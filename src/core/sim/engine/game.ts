@@ -10,7 +10,7 @@ import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
 import { buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
-import type { FinishType, PlayCall, PossLog } from '../log';
+import type { FinishType, PossLog } from '../log';
 import { cloneTactics } from '../tactics';
 import { isSetId, readAfter } from '../sets';
 import { K, ftChance } from './constants';
@@ -39,7 +39,7 @@ function shortName(p: Player) {
 
 /**
  * A game in progress. Callers construct it and play it with step() or simToEnd(), steer a live game
- * with the controls below (baseTactics, setTactics, callPlay, cancelPlay, callTimeout, substitute) and
+ * with the controls below (baseTactics, setTactics, callTimeout, substitute) and
  * read it through result(), rawBoxes(), drainLogs(), setReads() and the state the live view shows (T,
  * q, clock, poss, pbp, shots, flow, impacts, injuries, adjustments...). Every other field and method is
  * the engine's own, shared by its modules.
@@ -91,10 +91,8 @@ export class GameSim {
   inTransition = false;
   /** Play type of the possession's latest shot. */
   possFinish: FinishType = 'misc';
-  /** The player a called isolation is for: the next pickActor hands it to him. */
+  /** The player an after-timeout isolation is for: the next pickActor hands it to him. */
   calledActor: SP | null = null;
-  /** A called "go for three": every option that ends in a two is all but ruled out this trip. */
-  go3 = false;
   /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
   inbound = false;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
@@ -257,8 +255,7 @@ export class GameSim {
       base: cloneTactics(tactics),
       sit: null,
       hacked: new Map(),
-      call: null,
-      callQ: 1,
+      nextSet: null,
       toWait: null,
       atoNext: false,
       setRuns: new Map(),
@@ -349,26 +346,20 @@ export class GameSim {
   }
 
   /**
-   * Call a play from the bench (live games): it replaces any call still waiting, and is cleared at the
-   * end of the period, unless it was made at the buzzer (during the break): then it's for the next one.
+   * Run set `id` on this side's next half-court trip this period, for `pid` while he's on the floor
+   * (else for the best fit there): the engine's tests and the measurement scripts use it to put a set
+   * on the floor. The user's bench calls no plays.
    */
-  callPlay(side: 0 | 1, call: PlayCall): boolean {
+  runSet(side: 0 | 1, id: SetId, pid?: number): boolean {
     const t = this.T[side];
-    if (call.kind === 'iso' && !t.byId.has(call.pid)) return false;
-    // a set for a player is run for him while he's on the floor (else for the best fit there)
-    if (call.kind === 'set' && (!isSetId(call.set) || (call.pid != null && !t.byId.has(call.pid)))) return false;
-    t.call = { ...call };
-    t.callQ = this.atBuzzer() ? this.q + 1 : this.q;
+    if (!isSetId(id) || (pid != null && !t.byId.has(pid))) return false;
+    t.nextSet = { id, pid: pid ?? null };
     return true;
   }
 
   /** The period has run out and the next one hasn't started (the sim is at a break, or at the final buzzer). */
   atBuzzer(): boolean {
     return this.clock <= 0.05;
-  }
-
-  cancelPlay(side: 0 | 1) {
-    this.T[side].call = null;
   }
 
   /**
@@ -442,7 +433,7 @@ export class GameSim {
       if (!this.endPeriod()) return false;
     }
     // common random numbers: each team's n-th possession draws from its own stream, so two
-    // versions of the same game (Tactics Lab comparisons) stay paired possession by possession
+    // versions of the same game (paired batch comparisons) stay paired possession by possession
     this.rng = new Rng(mix(this.seed, 2 * this.T[this.poss].poss + this.poss));
     // substitutions at stoppages
     if (this.ctx !== 'steal' && this.ctx !== 'dreb') {

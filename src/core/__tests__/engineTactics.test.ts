@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
-import type { PlayCall, PossLog } from '../sim/log';
+import type { PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { archetype, composites } from '../ratings';
 import { defaultTactics, situationFromTemplate, situationText } from '../sim/tactics';
 import { Rng } from '../random';
 import type { SituationalPlan, SituationTrigger, Tactics, TacticImpact } from '../types';
 
-// Coaching controls inside the engine: situational plans, crunch time, play calls, hack-a-player
+// Coaching controls inside the engine: situational plans, crunch time, a queued set, hack-a-player
 // targets, zone schemes and the cost of switching off the ball.
 describe('engine tactics', () => {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
@@ -22,7 +22,7 @@ describe('engine tactics', () => {
   const opts = (seed: number, record = true) => ({ rng: new Rng(seed), type: 'regular' as const, record, injuries: false });
   const man: TacticsPatch = { defense: { scheme: 'man', pnr: 'drop', switchOffBall: false } };
   type SP = { pid: number; on: boolean; out: number; big: boolean; ftPct: number; starter: boolean };
-  type ST = { t: Tactics; base: Tactics; on: SP[]; players: SP[]; score: number; adjust: number; hacked: Map<number, number>; call: PlayCall | null };
+  type ST = { t: Tactics; base: Tactics; on: SP[]; players: SP[]; score: number; adjust: number; hacked: Map<number, number>; nextSet: { id: string; pid: number | null } | null };
   type In = {
     T: ST[];
     q: number;
@@ -245,168 +245,55 @@ describe('engine tactics', () => {
     });
   });
 
-  describe('play calls', () => {
-    /** A game stepped to `steps` possessions in, then `call` made for the home side. */
-    const called = (seed: number, steps: number, call: PlayCall) => {
-      const sim = new GameSim(side(14), side(15), opts(seed));
-      for (let i = 0; i < steps && !sim.over; i++) sim.step();
-      sim.drainLogs();
-      expect(sim.callPlay(0, call)).toBe(true);
-      return sim;
-    };
-
-    it('a call made with a timeout replaces the after-timeout play: "Timeout + Go for 3" goes for three even when the ATO is a post-up', () => {
-      let shots = 0;
-      let threes = 0;
-      for (let g = 0; g < 40; g++) {
-        const sim = new GameSim(side(14, { manage: { ato: 'post' } }), side(15), opts(1700 + g));
-        for (let i = 0; i < 30 + 3 * g && !sim.over; i++) sim.step();
-        sim.drainLogs();
-        if (!sim.callTimeout(0)) continue;
-        sim.callPlay(0, { kind: 'three' });
-        const q = (sim as unknown as In).q;
-        const l = nextTrip(sim, 0);
-        if (!l || l.q !== q) continue;
-        const shot = l.steps.find((s) => s.k === 'shot');
-        if (!shot) continue;
-        shots++;
-        if (shot.zone === 'c3' || shot.zone === 'ab3') threes++;
-      }
-      expect(shots).toBeGreaterThan(20);
-      expect(threes / shots).toBeGreaterThanOrEqual(0.85);
-    });
-
-    it('goes for three on a "three" call, and runs a called isolation for the player it names', () => {
-      let shots = 0;
-      let threes = 0;
-      let isos = 0;
-      for (let g = 0; g < 30; g++) {
-        const sim = called(1500 + g, 30 + 3 * g, { kind: 'three' });
-        const q = (sim as unknown as In).q;
-        const l = nextTrip(sim, 0)!;
-        // a call is for the period it was made in
-        if (l.q !== q) continue;
-        expect(l.call).toEqual({ kind: 'three', t: 0 });
-        const shot = l.steps.find((s) => s.k === 'shot');
-        if (shot) {
-          shots++;
-          if (shot.zone === 'c3' || shot.zone === 'ab3') threes++;
-        }
-        // the call is used up
-        expect(nextTrip(sim, 0)?.call).toBeUndefined();
-        const sim2 = new GameSim(side(14), side(15), opts(1600 + g));
-        for (let i = 0; i < 25 + 3 * g; i++) sim2.step();
-        sim2.drainLogs();
-        const pid = (sim2 as unknown as In).T[0].on[g % 5].pid;
-        sim2.callPlay(0, { kind: 'iso', pid });
-        const q2 = (sim2 as unknown as In).q;
-        const iso = nextTrip(sim2, 0)!;
-        if (iso.q !== q2) continue;
-        expect(iso.call).toEqual({ kind: 'iso', pid, t: 0 });
-        if (!iso.on[0].includes(pid) || iso.kind !== 'half') continue;
-        expect(iso.action).toBe('iso');
-        expect(iso.steps.find((s) => s.k === 'drive' || s.k === 'post')?.pid).toBe(pid);
-        isos++;
-      }
-      expect(shots).toBeGreaterThan(20);
-      expect(threes / shots).toBeGreaterThanOrEqual(0.85);
-      expect(isos).toBeGreaterThan(15);
-    });
-
-    it('fouls on the next defensive trip on a "foul" call, their worst free-throw shooter', () => {
-      for (let g = 0; g < 10; g++) {
-        const sim = called(1700 + g, 40 + g, { kind: 'foul' });
-        const them = (sim as unknown as In).T[1].players;
-        const ft = (pid: number) => them.find((p) => p.pid === pid)!.ftPct;
-        const l = nextTrip(sim, 1)!;
-        expect(l.call).toEqual({ kind: 'foul', t: 0 });
-        expect(l.label).toBe('Intentional foul');
-        const foul = l.steps.find((s) => s.k === 'foul')!;
-        expect(ft(foul.pid2!)).toBe(Math.min(...l.on[1].map(ft)));
-      }
-    });
-
-    it('a call made and cancelled changes nothing, and a call made in a period ends with it', () => {
-      for (let g = 0; g < 3; g++) {
-        const base = new GameSim(side(14), side(15), opts(1800 + g));
-        const sim = new GameSim(side(14), side(15), opts(1800 + g));
-        for (let i = 0; i < 50; i++) {
-          base.step();
+  describe('a queued set (the hook the set tests use)', () => {
+    it('waits for a trip that gets to the half court: a press turnover leaves it for the next one', () => {
+      let kept = 0;
+      for (let g = 0; g < 40 && kept < 6; g++) {
+        const sim = new GameSim(side(14), side(15, { defense: { press: 'always', pressure: 90 } }), opts(2000 + g));
+        const s = sim as unknown as In & { poss: number };
+        for (let i = 0; i < 400 && !sim.over && kept < 6; i++) {
+          if (s.poss !== 0 || s.q > 3 || s.clock < 60 || s.T[0].nextSet) {
+            sim.step();
+            continue;
+          }
+          sim.runSet(0, 'horns');
+          sim.drainLogs();
           sim.step();
+          const l = sim.drainLogs().find((x) => x.off === 0)!;
+          if (l.kind !== 'press') {
+            // (free throws from a foul before any action keep it too)
+            if (l.kind !== 'ft') expect(s.T[0].nextSet).toBeNull();
+            continue;
+          }
+          // the press forced a turnover before the set could be run: it's still queued
+          expect(l.set).toBeUndefined();
+          expect(s.T[0].nextSet).toEqual({ id: 'horns', pid: null });
+          const next = nextTrip(sim, 0)!;
+          if (next.q !== l.q) break;
+          if (next.kind === 'half') expect(next.set?.id).toBe('horns');
+          kept++;
         }
-        sim.callPlay(0, { kind: 'two' });
-        sim.cancelPlay(0);
-        expect(JSON.stringify(sim.simToEnd())).toBe(JSON.stringify(base.simToEnd()));
       }
-      // a call made with seconds left while the other side has the ball, that the period runs out on
+      expect(kept).toBeGreaterThanOrEqual(6);
+    });
+
+    it('is for the period it was queued in', () => {
       let ended = 0;
       for (let g = 0; g < 12; g++) {
         const sim = new GameSim(side(14), side(15), opts(1900 + g));
         const s = sim as unknown as In & { poss: number };
         while (!sim.over && !(s.poss === 1 && s.q <= 3 && s.clock > 0.05 && s.clock < 4)) sim.step();
         if (sim.over) continue;
-        sim.callPlay(0, { kind: 'three' });
+        sim.runSet(0, 'horns');
         const q = s.q;
         sim.step();
         if (s.q !== q || s.clock > 0.05) continue;
-        expect(s.T[0].call).toEqual({ kind: 'three' });
         sim.drainLogs();
         sim.step();
-        expect(s.T[0].call).toBeNull();
-        expect(sim.drainLogs().some((l) => l.call)).toBe(false);
+        expect(s.T[0].nextSet).toBeNull();
         ended++;
       }
       expect(ended).toBeGreaterThan(3);
-    });
-
-    it('a call made at the buzzer is for the next period: the first trips of it run it', () => {
-      for (let g = 0; g < 4; g++) {
-        const sim = new GameSim(side(14), side(15), opts(1950 + g));
-        const s = sim as unknown as In;
-        // the Live screen stops at the break with the game at the buzzer (the next step starts the next period)
-        while (s.clock > 0.05) sim.step();
-        const q = s.q;
-        sim.callPlay(0, { kind: 'three' });
-        sim.callPlay(1, { kind: 'foul' });
-        sim.drainLogs();
-        for (let i = 0; i < 6; i++) sim.step();
-        const logs = sim.drainLogs();
-        expect(logs.every((l) => l.q === q + 1)).toBe(true);
-        expect(logs.find((l) => l.off === 0 && l.kind === 'half')?.call).toEqual({ kind: 'three', t: 0 });
-        expect(logs.find((l) => l.off === 0)?.call).toEqual({ kind: 'foul', t: 1 });
-        expect([s.T[0].call, s.T[1].call]).toEqual([null, null]);
-      }
-    });
-
-    it('a call waits for a trip that gets to the half court: a press turnover leaves it for the next one', () => {
-      let kept = 0;
-      for (let g = 0; g < 40 && kept < 6; g++) {
-        const sim = new GameSim(side(14), side(15, { defense: { press: 'always', pressure: 90 } }), opts(2000 + g));
-        const s = sim as unknown as In & { poss: number };
-        for (let i = 0; i < 400 && !sim.over && kept < 6; i++) {
-          if (s.poss !== 0 || s.q > 3 || s.clock < 60 || s.T[0].call) {
-            sim.step();
-            continue;
-          }
-          sim.callPlay(0, { kind: 'set', set: 'horns' });
-          sim.drainLogs();
-          sim.step();
-          const l = sim.drainLogs().find((x) => x.off === 0)!;
-          if (l.kind !== 'press') {
-            // (free throws from a foul before any action keep it too)
-            if (l.kind !== 'ft') expect(s.T[0].call).toBeNull();
-            continue;
-          }
-          // the press forced a turnover before the set could be run: it's still called
-          expect(l.call).toBeUndefined();
-          expect(s.T[0].call).toEqual({ kind: 'set', set: 'horns' });
-          const next = nextTrip(sim, 0)!;
-          if (next.q !== l.q) break;
-          if (next.kind === 'half') expect([next.call, next.set?.id]).toEqual([{ kind: 'set', set: 'horns', t: 0 }, 'horns']);
-          kept++;
-        }
-      }
-      expect(kept).toBeGreaterThanOrEqual(6);
     });
   });
 

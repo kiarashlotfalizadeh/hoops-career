@@ -30,7 +30,7 @@ describe('ordinal', () => {
 
 describe('number formats', () => {
   it('never print "-0.0": a value that rounds to zero reads as zero, with no sign', () => {
-    // a -1 plus-minus over 30 games, the Lab's net rating for a plan that changes nothing
+    // a -1 plus-minus over 30 games, a net rating that rounds to nothing
     expect(signed(-1 / 30)).toBe('0.0');
     expect(signed(-0.04)).toBe('0.0');
     expect(signed(0)).toBe('0.0');

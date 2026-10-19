@@ -112,7 +112,7 @@ export function JunkCard({ league, opp }: { league: League; opp: number }) {
           </p>
           <p>
             Planned on named players, it plays only while one of them is on the floor: the rest of the game you play your usual defense. The staff sends your best perimeter
-            defenders (or whoever you plan on Matchups) to chase; the rest play a zone behind them. Test it first.
+            defenders (or whoever you plan on Matchups) to chase; the rest play a zone behind them.
           </p>
         </Help>
       }

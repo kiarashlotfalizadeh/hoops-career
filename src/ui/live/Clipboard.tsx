@@ -1,19 +1,18 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Segmented } from '../components/ui';
 
-export type ClipTab = 'lineup' | 'tactics' | 'calls' | 'box' | 'pbp';
+export type ClipTab = 'lineup' | 'tactics' | 'box' | 'pbp';
 
 const TABS: { id: ClipTab; label: string }[] = [
   { id: 'lineup', label: 'Lineup' },
   { id: 'tactics', label: 'Tactics' },
-  { id: 'calls', label: 'Calls' },
   { id: 'box', label: 'Box' },
   { id: 'pbp', label: 'Play-by-play' },
 ];
 
 /**
  * The coach's clipboard: every way to coach the game, one tab each (the lineup and its subs, the
- * tactics, the play calls, the box score, the play-by-play). Docked under the court when there's
+ * tactics, the box score, the play-by-play). Docked under the court when there's
  * room for it (beside it, held sideways), and open in a sheet from the quick actions: the same
  * clipboard, on the same tab.
  */

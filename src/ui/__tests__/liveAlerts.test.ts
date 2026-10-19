@@ -183,27 +183,6 @@ describe('live alerts', () => {
     expect(liveAlerts(input(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
   });
 
-  it('say once a period when the late-game calls open: the last two minutes of a close fourth or overtime', () => {
-    const g = game();
-    for (let i = 0; i < 30; i++) g.sim.step();
-    const view = structuredClone(snapshot(g.sim));
-    view.q = 4;
-    view.clock = 100;
-    view.sides[0].score = 90;
-    view.sides[1].score = 94;
-    const late = (v: Drawn, over: Partial<AlertInput> = {}) => liveAlerts(input(g, v, over)).find((x) => x.id === 'late-4');
-    expect(late(view)).toMatchObject({ title: 'Crunch time', tone: 'info' });
-    expect(late(view)?.action).toBeUndefined();
-    // not a blowout, not before the last two minutes, not at the break
-    const blowout = structuredClone(view);
-    blowout.sides[1].score = 110;
-    expect(late(blowout)).toBeUndefined();
-    const early = structuredClone(view);
-    early.clock = 200;
-    expect(late(early)).toBeUndefined();
-    expect(late(view, { atBreak: true })).toBeUndefined();
-  });
-
   it('count straight makes and misses from the shot log', () => {
     const s = streaks([
       { pid: 1, made: true },

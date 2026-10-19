@@ -109,7 +109,6 @@ async function tour(stage) {
     ['player', `/player/${ids.star}`],
     ['games', '/games'],
     ['matchup', `/games/${ids.opp}`],
-    ['lab', '/lab'],
     ['league', '/league'],
     ['team', `/teams/${ids.other}`],
     ['history', '/league/history'],
@@ -186,8 +185,8 @@ if (stages.includes('mid')) {
     await phone.waitForTimeout(4000);
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
-    // the in-game sheets: the lineup, the calls and the clipboard
-    for (const name of ['Subs', 'Call', 'Clipboard']) {
+    // the in-game sheets: the lineup and the clipboard
+    for (const name of ['Subs', 'Clipboard']) {
       const b = phone.getByRole('button', { name, exact: true }).first();
       if (await b.count()) {
         await b.click().catch(() => {});

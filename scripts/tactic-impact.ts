@@ -336,7 +336,7 @@ function runValue(id: SetId, def: TacticsPatch, n: number, prior: number) {
       }
       const f = fork(sim);
       inn(f).T[0].setRuns = new Map(prior ? [[id, prior]] : []);
-      f.callPlay(0, { kind: 'set', set: id });
+      f.runSet(0, id);
       const [a, b] = [inn(f).T[0].score, s.T[0].score];
       f.step();
       sim.step();

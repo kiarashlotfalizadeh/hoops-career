@@ -2,10 +2,9 @@ import { ArrowLeftRight, Lightbulb } from 'lucide-react';
 import { madeAtt } from '../../core/format';
 import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
-import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import { Chips, Help, Statline, Tag, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
-import { fitPlayers, setsFor, type Calls } from './plays';
+import { fitPlayers } from './plays';
 
 /** A player's night so far, at the top of his sheet (yours or theirs). */
 export function PlayerLine({ p }: { p: DrawnPlayer }) {
@@ -44,9 +43,8 @@ export interface SubOptions {
 /**
  * One of your players: his line tonight, the sub (the bench players who can come in for him, the
  * staff's pick first, or the five he can come in for), and his orders: shot freedom, role, crunch-time
- * go-to, a play run for him and who he guards. Every order goes through your tactics or a play call,
- * so the game's journal keeps it, and "Keep changes after this game" treats it like any other change
- * (tonight's matchups excepted).
+ * go-to and who he guards. Every order goes through your tactics, so the game's journal keeps it, and
+ * "Keep changes after this game" treats it like any other change (tonight's matchups excepted).
  */
 export function MyPlayer({
   league,
@@ -57,7 +55,6 @@ export function MyPlayer({
   guarding,
   nameOf,
   apply,
-  calls,
   subs,
   onSub,
 }: {
@@ -71,7 +68,6 @@ export function MyPlayer({
   guarding?: number;
   nameOf: (pid: number) => string;
   apply: (fn: (t: Tactics) => void) => void;
-  calls: Calls;
   subs: SubOptions;
   /** Swap him with `other` (out for in, or in for out, as he stands). */
   onSub: (other: number) => void;
@@ -80,11 +76,8 @@ export function MyPlayer({
   const freedom = tactics.offense.freedom[pid] ?? 0;
   const fp = fitPlayers(league, [pid], tactics)[0];
   const role: OffRole | undefined = fp?.role;
-  const fits = fp ? setsFor(fp).slice(0, 4) : [];
   const goTo = tactics.manage.goTo === pid;
   const assigned = Object.entries(tactics.defense.matchups).find(([, d]) => d === pid)?.[0];
-  const pending = calls.pending;
-  const isOn = (c: Parameters<Calls['call']>[0]) => !!pending && JSON.stringify(pending) === JSON.stringify(c);
   return (
     <div className="lv-ps">
       <PlayerLine p={p} />
@@ -162,30 +155,6 @@ export function MyPlayer({
         label="Crunch-time go-to"
         help="In the last two minutes of a close fourth quarter or overtime the ball finds him much more, and the offense runs more of what he does best."
       />
-
-      {subs.on && (
-        <div className="lv-ps-blk">
-          <div className="over">
-            Run a play for him
-            <Help title="A play for him">
-              <p>His best sets, run on your next half-court trip; a clear-out isolation always fits. Each run, their defense reads a set a little better.</p>
-            </Help>
-          </div>
-          <div className="chips" role="group" aria-label={`Plays for ${name}`}>
-            {fits.map((id) => {
-              const c = { kind: 'set' as const, set: id, pid };
-              return (
-                <button key={id} className={`chip ${isOn(c) ? 'on' : ''}`} aria-pressed={isOn(c)} title={SETS[id].look} onClick={() => calls.call(c)}>
-                  {SETS[id].name}
-                </button>
-              );
-            })}
-            <button className={`chip ${isOn({ kind: 'iso', pid }) ? 'on' : ''}`} aria-pressed={isOn({ kind: 'iso', pid })} onClick={() => calls.call({ kind: 'iso', pid })}>
-              {CLEAR_OUT.name}
-            </button>
-          </div>
-        </div>
-      )}
 
       {subs.on && oppOn.length > 0 && (
         <div className="lv-ps-blk">

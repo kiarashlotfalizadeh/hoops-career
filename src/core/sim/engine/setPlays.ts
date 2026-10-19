@@ -13,7 +13,7 @@ export const setPlaysMethods = {
   /**
    * Now and then (SET_K.rate a trip for each set in the package) a fresh trip runs one of the
    * package's sets the five on the floor fit, favoring the ones run least tonight; the staff stops
-   * running one once the defense is on it (only a call from the bench runs it again). No package, no
+   * running one once the defense is on it (only an after-timeout play runs it again). No package, no
    * draws.
    */
   packageSet(this: GameSim, off: ST, def: ST): { id: SetId; pid: null } | null {

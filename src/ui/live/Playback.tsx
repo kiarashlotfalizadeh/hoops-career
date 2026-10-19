@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FastForward, Pause, Play, RotateCcw, Zap } from 'lucide-react';
+import { FastForward, Pause, Play, Zap } from 'lucide-react';
 import { LIVE_SPEEDS } from '../settingsOptions';
 
 /** How long the controls stay up after a tap while the game plays. */
@@ -7,7 +7,7 @@ const SHOW_MS = 2800;
 
 /**
  * Playback, over the court like a video player's: tap the court and the controls come up (pause or
- * play, replay the last play, skip ahead, the speed and key plays only), then fade while the game
+ * play, skip ahead, the speed and key plays only), then fade while the game
  * plays; paused, they stay. One place for all of them. They stay in reach of a keyboard and a
  * screen reader (focusing one brings them up).
  */
@@ -15,30 +15,23 @@ export function Playback({
   paused,
   speed,
   keyPlays,
-  canReplay,
   playLabel,
   reveal,
-  replaying,
   onPause,
   onSpeed,
   onKeyPlays,
-  onReplay,
   onSkip,
 }: {
   paused: boolean;
   speed: number;
   keyPlays: boolean;
-  canReplay: boolean;
   /** What the play button does while paused ("Resume", "Start Q3"). */
   playLabel: string;
   /** Bumped to bring the controls up for a moment (the opening tip, a resume). */
   reveal: number;
-  /** A replay is on the court: the controls make way for it (a tap still brings them up). */
-  replaying: boolean;
   onPause: () => void;
   onSpeed: (to: number) => void;
   onKeyPlays: () => void;
-  onReplay: () => void;
   onSkip: () => void;
 }) {
   const [up, setUp] = useState(false);
@@ -57,26 +50,20 @@ export function Playback({
     if (!paused && up) bump();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paused]);
-  const shown = up || (paused && !replaying);
+  const shown = up || paused;
   const i = LIVE_SPEEDS.findIndex((x) => x.id === speed);
   const nextSpeed = LIVE_SPEEDS[(i + 1) % LIVE_SPEEDS.length];
-  // a tap on a control keeps them up (a replay clears the court for itself); a tap anywhere else toggles them
-  const act =
-    (fn: () => void, stay = true) =>
-    (e: React.MouseEvent) => {
-      e.stopPropagation();
-      fn();
-      if (stay) bump();
-      else {
-        clearTimeout(timer.current);
-        setUp(false);
-      }
-    };
+  // a tap on a control keeps them up; a tap anywhere else toggles them
+  const act = (fn: () => void) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    fn();
+    bump();
+  };
   return (
     <div
       className={`lv-pb${shown ? ' up' : ''}`}
       onClick={() => {
-        if (shown && (!paused || replaying)) {
+        if (shown && !paused) {
           clearTimeout(timer.current);
           setUp(false);
         } else bump();
@@ -93,9 +80,6 @@ export function Playback({
         </button>
       </div>
       <div className="lv-pb-mid" role="group" aria-label="Playback">
-        <button className="lv-pb-btn" disabled={!canReplay} onClick={act(onReplay, false)} aria-label="Replay the last play">
-          <RotateCcw size={20} />
-        </button>
         <button className="lv-pb-btn big" onClick={act(onPause)} aria-label={paused ? playLabel : 'Pause'}>
           {paused ? <Play size={28} fill="currentColor" /> : <Pause size={28} fill="currentColor" />}
         </button>

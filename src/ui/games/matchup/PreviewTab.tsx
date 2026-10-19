@@ -82,7 +82,6 @@ function Projection({ league, game, pv }: { league: League; game: ScheduledGame;
             teams&apos; pace, {pv.neutral ? 'with no home court on the neutral floor' : `plus home court (about ${Math.abs(pv.projection.edge).toFixed(1)} points)`}. One
             game&apos;s margin swings well either side of it.
           </p>
-          <p>The Lab tab plays it through the real engine, with both game plans.</p>
         </Help>
       }
     >

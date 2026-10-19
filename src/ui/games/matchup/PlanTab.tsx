@@ -1,5 +1,5 @@
 // The matchup page's Plan: your plan against this team first (each item with exactly what it
-// changes, and how long it lasts), then the staff's counters (tested in place), a star plan, a junk
+// changes, and how long it lasts), then the staff's counters, a star plan, a junk
 // defense and who it chases, a defender to attack, players to hack, and a note. Every change is the
 // user's tactics against this team only, on top of his playbook (see core/league/gamePlans.ts).
 import { useEffect, useRef, useState } from 'react';
@@ -8,7 +8,7 @@ import type { GamePlanItem, League, PlanScope, StarPlan } from '../../../core/ty
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { edit } from '../../../state/actions';
 import { scoutTeam } from '../../../core/ai/advisor';
-import { applyPatch } from '../../../core/ai/lab';
+import { applyPatch } from '../../../core/sim/tactics';
 import { projectedRotation, scoutData } from '../../../core/analysis/scouting';
 import { clearPlan, defaultScope, effectiveTactics, ensurePlan, itemGroup, planFor, removePlanItem, setPlanItem, setPlanScope } from '../../../core/league/gamePlans';
 import { STAR_PLAN_META } from '../../../core/sim/tactics';

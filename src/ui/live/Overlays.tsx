@@ -1,8 +1,8 @@
-// What goes over the court besides the playback controls: the lower stack (a replay's tag, the
-// running call of the play, a broadcast graphic, the one banner) and, at a period's end, the break
+// What goes over the court besides the playback controls: the lower stack (the running call of the
+// play, a broadcast graphic, the one banner) and, at a period's end, the break
 // card (the period's name, Start the next one, the report, skip ahead).
 import { useSyncExternalStore, type CSSProperties } from 'react';
-import { FastForward, Play, RotateCcw, X } from 'lucide-react';
+import { FastForward, Play } from 'lucide-react';
 import { captionAt, type Script } from './choreo';
 import type { Beat } from './ticker';
 import type { Graphic } from './graphics';
@@ -11,12 +11,11 @@ import { Banner, type BannerItem } from './Banner';
 import { periodLabel } from '../stats';
 
 /**
- * The lower stack over the backcourt, clear of the basket the play goes to: a replay's tag (with its
- * stop), the running call of the play in the offense's colour (or the key plays line between
- * them), the graphic up now in its team's colour (`kit`), and the one banner.
+ * The lower stack over the backcourt, clear of the basket the play goes to: the running call of the
+ * play in the offense's colour (or the key plays line between them), the graphic up now in its
+ * team's colour (`kit`), and the one banner.
  */
 export function CourtLower({
-  replay,
   drawing,
   ffing,
   beat,
@@ -24,12 +23,9 @@ export function CourtLower({
   graphic,
   kit,
   banner,
-  onStopReplay,
   onDropBanner,
 }: {
-  /** A replay is on the court. */
-  replay: boolean;
-  /** The possession the court is drawing (the replay's, during one). */
+  /** The possession the court is drawing. */
   drawing: Script | null;
   /** Key plays: on to the next one without drawing this one. */
   ffing: boolean;
@@ -39,20 +35,10 @@ export function CourtLower({
   graphic: Graphic | null;
   kit: string;
   banner?: BannerItem;
-  onStopReplay: () => void;
   onDropBanner: () => void;
 }) {
   return (
     <div className="lv-lower">
-      {replay && (
-        <div className="lv-show" role="status">
-          <RotateCcw size={13} aria-hidden="true" />
-          <span>Replay</span>
-          <button className="lv-show-x" aria-label="Stop the replay" onClick={onStopReplay}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
       {(drawing || ffing) && (
         // the offense's colour along its edge, as the court's boards show who has the ball
         <div className="lv-cap" aria-hidden="true" style={drawing ? ({ '--cap-c': capColor } as CSSProperties) : undefined}>
@@ -65,8 +51,8 @@ export function CourtLower({
           )}
         </div>
       )}
-      {graphic && !replay && <LowerThird key={graphic.id} g={graphic} kit={kit} />}
-      {banner && !replay && <Banner key={banner.id} item={banner} onClose={onDropBanner} />}
+      {graphic && <LowerThird key={graphic.id} g={graphic} kit={kit} />}
+      {banner && <Banner key={banner.id} item={banner} onClose={onDropBanner} />}
     </div>
   );
 }

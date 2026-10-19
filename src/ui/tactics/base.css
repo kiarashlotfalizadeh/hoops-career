@@ -1,5 +1,5 @@
 /* Team → Tactics (`tx-`): what every tab shares. Notes and empty lines, cards of controls and
-   control rows, sheets' leads and facts, the assistant's switch, the Lab link, the changes dock, the
+   control rows, sheets' leads and facts, the assistant's switch, the changes dock, the
    tab switch, and bullet lists. Lists sit flush in cards; explanations live behind Help and ⓘ. */
 .tx-sec-r {
   gap: 8px;
@@ -134,30 +134,11 @@
   margin: 0 2px 1px 0;
 }
 
-/* ------------------------------------------------------------ the assistant's switch, the Lab, the changes dock */
+/* ------------------------------------------------------------ the assistant's switch, the changes dock */
 /* flat on the page: a hairline under it, no box */
 .tx-auto {
   padding: 0 0 8px;
   border-bottom: 1px solid var(--line);
-}
-/* the way to the Lab, at the foot of every tab */
-.tx-lablink {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--row-min);
-  padding: 0 2px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-.tx-lablink > svg:first-child {
-  color: var(--accent-text);
-}
-.tx-lablink:active {
-  background: var(--surface);
 }
 /* this visit's edits: one compact line over the tab bar */
 .tx-dock {

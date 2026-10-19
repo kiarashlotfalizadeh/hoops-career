@@ -268,7 +268,7 @@ describe('live game', () => {
   });
 });
 
-/** Today's game with every kind of coaching move along the way, into the second half, with a play call still waiting. */
+/** Today's game with every kind of coaching move along the way, into the second half. */
 function coachedGame(l: League): LiveGame {
   const lg = goLive(l);
   const play = (n: number) => {
@@ -286,14 +286,10 @@ function coachedGame(l: League): LiveGame {
   lg.setManualSubs(true);
   play(25);
   expect(lg.callTimeout('test')).toBe(true);
-  expect(lg.callPlay({ kind: 'three' })).toBe(true);
   play(3);
-  lg.cancelPlay();
   lg.setManualSubs(false);
-  expect(lg.callPlay({ kind: 'iso', pid: t.on[1].pid })).toBe(true);
   lg.simTo('half');
   play(7);
-  expect(lg.callPlay({ kind: 'hold' })).toBe(true);
   return lg;
 }
 
@@ -307,7 +303,7 @@ describe('a live game survives the app being closed (W12)', () => {
     // the app is hidden (then closed): the store saves where the game is
     await useStore.getState().flush();
     expect(l.live).toMatchObject({ gid: lg.game.gid, tid: l.userTid, steps: lg.steps, q: lg.sim.q, clock: lg.sim.clock, score: [lg.sim.T[0].score, lg.sim.T[1].score] });
-    expect(l.live!.ops.map((o) => o.op)).toEqual(['sub', 'tactics', 'manualSubs', 'timeout', 'call', 'cancelCall', 'manualSubs', 'call', 'call']);
+    expect(l.live!.ops.map((o) => o.op)).toEqual(['sub', 'tactics', 'manualSubs', 'timeout', 'manualSubs']);
     // opened again: the league as it was saved, and no game open in this session
     const back = (await loadLeague(l.id))!;
     useStore.getState().setLeague(back);
@@ -324,10 +320,15 @@ describe('a live game survives the app being closed (W12)', () => {
     ]);
     expect(again.sim.result()).toEqual(lg.sim.result());
     expect(again.logs).toEqual(lg.logs);
+    // the night's moves, each with the logs before it, read the same after the playback
+    expect(lg.marks.map((m) => m.op.op)).toEqual(['sub', 'tactics', 'timeout']);
+    expect(lg.marks[1].before?.defense.pressure).not.toBe(80);
+    expect(lg.marks.every((m, i) => m.log <= lg.logs.length && (i === 0 || m.log >= lg.marks[i - 1].log))).toBe(true);
+    expect(again.marks).toEqual(lg.marks);
     expect(again.sim.pbp).toEqual(lg.sim.pbp);
     expect(again.planned).toEqual(lg.planned);
     expect(again.sim.baseTactics(again.userSide)).toEqual(lg.sim.baseTactics(lg.userSide));
-    expect([again.manualSubs, again.pendingCall, again.sim.T[again.userSide].timeouts]).toEqual([lg.manualSubs, { kind: 'hold' }, lg.sim.T[lg.userSide].timeouts]);
+    expect([again.manualSubs, again.sim.T[again.userSide].timeouts]).toEqual([lg.manualSubs, lg.sim.T[lg.userSide].timeouts]);
     expect([again.keep, again.seen]).toEqual([lg.keep, [1, 2]]);
     // the rest of the game, and its record, are what the game left open would have had
     const res = again.commit(back);
@@ -367,7 +368,7 @@ describe('a live game survives the app being closed (W12)', () => {
     expect(again.sim.result()).toEqual(lg.sim.result());
   });
 
-  it('keeps a call made at the buzzer for the next period, refuses a timeout there, and plays both back from the journal', async () => {
+  it('refuses a timeout at the buzzer, and plays a change made at the break back from the journal', async () => {
     const l = testLeague('buzzer');
     toGameDay(l);
     const lg = goLive(l);
@@ -378,23 +379,23 @@ describe('a live game survives the app being closed (W12)', () => {
     const left = lg.sim.T[me].timeouts;
     expect(lg.callTimeout()).toBe(false);
     expect(lg.sim.T[me].timeouts).toBe(left);
-    expect(lg.callPlay({ kind: 'set', set: 'horns' })).toBe(true);
+    const t = lg.sim.baseTactics(me);
+    t.defense.scheme = 'zone23';
+    lg.setTactics(t);
     await useStore.getState().flush();
     const back = (await loadLeague(l.id))!;
     useStore.getState().setLeague(back);
     const again = prepareLive(back)!;
     expect(again.resumed).toBe('journal');
-    expect(again.pendingCall).toEqual({ kind: 'set', set: 'horns' });
-    // the second quarter's first half-court trip of ours runs it, the same in both
+    // the second quarter plays the zone, the same in both
     let ran: PossLog | undefined;
     for (let i = 0; i < 12 && !ran; i++) {
       const logs = lg.step();
       expect(again.step()).toEqual(logs);
-      ran = logs.find((x) => x.off === me && x.kind === 'half');
+      ran = logs.find((x) => x.off !== me && x.kind === 'half');
     }
     expect(ran?.q).toBe(2);
-    expect(ran?.call).toEqual({ kind: 'set', set: 'horns', t: me });
-    expect([lg.pendingCall, again.pendingCall]).toEqual([null, null]);
+    expect(ran?.scheme).toBe('zone23');
     expect(again.sim.T[me].timeouts).toBe(left);
   });
 
@@ -587,8 +588,11 @@ describe('a live game survives the app being closed (W12)', () => {
       ['a move after the checkpoint', (j) => void (j.ops[j.ops.length - 1].at = j.steps + 1)],
       ['an unknown move', (j) => void Object.assign(j.ops[0], { op: 'eject' })],
       ['a sub without players', (j) => void Object.assign(j.ops[0], { args: {} })],
-      ['a play call that is not one', (j) => void Object.assign(j.ops.find((o) => o.op === 'call')!.args, { call: { kind: 'dunk' } })],
-      ['far too many moves', (j) => void (j.ops = Array.from({ length: 6000 }, () => ({ at: 0, op: 'cancelCall', args: {} })))],
+      [
+        'a play call (retired: it can no longer play back)',
+        (j) => void j.ops.push({ at: j.steps, op: 'call', args: { call: { kind: 'three' } } } as unknown as LiveJournal['ops'][number]),
+      ],
+      ['far too many moves', (j) => void (j.ops = Array.from({ length: 6000 }, () => ({ at: 0, op: 'manualSubs' as const, args: { on: false } })))],
       ['a game already played', (j) => void (j.gid = l.games[0].gid)],
       ["another day's game", (j) => void (j.gid = later.gid)],
       ['another team', (j) => void (j.tid = (j.tid + 1) % l.teams.length)],

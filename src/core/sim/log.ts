@@ -58,15 +58,6 @@ export interface PossStep {
   d?: string;
 }
 
-/**
- * A play called from the bench in a live game: an offensive call (go for three, a quick two, run the
- * clock for a last shot, an isolation for one player, a set for one player or the best fit on the
- * floor) is run on the side's next trip, "foul" on its next defensive one. Calls change what the team
- * tries, never how well it executes; a set adds only its documented edges against the defense it
- * meets, and the defense reads it a little better each time it's run (see sets.ts).
- */
-export type PlayCall = { kind: 'three' | 'two' | 'hold' | 'foul' } | { kind: 'iso'; pid: number } | { kind: 'set'; set: SetId; pid?: number };
-
 export interface PossLog {
   off: 0 | 1;
   q: number;
@@ -92,9 +83,7 @@ export interface PossLog {
   /** A junk defense's chased players (offensive pids), face-guarded by their defenders while the rest play the zone. */
   chase?: number[];
   help: number;
-  /** A called play this possession ran, and the side that called it. */
-  call?: PlayCall & { t: 0 | 1 };
-  /** The set the offense ran (called, after a timeout, or from its package): who it was for, and its run tonight (1 = first). */
+  /** The set the offense ran (after a timeout, or from its package): who it was for, and its run tonight (1 = first). */
   set?: { id: SetId; pid: number; n: number };
   /** Each side's situational plan in effect ('' for none), when either has one. */
   sit?: [string, string];

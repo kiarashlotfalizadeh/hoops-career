@@ -1,8 +1,7 @@
 // The matchup page: everything about one opponent in one place. Their slab (record, form, rank, the
 // next meeting, the season series, your plan against them), then the sections: Preview (when the
-// next game against them is the user's next game), Scout, Plan (with the staff's counters, tested in
-// place), Matchups and Lab (your plan against them, projected). On game day a dock tips the game off;
-// quick sim stays in the Continue bar's options.
+// next game against them is the user's next game), Scout, Plan (with the staff's counters) and
+// Matchups. On game day a dock tips the game off; quick sim stays in the Continue bar's options.
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
 import { useFlowRunner } from '../useFlow';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -28,19 +27,18 @@ import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
 import { PlanTab } from './matchup/PlanTab';
 import { MatchupPlanner } from '../components/MatchupPlanner';
-import { LabPanel } from './lab/LabPanel';
 import './games.css';
 
-type Tab = 'preview' | 'scout' | 'plan' | 'matchups' | 'lab';
-const LABEL: Record<Tab, string> = { preview: 'Preview', scout: 'Scout', plan: 'Plan', matchups: 'Matchups', lab: 'Lab' };
+type Tab = 'preview' | 'scout' | 'plan' | 'matchups';
+const LABEL: Record<Tab, string> = { preview: 'Preview', scout: 'Scout', plan: 'Plan', matchups: 'Matchups' };
 
 export default function Matchup() {
   const league = useLeague();
   const { tid } = useParams();
   const [params] = useSearchParams();
   const opp = Number(tid);
-  // (links from before the Lab's counters moved to the Plan: Test, and Test's counters)
-  if (params.get('tab') === 'test') return <Navigate to={`/games/${tid}?tab=${params.get('lab') === 'counters' ? 'plan' : 'lab'}`} replace />;
+  // (links from before the Lab was retired: Test, its counters and the Lab tab open the Plan)
+  if (params.get('tab') === 'test' || params.get('tab') === 'lab') return <Navigate to={`/games/${tid}?tab=plan`} replace />;
   const team = Number.isInteger(opp) ? league.teams[opp] : undefined;
   if (!team || opp === league.userTid)
     return (
@@ -59,7 +57,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   const upNext = useLeagueMemo(() => nextUserGame(league), [league]);
   // the preview is for the user's next game: when that's against them
   const preview = next && upNext?.gid === next.gid ? next : undefined;
-  const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups', 'lab'];
+  const tabs: Tab[] = [...(preview ? (['preview'] as const) : []), 'scout', 'plan', 'matchups'];
   const [tab, setTab] = useQueryParam<Tab>('tab', preview ? 'preview' : 'scout', tabs);
   const today = !!preview && preview.day === league.day;
   return (
@@ -70,7 +68,6 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
       {tab === 'plan' && <PlanTab league={league} opp={opp} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
-      {tab === 'lab' && <LabPanel league={league} fixedOpp={opp} modes={['project']} />}
       {today && <TipOff league={league} gid={preview.gid} name={league.teams[opp].name} />}
     </main>
   );

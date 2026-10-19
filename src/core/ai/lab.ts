@@ -1,5 +1,6 @@
-// Tactics Lab: run batches of games between two configurations and summarize the result.
-// Pure and serializable so it can run in a Web Worker.
+// Batch sims: run games between two configurations and summarize them, for the engine's tests and the
+// measurement scripts (scripts/tactic-impact.ts, tactic-sweep.ts). Each game draws from its own seed,
+// so two configurations can be compared game by game (pairedDelta).
 
 import type { GameType, TacticsPatch, Team, TeamBox } from '../types';
 import { GameSim, type SimTeamInput } from '../sim/engine';
@@ -9,7 +10,7 @@ import { applyPatch } from '../sim/tactics';
 export { applyPatch };
 export type { TacticsPatch };
 
-/** A side as real games build it (morale/wear, rest, injury risk), so Lab games play like them. */
+/** A side as real games build it (morale/wear, rest, injury risk), so batch games play like them. */
 export type LabSide = SimTeamInput;
 
 export interface LabRequest {
@@ -54,8 +55,6 @@ export interface LabSummary {
   players: Record<number, { min: number; pts: number; usg: number; ts: number }>;
   /** Points per game each tactical effect earned each side: both can gain from the same one (each side's drop coverage conceding pull-ups). */
   impacts: Record<string, { us: number; them: number }>;
-  /** Side A's sets (and clear-out isolations) per game: runs, and the points those possessions scored. */
-  sets: Record<string, { runs: number; pts: number }>;
   /** Per-game point margins (side A minus side B), in seed order, for paired comparisons. */
   margins: number[];
 }
@@ -99,7 +98,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
   const opt: Record<string, { poss: number; pts: number }> = {};
   const pl: Record<number, { sec: number; pts: number; use: number; teamUse: number; fga: number; fta: number }> = {};
   const impacts: Record<string, { us: number; them: number }> = {};
-  const sets: Record<string, { runs: number; pts: number }> = {};
   for (let g = 0; g < req.games; g++) {
     // each game gets its own seed so two configurations can be compared game by game
     const rng = new Rng((req.seed + Math.imul(g + 1, 2654435761)) >>> 0);
@@ -150,12 +148,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
       if (im.t === aSide) e.us += im.pts;
       else e.them += im.pts;
     }
-    for (const st of res.sets ?? []) {
-      if (st.t !== aSide) continue;
-      const e = (sets[st.id] ??= { runs: 0, pts: 0 });
-      e.runs += st.runs;
-      e.pts += st.pts;
-    }
     onGame?.();
   }
   const n = req.games;
@@ -186,10 +178,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     e.us /= n;
     e.them /= n;
   }
-  for (const e of Object.values(sets)) {
-    e.runs /= n;
-    e.pts /= n;
-  }
   return {
     games: n,
     wins,
@@ -207,51 +195,6 @@ export function runLab(req: LabRequest, onGame?: () => void): LabSummary {
     oppPlayTypes: freq(opt),
     players: playerOut(pl),
     impacts,
-    sets,
     margins,
   };
-}
-
-export interface Candidate {
-  id: string;
-  label: string;
-  why: string;
-  patch: TacticsPatch;
-  /** Game-plan group: a counter replaces the plan's item in the same group (see GamePlanItem). */
-  group?: string;
-  /** What in the scouting numbers backs it. */
-  evidence?: string;
-}
-
-export interface CandidateResult {
-  id: string;
-  label: string;
-  why: string;
-  patch: TacticsPatch;
-  group?: string;
-  evidence?: string;
-  net: number;
-  delta: number;
-  se: number;
-  winPct: number;
-}
-
-/** Evaluate candidate patches against a baseline using common random numbers. */
-export function evaluateCandidates(
-  a: LabSide,
-  b: LabSide,
-  candidates: Candidate[],
-  games: number,
-  seed: number,
-  onGame?: () => void,
-  type?: GameType,
-): { base: LabSummary; results: CandidateResult[] } {
-  const base = runLab({ a, b, games, seed, type }, onGame);
-  const results = candidates.map((c) => {
-    const r = runLab({ a, b, games, seed, type, patch: c.patch }, onGame);
-    const { delta, se } = pairedDelta(base, r);
-    return { id: c.id, label: c.label, why: c.why, patch: c.patch, group: c.group, evidence: c.evidence, net: r.net, delta, se, winPct: r.winPct };
-  });
-  results.sort((x, y) => y.delta - x.delta);
-  return { base, results };
 }

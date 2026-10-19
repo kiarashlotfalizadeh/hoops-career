@@ -1,5 +1,5 @@
 // One possession from the start: a situational plan coming or going, the late-game foul check, the
-// play called from the bench or after a timeout, the press, the run-out decision (each setting's share
+// play after a timeout, the press, the run-out decision (each setting's share
 // of it tagged), and the half court's sequence of up to six actions, the first of which may be a set,
 // with the shot clock running from the inbound. Also the shot profile the offense's settings and the
 // game situation ask for, and its spacing.
@@ -21,7 +21,6 @@ export const possessionMethods = {
     const off = this.T[o];
     const def = this.T[1 - o];
     let ctx = this.ctx;
-    this.go3 = false;
     this.inbound = false;
     this.sideOut = false;
     this.possPts = 0;
@@ -77,31 +76,20 @@ export const possessionMethods = {
 
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
-    // the after-timeout play is for this trip; a play called from the bench changes what the offense
-    // looks for (never how well it executes). Both wait for a trip that gets to the half court: a press
-    // turnover or a run-out leaves them for the next one
+    // the after-timeout play is for this trip (a queued set takes its place). Both wait for a trip
+    // that gets to the half court: a press turnover or a run-out leaves them for the next one
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
-    const call = off.call && off.call.kind !== 'foul' ? off.call : null;
+    const queued = off.nextSet;
     // an after-timeout set is run for its player (the best fit when he's off the floor), and an
     // after-timeout isolation named for a player is a clear-out for him
     const atoPid = off.t.manage.atoPid ?? null;
     let set: { id: SetId; pid: number | null } | null = ato && isSetId(ato) ? { id: ato, pid: atoPid } : null;
     let first: ActionType | null = ato && !isSetId(ato) ? ato : null;
     let isoFor: SP | null = first === 'iso' && atoPid !== null ? (off.byId.get(atoPid) ?? null) : null;
-    if (call) {
-      // a play called from the bench (after a timeout too) replaces the standing after-timeout play
+    if (queued) {
       first = null;
-      set = null;
       isoFor = null;
-      if (call.kind === 'three') late.need3 = this.go3 = true;
-      else if (call.kind === 'two') {
-        late.need2 = true;
-        late.quick = true;
-      } else if (call.kind === 'hold') late.hold = true;
-      else if (call.kind === 'iso') {
-        first = 'iso';
-        isoFor = off.byId.get(call.pid) ?? null;
-      } else if (call.kind === 'set') set = { id: call.set, pid: call.pid ?? null };
+      set = { ...queued };
     }
 
     // ---- full court press
@@ -127,9 +115,9 @@ export const possessionMethods = {
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
-    // a called play is walked up and run in the half court, and so is the inbounds play after a foul to
+    // a queued set is walked up and run in the half court, and so is the inbounds play after a foul to
     // give or a timeout
-    if (call || this.inbound || outOfTimeout) transP = 0;
+    if (queued || this.inbound || outOfTimeout) transP = 0;
 
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at K.runOutPts per run-out over a half-court trip
@@ -142,13 +130,10 @@ export const possessionMethods = {
       return;
     }
 
-    // ---- half court: the trip uses up the after-timeout play and the call from the bench
+    // ---- half court: the trip uses up the after-timeout play and a queued set
     if (this.cur) this.cur.kind = 'half';
     off.atoNext = false;
-    if (call) {
-      off.call = null;
-      if (this.cur) this.cur.call = { ...call, t: off.side };
-    }
+    off.nextSet = null;
     // (out of a timeout, the ball is inbounded and brought up, as after any dead ball)
     let setup = (K.setup[outOfTimeout && (ctx === 'steal' || ctx === 'dreb') ? 'deadTO' : ctx] ?? 4) * paceF * this.rng.uniform(0.75, 1.25);
     if (late.milk) setup += 6;
@@ -210,11 +195,11 @@ export const possessionMethods = {
       }
       const left = Math.min(shotClock, this.clock);
       forced = left <= 4.5 || n === 5 + stops;
-      // the trip opens with its set: the one called, or now and then one of the package's when it's a
+      // the trip opens with its set: after a timeout, or now and then one of the package's when it's a
       // fresh trip with the time to run it and nothing else to do (no late-game situation)
       let play: SetPlay | null = null;
       if (n === 0) {
-        const quiet = !first && !inbound && !forced && left >= 14 && !late.hold && !late.quick && !late.milk && !late.need3 && !late.need2 && !late.hurry && !this.go3;
+        const quiet = !first && !inbound && !forced && left >= 14 && !late.hold && !late.quick && !late.milk && !late.need3 && !late.hurry;
         const want = set ?? (fresh && quiet ? this.packageSet(off, def) : null);
         if (want) play = this.setPlay(off, def, want.id, want.pid);
       }
@@ -284,11 +269,8 @@ export const possessionMethods = {
     } else if (late.hurry) {
       three *= 1.8;
       mid *= 0.5;
-    } else if (late.need2) {
-      three *= 0.1;
-      mid *= 0.5;
     }
-    return { three, mid, rim: late.need3 ? rim * 0.15 : late.need2 ? rim * 1.6 : rim };
+    return { three, mid, rim: late.need3 ? rim * 0.15 : rim };
   },
 
   spacingBonus(this: GameSim, off: ST) {

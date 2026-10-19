@@ -1,5 +1,5 @@
 // Games: your schedule, a matchup page per opponent (/games/:tid: the preview on game day, scouting,
-// the game plan, matchups and the Lab against them), the live game and its reports, and the Lab.
+// the game plan and matchups), the live game and its reports.
 import { Navigate, Route, useLocation, useParams } from 'react-router-dom';
 import { useLeague } from '../../state/store';
 import { nextUserGame } from '../../core/analysis/preview';
@@ -9,7 +9,6 @@ const GamesHub = lazyRetry(() => import('../games/GamesHub'));
 const Matchup = lazyRetry(() => import('../games/Matchup'));
 const Live = lazyRetry(() => import('../screens/Live'));
 const GameReport = lazyRetry(() => import('../games/GameReport'));
-const Lab = lazyRetry(() => import('../games/Lab'));
 
 function MatchupPage() {
   const { pathname } = useLocation();
@@ -43,6 +42,7 @@ export const gamesRoutes = (
     <Route path="/preview/:gid?" element={<PreviewRedirect />} />
     <Route path="/live" element={<LivePage />} />
     <Route path="/game/:gid" element={<GameReport />} />
-    <Route path="/lab" element={<Lab />} />
+    {/* the Tactics Lab was retired: old links go to Tactics */}
+    <Route path="/lab" element={<Navigate to="/team/tactics" replace />} />
   </>
 );

@@ -1,13 +1,13 @@
-// The assistant coach: opponent scouting, counter-tactic candidates (verified with lab sims
-// in a worker), and alerts about rotation/tactics issues on your own team.
+// The assistant coach: opponent scouting, counter-tactic candidates, and alerts about rotation and
+// tactics issues on your own team.
 
-import type { ActionType, League, Player, PlayerDefense, PnrCoverage, RatingKey, SetId, Tactics } from '../types';
+import type { ActionType, League, Player, PlayerDefense, PnrCoverage, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
 import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
 import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
-import { applyPatch, type Candidate } from './lab';
+import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
 import { andList, playerName, rosterSorted, shortName, teamPlayers } from '../league/helpers';
@@ -17,6 +17,18 @@ import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
 import { SETS } from '../sim/sets';
+
+/** A change the staff would make against one opponent (see counterCandidates). */
+export interface Candidate {
+  id: string;
+  label: string;
+  why: string;
+  patch: TacticsPatch;
+  /** Game-plan group: a counter replaces the plan's item in the same group (see GamePlanItem). */
+  group?: string;
+  /** What in the scouting numbers backs it. */
+  evidence?: string;
+}
 
 export interface Threat {
   pid: number;
@@ -152,7 +164,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
 
 /**
  * The user's tactics against `opp` if counter `c` went into the game plan, replacing the plan's item
- * in its group (what the Lab tests and what Add on the game plan screen would play).
+ * in its group (what Add on the game plan screen would play).
  */
 export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidate, 'id' | 'label' | 'group' | 'patch'>): Tactics {
   const plan = planFor(league, opp);

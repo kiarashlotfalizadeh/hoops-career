@@ -137,7 +137,7 @@ export const motionMethods = {
         const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -lev(zone.drive) : 0);
         // (Hammer's baseline drive is run to kick it to the corner)
         const kickP = play ? 0.75 + lev(help * 0.15) : 0.45 + dr.c.passing / 200 + lev(help * 0.15);
-        if (this.go3 || this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {
+        if (this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {
           // kick out after collapsing the defense
           const sh = play ? play.cast.b : this.kickTarget(off, dr);
           // the hammer screen on the help side frees the corner

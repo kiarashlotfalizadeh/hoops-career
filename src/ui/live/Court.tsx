@@ -65,14 +65,9 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
   const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor });
   props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor };
 
-  // how far each possession got: a replay shown in between doesn't make the one it interrupted start over
-  // (or a finished one play again)
-  const progress = useRef(new WeakMap<Script, { t: number; done: boolean }>());
+  // each possession is drawn from its start
   useEffect(() => {
-    const was = state.current;
-    if (was.script) progress.current.set(was.script, { t: was.t, done: was.done });
-    const back = script ? progress.current.get(script) : undefined;
-    state.current = { t: back?.t ?? 0, last: 0, script, done: back?.done ?? false, score: null, beat: -1 };
+    state.current = { t: 0, last: 0, script, done: false, score: null, beat: -1 };
   }, [script]);
 
   useEffect(() => {

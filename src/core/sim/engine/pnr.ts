@@ -248,7 +248,6 @@ export const pnrMethods = {
       forced ? 0 : K.continueBase * (advH < 0 ? 1.6 : 0.7) * (late.hold ? 0.5 : 1), // reset
     ];
     if (cov === 'blitz') opts[2] *= levW(0.3);
-    if (this.go3) opts[3] *= 0.05;
     // a set goes for its look
     if (play) (['pull3', 'pull2', 'drive', 'roll', 'pop', 'kick'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);

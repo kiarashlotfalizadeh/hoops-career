@@ -1,7 +1,6 @@
 // Browser smoke test for CI: serves the production build, coaches the opening-night game live
 // and plays the opening week of the real league on a phone viewport, opens every main screen
-// (phone and tablet), runs the Tactics Lab's worker, round-trips a backup export/import and picks a
-// live game up after a reload.
+// (phone and tablet), round-trips a backup export/import and picks a live game up after a reload.
 // Fails on any page error, console error or missing screen.
 // Usage: npm run build && npm run smoke (SMOKE_PORT picks the preview port, default 4179)
 import { spawn } from 'node:child_process';
@@ -136,7 +135,6 @@ try {
     '/team/rotation',
     '/team/lineups',
     '/team/tactics',
-    '/lab',
     '/league',
     '/league?tab=stats',
     '/league?tab=ratings',
@@ -191,18 +189,6 @@ try {
     await page.waitForSelector('text=Game report');
     step('opened a game report');
   } else fail.push('no recent game on Home');
-
-  // the Tactics Lab sims in a Web Worker, which the production build bundles on its own
-  await page.goto(`${base}/#/lab`);
-  await page.locator('.lab-run').getByRole('button', { name: '20', exact: true }).click();
-  await page.getByRole('button', { name: /^Run \d+ games$/ }).click();
-  await page
-    .getByText('Win %', { exact: true })
-    .waitFor({ timeout: 60_000 })
-    .then(
-      () => step('ran a Tactics Lab projection'),
-      () => fail.push('the Tactics Lab never showed a result'),
-    );
 
   // backup round trip
   await page.goto(`${base}/#/settings`);

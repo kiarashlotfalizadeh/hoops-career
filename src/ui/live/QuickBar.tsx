@@ -1,4 +1,4 @@
-import { ClipboardList, Lightbulb, Route, Timer, Users, X } from 'lucide-react';
+import { ClipboardList, Lightbulb, Timer, Users, X } from 'lucide-react';
 
 /** The assistant's top fix, as the quick actions offer it. */
 export interface QuickFix {
@@ -11,8 +11,8 @@ export interface QuickFix {
 
 /**
  * The quick actions under the court (in the tab bar's place on a phone held upright; under the
- * scorebug held sideways): a timeout (the scorebug counts the ones left), the lineup and its subs, the play calls
- * (lit in the late game), the assistant's single top fix as a pill, and the Clipboard.
+ * scorebug held sideways): a timeout (the scorebug counts the ones left), the lineup and its subs,
+ * the assistant's single top fix as a pill, and the Clipboard.
  */
 export function QuickBar({
   timeouts,
@@ -21,9 +21,6 @@ export function QuickBar({
   toPending,
   toState,
   onSubs,
-  onCall,
-  called,
-  late,
   fix,
   clipOpen,
   onClip,
@@ -36,11 +33,6 @@ export function QuickBar({
   /** Why a timeout can't be called now, or that one is waiting, for screen readers. */
   toState: string;
   onSubs: () => void;
-  onCall: () => void;
-  /** A call is waiting for its possession. */
-  called: boolean;
-  /** The late-game window is open. */
-  late: boolean;
   fix?: QuickFix | null;
   clipOpen: boolean;
   onClip: () => void;
@@ -63,17 +55,6 @@ export function QuickBar({
           <Users size={20} />
         </span>
         <span className="lv-lq-l">Subs</span>
-      </button>
-      <button
-        className={`lv-lq-btn${late ? ' late' : ''}${called ? ' on' : ''}`}
-        onClick={onCall}
-        aria-label={`Call${late ? ': late game' : ''}${called ? ': a call is waiting' : ''}`}
-      >
-        <span className="lv-lq-ic" aria-hidden="true">
-          <Route size={20} />
-          {(called || late) && <span className="lv-lq-dot" />}
-        </span>
-        <span className="lv-lq-l">Call</span>
       </button>
       {fix && (
         <div className="lv-lq-fix" key={fix.label}>

@@ -215,15 +215,8 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
         text: `${(v.pts / v.poss).toFixed(2)} points a trip (league ${base.toFixed(2)}): try other actions.`,
       });
   }
-
-  // the last two minutes of a close fourth quarter or overtime: the late-game calls are open (said once a period)
-  if (lateGame(view.q, view.clock, me.score - them.score) && !a.atBreak)
-    out.push({ id: `late-${view.q}`, tone: 'info', title: 'Crunch time', text: 'Late-game calls are open: tap Call.' });
   return out;
 }
-
-/** The late-game window: the last two minutes of a fourth quarter or overtime within eight points (the Calls tab leads with the late-game calls). */
-export const lateGame = (q: number, clock: number, margin: number) => q >= 4 && clock <= 120 && clock > 0.05 && Math.abs(margin) <= 8;
 
 /**
  * What happened in the possessions between two snapshots: injuries and foul-outs on either side,

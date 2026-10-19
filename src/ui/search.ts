@@ -50,7 +50,6 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Lineups', to: '/team/lineups', meta: 'Team · five-man units and their ratings', also: 'units five man' },
   { title: 'Compare players', to: '/compare', meta: 'Team · two players side by side', also: 'versus vs' },
   { title: 'Schedule', to: '/games', meta: 'Games · your schedule and results', also: 'games results calendar' },
-  { title: 'Tactics Lab', to: '/lab', meta: 'Games · test tactics with real engine games', also: 'lab simulate test' },
   { title: 'Standings', to: '/league/standings', meta: 'League · standings and playoff odds', also: 'odds table' },
   { title: 'Playoffs', to: '/league/playoffs', meta: 'League · the bracket and the play-in', also: 'bracket play-in postseason' },
   { title: 'NBA Cup', to: '/league/cup', meta: 'League · the in-season tournament', also: 'cup tournament' },

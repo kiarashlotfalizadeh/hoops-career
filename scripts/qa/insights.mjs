@@ -1,5 +1,5 @@
-// Tactics insights, the rotation and a Lab compare (blitz vs your plan) after a few games of a
-// fictional league, on a phone and a tablet. Works on any build (dev server or preview).
+// Tactics insights and the rotation after a few games of a fictional league, on a phone and a
+// tablet. Works on any build (dev server or preview).
 // Usage: node scripts/qa/insights.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
@@ -46,15 +46,6 @@ async function run(viewport, prefix) {
   await shot('insights');
   await page.goto(`${base}/#/rotation`);
   await shot('rotation');
-  await page.goto(`${base}/#/tactics?tab=defense`);
-  await page.waitForTimeout(400);
-  await page.getByRole('button', { name: 'Blitz' }).first().click();
-  await page.waitForTimeout(300);
-  await page.getByRole('button', { name: /Compare/ }).click();
-  await page.waitForTimeout(500);
-  await page.getByRole('button', { name: /Run/ }).click();
-  await page.waitForSelector('text=Verdict', { timeout: 180000 });
-  await shot('compare');
   await page.goto(`${base}/#/`);
   await shot('home');
   await ctx.close();

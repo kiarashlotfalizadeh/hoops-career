@@ -6,7 +6,7 @@ import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { HighRow, RecStat, RecordBook } from './league/records';
-import type { PlayCall, PossLog } from './sim/log';
+import type { PossLog } from './sim/log';
 
 export type Pos = 'PG' | 'SG' | 'SF' | 'PF' | 'C';
 export const POSITIONS: Pos[] = ['PG', 'SG', 'SF', 'PF', 'C'];
@@ -1202,8 +1202,6 @@ export interface Settings {
   draftPause?: boolean;
   /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
   liveWinProb?: boolean;
-  /** Live games replay a shot at the buzzer and the one that wins the game, once, as it happens (default on). */
-  liveReplays?: boolean;
   /** Live games open with the starting lineups on the court before the tip (default on). */
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */
@@ -1371,8 +1369,6 @@ export type LiveOp = { at: number } & (
   | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean } }
   | { op: 'timeout'; args: { reason?: string } }
   | { op: 'manualSubs'; args: { on: boolean } }
-  | { op: 'call'; args: { call: PlayCall } }
-  | { op: 'cancelCall'; args: Record<string, never> }
 );
 
 /** Post-game press conference answers: credit the group, praise the player of the game, challenge the team and call one player out (after a loss). */

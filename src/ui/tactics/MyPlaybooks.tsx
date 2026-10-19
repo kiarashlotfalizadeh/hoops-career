@@ -1,9 +1,8 @@
-// The coach's saved playbooks on Team → Tactics: the "My playbooks" card (load, compare in the Lab,
-// overwrite, rename, delete, save the current tactics as a new one), the one in use marked, and
-// "Edited" once the tactics have moved from it.
+// The coach's saved playbooks on Team → Tactics: the "My playbooks" card (load, overwrite, rename,
+// delete, save the current tactics as a new one), the one in use marked, and "Edited" once the
+// tactics have moved from it.
 import { useMemo, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ChevronRight, FlaskConical, Save } from 'lucide-react';
+import { ChevronRight, Save } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import {
@@ -12,7 +11,6 @@ import {
   applyPlaybook,
   changeText,
   deletePlaybook,
-  loadPlaybook,
   overwritePlaybook,
   playbookDiff,
   playbookLabel,
@@ -26,7 +24,6 @@ import {
 import { fmtDate, rosterSorted } from '../../core/league/helpers';
 import type { League, SavedPlaybook } from '../../core/types';
 import { rosterNames } from '../stats';
-import { setLabBaseline } from '../screens/labBridge';
 import { Help, Section, Sheet, Tag, activateOnKey } from '../components/ui';
 import '../screens/tactics.css';
 
@@ -115,7 +112,6 @@ type Step = 'view' | 'rename' | 'overwrite' | 'delete';
 
 function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) {
   const league = useLeague();
-  const nav = useNavigate();
   const t = league.teams[league.userTid].tactics;
   const roster = useRoster(league);
   const [step, setStep] = useState<Step>('view');
@@ -128,12 +124,6 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
     if (!act('Load the playbook', (l) => void applyPlaybook(l, pb.id))) return;
     toast(`Loaded "${pb.name}"`, 'good');
     close();
-  };
-  const compare = () => {
-    // the playbook as it would load now is the before side; the current tactics are the after
-    setLabBaseline(loadPlaybook(t, pb, roster.pids), league, pb.name);
-    close();
-    nav('/lab?compare=1');
   };
   if (step === 'rename')
     return (
@@ -200,9 +190,6 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
         <button className="btn primary grow" onClick={load} disabled={busy || (inUse && !diff.length)}>
           {inUse && !diff.length ? 'In use' : 'Load'}
         </button>
-        <button className="btn grow" onClick={compare} disabled={!diff.length} aria-label={`Compare "${pb.name}" with your current tactics in the Lab`}>
-          <FlaskConical size={16} /> Compare
-        </button>
       </div>
       <div className="row wrap tx-btns">
         <button className="btn sm" disabled={busy} onClick={() => setStep('overwrite')}>
@@ -243,7 +230,7 @@ export function MyPlaybooksCard() {
               roster. Matchups and star targets are game by game, so they aren&apos;t saved.
             </p>
             <p>Your playbooks are yours: they come with you if you take over another team.</p>
-            <p>Load one, or compare it with your current tactics in the Lab.</p>
+            <p>Each one lists what loading it would change.</p>
           </Help>
         </div>
       }

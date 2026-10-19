@@ -66,7 +66,6 @@ export const isolationMethods = {
       Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + lev(Math.max(0, help))),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
-    if (this.go3) opts[3] *= 0.05;
     const c = this.rng.weighted(opts);
     const advOpen = clamp(adv * 0.35, -0.7, 0.75);
     switch (c) {

@@ -16,7 +16,7 @@ import { teamPlayers } from '../src/core/league/helpers';
 import { simDay, startRegularSeason } from '../src/core/league/season';
 import { applyPatch } from '../src/core/sim/tactics';
 import { GameSim, K, engineDiag, resetEngineDiag, type SimTeamInput } from '../src/core/sim/engine';
-import type { PlayCall, PossLog } from '../src/core/sim/log';
+import type { PossLog } from '../src/core/sim/log';
 import { Rng } from '../src/core/random';
 import type { GameType, Player, SituationalPlan, TacticsPatch } from '../src/core/types';
 
@@ -173,23 +173,15 @@ const cfgs: Cfg[] = [
     h: () => O({ sets: ['spain', 'horns'] }),
     live: (sim, n, h, a) => {
       void a;
-      const calls: PlayCall[] = [
-        { kind: 'three' },
-        { kind: 'two' },
-        { kind: 'hold' },
-        { kind: 'iso', pid: h.star },
-        { kind: 'set', set: 'floppy' },
-        { kind: 'set', set: 'hammer', pid: h.shooter },
-        { kind: 'foul' },
-      ];
-      if (n % 9 === 4) sim.callPlay(0, calls[((n / 9) % calls.length) | 0]);
+      // a set queued now and then (the hook the engine's tests use)
+      if (n % 18 === 4) sim.runSet(0, 'floppy');
+      else if (n % 9 === 4) sim.runSet(0, 'hammer', h.shooter);
       if (n % 23 === 11) sim.callTimeout(n % 2 ? 0 : 1, 'fingerprint');
       if (n === 60) {
         const t = sim.baseTactics(1);
         t.defense.scheme = 'zone32';
         sim.setTactics(1, t);
       }
-      if (n === 95) sim.cancelPlay(0);
       if (n === 120) {
         const t = sim.baseTactics(0);
         t.defense.starPlan = 'double';
@@ -271,7 +263,7 @@ for (const c of cfgs) {
     part(`${c.name} #${g}`, JSON.stringify([res, logs, reads, sim.rawBoxes(), sim.injuries, state, engineDiag]));
     if (verbose) {
       for (const im of res.impacts ?? []) seen.add(im.key.replace(/:[od]$/, ''));
-      for (const l of logs.flat()) for (const k of [l.kind, l.coverage, l.finish, l.set?.id, l.call?.kind, ...l.steps.map((s) => s.k)]) if (k) seen.add(k);
+      for (const l of logs.flat()) for (const k of [l.kind, l.coverage, l.finish, l.set?.id, ...l.steps.map((s) => s.k)]) if (k) seen.add(k);
       for (const e of res.pbp ?? []) for (const w of WORDS) if (e.text.includes(w)) seen.add(w);
       for (const l of logs.flat()) for (const w of LABELS) if (l.label.includes(w)) seen.add(w);
     }

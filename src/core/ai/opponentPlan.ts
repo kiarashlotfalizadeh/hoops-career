@@ -4,7 +4,7 @@
 // a particular way, a poor perimeter defender to attack). Whether he prepares one depends on the
 // difficulty and his tactics rating, rolled from the game's id, never the league's random stream.
 // What goes in it is read from the user's stored games before game day only, so the plan for a
-// game reads the same in the preview, the Lab and the game itself, whatever else is played that
+// game reads the same in the preview and the game itself, whatever else is played that
 // day. AI-vs-AI games never get one, so the league's numbers are unchanged.
 
 import { preset } from '../league/difficulty';

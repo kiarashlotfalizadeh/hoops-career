@@ -1,5 +1,5 @@
 // Drives the core coaching loop on a phone viewport and captures screenshots: tactics, rotation,
-// roster, the Lab (projection and counters), the pre-game screen, a live game and its report. Works on any build.
+// roster, the pre-game screen, a live game and its report. Works on any build.
 // Usage: node scripts/qa/core-screens.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
 import { clearMoments } from './moments.mjs';
@@ -44,17 +44,6 @@ const first = page.locator('.listrow.clickable').first();
 await first.click();
 await page.waitForTimeout(400);
 await shot('14-player', true);
-await page.goto(`${base}/#/lab`);
-await page.waitForTimeout(400);
-await page.getByRole('button', { name: /Run/ }).click();
-await page.waitForSelector('text=Win %', { timeout: 120000 });
-await shot('15-lab', true);
-// counters are tested on the opponent's matchup page (Plan): the old link takes you there
-await page.goto(`${base}/#/lab?mode=counters`);
-await page.waitForTimeout(800);
-await page.getByRole('button', { name: /^Run \d+ games each/ }).click();
-await page.waitForSelector('.mu-runres', { timeout: 240000 });
-await shot('16-lab-counters', true);
 // start season
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(400);
@@ -70,14 +59,10 @@ await waitSim();
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(500);
 await shot('18-home-gameday', true);
-// the pre-game screen for that game (its matchup page's Preview), and the Lab against them
+// the pre-game screen for that game (its matchup page's Preview)
 await page.goto(`${base}/#/preview`);
 await page.waitForTimeout(800);
 await shot('18b-preview', true);
-await page.getByRole('radio', { name: 'Lab' }).click();
-await page.getByRole('button', { name: /Run/ }).click();
-await page.waitForSelector('text=Win %', { timeout: 120000 });
-await shot('18c-preview-sim', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
 await shot('19-live');

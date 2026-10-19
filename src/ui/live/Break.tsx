@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { AlertTriangle, ClipboardList, Lightbulb, Play } from 'lucide-react';
+import { useMemo } from 'react';
+import { AlertTriangle, Lightbulb, Play } from 'lucide-react';
 import type { League, Tactics, Team } from '../../core/types';
 import { buildGameReport, setLineText, setLines } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
@@ -17,7 +17,7 @@ import '../components/agenda.css';
 import { fmtClock, periodLabel, signed } from '../stats';
 import { foulLimit, type LiveAlert } from './alerts';
 import type { Drawn } from './drawn';
-import { callLabel, readStatus, type Calls } from './plays';
+import { readStatus } from './plays';
 
 /** A fix the staff would make now: what it's about, a figure, and the change one tap away. */
 interface Fix {
@@ -56,8 +56,6 @@ export function Break({
   runAlert,
   subFor,
   substitute,
-  calls,
-  drawUp,
   keys,
   win,
   oppPlan,
@@ -83,9 +81,6 @@ export function Break({
   /** The rested bench player the staff would send in for one of yours. */
   subFor: (pid: number) => number | undefined;
   substitute: (out: number, inn: number) => boolean;
-  calls: Calls;
-  /** The Calls tab, for the play out of the timeout. */
-  drawUp: ReactNode;
   keys?: GameKey[];
   /** Your chance to win now (absent when it's switched off). */
   win?: number;
@@ -94,7 +89,6 @@ export function Break({
   /** Start the next period, or resume after the timeout. */
   onGo: () => void;
 }) {
-  const [drawing, setDrawing] = useState(false);
   const huddle = mode === 'huddle';
   const report = useMemo(() => buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics }), [league, view, tactics]);
   const q = view.q;
@@ -253,28 +247,15 @@ export function Break({
 
       {huddle ? (
         <Section title="Out of the timeout">
-          {!drawing && (
-            <div className="small">
-              {calls.pending ? (
-                <>
-                  Drawn up: <b>{callLabel(calls.pending, names)}</b>
-                </>
-              ) : atoText ? (
-                <>
-                  Your after-timeout play: <b>{atoText}</b>
-                </>
-              ) : (
-                <span className="dim">No play drawn up: the team runs its offense.</span>
-              )}
-            </div>
-          )}
-          {drawing ? (
-            drawUp
-          ) : (
-            <button className="btn block" onClick={() => setDrawing(true)}>
-              <ClipboardList size={16} aria-hidden="true" /> Draw up a play
-            </button>
-          )}
+          <div className="small">
+            {atoText ? (
+              <>
+                Your after-timeout play: <b>{atoText}</b>
+              </>
+            ) : (
+              <span className="dim">No after-timeout play set (Tactics → Game Mgmt): the team runs its offense.</span>
+            )}
+          </div>
         </Section>
       ) : (
         <>

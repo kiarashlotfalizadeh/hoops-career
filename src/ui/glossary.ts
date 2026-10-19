@@ -138,12 +138,6 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'Numbers',
     text: 'How far a number is from the league’s, in standard errors. Within about ±2 it could be noise; beyond that it’s a real tendency.',
   },
-  {
-    id: 'range',
-    term: '± range (Lab)',
-    group: 'Numbers',
-    text: 'How far a Lab result could be off: run the same test many times and the true change lands inside it about 95 times in 100. More games make it tighter.',
-  },
   { id: 'onoff', term: 'On/off', group: 'Numbers', text: 'A team’s net rating with a player on the floor minus with him off it.' },
   {
     id: 'onnet',
@@ -245,7 +239,6 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'The game',
     text: 'Changes to your playbook for one opponent: the next game, the series or the season. It never touches the playbook itself.',
   },
-  { id: 'lab', term: 'Tactics Lab', group: 'The game', text: 'Runs real engine games to test a plan, compare before and after your edits, or rank the staff’s counters.' },
 ];
 
 export const glossaryEntry = (id: string) => GLOSSARY.find((g) => g.id === id);

@@ -219,12 +219,6 @@ export default function Settings() {
             help="On the scorebug, the Flow tab and at the breaks. Game reports always show it."
           />
           <Toggle
-            on={st.liveReplays !== false}
-            onChange={(v) => set('liveReplays', v)}
-            label="Instant replays"
-            help="Buzzer-beaters and game-winners replay once in slow motion. Any play replays from the pause button."
-          />
-          <Toggle
             on={st.liveScores !== false}
             onChange={(v) => set('liveScores', v)}
             label="Scores around the league"

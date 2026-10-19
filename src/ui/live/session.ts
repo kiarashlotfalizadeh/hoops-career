@@ -7,7 +7,6 @@ import type { GameSim } from '../../core/sim/engine';
 import { buildSimInput } from '../../core/league/games';
 import { hashString } from '../../core/random';
 import type { LiveGame } from '../../state/live';
-import type { Script } from './choreo';
 import { eventLines, type LiveEvent } from './alerts';
 import type { BannerItem } from './Banner';
 import type { SubOptions } from './MyPlayer';
@@ -32,16 +31,6 @@ export const PEEK_MIN = 64;
 export type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
 /** 'player': one of the players (yours or theirs); 'break': a period's end; 'huddle': your timeout, while it's taken. */
 export type Panel = 'none' | 'player' | 'skip' | 'break' | 'huddle' | 'scores';
-/**
- * Something the court shows in place of the game for a moment: a replay, asked for or the automatic
- * one of a shot at the buzzer. The possession it interrupts picks up where it was.
- */
-export interface Show {
-  kind: 'replay' | 'auto';
-  script: Script;
-}
-/** Replays run at this share of the game's speed. */
-export const REPLAY_SPEED = 0.55;
 
 /** Whether a period's buzzer stops for a break with the period report. */
 export const breakAfter = (mode: NonNullable<Settings['liveBreaks']>, q: number) => (mode === 'quarters' ? true : mode === 'half' ? q === 2 : false);

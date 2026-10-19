@@ -33,14 +33,14 @@ export const clockMethods = {
       if (this.q === 4) t.timeouts = Math.min(t.timeouts, 4);
       if (this.q >= 5) t.timeouts = 2;
       for (const p of t.players) p.energy = Math.min(1, p.energy + (this.q === 3 ? 0.3 : 0.1));
-      // calls from the bench and the hack-a-player count are for one period (a call made at the
-      // buzzer is for the one starting now), and the break is the stop a waiting timeout was for
-      if (t.callQ !== this.q) t.call = null;
+      // a queued set and the hack-a-player count are for one period, and the break is the stop a
+      // waiting timeout was for
+      t.nextSet = null;
       t.atoNext = false;
       t.toWait = null;
       t.hacked.clear();
     }
-    // the break draws from its own stream, so the possessions around it stay paired in Lab comparisons
+    // the break draws from its own stream, so the possessions around it stay paired in batch comparisons
     this.rng = new Rng(mix(this.seed, 0x7ff00000 + this.q));
     for (const t of this.T) this.adjust(t);
     // possession arrow: loser of tip gets Q2 & Q3, winner Q4; OT is a jump
@@ -105,7 +105,7 @@ export const clockMethods = {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, need2: false };
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false };
     if (final && clock <= 26 && diff >= -2 && diff <= 0) res.hold = true;
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;

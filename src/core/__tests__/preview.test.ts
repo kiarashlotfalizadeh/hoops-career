@@ -161,7 +161,7 @@ describe('matchup preview', () => {
     expect(pv.projection.edge).toBe(-HOME_EDGE);
   });
 
-  it('the Lab plays every game at A’s floor with venue a, and takes turns by default as before', () => {
+  it('batch sims play every game at A’s floor with venue a, and take turns by default', () => {
     const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
     const side = (tid: number) => ({ team: league.teams[tid], players: teamPlayers(league, tid) });
     const run = (venue?: 'a' | 'b' | 'neutral') => runLab({ a: side(0), b: side(1), games: 6, seed: 42, venue }).margins;

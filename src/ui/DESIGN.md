@@ -211,8 +211,8 @@ first: wide screens get the same single column, centred, at most 788px. Grid col
 Broadcast first: the court is always the biggest thing on screen.
 
 - A slim scorebug sits over a full-width court (the win-probability sliver and the scores ticker
-  under it when Settings has them on). Captions, graphics, replays and **one banner at a time**
-  (injuries, foul-outs, their adjustments, the staff's alerts) go over the court, never beside it.
+  under it when Settings has them on). Captions, graphics and **one banner at a time** (injuries,
+  foul-outs, their adjustments, the staff's word) go over the court, never beside it.
 - **The scorebug labels its figures**: each team's block reads Timeouts n and Fouls n (Penalty n
   when the other team is in the bonus), and the sliver under it reads To win. A player on the floor
   shows points, energy (bar and %) and fouls as "n PF".
@@ -222,7 +222,7 @@ Broadcast first: the court is always the biggest thing on screen.
 - **One Clipboard** (Lineup, Tactics, Calls, Box, Play-by-play) holds every coaching control; it
   docks under the court when there's room and opens as a sheet otherwise. A new control goes in one
   of its tabs, once.
-- Playback (pause, replay, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
+- Playback (pause, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
 - **One break screen** for quarters, halftime and timeouts (huddle mode): the score and the chance
   to win, who's tired or in foul trouble, what's deciding it with Apply, the keys, and Start.
 - Every change during a game goes through the live controller (the journal records it), never a raw
@@ -231,7 +231,7 @@ Broadcast first: the court is always the biggest thing on screen.
   MIN PTS REB AST STL BLK TOV FG 3P FT PF +/-. Don't build another.
 - Two-team comparisons use `CompareBar`, which puts the winning figure in a pill of its side's
   colour (`higherBetter={false}` where lower wins, as for TOV%).
-- A court or reel that plays on request is one header line with its button until it's played.
+- A highlights reel that plays on request is one header line with its button until it's played.
 
 ## Copy
 
@@ -251,12 +251,11 @@ Broadcast first: the court is always the biggest thing on screen.
 - A percentage says what it's a percentage of ("75% of value"); a bar's legend names every part,
   a striped amount included.
 - **Never quote an engine effect size or spread in copy** ("worth about +1.1 per 100"): show the
-  Lab's or the league's numbers at runtime, or none. The engine is re-tuned; copy isn't.
+  game's or the league's numbers at runtime, or none. The engine is re-tuned; copy isn't.
 - **A tactical effect is phrased against what would otherwise have happened** ("turned it over
   less than pressure would have made them"), never as a count the box score's factors could
   contradict.
-- One verb per action: the Lab and the counters "Run 40 games" (the button names the count); the
-  press conference says whose mood moves ("Holmgren's mood ↑").
+- One verb per action: the press conference says whose mood moves ("Holmgren's mood ↑").
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
 - Names of controls in advice must match the controls on screen (Team → Tactics tabs: Playbook,
   Offense, Defense, Roles, Game Mgmt).

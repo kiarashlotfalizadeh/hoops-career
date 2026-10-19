@@ -265,7 +265,6 @@ export const shotsMethods = {
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
     if (lk) wDrive *= 1 + 2 * lk.beat;
-    if (this.go3) wDrive *= 0.05;
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
       return;

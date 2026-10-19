@@ -7,7 +7,7 @@
 import type { ActionType, LineupStat, OffRole, Player, Pos, Ratings, SetId, ShotZone, Tactics, Team, TeamBox, TeamTotals, GameType } from '../../types';
 import type { Rng } from '../../random';
 import type { Composites } from '../../ratings';
-import type { FinishType, PlayCall } from '../log';
+import type { FinishType } from '../log';
 import type { Cast, Slot } from '../sets';
 import { K } from './constants';
 
@@ -187,10 +187,8 @@ export interface ST {
   sit: { id: string; label: string } | null;
   /** Times each player has been hacked this period. */
   hacked: Map<number, number>;
-  /** A play called from the bench, waiting for its possession. */
-  call: PlayCall | null;
-  /** The period the call is for: the one it was made in, or the next when it was made at the buzzer (during the break). */
-  callQ: number;
+  /** A set queued for the side's next half-court trip this period (runSet: the engine's tests and measurement scripts). */
+  nextSet: { id: SetId; pid: number | null } | null;
   /** A timeout asked for while the other side had a live ball (the reason given): taken at the next dead ball. */
   toWait: string | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
@@ -266,11 +264,11 @@ export interface ShotOpts {
   foulTag?: [string, number];
 }
 
-/** The late-game modes the clock and the score put an offense in (see lateMode), and those a call from the bench sets. */
+/** The late-game modes the clock and the score put an offense in (see lateMode). */
 export interface LateMode {
   /** Hold for the last shot of the period. */
   hold: boolean;
-  /** A quick shot: a two-for-one, or a called quick two. */
+  /** A quick shot: a two-for-one. */
   quick: boolean;
   /** Milk a late lead: the clock dies with the ball. */
   milk: boolean;
@@ -278,8 +276,6 @@ export interface LateMode {
   need3: boolean;
   /** Two possessions or more down late, still within reach: quick shots, more of them threes. */
   hurry: boolean;
-  /** A called quick two. */
-  need2: boolean;
 }
 
 /** How an action ends: the possession is over ('done'), or the ball moves on to the next action with what's left of the advantage. */

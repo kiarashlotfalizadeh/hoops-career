@@ -1,5 +1,5 @@
 // The live game's broadcast, as a hook: it sets up (or picks up) today's game, runs the possession
-// loop that hands the court one possession at a time (key plays, replays, the breaks, your timeouts),
+// loop that hands the court one possession at a time (key plays, the breaks, your timeouts),
 // keeps the drawn view the rest of the screen reads, tells useOverCourt what to put up over the court,
 // and finishes the game. The Live screen (screens/Live.tsx) draws what it returns and adds the
 // coaching moves; every move goes through `coach`, so the game's journal keeps it.
@@ -26,7 +26,7 @@ import { playersBefore } from './LowerThird';
 import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
 import type { SkipTo } from './skip';
-import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Show, type Status } from './session';
+import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Status } from './session';
 
 export function useLiveGame() {
   const league = useLeague();
@@ -62,7 +62,6 @@ export function useLiveGame() {
   // the frame the court has reached in the possession it's drawing: the caption follows it
   const [beat] = useState<Beat>(() => createBeat());
   const [script, setScript] = useState<Script | null>(null);
-  const [show, setShow] = useState<Show | null>(null);
   // a game from its tip: the starting lineups go up on the court first
   const [intro, setIntro] = useState(false);
   // the playback controls come up for a moment at the tip (and whenever this is bumped)
@@ -71,13 +70,9 @@ export function useLiveGame() {
     setIntro(false);
     setReveal((x) => x + 1);
   }, []);
-  // read when the court finishes drawing (from its animation loop): the latest of each
-  const showRef = useRef<Show | null>(null);
-  showRef.current = show;
+  // read when the court finishes drawing (from its animation loop)
   const scriptRef = useRef<Script | null>(null);
   scriptRef.current = script;
-  /** The possession the court last finished drawing: what Replay shows. */
-  const lastDone = useRef<Script | null>(null);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
@@ -272,8 +267,6 @@ export function useLiveGame() {
       huddleNext.current = false;
       setGame(lg);
       setScript(null);
-      setShow(null);
-      lastDone.current = null;
       const intro = !!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false;
       setIntro(intro);
       if (!intro) setReveal((x) => x + 1);
@@ -547,32 +540,12 @@ export function useLiveGame() {
   }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead]);
   nextRef.current = nextPossession;
 
-  /** The court finished drawing: an automatic replay of a shot at the buzzer, or the next possession. */
+  /** The court finished drawing: on to the next possession. */
   const courtDone = () => {
-    const sh = showRef.current;
-    if (sh) {
-      setShow(null);
-      if (sh.kind === 'auto') nextRef.current();
-      return;
-    }
     const sc = scriptRef.current;
-    if (sc) lastDone.current = sc;
     // a shot at the buzzer, felt as it drops (on a phone)
     if (sc?.moment) haptic(sc.off === userSideRef.current ? 'success' : 'warning');
-    if (sc?.moment && useStore.getState().league?.settings.liveReplays !== false) {
-      setShow({ kind: 'auto', script: { ...sc } });
-      return;
-    }
     nextRef.current();
-  };
-  const replay = () => {
-    const sc = lastDone.current;
-    if (sc && !showRef.current) setShow({ kind: 'replay', script: { ...sc } });
-  };
-  const stopShow = () => {
-    const kind = show?.kind;
-    setShow(null);
-    if (kind === 'auto') nextRef.current();
   };
 
   const huddling = panel === 'huddle';
@@ -591,8 +564,6 @@ export function useLiveGame() {
     if (!lg || status !== 'live') return;
     clearFF();
     setIntro(false);
-    // a replay up now is of a moment the skip leaves behind (and an automatic one, once done, would play on past the break)
-    setShow(null);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
@@ -707,7 +678,6 @@ export function useLiveGame() {
     ticker,
     beat,
     script,
-    show,
     intro,
     reveal,
     tipOff,
@@ -718,10 +688,7 @@ export function useLiveGame() {
     graphic: oc.graphic,
     banner: oc.banner,
     dropBanner: oc.dropBanner,
-    lastDone,
     courtDone,
-    replay,
-    stopShow,
     skip,
     togglePause,
     pickSpeed,

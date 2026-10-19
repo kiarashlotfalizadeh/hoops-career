@@ -1,13 +1,13 @@
 // Named offensive sets (src/core/sim/sets.ts): who each is for and the look it creates, its edges
 // against the defenses it beats and its weakness against those that kill it, defenses reading a set
-// a little better every run, the set package (user only: AI teams run none), calls and after-timeout
-// sets, and the reports. Games that run no set play exactly as before.
+// a little better every run, the set package (user only: AI teams run none), after-timeout sets, and
+// the reports. Games that run no set play exactly as before.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { buildSimInput } from '../league/games';
 import { GameSim, type SimTeamInput } from '../sim/engine';
-import type { PlayCall, PossLog } from '../sim/log';
+import type { PossLog } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
 import { cloneTactics, hasCoachPlans, tacticsDiff, withoutCoachPlans, withoutGameSpecific } from '../sim/tactics';
@@ -33,7 +33,7 @@ const DEF: Record<string, TacticsPatch> = {
 };
 
 type SP = FitPlayer & { name: string; on: boolean };
-type ST = { on: SP[]; call: PlayCall | null; setRuns: Map<SetId, number>; score: number };
+type ST = { on: SP[]; nextSet: { id: SetId; pid: number | null } | null; setRuns: Map<SetId, number>; score: number };
 type In = { T: ST[]; poss: 0 | 1; q: number; clock: number; inTransition: boolean; setStats: Map<string, { runs: number; pts: number; readAt?: number }> };
 const inn = (sim: GameSim) => sim as unknown as In;
 
@@ -64,7 +64,7 @@ function teamFor(id: SetId, def = 9): number {
 /**
  * Possession-paired value of running set `id` (its `prior` earlier runs read) over the trip the team
  * would have run: before each of the offense's quiet half-court trips (Q1-Q3), a fork of the game
- * calls the set while the game itself plays on; both draw that possession's stream.
+ * queues the set while the game itself plays on; both draw that possession's stream.
  */
 function pairedValue(id: SetId, o: number, def: TacticsPatch, games: number, seed: number, prior = 0) {
   let n = 0;
@@ -80,7 +80,7 @@ function pairedValue(id: SetId, o: number, def: TacticsPatch, games: number, see
       }
       const f = fork(sim);
       inn(f).T[0].setRuns = new Map(prior ? [[id, prior]] : []);
-      f.callPlay(0, { kind: 'set', set: id });
+      f.runSet(0, id);
       const [a, b] = [inn(f).T[0].score, s.T[0].score];
       f.step();
       sim.step();
@@ -189,17 +189,17 @@ describe('the set library', () => {
 });
 
 describe('sets in the engine', () => {
-  /** Logs of the home side's trips over `games` games, calling `call(sim)` before each of its quiet trips (Q1-Q3), reads cleared when `fresh`. */
-  function trips(o: number, def: TacticsPatch, games: number, seed: number, call: (sim: GameSim) => PlayCall | null, fresh = true): PossLog[] {
+  /** Logs of the home side's trips over `games` games, queueing the set `call(sim)` names before each of its quiet trips (Q1-Q3), reads cleared when `fresh`. */
+  function trips(o: number, def: TacticsPatch, games: number, seed: number, call: (sim: GameSim) => { set: SetId; pid?: number } | null, fresh = true): PossLog[] {
     const out: PossLog[] = [];
     for (let g = 0; g < games; g++) {
       const sim = new GameSim(side(o), side(9, def), opts(seed + g, true));
       while (!sim.over) {
         const s = inn(sim);
-        if (s.poss === 0 && s.q <= 3 && s.clock > 30 && !s.T[0].call) {
+        if (s.poss === 0 && s.q <= 3 && s.clock > 30 && !s.T[0].nextSet) {
           if (fresh) s.T[0].setRuns.clear();
           const c = call(sim);
-          if (c) sim.callPlay(0, c);
+          if (c) sim.runSet(0, c.set, c.pid);
         }
         sim.step();
         out.push(...sim.drainLogs().filter((l) => l.off === 0));
@@ -208,14 +208,13 @@ describe('sets in the engine', () => {
     return out;
   }
 
-  it("runs each set for the player it's called for, records it on the possession, and goes for its look", () => {
+  it("runs each set for the player it's queued for, records it on the possession, and goes for its look", () => {
     for (const id of SET_IDS) {
       const o = teamFor(id);
-      const logs = trips(o, MAN, 3, 300, (sim) => ({ kind: 'set', set: id, pid: castFor(id, inn(sim).T[0].on)!.star.pid })).filter((l) => l.set);
+      const logs = trips(o, MAN, 3, 300, (sim) => ({ set: id, pid: castFor(id, inn(sim).T[0].on)!.star.pid })).filter((l) => l.set);
       expect(logs.length, id).toBeGreaterThan(60);
       for (const l of logs) {
         expect(l.set!.id).toBe(id);
-        expect(l.call).toMatchObject({ kind: 'set', set: id, t: 0 });
         expect(l.on[0]).toContain(l.set!.pid);
       }
       // (a switch or a double changes the headline, never the set it came out of)
@@ -279,10 +278,10 @@ describe('sets in the engine', () => {
     expect(first.mean).toBeGreaterThan(0);
     expect(late.mean).toBeLessThan(0);
     expect(first.mean - late.mean).toBeGreaterThan(2 * Math.hypot(first.se, late.se));
-    // called on every trip, its tally shows the run it was read by, and the reads are tagged against it
+    // run on every trip, its tally shows the run it was read by, and the reads are tagged against it
     const sim = new GameSim(side(o), side(9, MAN), opts(7));
     while (!sim.over) {
-      if (inn(sim).poss === 0) sim.callPlay(0, { kind: 'set', set: 'floppy' });
+      if (inn(sim).poss === 0) sim.runSet(0, 'floppy');
       sim.step();
     }
     const res = sim.result();
@@ -306,8 +305,7 @@ describe('sets in the engine', () => {
         for (const l of sim.drainLogs()) {
           if (l.set && l.off === 0) {
             runs[l.set.id] = (runs[l.set.id] ?? 0) + 1;
-            // no call made it: the package did, for a player who fits it
-            expect(l.call).toBeUndefined();
+            // the package ran it, for a player who fits it
             const p = inn(sim).T[0].on.find((x) => x.pid === l.set!.pid) ?? (sim as unknown as { T: { players: SP[] }[] }).T[0].players.find((x) => x.pid === l.set!.pid)!;
             expect(setFit(l.set.id, p)).toBeGreaterThanOrEqual(SET_K.fit);
             // and only while their defense isn't on it yet
@@ -329,7 +327,7 @@ describe('sets in the engine', () => {
 
   it('plays games with no sets exactly as before: AI teams never run one, and an empty package draws nothing', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
-    // and a coached side with an after-timeout action, a go-to player and every call there was), taken again
+    // and a coached side with an after-timeout action, a go-to player and two timeouts), taken again
     // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
     // tactics were made to matter twice as much (K.tacticEdge)
     const expected = {
@@ -338,10 +336,11 @@ describe('sets in the engine', () => {
         [124, 118, 93, 18, 17, 23, 14, 0],
         [132, 91, 90, 27, 8, 22, 13, 0],
       ],
+      // (taken again when play calls from the bench were retired)
       coached: [
-        [130, 103, 82, 19, 14, 19, 14, 0],
-        [131, 127, 86, 29, 8, 28, 13, 0],
-        [120, 140, 74, 41, 13, 38, 21, 0],
+        [126, 107, 80, 19, 9, 19, 14, 0],
+        [120, 115, 84, 26, 10, 21, 16, 0],
+        [111, 129, 81, 46, 11, 27, 19, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -358,12 +357,7 @@ describe('sets in the engine', () => {
       let i = 0;
       while (sim.step()) {
         i++;
-        if (i === 40) sim.callTimeout(0);
-        if (i === 60) sim.callPlay(0, { kind: 'iso', pid: inn(sim).T[0].on[1].pid });
-        if (i === 90) sim.callPlay(0, { kind: 'three' });
-        if (i === 120) sim.callPlay(1, { kind: 'foul' });
-        if (i === 150) sim.callPlay(0, { kind: 'hold' });
-        if (i === 170) sim.callPlay(0, { kind: 'two' });
+        if (i === 40 || i === 130) sim.callTimeout(0);
       }
       expect(fp(sim.result())).toEqual(expected.coached[g]);
     }
@@ -382,10 +376,9 @@ describe('sets in the engine', () => {
     expect(withPkg.sets).toBeUndefined();
   });
 
-  it('runs an after-timeout set for the player it names (the best fit when he sits), and a call replaces it', () => {
+  it('runs an after-timeout set for the player it names (the best fit when he sits)', () => {
     const o = teamFor('elevator');
     let ran = 0;
-    let replaced = 0;
     for (let g = 0; g < 16; g++) {
       const sim = new GameSim(side(o), side(9, MAN), opts(1300 + g, true));
       const star = castFor('elevator', inn(sim).T[0].on)!.star.pid;
@@ -397,7 +390,6 @@ describe('sets in the engine', () => {
       sim.drainLogs();
       const q = inn(sim).q;
       if (!sim.callTimeout(0)) continue;
-      if (g % 2) sim.callPlay(0, { kind: 'three' });
       // the trip out of the timeout (an inbound: no run-out), after the other side's when it had a live ball
       let l: PossLog | undefined;
       for (let i = 0; i < 6 && !l; i++) {
@@ -406,18 +398,11 @@ describe('sets in the engine', () => {
       }
       // (a timeout at a period's end: its after-timeout play goes with the period)
       if (!l || l.kind !== 'half' || !l.action || l.q !== q) continue;
-      if (g % 2) {
-        // "Timeout + Go for 3": the call, not the set
-        expect(l.set).toBeUndefined();
-        replaced++;
-        continue;
-      }
       expect(l.set?.id).toBe('elevator');
       if (l.on[0].includes(star)) expect(l.set!.pid).toBe(star);
       ran++;
     }
-    expect(ran).toBeGreaterThan(5);
-    expect(replaced).toBeGreaterThan(5);
+    expect(ran).toBeGreaterThan(10);
   });
 });
 
@@ -468,7 +453,7 @@ describe('sets around the game', () => {
     const o = teamFor('floppy');
     const sim = new GameSim(side(o), side(9, MAN), opts(3));
     while (!sim.over) {
-      if (inn(sim).poss === 0 && inn(sim).q === 1) sim.callPlay(0, { kind: 'set', set: 'floppy' });
+      if (inn(sim).poss === 0 && inn(sim).q === 1) sim.runSet(0, 'floppy');
       sim.step();
     }
     const g = { ...sim.result(), gid: 1, season: league.season, day: 1 };

@@ -10,7 +10,7 @@ import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { OFF_PRESETS, cloneTactics } from '../sim/tactics';
 import type { GameResult, Tactics } from '../types';
 
-describe('tactics lab & reports', () => {
+describe('batch sims & reports', () => {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
   const side = (tid: number) => ({ team: league.teams[tid], players: teamPlayers(league, tid) });
   it('is deterministic and paired', () => {

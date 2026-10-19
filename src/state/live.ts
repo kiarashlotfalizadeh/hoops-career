@@ -6,7 +6,7 @@
 
 import type { GameResult, League, LiveJournal, LiveOp, ScheduledGame, Tactics } from '../core/types';
 import { GameSim, type SimTeamInput } from '../core/sim/engine';
-import type { PlayCall, PossLog } from '../core/sim/log';
+import type { PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
 import { cloneTactics } from '../core/sim/tactics';
 import { buildSimInput, ensureRotation, neutralSite, playGame, tipoffEdge, userGameOnDay } from '../core/league/games';
@@ -19,6 +19,17 @@ import { reelOf } from '../core/analysis/highlights';
 export const CLUTCH_SEC = 300;
 /** Most possessions a journal can play back (a game takes about 200; the engine's own guard is 2000), so a damaged one can't run forever. */
 export const MAX_STEPS = 2000;
+
+/** A coaching move as the game made it: the move, the possession logs played by then, and where the game was. */
+export interface LiveMark {
+  op: LiveOp;
+  /** How many possession logs the game had when the move was made: everything from this index on came after it. */
+  log: number;
+  q: number;
+  clock: number;
+  /** A tactics change: the tactics it replaced. */
+  before?: Tactics;
+}
 
 /** A coaching move before it's journaled: the possession it comes after is added then. */
 type Move = WithoutAt<LiveOp>;
@@ -40,6 +51,12 @@ export class LiveGame {
   planned: Tactics;
   /** Possessions played so far (engine steps): what the journal counts in. */
   steps = 0;
+  /**
+   * Each coaching move as it was made (or played back from the journal): the move, how many
+   * possession logs there were by then, and for a tactics change the tactics it replaced. The
+   * night's moves and what each did since are read from these and the logs (see ui/live/moves.ts).
+   */
+  marks: LiveMark[] = [];
   /** The projected home margin at tip-off (GameResult.edge): where win probability starts. */
   readonly edge: number;
   /** This game's journal: the league's `live` while the game is pending (see checkpoint). */
@@ -185,21 +202,6 @@ export class LiveGame {
     this.record({ op: 'manualSubs', args: { on } });
   }
 
-  /** Call a play from the bench (see GameSim.callPlay): false when it can't be run. */
-  callPlay(call: PlayCall): boolean {
-    return this.record({ op: 'call', args: { call: { ...call } } });
-  }
-
-  cancelPlay() {
-    this.record({ op: 'cancelCall', args: {} });
-  }
-
-  /** The play called from the bench that hasn't been run yet, if any. */
-  get pendingCall(): PlayCall | null {
-    const c = this.sim.T[this.userSide].call;
-    return c && { ...c };
-  }
-
   /** "Keep changes after this game": the saved tactics as they were when it was turned on (null while it's off). */
   get keep(): Tactics | null {
     return this.journal.keep ?? null;
@@ -230,22 +232,24 @@ export class LiveGame {
   private apply(o: LiveOp): boolean {
     const s = this.sim;
     const side = this.userSide;
+    const mark = (ok: boolean, before?: Tactics) => {
+      if (ok) this.marks.push({ op: o, log: this.logs.length, q: s.q, clock: s.clock, ...(before && { before }) });
+      return ok;
+    };
     switch (o.op) {
       case 'sub':
-        return s.substitute(side, o.args.out, o.args.in);
-      case 'tactics':
+        return mark(s.substitute(side, o.args.out, o.args.in));
+      case 'tactics': {
+        const before = s.baseTactics(side);
         s.setTactics(side, o.args.tactics);
         if (o.args.plan) this.planned = cloneTactics(o.args.tactics);
-        return true;
+        // (edits made away from the Live screen become the plan: not a move made in the game)
+        return o.args.plan ? true : mark(true, before);
+      }
       case 'timeout':
-        return s.callTimeout(side, o.args.reason);
+        return mark(s.callTimeout(side, o.args.reason));
       case 'manualSubs':
         s.T[side].manualSubs = !!o.args.on;
-        return true;
-      case 'call':
-        return s.callPlay(side, o.args.call);
-      case 'cancelCall':
-        s.cancelPlay(side);
         return true;
     }
     throw new Error(`Unknown live-game move: ${(o as { op: unknown }).op}`);

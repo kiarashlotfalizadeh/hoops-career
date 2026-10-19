@@ -1,5 +1,5 @@
 // The live game, broadcast first: the scorebug and the court own the screen; coaching is one row of
-// quick actions (a timeout, subs, a call, the staff's top fix, the Clipboard) and one Clipboard with a
+// quick actions (a timeout, subs, the staff's top fix, the Clipboard) and one Clipboard with a
 // tab for each way to coach; playback is a tap on the court; the breaks and your timeouts stop on one
 // break screen. The broadcast itself runs in useLiveGame (live/useLiveGame.ts); this screen draws it
 // and makes the coaching moves (live/coaching.ts). The game is a journal (state/live.ts): every move
@@ -17,7 +17,6 @@ import { flowActions } from '../flow';
 import { skipChoices } from '../live/skip';
 import { Court, courtFloor } from '../live/Court';
 import { drawnPlayer } from '../live/drawn';
-import { lateGame } from '../live/alerts';
 import { offPlan, resetToPlan } from '../live/pills';
 import { ScoreBug, gameContext } from '../live/ScoreBug';
 import { TacticsPanel } from '../live/TacticsPanel';
@@ -25,13 +24,11 @@ import { BoxPanel } from '../live/BoxPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import { MyPlayer } from '../live/MyPlayer';
 import { Break } from '../live/Break';
-import { Calls } from '../live/Calls';
 import { Clipboard, type ClipTab } from '../live/Clipboard';
 import { Lineup, MiniFive } from '../live/Lineup';
 import { Feed } from '../live/Feed';
 import { Playback } from '../live/Playback';
 import { QuickBar, type QuickFix } from '../live/QuickBar';
-import { useCalls } from '../live/plays';
 import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
 import { Intro } from '../live/Intro';
 import { LiveFinal, NoGame } from '../live/Final';
@@ -40,7 +37,7 @@ import { SkipSheet } from '../live/SkipSheet';
 import { useLiveGame } from '../live/useLiveGame';
 import { useBugHeight, useDockHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
-import { DOCK_MIN, NO_LOGS, PEEK_MIN, REPLAY_SPEED, quickPills, subOptions } from '../live/session';
+import { DOCK_MIN, PEEK_MIN, quickPills, subOptions } from '../live/session';
 import '../live/live.css';
 
 export default function Live() {
@@ -66,16 +63,6 @@ export default function Live() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [game, s.tick],
   );
-  // play calls: one waiting at a time, shared by the Calls tab, the huddle and the player sheet
-  const calls = useCalls({
-    gid: game?.game.gid ?? -1,
-    side: userSide,
-    logs: game?.logs ?? NO_LOGS,
-    quarter: script?.q ?? view?.q ?? 1,
-    initial: game?.pendingCall ?? null,
-    call: (c) => !!coach((g) => g.callPlay(c)),
-    cancel: () => coach((g) => g.cancelPlay()),
-  });
   const pills = useMemo(() => (game && view && tactics && !over ? quickPills(view, game.userSide, tactics, game.planned, nameOf) : []), [game, view, tactics, over, nameOf]);
 
   const gameNo = useMemo(() => {
@@ -131,7 +118,7 @@ export default function Live() {
   }
 
   // ------------------------------------------------------------ the game
-  const { atBreak, paused, show, toPending, alerts } = s;
+  const { atBreak, paused, toPending, alerts } = s;
   const huddling = panel === 'huddle';
   const sim = game.sim;
   const me = sim.T[userSide];
@@ -145,9 +132,7 @@ export default function Live() {
   // the Cup final: nobody's home floor
   const neutral = neutralSite(game.game);
   const ffing = s.keyPlays && !script && !atBreak;
-  // what the court draws: a replay in place of the game for a moment
-  const drawing = show ? show.script : script;
-  const canReplay = !show && !!s.lastDone.current && paused && !atBreak;
+  const drawing = script;
   // (the period being played, as the scorebug shows it: the drawn view still reads the one before on a period's first possession)
   const skipTo = skipChoices(atBreak ? view.q + 1 : quarter, atBreak, sim);
   // the sim is at the period's buzzer while the court draws its last possession: no timeout then (the break is the stop)
@@ -156,7 +141,6 @@ export default function Live() {
   // whose floor: the home team's, or a neutral one for the Cup final
   const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const myView = view.sides[userSide];
-  const late = lateGame(view.q, view.clock, myView.score - view.sides[1 - userSide].score);
   const win = wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome;
   const docked = dockH >= DOCK_MIN;
 
@@ -187,22 +171,6 @@ export default function Live() {
     setPanel('player');
   };
 
-  const callsTab = (huddle = false) => (
-    <Calls
-      league={league}
-      tactics={tactics}
-      me={myView}
-      side={userSide}
-      late={late}
-      logs={game.logs}
-      drawing={!!script}
-      calls={calls}
-      nameOf={nameOf}
-      timeout={huddle ? undefined : () => s.callTimeout()}
-      onCalled={huddle ? undefined : () => s.setClipOpen(false)}
-      huddle={huddle}
-    />
-  );
   const clipboard = (isDocked: boolean) => (
     <Clipboard tab={clipTab} onTab={setClipTab} docked={isDocked}>
       {clipTab === 'lineup' && (
@@ -240,7 +208,6 @@ export default function Live() {
           q={view.q}
         />
       )}
-      {clipTab === 'calls' && callsTab()}
       {clipTab === 'box' && (
         <BoxPanel
           view={view}
@@ -279,8 +246,6 @@ export default function Live() {
         if (ok && mode === 'huddle') s.takeView(game, false);
         return ok;
       }}
-      calls={calls}
-      drawUp={callsTab(true)}
       keys={s.keys}
       win={win}
       oppPlan={mode === 'period' ? oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items : undefined}
@@ -307,46 +272,33 @@ export default function Live() {
       <div className="lv-stage">
         <Court
           script={drawing}
-          speed={show ? s.speed * REPLAY_SPEED : s.speed}
-          paused={!show && paused}
+          speed={s.speed}
+          paused={paused}
           colors={colors}
           jersey={jersey}
           onDone={s.courtDone}
-          // (a replay doesn't move the scorebug: it stays on the game as it stands)
-          onTick={show ? undefined : (c, sc) => s.ticker.set(c, sc)}
+          onTick={(c, sc) => s.ticker.set(c, sc)}
           onBeat={s.beat.set}
           names={nameOf}
           abbrevs={[home.abbrev, away.abbrev]}
           floor={floor}
-          label={
-            show
-              ? `Court: replay, ${drawing?.label ?? ''}.`
-              : atBreak
-                ? `Court: end of ${periodLabel(view.q)}.`
-                : ffing
-                  ? 'Court: fast-forwarding to the next key play.'
-                  : `Court: ${script?.label ?? 'tip-off'}.`
-          }
+          label={atBreak ? `Court: end of ${periodLabel(view.q)}.` : ffing ? 'Court: fast-forwarding to the next key play.' : `Court: ${script?.label ?? 'tip-off'}.`}
         />
         {!s.intro && !atBreak && (
           <Playback
             paused={paused}
             speed={s.speed}
             keyPlays={s.keyPlays}
-            canReplay={canReplay}
             playLabel="Resume"
             reveal={s.reveal}
-            replaying={!!show}
             onPause={s.togglePause}
             onSpeed={s.pickSpeed}
             onKeyPlays={s.toggleKeyPlays}
-            onReplay={s.replay}
             onSkip={() => setPanel('skip')}
           />
         )}
-        {(show || (!atBreak && (script || ffing || s.graphic || s.banner))) && (
+        {!atBreak && (script || ffing || s.graphic || s.banner) && (
           <CourtLower
-            replay={!!show}
             drawing={drawing}
             ffing={ffing}
             beat={s.beat}
@@ -354,7 +306,6 @@ export default function Live() {
             graphic={s.graphic}
             kit={teamLook((s.graphic?.side === 0 ? home : away).colors).slab}
             banner={s.intro ? undefined : s.banner}
-            onStopReplay={s.stopShow}
             onDropBanner={s.dropBanner}
           />
         )}
@@ -372,7 +323,7 @@ export default function Live() {
             onTip={s.tipOff}
           />
         )}
-        {atBreak && !show && <BreakCard q={view.q} tied={view.sides[0].score} onStart={s.togglePause} onReport={() => setPanel('break')} onSkip={() => setPanel('skip')} />}
+        {atBreak && <BreakCard q={view.q} tied={view.sides[0].score} onStart={s.togglePause} onReport={() => setPanel('break')} onSkip={() => setPanel('skip')} />}
       </div>
 
       {/* under the court, the clipboard docked when there's room for it (held sideways: beside the court, under the quick actions) */}
@@ -391,9 +342,6 @@ export default function Live() {
           toPending={toPending}
           toState={toState}
           onSubs={() => openClip('lineup')}
-          onCall={() => openClip('calls')}
-          called={!!calls.pending}
-          late={late}
           fix={simBusy ? null : fix}
           clipOpen={s.clipOpen}
           onClip={() => (s.clipOpen ? s.setClipOpen(false) : openClip())}
@@ -415,7 +363,6 @@ export default function Live() {
               guarding={[...me.guardOf].find(([, d]) => d.pid === pickedP.pid)?.[0]}
               nameOf={nameOf}
               apply={applyTactics}
-              calls={calls}
               subs={subOptions(view, userSide, me, pickedP.pid, s.subFor)}
               onSub={(other) => {
                 const on = me.byId.get(pickedP.pid)?.on;

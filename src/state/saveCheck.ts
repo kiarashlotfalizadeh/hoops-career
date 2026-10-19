@@ -652,7 +652,6 @@ const nums = (v: unknown): v is number[] => Array.isArray(v) && v.every(num);
 const numValues = (v: unknown) => obj(v) && Object.values(v).every(num);
 /** More moves than any coach makes in a game: a journal with more was crafted. */
 const MAX_LIVE_OPS = 5000;
-const PLAY_CALLS = new Set(['three', 'two', 'hold', 'foul', 'iso', 'set']);
 
 /** A journaled coaching move's arguments in shape. */
 function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
@@ -667,16 +666,9 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
       return a.reason === undefined || (str(a.reason) && (a.reason as string).length <= 80);
     case 'manualSubs':
       return typeof a.on === 'boolean';
-    case 'call':
-      return (
-        obj(a.call) &&
-        PLAY_CALLS.has(a.call.kind as string) &&
-        (a.call.kind !== 'iso' || int(a.call.pid)) &&
-        (a.call.kind !== 'set' || (KNOWN_SETS.has(a.call.set as string) && (a.call.pid === undefined || int(a.call.pid))))
-      );
-    case 'cancelCall':
-      return true;
   }
+  // (play calls from the bench were retired: a journal with one can't play back to its score, so the
+  // game starts over from tip-off)
   return false;
 }
 
@@ -703,9 +695,6 @@ function liveIntact(l: League, j: unknown): boolean {
   )
     return false;
   if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;
-  // a set call this version doesn't know is dropped (the replay then has to land on the journal's
-  // score and clock without it, or the game starts over)
-  j.ops = j.ops.filter((x) => !(obj(x) && x.op === 'call' && obj(x.args) && obj(x.args.call) && x.args.call.kind === 'set' && !KNOWN_SETS.has(x.args.call.set as string)));
   for (const t of [u.tactics, j.keep, obj(o) ? o.tactics : undefined]) cleanTactics(t);
   if (obj(o) && obj(o.plan) && Array.isArray(o.plan.items))
     for (const it of o.plan.items) if (obj(it) && obj(it.patch)) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);

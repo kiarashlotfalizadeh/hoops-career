@@ -358,62 +358,18 @@
   flex: 1;
 }
 
-/* the counters: the test row and its progress, then one counter per row (ranked once tested, with
-   its change at the right and a better/worse edge) */
-.mu-run {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: var(--row-py) var(--row-px);
-  min-height: var(--row-min);
-  background: var(--bg-2);
-}
-.mu-run .over {
-  flex: none;
-}
-.mu-run .chips {
-  flex-wrap: nowrap;
-}
-.mu-runbusy {
-  padding: 8px;
-}
-.mu-runbusy .card {
-  border: none;
-  padding: 4px;
-}
-.mu-runres {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px var(--row-px);
-  font-size: 12.5px;
-  color: var(--text-2);
-}
+/* the counters: one per row, what it changes, why, the numbers behind it, then Always and Add */
 .mu-cand {
   display: flex;
   flex-direction: column;
   gap: 3px;
   padding: 9px var(--row-px);
 }
-.mu-cand.good {
-  box-shadow: inset 3px 0 0 var(--good);
-}
-.mu-cand.bad {
-  box-shadow: inset 3px 0 0 var(--bad);
-}
 .mu-cand-top {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: 28px;
-}
-.mu-rank {
-  width: 14px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 17px;
-  color: var(--text-dim);
 }
 .mu-cand-foot {
   display: flex;

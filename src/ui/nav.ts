@@ -44,7 +44,7 @@ export function tabFor(pathname: string, userPlayer?: (pid: number) => boolean):
     return userPlayer?.(pid) ? 'team' : 'league';
   }
   if (['/team', '/compare'].some((p) => under(pathname, p))) return 'team';
-  if (['/games', '/preview', '/live', '/game', '/lab'].some((p) => under(pathname, p))) return 'games';
+  if (['/games', '/preview', '/live', '/game'].some((p) => under(pathname, p))) return 'games';
   if (['/league', '/teams'].some((p) => under(pathname, p))) return 'league';
   if (under(pathname, '/office')) return 'office';
   return 'today';

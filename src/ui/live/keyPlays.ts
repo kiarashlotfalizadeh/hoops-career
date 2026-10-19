@@ -16,7 +16,7 @@ export interface KeyContext {
 /**
  * Whether a possession is worth drawing: crunch time of a close game (the last five minutes of the
  * fourth quarter within ten), overtime, the last 24 seconds of a period, a run reaching 8-0, a
- * timeout, a play call, or anything that raises an alert or puts up a graphic.
+ * timeout, or anything that raises an alert or puts up a graphic.
  */
 export function isKey(log: PossLog, ctx: KeyContext): boolean {
   const margin = Math.abs(log.score[0] - log.score[1]);
@@ -25,7 +25,5 @@ export function isKey(log: PossLog, ctx: KeyContext): boolean {
   if (log.clockEnd <= 24) return true;
   if ([0, 1].some((i) => ctx.runBefore[i] < 8 && ctx.runAfter[i] >= 8)) return true;
   if (log.steps.some((s) => s.k === 'timeout')) return true;
-  // an end-of-game play call
-  if (log.call) return true;
   return ctx.event;
 }

@@ -1,6 +1,5 @@
-/* Games: the hub (your schedule), the matchup page per opponent and the Lab, one partial each. The
-   game report's own styles are in components/gameday.css. */
+/* Games: the hub (your schedule) and the matchup page per opponent, one partial each. The game
+   report's own styles are in components/gameday.css. */
 @import './schedule.css';
 @import './hub.css';
 @import './matchup/matchup.css';
-@import './lab/lab.css';

@@ -16,14 +16,7 @@ export const foulsMethods = {
     const defDiff = def.score - off.score;
     let fouled: SP | null = null;
     let tag = '';
-    // "foul now", called from the bench: their worst free-throw shooter on the floor
-    if (def.call?.kind === 'foul' && clock > 0.3) {
-      if (this.cur) this.cur.call = { kind: 'foul', t: def.side };
-      def.call = null;
-      fouled = off.on.reduce((a, p) => (p.ftPct < a.ftPct ? p : a), off.on[0]);
-      tag = 'late_foul';
-    }
-    if (!fouled && final && def.t.manage.foulWhenTrailing && defDiff < 0) {
+    if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
       const down = -defDiff;
       // only while there is time to score twice more after the free throws: down one or two, a foul
       // still buys a last shot; down three or more with seconds left it only pads the margin

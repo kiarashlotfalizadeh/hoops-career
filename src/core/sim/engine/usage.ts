@@ -123,7 +123,6 @@ export const usageMethods = {
       return emph * off.cap[act];
     });
     // a called three looks for the arc: no post-up (its shots are twos)
-    if (this.go3) ws[ACTION_LIST.indexOf('post')] *= 0.05;
     // crunch time: more of what the go-to player does best
     const go = this.goTo(off);
     if (go) {

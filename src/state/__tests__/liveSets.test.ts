@@ -1,12 +1,11 @@
-// Sets in a saved live game and in saves: set calls, an after-timeout set and a set package are
-// journaled and played back exactly after the app was closed, and reading a save keeps only the sets
-// this version knows (an unknown one in a journal's call, tactics or a result is dropped).
+// Sets in a saved live game and in saves: an after-timeout set and a set package are journaled and
+// played back exactly after the app was closed, and reading a save keeps only the sets this version
+// knows (an unknown one in tactics or a result is dropped).
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { checkpointLive, pendingLive, prepareLive, type LiveGame } from '../live';
 import { useStore } from '../store';
 import { loadLeague, migrate } from '../persistence';
-import { castFor } from '../../core/sim/sets';
 import type { League } from '../../core/types';
 import { testLeague, toGameDay } from './fixtures';
 
@@ -18,7 +17,7 @@ function goLive(l: League): LiveGame {
   return lg;
 }
 
-/** A live game coached with sets: a package and an after-timeout set, calls for a player and for the best fit, a cancelled one, a timeout. */
+/** A live game coached with sets: a package and an after-timeout set, and timeouts to run it. */
 function setsGame(l: League): LiveGame {
   const lg = goLive(l);
   const play = (n: number) => {
@@ -30,17 +29,10 @@ function setsGame(l: League): LiveGame {
   t.manage.ato = 'elevator';
   lg.setTactics(t);
   play(15);
-  const five = lg.sim.T[lg.userSide].on;
-  expect(lg.callPlay({ kind: 'set', set: 'chicago', pid: castFor('chicago', five)!.star.pid })).toBe(true);
-  play(6);
   expect(lg.callTimeout()).toBe(true);
   play(8);
-  expect(lg.callPlay({ kind: 'set', set: 'horns' })).toBe(true);
-  play(2);
-  lg.cancelPlay();
-  expect(lg.callPlay({ kind: 'set', set: 'postSplit' })).toBe(true);
-  // a set for a player who isn't on the team can't be called
-  expect(lg.callPlay({ kind: 'set', set: 'floppy', pid: 999999 })).toBe(false);
+  lg.callTimeout();
+  play(6);
   lg.simTo('half');
   play(9);
   return lg;
@@ -53,10 +45,9 @@ describe('sets in a live game', () => {
     const l = testLeague('sets-journal');
     toGameDay(l);
     const lg = setsGame(l);
-    // the game ran sets (its package, the calls, the after-timeout play)
-    expect(lg.logs.filter((x) => x.set && x.off === lg.userSide).length).toBeGreaterThan(3);
+    // the game ran sets (its package, the after-timeout play)
+    expect(lg.logs.filter((x) => x.set && x.off === lg.userSide).length).toBeGreaterThan(1);
     await useStore.getState().flush();
-    expect(l.live!.ops.filter((o) => o.op === 'call').map((o) => (o.op === 'call' ? o.args.call.kind : ''))).toEqual(['set', 'set', 'set', 'set']);
     const back = (await loadLeague(l.id))!;
     useStore.getState().setLeague(back);
     expect(pendingLive(back)).toBeNull();
@@ -75,16 +66,6 @@ describe('sets in a live game', () => {
     checkpointLive(l);
     const saved = JSON.parse(JSON.stringify(l)) as League;
     expect(migrate(structuredClone(saved)).live).toEqual(saved.live);
-    // an unknown set in a call is dropped from the journal (the game then has to play back without it)
-    const x = structuredClone(saved);
-    const calls = x.live!.ops.filter((o) => o.op === 'call');
-    Object.assign(calls[0].args, { call: { kind: 'set', set: 'flex' } });
-    const n = x.live!.ops.length;
-    expect(migrate(x).live!.ops).toHaveLength(n - 1);
-    // a set call whose player isn't a player is a damaged journal
-    const y = structuredClone(saved);
-    Object.assign(y.live!.ops.find((o) => o.op === 'call')!.args, { call: { kind: 'set', set: 'floppy', pid: 'x' } });
-    expect(migrate(y).live).toBeUndefined();
     // tactics: unknown sets go, the package keeps four at most and each once; a damaged after-timeout play goes
     const z = structuredClone(saved);
     const ut = z.teams[z.userTid].tactics as unknown as { offense: Record<string, unknown>; manage: Record<string, unknown> };

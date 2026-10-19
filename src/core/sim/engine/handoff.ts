@@ -102,7 +102,6 @@ export const handoffMethods = {
       Math.pow(B.c.roll / 50, 1.5) * Math.pow(Sh.c.passing / 50, 1.2) * 0.3,
       forced ? 0 : K.continueBase * (adv < 0 ? 1.4 : 0.6),
     ];
-    if (this.go3) opts[3] *= 0.05;
     // a set goes for its look
     if (play) (['three', 'mid', 'rim', 'roll'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
