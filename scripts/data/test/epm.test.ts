@@ -2,8 +2,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { aggregateEpm, epmByBbref, epmFields, epmShift, loadEpm, matchEpm, parseEpm } from '../epm';
-import { SEASON_WEIGHT, deriveRatings, popStats, type Agg } from '../derive';
+import { aggregateEpm, blendWeight, epmByBbref, epmFields, epmShift, epmSourceNote, loadEpm, matchEpm, parseEpm, reweightShift, seedEpmBlend, withEpmNote } from '../epm';
+import { EPM_BLEND, EPM_BLEND_V1, SEASON_WEIGHT, deriveRatings, popStats, reliability, zScore, type Agg } from '../derive';
+import type { PbpAgg } from '../nba/profile';
 
 const HEAD =
   'season,age,seasontype,team_id,team_alias,team_alias_all,player_id,player_name,pos_text,gp,roster_games,start,mp,rookie_year,inches,weight,mpg,off,def,tot,ewins,usg,tspct';
@@ -127,5 +128,103 @@ describe('Dunks & Threes EPM', () => {
     expect(Math.abs(epmShift(thin, bio, pop, 'x').oiq ?? 0)).toBeLessThan(Math.abs(d.oiq!) / 4);
     expect(epmShift(base(), bio, pop, 'x')).toEqual({});
     expect(epmFields({ nbaId: 1, name: 'A', season: 2026, teams: ['OKC'], min: 2000, off: 7.334, def: 2.013, tot: 9.347 })).toEqual({ oepm: 7.3, depm: 2, epm: 9.3 });
+  });
+
+  // a player with an NBA.com play-by-play profile, where EPM sits beside RAPM
+  const zone = (rim: number, paint: number, mid: number, c3: number, ab3: number) => ({ rim, paint, mid, c3, ab3 });
+  const pbp = (i = 0): PbpAgg => ({
+    nbaId: 1,
+    mins: 2400,
+    fga: zone(300, 120, 90, 80, 250),
+    fgm: zone(200, 52, 38, 30, 88),
+    astFgm: 240,
+    pullup: 100,
+    pullup3: 40,
+    drive: 150,
+    cut: 40,
+    putback: 20,
+    post: 20,
+    trans: 70,
+    dunk: 30,
+    lob: 10,
+    fta: 220,
+    sfDrawn: 120,
+    ast: 200,
+    astRim: 80,
+    ast3: 70,
+    tov: 100,
+    tovBadPass: 40,
+    tovLostBall: 30,
+    orb: 60,
+    drb: 260,
+    orbChances: 1400,
+    drbChances: 1500,
+    stl: 60,
+    blk: 40,
+    blkRim: 25,
+    pf: 150,
+    chargesDrawn: 3,
+    offPoss: 4800,
+    defPoss: 4800,
+    oppFga: 3800,
+    oppRimA: 1100 + (i % 4) * 40,
+    oppRimM: 700,
+    teamFga: 3800,
+    mdSaved: ((i * 3) % 5) - 2,
+    mdPoss: 1500,
+    rapmO: ((i * 7) % 9) / 3 - 1.3,
+    rapmD: ((i * 2) % 5) / 3 - 0.7,
+    rapmPoss: 9000,
+  });
+  const withPbp = (epm?: { off: number; def: number }, i = 0): Agg => ({ ...base(epm), pbp: pbp(i) });
+  const pbpPop = popStats(Array.from({ length: 40 }, (_, i) => withPbp({ off: (i % 9) - 4, def: (i % 5) - 2 }, i)));
+
+  it("moves a seed to a new EPM blend by exactly what it changes in a player's derived ratings", () => {
+    const keys = ['oiq', 'diq', 'perD', 'intD'] as const;
+    for (const [a, rawMin] of [
+      [withPbp({ off: 3, def: 1.5 }), 2400],
+      [withPbp({ off: -2.5, def: -1 }, 3), 2400],
+      // a thin sample: the build blends him with a prior, so he moves by the same share
+      [{ ...withPbp({ off: 2, def: 2 }), wMin: 200, rawMin: 200 }, 200],
+    ] as const) {
+      const now = deriveRatings(a, bio, pbpPop, 'x', EPM_BLEND).r;
+      const was = deriveRatings(a, bio, pbpPop, 'x', EPM_BLEND_V1).r;
+      const rel = reliability(a.wMin);
+      const z = { off: zScore(a.epm!.off, pbpPop.mean.epmO, pbpPop.sd.epmO, rel), def: zScore(a.epm!.def, pbpPop.mean.epmD, pbpPop.sd.epmD, rel) };
+      const d = reweightShift({ oiq: was.oiq, diq: was.diq, perD: was.perD, intD: was.intD }, z, rawMin, EPM_BLEND_V1, EPM_BLEND);
+      expect(Object.keys(d).sort()).toEqual([...keys].sort());
+      // derived ratings are rounded to 0.1
+      for (const k of keys) expect(d[k]! / blendWeight(rawMin)).toBeCloseTo(now[k] - was[k], 0.5);
+      // nothing else in his ratings reads EPM
+      for (const k of Object.keys(now) as (keyof typeof now)[]) if (!(keys as readonly string[]).includes(k)) expect(now[k]).toBe(was[k]);
+    }
+    // EPM moves the impact ratings further than it used to, the defensive ones included
+    const good = deriveRatings(withPbp({ off: 3, def: 1.5 }), bio, pbpPop, 'x').r;
+    const poor = deriveRatings(withPbp({ off: -3, def: -1.5 }), bio, pbpPop, 'x').r;
+    const goodV1 = deriveRatings(withPbp({ off: 3, def: 1.5 }), bio, pbpPop, 'x', EPM_BLEND_V1).r;
+    const poorV1 = deriveRatings(withPbp({ off: -3, def: -1.5 }), bio, pbpPop, 'x', EPM_BLEND_V1).r;
+    for (const k of keys) expect(good[k] - poor[k]).toBeGreaterThan(goodV1[k] - poorV1[k]);
+    // without EPM, box plus-minus keeps its old weight: his ratings don't depend on EPM's
+    const none = withPbp();
+    expect(deriveRatings(none, bio, pbpPop, 'x').r).toEqual(deriveRatings(none, bio, pbpPop, 'x', EPM_BLEND_V1).r);
+    // under 60 minutes the build derives nothing, and the same blend moves nothing
+    const r = { oiq: 70, diq: 60, perD: 55, intD: 50 };
+    expect(reweightShift(r, { off: 2, def: 2 }, 50, EPM_BLEND_V1, EPM_BLEND)).toEqual({});
+    expect(reweightShift(r, { off: 2, def: 2 }, 2000, EPM_BLEND, EPM_BLEND)).toEqual({});
+  });
+
+  it("records the blend in the seed's source, so a reweight applies once", () => {
+    const old = 'Basketball Reference: 2003-04 to 2025-26 per-game & advanced (ratings from 2023-24); current contracts; Dunks & Threes EPM';
+    // a seed that took EPM before the blend was recorded was derived at the first one
+    expect(seedEpmBlend(old)).toEqual(EPM_BLEND_V1);
+    expect(seedEpmBlend('Basketball Reference: …; current contracts')).toBeNull();
+    const now = withEpmNote(old, EPM_BLEND);
+    expect(now).toBe(old.replace('Dunks & Threes EPM', epmSourceNote(EPM_BLEND)));
+    expect(now).toMatch(/Dunks & Threes EPM \(impact weights oiq [\d.]+, diq [\d.]+, perD [\d.]+, intD [\d.]+; scale oiq [\d.]+, diq [\d.]+, perD [\d.]+, intD [\d.]+\)$/);
+    expect(seedEpmBlend(now)).toEqual(EPM_BLEND);
+    // writing the note again replaces it rather than adding another
+    expect(withEpmNote(now, EPM_BLEND_V1).match(/Dunks & Threes EPM/g)).toHaveLength(1);
+    expect(seedEpmBlend(withEpmNote(now, EPM_BLEND_V1))).toEqual(EPM_BLEND_V1);
+    expect(withEpmNote('Basketball Reference', EPM_BLEND)).toBe(`Basketball Reference; ${epmSourceNote(EPM_BLEND)}`);
   });
 });

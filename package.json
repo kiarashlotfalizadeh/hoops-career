@@ -23,6 +23,7 @@
     "data:fetch-extra": "NODE_USE_ENV_PROXY=1 tsx scripts/data/extra/fetch.ts",
     "data:extras": "tsx scripts/data/extra/refresh.ts",
     "data:epm": "tsx scripts/data/epm-apply.ts",
+    "data:epm-reweight": "tsx scripts/data/epm-reweight.ts",
     "data:history": "tsx scripts/data/history-apply.ts",
     "cap:sync": "npm run build && cap sync",
     "data": "npm run data:fetch && npm run data:fetch-nba && npm run data:fetch-extra && npm run data:build",

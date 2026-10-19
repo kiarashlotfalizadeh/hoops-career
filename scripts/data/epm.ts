@@ -4,14 +4,14 @@
 // nothing here downloads it) as one CSV per regular season, kept in data/epm/.
 //
 // EPM leans the impact ratings (offensive IQ, defensive IQ, perimeter and interior defense)
-// toward the best public estimate of what a player is worth, and each season's EPM is kept
-// with his imported stats.
+// toward the best public estimate of what a player is worth (by derive.ts's EPM_BLEND), and each
+// season's EPM is kept with his imported stats.
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { splitCsv } from './nba/csv';
 import { crosswalk, type BbrefRow, type NbaPerson } from './nba/crosswalk';
 import { STAT_SEASONS } from './sources';
-import { SEASON_WEIGHT, deriveRatings, type Agg, type Bio, type PopStats } from './derive';
+import { EPM_BLEND_V1, IMPACT_BASE, SEASON_WEIGHT, deriveRatings, type Agg, type Bio, type EpmBlend, type ImpactValues, type PopStats } from './derive';
 import { RATING_KEYS } from '../../src/core/ratings';
 import type { Ratings } from '../../src/core/types';
 
@@ -179,13 +179,65 @@ export const epmFields = (e: EpmRow) => ({ oepm: r1(e.off), depm: r1(e.def), epm
  */
 export function epmShift(a: Agg, bio: Bio, pop: PopStats, seedKey: string): Partial<Ratings> {
   if (!a.epm || a.rawMin < 60) return {};
-  const w = Math.min(1, a.rawMin / 400);
+  const w = blendWeight(a.rawMin);
   const withEpm = deriveRatings(a, bio, pop, seedKey).r;
   const without = deriveRatings({ ...a, epm: undefined }, bio, pop, seedKey).r;
   const out: Partial<Ratings> = {};
   for (const k of RATING_KEYS) {
     const d = (withEpm[k] - without[k]) * w;
     if (Math.abs(d) >= 0.05) out[k] = d;
+  }
+  return out;
+}
+
+/** How much of his derived ratings a player keeps: the build blends a sample under 400 raw minutes with a prior (and derives none under 60). */
+export const blendWeight = (rawMin: number) => (rawMin < 60 ? 0 : Math.min(1, rawMin / 400));
+
+const IMPACT_KEYS = ['oiq', 'diq', 'perD', 'intD'] as const;
+const list = (v: ImpactValues) => IMPACT_KEYS.map((k) => `${k} ${v[k]}`).join(', ');
+
+/** The seed's `source` note for EPM, with the blend its impact ratings were derived at. */
+export const epmSourceNote = (b: EpmBlend) => `Dunks & Threes EPM (impact weights ${list(b.w)}; scale ${list(b.k)})`;
+
+/**
+ * The EPM blend a seed's impact ratings were derived at, from its `source`: null without EPM, and
+ * the first one (EPM_BLEND_V1) for a seed that took EPM before the source recorded it.
+ */
+export function seedEpmBlend(source: string): EpmBlend | null {
+  if (!source.includes('Dunks & Threes EPM')) return null;
+  const b: EpmBlend = { w: { ...EPM_BLEND_V1.w }, k: { ...EPM_BLEND_V1.k } };
+  const m = source.match(/Dunks & Threes EPM \(impact weights ([^;)]*)(?:; scale ([^)]*))?\)/);
+  const read = (text: string | undefined, into: ImpactValues) => {
+    for (const part of (text ?? '').split(',')) {
+      const [k, v] = part.trim().split(/\s+/);
+      if ((IMPACT_KEYS as readonly string[]).includes(k) && Number.isFinite(Number(v))) into[k as keyof ImpactValues] = Number(v);
+    }
+  };
+  read(m?.[1], b.w);
+  read(m?.[2], b.k);
+  return b;
+}
+
+/** A source string with its EPM note giving this blend. */
+export const withEpmNote = (source: string, b: EpmBlend) =>
+  source.includes('Dunks & Threes EPM') ? source.replace(/Dunks & Threes EPM( \(impact weights [^)]*\))?/, epmSourceNote(b)) : `${source}; ${epmSourceNote(b)}`;
+
+/**
+ * What moving a player derived with the play-by-play from EPM blend `from` to `to` changes in his
+ * impact ratings `r`, given his EPM z-scores (offensive for offensive IQ, defensive for the rest).
+ * A derived impact rating is IMPACT_BASE + k × (w × z + the rating's other terms), so the one derived
+ * with `to` is IMPACT_BASE + (k′/k) × (the one derived with `from` − IMPACT_BASE) + k′ × (w′ − w) × z:
+ * exact for a rating as derived. The build blends a sample under 400 minutes with a prior, so the
+ * shift is scaled down the same way (exact when the prior sat where the derived rating did), and the
+ * leveling's skill shift, which the seed doesn't record, is scaled by k′/k with the rest.
+ */
+export function reweightShift(r: ImpactValues, z: { off: number; def: number }, rawMin: number, from: EpmBlend, to: EpmBlend): Partial<Ratings> {
+  const bw = blendWeight(rawMin);
+  const out: Partial<Ratings> = {};
+  if (bw <= 0) return out;
+  for (const k of IMPACT_KEYS) {
+    const d = bw * ((to.k[k] / from.k[k] - 1) * (r[k] - IMPACT_BASE[k]) + to.k[k] * (to.w[k] - from.w[k]) * (k === 'oiq' ? z.off : z.def));
+    if (d !== 0) out[k] = d;
   }
   return out;
 }

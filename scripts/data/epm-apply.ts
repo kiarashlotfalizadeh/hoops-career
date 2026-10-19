@@ -8,12 +8,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { STAT_SEASONS } from './sources';
 import { parseAdvanced, parsePerGame, type AdvRow, type PerGameRow } from './parse';
-import { aggregate, popStats, type Agg } from './derive';
+import { EPM_BLEND, aggregate, popStats, type Agg } from './derive';
 import { buildNbaProfile } from './nba/build';
 import { profilesByBbref } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
 import { COMBINED } from './positions';
-import { aggregateEpm, epmByBbref, epmFields, epmShift, loadEpm, matchEpm } from './epm';
+import { aggregateEpm, epmByBbref, epmFields, epmShift, loadEpm, matchEpm, withEpmNote } from './epm';
 import { RATING_KEYS, clampRatings } from '../../src/core/ratings';
 import type { SeedData } from '../../src/core/league/create';
 import type { Ratings } from '../../src/core/types';
@@ -91,7 +91,8 @@ async function main() {
     }
     if (any) withSeasons++;
   }
-  if (!seed.source.includes('EPM')) seed.source += '; Dunks & Threes EPM';
+  // (with the blend it was applied at, which data:epm-reweight reads)
+  seed.source = withEpmNote(seed.source, EPM_BLEND);
   console.log(`EPM applied: impact ratings moved for ${shifted} players, EPM seasons for ${withSeasons}`);
   if (big.length) console.log(`  moves of 5 or more: ${big.join(', ')}`);
   writeFileSync(OUT, JSON.stringify(seed));

@@ -22,7 +22,7 @@ import {
   type PerGameRow,
   type RosterRow,
 } from './parse';
-import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
+import { EPM_BLEND, PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { calibrate } from './calibrate';
 import { buildNbaProfile } from './nba/build';
 import { profilesByBbref, type PbpAgg } from './nba/profile';
@@ -37,7 +37,7 @@ import { clamp } from '../../src/core/random';
 import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
-import { aggregateEpm, epmByBbref, epmFields, loadEpm, matchEpm, type EpmRow } from './epm';
+import { aggregateEpm, epmByBbref, epmFields, epmSourceNote, loadEpm, matchEpm, type EpmRow } from './epm';
 import { byId, formerNumbers, historyLines, loadSeasons, realLine, seedIds } from './careers';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -335,7 +335,8 @@ async function main() {
   const seed: SeedData = {
     version: 1,
     generated: new Date().toISOString(),
-    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts${epmById.size ? '; Dunks & Threes EPM' : ''}`,
+    // (the EPM note records the blend the impact ratings were derived at, which data:epm-reweight reads)
+    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts${epmById.size ? `; ${epmSourceNote(EPM_BLEND)}` : ''}`,
     season: SEED_SEASON,
     careersFrom: FIRST_SEASON,
     players,
