@@ -15,6 +15,7 @@ import { RecordBook } from '../league/RecordBook';
 import { CoachesView } from '../league/Coaches';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
 import { slabVars } from '../teamColors';
+import { careerOnRecord } from '../../core/analysis/milestones';
 
 type View = 'seasons' | 'franchise' | 'records' | 'hof' | 'coaches';
 const VIEWS: { id: View; label: string }[] = [
@@ -135,9 +136,9 @@ function Franchise({ league }: { league: League }) {
 
 /**
  * Is a retiree worth remembering, and how much: honours won in this league (a single All-Star
- * Saturday contest isn't enough on its own), or a long or productive career. Imported veterans have
- * only their last real seasons on record, so their years in the NBA and those seasons' win shares
- * count too.
+ * Saturday contest isn't enough on its own), or a long or productive career. Real veterans' win
+ * shares are those of the seasons on record (the whole career, in a league seeded with them; else
+ * the last three before it), so their years in the NBA count too.
  */
 function careerValue(p: Player) {
   const c = careerTotals(p);
@@ -204,10 +205,13 @@ function HallOfFame({ league }: { league: League }) {
 function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolean }) {
   const c = careerTotals(p);
   const peak = Math.max(p.ovr, ...p.ratingsHistory.map((r) => r.ovr));
-  // a draft year the seed doesn't know (LeBron's predates its draft pages): count back his NBA seasons
-  const from = p.draft.year > 0 ? p.draft.year + 1 : Math.min((p.retiredSeason ?? league.season) - p.experience, ...c.seasons);
-  // imported veterans' records start with the seed's real seasons, not their rookie year
-  const tracked = c.seasons.size ? Math.min(...c.seasons) : from;
+  // his record starts with his first season when it's all there (a draftee who stayed overseas came
+  // later); a real veteran's in a league seeded with only his last three seasons starts with those
+  const first = c.seasons.size ? Math.min(...c.seasons) : undefined;
+  // otherwise from his draft, or a draft the seed doesn't know: count back his NBA seasons
+  const from =
+    first !== undefined && careerOnRecord(league, p) ? first : p.draft.year > 0 ? p.draft.year + 1 : Math.min((p.retiredSeason ?? league.season) - p.experience, ...c.seasons);
+  const tracked = first ?? from;
   // Most-played team for the jersey and the mark
   const byTeam = new Map<number, number>();
   for (const s of p.stats) if (!s.playoffs && typeof s.tid === 'number' && league.teams[s.tid]) byTeam.set(s.tid, (byTeam.get(s.tid) ?? 0) + s.gp);

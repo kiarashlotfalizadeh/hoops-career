@@ -415,7 +415,7 @@ function milestoneNews(league: League, sim: GameSim) {
   for (const rb of sim.rawBoxes()) {
     if (!rb.played || rb.b.sec <= 0) continue;
     const p = league.players[rb.pid];
-    if (!p || !careerOnRecord(p, league.season)) continue;
+    if (!p || !careerOnRecord(league, p)) continue;
     const after = careerTotals(p);
     for (const stat of ['pts', 'reb', 'ast'] as const) {
       const tonight = stat === 'pts' ? rb.b.pts : stat === 'reb' ? rb.b.orb + rb.b.drb : rb.b.ast;

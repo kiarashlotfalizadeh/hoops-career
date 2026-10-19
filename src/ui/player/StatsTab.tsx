@@ -109,8 +109,8 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
         {real ? (
           <More label="“real” seasons and advanced stats">
             <p className="tm-more-p">
-              “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes; only they have BPM and EPM. PER and win shares for seasons played in this league
-              are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
+              “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes for the last three; only they have BPM and EPM. PER and win shares for seasons
+              played in this league are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
             </p>
           </More>
         ) : (
@@ -128,7 +128,7 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
   if (!highs || !Object.keys(highs).length) return null;
   const since = league.records?.since ?? league.startSeason;
   const first = Math.min(...p.stats.filter((s) => !s.real).map((s) => s.season));
-  const whole = !p.stats.some((s) => s.real) && careerOnRecord(p, league.season) && first >= since;
+  const whole = !p.stats.some((s) => s.real) && careerOnRecord(league, p) && first >= since;
   const stored = new Set(league.games.map((g) => g.gid));
   return (
     <Section title={whole ? 'Career highs' : `Highs since ${seasonLabel(since)}`}>

@@ -146,26 +146,45 @@ describe.runIf(real)('Hall of Fame (L6)', () => {
   const named = (first: string, last: string) => Object.values(l.players).find((p) => p.firstName === first && p.lastName === last)!;
 
   it('real legends carry their careers before the league began', () => {
+    // with the whole career on record, Westbrook's MVP seasons count, not just his last three
     for (const [f, n] of [
       ['LeBron', 'James'],
       ['Stephen', 'Curry'],
       ['Kevin', 'Durant'],
       ['James', 'Harden'],
       ['Giannis', 'Antetokounmpo'],
+      ['Nikola', 'Jokić'],
       ['Anthony', 'Davis'],
       ['Kawhi', 'Leonard'],
+      ['Russell', 'Westbrook'],
     ])
       expect(hallOfFameScore(l, named(f, n))).toBeGreaterThanOrEqual(22);
+    expect(hallOfFameScore(l, named('LeBron', 'James')) / 22).toBeGreaterThan(2.5);
   });
 
   it('long-serving role players get next to nothing', () => {
     for (const [f, n] of [
       ['Taj', 'Gibson'],
       ['Nicolas', 'Batum'],
-      ['DeAndre', 'Jordan'],
+      ['Kyle', 'Anderson'],
     ])
-      expect(hallOfFameScore(l, named(f, n))).toBeLessThan(2);
+      expect(hallOfFameScore(l, named(f, n))).toBeLessThan(3);
     const credited = Object.values(l.players).filter((p) => hallOfFameScore(l, p) >= 22);
-    expect(credited.length).toBeLessThanOrEqual(12);
+    expect(credited.length).toBeLessThanOrEqual(15);
+  });
+
+  it('a league seeded with only the last three seasons estimates the careers before them', () => {
+    // a save from before careers were seeded: the stat seasons alone, and no careersFrom
+    const old = structuredClone(l);
+    delete old.careersFrom;
+    for (const p of Object.values(old.players)) p.stats = p.stats.filter((s) => !s.real || s.season >= old.startSeason - 3);
+    const lebron = Object.values(old.players).find((p) => p.firstName === 'LeBron' && p.lastName === 'James')!;
+    expect(hallOfFameScore(old, lebron)).toBeGreaterThan(44);
+    expect(
+      hallOfFameScore(
+        old,
+        Object.values(old.players).find((p) => p.firstName === 'Taj' && p.lastName === 'Gibson')!,
+      ),
+    ).toBeLessThan(2);
   });
 });

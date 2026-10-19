@@ -1,5 +1,5 @@
 # Builds src/data/seed.json on GitHub's runners (open network): Basketball Reference pages
-# (contracts, rosters, bios, box scores; ~90 pages at 1 request / 3.7 s) plus NBA.com
+# (contracts, rosters, bios, box scores and careers back to 2003-04; ~200 pages at 1 request / 3.7 s) plus NBA.com
 # play-by-play / matchup archives and ESPN college box scores from public GitHub datasets, and
 # the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
 # contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only)

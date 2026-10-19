@@ -1,10 +1,12 @@
 // Polite fetcher for Basketball Reference pages (they rate-limit at ~20 requests/minute).
 // Pages are cached in data/raw/ so re-runs only fetch what's missing; --refresh also re-fetches
-// the ones that change through the offseason (contracts, current rosters).
+// the ones that change through the offseason (contracts, current rosters). Then the roster pages
+// with the numbers players wore at franchises they've left, which those pages decide (careers.ts).
 // Usage: npm run data:fetch [-- --force] [-- --refresh] [-- --only per_game]
-import { existsSync, mkdirSync, writeFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, statSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { allSources } from './sources';
+import { allSources, type Source } from './sources';
+import { numberSources } from './careers';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const force = process.argv.includes('--force');
@@ -54,12 +56,11 @@ async function get(url: string): Promise<{ status: number; body: string }> {
   return { status: 0, body: '' };
 }
 
-async function main() {
-  mkdirSync(RAW, { recursive: true });
-  const sources = allSources().filter((s) => !only || s.key.includes(only));
-  let fetched = 0;
-  const failed: string[] = [];
-  for (const s of sources) {
+let fetched = 0;
+const failed: string[] = [];
+
+async function fetchAll(sources: Source[]) {
+  for (const s of sources.filter((x) => !only || x.key.includes(only))) {
     const file = join(RAW, `${s.key}.html`);
     if (!force && !(refresh && s.volatile) && existsSync(file) && statSync(file).size > 5000) continue;
     if (fetched > 0) await sleep(DELAY_MS);
@@ -88,6 +89,16 @@ async function main() {
       failed.push(s.key);
     }
   }
+}
+
+async function main() {
+  mkdirSync(RAW, { recursive: true });
+  await fetchAll(allSources());
+  const read = (key: string) => {
+    const f = join(RAW, `${key}.html`);
+    return existsSync(f) ? readFileSync(f, 'utf8') : null;
+  };
+  await fetchAll(numberSources(read));
   console.log(`Done. ${fetched} request(s) made; cache at ${RAW}`);
   // the seed can't be built without these, and a copy cached by an earlier run (--refresh) is out of date
   if (failed.length) {

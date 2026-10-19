@@ -379,7 +379,12 @@ export const FRANCHISES: FranchiseDef[] = [
 ];
 
 export const BBREF_TO_TID: Record<string, number> = Object.fromEntries(FRANCHISES.map((f, i) => [f.bbref, i]));
-// Historic/alternate abbreviations that can appear in older stat rows.
+// Historic/alternate abbreviations that can appear in older stat rows, each with the franchise
+// Basketball Reference files it under (the seed's seasons go back to 2003-04).
 BBREF_TO_TID['BKN'] = BBREF_TO_TID['BRK'];
-BBREF_TO_TID['CHA'] = BBREF_TO_TID['CHO'];
+BBREF_TO_TID['CHA'] = BBREF_TO_TID['CHO']; // Bobcats, 2004-05 to 2013-14
 BBREF_TO_TID['PHX'] = BBREF_TO_TID['PHO'];
+BBREF_TO_TID['SEA'] = BBREF_TO_TID['OKC']; // SuperSonics, to 2007-08
+BBREF_TO_TID['NJN'] = BBREF_TO_TID['BRK']; // New Jersey Nets, to 2011-12
+BBREF_TO_TID['NOH'] = BBREF_TO_TID['NOP']; // New Orleans Hornets, to 2012-13
+BBREF_TO_TID['NOK'] = BBREF_TO_TID['NOP']; // New Orleans/Oklahoma City Hornets, 2005-06 and 2006-07

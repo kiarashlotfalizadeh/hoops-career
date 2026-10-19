@@ -1,8 +1,8 @@
 // TEST UTILITY ONLY: writes Basketball-Reference-shaped HTML (and Dunks & Threes-shaped EPM
 // exports) for a simulated fictional league so the seed pipeline (parse → derive → calibrate)
-// can be exercised end to end offline.
+// can be exercised end to end offline, careers back to 2003-04 included.
 // Usage: tsx scripts/data/test/make-fixture.ts <outDir>
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createLeague, defaultSettings } from '../../../src/core/league/create';
 import { GameSim } from '../../../src/core/sim/engine';
@@ -10,6 +10,9 @@ import { Rng } from '../../../src/core/random';
 import { teamPlayers } from '../../../src/core/league/helpers';
 import { FRANCHISES } from '../../../src/core/teams';
 import { contractExp, salaryFor } from '../../../src/core/playerGen';
+import type { Player } from '../../../src/core/types';
+import { HISTORY_SEASONS } from '../sources';
+import { numberSources } from '../careers';
 
 const out = process.argv[2];
 if (!out) {
@@ -22,9 +25,33 @@ const id = (pid: number) => `fx${String(pid).padStart(5, '0')}01`;
 const cell = (stat: string, v: string | number, extra = '') => `<td data-stat="${stat}"${extra}>${v}</td>`;
 const wrap = (tableId: string, rows: string[]) =>
   `<html><body>${'x'.repeat(6000)}<!-- <table id="${tableId}"><thead><tr><th data-stat="ranker">Rk</th></tr></thead><tbody>${rows.join('')}</tbody></table> --></body></html>`;
+type Line = Record<string, number>;
+/** A season's per-game and advanced pages from each player's totals, under the team `teamOf` gives him. */
+function writeSeason(season: number, acc: Map<number, Line>, teamOf: (p: Player) => string) {
+  const pg: string[] = [];
+  const adv: string[] = [];
+  for (const [pid, e] of acc) {
+    const p = league.players[pid];
+    const team = teamOf(p);
+    const per = (v: number) => (v / e.g).toFixed(1);
+    const name = `<td data-stat="name_display" data-append-csv="${id(pid)}"><a href="/players/f/${id(pid)}.html">${p.firstName} ${p.lastName}</a></td>`;
+    pg.push(
+      `<tr><th data-stat="ranker">1</th>${name}${cell('age', season - p.bornYear)}${cell('team_name_abbr', team)}${cell('pos', p.pos)}${cell('games', e.g)}${cell('games_started', 0)}${cell('mp_per_g', (e.sec / 60 / e.g).toFixed(1))}${cell('fg_per_g', per(e.fg))}${cell('fga_per_g', per(e.fga))}${cell('fg3_per_g', per(e.fg3))}${cell('fg3a_per_g', per(e.fg3a))}${cell('fg2_per_g', per(e.fg - e.fg3))}${cell('fg2a_per_g', per(e.fga - e.fg3a))}${cell('ft_per_g', per(e.ft))}${cell('fta_per_g', per(e.fta))}${cell('orb_per_g', per(e.orb))}${cell('drb_per_g', per(e.drb))}${cell('ast_per_g', per(e.ast))}${cell('stl_per_g', per(e.stl))}${cell('blk_per_g', per(e.blk))}${cell('tov_per_g', per(e.tov))}${cell('pf_per_g', per(e.pf))}${cell('pts_per_g', per(e.pts))}</tr>`,
+    );
+    const mins = e.sec / 60;
+    const usg = ((e.fga + 0.44 * e.fta + e.tov) / Math.max(1, e.tUse)) * 100;
+    adv.push(
+      `<tr>${name}${cell('team_name_abbr', team)}${cell('games', e.g)}${cell('mp', Math.round(mins))}${cell('per', 15)}${cell('ts_pct', (e.pts / (2 * (e.fga + 0.44 * e.fta) || 1)).toFixed(3))}${cell('usg_pct', usg.toFixed(1))}${cell('ast_pct', ((e.ast / mins) * 48 * 2.4).toFixed(1))}${cell('orb_pct', ((e.orb / mins) * 48 * 0.9).toFixed(1))}${cell('drb_pct', ((e.drb / mins) * 48 * 0.75).toFixed(1))}${cell('stl_pct', ((e.stl / mins) * 48 * 1.0).toFixed(1))}${cell('blk_pct', ((e.blk / mins) * 48 * 1.6).toFixed(1))}${cell('tov_pct', ((e.tov / Math.max(1, e.fga + 0.44 * e.fta + e.tov)) * 100).toFixed(1))}${cell('obpm', ((p.ovr - 72) / 4).toFixed(1))}${cell('dbpm', ((p.ratings.diq - 50) / 15).toFixed(1))}${cell('bpm', ((p.ovr - 72) / 3).toFixed(1))}${cell('ws', 2)}${cell('ws_per_48', 0.1)}${cell('vorp', ((p.ovr - 70) / 6).toFixed(1))}</tr>`,
+    );
+  }
+  pg.push(`<tr class="norank"><th data-stat="ranker"></th><td data-stat="name_display">League Average</td>${cell('fga_per_g', 88)}</tr>`);
+  writeFileSync(join(out, `per_game_${season}.html`), wrap('per_game_stats', pg));
+  writeFileSync(join(out, `advanced_${season}.html`), wrap('advanced', adv));
+}
+let first = new Map<number, Line>();
 for (const season of [2024, 2025, 2026]) {
   const rng = new Rng(season);
-  const acc = new Map<number, Record<string, number>>();
+  const acc = new Map<number, Line>();
   const rosters = league.teams.map((t) => teamPlayers(league, t.tid));
   for (let g = 0; g < 450; g++) {
     const h = g % 30;
@@ -55,24 +82,10 @@ for (const season of [2024, 2025, 2026]) {
       acc.set(rb.pid, e);
     }
   }
-  const pg: string[] = [];
-  const adv: string[] = [];
+  if (season === 2024) first = acc;
+  writeSeason(season, acc, (p) => FRANCHISES[p.tid].bbref);
   // Dunks & Threes EPM export: NBA.com-style ids and tricodes, so the build matches it by name and team
   const epm: string[] = ['season,seasontype,team_alias,team_alias_all,player_id,player_name,mp,off,def,tot'];
-  for (const [pid, e] of acc) {
-    const p = league.players[pid];
-    const team = FRANCHISES[p.tid].bbref;
-    const per = (v: number) => (v / e.g).toFixed(1);
-    const name = `<td data-stat="name_display" data-append-csv="${id(pid)}"><a href="/players/f/${id(pid)}.html">${p.firstName} ${p.lastName}</a></td>`;
-    pg.push(
-      `<tr><th data-stat="ranker">1</th>${name}${cell('age', season - p.bornYear)}${cell('team_name_abbr', team)}${cell('pos', p.pos)}${cell('games', e.g)}${cell('games_started', 0)}${cell('mp_per_g', (e.sec / 60 / e.g).toFixed(1))}${cell('fg_per_g', per(e.fg))}${cell('fga_per_g', per(e.fga))}${cell('fg3_per_g', per(e.fg3))}${cell('fg3a_per_g', per(e.fg3a))}${cell('fg2_per_g', per(e.fg - e.fg3))}${cell('fg2a_per_g', per(e.fga - e.fg3a))}${cell('ft_per_g', per(e.ft))}${cell('fta_per_g', per(e.fta))}${cell('orb_per_g', per(e.orb))}${cell('drb_per_g', per(e.drb))}${cell('ast_per_g', per(e.ast))}${cell('stl_per_g', per(e.stl))}${cell('blk_per_g', per(e.blk))}${cell('tov_per_g', per(e.tov))}${cell('pf_per_g', per(e.pf))}${cell('pts_per_g', per(e.pts))}</tr>`,
-    );
-    const mins = e.sec / 60;
-    const usg = ((e.fga + 0.44 * e.fta + e.tov) / Math.max(1, e.tUse)) * 100;
-    adv.push(
-      `<tr>${name}${cell('team_name_abbr', team)}${cell('games', e.g)}${cell('mp', Math.round(mins))}${cell('per', 15)}${cell('ts_pct', (e.pts / (2 * (e.fga + 0.44 * e.fta) || 1)).toFixed(3))}${cell('usg_pct', usg.toFixed(1))}${cell('ast_pct', ((e.ast / mins) * 48 * 2.4).toFixed(1))}${cell('orb_pct', ((e.orb / mins) * 48 * 0.9).toFixed(1))}${cell('drb_pct', ((e.drb / mins) * 48 * 0.75).toFixed(1))}${cell('stl_pct', ((e.stl / mins) * 48 * 1.0).toFixed(1))}${cell('blk_pct', ((e.blk / mins) * 48 * 1.6).toFixed(1))}${cell('tov_pct', ((e.tov / Math.max(1, e.fga + 0.44 * e.fta + e.tov)) * 100).toFixed(1))}${cell('obpm', ((p.ovr - 72) / 4).toFixed(1))}${cell('dbpm', ((p.ratings.diq - 50) / 15).toFixed(1))}${cell('bpm', ((p.ovr - 72) / 3).toFixed(1))}${cell('ws', 2)}${cell('ws_per_48', 0.1)}${cell('vorp', ((p.ovr - 70) / 6).toFixed(1))}</tr>`,
-    );
-  }
   for (const [pid, e] of acc) {
     const p = league.players[pid];
     const [off, def] = [(p.ovr - 72) / 4, (p.ratings.diq - 50) / 15];
@@ -82,10 +95,15 @@ for (const season of [2024, 2025, 2026]) {
     );
   }
   writeFileSync(join(out, 'epm', `dunksandthrees_${season}.csv`), epm.join('\n') + '\n');
-  pg.push(`<tr class="norank"><th data-stat="ranker"></th><td data-stat="name_display">League Average</td>${cell('fga_per_g', 88)}</tr>`);
-  writeFileSync(join(out, `per_game_${season}.html`), wrap('per_game_stats', pg));
-  writeFileSync(join(out, `advanced_${season}.html`), wrap('advanced', adv));
 }
+// the seasons before them: each player's 2023-24 line in every season since his experience says he
+// came in; every third one played his seasons before 2018-19 for the next franchise over (Seattle,
+// before 2008-09, for the Thunder), so his number there comes from that team's roster page
+const historyTeam = (p: Player, season: number) => {
+  const code = FRANCHISES[(p.tid + (p.pid % 3 === 0 && season < 2019 ? 1 : 0)) % 30].bbref;
+  return code === 'OKC' && season <= 2008 ? 'SEA' : code;
+};
+for (const season of HISTORY_SEASONS) writeSeason(season, new Map([...first].filter(([pid]) => 2024 - league.players[pid].experience <= season)), (p) => historyTeam(p, season));
 const cr: string[] = [];
 for (const p of Object.values(league.players)) {
   if (p.tid < 0) continue;
@@ -115,4 +133,17 @@ for (const p of Object.values(league.players)) {
   draftRows.set(p.draft.year, [...(draftRows.get(p.draft.year) ?? []), row]);
 }
 for (const [year, rows] of draftRows) writeFileSync(join(out, `draft_${year}.html`), wrap('stats', rows));
+// the roster pages the fetcher would get for the numbers players wore at franchises they left
+const cached = (key: string) => (existsSync(join(out, `${key}.html`)) ? readFileSync(join(out, `${key}.html`), 'utf8') : null);
+for (const src of numberSources(cached)) {
+  const [, team, season] = src.key.match(/^roster_(\w+)_(\d+)$/)!;
+  const rows = [...first.keys()]
+    .map((pid) => league.players[pid])
+    .filter((p) => 2024 - p.experience <= Number(season) && historyTeam(p, Number(season)) === team)
+    .map(
+      (p) =>
+        `<tr>${cell('number', String(p.pid % 99))}<td data-stat="player" data-append-csv="${id(p.pid)}"><a href="/players/f/${id(p.pid)}.html">${p.firstName} ${p.lastName}</a></td>${cell('pos', p.pos)}</tr>`,
+    );
+  writeFileSync(join(out, `${src.key}.html`), wrap('roster', rows));
+}
 console.log('fixture written to', out);

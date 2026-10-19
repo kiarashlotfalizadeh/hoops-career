@@ -180,15 +180,26 @@ describe('the projection a game keeps', () => {
 });
 
 describe('career milestones', () => {
-  it("count only careers the game has whole: a real veteran's three seasons on record aren't his career", () => {
+  it("count only careers the game has whole: a real veteran's, when the seed carried it, not his last three seasons", () => {
     const l = testLeague('careers');
     const real = Object.values(l.players).filter((p) => p.real && p.tid >= 0);
-    const veteran = real.find((p) => p.experience >= 8)!;
-    expect(careerOnRecord(veteran, l.season)).toBe(false);
-    // a 2023 draftee has every season on record
-    const young = real.find((p) => p.draft.year === l.season - 4 && p.stats.filter((s) => !s.playoffs && s.gp > 0).length === 3);
+    const named = (first: string, last: string) => real.find((p) => p.firstName === first && p.lastName === last)!;
+    // every season since 2003-04 on record: LeBron's from his first, and a season lost to injury
+    // (Durant's 2019-20) or spent overseas leaves a gap, not a hole
+    expect(l.careersFrom).toBe(2004);
+    for (const p of [named('LeBron', 'James'), named('Kevin', 'Durant'), named('Stephen', 'Curry')]) expect(careerOnRecord(l, p)).toBe(true);
+    const durant = named('Kevin', 'Durant');
+    expect(new Set(durant.stats.filter((s) => s.real && s.gp > 0).map((s) => s.season)).size).toBeLessThan(durant.experience);
+    // a league seeded with only the last three seasons (a save from before) has a veteran's career in part
+    const old = structuredClone(l);
+    delete old.careersFrom;
+    for (const p of Object.values(old.players)) p.stats = p.stats.filter((s) => !s.real || s.season >= old.startSeason - 3);
+    const veteran = Object.values(old.players).find((p) => p.real && p.tid >= 0 && p.experience >= 8)!;
+    expect(careerOnRecord(old, veteran)).toBe(false);
+    // there, a 2023 draftee still has every season on record
+    const young = Object.values(old.players).find((p) => p.real && p.draft.year === l.season - 4 && p.stats.filter((s) => !s.playoffs && s.gp > 0).length === 3);
     expect(young).toBeDefined();
-    expect(careerOnRecord(young!, l.season)).toBe(true);
+    expect(careerOnRecord(old, young!)).toBe(true);
     expect(marksCrossed(990, 1004)).toEqual([1000]);
     expect(marksCrossed(1000, 1999)).toEqual([]);
     const news = (stat: 'pts' | 'reb' | 'ast', mark: number) => newsworthy(stat, mark);

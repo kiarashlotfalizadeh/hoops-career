@@ -125,15 +125,19 @@ export function mainTeam(p: Player): number | null {
 
 /**
  * Why a franchise retires a retiring player's number, or null: he gave it five seasons and a career
- * it remembers there. A Hall of Famer's goes up with the team he played the most seasons for; anyone's
- * with a team he won an MVP or a Finals MVP for, a title with two All-NBA selections there, three
- * All-NBA or five All-Star selections there, or whose scoring record he holds (the most points for it
- * in this league's seasons, 15,000 at least). Played out for sixteen seasons (two real leagues and a
- * fictional one), that came to none in the first four seasons, 1.4 a season from the fifth to the
- * twelfth (none to three in a season), and about four a season from the thirteenth to the sixteenth,
- * as the generation of stars a league opens with retires, most of them Hall of Famers. A Hall of Famer
- * at every team he gave five seasons, a title with one All-NBA selection and a 10,000-point scoring
- * record made it a quarter more.
+ * it remembers there. A Hall of Famer's goes up with the team he played the most seasons for (a
+ * seeded player's real seasons count: his whole career, in a league seeded with it); anyone's with a
+ * team he won an MVP or a Finals MVP for, a title with two All-NBA selections there, three All-NBA or
+ * five All-Star selections there, or whose scoring record he holds (the most points for it in this
+ * league's seasons, 15,000 at least). Played out for sixteen seasons in two real leagues seeded with
+ * their players' careers, the stars a league opens with go up at the franchises they made their names
+ * with, from its first summer (LeBron James's 23 in Cleveland, Durant's 35 in Oklahoma City): seven
+ * numbers in the first four seasons, about two a season from the fifth to the twelfth (none to four
+ * in a season) and two and a half to four a season from the thirteenth to the sixteenth, as the next
+ * generation retires (33 and 39 in all). A league seeded with only its players' last three seasons
+ * retired 22, one in its first four seasons, its first stars' numbers going up only where they had
+ * five seasons in it. A Hall of Famer at every team he gave five seasons, a title with one All-NBA
+ * selection and a 10,000-point scoring record made it a quarter more.
  */
 export function legendReason(league: League, p: Player, tid: number): LegendReason | null {
   if (seasonsWith(p, tid) < LEGEND_SEASONS) return null;

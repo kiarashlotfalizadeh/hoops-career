@@ -1,7 +1,7 @@
 import type { DraftInfo, Injury, League, Player, PlayerStats, Pos, RatingKey, Ratings, Settings, Tendencies } from '../types';
 import { cutOrder, startGuide } from './agenda';
 import { FREE_AGENT } from '../types';
-import { CAP, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
+import { CAP, RATED_SEASONS, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '../constants';
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
@@ -41,9 +41,12 @@ export interface SeedPlayer {
   tend?: Tendencies;
   growth?: number;
   injuryProne?: number;
+  /** His real seasons, oldest first (from SeedData.careersFrom when the seed has it, else the stat seasons alone). */
   stats: PlayerStats[];
   /** Out on opening night (real league with injuries on). */
   injury?: SeedInjury;
+  /** The number he last wore at each franchise he gave five seasons and has left, by its Basketball Reference code today. */
+  jerseys?: Record<string, string>;
 }
 
 export interface SeedInjury {
@@ -83,6 +86,11 @@ export interface SeedData {
   generated: string;
   source: string;
   season: number;
+  /**
+   * Every player's real regular seasons from this one on are in his stats, so a veteran's whole NBA
+   * career is on record (absent: only the three seasons his ratings come from, a seed from before).
+   */
+  careersFrom?: number;
   players: SeedPlayer[];
   /** The real regular-season schedule (80 games per team plus the Cup, or completed to 82 at creation). */
   schedule?: SeedSchedule;
@@ -111,11 +119,12 @@ export function defaultSettings(): Settings {
 
 /**
  * NBA seasons before `season` and draft details for a seed player. Without draft data he went
- * undrafted (or, like LeBron, was drafted before the seed's draft pages begin): with no season on
- * record he is a rookie, one who debuted within the record has its seasons, and one already playing
- * when it begins (`firstRecord`) counts the years since a typical undrafted debut at 22 (VanVleet 10,
- * not the 2 on record), which sets his max, his minimum and two-way eligibility. Second-round picks
- * are numbered within the round, as the game does.
+ * undrafted (or was drafted before the seed's draft pages begin): with no season on record he is a
+ * rookie, and one who debuted within the record counts the seasons since (VanVleet 10: the one he
+ * lost to injury counts, as it would for a draftee). One already playing when the record begins
+ * (`firstRecord`, in a seed with only three seasons) counts the years since a typical undrafted debut
+ * at 22. That sets his max, his minimum and two-way eligibility. Second-round picks are numbered
+ * within the round, as the game does.
  */
 function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { experience: number; draft: DraftInfo } {
   if (sp.draft) {
@@ -123,8 +132,9 @@ function seedCareer(sp: SeedPlayer, season: number, firstRecord: number): { expe
     const pick = round === 2 && sp.draft.pick > 30 ? sp.draft.pick - 30 : sp.draft.pick;
     return { experience: Math.max(0, season - 1 - year), draft: { year, round, pick, tid: team ? (BBREF_TO_TID[team] ?? null) : null, teamAbbrev: team } };
   }
-  const seasons = new Set(sp.stats.filter((s) => s.real).map((s) => s.season));
-  const experience = seasons.has(firstRecord) ? Math.max(seasons.size, season - sp.bornYear - 22) : seasons.size;
+  const seasons = sp.stats.filter((s) => s.real).map((s) => s.season);
+  const debut = Math.min(season, ...seasons);
+  const experience = debut <= firstRecord ? Math.max(season - debut, season - sp.bornYear - 22) : season - debut;
   // a 15-year veteran was almost surely drafted: his draft stays unknown rather than "undrafted"
   return { experience, draft: { year: experience >= 15 ? 0 : season - 1 - experience, round: 0, pick: 0, tid: null } };
 }
@@ -139,6 +149,9 @@ function onRookieScale(sp: SeedPlayer, season: number): boolean {
   const scale = ROOKIE_SCALE[Math.min(29, sp.draft.pick - 1)] * Math.pow(1.045, season - 1 - sp.draft.year);
   return season + c.salaries.length - 1 <= sp.draft.year + 4 && c.salaries[0] >= scale * 0.85;
 }
+
+/** Basketball Reference lists every number a player wore in a season ("6, 9"): the latest is his. */
+const lastNumber = (jersey: string) => jersey.split(',').pop()!.trim();
 
 function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, firstRecord: number): Player {
   const tid = sp.team ? (BBREF_TO_TID[sp.team] ?? FREE_AGENT) : FREE_AGENT;
@@ -156,8 +169,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     bornYear: sp.bornYear,
     country: sp.country,
     college: sp.college,
-    // Basketball Reference lists every number a player wore that season ("6, 9"): the latest is his
-    jersey: sp.jersey.split(',').pop()!.trim(),
+    jersey: lastNumber(sp.jersey),
     draft,
     tid,
     ratings: { ...sp.ratings },
@@ -169,6 +181,10 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     ratingsHistory: [],
     contract: { start: season, salaries, option: sp.contract?.option, ...(sp.contract?.twoWay ? { twoWay: true } : {}), ...(onRookieScale(sp, season) ? { rookie: true } : {}) },
     stats: sp.stats.map((s) => ({ ...s, tid: BBREF_TO_TID[String(s.tid)] ?? s.tid })),
+    // the numbers he wore at franchises he has left, for the one that retires his (jerseys.ts)
+    ...(sp.jerseys
+      ? { jerseys: Object.fromEntries(Object.entries(sp.jerseys).flatMap(([team, j]) => (BBREF_TO_TID[team] === undefined ? [] : [[BBREF_TO_TID[team], lastNumber(j)]]))) }
+      : {}),
     injury: null,
     injuryCount: 0,
     mood: blankMood(),
@@ -250,6 +266,7 @@ export function createLeague(opts: CreateOpts): League {
     ownerMood: { wins: 0, playoffs: 0, money: 0, total: 0 },
     faDay: 30,
     startSeason: season,
+    ...(opts.seed?.careersFrom !== undefined && opts.seed.players.length ? { careersFrom: opts.seed.careersFrom } : {}),
   };
   teams[opts.userTid].coach.name = opts.coachName;
   // no two head coaches share a name (drawn from 900, a third of leagues had two, and Coach of the
@@ -272,12 +289,12 @@ export function createLeague(opts: CreateOpts): League {
       // the contracts table also lists waived players a team still pays (a stretched or partly
       // guaranteed deal, below any playing contract): that is dead money (a team option year isn't
       // guaranteed), and the player is a free agent, or out of the league if he hasn't played in the
-      // seed's seasons
+      // seasons the seed rates players by (its careers go further back)
       const c = p.contract;
       if (p.tid >= 0 && !c.twoWay && c.salaries[0] < CAP.minContract) {
         const years = c.option === 'team' ? c.salaries.length - 1 : c.salaries.length;
         for (let i = 0; i < years; i++) if (c.salaries[i] > 0) league.teams[p.tid].deadMoney.push({ pid: p.pid, name: playerName(p), season: season + i, amount: c.salaries[i] });
-        if (!p.stats.some((s) => s.real && s.gp > 0)) continue;
+        if (!p.stats.some((s) => s.real && s.gp > 0 && s.season >= season - RATED_SEASONS)) continue;
         p.tid = FREE_AGENT;
         p.contract = { start: season, salaries: [0] };
       }

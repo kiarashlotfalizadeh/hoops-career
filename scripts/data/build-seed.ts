@@ -1,12 +1,13 @@
 // Build src/data/seed.json from cached Basketball Reference pages (run data:fetch first).
 //
-// Inputs: per-game + advanced tables for 2023-24, 2024-25, 2025-26; the current contracts
-// table (who plays where in 2026-27 and their salaries); team roster pages (height, weight,
-// birth date, jersey, country, college); draft pages (draft slot); Dunks & Threes EPM exports
-// for the same seasons (data/epm/, see epm.ts).
+// Inputs: per-game + advanced tables for 2023-24, 2024-25, 2025-26 (ratings) and every season
+// back to 2003-04 (careers on record, see careers.ts); the current contracts table (who plays where
+// in 2026-27 and their salaries); team roster pages (height, weight, birth date, jersey, country,
+// college, and the numbers players wore at franchises they've left); draft pages (draft slot);
+// Dunks & Threes EPM exports for the stat seasons (data/epm/, see epm.ts).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES } from './sources';
+import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES, FIRST_SEASON, HISTORY_SEASONS } from './sources';
 import {
   countryName,
   parseAdvanced,
@@ -28,16 +29,16 @@ import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
 import { collegePop, collegeRatings, findCollege, loadCollege } from './nba/college';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
-import type { PlayerStats, Pos, Ratings, Tendencies } from '../../src/core/types';
+import type { Pos, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
-import { BBREF_TO_TID } from '../../src/core/teams';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
 import { clamp } from '../../src/core/random';
 import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 import { aggregateEpm, epmByBbref, epmFields, loadEpm, matchEpm, type EpmRow } from './epm';
+import { byId, formerNumbers, historyLines, loadSeasons, realLine, seedIds } from './careers';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -69,6 +70,13 @@ async function main() {
     adv.push(...parseAdvanced(ad, s));
     console.log(`season ${s}: ${parsed.rows.length} per-game rows`);
   }
+  // every season since FIRST_SEASON, or players' careers on record would have holes
+  const history = loadSeasons(read, HISTORY_SEASONS);
+  if (history.missing.length) {
+    console.error(`Missing ${history.missing.join(', ')}. Run \`npm run data:fetch\` first.`);
+    process.exit(1);
+  }
+  console.log(`history ${HISTORY_SEASONS[0]}-${HISTORY_SEASONS[HISTORY_SEASONS.length - 1]}: ${history.perGame.length} per-game rows`);
   const rosters: RosterRow[] = [];
   const noRoster: string[] = [];
   for (const s of ROSTER_SEASONS)
@@ -89,17 +97,10 @@ async function main() {
   if (noRoster.length) console.warn(`  no roster rows for ${noRoster.join(', ')}: their players get no bio, jersey or position from those pages`);
   if (noDraftPage.length) console.warn(`  no draft page for ${noDraftPage.join(', ')}: players drafted then are seeded as undrafted`);
 
-  const byId = <T extends { id: string }>(rows: T[]) => {
-    const m = new Map<string, T[]>();
-    for (const r of rows) {
-      const list = m.get(r.id) ?? [];
-      list.push(r);
-      m.set(r.id, list);
-    }
-    return m;
-  };
   const pgById = byId(perGame);
   const advById = byId(adv);
+  const histById = byId(history.perGame);
+  const histAdvById = byId(history.adv);
   const rosterById = new Map<string, RosterRow>();
   for (const r of rosters.sort((a, b) => a.season - b.season)) {
     // later season wins, but offseason pages leave uniform numbers blank: keep the last known one
@@ -122,13 +123,20 @@ async function main() {
   const contractById = new Map<string, ContractRow>(contracts.map((c) => [c.id, c]));
 
   // universe: everyone under contract + recent rotation players who are unsigned
-  const ids = new Set<string>(contracts.map((c) => c.id));
-  const fa = [...pgById.entries()]
-    .filter(([id, rows]) => !ids.has(id) && rows.some((r) => r.season === SEED_SEASON - 1 && r.g * r.mp >= 250))
-    .map(([id, rows]) => ({ id, min: rows.filter((r) => r.season === SEED_SEASON - 1 && !COMBINED.test(r.team)).reduce((a, r) => a + r.g * r.mp, 0) }))
-    .sort((a, b) => b.min - a.min)
-    .slice(0, 140);
-  for (const f of fa) ids.add(f.id);
+  const ids = seedIds(contracts, perGame);
+  // the numbers they wore at franchises they've left: the roster pages of their last seasons there
+  // (fetched for them by data:fetch; this season's and last season's are read above)
+  const numberPages = new Map<string, RosterRow[]>();
+  const rosterRow = (id: string, team: string, season: number) => {
+    const key = `roster_${team}_${season}`;
+    let page = numberPages.get(key);
+    if (!page) {
+      const html = ROSTER_SEASONS.includes(season) ? null : read(key);
+      page = ROSTER_SEASONS.includes(season) ? rosters.filter((r) => r.team === team && r.season === season) : html ? parseRoster(html, team, season) : [];
+      numberPages.set(key, page);
+    }
+    return page.find((r) => r.id === id);
+  };
 
   // NBA.com play-by-play profiles (shot zones, creation, defense, RAPM), if downloaded
   let pbpById = new Map<string, PbpAgg>();
@@ -249,72 +257,26 @@ async function main() {
     }
     const nbaId = pbpById.get(id)?.nbaId;
     const seasonFga = (s: number) => rows.filter((r) => r.season === s && !COMBINED.test(r.team)).reduce((a, r) => a + r.fga * r.g, 0);
-    const stats: PlayerStats[] = rows
+    const recent = rows
       .filter((r) => !COMBINED.test(r.team))
       .map((r) => {
         // real shot locations from NBA.com, split across teams by shot volume
         const sp = nbaId && prof ? prof.players[prof.seasons.indexOf(r.season)]?.[nbaId] : undefined;
         const share = sp ? (r.fga * r.g) / Math.max(1, seasonFga(r.season)) : 0;
         const zn = (x: number) => Math.round(x * share);
-        const a = (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team);
         // EPM is a season's figure across his teams: each team row carries it
         const e = epmById.get(id)?.get(r.season);
-        const g = r.g;
-        const t = (v: number) => Math.round(v * g);
-        return {
-          season: r.season,
-          tid: BBREF_TO_TID[r.team] ?? -1,
-          playoffs: false,
-          real: true,
-          gp: g,
-          gs: r.gs,
-          min: Math.round(r.mp * g),
-          fgm: t(r.fg),
-          fga: t(r.fga),
-          tpm: t(r.fg3),
-          tpa: t(r.fg3a),
-          ftm: t(r.ft),
-          fta: t(r.fta),
-          orb: t(r.orb),
-          drb: t(r.drb),
-          ast: t(r.ast),
-          stl: t(r.stl),
-          blk: t(r.blk),
-          tov: t(r.tov),
-          pf: t(r.pf),
-          pts: t(r.pts),
-          pm: 0,
-          rimM: sp ? zn(sp.fgm.rim) : 0,
-          rimA: sp ? zn(sp.fga.rim) : 0,
-          midM: sp ? zn(sp.fgm.mid) : 0,
-          midA: sp ? zn(sp.fga.mid) : 0,
-          onPoss: 0,
-          onPtsFor: 0,
-          onPtsAgainst: 0,
-          teamFga: 0,
-          teamFta: 0,
-          teamTov: 0,
-          adv: a
-            ? {
-                per: a.per,
-                ts: a.ts,
-                usg: a.usgPct,
-                astPct: a.astPct,
-                trbPct: a.trbPct,
-                stlPct: a.stlPct,
-                blkPct: a.blkPct,
-                tovPct: a.tovPct,
-                ws: a.ws,
-                ws48: a.ws48,
-                obpm: a.obpm,
-                dbpm: a.dbpm,
-                bpm: a.bpm,
-                vorp: a.vorp,
-                ...(e ? epmFields(e) : {}),
-              }
-            : undefined,
-        };
+        return realLine(
+          r,
+          (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team),
+          sp ? { rimM: zn(sp.fgm.rim), rimA: zn(sp.fga.rim), midM: zn(sp.fgm.mid), midA: zn(sp.fga.mid) } : undefined,
+          e ? epmFields(e) : undefined,
+        );
       });
+    // his career before the stat seasons: on record, not in his ratings
+    const past = histById.get(id) ?? [];
+    const stats = [...historyLines(past, histAdvById.get(id) ?? []), ...recent];
+    const jerseys = formerNumbers([...past, ...rows], c?.team ?? null, (team, season) => rosterRow(id, team, season));
     const lastOpt = c?.options[c.options.length - 1];
     if (!fivePos) inferredPos.set(players.length, label);
     const sp: SeedPlayer = {
@@ -335,12 +297,16 @@ async function main() {
       ratings,
       tend,
       stats,
+      ...(Object.keys(jerseys).length ? { jerseys } : {}),
     };
     if (agg && agg.rawMin >= 300) targets.push({ idx: players.length, agg, rel });
     players.push(sp);
   }
   console.log(
     `players: ${players.length} (${players.filter((p) => p.team).length} under contract, ${players.filter((p) => !p.team).length} free agents); ${collegeUsed} shaped by college stats`,
+  );
+  console.log(
+    `careers: ${players.filter((p) => p.stats.some((s) => s.season < STAT_SEASONS[0])).length} players with seasons before ${seasonLabel(STAT_SEASONS[0])}; numbers at former franchises for ${players.filter((p) => p.jerseys).length}`,
   );
   const noBio = players.filter((p) => p.team && !rosterById.has(p.id));
   if (noBio.length) console.warn(`  under contract but on no roster page (size, age and country estimated): ${noBio.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}`);
@@ -369,8 +335,9 @@ async function main() {
   const seed: SeedData = {
     version: 1,
     generated: new Date().toISOString(),
-    source: `Basketball Reference: ${seasonLabel(STAT_SEASONS[0])} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced; current contracts${epmById.size ? '; Dunks & Threes EPM' : ''}`,
+    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts${epmById.size ? '; Dunks & Threes EPM' : ''}`,
     season: SEED_SEASON,
+    careersFrom: FIRST_SEASON,
     players,
   };
   const league = createLeague({ name: 'calib', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed, rngSeed: 99, preseasonCuts: false });

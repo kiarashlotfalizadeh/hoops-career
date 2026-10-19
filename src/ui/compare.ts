@@ -237,7 +237,10 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     {
       id: 'career',
       title: 'Career',
-      note: 'Regular-season totals on record (for a real veteran, his last three seasons before this league count too).',
+      note:
+        league.careersFrom !== undefined
+          ? 'Regular-season totals on record (for a real player, his NBA career before this league counts too).'
+          : 'Regular-season totals on record (for a real veteran, his last three seasons before this league count too).',
       rows: careerRows,
       empty: 'No NBA games yet.',
     },

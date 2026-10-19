@@ -15,6 +15,7 @@ import { blankStats } from '../playerGen';
 import { CAP } from '../constants';
 import type { League, Player, PlayerStats } from '../types';
 import { RETIRED } from '../types';
+import { BBREF_TO_TID } from '../teams';
 
 const base = testLeague('jerseys');
 const fresh = () => structuredClone(base);
@@ -225,6 +226,25 @@ describe('who is a legend', () => {
     retireNumbers(l, theirs);
     expect(l.inbox.length).toBe(inbox + 1);
     expect(l.news[l.news.length - 1].text).toBe(`The ${l.teams[A].name} will retire ${playerName(theirs)}'s No. 9.`);
+  });
+
+  it.runIf(base.careersFrom !== undefined)('a real Hall of Famer goes up with the franchise he left before the league began, in the number he wore there', () => {
+    const l = fresh();
+    const named = (first: string, last: string) => Object.values(l.players).find((p) => p.firstName === first && p.lastName === last)!;
+    // Durant's Seattle season counts with his eight in Oklahoma City (one franchise); Giannis's twelve in Milwaukee
+    for (const [p, team, jersey] of [
+      [named('Kevin', 'Durant'), BBREF_TO_TID.OKC, '35'],
+      [named('Giannis', 'Antetokounmpo'), BBREF_TO_TID.MIL, '34'],
+    ] as const) {
+      expect(p.tid).not.toBe(team);
+      expect(mainTeam(p)).toBe(team);
+      expect(p.jerseys?.[team]).toBe(jersey);
+      p.tid = RETIRED;
+      p.retiredSeason = l.season;
+      p.hof = true;
+      expect(retireNumbers(l, p)).toEqual([team]);
+      expect(l.teams[team].retired).toContainEqual({ jersey, pid: p.pid, name: playerName(p), season: l.season });
+    }
   });
 });
 

@@ -79,8 +79,9 @@ describe.skipIf(!real)('real-player seed', () => {
     const byId = new Map(Object.values(league.players).map((p) => [p.bbrefId, p]));
     for (const sp of waived) {
       const p = byId.get(sp.id);
-      // a free agent if he played in the seed's seasons, else not in the league (Rubio retired in 2024)
-      if (sp.stats.some((s) => s.gp > 0)) expect(p?.tid).toBe(FREE_AGENT);
+      // a free agent if he played in the three seasons the seed rates players by, else not in the
+      // league (Rubio retired in 2024: his career on record goes back further)
+      if (sp.stats.some((s) => s.gp > 0 && s.season >= seed.season - 3)) expect(p?.tid).toBe(FREE_AGENT);
       else expect(p).toBeUndefined();
       expect(league.teams[BBREF_TO_TID[sp.team!]].deadMoney).toContainEqual(
         expect.objectContaining({ name: `${sp.first} ${sp.last}`, season: league.season, amount: sp.contract!.salaries[0] }),

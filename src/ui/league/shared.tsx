@@ -6,6 +6,7 @@ import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeas
 import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
+import { RATED_SEASONS } from '../../core/constants';
 import { Segmented, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
@@ -122,12 +123,17 @@ export function teamAbbrev(league: League, tid: number | null | undefined) {
   return league.teams[tid]?.abbrev ?? '—';
 }
 
-/** All seasons with any player stats, newest first, plus the current season. */
+/**
+ * All seasons with any player stats, newest first, plus the current season. Of the real seasons
+ * before the league, the ones it has for everyone (RATED_SEASONS): the earlier ones on record are
+ * only the careers of the players it began with, no league to rank.
+ */
 export function statSeasons(league: League): { season: number; real: boolean }[] {
   const real = new Map<number, boolean>();
   real.set(league.season, false);
   for (const p of Object.values(league.players)) {
     for (const s of p.stats) {
+      if (s.real && s.season < league.startSeason - RATED_SEASONS) continue;
       const prev = real.get(s.season);
       if (prev === undefined) real.set(s.season, !!s.real);
       else if (s.real && !prev) real.set(s.season, true);

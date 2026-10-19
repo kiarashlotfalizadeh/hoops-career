@@ -1,7 +1,8 @@
 // Career milestones: round career totals a player reaches (points, rebounds, assists). Only careers
-// the game has whole are counted: a player's stored stats begin with his first NBA season (real
-// players carry their last three real seasons, so a veteran's career totals aren't known and none
-// of his milestones are claimed). Regular-season games only, as the NBA counts them.
+// the game has whole are counted: a player's stored stats begin with his first NBA season (a real
+// league seeded with every season since 2003-04 has its veterans' whole careers; one seeded with only
+// their last three seasons doesn't, so none of their milestones are claimed). Regular-season games
+// only, as the NBA counts them.
 
 import type { BoxLine, GameResult, League, Player } from '../types';
 
@@ -24,13 +25,28 @@ export function careerTotals(p: Player): Record<MilestoneStat, number> & { gp: n
 
 /**
  * Whether his whole career is in the stored stats: every NBA season he has completed (experience)
- * is on record. A real veteran's record starts three seasons back, and a fictional league's
- * veterans start with none, so their career totals stay unknown.
+ * is on record, or his real seasons reach back to his first (realCareerOnRecord: a season lost to
+ * injury or played overseas leaves a gap, not a hole). A fictional league's veterans start with no
+ * seasons, and a real veteran's record in a league seeded with only his last three starts there, so
+ * their career totals stay unknown.
  */
-export function careerOnRecord(p: Player, season: number): boolean {
+export function careerOnRecord(league: League, p: Player): boolean {
   const seasons = new Set<number>();
-  for (const s of p.stats) if (!s.playoffs && s.gp > 0 && s.season < season) seasons.add(s.season);
-  return seasons.size >= p.experience;
+  for (const s of p.stats) if (!s.playoffs && s.gp > 0 && s.season < league.season) seasons.add(s.season);
+  return seasons.size >= p.experience || realCareerOnRecord(league, p);
+}
+
+/**
+ * A real player's seasons reach back to his first NBA season: the league was seeded with every real
+ * season since `careersFrom` (League.careersFrom) and his first came after it, or he was drafted too
+ * late to have played before it (LeBron James's first is that one: drafted in 2003).
+ */
+export function realCareerOnRecord(league: League, p: Player): boolean {
+  const from = league.careersFrom;
+  if (from === undefined || !p.real) return false;
+  let first = Infinity;
+  for (const s of p.stats) if (s.real && !s.playoffs && s.gp > 0) first = Math.min(first, s.season);
+  return first < Infinity && (first > from || (p.draft.year > 0 && p.draft.year + 1 >= from));
 }
 
 /** Round career marks (every thousand) that `before` → `after` crossed, lowest first. */
@@ -70,7 +86,7 @@ export interface Milestone {
 export function milestonesIn(league: League, res: GameResult): Milestone[] {
   if (res.type !== 'regular' || res.season !== league.season) return [];
   const out: Milestone[] = [];
-  const lines = [...res.home.players, ...res.away.players].filter((b) => b.min > 0 && league.players[b.pid] && careerOnRecord(league.players[b.pid], league.season));
+  const lines = [...res.home.players, ...res.away.players].filter((b) => b.min > 0 && league.players[b.pid] && careerOnRecord(league, league.players[b.pid]));
   if (!lines.length) return out;
   // what each of them has added since (his games on later days: a player plays once a day)
   const since = new Map(lines.map((b) => [b.pid, { pts: 0, reb: 0, ast: 0 }]));

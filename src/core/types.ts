@@ -1271,6 +1271,12 @@ export interface League {
   draftBoard?: number[];
   /** Season the league was started. */
   startSeason: number;
+  /**
+   * A real league whose seed carried every real regular season from this one on (SeedData.careersFrom):
+   * a real veteran's whole NBA career is on record. Absent for a fictional league and for one seeded
+   * with only the three seasons his ratings come from.
+   */
+  careersFrom?: number;
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
   /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */

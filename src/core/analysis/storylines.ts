@@ -92,7 +92,7 @@ function perGame(p: Player, season: number, stat: MilestoneStat): number {
 
 /** The career mark within one good night: about a third more than his average gets him there. */
 function milestoneWatch(league: League, p: Player, name: string): Storyline | null {
-  if (!careerOnRecord(p, league.season)) return null;
+  if (!careerOnRecord(league, p)) return null;
   const tot = careerTotals(p);
   let best: Storyline | null = null;
   for (const [stat, min] of [

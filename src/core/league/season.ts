@@ -65,6 +65,7 @@ import { clearAllPlans } from './gamePlans';
 import { pruneTransactions } from './transactions';
 import { retireNumbers } from './jerseys';
 import { recordTrail } from '../analysis/odds';
+import { realCareerOnRecord } from '../analysis/milestones';
 import { money } from '../format';
 
 export function regularGamesLeft(league: League) {
@@ -315,16 +316,33 @@ const HOF_POINTS: Record<string, number> = { MVP: 12, 'Finals MVP': 6, 'Defensiv
 const HOF_LINE = 22;
 
 /**
- * Credit for a real player's career before the league began, which his awards here don't cover:
- * his production in the real seasons the seed carries (game score per game, raised with age since
- * a 37-year-old's numbers understate his prime, less a replacement-level 6) squared, times the
- * seasons he had played. LeBron James is worth almost three Hall of Fame lines; Durant, Curry,
- * Harden, Giannis, Kawhi and Davis one or more; a long-serving role player next to nothing.
+ * Credit for a real player's career before the league began, which his awards here don't cover.
+ * With his whole career on record (a league seeded with every season since 2003-04): each real
+ * season's game score per game above a replacement-level 6, discounted below 41 games, squared and
+ * summed, so a peak counts for more than a long run of solid seasons. LeBron James is worth about
+ * three Hall of Fame lines; Durant, Harden, Giannis, Jokic, Davis and Curry one and a half or more;
+ * Doncic, Embiid, Lillard, Westbrook, Butler, Gilgeous-Alexander and Leonard one (14 in all); Irving,
+ * Towns and DeRozan just short; a long-serving role player next to nothing. With only his last three seasons on
+ * record (a league seeded with those alone): their production, raised with age since a 37-year-old's
+ * numbers understate his prime, squared, times the seasons he had played.
  */
 export function preLeagueLegacy(league: League, p: Player): number {
   const real = p.stats.filter((s) => s.real && !s.playoffs);
   const gp = real.reduce((a, s) => a + s.gp, 0);
   if (!gp) return 0;
+  if (realCareerOnRecord(league, p)) {
+    // a season split between teams counts whole
+    const seasons = new Map<number, { gp: number; gmsc: number }>();
+    for (const s of real) {
+      const x = seasons.get(s.season) ?? { gp: 0, gmsc: 0 };
+      x.gp += s.gp;
+      x.gmsc += gameScore(s);
+      seasons.set(s.season, x);
+    }
+    let sum = 0;
+    for (const x of seasons.values()) if (x.gp) sum += (Math.max(0, x.gmsc / x.gp - 6) * Math.min(1, x.gp / 41)) ** 2;
+    return sum / 86;
+  }
   const age = playerAge(p, league.startSeason);
   const seasons = p.draft.year > 0 ? league.startSeason - 1 - p.draft.year : Math.max(0, age - 21);
   const gmsc = real.reduce((a, s) => a + gameScore(s), 0) / gp;

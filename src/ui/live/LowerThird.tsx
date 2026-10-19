@@ -43,7 +43,7 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
       const pid = tp.pid;
       const p = league.players[pid];
       if (!p) continue;
-      const whole = careerOnRecord(p, league.season);
+      const whole = careerOnRecord(league, p);
       const h = high.get(pid);
       const c = whole ? careerTotals(p) : null;
       const franchise = lists && team ? book!.teams[tid]?.[lists.kind].players.pts?.[0]?.[0] : undefined;

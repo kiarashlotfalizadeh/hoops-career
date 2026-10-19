@@ -3,6 +3,12 @@
 export const START_SEASON = 2027; // 2026-27 season (named by end year, like Basketball Reference)
 
 /**
+ * The real seasons a seeded league has for everyone in it: the last three before it starts, which
+ * the players' ratings come from. A seed's careers can go back further, for its players alone.
+ */
+export const RATED_SEASONS = 3;
+
+/**
  * Format of the league record. Bump it, with a step in migrate() (src/state/persistence.ts), when
  * that format changes.
  * 4: the redesign (difficulty presets, no coaching depth, the agenda, the owner's hot seat, the

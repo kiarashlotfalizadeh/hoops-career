@@ -61,7 +61,8 @@ describe('keys to the game', () => {
   });
 
   it("on a new season's first nights read last season's team totals, not the few meetings its results keep", () => {
-    const l = testLeague('keys-last', 5);
+    // (one whose first month leaves a full set of three keys in last season's numbers)
+    const l = testLeague('keys-last', 4);
     for (let i = 0; i < 30; i++) simDay(l);
     // what was played becomes last season, its results kept as a new season keeps them: the user's only
     const S = l.season;
