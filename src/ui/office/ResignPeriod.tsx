@@ -7,7 +7,7 @@ import { CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { CAP_FOR, payroll, playerName, shortName } from '../../core/league/helpers';
-import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
+import { askingContract, birdTier, decideTeamOption, pendingTeamOptions, resignLimit, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -20,6 +20,7 @@ import { QualifyRow } from './RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE } from '../../core/league/rfa';
 import { FIRM_BUMP, talkAsk, talkState } from '../../core/league/negotiation';
 import { money } from '../../core/format';
+import { teamTaxBill } from '../../core/league/finances';
 import { ExtendRow, PlayerTop, StatLine, extendablePlayers } from './resignRows';
 
 export function ResignPeriod() {
@@ -87,13 +88,18 @@ export function ResignPeriod() {
               (yours) adds about 6%.
             </p>
             <p>
-              <b>Luxury tax.</b> Payroll above {money(cap.luxuryTax)} costs {CAP.taxRate}× in tax at the end of the season.
+              <b>Bird rights.</b> After three seasons with you (a trade keeps his clock) you can re-sign a player up to his max, for up to five years with 8% raises. After two
+              (Early Bird), up to 175% of his salary or 105% of the league's average; after one, 120% of his salary: a player who wants more than that goes to the market.
+            </p>
+            <p>
+              <b>Luxury tax.</b> Payroll above {money(cap.luxuryTax)} pays tax at the end of the season, from {CAP.taxRate}× on the first bracket and more on each after (see the
+              cap sheet's "?"). Past the first apron ({money(cap.firstApron)}) a team loses tools: in trades it takes back no more salary than it sends.
             </p>
             <p>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens, and other teams may sign him.</p>
             <p>
               <b>Restricted free agents.</b> A first-round pick finishing his rookie-scale deal, or a player with {RFA_MAX_SERVICE} seasons or fewer, can get a{' '}
               <b>qualifying offer</b>: one season at 125% of his last salary (a rookie-scale pick: 130% for #1 up to 150% for #30), at least the minimum plus $0.2M. In free agency
-              you can still re-sign him, and when another team signs him to an offer sheet (2 to 5 years) you have {MATCH_DAYS} days to match it on exactly its terms. Unsigned when
+              you can still re-sign him, and when another team signs him to an offer sheet (2 to 4 years) you have {MATCH_DAYS} days to match it on exactly its terms. Unsigned when
               the market closes, he plays a season on the qualifying offer and is unrestricted after it. You can withdraw the offer until he signs a sheet.
             </p>
             <p>
@@ -128,11 +134,25 @@ export function ResignPeriod() {
             <div className="right">
               <div className="over">Keep everyone</div>
               <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{money(ifAll)}</div>
-              {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(Math.round((ifAll - cap.luxuryTax) * CAP.taxRate))}</div>}
+              {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(teamTaxBill(league, tid, ifAll, next))}</div>}
             </div>
           </div>
-          <CapBar pay={committed} cap={cap.salaryCap} tax={cap.luxuryTax} add={ifAll - committed} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
-          <Statline items={[{ ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined }, taxFig(committed, cap.luxuryTax), rosterFig(league)]} />
+          <CapBar
+            pay={committed}
+            cap={cap.salaryCap}
+            tax={cap.luxuryTax}
+            aprons={{ first: cap.firstApron, second: cap.secondApron }}
+            add={ifAll - committed}
+            addLabel={<Term id="hold">Cap holds</Term>}
+            legend="lines"
+          />
+          <Statline
+            items={[
+              { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+              taxFig(committed, cap.luxuryTax, teamTaxBill(league, tid, committed, next)),
+              rosterFig(league),
+            ]}
+          />
         </div>
       </Section>
 
@@ -195,6 +215,12 @@ export function ResignPeriod() {
                         <div className="tiny dim">
                           his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
                         </div>
+                        {/* without full Bird rights the team can only pay him so much: past it he goes to the market */}
+                        {ask.amount > resignLimit(league, p, tid) && (
+                          <div className="tiny warn">
+                            {birdTier(league, p) === 'early' ? 'Early Bird' : 'No Bird rights'}: you can pay up to {salaryText(league, resignLimit(league, p, tid))}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>

@@ -54,7 +54,17 @@ export function PartnerSlab({ league, tid, season }: { league: League; tid: numb
         </div>
         <div className="fo-partner-cap">
           <div className="v num">{pay > cap.salaryCap ? money(pay - cap.salaryCap) : money(cap.salaryCap - pay)}</div>
-          <div className="k">{pay > cap.luxuryTax ? 'over · taxpayer' : pay > cap.salaryCap ? 'over the cap' : 'cap space'}</div>
+          <div className="k">
+            {pay > cap.secondApron
+              ? 'over · 2nd apron'
+              : pay > cap.firstApron
+                ? 'over · 1st apron'
+                : pay > cap.luxuryTax
+                  ? 'over · taxpayer'
+                  : pay > cap.salaryCap
+                    ? 'over the cap'
+                    : 'cap space'}
+          </div>
         </div>
       </div>
       <div className="fo-partner-meta">

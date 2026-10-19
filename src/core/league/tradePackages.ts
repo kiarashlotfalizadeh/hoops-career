@@ -27,6 +27,7 @@ import {
   tradeRoster,
   tradedAwayBy,
   untradeable,
+  validateTrade,
   weighted,
 } from './trades';
 
@@ -198,6 +199,33 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
   }
   const b = best as { pkg: Asset[]; mine: number } | null;
   return b ? { tid, offer: offerOf(b.pkg), myValue: b.mine, giveValue } : null;
+}
+
+/**
+ * A salary dump: team `from` sends player `bad` to team `to` for nothing (or, `back`, for cheaper
+ * players of its), with its picks attached from the cheapest up (the cheapest makes way for a
+ * better one past three; two firsts at most; no first that breaks the Stepien rule) until `done`
+ * says the deal works. `to` is side A. Null when the rules don't allow the deal (the taker can't
+ * absorb the salary) or no picks get it done.
+ */
+export function dumpPackage(league: League, from: number, to: number, bad: Player, done: (o: TradeOffer) => boolean, back: Player[] = []): TradeOffer | null {
+  const dps: DraftPick[] = [];
+  const offer = (): TradeOffer => ({ a: { tid: to, pids: back.map((p) => p.pid), dpids: [] }, b: { tid: from, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
+  if (validateTrade(league, offer()).length) return null;
+  const picks = league.draftPicks.filter((d) => d.tid === from && !tradedAwayBy(league, d, to)).sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
+  for (const x of picks) {
+    if (done(offer())) break;
+    const out = dps.length >= MAX_PICKS_OUT ? dps[0] : null;
+    if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
+    if (out) dps.shift();
+    dps.push(x);
+    const o = offer();
+    if (stepienError(league, o, o.b)) {
+      dps.pop();
+      if (out) dps.unshift(out);
+    }
+  }
+  return done(offer()) ? offer() : null;
 }
 
 /**

@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
+import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll, playerName, rosterMaxNow, shortName, standardRoster } from '../../core/league/helpers';
 import {
@@ -17,15 +17,22 @@ import {
   askingContract,
   exceptionAmount,
   exceptionRoom,
+  birdTier,
   isException,
   makeContract,
   marketHolds,
   marketSalary,
+  maxYearsWith,
+  playerMax,
+  raiseWith,
+  resignLimit,
   signingRoute,
   teamAppeal,
 } from '../../core/league/contracts';
-import { SHEET_MIN_YEARS, deadlineLabel, matchDeadline, pendingSheets, sheetBlockedReason } from '../../core/league/rfa';
+import { SHEET_MAX_YEARS, SHEET_MIN_YEARS, deadlineLabel, matchDeadline, pendingSheets, sheetBlockedReason } from '../../core/league/rfa';
+import { teamTaxBill } from '../../core/league/finances';
 import {
+  FA_YEARS,
   bidFloor,
   bidHolds,
   capHolds,
@@ -92,7 +99,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // a top free agent in the summer weighs offers: the sheet opens on your pending one, and raising it replaces it
   const bidding = mode === 'fa' && marqueeFA(league, p);
   const bid = bidding ? pendingBid(league, p.pid) : undefined;
-  // another team's restricted free agent signs an offer sheet it can match (2-5 years); the user's own is re-signed
+  // another team's restricted free agent signs an offer sheet it can match (2-4 years); the user's own is re-signed
   const sheet = mode === 'fa' && !!p.rfa;
   const ownRfa = mode === 'resign' && p.tid === FREE_AGENT;
   const kind: TalkKind = mode === 'resign' ? 'resign' : 'fa';
@@ -100,7 +107,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // his ask on his own terms (up after re-sign talks broke down)
   const ask = bidding ? askingContract(league, p, tid) : talkAsk(league, p, kind);
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
-  const maxAmt = cap.maxContract(p.experience);
+  // re-signing, what his Bird rights allow (and a bigger max he has earned with you); a free agent, his max
+  const limit = mode === 'resign' ? resignLimit(league, p, tid) : null;
+  const maxAmt = limit ?? playerMax(league, p, season);
+  const yearsMax = mode === 'resign' ? maxYearsWith(league, p, tid) : sheet ? SHEET_MAX_YEARS : FA_YEARS;
+  const raise = mode === 'resign' ? raiseWith(league, p, tid) : 0.05;
   // (his minimum exactly when he asks it: a little more would no longer be a minimum deal)
   const [amount, setAmount] = useState(() => bid?.amount ?? (ask.amount <= minAmt + 1 ? minAmt : clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt)));
   // an exception's deal is shorter: open on the longest the route allows
@@ -161,16 +172,17 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const capBlocked = mode === 'fa' && !route && !tooLong;
   // the exceptions that would pay for this offer (more than one: choose)
   const covering = mode === 'fa' && isException(route) ? EXCEPTION_ORDER.filter((k) => years <= EXCEPTIONS[k].years && amount <= userExceptionRoom(league, k, season, p.pid)) : [];
-  const exceptionsOpen = EXCEPTION_ORDER.map((k) => ({ k, room: mode === 'fa' ? userExceptionRoom(league, k, season, p.pid) : exceptionRoom(league, tid, k, season) })).filter(
-    (x) => x.room > cap.vetMin,
-  );
+  const exceptionsOpen = EXCEPTION_ORDER.map((k) => ({ k, room: mode === 'fa' ? userExceptionRoom(league, k, season, p.pid) : exceptionRoom(league, tid, k, season) }))
+    .filter((x) => x.room > cap.vetMin)
+    // (the taxpayer mid-level only once the full one can't pay as much)
+    .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room);
   const floor = bidding ? bidFloor(league, p, years) : 0;
   const talksOff = !!talks?.closed;
   const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff;
   // as signed: each season at least his minimum
-  const contract = makeContract(league, amount, years, season, p.experience);
+  const contract = makeContract(league, amount, years, season, p.experience, { raise, max: maxAmt });
   const total = contract.salaries.reduce((a, b) => a + b, 0);
-  const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
+  const taxBill = teamTaxBill(league, tid, after, season);
 
   /** Why his counter can't be signed as it stands (the window, the roster, the cap), or null. */
   const counterBlocked = (c: TalkTerms): string | null =>
@@ -252,10 +264,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         wants={ask.years}
         firstSeason={season}
         yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
+        yearsMax={yearsMax}
         yearsNote={
           <>
-            Through {shortSeason(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.
-            {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-5 years, no options.` : ''}
+            Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants: about 3% on his price.
+            {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.` : ''}
+            {mode === 'resign' && birdTier(league, p) !== 'full'
+              ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
+              : ''}
           </>
         }
       />
@@ -310,10 +326,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               </p>
               <p>
                 Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {money(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
-                once a season, staying under the tax line), the <b>bi-annual</b> (up to {money(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the
-                tax, not two seasons running), and for a team that used its cap space the <b>room exception</b> in place of the mid-level (up to{' '}
-                {money(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). After the mid-level or the bi-annual, trades can't take you past the tax line that
-                season.
+                once a season, staying under the first apron, {money(cap.firstApron)}), past it the <b>taxpayer mid-level</b> (up to{' '}
+                {money(exceptionAmount(league, 'tmle', season))}, {EXCEPTIONS.tmle.years} years, under the second apron, {money(cap.secondApron)}), the <b>bi-annual</b> (up to{' '}
+                {money(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the first apron, not two seasons running), and for a team that used its cap
+                space the <b>room exception</b> in place of the mid-level (up to {money(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). Each hard-caps
+                you at its apron for the season: no trade can take you past it.
               </p>
               <p>To make space: trade salary away, let contracts expire, or release players (what they're owed still counts as dead money).</p>
             </HelpSheet>
@@ -377,19 +394,21 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               },
             ]}
           />
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This offer" />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This offer" />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
               ? `Minimum deals (up to ${money(minAmt, 2)} for him) sign over the cap.`
               : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
                 ? `Signing with cap space trades your mid-level for the smaller room exception for ${shortSeason(season)}.`
                 : route === 'mle'
-                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years, keeps you under the tax line.`
-                  : route === 'room'
-                    ? `Your room exception: once, after using cap space this season, up to ${EXCEPTIONS.room.years} years.`
-                    : route === 'bae'
-                      ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, under the tax line, not again next season.`
-                      : ''}
+                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years; it hard-caps you at the first apron (${money(cap.firstApron)}) for ${shortSeason(season)}.`
+                  : route === 'tmle'
+                    ? `Your taxpayer mid-level: once a season, up to ${EXCEPTIONS.tmle.years} years; it hard-caps you at the second apron (${money(cap.secondApron)}).`
+                    : route === 'room'
+                      ? `Your room exception: once, after using cap space this season, up to ${EXCEPTIONS.room.years} years.`
+                      : route === 'bae'
+                        ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, not again next season; it hard-caps you at the first apron (${money(cap.firstApron)}).`
+                        : ''}
             {held > 0
               ? ` Counts ${money(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
               : ''}
@@ -401,7 +420,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <span className="over">{shortSeason(season)} payroll</span>
             <span className="tag info">Bird rights</span>
           </div>
-          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={amount} addLabel="This deal" />
+          <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This deal" />
           <div className="tiny dim">
             Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${money(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
             {taxBill > 0 ? (

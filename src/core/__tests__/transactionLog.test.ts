@@ -48,6 +48,8 @@ function shape(l: League, p: Player, ovr: number, age: number, salary: number, y
   p.injury = null;
   p.experience = 6;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary) };
+  // with his team for years: full Bird rights
+  p.birdSince = l.season - 4;
   return p;
 }
 

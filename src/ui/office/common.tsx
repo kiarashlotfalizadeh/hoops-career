@@ -84,10 +84,20 @@ export function capRoomFig(space: number): { k: ReactNode; v: string; color: str
 export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in cap space` : `${money(-space)} over the cap`);
 
 /** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
-export function taxFig(pay: number, line: number): { k: ReactNode; v: string; s: string; color?: string } {
+/** The tax figure for a payroll: the bill over the line (`bill`, its brackets counted, see luxuryTaxBill), or the room under it. */
+export function taxFig(pay: number, line: number, bill: number): { k: ReactNode; v: string; s: string; color?: string } {
   return pay > line
-    ? { k: <Term id="tax">Luxury tax</Term>, v: money(Math.round((pay - line) * CAP.taxRate)), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
+    ? { k: <Term id="tax">Luxury tax</Term>, v: money(bill), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
     : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay), s: `line ${money(line)}` };
+}
+
+/** Where a payroll stands against the cap's lines, for a status tag: the second apron, the first, the tax line, the cap. */
+export function payStatus(pay: number, cap: { salaryCap: number; luxuryTax: number; firstApron: number; secondApron: number }): { label: string; tone: 'bad' | 'warn' | 'good' } {
+  if (pay > cap.secondApron) return { label: 'Over the 2nd apron', tone: 'bad' };
+  if (pay > cap.firstApron) return { label: 'Over the 1st apron', tone: 'bad' };
+  if (pay > cap.luxuryTax) return { label: 'Taxpayer', tone: 'bad' };
+  if (pay > cap.salaryCap) return { label: 'Over the cap', tone: 'warn' };
+  return { label: 'Under the cap', tone: 'good' };
 }
 
 /** An injured player's flag in a list: "Out 8 games". */
@@ -130,6 +140,7 @@ export function CapBar({
   pay,
   cap,
   tax,
+  aprons,
   add = 0,
   addLabel,
   legend = 'full',
@@ -137,13 +148,15 @@ export function CapBar({
   pay: number;
   cap: number;
   tax: number;
+  /** The first and second aprons, marked past the tax line (too close to it for a label over the bar: the legend names them). */
+  aprons?: { first: number; second: number };
   add?: number;
   /** What the stripe is ("Cap holds", "This offer"). */
   addLabel?: ReactNode;
   legend?: 'full' | 'lines' | false;
 }) {
   const total = pay + Math.max(0, add);
-  const max = Math.max(tax * 1.14, total * 1.03);
+  const max = Math.max(aprons ? aprons.second * 1.05 : tax * 1.14, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
   const tone = (x: number) => (x > tax ? 'var(--bad)' : x > cap ? 'var(--warn)' : 'var(--good)');
   return (
@@ -159,6 +172,12 @@ export function CapBar({
         <div className="fo-cap-mark tax" style={{ left: `${pct(tax)}%` }}>
           <span>Tax</span>
         </div>
+        {aprons && (
+          <>
+            <div className="fo-cap-mark apron" style={{ left: `${pct(aprons.first)}%` }} aria-label="First apron" />
+            <div className="fo-cap-mark apron" style={{ left: `${pct(aprons.second)}%` }} aria-label="Second apron" />
+          </>
+        )}
       </div>
       {legend && (
         <div className="fo-legend">
@@ -180,6 +199,15 @@ export function CapBar({
           <span>
             Tax line <b>{money(tax)}</b>
           </span>
+          {aprons && (
+            <span>
+              <i className="fo-legend-apron" />
+              <Term id="apron">Aprons</Term>{' '}
+              <b>
+                {money(aprons.first)} · {money(aprons.second)}
+              </b>
+            </span>
+          )}
         </div>
       )}
     </div>

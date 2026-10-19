@@ -43,6 +43,8 @@ export default function FreeAgents() {
   // the exceptions open to a signing now, largest first (each net of the pending offers that lean on them)
   const exceptions = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, s) }))
     .filter((x) => x.room > 0)
+    // (the taxpayer mid-level only once the full one can't pay as much)
+    .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room)
     .sort((a, b) => b.room - a.room);
   // two-way players don't use one of the 15 standard spots; the offseason allows 21 until opening night
   const n = standardRoster(league, tid).length;

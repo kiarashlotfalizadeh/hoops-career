@@ -5,10 +5,11 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban } from 'lucide-react';
 import type { Player, TalkTerms } from '../../core/types';
-import { CAP, seasonLabel } from '../../core/constants';
+import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll } from '../../core/league/helpers';
-import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract, teamAppeal } from '../../core/league/contracts';
+import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract, playerMax, teamAppeal } from '../../core/league/contracts';
+import { teamTaxBill } from '../../core/league/finances';
 import { type OfferResult, askFor, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
@@ -29,7 +30,8 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const ask = talkAsk(league, p, 'extend');
   const maxYears = extensionMaxYears(p);
   const minAmt = p.experience >= 3 ? cap.vetMin : cap.minContract;
-  const maxAmt = cap.maxContract(p.experience);
+  // (with the honors, his own team can pay him the Rose-rule max or the supermax: see playerMax)
+  const maxAmt = playerMax(league, p, season, tid);
   const [amount, setAmount] = useState(() => (ask.amount <= minAmt + 1 ? minAmt : clamp(Math.ceil(ask.amount / STEP) * STEP, minAmt, maxAmt)));
   const [years, setYears] = useState(ask.years);
   const [reply, setReply] = useState<Reply | null>(null);
@@ -44,9 +46,9 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const ai = appealInfo(appeal);
   const pay = payroll(league, tid, season);
   const after = pay + amount;
-  const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
+  const taxBill = teamTaxBill(league, tid, after, season);
   // as signed: each season at least his minimum
-  const total = makeContract(league, amount, years, season, p.experience).salaries.reduce((a, b) => a + b, 0);
+  const total = makeContract(league, amount, years, season, p.experience, { raise: 0.08, max: maxAmt }).salaries.reduce((a, b) => a + b, 0);
 
   const submit = (terms: TalkTerms = { amount, years }) => {
     const res = settle<OfferResult>('The extension', (l) => userExtend(l, p.pid, terms.amount, terms.years), 'good', true);
@@ -110,7 +112,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         yearsMax={maxYears}
         wants={ask.years}
         firstSeason={season}
-        yearsNote={`${shortSeason(season)} to ${shortSeason(season + years - 1)}, 5% raises. Each year off what he wants: about 3% on his price.`}
+        yearsNote={`${shortSeason(season)} to ${shortSeason(season + years - 1)}, 8% raises. Each year off what he wants: about 3% on his price.`}
       />
 
       {blocked ? (

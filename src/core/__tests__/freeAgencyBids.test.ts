@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { faAdvance, newSeason, startFreeAgency } from '../league/season';
 import { CAP_FOR, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, teamPlayers } from '../league/helpers';
-import { EVEN_PREFS, PREF_KEYS, askingContract, capSpace, exceptionAmount, heldSalary, playerPrefs, signPlayer, teamAppeal } from '../league/contracts';
+import { EVEN_PREFS, PREF_KEYS, askingContract, capSpace, exceptionAmount, heldSalary, playerPrefs, signPlayer, teamAppeal, valueScore } from '../league/contracts';
 import {
   FA_DAYS,
   bidFloor,
@@ -388,11 +388,14 @@ describe('competing offers for top free agents', () => {
       for (const p of standardRoster(l, U)) p.contract = { start: s, salaries: [CAP_FOR(l, s).vetMin] };
     };
     give();
-    const pool = freeAgents(l).sort((a, b) => b.ovr - a.ovr);
+    // (restricted free agents sign offer sheets instead: AI teams may already have signed some)
+    const pool = freeAgents(l)
+      .filter((p) => !p.rfa)
+      .sort((a, b) => b.ovr - a.ovr);
     const targets = pool.slice(0, 3).map((p) => freeAgent(l, p, 84));
     for (const p of targets) expect(bidAtAsk(l, p).ok).toBe(true);
     faAdvance(l, 1);
-    const late = freeAgent(l, freeAgents(l).filter((p) => !pendingBid(l, p.pid))[0], 84);
+    const late = freeAgent(l, freeAgents(l).filter((p) => !pendingBid(l, p.pid) && !p.rfa)[0], 84);
     expect(bidAtAsk(l, late).ok).toBe(true);
     faAdvance(l, FA_DAYS);
     expect(l.faBids).toBeUndefined();
@@ -407,18 +410,16 @@ describe('competing offers for top free agents', () => {
     expect(last.waivers).toBeUndefined();
   });
 
-  it('opens free agency with the user getting the first look: nobody changes teams before he has seen the market (B2)', () => {
+  it('opens free agency for every team at once: AI teams make their first wave of signings with the user, but no top free agent decides before the second day', () => {
     const l = league(9);
     l.phase = 'resign';
     const before = new Map(Object.values(l.players).map((p) => [p.pid, p.tid]));
     startFreeAgency(l);
-    const moved = Object.values(l.players).filter((p) => p.tid >= 0 && p.tid !== before.get(p.pid));
-    expect(moved).toEqual([]);
-    const best = freeAgents(l).sort((a, b) => b.ovr - a.ovr)[0];
-    expect(best).toBeDefined();
-    // the market opens for AI teams the next day
-    faAdvance(l, 1);
-    expect(Object.values(l.players).filter((p) => p.tid >= 0 && before.get(p.pid) !== p.tid && p.tid !== l.userTid).length).toBeGreaterThan(0);
+    const moved = Object.values(l.players).filter((p) => p.tid >= 0 && p.tid !== l.userTid && before.get(p.pid) !== p.tid);
+    expect(moved.length).toBeGreaterThan(0);
+    // the top free agents (worth 78+) decide from the market's second day: all still there for the user's bids
+    expect(moved.filter((p) => valueScore(l, p) >= 78)).toEqual([]);
+    expect(freeAgents(l).some((p) => marqueeFA(l, p))).toBe(true);
   });
 });
 

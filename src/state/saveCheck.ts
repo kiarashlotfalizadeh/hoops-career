@@ -531,14 +531,17 @@ const TALK_PERIODS = new Set(['resign', 'fa', 'season']);
 const OPTIONS = new Set(['player', 'team']);
 
 /**
- * Contract talks, 10-day contracts, the stretch provision and the exceptions (all optional): a
- * damaged piece is dropped. Talks need a real team, season, kind and period, patience 0-5, a
- * counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a 10-day
- * contract is only kept on a rostered player in the regular season (without it, his one prorated
- * salary runs to the season's end like any deal); the 10-day count holds one or two contracts for
- * each real team (an older save's count, for the one team he last signed with, becomes that
- * team's); a dead-money entry's stretch mark is `true` or gone; the seasons a team used cap space
- * or an exception are whole numbers; and an inbox message's 10-day link is a player id.
+ * Contract talks, 10-day contracts, the stretch provision, Bird rights and the exceptions (all
+ * optional): a damaged piece is dropped. Talks need a real team, season, kind and period, patience
+ * 0-5, a counter with a positive salary for 1-5 years, and lost interest and a firm ask in range; a
+ * 10-day contract is only kept on a rostered player in the regular season (without it, his one
+ * prorated salary runs to the season's end like any deal); the 10-day count holds one or two
+ * contracts for each real team (an older save's count, for the one team he last signed with,
+ * becomes that team's); a Bird clock is a season (without one, the season he joined stands in); a
+ * release names a real team and a season; a dead-money entry's stretch mark is `true` or gone; the
+ * seasons a team used cap space or an exception are whole numbers; its traded player exceptions
+ * each have a positive amount and the season and day of their trade (a damaged one goes); and an
+ * inbox message's 10-day link is a player id.
  */
 function migrateContracts(x: League) {
   const teamOk = (v: unknown) => int(v) && !!x.teams[v];
@@ -571,10 +574,19 @@ function migrateContracts(x: League) {
     const td = p.contract?.tenDay as unknown;
     if (td !== undefined && !(obj(td) && int(td.until) && (td.hardship === undefined || td.hardship === true) && p.tid >= 0 && x.phase === 'regular')) delete p.contract.tenDay;
     if (p.waivers && Array.isArray(p.waivers.dead)) for (const d of p.waivers.dead) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
+    if (p.birdSince !== undefined && !int(p.birdSince)) delete p.birdSince;
+    const rel = p.released as unknown;
+    if (rel !== undefined && !(obj(rel) && teamOk(rel.tid) && int(rel.season))) delete p.released;
   }
   for (const t of x.teams) {
     for (const d of Array.isArray(t.deadMoney) ? t.deadMoney : []) if (obj(d) && d.stretched !== undefined && d.stretched !== true) delete d.stretched;
-    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
+    for (const k of ['mleSeason', 'spaceSeason', 'roomSeason', 'baeSeason', 'taxMleSeason'] as const) if (t[k] !== undefined && !int(t[k])) delete t[k];
+    const tpes = t.tpes as unknown;
+    if (tpes !== undefined) {
+      const ok = Array.isArray(tpes) ? tpes.filter((e) => obj(e) && num(e.amount) && (e.amount as number) > 0 && int(e.season) && int(e.day)) : [];
+      if (ok.length) t.tpes = ok as typeof t.tpes;
+      else delete t.tpes;
+    }
   }
   for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
 }
@@ -716,7 +728,7 @@ function liveIntact(l: League, j: unknown): boolean {
   return j.tid === l.userTid && !!g && !g.played && g.day === l.day && (g.home === j.tid || g.away === j.tid);
 }
 
-const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'room', 'bae']);
+const SHEET_ROUTES = new Set(['min', 'space', 'mle', 'tmle', 'room', 'bae']);
 
 /**
  * A restricted free agent's rights in shape (see src/core/league/rfa.ts), or dropped: a qualifying

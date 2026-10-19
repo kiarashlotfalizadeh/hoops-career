@@ -25,6 +25,8 @@ import {
   extensionMaxYears,
   extensionRefusal,
   askingContract,
+  playerMax,
+  resignLimit,
   playerPrefs,
   teamAppeal,
   valueScore,
@@ -122,10 +124,16 @@ export function talkAsk(league: League, p: Player, kind: TalkKind): Ask {
   return { amount: Math.min(max, Math.ceil((ask.amount * firm) / 50) * 50), years: ask.years };
 }
 
-/** His minimum and max for the contract talked about: an extension's are those of its first season. */
-function talkBounds(league: League, p: Player, kind: TalkKind): { min: number; max: number } {
-  const cap = CAP_FOR(league, kind === 'extend' ? contractExp(p.contract) + 1 : contractSeason(league));
-  return { min: p.experience >= 3 ? cap.vetMin : cap.minContract, max: cap.maxContract(p.experience) };
+/**
+ * His minimum and max for the contract talked about: an extension's are those of its first season;
+ * re-signing, what his Bird rights allow (see resignLimit); with his own team, a bigger max he has
+ * earned (see playerMax).
+ */
+export function talkBounds(league: League, p: Player, kind: TalkKind): { min: number; max: number } {
+  const season = kind === 'extend' ? contractExp(p.contract) + 1 : contractSeason(league);
+  const cap = CAP_FOR(league, season);
+  const max = kind === 'resign' ? resignLimit(league, p, league.userTid) : playerMax(league, p, season, kind === 'extend' ? league.userTid : undefined);
+  return { min: p.experience >= 3 ? cap.vetMin : cap.minContract, max };
 }
 
 /** His price for a deal on these terms, as a multiple of his ask: 3% a year away from the length he wants, 4% off for a player option, 6% more for a team option. */
@@ -289,7 +297,7 @@ export function userExtend(league: League, pid: number, amount: number, years: n
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signs a ${years}-year, ${money(salaries.reduce((a, x) => a + x, 0))} extension`,
-    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 5% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
+    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 8% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

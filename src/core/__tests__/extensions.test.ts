@@ -141,9 +141,10 @@ describe('what he asks, and whether he talks', () => {
     const vet = finalYear(l, b, 78, 32);
     const star = finalYear(l, c, 84, 24);
     const cap = CAP_FOR(l, l.season + 1);
-    // his market value with the cap's growth, the discount or premium, over his interest in the team
+    // his market value with the cap's growth, the discount or premium, moved by his interest in the team (10% at most either way)
+    const interest = (p: Player) => Math.min(1 / 0.9, Math.max(1 / 1.1, 1 / teamAppeal(l, U, p)));
     const expected = (p: Player, f: number) =>
-      Math.min(cap.maxContract(p.experience), Math.round((((marketSalary(l, p) * revenueScale(l, l.season + 1)) / revenueScale(l, l.season)) * f) / teamAppeal(l, U, p) / 50) * 50);
+      Math.min(cap.maxContract(p.experience), Math.round((((marketSalary(l, p) * revenueScale(l, l.season + 1)) / revenueScale(l, l.season)) * f * interest(p)) / 50) * 50);
     expect(extensionAsk(l, mid).amount).toBe(expected(mid, 1));
     expect(extensionAsk(l, vet).amount).toBe(expected(vet, 0.95));
     expect(extensionAsk(l, star).amount).toBe(expected(star, 1.05));

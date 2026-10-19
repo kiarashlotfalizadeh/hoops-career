@@ -92,6 +92,11 @@
   color: color-mix(in srgb, var(--bad) 80%, white);
 }
 
+/* the aprons past the tax line: dashed, quieter than the line itself */
+.fo-cap-mark.apron {
+  background: repeating-linear-gradient(180deg, var(--bad) 0 3px, transparent 3px 5px);
+}
+
 .fo-legend {
   display: flex;
   flex-wrap: wrap;
@@ -117,6 +122,16 @@
 }
 
 /* the stripe's swatch: the cap bar's striped part (holds, an offer) */
+/* the aprons' swatch: a short dashed line, as they're marked on the bar */
+.fo-legend i.fo-legend-apron {
+  width: 2px;
+  height: 10px;
+  margin: 0 7px 0 3px;
+  vertical-align: -1px;
+  border-radius: 1px;
+  background: repeating-linear-gradient(180deg, var(--bad) 0 3px, transparent 3px 5px);
+}
+
 .fo-legend i.fo-legend-add {
   background: repeating-linear-gradient(135deg, var(--accent) 0 2px, color-mix(in srgb, var(--accent) 50%, transparent) 2px 4px);
 }

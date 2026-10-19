@@ -121,11 +121,13 @@ function CounterCard({
       <div className="tiny dim num">
         {info.inc >= info.out ? 'You take on' : 'You shed'} {money(Math.abs(info.inc - info.out))} in salary · payroll after{' '}
         <b className={info.after > cap.luxuryTax ? 'bad' : info.after > cap.salaryCap ? 'warn' : 'good'}>{money(info.after)}</b>
-        {info.after > cap.luxuryTax
-          ? `, ${money(info.after - cap.luxuryTax)} over the tax`
-          : info.after > cap.salaryCap
-            ? `, ${money(info.after - cap.salaryCap)} over the cap`
-            : `, ${money(cap.salaryCap - info.after)} in cap space`}
+        {info.after > cap.firstApron
+          ? `, ${money(info.after - cap.firstApron)} over the first apron`
+          : info.after > cap.luxuryTax
+            ? `, ${money(info.after - cap.luxuryTax)} over the tax`
+            : info.after > cap.salaryCap
+              ? `, ${money(info.after - cap.salaryCap)} over the cap`
+              : `, ${money(cap.salaryCap - info.after)} in cap space`}
       </div>
       {info.warn.length > 0 && <TradeNotes notes={info.warn} />}
       <div className="row">

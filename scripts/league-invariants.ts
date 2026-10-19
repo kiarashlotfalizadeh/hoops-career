@@ -51,6 +51,12 @@ function walk(o: unknown, path: string): void {
   for (const [k, v] of Object.entries(o)) walk(v, `${path}.${k}`);
 }
 
+/** The most a deal can start at: his max, or with the honors for one (All-NBA, MVP, Defensive Player of the Year) 35% of the cap (see playerMax). */
+const topSalary = (p: Player, cap: ReturnType<typeof H.CAP_FOR>) =>
+  p.awards.some((a) => a.type.startsWith('All-NBA') || a.type === 'MVP' || a.type === 'Defensive Player of the Year')
+    ? Math.round(cap.salaryCap * 0.35)
+    : cap.maxContract(p.experience);
+
 function check() {
   const season = L.season;
   const ph = L.phase;
@@ -75,7 +81,8 @@ function check() {
   }
   for (const t of L.teams) {
     const n = std(t.tid).length;
-    const tw = H.twoWayRoster(L, t.tid).length;
+    // (through the draft and the re-sign window, as for the standard roster, the two-way deals that run into next season)
+    const tw = H.twoWayRoster(L, t.tid).filter((p) => !(ph === 'draft' || ph === 'resign') || contractExp(p.contract) > L.season).length;
     const who = `${t.abbrev}${t.tid === L.userTid ? '*' : ''}`;
     // standard roster: 13-15 in season, plus hardship 10-days beyond 15; two-way deals sit outside it (max 3)
     const hardship = std(t.tid).filter((p) => p.contract.tenDay?.hardship).length;
@@ -106,7 +113,7 @@ function check() {
         !p.contract.twoWay &&
         !p.contract.tenDay &&
         p.contract.start > L.startSeason &&
-        (first > cap.maxContract(p.experience) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5)
+        (first > topSalary(p, cap) + 10 || first < cap.minContract - 1 || p.contract.salaries.length > 5)
       )
         bad('contract outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
       if ((ph === 'preseason' || ph === 'regular') && p.draft.round > 0 && p.draft.year === season - 1 && p.experience !== 0)
@@ -123,7 +130,7 @@ function check() {
         !next.salaries.length ||
         next.salaries.length > 5 ||
         next.salaries.some((x) => !(x > 0)) ||
-        next.salaries[0] > cap.maxContract(p.experience) + 10 ||
+        next.salaries[0] > topSalary(p, cap) + 10 ||
         next.salaries[0] < cap.minContract - 1
       )
         bad('extension outside min/max/5yr', `${nm(p.pid)} ${JSON.stringify(p.contract)}`);
@@ -812,6 +819,9 @@ function resignTalks(p: Player): boolean {
   if (contractTally.offers > 0) return false;
   const round50 = (x: number) => Math.round(x / 50) * 50;
   const ask = N.talkAsk(L, p, 'resign');
+  // (one who wants more than his Bird rights allow goes to the market: no talks)
+  const limit = C.resignLimit(L, p, L.userTid);
+  if (C.askingContract(L, p, L.userTid).amount > limit || N.askFor(L, p, 'resign', ask.years) > limit) return false;
   const offer = round50(N.askFor(L, p, 'resign', ask.years) * 0.87);
   const walk = N.walkAwayFor(L, p, 'resign', ask.years);
   const r = FA.userResign(L, p.pid, offer, ask.years);
@@ -915,7 +925,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     let lastId = L.nextMsgId;
     const firstTxn = L.nextTxnId ?? 1;
     for (let g = 0; L.phase === 'regular' && g < 400; g++) {
-      const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from, contract: p.waivers!.contract }));
+      const waived = C.onWaivers(L).map((p) => ({ pid: p.pid, from: p.waivers!.from, contract: p.waivers!.contract, dead: p.waivers!.dead }));
       S.simDay(L);
       // 10-day contracts: the user's own, and the AI teams' (hardship ones among them)
       if (L.phase === 'regular') tenDayStep();
@@ -938,7 +948,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
           continue;
         }
         claims++;
-        if (L.teams[w.from].deadMoney.some((d) => d.pid === w.pid && d.season >= L.season)) bad('dead money left for a claimed player', `${nm(w.pid)} ${L.teams[w.from].abbrev}`);
+        // (his waiver's dead money: a release of his from an earlier deal can still be on the books)
+        const left = L.teams[w.from].deadMoney.filter((d) => d.pid === w.pid && w.dead.some((x) => x.season === d.season && x.amount === d.amount));
+        if (left.length) bad('dead money left for a claimed player', `${nm(w.pid)} ${L.teams[w.from].abbrev} ${JSON.stringify(left)} of ${JSON.stringify(w.dead)}`);
       }
       // take the first offer that comes before the deadline: every open one must go through
       const open = P.openProposals(L)[0];
@@ -992,10 +1004,11 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     S.startFreeAgency(L);
     check();
     checkOptions(true);
-    // one withdrawn when there are two or more: an unrestricted free agent, his hold gone
+    // one withdrawn when there are two or more: an unrestricted free agent, his hold gone (not one
+    // who signed an offer sheet in the market's opening wave: that one waits for the match)
     const mine = R.restrictedFreeAgents(L, L.userTid);
-    if (mine.length >= 2) {
-      const w = mine[mine.length - 1];
+    const w = [...mine].reverse().find((p) => !p.rfa?.sheet);
+    if (mine.length >= 2 && w) {
       if (!R.userWithdrawQualifying(L, w.pid).ok || w.rfa || FA.capHolds(L, L.userTid).some((h) => h.p.pid === w.pid)) bad('qualifying offer not withdrawn', nm(w.pid));
     }
     const star = bidOnStar();
@@ -1084,7 +1097,16 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   }
 }
 
-L = createLeague({ name: 'Inv', userTid, coachName: 'C', settings: defaultSettings(), seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')), rngSeed });
+// the real league's run never fires the coach (fire: false), so the owner's own verdict is off too:
+// an auto-managed team fired after a bad stretch would leave the run stuck on its next phase
+L = createLeague({
+  name: 'Inv',
+  userTid,
+  coachName: 'C',
+  settings: { ...defaultSettings(), jobSecurity: false },
+  seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')),
+  rngSeed,
+});
 // a fixed id: the lottery draws ties from it, so a run with the same seed repeats
 L.id = `inv_${rngSeed}`;
 play(seasons, { realCalendar: true, fire: false });

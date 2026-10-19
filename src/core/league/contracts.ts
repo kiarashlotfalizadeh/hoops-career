@@ -11,7 +11,7 @@ import { preset } from './difficulty';
 import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, seasonLabel } from '../constants';
 import { Rng, clamp, hashString } from '../random';
-import { contractExp, salaryFor } from '../playerGen';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
   addInbox,
@@ -101,19 +101,19 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
-// would earn roughly matches the league's total cap (0.85× the first curve, which came to ~1.4×),
-// easing back to the max for superstars.
+// would earn roughly matches the league's total cap, rising steeply at the top as the NBA's does:
+// an 86 is worth a 25% max, an 89 a 30% one, a 92 the 35% one (each capped by his own max).
 const SALARY_CURVE: [number, number][] = [
   [66, 0],
   [70, 0.019],
   [73, 0.038],
   [76, 0.072],
   [79, 0.106],
-  [82, 0.153],
-  [85, 0.213],
-  [88, 0.265],
-  [91, 0.31],
-  [94, 0.35],
+  [82, 0.16],
+  [84, 0.21],
+  [86, 0.25],
+  [89, 0.3],
+  [92, 0.35],
 ];
 
 /** Fair annual salary ($K) for a player on the open market. */
@@ -226,25 +226,124 @@ export interface Ask {
   years: number;
 }
 
+// ---------------------------------------------------------------- the max and Bird rights
+
+/** Is team `tid` his own: the one he plays for, or that holds his rights as a restricted free agent? */
+const ownTeam = (p: Player, tid: number) => p.tid === tid || p.rfa?.tid === tid;
+
+/**
+ * Honors that earn a bigger max with his own team: All-NBA in his last season or two of his last
+ * three, MVP in one of them, or Defensive Player of the Year in the last.
+ */
+export function maxHonors(league: League, p: Player): boolean {
+  const last = contractSeason(league) - 1;
+  const recent = p.awards.filter((a) => a.season <= last && a.season >= last - 2);
+  const allNba = recent.filter((a) => a.type.startsWith('All-NBA'));
+  return (
+    allNba.some((a) => a.season === last) ||
+    allNba.length >= 2 ||
+    recent.some((a) => a.type === 'MVP') ||
+    recent.some((a) => a.type === 'Defensive Player of the Year' && a.season === last)
+  );
+}
+
+/**
+ * The most a player can earn a season from team `tid` in `season`: 25% of the cap up to six seasons
+ * in the league, 30% for seven to nine, 35% from ten. With his own team and the honors (see
+ * maxHonors) a player coming off his rookie-scale deal can earn 30% (the "Rose rule"), and one with
+ * seven to nine seasons 35% (the supermax).
+ */
+export function playerMax(league: League, p: Player, season = contractSeason(league), tid?: number): number {
+  const cap = CAP_FOR(league, season);
+  let pct = CAP.maxPct(p.experience);
+  if (tid !== undefined && ownTeam(p, tid) && maxHonors(league, p)) {
+    if (p.experience <= 6 && rookieScaleDeal(p)) pct = 0.3;
+    else if (p.experience >= 7 && p.experience <= 9) pct = 0.35;
+  }
+  return Math.round(cap.salaryCap * pct);
+}
+
+/** A player whose market value is this share of his max or more asks the max of everyone. */
+export const MAX_ASK = 0.95;
+
+/** His Bird rights with his team: full after three seasons there, Early Bird after two, otherwise none. */
+export type BirdTier = 'full' | 'early' | 'non';
+
+/** Seasons on his Bird clock with his team by the contract season ahead (see Player.birdSince). */
+export const birdSeasons = (league: League, p: Player) => contractSeason(league) - (p.birdSince ?? p.joinedSeason);
+
+export function birdTier(league: League, p: Player): BirdTier {
+  const n = birdSeasons(league, p);
+  return n >= 3 ? 'full' : n === 2 ? 'early' : 'non';
+}
+
+/** League-average salary of the standard contracts in `season` ($K). */
+export function averageSalary(league: League, season = contractSeason(league)): number {
+  let total = 0;
+  let n = 0;
+  for (const p of Object.values(league.players)) {
+    if (p.tid < 0 || p.contract.twoWay || p.contract.tenDay) continue;
+    const s = salaryFor(p, season);
+    if (s > 0) {
+      total += s;
+      n++;
+    }
+  }
+  return n ? total / n : 0;
+}
+
+/**
+ * The most his own team can re-sign him for, by his Bird rights: up to his max with full Bird
+ * rights; with Early Bird the larger of 175% of his last salary and 105% of the league's average;
+ * without them 120% of his last salary (or of the minimum).
+ */
+export function resignLimit(league: League, p: Player, tid: number): number {
+  const cs = contractSeason(league);
+  const max = playerMax(league, p, cs, tid);
+  const tier = birdTier(league, p);
+  if (tier === 'full') return max;
+  const prior = salaryFor(p, cs - 1);
+  const cap = CAP_FOR(league, cs);
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  const lim = tier === 'early' ? Math.max(prior * 1.75, averageSalary(league, cs - 1) * 1.05) : Math.max(prior, min) * 1.2;
+  return Math.min(max, Math.max(min, Math.floor(lim / 50) * 50));
+}
+
+/** Longest deal he signs: five years re-signing with his own team on full Bird rights, four for anyone else. */
+export const maxYearsWith = (league: League, p: Player, tid: number) => (ownTeam(p, tid) && birdTier(league, p) === 'full' ? 5 : 4);
+
+/** Raises on a deal: 8% a season re-signing with his own team on (Early) Bird rights, 5% otherwise. */
+export const raiseWith = (league: League, p: Player, tid: number) => (ownTeam(p, tid) && birdTier(league, p) !== 'non' ? 0.08 : 0.05);
+
+/**
+ * What he asks of team `tid` (of the market, without one): his market value, an unsigned free
+ * agent's price as it has come down (see faDay), over the years he wants. A star worth nearly the
+ * max (MAX_ASK) asks his max of everyone, so his interest in a team decides where he signs (see
+ * offerUtility) rather than his price; anyone else's interest moves his price up to 10% either way.
+ */
 export function askingContract(league: League, p: Player, tid?: number): Ask {
   const market = marketSalary(league, p);
   let amount = market;
   // unsigned free agents lower their price as the market dries up (see faDay)
   const marked = p.tid === FREE_AGENT && !!p.asking && p.asking.amount < market;
   if (marked) amount = p.asking!.amount;
-  const years = marked ? p.asking!.years : preferredYears(league, p);
-  const cap = CAP_FOR(league, contractSeason(league));
+  const years = Math.min(marked ? p.asking!.years : preferredYears(league, p), tid === undefined ? 5 : maxYearsWith(league, p, tid));
+  const cs = contractSeason(league);
+  const cap = CAP_FOR(league, cs);
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   // a minimum-level player takes the minimum from anyone
   if (amount <= min) return { amount: min, years };
+  const max = playerMax(league, p, cs, tid);
+  if (!marked && market >= cap.maxContract(p.experience) * MAX_ASK) amount = max;
+  else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), 1 / 1.1, 1 / 0.9);
   if (tid === league.userTid) amount *= preset(league).contractAsk;
-  if (tid !== undefined) amount /= teamAppeal(league, tid, p);
-  return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
+  return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const ask = askingContract(league, p, tid);
-  if (years < 1 || years > 5) return { ok: false, reason: 'Contracts must be 1 to 5 years.' };
+  const most = maxYearsWith(league, p, tid);
+  if (years < 1 || years > most) return { ok: false, reason: `Contracts must be 1 to ${most} years.` };
   const yearPenalty = Math.abs(years - ask.years) * 0.03;
   if (amount >= ask.amount * (1 + yearPenalty) - 1) return { ok: true, reason: 'Deal!' };
   const gap = ask.amount * (1 + yearPenalty) - amount;
@@ -254,14 +353,19 @@ export function willSign(league: League, p: Player, tid: number, amount: number,
   };
 }
 
-/** Pass `experience` to keep the rounded first-year salary inside that player's min/max. */
-export function makeContract(league: League, amount: number, years: number, start = league.season, experience?: number) {
+/**
+ * Pass `experience` to keep the rounded first-year salary inside that player's min/max (`max`: his
+ * own, when it isn't his years' standard max, see playerMax). `raise`: each season's raise (5%, or
+ * 8% re-signing on Bird rights, see raiseWith).
+ */
+export function makeContract(league: League, amount: number, years: number, start = league.season, experience?: number, opts: { raise?: number; max?: number } = {}) {
   const salaries: number[] = [];
-  for (let i = 0; i < years; i++) salaries.push(Math.round((amount * Math.pow(1.05, i)) / 10) * 10);
+  const raise = 1 + (opts.raise ?? 0.05);
+  for (let i = 0; i < years; i++) salaries.push(Math.round((amount * Math.pow(raise, i)) / 10) * 10);
   if (experience !== undefined) {
     const min = (season: number) => (experience >= 3 ? CAP_FOR(league, season).vetMin : CAP_FOR(league, season).minContract);
     // clamp after rounding: a max deal rounded to $10K would otherwise exceed the max by a few $K
-    salaries[0] = clamp(salaries[0], min(start), CAP_FOR(league, start).maxContract(experience));
+    salaries[0] = clamp(salaries[0], min(start), opts.max ?? CAP_FOR(league, start).maxContract(experience));
     // and a minimum deal's raises (5%) trail the minimum's growth with the cap (6%)
     for (let i = 1; i < years; i++) salaries[i] = Math.max(salaries[i], min(start + i));
   }
@@ -293,20 +397,27 @@ export const MLE_YEARS = 4;
 export const ROOM_PCT = 0.057;
 /** Bi-annual exception, as a share of the cap. */
 export const BAE_PCT = 0.033;
+/** Taxpayer mid-level exception, as a share of the cap: the mid-level for a team it takes past the first apron. */
+export const TMLE_PCT = 0.037;
 
-export type Exception = 'mle' | 'room' | 'bae';
+export type Exception = 'mle' | 'tmle' | 'room' | 'bae';
 
 /** The exceptions a team can sign free agents with over the cap: share of the cap, longest deal, names. */
 export const EXCEPTIONS: Record<Exception, { pct: number; years: number; name: string; short: string }> = {
   bae: { pct: BAE_PCT, years: 2, name: 'bi-annual exception', short: 'Bi-annual' },
   room: { pct: ROOM_PCT, years: 2, name: 'room exception', short: 'Room exception' },
   mle: { pct: MLE_PCT, years: MLE_YEARS, name: 'mid-level exception', short: 'Mid-level' },
+  tmle: { pct: TMLE_PCT, years: 2, name: 'taxpayer mid-level exception', short: 'Taxpayer mid-level' },
 };
 
-/** The order a signing looks for an exception that covers it: the smallest first, so a cheap signing doesn't use up the mid-level. */
-export const EXCEPTION_ORDER: Exception[] = ['bae', 'room', 'mle'];
+/**
+ * The order a signing looks for an exception that covers it: the smallest first, so a cheap signing
+ * doesn't use up the mid-level, and the taxpayer mid-level last: only when the full one can't stay
+ * under the first apron.
+ */
+export const EXCEPTION_ORDER: Exception[] = ['bae', 'room', 'mle', 'tmle'];
 
-export const isException = (r: SigningRoute | null | undefined): r is Exception => r === 'mle' || r === 'room' || r === 'bae';
+export const isException = (r: SigningRoute | null | undefined): r is Exception => r === 'mle' || r === 'tmle' || r === 'room' || r === 'bae';
 
 /** Longest deal a signing route allows. */
 export const routeYears = (r: SigningRoute) => (isException(r) ? EXCEPTIONS[r].years : 5);
@@ -338,8 +449,20 @@ function exceptionClosed(league: League, tid: number, kind: Exception, season: n
   const t = league.teams[tid];
   const r = (why: string, short: string) => ({ why, short });
   switch (kind) {
+    case 'tmle':
+      if (t.taxMleSeason === season) return r('Used this season.', 'used');
+      if (t.mleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
+      if (t.spaceSeason === season || t.roomSeason === season)
+        return r('Gone this season: a free agent was signed with cap space, so the room exception replaces it.', 'gone: cap space was used');
+      if (spaceSheetPending(league, tid, season))
+        return r(
+          'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.',
+          'gone while an offer sheet holds your space',
+        );
+      return null;
     case 'mle':
       if (t.mleSeason === season) return r('Used this season.', 'used');
+      if (t.taxMleSeason === season) return r('Not after the taxpayer mid-level: a team gets one or the other.', 'not after the taxpayer mid-level');
       if (t.spaceSeason === season || t.roomSeason === season)
         return r('Gone this season: a free agent was signed with cap space, so the room exception replaces it.', 'gone: cap space was used');
       if (spaceSheetPending(league, tid, season))
@@ -350,7 +473,7 @@ function exceptionClosed(league: League, tid: number, kind: Exception, season: n
       return null;
     case 'room':
       if (t.roomSeason === season) return r('Used this season.', 'used');
-      if (t.mleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
+      if (t.mleSeason === season || t.taxMleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
       if (t.baeSeason === season) return r('Not after the bi-annual this season.', 'not after the bi-annual');
       if (t.spaceSeason !== season) return r('Only after signing a free agent with cap space this season (it replaces the mid-level).', 'only after a cap-space signing');
       return null;
@@ -364,18 +487,22 @@ function exceptionClosed(league: League, tid: number, kind: Exception, season: n
 
 /**
  * Most a team can pay one free agent with an exception this contract season: its amount (the
- * mid-level 8.5% of the cap, the room exception 5.7%, the bi-annual 3.3%), and for the mid-level and
- * the bi-annual only while the signing keeps the team under the luxury tax (counting the offer
- * sheets it has signed, which land on its payroll unless matched, and `extra`: other commitments the
- * caller counts, such as the user's pending offers). 0 when it can't be used.
+ * mid-level 8.5% of the cap, the room exception 5.7%, the taxpayer mid-level 3.7%, the bi-annual
+ * 3.3%), and for the mid-level and the bi-annual only while the signing keeps the team under the
+ * first apron, the taxpayer mid-level under the second (counting the offer sheets it has signed,
+ * which land on its payroll unless matched, and `extra`: other commitments the caller counts, such
+ * as the user's pending offers). Using one hard-caps the team at that line for the season (see
+ * hardCapLine). 0 when it can't be used.
  */
 export function exceptionRoom(league: League, tid: number, kind: Exception, season = contractSeason(league), extra = 0): number {
   if (exceptionUsedReason(league, tid, kind, season)) return 0;
   const full = exceptionAmount(league, kind, season);
-  // (a team that has just used its cap space is nowhere near the tax)
+  // (a team that has just used its cap space is nowhere near an apron)
   if (kind === 'room') return full;
   const sheets = marketHolds(league, tid, season).reduce((a, h) => a + (h.kind === 'sheet' ? h.amount : 0), 0);
-  return Math.max(0, Math.min(full, CAP_FOR(league, season).luxuryTax - payroll(league, tid, season) - sheets - extra));
+  const cap = CAP_FOR(league, season);
+  const line = kind === 'tmle' ? cap.secondApron : cap.firstApron;
+  return Math.max(0, Math.min(full, line - payroll(league, tid, season) - sheets - extra));
 }
 
 /** Most a team can pay one free agent with its mid-level exception (see exceptionRoom): 0 once used, replaced by the room exception, or past the tax. */
@@ -385,8 +512,19 @@ export const mleRoom = (league: League, tid: number, season = contractSeason(lea
 export const bestExceptionRoom = (league: League, tid: number, season = contractSeason(league)) =>
   Math.max(0, ...EXCEPTION_ORDER.map((k) => exceptionRoom(league, tid, k, season)));
 
-/** A team that used the mid-level or the bi-annual this season stays under the tax line for the rest of it: trades can't take its payroll past it. */
-export const taxCapped = (t: Team, season: number) => t.mleSeason === season || t.baeSeason === season;
+/**
+ * The line a team is hard-capped at this contract season, or null: the first apron after it used the
+ * mid-level or the bi-annual, the second after the taxpayer mid-level. Trades can't take its
+ * payroll past it for the rest of the season.
+ */
+export function hardCapLine(league: League, tid: number, season = contractSeason(league)): { amount: number; name: string; what: string } | null {
+  const t = league.teams[tid];
+  const cap = CAP_FOR(league, season);
+  if (t.mleSeason === season || t.baeSeason === season)
+    return { amount: cap.firstApron, name: 'first apron', what: t.mleSeason === season ? 'mid-level exception' : 'bi-annual exception' };
+  if (t.taxMleSeason === season) return { amount: cap.secondApron, name: 'second apron', what: 'taxpayer mid-level exception' };
+  return null;
+}
 
 export type { SigningRoute };
 
@@ -432,6 +570,7 @@ export function spendRoute(league: League, tid: number, route: SigningRoute | nu
   const t = league.teams[tid];
   if (route === 'space') t.spaceSeason = season;
   else if (route === 'mle') t.mleSeason = season;
+  else if (route === 'tmle') t.taxMleSeason = season;
   else if (route === 'room') t.roomSeason = season;
   else if (route === 'bae') t.baeSeason = season;
 }
@@ -488,26 +627,72 @@ export function summerRoster(league: League, tid: number): number {
 }
 
 /**
- * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy:
- * contenders go a little past the tax, retooling teams stop halfway between cap and tax,
- * rebuilders near the cap. A player worth 82+ stretches it to the tax (8% past it for a contender,
- * or for anyone's franchise player at 86+). Re-signing, extensions, qualifying offers and matching
- * offer sheets all budget with it.
+ * The payroll an AI team will go to for keeping a player worth `v`. Its core (its three best and
+ * its young stars, `core`, see teamCore) it keeps at almost any price its strategy allows: a
+ * contender up to the first apron, a retooling team up to the tax line, a rebuilder its young core
+ * (28 or under) up to the tax line; a star worth 86+ up to the second apron, and a young one (28
+ * or under) on any team to 10% of the cap past it: a franchise keeps its young star and sheds
+ * salary around him later (see dumpDeal).
+ * Anyone else: a contender up to a little under the tax line (a starter worth 80+ to the line), a
+ * retooling team halfway between cap and tax (80+ a little under the line), a rebuilder under the
+ * cap (its veterans past 28 further under), keeping room for the dumps it takes picks for (halfway
+ * to the tax for 82+, or 80+ and 28 or under). Re-signing, extensions, qualifying offers and matching offer sheets
+ * all budget with it.
  */
-export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number): number {
-  if (v >= 86 || (v >= 82 && t.strategy === 'contend')) return cap.luxuryTax * 1.08;
-  if (t.strategy === 'contend') return cap.luxuryTax * 1.02;
-  if (v >= 82) return cap.luxuryTax;
-  return t.strategy === 'retool' ? (cap.salaryCap + cap.luxuryTax) / 2 : cap.salaryCap * 1.05;
+export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number, who: { core: boolean; young: boolean } = { core: false, young: true }): number {
+  const star = v >= 86;
+  if (who.core) {
+    if (star && who.young) return cap.secondApron + cap.salaryCap * 0.1;
+    if (t.strategy === 'contend') return star ? cap.secondApron : cap.firstApron;
+    if (t.strategy === 'retool') return star ? cap.secondApron : cap.luxuryTax;
+    if (who.young) return cap.luxuryTax;
+  }
+  const mid = (cap.salaryCap + cap.luxuryTax) / 2;
+  const under = cap.luxuryTax - cap.salaryCap * 0.02;
+  if (t.strategy === 'contend') return v >= 80 ? cap.luxuryTax : under;
+  if (t.strategy === 'retool') return v >= 80 ? under : mid;
+  return v >= 82 || (v >= 80 && who.young) ? mid : cap.salaryCap * (who.young ? 0.95 : 0.85);
+}
+
+/** A team's core for its payroll budget (see payrollBudget): its three most valuable players, and any young star (25 or younger, worth 82+). */
+export function teamCore(league: League, tid: number): Set<number> {
+  return new Set(
+    teamPlayers(league, tid)
+      .filter((p) => !p.contract.twoWay)
+      .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid)
+      .filter((p, i) => i < 3 || (age(league, p) <= 25 && valueScore(league, p) >= 82))
+      .map((p) => p.pid),
+  );
 }
 
 /** Season day of December 15 (day 0 is October 20). */
 export const DEC_15 = 56;
 
 /**
+ * The option an AI team's signing of `years` (two or more) carries: a player option on the final
+ * season for a player 32 or younger, likelier the better he is (none under 75, up to 60% from 86),
+ * as stars get them; else a team option on a cheap (5% of the cap or less) two- or three-year deal
+ * for a player 24 or younger, about a third of the time. A hash of the league, season and player,
+ * so the league's random stream is left alone.
+ */
+export function aiOption(league: League, p: Player, amount: number, years: number): 'player' | 'team' | undefined {
+  if (years < 2) return undefined;
+  const s = contractSeason(league);
+  const roll = hashString(`${league.id}:${league.season}:${p.pid}:option`) / 4294967296;
+  const a = playerAge(p, s);
+  if (a <= 32 && roll < clamp((valueScore(league, p) - 74) / 20, 0, 0.6)) return 'player';
+  if (a <= 24 && years <= 3 && amount <= CAP_FOR(league, s).salaryCap * 0.05 && roll > 0.65) return 'team';
+  return undefined;
+}
+
+/** Did team `tid` release (waive or buy out) him this season? Then it can't sign him again until next season. */
+export const releasedBy = (league: League, p: Pick<Player, 'released'>, tid: number) => p.released?.tid === tid && p.released.season === league.season;
+
+/**
  * `log: false`: the caller logs the move itself (restricted free agency's matches and qualifying
  * offers, 10-day contracts). `option`: a player or team option on the final season (the user's
- * signings only). `tenDay`: a 10-day contract, whose one salary is `amount` as given (see tenDay.ts).
+ * choice, or an AI team's, see aiOption). `tenDay`: a 10-day contract, whose one salary is `amount`
+ * as given (see tenDay.ts). `raise`: the raises set by terms already written (a matched offer sheet's).
  */
 export function signPlayer(
   league: League,
@@ -515,21 +700,34 @@ export function signPlayer(
   tid: number,
   amount: number,
   years: number,
-  opts: { news?: boolean; start?: number; twoWay?: boolean; log?: boolean; option?: 'player' | 'team'; tenDay?: { until: number; hardship?: boolean } } = {},
+  opts: {
+    news?: boolean;
+    start?: number;
+    twoWay?: boolean;
+    log?: boolean;
+    option?: 'player' | 'team';
+    tenDay?: { until: number; hardship?: boolean };
+    bird?: boolean;
+    raise?: number;
+  } = {},
 ) {
   const prevTid = p.tid;
-  // his own team re-signs him: from its roster, or as its restricted free agent (it kept his rights)
-  const own = prevTid === tid || p.rfa?.tid === tid;
+  // his own team re-signs him: from its roster, as its restricted free agent (it kept his rights),
+  // or bringing him back from the market on his Bird rights (`bird`)
+  const own = prevTid === tid || p.rfa?.tid === tid || !!opts.bird;
+  const start = opts.start ?? league.season;
+  // (read before he joins: Bird rights are his old team's, and so is a bigger max)
+  const terms = opts.tenDay || opts.twoWay ? {} : { raise: opts.raise ?? (opts.bird ? 0.08 : raiseWith(league, p, tid)), max: playerMax(league, p, start, tid) };
   p.tid = tid;
-  p.contract = opts.tenDay
-    ? { start: opts.start ?? league.season, salaries: [amount], tenDay: { ...opts.tenDay } }
-    : makeContract(league, amount, years, opts.start ?? league.season, opts.twoWay ? undefined : p.experience);
+  p.contract = opts.tenDay ? { start, salaries: [amount], tenDay: { ...opts.tenDay } } : makeContract(league, amount, years, start, opts.twoWay ? undefined : p.experience, terms);
   if (opts.twoWay) p.contract.twoWay = true;
   if (opts.option && years >= 2) p.contract.option = opts.option;
   // whatever he signs, his talks with the user are over
   delete p.talks;
   if (!own) {
     p.joinedSeason = league.season;
+    // his Bird clock with the new team starts with his first season there
+    p.birdSince = start;
     // a new team: the trade-back rule was about his old one (a re-signing keeps it)
     delete p.tradedFrom;
   }
@@ -673,10 +871,11 @@ export function releaseSchedule(league: League, p: Player, opts: { giveback?: nu
  * provision (see stretchDeadMoney). In the regular season a release that leaves dead money puts him
  * on waivers for WAIVER_DAYS first: another team can claim his contract and take that dead money,
  * stretched or not, off the books (see resolveWaivers). Bought-out players skip waivers, and so do
- * preseason cuts and minimum camp deals, which leave no dead money. `log: false`: the caller logs
- * the move itself (a buyout, a 10-day contract that ended).
+ * preseason cuts and minimum camp deals, which leave no dead money. The team can't sign him again
+ * that season (see releasedBy), unless his 10-day contract simply ran out (`ended`). `log: false`:
+ * the caller logs the move itself (a buyout, a 10-day contract that ended).
  */
-export function releasePlayer(league: League, p: Player, opts: { news?: boolean; giveback?: number; stretch?: boolean; log?: boolean } = {}) {
+export function releasePlayer(league: League, p: Player, opts: { news?: boolean; giveback?: number; stretch?: boolean; log?: boolean; ended?: boolean } = {}) {
   const tid = p.tid;
   if (tid < 0) return;
   const team = league.teams[tid];
@@ -695,6 +894,8 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   delete p.tradedFrom;
   delete p.tradeLock;
   delete p.rfa;
+  if (opts.ended) delete p.released;
+  else p.released = { tid, season: league.season };
   if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead, ...(lock ? { lock } : {}) };
   else delete p.waivers;
   // a free agent again: whatever he was talking about with the user is over
@@ -913,21 +1114,64 @@ export const stretchPhrase = (league: League, seasons: number) =>
   `${contractSeason(league) === league.season ? "this season's as usual and the rest " : ''}stretched over ${seasons} seasons`;
 
 /**
- * After the trade deadline, rebuilding AI teams may buy out a veteran on an expiring deal (30+,
- * OVR 70+) so he can join a contender, about half of them, but only from a roster of 15 so it
- * stays at 14 or more until the weekly fill.
+ * The day after the trade deadline, when no trade has found a taker: AI teams out of contention
+ * (rebuilding half the time, retooling a third) buy out a role veteran so he can join a contender:
+ * 30 or older, his deal up this season or next, outside the team's six best, under 82. Only from a
+ * roster of 15, so it stays at 14 or more. Then the buyout market (see buyoutMarket).
  */
 export function aiBuyouts(league: League) {
+  const out: Player[] = [];
   for (const t of league.teams) {
-    if (t.tid === league.userTid || t.strategy !== 'rebuild') continue;
+    if (t.tid === league.userTid || t.strategy === 'contend') continue;
     const roster = standardRoster(league, t.tid);
     if (roster.length - 1 < 14) continue;
-    const vet = roster.filter((p) => age(league, p) >= 30 && contractExp(p.contract) === league.season && p.ovr >= 70 && buyoutTerms(league, p)).sort((a, b) => b.ovr - a.ovr)[0];
-    if (!vet || !new Rng(hashString(`${league.id}:${league.season}:${league.day}:buyout:${t.tid}`)).chance(0.5)) continue;
+    const top = new Set(
+      [...roster]
+        .sort((a, b) => valueScore(league, b) - valueScore(league, a))
+        .slice(0, 6)
+        .map((p) => p.pid),
+    );
+    const vet = roster
+      .filter((p) => !top.has(p.pid) && age(league, p) >= 30 && contractExp(p.contract) <= league.season + 1 && p.ovr >= 68 && p.ovr < 82 && buyoutTerms(league, p))
+      .sort((a, b) => b.ovr - a.ovr)[0];
+    if (!vet || !new Rng(hashString(`${league.id}:${league.season}:${league.day}:buyout:${t.tid}`)).chance(t.strategy === 'rebuild' ? 0.5 : 0.33)) continue;
     const terms = buyoutTerms(league, vet)!;
     releasePlayer(league, vet, { news: false, giveback: terms.giveback });
     addNews(league, { kind: 'release', text: `The ${t.name} bought out ${playerName(vet)}, who gave back ${money(terms.saved)}.`, tids: [t.tid], pids: [vet.pid] });
     logMove(league, 'buyout', t.tid, vet, { amount: terms.saved });
+    out.push(vet);
+  }
+  buyoutMarket(league, out);
+}
+
+/**
+ * Bought-out veterans take the minimum to chase a ring: each signs with the contender he likes best
+ * (its appeal to him, see teamAppeal) that has an open spot, or a 15th man worth 3 points less on a
+ * deal it can drop for little (dead money of 2.2× the veteran minimum at most). One left unsigned
+ * asks the minimum of anyone, the user included.
+ */
+export function buyoutMarket(league: League, players: Player[]) {
+  const cap = CAP_FOR(league, league.season);
+  for (const p of [...players].sort((a, b) => valueScore(league, b) - valueScore(league, a))) {
+    const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+    p.asking = { amount: min, years: 1 };
+    let best: { tid: number; appeal: number; cut?: Player } | null = null;
+    for (const t of league.teams) {
+      if (t.tid === league.userTid || t.strategy !== 'contend' || releasedBy(league, p, t.tid)) continue;
+      const roster = standardRoster(league, t.tid).filter((x) => !x.contract.tenDay?.hardship);
+      const cut =
+        roster.length >= CAP.rosterMax
+          ? roster
+              .filter((x) => releaseDeadMoney(league, x).reduce((a, d) => a + d.amount, 0) <= cap.vetMin * 2.2 && valueScore(league, x) <= valueScore(league, p) - 3)
+              .sort((a, b) => valueScore(league, a) - valueScore(league, b))[0]
+          : undefined;
+      if (roster.length >= CAP.rosterMax && !cut) continue;
+      const appeal = teamAppeal(league, t.tid, p);
+      if (!best || appeal > best.appeal) best = { tid: t.tid, appeal, cut };
+    }
+    if (!best) continue;
+    if (best.cut) releasePlayer(league, best.cut, { news: false });
+    signPlayer(league, p, best.tid, min, 1);
   }
 }
 
@@ -1141,14 +1385,20 @@ export function extensionAsk(league: League, p: Player): Ask {
   const cap = CAP_FOR(league, start);
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const years = Math.min(extensionMaxYears(p), preferredYears(league, p));
-  let amount = (marketSalary(league, p) * revenueScale(league, start)) / revenueScale(league, contractSeason(league));
+  const market = marketSalary(league, p);
+  let amount = (market * revenueScale(league, start)) / revenueScale(league, contractSeason(league));
   if (amount <= min) return { amount: min, years };
-  const a = age(league, p);
-  if (rookieScaleDeal(p) || a >= 31) amount *= 0.95;
-  else if (a <= 27 && valueScore(league, p) >= 82) amount *= 1.05;
+  const max = playerMax(league, p, start, p.tid >= 0 ? p.tid : undefined);
+  // a star worth nearly the max asks it (see askingContract): the supermax or Rose-rule max when he has earned it
+  if (market >= CAP_FOR(league, contractSeason(league)).maxContract(p.experience) * MAX_ASK) amount = max;
+  else {
+    const a = age(league, p);
+    if (rookieScaleDeal(p) || a >= 31) amount *= 0.95;
+    else if (a <= 27 && valueScore(league, p) >= 82) amount *= 1.05;
+    if (p.tid >= 0) amount *= clamp(1 / teamAppeal(league, p.tid, p), 1 / 1.1, 1 / 0.9);
+  }
   if (p.tid === league.userTid) amount *= preset(league).contractAsk;
-  if (p.tid >= 0) amount /= teamAppeal(league, p.tid, p);
-  return { amount: clamp(Math.round(amount / 50) * 50, min, cap.maxContract(p.experience)), years };
+  return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
 }
 
 /**
@@ -1181,13 +1431,13 @@ export function willExtend(league: League, p: Player, amount: number, years: num
 }
 
 /**
- * Sign an extension: `years` seasons from the one after his deal ends, with 5% raises. Any option
+ * Sign an extension: `years` seasons from the one after his deal ends, with 8% raises (Bird rights). Any option
  * on the deal is picked up (it would read as the extension's last season), and like a signing he
  * can't be traded until December 15, or three months on in season.
  */
 export function extendContract(league: League, p: Player, amount: number, years: number) {
   const start = contractExp(p.contract) + 1;
-  p.contract.next = { salaries: makeContract(league, amount, years, start, p.experience).salaries };
+  p.contract.next = { salaries: makeContract(league, amount, years, start, p.experience, { raise: 0.08, max: playerMax(league, p, start, p.tid) }).salaries };
   delete p.contract.option;
   p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: contractSeason(league), day: DEC_15 };
   const team = league.teams[p.tid];

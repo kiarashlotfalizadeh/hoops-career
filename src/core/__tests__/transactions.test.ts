@@ -31,6 +31,7 @@ import { capHolds, capPayroll, faDay, renouncePlayer, userOffer, userResign, use
 import { aiProposals } from '../league/proposals';
 import {
   MAX_FIRSTS_OUT,
+  bestTpe,
   capSalary,
   evaluateTrade,
   executeTrade,
@@ -38,11 +39,12 @@ import {
   playerValueFor,
   salaryMatchGap,
   teamAccepts,
+  tradeMatchLimit,
   untradeableReason,
   validateTrade,
   type TradeOffer,
 } from '../league/trades';
-import { aiToAiTrade } from '../league/aiTrades';
+import { aiPackage, aiToAiTrade } from '../league/aiTrades';
 import { canMakeWork, makeItWork } from '../league/tradeHelp';
 import { draftPlayer, draftStandings, ensureFuturePicks, runLottery } from '../league/draft';
 import { CAP } from '../constants';
@@ -66,6 +68,8 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.bornYear = l.season - age;
   p.injury = null;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary ?? marketSalary(l, p)) };
+  // with his team for years: full Bird rights
+  p.birdSince = l.season - 4;
   return p;
 }
 
@@ -188,11 +192,15 @@ describe('AI trade valuation', () => {
     const l = league();
     l.phase = 'regular';
     const p = shape(l, standardRoster(l, AI)[0], 90, 28);
-    const healthy = { contend: tradeValue(l, p, 'contend'), rebuild: tradeValue(l, p, 'rebuild'), ask: askingContract(l, p).amount };
+    const healthy = { contend: tradeValue(l, p, 'contend'), rebuild: tradeValue(l, p, 'rebuild') };
     p.injury = { type: 'Torn ACL', gamesRemaining: 100, gamesTotal: 100, severity: 'severe' };
     expect(tradeValue(l, p, 'contend')).toBeLessThan(healthy.contend * 0.5);
     expect(tradeValue(l, p, 'rebuild') / healthy.rebuild).toBeGreaterThan(tradeValue(l, p, 'contend') / healthy.contend);
-    expect(askingContract(l, p).amount).toBeLessThan(healthy.ask);
+    // a player under max level asks less for it (a star worth the max still asks it: see askingContract)
+    const q = shape(l, standardRoster(l, AI)[1], 80, 28);
+    const ask = askingContract(l, q).amount;
+    q.injury = { type: 'Torn ACL', gamesRemaining: 100, gamesTotal: 100, severity: 'severe' };
+    expect(askingContract(l, q).amount).toBeLessThan(ask);
   });
 
   it('caps an AI at two outgoing first-round picks per deal (T4)', () => {
@@ -228,7 +236,8 @@ describe('AI trade valuation', () => {
     for (let i = 0; i < 150; i++) {
       const before: League = structuredClone(l);
       aiToAiTrade(l, new Rng(i + 1));
-      const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid);
+      // (a team over 15 waives its end of the bench after the deal: those go to free agency, not the other side)
+      const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid && p.tid >= 0);
       const picks = l.draftPicks.filter((d) => before.draftPicks.find((x) => x.dpid === d.dpid)!.tid !== d.tid);
       if (!moved.length) continue;
       trades++;
@@ -254,14 +263,16 @@ describe('AI trade valuation', () => {
     for (const t of l.teams) t.strategy = 'retool';
     l.teams[S].strategy = 'rebuild';
     l.teams[B].strategy = 'contend';
-    // the rebuilder's one veteran, on a minimum deal so the salaries match with anyone; the
-    // contender has no young players to offer, only picks
-    const vet = shape(l, standardRoster(l, S)[0], 80, 29, CAP_FOR(l).vetMin);
+    // the rebuilder's one veteran (31: only a contender buys him), on a minimum deal so the
+    // salaries match with anyone; the contender has no young players to offer, only picks
+    const vet = shape(l, standardRoster(l, S)[0], 80, 31, CAP_FOR(l).vetMin);
     for (const p of standardRoster(l, S)) if (p !== vet) p.ovr = Math.min(p.ovr, 73);
     for (const p of standardRoster(l, B)) p.bornYear = Math.min(p.bornYear, l.season - 27);
     expect(l.draftPicks.filter((d) => d.tid === B && d.round === 2).length).toBeGreaterThanOrEqual(3);
     const owner = new Map(l.draftPicks.map((d) => [d.dpid, d.tid]));
-    for (let i = 0; i < 40 && vet.tid === S; i++) aiToAiTrade(l, new Rng(i + 1));
+    const deal = aiPackage(l, B, S, vet);
+    expect(deal).not.toBeNull();
+    executeTrade(l, deal!);
     // three seconds are nowhere near him: the deal takes firsts (two at most)
     expect(vet.tid).toBe(B);
     const rounds = l.draftPicks.filter((d) => owner.get(d.dpid) !== d.tid).map((d) => d.round);
@@ -553,20 +564,72 @@ describe('AI trade valuation', () => {
     expect(releaseDeadMoney(l, bust).map((d) => d.season)).toEqual([l.season]);
   });
 
-  it('using the mid-level caps a team at the tax line in trades that season', () => {
+  it('past the first apron a team takes back no more salary than it sends; past the second it combines no salaries and sends no cash', () => {
     const l = league();
     l.phase = 'regular';
     const cap = CAP_FOR(l);
-    // just under the tax, taking a $10M player for a $9M one
+    // just under the first apron, taking a $10M player for a $9M one
     const mine = shape(l, standardRoster(l, U)[0], 70, 27, 9_000);
     const theirs = shape(l, standardRoster(l, AI)[0], 72, 27, 10_000);
-    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.luxuryTax - 500 - payroll(l, U) });
+    const to = (amount: number) => {
+      l.teams[U].deadMoney = l.teams[U].deadMoney.filter((d) => d.pid !== -1);
+      l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, U) });
+    };
+    to(cap.firstApron - 5_000);
     const deal = offer([mine.pid], [theirs.pid]);
-    expect(validateTrade(l, deal).some((e) => /mid-level/.test(e))).toBe(false);
-    l.teams[U].mleSeason = l.season;
-    expect(validateTrade(l, deal).some((e) => /mid-level/.test(e))).toBe(true);
+    expect(validateTrade(l, deal).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
+    to(cap.firstApron - 500);
+    expect(validateTrade(l, deal).find((e) => /Salary doesn't match/.test(e))).toMatch(/100% of \$9\.0M sent: over the first apron/);
     // sending out more than it takes back is always fine
-    expect(validateTrade(l, offer([mine.pid], [])).some((e) => /mid-level/.test(e))).toBe(false);
+    expect(validateTrade(l, offer([mine.pid], [])).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
+    // over the second apron: two contracts can't add up to take back a bigger one, and no cash goes out
+    const second = shape(l, standardRoster(l, U)[1], 66, 27, 2_000);
+    theirs.contract.salaries = [10_500, 10_500];
+    to(cap.secondApron + 5_000);
+    expect(validateTrade(l, offer([mine.pid, second.pid], [theirs.pid])).some((e) => /can't combine salaries/.test(e))).toBe(true);
+    expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [], cash: 1_000 }, b: { tid: AI, pids: [], dpids: [] } }).some((e) => /can't send cash/.test(e))).toBe(true);
+  });
+
+  it('salary matching runs by tiers of what a team sends: 200% of a small salary, plus 4.85% of the cap in the middle, 125% of a big one', () => {
+    const l = league();
+    l.phase = 'regular';
+    const cap = CAP_FOR(l).salaryCap;
+    const buf = Math.round((cap * CAP.tradeMatchBufferPct) / 10) * 10;
+    expect(tradeMatchLimit(l, 0)).toBe(buf);
+    expect(tradeMatchLimit(l, 5_000)).toBe(10_000 + buf);
+    expect(tradeMatchLimit(l, 20_000)).toBe(20_000 + Math.round(cap * 0.0485));
+    expect(tradeMatchLimit(l, 40_000)).toBe(50_000 + buf);
+    expect(tradeMatchLimit(l, 40_000, l.season, true)).toBe(40_000);
+  });
+
+  it("an over-the-cap team's trade that sends out more salary than it takes back leaves a traded player exception for a year, which absorbs a player later", () => {
+    const l = league();
+    l.phase = 'regular';
+    const cap = CAP_FOR(l);
+    // AI over the cap (not near an apron) sends a $12M player for a $4M one to a team with room: an $8M exception
+    for (const [t, amount] of [
+      [U, cap.salaryCap - 20_000],
+      [AI, cap.salaryCap + 10_000],
+    ] as const) {
+      l.teams[t].deadMoney = [];
+      l.teams[t].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, t) });
+    }
+    const big = shape(l, standardRoster(l, AI)[0], 72, 27, 12_000);
+    const small = shape(l, standardRoster(l, U)[0], 70, 27, 4_000);
+    const deal = offer([small.pid], [big.pid]);
+    expect(validateTrade(l, deal)).toEqual([]);
+    executeTrade(l, deal);
+    expect(l.teams[AI].tpes).toEqual([{ amount: 8_000, season: l.season, day: l.day }]);
+    expect(bestTpe(l, AI)).toBe(8_000);
+    // it absorbs a $7M player with nothing going back, and is used up by what it took
+    const target = shape(l, standardRoster(l, U)[1], 68, 27, 7_000);
+    const dump = offer([target.pid], []);
+    expect(validateTrade(l, dump)).toEqual([]);
+    executeTrade(l, dump);
+    expect(bestTpe(l, AI)).toBeLessThan(8_000);
+    // a year on it's gone
+    l.teams[AI].tpes = [{ amount: 8_000, season: l.season - 1, day: l.day }];
+    expect(bestTpe(l, AI)).toBe(0);
   });
 
   it("counts only next season's contracts against the 21-man offseason limit in trades", () => {
@@ -620,13 +683,13 @@ describe('cap holds (T7)', () => {
     const holds = capHolds(l, U);
     expect(holds.length).toBeGreaterThanOrEqual(10);
     expect(capPayroll(l, U, next)).toBeGreaterThan(payroll(l, U, next));
-    // the holds take us over the cap, so taking on salary for nothing breaks the 125% rule
+    // the holds take us over the cap, so taking on salary for nothing breaks salary matching
     const target = shape(l, standardRoster(l, AI)[0], 72, 27, 25_000, 3);
     expect(capPayroll(l, U, next) + 25_000).toBeGreaterThan(CAP_FOR(l, next).salaryCap);
-    expect(validateTrade(l, offer([], [target.pid])).some((e) => e.includes('125%'))).toBe(true);
+    expect(validateTrade(l, offer([], [target.pid])).some((e) => e.includes("Salary doesn't match"))).toBe(true);
     for (const h of holds) expect(renouncePlayer(l, h.p.pid).ok).toBe(true);
     expect(capHolds(l, U)).toEqual([]);
-    expect(validateTrade(l, offer([], [target.pid])).filter((e) => e.includes('125%'))).toEqual([]);
+    expect(validateTrade(l, offer([], [target.pid])).filter((e) => e.includes("Salary doesn't match"))).toEqual([]);
   });
 
   it("holds an AI team's room for the players it would re-sign", () => {
@@ -768,12 +831,32 @@ describe('free agency', () => {
     expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toMatch(/No open roster spot \(21\)/);
   });
 
-  it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {
+  it('a star holds his price for the first two weeks of free agency, then comes down 15% a cut, never below 60% of his value', () => {
     const l = league();
     l.phase = 'freeAgency';
     l.faDay = 0;
     for (const t of l.teams) overCap(l, t.tid);
     const star = shape(l, freeAgents(l)[0], 88, 27);
+    star.contract = { start: l.season, salaries: [0] };
+    star.asking = askingContract(l, star);
+    star.faDays = 1;
+    const start = star.asking.amount;
+    const rng = new Rng(4);
+    faDay(l, rng, 0, 1);
+    expect(star.asking.amount).toBe(start);
+    l.faDay = 15;
+    star.faDays = 1;
+    faDay(l, rng, 0, 16);
+    expect(star.asking.amount).toBe(Math.round(Math.max(start * 0.85, marketSalary(l, star) * 0.6) / 10) * 10);
+  });
+
+  it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {
+    const l = league();
+    l.phase = 'freeAgency';
+    l.faDay = 0;
+    for (const t of l.teams) overCap(l, t.tid);
+    // (a player under star level, no top free agent: a star holds his price a while, see above)
+    const star = shape(l, freeAgents(l)[0], 76, 27);
     star.contract = { start: l.season, salaries: [0] };
     star.asking = askingContract(l, star);
     star.faDays = 5;

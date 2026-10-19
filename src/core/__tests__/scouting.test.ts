@@ -189,10 +189,11 @@ describe('scouting data', () => {
   it("backs counters with evidence when their P&R ball handlers' numbers are inflated, and lists those first", () => {
     const m = playedLeague();
     const tid = scoutable(m, m.userTid + 5);
-    // their handlers scoring 1.6 a trip
+    // their handlers scoring 1.6 a trip, and their defense giving up 1.7 on spot-ups
     for (const g of m.games) {
-      const side = g.home.tid === tid ? g.home : g.away.tid === tid ? g.away : null;
+      const [side, other] = g.home.tid === tid ? [g.home, g.away] : g.away.tid === tid ? [g.away, g.home] : [null, null];
       if (side) side.playTypes.pnrBH = { poss: 20, pts: 32 };
+      if (other) other.playTypes.spotup = { poss: 20, pts: 34 };
     }
     m.teams[m.userTid].tactics = applyPatch(m.teams[m.userTid].tactics, { defense: { scheme: 'man', pnr: 'drop' } });
     const d = scoutData(m, tid);
@@ -203,7 +204,7 @@ describe('scouting data', () => {
     const firstPlain = cands.findIndex((c) => !c.evidence);
     expect(cands.findIndex((c) => c.id === 'cov-hedge')).toBeLessThan(firstPlain < 0 ? Infinity : firstPlain);
     // and the scouting report's attack line reads the numbers first
-    expect(scoutTeam(m, tid).weaknesses.length).toBeGreaterThan(0);
+    expect(scoutTeam(m, tid).weaknesses[0]).toMatch(/^Their defense gives up/);
   });
 });
 

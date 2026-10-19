@@ -61,7 +61,6 @@ describe('keys to the game', () => {
   });
 
   it("on a new season's first nights read last season's team totals, not the few meetings its results keep", () => {
-    // (one whose first month leaves a full set of three keys in last season's numbers)
     const l = testLeague('keys-last', 4);
     for (let i = 0; i < 30; i++) simDay(l);
     // what was played becomes last season, its results kept as a new season keeps them: the user's only
@@ -70,11 +69,15 @@ describe('keys to the game', () => {
     for (const p of Object.values(l.players)) for (const s of p.stats) if (s.season === S) s.season = S - 1;
     l.games = l.games.filter((g) => g.home.tid === l.userTid || g.away.tid === l.userTid).map((g) => ({ ...g, season: S - 1 }));
     for (const t of l.teams) teamSeason(t, S);
-    // five meetings with one opponent (the Cup can make five): enough for a team's own sample
-    const meeting = l.games.find((g) => g.type === 'regular')!;
-    const opp = meeting.home.tid === l.userTid ? meeting.away.tid : meeting.home.tid;
+    // (an opponent the user met whose numbers last season give a full set of three keys)
+    const against = (opp: number): ScheduledGame => ({ gid: l.nextGid, day: 0, home: l.userTid, away: opp, type: 'regular' });
+    const met = [...new Set(l.games.filter((g) => g.type === 'regular').map((g) => (g.home.tid === l.userTid ? g.away.tid : g.home.tid)))];
+    const opp = met.find((t) => gameKeys(l, against(t)).length === 3)!;
+    expect(opp).toBeDefined();
+    // five meetings with it (the Cup can make five): enough for a team's own sample
+    const meeting = l.games.find((g) => g.type === 'regular' && (g.home.tid === opp || g.away.tid === opp))!;
     for (let i = l.games.filter((g) => g.home.tid === opp || g.away.tid === opp).length; i < 5; i++) l.games.push({ ...structuredClone(meeting), gid: l.nextGid++ });
-    const g: ScheduledGame = { gid: l.nextGid++, day: 0, home: l.userTid, away: opp, type: 'regular' };
+    const g: ScheduledGame = { ...against(opp), gid: l.nextGid++ };
     const keys = gameKeys(l, g);
     expect(keys.length).toBe(3);
     expect(keys.some((k) => /of 30 last season|last season, the most/.test(k.why))).toBe(true);

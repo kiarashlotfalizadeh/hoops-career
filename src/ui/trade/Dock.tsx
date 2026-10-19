@@ -3,9 +3,9 @@
 // buttons (make it work, propose, force in god mode).
 import { Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP_FOR, payroll, rosterMaxNow } from '../../core/league/helpers';
+import { CAP_FOR, inSeason, payroll, rosterMaxNow } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { TRADE_WAIVE_MAX, capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { canMakeWork } from '../../core/league/tradeHelp';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -83,6 +83,7 @@ export function Dock({
   const rosterAfter = tradeRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
   const theirAfter = tradeRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
   const maxSize = rosterMaxNow(league);
+  const waives = inSeason(league) && theirAfter - maxSize <= TRADE_WAIVE_MAX;
   if (empty || !ev) {
     return (
       <div className="fo-dock idle">
@@ -129,20 +130,25 @@ export function Dock({
             {money(after)}
           </div>
           <div className="s num">
-            {after > cap.luxuryTax
-              ? `${money(after - cap.luxuryTax)} over the tax`
-              : after > cap.salaryCap
-                ? `${money(after - cap.salaryCap)} over the cap`
-                : `${money(cap.salaryCap - after)} cap space`}
+            {after > cap.secondApron
+              ? `${money(after - cap.secondApron)} over the 2nd apron`
+              : after > cap.firstApron
+                ? `${money(after - cap.firstApron)} over the 1st apron`
+                : after > cap.luxuryTax
+                  ? `${money(after - cap.luxuryTax)} over the tax`
+                  : after > cap.salaryCap
+                    ? `${money(after - cap.salaryCap)} over the cap`
+                    : `${money(cap.salaryCap - after)} cap space`}
             {holds > 0 ? `, incl. ${money(holds)} holds` : ''}
           </div>
         </div>
         <div>
           <div className="k">Rosters</div>
-          <div className="v num" style={{ color: rosterAfter > maxSize || theirAfter > maxSize ? 'var(--bad)' : undefined }}>
+          <div className="v num" style={{ color: rosterAfter > maxSize || (theirAfter > maxSize && !waives) ? 'var(--bad)' : undefined }}>
             {rosterAfter} · {theirAfter}
           </div>
-          <div className="s">you · {abbrev}</div>
+          {/* (in season an AI team waives its end of the bench to make room) */}
+          <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
         </div>
       </div>
       {ruleErrors.length > 0 && (

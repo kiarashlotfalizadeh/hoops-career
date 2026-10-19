@@ -13,8 +13,8 @@ import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, senten
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
-import { MAX_FIRSTS_OUT, capSalary, evaluateTrade, executeTrade, pickLabel, pickValue, stepienError, tradedAwayBy, untradeable, validateTrade, type TradeOffer } from './trades';
-import { MAX_PICKS_OUT, neutralBalance, packageFor } from './tradePackages';
+import { capSalary, evaluateTrade, executeTrade, pickLabel, tradedAwayBy, untradeable, validateTrade, type TradeOffer } from './trades';
+import { dumpPackage, neutralBalance, packageFor } from './tradePackages';
 import { makeItWork } from './tradeHelp';
 import { plural } from '../format';
 
@@ -273,28 +273,13 @@ function tryDump(league: League, rng: Rng): Pitch | null {
       .filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && tradeValue(league, p) < 0)
       .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
     if (!bad || pitchedLately(league, bad.pid, `dump:${t.tid}`)) continue;
-    const dps: DraftPick[] = [];
-    const offer = (): TradeOffer => ({ a: { tid: user, pids: [], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
-    if (validateTrade(league, offer()).length) continue;
-    const picks = league.draftPicks.filter((d) => d.tid === t.tid && !tradedAwayBy(league, d, user)).sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
-    for (const x of picks) {
-      if (fair(league, offer(), 0)) break;
-      const out = dps.length >= MAX_PICKS_OUT ? dps[0] : null;
-      if (x.round === 1 && dps.filter((d) => d !== out && d.round === 1).length >= MAX_FIRSTS_OUT) continue;
-      if (out) dps.shift();
-      dps.push(x);
-      const o = offer();
-      if (stepienError(league, o, o.b)) {
-        dps.pop();
-        if (out) dps.unshift(out);
-      }
-    }
-    if (!fair(league, offer(), 0) || !evaluateTrade(league, offer()).accept) continue;
+    const deal = dumpPackage(league, t.tid, user, bad, (o) => fair(league, o, 0));
+    if (!deal || !evaluateTrade(league, deal).accept) continue;
     return {
       tid: t.tid,
-      offer: offer(),
+      offer: deal,
       kind: 'dump',
-      note: `We need to get under the luxury tax. Take ${shortName(league, bad)}'s contract and the pick${dps.length > 1 ? 's are' : ' is'} yours.`,
+      note: `We need to get under the luxury tax. Take ${shortName(league, bad)}'s contract and the pick${deal.b.dpids.length > 1 ? 's are' : ' is'} yours.`,
       pitch: `dump:${t.tid}`,
     };
   }

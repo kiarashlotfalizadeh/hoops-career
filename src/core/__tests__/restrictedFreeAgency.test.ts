@@ -68,6 +68,8 @@ function young(l: League, p: Player, tid: number, o: { ovr?: number; age?: numbe
   p.bornYear = l.season - (o.age ?? 23);
   p.injury = null;
   p.experience = o.exp ?? 2;
+  // with his team since he came into the league: full Bird rights from his third season
+  p.birdSince = l.season - (o.exp ?? 2);
   delete p.rfa;
   p.contract = { start: l.season - 1, salaries: [o.final ?? 3000, o.final ?? 3000], ...(o.pick ? { rookie: true } : {}) };
   p.draft = { year: l.season - 3, round: o.pick ? 1 : 2, pick: o.pick ?? 40, tid };
@@ -230,6 +232,11 @@ describe('qualifying offers', () => {
     userQualify(l, p.pid);
     const qo = p.rfa!.qo;
     const ask = askingContract(l, p, U).amount;
+    // AI teams move as the market opens: here none of them can pay for an offer sheet
+    for (const t of l.teams.filter((x) => x.tid !== U)) {
+      t.deadMoney = [{ pid: -1, name: 'x', season: l.season + 1, amount: CAP_FOR(l, l.season + 1).secondApron }];
+      t.mleSeason = l.season + 1;
+    }
     startFreeAgency(l);
     const s = contractSeason(l);
     expect(p.tid).toBe(FREE_AGENT);
@@ -260,11 +267,12 @@ describe('qualifying offers', () => {
 });
 
 describe('offer sheets', () => {
-  it('the user signs one at his asking price for two to five seasons, paid for like any signing: the room and a roster spot stay held until his team decides', () => {
+  it('the user signs one at his asking price for two to four seasons, paid for like any signing: the room and a roster spot stay held until his team decides', () => {
     const { l, s, open } = summer();
     open(U, 40_000);
     const p = rfa(l, R);
-    expect(userOffer(l, p.pid, atAsk(l, p, 1), 1).reason).toBe('Offer sheets run 2 to 5 years.');
+    expect(userOffer(l, p.pid, atAsk(l, p, 1), 1).reason).toBe('Offer sheets run 2 to 4 years.');
+    expect(userOffer(l, p.pid, atAsk(l, p, 5), 5).reason).toBe('Offer sheets run 2 to 4 years.');
     // well under his ask: he counters (see negotiation.test.ts)
     expect(userOffer(l, p.pid, Math.round((atAsk(l, p, 3) * 0.8) / 50) * 50, 3).reason).toMatch(/counters at/);
     const amount = atAsk(l, p, 3);

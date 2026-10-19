@@ -1,8 +1,8 @@
 // The trade rules in full, behind the Trade screen's "?".
 import type { League } from '../../core/types';
-import { CAP } from '../../core/constants';
+import { CAP, MATCH_MID_PCT, MATCH_SMALL_PCT } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX } from '../../core/league/helpers';
-import { MAX_FIRSTS_OUT, cashRoom } from '../../core/league/trades';
+import { MAX_FIRSTS_OUT, TRADE_WAIVE_MAX, cashRoom } from '../../core/league/trades';
 import { HelpSheet } from '../office/common';
 import { money, moneyExact } from '../../core/format';
 
@@ -12,12 +12,23 @@ export function TradeHelp({ league, season }: { league: League; season: number }
   return (
     <HelpSheet title="Trade rules">
       <p>
-        <b>Salary matching.</b> A team over the cap ({money(cap.salaryCap)}) after the trade takes back at most 125% of the salary it sends, plus $0.1M. Teams under it absorb
-        salary freely. A team that used its mid-level or bi-annual this season can't take its payroll past the tax line ({money(cap.luxuryTax)}).
+        <b>Salary matching.</b> A team over the cap ({money(cap.salaryCap)}) after the trade takes back up to 200% of a small salary it sends (up to{' '}
+        {money(cap.salaryCap * MATCH_SMALL_PCT)}) plus {money(cap.salaryCap * CAP.tradeMatchBufferPct)}, what it sends plus {money(cap.salaryCap * MATCH_SMALL_PCT)} up to{' '}
+        {money(cap.salaryCap * MATCH_MID_PCT)}, and 125% plus {money(cap.salaryCap * CAP.tradeMatchBufferPct)} above that. Teams under it absorb salary freely.
       </p>
       <p>
-        <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} in season ({OFFSEASON_ROSTER_MAX} in the offseason), and in season no team drops
-        below {CAP.rosterMin}. Two-way players don't count, but each team has {TWO_WAY_MAX} two-way slots.
+        <b>Aprons.</b> Past the first apron ({money(cap.firstApron)}) after the trade, a team takes back no more salary than it sends. Past the second ({money(cap.secondApron)}) it
+        can't combine two or more salaries to take back a bigger one, send cash, or trade its first in the furthest draft on the books. A team that used its mid-level or bi-annual
+        this season is hard-capped at the first apron; the taxpayer mid-level, at the second.
+      </p>
+      <p>
+        <b>Traded player exceptions.</b> A team over the cap that sends out more salary than it takes back keeps the difference as an exception for a year: it can take in that much
+        (plus {money(cap.salaryCap * CAP.tradeMatchBufferPct)}) without sending salary back, while it stays under the first apron. The cap sheet lists yours.
+      </p>
+      <p>
+        <b>Rosters.</b> A team taking in more players than it sends can't go over {CAP.rosterMax} in season ({OFFSEASON_ROSTER_MAX} in the offseason): you release first, an AI team
+        waives its end of the bench (up to {TRADE_WAIVE_MAX}). In season no team drops below {CAP.rosterMin}. Two-way players don't count, but each team has {TWO_WAY_MAX} two-way
+        slots.
       </p>
       <p>
         <b>Expiring contracts.</b> After the season, players whose deals are up can only be re-signed or let go, and a player with a player option on next season can't be traded

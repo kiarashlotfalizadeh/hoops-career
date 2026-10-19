@@ -268,12 +268,16 @@ export function draftPlayer(league: League, dp: DraftPick, pid: number) {
   p.tid = dp.tid;
   p.draft = { year: league.season, round: dp.round, pick: dp.pick!, tid: dp.tid };
   p.contract = rookieContract(league, dp.pick!, dp.round, league.season + 1);
-  // an AI team with 14+ players signed for next season stashes its second-rounder on a two-way deal
+  // an AI team stashes its second-rounder on a two-way deal when it has a two-way slot for next
+  // season (deals running out this season don't hold one) and either a roster that's nearly set
+  // (11 signed for next season) or a pick who isn't ready (worth under 64)
   const committed = standardRoster(league, dp.tid).filter((x) => x.pid !== pid && contractExp(x.contract) > league.season).length;
-  if (dp.round === 2 && dp.tid !== league.userTid && committed >= 14 && twoWayRoster(league, dp.tid).length < TWO_WAY_MAX) {
+  const twoWaysNext = twoWayRoster(league, dp.tid).filter((x) => contractExp(x.contract) > league.season).length;
+  if (dp.round === 2 && dp.tid !== league.userTid && twoWaysNext < TWO_WAY_MAX && (committed >= 11 || valueScore(league, p) < 64)) {
     p.contract = { start: league.season + 1, salaries: [twoWaySalary(league, league.season + 1), twoWaySalary(league, league.season + 2)], twoWay: true };
   }
   p.joinedSeason = league.season + 1;
+  p.birdSince = league.season + 1;
   // a pick traded away this season can't come straight back as the player it became
   if (dp.tradedFrom) p.tradedFrom = dp.tradedFrom;
   const team = league.teams[dp.tid];
@@ -325,13 +329,23 @@ export function aiChoose(league: League, tid: number, rng: Rng): Player | undefi
   return best;
 }
 
-/** Make AI picks until it's the user's turn (or the draft ends). Returns picks made. */
-export function draftUntilUser(league: League, rng: Rng, includeUser = false): number {
+/**
+ * Make AI picks until it's the user's turn (or the draft ends). Returns picks made. `beforePick`:
+ * what happens before an AI team picks (its draft-night trades, see aiDraftTrade).
+ */
+export function draftUntilUser(league: League, rng: Rng, includeUser = false, beforePick?: (dp: DraftPick) => void): number {
   let made = 0;
   for (;;) {
-    const dp = nextPick(league);
+    let dp = nextPick(league);
     if (!dp) break;
     if (dp.tid === league.userTid && !includeUser) break;
+    if (beforePick && dp.tid !== league.userTid) {
+      beforePick(dp);
+      // a trade can hand the pick to another team, the user's among them
+      dp = nextPick(league);
+      if (!dp) break;
+      if (dp.tid === league.userTid && !includeUser) break;
+    }
     const choice = aiChoose(league, dp.tid, rng);
     if (!choice) {
       league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);

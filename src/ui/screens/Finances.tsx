@@ -3,7 +3,7 @@ import { seasonOutcome, useQueryParam } from '../league/shared';
 import { Link } from 'react-router-dom';
 import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert } from 'lucide-react';
 import type { Team } from '../../core/types';
-import { CAP } from '../../core/constants';
+import { CAP, TAX_BRACKET_PCT } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster } from '../../core/league/helpers';
 import { salaryFor } from '../../core/playerGen';
 import {
@@ -17,6 +17,8 @@ import {
   budgetCostPerSeason,
   profit,
   referencePrice,
+  taxRepeater,
+  teamTaxBill,
 } from '../../core/league/finances';
 import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -68,7 +70,8 @@ function Overview({ team }: { team: Team }) {
   const pay = payroll(league, team.tid, s);
   const scale = revenueScale(league, s);
   const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0) * (scale / revenueScale(league));
-  const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
+  const tax = teamTaxBill(league, team.tid, pay, s);
+  const repeater = taxRepeater(league, team.tid, s);
   const shortfall = Math.max(0, cap.minPayroll - pay);
   // two-way deals sit outside the cap and the tax, but they are still paid
   const twoWayPay = twoWayRoster(league, team.tid).reduce((a, p) => a + salaryFor(p, s), 0);
@@ -79,7 +82,7 @@ function Overview({ team }: { team: Team }) {
     // (not the OVR tiers' colours: these are kinds of cost, not grades)
     { k: 'Staff & facilities budgets', v: budgets, c: 'var(--info)' },
     { k: 'Arena & operations', v: OPERATIONS_PER_SEASON * scale, c: 'var(--text-dim)' },
-    ...(tax > 0 ? [{ k: 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
+    ...(tax > 0 ? [{ k: repeater ? 'Luxury tax (repeater)' : 'Luxury tax', v: tax, c: 'var(--bad)' }] : []),
     ...(shortfall > 0 ? [{ k: 'Salary floor shortfall', v: shortfall, c: 'var(--warn)' }] : []),
   ];
   const totalExp = expenses.reduce((a, e) => a + e.v, 0);
@@ -162,10 +165,12 @@ function Overview({ team }: { team: Team }) {
           </div>
           <More label="League money">
             <p className="small dim2">
-              National TV and league revenue pays every team about {money(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the tax line pay{' '}
-              {CAP.taxRate}× on every dollar above it ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to teams under the line), and teams under the{' '}
-              {money(cap.minPayroll)} salary floor pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives{' '}
-              {Math.round(REVENUE_SHARING * 100)}% of the gap between its local revenue (gate, merchandise, local TV) and the league average.
+              National TV and league revenue pays every team about {money(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the{' '}
+              {money(cap.luxuryTax)} tax line pay by brackets: {CAP.taxRate}× on the first {money(cap.salaryCap * TAX_BRACKET_PCT)} over it, more on each one after, and a repeater
+              (a taxpayer in three of the last four seasons) 1× more on every bracket ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to teams under the line).
+              Past the aprons ({money(cap.firstApron)} and {money(cap.secondApron)}) a team loses tools in trades and signings. Teams under the {money(cap.minPayroll)} salary floor
+              pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives {Math.round(REVENUE_SHARING * 100)}% of the gap between its
+              local revenue (gate, merchandise, local TV) and the league average.
             </p>
           </More>
         </div>

@@ -18,7 +18,8 @@ import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 import { CAP } from '../constants';
 import { CAP_FOR, addInbox, curTeamSeason, dateToDay, fmtDate, freeAgents, playerName, standardRoster } from './helpers';
-import { FIRED_REASON, askingContract, releasePlayer, signPlayer, valueScore } from './contracts';
+import { hashString } from '../random';
+import { FIRED_REASON, askingContract, releasePlayer, releasedBy, signPlayer, valueScore } from './contracts';
 import { logMove } from './transactions';
 import { moneyExact } from '../format';
 
@@ -93,6 +94,7 @@ export function tenDayBlockedReason(league: League, tid: number, p: Player): str
   if (!cur) {
     if (p.tid >= 0) return p.tid === tid ? `${name} is on a standard contract.` : `${name} isn't a free agent.`;
     if (p.waivers) return `${name} is on waivers: put in a claim instead.`;
+    if (releasedBy(league, p, tid)) return `${tid === league.userTid ? 'You' : 'They'} released ${name} this season: no new deal with him until next season.`;
     if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract (asking ${moneyExact(askingContract(league, p, tid).amount)}).`;
   }
   if (tenDaysWith(league, p, tid) >= TEN_DAY_MAX)
@@ -142,7 +144,7 @@ function signTenDay(league: League, p: Player, tid: number) {
 /** His 10-day contract ends: a free agent again, with no dead money (it was paid when he signed). */
 function endTenDay(league: League, p: Player) {
   const tid = p.tid;
-  releasePlayer(league, p, { news: false, log: false });
+  releasePlayer(league, p, { news: false, log: false, ended: true });
   if (tid === league.userTid) logMove(league, 'tenDay', tid, p, { note: 'ended' });
 }
 
@@ -213,13 +215,14 @@ const tenDayPool = (league: League) =>
 
 /**
  * A team a 10-day contract ending left under 13 signs the best healthy free agent who'd take the
- * minimum (the best of the rest when none would) for the rest of the season, at his minimum. The
- * user hears from his Assistant GM.
+ * minimum (when none would, the best of the rest worth under 76: a better player holds out for real
+ * money) for the rest of the season, at his minimum, never one it released this season. The user
+ * hears from his Assistant GM.
  */
 function fillAfterTenDay(league: League, tid: number, left: string) {
   while (standardRoster(league, tid).length < CAP.rosterMin) {
-    const healthy = freeAgents(league).filter((x) => !x.injury && !x.rfa);
-    const willing = tenDayPool(league);
+    const healthy = freeAgents(league).filter((x) => !x.injury && !x.rfa && !releasedBy(league, x, tid) && valueScore(league, x) < 76);
+    const willing = tenDayPool(league).filter((x) => !releasedBy(league, x, tid));
     const p = willing[0] ?? healthy.sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid)[0];
     if (!p) return;
     signPlayer(league, p, tid, minFor(league, p), 1, { news: false, log: tid === league.userTid });
@@ -238,20 +241,33 @@ function fillAfterTenDay(league: League, tid: number, left: string) {
  * AI teams short of 13 healthy players sign the best free agents who'd take the minimum to 10-day
  * contracts (into an open spot, or a hardship one beyond 15), until they're back to 13 or out of
  * spots. They never renew one: a player can come back for a second when he's still the best left.
+ * From March a rebuilder with an open spot takes a look at a young prospect (24 or younger, potential
+ * 66+) on a 10-day, about once a week.
  */
 function aiTenDays(league: League) {
   if (tenDayClosedReason(league)) return;
   let pool: Player[] | null = null;
+  const march = league.day >= dateToDay(league.season, 2, 1);
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     let healthy = standardRoster(league, t.tid).filter((p) => !p.injury).length;
     while (healthy < CAP.rosterMin && tenDaySpot(league, t.tid)) {
       pool ??= tenDayPool(league);
-      const i = pool.findIndex((p) => p.tid === FREE_AGENT && tenDaysWith(league, p, t.tid) < TEN_DAY_MAX);
+      const i = pool.findIndex((p) => p.tid === FREE_AGENT && tenDaysWith(league, p, t.tid) < TEN_DAY_MAX && !releasedBy(league, p, t.tid));
       if (i < 0) break;
       const [p] = pool.splice(i, 1);
       signTenDay(league, p, t.tid);
       healthy++;
+    }
+    if (march && t.strategy === 'rebuild' && tenDaySpot(league, t.tid) === 'regular' && !standardRoster(league, t.tid).some((p) => p.contract.tenDay)) {
+      if (hashString(`${league.id}:${league.season}:${league.day}:look:${t.tid}`) % 7 !== 0) continue;
+      pool ??= tenDayPool(league);
+      const i = pool.findIndex(
+        (p) => p.tid === FREE_AGENT && league.season - p.bornYear <= 24 && p.pot >= 66 && tenDaysWith(league, p, t.tid) < TEN_DAY_MAX && !releasedBy(league, p, t.tid),
+      );
+      if (i < 0) continue;
+      const [p] = pool.splice(i, 1);
+      signTenDay(league, p, t.tid);
     }
   }
 }

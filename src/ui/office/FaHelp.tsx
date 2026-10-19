@@ -7,7 +7,7 @@ import { FA_DAYS } from '../../core/league/season';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS } from '../../core/league/tenDay';
 import { HelpSheet } from './common';
-import { MATCH_DAYS, SHEET_MIN_YEARS } from '../../core/league/rfa';
+import { MATCH_DAYS, SHEET_MAX_YEARS, SHEET_MIN_YEARS } from '../../core/league/rfa';
 import { money } from '../../core/format';
 
 /** The rules of signing, behind the header's "?": `space` and `exceptions` are what's open to you now. */
@@ -24,10 +24,11 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
       </p>
       <p>
         <b>Exceptions.</b> Over the cap, each pays for one signing a season. The <b>mid-level</b>: up to {money(exceptionAmount(league, 'mle', s))} for up to {EXCEPTIONS.mle.years}{' '}
-        years, if the signing keeps you under the tax line ({money(cap.luxuryTax)}). The <b>bi-annual</b>: up to {money(exceptionAmount(league, 'bae', s))} for up to{' '}
-        {EXCEPTIONS.bae.years} years, under the tax line too, and not two seasons running. After either, trades can't take you past the tax line that season. Sign anyone with{' '}
-        <b>cap space</b> and the mid-level is gone for the season: the <b>room exception</b> replaces it, up to {money(exceptionAmount(league, 'room', s))} for up to{' '}
-        {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
+        years, if the signing keeps you under the first apron ({money(cap.firstApron)}); a team it would take past the apron gets the <b>taxpayer mid-level</b> instead, up to{' '}
+        {money(exceptionAmount(league, 'tmle', s))} for {EXCEPTIONS.tmle.years} years under the second apron ({money(cap.secondApron)}). The <b>bi-annual</b>: up to{' '}
+        {money(exceptionAmount(league, 'bae', s))} for up to {EXCEPTIONS.bae.years} years, under the first apron too, and not two seasons running. Each hard-caps you at its apron
+        for the season. Sign anyone with <b>cap space</b> and the mid-level is gone for the season: the <b>room exception</b> replaces it, up to{' '}
+        {money(exceptionAmount(league, 'room', s))} for up to {EXCEPTIONS.room.years} years (a team uses the room exception or the bi-annual in a season, not both).{' '}
         {exceptions.length ? `Open to you now: ${exceptions.map((x) => `${EXCEPTIONS[x.k].name} up to ${money(x.room)}`).join(', ')}.` : 'None is open to you now.'}
       </p>
       <p>
@@ -38,18 +39,23 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
       </p>
       <p>
         <b>Top free agents.</b> In the summer, players worth 78+ or asking 8% of the cap or more weigh offers: submit one (at least 90% of his ask) and a day or two later he picks
-        between yours and other teams' by the money against his ask of each, how much he likes each team, and the years. Pending offers hold their cap space, mid-level and roster
-        spot until he decides; raise or withdraw them any time.
+        between yours and other teams' by the money against his ask of each, how much he likes each team, and the years. Without an offer from you he decides on one of his first
+        three days, between the AI teams' bids (contenders bid up to 10% over his ask); nobody spends cap space on anyone else before then. A star worth about the max asks it of
+        everyone, so where he goes is about the team. Pending offers hold their cap space, mid-level and roster spot until he decides; raise or withdraw them any time.
       </p>
       <p>
-        <b>Restricted free agents.</b> A young player whose team qualified him signs only offer sheets: {SHEET_MIN_YEARS} to 5 years, no options, at his ask, paid with cap space,
-        the mid-level or the minimum. His team has {MATCH_DAYS} days to match on exactly those terms; until then the sheet holds your room (or mid-level) and a roster spot. Your
-        own restricted free agents re-sign with Bird rights until they sign a sheet, their holds stay on your books meanwhile, and the market stops when another team signs one so
-        you can match or let him go. Unsigned at the close, a restricted free agent plays a season on his qualifying offer.
+        <b>Lengths and raises.</b> Free agents sign for four years at most, with 5% raises: five years (and 8% raises) are only for re-signing your own player on full Bird rights.
+        You can't sign a player you released this season.
       </p>
       <p>
-        <b>Timing.</b> The summer market lasts {FA_DAYS} days and you get the first look: AI teams start signing on day 2, and stars go fast. Unsigned players cut their price every
-        few days, and stay available in season.
+        <b>Restricted free agents.</b> A young player whose team qualified him signs only offer sheets: {SHEET_MIN_YEARS} to {SHEET_MAX_YEARS} years, no options, at his ask, paid
+        with cap space, the mid-level or the minimum. His team has {MATCH_DAYS} days to match on exactly those terms; until then the sheet holds your room (or mid-level) and a
+        roster spot. Your own restricted free agents re-sign with Bird rights until they sign a sheet, their holds stay on your books meanwhile, and the market stops when another
+        team signs one so you can match or let him go. Unsigned at the close, a restricted free agent plays a season on his qualifying offer.
+      </p>
+      <p>
+        <b>Timing.</b> The summer market lasts {FA_DAYS} days and opens for every team at once: AI teams sign their first wave on day 1 too. Unsigned players cut their price every
+        few days (a star holds his for two weeks first), and stay available in season.
       </p>
       <p>
         <b>Waivers.</b> A player released in season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, worst record first, and take over his

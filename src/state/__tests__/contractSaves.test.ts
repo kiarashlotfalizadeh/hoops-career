@@ -20,6 +20,11 @@ const talks = (l: League): Talks => ({
 describe('contract saves', () => {
   it('loads a save from before talks, stretched dead money, the new exceptions and 10-day contracts', () => {
     const l = testLeague('before');
+    // (opening night's signings can use an exception: a save from before had none)
+    for (const t of l.teams) {
+      delete t.roomSeason;
+      delete t.baeSeason;
+    }
     const back = migrate(JSON.parse(JSON.stringify(l)) as League);
     expect(Object.values(back.players).some((p) => p.talks || p.tenDays || p.contract.tenDay)).toBe(false);
     expect(back.teams.some((t) => t.roomSeason !== undefined || t.baeSeason !== undefined || t.deadMoney.some((d) => d.stretched))).toBe(false);
@@ -66,5 +71,32 @@ describe('contract saves', () => {
     const later = structuredClone(once);
     later.phase = 'playoffs';
     expect(migrate(later).players[mine[0].pid].contract.tenDay).toBeUndefined();
+  });
+
+  it('keeps sound traded player exceptions, Bird clocks, releases and taxpayer mid-level seasons, and drops damaged ones', () => {
+    const l = testLeague('cba');
+    const [a, b, c, d] = Object.values(l.players).filter((p) => p.tid === l.userTid);
+    a.birdSince = l.season - 2;
+    b.birdSince = 'long ago' as never;
+    c.released = { tid: 3, season: l.season };
+    d.released = { tid: 99, season: l.season };
+    const t = l.teams[l.userTid];
+    t.tpes = [
+      { amount: 8_000, season: l.season, day: 30 },
+      { amount: -5, season: l.season, day: 30 },
+      { amount: 2_000, season: 'x' as never, day: 1 },
+    ];
+    t.taxMleSeason = l.season;
+    l.teams[2].tpes = [{ amount: 0, season: l.season, day: 1 }];
+    l.teams[3].taxMleSeason = 'x' as never;
+    const once = migrate(JSON.parse(JSON.stringify(l)) as League);
+    const by = (pid: number) => once.players[pid];
+    expect([by(a.pid).birdSince, by(b.pid).birdSince]).toEqual([l.season - 2, undefined]);
+    expect([by(c.pid).released, by(d.pid).released]).toEqual([{ tid: 3, season: l.season }, undefined]);
+    expect(once.teams[l.userTid].tpes).toEqual([{ amount: 8_000, season: l.season, day: 30 }]);
+    expect(once.teams[l.userTid].taxMleSeason).toBe(l.season);
+    expect(once.teams[2].tpes).toBeUndefined();
+    expect(once.teams[3].taxMleSeason).toBeUndefined();
+    expect(migrate(structuredClone(once))).toEqual(once);
   });
 });

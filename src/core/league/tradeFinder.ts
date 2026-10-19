@@ -1,12 +1,11 @@
 // The trade finder: value tiers, who is available (a franchise player, on the block), the league's
 // targets with their filters, and how much salary a team can take back.
 import type { League, Player, Pos } from '../types';
-import { CAP } from '../constants';
 import { playerAge } from '../playerGen';
 import { CAP_FOR, contractSeason, standardRoster } from './helpers';
-import { taxCapped, tradeValue } from './contracts';
+import { hardCapLine, tradeValue } from './contracts';
 import { capPayroll } from './freeAgency';
-import { capSalary, untradeable } from './trades';
+import { capSalary, tradeMatchLimit, untradeable } from './trades';
 
 // ---------------------------------------------------------------- trade finder
 
@@ -130,8 +129,9 @@ export function filterTargets(rows: TradeTarget[], f: TargetFilter): TradeTarget
 /**
  * The most salary a team can take back in one deal right now, sending at most two of its
  * tradeable contracts (as "what would make this work?" does to match salaries): what fits under
- * the cap after they leave, or 125% of them plus $0.1M, and no more than keeps a team that used the
- * mid-level or the bi-annual at the tax line (or as much as they make, past it).
+ * the cap after they leave, or what matching allows for them (see tradeMatchLimit; 100% over the
+ * first apron), and no more than keeps a hard-capped team under its apron (or as much as they make,
+ * past it).
  */
 export function maxTakeBack(league: League, tid: number): number {
   const s = contractSeason(league);
@@ -142,6 +142,8 @@ export function maxTakeBack(league: League, tid: number): number {
     .map((p) => capSalary(league, p.pid))
     .sort((a, b) => b - a);
   const out = (sals[0] ?? 0) + (sals[1] ?? 0);
-  const most = Math.max(cap.salaryCap - pay + out, out * CAP.tradeMatchPct + CAP.tradeMatchBuffer);
-  return taxCapped(league.teams[tid], s) ? Math.min(most, Math.max(out, cap.luxuryTax - pay + out)) : most;
+  const match = tradeMatchLimit(league, out, s);
+  const most = Math.max(cap.salaryCap - pay + out, pay - out + match > cap.firstApron ? Math.max(out, cap.firstApron - pay + out) : match);
+  const line = hardCapLine(league, tid, s);
+  return line ? Math.min(most, Math.max(out, line.amount - pay + out)) : most;
 }

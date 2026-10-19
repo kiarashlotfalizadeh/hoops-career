@@ -1,7 +1,7 @@
 import type { League, Team } from '../types';
 import { clamp } from '../random';
 import { salaryFor } from '../playerGen';
-import { CAP } from '../constants';
+import { REPEATER_EXTRA, TAX_BRACKET_PCT, TAX_RATES, TAX_RATE_STEP } from '../constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, teamPlayers, winPct } from './helpers';
 
 export const ARENA_CAPACITY = 18_800;
@@ -119,13 +119,53 @@ export function shareRevenue(league: League): Map<number, number> {
   return out;
 }
 
+/**
+ * A repeat taxpayer: one that paid the tax in three of the four seasons before `season` (each
+ * season's payroll on its books against that season's line).
+ */
+export function taxRepeater(league: League, tid: number, season = league.season): boolean {
+  const t = league.teams[tid];
+  let n = 0;
+  for (let s = season - 4; s < season; s++) {
+    const ts = t.seasons.find((x) => x.season === s);
+    if (ts && ts.payroll > CAP_FOR(league, s).luxuryTax) n++;
+  }
+  return n >= 3;
+}
+
+/** The tax rate on bracket `i` over the line (0 the first): 1.5, 1.75, 2.5, 3.25, then 0.5 more each; a repeater pays 1 more on each. */
+export function taxRateAt(i: number, repeater = false): number {
+  const last = TAX_RATES.length - 1;
+  return (i <= last ? TAX_RATES[i] : TAX_RATES[last] + TAX_RATE_STEP * (i - last)) + (repeater ? REPEATER_EXTRA : 0);
+}
+
+/**
+ * The luxury tax on a payroll, as the NBA's progressive brackets have it: every TAX_BRACKET_PCT of
+ * the cap over the line is taxed at the next rate (see taxRateAt), a repeater's at 1 more.
+ */
+export function luxuryTaxBill(league: League, pay: number, season = league.season, repeater = false): number {
+  const cap = CAP_FOR(league, season);
+  let over = pay - cap.luxuryTax;
+  const step = cap.salaryCap * TAX_BRACKET_PCT;
+  let tax = 0;
+  for (let i = 0; over > 0; i++) {
+    const part = Math.min(over, step);
+    tax += part * taxRateAt(i, repeater);
+    over -= part;
+  }
+  return Math.round(tax);
+}
+
+/** Team `tid`'s tax bill on a payroll in `season`, at the repeater rate if it is one. */
+export const teamTaxBill = (league: League, tid: number, pay: number, season = league.season) => luxuryTaxBill(league, pay, season, taxRepeater(league, tid, season));
+
 /** Share of the luxury-tax pot paid out to teams under the tax line; the league keeps the rest. */
 export const TAX_SHARE_TO_NON_TAXPAYERS = 0.5;
 
 /**
  * End of regular season: teams under the salary floor pay the shortfall (to their players, as in
- * the NBA), teams over the tax line pay CAP.taxRate on every dollar above it, and half of the tax
- * is shared among the teams that didn't pay any.
+ * the NBA), teams over the tax line pay its progressive brackets (see luxuryTaxBill; a repeater
+ * more), and half of the tax is shared among the teams that didn't pay any.
  */
 export function assessLuxuryTax(league: League): { tid: number; tax: number; shortfall: number }[] {
   const cap = CAP_FOR(league);
@@ -135,7 +175,7 @@ export function assessLuxuryTax(league: League): { tid: number; tax: number; sho
     const pay = payroll(league, t.tid);
     const ts = curTeamSeason(league, t.tid);
     ts.payroll = pay;
-    const tax = pay > cap.luxuryTax ? Math.round((pay - cap.luxuryTax) * CAP.taxRate) : 0;
+    const tax = teamTaxBill(league, t.tid, pay);
     const shortfall = Math.max(0, cap.minPayroll - pay);
     if (!tax && !shortfall) continue;
     bills.push({ tid: t.tid, tax, shortfall });

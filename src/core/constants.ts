@@ -24,6 +24,13 @@ export const MIN_SAVE_VERSION = 4;
 export const CAP = {
   salaryCap: 165_000,
   luxuryTax: 201_000,
+  /**
+   * The aprons above the tax line (the 2023 CBA's), at the 2025-26 ratios to the cap: the first
+   * 1.267× the cap, the second 1.344×. Teams over them lose tools (see contracts.ts and trades.ts).
+   */
+  firstApron: 209_100,
+  secondApron: 221_800,
+  /** The tax on the first bracket over the line; each bracket is TAX_BRACKET_PCT of the cap (see luxuryTaxBill). */
   taxRate: 1.5,
   minPayroll: 148_500, // 90% of cap
   minContract: 1_300,
@@ -34,10 +41,27 @@ export const CAP = {
   growth: 0.06,
   rosterMax: 15,
   rosterMin: 13,
-  /** Trade matching when over the cap after the trade. */
-  tradeMatchPct: 1.25,
-  tradeMatchBuffer: 100,
+  /** Trade matching's buffer as a share of the cap ($0.25M at the 2025-26 cap): see tradeMatchLimit. */
+  tradeMatchBufferPct: 0.0016,
 };
+
+/**
+ * Luxury tax brackets: each this share of the cap over the line, taxed at the next rate (see
+ * luxuryTaxBill). The CBA's brackets grow with the cap: $5M on 2023-24's, $5.168M on 2024-25's.
+ */
+export const TAX_BRACKET_PCT = 0.0368;
+/** Tax rates by bracket over the line; past the last, each further bracket adds TAX_RATE_STEP. A repeater pays REPEATER_EXTRA more on every bracket. */
+export const TAX_RATES = [1.5, 1.75, 2.5, 3.25];
+export const TAX_RATE_STEP = 0.5;
+export const REPEATER_EXTRA = 1;
+
+/**
+ * Trade salary matching for a team over the cap after the trade (the 2023 CBA's tiers, as shares of
+ * the cap): up to 4.85% of the cap sent, it may take back 200% of it plus the buffer; up to 18.75%,
+ * what it sends plus 4.85% of the cap; above that, 125% plus the buffer.
+ */
+export const MATCH_SMALL_PCT = 0.0485;
+export const MATCH_MID_PCT = 0.1875;
 
 /** First-round rookie scale (year-1 salary in $K) by pick, for the 2026-27 cap. */
 export const ROOKIE_SCALE: number[] = [

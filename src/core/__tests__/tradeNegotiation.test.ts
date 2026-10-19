@@ -8,7 +8,7 @@ import { CAP_FOR, contractSeason, freeAgents, standardRoster } from '../league/h
 import { marketSalary, tradeValue } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import { ensureFuturePicks } from '../league/draft';
-import { capSalary, evaluateTrade, neutralSplit, tradeRoster, untradeable, validateTrade, type TradeOffer } from '../league/trades';
+import { capSalary, evaluateTrade, neutralSplit, tradeMatchLimit, tradeRoster, untradeable, validateTrade, type TradeOffer } from '../league/trades';
 import { availability, filterTargets, maxTakeBack, tradeTargets, valueTier, type ValueTier } from '../league/tradeFinder';
 import { counterOffers } from '../league/tradeHelp';
 import { CAP } from '../constants';
@@ -352,27 +352,31 @@ describe('trade finder', () => {
     expect(maxTakeBack(l, U)).toBeLessThan(Math.max(room + out, out * 1.25 + 100));
   });
 
-  it('keeps a team that used the mid-level at the tax line', () => {
+  it('keeps a team at the first apron: matching by the tiers under it, no more than it sends past it', () => {
     const l = league();
     l.phase = 'regular';
     const top = standardRoster(l, U)
       .filter((p) => !untradeable(l, p))
       .sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid));
-    // $1M under the tax, the top contract taking up the rest
-    const tax = CAP_FOR(l).luxuryTax;
-    const raise = tax - 1000 - capPayroll(l, U, l.season);
-    top[0].contract = { start: l.season, salaries: [capSalary(l, top[0].pid) + raise, capSalary(l, top[0].pid) + raise] };
-    const out = capSalary(l, top[0].pid) + capSalary(l, top[1].pid);
-    expect(maxTakeBack(l, U)).toBeCloseTo(out * 1.25 + 100, 6);
-    l.teams[U].mleSeason = l.season;
-    expect(maxTakeBack(l, U)).toBeCloseTo(out + 1000, 6);
+    const cap = CAP_FOR(l);
+    const set = (pay: number) => {
+      const raise = pay - capPayroll(l, U, l.season);
+      top[0].contract = { start: l.season, salaries: [capSalary(l, top[0].pid) + raise, capSalary(l, top[0].pid) + raise] };
+    };
+    // well under the first apron: what the tiers allow for its two biggest contracts
+    set(cap.salaryCap + 1_000);
+    const out = () => capSalary(l, top[0].pid) + capSalary(l, top[1].pid);
+    expect(maxTakeBack(l, U)).toBeCloseTo(tradeMatchLimit(l, out()), 6);
+    // $1M under the first apron: no more than takes it there
+    set(cap.firstApron - 1_000);
+    expect(maxTakeBack(l, U)).toBeCloseTo(out() + 1_000, 6);
     // the most it allows passes the rules, a dollar more doesn't
     const them = standardRoster(l, AI).sort((a, b) => capSalary(l, b.pid) - capSalary(l, a.pid))[0];
-    them.contract = { start: l.season, salaries: [out + 1000, out + 1000] };
+    them.contract = { start: l.season, salaries: [out() + 1_000, out() + 1_000] };
     const deal = offer([top[0].pid, top[1].pid], [them.pid]);
-    const taxError = (o: TradeOffer) => validateTrade(l, o).some((e) => e.includes('tax line'));
-    expect(taxError(deal)).toBe(false);
-    them.contract.salaries = [out + 1001, out + 1001];
-    expect(taxError(deal)).toBe(true);
+    const matchError = (o: TradeOffer) => validateTrade(l, o).some((e) => e.includes("Salary doesn't match"));
+    expect(matchError(deal)).toBe(false);
+    them.contract.salaries = [out() + 1_001, out() + 1_001];
+    expect(matchError(deal)).toBe(true);
   });
 });

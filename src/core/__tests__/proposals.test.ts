@@ -25,7 +25,7 @@ import { deadlineDay, seasonTrades } from '../league/deadline';
 import { agenda } from '../league/agenda';
 import { MAX_FIRSTS_OUT, evaluateTrade, executeTrade, validateTrade } from '../league/trades';
 import { MAX_PICKS_OUT, neutralBalance, packageFor } from '../league/tradePackages';
-import { aiToAiTrade, aiTradeChance, onTheBlock } from '../league/aiTrades';
+import { aiToAiTrade, aiTradeRate, onTheBlock } from '../league/aiTrades';
 import { makeItWork } from '../league/tradeHelp';
 import { nextPick, runLottery } from '../league/draft';
 import { Rng } from '../random';
@@ -285,24 +285,27 @@ describe("the trading block's packages", () => {
 });
 
 describe('the trade deadline', () => {
-  it('ramps AI-to-AI trade attempts toward the deadline, about as many a season as before', () => {
+  it('ramps AI-to-AI deals toward the deadline: some 25-35 a season, nearly half of them in the last week', () => {
     const l = league(5);
     l.phase = 'regular';
     const D = l.tradeDeadlineDay;
-    let expected = 0;
     const at = (d: number) => {
       l.day = d;
-      return aiTradeChance(l);
+      return aiTradeRate(l);
     };
+    let total = 0;
+    let lastWeek = 0;
     for (let d = 0; d <= D; d++) {
-      const c = at(d);
-      expected += c.p * c.attempts;
+      total += at(d);
+      if (D - d < 7) lastWeek += at(d);
     }
-    // the flat 12% a day it replaces
-    expect(expected / (0.12 * (D + 1))).toBeGreaterThan(0.85);
-    expect(expected / (0.12 * (D + 1))).toBeLessThan(1.1);
-    expect(at(D - 3).p).toBeGreaterThanOrEqual(3 * at(D - 40).p);
-    expect(at(D).attempts).toBe(3);
+    expect(total).toBeGreaterThan(25);
+    expect(total).toBeLessThan(40);
+    expect(lastWeek / total).toBeGreaterThan(0.35);
+    expect(lastWeek / total).toBeLessThan(0.6);
+    expect(at(D)).toBeGreaterThan(at(D - 3));
+    expect(at(D - 3)).toBeGreaterThan(at(D - 40));
+    expect(at(D + 1)).toBe(0);
     // and the trades themselves cluster: more a day in the last three weeks than before
     const early: number[] = [];
     const late: number[] = [];

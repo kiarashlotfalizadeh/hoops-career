@@ -195,7 +195,18 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     real: true,
     archetype: archetype(sp.ratings).label,
   };
+  if (tid >= 0) p.birdSince = birdStart(p, season);
   return p;
+}
+
+/**
+ * The first season of a seeded player's unbroken run with his team, as his real seasons have it
+ * (the season the league starts in when he only just joined): his Bird rights there (see birdTier).
+ */
+function birdStart(p: Player, season: number): number {
+  let s = season;
+  while (p.stats.some((x) => x.real && x.season === s - 1 && x.tid === p.tid)) s--;
+  return s;
 }
 
 /** Rookies and new signings without a listed number pick a free one on their team. */
@@ -510,6 +521,12 @@ function fictionalContracts(league: League, rng: Rng) {
     const years = rng.int(1, Math.min(4, preferredYears(league, p)));
     p.contract = makeContract(league, clamp(Math.round((amount * f) / 10) * 10, ...limits(p)), years, season, p.experience);
     if (years > 1 && p.experience >= 4 && rng.chance(0.12)) p.contract.option = rng.chance(0.7) ? 'player' : 'team';
+  }
+  // Bird clocks: a rookie's from his draft, anyone else's up to four seasons back (a hash, so the
+  // league's random stream is left alone)
+  for (const p of Object.values(league.players)) {
+    if (p.tid < 0) continue;
+    p.birdSince = p.contract.rookie ? season - p.experience : season - (hashString(`${league.id}:${p.pid}:bird`) % (Math.min(4, p.experience) + 1));
   }
 }
 

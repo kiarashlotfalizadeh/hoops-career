@@ -1,20 +1,22 @@
 // The Office hub: the GM's desk. What the desk is doing now (the phase card and its action), the
-// decisions waiting on it, the cap sheet in one block (the payroll against the cap and the tax line,
-// the room or how far over, the roster, the exceptions open and why the others aren't, the seasons
-// ahead), and the desks, each with a line of live status. The contracts table lives on Team → Roster
+// decisions waiting on it, the cap sheet in one block (the payroll against the cap, the tax line and
+// the aprons, the room or how far over, the roster, the exceptions open and why the others aren't,
+// a hard cap, the traded player exceptions, the seasons ahead), and the desks, each with a line of
+// live status. The contracts table lives on Team → Roster
 // → Contracts; the owner on his own desk.
 import { createContext, useContext, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { type LucideIcon, ArrowLeftRight, ChevronRight, ClipboardList, Crown, ListOrdered, PenLine, PiggyBank, Ticket, UserPlus } from 'lucide-react';
 import type { League } from '../../core/types';
-import { CAP } from '../../core/constants';
+import { CAP, TAX_BRACKET_PCT, TAX_RATES } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers } from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason } from '../../core/league/contracts';
+import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason, hardCapLine } from '../../core/league/contracts';
 import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
 import { draftOrder, nextPick } from '../../core/league/draft';
 import { FA_DAYS, faDayNumber, faOver } from '../../core/league/season';
-import { TAX_SHARE_TO_NON_TAXPAYERS, profit } from '../../core/league/finances';
+import { TAX_SHARE_TO_NON_TAXPAYERS, profit, teamTaxBill } from '../../core/league/finances';
+import { openTpes } from '../../core/league/trades';
 import { openProposals } from '../../core/league/proposals';
 import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
@@ -25,7 +27,7 @@ import { Bar, PageHeader, Section, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, rosterFig, shortSeason, taxFig } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, payStatus, rosterFig, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
@@ -263,8 +265,11 @@ function CapSheet({ league }: { league: League }) {
   // between the season and free agency, own expiring players hold cap room until renounced
   const holds = capHolds(league, tid).reduce((a, h) => a + h.amount, 0);
   const space = cap.salaryCap - pay - holds;
-  const status = pay > cap.luxuryTax ? 'tax' : pay + holds > cap.salaryCap ? 'cap' : 'under';
+  // (cap holds count against the cap, not toward the tax or the aprons)
+  const status = pay + holds > cap.salaryCap && pay <= cap.salaryCap ? { label: 'Over the cap', tone: 'warn' as const } : payStatus(pay, cap);
   const dead = team.deadMoney.filter((d) => d.season === s0).reduce((a, d) => a + d.amount, 0);
+  const hard = hardCapLine(league, tid, s0);
+  const tpes = openTpes(league, tid);
   return (
     <Section
       title={`${shortSeason(s0)} cap sheet`}
@@ -284,20 +289,35 @@ function CapSheet({ league }: { league: League }) {
             <div className="fo-pay-v num">{money(pay)}</div>
           </div>
           {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
-          <span className={`tag ${status === 'tax' ? 'bad' : status === 'cap' ? 'warn' : 'good'}`}>
-            {status === 'tax' ? 'Taxpayer' : status === 'cap' ? 'Over the cap' : 'Under the cap'}
-          </span>
+          <span className={`tag ${status.tone}`}>{status.label}</span>
         </div>
-        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} addLabel={<Term id="hold">Cap holds</Term>} legend="lines" />
+        <CapBar
+          pay={pay}
+          cap={cap.salaryCap}
+          tax={cap.luxuryTax}
+          aprons={{ first: cap.firstApron, second: cap.secondApron }}
+          add={holds}
+          addLabel={<Term id="hold">Cap holds</Term>}
+          legend="lines"
+        />
         <Statline
           items={[
             { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
-            taxFig(pay, cap.luxuryTax),
+            taxFig(pay, cap.luxuryTax, teamTaxBill(league, tid, pay, s0)),
             // on the season the money is about: signed for it, the expiring deals beside them
             rosterFig(league),
           ]}
         />
         <Exceptions league={league} season={s0} />
+        {(hard || tpes.length > 0) && (
+          <div className="tiny dim">
+            {hard ? `Hard-capped at the ${hard.name} (${money(hard.amount)}) for ${shortSeason(s0)}: you used the ${hard.what}.` : ''}
+            {hard && tpes.length ? ' ' : ''}
+            {tpes.length
+              ? `${tpes.length > 1 ? 'Traded player exceptions' : 'Traded player exception'}: ${tpes.map((x) => `${money(x.amount)} until ${fmtDate(x.season + 1, x.day)}`).join(', ')}.`
+              : ''}
+          </div>
+        )}
         <SeasonsAhead league={league} from={s0 + 1} />
       </div>
     </Section>
@@ -353,14 +373,21 @@ function Exceptions({ league, season }: { league: League; season: number }) {
           ? `held for your offer to ${playerName(league.players[bid.pid])}`
           : 'gone while your offer holds your cap space'
         : room <= 0
-          ? 'over the tax line'
+          ? k === 'tmle'
+            ? 'over the second apron'
+            : 'over the first apron'
           : null);
     return { k, room, why };
   });
-  const open = rows.filter((r) => !r.why).sort((a, b) => b.room - a.room);
+  // the taxpayer mid-level only matters once the full one can't pay it (past the first apron)
+  const mle = rows.find((r) => r.k === 'mle')!;
+  const tmle = rows.find((r) => r.k === 'tmle')!;
+  if (!mle.why && mle.room >= tmle.room) tmle.why = null;
+  const shown = rows.filter((r) => r.k !== 'tmle' || mle.why || mle.room < tmle.room);
+  const open = shown.filter((r) => !r.why).sort((a, b) => b.room - a.room);
   // the room exception's usual state (no cap-space signing yet) says nothing: it's left out
-  const closed = rows.filter((r) => r.why && !(r.k === 'room' && r.why === ROOM_IDLE));
-  // the same reason once, for the exceptions it closes, biggest first: "Mid-level, bi-annual: over the tax line"
+  const closed = shown.filter((r) => r.why && !(r.k === 'room' && r.why === ROOM_IDLE) && !(r.k === 'tmle' && !mle.why));
+  // the same reason once, for the exceptions it closes, biggest first: "Mid-level, bi-annual: over the first apron"
   const byWhy = new Map<string, string[]>();
   for (const r of [...closed].reverse()) byWhy.set(r.why!, [...(byWhy.get(r.why!) ?? []), EXCEPTIONS[r.k].short]);
   const whys = [...byWhy].map(([why, names]) => `${names.map((n, i) => (i ? n.toLowerCase() : n)).join(', ')}: ${why}`);
@@ -399,16 +426,18 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         deals count against: next season's from the draft lottery on.
       </p>
       <p>
-        <b>Mid-level.</b> Once a season, for a team that stays under the tax line: one free agent up to {money(exceptionAmount(league, 'mle', season))} ({pct('mle')}% of the cap,{' '}
-        {EXCEPTIONS.mle.years} years), even over the cap. For the rest of that season, trades can't take its payroll past the tax line.
+        <b>Mid-level.</b> Once a season, for a team that stays under the first apron ({money(cap.firstApron)}): one free agent up to {money(exceptionAmount(league, 'mle', season))}{' '}
+        ({pct('mle')}% of the cap, {EXCEPTIONS.mle.years} years), even over the cap. It hard-caps the team at the first apron for the season. A team it would take past the first
+        apron gets the <b>taxpayer mid-level</b> instead: up to {money(exceptionAmount(league, 'tmle', season))} ({pct('tmle')}%), {EXCEPTIONS.tmle.years} years, under the second
+        apron ({money(cap.secondApron)}), hard-capped there.
       </p>
       <p>
         <b>Room exception.</b> Sign a free agent with cap space and the mid-level is gone for the season; this replaces it: one signing up to{' '}
         {money(exceptionAmount(league, 'room', season))} ({pct('room')}%), {EXCEPTIONS.room.years} years.
       </p>
       <p>
-        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} ({pct('bae')}%), {EXCEPTIONS.bae.years} years, for a team under the tax line after it:
-        not two seasons running, nor with the room exception. Like the mid-level, it keeps trades from taking the payroll past the tax line that season.
+        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} ({pct('bae')}%), {EXCEPTIONS.bae.years} years, for a team under the first apron after
+        it: not two seasons running, nor with the room exception. Like the mid-level, it hard-caps the team at the first apron that season.
       </p>
       <p>
         <b>Stretch.</b> A release can spread its dead money evenly over twice the seasons left plus one (in season, this season's salary is paid as usual). Less a season, for
@@ -419,19 +448,36 @@ function CapHelp({ league, season }: { league: League; season: number }) {
         {HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows them beyond {CAP.rosterMax}.
       </p>
       <p>
-        <b>Bird rights.</b> Re-sign your own players for any amount in the re-sign period, even over the cap. Until free agency opens (or you renounce them), each holds cap room at
-        about his ask: the striped part of the bar.
+        <b>Bird rights.</b> Re-sign your own players in the re-sign period, even over the cap: after three seasons with you (a trade keeps his clock) up to his max, for up to five
+        years with 8% raises; after two (Early Bird) up to 175% of his salary or 105% of the league average; after one, 120% of his salary. Anyone else signs for four years at
+        most, with 5% raises. Until free agency opens (or you renounce them), each holds cap room at about his ask: the striped part of the bar.
+      </p>
+      <p>
+        <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. With All-NBA, MVP or Defensive Player of the Year honors, his own team
+        can pay a player off his rookie deal 30%, and one with seven to nine seasons 35% (the supermax). A player worth about the max asks it of every team: where he signs is up to
+        how much he likes each.
       </p>
       <p>
         <b>Restricted free agents.</b> A young player you qualify can still be re-signed in free agency, and you can match any offer sheet he signs. His cap hold (the larger of the
         offer and his ask) stays until he signs or you withdraw the offer; an offer sheet you sign holds its room until his team decides.
       </p>
       <p>
-        <b>Luxury tax ({money(cap.luxuryTax)}).</b> Every dollar over the line costs {CAP.taxRate}× at the end of the regular season; {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}
-        % of the pot goes to the teams under it. Cap holds don't count toward it.
+        <b>Luxury tax ({money(cap.luxuryTax)}).</b> Paid at the end of the regular season by brackets of {money(cap.salaryCap * TAX_BRACKET_PCT)} over the line:{' '}
+        {TAX_RATES.join('×, ')}× and 0.5 more for each after. A repeater (a taxpayer in three of the last four seasons) pays 1 more on every bracket.{' '}
+        {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to the teams under it. Cap holds don't count toward it.
       </p>
       <p>
-        <b>Trades.</b> A team over the cap after a trade takes back at most 125% of the salary it sends, plus $0.1M.
+        <b>
+          Aprons ({money(cap.firstApron)}, {money(cap.secondApron)}).
+        </b>{' '}
+        Over the first apron after a deal, a team takes back no more salary than it sends, and has no bi-annual and only the taxpayer mid-level. Over the second it can't combine
+        salaries to take back a bigger one, send cash, use a traded player exception or trade its first in the furthest draft on the books, and has no mid-level at all.
+      </p>
+      <p>
+        <b>Trades.</b> A team over the cap after a trade takes back up to 200% of a small salary it sends (up to {money(cap.salaryCap * 0.0485)}) plus{' '}
+        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}, what it sends plus {money(cap.salaryCap * 0.0485)} up to {money(cap.salaryCap * 0.1875)}, and 125% plus{' '}
+        {money(cap.salaryCap * CAP.tradeMatchBufferPct)} above that. Sending out more than it takes back leaves it a <Term id="tpe">traded player exception</Term> for the
+        difference, for a year.
       </p>
       <p>
         <b>Rosters.</b> {CAP.rosterMin}-{CAP.rosterMax} players in season, up to {OFFSEASON_ROSTER_MAX} in the offseason. Minimum deals for the coming season aren't guaranteed

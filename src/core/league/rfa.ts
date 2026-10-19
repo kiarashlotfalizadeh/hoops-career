@@ -45,6 +45,8 @@ import { money } from '../format';
 export const MATCH_DAYS = 2;
 /** Offer sheets run at least two seasons (and at most five, like any contract). */
 export const SHEET_MIN_YEARS = 2;
+/** The longest offer sheet: four seasons (five is only for re-signing on full Bird rights). */
+export const SHEET_MAX_YEARS = 4;
 /** Seasons in the league (the one just played included) up to which a player not on a rookie-scale deal can be made restricted. */
 export const RFA_MAX_SERVICE = 3;
 
@@ -151,12 +153,13 @@ export function aiQualify(league: League, t: Team) {
 
 /**
  * The payroll an AI team will go to for keeping its restricted free agent worth `v` (matching an
- * offer sheet, or coming to terms): the budget re-signing uses (see payrollBudget), stretched to 5%
- * past the tax line, since the alternative is losing a young player for nothing.
+ * offer sheet, or coming to terms): the budget re-signing uses (see payrollBudget; a young player
+ * worth 80+ is core), stretched to 5% past the tax line, since the alternative is losing a young
+ * player for nothing.
  */
 const keepBudget = (league: League, t: Team, v: number) => {
   const cap = CAP_FOR(league, contractSeason(league));
-  return Math.max(payrollBudget(cap, t, v), cap.luxuryTax * 1.05);
+  return Math.max(payrollBudget(cap, t, v, { core: v >= 80, young: true }), cap.luxuryTax * 1.05);
 };
 
 /** The free-agency day from which an AI team and its restricted free agent come to terms if no offer sheet has come (see aiRfaTerms). */
@@ -238,7 +241,7 @@ export function sheetBlockedReason(league: League, p: Player, years: number): st
   if (league.phase !== 'freeAgency') return 'Offer sheets are signed during free agency.';
   if (r.sheet)
     return `${playerName(p)} has signed an offer sheet with the ${league.teams[r.sheet.tid].name}: the ${league.teams[r.tid].name} decide by the end of ${deadlineLabel(r.sheet.until)}.`;
-  if (years < SHEET_MIN_YEARS || years > 5) return `Offer sheets run ${SHEET_MIN_YEARS} to 5 years.`;
+  if (years < SHEET_MIN_YEARS || years > SHEET_MAX_YEARS) return `Offer sheets run ${SHEET_MIN_YEARS} to ${SHEET_MAX_YEARS} years.`;
   return null;
 }
 
@@ -318,10 +321,12 @@ function settleSheet(league: League, p: Player, matched: boolean) {
   const offerer = league.teams[sh.tid];
   if (matched) {
     if (sh.route === 'mle' && offerer.mleSeason === next) delete offerer.mleSeason;
+    if (sh.route === 'tmle' && offerer.taxMleSeason === next) delete offerer.taxMleSeason;
     if (sh.route === 'room' && offerer.roomSeason === next) delete offerer.roomSeason;
     if (sh.route === 'bae' && offerer.baeSeason === next) delete offerer.baeSeason;
   } else if (sh.route === 'space') spendRoute(league, sh.tid, 'space', next);
-  signPlayer(league, p, matched ? r.tid : sh.tid, sh.amount, sh.years, { start: next, news: false, log: false });
+  // (on exactly the sheet's terms, its 5% raises included)
+  signPlayer(league, p, matched ? r.tid : sh.tid, sh.amount, sh.years, { start: next, news: false, log: false, raise: 0.05 });
   logMove(league, 'match', [r.tid, sh.tid], p, { amount: p.contract.salaries[0], years: sh.years, note: matched ? 'matched' : 'declined' });
   if (!notable(league, p, sh.amount, [r.tid, sh.tid])) return;
   const own = league.teams[r.tid];

@@ -14,6 +14,7 @@ import {
   payroll,
   playerName,
   rosterMaxNow,
+  seasonTid,
   standardRoster,
   teamPlayers,
   twoWayRoster,
@@ -28,8 +29,13 @@ import {
   type Exception,
   type PlayerPrefs,
   type SigningRoute,
+  aiOption,
   aiRoute,
   askingContract,
+  birdTier,
+  nonGuaranteed,
+  playerMax,
+  releasedBy,
   bestExceptionRoom,
   capSpace,
   exceptionRoom,
@@ -43,9 +49,13 @@ import {
   marketSalary,
   payrollBudget,
   playerPrefs,
+  teamCore,
   preferredYears,
   releaseDeadMoney,
   releasePlayer,
+  resignLimit,
+  rookieScaleDeal,
+  maxYearsWith,
   routeYears,
   signPlayer,
   signingRoute,
@@ -80,6 +90,21 @@ import { money, moneyExact } from '../format';
 
 export { FA_DAYS };
 
+/** Why the user can't sign a player he released this season (see releasedBy). */
+export const RELEASED_REASON = (p: Player) => `You released ${playerName(p)} this season: you can't sign him again until next season.`;
+
+/** Free agents sign for four years at most: five is for re-signing one's own player with full Bird rights. */
+export const FA_YEARS = 4;
+const FA_YEARS_REASON = `Free agents sign for 1 to ${FA_YEARS} years: five is only for re-signing your own player with full Bird rights.`;
+
+/** Why the user can't re-sign him for more than `limit`: his Bird rights with the team (see resignLimit). */
+export function resignLimitReason(league: League, p: Player, limit: number): string {
+  const tier = birdTier(league, p);
+  return tier === 'early'
+    ? `With Early Bird rights (two seasons with you) you can re-sign ${playerName(p)} for up to ${money(limit)}: 175% of his salary or 105% of the league's average, whichever is more.`
+    : `Without Bird rights (a season with you) you can re-sign ${playerName(p)} for up to ${money(limit)}: 120% of his salary. Beyond that he's a free agent like any other.`;
+}
+
 export function expiringPlayers(league: League, tid: number): Player[] {
   return teamPlayers(league, tid).filter((p) => contractExp(p.contract) <= league.season);
 }
@@ -96,15 +121,19 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
   let committed = standardRoster(league, t.tid).filter((x) => contractExp(x.contract) > league.season).length;
   const byValue = teamPlayers(league, t.tid).sort((a, b) => valueScore(league, b) - valueScore(league, a));
   const core = new Set(byValue.slice(0, 8).map((p) => p.pid));
+  const top = teamCore(league, t.tid);
   const plan: { p: Player; ask: Ask }[] = [];
   for (const p of byValue) {
     if (contractExp(p.contract) > league.season) continue;
     const v = valueScore(league, p);
     const ask = askingContract(league, p, t.tid);
-    const budget = payrollBudget(cap, t, v);
+    // without full Bird rights his team can only pay him so much (see resignLimit): above it he walks
+    if (ask.amount > resignLimit(league, p, t.tid)) continue;
+    const budget = payrollBudget(cap, t, v, { core: top.has(p.pid), young: playerAge(p, next) <= 28 });
     const worth = v >= 70 || (v >= 66 && committed < 11);
     const needed = core.has(p.pid) || committed < 13;
-    const wants = playerAge(p, next) <= 35;
+    // (past 35 only a veteran still playing at 78+, for the year he asks)
+    const wants = playerAge(p, next) <= 35 || p.ovr >= 78;
     if (worth && needed && wants && pay + ask.amount < budget && agrees(p)) {
       plan.push({ p, ask });
       pay += ask.amount;
@@ -123,13 +152,14 @@ export function aiResign(league: League, rng: Rng) {
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     const plan = resignPlan(league, t, (p) => rng.chance(valueScore(league, p) >= 82 ? 0.95 : 0.85));
-    for (const { p, ask } of plan) signPlayer(league, p, t.tid, ask.amount, ask.years, { start: league.season + 1 });
+    for (const { p, ask } of plan) signPlayer(league, p, t.tid, ask.amount, ask.years, { start: league.season + 1, option: aiOption(league, p, ask.amount, ask.years) });
     aiQualify(league, t);
   }
 }
 
-/** Share of AI players worth extending who get extended on opening night; the rest go through re-signing in the summer. */
+/** Share of AI players worth extending who get extended on opening night (a star's, worth 84+, more); the rest go through re-signing in the summer. */
 const AI_EXTENSION_SHARE = 0.6;
+const AI_STAR_EXTENSION_SHARE = 0.85;
 
 /**
  * Opening night: AI teams extend players worth 76+ in the final season of their deals who are
@@ -143,14 +173,18 @@ export function aiExtensions(league: League) {
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     let pay = payroll(league, t.tid, next);
+    const top = teamCore(league, t.tid);
     const candidates = teamPlayers(league, t.tid)
       .filter((p) => valueScore(league, p) >= 76 && playerAge(p, next) <= 35 && !extensionClosedReason(league, p) && !extensionRefusal(league, p))
       .sort((a, b) => valueScore(league, b) - valueScore(league, a));
     for (const p of candidates) {
-      if (new Rng(hashString(`${league.id}:${league.season}:aiExtension:${p.pid}`)).next() >= AI_EXTENSION_SHARE) continue;
+      const share = valueScore(league, p) >= 84 ? AI_STAR_EXTENSION_SHARE : AI_EXTENSION_SHARE;
+      if (new Rng(hashString(`${league.id}:${league.season}:aiExtension:${p.pid}`)).next() >= share) continue;
       const ask = extensionAsk(league, p);
-      if (pay + ask.amount >= payrollBudget(cap, t, valueScore(league, p))) continue;
+      if (pay + ask.amount >= payrollBudget(cap, t, valueScore(league, p), { core: top.has(p.pid), young: playerAge(p, next) <= 28 })) continue;
       extendContract(league, p, ask.amount, ask.years);
+      // a veteran's extension can carry his player option on its final season, as a signing's can (see aiOption)
+      if (!rookieScaleDeal(p) && aiOption(league, p, ask.amount, ask.years) === 'player') p.contract.option = 'player';
       pay += ask.amount;
     }
   }
@@ -315,7 +349,7 @@ function aiSheetTerms(league: League, t: Team, p: Player, season: number): { amo
  * pickier about one his team may match (worth 68+, and 1.5 points off its interest), signs one at
  * a time, and only while the market leaves his team its full two days to decide.
  */
-function aiSign(league: League, t: Team, rng: Rng, season: number) {
+function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infinity) {
   const roster = regularRoster(league, t.tid);
   const full = roster.length >= CAP.rosterMax;
   const cut = swapCandidate(league, t.tid, season);
@@ -327,16 +361,32 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   const sheets = league.phase === 'freeAgency' && matchDeadline(sheetDay) === sheetDay + MATCH_DAYS - 1 && !pendingSheets(league, t.tid).length;
   let pick: Player | undefined;
   let bs = -Infinity;
-  // a top free agent weighing the user's offer waits for his decision day (see resolveBids)
+  // a top free agent weighing the user's offer waits for his decision day (see resolveBids), and
+  // one who isn't weighs the AI teams' bids on his own (see aiMarquee)
   const weighing = new Set(league.faBids?.map((b) => b.pid));
+  const cap = CAP_FOR(league, season);
+  const pay = payroll(league, t.tid, season);
   for (const p of freeAgents(league)) {
-    if (weighing.has(p.pid)) continue;
+    if (weighing.has(p.pid) || marqueeFA(league, p) || releasedBy(league, p, t.tid)) continue;
     const r = p.rfa;
     // his own team waits for offer sheets to match; one who has signed a sheet is spoken for
     if (r && (!sheets || r.tid === t.tid || r.sheet)) continue;
     const v = valueScore(league, p);
-    if (v < floor || (size >= 13 && v < 64) || (r && v < AI_SHEET_VALUE)) continue;
-    if (r ? !aiSheetTerms(league, t, p, season) : !signingRoute(league, t.tid, askingContract(league, p, t.tid).amount, season, p)) continue;
+    // (a young player with upside asking the minimum clears a lower bar)
+    const bar = playerAge(p, season) <= 24 && p.pot >= 70 ? 60 : 64;
+    if (v < floor || (size >= 13 && v < bar) || (r && v < AI_SHEET_VALUE)) continue;
+    if (r) {
+      if (!aiSheetTerms(league, t, p, season)) continue;
+    } else {
+      const amount = askingContract(league, p, t.tid).amount;
+      const route = signingRoute(league, t.tid, amount, season, p);
+      // over the cap only a contender pays an exception into the tax; a rebuilder keeps its room
+      // for youth (and the dumps it takes picks for), not veterans on real money; and nobody spends
+      // its cap space before the top free agents have decided (their first three days)
+      if (!route || (isException(route) && t.strategy !== 'contend' && pay + amount > cap.luxuryTax)) continue;
+      if (t.strategy === 'rebuild' && route !== 'min' && playerAge(p, season) >= 29) continue;
+      if (route === 'space' && today <= MARQUEE_DAYS) continue;
+    }
     const s = needScore(league, t.tid, p) + rng.normal(0, 1.5) - (r ? AI_SHEET_PENALTY : 0);
     if (s > bs) {
       bs = s;
@@ -359,7 +409,61 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
   if (cut && season === league.season) releasePlayer(league, cut, { news: false });
   // minimum deals are short: a season, two for a young player; an exception's run as long as it allows
   const years = route === 'min' ? (playerAge(pick, season) <= 25 ? 2 : 1) : Math.min(routeYears(route), ask.years);
-  signPlayer(league, pick, t.tid, ask.amount, years, { start: season });
+  signPlayer(league, pick, t.tid, ask.amount, years, { start: season, option: route === 'min' ? undefined : aiOption(league, pick, ask.amount, years) });
+}
+
+/** Top free agents decide over the market's first days (see marqueeDay); until then nobody spends cap space on anyone else (see aiSign). */
+const MARQUEE_DAYS = 3;
+
+/** The free-agency day (1-3) a top free agent nobody has the user's offer out to decides on: a hash of the league, season and player. */
+const marqueeDay = (league: League, p: Player) => 1 + (hashString(`${league.id}:${league.season}:${p.pid}:market`) % MARQUEE_DAYS);
+
+/**
+ * A star (worth 82+) holds his price in the summer: no cut at all before day 15 (space can still
+ * open up, and his old team can still bring him back, see faInterest), then 15% a cut down to 60%
+ * of his value at most, whatever teams can pay now; from day 25, with the summer's money nearly
+ * spent, he takes what is left like anyone (see faDay).
+ */
+const STAR_HOLD = { value: 82, day: 15, floor: 0.6, late: 25 };
+
+/**
+ * What his old team would still pay a top free agent (see marqueeFA) to bring him back on his Bird
+ * rights, over the cap: what those rights allow (see resignLimit) and its re-signing budget leave
+ * (see payrollBudget: a star, or a player who'd be among its three best, counts as core), when it
+ * wants him and has the spot. Null for a restricted free agent (his team holds his rights another
+ * way) and outside the summer market.
+ */
+function birdRoom(league: League, p: Player, season: number): { tid: number; room: number } | null {
+  if (league.phase !== 'freeAgency' || p.rfa) return null;
+  const old = seasonTid(p, league.season);
+  if (old === null || old === league.userTid || releasedBy(league, p, old)) return null;
+  const t = league.teams[old];
+  if (!aiWants(league, t, p, season)) return null;
+  const v = valueScore(league, p);
+  const better = regularRoster(league, old).filter((x) => valueScore(league, x) > v).length;
+  const budget = payrollBudget(CAP_FOR(league, season), t, v, { core: v >= STAR_HOLD.value || better < 3, young: playerAge(p, season) <= 28 });
+  return { tid: old, room: Math.min(resignLimit(league, p, old), budget - payroll(league, old, season)) };
+}
+
+/**
+ * Top free agents weigh the AI teams' bids against each other (the user's offer, when he made one,
+ * on its own decision day: see resolveBids): on his day (see marqueeDay), each team that wants him
+ * and can pay bids (see faInterest), and he signs the one he likes best (see offerUtility), the best
+ * players first so the money they take is gone for the next. With no bid he waits for his price to
+ * come down.
+ */
+function aiMarquee(league: League, today: number) {
+  const season = contractSeason(league);
+  const weighing = new Set(league.faBids?.map((b) => b.pid));
+  const stars = freeAgents(league)
+    .filter((p) => !weighing.has(p.pid) && marqueeFA(league, p) && marqueeDay(league, p) <= today)
+    .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid);
+  for (const p of stars) {
+    const best = faInterest(league, p)[0];
+    if (!best) continue;
+    spendRoute(league, best.tid, best.route, season);
+    signPlayer(league, p, best.tid, best.amount, best.years, { start: season, option: aiOption(league, p, best.amount, best.years), bird: best.bird });
+  }
 }
 
 /**
@@ -369,10 +473,11 @@ function aiSign(league: League, t: Team, rng: Rng, season: number) {
  * his interest in that team), on deals of 3 years at most. In season this runs once a week, so every
  * call is a price cut.
  */
-export function faDay(league: League, rng: Rng, intensity = 1) {
-  if (league.phase === 'freeAgency') {
+export function faDay(league: League, rng: Rng, intensity = 1, today = league.faDay + 1) {
+  // (today 0: the market's opening, when AI teams move with the user and nobody has decided yet)
+  if (league.phase === 'freeAgency' && today > 0) {
     // top free agents whose decision day this is choose between the user's offer and AI teams' first
-    resolveBids(league, league.faDay + 1);
+    resolveBids(league, today);
     // offer sheets whose last match day was the one ending now are decided, and AI teams' restricted
     // free agents who went ten days without one come to terms
     resolveOfferSheets(league, league.faDay);
@@ -387,11 +492,18 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
   const buyers = ai.flatMap((t) => {
     const cut = swapCandidate(league, t.tid, season);
     if (regularRoster(league, t.tid).length >= CAP.rosterMax && !cut) return [];
-    const room = Math.max(capSpace(league, t.tid, season), bestExceptionRoom(league, t.tid, season));
+    // (only a contender pays an exception into the tax, see aiSign)
+    const ex = bestExceptionRoom(league, t.tid, season);
+    const room = Math.max(capSpace(league, t.tid, season), t.strategy === 'contend' ? ex : Math.min(ex, cap.luxuryTax - payroll(league, t.tid, season)));
     return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
   });
-  // what a player is asking a team is his price over his interest in it (see askingContract)
-  const roomFor = (p: Player) => Math.max(0, ...buyers.filter((b) => valueScore(league, p) >= b.bar).map((b) => b.room * teamAppeal(league, b.t.tid, p)));
+  // what a player asks a team moves with his interest in it, up to 10% either way (see askingContract);
+  // a top free agent's old team can also pay him on his Bird rights (see birdRoom)
+  const asks = (tid: number, p: Player, room: number) => room * Math.min(1.1, Math.max(0.9, teamAppeal(league, tid, p)));
+  const roomFor = (p: Player) => {
+    const bird = marqueeFA(league, p) ? birdRoom(league, p, season) : null;
+    return Math.max(0, bird ? asks(bird.tid, p, bird.room) : 0, ...buyers.filter((b) => valueScore(league, p) >= b.bar).map((b) => asks(b.t.tid, p, b.room)));
+  };
   for (const p of freeAgents(league)) {
     // (a restricted free agent who has signed an offer sheet is waiting on his team, not the market)
     if (p.faDays === undefined || p.rfa?.sheet) continue;
@@ -400,11 +512,15 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
     if (p.faDays > 0) continue;
     const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
     const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-    p.asking = { amount: Math.max(min, Math.round(Math.min(ask * 0.85, roomFor(p)) / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
+    const star = offseason && valueScore(league, p) >= STAR_HOLD.value && league.faDay < STAR_HOLD.late;
+    const cut = !star ? Math.min(ask * 0.85, roomFor(p)) : league.faDay < STAR_HOLD.day ? ask : Math.max(ask * 0.85, marketSalary(league, p) * STAR_HOLD.floor);
+    p.asking = { amount: Math.max(min, Math.round(cut / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
     p.faDays = FA_PRICE_CUT_DAYS;
   }
+  // the top free agents whose day it is pick among the AI teams' bids, then the rest of the market moves
+  if (league.phase === 'freeAgency' && today > 0) aiMarquee(league, today);
   for (const t of ai) {
-    if (freeAgents(league).length && rng.chance(0.55 * intensity)) aiSign(league, t, rng, season);
+    if (freeAgents(league).length && rng.chance(Math.min(1, 0.55 * intensity))) aiSign(league, t, rng, season, league.phase === 'freeAgency' ? today : Infinity);
   }
   const twoWayPool = freeAgents(league)
     .filter((x) => wantsTwoWay(league, x))
@@ -416,16 +532,21 @@ export function faDay(league: League, rng: Rng, intensity = 1) {
   }
 }
 
-/** Make sure every AI team can field a legal roster (13+) with minimum signings (never a restricted free agent: his team holds his rights). */
+/**
+ * Make sure every AI team can field a legal roster (13+) with minimum signings: from the free agents
+ * who'd take the minimum (one of the best four), else the best one worth under 76 (a better player
+ * holds out for real money). Never a restricted free agent (his team holds his rights), nor a player
+ * the team released this season.
+ */
 export function fillRosters(league: League, rng: Rng, season = league.season) {
   const cap = CAP_FOR(league, season);
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     let size = standardRoster(league, t.tid).length;
     while (size < CAP.rosterMin) {
-      const pool = freeAgents(league)
-        .filter((p) => !p.rfa)
-        .sort((a, b) => valueScore(league, b) - valueScore(league, a));
+      const free = freeAgents(league).filter((p) => !p.rfa && !releasedBy(league, p, t.tid));
+      const willing = free.filter((p) => askingContract(league, p, t.tid).amount <= (p.experience >= 3 ? cap.vetMin : cap.minContract) + 1);
+      const pool = (willing.length ? willing : free.filter((p) => valueScore(league, p) < 76)).sort((a, b) => valueScore(league, b) - valueScore(league, a));
       const p = pool[Math.min(pool.length - 1, Math.floor(rng.uniform(0, 4)))];
       if (!p) break;
       signPlayer(league, p, t.tid, p.experience >= 3 ? cap.vetMin : cap.minContract, 1, { news: false, start: season });
@@ -434,6 +555,9 @@ export function fillRosters(league: League, rng: Rng, season = league.season) {
   }
 }
 
+/** How much an AI team would rather keep a player when trimming: his value, and 0.3 points for each $1M of dead money releasing him would leave. */
+const rosterKeep = (league: League, p: Player) => valueScore(league, p) + (0.3 * releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0)) / 1000;
+
 /**
  * Trim AI rosters to 15 standard players and 3 two-ways (two-ways never cost a standard spot).
  * Cuts go mainly by value; a release that leaves dead money counts a little against cutting him
@@ -441,7 +565,7 @@ export function fillRosters(league: League, rng: Rng, season = league.season) {
  * unless he is clearly the worst player.
  */
 export function trimRosters(league: League, release: (p: Player) => void, standardMax: number = CAP.rosterMax) {
-  const keep = (p: Player) => valueScore(league, p) + (0.3 * releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0)) / 1000;
+  const keep = (p: Player) => rosterKeep(league, p);
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
     for (const [roster, max] of [
@@ -451,6 +575,63 @@ export function trimRosters(league: League, release: (p: Player) => void, standa
       roster.sort((a, b) => keep(a) - keep(b));
       while (roster.length > max) release(roster.shift()!);
     }
+  }
+}
+
+/**
+ * Opening night, after the cuts: a free agent left who is worth 66+ or rated 70+ (a camp's cut, a
+ * veteran) joins the team whose last man he most clearly beats (by 2 points or more; a team that
+ * isn't rebuilding counts a veteran's game now as much as his value) when letting that man go costs little (a camp
+ * deal, or dead money of 2.2× the veteran minimum at most), or a team with a spot open, on a
+ * one-year deal at his price if the team can pay it (an exception into the tax only for a
+ * contender), else at the minimum, best players first: a good player left unsigned on opening
+ * night is rare.
+ */
+export function openingSwaps(league: League) {
+  const season = league.season;
+  const cap = CAP_FOR(league, season);
+  const pool = freeAgents(league)
+    .filter((p) => !p.rfa && (valueScore(league, p) >= 66 || p.ovr >= 70))
+    .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid);
+  // (a team out to win weighs a veteran's game now as much as his value: see winNow)
+  const winNow = (t: Team, p: Player) => (t.strategy !== 'rebuild' ? (valueScore(league, p) + p.ovr) / 2 : valueScore(league, p));
+  for (const p of pool) {
+    const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+    let best: { tid: number; margin: number; amount: number; route: SigningRoute; cut?: Player } | null = null;
+    for (const t of league.teams) {
+      if (t.tid === league.userTid || releasedBy(league, p, t.tid)) continue;
+      const roster = regularRoster(league, t.tid);
+      // (a taxpayer carrying 14 keeps the spot open: see taxTeamsTrim)
+      const full = roster.length >= CAP.rosterMax || (roster.length >= CAP.rosterMax - 1 && payroll(league, t.tid, season) > cap.luxuryTax);
+      const cut = full ? roster.filter((x) => deadIfCut(league, x) <= cap.vetMin * 2.2).sort((a, b) => winNow(t, a) - winNow(t, b))[0] : undefined;
+      if (full && !cut) continue;
+      const margin = winNow(t, p) - (cut ? winNow(t, cut) + (0.3 * deadIfCut(league, cut)) / 1000 : 60);
+      if (margin < 2 || (best && margin <= best.margin)) continue;
+      // with the summer's money spent he takes what's left: his price if the team can pay it, else the minimum
+      let amount = askingContract(league, p, t.tid).amount;
+      let route = signingRoute(league, t.tid, amount, season, p, 1);
+      if (!route || (isException(route) && t.strategy !== 'contend' && payroll(league, t.tid, season) + amount > cap.luxuryTax)) {
+        amount = min;
+        route = 'min';
+      }
+      best = { tid: t.tid, margin, amount, route, cut };
+    }
+    if (!best) continue;
+    if (best.cut) releasePlayer(league, best.cut, { news: false });
+    spendRoute(league, best.tid, best.route, season);
+    signPlayer(league, p, best.tid, best.amount, 1, { start: season });
+  }
+}
+
+/** Opening night, after the cuts: an AI taxpayer carrying 15 lets its last man go when his deal isn't guaranteed yet (a camp deal), saving his salary and the tax on it. */
+export function taxTeamsTrim(league: League) {
+  const tax = CAP_FOR(league, league.season).luxuryTax;
+  for (const t of league.teams) {
+    if (t.tid === league.userTid || payroll(league, t.tid) <= tax) continue;
+    const roster = regularRoster(league, t.tid);
+    if (roster.length < CAP.rosterMax) continue;
+    const last = roster.sort((a, b) => rosterKeep(league, a) - rosterKeep(league, b))[0];
+    if (last && nonGuaranteed(league, last)) releasePlayer(league, last, { news: false });
   }
 }
 
@@ -560,7 +741,9 @@ export function bidHolds(league: League, exceptPid = -1): number {
  * an offer holds the space the mid-level is gone, as a pending mid-level offer keeps the space shut).
  */
 export function bidOnException(league: League, kind: Exception, exceptPid = -1): FaBid | undefined {
-  return otherBids(league, exceptPid).find((b) => b.route === kind || (kind === 'mle' && b.route === 'space'));
+  // (the mid-level and the taxpayer mid-level are one exception: a team uses one or the other)
+  const mid = (k: string | undefined) => k === 'mle' || k === 'tmle';
+  return otherBids(league, exceptPid).find((b) => b.route === kind || (mid(kind) && (b.route === 'space' || mid(b.route))));
 }
 
 /**
@@ -637,6 +820,8 @@ export interface FaOffer {
   route: SigningRoute;
   /** How much he likes it: see offerUtility. */
   utility: number;
+  /** His old team bringing him back on his Bird rights (over the cap: no exception used, `route` is 'min'). */
+  bird?: true;
 }
 
 /**
@@ -664,19 +849,44 @@ function aiWants(league: League, t: Team, p: Player, season: number): boolean {
 }
 
 /**
+ * The market closes: a free agent worth 78+ still unsigned whose old team holds his Bird rights
+ * goes back to it, as a holdout ends, on a deal of two years at most at his price now (within what
+ * his rights allow), when it wants him and has the spot (see aiWants): past its budget even, since
+ * nobody else could pay him and a team doesn't let a player that good walk for nothing.
+ */
+export function aiLateReturns(league: League) {
+  if (league.phase !== 'freeAgency') return;
+  const season = contractSeason(league);
+  const left = freeAgents(league)
+    .filter((p) => !p.rfa && !p.waivers && valueScore(league, p) >= 78)
+    .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid);
+  for (const p of left) {
+    const old = seasonTid(p, league.season);
+    if (old === null || old === league.userTid || releasedBy(league, p, old) || !aiWants(league, league.teams[old], p, season)) continue;
+    const ask = askingContract(league, p, old);
+    signPlayer(league, p, old, Math.min(ask.amount, resignLimit(league, p, old)), Math.min(2, ask.years), { start: season, bird: true });
+  }
+}
+
+/**
  * The AI teams that would bid for a top free agent now, most attractive offer first: each one
- * that wants him and can pay his asking price for it offers that, a contender up to 5% more if
+ * that wants him and can pay his asking price for it offers that, a contender up to 10% more if
  * its space (net of what the summer market holds, see capSpace) or its exception covers it. Every
  * offer is one the team can make: `route` pays for it as it stands.
  */
 export function faInterest(league: League, p: Player): FaOffer[] {
   const season = contractSeason(league);
-  const cap = CAP_FOR(league, season);
   const prefs = playerPrefs(league, p);
   const out: FaOffer[] = [];
+  const bird = birdRoom(league, p, season);
   for (const t of league.teams) {
-    if (t.tid === league.userTid || !aiWants(league, t, p, season)) continue;
+    if (t.tid === league.userTid || releasedBy(league, p, t.tid) || !aiWants(league, t, p, season)) continue;
     const ask = askingContract(league, p, t.tid);
+    // his old team can still bring him back on his Bird rights, over the cap (see birdRoom)
+    if (bird && t.tid === bird.tid && ask.amount <= bird.room) {
+      out.push({ tid: t.tid, amount: ask.amount, years: ask.years, route: 'min', bird: true, utility: offerUtility(league, p, t.tid, ask.amount, ask.years, prefs) });
+      continue;
+    }
     const route = aiRoute(league, t.tid, ask.amount, season, p, ask.years);
     if (!route) continue;
     const years = route === 'min' ? ask.years : Math.min(routeYears(route), ask.years);
@@ -684,7 +894,7 @@ export function faInterest(league: League, p: Player): FaOffer[] {
     let paid: SigningRoute = route;
     if (t.strategy === 'contend' && route !== 'min') {
       const room = route === 'space' ? capSpace(league, t.tid, season) : exceptionRoom(league, t.tid, route, season);
-      const more = Math.max(ask.amount, Math.min(Math.round((ask.amount * 1.05) / 50) * 50, room, cap.maxContract(p.experience)));
+      const more = Math.max(ask.amount, Math.min(Math.round((ask.amount * 1.1) / 50) * 50, room, playerMax(league, p, season, t.tid)));
       // (and only as much more as a route the rules allow for that length still pays)
       const r = more > ask.amount ? signingRoute(league, t.tid, more, season, p, years) : route;
       if (r) {
@@ -734,8 +944,9 @@ export function userBid(league: League, pid: number, amount: number, years: numb
   const p = league.players[pid];
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid !== FREE_AGENT || p.waivers) return { ok: false, reason: 'Not a free agent.' };
+  if (releasedBy(league, p, league.userTid)) return { ok: false, reason: RELEASED_REASON(p) };
   if (!marqueeFA(league, p)) return userOffer(league, pid, amount, years);
-  if (years < 1 || years > 5) return { ok: false, reason: 'Contracts must be 1 to 5 years.' };
+  if (years < 1 || years > FA_YEARS) return { ok: false, reason: FA_YEARS_REASON };
   const closed = signingClosedReason(league) ?? offerBlockedReason(league, p, amount, years);
   if (closed) return { ok: false, reason: closed };
   const floor = bidFloor(league, p, years);
@@ -828,7 +1039,7 @@ function decideBid(league: League, b: FaBid) {
     const t = league.teams[best.tid];
     const years = best.years;
     spendRoute(league, t.tid, best.route, season);
-    signPlayer(league, p, t.tid, best.amount, years, { start: season });
+    signPlayer(league, p, t.tid, best.amount, years, { start: season, option: aiOption(league, p, best.amount, years), bird: best.bird });
     const top = (Object.keys(PREF_LABEL) as (keyof PlayerPrefs)[]).sort((x, y) => prefs[y] - prefs[x])[0];
     const appealT = teamAppeal(league, t.tid, p, prefs);
     const appealU = teamAppeal(league, tid, p, prefs);
@@ -886,13 +1097,14 @@ export function userOffer(league: League, pid: number, amount: number, years: nu
   if (league.fired) return { ok: false, reason: FIRED_REASON };
   if (!p || p.tid !== FREE_AGENT) return { ok: false, reason: 'Not a free agent.' };
   if (p.waivers) return { ok: false, reason: `${playerName(p)} is on waivers: put in a claim instead.` };
+  if (releasedBy(league, p, league.userTid)) return { ok: false, reason: RELEASED_REASON(p) };
   // a restricted free agent: his own team re-signs him with Bird rights, anyone else signs an offer sheet
   if (p.rfa) return p.rfa.tid === league.userTid ? userResign(league, pid, amount, years, extras) : userOfferSheet(league, pid, amount, years, extras.via);
   // a top free agent in the summer weighs offers
   if (marqueeFA(league, p)) return userBid(league, pid, amount, years);
   const season = contractSeason(league);
   const tid = league.userTid;
-  if (years < 1 || years > 5) return { ok: false, reason: 'Contracts must be 1 to 5 years.' };
+  if (years < 1 || years > FA_YEARS) return { ok: false, reason: FA_YEARS_REASON };
   if (extras.option && years < 2) return { ok: false, reason: 'An option needs a deal of two years or more.' };
   const closed = signingClosedReason(league) ?? offerBlockedReason(league, p, amount, years, extras.via);
   if (closed) return { ok: false, reason: closed };
@@ -1004,9 +1216,14 @@ export function userResign(league: League, pid: number, amount: number, years: n
       ok: false,
       reason: `Your roster is full for next season (${OFFSEASON_ROSTER_MAX}${league.faBids?.length || pendingSheets(league, league.userTid).length ? ', counting your pending offers and offer sheets' : ''}). Release or trade someone first.`,
     };
-  if (years < 1 || years > 5) return { ok: false, reason: 'Contracts must be 1 to 5 years.' };
+  const most = maxYearsWith(league, p, league.userTid);
+  if (years < 1 || years > most)
+    return { ok: false, reason: most === 5 ? 'Contracts must be 1 to 5 years.' : `Without full Bird rights (three seasons with you) he re-signs for 4 years at most.` };
   if (extras.option && years < 2) return { ok: false, reason: 'An option needs a deal of two years or more.' };
-  const h = hearOffer(league, p, 'resign', { amount, years, option: extras.option }, { min: 1, max: 5 });
+  const limit = resignLimit(league, p, league.userTid);
+  // a player worth more than his Bird rights allow goes to the market
+  if (amount > limit || askingContract(league, p, league.userTid).amount > limit) return { ok: false, reason: resignLimitReason(league, p, limit) };
+  const h = hearOffer(league, p, 'resign', { amount, years, option: extras.option }, { min: 1, max: most });
   if (!h.accept) return { ok: false, reason: h.text, counter: h.counter };
   signPlayer(league, p, league.userTid, amount, years, { start: league.season + 1, option: extras.option });
   return { ok: true, reason: `${playerName(p)} re-signs!` };

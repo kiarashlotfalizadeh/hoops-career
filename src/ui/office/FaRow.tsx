@@ -3,7 +3,7 @@
 // waiver claim's terms).
 import type { League, Player, SigningRoute } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
-import { EXCEPTIONS, twoWaySalary, twoWayYears, waiverSalary, type Ask } from '../../core/league/contracts';
+import { EXCEPTIONS, isException, twoWaySalary, twoWayYears, waiverSalary, type Ask } from '../../core/league/contracts';
 import { tenDayPay, tenDayUntil } from '../../core/league/tenDay';
 import { OvrPot, appealInfo, contractEnd, forYears, outTag, playerMeta, salaryText } from './common';
 import { rfaTag } from './RfaPanel';
@@ -83,7 +83,7 @@ export function FaRow({
             <span className="good">Min deal</span>
           ) : route === 'space' ? (
             <span className="good">Fits your space</span>
-          ) : route === 'mle' || route === 'room' || route === 'bae' ? (
+          ) : isException(route) ? (
             <span className="good">{EXCEPTIONS[route].short}</span>
           ) : space > 0 ? (
             <span className="warn">More than your space</span>

@@ -35,7 +35,20 @@ import { allStarSaturday } from './allStarSaturday';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
-import { FA_DAYS, aiExtensions, aiResign, expiringPlayers, faDay, fillRosters, releaseExpiring, resolveBids, trimRosters } from './freeAgency';
+import {
+  FA_DAYS,
+  aiExtensions,
+  aiLateReturns,
+  aiResign,
+  expiringPlayers,
+  faDay,
+  fillRosters,
+  openingSwaps,
+  releaseExpiring,
+  resolveBids,
+  taxTeamsTrim,
+  trimRosters,
+} from './freeAgency';
 import { MATCH_DAYS, acceptQualifyingOffers, resolveOfferSheets, restrictedFreeAgents } from './rfa';
 import {
   FIRED_REASON,
@@ -52,7 +65,7 @@ import {
 } from './contracts';
 import { healOneGame } from './injuries';
 import { bookTradedCash } from './trades';
-import { aiToAiTrade, teamStrategyUpdate } from './aiTrades';
+import { aiDraftTrade, aiOffseasonTrades, aiTaxDumps, aiToAiTrade, teamStrategyUpdate } from './aiTrades';
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
@@ -66,6 +79,15 @@ import { retireNumbers } from './jerseys';
 import { recordTrail } from '../analysis/odds';
 import { realCareerOnRecord } from '../analysis/milestones';
 import { money } from '../format';
+
+/**
+ * AI-to-AI deals expected off the regular season (see aiOffseasonTrades): on draft night before
+ * the first pick (draft-night pick trades come on top, see aiDraftTrade), each free-agency day from
+ * the third, and in the preseason: about ten a summer with the draft's.
+ */
+const DRAFT_DEALS = 2;
+const SUMMER_DEALS = 0.2;
+const PRESEASON_DEALS = 2;
 
 export function regularGamesLeft(league: League) {
   return league.schedule.filter((g) => g.type === 'regular' && !g.played).length;
@@ -89,6 +111,9 @@ export function startRegularSeason(league: League): string[] {
   if (errs.length) return errs;
   withRng(league, (rng) => {
     trimRosters(league, (p) => releasePlayer(league, p, { news: false }));
+    taxTeamsTrim(league);
+    // a good player cut (or still unsigned) replaces a weaker last man somewhere
+    openingSwaps(league);
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
@@ -441,7 +466,7 @@ function endPlayoffs(league: League) {
  */
 export function continueDraft(league: League) {
   if (league.phase !== 'draft' || league.fired) return;
-  if (!league.settings.draftPause) withRng(league, (rng) => draftUntilUser(league, rng));
+  if (!league.settings.draftPause) withRng(league, (rng) => draftUntilUser(league, rng, false, (dp) => aiDraftTrade(league, rng, dp)));
   draftProposals(league);
 }
 
@@ -452,6 +477,9 @@ export function startDraft(league: League): boolean {
   delete league.jobOffers;
   // draft night: late June, or the day after a late Finals
   league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 25));
+  cleanProposals(league);
+  // teams deal veterans for picks before the first one is made
+  withRng(league, (rng) => aiOffseasonTrades(league, rng, DRAFT_DEALS));
   cleanProposals(league);
   continueDraft(league);
   return true;
@@ -488,9 +516,13 @@ export function draftNextPick(league: League): boolean {
   const dp = nextPick(league);
   if (!dp || dp.tid === league.userTid) return false;
   withRng(league, (rng) => {
-    const choice = aiChoose(league, dp.tid, rng);
-    if (choice) draftPlayer(league, dp, choice.pid);
-    else league.draftPicks = league.draftPicks.filter((d) => d.dpid !== dp.dpid);
+    aiDraftTrade(league, rng, dp);
+    // (a trade can hand the pick on: the team holding it now picks, the user himself included)
+    const now = nextPick(league);
+    if (!now || now.tid === league.userTid) return;
+    const choice = aiChoose(league, now.tid, rng);
+    if (choice) draftPlayer(league, now, choice.pid);
+    else league.draftPicks = league.draftPicks.filter((d) => d.dpid !== now.dpid);
   });
   draftProposals(league);
   return true;
@@ -499,7 +531,7 @@ export function draftNextPick(league: League): boolean {
 export function finishDraftPhase(league: League): boolean {
   if (league.phase !== 'draft' || league.fired) return false;
   withRng(league, (rng) => {
-    draftUntilUser(league, rng, true);
+    draftUntilUser(league, rng, true, (dp) => aiDraftTrade(league, rng, dp));
     finishDraft(league);
     // option years are settled before re-signing: opt-outs and declines join the expiring list
     resolveOptions(league, rng);
@@ -534,8 +566,10 @@ export function startFreeAgency(league: League): boolean {
     trimRosters(league, (p) => releasePlayer(league, p, { news: false }), OFFSEASON_ROSTER_MAX);
     league.phase = 'freeAgency';
     league.faDay = 0;
-    // the market opens on June 30: the user gets the first look, and AI teams move from day 2
+    // the market opens on June 30, for every team at once: AI teams make their first wave of
+    // signings with the user (twice a normal day's rate); the top free agents decide from day 2
     league.day = Math.max(league.day + 1, dateToDay(league.season, 5, 30));
+    faDay(league, rng, 2, 0);
   });
   // (net of the cap holds the user's restricted free agents keep through free agency)
   const space = capSpace(league, league.userTid, league.season + 1);
@@ -543,7 +577,7 @@ export function startFreeAgency(league: League): boolean {
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
-    body: `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. You get the first look: AI teams start signing tomorrow. Top free agents weigh competing offers for a day or two; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
+    body: `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. AI teams are already signing their first wave. Top free agents weigh competing offers over their first days on the market; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
       rfas.length
         ? `\nYour restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights any time before an offer sheet comes in, or match one; unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`
         : ''
@@ -577,9 +611,12 @@ export function faAdvance(league: League, days = 1) {
     for (let i = 0; i < n; i++) {
       if (i > 0 && newSeasonBlockedReason(league)) break;
       league.day++;
-      // the opening rush comes the day after the user's first look
-      faDay(league, rng, league.faDay === 0 ? 1.2 : 1);
+      faDay(league, rng);
       league.faDay++;
+      // from the third day, with the first wave of signings done, teams trade now and then, the
+      // taxpayers out of contention first (see aiTaxDumps)
+      if (league.faDay === 3) aiTaxDumps(league, rng);
+      if (league.faDay >= 3) aiOffseasonTrades(league, rng, SUMMER_DEALS);
     }
   });
   cleanProposals(league);
@@ -598,11 +635,13 @@ export function newSeason(league: League): boolean {
   if (!faOver(league)) faAdvance(league, FA_DAYS);
   if (!faOver(league) || newSeasonBlockedReason(league)) return false;
   // offers made on the last day are decided as the market closes, then the offer sheets still
-  // pending, and the restricted free agents left take their qualifying offers
+  // pending, the restricted free agents left take their qualifying offers, and the good players
+  // nobody could pay go back to their teams
   resolveBids(league);
   delete league.faBids;
   resolveOfferSheets(league);
   acceptQualifyingOffers(league);
+  aiLateReturns(league);
   const prevSeason = league.season;
   league.season++;
   league.phase = 'preseason';
@@ -680,6 +719,14 @@ export function newSeason(league: League): boolean {
     t.rotation.order = t.rotation.order.filter((pid) => league.players[pid]?.tid === t.tid);
     ensureRotation(league, t.tid);
   }
+  // the preseason's trades, now that the summer's signings can be valued with the new season's
+  // rosters, and camp bodies for a team a two-for-one left short
+  withRng(league, (rng) => {
+    aiTaxDumps(league, rng);
+    aiOffseasonTrades(league, rng, PRESEASON_DEALS);
+    fillRosters(league, rng);
+  });
+  for (const t of league.teams) ensureRotation(league, t.tid);
   // remaining unsigned prospects from older classes are cleaned up
   for (const p of prospects(league)) if (p.draft.year < league.season) delete league.players[p.pid];
   compactRetired(league);

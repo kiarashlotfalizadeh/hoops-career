@@ -203,6 +203,13 @@ export interface Player {
   awards: AwardRecord[];
   /** Season he joined current team. */
   joinedSeason: number;
+  /**
+   * The first season of his Bird clock with his team: his first there as a free agent signing, a
+   * draftee or a claim (a trade keeps it). Absent, joinedSeason stands in (see birdSeasons).
+   */
+  birdSince?: number;
+  /** The team that last released (waived or bought out) him, and the season: it can't sign him again that season. */
+  released?: { tid: number; season: number };
   /** The team that last traded him away, and when (`also`: the others that traded him away that season): he can't go back to them that season. */
   tradedFrom?: { tid: number; season: number; also?: number[] };
   /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
@@ -322,11 +329,11 @@ export interface Waivers {
 }
 
 /**
- * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level,
- * the room exception (instead of the mid-level, once a team has used cap space that season) or the
- * bi-annual (see contracts.ts).
+ * How a team pays a free agent: his minimum, cap space, or an exception over the cap: the mid-level
+ * (the taxpayer mid-level for a team it takes past the first apron), the room exception (instead of
+ * the mid-level, once a team has used cap space that season) or the bi-annual (see contracts.ts).
  */
-export type SigningRoute = 'min' | 'space' | 'mle' | 'room' | 'bae';
+export type SigningRoute = 'min' | 'space' | 'mle' | 'tmle' | 'room' | 'bae';
 
 /** The user's offer to a top free agent in the summer: he weighs it against other teams' on `decideDay` (a faDay). See userBid. */
 export interface FaBid {
@@ -674,6 +681,13 @@ export interface Team {
   roomSeason?: number;
   /** Contract season the team last used its bi-annual exception (not two seasons running). */
   baeSeason?: number;
+  /** Contract season the team used the taxpayer mid-level exception (instead of the mid-level: one or the other). */
+  taxMleSeason?: number;
+  /**
+   * Traded player exceptions (see executeTrade): salary it sent out over the cap beyond what it took
+   * back, which it can absorb salary into for a year from the trade (`season` and `day`: when).
+   */
+  tpes?: { amount: number; season: number; day: number }[];
   /** Players whose jersey numbers were settled at the team's last game or arrival (see numberTeam): they keep them over arrivals. */
   numbered?: number[];
   /**
