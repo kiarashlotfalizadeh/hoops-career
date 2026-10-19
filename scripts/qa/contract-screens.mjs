@@ -79,9 +79,6 @@ const resign = await mutate((l) => {
   p.contract = { start: l.season - 1, salaries: [9000, 9500] };
   p.experience = 6;
   p.bornYear = l.season - 27;
-  p.mood.tradeRequest = false;
-  p.mood.score = 1;
-  delete p.promise;
   return { pid: p.pid, name: `${p.firstName} ${p.lastName}`.trim() };
 });
 await go('/office/resign');
@@ -129,10 +126,7 @@ const setup = await mutate((l) => {
   const ext = mine[1];
   ext.contract = { start: s - 2, salaries: [14000, 14500, 15000] };
   ext.experience = 6;
-  ext.mood.tradeRequest = false;
-  ext.mood.score = 1;
   delete ext.tradeLock;
-  delete ext.promise;
   delete ext.talks;
   const vet = mine[6];
   vet.contract = { start: s - 1, salaries: [11000, 11500, 12000, 12500] };

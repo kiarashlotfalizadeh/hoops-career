@@ -13,9 +13,12 @@ export const RATED_SEASONS = 3;
  * that format changes.
  * 4: the redesign (difficulty presets, no coaching depth, the agenda, the owner's hot seat, the
  *    assistant's feed). Saves from before it can't be opened: migrate() turns them away.
+ * 5: no player morale or press conference (players have no mood, promise or meetings, the league no
+ *    press): migrate() strips them from a version-4 save, and a build from before refuses a
+ *    version-5 one instead of reading a player without a mood.
  */
-export const SAVE_VERSION = 4;
-/** The oldest save format this build opens. */
+export const SAVE_VERSION = 5;
+/** The oldest save format this build opens (a version-4 save loses its morale on the way in). */
 export const MIN_SAVE_VERSION = 4;
 
 export const CAP = {

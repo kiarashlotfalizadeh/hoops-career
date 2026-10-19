@@ -1,6 +1,6 @@
 // Regression tests for league rules: trades, rosters, experience, clinching, options, signing
 // windows, draft order, two-way contracts, phase guards, tiebreaks, the playoff calendar, awards,
-// the owner, morale and wear. Fast: no full-season sims.
+// the owner and wear. Fast: no full-season sims.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -9,7 +9,7 @@ import { CAP_FOR, curTeamSeason, dayToDate, freeAgents, payroll, standardRoster,
 import { askingContract, convertTwoWay, decideTeamOption, pendingOption, releasePlayer, signPlayer, twoWaySalary, valueScore } from '../league/contracts';
 import { expiringPlayers, signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { tradingClosedReason, validateTrade } from '../league/trades';
-import { buildSimInput, ensureRotation, wearInjuryRisk } from '../league/games';
+import { ensureRotation, wearInjuryRisk } from '../league/games';
 import { rankedPresets } from '../ai/coachAI';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
@@ -17,7 +17,6 @@ import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../leagu
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { inSeasonProgression } from '../league/progression';
 import { injuryText } from '../league/injuries';
-import { updateMorale } from '../league/morale';
 import { generateDraftClass, lotteryOdds, runLottery } from '../league/draft';
 import { RATING_KEYS } from '../ratings';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
@@ -874,30 +873,7 @@ describe('development (L14)', () => {
   });
 });
 
-describe('morale and wear (L17)', () => {
-  it('a player who asked out weighs on his teammates', () => {
-    const l = league();
-    const [star, mate] = standardRoster(l, U);
-    for (const p of teamPlayers(l, U)) p.mood = { ...p.mood, score: 0, tradeRequest: false };
-    const before = buildSimInput(l, U, 0, 'regular').perf!;
-    star.mood.tradeRequest = true;
-    const after = buildSimInput(l, U, 0, 'regular').perf!;
-    expect(after[mate.pid]).toBeCloseTo(before[mate.pid] * 0.994);
-    expect(after[star.pid]).toBeCloseTo(before[star.pid]);
-  });
-
-  it('a rookie-scale deal never leaves a player feeling underpaid; a cheap veteran deal does', () => {
-    const l = league();
-    const star = standardRoster(l, U).sort((a, b) => b.ovr - a.ovr)[0];
-    star.contract = { start: l.season, salaries: [CAP.minContract, CAP.minContract], rookie: true, option: 'team' };
-    updateMorale(l, U);
-    expect(star.mood.notes).not.toContain('Feels underpaid');
-    expect(star.mood.contractComponent).toBe(0);
-    delete star.contract.rookie;
-    updateMorale(l, U);
-    expect(star.mood.notes).toContain('Feels underpaid');
-  });
-
+describe('wear (L17)', () => {
   it('injury names read as English in messages', () => {
     expect(injuryText('Torn ACL', true)).toBe('a torn ACL');
     expect(injuryText('MCL Sprain', true)).toBe('an MCL sprain');
@@ -934,23 +910,5 @@ describe('morale and wear (L17)', () => {
     expect(wearInjuryRisk(p)).toBeCloseTo(0.3);
     p.wear = 100;
     expect(wearInjuryRisk(p)).toBeCloseTo(0.6);
-  });
-
-  it('trade requests that still apply survive the summer', () => {
-    const l = league();
-    const [angry, calmer] = standardRoster(l, U);
-    const fa = freeAgents(l)[0];
-    for (const [p, score] of [
-      [angry, -8],
-      [calmer, -3],
-      [fa, -8],
-    ] as const)
-      p.mood = { ...p.mood, score, tradeRequest: true };
-    l.phase = 'freeAgency';
-    l.faDay = 30;
-    expect(newSeason(l)).toBe(true);
-    expect(angry.mood.tradeRequest).toBe(angry.tid === U);
-    expect(calmer.mood.tradeRequest).toBe(false);
-    expect(fa.mood.tradeRequest).toBe(false);
   });
 });

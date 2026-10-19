@@ -47,7 +47,7 @@ function league(phase: League['phase'] = 'regular', rngSeed = 7): League {
   return l;
 }
 
-/** A free agent of known value: OVR = POT, 27, healthy, content, asking his market price. */
+/** A free agent of known value: OVR = POT, 27, healthy, asking his market price. */
 function freeAgent(l: League, ovr = 74, age = 27, i = 0): Player {
   const p = freeAgents(l).filter((x) => !x.rfa)[i];
   p.ovr = ovr;
@@ -55,8 +55,6 @@ function freeAgent(l: League, ovr = 74, age = 27, i = 0): Player {
   p.bornYear = l.season - age;
   p.experience = 5;
   p.injury = null;
-  p.mood.tradeRequest = false;
-  p.mood.score = 0;
   p.contract = { start: l.season, salaries: [0] };
   p.asking = undefined;
   p.asking = askingContract(l, p);
@@ -71,8 +69,6 @@ function expiring(l: League, ovr = 74, age = 27): Player {
   p.bornYear = l.season - age;
   p.experience = 5;
   p.injury = null;
-  p.mood.tradeRequest = false;
-  p.mood.score = 0;
   p.contract = { start: l.season - 1, salaries: [8_000, 8_000] };
   return p;
 }
@@ -249,22 +245,12 @@ describe('counters and patience', () => {
     expect(p.contract.start).toBe(l.season + 1);
   });
 
-  it("a player who wants a trade still won't re-sign", () => {
-    const l = league('resign');
-    const p = expiring(l);
-    p.mood.tradeRequest = true;
-    const ask = talkAsk(l, p, 'resign');
-    expect(userResign(l, p.pid, ask.amount * 2, ask.years).reason).toMatch(/wants out and won't re-sign/);
-  });
-
   it('extensions: the same talks on his extension ask, and 30 days off when they break down', () => {
     const l = league('regular');
     const p = standardRoster(l, U)[1];
     p.ovr = p.pot = 76;
     p.bornYear = l.season - 27;
     p.experience = 5;
-    p.mood.score = 0;
-    p.mood.tradeRequest = false;
     p.injury = null;
     p.contract = { start: l.season - 2, salaries: [9_000, 9_000, 9_000] };
     p.tradeLock = undefined;

@@ -29,8 +29,6 @@ function signed(l: League, salary: number, years: number, start = l.season, age 
   p.bornYear = l.season - age;
   p.experience = 6;
   p.injury = null;
-  p.mood.tradeRequest = false;
-  p.mood.score = 0;
   p.contract = { start, salaries: Array.from({ length: years }, () => salary) };
   return p;
 }

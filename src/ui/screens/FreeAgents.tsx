@@ -12,7 +12,7 @@ import type { Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { CAP_FOR, TWO_WAY_MAX, freeAgents, payroll, rosterMaxNow, standardRoster, twoWayRoster } from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, askingContract, onWaivers, teamAppeal, twoWaySalary, valueScore, wantsOut, wantsTwoWay } from '../../core/league/contracts';
+import { EXCEPTIONS, EXCEPTION_ORDER, askingContract, onWaivers, teamAppeal, twoWaySalary, valueScore, wantsTwoWay } from '../../core/league/contracts';
 import { bidHolds, capPayroll, offerRoute, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } from '../../core/league/tenDay';
 import { playerAge } from '../../core/playerGen';
@@ -103,7 +103,7 @@ export default function FreeAgents() {
         (!twoWayMode || r.twoWay) &&
         (!tenDays || r.tenDay) &&
         // (your own restricted free agent re-signs with Bird rights; one who signed an offer sheet waits on it)
-        (!onlySignable || (!r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || tenDays || r.route || (r.p.rfa?.tid === tid && !wantsOut(r.p))))),
+        (!onlySignable || (!r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || tenDays || r.route || r.p.rfa?.tid === tid))),
     )
     .sort((a, b) => {
       switch (sort) {

@@ -61,8 +61,8 @@ export type Availability = 'franchise' | 'block' | null;
 /**
  * How gettable an AI team's player looks: 'franchise' for a young star it builds around (a
  * franchise-tier player 27 or younger, an All-Star 25 or younger), 'block' for a player it would
- * move (he asked for a trade, his contract is worth less than nothing, or he's a rebuilder's
- * veteran of 72+ OVR aged 28 or more), null otherwise and for your own players. A label only.
+ * move (his contract is worth less than nothing, or he's a rebuilder's veteran of 72+ OVR aged
+ * 28 or more), null otherwise and for your own players. A label only.
  */
 export function availability(league: League, p: Player): Availability {
   return availabilityAt(league, p, tradeValue(league, p));
@@ -71,7 +71,7 @@ export function availability(league: League, p: Player): Availability {
 /** availability for a player whose neutral trade value is known. */
 function availabilityAt(league: League, p: Player, value: number): Availability {
   if (p.tid < 0 || p.tid === league.userTid || !league.teams[p.tid]) return null;
-  if (p.mood.tradeRequest || value < 0) return 'block';
+  if (value < 0) return 'block';
   const a = playerAge(p, league.season);
   const tier = tierOf(league, value);
   if ((tier === 'Franchise' && a <= 27) || (tier === 'All-Star' && a <= 25)) return 'franchise';

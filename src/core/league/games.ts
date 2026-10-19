@@ -7,7 +7,6 @@ import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
 import { addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
-import { lockerRoomPerf, moodPerf } from './morale';
 import { playerAge } from '../playerGen';
 import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
@@ -133,7 +132,7 @@ export function buildSimInput(
     }
   }
   const perf: Record<number, number> = {};
-  for (const p of players) perf[p.pid] = moodPerf(p) * wearPerf(p) * lockerRoomPerf(players, p);
+  for (const p of players) perf[p.pid] = wearPerf(p);
   // practice intensity: intense camps build skills but add wear and injury risk
   const injuryMult = teamInjuryMult(team);
   if (tid === league.userTid) {

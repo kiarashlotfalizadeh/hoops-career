@@ -201,22 +201,21 @@ function pitchedLately(league: League, pid: number, pitch: string): boolean {
 
 /**
  * An AI team wants one of the user's players (70+, not untouchable) that fits its plan, and offers
- * its best package for him (see packageFor). A player who asked out comes up three times as often.
- * Two players are tried, each with up to six teams.
+ * its best package for him (see packageFor). Two players are tried, each with up to six teams.
  */
 function tryBuy(league: League, rng: Rng): Pitch | null {
   const targets = standardRoster(league, league.userTid).filter(
     (p) => p.ovr >= 70 && !isUntouchable(league, p.pid) && !untradeable(league, p) && !pitchedLately(league, p.pid, `buy:${p.pid}`),
   );
   for (let k = 0; k < 2 && targets.length; k++) {
-    const target = targets.splice(rng.weighted(targets.map((p) => (p.mood.tradeRequest ? 3 : 1))), 1)[0];
+    // (any of them alike, on one draw of the stream)
+    const target = targets.splice(rng.weighted(targets.map(() => 1)), 1)[0];
     for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
       const pkg = packageFor(league, t.tid, { pids: [target.pid], dpids: [] });
       if (!pkg || !fair(league, pkg.offer)) continue;
       const last = shortName(league, target);
-      const note = target.mood.tradeRequest
-        ? `We hear ${last} wants out. We'd give him a fresh start.`
-        : t.strategy === 'contend'
+      const note =
+        t.strategy === 'contend'
           ? `We're going for it this season, and ${last} is the piece we're missing.`
           : t.strategy === 'rebuild'
             ? `${last} fits our timeline: we're building around young players.`

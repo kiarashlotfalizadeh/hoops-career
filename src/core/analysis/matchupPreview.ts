@@ -73,7 +73,7 @@ function projected(input: SimTeamInput, n: number, type: ScheduledGame['type']):
 
 /**
  * Their top eight against your top ten for the game plan against `opp`, as the next meeting would
- * open (rest days, morale and wear included): opening fives against each other, then their bench
+ * open (rest days and wear included): opening fives against each other, then their bench
  * against yours, each unit solved as the staff would at tip-off, honouring the planned pairs within
  * it; a planned matchup across the units stands as planned.
  */

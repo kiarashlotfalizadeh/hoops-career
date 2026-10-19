@@ -55,7 +55,6 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.pot = ovr;
   p.bornYear = l.season - age;
   p.injury = null;
-  p.mood.tradeRequest = false;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary ?? marketSalary(l, p)) };
   return p;
 }
@@ -326,10 +325,7 @@ describe('the trade deadline', () => {
     const l = season(5);
     const [S, B] = [1, 2];
     for (const t of l.teams) t.strategy = t.tid === S ? 'rebuild' : t.tid === B ? 'contend' : 'retool';
-    for (const p of Object.values(l.players)) {
-      p.mood.tradeRequest = false;
-      if (p.tid === S || p.tid === B) delete p.tradeLock;
-    }
+    for (const p of Object.values(l.players)) if (p.tid === S || p.tid === B) delete p.tradeLock;
     const vetMin = CAP_FOR(l).vetMin;
     for (const p of standardRoster(l, S)) shape(l, p, 66, 30, vetMin);
     const vet = shape(l, standardRoster(l, S)[0], 84, 30, 10_000);

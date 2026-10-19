@@ -7,14 +7,14 @@ import { CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { CAP_FOR, payroll, playerName, shortName } from '../../core/league/helpers';
-import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth, wantsOut } from '../../core/league/contracts';
+import { askingContract, decideTeamOption, pendingTeamOptions, rookieScaleDeal, teamOptionWorth } from '../../core/league/contracts';
 import { capHolds, expiringPlayers, renouncePlayer, signedThisSummer } from '../../core/league/freeAgency';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Term } from '../components/Glossary';
 import { PageHeader, Section, Sheet, Statline } from '../components/ui';
-import { CapBar, HelpSheet, MoodTag, OvrPot, capRoomFig, contractEnd, forYears, rosterFig, salaryText, shortSeason, taxFig } from './common';
+import { CapBar, HelpSheet, OvrPot, capRoomFig, contractEnd, forYears, rosterFig, salaryText, shortSeason, taxFig } from './common';
 import { ContractSheet } from './ContractSheet';
 import { QualifyRow } from './RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE } from '../../core/league/rfa';
@@ -36,7 +36,7 @@ export function ResignPeriod() {
   // (his ask in your talks: up after they broke down)
   const asks = useMemo(() => new Map(expiring.map((p) => [p.pid, talkAsk(league, p, 'resign')])), [expiring, league]);
   const committed = payroll(league, tid, next);
-  // the players who hold cap room until free agency: two-way pay sits outside the cap, and a player who wants out won't re-sign
+  // the players who hold cap room until free agency: two-way pay sits outside the cap
   const holders = capHolds(league, tid);
   const holds = holders.reduce((a, h) => a + h.amount, 0);
   const ifAll = committed + holds;
@@ -187,25 +187,20 @@ export function ResignPeriod() {
               return (
                 <div key={p.pid} className="fo-rs">
                   <PlayerTop league={league} p={p} />
-                  <MoodTag p={p} withNotes />
                   <StatLine league={league} p={p} />
                   <div className="fo-rs-act">
                     <div className="grow">
-                      {wantsOut(p) ? (
-                        <span className="small bad bold">{p.mood.tradeRequest ? "Wants a trade: won't re-sign" : "Asked for a trade: on hold, won't re-sign"}</span>
-                      ) : (
-                        <div className="fo-rs-ask">
-                          <b className="num">{salaryText(league, ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
-                          <div className="tiny dim">
-                            his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
-                          </div>
+                      <div className="fo-rs-ask">
+                        <b className="num">{salaryText(league, ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
+                        <div className="tiny dim">
+                          his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
                         </div>
-                      )}
+                      </div>
                     </div>
                     <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
                       Renounce
                     </button>
-                    <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} disabled={wantsOut(p)} onClick={() => setSel(p.pid)}>
+                    <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} onClick={() => setSel(p.pid)}>
                       <PenLine size={15} /> Negotiate
                     </button>
                   </div>
@@ -266,10 +261,8 @@ export function ResignPeriod() {
           <div className="col fo-sheet">
             <p className="fo-lede">
               You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he's an unrestricted free agent when the market opens
-              {renounce.contract.twoWay || (wantsOut(renounce) && !renounce.rfa)
-                ? ''
-                : `, and his ${money(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}
-              . To bring him back you'd have to outbid other teams with cap space.
+              {renounce.contract.twoWay ? '' : `, and his ${money(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring him
+              back you'd have to outbid other teams with cap space.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>

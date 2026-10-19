@@ -80,9 +80,9 @@ describe('player edits', () => {
     expect(playerName(p)).toBe('Zed Quill');
     expect(l.season - p.bornYear).toBe(21);
     expect(p.injury).toMatchObject({ type: 'Torn ACL', gamesRemaining: 80, gamesTotal: 80, severity: 'severe' });
-    editPlayer(l, p.pid, { injury: null, wear: 0, mood: { score: 9, tradeRequest: false } });
+    editPlayer(l, p.pid, { injury: null, wear: 0 });
     expect(p.injury).toBeNull();
-    expect(p.mood.score).toBe(9);
+    expect(p.wear).toBe(0);
   });
 
   it('a bad edit throws and changes nothing', () => {

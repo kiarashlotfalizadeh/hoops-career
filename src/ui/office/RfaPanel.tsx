@@ -8,7 +8,7 @@ import type { League, Player } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { OFFSEASON_ROSTER_MAX, contractSeason, playerName, shortName } from '../../core/league/helpers';
-import { askingContract, makeContract, summerRoster, wantsOut } from '../../core/league/contracts';
+import { askingContract, makeContract, summerRoster } from '../../core/league/contracts';
 import {
   MATCH_DAYS,
   deadlineLabel,
@@ -211,20 +211,13 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
               ) : (
                 <>
                   <div className="small dim2">
-                    No offer sheet yet ·{' '}
-                    {wantsOut(p) ? (
-                      <span className="warn">wants out: won't re-sign, but you can match a sheet</span>
-                    ) : (
-                      <>
-                        asks <b className="num">{money(ask.amount)}</b> {forYears(ask.years)} to re-sign
-                      </>
-                    )}
+                    No offer sheet yet · asks <b className="num">{money(ask.amount)}</b> {forYears(ask.years)} to re-sign
                   </div>
                   <div className="row">
                     <button className="btn sm grow" onClick={() => setWithdraw(p)}>
                       Withdraw offer
                     </button>
-                    <button className="btn sm primary grow" disabled={wantsOut(p)} onClick={() => onResign(p.pid)}>
+                    <button className="btn sm primary grow" onClick={() => onResign(p.pid)}>
                       <PenLine size={15} /> Re-sign
                     </button>
                   </div>

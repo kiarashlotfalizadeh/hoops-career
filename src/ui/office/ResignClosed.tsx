@@ -10,7 +10,7 @@ import { capHolds } from '../../core/league/freeAgency';
 import { extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { PageHeader, Section, Statline } from '../components/ui';
-import { Callout, MoodTag, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, playerMeta, salaryText, shortSeason } from './common';
+import { Callout, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, playerMeta, salaryText, shortSeason } from './common';
 import { ContractSheet } from './ContractSheet';
 import { restrictedFreeAgents } from '../../core/league/rfa';
 import { money } from '../../core/format';
@@ -88,9 +88,6 @@ export function ResignClosed({ league }: { league: League }) {
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-                    <div className="fo-rs-mood">
-                      <MoodTag p={p} />
-                    </div>
                   </div>
                   <div className="fo-money">
                     <div className="a">{salaryText(league, salaryFor(p, s))}</div>
@@ -104,7 +101,7 @@ export function ResignClosed({ league }: { league: League }) {
           </div>
         )}
         <div className="tiny dim">
-          Asks use today's ratings and mood; both change by the summer.
+          Asks use today's ratings, which change by the summer.
           {canExtend.size > 0 ? ` An extension's ask is from ${shortSeason(s + 1)}, the season after his deal ends.` : ''}
         </div>
       </Section>

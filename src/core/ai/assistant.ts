@@ -1,5 +1,5 @@
 // The assistant: one voice for the staff's advice. Everything the staff would tell the user about
-// his team (the advisor's alerts on fit, lineups, coverages, minutes, wear and morale), his next
+// his team (the advisor's alerts on fit, lineups, coverages, minutes and wear), his next
 // opponent, his roster spots and contracts, and the owner's mood comes through this feed as cards
 // of one shape, each tagged with the area it's about so a screen can show its own (Today shows the
 // most urgent). A card can carry a one-tap fix the staff makes (applyFix) and the screen to open.

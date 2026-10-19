@@ -31,7 +31,6 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.pot = ovr;
   p.bornYear = l.season - age;
   p.injury = null;
-  p.mood.tradeRequest = false;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary ?? marketSalary(l, p)) };
   return p;
 }
@@ -300,8 +299,6 @@ describe('trade finder', () => {
     expect(availability(l, vet)).toBe('block');
     const same = shape(l, standardRoster(l, 2)[0], 76, 30);
     expect(availability(l, same)).toBe(null);
-    same.mood.tradeRequest = true;
-    expect(availability(l, same)).toBe('block');
     const kid = shape(l, standardRoster(l, 2)[1], 92, 22);
     expect(availability(l, kid)).toBe('franchise');
     const bad = shape(l, standardRoster(l, 2)[2], 64, 32, Math.round(CAP_FOR(l).salaryCap * 0.2), 3);

@@ -46,8 +46,6 @@ function shape(l: League, p: Player, ovr: number, age: number, salary: number, y
   p.bornYear = l.season - age;
   p.injury = null;
   p.experience = 6;
-  p.mood.tradeRequest = false;
-  p.mood.score = 0;
   p.contract = { start: l.season, salaries: Array.from({ length: years }, () => salary) };
   return p;
 }
@@ -96,14 +94,12 @@ describe('waivers', () => {
     expect(l.inbox[0].subject).toMatch(/claimed off waivers/);
   });
 
-  it("a claim takes over the contract's trade lock, and leaves his grievance with his old team", () => {
+  it("a claim takes over the contract's trade lock", () => {
     const l = league();
     const vetMin = CAP_FOR(l).vetMin;
     const p = shape(l, standardRoster(l, 5)[0], 74, 27, vetMin * 3, 1);
     // signed this season: he can't be traded until the lock is up, nor extended this season
     p.tradeLock = { season: l.season, day: l.day + 60 };
-    p.mood.tradeRequest = true;
-    p.mood.score = -7;
     cutTo(l, U, 14);
     record(l, U, 1);
     releasePlayer(l, p);
@@ -112,8 +108,6 @@ describe('waivers', () => {
     expect(p.tid).toBe(U);
     expect(p.tradeLock).toEqual({ season: l.season, day: l.day + 60 - WAIVER_DAYS });
     expect(extensionBlockedReason(l, p)).toMatch(/signed this deal this season/);
-    expect(p.mood.tradeRequest).toBe(false);
-    expect(p.mood.score).toBeGreaterThanOrEqual(0);
   });
 
   it("taking over another team leaves the old team's waiver claims (and free-agent offers) behind", () => {
@@ -231,18 +225,17 @@ describe('buyouts', () => {
     const l = league();
     const p = shape(l, standardRoster(l, U)[0], 74, 31, 20_000, 2);
     l.teams[U].strategy = 'contend';
-    const happy = buyoutTerms(l, p)!;
-    expect(happy.owed).toBe(40_000);
-    expect(happy.giveback).toBeGreaterThanOrEqual(0);
-    expect(happy.giveback).toBeLessThanOrEqual(0.35);
-    // unhappy, older, or on a team that isn't contending: he gives back more
-    p.mood.tradeRequest = true;
-    const unhappy = buyoutTerms(l, p)!;
-    expect(unhappy.giveback).toBeGreaterThan(happy.giveback);
+    const base = buyoutTerms(l, p)!;
+    expect(base.owed).toBe(40_000);
+    expect(base.giveback).toBeGreaterThanOrEqual(0);
+    expect(base.giveback).toBeLessThanOrEqual(0.35);
+    // older, or on a team that isn't contending: he gives back more
     p.bornYear = l.season - 33;
+    const older = buyoutTerms(l, p)!;
+    expect(older.giveback).toBeGreaterThan(base.giveback);
     l.teams[U].strategy = 'rebuild';
     const most = buyoutTerms(l, p)!;
-    expect(most.giveback).toBeGreaterThan(unhappy.giveback);
+    expect(most.giveback).toBeGreaterThan(older.giveback);
     expect(most.giveback).toBeLessThanOrEqual(0.35);
     const res = userBuyout(l, p.pid);
     expect(res.ok).toBe(true);

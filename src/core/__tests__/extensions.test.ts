@@ -46,15 +46,13 @@ function league(rngSeed = 5): League {
 
 /**
  * A player in the final season of a two-year deal signed last season (next season's deal in the
- * offseason), happy, healthy, with a known value: OVR = POT and his age.
+ * offseason), healthy, with a known value: OVR = POT and his age.
  */
 function finalYear(l: League, p: Player, ovr: number, age: number, salary = 10_000): Player {
   p.ovr = ovr;
   p.pot = ovr;
   p.bornYear = l.season - age;
   p.injury = null;
-  p.mood.score = 0;
-  p.mood.tradeRequest = false;
   p.experience = Math.max(p.experience, 4);
   p.draft = { year: l.season - 6, round: 2, pick: 40, tid: null };
   p.contract = { start: contractSeason(l) - 1, salaries: [salary, salary] };
@@ -77,11 +75,8 @@ describe('the extension window', () => {
     p.contract.salaries.push(10_000);
     expect(extensionBlockedReason(l, p)).toMatch(/final season of his deal/);
     p.contract.salaries.pop();
-    // not someone else's player, not a two-way, not while he wants out, not for a fired coach
+    // not someone else's player, not a two-way, not for a fired coach
     expect(extensionBlockedReason(l, finalYear(l, standardRoster(l, AI)[0], 78, 27))).toMatch(/your own players/);
-    p.mood.tradeRequest = true;
-    expect(extensionBlockedReason(l, p)).toMatch(/wants a trade/);
-    p.mood.tradeRequest = false;
     l.fired = true;
     expect(extensionBlockedReason(l, p)).toBe(FIRED_REASON);
     l.fired = false;
@@ -122,8 +117,6 @@ describe('the extension window', () => {
     const p = standardRoster(l, U)[0];
     p.draft = { year: l.season - 3, round: 1, pick: 4, tid: U };
     p.experience = 3;
-    p.mood.tradeRequest = false;
-    p.mood.score = 0;
     // four seasons from three summers ago: the option year is next season
     p.contract = rookieContract(l, 4, 1, l.season - 2);
     expect(contractExp(p.contract)).toBe(l.season + 1);
@@ -162,14 +155,10 @@ describe('what he asks, and whether he talks', () => {
     expect(extensionAsk(l, finalYear(l, a, 78, 23)).years).toBeLessThanOrEqual(4);
   });
 
-  it("an unhappy player won't talk, and a star on a team he doesn't fancy gives the same answer all season", () => {
+  it("a star on a team he doesn't fancy gives the same answer all season", () => {
     const l = league();
     l.phase = 'regular';
     const p = finalYear(l, standardRoster(l, U)[0], 86, 27);
-    p.mood.score = -3;
-    expect(extensionRefusal(l, p)).toMatch(/unhappy/);
-    expect(willExtend(l, p, CAP_FOR(l, l.season + 1).maxContract(10), extensionAsk(l, p).years).ok).toBe(false);
-    p.mood.score = 0;
     // a losing team with no buzz
     const t = l.teams[U];
     t.hype = 0;
@@ -229,8 +218,6 @@ describe('an extension on the books', () => {
     const p = standardRoster(l, U)[0];
     p.draft = { year: l.season - 4, round: 1, pick: 10, tid: U };
     p.experience = 3;
-    p.mood.score = 0;
-    p.mood.tradeRequest = false;
     p.contract = { ...rookieContract(l, 10, 1, l.season - 3) };
     delete p.contract.option;
     expect(extensionBlockedReason(l, p)).toBeNull();

@@ -1,5 +1,5 @@
 // God mode: the commissioner's in-game editor, turned on and off in Settings at any time
-// (Settings.godMode). With it on, any player's bio, ratings, development, health, mood, contract and
+// (Settings.godMode). With it on, any player's bio, ratings, development, health, contract and
 // team can be edited, teams renamed, recoloured and given money, players created, and trades forced
 // that the AI GMs (or the CBA) wouldn't allow. Edits bend the league's rules, never its shape: a
 // player is on one team or none, his contract pays someone, every team keeps five players to dress
@@ -70,7 +70,6 @@ export interface PlayerEdit {
   /** An injury (its type and games out), or null to heal him. */
   injury?: { type: string; games: number } | null;
   wear?: number;
-  mood?: { score?: number; tradeRequest?: boolean };
   contract?: ContractEdit;
   /** Move him to a team, or to free agency (FREE_AGENT). */
   tid?: number;
@@ -135,7 +134,6 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
   if (e.growth !== undefined && !between(e.growth, [-1, 1])) err('Development is -1 to 1.');
   if (e.injuryProne !== undefined && !between(e.injuryProne, [0, 1])) err('Injury proneness is 0 to 100%.');
   if (e.wear !== undefined && !between(e.wear, [0, 100])) err('Wear is 0 to 100.');
-  if (e.mood?.score !== undefined && !between(e.mood.score, [-10, 10])) err('Mood is -10 to 10.');
   if (e.injury) {
     if (!movable(p)) err('Only active players can be hurt.');
     else if (!e.injury.type.trim()) err('Pick an injury.');
@@ -228,7 +226,7 @@ function applyContract(league: League, p: Player, c: ContractEdit) {
 
 /**
  * Move a player to a team or to free agency, cleanly: off his old team's rotation and roles, his
- * talks, promises, waiver and restricted free agency over, the user's pending offer to him dropped.
+ * talks, waiver and restricted free agency over, the user's pending offer to him dropped.
  * A free agent (or a player whose deal is up) joins a team on his asking contract; a player under
  * contract takes his deal with him, as in a trade. Nothing is left on the old team's books.
  */
@@ -238,12 +236,9 @@ function movePlayer(league: League, p: Player, to: number) {
   if (from >= 0) leaveTeam(league.teams[from], p.pid);
   delete p.tradedFrom;
   delete p.tradeLock;
-  delete p.promise;
-  delete p.meeting;
   delete p.talks;
   delete p.rfa;
   delete p.waivers;
-  p.mood.tradeRequest = false;
   if (league.faBids?.some((b) => b.pid === p.pid)) league.faBids = league.faBids.filter((b) => b.pid !== p.pid);
   // a free agent joining a team signs at his price as it stands (marked down as the market dried
   // up, as the editor shows it), so it's read before his asking deal goes
@@ -316,8 +311,6 @@ export function editPlayer(league: League, pid: number, e: PlayerEdit) {
     p.injury = { type, gamesRemaining: e.injury.games, gamesTotal: e.injury.games, severity: injurySeverity(type, e.injury.games) };
   }
   if (e.wear !== undefined) p.wear = e.wear;
-  if (e.mood?.score !== undefined) p.mood.score = e.mood.score;
-  if (e.mood?.tradeRequest !== undefined) p.mood.tradeRequest = e.mood.tradeRequest;
   if (moving) {
     movePlayer(league, p, e.tid!);
     touched.push(p.tid);

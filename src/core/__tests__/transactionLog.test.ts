@@ -40,15 +40,13 @@ function league(rngSeed = 7): League {
   return l;
 }
 
-/** A player of known value and contract (`salary` a season for `years` from the contract season), happy and healthy. */
+/** A player of known value and contract (`salary` a season for `years` from the contract season), healthy. */
 function shape(l: League, p: Player, ovr: number, age: number, salary: number, years: number): Player {
   p.ovr = ovr;
   p.pot = ovr;
   p.bornYear = l.season - age;
   p.injury = null;
   p.experience = 6;
-  p.mood.tradeRequest = false;
-  p.mood.score = 0;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary) };
   return p;
 }

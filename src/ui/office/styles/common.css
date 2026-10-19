@@ -282,13 +282,6 @@
   text-overflow: ellipsis;
 }
 
-.fo-mood {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
 .fo-money {
   text-align: right;
   flex: none;

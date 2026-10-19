@@ -1,5 +1,5 @@
 // God mode's player editor: his ratings (with the OVR, potential and archetype they'd give him),
-// bio, health, mood and team, and his contract, in one sheet. Only what changed is saved, whole or
+// bio, health and team, and his contract, in one sheet. Only what changed is saved, whole or
 // not at all; what would stop it, or what rule it bends, shows above Save.
 import { useState } from 'react';
 import type { League, Player, Pos, RatingKey, Ratings } from '../../core/types';
@@ -10,7 +10,6 @@ import { seasonLabel } from '../../core/constants';
 import { contractSeason, playerName } from '../../core/league/helpers';
 import { askingContract } from '../../core/league/contracts';
 import { INJURY_TYPES } from '../../core/league/injuries';
-import { MOOD_META, moodLevel } from '../../core/league/morale';
 import { checkPlayerEdit, editPlayer, movable, yearsLeft, type ContractEdit, type PlayerEdit } from '../../core/league/godMode';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
@@ -44,8 +43,6 @@ interface Form {
   growth: number;
   injuryProne: number;
   wear: number;
-  mood: number;
-  tradeRequest: boolean;
   injury: { type: string; games: string } | null;
   tid: number;
   /** $M, as typed. */
@@ -74,8 +71,6 @@ export function formOf(league: League, p: Player): Form {
     growth: p.growth,
     injuryProne: p.injuryProne,
     wear: p.wear,
-    mood: p.mood.score,
-    tradeRequest: p.mood.tradeRequest,
     injury: p.injury ? { type: p.injury.type, games: String(p.injury.gamesRemaining) } : null,
     tid: p.tid,
     amount: ((ask?.amount ?? salaryFor(p, cs)) / 1000).toFixed(1),
@@ -91,7 +86,7 @@ const moved = (a: number, b: number) => Math.abs(a - b) > 1e-6;
 /**
  * The edit: only what differs from the form as it opened, `base` (a field that doesn't parse goes
  * in, for the checks to name). Not from him as he is now: a sim running while the sheet is open
- * moves his wear, mood, health or team, and saving mustn't put those back.
+ * moves his wear, health or team, and saving mustn't put those back.
  */
 export function editOf(base: Form, f: Form): PlayerEdit {
   const e: PlayerEdit = {};
@@ -109,8 +104,6 @@ export function editOf(base: Form, f: Form): PlayerEdit {
   if (moved(f.growth, base.growth)) e.growth = f.growth;
   if (moved(f.injuryProne, base.injuryProne)) e.injuryProne = f.injuryProne;
   if (moved(f.wear, base.wear)) e.wear = f.wear;
-  const mood = { ...(moved(f.mood, base.mood) ? { score: f.mood } : {}), ...(f.tradeRequest !== base.tradeRequest ? { tradeRequest: f.tradeRequest } : {}) };
-  if (Object.keys(mood).length) e.mood = mood;
   const hurt = (x: Form['injury']) => (x ? `${x.type}|${x.games.trim()}` : '');
   if (hurt(f.injury) !== hurt(base.injury)) e.injury = f.injury && { type: f.injury.type, games: whole(f.injury.games) };
   if (f.tid !== base.tid) e.tid = f.tid;
@@ -311,17 +304,6 @@ function StatusTab({ league, p, f, set }: TabProps & { league: League; p: Player
         </div>
       )}
       <Slider label="Wear" min={0} max={100} value={f.wear} onChange={(wear) => set({ wear })} format={(v) => String(Math.round(v))} left="Fresh" right="Worn down" />
-      <Slider
-        label="Mood"
-        min={-10}
-        max={10}
-        step={0.5}
-        value={f.mood}
-        onChange={(mood) => set({ mood })}
-        format={(v) => `${MOOD_META[moodLevel(v)].label} (${signed(v, 1)})`}
-        help="It moves again with his minutes, the team's results and his role at the next weekly check."
-      />
-      <Toggle on={f.tradeRequest} onChange={(tradeRequest) => set({ tradeRequest })} label="Asking for a trade" />
       <Slider
         label="Injury proneness"
         min={0}

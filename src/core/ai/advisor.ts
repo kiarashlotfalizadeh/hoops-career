@@ -11,7 +11,6 @@ import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
 import { andList, playerName, rosterSorted, shortName, teamPlayers } from '../league/helpers';
-import { complaints } from '../league/morale';
 import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
@@ -63,12 +62,6 @@ function readRotation(league: League, tid: number) {
 
 /** A big that opponents hunt on switches. */
 const slowBig = (p: Player) => p.ratings.hgt >= 60 && p.ratings.spd < 40;
-
-/** A player's complaints as sentences, or `none` when he has nothing specific. */
-const moodText = (p: Player, none: string) => {
-  const gripes = complaints(p);
-  return gripes.length ? `${gripes.join('. ')}.` : none;
-};
 
 /** What each starting-five hole is about, as a rating. */
 const HOLE_RATING: Record<string, RatingKey> = {
@@ -657,10 +650,6 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         ...(b2b && !rot.restB2B.includes(p.pid) ? { fix: { kind: 'restB2B' as const, pid: p.pid, label: 'Rest him on back-to-backs' } } : {}),
       });
     }
-    if (p.mood.tradeRequest)
-      alerts.push({ id: `tr-${p.pid}`, tone: 'bad', title: `${p.lastName} wants a trade`, body: moodText(p, 'He wants a fresh start somewhere else.'), link: `/player/${p.pid}` });
-    else if (p.mood.score <= -4 && p.ovr >= 70)
-      alerts.push({ id: `mood-${p.pid}`, tone: 'bad', title: `${p.lastName} is unhappy`, body: moodText(p, 'He is frustrated.'), link: `/player/${p.pid}` });
   }
   return alerts.slice(0, 8);
 }

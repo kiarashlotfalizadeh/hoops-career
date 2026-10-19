@@ -1,13 +1,13 @@
 // The post-game recap's data: the standings move kept with the user's regular-season results (set
-// before the first save and kept by it), quotes that read the same every time without touching the
-// league's random stream, and a press conference that moves the user's locker room once per game.
+// before the first save and kept by it), and quotes that read the same every time without touching
+// the league's random stream.
 import 'fake-indexeddb/auto';
 import { describe, expect, it } from 'vitest';
 import { testLeague, userGames } from '../../state/__tests__/fixtures';
 import { loadLeague, saveLeague } from '../../state/persistence';
 import { simDay } from '../league/season';
-import { buildGameReport, IMPACT_TEXT, impactSentence, possessive } from '../analysis/gameReport';
-import { calloutTarget, holdPress, isLatestUserGame, postGameQuotes, PRESS, pressEffects, pressOpen, pressOptions, recapFacts, streakAfter } from '../analysis/quotes';
+import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
+import { isLatestUserGame, postGameQuotes, recapFacts, streakAfter } from '../analysis/quotes';
 import { curTeamSeason } from '../league/helpers';
 import { migrate } from '../../state/persistence';
 import type { GameResult, League } from '../types';
@@ -51,7 +51,7 @@ describe('post-game stakes', () => {
   });
 });
 
-describe('post-game quotes and the press conference', () => {
+describe('post-game quotes', () => {
   it('quotes are the same every time for a game and draw nothing from the league', () => {
     const l = played('quotes', 20);
     const rng = l.rng;
@@ -164,147 +164,8 @@ describe('post-game quotes and the press conference', () => {
     const last = userGames(l)
       .filter((g) => g.type === 'regular')
       .at(-1)!;
-    expect(streakAfter(l, last)).toBe(curTeamSeason(l, l.userTid).streak);
-  });
-
-  it("the press conference moves only the user's players, once, for the latest game", () => {
-    const l = played('press', 12);
-    const games = userGames(l);
-    const last = games.at(-1)!;
     expect(isLatestUserGame(l, last)).toBe(true);
-    expect(pressOpen(l, games[0])).toBe(false);
-    expect(holdPress(l, games[0], 'group')).toBeNull();
-    const us = last.home.tid === l.userTid ? last.home : last.away;
-    const lost = us.pts < (us === last.home ? last.away : last.home).pts;
-    expect(pressOptions(l, last).some((o) => o.id === 'challenge')).toBe(lost);
-    const before = Object.fromEntries(Object.values(l.players).map((p) => [p.pid, p.mood.score]));
-    const rng = l.rng;
-    const fx = holdPress(l, last, 'pog')!;
-    expect(fx.length).toBeGreaterThan(0);
-    expect(fx).toEqual(pressEffects(l, last, 'pog'));
-    for (const p of Object.values(l.players)) {
-      const d = Math.round((p.mood.score - before[p.pid]) * 10) / 10;
-      const e = fx.find((x) => x.pid === p.pid);
-      if (!e) expect(d, `${p.pid}`).toBe(0);
-      else {
-        expect(p.tid).toBe(l.userTid);
-        // (a mood at the scale's end can't move past it)
-        if (Math.abs(before[p.pid]) < 8) expect(d).toBeCloseTo(e.delta, 6);
-      }
-    }
-    expect(l.press).toEqual({ gid: last.gid, choice: 'pog' });
-    expect(l.rng).toBe(rng);
-    // once per game
-    const after = Object.fromEntries(Object.values(l.players).map((p) => [p.pid, p.mood.score]));
-    expect(pressOpen(l, last)).toBe(false);
-    expect(holdPress(l, last, 'group')).toBeNull();
-    expect(Object.fromEntries(Object.values(l.players).map((p) => [p.pid, p.mood.score]))).toEqual(after);
-  });
-
-  describe('each answer has a trade-off, and its button says it', () => {
-    const base = played('answers', 14);
-    /** The latest game, made a win or a loss by ten. */
-    const game = (won: boolean) => {
-      const l = structuredClone(base);
-      const g = userGames(l).at(-1)!;
-      const us = g.home.tid === l.userTid ? g.home : g.away;
-      const them = us === g.home ? g.away : g.home;
-      [us.pts, them.pts] = won ? [110, 100] : [100, 110];
-      return { l, g, us };
-    };
-    const delta = (fx: { pid: number; delta: number }[], pid: number) => fx.find((e) => e.pid === pid)?.delta ?? 0;
-    const mine = (l: League, us: GameResult['home']) => us.players.filter((b) => b.min > 0 && l.players[b.pid].tid === l.userTid);
-
-    it('praise lifts the player of the game most; the teammate he outshone and a poor starter cool', () => {
-      const { l, g, us } = game(true);
-      const fx = pressEffects(l, g, 'pog');
-      const star = fx[0];
-      expect(star.delta).toBe(PRESS.praise);
-      expect(fx.filter((e) => e.delta > 0)).toHaveLength(1);
-      expect(fx.length).toBeLessThanOrEqual(3);
-      for (const e of fx.slice(1)) expect([PRESS.outshone, PRESS.flop]).toContain(e.delta);
-      // a starter with a poor night (not the star, nor the one he outshone) cools
-      const flop = mine(l, us).find((b) => b.gs && b.pid !== star.pid && delta(fx, b.pid) !== PRESS.outshone)!;
-      Object.assign(flop, { pts: 0, fgm: 0, fga: 9, ftm: 0, fta: 0, ast: 0, orb: 0, drb: 1, stl: 0, blk: 0, tov: 4 });
-      const after = pressEffects(l, g, 'pog');
-      expect(after.filter((e) => e.delta === PRESS.flop).map((e) => e.pid)).toContain(flop.pid);
-      const opt = pressOptions(l, g).find((o) => o.id === 'pog')!;
-      expect(opt.hint.startsWith(`${possessive(star.name)} mood ↑`)).toBe(true);
-      expect(opt.hint).toContain('mood ↓');
-    });
-
-    it('crediting the group lifts everyone after a win and reads as soft after a loss', () => {
-      const win = game(true);
-      const fx = pressEffects(win.l, win.g, 'group');
-      expect(fx.length).toBe(mine(win.l, win.us).length);
-      for (const e of fx) expect(e.delta).toBe(PRESS.group);
-      const loss = game(false);
-      expect(pressEffects(loss.l, loss.g, 'group')).toEqual([]);
-      expect(pressOptions(loss.l, loss.g).find((o) => o.id === 'group')!.hint).toBe('Reads soft · no change');
-      // answered anyway: it's held, and moves nobody
-      const before = Object.values(loss.l.players).map((p) => p.mood.score);
-      expect(holdPress(loss.l, loss.g, 'group')).toEqual([]);
-      expect(Object.values(loss.l.players).map((p) => p.mood.score)).toEqual(before);
-      expect(loss.l.press?.gid).toBe(loss.g.gid);
-    });
-
-    it('challenging the team (losses only) lifts players in a good mood and stings unhappy ones', () => {
-      const win = game(true);
-      expect(pressOptions(win.l, win.g).map((o) => o.id)).not.toContain('challenge');
-      expect(holdPress(win.l, win.g, 'challenge')).toBeNull();
-      const { l, g, us } = game(false);
-      const [happy, sulker, furious, calm] = mine(l, us);
-      l.players[happy.pid].mood.score = 4;
-      l.players[sulker.pid].mood.score = -3;
-      l.players[furious.pid].mood.score = -7;
-      l.players[calm.pid].mood.score = 0;
-      const fx = pressEffects(l, g, 'challenge');
-      expect(delta(fx, happy.pid)).toBe(PRESS.answer);
-      expect(delta(fx, sulker.pid)).toBe(PRESS.sulk);
-      expect(delta(fx, furious.pid)).toBe(PRESS.sulkFurious);
-      expect(delta(fx, calm.pid)).toBe(0);
-      expect(pressOptions(l, g).find((o) => o.id === 'challenge')!.hint).toMatch(/^.+ mood ↑ · .+ mood ↓$/);
-    });
-
-    it('a call-out names the one who clearly struggled: a veteran in a good mood takes it, anyone else is hurt by it', () => {
-      const { l, g, us } = game(false);
-      // nobody had a bad enough night: no call-out
-      for (const b of us.players) Object.assign(b, { pts: Math.max(b.pts, 12), fgm: Math.max(b.fgm, 5), fga: Math.min(b.fga, 10), tov: 0, pf: 0 });
-      expect(calloutTarget(l, g)).toBeUndefined();
-      expect(pressOptions(l, g).map((o) => o.id)).not.toContain('callout');
-      const bad = mine(l, us).filter((b) => b.min >= 20)[1];
-      Object.assign(bad, { pts: 2, fgm: 1, fga: 11, ftm: 0, fta: 2, ast: 0, orb: 0, drb: 2, stl: 0, blk: 0, tov: 4, pf: 4 });
-      expect(calloutTarget(l, g)?.pid).toBe(bad.pid);
-      const p = l.players[bad.pid];
-      p.bornYear = l.season - 33;
-      p.mood.score = 4;
-      expect(pressEffects(l, g, 'callout')).toEqual([{ pid: bad.pid, name: p.lastName, delta: PRESS.calloutUp }]);
-      expect(pressOptions(l, g).find((o) => o.id === 'callout')).toMatchObject({ label: `Call out ${p.lastName}`, hint: `${possessive(p.lastName)} mood ↑` });
-      p.bornYear = l.season - 23;
-      expect(pressEffects(l, g, 'callout')[0].delta).toBe(PRESS.calloutDown);
-      p.bornYear = l.season - 33;
-      p.mood.score = 0;
-      expect(pressEffects(l, g, 'callout')[0].delta).toBe(PRESS.calloutDown);
-      expect(pressOptions(l, g).find((o) => o.id === 'callout')!.hint).toBe(`${possessive(p.lastName)} mood ↓`);
-      // after a win nobody is called out
-      const win = game(true);
-      expect(calloutTarget(win.l, win.g)).toBeUndefined();
-    });
-
-    it('every hint is true to the effects', () => {
-      for (const won of [true, false]) {
-        const { l, g } = game(won);
-        for (const o of pressOptions(l, g)) {
-          const fx = pressEffects(l, g, o.id);
-          const up = fx.filter((e) => e.delta > 0);
-          const down = fx.filter((e) => e.delta < 0);
-          expect(o.hint.includes('mood ↑'), `${o.id} up`).toBe(up.length > 0);
-          expect(o.hint.includes('mood ↓'), `${o.id} down`).toBe(down.length > 0);
-          if (up.length && up.length <= 2) for (const e of up) expect(o.hint).toContain(e.name);
-          if (up.length > 2) expect(o.hint).toContain(`${up.length} players' mood ↑`);
-        }
-      }
-    });
+    expect(streakAfter(l, last)).toBe(curTeamSeason(l, l.userTid).streak);
   });
 
   it('what the quotes read survives a save, and a damaged one goes', () => {

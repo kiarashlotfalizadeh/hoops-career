@@ -149,22 +149,6 @@ export interface PlayerStats {
   };
 }
 
-export type MoodLevel = 'ecstatic' | 'happy' | 'content' | 'unhappy' | 'furious';
-
-export interface Mood {
-  /** -10..10 composite. */
-  score: number;
-  ptComponent: number; // playing time vs expectation
-  winComponent: number;
-  roleComponent: number;
-  contractComponent: number;
-  /** Minutes per game the player expects, given his standing. */
-  expectedMin: number;
-  tradeRequest: boolean;
-  /** Short reasons for UI. */
-  notes: string[];
-}
-
 export interface AwardRecord {
   season: number;
   type: string; // 'MVP', 'DPOY', 'All-NBA 1st', 'Champion', 'All-Star', ...
@@ -215,7 +199,6 @@ export interface Player {
   stats: PlayerStats[];
   injury: Injury | null;
   injuryCount: number;
-  mood: Mood;
   training: TrainingFocus;
   awards: AwardRecord[];
   /** Season he joined current team. */
@@ -245,10 +228,6 @@ export interface Player {
   faDays?: number;
   /** Released in season with guaranteed money left: other teams can claim his contract until `until` (a season day). See resolveWaivers. */
   waivers?: Waivers;
-  /** What the GM promised him at their last meeting, while it's open (the user's players only; see meetPlayer in morale.ts). */
-  promise?: PlayerPromise;
-  /** His last meeting with the GM (one every MEET_DAYS days), and the season a promise to him was broken: he takes no more that season. */
-  meeting?: { season: number; day: number; broken?: number };
   /** Restricted free agency: his team extended a qualifying offer as his deal ran out, so it can match any offer sheet he signs (see rfa.ts). */
   rfa?: Rfa;
   /** His contract talks with the user's team (see negotiation.ts): cleared when he signs anywhere. */
@@ -294,26 +273,6 @@ export interface Talks {
   closed?: { season: number; day: number };
   /** Re-sign period, talks broke down: his ask went up by this factor and he takes nothing less. */
   firm?: number;
-}
-
-/**
- * A promise the GM made to one of his players who asked for a trade or is unhappy (see meetPlayer):
- * 'role' a bigger role (he holds off and is judged on his minutes over his next ROLE_GAMES games),
- * 'trade' to move him (by this season's deadline, or by next opening night), 'patience' he agreed
- * to hold off for PATIENCE_GAMES team games.
- */
-export interface PlayerPromise {
-  kind: 'role' | 'trade' | 'patience';
-  /** His team when it was made: a trade or a release ends it. */
-  tid: number;
-  season: number;
-  day: number;
-  /** He had asked for a trade when it was made (a role or patience promise puts the request on hold). */
-  request: boolean;
-  /** Role: the minutes a night he expects by the end of it. */
-  minutes?: number;
-  /** Trade: judged the day after this season's deadline, or on next season's opening night. */
-  by?: 'deadline' | 'opening';
 }
 
 /**
@@ -1283,8 +1242,6 @@ export interface League {
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
   cup?: CupState | null;
-  /** The user's latest post-game press conference: the game and the answer he gave (one per game). */
-  press?: { gid: number; choice: PressChoice };
   /** AI trade offers to the user that are still open. */
   proposals?: Proposal[];
   nextProposalId?: number;
@@ -1370,9 +1327,6 @@ export type LiveOp = { at: number } & (
   | { op: 'timeout'; args: { reason?: string } }
   | { op: 'manualSubs'; args: { on: boolean } }
 );
-
-/** Post-game press conference answers: credit the group, praise the player of the game, challenge the team and call one player out (after a loss). */
-export type PressChoice = 'group' | 'pog' | 'challenge' | 'callout';
 
 export interface CupGroup {
   /** 'East A' ... 'West C'. */

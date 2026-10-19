@@ -72,8 +72,6 @@ describe('retired players (L4)', () => {
       teamFta: 1500,
       teamTov: 900,
     });
-    p.mood.score = -4;
-    p.mood.notes = ['Wants more minutes'];
     return p;
   }
 
@@ -98,8 +96,6 @@ describe('retired players (L4)', () => {
     // usage and plus-minus still show in his career table
     expect([s.teamFga, s.teamFta, s.teamTov, s.pm, s.pts]).toEqual([5000, 1500, 900, 37, 4500]);
     expect(s.min).toBe(Math.round(500 * 21.123456 * 10) / 10);
-    expect(vet.mood.notes).toEqual([]);
-    expect(vet.mood.score).toBe(0);
   });
 });
 

@@ -1,14 +1,12 @@
-// What players and the other coach said after one of the user's games, and the user's own
-// optional press conference. Quotes come from templates for what happened (the margin, overtime,
-// a 30-point night, the player of the game, a streak, an upset, an injury), picked by a hash of the
-// game id so a game always reads the same and nothing is drawn from the league's random stream. The
-// press conference (below) moves the user's locker room's mood, once per game, with real trade-offs.
+// What players and the other coach said after one of the user's games. Quotes come from templates
+// for what happened (the margin, overtime, a 30-point night, the player of the game, a streak, an
+// upset, an injury), picked by a hash of the game id so a game always reads the same and nothing is
+// drawn from the league's random stream.
 
-import type { BoxLine, GameResult, League, Player, PressChoice, TeamBox } from '../types';
-import { hashString, clamp } from '../random';
-import { playerName, seasonTotals, shortName } from '../league/helpers';
-import { playerAge } from '../playerGen';
-import { possessive, type Factor, type GameReport } from './gameReport';
+import type { BoxLine, GameResult, League, Player, TeamBox } from '../types';
+import { hashString } from '../random';
+import { playerName, shortName } from '../league/helpers';
+import type { Factor, GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
 
 export interface Quote {
@@ -70,7 +68,7 @@ function userGames(league: League, season: number) {
   return league.games.filter((g) => g.season === season && (g.home.tid === league.userTid || g.away.tid === league.userTid));
 }
 
-/** Is this the user's latest game? (Streaks, injuries and the press conference are about the latest one.) */
+/** Is this the user's latest game? (Streaks and injuries are about the latest one.) */
 export function isLatestUserGame(league: League, res: GameResult) {
   const mine = league.games.filter((g) => g.home.tid === league.userTid || g.away.tid === league.userTid);
   return mine[mine.length - 1]?.gid === res.gid;
@@ -351,183 +349,4 @@ export function postGameQuotes(league: League, res: GameResult, report?: GameRep
   const opp = league.teams[f.them.tid];
   out.push({ who: opp.coach.name, role: `${opp.abbrev} head coach`, tid: opp.tid, text: coachLine(f, res.gid, league) });
   return out;
-}
-
-// ---------------------------------------------------------------- press conference
-//
-// One answer after the user's latest game, once (League.press keeps which game was answered). Every
-// answer works through the morale model's mood score and nothing else: a lift raises a player's
-// on-court multiplier a little (moodPerf) and the weekly morale update fades it again (it keeps 60%
-// of the mood each week), so a press-conference effect is a short-term one. What each answer does is
-// read from the box score and the players as they stand, never drawn from the league's random stream,
-// so the same game always offers the same answers with the same effects:
-//
-// - Praise <the player of the game>: a bigger lift for him; the teammate whose role he outshone (our
-//   usual top scorer, outscored tonight) cools, and so does a starter who had a poor night.
-// - Credit the group: a small lift for everyone who played after a win; after a loss it reads as soft
-//   and moves nobody.
-// - Challenge the team (losses): players in a good mood answer it (a lift); unhappy ones sulk (a hit),
-//   the furious more; the rest shrug.
-// - Call out <player> (losses, when one of ours clearly struggled): a big swing on him alone, up for a
-//   veteran in a good mood who takes it as a challenge, down for anyone else.
-
-export interface PressOption {
-  id: PressChoice;
-  label: string;
-  /** What the answer would do, in a few words ("Holmgren's mood ↑ · Mitchell's mood ↓"), from its effects. */
-  hint: string;
-}
-
-export interface PressEffect {
-  pid: number;
-  name: string;
-  /** Change in mood score (-10..10). */
-  delta: number;
-}
-
-/** Mood changes, by answer. */
-export const PRESS = {
-  /** The praised player. */
-  praise: 0.8,
-  /** The teammate he outshone, and a starter who had a poor night. */
-  outshone: -0.3,
-  flop: -0.2,
-  /** Everyone who played, after a win. */
-  group: 0.25,
-  /** Challenge the team: players in a good mood (2+), unhappy ones (below -2), furious ones (-5 and below). */
-  answer: 0.5,
-  sulk: -0.8,
-  sulkFurious: -1.2,
-  /** Call out: a veteran (30+) in a good mood, anyone else. */
-  calloutUp: 1.5,
-  calloutDown: -2,
-} as const;
-
-/** A starter's night that reads as poor (game score), and one bad enough to call a player out for (with his minutes). */
-const POOR_NIGHT = 5;
-const STRUGGLED = 3;
-const STRUGGLED_MIN = 18;
-const VETERAN = 30;
-const GOOD_MOOD = 2;
-
-/** Our players in this game who are still on the user's team. */
-function ours(league: League, res: GameResult): BoxLine[] {
-  const us = userSide(league, res);
-  return us ? us.players.filter((b) => b.min > 0 && league.players[b.pid]?.tid === league.userTid) : [];
-}
-
-const lostGame = (league: League, res: GameResult) => {
-  const us = userSide(league, res);
-  return !!us && us.pts < (us === res.home ? res.away : res.home).pts;
-};
-
-/** Who "Praise" praises: the player of the game when he's ours, else our best game. */
-function praised(league: League, res: GameResult): BoxLine | undefined {
-  const played = ours(league, res);
-  return played.find((b) => b.pid === res.pog) ?? [...played].sort((a, b) => gameScore(b) - gameScore(a))[0];
-}
-
-/** Points a game this season (the kind of game this one was). */
-function ppg(league: League, pid: number, res: GameResult): number {
-  const p = league.players[pid];
-  const s = p ? seasonTotals(p, res.season, res.type === 'playoffs') : null;
-  return s && s.gp ? s.pts / s.gp : 0;
-}
-
-/**
- * Who cools when the user praises `star`: the teammate whose role he outshone (our usual top scorer,
- * when the praised player outscored him tonight) and a starter who had a poor night.
- */
-function cooled(league: League, res: GameResult, star: BoxLine): { outshone?: BoxLine; flop?: BoxLine } {
-  const rest = ours(league, res).filter((b) => b.pid !== star.pid);
-  const top = [...rest].sort((a, b) => ppg(league, b.pid, res) - ppg(league, a.pid, res) || a.pid - b.pid)[0];
-  const outshone = top && ppg(league, top.pid, res) > ppg(league, star.pid, res) && star.pts > top.pts ? top : undefined;
-  const flop = rest.filter((b) => b.gs && b !== outshone && gameScore(b) < POOR_NIGHT).sort((a, b) => gameScore(a) - gameScore(b) || a.pid - b.pid)[0];
-  return { outshone, flop };
-}
-
-/** The player a call-out names: after a loss, ours with the worst night among those who played real minutes, when it was clearly bad. */
-export function calloutTarget(league: League, res: GameResult): BoxLine | undefined {
-  if (!lostGame(league, res)) return undefined;
-  return ours(league, res)
-    .filter((b) => b.min >= STRUGGLED_MIN && gameScore(b) <= STRUGGLED)
-    .sort((a, b) => gameScore(a) - gameScore(b) || a.pid - b.pid)[0];
-}
-
-/** The press conference answers on offer after this game (Challenge and Call out after losses only). */
-export function pressOptions(league: League, res: GameResult): PressOption[] {
-  if (!userSide(league, res)) return [];
-  const star = praised(league, res);
-  const lost = lostGame(league, res);
-  const target = calloutTarget(league, res);
-  const ids: PressChoice[] = [...(star ? (['pog'] as const) : []), 'group', ...(lost ? (['challenge'] as const) : []), ...(target ? (['callout'] as const) : [])];
-  const label = (id: PressChoice) =>
-    id === 'pog' ? `Praise ${lastName(league, star!)}` : id === 'group' ? 'Credit the group' : id === 'challenge' ? 'Challenge the team' : `Call out ${lastName(league, target!)}`;
-  return ids.map((id) => ({ id, label: label(id), hint: pressHint(pressEffects(league, res, id), id === 'group' && lost) }));
-}
-
-/** What an answer does to the locker room (see the section's head). Only players still on the user's team count. */
-export function pressEffects(league: League, res: GameResult, choice: PressChoice): PressEffect[] {
-  const played = ours(league, res);
-  if (!played.length) return [];
-  const eff = (b: BoxLine, delta: number): PressEffect => ({ pid: b.pid, name: lastName(league, b), delta });
-  const mood = (b: BoxLine) => league.players[b.pid].mood.score;
-  const lost = lostGame(league, res);
-  switch (choice) {
-    case 'pog': {
-      const star = praised(league, res);
-      if (!star) return [];
-      const { outshone, flop } = cooled(league, res, star);
-      return [eff(star, PRESS.praise), ...(outshone ? [eff(outshone, PRESS.outshone)] : []), ...(flop ? [eff(flop, PRESS.flop)] : [])];
-    }
-    case 'group':
-      return lost ? [] : played.map((b) => eff(b, PRESS.group));
-    case 'challenge':
-      if (!lost) return [];
-      return played.flatMap((b) => (mood(b) >= GOOD_MOOD ? [eff(b, PRESS.answer)] : mood(b) <= -5 ? [eff(b, PRESS.sulkFurious)] : mood(b) < -2 ? [eff(b, PRESS.sulk)] : []));
-    case 'callout': {
-      const b = calloutTarget(league, res);
-      if (!b) return [];
-      const p = league.players[b.pid];
-      const takesIt = playerAge(p, league.season) >= VETERAN && p.mood.score >= GOOD_MOOD;
-      return [eff(b, takesIt ? PRESS.calloutUp : PRESS.calloutDown)];
-    }
-  }
-}
-
-/** The press conference can be held: the user's latest game, not held yet. */
-export function pressOpen(league: League, res: GameResult): boolean {
-  return !!userSide(league, res) && isLatestUserGame(league, res) && league.press?.gid !== res.gid;
-}
-
-/** Hold the press conference: applies the answer's mood changes once and records it. Returns the effects, or null when it can't be held. */
-export function holdPress(league: League, res: GameResult, choice: PressChoice): PressEffect[] | null {
-  if (!pressOpen(league, res) || !pressOptions(league, res).some((o) => o.id === choice)) return null;
-  const effects = pressEffects(league, res, choice);
-  for (const e of effects) {
-    const p = league.players[e.pid];
-    p.mood.score = Math.round(clamp(p.mood.score + e.delta, -10, 10) * 10) / 10;
-  }
-  league.press = { gid: res.gid, choice };
-  return effects;
-}
-
-/** Whose mood an effect list moves: one or two by name, more as a count ("Holmgren's", "Wallace and Mitchell's", "12 players'"). */
-const whose = (list: PressEffect[]) => (list.length > 2 ? `${list.length} players'` : possessive(list.map((e) => e.name).join(' and ')));
-
-/** Whose mood goes which way, in plain words: "Holmgren's mood ↑ · Mitchell's mood ↓" ('' when nobody's moves). */
-function moodWords(effects: PressEffect[]): string {
-  const up = effects.filter((e) => e.delta > 0);
-  const down = effects.filter((e) => e.delta < 0);
-  return [up.length ? `${whose(up)} mood ↑` : '', down.length ? `${whose(down)} mood ↓` : ''].filter(Boolean).join(' · ');
-}
-
-/** An answer's effect in a few words, for its button: "Holmgren's mood ↑ · Mitchell's mood ↓", "9 players' mood ↑", "Reads soft · no change". */
-export function pressHint(effects: PressEffect[], soft = false): string {
-  return moodWords(effects) || (soft ? 'Reads soft · no change' : 'No change');
-}
-
-/** The answer's effect once given, in the same words as its button: "Holmgren's mood ↑ · Mitchell's mood ↓". */
-export function pressSummary(effects: PressEffect[]): string {
-  return moodWords(effects) || 'No change in the room';
 }

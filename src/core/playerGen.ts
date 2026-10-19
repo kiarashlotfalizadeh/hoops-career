@@ -1,4 +1,4 @@
-import type { Contract, Mood, Player, PlayerStats, Pos, Ratings, Tendencies } from './types';
+import type { Contract, Player, PlayerStats, Pos, Ratings, Tendencies } from './types';
 import { Rng, clamp } from './random';
 import { NAME_POOLS } from './names';
 import { archetype, clampRatings, heightToRating, inferPos, ovrRaw, potential, toDisplay, type OvrScale } from './ratings';
@@ -203,10 +203,6 @@ export function followTendencies(p: Player, prevOvr: number, rng: Rng, settle = 
   }
 }
 
-export function blankMood(): Mood {
-  return { score: 0, ptComponent: 0, winComponent: 0, roleComponent: 0, contractComponent: 0, expectedMin: 0, tradeRequest: false, notes: [] };
-}
-
 export function blankStats(season: number, tid: number, playoffs: boolean): PlayerStats {
   return {
     season,
@@ -326,7 +322,6 @@ export function generatePlayer(rng: Rng, o: NewPlayerOpts): Player {
     stats: [],
     injury: null,
     injuryCount: 0,
-    mood: blankMood(),
     training: 'balanced',
     awards: [],
     joinedSeason: o.season,

@@ -182,9 +182,9 @@ export function playerPrefs(league: League, p: Pick<Player, 'pid'>): PlayerPrefs
 /**
  * The parts of a team's appeal to a player, before his priorities weigh them: winning (this
  * season's record once 10 games are in, else last season's), market (hype and size), role (is he
- * better than the team's current rotation?) and, on his current team, his mood.
+ * better than the team's current rotation?).
  */
-export function appealTerms(league: League, tid: number, p: Player): { winning: number; market: number; role: number; mood: number; wp: number; rank: number } {
+export function appealTerms(league: League, tid: number, p: Player): { winning: number; market: number; role: number; wp: number; rank: number } {
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
   const games = ts.won + ts.lost;
@@ -198,8 +198,6 @@ export function appealTerms(league: League, tid: number, p: Player): { winning: 
     winning: (wp - 0.5) * 0.35,
     market: (team.hype - 0.5) * 0.15 + Math.min(0.06, (team.pop - 3) * 0.01),
     role: rank <= 4 ? 0.06 : rank >= 9 ? -0.08 : 0,
-    // current team: mood matters
-    mood: p.tid === tid ? p.mood.score * 0.02 : 0,
     wp,
     rank,
   };
@@ -211,7 +209,7 @@ export function appealTerms(league: League, tid: number, p: Player): { winning: 
  */
 export function teamAppeal(league: League, tid: number, p: Player, prefs: PlayerPrefs = playerPrefs(league, p)): number {
   const t = appealTerms(league, tid, p);
-  return clamp(1 + prefs.winning * t.winning + prefs.market * t.market + prefs.role * t.role + t.mood - talksSour(league, tid, p), 0.75, 1.25);
+  return clamp(1 + prefs.winning * t.winning + prefs.market * t.market + prefs.role * t.role - talksSour(league, tid, p), 0.75, 1.25);
 }
 
 /**
@@ -246,7 +244,6 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {
   const ask = askingContract(league, p, tid);
-  if (wantsOut(p) && p.tid === tid) return { ok: false, reason: wantsOutReason(p) };
   if (years < 1 || years > 5) return { ok: false, reason: 'Contracts must be 1 to 5 years.' };
   const yearPenalty = Math.abs(years - ask.years) * 0.03;
   if (amount >= ask.amount * (1 + yearPenalty) - 1) return { ok: true, reason: 'Deal!' };
@@ -490,15 +487,6 @@ export function summerRoster(league: League, tid: number): number {
   return signed + sheets + (tid === league.userTid ? (league.faBids?.length ?? 0) : 0);
 }
 
-/** A player who asked for a trade won't sign with his team, nor while a promise only has the request on hold (see meetPlayer). */
-export const wantsOut = (p: Player) => p.mood.tradeRequest || !!p.promise?.request;
-
-/** Why he won't re-sign: he wants out, or his request is only on hold while a promise runs. */
-export const wantsOutReason = (p: Player) =>
-  p.mood.tradeRequest
-    ? `${playerName(p)} wants out and won't re-sign.`
-    : `${playerName(p)} asked for a trade: your promise has him holding off, but he won't re-sign while it stands.`;
-
 /**
  * The payroll an AI team will go to for keeping a player worth `v`. It follows the strategy:
  * contenders go a little past the tax, retooling teams stop halfway between cap and tax,
@@ -553,7 +541,6 @@ export function signPlayer(
   p.tradeLock = league.phase === 'regular' ? { season: league.season, day: Math.max(DEC_15, league.day + 90) } : { season: p.contract.start, day: DEC_15 };
   p.asking = undefined;
   p.faDays = undefined;
-  p.mood.tradeRequest = false;
   const team = league.teams[tid];
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
   // a newcomer takes a number nobody there wears (nor has retired) now, not at the next game
@@ -704,13 +691,10 @@ export function releasePlayer(league: League, p: Player, opts: { news?: boolean;
   leaveTeam(team, p.pid);
   if (league.untouchable?.includes(p.pid)) league.untouchable = league.untouchable.filter((x) => x !== p.pid);
   // a free agent like any other: the trade-back rule and the trade lock went with the old contract,
-  // his old team's rights to him (a qualifying offer) with it, and, as after a trade, what his old
-  // GM promised him and their meetings stay behind
+  // his old team's rights to him (a qualifying offer) with it
   delete p.tradedFrom;
   delete p.tradeLock;
   delete p.rfa;
-  delete p.promise;
-  delete p.meeting;
   if (waive) p.waivers = { from: tid, until: league.day + WAIVER_DAYS, contract, dead, ...(lock ? { lock } : {}) };
   else delete p.waivers;
   // a free agent again: whatever he was talking about with the user is over
@@ -783,10 +767,8 @@ function claimPlayer(league: League, p: Player, tid: number) {
   p.contract = w.contract;
   p.joinedSeason = league.season;
   // the contract comes with its trade lock (a deal signed this season still can't be traded or
-  // extended yet), and a fresh start: whatever soured him on his old team stays there
+  // extended yet)
   if (w.lock) p.tradeLock = { ...w.lock };
-  p.mood.tradeRequest = false;
-  p.mood.score = Math.max(p.mood.score, 0);
   delete p.waivers;
   delete p.talks;
   p.asking = undefined;
@@ -883,17 +865,14 @@ export function userClaim(league: League, pid: number, claim = true): { ok: bool
 
 /**
  * What a buyout would look like: a veteran (28+) with guaranteed money left gives some of it back
- * to be let go, 0-35%: more when he's unhappy or has asked out, at 32+, or when the team isn't
- * contending, plus a little that is his own (a hash, so the terms hold still). null when he isn't
- * a candidate.
+ * to be let go, 2-22%: more at 32+ or when the team isn't contending, plus a little that is his
+ * own (a hash, so the terms hold still). null when he isn't a candidate.
  */
 export function buyoutTerms(league: League, p: Player): { giveback: number; owed: number; saved: number; dead: number } | null {
   if (p.tid < 0 || p.contract.twoWay || age(league, p) < 28) return null;
   const owed = releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
   if (owed <= 0) return null;
   let g = 0.02 + 0.05 * (hashString(`${league.id}:${p.pid}:buyout`) / 4294967296);
-  if (p.mood.tradeRequest) g += 0.15;
-  else if (p.mood.score <= -2) g += 0.1;
   if (age(league, p) >= 32) g += 0.08;
   if (league.teams[p.tid].strategy !== 'contend') g += 0.07;
   const giveback = Math.min(0.35, g);
@@ -1120,8 +1099,7 @@ const EXTENSION_PHASES: League['phase'][] = ['resign', 'freeAgency', 'preseason'
 /**
  * Why no team could extend this player now, or null: only in the final season of a standard deal
  * (next season's from the re-signing period until opening night) that he didn't sign this season,
- * once any option on it is decided, never twice, and not while he wants out. Whether he'd talk is
- * extensionRefusal's call.
+ * once any option on it is decided, and never twice. Whether he'd talk is extensionRefusal's call.
  */
 export function extensionClosedReason(league: League, p: Player): string | null {
   if (!EXTENSION_PHASES.includes(league.phase))
@@ -1140,8 +1118,6 @@ export function extensionClosedReason(league: League, p: Player): string | null 
   // league's first season, but weren't signed in it
   if (c.start === cs && p.tradeLock?.season === cs) return `${playerName(p)} signed this deal this season: it can't be extended.`;
   if (pendingOption(league, p)) return `Decide his ${pendingOption(league, p)} option on ${seasonLabel(exp)} first.`;
-  if (p.mood.tradeRequest) return `${playerName(p)} wants a trade: he won't sign an extension.`;
-  if (p.promise?.request) return `${playerName(p)} asked for a trade: while your promise has it on hold, he won't sign an extension.`;
   return null;
 }
 
@@ -1176,15 +1152,12 @@ export function extensionAsk(league: League, p: Player): Ask {
 }
 
 /**
- * Why he won't extend at any price, or null. An unhappy player waits for the market, and so may a
- * star (worth 80+) on a team he doesn't fancy (interest under 0.94: the less he likes it, the
- * likelier) unless he's coming off his rookie-scale deal, when his team could match any offer. The
- * star's call is one roll per contract season, so asking again gets the same answer until his
- * interest changes.
+ * Why he won't extend at any price, or null. A star (worth 80+) on a team he doesn't fancy
+ * (interest under 0.94: the less he likes it, the likelier) may wait for the market, unless he's
+ * coming off his rookie-scale deal, when his team could match any offer. The call is one roll per
+ * contract season, so asking again gets the same answer until his interest changes.
  */
 export function extensionRefusal(league: League, p: Player): string | null {
-  // (unhappy and furious moods: below "content")
-  if (p.mood.score < -2) return `${playerName(p)} is unhappy here: he won't talk about an extension.`;
   if (p.tid < 0 || rookieScaleDeal(p) || valueScore(league, p) < 80) return null;
   const appeal = teamAppeal(league, p.tid, p);
   if (appeal >= 0.94) return null;

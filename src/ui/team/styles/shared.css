@@ -1,4 +1,4 @@
-/* Pieces the Team screens share: a table's foot line, the mood mark, OVR over POT, tablet pairs. */
+/* Pieces the Team screens share: a table's foot line, OVR over POT, tablet pairs. */
 /* ------------------------------------------------------------ shared */
 /* a line under a table or a list: what its marks mean */
 .tm-foot {
@@ -9,23 +9,6 @@
 .tm-foot .card-link {
   flex: none;
   white-space: nowrap;
-}
-/* a row's mood mark, only when it matters: a small word in its signal colour */
-.tm-moodmark {
-  flex: none;
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  line-height: 1;
-  white-space: nowrap;
-}
-.tm-moodmark.warn {
-  color: var(--warn);
-}
-.tm-moodmark.bad {
-  color: var(--bad);
 }
 /* an OVR badge with its POT under it */
 .tm-ovr {

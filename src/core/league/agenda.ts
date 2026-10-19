@@ -2,10 +2,10 @@
 // are the ones the league won't move on without (the same checks the season loop makes: a roster
 // over or under its limits on opening night, an offer sheet on one of his restricted free agents,
 // a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
-// Optional items (offers, 10-day contracts running out, unhappy players, job offers, the guided first
-// week) never block. Each item can be settled where it stands: the staff's suggestion and any quick
-// choices are AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the
-// whole decision. Nothing here is stored except the guided week's progress (League.onboarding).
+// Optional items (offers, 10-day contracts running out, job offers, the guided first week) never
+// block. Each item can be settled where it stands: the staff's suggestion and any quick choices are
+// AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
+// decision. Nothing here is stored except the guided week's progress (League.onboarding).
 import type { League, Player } from '../types';
 import { CAP } from '../constants';
 import { addInbox, fmtDate, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
@@ -18,7 +18,7 @@ import { nextPick } from './draft';
 import { userGameOnDay } from './games';
 import { money } from '../format';
 
-export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'tradeRequest' | 'jobOffers' | 'ultimatum' | 'guide';
+export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide';
 
 /** A step of the guided first week. */
 export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
@@ -313,20 +313,6 @@ export function agenda(league: League): AgendaItem[] {
       pids: want.map((p) => p.pid),
     });
   }
-
-  // players who want out
-  for (const p of teamPlayers(league, me))
-    if (p.mood.tradeRequest)
-      items.push({
-        id: `tradeRequest:${p.pid}`,
-        kind: 'tradeRequest',
-        required: false,
-        title: `${playerName(p)} wants a trade`,
-        line: 'Meet him: promise a role, promise a trade, or ask for patience.',
-        tone: 'warn',
-        to: `/player/${p.pid}?meet=1`,
-        pids: [p.pid],
-      });
 
   // the summer's job offers
   const offers = league.jobOffers?.season === league.season ? league.jobOffers.offers : [];

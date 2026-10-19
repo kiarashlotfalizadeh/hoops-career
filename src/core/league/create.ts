@@ -6,14 +6,13 @@ import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
 import { seedCoaches } from './coaches';
-import { DEFAULT_SCALE, blankMood, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
+import { DEFAULT_SCALE, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
 import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { JERSEYS } from './jerseys';
-import { updateMorale } from './morale';
 import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './aiTrades';
@@ -187,7 +186,6 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
       : {}),
     injury: null,
     injuryCount: 0,
-    mood: blankMood(),
     training: 'balanced',
     awards: [],
     joinedSeason: season,
@@ -391,7 +389,6 @@ export function createLeague(opts: CreateOpts): League {
   league.rng = rng.state;
   teamStrategyUpdate(league);
   for (const t of league.teams) ensureRotation(league, t.tid);
-  for (const t of league.teams) updateMorale(league, t.tid);
   const user = league.teams[opts.userTid];
   const roster = teamPlayers(league, opts.userTid);
   // two-way contracts don't count toward the 15-man roster

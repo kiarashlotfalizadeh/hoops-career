@@ -79,8 +79,8 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               expensive 84.
             </p>
             <p>
-              <b>On the block</b>: his team looks ready to move him (he asked out, his contract is a burden, or he's a rebuilder's veteran). <b>Cornerstone</b>: a young star his
-              team builds around; expect a steep price.
+              <b>On the block</b>: his team looks ready to move him (his contract is a burden, or he's a rebuilder's veteran). <b>Cornerstone</b>: a young star his team builds
+              around; expect a steep price.
             </p>
             <p>
               <b>Salary you can match</b>: the most you could take back sending up to two of your tradeable contracts (125% of them plus $0.1M, or what fits under the cap after

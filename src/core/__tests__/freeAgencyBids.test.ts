@@ -42,7 +42,6 @@ function freeAgent(l: League, p: Player, ovr: number, age = 27): Player {
   p.bornYear = l.season - age;
   p.injury = null;
   p.experience = 6;
-  p.mood.tradeRequest = false;
   p.contract = { start: l.season, salaries: [0] };
   p.asking = undefined;
   p.asking = askingContract(l, p);

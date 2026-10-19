@@ -1,16 +1,14 @@
 // Fixes from the review of restricted free agency: a pending offer sheet (and the user's pending
 // offers) holds a spot under the 21-man summer limit on every path that adds a player (re-signing
 // one's own restricted free agent, matching, an AI team matching or coming to terms, AI signings);
-// free agency goes a day at a time while a sheet on the user's player waits; and a player whose
-// trade request a promise only put on hold won't re-sign or extend.
+// and free agency goes a day at a time while a sheet on the user's player waits.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, contractSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers } from '../league/helpers';
-import { askingContract, extensionClosedReason, signPlayer, summerRoster } from '../league/contracts';
+import { askingContract, signPlayer, summerRoster } from '../league/contracts';
 import { userOffer, userResign } from '../league/freeAgency';
 import { aiMatchVerdict, qualifyingOffer, resolveOfferSheets, setRfaHold, sheetDecisionBlocked, signOfferSheet, userDecideSheet } from '../league/rfa';
 import { faAdvance } from '../league/season';
-import { meetPlayer } from '../league/morale';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 
@@ -53,8 +51,6 @@ function rfa(l: League, tid: number): Player {
   p.bornYear = l.season - 23;
   p.injury = null;
   p.experience = 2;
-  p.mood.tradeRequest = false;
-  p.mood.score = 2;
   p.contract = { start: l.season - 1, salaries: [3000, 3000] };
   p.draft = { year: l.season - 3, round: 2, pick: 40, tid };
   p.stats = p.stats.filter((x) => x.season !== l.season);
@@ -135,30 +131,5 @@ describe('free agency waits on an offer sheet', () => {
     faAdvance(l, 7);
     expect(mine.tid).toBe(B);
     expect(l.faDay).toBeGreaterThan(5);
-  });
-});
-
-describe('a trade request on hold', () => {
-  it("a player whose request a promise put on hold won't re-sign or extend while it stands", () => {
-    const l = league();
-    l.phase = 'regular';
-    const p = teamPlayers(l, U)[0];
-    p.contract = { start: l.season - 1, salaries: [10_000, 10_000] };
-    p.mood.tradeRequest = true;
-    p.mood.score = -7;
-    p.mood.expectedMin = 30;
-    // the promise made late in his last season, still open when the re-sign period comes
-    expect(meetPlayer(l, p.pid, 'role').ok).toBe(true);
-    expect(p.mood.tradeRequest).toBe(false);
-    expect(p.promise?.request).toBe(true);
-    l.phase = 'resign';
-    const ask2 = askingContract(l, p, U);
-    expect(userResign(l, p.pid, ask2.amount, ask2.years).reason).toMatch(/your promise has him holding off, but he won't re-sign/);
-    // an extension the same
-    const q = teamPlayers(l, U)[1];
-    q.contract = { start: l.season, salaries: [9_000, 9_000] };
-    q.tradeLock = undefined;
-    q.promise = { kind: 'patience', tid: U, season: l.season, day: l.day, request: true };
-    expect(extensionClosedReason(l, q)).toMatch(/while your promise has it on hold/);
   });
 });

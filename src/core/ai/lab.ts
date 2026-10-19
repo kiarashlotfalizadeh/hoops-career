@@ -10,7 +10,7 @@ import { applyPatch } from '../sim/tactics';
 export { applyPatch };
 export type { TacticsPatch };
 
-/** A side as real games build it (morale/wear, rest, injury risk), so batch games play like them. */
+/** A side as real games build it (wear, rest, injury risk), so batch games play like them. */
 export type LabSide = SimTeamInput;
 
 export interface LabRequest {

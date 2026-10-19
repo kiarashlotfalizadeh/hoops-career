@@ -7,7 +7,6 @@ import { createLeague, defaultSettings } from '../league/create';
 import { CAP_FOR, curTeamSeason, freeAgents, payroll, standardRoster } from '../league/helpers';
 import { askingContract, releaseDeadMoney, signPlayer } from '../league/contracts';
 import { gameFinances } from '../league/finances';
-import { updateMorale } from '../league/morale';
 import { untradeableReason } from '../league/trades';
 import { txnLine, txnText } from '../league/transactions';
 import {
@@ -186,17 +185,6 @@ describe('10-day contracts', () => {
     atMin();
     expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-day contracts with you/);
     expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
-  });
-
-  it("don't make him feel underpaid: his salary is ten days' pay, not a season's", () => {
-    const l = league();
-    rosterOf(l, U, 14);
-    const p = minGuy(l);
-    userTenDay(l, p.pid);
-    p.mood.score = 0;
-    updateMorale(l, U);
-    expect(p.mood.contractComponent).toBe(0);
-    expect(p.mood.notes).not.toContain('Feels underpaid');
   });
 
   it('end with the regular season, prorated for the days left', () => {

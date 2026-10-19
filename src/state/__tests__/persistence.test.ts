@@ -220,7 +220,7 @@ describe('reading a league', () => {
     expect(migrate(structuredClone(once))).toEqual(once);
   });
 
-  it('keeps sound pick swaps, cash in trades and promises to players, and drops damaged ones', () => {
+  it('keeps sound pick swaps and cash in trades, and drops damaged ones', () => {
     const l = testLeague('terms');
     // a save from before them comes through as it was
     const before = structuredClone(l);
@@ -240,13 +240,6 @@ describe('reading a league', () => {
     (l.teams[2] as { cashTrades?: unknown }).cashTrades = 'lots';
     l.teams[1].seasons[0].cashIn = 2_500;
     (l.teams[3].seasons[0] as { cashIn?: unknown }).cashIn = 'x';
-    const [a, b, c, d] = Object.values(l.players).filter((p) => p.tid === l.userTid);
-    a.promise = { kind: 'role', tid: l.userTid, season: l.season, day: 3, request: true, minutes: 30 };
-    a.meeting = { season: l.season, day: 3 };
-    b.promise = { kind: 'trade', tid: l.userTid, season: l.season, day: 3, request: true } as never;
-    c.promise = { kind: 'bribe', tid: l.userTid, season: l.season, day: 3, request: true } as never;
-    c.meeting = { season: l.season, day: 'soon' } as never;
-    d.meeting = { season: l.season, day: 4, broken: l.season };
     l.transactions = [
       {
         id: 1,
@@ -265,7 +258,6 @@ describe('reading a league', () => {
     expect(back.draftPicks.filter((p) => p.swap !== undefined).map((p) => [p.originalTid, p.swap])).toEqual([[0, first(1, y).dpid]]);
     expect(back.teams.slice(0, 3).map((t) => t.cashTrades)).toEqual([{ season: l.season, sent: 2_500, received: 0 }, undefined, undefined]);
     expect([back.teams[1].seasons[0].cashIn, back.teams[3].seasons[0].cashIn]).toEqual([2_500, undefined]);
-    expect([a.promise?.kind, b.promise, c.promise, c.meeting, d.meeting?.broken]).toEqual(['role', undefined, undefined, undefined, l.season]);
     expect(back.transactions![0].sides).toEqual([
       { tid: 0, players: [], picks: [], cash: 2_500, swaps: [y] },
       { tid: 1, players: [], picks: [] },
@@ -324,6 +316,21 @@ describe('reading a league', () => {
     delete unversioned.version;
     expect(() => migrate(unversioned)).toThrow(/older version/);
     expect(migrate(JSON.parse(JSON.stringify(l))).version).toBe(SAVE_VERSION);
+  });
+
+  it('opens a version-4 save without its player morale and press conference', () => {
+    const l = testLeague('morale');
+    const v4 = JSON.parse(JSON.stringify({ ...l, version: 4, press: { gid: 1, choice: 'pog' } })) as League;
+    // every player had a mood; the user's could have a promise and a meeting
+    for (const p of Object.values(v4.players))
+      Object.assign(p, { mood: { score: -3, ptComponent: 0, winComponent: 0, roleComponent: 0, contractComponent: 0, expectedMin: 20, tradeRequest: true, notes: [] } });
+    const mine = Object.values(v4.players).find((p) => p.tid === l.userTid)!;
+    Object.assign(mine, { promise: { kind: 'role', tid: l.userTid, season: l.season, day: 3, request: true, minutes: 30 }, meeting: { season: l.season, day: 3 } });
+    const back = migrate(v4);
+    expect(back.version).toBe(SAVE_VERSION);
+    expect('press' in back).toBe(false);
+    expect(Object.values(back.players).filter((p) => 'mood' in p || 'promise' in p || 'meeting' in p)).toEqual([]);
+    expect(back).toEqual(migrate(JSON.parse(JSON.stringify(l))));
   });
 
   it('accepts real and fictional leagues, as saved or as backup files', () => {

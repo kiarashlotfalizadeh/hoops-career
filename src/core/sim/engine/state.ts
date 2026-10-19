@@ -101,7 +101,7 @@ export interface SP {
   starter: boolean;
   ftPct: number;
   hot: number;
-  perf: number; // morale/wear multiplier around 1
+  perf: number; // wear multiplier around 1
   guard: boolean;
   big: boolean;
   /** Tendencies: usage, three, drive, pass multipliers. */
@@ -217,7 +217,7 @@ export interface SimTeamInput {
   players: Player[];
   /** Team-specific injury risk multiplier (practice intensity, medical staff). */
   injuryMult?: number;
-  /** Per-player performance multipliers (morale, wear), ~0.95..1.03. */
+  /** Per-player performance multipliers (wear, a questionable player's step slow), at most 1. */
   perf?: Record<number, number>;
   /** Players held out (rest / coach decision). */
   rest?: number[];

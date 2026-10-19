@@ -1009,11 +1009,6 @@ export function executeTrade(league: League, offer: TradeOffer) {
       p.tradedFrom = tradedAway(league, p, p.tid);
       p.tid = to;
       p.joinedSeason = league.season;
-      p.mood.tradeRequest = false;
-      p.mood.score = Math.max(p.mood.score, 0);
-      // a fresh start: what his old GM promised him, and their meetings, stay behind
-      delete p.promise;
-      delete p.meeting;
       league.teams[to].rotation.order.push(pid);
     }
   };

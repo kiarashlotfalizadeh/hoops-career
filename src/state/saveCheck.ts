@@ -226,6 +226,10 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   if (num(version) && (version as number) > SAVE_VERSION) throw new Error('This league was saved by a newer version of Hoops Career. Update the app to open it.');
   if (!isLeague(x)) throw new Error(notALeague);
   if (!num(version) || (version as number) < MIN_SAVE_VERSION) throw new OldSaveError();
+  // version 4 had player morale (a mood, a GM's promise, their meetings) and the post-game press
+  // conference: they're gone
+  for (const p of Object.values(x.players)) for (const k of ['mood', 'promise', 'meeting']) Reflect.deleteProperty(p, k);
+  Reflect.deleteProperty(x, 'press');
   for (const m of x.inbox) if (m.link !== undefined && !isRoute(m.link)) delete m.link;
   for (const t of x.teams) {
     if (t.colors.length === 3 && t.colors.every(isColor)) continue;
@@ -592,13 +596,10 @@ function setsIntact(v: unknown): boolean {
   );
 }
 
-const PROMISES = new Set(['role', 'trade', 'patience']);
-
 /**
- * Pick swaps, cash in trades and promises to players (all optional): a damaged one is dropped. A
- * swap must tie a first to another team's first of the same draft, neither protected, each pick in
- * one swap at most; cash records and logged cash are amounts of money; a promise or meeting has
- * its kind and dates.
+ * Pick swaps and cash in trades (all optional): a damaged one is dropped. A swap must tie a first to
+ * another team's first of the same draft, neither protected, each pick in one swap at most; cash
+ * records and logged cash are amounts of money.
  */
 function migrateDealTerms(x: League) {
   const picks = new Map(x.draftPicks.filter(obj).map((d) => [d.dpid, d]));
@@ -618,25 +619,6 @@ function migrateDealTerms(x: League) {
     const c = t.cashTrades;
     if (c !== undefined && !(obj(c) && int(c.season) && money(c.sent) && money(c.received))) delete t.cashTrades;
     for (const s of t.seasons) if (obj(s) && s.cashIn !== undefined && !money(s.cashIn)) delete s.cashIn;
-  }
-  for (const p of Object.values(x.players)) {
-    const pr = p.promise;
-    if (
-      pr !== undefined &&
-      !(
-        obj(pr) &&
-        PROMISES.has(pr.kind as string) &&
-        int(pr.tid) &&
-        int(pr.season) &&
-        int(pr.day) &&
-        typeof pr.request === 'boolean' &&
-        (pr.kind !== 'role' || (num(pr.minutes) && (pr.minutes as number) > 0)) &&
-        (pr.kind !== 'trade' || pr.by === 'deadline' || pr.by === 'opening')
-      )
-    )
-      delete p.promise;
-    const m = p.meeting;
-    if (m !== undefined && !(obj(m) && int(m.season) && int(m.day) && (m.broken === undefined || int(m.broken)))) delete p.meeting;
   }
   for (const t of Array.isArray(x.transactions) ? x.transactions : []) {
     for (const s of obj(t) && Array.isArray(t.sides) ? t.sides : []) {

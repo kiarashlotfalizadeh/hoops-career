@@ -255,7 +255,6 @@ Broadcast first: the court is always the biggest thing on screen.
 - **A tactical effect is phrased against what would otherwise have happened** ("turned it over
   less than pressure would have made them"), never as a count the box score's factors could
   contradict.
-- One verb per action: the press conference says whose mood moves ("Holmgren's mood ↑").
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
 - Names of controls in advice must match the controls on screen (Team → Tactics tabs: Playbook,
   Offense, Defense, Roles, Game Mgmt).

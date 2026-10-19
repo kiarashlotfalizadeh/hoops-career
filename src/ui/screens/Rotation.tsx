@@ -1,5 +1,5 @@
-// Team → Rotation: the depth chart with each player's minute target (wear and mood risks marked on
-// his row), the assistant's switch, the staff's advice on the rotation, and the stint plan the
+// Team → Rotation: the depth chart with each player's minute target (wear risks marked on his
+// row), the assistant's switch, the staff's advice on the rotation, and the stint plan the
 // targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useEffect, useState } from 'react';
@@ -9,7 +9,6 @@ import { edit, touch } from '../../state/actions';
 import { rosterSorted } from '../../core/league/helpers';
 import { ensureRotation } from '../../core/league/games';
 import { guideVisit } from '../../core/league/agenda';
-import { shortOfMinutes } from '../../core/league/moraleView';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Help, Ovr, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
@@ -18,7 +17,6 @@ import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
 import { injuryName, plural } from '../../core/format';
 import { swapSpots } from '../../core/analysis/lineups';
-import { MoodMark } from '../team/MoodMark';
 import './team.css';
 
 /** The most a target can be. */
@@ -159,10 +157,7 @@ export default function Rotation() {
               Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury
               risk.
             </p>
-            <p>
-              The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+) and one whose target is well short of the minutes he expects, which
-              costs his mood.
-            </p>
+            <p>The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+).</p>
           </Help>
         }
       >
@@ -172,10 +167,8 @@ export default function Rotation() {
               const p = byId.get(pid)!;
               const m = rot.minutes[pid] ?? 0;
               const pg = playerSeason(p, league.season);
-              const short = shortOfMinutes(p, m);
-              const worn = p.wear >= WORN;
-              // the risks, on their own line when he has any
-              const risks = [short ? `wants ${p.mood.expectedMin} min` : '', worn ? `wear ${Math.round(p.wear)}` : ''].filter(Boolean).join(' · ');
+              // wear, on its own line when he's worn down
+              const risks = p.wear >= WORN ? `wear ${Math.round(p.wear)}` : '';
               return (
                 <Fragment key={pid}>
                   {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} />}
@@ -204,7 +197,6 @@ export default function Rotation() {
                         {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
                         {closers.includes(pid) && <Tag>Closer</Tag>}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
-                        <MoodMark p={p} />
                       </div>
                       {/* an injured player's line is his injury: his figures wait for his return */}
                       <div className="tm-rmeta">
@@ -224,7 +216,7 @@ export default function Rotation() {
                         </>
                       )}
                       {risks && <div className="tm-rwarn warn">{risks.charAt(0).toUpperCase() + risks.slice(1)}</div>}
-                      <span className={`tm-rmin num ${short ? 'warn' : ''}`}>
+                      <span className="tm-rmin num">
                         {m}
                         <span className="sr-only"> minutes, his target</span>
                       </span>
@@ -346,7 +338,6 @@ function EditPlayer({
   const at = order.indexOf(p.pid);
   // one tap instead of a run of arrow taps: trade depth-chart spots (and minutes: the role moves with the spot) with anyone
   const swap = (other: number) => update((r) => swapSpots(r, order, p.pid, other));
-  const short = shortOfMinutes(p, m);
   return (
     <div className="tm-ed">
       <div className="tm-ed-who">
@@ -378,16 +369,7 @@ function EditPlayer({
       </Section>
       <Section title="Minutes">
         <div className="tm-ed-group">
-          <Slider
-            label="Target minutes"
-            value={m}
-            min={0}
-            max={MAX_MIN}
-            disabled={busy}
-            onChange={(x) => update((r) => void (r.minutes[p.pid] = x))}
-            format={(x) => `${x} min`}
-            help={p.mood.expectedMin ? <span className={short ? 'warn' : undefined}>He expects about {p.mood.expectedMin}.</span> : undefined}
-          />
+          <Slider label="Target minutes" value={m} min={0} max={MAX_MIN} disabled={busy} onChange={(x) => update((r) => void (r.minutes[p.pid] = x))} format={(x) => `${x} min`} />
           <Slider
             label="Hard minute cap"
             value={cap}

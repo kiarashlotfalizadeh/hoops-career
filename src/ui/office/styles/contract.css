@@ -1,5 +1,5 @@
 /* The contract sheet: his ask, your offer (amount, years, option), talks with his agent, a top free
-   agent's bids, what the signing does to the cap, and meeting a player. */
+   agent's bids and what the signing does to the cap. */
 
 /* ------------------------------------------------------------ the contract sheet */
 .fo-contract {
@@ -15,7 +15,7 @@
   flex: none;
 }
 
-/* his ask and his interest (or mood), with the "?" at the corner */
+/* his ask and his interest, with the "?" at the corner */
 .fo-ask {
   position: relative;
   padding: 12px 14px;
@@ -331,36 +331,4 @@
     margin-bottom: -20px;
     padding-bottom: 14px;
   }
-}
-
-/* ------------------------------------------------------------ meeting a player */
-.fo-meet {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-}
-
-.fo-meet-h {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.fo-meet-h .grow {
-  min-width: 0;
-}
-
-.fo-meet-t {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 15px;
-  font-weight: 750;
-  letter-spacing: 0;
-  text-transform: none;
-  margin-bottom: 2px;
-}
-
-.fo-meet .more p {
-  margin: 0;
 }

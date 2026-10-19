@@ -1,6 +1,5 @@
-// A player's page, Overview: his morale (rostered players), his scouting profile as percentiles
-// among every rostered player, his role and how he's used, his contract with the desk's actions,
-// his honors and his moves.
+// A player's page, Overview: his scouting profile as percentiles among every rostered player, his
+// role and how he's used, his contract with the desk's actions, his honors and his moves.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
@@ -11,26 +10,11 @@ import { ordinalSuffix, playerSeason, signed } from '../stats';
 import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerMoves } from '../league/MovesTab';
 import { accolades } from '../league/shared';
-import { Morale } from './Morale';
 import { ContractSection, deskBlocks } from './Contract';
 
-export function Overview({
-  league,
-  p,
-  onMeet,
-  onRole,
-  onExtend,
-  onRelease,
-}: {
-  league: League;
-  p: Player;
-  onMeet: () => void;
-  onRole: () => void;
-  onExtend: () => void;
-  onRelease: () => void;
-}) {
+export function Overview({ league, p, onRole, onExtend, onRelease }: { league: League; p: Player; onRole: () => void; onExtend: () => void; onRelease: () => void }) {
   const pctile = useSkillPercentiles(league);
-  const { mine, busyWhy } = deskBlocks(league, p);
+  const { mine } = deskBlocks(league, p);
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const c = composites(p.ratings);
   const arch = archetype(p.ratings);
@@ -50,9 +34,6 @@ export function Overview({
   const honors = accolades(p);
   return (
     <>
-      {/* a rostered player's mood: free agents, prospects and retired players have none to show */}
-      {p.tid >= 0 && <Morale league={league} p={p} mine={mine} busyWhy={busyWhy} onMeet={onMeet} />}
-
       <Section
         title="Scouting profile"
         right={

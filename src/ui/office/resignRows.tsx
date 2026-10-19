@@ -8,7 +8,7 @@ import { playerName, teamPlayers } from '../../core/league/helpers';
 import { extensionAsk, extensionBlockedReason, extensionRefusal } from '../../core/league/contracts';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { f1, latestLine, p1, playerSeason } from '../stats';
-import { MoodTag, OvrPot, forYears, playerMeta, salaryText, shortSeason } from './common';
+import { OvrPot, forYears, playerMeta, salaryText, shortSeason } from './common';
 
 /** His per-game line this season (or his latest): points, rebounds, assists, minutes, true shooting, games. */
 export function StatLine({ league, p }: { league: League; p: Player }) {
@@ -80,7 +80,6 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
       />
       <div className="fo-rs-act">
         <div className="grow">
-          <MoodTag p={p} />
           <div className="small dim2 fo-rs-ext">
             {extensionRefusal(league, p) ? (
               <span className="warn">Won't extend now</span>

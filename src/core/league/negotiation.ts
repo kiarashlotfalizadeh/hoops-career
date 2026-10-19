@@ -2,8 +2,8 @@
 // and extensions. His ask is open (askingContract, extensionAsk): offered on his terms, it signs
 // him on the spot. What he'd take is a little lower, his walk-away price, which he keeps to himself:
 // 0-12% under the ask, from a hash of the league, season, team and player (so asking again can't
-// reroll it), lower for a player keen on the team (its record, market, the role on offer, his mood
-// with his own team), later in the summer market and for older players, higher for money-first
+// reroll it), lower for a player keen on the team (its record, market, the role on offer), later
+// in the summer market and for older players, higher for money-first
 // players and stars. An offer at or above it signs him. Below it he counters, between the offer and
 // his ask for the years he wants, and his patience drops; a lowball (under 85% of the ask for those
 // terms) costs twice the patience and a little of his interest in the team. Out of patience, talks

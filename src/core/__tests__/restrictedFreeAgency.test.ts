@@ -20,7 +20,7 @@ import {
 } from '../league/helpers';
 import { FA_DAYS, askingContract, capSpace, leaveTeam, makeContract, marketHolds, releasePlayer, signPlayer, signingRoute, summerRoster, wantsTwoWay } from '../league/contracts';
 import { contractExp } from '../playerGen';
-import { capHolds, capPayroll, fillRosters, marqueeFA, offerRoute, renouncePlayer, userBid, userOffer, userResign, userTwoWayOffer } from '../league/freeAgency';
+import { capHolds, capPayroll, fillRosters, marqueeFA, offerRoute, renouncePlayer, userBid, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import {
   AI_TERMS_DAY,
   acceptQualifyingOffers,
@@ -58,9 +58,9 @@ function league(rngSeed = 5): League {
 }
 
 /**
- * A young player of team `tid` whose deal (`final` a season) runs out this season: OVR = POT, happy,
- * healthy, `exp` seasons before this one and (unless `played` is false) games this season. A first-round
- * `pick` makes it a rookie-scale deal.
+ * A young player of team `tid` whose deal (`final` a season) runs out this season: OVR = POT,
+ * healthy, `exp` seasons before this one and (unless `played` is false) games this season. A
+ * first-round `pick` makes it a rookie-scale deal.
  */
 function young(l: League, p: Player, tid: number, o: { ovr?: number; age?: number; exp?: number; final?: number; pick?: number; played?: boolean } = {}): Player {
   p.tid = tid;
@@ -68,8 +68,6 @@ function young(l: League, p: Player, tid: number, o: { ovr?: number; age?: numbe
   p.bornYear = l.season - (o.age ?? 23);
   p.injury = null;
   p.experience = o.exp ?? 2;
-  p.mood.tradeRequest = false;
-  p.mood.score = 2;
   delete p.rfa;
   p.contract = { start: l.season - 1, salaries: [o.final ?? 3000, o.final ?? 3000], ...(o.pick ? { rookie: true } : {}) };
   p.draft = { year: l.season - 3, round: o.pick ? 1 : 2, pick: o.pick ?? 40, tid };
@@ -213,7 +211,7 @@ describe('qualifying offers', () => {
     expect(marketHolds(l, U, l.season + 1)).toEqual([]);
   });
 
-  it('only in the re-sign period, only for eligible players of his own team; a player who asked out can still be qualified, and holds room', () => {
+  it('only in the re-sign period, only for eligible players of his own team, and he holds room', () => {
     const { l, p } = resignPhase();
     l.phase = 'draft';
     expect(userQualify(l, p.pid).reason).toMatch(/re-sign period/);
@@ -222,10 +220,8 @@ describe('qualifying offers', () => {
     expect(userQualify(l, vet.pid).reason).toMatch(/rookie-scale deal, or a player with 3 seasons or fewer/);
     const theirs = young(l, teamPlayers(l, R)[0], R);
     expect(userQualify(l, theirs.pid).reason).toBe('Not on your team.');
-    p.mood.tradeRequest = true;
-    expect(capHolds(l, U).some((h) => h.p.pid === p.pid)).toBe(false);
     expect(userQualify(l, p.pid).ok).toBe(true);
-    expect(capHolds(l, U).some((h) => h.p.pid === p.pid)).toBe(true);
+    expect(capHolds(l, U).find((h) => h.p.pid === p.pid)?.amount).toBe(Math.max(p.rfa!.qo, askingContract(l, p, U).amount));
   });
 
   it('free agency opens with him restricted: his hold stays on his team’s cap through it (capPayroll and space too) until it is withdrawn, and he never weighs bids', () => {
@@ -250,8 +246,8 @@ describe('qualifying offers', () => {
     expect(capPayroll(l, U, s)).toBe(payroll(l, U, s));
   });
 
-  it('his team re-signs him with Bird rights in free agency, over the cap, until he signs an offer sheet; one who asked out won’t', () => {
-    const { l, s, cap } = summer();
+  it('his team re-signs him with Bird rights in free agency, over the cap, until he signs an offer sheet', () => {
+    const { l, s } = summer();
     const p = rfa(l, U);
     expect(capSpace(l, U, s)).toBeLessThan(0);
     const ask = askingContract(l, p, U);
@@ -260,9 +256,6 @@ describe('qualifying offers', () => {
     expect(p.tid).toBe(U);
     expect(p.rfa).toBeUndefined();
     expect(p.contract.start).toBe(s);
-    const q = rfa(l, U);
-    q.mood.tradeRequest = true;
-    expect(userResign(l, q.pid, cap.maxContract(q.experience), 3).reason).toMatch(/wants out/);
   });
 });
 

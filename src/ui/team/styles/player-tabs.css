@@ -1,4 +1,4 @@
-/* A player's page, under the slab: scouting, OVR, role, morale, contract, ratings, highs, the game log, growth. */
+/* A player's page, under the slab: scouting, OVR, role, contract, ratings, highs, the game log, growth. */
 /* scouting profile: skill, percentile bar, the percentile */
 .tm-skills {
   display: grid;
@@ -95,69 +95,6 @@
 .tm-deal .statline .v,
 .tm-outlook .statline .v {
   font-size: 24px;
-}
-
-/* morale: how he feels in display type, what it does to his play, the pulls behind it */
-.tm-morale {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tm-morale-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.tm-morale-ic {
-  font-size: 18px;
-  line-height: 1;
-  width: 20px;
-  text-align: center;
-}
-.tm-morale-l {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 26px;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
-}
-.tm-morale-fx {
-  font-size: 14.5px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-.tm-reasons {
-  list-style: none;
-  margin: 2px 0 0;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  font-size: 13.5px;
-  color: var(--text-2);
-}
-.tm-reasons li {
-  display: flex;
-  gap: 10px;
-}
-.tm-reasons .num {
-  font-weight: 750;
-}
-.tm-promise {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-.tm-promise svg {
-  flex: none;
-  margin-top: 1px;
-  color: var(--info);
 }
 
 /* contract */

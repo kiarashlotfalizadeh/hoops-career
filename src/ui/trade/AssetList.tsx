@@ -113,13 +113,6 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           {locked && <span className="fo-flag bad">{{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
         </div>
         <div className="fo-meta fo-wrap">
-          {/* the name line has no room for it: it leads the details instead */}
-          {p.mood.tradeRequest && (
-            <span className="warn bold">
-              {/* you told him you'd move him */}
-              {p.promise?.kind === 'trade' ? 'Promised a trade' : 'Wants a trade'} ·{' '}
-            </span>
-          )}
           {p.pos} · {playerAge(p, league.season)}
           {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''} · <TierLine inline tier={valueTier(league, p)} avail={availability(league, p)} />
         </div>

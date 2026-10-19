@@ -7,7 +7,7 @@ import { Rng, clamp } from '../random';
 import { GameSim } from '../sim/engine';
 import { autoRotation, autoTactics } from '../ai/coachAI';
 import { makeTeam } from '../teamFactory';
-import { blankMood, contractExp, playerAge } from '../playerGen';
+import { contractExp, playerAge } from '../playerGen';
 import {
   OFFSEASON_ROSTER_MAX,
   TWO_WAY_MAX,
@@ -29,7 +29,6 @@ import { advanceCup, cupState } from './cup';
 import { ensureRotation, gamesOnDay, playGame } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
-import { resolvePromises, settleExpiringPromises, updateMorale } from './morale';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
 import { computeRegularSeasonAwards, finalsMvp, gameScore, missesAllStarGame, selectAllStars } from './awards';
 import { allStarSaturday } from './allStarSaturday';
@@ -93,13 +92,10 @@ export function startRegularSeason(league: League): string[] {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
-  for (const t of league.teams) updateMorale(league, t.tid);
   for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
   aiExtensions(league);
   league.phase = 'regular';
   league.day = 0;
-  // a trade promised over the summer is due by opening night
-  resolvePromises(league);
   // (no "the season tips off" mail: Today says it, and the staff's advice comes through its feed)
   // the owner sets the season's goals from the roster the team opens with (frozen for the season)
   setOwnerGoals(league);
@@ -112,7 +108,6 @@ function periodic(league: League, rng: Rng) {
   const d = league.day;
   if (d % 7 === 0) {
     for (const t of league.teams) {
-      updateMorale(league, t.tid, true);
       // assistant-managed teams re-fit their playbook to the healthy roster weekly
       if (!t.tactics.manual) t.tactics = autoTactics(t, teamPlayers(league, t.tid), true);
     }
@@ -250,8 +245,6 @@ export function advanceDay(league: League) {
   if (gt && !league.schedule.some((g) => g.gid === gt.gid && !g.played && g.day >= league.day)) delete league.gameTime;
   // released players whose days on waivers are up are claimed or clear to free agency
   resolveWaivers(league);
-  // promises to the user's players that are due (a bigger role, a trade by the deadline, patience)
-  resolvePromises(league);
   // 10-day contracts that are up end, and AI teams short of healthy players sign them
   tenDayDaily(league);
   if (league.phase === 'regular' && regularGamesLeft(league) === 0) endRegularSeason(league);
@@ -424,8 +417,6 @@ function endPlayoffs(league: League) {
       link: '/league/history',
     });
   }
-  // a promise that can't run its games before his deal is up ends with the season
-  settleExpiringPromises(league);
   ownerEvaluation(league);
   // AI owners review their coaches too (on a random stream of their own), and the teams that changed look at the user
   makeJobOffers(league, coachingCarousel(league));
@@ -651,9 +642,6 @@ export function newSeason(league: League): boolean {
         p.injury.gamesRemaining -= 35;
         if (p.injury.gamesRemaining <= 0) p.injury = null;
       }
-      p.mood.score *= 0.5;
-      // a request stands while he's still unhappy on a roster (opening night re-evaluates it)
-      p.mood.tradeRequest &&= p.tid >= 0 && p.mood.score <= -2;
       // last season's contract talks with the user and 10-day count are over (the summer's talks are about this season)
       if (p.talks && p.talks.season < league.season) delete p.talks;
       if (p.tenDays && p.tenDays.season < league.season) delete p.tenDays;
@@ -727,7 +715,7 @@ function extensionCandidatesMail(league: League) {
 /**
  * Retirees stay for history and the Hall of Fame, but after two seasons only as career records:
  * those who never played a game go, the rest lose sim-only detail (ratings snapshots beyond peak
- * and final, tendencies, scouting, mood, on-court and shot-zone context in their stat lines).
+ * and final, tendencies, scouting, on-court and shot-zone context in their stat lines).
  * Five seasons on, fringe careers without an award (under 100 games) leave too, unless a season of
  * theirs stands in the single-season record lists (see holdsSeasonRecord). Without this the
  * save grows by every retiree's full record.
@@ -760,6 +748,5 @@ function compactRetired(league: League) {
     delete p.asking;
     delete p.faDays;
     p.injury = null;
-    p.mood = blankMood();
   }
 }

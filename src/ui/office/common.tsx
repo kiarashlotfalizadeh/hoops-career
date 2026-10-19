@@ -10,7 +10,6 @@ import { fmtHeight } from '../../core/ratings';
 import { contractExp, playerAge } from '../../core/playerGen';
 import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
 import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
-import { moodLevel, MOOD_META } from '../../core/league/morale';
 import { tradingClosedReason } from '../../core/league/trades';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
@@ -213,19 +212,6 @@ export function OvrPot({ p, showPot = true }: { p: Pick<Player, 'ovr' | 'pot'>; 
   );
 }
 
-export function MoodTag({ p, withNotes = false }: { p: Player; withNotes?: boolean }) {
-  const lvl = moodLevel(p.mood.score);
-  const m = MOOD_META[lvl];
-  return (
-    <span className="fo-mood">
-      <span className="tag" style={{ color: m.color, background: `color-mix(in srgb, ${m.color} 16%, transparent)` }}>
-        {m.emoji} {m.label}
-      </span>
-      {withNotes && p.mood.notes.length > 0 && <span className="small dim ellipsis">{p.mood.notes.join(' · ')}</span>}
-    </span>
-  );
-}
-
 /** Bare range input for an amount of money ($K) using the design-system track styling. */
 export function Range({ value, min, max, step = 1, onChange, label }: { value: number; min: number; max: number; step?: number; onChange: (v: number) => void; label: string }) {
   const fill = max > min ? clamp(((value - min) / (max - min)) * 100, 0, 100) : 0;
@@ -321,13 +307,7 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
   const seasons = [...new Set([...remaining, ...(stretch ?? [])].map((d) => d.season))].sort((a, b) => a - b);
   const amountIn = (xs: { season: number; amount: number }[] | null, s: number) => xs?.find((d) => d.season === s)?.amount;
   // why he'd give back more than a little
-  const why = buyout
-    ? [
-        p.mood.tradeRequest ? 'he wants out' : p.mood.score <= -2 ? "he's unhappy" : '',
-        playerAge(p, league.season) >= 32 ? 'his age' : '',
-        league.teams[p.tid].strategy !== 'contend' ? "you're not contending" : '',
-      ].filter(Boolean)
-    : [];
+  const why = buyout ? [playerAge(p, league.season) >= 32 ? 'his age' : '', league.teams[p.tid].strategy !== 'contend' ? "you're not contending" : ''].filter(Boolean) : [];
   return (
     <>
       <p className="fo-lede">

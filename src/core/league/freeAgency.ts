@@ -56,8 +56,6 @@ import {
   twoWayYears,
   spendRoute,
   valueScore,
-  wantsOut,
-  wantsOutReason,
   wantsTwoWay,
   willSign,
 } from './contracts';
@@ -106,9 +104,7 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
     const budget = payrollBudget(cap, t, v);
     const worth = v >= 70 || (v >= 66 && committed < 11);
     const needed = core.has(p.pid) || committed < 13;
-    // coming off a rookie deal his team could make him a restricted free agent (see rfa.ts), so he
-    // can't hold out on mood: only a trade request gets him out
-    const wants = !p.mood.tradeRequest && (p.mood.score > -5 || !!p.contract.rookie) && playerAge(p, next) <= 35;
+    const wants = playerAge(p, next) <= 35;
     if (worth && needed && wants && pay + ask.amount < budget && agrees(p)) {
       plan.push({ p, ask });
       pay += ask.amount;
@@ -165,8 +161,8 @@ export function aiExtensions(league: League) {
  * count against next season's cap at about their asking price, so that space isn't spent twice
  * (absorbed in a trade, then used again to re-sign them with Bird rights). AI teams hold the
  * players they'd re-sign; the user holds everyone who'd re-sign until he renounces them or free
- * agency opens, and a player he has qualified at the larger of the qualifying offer and his ask
- * (even one who wants out: the offer binds the team). In free agency the holds left are the
+ * agency opens, and a player he has qualified at the larger of the qualifying offer and his ask.
+ * In free agency the holds left are the
  * market's (see marketHolds): restricted free agents' and pending offer sheets', for every team.
  */
 export function capHolds(league: League, tid: number): { p: Player; amount: number }[] {
@@ -174,7 +170,7 @@ export function capHolds(league: League, tid: number): { p: Player; amount: numb
   if (league.phase !== 'draftLottery' && league.phase !== 'draft' && league.phase !== 'resign') return [];
   if (tid !== league.userTid) return resignPlan(league, league.teams[tid]).map(({ p, ask }) => ({ p, amount: ask.amount }));
   return expiringPlayers(league, tid)
-    .filter((p) => !p.contract.twoWay && (!wantsOut(p) || p.rfa))
+    .filter((p) => !p.contract.twoWay)
     .map((p) => ({ p, amount: Math.max(p.rfa?.qo ?? 0, askingContract(league, p, tid).amount) }));
 }
 
@@ -223,17 +219,11 @@ export function renouncePlayer(league: League, pid: number): { ok: boolean; reas
 /**
  * A player whose contract ran out joins the free agent pool like a released one: with an asking
  * price and the price-cut clock, and without the trade-back rule and trade lock of his old deal.
- * Unless his old team kept his rights (a restricted free agent), what its GM promised him and their
- * meetings stay behind too, as after a trade or a release.
  */
 function toFreeAgent(league: League, p: Player) {
   p.tid = FREE_AGENT;
   delete p.tradedFrom;
   delete p.tradeLock;
-  if (!p.rfa) {
-    delete p.promise;
-    delete p.meeting;
-  }
   p.asking = undefined;
   p.asking = askingContract(league, p);
   p.faDays = FA_PRICE_CUT_DAYS;
@@ -1007,8 +997,6 @@ export function userResign(league: League, pid: number, amount: number, years: n
   if (league.phase !== 'resign' && !rfa) return { ok: false, reason: 'Re-signing happens between the draft and free agency.' };
   if (!p || (p.tid !== league.userTid && !rfa)) return { ok: false, reason: 'Not on your team.' };
   if (rfa && p.rfa!.sheet) return { ok: false, reason: `${playerName(p)} has signed an offer sheet with the ${league.teams[p.rfa!.sheet.tid].name}: match it or let him go.` };
-  // (a promise only puts a trade request on hold)
-  if (wantsOut(p)) return { ok: false, reason: wantsOutReason(p) };
   if (contractExp(p.contract) > league.season) return { ok: false, reason: `${playerName(p)} is still under contract.` };
   // a new deal takes one of next season's 21 spots, like any other signing (pending offers and sheets hold theirs)
   if (resignRoster(league) >= OFFSEASON_ROSTER_MAX)

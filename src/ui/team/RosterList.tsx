@@ -1,8 +1,9 @@
 // A roster as rows, the same for your team (Team → Roster) and any other (/teams/:tid): tonight's
 // five, the bench, then the two-way deals. A row is the jersey, the name with what's wrong (out,
-// unhappy, a 10-day deal: dropping under a long name rather than cutting it), position and age, then aligned columns under one header per group:
-// minutes, points, rebounds and assists a game, OVR and POT. Before anyone plays, each player's
-// latest season stands in for this one's, and the line under the list says so.
+// a 10-day deal: dropping under a long name rather than cutting it), position and age, then aligned
+// columns under one header per group: minutes, points, rebounds and assists a game, OVR and POT.
+// Before anyone plays, each player's latest season stands in for this one's, and the line under the
+// list says so.
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
@@ -12,7 +13,6 @@ import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
 import { tenDayLabel } from '../office/TenDayPanel';
 import { injuryName, plural } from '../../core/format';
-import { MoodMark } from './MoodMark';
 
 const FIGS = [
   ['min', 'MIN', 'minutes'],
@@ -63,7 +63,6 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
             Out {plural(p.injury.gamesRemaining, 'game')}
           </span>
         )}
-        <MoodMark p={p} />
         {ten && <span className="tag warn">{ten}</span>}
       </span>
       <span className="tm-rl-meta">

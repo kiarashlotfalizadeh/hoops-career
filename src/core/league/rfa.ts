@@ -121,7 +121,7 @@ function qualify(league: League, p: Player) {
 
 /**
  * Free agency opens: the qualified player's cap hold is set for the market, the larger of his
- * qualifying offer and his asking price from his team (mood included, as in the re-sign period).
+ * qualifying offer and his asking price from his team (as in the re-sign period).
  * Called while he is still on its roster.
  */
 export function setRfaHold(league: League, p: Player) {
@@ -139,7 +139,7 @@ export function setRfaHold(league: League, p: Player) {
 export function aiQualify(league: League, t: Team) {
   let room = OFFSEASON_ROSTER_MAX - standardRoster(league, t.tid).filter((x) => contractExp(x.contract) > league.season).length;
   const candidates = teamPlayers(league, t.tid)
-    .filter((p) => !p.rfa && !p.mood.tradeRequest && rfaEligible(league, p) && valueScore(league, p) >= AI_QUALIFY_VALUE)
+    .filter((p) => !p.rfa && rfaEligible(league, p) && valueScore(league, p) >= AI_QUALIFY_VALUE)
     .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid);
   for (const p of candidates) {
     if (room <= 0) return;
@@ -166,16 +166,15 @@ export const AI_TERMS_DAY = 10;
  * An AI team's restricted free agent who has had the market for ten days without an offer sheet
  * comes to terms with it: his asking price from it (never under the qualifying offer, which he
  * could simply take) for the years he wants, when that fits what the team will pay to keep him
- * (keepBudget) and there's a roster spot, unless he asked out. Otherwise he waits, and takes the
- * qualifying offer when the market closes.
+ * (keepBudget) and there's a roster spot. Otherwise he waits, and takes the qualifying offer when
+ * the market closes.
  */
 export function aiRfaTerms(league: League) {
   if (league.phase !== 'freeAgency' || league.faDay < AI_TERMS_DAY) return;
   const next = contractSeason(league);
   for (const p of restrictedFreeAgents(league)) {
     const r = p.rfa!;
-    // (one who asked out won't re-sign; he can still be matched, or take the qualifying offer)
-    if (r.sheet || p.mood.tradeRequest || (r.tid === league.userTid && !league.fired)) continue;
+    if (r.sheet || (r.tid === league.userTid && !league.fired)) continue;
     const t = league.teams[r.tid];
     const ask = askingContract(league, p, t.tid);
     const amount = Math.max(ask.amount, r.qo);
@@ -184,7 +183,7 @@ export function aiRfaTerms(league: League) {
   }
 }
 
-/** Why the user can't extend this player a qualifying offer now, or null. A player who wants out can still be qualified: the team keeps his rights. */
+/** Why the user can't extend this player a qualifying offer now, or null. */
 export function qualifyBlockedReason(league: League, p: Player): string | null {
   if (league.fired) return FIRED_REASON;
   if (p.tid !== league.userTid) return 'Not on your team.';
@@ -310,7 +309,7 @@ export function aiMatchVerdict(league: League, p: Player): { match: boolean; why
  * team gets back the room it held, and the exception if the sheet used one); not matched, he joins
  * the offering team on them, and a sheet on cap space counts as the team using its space (no
  * mid-level for it this season, the room exception instead). Either way it's a signing: the trade
- * lock until December 15 applies. A player who asked out of his team and is matched still wants out.
+ * lock until December 15 applies.
  */
 function settleSheet(league: League, p: Player, matched: boolean) {
   const r = p.rfa!;
@@ -322,9 +321,7 @@ function settleSheet(league: League, p: Player, matched: boolean) {
     if (sh.route === 'room' && offerer.roomSeason === next) delete offerer.roomSeason;
     if (sh.route === 'bae' && offerer.baeSeason === next) delete offerer.baeSeason;
   } else if (sh.route === 'space') spendRoute(league, sh.tid, 'space', next);
-  const wantsOut = p.mood.tradeRequest;
   signPlayer(league, p, matched ? r.tid : sh.tid, sh.amount, sh.years, { start: next, news: false, log: false });
-  if (matched) p.mood.tradeRequest = wantsOut;
   logMove(league, 'match', [r.tid, sh.tid], p, { amount: p.contract.salaries[0], years: sh.years, note: matched ? 'matched' : 'declined' });
   if (!notable(league, p, sh.amount, [r.tid, sh.tid])) return;
   const own = league.teams[r.tid];
@@ -425,11 +422,9 @@ export function acceptQualifyingOffers(league: League) {
       delete p.rfa;
       continue;
     }
-    const wantsOut = p.mood.tradeRequest;
     const tid = r.tid;
     signPlayer(league, p, tid, r.qo, 1, { start: next, news: false, log: false });
     p.contract.qualifying = true;
-    p.mood.tradeRequest = wantsOut;
     logMove(league, 'qualify', tid, p, { amount: p.contract.salaries[0], years: 1, note: 'accepted' });
     took.push(p);
   }

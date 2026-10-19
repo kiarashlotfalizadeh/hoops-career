@@ -8,13 +8,13 @@ import type { Player, TalkTerms } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
 import { CAP_FOR, payroll } from '../../core/league/helpers';
-import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract } from '../../core/league/contracts';
+import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract, teamAppeal } from '../../core/league/contracts';
 import { type OfferResult, askFor, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, forYears, salaryText, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, forYears, salaryText, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { money } from '../../core/format';
@@ -40,6 +40,8 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const blocked = extensionBlockedReason(league, p);
   const refusal = extensionRefusal(league, p);
   const off = !!talkState(league, p, 'extend').closed;
+  const appeal = teamAppeal(league, tid, p);
+  const ai = appealInfo(appeal);
   const pay = payroll(league, tid, season);
   const after = pay + amount;
   const taxBill = after > cap.luxuryTax ? (after - cap.luxuryTax) * CAP.taxRate : 0;
@@ -71,7 +73,15 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
               v: money(askFor(league, p, 'extend', ask.years), 2),
               s: `${forYears(ask.years)} from ${shortSeason(season)}`,
             },
-            { k: 'Mood', v: <MoodTag p={p} />, s: p.mood.notes[0] ?? 'No complaints' },
+            {
+              k: 'Interest',
+              v: (
+                <span className="fo-ask-word" style={{ color: ai.color }}>
+                  {ai.label}
+                </span>
+              ),
+              s: `appeal ×${appeal.toFixed(2)}`,
+            },
           ]}
         />
         <HelpSheet title="Extensions">
@@ -80,9 +90,8 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
             re-signing, can take you over the cap.
           </p>
           <p>
-            He asks about his market value in {seasonLabel(season)} money: a little less coming off his rookie deal or past 30 (security now), a little more as a young star. Happy
-            players give a hometown discount. Unhappy ones won't talk, and a star on a team he doesn't fancy may want to test free agency: he gives the same answer until something
-            changes.
+            He asks about his market value in {seasonLabel(season)} money: a little less coming off his rookie deal or past 30 (security now), a little more as a young star. A star
+            on a team he doesn't fancy may want to test free agency: he gives the same answer until something changes.
           </p>
           <p>Offer his ask and he signs; he may take a little less, and below that he counters. Run out his patience and he won't discuss an extension for 30 days.</p>
           <p>Up to {maxYears} years, no options. Like any signing, he can't be traded for a while after.</p>

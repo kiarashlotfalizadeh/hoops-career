@@ -65,7 +65,6 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.pot = ovr;
   p.bornYear = l.season - age;
   p.injury = null;
-  p.mood.tradeRequest = false;
   p.contract = { start: contractSeason(l), salaries: Array.from({ length: years }, () => salary ?? marketSalary(l, p)) };
   return p;
 }

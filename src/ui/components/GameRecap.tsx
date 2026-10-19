@@ -1,10 +1,9 @@
 // The post-game recap for one of the user's games, most telling first: the three stars (the player
 // of the game first), the keys to the game graded, the night (how win probability turned, what the
-// result did to the standings or the series, milestones and records), the highlights, the press
-// conference (the quotes, then the user's answer, each with what it does to the locker room) and the
-// rest of the night's results that matter to him (the Continue bar, or the final card's Next game,
-// names the next game). Takes a stored result, so the report and the Live screen's final card can
-// both show it, under the result itself (FinalSlab.tsx).
+// result did to the standings or the series, milestones and records), the highlights, what was
+// said after the game and the rest of the night's results that matter to him (the Continue bar, or
+// the final card's Next game, names the next game). Takes a stored result, so the report and the
+// Live screen's final card can both show it, under the result itself (FinalSlab.tsx).
 import { KeysGraded } from './GameKeys';
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,7 +17,6 @@ import { seriesLabel } from '../../core/league/playoffs';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
-import { PressConference } from './PressConference';
 import { streakText } from '../games/series';
 import { madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
@@ -266,7 +264,20 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
 
       {highlights}
 
-      <PressConference league={league} res={res} quotes={quotes} />
+      {quotes.length > 0 && (
+        <Section title="Postgame">
+          <div className="gd-quotes">
+            {quotes.map((q, i) => (
+              <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
+                <p>“{q.text}”</p>
+                <footer>
+                  {q.who}, {q.role}
+                </footer>
+              </blockquote>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {elsewhere.length > 0 && (
         <Section title={`Elsewhere ${res.day === league.day - 1 || res.day === league.day ? 'tonight' : 'that night'}`}>

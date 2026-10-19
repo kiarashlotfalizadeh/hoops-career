@@ -44,7 +44,7 @@ import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, MoodTag, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
@@ -220,37 +220,23 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         <Statline
           items={[
             { k: talks?.firm ? 'His ask · firm' : 'His ask', v: money(askOwn, 2), s: `${forYears(ask.years)} · market ${money(market, 1)}` },
-            mode === 'fa'
-              ? {
-                  k: 'Interest',
-                  v: (
-                    <span className="fo-ask-word" style={{ color: ai.color }}>
-                      {ai.label}
-                    </span>
-                  ),
-                  s: `appeal ×${appeal.toFixed(2)}`,
-                }
-              : { k: 'Mood', v: <MoodTag p={p} />, s: p.mood.notes[0] ?? 'No complaints' },
+            {
+              k: 'Interest',
+              v: (
+                <span className="fo-ask-word" style={{ color: ai.color }}>
+                  {ai.label}
+                </span>
+              ),
+              s: `appeal ×${appeal.toFixed(2)}`,
+            },
           ]}
         />
-        <HelpSheet title={mode === 'fa' ? 'Interest in your team' : 'Player mood'}>
-          {mode === 'fa' ? (
-            <>
-              <p>
-                Free agents weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they'd get. Interested players give you a discount; lukewarm
-                ones want a premium. A lowball costs some of his interest for the season.
-              </p>
-              <p>His price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral team.</p>
-            </>
-          ) : (
-            <>
-              <p>
-                Mood reflects playing time against what he expects, winning, his role and whether he feels fairly paid. Happy players give a hometown discount; unhappy ones want
-                more.
-              </p>
-              <p>A player who has asked for a trade won't re-sign.</p>
-            </>
-          )}
+        <HelpSheet title="Interest in your team">
+          <p>
+            Players weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they'd get. Interested players give you a discount; lukewarm ones
+            want a premium. A lowball costs some of his interest for the season.
+          </p>
+          <p>His price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral team.</p>
         </HelpSheet>
       </div>
 

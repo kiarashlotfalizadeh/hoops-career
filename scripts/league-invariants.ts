@@ -18,7 +18,6 @@ import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
 import * as TR from '../src/core/league/trades';
 import { makeItWork } from '../src/core/league/tradeHelp';
-import * as MO from '../src/core/league/morale';
 import * as P from '../src/core/league/proposals';
 import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
@@ -430,7 +429,7 @@ function checkLottery() {
 /**
  * Deal terms: a swap right ties a first to another team's first of the same draft, neither
  * protected nor with its slot set, each pick in one swap at most; no team past its cash limit for
- * the contract season; promises only to the user's players while the season is on.
+ * the contract season.
  */
 function checkTerms() {
   const inOne = new Set<number>();
@@ -459,8 +458,6 @@ function checkTerms() {
     if (c && c.season === cs && (c.sent > limit || c.received > limit || c.sent < 0 || c.received < 0))
       bad('cash in trades over the limit', `${t.abbrev} ${JSON.stringify(c)} limit ${limit}`);
   }
-  if (H.inSeason(L) && L.phase !== 'preseason')
-    for (const p of Object.values(L.players)) if (p.promise && (p.promise.tid !== L.userTid || (p.tid >= 0 && p.tid !== L.userTid))) bad("promise off the user's team", nm(p.pid));
 }
 
 /**
@@ -507,8 +504,8 @@ const contractTally = { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0,
 /** 10-day contracts signed this season (players seen on one), by AI teams and on hardship spots. */
 const tenDayTally = { ai: new Set<number>(), hardship: new Set<number>() };
 
-/** What the user's deals and meetings with deal terms came to this season. */
-const termsTally = { trades: 0, swaps: 0, cash: 0, promises: 0 };
+/** What the user's deals with deal terms came to this season. */
+const termsTally = { trades: 0, swaps: 0, cash: 0 };
 
 /**
  * Preseason: the user trades with terms, as a player might. His next first, top-10 protected, the
@@ -548,18 +545,6 @@ function tradeWithTerms() {
     termsTally.trades++;
     termsTally.cash += r.offer.a.cash;
     break;
-  }
-}
-
-/** In season, now and then: the user meets his players who asked out or are unhappy, promising each something in turn. */
-function meetUnhappy() {
-  const kinds: MO.MeetChoice[] = ['role', 'trade', 'patience'];
-  for (const p of H.teamPlayers(L, L.userTid)) {
-    if (MO.meetBlockedReason(L, p)) continue;
-    const kind = kinds[(termsTally.promises + p.pid) % 3];
-    const r = MO.meetPlayer(L, p.pid, kind === 'trade' && !p.mood.tradeRequest ? 'role' : kind);
-    if (!r.ok) bad('meeting refused', `${nm(p.pid)} ${r.text}`);
-    else termsTally.promises++;
   }
 }
 
@@ -824,7 +809,7 @@ function negotiate() {
  * ask, taken as offered). Returns whether talks happened.
  */
 function resignTalks(p: Player): boolean {
-  if (contractTally.offers > 0 || C.wantsOut(p)) return false;
+  if (contractTally.offers > 0) return false;
   const round50 = (x: number) => Math.round(x / 50) * 50;
   const ask = N.talkAsk(L, p, 'resign');
   const offer = round50(N.askFor(L, p, 'resign', ask.years) * 0.87);
@@ -909,7 +894,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // the user's best player is off the table: no offer may ask for him
     const best = std(L.userTid).sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
     if (best) P.setUntouchable(L, best.pid, true);
-    Object.assign(termsTally, { trades: 0, swaps: 0, cash: 0, promises: 0 });
+    Object.assign(termsTally, { trades: 0, swaps: 0, cash: 0 });
     Object.assign(contractTally, { offers: 0, counters: 0, under: 0, broke: 0, lowballs: 0, stretched: 0, tenDays: 0 });
     tenDayTally.ai.clear();
     tenDayTally.hardship.clear();
@@ -965,10 +950,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         lastId = L.nextMsgId;
         check();
       }
-      if (L.day % 30 === 0) {
-        meetUnhappy();
-        check();
-      }
+      if (L.day % 30 === 0) check();
       if (L.day > 90 && L.phase === 'regular') checkClinch();
       if (L.day === L.allStarDay + 1 && L.phase === 'regular') checkAllStars();
     }
@@ -1090,10 +1072,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // the user's swaps settled at last season's lottery (he hears about each), and how many were used
     const swapsSettled = L.inbox.filter((m) => m.season === L.season - 1 && m.subject.startsWith('Pick swap')).length;
     const swapped = (L.transactions ?? []).filter((t) => t.kind === 'swap' && t.season === L.season - 1).length;
-    const kept = L.inbox.filter((m) => m.season === L.season - 1 && /likes his new role|has settled down/.test(m.subject)).length;
-    const broken = L.inbox.filter((m) => m.season >= L.season - 1 && /says you broke your word|goes public|wants a trade again/.test(m.subject)).length;
     console.log(
-      `   deal terms: ${termsTally.trades} trades (${termsTally.swaps} swap rights given, $${(termsTally.cash / 1000).toFixed(1)}M cash), ${swapsSettled} swaps settled at the lottery (${swapped} used), ${termsTally.promises} promises (${kept} kept, ${broken} broken or back)`,
+      `   deal terms: ${termsTally.trades} trades (${termsTally.swaps} swap rights given, $${(termsTally.cash / 1000).toFixed(1)}M cash), ${swapsSettled} swaps settled at the lottery (${swapped} used)`,
     );
     const log = L.transactions ?? [];
     const kinds = new Map<string, number>();

@@ -71,18 +71,15 @@ export function aiTradeChance(league: League): { p: number; attempts: number } {
   return { p: left < 7 ? 0.3 : left < 21 ? 0.15 : 0.09, attempts: 1 };
 }
 
-/**
- * Players a team will move to a contender: a rebuilder's veterans (27 or older, 74+), and anyone
- * who asked out (72+) on any team. Only players the rules let move.
- */
+/** Players a team will move to a contender: a rebuilder's veterans (27 or older, 74+). Only players the rules let move. */
 function sellable(league: League, tid: number): Player[] {
-  const rebuilding = league.teams[tid].strategy === 'rebuild';
-  return standardRoster(league, tid).filter((p) => (p.mood.tradeRequest ? p.ovr >= 72 : rebuilding && league.season - p.bornYear >= 27 && p.ovr >= 74) && !untradeable(league, p));
+  if (league.teams[tid].strategy !== 'rebuild') return [];
+  return standardRoster(league, tid).filter((p) => league.season - p.bornYear >= 27 && p.ovr >= 74 && !untradeable(league, p));
 }
 
 /**
  * AI-to-AI deals (a few a season, most near the deadline): contenders buy rebuilding teams'
- * veterans and other teams' players who asked out. The buyer matches salary first (without sending
+ * veterans. The buyer matches salary first (without sending
  * an over-the-cap seller more than it can take back, or taking its own payroll past the tax after
  * using the mid-level), then adds its two most valuable young players and picks from the cheapest
  * up (three at most, so better ones replace the cheapest; two firsts at most) until the seller
@@ -97,7 +94,7 @@ export function aiToAiTrade(league: League, rng: Rng) {
 
 function aiTradeAttempt(league: League, rng: Rng) {
   const ai = league.teams.filter((t) => t.tid !== league.userTid);
-  const sellers = ai.filter((t) => t.strategy === 'rebuild' || standardRoster(league, t.tid).some((p) => p.mood.tradeRequest));
+  const sellers = ai.filter((t) => t.strategy === 'rebuild');
   const s = sellers.length ? rng.pick(sellers) : undefined;
   const buyers = ai.filter((t) => t.strategy === 'contend' && t !== s);
   if (!s || !buyers.length) return;

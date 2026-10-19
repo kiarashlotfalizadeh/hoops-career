@@ -1,5 +1,5 @@
 // God mode's editor sheets: Save sends what was changed in the sheet, measured from the form as it
-// opened, so a sim that ran with the sheet open (wear, mood, health, a trade, the team's cash) isn't
+// opened, so a sim that ran with the sheet open (wear, health, a trade, the team's cash) isn't
 // put back by it.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../../core/league/create';
@@ -16,8 +16,6 @@ describe('player editor', () => {
     const base = playerForm(l, p);
     // what a sim does to him meanwhile
     p.wear = 40;
-    p.mood.score = -6;
-    p.mood.tradeRequest = true;
     p.injury = { type: 'Sprained Ankle', gamesRemaining: 3, gamesTotal: 3, severity: 'minor' };
     p.tid = 1;
     expect(playerEdit(base, { ...base })).toEqual({});
@@ -27,8 +25,7 @@ describe('player editor', () => {
     const l = league();
     const p = standardRoster(l, 0)[0];
     const base = playerForm(l, p);
-    expect(playerEdit(base, { ...base, mood: base.mood + 2 })).toEqual({ mood: { score: base.mood + 2 } });
-    expect(playerEdit(base, { ...base, tradeRequest: !base.tradeRequest })).toEqual({ mood: { tradeRequest: !base.tradeRequest } });
+    expect(playerEdit(base, { ...base, wear: base.wear + 2 })).toEqual({ wear: base.wear + 2 });
     expect(playerEdit(base, { ...base, age: ` ${base.age} ` })).toEqual({});
     expect(playerEdit(base, { ...base, age: 'abc' }).age).toBeNaN();
     expect(playerEdit(base, { ...base, injury: { type: 'Sprained Ankle', games: '' } }).injury?.games).toBeNaN();

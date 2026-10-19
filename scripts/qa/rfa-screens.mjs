@@ -87,10 +87,7 @@ const names = await mutate((l) => {
   b.draft = { year: l.season - 4, round: 1, pick: 12, tid: l.userTid };
   c.contract = { start: l.season - 2, salaries: [18000, 19000, 20000] };
   c.experience = 7;
-  for (const p of [a, b, c]) {
-    p.mood.tradeRequest = false;
-    p.asking = undefined;
-  }
+  for (const p of [a, b, c]) p.asking = undefined;
   return [a, b, c].map((p) => ({ pid: p.pid, name: `${p.firstName} ${p.lastName}`.trim(), last: p.lastName }));
 });
 console.log('expiring', names.map((x) => x.name).join(', '));

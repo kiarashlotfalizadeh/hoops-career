@@ -619,6 +619,9 @@ describe('a live game whose set-up or recording throws halfway (the Live screen)
     const lg = goLive(l);
     lg.simTo('quarter');
     await useStore.getState().flush();
+    // the rest is played before anything breaks (an overtime reads the rotation's closers: one played
+    // after the rotation is gone would throw before the recording does)
+    lg.simTo('end');
     const day = l.day;
     // something in playing out the day throws (here the assistant's rotation update for the user's team)
     const rot = l.teams[l.userTid].rotation;
