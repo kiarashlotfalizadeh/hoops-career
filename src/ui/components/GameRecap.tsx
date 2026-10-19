@@ -1,5 +1,6 @@
-// The post-game recap for one of the user's games, most telling first: the three stars (the player
-// of the game first), the keys to the game graded, the night (how win probability turned, what the
+// The post-game recap for one of the user's games, most telling first: the staff's debrief (its
+// verdict, what decided it, your moves and what to do next time), the three stars (the player of the
+// game first), the keys to the game graded, the night (how win probability turned, what the
 // result did to the standings or the series, milestones and records), the highlights, what was
 // said after the game and the rest of the night's results that matter to him (the Continue bar, or
 // the final card's Next game, names the next game). Takes a stored result, so the report and the
@@ -20,6 +21,7 @@ import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
 import { streakText } from '../games/series';
 import { madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
+import { Debrief } from './Debrief';
 import { TeamLogo } from './TeamLogo';
 import './gameday.css';
 
@@ -136,6 +138,8 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
 
   return (
     <div className="gd-recap">
+      {rep && <Debrief res={res} league={league} report={rep} />}
+
       {stars.length > 0 && (
         <Section title="Three stars">
           <div className="card flush list">

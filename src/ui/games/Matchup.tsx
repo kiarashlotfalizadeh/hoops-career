@@ -64,7 +64,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
     <main className="page">
       <Slab league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
-      {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} />}
+      {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
       {tab === 'plan' && <PlanTab league={league} opp={opp} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}

@@ -32,6 +32,8 @@ export interface CourtProps {
   abbrevs?: [string, string];
   /** Whose floor it is (a plain neutral floor without it). */
   floor?: CourtFloor;
+  /** Players on a hot streak: they wear a heat ring. */
+  hot?: ReadonlySet<number>;
   /** What the court shows, for screen readers. */
   label: string;
 }
@@ -59,11 +61,11 @@ function setFont(ctx: CanvasRenderingContext2D, weight: number, px: number, stre
   if ('fontStretch' in ctx) (ctx as CanvasRenderingContext2D & { fontStretch: string }).fontStretch = stretch;
 }
 
-export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, label }: CourtProps) {
+export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, label }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null, beat: -1 });
-  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor });
-  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor };
+  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot });
+  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot };
 
   // each possession is drawn from its start
   useEffect(() => {
@@ -168,37 +170,39 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const calm = !!still?.matches;
       // the net or the rim answers a shot as it lands, and a moment after
       const fx = b.fx && u > 0.72 ? { kind: b.fx, p: (u - 0.72) / 0.28 } : a.fx && u < 0.5 && i > 1 ? { kind: a.fx, p: 1 + u / 0.5 } : null;
+      // the net under the rim, swaying on a make
+      drawNet(ctx, k, !calm && fx?.kind === 'make' ? fx.p : 0);
       if (fx && !calm) drawRim(ctx, k, fx.kind, fx.p);
-      // defense first (under), then offense
+      // defense first (under), then offense; the ball handler in a pool of his team's light, a hot shooter in a heat ring
+      const hold = u >= 0.5 ? b.hold : a.hold;
+      const hotSet = props.current.hot;
+      const glow = calm ? 0 : 0.5 + 0.5 * Math.sin(s.t / 160);
       const dAt = sc.dPids.map((_, j) => lerpPt(a.d[j], b.d[j], u));
       const oAt = sc.oPids.map((_, j) => lerpPt(a.o[j], b.o[j], u));
-      sc.dPids.forEach((pid, j) => drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false));
-      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true));
+      sc.dPids.forEach((pid, j) =>
+        drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false, { holder: hold === sc.oPids.length + j, hot: !!hotSet?.has(pid), glow }),
+      );
+      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true, { holder: hold === j, hot: !!hotSet?.has(pid), glow }));
       // the ball handler's name, under him (whoever has it at the end of this move, once he does)
       const nm = props.current.names;
-      const hold = u >= 0.5 ? b.hold : a.hold;
       if (nm && hold !== undefined && hold >= 0) {
         const off = hold < sc.oPids.length;
         const pid = off ? sc.oPids[hold] : sc.dPids[hold - sc.oPids.length];
         const at = off ? oAt[hold] : dAt[hold - sc.oPids.length];
         if (pid !== undefined && at) drawTag(ctx, k, at, nm(pid));
       }
-      // ball
+      // ball: its shadow stays on the floor and shrinks as it rises; it spins as it travels
       const bp = lerpPt(a.ball, b.ball, u);
       const z = b.ballZ ? Math.sin(Math.PI * u) * 7 : 0;
       // a shot's flight leaves a faint trail behind the ball
       if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, k, a.ball, b.ball, u);
-      ctx.fillStyle = 'rgba(0,0,0,0.4)';
+      const shadow = 1 / (1 + z * 0.12);
+      ctx.fillStyle = `rgba(0,0,0,${0.42 * shadow})`;
       ctx.beginPath();
-      ctx.ellipse(bp.x * k + (W_FT / 2) * k + 2, bp.y * k + 2, 0.55 * k, 0.4 * k, 0, 0, Math.PI * 2);
+      ctx.ellipse(bp.x * k + (W_FT / 2) * k + 2, bp.y * k + 2, 0.6 * k * shadow, 0.42 * k * shadow, 0, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#ff8c2b';
-      ctx.strokeStyle = '#4a2200';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(bp.x * k + (W_FT / 2) * k, (bp.y - z) * k, (0.62 + z * 0.04) * k, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      const travel = Math.hypot(b.ball.x - a.ball.x, b.ball.y - a.ball.y);
+      drawBall(ctx, bp.x * k + (W_FT / 2) * k, (bp.y - z) * k, (0.62 + z * 0.04) * k, calm ? 0 : (s.t / 90 + travel * u * 0.9) % (Math.PI * 2));
       // flash
       const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
       if (fl && !still?.matches) {
@@ -297,9 +301,9 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.lineTo(X(25), Y(47));
   ctx.stroke();
   ctx.strokeRect(X(-8), Y(0), 16 * k, 19 * k);
-  // FT circle
+  // FT circle: its half away from the basket (the half inside the lane is dashed, below)
   ctx.beginPath();
-  ctx.arc(X(0), Y(19), 6 * k, 0, Math.PI * 2);
+  ctx.arc(X(0), Y(19), 6 * k, 0, Math.PI);
   ctx.stroke();
   // three point line
   const arcR = 23.75;
@@ -316,6 +320,24 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.beginPath();
   ctx.arc(X(0), Y(by), 4 * k, 0, Math.PI);
   ctx.stroke();
+  // the lane's hash marks and blocks, and the dashed lower half of the free-throw circle
+  ctx.lineWidth = Math.max(1, k * 0.14);
+  ctx.beginPath();
+  for (const side of [-1, 1]) {
+    for (const hy of [7, 11, 14, 17]) {
+      ctx.moveTo(X(side * 8), Y(hy));
+      ctx.lineTo(X(side * 8.7), Y(hy));
+    }
+  }
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  for (const side of [-1, 1]) ctx.fillRect(Math.min(X(side * 8), X(side * 8.7)), Y(7.6), 0.7 * k, 1 * k);
+  ctx.setLineDash([k * 0.9, k * 0.9]);
+  ctx.beginPath();
+  ctx.arc(X(0), Y(19), 6 * k, Math.PI, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = Math.max(1.5, k * 0.17);
   // half court
   ctx.beginPath();
   ctx.moveTo(X(-25), Y(46.8));
@@ -336,6 +358,14 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.beginPath();
   ctx.arc(X(0), Y(by), 0.75 * k, 0, Math.PI * 2);
   ctx.stroke();
+  // the floor's gloss: a band of the arena's lights across the wood
+  const gloss = ctx.createLinearGradient(0, h * 0.2, w, h * 0.75);
+  gloss.addColorStop(0, 'rgba(255,255,255,0)');
+  gloss.addColorStop(0.45, 'rgba(255,248,235,0.07)');
+  gloss.addColorStop(0.55, 'rgba(255,248,235,0.07)');
+  gloss.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gloss;
+  ctx.fillRect(0, Y(0), w, h - Y(0));
   // arena light: brighter under the basket, falling off toward the corners
   const v = ctx.createRadialGradient(X(0), Y(12), h * 0.15, X(0), Y(16), h * 0.95);
   v.addColorStop(0, 'rgba(255,240,220,0.05)');
@@ -412,14 +442,40 @@ function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fill();
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [string, string], num: string, offense: boolean) {
+function drawPlayer(
+  ctx: CanvasRenderingContext2D,
+  k: number,
+  p: Pt,
+  colors: [string, string],
+  num: string,
+  offense: boolean,
+  mark: { holder: boolean; hot: boolean; glow: number } = { holder: false, hot: false, glow: 0 },
+) {
   const x = (p.x + W_FT / 2) * k;
   const y = p.y * k;
   const r = 1.45 * k;
+  // the ball handler stands in a pool of his team's light
+  if (mark.holder) {
+    const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 3.2);
+    g.addColorStop(0, hexA(colors[0], 0.45));
+    g.addColorStop(1, hexA(colors[0], 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.fillStyle = 'rgba(0,0,0,0.42)';
   ctx.beginPath();
   ctx.ellipse(x + 2, y + 3, r, r * 0.8, 0, 0, Math.PI * 2);
   ctx.fill();
+  // a hot shooter wears a flickering heat ring
+  if (mark.hot) {
+    ctx.strokeStyle = `rgba(255,${Math.round(120 + 60 * mark.glow)},40,${0.55 + 0.35 * mark.glow})`;
+    ctx.lineWidth = Math.max(2, k * 0.32);
+    ctx.beginPath();
+    ctx.arc(x, y, r + Math.max(3, k * 0.5) + mark.glow * 1.5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.fillStyle = colors[0];
   ctx.strokeStyle = colors[1];
   ctx.lineWidth = Math.max(2, k * 0.28);
@@ -427,6 +483,15 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
+  // a sheen on the jersey, lit from above
+  const sheen = ctx.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.1, x, y, r);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.32)');
+  sheen.addColorStop(0.55, 'rgba(255,255,255,0.04)');
+  sheen.addColorStop(1, 'rgba(0,0,0,0.18)');
+  ctx.fillStyle = sheen;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
   // a dark hairline around the trim: a dark jersey still reads on the stained wood
   ctx.strokeStyle = 'rgba(0,0,0,0.55)';
   ctx.lineWidth = 1;
@@ -445,6 +510,76 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(num, x, y + 0.5);
+}
+
+/** A colour as rgba at `a` (#rgb, #rrggbb, or any other colour left as it is). */
+function hexA(c: string, a: number): string {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c.trim());
+  if (!m) return c;
+  const h = m[1].length === 3 ? m[1].replace(/./g, (x) => x + x) : m[1];
+  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
+}
+
+/** The ball: orange with its seams, turned by `spin`. */
+function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, spin: number) {
+  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.15, x, y, r);
+  g.addColorStop(0, '#ffb066');
+  g.addColorStop(1, '#e8701a');
+  ctx.fillStyle = g;
+  ctx.strokeStyle = '#3d1c00';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.clip();
+  ctx.translate(x, y);
+  ctx.rotate(spin);
+  ctx.strokeStyle = 'rgba(40,16,0,0.75)';
+  ctx.lineWidth = Math.max(0.6, r * 0.12);
+  ctx.beginPath();
+  ctx.moveTo(-r, 0);
+  ctx.lineTo(r, 0);
+  ctx.moveTo(0, -r);
+  ctx.lineTo(0, r);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(-r * 1.25, 0, r * 0.95, -0.9, 0.9);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(r * 1.25, 0, r * 0.95, Math.PI - 0.9, Math.PI + 0.9);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** The net under the rim; `sway` (0..2 over a make and the moment after) makes it ripple out and settle. */
+function drawNet(ctx: CanvasRenderingContext2D, k: number, sway: number) {
+  const x = (W_FT / 2) * k;
+  const y = 5.25 * k;
+  const top = 0.75 * k;
+  const len = 1.7 * k;
+  // the net hangs below the rim as a broadcast angle shows it (toward the court); a make pulls it long and wide
+  const t = sway > 0 ? Math.sin(Math.min(1, sway / 2) * Math.PI) : 0;
+  const bottom = top * (0.55 + 0.3 * t);
+  const drop = len * (1 + 0.5 * t);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = Math.max(0.8, k * 0.08);
+  ctx.beginPath();
+  for (let i = 0; i <= 6; i++) {
+    const f = i / 6;
+    const ax = x - top + 2 * top * f;
+    const bx = x - bottom + 2 * bottom * f + Math.sin(sway * 9 + i) * 0.12 * k * t;
+    ctx.moveTo(ax, y);
+    ctx.lineTo(bx, y + drop);
+  }
+  ctx.moveTo(x - bottom, y + drop);
+  ctx.lineTo(x + bottom, y + drop);
+  ctx.moveTo(x - (top + bottom) / 2, y + drop / 2);
+  ctx.lineTo(x + (top + bottom) / 2, y + drop / 2);
+  ctx.stroke();
 }
 
 /** The team with the ball, in its colours, on the boards behind the baseline it attacks (both sides of the basket). */

@@ -45,6 +45,7 @@ import { useLiveGame } from '../live/useLiveGame';
 import { useBugHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
 import { quickPills, subOptions } from '../live/session';
+import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
 import '../live/live.css';
 
@@ -182,6 +183,8 @@ export default function Live() {
   const notes = s.notes;
   const calls = notes.filter((n) => n.kind === 'decision').length;
   const moreBench = league.settings.liveView === 'bench';
+  // shooters on a streak wear a heat ring on the court
+  const hot = new Set(view.sides.flatMap((sd) => sd.players.filter((p) => p.streak >= HOT_STREAK).map((p) => p.pid)));
   // the scorer of theirs the staff watches: their best night so far, or their best player before anyone has one
   const themSide = view.sides[1 - userSide];
   const watchP =
@@ -377,6 +380,7 @@ export default function Live() {
           names={nameOf}
           abbrevs={[home.abbrev, away.abbrev]}
           floor={floor}
+          hot={hot}
           label={atBreak ? `Court: end of ${periodLabel(view.q)}.` : ffing ? 'Court: fast-forwarding to the next key play.' : `Court: ${script?.label ?? 'tip-off'}.`}
         />
         {!s.intro && !atBreak && (

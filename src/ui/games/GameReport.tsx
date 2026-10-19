@@ -1,5 +1,5 @@
-// A game's report: the final, then Recap (your games: the stars, the keys, the night, the press
-// conference), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
+// A game's report: the final, then Debrief (your games: the staff's verdict, your moves and what to
+// do next time, the stars, the keys, the night, what was said), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
 // play-by-play). Each tab is its own module under report/.
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
@@ -38,7 +38,7 @@ export default function GameReport() {
   const home = league.teams[g.home.tid];
   const away = league.teams[g.away.tid];
   const tabs: { id: Tab; label: string }[] = [
-    ...(userGame ? [{ id: 'recap' as Tab, label: 'Recap' }] : []),
+    ...(userGame ? [{ id: 'recap' as Tab, label: 'Debrief' }] : []),
     ...(report ? [{ id: 'report' as Tab, label: 'Why' }] : []),
     { id: 'box', label: 'Box' },
     ...(g.shots?.length ? [{ id: 'shots' as Tab, label: 'Shots' }] : []),

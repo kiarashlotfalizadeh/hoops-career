@@ -1,6 +1,6 @@
 // Broadcast graphics for the live game: now and then a lower-third about a player or a team ("Brunson:
 // 14 points in the 4th", "5 of 5 from three", a new season high, a career milestone, "BOS 18-4 on
-// fast-break points" at a break). Pure: it reads the game as the court has drawn it (the snapshot and
+// fast-break points" at a break, "OKC on a 12-0 run"). Pure: it reads the game as the court has drawn it (the snapshot and
 // the possession logs drawn so far) and what was known before tip-off, and says only what those
 // show. The Live screen shows at most one every two minutes of game time, each once.
 
@@ -10,7 +10,7 @@ import { STAT_WORD, type MilestoneStat } from '../../core/analysis/milestones';
 import { periodLabel } from '../stats';
 import type { Drawn } from './drawn';
 
-export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team';
+export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team' | 'run';
 
 export interface Graphic {
   id: string;
@@ -241,6 +241,22 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
         add({ id: `solo-${pid}-${startScore}`, kind: 'solo', tag: 'Scoring', text: `${names(pid)} has scored ${a.abbrevs[side]}'s last ${run} points`, side, priority: 65 });
       }
     }
+  }
+
+  // a team on a 10-0 run or more (once a run: its id is the score it started from), bigger in a close game late
+  for (const side of [0, 1] as const) {
+    const run = view.sides[side].run;
+    if (run < 10 || ended || !exact[side]) continue;
+    const from = view.sides[side].score - run;
+    const close = Math.abs(view.sides[0].score - view.sides[1].score) <= 8;
+    add({
+      id: `run-${side}-${from}-${view.sides[1 - side].score}`,
+      kind: 'run',
+      tag: 'Run',
+      text: `${a.abbrevs[side]} on a ${run}-0 run`,
+      side,
+      priority: q >= 4 && close ? 84 : 58,
+    });
   }
 
   // at a break: the most lopsided team number (8 points or more apart) not shown yet

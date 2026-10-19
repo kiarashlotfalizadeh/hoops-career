@@ -1,5 +1,5 @@
-// The matchup page's Preview, for the user's next game against them: the projection and what the
-// game is worth, the keys to the game, the injury report with the game-time decisions on his
+// The matchup page's Preview, for the user's next game against them: the staff's briefing and its
+// plan for tonight, the projection and what the game is worth, the keys to the game, the injury report with the game-time decisions on his
 // questionable players, the starting fives, what their coach has planned for tonight, and the
 // storylines a broadcast would lead with.
 import { useEffect } from 'react';
@@ -23,8 +23,9 @@ import { OppPlanNote } from '../../components/scouting';
 import { matchupColors } from '../../teamColors';
 import { p0, rosterNames } from '../../stats';
 import { teamPlayers } from '../../../core/league/helpers';
+import { Briefing } from './Briefing';
 
-export function PreviewTab({ league, game }: { league: League; game: ScheduledGame }) {
+export function PreviewTab({ league, game, onPlan }: { league: League; game: ScheduledGame; onPlan: () => void }) {
   // the rotations as the game will start them (injuries since a team's last game): the starters shown are the real ones
   useEffect(() => {
     if (useStore.getState().sim) return;
@@ -41,6 +42,7 @@ export function PreviewTab({ league, game }: { league: League; game: ScheduledGa
   const locked = live?.gid === game.gid;
   return (
     <>
+      <Briefing league={league} opp={pv.them.tid} onPlan={onPlan} />
       <Projection league={league} game={game} pv={pv} />
       <Keys league={league} game={game} />
       <InjuryReport league={league} pv={pv} game={game} locked={locked} />
