@@ -1,4 +1,4 @@
-// The Playbook tab's pickers: the offensive playbooks or the defensive identities, best fit for the
+// The System tab's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
 // roster first, each a row to pick it by with its fit in a column. Its fit or ⓘ opens one sheet: what
 // it is, who it's for, the fit broken into its parts (on the row's scale), what would raise it, and
 // Use.

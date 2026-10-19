@@ -3,14 +3,16 @@ import { useLeague, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import { ROLE_META, archetype } from '../../core/ratings';
 import type { OffRole, Player, ShotFreedom, Tactics } from '../../core/types';
+import { fitStars, roleFits } from '../../core/analysis/system';
 import { Section, Segmented } from './ui';
 import '../screens/team.css';
 
-/** Offensive role and shot freedom for one of the user's players, from Tactics > Roles or his own page. */
+/** Offensive role and shot freedom for one of the user's players, from Tactics > Players or his own page. */
 export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
   const natural = archetype(p.ratings).role;
+  const fits = roleFits(p);
   const busy = useStore((s) => !!s.sim);
   const edit = (label: string, fn: (tt: Tactics) => void) =>
     act(label, (l) => {
@@ -36,6 +38,10 @@ export function RoleEditor({ p, onDone }: { p: Player; onDone: () => void }) {
                   <span className="tm-role-opt-l">
                     {ROLE_META[r].label}
                     {r === natural && <span className="tag">Natural</span>}
+                    <span className="tm-role-stars" aria-label={`${fitStars(fits[r])} of 5 for it`}>
+                      {'★'.repeat(fitStars(fits[r]))}
+                      <span className="dim">{'★'.repeat(5 - fitStars(fits[r]))}</span>
+                    </span>
                   </span>
                   <span className="tm-role-opt-h">{ROLE_META[r].help}</span>
                 </span>

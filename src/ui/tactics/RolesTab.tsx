@@ -1,4 +1,4 @@
-// Tactics → Roles: each player's offensive role and shot freedom (a tap opens his editor), and the
+// Tactics → Players: each player's offensive role and shot freedom (a tap opens his editor), and the
 // preferred ball screeners.
 import { useMemo, useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';

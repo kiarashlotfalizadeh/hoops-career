@@ -475,7 +475,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
       pts: tovSwing,
       category: 'turnovers',
-      advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics > Roles) or lower the pace.' : undefined,
+      advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics > Players) or lower the pace.' : undefined,
     });
   }
   const orbSwing = (u.t.orb - o.t.orb) * 1.05;

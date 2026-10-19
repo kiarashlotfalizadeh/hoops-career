@@ -1,0 +1,299 @@
+/* The system report (System tab), its strip over the Offense and Defense tabs, and your five on the floor. */
+.tx-grade {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 6px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--accent-ink);
+}
+.tx-grade.sm {
+  min-width: 24px;
+  height: 20px;
+  font-size: 13px;
+  border-radius: 5px;
+}
+.tx-grade.good {
+  background: var(--good);
+}
+.tx-grade.ok {
+  background: color-mix(in srgb, var(--good) 55%, var(--warn));
+}
+.tx-grade.meh {
+  background: var(--warn);
+}
+.tx-grade.bad {
+  background: var(--bad);
+  color: #fff;
+}
+.tx-sys {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+@media (min-width: 720px) {
+  .tx-sys {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.tx-sys-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tx-q {
+  display: flex;
+  flex-direction: column;
+}
+.tx-q-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding: 6px var(--row-px) 2px;
+  text-align: left;
+}
+.tx-q-n {
+  font-size: 14px;
+  font-weight: 700;
+}
+.tx-q-was {
+  font-size: 12px;
+  font-weight: 800;
+}
+.tx-q-was.good {
+  color: var(--good);
+}
+.tx-q-was.bad {
+  color: var(--bad);
+}
+.tx-q-rank {
+  width: 30px;
+  text-align: right;
+}
+.tx-q-bar {
+  height: 4px;
+  margin: 0 var(--row-px) 8px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.tx-q-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+.tx-q-bar > .good {
+  background: var(--good);
+}
+.tx-q-bar > .ok {
+  background: color-mix(in srgb, var(--good) 55%, var(--warn));
+}
+.tx-q-bar > .meh {
+  background: var(--warn);
+}
+.tx-q-bar > .bad {
+  background: var(--bad);
+}
+.tx-q-parts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 var(--row-px) 10px;
+}
+.tx-q-part {
+  display: flex;
+  gap: 8px;
+}
+.tx-q-part .good {
+  color: var(--good);
+}
+.tx-q-part .bad {
+  color: var(--bad);
+}
+
+/* the strip over the Offense and Defense tabs: the grades their settings move, lit as they change */
+.tx-strip {
+  position: sticky;
+  /* under the Team page's own sticky tabs */
+  top: calc(var(--top-h) + var(--safe-t) + 45px);
+  z-index: 5;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  padding: 8px var(--gut-r) 8px var(--gut-l);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.tx-strip::-webkit-scrollbar {
+  display: none;
+}
+.tx-strip-q {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  transition: border-color 0.2s ease;
+}
+.tx-strip-q.up {
+  border-color: var(--good);
+  animation: tx-flash 0.6s ease;
+}
+.tx-strip-q.down {
+  border-color: var(--bad);
+  animation: tx-flash 0.6s ease;
+}
+.tx-strip-n {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.tx-strip-g {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tx-strip-was {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+@keyframes tx-flash {
+  40% {
+    transform: scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tx-strip-q.up,
+  .tx-strip-q.down {
+    animation: none;
+  }
+}
+.tx-dock-m {
+  margin-right: 8px;
+  font-size: 13px;
+  font-weight: 750;
+}
+.tx-dock-m.good {
+  color: var(--good);
+}
+.tx-dock-m.bad {
+  color: var(--bad);
+}
+.tx-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+
+/* your five on the floor */
+.tx-floor {
+  position: relative;
+  aspect-ratio: 100 / 70;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+}
+.tx-floor-court {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.tx-floor-wood {
+  fill: #6b4a2c;
+}
+.tx-floor-paint {
+  fill: color-mix(in srgb, var(--team, #1b2b44) 70%, #000);
+}
+.tx-floor-line {
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-width: 0.5;
+}
+.tx-floor-rim {
+  stroke: var(--accent);
+  stroke-width: 0.6;
+}
+.tx-floor-p {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: 32%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(8, 10, 14, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  text-align: center;
+}
+.tx-floor-p.off {
+  border-color: var(--warn);
+}
+.tx-floor-p:active {
+  transform: translate(-50%, -50%) scale(0.97);
+}
+.tx-floor-n {
+  font-size: 13px;
+  font-weight: 750;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.tx-floor-r {
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #cfd6e0;
+  white-space: nowrap;
+}
+.tx-floor-s {
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #ffc23d;
+}
+.tx-floor-s .dim {
+  color: rgba(255, 255, 255, 0.25);
+}
+.tx-floor-best {
+  font-size: 9.5px;
+  color: #ffd68a;
+  white-space: nowrap;
+}
+.tm-role-stars {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--warn);
+}
+.tm-role-stars .dim {
+  color: var(--line-3);
+}

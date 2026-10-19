@@ -240,6 +240,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     text: 'Changes to your playbook for one opponent: the next game, the series or the season. It never touches the playbook itself.',
   },
   {
+    id: 'system',
+    term: 'System report',
+    group: 'The game',
+    text: 'Team → Tactics: what your system should be good and bad at, from your rotation and your settings, graded against the other teams’ systems (A+ the top tenth). Change a setting and the grades move.',
+  },
+  {
     id: 'bench',
     term: 'The bench (live games)',
     group: 'The game',
