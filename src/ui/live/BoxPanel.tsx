@@ -15,7 +15,7 @@ import type { Drawn } from './drawn';
 type Tab = 'players' | 'team' | 'shots' | 'flow';
 
 /**
- * The Clipboard's Box tab, the game as the court has drawn it: each team's players (the box score
+ * The console's Stats view, the game as the court has drawn it: each team's players (the box score
  * the report has, and their play types so far), the team totals by period, the shots (by team, period
  * and player) and the flow: your chance to win so far (`wp`, when it's on) and the score margin.
  */

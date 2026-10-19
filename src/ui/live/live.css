@@ -1,6 +1,7 @@
-/* The live game, broadcast first: the scorebug and the court own the screen, the quick actions sit in
-   the tab bar's place, the Clipboard docks under the court when there's room (beside it, held
-   sideways) and opens in a sheet. Team colours only where a team is the subject (the bug's blocks,
+/* The live game, broadcast first: the scorebug and the court own the top of the screen, the bench bar
+   sits in the tab bar's place, and the console under the court holds the staff's bench, the game
+   plan, the lineup and the stats (beside the court, held sideways); at a break or in your timeout the
+   court steps aside for the report. Team colours only where a team is the subject (the bug's blocks,
    the floor, the lineups, the graphics); the brand runs the controls. Text over the court is white
    whatever the theme: it sits on the floor's colours and dark plates. */
 
@@ -8,7 +9,6 @@
 @import './styles/page.css';
 @import './styles/scorebug.css';
 @import './styles/court.css';
-@import './styles/quick.css';
-@import './styles/clipboard.css';
-@import './styles/break.css';
+@import './styles/console.css';
+@import './styles/views.css';
 @import './styles/landscape.css';

@@ -1,4 +1,5 @@
-/* Held sideways: the court on the left, the rest beside it. Last, so it overrides the partials above. */
+/* Held sideways: the court on the left, the scorebug, the bench bar and the console beside it. Last,
+   so it overrides the partials above. */
 @media (orientation: landscape) and (min-width: 600px) {
   :root {
     --lq-h: 54px;
@@ -6,12 +7,12 @@
   .app main.page.lv {
     max-width: 1240px;
     display: grid;
-    grid-template-columns: auto minmax(300px, 1fr);
+    grid-template-columns: auto minmax(320px, 1fr);
     grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
       'stage bug'
-      'stage quick'
-      'stage dock';
+      'stage bar'
+      'stage con';
     column-gap: 14px;
     padding: 8px max(12px, var(--safe-r)) calc(8px + var(--safe-b)) max(12px, var(--safe-l));
   }
@@ -19,7 +20,22 @@
     grid-area: stage;
     align-self: start;
     margin: 0;
-    width: min(calc(100vw - 360px - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--top-h) - var(--safe-t) - var(--safe-b) - 17px) * 532 / 494));
+    width: min(calc(100vw - 380px - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--top-h) - var(--safe-t) - var(--safe-b) - 17px) * 532 / 494));
+  }
+  /* stopped: the report beside the scorebug, the court's room its own */
+  .lv.stopped {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'bug'
+      'bar'
+      'con';
+  }
+  /* (the report reads at a comfortable width when it has the whole screen) */
+  .lv.stopped .lv-con-body,
+  .lv.stopped .lv-bb {
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
   }
   .lv .lv-bug {
     grid-area: bug;
@@ -32,12 +48,11 @@
     border-radius: 12px;
   }
   .lv-stage .court-cv,
-  .lv-stage > .live-intro,
-  .lv-stage > .lv-break {
+  .lv-stage > .live-intro {
     border-radius: 12px;
   }
-  .lv-quick {
-    grid-area: quick;
+  .lv-bar {
+    grid-area: bar;
     position: static;
     padding: 6px 0 2px;
     background: none;
@@ -45,10 +60,10 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  .lv-dock {
-    grid-area: dock;
+  .lv-con {
+    grid-area: con;
   }
-  .lv .lv-clip.docked .lv-clip-body {
-    padding-bottom: 8px;
+  .lv-grab {
+    display: none;
   }
 }

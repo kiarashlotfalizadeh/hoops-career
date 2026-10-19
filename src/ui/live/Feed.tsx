@@ -4,7 +4,7 @@ import { fmtClock, pbpOpacity, periodLabel } from '../stats';
 import { Segmented } from '../components/ui';
 
 /**
- * The Clipboard's Play-by-play tab, newest first, each line with the score after it (away-home, as
+ * The play-by-play under the console's Stats view, newest first, each line with the score after it (away-home, as
  * the scorebug reads): everything, the scoring plays (with the period and timeout lines that frame
  * them), or one team's. It only re-renders when new lines arrive, not on
  * every animation frame.

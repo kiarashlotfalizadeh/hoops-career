@@ -239,6 +239,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'The game',
     text: 'Changes to your playbook for one opponent: the next game, the series or the season. It never touches the playbook itself.',
   },
+  {
+    id: 'bench',
+    term: 'The bench (live games)',
+    group: 'The game',
+    text: 'Your lead assistant during a live game: his read of it, the calls he wants from you with his pick first, and your moves with what each has done since (their points a trip since the change, against before it).',
+  },
 ];
 
 export const glossaryEntry = (id: string) => GLOSSARY.find((g) => g.id === id);

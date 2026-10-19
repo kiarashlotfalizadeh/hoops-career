@@ -224,6 +224,12 @@ export default function Settings() {
             label="Scores around the league"
             help="The night's other games tick along under the scorebug, the ones that matter first."
           />
+          <Toggle
+            on={st.liveStaff === 'auto'}
+            onChange={(v) => set('liveStaff', v ? 'auto' : 'ask')}
+            label="Staff makes tactics calls"
+            help="In live games your lead assistant makes the tactics changes he would bring you himself, and they show in your moves. Subs and timeouts stay yours. Off: each one comes to you first."
+          />
         </fieldset>
       </Section>
 

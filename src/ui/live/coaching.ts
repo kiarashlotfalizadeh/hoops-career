@@ -8,11 +8,10 @@ import type { LiveGame } from '../../state/live';
 import type { Tactics } from '../../core/types';
 import { keptTactics } from './keep';
 import type { LiveAlert } from './alerts';
-import type { ClipTab } from './Clipboard';
 import { userSetup } from './session';
 import type { LiveSession } from './useLiveGame';
 
-export function coachingMoves(s: LiveSession, openClip: (tab?: ClipTab) => void) {
+export function coachingMoves(s: LiveSession, openLineup: () => void) {
   const { liveRef, userSide, coach, nameOf, callTimeout, bump, setDismissed } = s;
 
   /**
@@ -30,13 +29,16 @@ export function coachingMoves(s: LiveSession, openClip: (tab?: ClipTab) => void)
     });
   };
 
-  /** Every in-game tactics change goes through the tactics the coach set (never an in-game overlay on them). */
-  const applyTactics = (fn: (t: Tactics) => void) => {
+  /**
+   * Every in-game tactics change goes through the tactics the coach set (never an in-game overlay on
+   * them); `staff`: the staff made it, and why (its moves are marked as the staff's).
+   */
+  const applyTactics = (fn: (t: Tactics) => void, staff?: string) => {
     const lg = liveRef.current;
     if (!lg) return;
     const t = lg.sim.baseTactics(userSide);
     fn(t);
-    coach((g) => g.setTactics(t));
+    coach((g) => g.setTactics(t, false, staff));
     keep(lg);
     bump();
   };
@@ -83,7 +85,7 @@ export function coachingMoves(s: LiveSession, openClip: (tab?: ClipTab) => void)
       applyTactics(what.apply);
       haptic();
       useStore.getState().toast(`${what.label}: from the next possession.`, 'good');
-    } else if (what.kind === 'subs') openClip('lineup');
+    } else if (what.kind === 'subs') openLineup();
     else substitute(what.out, what.in);
     setDismissed((d) => [...d, a.id]);
   };

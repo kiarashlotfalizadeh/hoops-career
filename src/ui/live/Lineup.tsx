@@ -1,12 +1,11 @@
 import type { GameSim } from '../../core/sim/engine';
 import { plural } from '../../core/format';
 import { Tag, Toggle } from '../components/ui';
-import { inkOn } from '../teamColors';
 import { subsLine, type Drawn } from './drawn';
 import { OnCourt, type SideInfo } from './OnCourt';
 
 /**
- * The Clipboard's Lineup tab: both fives on the floor (energy, fouls, points, hot or cold), your
+ * The console's Lineup view: both fives on the floor (energy, fouls, points, hot or cold), your
  * bench under them, and who makes the substitutions. Tap any player for his sheet: subs, his orders,
  * his matchups, a Hack-a-player. Who's on and off comes from the game itself (a sub has to be possible now);
  * the numbers from the possession the court last drew (see subsLine).
@@ -91,68 +90,6 @@ export function Lineup({
         label="I'll handle substitutions"
         help="On: only your subs change the lineup (injuries and foul-outs aside), and the staff calls no timeouts for runs. Off: the staff follows the rotation plan."
       />
-    </div>
-  );
-}
-
-/**
- * Your five in one row, for a phone too short to dock the clipboard under the court: number, points,
- * energy and foul trouble at a glance. Tap one for his sheet.
- */
-export function MiniFive({
-  view,
-  side,
-  five,
-  kit,
-  fatigue,
-  nameOf,
-  jersey,
-  onTap,
-}: {
-  view: Drawn;
-  side: 0 | 1;
-  five: number[];
-  /** Your jersey [fill, trim]. */
-  kit: [string, string];
-  /** The staff's sub-out mark (0..1). */
-  fatigue: number;
-  nameOf: (pid: number) => string;
-  jersey: (pid: number) => string;
-  onTap: (pid: number) => void;
-}) {
-  const ds = view.sides[side];
-  return (
-    <div className="lv-mf" role="group" aria-label="Your five">
-      {five.map((pid) => {
-        const p = ds.players.find((x) => x.pid === pid);
-        if (!p) return null;
-        const e = Math.round(p.energy * 100);
-        const tone = p.energy < fatigue ? 'bad' : p.energy < fatigue + 0.15 ? 'warn' : 'good';
-        return (
-          <button key={pid} className="lv-mf-p" onClick={() => onTap(pid)} aria-haspopup="dialog">
-            <span className="lv-mf-top">
-              <span className="lv-oc-num" style={{ background: kit[0], color: inkOn(kit[0]), borderColor: kit[1] }} aria-hidden="true">
-                {jersey(pid)}
-              </span>
-              <span className="lv-mf-pts num" aria-hidden="true">
-                {p.pts}
-              </span>
-            </span>
-            <span className="lv-mf-name ellipsis">{nameOf(pid)}</span>
-            <span className="lv-lu-bar lv-mf-bar" aria-hidden="true">
-              <span className={tone} style={{ width: `${e}%` }} />
-            </span>
-            <span className="sr-only">
-              : {plural(p.pts, 'point')}, {e}% energy, {plural(p.fouls, 'foul')}
-            </span>
-            {p.fouls >= 3 && (
-              <span className={`lv-mf-f num ${p.fouls >= 5 ? 'bad' : 'warn'}`} aria-hidden="true">
-                {p.fouls} PF
-              </span>
-            )}
-          </button>
-        );
-      })}
     </div>
   );
 }

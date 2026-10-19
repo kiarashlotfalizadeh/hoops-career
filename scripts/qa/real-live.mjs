@@ -36,12 +36,15 @@ for (const [tag, viewport] of [
   await page.goto(`${base}/#/live`);
   await page.waitForTimeout(8000);
   await shot('live');
-  // the Clipboard: the lineup, tactics, calls, box and play-by-play
-  await page
-    .getByRole('button', { name: 'Clipboard', exact: true })
-    .click()
-    .catch(() => {});
-  await shot('live-clipboard', true);
+  // the console's views: the game plan, the lineup and the stats
+  for (const name of ['Game plan', 'Lineup', 'Stats']) {
+    await page
+      .locator('.lv-bb-views')
+      .getByRole('tab', { name })
+      .click()
+      .catch(() => {});
+    await shot(`live-${name.toLowerCase().replace(' ', '-')}`, true);
+  }
   await ctx.close();
 }
 console.log('errors:', errors.length ? errors.slice(0, 10) : 'none');

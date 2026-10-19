@@ -1,0 +1,438 @@
+/* The console under the court and the bench bar in the tab bar's place: the staff's bench, the game
+   plan's battle rows with their levers, the breaks' report and huddle, the night's moves. */
+
+/* ------------------------------------------------------------------ the console */
+.lv-con {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 12px;
+  scroll-padding-top: 8px;
+}
+.lv-con > * + * {
+  margin-top: 0;
+}
+/* the grabber at the top: a bigger court, or more of the bench under a smaller one */
+.lv-grab {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  margin-bottom: 4px;
+  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lv-grab::before {
+  content: '';
+  width: 34px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-3);
+}
+.lv-grab:active {
+  color: var(--text-2);
+}
+.lv-con-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+/* stopped (a period's end, your timeout): the court steps aside and the report takes the room */
+.lv.stopped .lv-stage {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ the bench bar */
+.lv-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  padding: 0 max(6px, var(--safe-r)) var(--safe-b) max(6px, var(--safe-l));
+  background: rgba(11, 15, 21, 0.96);
+  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border-top: 1px solid var(--line);
+}
+.lv-bb {
+  max-width: 640px;
+  height: var(--lq-h);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
+  align-items: center;
+  gap: 4px;
+}
+.lv-bb.stopped {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 4fr);
+}
+.lv-bb-views {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+}
+.lv-bb-btn {
+  position: relative;
+  height: 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 750;
+  font-stretch: 100%;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.lv-bb-btn.on {
+  color: var(--text);
+}
+.lv-bb-btn.on .lv-bb-ic {
+  color: var(--accent-text);
+}
+.lv-bb-btn:active:not(:disabled) {
+  background: var(--surface-2);
+}
+.lv-bb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.lv-bb-l {
+  white-space: nowrap;
+}
+.lv-bb-ic {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+/* the timeout: its own block, the ones left on it */
+.lv-bb-to {
+  background: var(--surface);
+  color: var(--text-2);
+}
+.lv-bb-to.on {
+  color: var(--text);
+}
+.lv-bb-to.on .lv-bb-ic {
+  color: var(--accent-text);
+}
+.lv-bb-to.on:disabled {
+  opacity: 1;
+}
+.lv-bb-n {
+  position: absolute;
+  top: -6px;
+  right: -12px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--surface-3);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 17px;
+}
+.lv-bb-badge {
+  position: absolute;
+  top: -6px;
+  right: -11px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 17px;
+  box-shadow: 0 0 0 2px var(--bg-2);
+  animation: lv-up 0.3s ease;
+}
+/* at a stop: the way on, in the brand's colour */
+.lv-bb-go {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  animation: lv-up 0.3s ease;
+}
+.lv-bb-go:active {
+  transform: scale(0.97);
+}
+
+/* ------------------------------------------------------------------ the bench */
+.lv-auto {
+  padding-top: 2px;
+  border-top: 1px solid var(--line);
+}
+/* the scorer the staff is watching */
+.lv-watch {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--raised);
+  text-align: left;
+}
+.lv-watch:active {
+  background: var(--surface);
+}
+.lv-watch-n {
+  font-size: 15px;
+  font-weight: 750;
+}
+.lv-calm {
+  padding: 4px 0;
+}
+
+/* ------------------------------------------------------------------ the game plan */
+.lv-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lv-plan-top {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lv-plan-top .chips {
+  align-items: center;
+}
+.lv-plan-changed {
+  line-height: 1.4;
+}
+.lv-plan-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 2px;
+  font-weight: 750;
+  color: var(--accent-text);
+}
+/* a play type tonight, and the lever under it */
+.lv-pr {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px var(--row-px);
+}
+.lv-pr-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.lv-pr-n {
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+}
+.lv-pr-ppp {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 18px;
+  font-weight: 800;
+}
+.lv-pr-ppp.good {
+  color: var(--good);
+}
+.lv-pr-ppp.bad {
+  color: var(--bad);
+}
+.lv-pr-base {
+  width: 42px;
+  text-align: right;
+}
+.lv-pr-empty {
+  padding: 12px var(--row-px);
+}
+.lv-lev {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.chip.sm {
+  height: 32px;
+  padding: 0 11px;
+  font-size: 12.5px;
+}
+/* their scorers: points, who's on him, a tap to his sheet */
+.lv-sc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 7px var(--row-px);
+  text-align: left;
+}
+.lv-sc-row:active {
+  background: var(--surface);
+}
+.lv-sc-pts {
+  flex: none;
+  width: 30px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+}
+.lv-sc-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lv-sc-n {
+  font-size: 14px;
+  font-weight: 700;
+}
+.lv-team-lev {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lv-tl {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lv-plan-all {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--row-min);
+  margin-top: 12px;
+  padding: 0 2px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.lv-plan-all > svg:first-child {
+  color: var(--accent-text);
+}
+
+/* ------------------------------------------------------------------ the breaks: the report and the huddle */
+.lv-rep {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.lv-rep-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+}
+.lv-rep-kicker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 26px;
+  font-weight: 800;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.lv-rep-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font);
+  font-stretch: 100%;
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  color: var(--accent-text);
+  text-transform: none;
+}
+.lv-bk-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: 8px 12px 8px 14px;
+}
+.lv-bk-scorers {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lv-bt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.lv-bt-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lv-bt-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.lv-bt-row .num.good {
+  color: var(--good);
+}
+.lv-bt-row .num.bad {
+  color: var(--bad);
+}
+.lv-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------------ skip, the final */
+.lv-skip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lv-final-go {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.lv-simmed,
+.lv-final-next {
+  color: rgba(255, 255, 255, 0.82);
+}

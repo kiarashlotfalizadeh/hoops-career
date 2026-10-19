@@ -1,10 +1,11 @@
-/* The live page: no scrolling while the game is on, the scorebug and the court edge to edge on a
-   phone, the court as big as leaves the docked Clipboard room under it on a tablet. */
+/* The live page: no scrolling while the game is on but the console's own. The scorebug and the court
+   edge to edge on a phone, the console under them to the bench bar; on a tablet the court as big as
+   leaves the console its room. "More bench" makes the court smaller on a phone for more of it. */
 :root {
-  /* the quick actions' row */
+  /* the bench bar's row */
   --lq-h: 58px;
-  /* on a tablet, the room the court leaves under it: the Clipboard's tabs and both fives whole */
-  --lv-dock-min: 288px;
+  /* on a tablet, the room the court leaves the console under it */
+  --lv-dock-min: 300px;
 }
 :root[data-gameday] .bottomnav {
   display: none;
@@ -24,6 +25,7 @@
   position: relative;
   align-self: center;
   width: 100%;
+  transition: width 0.25s ease;
 }
 .lv-stage > :not(canvas) {
   color: #fff;
@@ -36,8 +38,18 @@
     align-self: stretch;
     margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
   }
+  /* more of the bench: a smaller court, centred */
+  .lv.more-bench .lv-stage {
+    width: 68%;
+    align-self: center;
+    margin: 6px 0 0;
+  }
+  .lv.more-bench .lv-stage .court-cv,
+  .lv.more-bench .lv-stage > .live-intro {
+    border-radius: 10px;
+  }
 }
-/* wider, upright (tablets): the court as big as leaves the docked clipboard room under it */
+/* wider, upright (tablets): the court as big as leaves the console room under it */
 @media (min-width: 600px) {
   .lv-bug {
     padding-top: 10px;
@@ -49,9 +61,11 @@
     border-radius: 12px 12px 0 0;
   }
   .lv-stage .court-cv,
-  .lv-stage > .live-intro,
-  .lv-stage > .lv-break {
+  .lv-stage > .live-intro {
     border-radius: 0 0 12px 12px;
+  }
+  .lv-con {
+    padding-top: 6px;
   }
 }
 .lv-bug .lv-lb {

@@ -66,9 +66,10 @@ await shot('18b-preview', true);
 await page.goto(`${base}/#/live`);
 await page.waitForTimeout(6000);
 await shot('19-live');
-await page.getByRole('button', { name: 'Clipboard' }).click();
+// the console's game plan: tonight's numbers beside their levers
+await page.locator('.lv-bb-views').getByRole('tab', { name: 'Game plan' }).click();
 await shot('20-live-plan');
-await page.keyboard.press('Escape');
+await page.locator('.lv-bb-views').getByRole('tab', { name: /Bench/ }).click();
 // the live game's playback controls come up with a tap on the court
 if (await page.locator('.lv-pb:not(.up)').count()) await page.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
 await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();

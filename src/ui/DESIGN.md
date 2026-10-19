@@ -216,17 +216,26 @@ Broadcast first: the court is always the biggest thing on screen.
 - **The scorebug labels its figures**: each team's block reads Timeouts n and Fouls n (Penalty n
   when the other team is in the bonus), and the sliver under it reads To win. A player on the floor
   shows points, energy (bar and %) and fouls as "n PF".
-- **One row of quick actions** takes the tab bar's place: Timeout, Subs, Call, the staff's top fix
-  as a pill, Clipboard. They carry no counts (the scorebug has them). Don't add a second row or a
-  floating button.
-- **One Clipboard** (Lineup, Tactics, Calls, Box, Play-by-play) holds every coaching control; it
-  docks under the court when there's room and opens as a sheet otherwise. A new control goes in one
-  of its tabs, once.
+- **One bench bar** takes the tab bar's place: the one action the moment calls for first (Timeout
+  while the game plays, Start the next period at a break, Resume in your huddle), then the
+  console's views (Bench, Game plan, Lineup, Stats; the Bench counts the staff's calls waiting).
+  Don't add a second row or a floating button.
+- **One console** under the court (beside it, held sideways) holds every coaching control, in its
+  four views. **Evidence next to the lever**: a control in the Game plan sits beside the number it
+  moves (the coverage beside their pick-and-roll's points a trip). Every setting is in its sheet,
+  one tap down. A new control goes in one view, once.
+- **The staff has one voice**: the lead assistant (`leadAssistant`) heads the Bench, the breaks,
+  the pre-game briefing and the debrief, as `AssistantHead` with a read in a sentence; his calls are
+  `NoteCard`s (evidence, the moves on offer with his pick first, Not now). Don't build another
+  advice box.
+- **Every move is measured**: a tactics change, sub or timeout shows in Your moves with what it has
+  done since (`coachMoves`, drawn with `MovesList`), in the live game and in the report.
 - Playback (pause, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
-- **One break screen** for quarters, halftime and timeouts (huddle mode): the score and the chance
-  to win, who's tired or in foul trouble, what's deciding it with Apply, the keys, and Start.
+- **The breaks are on the screen, not over it**: at a period's end or in your timeout the court
+  steps aside for the period report or the huddle in the console; the next period starts from the
+  bench bar.
 - Every change during a game goes through the live controller (the journal records it), never a raw
-  league edit. The Clipboard's Tactics tab says what's changed since the tip, in Tactics' words.
+  league edit. The Game plan says what's changed since the tip, in Tactics' words.
 - **One box score**: `BoxScore` (`components/BoxScore.tsx`), in the live game and the report, with
   MIN PTS REB AST STL BLK TOV FG 3P FT PF +/-. Don't build another.
 - Two-team comparisons use `CompareBar`, which puts the winning figure in a pill of its side's

@@ -15,8 +15,25 @@ import { extensionBlockedReason, marketSalary } from '../league/contracts';
 import { money } from '../format';
 import { jobSecurity } from '../league/jobSecurity';
 import { nextOpponent } from '../league/agenda';
+import { Rng, hashString } from '../random';
+import { coachName } from '../teamFactory';
 
 export type AssistantArea = 'team' | 'tactics' | 'games' | 'office' | 'owner';
+
+/**
+ * The user's lead assistant, the voice of the staff before, during and after games: a name of his
+ * own on each team the user runs (from the league and the team, never its random stream, and never
+ * a head coach's).
+ */
+export function leadAssistant(league: League, tid = league.userTid): { name: string; last: string; initials: string } {
+  const rng = new Rng(hashString(`${league.id}:assistant:${tid}`));
+  const taken = new Set([league.coachName, ...league.teams.map((t) => t.coach?.name)]);
+  let name = coachName(rng);
+  for (let i = 0; i < 8 && taken.has(name); i++) name = coachName(rng);
+  const parts = name.split(' ');
+  const last = parts.slice(1).join(' ') || name;
+  return { name, last, initials: `${parts[0][0] ?? ''}${last[0] ?? ''}`.toUpperCase() };
+}
 
 export interface AssistantCard {
   id: string;

@@ -57,6 +57,8 @@ export interface Drawn {
   sides: [DrawnSide, DrawnSide];
   /** The tactical edges so far (copies). */
   impacts: TacticImpact[];
+  /** The live game's possession logs it includes (the ones the court has drawn). */
+  logs: number;
   /** How many of the sim's coaching adjustments, in-game injuries, flow points, shots and play-by-play lines it includes. */
   adjustments: number;
   injuries: number;
@@ -77,8 +79,8 @@ export function streaks(shots: { pid: number; made: boolean }[]): Map<number, nu
   return out;
 }
 
-/** The game as it stands in the sim right now. */
-export function snapshot(sim: GameSim): Drawn {
+/** The game as it stands in the sim right now; `logs` is how many possession logs the live game has kept by now. */
+export function snapshot(sim: GameSim, logs = 0): Drawn {
   const res = sim.result();
   const pt = (t: GameResult['home']) => ({ ...t, playTypes: Object.fromEntries(Object.entries(t.playTypes).map(([k, v]) => [k, { ...v }])) });
   // the flow, shots and lineups are the sim's own growing lists too (the play-by-play isn't needed)
@@ -130,6 +132,7 @@ export function snapshot(sim: GameSim): Drawn {
     ball: sim.clock <= 0.05 ? null : sim.poss,
     sides: [side(0), side(1)],
     impacts: [...sim.impacts.values()].map((im) => ({ ...im, players: { ...im.players } })),
+    logs,
     adjustments: sim.adjustments.length,
     injuries: sim.injuries.length,
     flowLen: sim.flow.length,

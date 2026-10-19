@@ -185,15 +185,13 @@ if (stages.includes('mid')) {
     await phone.waitForTimeout(4000);
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
-    // the in-game sheets: the lineup and the clipboard
-    for (const name of ['Subs', 'Clipboard']) {
-      const b = phone.getByRole('button', { name, exact: true }).first();
+    // the console's views: the game plan, the lineup and the stats
+    for (const name of ['Game plan', 'Lineup', 'Stats']) {
+      const b = phone.locator('.lv-bb-views').getByRole('tab', { name }).first();
       if (await b.count()) {
         await b.click().catch(() => {});
         await phone.waitForTimeout(400);
-        await phone.screenshot({ path: `${out}/live/phone-live-${name}.png`, fullPage: true });
-        await phone.keyboard.press('Escape');
-        await phone.waitForTimeout(200);
+        await phone.screenshot({ path: `${out}/live/phone-live-${name.toLowerCase().replace(' ', '-')}.png`, fullPage: true });
       }
     }
     // the live game's playback controls come up with a tap on the court

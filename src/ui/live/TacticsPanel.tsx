@@ -21,7 +21,7 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 }
 
 /**
- * The Clipboard's Tactics tab: tonight's game plan, what's changed since the tip (in the Tactics
+ * Every setting, the sheet under the Game plan view: tonight's game plan, what's changed since the tip (in the Tactics
  * screen's words) and the way back to it, a short row of quick changes, then every team-wide lever (defense, offense, the late game), and whether tonight's
  * changes stay after the game. Player-by-player orders (matchups, a defender's instructions, a
  * Hack-a on one man) live on each player's sheet. Every change goes through the live game.

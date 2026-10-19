@@ -22,7 +22,7 @@ export interface SideInfo {
 }
 
 /**
- * Both fives on the floor, at the top of the Clipboard's Lineup (yours first): points, the energy bar
+ * Both fives on the floor, at the top of the console's Lineup view (yours first): points, the energy bar
  * (against the staff's sub-out mark), personal fouls (lit at the foul-trouble limit), and who's hot or
  * cold. Tap one of yours for his sheet (the sub, his orders, a play for him), one of
  * theirs for the ways to stop him and a Hack-a-player. `fives` are [home, away] as the court draws them.

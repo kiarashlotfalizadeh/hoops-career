@@ -14,7 +14,7 @@ import { drawnPlayer, subsLine, type Drawn } from './drawn';
 import { HOT_STREAK } from './OnCourt';
 import { livePills, type Pill } from './pills';
 
-/** The play-by-play lines the Clipboard keeps. */
+/** The play-by-play lines the console keeps. */
 export const FEED_MAX = 80;
 export const NO_LOGS: PossLog[] = [];
 /** Key plays mode: the pause between possessions it doesn't draw (at 1×). */
@@ -22,15 +22,11 @@ export const FF_MS = 90;
 /** How long a banner stays over the court: an event, and the assistant's word (it has a line to read). */
 export const EVENT_MS = 4000;
 export const WORD_MS = 6500;
-/** The docked clipboard needs this much height under the court to be worth showing (with less, your five in a row). */
-export const DOCK_MIN = 150;
-/** With at least this much, your five in a row (MiniFive); with less, nothing. */
-export const PEEK_MIN = 64;
 
 /** The screen: setting up, no game today, a game on, its final, or a game the Play menu simmed. */
 export type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
-/** 'player': one of the players (yours or theirs); 'break': a period's end; 'huddle': your timeout, while it's taken. */
-export type Panel = 'none' | 'player' | 'skip' | 'break' | 'huddle' | 'scores';
+/** The sheet open over the live screen: one of the players (yours or theirs), skip ahead, or the scores around the league. */
+export type Panel = 'none' | 'player' | 'skip' | 'scores';
 
 /** Whether a period's buzzer stops for a break with the period report. */
 export const breakAfter = (mode: NonNullable<Settings['liveBreaks']>, q: number) => (mode === 'quarters' ? true : mode === 'half' ? q === 2 : false);

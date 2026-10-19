@@ -1,16 +1,21 @@
-// The live game, broadcast first: the scorebug and the court own the screen; coaching is one row of
-// quick actions (a timeout, subs, the staff's top fix, the Clipboard) and one Clipboard with a
-// tab for each way to coach; playback is a tap on the court; the breaks and your timeouts stop on one
-// break screen. The broadcast itself runs in useLiveGame (live/useLiveGame.ts); this screen draws it
-// and makes the coaching moves (live/coaching.ts). The game is a journal (state/live.ts): every move
-// goes into it, so the game picks up where it was after the app is closed.
-import { useMemo, useState } from 'react';
+// The live game, broadcast first: the scorebug and the court own the top of the screen; under them,
+// the console holds the bench (the lead assistant's read, the calls he wants from you and your moves
+// with what each has done), the game plan (each of tonight's numbers beside the lever that moves it),
+// the lineup and the stats; the bench bar in the tab bar's place has the timeout and the views. At a
+// period's end or in your timeout the court steps aside for the report or the huddle, on this screen.
+// Playback is a tap on the court. The broadcast itself runs in useLiveGame (live/useLiveGame.ts);
+// this screen draws it and makes the coaching moves (live/coaching.ts). The game is a journal
+// (state/live.ts): every move goes into it, so the game picks up where it was after the app is closed.
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
+import { edit } from '../../state/actions';
 import { neutralSite, userGameOnDay } from '../../core/league/games';
 import { planFor } from '../../core/league/gamePlans';
 import { oppPlanIn } from '../../core/ai/opponentPlan';
+import { leadAssistant } from '../../core/ai/assistant';
+import { coachMoves } from '../../core/analysis/moves';
 import { winProb } from '../../core/analysis/winProb';
-import { Empty, Sheet } from '../components/ui';
+import { Empty, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
 import { matchupColors, teamLook } from '../teamColors';
 import { flowActions } from '../flow';
@@ -23,38 +28,37 @@ import { TacticsPanel } from '../live/TacticsPanel';
 import { BoxPanel } from '../live/BoxPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import { MyPlayer } from '../live/MyPlayer';
-import { Break } from '../live/Break';
-import { Clipboard, type ClipTab } from '../live/Clipboard';
-import { Lineup, MiniFive } from '../live/Lineup';
+import { Lineup } from '../live/Lineup';
 import { Feed } from '../live/Feed';
 import { Playback } from '../live/Playback';
-import { QuickBar, type QuickFix } from '../live/QuickBar';
+import { BenchBar, type ConsoleView } from '../live/BenchBar';
+import { StaffView } from '../live/StaffView';
+import { PlanView } from '../live/PlanView';
+import { Huddle, PeriodReport } from '../live/PeriodReport';
+import { staffRead, type StaffAction, type StaffNote } from '../live/staff';
 import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
 import { Intro } from '../live/Intro';
 import { LiveFinal, NoGame } from '../live/Final';
-import { BreakCard, CourtLower } from '../live/Overlays';
+import { CourtLower } from '../live/Overlays';
 import { SkipSheet } from '../live/SkipSheet';
 import { useLiveGame } from '../live/useLiveGame';
-import { useBugHeight, useDockHeight } from '../live/useLiveLayout';
+import { useBugHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
-import { DOCK_MIN, PEEK_MIN, quickPills, subOptions } from '../live/session';
+import { quickPills, subOptions } from '../live/session';
+import { changesLine, screenChanges } from '../tactics/changes';
 import '../live/live.css';
 
 export default function Live() {
   const s = useLiveGame();
   const { league, nav, simBusy, status, game, view, home, away, colors, userSide, nameOf, over, script, panel, setPanel, coach } = s;
-  // the Clipboard's tab (it's open in its sheet, or docked under the court when there's room)
-  const [clipTab, setClipTab] = useState<ClipTab>('lineup');
+  // the console's view (at a stop, its bench is the report or the huddle)
+  const [cview, setCview] = useState<ConsoleView>('bench');
+  const [statsTab, setStatsTab] = useState<'box' | 'pbp'>('box');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
-  const openClip = (tab?: ClipTab) => {
-    if (tab) setClipTab(tab);
-    s.setClipOpen(true);
-  };
-  const { applyTactics, setKeep, substitute, runAlert } = coachingMoves(s, openClip);
-  // a tablet or phone's room under the court for the docked clipboard (and the court's own size: live.css)
-  const [setDockEl, dockH] = useDockHeight();
+  const { applyTactics, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
   const setBugEl = useBugHeight();
+  const conRef = useRef<HTMLDivElement>(null);
 
   const persist = !!game?.keep;
   const tactics = useMemo(
@@ -64,6 +68,14 @@ export default function Live() {
     [game, s.tick],
   );
   const pills = useMemo(() => (game && view && tactics && !over ? quickPills(view, game.userSide, tactics, game.planned, nameOf) : []), [game, view, tactics, over, nameOf]);
+  // the night's moves as the court has drawn the game, each with what it has done since
+  const moves = useMemo(
+    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf) : []),
+    // (the marks grow with every move: tick)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [game, view, s.tick, nameOf],
+  );
+  const assistant = useMemo(() => leadAssistant(league), [league]);
 
   const gameNo = useMemo(() => {
     const ser = game?.game.seriesId ? league.playoffs.find((x) => x.id === game.game.seriesId) : undefined;
@@ -76,6 +88,30 @@ export default function Live() {
   const showWp = league.settings.liveWinProb !== false;
   const wpHome =
     game && view && showWp ? winProb({ margin: view.sides[0].score - view.sides[1].score, q: view.q, clock: view.clock, ball: view.ball, edge: game.edge }) : undefined;
+
+  const huddling = s.huddling;
+  const stop: 'break' | 'huddle' | null = s.atBreak ? 'break' : huddling ? 'huddle' : null;
+  // a stop opens on its report (or the huddle), at the top
+  useEffect(() => {
+    if (!stop) return;
+    setCview('bench');
+    conRef.current?.scrollTo({ top: 0 });
+  }, [stop]);
+
+  // with the bench handed to the staff, it makes its tactics calls itself: one at a time, each once a game
+  const autonomy = league.settings.liveStaff === 'auto' ? 'auto' : 'ask';
+  const autoDone = useRef(new Set<string>());
+  useEffect(() => {
+    if (autonomy !== 'auto' || over || simBusy) return;
+    const n = s.notes.find((x) => x.auto && x.actions[0]?.kind === 'tactics' && !autoDone.current.has(x.id));
+    const a = n?.actions[0];
+    if (!n || a?.kind !== 'tactics') return;
+    autoDone.current.add(n.id);
+    applyTactics(a.apply, n.title);
+    s.setDismissed((d) => [...d, n.id]);
+    useStore.getState().toast(`${assistant.last}: ${a.label}`, 'good');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.notes, autonomy, over, simBusy]);
 
   // only offered once the game is over (or there is none): not worked out on every possession
   const nextAction = status !== 'live' ? flowActions(league).find((a) => !a.disabled && (a.cmd === 'watchLive' || a.sim?.kind === 'untilUserGame')) : undefined;
@@ -118,8 +154,7 @@ export default function Live() {
   }
 
   // ------------------------------------------------------------ the game
-  const { atBreak, paused, toPending, alerts } = s;
-  const huddling = panel === 'huddle';
+  const { atBreak, paused, toPending } = s;
   const sim = game.sim;
   const me = sim.T[userSide];
   const quarter = script?.q ?? view.q;
@@ -132,7 +167,6 @@ export default function Live() {
   // the Cup final: nobody's home floor
   const neutral = neutralSite(game.game);
   const ffing = s.keyPlays && !script && !atBreak;
-  const drawing = script;
   // (the period being played, as the scorebug shows it: the drawn view still reads the one before on a period's first possession)
   const skipTo = skipChoices(atBreak ? view.q + 1 : quarter, atBreak, sim);
   // the sim is at the period's buzzer while the court draws its last possession: no timeout then (the break is the stop)
@@ -142,18 +176,18 @@ export default function Live() {
   const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const myView = view.sides[userSide];
   const win = wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome;
-  const docked = dockH >= DOCK_MIN;
-
-  // the staff's top fix, as the pill in the quick actions (not while the game is stopped for a break)
-  const top = !atBreak && !huddling ? alerts.find((a) => a.action) : undefined;
-  const fix: QuickFix | null = top
-    ? {
-        label: top.action!.label,
-        about: top.title,
-        run: () => runAlert(top),
-        dismiss: () => s.setDismissed((d) => [...d, top.id]),
-      }
-    : null;
+  const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
+  const teams: [typeof home, typeof away] = [home, away];
+  const read = staffRead({ view, side: userSide, teams });
+  const notes = s.notes;
+  const calls = notes.filter((n) => n.kind === 'decision').length;
+  const moreBench = league.settings.liveView === 'bench';
+  // the scorer of theirs the staff watches: their best night so far, or their best player before anyone has one
+  const themSide = view.sides[1 - userSide];
+  const watchP =
+    [...themSide.players].filter((p) => p.pts >= 8).sort((a, b) => b.pts - a.pts)[0] ??
+    [...themSide.players].filter((p) => themSide.on.includes(p.pid)).sort((a, b) => (league.players[b.pid]?.ovr ?? 0) - (league.players[a.pid]?.ovr ?? 0))[0];
+  const watch = watchP ? { pid: watchP.pid, defender: me.guardOf.get(watchP.pid)?.pid } : undefined;
 
   const canTimeout = me.timeouts > 0 && !atBreak && !toPending && !s.intro && !buzzer && !simBusy;
   const toState = toPending
@@ -171,9 +205,100 @@ export default function Live() {
     setPanel('player');
   };
 
-  const clipboard = (isDocked: boolean) => (
-    <Clipboard tab={clipTab} onTab={setClipTab} docked={isDocked}>
-      {clipTab === 'lineup' && (
+  /** A substitution from a stop: the court is waiting on the sim, so what it shows is the game as it stands. */
+  const subAtStop = (out: number, inn: number) => {
+    const ok = substitute(out, inn, true);
+    if (ok && huddling) s.takeView(game, false);
+    return ok;
+  };
+  /** One of the staff's moves, taken: its change, sub, timeout or the lineup. */
+  const act = (n: StaffNote, a: StaffAction) => {
+    if (a.kind === 'tactics') {
+      applyTactics(a.apply);
+      useStore.getState().toast(`${a.label}: from the next possession.`, 'good');
+    } else if (a.kind === 'sub') (stop ? subAtStop : substitute)(a.out, a.in);
+    else if (a.kind === 'timeout') s.callTimeout('stop the run');
+    else setCview('lineup');
+    s.setDismissed((d) => [...d, n.id]);
+  };
+  const dismiss = (n: StaffNote) => s.setDismissed((d) => [...d, n.id]);
+  const changed = offPlan(tactics, game.planned) ? changesLine(screenChanges(game.planned, tactics, nameOf).slice(0, 3)) : '';
+
+  const common = {
+    league,
+    view,
+    side: userSide,
+    teams,
+    tactics,
+    names: nameOf,
+    assistant,
+    read,
+    notes,
+    onAct: act,
+    onDismiss: dismiss,
+    subFor: s.subFor,
+    substitute: subAtStop,
+    keys: s.keys,
+    win,
+    moves,
+    busy: simBusy,
+  };
+
+  const consoleBody = () => {
+    if (cview === 'bench') {
+      if (atBreak)
+        return (
+          <PeriodReport
+            {...common}
+            baselines={s.baselines}
+            colors={barColors}
+            oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items}
+            adjustments={sim.adjustments}
+            onSkip={() => setPanel('skip')}
+          />
+        );
+      if (huddling) return <Huddle {...common} />;
+      return (
+        <StaffView
+          assistant={assistant}
+          read={read}
+          notes={notes}
+          onAct={act}
+          onDismiss={dismiss}
+          autonomy={autonomy}
+          setAutonomy={(v) => edit((l) => void (l.settings.liveStaff = v))}
+          moves={moves}
+          abbrevs={abbrevs}
+          nameOf={nameOf}
+          busy={simBusy}
+          view={view}
+          side={userSide}
+          keys={s.keys}
+          watch={watch}
+          onPlayer={pickPlayer}
+        />
+      );
+    }
+    if (cview === 'plan')
+      return (
+        <PlanView
+          view={view}
+          side={userSide}
+          tactics={tactics}
+          logs={game.logs.slice(0, view.logs)}
+          baselines={s.baselines}
+          apply={applyTactics}
+          nameOf={nameOf}
+          plan={plan?.items ?? []}
+          changed={changed}
+          onReset={() => applyTactics((x) => resetToPlan(x, game.planned))}
+          onPlayer={pickPlayer}
+          onAll={() => s.setClipOpen(true)}
+          abbrevs={abbrevs}
+        />
+      );
+    if (cview === 'lineup')
+      return (
         <Lineup
           sim={sim}
           view={view}
@@ -191,70 +316,40 @@ export default function Live() {
             s.bump();
           }}
         />
-      )}
-      {clipTab === 'tactics' && (
-        <TacticsPanel
-          tactics={tactics}
-          apply={applyTactics}
-          persist={persist}
-          setPersist={setKeep}
-          plan={plan?.items ?? []}
-          pills={pills}
-          planned={game.planned}
-          offPlan={offPlan(tactics, game.planned)}
-          reset={() => applyTactics((x) => resetToPlan(x, game.planned))}
-          oppOn={sim.T[1 - userSide].on.map((p) => p.pid)}
-          nameOf={nameOf}
-          q={view.q}
+      );
+    return (
+      <div className="lv-stats">
+        <Segmented
+          tabs
+          value={statsTab}
+          onChange={setStatsTab}
+          label="Stats"
+          options={[
+            { id: 'box', label: 'Box score' },
+            { id: 'pbp', label: 'Play-by-play' },
+          ]}
         />
-      )}
-      {clipTab === 'box' && (
-        <BoxPanel
-          view={view}
-          flow={sim.flow}
-          flowPeriods={sim.flowPeriods}
-          side={userSide}
-          league={league}
-          nameOf={nameOf}
-          colors={barColors}
-          flowColors={flowKits}
-          wp={showWp ? { edge: game.edge, type: game.game.type } : undefined}
-        />
-      )}
-      {clipTab === 'pbp' && <Feed feed={s.feed} colors={colors} homeAbbrev={home.abbrev} awayAbbrev={away.abbrev} />}
-    </Clipboard>
-  );
-
-  const breakSheet = (mode: 'period' | 'huddle') => (
-    <Break
-      mode={mode}
-      league={league}
-      view={view}
-      side={userSide}
-      teams={[home, away]}
-      tactics={tactics}
-      names={nameOf}
-      baselines={s.baselines}
-      colors={barColors}
-      apply={applyTactics}
-      alerts={alerts}
-      runAlert={runAlert}
-      subFor={s.subFor}
-      substitute={(out, inn) => {
-        const ok = substitute(out, inn, true);
-        // the court is waiting on the sim here: what it shows is the game as it stands
-        if (ok && mode === 'huddle') s.takeView(game, false);
-        return ok;
-      }}
-      keys={s.keys}
-      win={win}
-      oppPlan={mode === 'period' ? oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items : undefined}
-      onGo={mode === 'huddle' ? s.resume : s.togglePause}
-    />
-  );
+        {statsTab === 'box' ? (
+          <BoxPanel
+            view={view}
+            flow={sim.flow}
+            flowPeriods={sim.flowPeriods}
+            side={userSide}
+            league={league}
+            nameOf={nameOf}
+            colors={barColors}
+            flowColors={flowKits}
+            wp={showWp ? { edge: game.edge, type: game.game.type } : undefined}
+          />
+        ) : (
+          <Feed feed={s.feed} colors={colors} homeAbbrev={home.abbrev} awayAbbrev={away.abbrev} />
+        )}
+      </div>
+    );
+  };
 
   return (
-    <main className={`page lv${atBreak ? ' at-break' : ''}${docked ? ' has-dock' : ''}`}>
+    <main className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${moreBench ? ' more-bench' : ''}`}>
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
         Live game: {away.region} {away.name} {neutral ? 'vs' : 'at'} {home.region} {home.name}
@@ -271,7 +366,7 @@ export default function Live() {
 
       <div className="lv-stage">
         <Court
-          script={drawing}
+          script={script}
           speed={s.speed}
           paused={paused}
           colors={colors}
@@ -299,10 +394,10 @@ export default function Live() {
         )}
         {!atBreak && (script || ffing || s.graphic || s.banner) && (
           <CourtLower
-            drawing={drawing}
+            drawing={script}
             ffing={ffing}
             beat={s.beat}
-            capColor={drawing ? colors[drawing.off][0] : undefined}
+            capColor={script ? colors[script.off][0] : undefined}
             graphic={s.graphic}
             kit={teamLook((s.graphic?.side === 0 ? home : away).colors).slab}
             banner={s.intro ? undefined : s.banner}
@@ -323,33 +418,56 @@ export default function Live() {
             onTip={s.tipOff}
           />
         )}
-        {atBreak && <BreakCard q={view.q} tied={view.sides[0].score} onStart={s.togglePause} onReport={() => setPanel('break')} onSkip={() => setPanel('skip')} />}
       </div>
 
-      {/* under the court, the clipboard docked when there's room for it (held sideways: beside the court, under the quick actions) */}
-      <div className="lv-dock" ref={setDockEl}>
-        {docked && !s.clipOpen && clipboard(true)}
-        {!docked && dockH >= PEEK_MIN && (
-          <MiniFive view={view} side={userSide} five={fives[userSide]} kit={colors[userSide]} fatigue={me.t.manage.fatigueSub} nameOf={nameOf} jersey={jersey} onTap={pickPlayer} />
+      <div className="lv-con" ref={conRef}>
+        {!stop && (
+          <button
+            className="lv-grab"
+            onClick={() => edit((l) => void (l.settings.liveView = moreBench ? 'court' : 'bench'))}
+            aria-label={moreBench ? 'Bigger court' : 'Smaller court, more of the bench'}
+          >
+            {moreBench ? 'Bigger court' : 'More bench'}
+          </button>
         )}
+        <div className="lv-con-body">{consoleBody()}</div>
       </div>
 
-      <div className="lv-quick">
-        <QuickBar
+      <div className="lv-bar">
+        <BenchBar
+          view={cview}
+          onView={(v) => {
+            setCview(v);
+            conRef.current?.scrollTo({ top: 0 });
+          }}
+          calls={calls}
+          stop={stop}
           timeouts={myView.timeouts}
-          timeout={() => s.callTimeout()}
           canTimeout={canTimeout}
           toPending={toPending}
           toState={toState}
-          onSubs={() => openClip('lineup')}
-          fix={simBusy ? null : fix}
-          clipOpen={s.clipOpen}
-          onClip={() => (s.clipOpen ? s.setClipOpen(false) : openClip())}
+          onTimeout={() => s.callTimeout()}
+          go={atBreak ? { label: `Start ${periodLabel(view.q + 1)}`, run: s.togglePause } : huddling ? { label: 'Resume', run: s.resume } : undefined}
         />
       </div>
 
-      <Sheet open={s.clipOpen} onClose={() => s.setClipOpen(false)} title="Clipboard">
-        {clipboard(false)}
+      <Sheet open={s.clipOpen} onClose={() => s.setClipOpen(false)} title="Every setting">
+        {s.clipOpen && (
+          <TacticsPanel
+            tactics={tactics}
+            apply={applyTactics}
+            persist={persist}
+            setPersist={setKeep}
+            plan={plan?.items ?? []}
+            pills={pills}
+            planned={game.planned}
+            offPlan={offPlan(tactics, game.planned)}
+            reset={() => applyTactics((x) => resetToPlan(x, game.planned))}
+            oppOn={sim.T[1 - userSide].on.map((p) => p.pid)}
+            nameOf={nameOf}
+            q={view.q}
+          />
+        )}
       </Sheet>
       <Sheet open={panel === 'player' && !!pickedP} onClose={() => setPanel('none')} title={picked !== undefined ? nameOf(picked) : 'Player'}>
         {pickedP &&
@@ -372,12 +490,6 @@ export default function Live() {
           ) : (
             <OppPlayer p={pickedP} name={nameOf(pickedP.pid)} tactics={tactics} clock={view.clock} q={view.q} apply={applyTactics} />
           ))}
-      </Sheet>
-      <Sheet open={panel === 'break'} onClose={() => setPanel('none')} title={view.q === 2 ? 'Halftime' : view.q === 4 ? 'End of regulation' : `End of ${periodLabel(view.q)}`}>
-        {panel === 'break' && breakSheet('period')}
-      </Sheet>
-      <Sheet open={huddling} onClose={s.resume} title={`Timeout ${me.team.abbrev}`}>
-        {huddling && breakSheet('huddle')}
       </Sheet>
       <Sheet open={panel === 'scores'} onClose={() => setPanel('none')} title="Around the league">
         <ScoresSheet league={league} games={s.others} elapsed={view.elapsed} done={false} />

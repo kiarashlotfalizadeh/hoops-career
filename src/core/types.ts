@@ -870,6 +870,36 @@ export interface GameResult {
    */
   hurt?: number[];
   wpLow?: number;
+  /** The user's live games: his tactics changes, substitutions and timeouts, and the scoring around each (see analysis/moves.ts). */
+  moves?: CoachMove[];
+}
+
+/** Trips and points for each side over a stretch of a game, and for what a move was aimed at. */
+export interface MoveTally {
+  us: { poss: number; pts: number };
+  them: { poss: number; pts: number };
+  /** The play types or the one player of theirs a move was aimed at. */
+  focus?: { poss: number; pts: number };
+}
+
+/** One of the coach's moves in a live game, and the scoring while it was in effect against the stretch before it. */
+export interface CoachMove {
+  kind: 'tactics' | 'sub' | 'timeout';
+  q: number;
+  /** Seconds left in the period. */
+  clock: number;
+  /** "Pick-and-roll coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout". */
+  text: string;
+  /** The end of the floor it's about. */
+  end: 'def' | 'off' | 'both';
+  /** The staff made it. */
+  by?: 'staff';
+  /** One of theirs it was aimed at. */
+  pid?: number;
+  /** The play it was aimed at, a few words ("pick-and-roll", "transition"). */
+  aim?: string;
+  before: MoveTally;
+  after: MoveTally;
 }
 
 /** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
@@ -1161,6 +1191,13 @@ export interface Settings {
   draftPause?: boolean;
   /** Live games show win probability: on the scorebug, in the box score's Flow tab and the period report (default on). */
   liveWinProb?: boolean;
+  /**
+   * Live games: whether the staff makes its in-game tactics changes itself ('auto') or brings each one
+   * to you ('ask', the default). Subs and timeouts stay yours either way.
+   */
+  liveStaff?: 'ask' | 'auto';
+  /** Live games on a phone held upright: the court at full size ('court') or smaller, for more of the bench under it ('bench'). */
+  liveView?: 'court' | 'bench';
   /** Live games open with the starting lineups on the court before the tip (default on). */
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */
@@ -1322,8 +1359,11 @@ export interface LiveJournal {
 /** A coaching move in a live game, on the user's side (see LiveJournal). */
 export type LiveOp = { at: number } & (
   | { op: 'sub'; args: { out: number; in: number } }
-  /** `plan`: the new tactics are also what "Reset to game plan" goes back to (edits made away from the Live screen). */
-  | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean } }
+  /**
+   * `plan`: the new tactics are also what "Reset to game plan" goes back to (edits made away from the
+   * Live screen). `staff`: the staff made it (with the bench handed to it), and why.
+   */
+  | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean; staff?: string } }
   | { op: 'timeout'; args: { reason?: string } }
   | { op: 'manualSubs'; args: { on: boolean } }
 );

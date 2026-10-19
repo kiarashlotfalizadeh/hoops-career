@@ -1,5 +1,5 @@
-/* Over the court: the play's call, the broadcast graphics, the one banner and a break's card; the
-   playback controls a tap brings up; the starting lineups before the tip. */
+/* Over the court: the play's call, the broadcast graphics and the one banner; the playback controls a
+   tap brings up; the starting lineups before the tip. */
 /* the play's call, the graphics and the banner: over the backcourt, clear of the basket the play goes to */
 .lv-lower {
   position: absolute;
@@ -146,48 +146,6 @@
   content: '';
   position: absolute;
   inset: -7px -6px;
-}
-
-/* a break: the period's name big over the court, the next period one tap away */
-.lv-break {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px;
-  text-align: center;
-  background: rgba(6, 8, 12, 0.74);
-}
-.lv-break-t {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 40px;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-.lv-break-s {
-  font-size: 13.5px;
-  color: #d6dbe3;
-}
-.lv-break-go {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-}
-.lv-break-rep {
-  background: rgba(0, 0, 0, 0.4);
-  border-color: rgba(255, 255, 255, 0.24);
-  color: #fff;
-}
-.lv-break-skip {
-  width: 46px;
-  padding: 0;
 }
 
 /* ------------------------------------------------------------------ playback: tap the court, like a video player */

@@ -474,3 +474,12 @@
   display: flex;
   justify-content: center;
 }
+
+/* the staff's one line on the next opponent, under who's out (its key is the assistant's name) */
+.td-staff {
+  position: relative;
+  margin-top: 8px;
+}
+.td-staff .td-out-k {
+  width: auto;
+}

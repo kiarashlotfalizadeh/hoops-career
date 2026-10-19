@@ -1,5 +1,5 @@
-// Quick changes for the live game: a short, curated row of one-tap moves on the Clipboard's Tactics
-// tab, over the full levers. Each is a real change; pressed, it goes back to the game plan's setting.
+// Quick changes for the live game: a short, curated row of one-tap moves at the top of the Every
+// setting sheet, over the full levers. Each is a real change; pressed, it goes back to the game plan's setting.
 // Pure: the Live screen applies them through the live game (sim.baseTactics → setTactics).
 
 import type { Tactics } from '../../core/types';

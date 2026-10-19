@@ -271,6 +271,7 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     // what the recap's quotes read: damaged, they go (the quotes read the play-by-play and the flow, as for older games)
     if (g.hurt !== undefined && !(Array.isArray(g.hurt) && g.hurt.every(int))) delete g.hurt;
     if (g.wpLow !== undefined && !(num(g.wpLow) && g.wpLow >= 0 && g.wpLow <= 1)) delete g.wpLow;
+    if (g.moves !== undefined && !movesIntact(g.moves)) delete g.moves;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
@@ -578,6 +579,31 @@ function migrateContracts(x: League) {
   for (const m of x.inbox) if (m.tenDay !== undefined && !int(m.tenDay)) delete m.tenDay;
 }
 
+/** A live game's moves in shape (see CoachMove): what each was, when, and the tallies around it. */
+function movesIntact(v: unknown): boolean {
+  const pair = (x: unknown) => obj(x) && int(x.poss) && (x.poss as number) >= 0 && num(x.pts) && (x.pts as number) >= 0;
+  const tally = (t: unknown) => obj(t) && pair(t.us) && pair(t.them) && (t.focus === undefined || pair(t.focus));
+  return (
+    Array.isArray(v) &&
+    v.length <= MAX_LIVE_OPS &&
+    v.every(
+      (m) =>
+        obj(m) &&
+        ['tactics', 'sub', 'timeout'].includes(m.kind as string) &&
+        int(m.q) &&
+        num(m.clock) &&
+        str(m.text) &&
+        (m.text as string).length <= 600 &&
+        ['def', 'off', 'both'].includes(m.end as string) &&
+        (m.by === undefined || m.by === 'staff') &&
+        (m.pid === undefined || int(m.pid)) &&
+        (m.aim === undefined || (str(m.aim) && (m.aim as string).length <= 60)) &&
+        tally(m.before) &&
+        tally(m.after),
+    )
+  );
+}
+
 /** A result's set tallies in shape (see SetStat): a side, a known set or 'iso', runs and points, and the run it was read by. */
 function setsIntact(v: unknown): boolean {
   return (
@@ -642,6 +668,7 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
       return int(a.out) && int(a.in);
     case 'tactics':
       if (!isTactics(a.tactics) || (a.plan !== undefined && typeof a.plan !== 'boolean')) return false;
+      if (a.staff !== undefined && !(str(a.staff) && (a.staff as string).length <= 200)) return false;
       cleanTactics(a.tactics);
       return true;
     case 'timeout':

@@ -19,6 +19,7 @@ import { jerseyColors } from '../teamColors';
 import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
+import { staffNotes } from './staff';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from './graphics';
@@ -82,6 +83,8 @@ export function useLiveGame() {
   const { gfx, queueBanner, markSaid, seedGraphics, showGraphic, sayStaff, reset: resetOverCourt } = oc;
   const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
   const [panel, setPanel] = useState<Panel>('none');
+  /** Your timeout, while it's taken: the game waits in the huddle (on the screen, under any sheet opened from it). */
+  const [huddle, setHuddle] = useState(false);
   const [clipOpen, setClipOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
@@ -224,7 +227,7 @@ export function useLiveGame() {
   const takeView = useCallback(
     (lg: LiveGame, banner = true) => {
       const prev = viewRef.current;
-      const next = snapshot(lg.sim);
+      const next = snapshot(lg.sim, lg.logs.length);
       viewRef.current = next;
       setView(next);
       const [h, a] = loopHelpers.current.teams;
@@ -259,7 +262,7 @@ export function useLiveGame() {
       clearTimeout(ff.current.timer);
       ff.current = { timer: 0, waiting: false };
       brokeAt.current = 0;
-      viewRef.current = lg ? snapshot(lg.sim) : null;
+      viewRef.current = lg ? snapshot(lg.sim, lg.logs.length) : null;
       setView(viewRef.current);
       setEvents([]);
       resetOverCourt(!!lg && lg.steps > 0);
@@ -274,6 +277,7 @@ export function useLiveGame() {
       setPaused(false);
       setDismissed([]);
       setPanel('none');
+      setHuddle(false);
       setClipOpen(false);
       setResultGid(null);
       setAnnounce('');
@@ -373,6 +377,7 @@ export function useLiveGame() {
       const res = lg.committed!;
       // the coaching sheets have nothing left to change
       setPanel('none');
+      setHuddle(false);
       setClipOpen(false);
       setStatus('final');
       setResultGid(res.gid);
@@ -392,6 +397,7 @@ export function useLiveGame() {
       const res = useStore.getState().league!.games.find((g) => g.gid === lg.game.gid);
       clearLive();
       setPanel('none');
+      setHuddle(false);
       setClipOpen(false);
       setStatus('simmed');
       setResultGid(res?.gid ?? null);
@@ -418,7 +424,7 @@ export function useLiveGame() {
       clearLive();
     }
     // the box score shows the final numbers
-    viewRef.current = snapshot(lg.sim);
+    viewRef.current = snapshot(lg.sim, lg.logs.length);
     setView(viewRef.current);
     if (lg.committed) showFinal(lg);
     else showSimmed(lg);
@@ -444,7 +450,6 @@ export function useLiveGame() {
       setAtBreak(true);
       setPaused(true);
       setClipOpen(false);
-      setPanel('break');
       const [h, a] = lg.sim.T;
       ticker.set(lg.sim.clock, [h.score, a.score], true);
       setAnnounce(`${lg.sim.q === 2 ? 'Halftime' : `End of ${periodLabel(lg.sim.q)}`}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
@@ -492,7 +497,8 @@ export function useLiveGame() {
         setScript(null);
         setPaused(true);
         setClipOpen(false);
-        setPanel('huddle');
+        setPanel('none');
+        setHuddle(true);
         return;
       }
       // (a timeout waiting for a dead ball when the period ran out isn't taken: the break is the stop)
@@ -548,7 +554,7 @@ export function useLiveGame() {
     nextRef.current();
   };
 
-  const huddling = panel === 'huddle';
+  const huddling = huddle;
   useEffect(() => {
     if (status === 'live' && !script && !atBreak && !huddling && !intro && !ff.current.timer && !ff.current.waiting) nextPossession();
   }, [status, script, atBreak, huddling, intro, nextPossession]);
@@ -642,6 +648,7 @@ export function useLiveGame() {
   const over = status !== 'live';
   const resume = () => {
     setPanel('none');
+    setHuddle(false);
     setPaused(false);
     setReveal((x) => x + 1);
   };
@@ -655,6 +662,24 @@ export function useLiveGame() {
   useEffect(() => {
     if (!over) sayStaff(alerts);
   }, [alerts, over, sayStaff]);
+  /** A player's defense on the perimeter and inside, for who the staff would put on a scorer. */
+  const defense = useCallback(
+    (pid: number) => {
+      const p = league.players[pid];
+      if (!p) return undefined;
+      const c = composites(p.ratings);
+      return { per: c.perDef, int: c.intDef, hgt: p.ratings.hgt };
+    },
+    [league],
+  );
+  /** The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed. */
+  const notes = useMemo(() => {
+    const lg = liveRef.current;
+    if (!view || over || !lg) return [];
+    const input = alertInput(view);
+    return input ? staffNotes({ ...input, logs: lg.logs.slice(0, view.logs), defense }).filter((n) => !dismissed.includes(n.id)) : [];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, tick, dismissed, over, alertInput, defense]);
 
   return {
     league,
@@ -701,6 +726,7 @@ export function useLiveGame() {
     callTimeout,
     toPending,
     alerts,
+    notes,
     dismissed,
     setDismissed,
     /** Something changed through the game (tactics, subs): the screen reads it again. */
@@ -709,6 +735,7 @@ export function useLiveGame() {
     // the sheets
     panel,
     setPanel,
+    huddling,
     clipOpen,
     setClipOpen,
     // the end

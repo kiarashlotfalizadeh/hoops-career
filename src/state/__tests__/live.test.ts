@@ -334,6 +334,11 @@ describe('a live game survives the app being closed (W12)', () => {
     const res = again.commit(back);
     expect(res).toEqual(lg.commit(l));
     expect([back.live, l.live, once(back, res.gid)]).toEqual([undefined, undefined, 1]);
+    // the result keeps the night's moves and the scoring around each
+    expect(res.moves!.map((m) => m.kind)).toEqual(['sub', 'tactics', 'timeout']);
+    expect(res.moves![1].text).toMatch(/Ball pressure|Pace/);
+    const all = res.moves![1];
+    expect(all.before.us.poss + all.after.us.poss + all.before.them.poss + all.after.them.poss).toBe(lg.logs.length);
   });
 
   it('takes a timeout asked for in their live ball at the next dead ball, and plays it back from the journal', async () => {

@@ -14,6 +14,8 @@ import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
 import { reelOf } from '../core/analysis/highlights';
+import { coachMoves } from '../core/analysis/moves';
+import { shortName } from '../core/league/helpers';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -178,9 +180,9 @@ export class LiveGame {
     return this.record({ op: 'sub', args: { out: outPid, in: inPid } });
   }
 
-  /** New tactics to play from; `plan`: they're also what "Reset to game plan" goes back to. */
-  setTactics(tactics: Tactics, plan = false) {
-    this.record({ op: 'tactics', args: { tactics: cloneTactics(tactics), ...(plan && { plan }) } });
+  /** New tactics to play from; `plan`: they're also what "Reset to game plan" goes back to; `staff`: the staff made the change, and why. */
+  setTactics(tactics: Tactics, plan = false, staff?: string) {
+    this.record({ op: 'tactics', args: { tactics: cloneTactics(tactics), ...(plan && { plan }), ...(staff && { staff }) } });
   }
 
   /** Call one of the user's timeouts: false when none is left or the period has run out (one asked for in the other side's live ball waits for the next dead ball). */
@@ -329,6 +331,9 @@ export class LiveGame {
     if (!this.sim.over) this.simTo('end');
     // (recording it ends its journal)
     const res = playGame(league, g, { sim: this.sim, edge: this.edge });
+    // the coach's moves and what each did, for the game's report
+    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`));
+    if (moves.length) res.moves = moves;
     // its highlights stay with the save for its game report, until the next live game
     const reel = reelOf(g.gid, this.logs, this.userSide);
     if (reel.plays.length) league.reel = reel;

@@ -1,5 +1,5 @@
-// Today's slab: the next game at a glance (who, both records, when, what's at stake, who's out, and
-// the way to its Matchup page), or outside the season's games a phase card (where the season stands,
+// Today's slab: the next game at a glance (who, both records, when, what's at stake, who's out, the
+// staff's one line on them, and the way to its Matchup page), or outside the season's games a phase card (where the season stands,
 // one line, and the one screen worth opening). The Continue bar carries Watch & coach and the
 // phase's next step, so neither is repeated here.
 import { Link } from 'react-router-dom';
@@ -19,6 +19,8 @@ import { TeamLogo } from '../components/TeamLogo';
 import { flowActions, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
+import { scoutTeam } from '../../core/ai/advisor';
+import { leadAssistant } from '../../core/ai/assistant';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -75,6 +77,13 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   // (the missing plan is a link to the Plan tab: the one tag here with something to do)
   if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
+  // the staff's one line on them: who to watch, and where to hit them
+  const staff = useLeagueMemo(() => {
+    const sc = scoutTeam(league, opp);
+    const watch = sc.threats[0];
+    const hit = sc.weaknesses[0];
+    return { who: leadAssistant(league).last, text: [watch && `Watch ${watch.name}.`, hit].filter(Boolean).join(' ') };
+  }, [league, opp]);
   return (
     <section className="slab td-slab" aria-label="Next game">
       <span className="slab-mark">
@@ -130,6 +139,12 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
               <span className="grow">{o.text}</span>
             </div>
           ))}
+        </div>
+      )}
+      {staff.text && (
+        <div className="td-out td-staff">
+          <span className="td-out-k">{staff.who}</span>
+          <span className="grow">{staff.text}</span>
         </div>
       )}
     </section>
