@@ -202,6 +202,9 @@ function playAllStarGame(league: League, rng: Rng) {
   const res = sim.simToEnd();
   const mvpPid = res.pog;
   aw.allStarMvp = mvpPid;
+  // the game itself, for the awards page: the score, and the MVP's night rather than his season
+  const line = [...res.home.players, ...res.away.players].find((b) => b.pid === mvpPid);
+  aw.allStarGame = { east: res.home.pts, west: res.away.pts, ...(line ? { mvp: { pts: line.pts, reb: line.orb + line.drb, ast: line.ast } } : {}) };
   if (mvpPid !== undefined && league.players[mvpPid]) league.players[mvpPid].awards.push({ season: league.season, type: 'All-Star MVP' });
   const winner = res.home.pts > res.away.pts ? 'East' : 'West';
   addNews(league, {

@@ -31,7 +31,7 @@ import {
 } from '../../core/league/records';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Sheet } from '../components/ui';
-import { f1, p1, rosterNames } from '../stats';
+import { f1, p1, rosterNames, signed } from '../stats';
 import { teamPath, useQueryParam } from './shared';
 import { plural } from '../../core/format';
 
@@ -73,7 +73,7 @@ const when = (league: League, m: { season: number; day: number; opp: number }) =
   `vs ${league.teams[m.opp]?.abbrev ?? '?'} · ${fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
 const fmtSeason = (stat: SeasonStat, v: number) =>
   stat === 'fg' || stat === 'tp' || stat === 'ft' ? p1(v) : stat === 'pts' || stat === 'tpm' ? Math.round(v).toLocaleString('en-US') : f1(v);
-const fmtTeam = (stat: TeamSeasonStat, v: number) => (stat === 'wins' || stat === 'losses' ? '' : stat === 'net' ? `${v > 0 ? '+' : ''}${f1(v)}` : f1(v));
+const fmtTeam = (stat: TeamSeasonStat, v: number) => (stat === 'wins' || stat === 'losses' ? '' : stat === 'net' ? signed(v) : f1(v));
 
 function Who({ tid, name, decorative }: { tid?: number; name: ReactNode; decorative?: boolean }) {
   return (
@@ -165,7 +165,7 @@ function useBook(league: League, tid: number | undefined, post: boolean) {
           };
         });
     const career: Rec[] = CAREER_STATS.map((stat) => {
-      const rows = careerLeaders(league, stat, { tid, playoffs: post });
+      const rows = careerLeaders(league, stat, { tid, playoffs: post, real: true });
       const name = listNames(
         league,
         rows.map((r) => r.pid),
@@ -230,8 +230,8 @@ export function RecordBook({ league }: { league: League }) {
               i === 0 ? (
                 <Help title="The record book">
                   <p className="lg-p">
-                    Since {seasonLabel(since)}, this league&apos;s seasons only. Single games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the
-                    top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
+                    Since {seasonLabel(since)}, this league&apos;s seasons only; careers count the real seasons before it too, for a player whose whole career is on record. Single
+                    games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
                   </p>
                   <p className="lg-p">
                     Per-game and percentage season records need 70% of the team&apos;s games (and 300 field goals, 82 threes or 125 free throws made); a playoff run, half the

@@ -77,11 +77,18 @@ export const activeCoach = (league: League, tid: number) => league.coaches?.find
 
 export const userCoach = (league: League) => league.coaches?.find((r) => r.user);
 
-/** A head coach's name no other has had: a redraw, and once the 900 names wear thin over a long career, a middle initial. */
-export function uniqueName(rng: Rng, taken: ReadonlySet<string>): string {
+/** A coach's surname (the name after the first word). */
+export const surnameOf = (name: string) => name.split(/ (.+)/)[1] ?? name;
+
+/**
+ * A head coach's name no other has had: a redraw, and once the 5,400 names wear thin over a long
+ * career, a middle initial. `surnames`: last names that coaches in charge now have, which a new
+ * one avoids while it can (two Hardins in one league read as a family business).
+ */
+export function uniqueName(rng: Rng, taken: ReadonlySet<string>, surnames: ReadonlySet<string> = new Set()): string {
   for (let i = 0; i < 50; i++) {
     const n = coachName(rng);
-    if (!taken.has(n)) return n;
+    if (!taken.has(n) && (i >= 40 || !surnames.has(surnameOf(n)))) return n;
   }
   for (;;) {
     const [first, last] = coachName(rng).split(/ (.+)/);
@@ -100,16 +107,19 @@ export function seedCoaches(league: League) {
   if (league.coaches) return;
   const rng = new Rng(hashString(`${league.id}:coachNames`));
   const taken = new Set([league.coachName]);
+  // no two share a surname either, when the league starts
+  const surnames = new Set([surnameOf(league.coachName)]);
   league.teams[league.userTid].coach.name = league.coachName;
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
-    if (taken.has(t.coach.name)) {
+    if (taken.has(t.coach.name) || surnames.has(surnameOf(t.coach.name))) {
       const was = t.coach.name;
-      t.coach.name = uniqueName(rng, taken);
+      t.coach.name = uniqueName(rng, taken, surnames);
       // a Coach of the Year he won with this team under the shared name stays his (before the registry, AI coaches never moved)
       for (const a of league.awards) if (a.coy === t.tid && a.coyCoach === was) a.coyCoach = t.coach.name;
     }
     taken.add(t.coach.name);
+    surnames.add(surnameOf(t.coach.name));
   }
   league.coaches = league.teams.map((t, id) => {
     const user = t.tid === league.userTid;
@@ -512,11 +522,14 @@ export function coachingCarousel(league: League): CarouselMoves {
   const coy = coyWinners(league);
   // (the user's former names too: an award that named him then must still find him)
   const taken = new Set(reg.flatMap((r) => [r.name, ...(r.aka ?? [])]));
+  // the candidates' surnames differ from the coaches in charge and from each other's
+  const surnames = new Set(reg.filter((r) => openStint(r)).map((r) => surnameOf(r.name)));
   const fresh: CoachProfile[] = [];
   for (let i = 0; i < moves.fired.length * CANDIDATES; i++) {
     const p = randomCoach(rng);
-    p.name = uniqueName(rng, taken);
+    p.name = uniqueName(rng, taken, surnames);
     taken.add(p.name);
+    surnames.add(surnameOf(p.name));
     fresh.push(p);
   }
   const firedNow = new Set(moves.fired.map((f) => f.coach));

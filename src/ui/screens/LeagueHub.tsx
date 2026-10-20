@@ -6,7 +6,7 @@ import type { League } from '../../core/types';
 import { useLeague } from '../../state/store';
 import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { lazyRetry } from '../lazyRetry';
-import { PageHeader } from '../components/ui';
+import { PageHeader, Spinner } from '../components/ui';
 import { TabBar } from '../league/shared';
 import { StandingsTab } from '../league/StandingsTab';
 import { StatsTab } from '../league/StatsTab';
@@ -60,7 +60,14 @@ export default function LeagueHub() {
       {tab === 'awards' && <AwardsTab league={league} />}
       {tab === 'news' && <NewsTab league={league} />}
       {tab === 'history' && (
-        <Suspense fallback={<div className="empty">Loading…</div>}>
+        // (the app's own wait: nothing for a moment, then a spinner, never a "Loading…" line)
+        <Suspense
+          fallback={
+            <div className="page-wait" role="status" aria-label="Loading">
+              <Spinner />
+            </div>
+          }
+        >
           <History />
         </Suspense>
       )}

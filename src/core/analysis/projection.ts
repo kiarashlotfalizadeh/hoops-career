@@ -34,11 +34,12 @@ export const winChance = (margin: number) => phi(margin / MARGIN_SD);
 
 /**
  * A team's net rating estimate: this season's per-100 net, weighted by games played against a
- * prior from tonight's rotation talent (`talent`: its minutes-weighted OVR above the league's).
+ * prior from tonight's rotation talent (`talent`: its minutes-weighted OVR above the league's), at
+ * `perPoint` net a point of it (TALENT_NET for a game's planned rotation).
  */
-export function blendNet(net: number, gp: number, talent: number) {
+export function blendNet(net: number, gp: number, talent: number, perPoint = TALENT_NET) {
   const w = gp / (gp + PRIOR_GAMES);
-  return w * net + (1 - w) * talent * TALENT_NET;
+  return w * net + (1 - w) * talent * perPoint;
 }
 
 /** The projected margin for `us`: the net ratings' difference at the game's pace, plus home court (`edge`). */

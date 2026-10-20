@@ -144,14 +144,15 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
               <span className="wl" aria-hidden="true">
                 {r.won}-{r.lost}
               </span>
-              <span aria-hidden="true">{r.gb === 0 ? '—' : r.gb.toFixed(1)}</span>
+              <span aria-hidden="true">{r.gb === 0 ? '—' : r.gb % 1 ? r.gb.toFixed(1) : r.gb.toFixed(0)}</span>
               <span className={`strk ${r.streak > 0 ? 'good' : r.streak < 0 ? 'bad' : ''}`} aria-hidden="true">
                 {streakLabel(r.streak)}
               </span>
-              <span aria-hidden="true">{r.lastTen}</span>
-              <span aria-hidden="true">{r.home}</span>
-              <span aria-hidden="true">{r.away}</span>
-              <span aria-hidden="true">{r.confRec}</span>
+              {/* (before opening night every split is a dash, as GB and the streak are) */}
+              <span aria-hidden="true">{played ? r.lastTen : '—'}</span>
+              <span aria-hidden="true">{played ? r.home : '—'}</span>
+              <span aria-hidden="true">{played ? r.away : '—'}</span>
+              <span aria-hidden="true">{played ? r.confRec : '—'}</span>
               <span className={r.diff > 0 ? 'good' : r.diff < 0 ? 'bad' : ''} aria-hidden="true">
                 {played ? signed(r.diff) : '—'}
               </span>
@@ -195,8 +196,8 @@ function PowerRankings({ league }: { league: League }) {
           <Help title="Power rankings">
             <p className="lg-p">Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
             <p className="lg-p">
-              Net rating predicts future results better than win-loss record. Early in the season, roster strength (average OVR of the top eight players, TAL) is blended in until
-              about ten games are played.
+              Net rating predicts future results better than win-loss record. Early in the season, roster strength (Top 8: the average OVR of the eight best players) is blended in
+              until about ten games are played.
             </p>
           </Help>
         }
@@ -218,7 +219,7 @@ function PowerRankings({ league }: { league: League }) {
             Net
           </span>,
           'W-L',
-          'Tal',
+          'Top 8',
           <span key="o" className="as-is">
             ORtg
           </span>,

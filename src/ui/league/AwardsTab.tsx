@@ -63,7 +63,10 @@ export function AwardsTab({ league }: { league: League }) {
           {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
           {decided && aw && <MajorAwards league={league} aw={aw} />}
           {(decided || (isCurrent && started)) && (
-            <div className="lg-note">Figures per game{decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}.</div>
+            <div className="lg-note">
+              Figures per game{decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}
+              {decided && aw?.allStarGame?.mvp ? '; the All-Star MVP’s in the game' : ''}.
+            </div>
           )}
         </>
       )}
@@ -183,6 +186,7 @@ function PlayerAward({
   label,
   kind = 'off',
   playoffs = false,
+  line,
 }: {
   league: League;
   pid?: number;
@@ -191,6 +195,8 @@ function PlayerAward({
   label: string;
   kind?: 'off' | 'def';
   playoffs?: boolean;
+  /** The figures to show in place of his season's per-game line (one game's). */
+  line?: string;
 }) {
   const p = pid !== undefined ? league.players[pid] : undefined;
   if (!p) return null;
@@ -205,7 +211,7 @@ function PlayerAward({
         </span>
         <span className="sub ellipsis">
           {tid !== null ? `${teamAbbrev(league, tid)} · ` : ''}
-          {statLine(p, season, kind, playoffs)}
+          {line ?? statLine(p, season, kind, playoffs)}
         </span>
       </span>
       <span />
@@ -240,7 +246,19 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
             <span />
           </AwardRow>
         )}
-        <PlayerAward league={league} pid={aw.allStarMvp} season={s} icon={<Star size={18} />} label="All-Star Game MVP" />
+        <PlayerAward
+          league={league}
+          pid={aw.allStarMvp}
+          season={s}
+          icon={<Star size={18} />}
+          label="All-Star Game MVP"
+          // his night, not his season: the game's figures and its final
+          line={
+            aw.allStarGame?.mvp
+              ? `${aw.allStarGame.east > aw.allStarGame.west ? 'East' : 'West'} won ${Math.max(aw.allStarGame.east, aw.allStarGame.west)}-${Math.min(aw.allStarGame.east, aw.allStarGame.west)} · ${aw.allStarGame.mvp.pts} PTS · ${aw.allStarGame.mvp.reb} REB`
+              : undefined
+          }
+        />
       </div>
     </Section>
   );
@@ -387,7 +405,11 @@ function RaceCard({
   const top = list[0]?.score ?? 1;
   const low = Math.min(0, ...list.map((x) => x.score));
   // the voters' score on a scale where the leader is 100: how close the race is, in one figure
-  const rel = (score: number) => Math.round(((score - low) / Math.max(0.01, top - low)) * 100);
+  // (only the leader shows 100: a close second rounds down to 99, not up to a tie that isn't one)
+  const rel = (score: number, i: number) => {
+    const v = Math.round(((score - low) / Math.max(0.01, top - low)) * 100);
+    return i > 0 && score < top ? Math.min(99, v) : v;
+  };
   return (
     <Section
       title={
@@ -419,7 +441,7 @@ function RaceCard({
                   </span>
                 </span>
                 <span className="lg-race-v num">
-                  {rel(score)}
+                  {rel(score, i)}
                   <span className="sr-only"> of 100</span>
                 </span>
               </Link>

@@ -8,13 +8,14 @@ import type { League, Phase, Txn, TxnKind } from '../../core/types';
 import { fmtDate } from '../../core/league/helpers';
 import { playerTxns, teamTxns, tradesBetween, txnLine, type TxnPart } from '../../core/league/transactions';
 import { seasonLabel } from '../../core/constants';
+import { plural } from '../../core/format';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help } from '../components/ui';
 import { NEWS_KIND } from './NewsTab';
 import { teamPath, useQueryParam } from './shared';
 
-type Group = 'trade' | 'signing' | 'release' | 'other';
+type Group = 'trade' | 'signing' | 'release' | 'draft' | 'other';
 type Filter = 'all' | Group;
 
 const GROUP: Record<TxnKind, Group> = {
@@ -32,7 +33,7 @@ const GROUP: Record<TxnKind, Group> = {
   buyout: 'release',
   renounce: 'release',
   option: 'other',
-  draft: 'other',
+  draft: 'draft',
   // restricted free agency: an offer sheet and its outcome are signings; a qualifying offer is a
   // rights call, like an option, until he takes it (see groupOf)
   qualify: 'other',
@@ -43,12 +44,12 @@ const GROUP: Record<TxnKind, Group> = {
 };
 /** A move's filter group: a qualifying offer he took is a signing, a 10-day contract that ended a release. */
 const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : t.kind === 'tenDay' && t.note === 'ended' ? 'release' : GROUP[t.kind]);
-const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'other'];
-const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', other: 'Other' };
+const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'draft', 'other'];
+const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', draft: 'Draft', other: 'Other' };
 /** The news log's icon and colour for each kind of move. */
 const kindMeta = (t: Txn) => {
   const g = groupOf(t);
-  return NEWS_KIND[g === 'other' ? (t.kind === 'draft' ? 'draft' : 'general') : g];
+  return NEWS_KIND[g === 'other' ? 'general' : g];
 };
 
 const OFFSEASON: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
@@ -87,17 +88,20 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
   const counts = new Map<Filter, number>([['all', all.length]]);
   for (const t of all) counts.set(groupOf(t), (counts.get(groupOf(t)) ?? 0) + 1);
   const shown = all.filter((t) => filter === 'all' || groupOf(t) === filter);
+  // kinds with no moves stay out, as on the News tab; with a single kind there's nothing to filter
+  const chips = FILTERS.filter((f) => f === 'all' || f === filter || counts.get(f));
   let lastKey = '';
   return (
     <>
       <div className="lg-bar lg-bar-chips">
         <div className="lg-hscroll lg-bar-scroll" role="group" aria-label="Kind of move">
-          {/* kinds with no moves stay out, as on the News tab */}
-          {FILTERS.filter((f) => f === 'all' || f === filter || counts.get(f)).map((f) => (
-            <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
-              {FILTER_LABEL[f]} <span className="lg-count num">{counts.get(f) ?? 0}</span>
-            </button>
-          ))}
+          {chips.length > 2 || filter !== 'all'
+            ? chips.map((f) => (
+                <button key={f} className={`chip ${filter === f ? 'on' : ''}`} aria-pressed={filter === f} onClick={() => setFilter(f)}>
+                  {FILTER_LABEL[f]} <span className="lg-count num">{counts.get(f) ?? 0}</span>
+                </button>
+              ))
+            : all.length > 0 && <span className="lg-bar-l">{plural(all.length, 'move')}</span>}
         </div>
         <span className="lg-bar-r">
           <Help title="The moves log">

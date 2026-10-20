@@ -149,6 +149,13 @@ export const trajectory = (league: Pick<League, 'id'>, pid: number) => new Rng(h
  */
 const fadeScale = (rating: number, mean?: number) => (mean && mean > 0 ? clamp(Math.pow(rating / mean, 0.7), 0.6, 1.6) : 1);
 
+/**
+ * Share of a year's gain an attribute still takes near the top of the scale: all of it up to
+ * CEILING_FROM, then less the closer it is to 100 (a fifth at most from 96 up).
+ */
+const CEILING_FROM = 80;
+const ceilingRoom = (r: number) => (r <= CEILING_FROM ? 1 : Math.max(0.2, (100 - r) / (100 - CEILING_FROM)));
+
 /** Apply `frac` of a year's development. Returns OVR change. */
 export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, frac = 1, scale?: League['ovrScale']): number {
   const a = playerAge(p, season);
@@ -179,6 +186,8 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
       d += !focus.length || focus.includes(k) ? focusGain : OFF_FOCUS_GAIN;
       if (p.training === 'conditioning' && g === 'athletic' && d < 0) d *= 0.75;
     }
+    // the last points are the hardest: a gain slows as the attribute nears the top of the scale
+    if (d > 0 && g !== 'hgt') d *= ceilingRoom(p.ratings[k]);
     p.ratings[k] = clamp(Math.round((p.ratings[k] + d * frac) * 10) / 10, 1, 100);
   }
   if (!scale) return 0;

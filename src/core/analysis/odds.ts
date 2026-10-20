@@ -23,6 +23,14 @@ export const TRAIL_SIMS = 250;
  * blend weighs the games (sd · √(PRIOR_GAMES / (gp + PRIOR_GAMES))).
  */
 export const STRENGTH_SD = 2.5;
+/**
+ * Net rating per point of a roster's worth (rosterWorth) above the league's: what the season
+ * forecast's talent prior counts. Fitted over eight simulated opening seasons of the real league
+ * (240 team seasons, r = 0.91): 2.15. At the game projection's 1.7 (TALENT_NET, a planned
+ * rotation's), the forecast was a fifth too timid: teams finished 1.21 wins from average for every
+ * win it projected (the Thunder, projected for 64, won 69-74), the worst short of what it said.
+ */
+export const ROSTER_NET = 2.1;
 /** Minutes by OVR rank in a typical rotation (240 in all), for what a roster is worth with its injured players out or back. */
 const SLOTS = [35, 34, 32, 30, 28, 24, 20, 16, 12, 9];
 /** 2-2-1-1-1 from the higher seed's view, as the playoffs schedule it. */
@@ -164,7 +172,7 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   const net = league.teams.map((t) => {
     const r = ratings.rows[t.tid];
-    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg);
+    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET);
   });
   const sd = ratings.rows.map((r) => spread * Math.sqrt(PRIOR_GAMES / (r.gp + PRIOR_GAMES)));
   const paces = ratings.rows.filter((r) => r.gp > 0).map((r) => r.pace);
@@ -220,6 +228,42 @@ function playSeries(rng: Rng, pHome: number, pAway: number, hw = 0, lw = 0): boo
     n++;
   }
   return hw === 4;
+}
+
+const lotteryTables = new Map<number, { first: number[]; top4: number[]; pick: number[] }>();
+
+/**
+ * For a lottery of `m` teams in draft order (worst first): each place's chance of the first pick,
+ * of a top-four pick and its expected pick, from the 2019 odds' four drawings (every order of the
+ * four winners added up). Places past the odds' table get no chances and fall in order behind.
+ */
+export function lotteryTable(m: number) {
+  const cached = lotteryTables.get(m);
+  if (cached) return cached;
+  const odds = Array.from({ length: m }, (_, i) => LOTTERY_ODDS[i] ?? 0);
+  const first = new Array<number>(m).fill(0);
+  const top4 = new Array<number>(m).fill(0);
+  const pick = new Array<number>(m).fill(0);
+  const draws = Math.min(4, odds.filter((o) => o > 0).length);
+  // every sequence of distinct winners for the drawn picks, with its probability
+  const walk = (drawn: number[], p: number) => {
+    if (drawn.length === draws) {
+      // the rest keep their order behind the drawn picks
+      const order = [...drawn, ...Array.from({ length: m }, (_, t) => t).filter((t) => !drawn.includes(t))];
+      order.forEach((t, k) => {
+        if (k === 0) first[t] += p;
+        if (k < 4) top4[t] += p;
+        pick[t] += p * (k + 1);
+      });
+      return;
+    }
+    const total = odds.reduce((a, o, t) => a + (drawn.includes(t) ? 0 : o), 0);
+    for (let t = 0; t < m; t++) if (!drawn.includes(t) && odds[t] > 0) walk([...drawn, t], (p * odds[t]) / total);
+  };
+  walk([], 1);
+  const table = { first, top4, pick };
+  lotteryTables.set(m, table);
+  return table;
 }
 
 /**
@@ -372,27 +416,19 @@ export function forecast(league: League, opts: { sims?: number; fixed?: { gid: n
       count.reach[4][playSeries(rng, pH, pA, real?.highWins ?? 0, real?.lowWins ?? 0) ? high : low]++;
     }
 
-    // the lottery: everyone not in the playoffs, worst record first (a tie drawn), four picks drawn by the 2019 odds
+    // the lottery: everyone not in the playoffs, worst record first (a tie drawn); each place's
+    // chances at the first pick, the top four and its expected pick are exact (the 2019 odds'
+    // drawing, worked out once), so a pick's odds follow its place without a second draw's noise
     const inPlayoffs = new Set(alive);
     const lottery = [];
     for (let t = 0; t < n; t++) if (!inPlayoffs.has(t)) lottery.push({ t, key: w[t] + rng.next() * 0.5 });
     lottery.sort((a, b) => a.key - b.key);
-    const pool = lottery.map((x, i) => ({ t: x.t, odds: LOTTERY_ODDS[i] ?? 0 }));
-    const order: number[] = [];
-    for (let k = 0; k < 4 && pool.length; k++) {
-      const total = pool.reduce((a, x) => a + x.odds, 0);
-      let r = rng.next() * total;
-      let i = 0;
-      while (i < pool.length - 1 && r >= pool[i].odds) r -= pool[i++].odds;
-      order.push(pool[i].t);
-      pool.splice(i, 1);
-    }
-    for (const x of pool) order.push(x.t);
-    order.forEach((t, i) => {
-      count.lottery[t]++;
-      count.pickSum[t] += i + 1;
-      if (i === 0) count.pick1[t]++;
-      if (i < 4) count.top4[t]++;
+    const table = lotteryTable(lottery.length);
+    lottery.forEach((x, i) => {
+      count.lottery[x.t]++;
+      count.pickSum[x.t] += table.pick[i];
+      count.pick1[x.t] += table.first[i];
+      count.top4[x.t] += table.top4[i];
     });
   }
 

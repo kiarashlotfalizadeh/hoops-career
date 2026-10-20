@@ -4,7 +4,9 @@
 // kept as each game is recorded. Single-season and career records are read from what the save keeps
 // for good: every player's and team's seasons. Only seasons played in this league count: the real
 // seasons a seeded player arrives with are history from before it, and his career highs are the
-// league's ("since 2026-27") unless his whole career is on record.
+// league's ("since 2026-27") unless his whole career is on record. Career totals follow the same
+// rule: a real player whose whole career is on record counts it all (LeBron James's points lead the
+// list from the first day, as his franchises' leaders do on their pages).
 //
 // The regular season (NBA Cup group games, quarterfinals and semifinals included) and the postseason
 // (play-in and playoffs) keep separate books; the Cup championship and the All-Star Game count in
@@ -13,6 +15,7 @@
 import type { BoxLine, GameResult, GameType, League, Player, PlayerStats, TeamSeason } from '../types';
 import { RETIRED } from '../types';
 import { addInbox, addNews, playerName, seasonTotals } from './helpers';
+import { realCareerOnRecord } from '../analysis/milestones';
 
 /** The player stats the book keeps single-game marks for. */
 export const REC_STATS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm'] as const;
@@ -560,14 +563,19 @@ export interface CareerMark {
   seasons: number;
 }
 
-/** Career totals in this league's seasons (regular season or playoffs, play-in included), the league's or for one franchise. */
-export function careerLeaders(league: League, stat: CareerStat, opts: { tid?: number; playoffs?: boolean; n?: number } = {}): CareerMark[] {
+/**
+ * Career totals (regular season or playoffs, play-in included), the league's or for one franchise:
+ * this league's seasons, and with `real` the real seasons before it of a player whose whole career
+ * is on record (see realCareerOnRecord).
+ */
+export function careerLeaders(league: League, stat: CareerStat, opts: { tid?: number; playoffs?: boolean; n?: number; real?: boolean } = {}): CareerMark[] {
   const out: CareerMark[] = [];
   for (const p of Object.values(league.players)) {
     let v = 0;
     const seasons = new Set<number>();
+    const real = !!opts.real && realCareerOnRecord(league, p);
     for (const s of p.stats) {
-      if (s.real || s.playoffs !== !!opts.playoffs || (opts.tid !== undefined && s.tid !== opts.tid) || s.gp <= 0) continue;
+      if ((s.real && !real) || s.playoffs !== !!opts.playoffs || (opts.tid !== undefined && s.tid !== opts.tid) || s.gp <= 0) continue;
       v += stat === 'reb' ? s.orb + s.drb : s[stat];
       seasons.add(s.season);
     }

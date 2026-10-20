@@ -187,6 +187,12 @@
 .lg-strip .statline .v {
   font-size: 26px;
 }
+/* a long label ("Owed to others") wraps under its figure rather than cutting off on a phone */
+.lg-strip .statline .k {
+  white-space: normal;
+  line-height: 1.25;
+  text-wrap: balance;
+}
 /* figures stay on one line: a record never breaks at its hyphen */
 .lg-page .statline .v {
   white-space: nowrap;

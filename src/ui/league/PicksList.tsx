@@ -14,28 +14,32 @@ import { pickOrder, projText } from '../draft/common';
 import { PROJECTION_NOTE, pickProjection, teamPath } from './shared';
 
 /**
- * One draft pick: whose it was (its team's mark) and its name ("2027 1st #4 (LAC)"), its terms in
- * words, who owns it when that's another team (`owner`: the row links to them), and where it would
- * land today ("proj. #17", neutral: a projection, not a grade).
+ * One draft pick: whose it was (its team's mark) and its name ("2027 1st #4 (LAC)"), the team behind
+ * it in words, its terms, and where it would land today ("proj. #17", neutral: a projection, not a
+ * grade). Every row reads the same way: one owed to another team (`owner`) names its owner, one from
+ * another team names that team, and either links to the other team; a team's own pick is "Own pick".
  */
 export function PickRow({ league, d, proj, owner = false }: { league: League; d: DraftPick; proj?: number; owner?: boolean }) {
   const terms = pickTermsNote(league, d);
-  const meta = [owner ? `Owned by the ${teamName(league.teams[d.tid])}.` : '', terms ?? ''].filter(Boolean).join(' ');
+  // the other team in the pick's story: its owner, or the team whose record decides it
+  const other = owner ? d.tid : d.originalTid !== d.tid ? d.originalTid : undefined;
+  const whose = owner ? `Owned by the ${teamName(league.teams[d.tid])}.` : other !== undefined ? `From the ${teamName(league.teams[other])}.` : 'Own pick.';
+  const meta = [whose, terms ?? ''].filter(Boolean).join(' ');
   const body = (
     <>
       <TeamLogo tid={owner ? d.tid : d.originalTid} size={28} decorative />
       <span className="lg-pick-t">
         <span className="lr-name">{pickLabel(league, d)}</span>
-        {meta && <span className="lr-meta">{meta}</span>}
+        <span className="lr-meta">{meta}</span>
       </span>
       <span className="row lg-pick-r">
         {proj !== undefined && <span className="tiny dim num nowrap">{projText(proj)}</span>}
-        {owner && <ChevronRight size={16} className="dim" />}
+        {other !== undefined && <ChevronRight size={16} className="dim" />}
       </span>
     </>
   );
-  return owner ? (
-    <Link to={teamPath(d.tid)} className="lg-pick">
+  return other !== undefined ? (
+    <Link to={teamPath(other)} className="lg-pick">
       {body}
     </Link>
   ) : (

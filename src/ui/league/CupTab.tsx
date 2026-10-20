@@ -10,6 +10,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Segmented } from '../components/ui';
 import { TitleSlab, Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { plural } from '../../core/format';
+import { signed } from '../stats';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
 function dateRange(league: League, a: number, b: number) {
@@ -186,7 +187,7 @@ function GroupTables({ league, tables, seeds, decided }: { league: League; table
                   <span className="wl">
                     {r.won}-{r.lost}
                   </span>
-                  <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : ''}>{r.won + r.lost ? (r.pd > 0 ? `+${r.pd}` : r.pd) : '—'}</span>
+                  <span className={r.pd > 0 ? 'good' : r.pd < 0 ? 'bad' : ''}>{r.won + r.lost ? signed(r.pd, 0) : '—'}</span>
                   <span>{r.won + r.lost ? r.pf : '—'}</span>
                   <span>{seed !== undefined && <span className={`tag ${!decided ? '' : seed === 4 ? 'info' : 'good'}`}>{seed === 4 ? 'WC' : seed}</span>}</span>
                 </Link>

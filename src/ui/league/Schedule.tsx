@@ -20,6 +20,28 @@ function record(league: League, tid: number) {
   return `${ts.won}-${ts.lost}`;
 }
 
+/** Each team's regular-season record after each day's games, this season: a past day's cards show the records as they stood then. */
+function recordsByDay(league: League): Map<number, Map<number, [number, number]>> {
+  const out = new Map<number, Map<number, [number, number]>>();
+  const run = new Map<number, [number, number]>();
+  const games = league.games.filter((g) => g.season === league.season && g.type === 'regular').sort((a, b) => a.day - b.day || a.gid - b.gid);
+  for (const g of games) {
+    const homeWon = g.home.pts > g.away.pts;
+    for (const [tid, won] of [
+      [g.home.tid, homeWon],
+      [g.away.tid, !homeWon],
+    ] as const) {
+      const [w, l] = run.get(tid) ?? [0, 0];
+      const now: [number, number] = won ? [w + 1, l] : [w, l + 1];
+      run.set(tid, now);
+      let day = out.get(g.day);
+      if (!day) out.set(g.day, (day = new Map()));
+      day.set(tid, now);
+    }
+  }
+  return out;
+}
+
 /** "1st Round G4", "Finals G2", "Play-In", or '' for regular-season games. */
 function gameTag(league: League, g: ScheduledGame): string {
   if (g.type === 'playoffs') {
@@ -41,6 +63,7 @@ function seriesGameNo(league: League, g: ScheduledGame) {
 /** Scoreboard for every game on one calendar day, with a day stepper. */
 export function DayScoreboard({ league }: { league: League }) {
   const byGid = useGamesByGid(league);
+  const afterDay = useLeagueMemo(() => recordsByDay(league), [league]);
   const days = useLeagueMemo(() => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b), [league]);
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
   if (!days.length) return <div className="card empty">No games scheduled.</div>;
@@ -85,7 +108,7 @@ export function DayScoreboard({ league }: { league: League }) {
       )}
       <div className="card flush lg-sb-grid">
         {games.map((g) => (
-          <ScoreCard key={g.gid} league={league} g={g} res={byGid.get(g.gid)} />
+          <ScoreCard key={g.gid} league={league} g={g} res={byGid.get(g.gid)} after={day < league.day ? afterDay.get(day) : undefined} />
         ))}
       </div>
     </>
@@ -99,7 +122,7 @@ function favorite(league: League, g: ScheduledGame): string {
   return `${league.teams[fav].abbrev} ${p0(Math.max(win, 1 - win))} to win`;
 }
 
-function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?: GameResult }) {
+function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame; res?: GameResult; after?: Map<number, [number, number]> }) {
   const mine = g.home === league.userTid || g.away === league.userTid;
   const tag = gameTag(league, g);
   const done = !!res || !!g.played;
@@ -129,7 +152,9 @@ function ScoreCard({ league, g, res }: { league: League; g: ScheduledGame; res?:
           <TeamLogo tid={t.tid} size={22} decorative />
           <span className="ab">
             {league.teams[t.tid].abbrev}
-            <span className="rec">{series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : record(league, t.tid)}</span>
+            <span className="rec">
+              {series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : after?.get(t.tid) ? after.get(t.tid)!.join('-') : record(league, t.tid)}
+            </span>
           </span>
           <span className="sc">{t.pts ?? ''}</span>
         </div>

@@ -16,7 +16,8 @@ import { plural } from '../../core/format';
 
 /** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
 export function FranchiseFigures({ league, tid }: { league: League; tid: number }) {
-  const seasons = league.teams[tid].seasons;
+  // (a season not yet begun isn't one of its seasons yet)
+  const seasons = league.teams[tid].seasons.filter((s) => s.season < league.season || s.won + s.lost > 0 || league.phase !== 'preseason');
   const finished = seasons.filter((s) => s.season < league.season || !['preseason', 'regular'].includes(league.phase));
   const w = seasons.reduce((a, s) => a + s.won, 0);
   const l = seasons.reduce((a, s) => a + s.lost, 0);
@@ -69,7 +70,14 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
                 {s.won}-{s.lost}
               </span>
               <span className="sd ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : ''}</span>
-              <OutcomeTag o={seasonOutcome(league, tid, s)} />
+              {/* a season not yet begun is next, not in progress */}
+              <OutcomeTag
+                o={
+                  s.season === league.season && league.phase === 'preseason' && s.won + s.lost === 0
+                    ? { label: 'Not started yet', short: 'Up next' }
+                    : seasonOutcome(league, tid, s)
+                }
+              />
             </div>
           ))}
         </div>

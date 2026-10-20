@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { fmtDate, playerName } from '../../core/league/helpers';
-import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { shortName, teamPath, useQueryParam } from './shared';
@@ -100,8 +99,8 @@ export function NewsTab({ league }: { league: League }) {
               <Fragment key={n.id}>
                 {header && (
                   <div className="list-divider">
-                    {fmtDate(n.season, n.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-                    {n.season !== league.season ? ` · ${seasonLabel(n.season)}` : ''}
+                    {/* a date outside this season carries its year (last summer's "Jul 29" is 2038's, not 2037-38's) */}
+                    {fmtDate(n.season, n.day, { weekday: 'short', month: 'short', day: 'numeric', ...(n.season !== league.season ? { year: 'numeric' } : {}) })}
                   </div>
                 )}
                 <NewsRow league={league} n={n} />

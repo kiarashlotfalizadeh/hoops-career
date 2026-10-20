@@ -90,8 +90,9 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}): ${injuryText(inj.type)}, ${outFor(inj.gamesRemaining)}.`;
-  // news for real absences: ten games, or five for a star
-  if (inj.gamesRemaining >= 10 || (p.ovr >= 80 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
+  // news for real absences: ten games, or five for a star (85+: at 80, a fifth of the league's
+  // players, a month's wire was a column of five-game strains)
+  if (inj.gamesRemaining >= 10 || (p.ovr >= 85 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
   // day-to-day knocks, short absences of the end of the bench and players out of the rotation only
   // show on the roster; the inbox is for absences that change plans
   const rot = p.tid === league.userTid ? league.teams[p.tid].rotation : null;

@@ -1213,6 +1213,8 @@ export interface SeasonAwards {
   allRookie: number[];
   allStars: { E: number[]; W: number[] };
   allStarMvp?: number;
+  /** The All-Star Game's final (East, West) and its MVP's line in it (absent in seasons from before it was kept). */
+  allStarGame?: { east: number; west: number; mvp?: { pts: number; reb: number; ast: number } };
   /** All-Star Saturday's contests (see allStarSaturday.ts), each field in its final order: the winner first. */
   saturday?: { three: ThreeShooter[]; dunk: Dunker[] };
   cupWinner?: number;

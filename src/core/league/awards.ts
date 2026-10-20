@@ -118,9 +118,42 @@ export function defContext(league: League, season = league.season): DefContext {
 export const royScore = (c: Cand) => c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.5) + c.mpg * 0.05;
 export const smoyScore = (c: Cand) => c.gmsc + c.pmPerGame * 0.2;
 
-/** This season's award races so far, each with the award's own eligibility, best first. */
+/**
+ * Whether a player can still reach an award's games line by the season's end: his games so far
+ * plus his team's games left, less those an injury will cost him. A star out for months drops off
+ * the ladders while the race is still on, rather than leading one he can no longer win.
+ */
+function canStillQualify(c: Cand, line: number, left: Map<number, number>): boolean {
+  const tid = c.p.tid >= 0 ? c.p.tid : c.s.tid;
+  const remaining = left.get(tid) ?? 0;
+  const out = Math.min(remaining, c.p.injury?.gamesRemaining ?? 0);
+  return c.gp + remaining - out >= line;
+}
+
+/** Each team's regular-season games still to play, and the most any team plays in all. */
+function gamesLeft(league: League): { left: Map<number, number>; season: number } {
+  const left = new Map<number, number>();
+  const all = new Map<number, number>();
+  for (const g of league.schedule) {
+    if (g.type !== 'regular') continue;
+    for (const tid of [g.home, g.away]) {
+      all.set(tid, (all.get(tid) ?? 0) + 1);
+      if (!g.played) left.set(tid, (left.get(tid) ?? 0) + 1);
+    }
+  }
+  return { left, season: Math.max(0, ...all.values()) };
+}
+
+/** This season's award races so far, each with the award's own eligibility (and only those who can still meet it), best first. */
 export function awardRaces(league: League, n = 5) {
-  const { eligible, rookies, bench } = awardPools(league);
+  const pools = awardPools(league);
+  const { left, season } = gamesLeft(league);
+  // the lines as they will stand on the last day: 65 games (50 for the rookies and the sixth men)
+  const full = (g: number) => Math.round(season * (g / 82));
+  const reach = (list: Cand[], g: number) => (left.size ? list.filter((c) => canStillQualify(c, full(g), left)) : list);
+  const eligible = reach(pools.eligible, 65);
+  const rookies = reach(pools.rookies, 50);
+  const bench = reach(pools.bench, 50);
   const dctx = defContext(league, league.season);
   const rank = (arr: Cand[], f: (c: Cand) => number) =>
     arr
