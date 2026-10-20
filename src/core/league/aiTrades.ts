@@ -4,7 +4,7 @@
 import type { DraftPick, League, Player } from '../types';
 import { CAP } from '../constants';
 import { Rng, clamp } from '../random';
-import { CAP_FOR, age, contractSeason, curTeamSeason, dateToDay, inSeason, standardRoster, winPct } from './helpers';
+import { CAP_FOR, OFFSEASON_ROSTER_MAX, age, contractSeason, curTeamSeason, dateToDay, inSeason, standardRoster, winPct } from './helpers';
 import { DEC_15, extensionRefusal, hardCapLine, tradeValue, valueScore } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { contractExp } from '../playerGen';
@@ -127,12 +127,32 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
   const kinds = rng.chance(late ? 0.5 : 0.7) ? [saleDeal, dumpDeal] : [dumpDeal, saleDeal];
   for (const find of kinds) {
     const deal = withHoldsMemo(() => find(league, rng));
-    if (deal) {
+    if (deal && draftNightRoom(league, deal)) {
       executeTrade(league, deal);
       return true;
     }
   }
   return false;
+}
+
+/**
+ * On draft night a team's picks still to come land on its roster too: an AI deal leaves each side
+ * room for them under the offseason limit (OFFSEASON_ROSTER_MAX), counting next season's contracts.
+ * Without it a rebuilder with five picks to make took back four players for a veteran and came out
+ * of the draft with 22 signed.
+ */
+function draftNightRoom(league: League, deal: TradeOffer): boolean {
+  if (league.phase !== 'draft') return true;
+  const bodies = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
+  for (const [mine, other] of [
+    [deal.a, deal.b],
+    [deal.b, deal.a],
+  ] as const) {
+    const signed = standardRoster(league, mine.tid).filter((p) => contractExp(p.contract) > league.season).length;
+    const picks = league.draftPicks.filter((d) => d.season === league.season && (d.tid === mine.tid ? !mine.dpids.includes(d.dpid) : other.dpids.includes(d.dpid))).length;
+    if (signed + bodies(other.pids) - bodies(mine.pids) + picks > OFFSEASON_ROSTER_MAX) return false;
+  }
+  return true;
 }
 
 // ---------------------------------------------------------------- sales: a veteran for youth and picks
@@ -141,12 +161,14 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
 const FADING = { games: 20, pct: 0.45 };
 
 /**
- * Players a team will shop: a rebuilder's veterans (28 or older, 70+, its stars too), and its
- * 27-year-olds outside its two best (a young franchise player stays); a retooling team's 31+
- * outside its three best, and once it is out of it in season (under .450) every veteran of 30 or
+ * Players a team will shop: a rebuilder's veterans (28 or older, 70+, its stars too), and anyone
+ * else of 26 or older but its best (a young franchise player stays); a retooling team's 30+
+ * outside its three best, and once it is out of it in season (under .450) every player of 28 or
  * older, its stars included; and anyone's star (80+, 26 or older) in the last season of his deal
  * who won't extend there, unless his team contends: better to get something for him now. Only
- * players the rules let move.
+ * players the rules let move. When rebuilders kept their 26- and 27-year-old starters and fading
+ * teams their 28- and 29-year-olds, the teams at the bottom stayed nearly as deep as the middle:
+ * over twelve simulated seasons the spread of team talent at the deadline fell a tenth further.
  */
 export function sellable(league: League, tid: number): Player[] {
   const t = league.teams[tid];
@@ -162,8 +184,8 @@ export function sellable(league: League, tid: number): Player[] {
     const r = rank.get(p.pid)!;
     const leaving = p.ovr >= 80 && a >= 26 && contractExp(p.contract) === cs && !p.contract.next && !!extensionRefusal(league, p);
     if (leaving) return true;
-    if (t.strategy === 'rebuild') return a >= 28 || (a >= 27 && r >= 2);
-    return (a >= 31 && r >= 3) || (fading && a >= 30);
+    if (t.strategy === 'rebuild') return a >= 28 || (a >= 26 && r >= 1);
+    return (a >= 30 && r >= 3) || (fading && a >= 28);
   });
 }
 

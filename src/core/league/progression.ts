@@ -61,6 +61,15 @@ const CURVES: Record<Group, number[]> = {
 const SUMMER_SKILLS = 0.6;
 const SUMMER_BODY = 0.25;
 const OWN_NOISE = 1.6;
+/**
+ * Spread of a summer (the shared part, see SUMMER_SKILLS) through 25 and after. A player's OVR moves
+ * about ±3.5-4.5 a year at 20-24 and ±2.5-3 in his prime: some years a breakout, some a step back.
+ * At ±2.3 and ±1.4 almost nobody's level changed but by age, so a team's talent was its roster's
+ * ages: the contenders, the older teams, gave back about a fifth of their edge every summer, and over
+ * twelve simulated seasons the spread of team wins fell from 11 to about 9.5. Holding the league's
+ * spread against it (anchorRatings) costs the established a little each year.
+ */
+const SUMMER_SD = { young: 3.7, prime: 2.6 };
 
 /**
  * Training: balanced adds a little to every attribute. A focus is OVR-neutral against it: the
@@ -120,6 +129,15 @@ export interface DevContext {
  */
 const TRAJECTORY = [1.1, 1.1, 1.1, 1, 0.8, 0.5, 0.25];
 
+/**
+ * How far his arc can take him by where he was drafted: scouts read a late pick less well, so more of
+ * his course is hidden. 1 through the 14th pick, up to 1.19 for the 30th, 1.3 for a second-rounder
+ * or an undrafted player. With every arc the same size (and smaller summers, see SUMMER_SD), a
+ * second-round pick reached 85 about once in thirteen classes over eight simulated leagues (the NBA's
+ * Jokić and Brunson come along every few drafts); now two classes in five have one.
+ */
+export const arcScale = (p: Pick<Player, 'draft'>) => (p.draft.round === 1 ? 1 + Math.max(0, p.draft.pick - 14) * 0.012 : 1.3);
+
 /** A player's hidden development arc in a league: a z-score from a stream of his own, the same every summer. */
 export const trajectory = (league: Pick<League, 'id'>, pid: number) => new Rng(hashString(`${league.id}:arc:${pid}`)).normal(0, 1);
 
@@ -138,7 +156,7 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   const young = a <= 25;
   // a good or bad summer moves all skills together
   const arc = young ? (ctx.trajectory ?? 0) * TRAJECTORY[clamp(a - 19, 0, 6)] : 0;
-  const summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? 1.7 : 1.2);
+  const summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? SUMMER_SD.young : SUMMER_SD.prime);
   const coaching = ((ctx.coachDev - 50) / 50) * 0.7 + ((ctx.coachingBudget - 50) / 50) * 0.5;
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
   const minutes = young ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
@@ -184,22 +202,47 @@ function devContext(league: League, p: Player, statsSeason: number, means: DevCo
     practice: team ? team.practice : 'normal',
     mpg,
     means,
-    trajectory: playerAge(p, league.season) <= 25 ? trajectory(league, p.pid) : 0,
+    trajectory: playerAge(p, league.season) <= 25 ? trajectory(league, p.pid) * arcScale(p) : 0,
   };
 }
 
-/** League-wide mean of each attribute among rostered players. */
-export function ratingMeans(league: League): Partial<Record<RatingKey, number>> {
-  const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
+/**
+ * The players the league's anchors measure (see anchorRatings): each team's 15 best standard players
+ * by raw OVR and its two-way players, the opening-night league the anchors were set on at creation.
+ * Measured on everyone under contract in the summer, camp bodies and draftees made the league look
+ * weaker than it was, so every summer lifted everyone: by opening night the league's median player
+ * had gained two OVR in a decade and the players rated 80 or more went from 115 to 150 while the
+ * stars stayed as many. Deep rosters everywhere flattened the standings and soaked up the payroll
+ * stars would have been paid.
+ */
+export function anchorPopulation(league: League): Player[] {
+  const byTeam = new Map<number, Player[]>();
+  for (const p of Object.values(league.players)) {
+    if (p.tid < 0) continue;
+    let ps = byTeam.get(p.tid);
+    if (!ps) byTeam.set(p.tid, (ps = []));
+    ps.push(p);
+  }
+  const out: Player[] = [];
+  for (const ps of byTeam.values()) {
+    for (const p of ps) if (p.contract.twoWay) out.push(p);
+    const standard = ps.filter((p) => !p.contract.twoWay).map((p) => ({ p, raw: ovrRaw(p.ratings) }));
+    standard.sort((a, b) => b.raw - a.raw || a.p.pid - b.p.pid);
+    for (const x of standard.slice(0, 15)) out.push(x.p);
+  }
+  return out;
+}
+
+/** Mean of each attribute among `rostered` (by default every player on a team). */
+export function ratingMeans(league: League, rostered = Object.values(league.players).filter((p) => p.tid >= 0)): Partial<Record<RatingKey, number>> {
   const out: Partial<Record<RatingKey, number>> = {};
   for (const k of RATING_KEYS) out[k] = rostered.reduce((a, p) => a + p.ratings[k], 0) / Math.max(1, rostered.length);
   return out;
 }
 
-/** Standard deviation per attribute among rostered players. */
-export function ratingSpreads(league: League): Partial<Record<RatingKey, number>> {
-  const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
-  const means = ratingMeans(league);
+/** Standard deviation of each attribute among `rostered` (by default every player on a team). */
+export function ratingSpreads(league: League, rostered = Object.values(league.players).filter((p) => p.tid >= 0)): Partial<Record<RatingKey, number>> {
+  const means = ratingMeans(league, rostered);
   const out: Partial<Record<RatingKey, number>> = {};
   for (const k of RATING_KEYS) {
     const m = means[k]!;
@@ -210,17 +253,18 @@ export function ratingSpreads(league: League): Partial<Record<RatingKey, number>
 
 /**
  * Hold the league's talent distribution steady: after a year of development (young players rise,
- * veterans fade, rookies arrive, retirees leave), map every attribute back so its league-wide mean
- * among rostered players matches the anchor set when the league was created, and pull its spread
+ * veterans fade, rookies arrive, retirees leave), map every attribute back so its mean among the
+ * opening-night league (anchorPopulation) matches the anchor set when the league was created, and pull its spread
  * halfway back toward the original each year (otherwise stars drift upward and 90+ OVR players
  * pile up). Individual arcs are kept relative to the league; scoring, OVR meaning and salaries
  * stay stable for decades.
  */
 export function anchorRatings(league: League) {
-  league.ratingAnchors ??= ratingMeans(league);
-  league.ratingSpreads ??= ratingSpreads(league);
-  const now = ratingMeans(league);
-  const sd = ratingSpreads(league);
+  const pop = anchorPopulation(league);
+  league.ratingAnchors ??= ratingMeans(league, pop);
+  league.ratingSpreads ??= ratingSpreads(league, pop);
+  const now = ratingMeans(league, pop);
+  const sd = ratingSpreads(league, pop);
   for (const k of RATING_KEYS) {
     if (k === 'hgt') continue;
     const target = league.ratingAnchors[k] ?? now[k]!;
@@ -232,34 +276,43 @@ export function anchorRatings(league: League) {
       p.ratings[k] = clamp(Math.round((target + (p.ratings[k] - now[k]!) * scale) * 10) / 10, 1, 100);
     }
   }
-  anchorOverallSpread(league);
+  anchorOverallSpread(league, anchorPopulation(league));
 }
+
+/** Quantiles of the raw-OVR distribution held to the league's creation (see anchorOverallSpread): OVR_ANCHORS' but the ends. */
+const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975];
 
 /**
  * Good and bad summers move a player's skills together, so over the years good players become
  * good at everything and the OVR spread widens even with every attribute's own spread held (more
- * stars and more sub-60 players), while the top can thin out as stars age. Pull each half of the
- * raw-OVR distribution halfway back to the shape the display scale was built on at league creation
- * (median to 97.5th percentile above, 5th percentile to median below): each player moves along all
- * his attributes at once, toward or away from the median.
+ * stars and more sub-60 players), while the top can thin out as stars age. Pull each stretch of the
+ * raw-OVR distribution between neighbouring SHAPE_QS halfway back to its width when the display
+ * scale was built at league creation, around the median: each player moves along all his
+ * attributes at once, by where he stands (past the 97.5th percentile, as the stretch below it
+ * moves). Held by its two halves alone (median to 97.5th, 5th to median), the shape inside them
+ * drifted: the band of 80-84 players filled up while the 85+ stars thinned out.
  */
-function anchorOverallSpread(league: League) {
-  const raws = Object.values(league.players)
-    .filter((p) => p.tid >= 0)
-    .map((p) => ovrRaw(p.ratings))
-    .sort((a, b) => a - b);
+function anchorOverallSpread(league: League, pop: Player[]) {
+  const raws = pop.map((p) => ovrRaw(p.ratings)).sort((a, b) => a - b);
   if (raws.length < 40) return;
-  const now = (f: number) => raws[Math.round(f * (raws.length - 1))];
-  const then = (f: number) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)];
-  const pull = (lo: number, hi: number) => 0.5 * (1 - (then(hi) - then(lo)) / (now(hi) - now(lo)));
-  const [up, down] = [pull(0.5, 0.975), pull(0.05, 0.5)];
-  const median = now(0.5);
+  const now = SHAPE_QS.map((f) => raws[Math.round(f * (raws.length - 1))]);
+  const then = SHAPE_QS.map((f) => league.ovrScale.raw[OVR_ANCHORS.findIndex(([q]) => q === f)]);
+  // where each quantile goes: every stretch's width halfway back to its width at creation, out from the median
+  const mid = SHAPE_QS.indexOf(0.5);
+  const to = [...now];
+  for (let i = mid + 1; i < now.length; i++) to[i] = to[i - 1] + (now[i] - now[i - 1] + then[i] - then[i - 1]) / 2;
+  for (let i = mid - 1; i >= 0; i--) to[i] = to[i + 1] - (now[i + 1] - now[i] + then[i + 1] - then[i]) / 2;
+  const target = (raw: number) => {
+    let i = 0;
+    while (i < now.length - 2 && raw > now[i + 1]) i++;
+    return to[i] + ((raw - now[i]) * (to[i + 1] - to[i])) / Math.max(1e-6, now[i + 1] - now[i]);
+  };
   for (const p of Object.values(league.players)) {
     if (p.tid === RETIRED) continue;
     const w = ovrWeights(p.ratings);
     const weight = RATING_KEYS.reduce((t, k) => t + (k === 'hgt' ? 0 : w[k]), 0);
-    const dev = ovrRaw(p.ratings) - median;
-    const shift = (-(dev > 0 ? up : down) * dev) / weight;
+    const raw = ovrRaw(p.ratings);
+    const shift = (target(raw) - raw) / weight;
     if (Math.abs(shift) < 0.05) continue;
     for (const k of RATING_KEYS) if (k !== 'hgt') p.ratings[k] = clamp(Math.round((p.ratings[k] + shift) * 10) / 10, 1, 100);
   }

@@ -235,11 +235,14 @@ describe('AI trade valuation', () => {
     let trades = 0;
     for (let i = 0; i < 150; i++) {
       const before: League = structuredClone(l);
+      const logged = l.transactions?.length ?? 0;
       aiToAiTrade(l, new Rng(i + 1));
       // (a team over 15 waives its end of the bench after the deal: those go to free agency, not the other side)
       const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid && p.tid >= 0);
       const picks = l.draftPicks.filter((d) => before.draftPicks.find((x) => x.dpid === d.dpid)!.tid !== d.tid);
       if (!moved.length) continue;
+      // a day that brought two deals can't be told apart from its moves: each is checked on a day of its own
+      if ((l.transactions ?? []).slice(logged).filter((t) => t.kind === 'trade').length > 1) continue;
       trades++;
       // the buyer sends players and picks for one veteran
       const from = (p: Player) => before.players[p.pid].tid;

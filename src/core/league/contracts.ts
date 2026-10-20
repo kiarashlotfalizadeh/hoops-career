@@ -102,23 +102,36 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
 // would earn roughly matches the league's total cap, rising steeply at the top as the NBA's does:
-// an 86 is worth a 25% max, an 89 a 30% one, a 92 the 35% one (each capped by his own max).
+// an 85 is worth a 25% max, an 88 a 30% one, a 90 the 35% one (each capped by his own max). With
+// the top at 86/89/92 and role players paid a little more, the league's money went to the middle:
+// players on 25%+ of the cap fell from about 40 to 25 in a decade (the NBA has 30-40), and good
+// players the market couldn't pay waited out the summer and signed for whatever was left.
 const SALARY_CURVE: [number, number][] = [
   [66, 0],
-  [70, 0.019],
-  [73, 0.038],
-  [76, 0.072],
-  [79, 0.106],
-  [82, 0.16],
-  [84, 0.21],
-  [86, 0.25],
-  [89, 0.3],
-  [92, 0.35],
+  [70, 0.018],
+  [73, 0.035],
+  [76, 0.064],
+  [79, 0.097],
+  [82, 0.15],
+  [84, 0.205],
+  [86, 0.26],
+  [88, 0.305],
+  [90, 0.35],
 ];
+
+/**
+ * Of the yearly discount past 29 in his value (see valueScore), the share his market salary gives
+ * back for a star (85+; less for a lesser player, none under 75): the NBA pays its 30-to-33-year-old
+ * All-Stars their max on shorter deals (see preferredYears), and values them by what they still do.
+ */
+const STAR_AGE_PAY = 0.6;
 
 /** Fair annual salary ($K) for a player on the open market. */
 export function marketSalary(league: League, p: Player): number {
-  return salaryForScore(league, valueScore(league, p), p.experience);
+  let s = valueScore(league, p);
+  const a = age(league, p);
+  if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_PAY * clamp((p.ovr - 75) / 10, 0, 1);
+  return salaryForScore(league, s, p.experience);
 }
 
 /** Fair annual salary ($K) for a value score, within the minimum and max for his years in the league. */
@@ -182,7 +195,10 @@ export function playerPrefs(league: League, p: Pick<Player, 'pid'>): PlayerPrefs
 /**
  * The parts of a team's appeal to a player, before his priorities weigh them: winning (this
  * season's record once 10 games are in, else last season's), market (hype and size), role (is he
- * better than the team's current rotation?).
+ * better than the team's current rotation?). Winning counts for more the older he is (a fifth more
+ * a year past 29): veterans chase rings. At half the weight, with no veteran's lean, a team's record
+ * barely moved a free agent's price, and the good players a contender couldn't pay all went to the
+ * teams with room.
  */
 export function appealTerms(league: League, tid: number, p: Player): { winning: number; market: number; role: number; wp: number; rank: number } {
   const team = league.teams[tid];
@@ -195,7 +211,7 @@ export function appealTerms(league: League, tid: number, p: Player): { winning: 
     .sort((x, y) => y.ovr - x.ovr);
   const rank = roster.filter((x) => x.ovr > p.ovr).length;
   return {
-    winning: (wp - 0.5) * 0.35,
+    winning: (wp - 0.5) * 0.7 * (1 + Math.max(0, age(league, p) - 29) * 0.2),
     market: (team.hype - 0.5) * 0.15 + Math.min(0.06, (team.pop - 3) * 0.01),
     role: rank <= 4 ? 0.06 : rank >= 9 ? -0.08 : 0,
     wp,
@@ -262,6 +278,12 @@ export function playerMax(league: League, p: Player, season = contractSeason(lea
   }
   return Math.round(cap.salaryCap * pct);
 }
+
+/** A veteran's interest in a contender can take up to a fifth off his price for it (see ringChase); anyone else's, a tenth. */
+const RING_DISCOUNT = 1.25;
+
+/** A veteran (30 or older) and a contender: he'll take less to win (see RING_DISCOUNT). */
+const ringChase = (league: League, p: Player, tid: number) => age(league, p) >= 30 && league.teams[tid]?.strategy === 'contend';
 
 /** A player whose market value is this share of his max or more asks the max of everyone. */
 export const MAX_ASK = 0.95;
@@ -335,7 +357,7 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
   if (amount <= min) return { amount: min, years };
   const max = playerMax(league, p, cs, tid);
   if (!marked && market >= cap.maxContract(p.experience) * MAX_ASK) amount = max;
-  else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), 1 / 1.1, 1 / 0.9);
+  else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), ringChase(league, p, tid) ? 1 / RING_DISCOUNT : 1 / 1.1, 1 / 0.9);
   if (tid === league.userTid) amount *= preset(league).contractAsk;
   return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
 }

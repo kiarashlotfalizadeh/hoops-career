@@ -110,6 +110,14 @@ export function expiringPlayers(league: League, tid: number): Player[] {
 }
 
 /**
+ * How far past its payroll budget (see payrollBudget), as a share of the cap, an AI team goes to
+ * re-sign its own player worth 80+: a team keeps a good player it has rather than replace him. With
+ * stars' prices up to the max (see marketSalary) and contenders getting the first look at the market
+ * (see faDay), 54% of expiring 80+ players stayed without it, 61% with it (the NBA's 60-70%).
+ */
+const RESIGN_STAR_ROOM = 0.04;
+
+/**
  * The expiring players an AI team would keep (if they agree, see `agrees`) and what each asks,
  * best first, within its payroll budget (see payrollBudget). Once 13 players are committed, only
  * core players (the top 8) are kept.
@@ -129,7 +137,7 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
     const ask = askingContract(league, p, t.tid);
     // without full Bird rights his team can only pay him so much (see resignLimit): above it he walks
     if (ask.amount > resignLimit(league, p, t.tid)) continue;
-    const budget = payrollBudget(cap, t, v, { core: top.has(p.pid), young: playerAge(p, next) <= 28 });
+    const budget = payrollBudget(cap, t, v, { core: top.has(p.pid), young: playerAge(p, next) <= 28 }) + (v >= 80 ? cap.salaryCap * RESIGN_STAR_ROOM : 0);
     const worth = v >= 70 || (v >= 66 && committed < 11);
     const needed = core.has(p.pid) || committed < 13;
     // (past 35 only a veteran still playing at 78+, for the year he asks)
@@ -390,6 +398,8 @@ function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infin
       // its cap space before the top free agents have decided (their first three days)
       if (!route || (isException(route) && t.strategy !== 'contend' && pay + amount > cap.luxuryTax)) continue;
       if (t.strategy === 'rebuild' && route !== 'min' && playerAge(p, season) >= 29) continue;
+      // and past 13 players, its spots go to its young players (26 or younger), not veterans
+      if (t.strategy === 'rebuild' && size >= 13 && playerAge(p, season) >= 27) continue;
       if (route === 'space' && today <= MARQUEE_DAYS) continue;
     }
     const s = needScore(league, t.tid, p) + rng.normal(0, 1.5) - (r ? AI_SHEET_PENALTY : 0);
@@ -498,7 +508,12 @@ export function faDay(league: League, rng: Rng, intensity = 1, today = league.fa
   const season = contractSeason(league);
   const cap = CAP_FOR(league, season);
   const offseason = season > league.season;
-  const ai = rng.shuffle(league.teams.filter((t) => t.tid !== league.userTid));
+  // contenders get the first look each day, then retooling teams, then rebuilders (in a random order
+  // within each): the free agent a contender wants signs there before a team with room calls, and
+  // the veterans who'll take less to win (see ringChase) do. In one random order, a rebuilder with
+  // cap space got as many good players as anyone, and every roster ended up about as deep.
+  const order = { contend: 0, retool: 1, rebuild: 2 };
+  const ai = rng.shuffle(league.teams.filter((t) => t.tid !== league.userTid)).sort((a, b) => order[a.strategy] - order[b.strategy]);
   // price cuts come first, so AI teams get the first look at a new price. Buyers are the teams with
   // a roster spot, or a player he'd clearly beat for one, and money beyond the minimum.
   const buyers = ai.flatMap((t) => {
