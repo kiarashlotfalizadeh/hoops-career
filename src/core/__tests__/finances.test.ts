@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import {
   aiTicketPrice,
+  arenaCapacity,
   assessLuxuryTax,
   attendanceFor,
   gameFinances,
@@ -19,7 +20,7 @@ import {
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, standardRoster, teamPlayers } from '../league/helpers';
 import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
-import { newSeason, startRegularSeason } from '../league/season';
+import { newSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP, TAX_BRACKET_PCT } from '../constants';
 import type { League } from '../types';
 
@@ -65,9 +66,12 @@ describe('finances (L1, L15)', () => {
     expect(startRegularSeason(l)).toEqual([]);
     for (const t of l.teams.filter((x) => x.tid !== 0)) {
       expect(t.budget.ticketPrice).toBe(aiTicketPrice(l, t));
-      // the price where the arena just sells out
-      expect(attendanceFor(l, t)).toBe(18_800);
-      expect(attendanceFor(l, { ...t, budget: { ...t.budget, ticketPrice: t.budget.ticketPrice + 5 } })).toBeLessThan(18_800);
+      // the price where the gate peaks: the sellout price when fans want more seats than there are, else the fair one
+      // (rounded down to the dollar, which gives up a dollar a seat at most)
+      const gate = (price: number) => attendanceFor(l, { ...t, budget: { ...t.budget, ticketPrice: price } }) * price;
+      expect(gate(t.budget.ticketPrice) + arenaCapacity(t)).toBeGreaterThanOrEqual(gate(t.budget.ticketPrice + 5));
+      expect(gate(t.budget.ticketPrice)).toBeGreaterThanOrEqual(gate(t.budget.ticketPrice - 5));
+      expect(attendanceFor(l, t)).toBeLessThanOrEqual(arenaCapacity(t));
     }
     // playoff tickets cost 1.6x and fans pay 1.6x for them: a team that priced fans out still does
     const t = l.teams[1];
@@ -163,5 +167,35 @@ describe('finances (L1, L15)', () => {
     expect(ownerMoneyScore(l, OWNER_PROFIT_TARGET)).toBeLessThan(0);
     expect(ownerMoneyScore(l, OWNER_PROFIT_TARGET * g)).toBeCloseTo(0);
     expect(ownerMoneyScore(l, (OWNER_PROFIT_TARGET + OWNER_PROFIT_RANGE / 2) * g)).toBeCloseTo(0.5);
+  });
+});
+
+describe('attendance', () => {
+  it('each arena holds its own crowd: a hyped winner sells out, a losing team with no buzz does not', () => {
+    const l = league();
+    const seats = l.teams.map((t) => arenaCapacity(t));
+    expect(Math.min(...seats)).toBeGreaterThan(16_500);
+    expect(Math.max(...seats)).toBeLessThan(21_500);
+    expect(new Set(seats).size).toBeGreaterThan(20);
+    const at = (hype: number, won: number, lost: number) => {
+      const t = { ...l.teams[5], hype };
+      Object.assign(curTeamSeason(l, 5), { won, lost });
+      t.budget = { ...t.budget, ticketPrice: aiTicketPrice(l, t) };
+      return attendanceFor(l, t);
+    };
+    expect(at(0.95, 30, 10)).toBe(arenaCapacity(l.teams[5]));
+    const weak = at(0.1, 10, 30);
+    expect(weak).toBeGreaterThan(13_500);
+    expect(weak).toBeLessThan(17_000);
+  });
+
+  it('crowds vary from night to night and never pass the arena', () => {
+    const l = league();
+    expect(startRegularSeason(l)).toEqual([]);
+    while (l.day < 20) simDay(l);
+    const crowds = l.games.filter((g) => g.type === 'regular').map((g) => ({ att: g.att!, seats: arenaCapacity(l.teams[g.home.tid]) }));
+    expect(crowds.length).toBeGreaterThan(100);
+    for (const c of crowds) expect(c.att).toBeLessThanOrEqual(c.seats);
+    expect(new Set(crowds.map((c) => c.att)).size).toBeGreaterThan(crowds.length / 3);
   });
 });

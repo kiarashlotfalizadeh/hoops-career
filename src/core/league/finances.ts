@@ -1,10 +1,17 @@
 import type { League, Team } from '../types';
-import { clamp } from '../random';
+import { clamp, mix32 } from '../random';
 import { salaryFor } from '../playerGen';
 import { REPEATER_EXTRA, TAX_BRACKET_PCT, TAX_RATES, TAX_RATE_STEP } from '../constants';
-import { CAP_FOR, curTeamSeason, payroll, revenueScale, teamPlayers, winPct } from './helpers';
+import { FRANCHISES } from '../teams';
+import { CAP_FOR, curTeamSeason, payroll, revenueScale, teamPlayers } from './helpers';
 
-export const ARENA_CAPACITY = 18_800;
+/** Seats for an arena the franchise table doesn't list (about the league's average). */
+export const DEFAULT_CAPACITY = 18_100;
+
+/** Seats for basketball in the team's arena (the franchise table's figure). */
+export function arenaCapacity(team: Team): number {
+  return FRANCHISES[team.tid]?.capacity ?? DEFAULT_CAPACITY;
+}
 
 // Money below is in first-season thousands of dollars; revenueScale grows it with the cap.
 
@@ -23,41 +30,79 @@ export function budgetCostPerSeason(league: League, level: number) {
   return (5_000 + level * 200) * revenueScale(league);
 }
 
-/** Ticket price fans consider fair: rises with hype, winning, market size and facilities. */
-export function referencePrice(league: League, team: Team): number {
+/** Games of a .500 record a team's win% is weighed with for the fans (none played: .500; it counts more as the season goes on). */
+const FAN_RECORD_PRIOR = 10;
+
+/** The record as the fans weigh it: the win% so far, pulled toward .500 early in the season. */
+function fansWinPct(league: League, team: Team) {
   const ts = curTeamSeason(league, team.tid);
-  const wp = ts.won + ts.lost >= 5 ? winPct(ts) : 0.5;
-  return (62 + 55 * team.hype + 70 * (wp - 0.5) + 22 * Math.min(team.pop / 10, 1.5) + (team.budget.facilities - 50) * 0.25) * revenueScale(league);
+  return (ts.won + FAN_RECORD_PRIOR / 2) / (ts.won + ts.lost + FAN_RECORD_PRIOR);
 }
 
-export function attendanceFor(league: League, team: Team, playoffs = false): number {
+/** Ticket price fans consider fair: rises with hype, winning, market size and facilities. */
+export function referencePrice(league: League, team: Team): number {
+  const wp = fansWinPct(league, team);
+  return (74 + 35 * team.hype + 20 * (wp - 0.5) + 22 * Math.min(team.pop / 10, 1.5) + (team.budget.facilities - 50) * 0.25) * revenueScale(league);
+}
+
+/**
+ * Share of the arena's seats fans want at the fair price: an average team in an average market about
+ * full, a hyped winner more than the building holds, a losing team with no buzz about five in six.
+ */
+export function fanInterest(league: League, team: Team): number {
+  const wp = fansWinPct(league, team);
+  return clamp(0.97 + 0.2 * (team.hype - 0.5) + 0.15 * (wp - 0.5) + 0.05 * (Math.min(team.pop / 10, 1.5) - 0.5), 0.5, 1.4);
+}
+
+/** How fast demand falls as the ticket climbs over the fair price (and rises below it). */
+const PRICE_SENSITIVITY = 1;
+
+/** Seats fans want for a home game at today's price (more than the arena holds, for a hot ticket). */
+function seatsWanted(league: League, team: Team, playoffs: boolean): number {
   // playoff tickets cost more and fans will pay more for them, by the same multiple
   const ref = referencePrice(league, team) * (playoffs ? PLAYOFF_PRICE_MULT : 1);
   const price = team.budget.ticketPrice * (playoffs ? PLAYOFF_PRICE_MULT : 1);
-  const demand = 1.05 * Math.exp((-1.1 * (price - ref)) / ref);
-  return Math.round(clamp(ARENA_CAPACITY * demand, 1_500, ARENA_CAPACITY));
+  return arenaCapacity(team) * fanInterest(league, team) * Math.exp((-PRICE_SENSITIVITY * (price - ref)) / ref);
+}
+
+/** The crowd a home game draws on an average night at today's price: fan interest, less what the price above the fair one turns away. */
+export function attendanceFor(league: League, team: Team, playoffs = false): number {
+  return Math.round(clamp(seatsWanted(league, team, playoffs), 1_500, arenaCapacity(team)));
 }
 
 /**
- * What AI front offices charge each season: the fair price plus the little fans will still pay
- * before seats go empty (whole dollars, rounded down), which is where gate revenue peaks.
+ * What AI front offices charge each season (whole dollars, rounded down): where gate revenue peaks.
+ * Fans who want more seats than the arena holds pay up to the price that just sells it out; a team
+ * fans want less of can't fill it at any price worth charging, and prices for the crowd it draws.
  */
 export function aiTicketPrice(league: League, team: Team): number {
-  return Math.floor(referencePrice(league, team) * (1 + Math.log(1.05) / 1.1));
+  const ref = referencePrice(league, team);
+  const sellout = ref * (1 + Math.log(fanInterest(league, team)) / PRICE_SENSITIVITY);
+  return Math.floor(Math.max(sellout, ref / PRICE_SENSITIVITY));
 }
 
 /**
- * Revenue & expenses for one game (applied to both teams; home gets gate). `playoffs` covers the
- * whole postseason, play-in included: gate only, no salary or national-revenue share (those are
- * spread over the 82 regular-season games).
+ * One game's crowd around the average: a hyped visitor draws more, and every night differs a little
+ * (a few percent either way, fixed by the game).
  */
-export function gameFinances(league: League, team: Team, home: boolean, playoffs: boolean) {
+function nightFactor(league: League, opp: Team | undefined, gid: number | undefined) {
+  const visitor = opp ? 0.08 * (opp.hype - 0.5) : 0;
+  const night = gid === undefined ? 0 : (mix32(mix32(gid) ^ league.season) / 0xffffffff - 0.5) * 0.08;
+  return 1 + visitor + night;
+}
+
+/**
+ * Revenue & expenses for one game (applied to both teams; home gets gate, from the crowd `game`'s
+ * visitor and night draw). `playoffs` covers the whole postseason, play-in included: gate only, no
+ * salary or national-revenue share (those are spread over the 82 regular-season games).
+ */
+export function gameFinances(league: League, team: Team, home: boolean, playoffs: boolean, game?: { opp: Team; gid: number }) {
   const ts = curTeamSeason(league, team.tid);
   const scale = revenueScale(league);
   let revenue = 0;
   let att = 0;
   if (home) {
-    att = attendanceFor(league, team, playoffs);
+    att = Math.round(clamp(seatsWanted(league, team, playoffs) * nightFactor(league, game?.opp, game?.gid), 1_500, arenaCapacity(team)));
     const gate = (att * team.budget.ticketPrice * (playoffs ? PLAYOFF_PRICE_MULT : 1)) / 1000;
     const merch = MERCH_PER_GAME * scale * (0.5 + team.hype) * (0.7 + team.pop / 15);
     const localTv = LOCAL_TV_PER_GAME * scale * (0.6 + team.pop / 12);

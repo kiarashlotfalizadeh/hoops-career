@@ -13,6 +13,8 @@ export interface FranchiseDef {
   /** Monogram shape for the generated mark. */
   mark: 'circle' | 'shield' | 'hex' | 'diamond' | 'round-square';
   arena: string;
+  /** Seats for basketball. */
+  capacity: number;
 }
 
 export const FRANCHISES: FranchiseDef[] = [
@@ -27,6 +29,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 6.3,
     mark: 'circle',
     arena: 'State Farm Arena',
+    capacity: 17_044,
   },
   {
     abbrev: 'BOS',
@@ -39,6 +42,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 4.9,
     mark: 'shield',
     arena: 'TD Garden',
+    capacity: 19_156,
   },
   {
     abbrev: 'BKN',
@@ -51,6 +55,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 10.0,
     mark: 'round-square',
     arena: 'Barclays Center',
+    capacity: 17_732,
   },
   {
     abbrev: 'CHA',
@@ -63,6 +68,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.8,
     mark: 'hex',
     arena: 'Spectrum Center',
+    capacity: 19_077,
   },
   {
     abbrev: 'CHI',
@@ -75,6 +81,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 9.4,
     mark: 'diamond',
     arena: 'United Center',
+    capacity: 20_917,
   },
   {
     abbrev: 'CLE',
@@ -87,6 +94,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.1,
     mark: 'shield',
     arena: 'Rocket Arena',
+    capacity: 19_432,
   },
   {
     abbrev: 'DAL',
@@ -99,6 +107,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 7.9,
     mark: 'hex',
     arena: 'American Airlines Center',
+    capacity: 19_200,
   },
   {
     abbrev: 'DEN',
@@ -111,6 +120,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 3.0,
     mark: 'diamond',
     arena: 'Ball Arena',
+    capacity: 19_520,
   },
   {
     abbrev: 'DET',
@@ -123,6 +133,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 4.3,
     mark: 'circle',
     arena: 'Little Caesars Arena',
+    capacity: 20_332,
   },
   {
     abbrev: 'GSW',
@@ -135,6 +146,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 7.5,
     mark: 'circle',
     arena: 'Chase Center',
+    capacity: 18_064,
   },
   {
     abbrev: 'HOU',
@@ -147,6 +159,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 7.3,
     mark: 'round-square',
     arena: 'Toyota Center',
+    capacity: 18_055,
   },
   {
     abbrev: 'IND',
@@ -159,6 +172,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.1,
     mark: 'hex',
     arena: 'Gainbridge Fieldhouse',
+    capacity: 17_274,
   },
   {
     abbrev: 'LAC',
@@ -171,6 +185,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 12.8,
     mark: 'shield',
     arena: 'Intuit Dome',
+    capacity: 18_000,
   },
   {
     abbrev: 'LAL',
@@ -183,6 +198,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 12.8,
     mark: 'diamond',
     arena: 'Crypto.com Arena',
+    capacity: 18_997,
   },
   {
     abbrev: 'MEM',
@@ -195,6 +211,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 1.3,
     mark: 'shield',
     arena: 'FedExForum',
+    capacity: 17_794,
   },
   {
     abbrev: 'MIA',
@@ -207,6 +224,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 6.2,
     mark: 'diamond',
     arena: 'Kaseya Center',
+    capacity: 19_600,
   },
   {
     abbrev: 'MIL',
@@ -219,6 +237,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 1.6,
     mark: 'circle',
     arena: 'Fiserv Forum',
+    capacity: 17_341,
   },
   {
     abbrev: 'MIN',
@@ -231,6 +250,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 3.7,
     mark: 'hex',
     arena: 'Target Center',
+    capacity: 18_978,
   },
   {
     abbrev: 'NOP',
@@ -243,6 +263,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 1.3,
     mark: 'round-square',
     arena: 'Smoothie King Center',
+    capacity: 16_867,
   },
   {
     abbrev: 'NYK',
@@ -255,6 +276,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 19.5,
     mark: 'circle',
     arena: 'Madison Square Garden',
+    capacity: 19_812,
   },
   {
     abbrev: 'OKC',
@@ -267,6 +289,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 1.4,
     mark: 'shield',
     arena: 'Paycom Center',
+    capacity: 18_203,
   },
   {
     abbrev: 'ORL',
@@ -279,6 +302,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.7,
     mark: 'diamond',
     arena: 'Kia Center',
+    capacity: 18_846,
   },
   {
     abbrev: 'PHI',
@@ -291,6 +315,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 6.2,
     mark: 'shield',
     arena: 'Xfinity Mobile Arena',
+    capacity: 20_478,
   },
   {
     abbrev: 'PHX',
@@ -303,6 +328,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 5.1,
     mark: 'circle',
     arena: 'Mortgage Matchup Center',
+    capacity: 17_071,
   },
   {
     abbrev: 'POR',
@@ -315,6 +341,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.5,
     mark: 'hex',
     arena: 'Moda Center',
+    capacity: 19_393,
   },
   {
     abbrev: 'SAC',
@@ -327,6 +354,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.4,
     mark: 'shield',
     arena: 'Golden 1 Center',
+    capacity: 17_608,
   },
   {
     abbrev: 'SAS',
@@ -339,6 +367,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.7,
     mark: 'round-square',
     arena: 'Frost Bank Center',
+    capacity: 18_418,
   },
   {
     abbrev: 'TOR',
@@ -351,6 +380,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 6.7,
     mark: 'diamond',
     arena: 'Scotiabank Arena',
+    capacity: 19_800,
   },
   {
     abbrev: 'UTA',
@@ -363,6 +393,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 2.7,
     mark: 'circle',
     arena: 'Delta Center',
+    capacity: 18_306,
   },
   {
     abbrev: 'WAS',
@@ -375,6 +406,7 @@ export const FRANCHISES: FranchiseDef[] = [
     pop: 6.4,
     mark: 'hex',
     arena: 'Capital One Arena',
+    capacity: 20_356,
   },
 ];
 

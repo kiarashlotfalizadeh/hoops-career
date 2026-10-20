@@ -97,6 +97,8 @@ export const WIN_SCALE = 20;
 export const PROFIT_SCALE = 40_000;
 /** Each win the roster should win above .500 brings about this much more profit (gate, merchandise, hype, playoff gates), first-season $K. */
 export const PROFIT_PER_WIN = 2_000;
+/** Each win it should fall short of .500 costs about this much (crowds and merchandise thin as the losses mount), first-season $K. */
+export const PROFIT_PER_LOSS = 1_500;
 /**
  * The playoff gates and the league's luxury-tax payouts a typical season brings beyond the budget, first-season $K:
  * fitted so that over sixteen simulated league-seasons the profit goals' results center on their targets (they had
@@ -409,7 +411,7 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     // a roster that should lose draws smaller crowds game by game; one that should win earns playoff gates at the
     // end. The season's end money (revenue sharing, the floor, playoff gates, tax payouts) all lands after a
     // mid-season start, so none of it is prorated.
-    const wins = PROFIT_PER_WIN * (expected - o.left / 2) * s;
+    const wins = (expected >= o.left / 2 ? PROFIT_PER_WIN : PROFIT_PER_LOSS) * (expected - o.left / 2) * s;
     const op = b.op + Math.min(0, wins);
     const end = b.share - b.floor + PROFIT_EXTRA * s + Math.max(0, wins);
     const target = round500((opening ? profit(league, tid) : 0) + op + end + PROFIT_NUDGE[who] * share * s);

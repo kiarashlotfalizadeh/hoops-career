@@ -7,12 +7,12 @@ import { CAP, TAX_BRACKET_PCT } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster } from '../../core/league/helpers';
 import { salaryFor } from '../../core/playerGen';
 import {
-  ARENA_CAPACITY,
   NATIONAL_REVENUE,
   OPERATIONS_PER_SEASON,
   PLAYOFF_PRICE_MULT,
   REVENUE_SHARING,
   TAX_SHARE_TO_NON_TAXPAYERS,
+  arenaCapacity,
   attendanceFor,
   budgetCostPerSeason,
   profit,
@@ -86,7 +86,8 @@ function Overview({ team }: { team: Team }) {
     ...(shortfall > 0 ? [{ k: 'Salary floor shortfall', v: shortfall, c: 'var(--warn)' }] : []),
   ];
   const totalExp = expenses.reduce((a, e) => a + e.v, 0);
-  const full = Math.round((attShown / ARENA_CAPACITY) * 100);
+  const seats = arenaCapacity(team);
+  const full = Math.round((attShown / seats) * 100);
   return (
     <>
       <div className="card fo-capsheet">
@@ -119,8 +120,8 @@ function Overview({ team }: { team: Team }) {
         right={
           <HelpSheet title="What fills the arena">
             <p>
-              Winning, hype, market size, facilities and ticket price drive crowds. Hype rises with wins (playoff wins count double), falls with losses and drifts back toward
-              average every offseason.
+              Winning, hype, market size, facilities and ticket price drive crowds, and a hyped visitor draws a bigger one. Hype rises with wins (playoff wins count double), falls
+              with losses and drifts back toward average every offseason.
             </p>
           </HelpSheet>
         }
@@ -131,7 +132,7 @@ function Overview({ team }: { team: Team }) {
               {
                 k: homeGames ? 'Per home game' : 'Projected',
                 v: Math.round(attShown).toLocaleString(),
-                s: full >= 100 ? 'sold out' : `${full}% of ${ARENA_CAPACITY.toLocaleString()} seats`,
+                s: full >= 100 ? 'sold out' : `${full}% of ${seats.toLocaleString()} seats`,
               },
               { k: 'Hype', v: Math.round(team.hype * 100), s: 'of 100' },
             ]}
@@ -274,6 +275,7 @@ function BudgetTab({ team }: { team: Team }) {
   const scale = revenueScale(league);
   const [minPrice, maxPrice] = [30, 250].map((x) => Math.max(5, Math.round((x * scale) / 5) * 5));
   const att = priceAt(price);
+  const seats = arenaCapacity(team);
   const gate = (att * price) / 1000;
   const sweet = (() => {
     let best = { p: price, g: 0 };
@@ -367,9 +369,9 @@ function BudgetTab({ team }: { team: Team }) {
             items={[
               {
                 k: 'Est. crowd',
-                v: att >= ARENA_CAPACITY ? 'Sellout' : att.toLocaleString(),
-                s: `${Math.round((att / ARENA_CAPACITY) * 100)}% full`,
-                color: att >= ARENA_CAPACITY ? 'var(--good)' : undefined,
+                v: att >= seats ? 'Sellout' : att.toLocaleString(),
+                s: `${Math.round((att / seats) * 100)}% full`,
+                color: att >= seats ? 'var(--good)' : undefined,
               },
               { k: 'Gate / game', v: moneyExact(gate), s: 'ticket revenue' },
               { k: 'Season gate', v: money(gate * 41), s: '41 home games' },
