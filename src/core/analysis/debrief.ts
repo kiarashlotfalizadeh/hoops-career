@@ -4,7 +4,7 @@
 // for the plan against this opponent or for good), and a word on each key to the game he missed.
 // Pure: it reads the stored result and the report built from it.
 
-import type { GameResult, KeyGrade, League, TacticsPatch } from '../types';
+import type { GameResult, League, TacticsPatch } from '../types';
 import type { GameReport, Factor } from './gameReport';
 import { moveVerdict } from './moves';
 import { impactCounter } from '../ai/advisor';
@@ -23,6 +23,7 @@ export interface DebriefAdvice {
 }
 
 export interface Debrief {
+  /** The staff's read: how it went and what decided it, in words (the final above has the score). */
   headline: string;
   /** The biggest edges, at most three, biggest first. */
   decided: Factor[];
@@ -64,8 +65,58 @@ const KEY_ADVICE: Record<string, string> = {
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
 
-/** The key's number on the night against its goal, a few words ("37% (goal ≤ 29%)"). */
-const keyLine = (k: KeyGrade) => `${k.value ?? '—'}${k.pct ? '%' : ''} (goal ${k.dir === 'max' ? '≤' : '≥'} ${k.target}${k.pct ? '%' : ''})`;
+/** What a missed key is about, so advice on the same thing isn't given twice (a factor's category, or a tactical effect's topic). */
+const KEY_TOPIC: Record<string, string> = { glass: 'rebounding', ball: 'turnovers', line: 'fouls', crash: 'rebounding', star: 'stars' };
+const IMPACT_TOPIC: Record<string, string> = { 'crash_orb:o': 'rebounding', 'zone_glass:o': 'rebounding' };
+
+/** A four-factor or star edge's advice row, when its card is already up top: what to do, not the figures again. */
+const DO_TITLE: Partial<Record<Factor['category'], string>> = {
+  turnovers: 'Take care of the ball',
+  rebounding: 'Win the glass',
+  fouls: 'Stay off the line',
+  stars: 'Slow their star',
+  shooting: 'Get better shots',
+};
+
+/**
+ * The staff's read of the result in a sentence or two, the score left to the final above it: how it
+ * went ("A 21-point rout.") and what decided it, in words (the edges' cards carry the figures).
+ */
+export function verdict(res: GameResult, side: 0 | 1, report: GameReport): string {
+  const [us, them] = side === 0 ? [res.home.pts, res.away.pts] : [res.away.pts, res.home.pts];
+  const won = us > them;
+  const m = Math.abs(us - them);
+  const ot = res.ot ? (res.ot > 1 ? `${res.ot} overtimes` : 'overtime') : '';
+  const how = won
+    ? ot
+      ? `We won it in ${ot}.`
+      : m >= 20
+        ? `A ${m}-point rout.`
+        : m <= 3
+          ? 'A nail-biter, and it went our way.'
+          : `We won by ${m}.`
+    : ot
+      ? `We lost it in ${ot}.`
+      : m >= 20
+        ? `Run off the floor by ${m}.`
+        : m <= 3
+          ? 'A close one, and it got away.'
+          : `They beat us by ${m}.`;
+  // the biggest edge that went the winner's way
+  const top = report.factors.find((f) => f.pts > 0 === won);
+  const why: Partial<Record<Factor['category'], string>> = {
+    shooting: won ? 'We shot it better.' : 'They shot it better.',
+    turnovers: won ? 'Their turnovers decided it.' : 'Our turnovers decided it.',
+    rebounding: won ? 'We won it on the glass.' : 'They won it on the glass.',
+    fouls: won ? 'We won it at the line.' : 'They won it at the line.',
+    stars: won ? 'Our star took it over.' : 'Their star took it over.',
+    tactics: won ? 'We won the tactical battle.' : 'They won the tactical battle.',
+    pace: won ? 'Our pace wore them down.' : 'Their pace hurt us.',
+    fatigue: won ? 'Their legs went before ours.' : 'Our legs went before theirs.',
+  };
+  const second = top ? why[top.category] : undefined;
+  return second ? `${how} ${second}` : how;
+}
 
 export function debrief(league: League, res: GameResult, report: GameReport): Debrief {
   const me = league.userTid;
@@ -74,6 +125,9 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const tactics = league.teams[me].tactics;
   const advice: DebriefAdvice[] = [];
   const seen = new Set<string>();
+  // what the advice so far is about, so the same fix isn't given twice in other words
+  const topics = new Set<string>();
+  const decided = report.factors.slice(0, 3);
   for (const f of report.factors) {
     if (f.pts > -0.8) continue;
     const fix = f.key ? impactCounter(f.key, tactics) : undefined;
@@ -82,6 +136,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       const patch = tacticsDiff(tactics, applyPatch(tactics, off.patch));
       if (!emptyPatch(patch)) {
         seen.add(off.label);
+        topics.add(f.key!);
         advice.push({ id: `fix-${f.key}`, title: f.title.replace(/\.$/, ''), text: f.advice ?? f.detail, patch, label: off.label, group: `debrief-${off.label}` });
       }
       continue;
@@ -93,14 +148,23 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       fix.apply(after);
       const patch = tacticsDiff(tactics, after);
       if (emptyPatch(patch)) continue;
+      topics.add((f.key && IMPACT_TOPIC[f.key]) || f.key!);
       advice.push({ id: `fix-${f.key}`, title: f.title.replace(/\.$/, ''), text: f.advice ?? f.detail, patch, label: fix.label, group: `debrief-${fix.label}` });
-    } else if (f.advice && advice.length < 4) advice.push({ id: `adv-${f.title}`, title: f.title.replace(/\.$/, ''), text: f.advice });
+    } else if (f.advice && advice.length < 4) {
+      const topic = (f.key && IMPACT_TOPIC[f.key]) || (f.key ? f.key : f.category);
+      if (topics.has(topic)) continue;
+      topics.add(topic);
+      // (its card is up top: the row says what to do, not the figures again)
+      const title = decided.includes(f) && !f.key ? (DO_TITLE[f.category] ?? f.title) : f.title;
+      advice.push({ id: `adv-${f.title}`, title: title.replace(/\.$/, ''), text: f.advice });
+    }
   }
   for (const k of res.keys ?? []) {
     if (k.met !== false || advice.length >= 5) continue;
     const text = KEY_ADVICE[k.id] ?? '';
-    if (!text) continue;
-    advice.push({ id: `key-${k.id}`, title: `Missed: ${k.title} — ${keyLine(k)}`, text });
+    if (!text || (KEY_TOPIC[k.id] && topics.has(KEY_TOPIC[k.id]))) continue;
+    // (the keys' own list has its number against the goal)
+    advice.push({ id: `key-${k.id}`, title: `Missed key: ${k.title}`, text });
   }
   const moves = res.moves?.length
     ? {
@@ -110,5 +174,5 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       }
     : null;
   const meetAgain = league.schedule.some((g) => !g.played && g.day >= league.day && ((g.home === me && g.away === opp) || (g.away === me && g.home === opp)));
-  return { headline: report.headline, decided: report.factors.slice(0, 3), moves, advice: advice.slice(0, 5), opp, meetAgain };
+  return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), opp, meetAgain };
 }

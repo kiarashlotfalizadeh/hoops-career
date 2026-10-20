@@ -2,7 +2,9 @@
 // types against the league, key players with on/off, the user's meetings with the team and what its
 // coach has planned for the next one. Colours always rate the team shown: green where it is better
 // than the league, red where it is worse, whoever's team it is.
+import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import type { PlayTypeRow, Ranked, ScoutData, ScoutPlayer } from '../../core/analysis/scouting';
 import type { OppPlanItem } from '../../core/ai/opponentPlan';
@@ -151,10 +153,10 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   const effects = d.h2h.effects.filter((e) => e.perGame >= 0.8).slice(0, 4);
   return (
     <div className="col" style={{ gap: 10 }}>
-      <div className="col" style={{ gap: 6 }}>
+      <div className="card flush list">
         {[...d.h2h.games].reverse().map((g) => (
-          <Link key={g.gid} to={`/game/${g.gid}`} className="row between small" style={{ gap: 8 }}>
-            <span className="dim2">
+          <Link key={g.gid} to={`/game/${g.gid}`} className="scout-h2h">
+            <span className="grow dim2">
               {fmtDate(g.season, g.day, { month: 'short', day: 'numeric', year: g.season === league.season ? undefined : 'numeric' })} ·{' '}
               {/* the Cup final is on a neutral floor: nobody's home */}
               {g.cupFinal ? `vs ${opp.abbrev} · Cup final` : `${g.home ? 'vs' : '@'} ${opp.abbrev}`}
@@ -162,18 +164,25 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
             <span className={`bold num ${g.won ? 'good' : 'bad'}`}>
               {g.won ? 'W' : 'L'} {g.us}-{g.them}
             </span>
+            <ChevronRight size={16} className="dim" aria-hidden="true" />
           </Link>
         ))}
       </div>
       {effects.length > 0 && (
         <div className="col" style={{ gap: 6 }}>
-          <div className="tiny upper dim bold">What decided them</div>
-          {effects.map((e) => (
-            <div key={`${e.key}|${e.forUser}`} className="small dim2">
-              <span className={`bold num ${e.forUser ? 'good' : 'bad'}`}>{signed(e.forUser ? e.perGame : -e.perGame)}</span>{' '}
-              {IMPACT_TEXT[e.key] && impactSentence(e.key, e.forUser ? `the ${me.name}` : teamRef(opp), e.forUser ? teamRef(opp) : `the ${me.name}`)}
-            </div>
-          ))}
+          <div className="over">What decided them</div>
+          {/* the figures in a column of their own, the sentences beside them */}
+          <div className="scout-imps">
+            {effects.map((e) => (
+              <Fragment key={`${e.key}|${e.forUser}`}>
+                <span className={`num ${e.forUser ? 'good' : 'bad'}`}>
+                  {e.forUser ? '+' : '−'}
+                  {e.perGame.toFixed(1)}
+                </span>
+                <span>{IMPACT_TEXT[e.key] && impactSentence(e.key, e.forUser ? `the ${me.name}` : teamRef(opp), e.forUser ? teamRef(opp) : `the ${me.name}`)}</span>
+              </Fragment>
+            ))}
+          </div>
           <div className="tiny dim">Points a game, from your side.</div>
         </div>
       )}

@@ -120,8 +120,8 @@ export interface MatchupNote {
 export function matchupNotes(them: Player, me: Player): MatchupNote[] {
   const out: MatchupNote[] = [];
   const gap = Math.round(them.heightIn - me.heightIn);
-  if (gap >= 3) out.push({ text: `Your defender is ${gap} in shorter`, tone: gap >= 6 ? 'bad' : 'warn' });
-  else if (gap <= -4) out.push({ text: `Your defender is ${-gap} in taller`, tone: 'good' });
+  if (gap >= 3) out.push({ text: `Your defender gives up ${gap} inches`, tone: gap >= 6 ? 'bad' : 'warn' });
+  else if (gap <= -4) out.push({ text: `Your defender has ${-gap} inches on him`, tone: 'good' });
   const big = isBig(them);
   const his: RatingKey = big ? (them.ratings.post > them.ratings.ins ? 'post' : 'ins') : 'hnd';
   const yours: RatingKey = big ? 'intD' : 'perD';

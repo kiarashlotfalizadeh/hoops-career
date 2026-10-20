@@ -188,7 +188,8 @@ function InjuryReport({ league, pv, game, locked }: { league: League; pv: Matchu
             <div key={p.pid} className="mu-q">
               <div className="mu-q-row">
                 <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Game-time'}</Tag>
-                <Link to={`/player/${p.pid}`} className="grow ellipsis">
+                {/* (wraps beside the button rather than cutting the injury short) */}
+                <Link to={`/player/${p.pid}`} className="grow mu-q-who">
                   <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
                 </Link>
                 <button

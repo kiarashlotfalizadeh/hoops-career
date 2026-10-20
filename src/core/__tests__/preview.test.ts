@@ -152,10 +152,10 @@ describe('matchup preview', () => {
     l.schedule.push(g);
     ensureRotation(l, opp);
     ensureRotation(l, l.userTid);
-    expect(matchupPreview(l, g.gid)!.playoff).toMatchObject({ tag: 'R1 · Game 5', game: 5, wins: 1, losses: 3, elimination: true, clinch: false, homeCourt: false });
+    expect(matchupPreview(l, g.gid)!.playoff).toMatchObject({ tag: '1st Round · Game 5', game: 5, wins: 1, losses: 3, elimination: true, clinch: false, homeCourt: false });
     l.playoffs[0].lowWins = 3;
     const pv = matchupPreview(l, g.gid)!;
-    expect(pv.playoff).toMatchObject({ tag: 'R1 · Game 7', elimination: true, clinch: true });
+    expect(pv.playoff).toMatchObject({ tag: '1st Round · Game 7', elimination: true, clinch: true });
     expect(pv.us.tid).toBe(l.userTid);
     expect(pv.usHome).toBe(false);
     expect(pv.projection.edge).toBe(-HOME_EDGE);

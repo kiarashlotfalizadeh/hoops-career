@@ -23,6 +23,9 @@ import { playTypeBaselines, seasonPlayTypes, zScore } from './playTypes';
 import { leagueRatings, projectGame, winChance } from './projection';
 
 // (the projection lives in ./projection, which the game pipeline uses too)
+
+/** A playoff round as the schedule's tags name it ("1st Round G4"). */
+const ROUND_TAG = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
 export { blendNet, HOME_EDGE, MARGIN_SD, PRIOR_GAMES, projectGame, projectMargin, TALENT_NET, winChance, type Ranked } from './projection';
 
 export interface PreviewPlayer {
@@ -124,7 +127,7 @@ export interface SeriesState {
   id: string;
   /** "East First Round". */
   label: string;
-  /** "R1 · Game 5", "Finals · Game 2". */
+  /** "1st Round · Game 5", "Finals · Game 2" (the rounds as the schedule names them). */
   tag: string;
   round: number;
   game: number;
@@ -344,7 +347,7 @@ function seriesState(league: League, g: Pick<ScheduledGame, 'seriesId' | 'type'>
   return {
     id: s.id,
     label: seriesLabel(s),
-    tag: `${s.round === 4 ? 'Finals' : `R${s.round}`} · Game ${game}`,
+    tag: `${ROUND_TAG[s.round] ?? 'Playoffs'} · Game ${game}`,
     round: s.round,
     game,
     wins,

@@ -45,7 +45,11 @@ export const markRead = (id: number) =>
 
 const shortDate = (m: InboxMessage) => fmtDate(m.season, m.day, { month: 'short', day: 'numeric' });
 
-/** One message in a list, as mail apps show it: unread dot, subject and date, then who it's from and its first words. `open`: its decision is still on the agenda. */
+/**
+ * One message in a list, as mail apps show it: unread dot, subject (two lines at most: a headline
+ * like "BKN want Williams + McCain + 1 pick" is read whole) and date, then who it's from and its
+ * first words. `open`: its decision is still on the agenda.
+ */
 export function MessageRow({ m, open, onOpen }: { m: InboxMessage; open?: boolean; onOpen: () => void }) {
   return (
     <button type="button" className={`td-msg ${m.read ? '' : 'unread'}`} aria-haspopup="dialog" onClick={onOpen}>
@@ -53,7 +57,7 @@ export function MessageRow({ m, open, onOpen }: { m: InboxMessage; open?: boolea
       <span className="grow">
         <span className="td-msg-subj">
           {!m.read && <span className="sr-only">Unread: </span>}
-          <span className="ellipsis">{m.subject}</span>
+          <span className="td-msg-s">{m.subject}</span>
           {open && <span className="tag warn">Decide</span>}
           <span className="td-msg-date">{shortDate(m)}</span>
         </span>
@@ -64,6 +68,33 @@ export function MessageRow({ m, open, onOpen }: { m: InboxMessage; open?: boolea
     </button>
   );
 }
+
+/** The screen a message links to, by the name it has elsewhere ("Player page", "Rotation"), or "Open". */
+const LINK_LABELS: [RegExp, string][] = [
+  [/^\/player\//, 'Player page'],
+  [/^\/teams\//, 'Team page'],
+  [/^\/games\/\d/, 'Matchup'],
+  [/^\/game\//, 'Game report'],
+  [/^\/team\/tactics/, 'Tactics'],
+  [/^\/team\/rotation/, 'Rotation'],
+  [/^\/team\/?$/, 'Roster'],
+  [/^\/office\/owner/, 'Owner'],
+  [/^\/office\/resign/, 'Re-signing'],
+  [/^\/office\/free-agents/, 'Free agents'],
+  [/^\/office\/draft/, 'Draft board'],
+  [/^\/office\/career/, 'Your career'],
+  [/^\/office\/trade/, 'Trade'],
+  [/^\/office\/finances/, 'Finances'],
+  [/^\/office\/?$/, 'Office'],
+  [/^\/league\/cup/, 'NBA Cup'],
+  [/^\/league\/awards/, 'Awards'],
+  [/^\/league\/playoffs/, 'Bracket'],
+  [/^\/league\/news/, 'News'],
+  [/^\/league\/history\?view=records/, 'Records'],
+  [/^\/league\/history/, 'History'],
+  [/^\/$/, 'Today'],
+];
+export const linkLabel = (to: string) => LINK_LABELS.find(([re]) => re.test(to))?.[1] ?? 'Open';
 
 /** How a decision a message carried was settled, once it's off the agenda. */
 function settledLine(league: League, m: InboxMessage): string {
@@ -112,7 +143,7 @@ export function MessageSheet({ league, m, onClose }: { league: League; m?: Inbox
           {/* a decision still open links to its screen from its row */}
           {to && !item && (
             <Link to={to} className="btn sm primary" onClick={onClose}>
-              Open <ArrowRight size={15} aria-hidden="true" />
+              {linkLabel(to)} <ArrowRight size={15} aria-hidden="true" />
             </Link>
           )}
           <button

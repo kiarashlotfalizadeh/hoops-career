@@ -34,7 +34,7 @@ export function FlowTab({ g, league, side, kits }: { g: GameResult; league: Leag
               height={150}
             />
             <div className="small dim" style={{ marginTop: 8 }}>
-              Largest leads: {away.abbrev} {g.away.extra.biggestLead}, {home.abbrev} {g.home.extra.biggestLead}.
+              {leadsText(away.abbrev, g.away.extra.biggestLead, home.abbrev, g.home.extra.biggestLead)}
             </div>
           </div>
         </Section>
@@ -42,6 +42,14 @@ export function FlowTab({ g, league, side, kits }: { g: GameResult; league: Leag
       {pbp.length > 0 && (g.flow ? <More label="Play-by-play">{<PlayByPlay pbp={pbp} />}</More> : <PlayByPlay pbp={pbp} />)}
     </>
   );
+}
+
+/** "Largest leads: BOS 12, NYK 7.", or "Largest lead: OKC 41 (LAC never led)." */
+function leadsText(a: string, la: number, b: string, lb: number) {
+  if (la > 0 && lb > 0) return `Largest leads: ${a} ${la}, ${b} ${lb}.`;
+  if (!la && !lb) return '';
+  const [lead, n, other] = la > 0 ? [a, la, b] : [b, lb, a];
+  return `Largest lead: ${lead} ${n} (${other} never led).`;
 }
 
 /**

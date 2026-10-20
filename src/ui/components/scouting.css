@@ -141,3 +141,29 @@
   flex: none;
   color: var(--accent-text);
 }
+
+/* head to head: a meeting a row (it opens its report), then what decided them, figures in a column */
+.scout-h2h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 var(--row-px);
+  font-size: 13.5px;
+  color: inherit;
+}
+.scout-h2h:active {
+  background: var(--surface);
+}
+.scout-imps {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+.scout-imps > .num {
+  text-align: right;
+  font-weight: 750;
+}

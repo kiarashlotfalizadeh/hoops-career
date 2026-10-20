@@ -11,6 +11,7 @@ import { planFor, setPlanItem } from '../../../core/league/gamePlans';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { act } from '../../../state/actions';
 import { Section, Tag } from '../../components/ui';
+import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
 
 /** Counters the briefing proposes: the ones the numbers back first, one per game-plan group. */
@@ -23,9 +24,13 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
   const simming = useStore((s) => !!s.sim);
   const them = league.teams[opp];
   const plan = planFor(league, opp);
-  // one per group, the ones with evidence first (counterCandidates already sorts them so)
+  // one per group, the ones with evidence first (counterCandidates already sorts them so), leaving
+  // out what the plan already settles (a counter in a plan item's group would undo it: a coverage
+  // after the staff's own zone)
+  const taken = new Set((plan?.items ?? []).map((it) => it.group ?? it.id));
   const picks: Candidate[] = [];
-  for (const c of cands) if (picks.length < PLAN_MAX && !picks.some((p) => (p.group ?? p.id) === (c.group ?? c.id))) picks.push(c);
+  for (const c of cands) if (picks.length < PLAN_MAX && !taken.has(c.group ?? c.id) && !picks.some((p) => (p.group ?? p.id) === (c.group ?? c.id))) picks.push(c);
+  const more = (plan?.items.length ?? 0) > 0;
   const add = (list: Candidate[]) => {
     const ok = act('Game plan', (l) => {
       for (const c of list) setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
@@ -50,13 +55,14 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
           {scout.weaknesses.length > 0 && (
             <div>
               <dt>Where to hit them</dt>
-              <dd>{scout.weaknesses.slice(0, 2).join(' ')}</dd>
+              {/* the first, best-backed one: the rest are on Scout */}
+              <dd>{scout.weaknesses[0]}</dd>
             </div>
           )}
         </dl>
         {picks.length > 0 ? (
           <div className="mu-brief-plan">
-            <div className="over">The staff&apos;s plan for tonight</div>
+            <div className="over">{more ? 'The staff would also add' : <>The staff&apos;s plan for tonight</>}</div>
             {picks.map((c) => (
               <div key={c.id} className="mu-brief-item">
                 <div className="grow">
@@ -69,9 +75,12 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
               </div>
             ))}
             <div className="mu-brief-go">
-              <button className="btn sm primary" disabled={simming} onClick={() => add(picks)}>
-                <Check size={15} aria-hidden="true" /> Use the staff&apos;s plan
-              </button>
+              {/* (one extra counter has its own Add) */}
+              {(!more || picks.length > 1) && (
+                <button className="btn sm primary" disabled={simming} onClick={() => add(picks)}>
+                  <Check size={15} aria-hidden="true" /> {more ? 'Add all' : <>Use the staff&apos;s plan</>}
+                </button>
+              )}
               <button className="btn sm ghost" onClick={onPlan}>
                 Open the plan
               </button>
@@ -81,7 +90,7 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
           <div className="small dim">
             {plan ? (
               <>
-                Your plan covers what the staff sees: <Tag tone="info">{plan.items.length} changes</Tag>
+                Your plan covers what the staff sees: <Tag tone="info">{plural(plan.items.length, 'change')}</Tag>
               </>
             ) : (
               'The staff would play them with your playbook as it is.'

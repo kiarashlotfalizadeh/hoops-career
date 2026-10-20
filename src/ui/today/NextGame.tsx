@@ -36,7 +36,7 @@ const whenLabel = (league: League, day: number) =>
   day <= league.day ? 'Today' : day === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' });
 
 /**
- * A side's players who won't play (or might not), three at most, named so teammates can't be
+ * A side's players who won't play (or might not), two at most, named so teammates can't be
  * confused: "Jal. Williams out 3 games, K. Williams resting +2 more".
  */
 function outText(league: League, s: SidePreview): string {
@@ -47,7 +47,25 @@ function outText(league: League, s: SidePreview): string {
     ...s.resting.map((p) => `${name(p.pid, p.name)} resting`),
     ...s.questionable.filter((p) => !p.cleared).map((p) => `${name(p.pid, p.name)} questionable`),
   ];
-  return all.slice(0, 3).join(', ') + (all.length > 3 ? ` +${all.length - 3} more` : '');
+  // two names keep a side to a line or so; the matchup page has the rest
+  return all.slice(0, 2).join(', ') + (all.length > 2 ? ` +${all.length - 2} more` : '');
+}
+
+/**
+ * A scouting point cut to what to do, for a line on the slab (the numbers behind it are on the
+ * matchup page): "They foul: opponents get 0.27 free throws a shot… Attack the rim." → "Attack the
+ * rim."; "No real rim protection: attack the basket." → "Attack the basket." A point whose advice
+ * leans on what came before it ("…(Smith): hunt that mismatch") stays whole.
+ */
+export function gist(text: string): string {
+  // sentences end at a full stop before a capital (a decimal's point doesn't end one)
+  const sentences = text.split(/(?<=\.)\s+(?=[A-Z])/);
+  let last = sentences[sentences.length - 1];
+  const colon = last.indexOf(': ');
+  if (colon > 0) last = last.slice(colon + 2);
+  // "…: hunt that mismatch" needs what came before it
+  if (sentences.length === 1 && /\b(that|this|those|him)\b/i.test(last)) return text;
+  return last.charAt(0).toUpperCase() + last.slice(1);
 }
 
 /** `noPlan`: the staff would say there's no game plan for this opponent yet (a tag here, not a card below). */
@@ -82,7 +100,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
     const sc = scoutTeam(league, opp);
     const watch = sc.threats[0];
     const hit = sc.weaknesses[0];
-    return { who: leadAssistant(league).last, text: [watch && `Watch ${watch.name}.`, hit].filter(Boolean).join(' ') };
+    return { who: leadAssistant(league).last, text: [watch && `Watch ${watch.name}.`, hit && gist(hit)].filter(Boolean).join(' ') };
   }, [league, opp]);
   return (
     <section className="slab td-slab" aria-label="Next game">
@@ -116,36 +134,36 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           {g.home === me ? 'vs' : '@'}
         </span>
       </div>
-      {(tags.length > 0 || outs.length > 0) && (
-        <div className="td-facts">
-          {tags.length > 0 && (
-            <div className="chips">
-              {tags.map((t) =>
-                t.to ? (
-                  <Link key={t.text} to={t.to} className="tag td-tag-link">
-                    {t.text} <ChevronRight size={12} aria-hidden="true" />
-                  </Link>
-                ) : (
-                  <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
-                    {t.text}
-                  </span>
-                ),
-              )}
-            </div>
+      {tags.length > 0 && (
+        <div className="chips td-tags">
+          {tags.map((t) =>
+            t.to ? (
+              <Link key={t.text} to={t.to} className="tag td-tag-link">
+                {t.text} <ChevronRight size={12} aria-hidden="true" />
+              </Link>
+            ) : (
+              <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
+                {t.text}
+              </span>
+            ),
           )}
-          {outs.map((o) => (
-            <div key={o.tid} className="td-out">
-              <span className="td-out-k">{league.teams[o.tid].abbrev}</span>
-              <span className="grow">{o.text}</span>
-            </div>
-          ))}
         </div>
       )}
+      {outs.length > 0 && (
+        <dl className="td-outs">
+          {outs.map((o) => (
+            <div key={o.tid} className="td-out">
+              <dt className="td-out-k">{league.teams[o.tid].abbrev}</dt>
+              <dd>{o.text}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {/* the staff's one line, under a hairline: the assistant's name leads it */}
       {staff.text && (
-        <div className="td-out td-staff">
-          <span className="td-out-k">{staff.who}</span>
-          <span className="grow">{staff.text}</span>
-        </div>
+        <p className="td-staff">
+          <span className="td-staff-who">{staff.who}</span> {staff.text}
+        </p>
       )}
     </section>
   );

@@ -17,7 +17,12 @@ describe('the debrief', () => {
       const res = playGame(league, g);
       const rep = buildGameReport(league, res)!;
       const d = debrief(league, res, rep);
-      expect(d.headline).toBe(rep.headline);
+      // the staff's read says how it went in words: the final above it has the score
+      expect(d.headline).not.toContain(`${res.home.pts}-${res.away.pts}`);
+      expect(d.headline).not.toContain(`${res.away.pts}-${res.home.pts}`);
+      expect(d.headline).toMatch(/^[A-Z].+\.$/);
+      // and the next-time rows don't repeat a key's number (the keys' list has it)
+      for (const a of d.advice) expect(a.title).not.toMatch(/goal [≤≥]/);
       expect(d.decided.length).toBeLessThanOrEqual(3);
       expect(d.opp).toBe(res.home.tid === 0 ? res.away.tid : res.home.tid);
       expect(d.advice.length).toBeLessThanOrEqual(5);

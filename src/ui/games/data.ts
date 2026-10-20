@@ -29,7 +29,7 @@ export function seriesGameNo(league: League, g: ScheduledGame): number {
   return list.findIndex((x) => x.gid === g.gid) + 1;
 }
 
-/** "R1 G4", "Finals G2", "Cup QF", "Play-In", or '' for a regular-season game. */
+/** "1st Round G4", "Finals G2", "Cup QF", "Play-In", or '' for a regular-season game. */
 export function gameTag(league: League, g: ScheduledGame): string {
   if (g.type === 'playoffs') {
     const round = g.seriesId ? Number(g.seriesId[1]) : 0;

@@ -1,7 +1,7 @@
 // The Games hub, the season's spine: the next game (who, when, the series, whether a plan is set,
 // and its matchup page a tap away), then the schedule: what's coming and the results, with filters.
 // On game day the Continue bar carries Watch & coach: the card doesn't repeat it.
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
@@ -45,18 +45,57 @@ export default function GamesHub() {
   const me = league.userTid;
   const mine = useLeagueMemo(() => league.schedule.filter((g) => g.home === me || g.away === me), [league, me]);
   const next = useLeagueMemo(() => nextGame(league), [league]);
-  // the Cup and the postseason only once there are games of theirs
-  const shown = FILTERS.filter((f) => (f === 'cup' ? mine.some((g) => g.cup) : f === 'post' ? mine.some((g) => g.type === 'playoffs' || g.type === 'playin') : true));
+  // the Cup and the postseason only once there are games of theirs; Upcoming and Results only while
+  // there's something on each side
+  const shown = FILTERS.filter((f) =>
+    f === 'cup'
+      ? mine.some((g) => g.cup)
+      : f === 'post'
+        ? mine.some((g) => g.type === 'playoffs' || g.type === 'playin')
+        : f === 'upcoming'
+          ? mine.some((g) => !g.played)
+          : f === 'results'
+            ? mine.some((g) => g.played)
+            : true,
+  );
+  const chips = useScrollEdges(shown.length);
   return (
     <main className="page">
       <PageHeader title="Games" />
       {next && <NextGame league={league} g={next} />}
-      <div className="gs-filters">
+      <div className="gs-filters" ref={chips}>
         <Chips label="Show games" value={shown.includes(filter) ? filter : 'all'} onChange={setFilter} options={shown.map((id) => ({ id, label: FILTER_LABEL[id] }))} />
       </div>
       <TeamScheduleList league={league} tid={me} filter={shown.includes(filter) ? filter : 'all'} split skip={next?.gid} />
     </main>
   );
+}
+
+/**
+ * The filters' row scrolls sideways on a phone: its edges fade where chips wait past them (`fl`,
+ * `fr`), and the chip that's on is scrolled into view when the screen opens.
+ */
+function useScrollEdges(count: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = ref.current;
+    const row = box?.querySelector<HTMLElement>('.chips');
+    if (!box || !row) return;
+    const on = row.querySelector<HTMLElement>('.chip.on');
+    if (on && on.offsetLeft + on.offsetWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - 16;
+    const edges = () => {
+      box.classList.toggle('fl', row.scrollLeft > 4);
+      box.classList.toggle('fr', row.scrollLeft + row.clientWidth < row.scrollWidth - 4);
+    };
+    edges();
+    row.addEventListener('scroll', edges, { passive: true });
+    window.addEventListener('resize', edges);
+    return () => {
+      row.removeEventListener('scroll', edges);
+      window.removeEventListener('resize', edges);
+    };
+  }, [count]);
+  return ref;
 }
 
 /** The next game on a slab in the opponent's colours: when, who, how they stand, the series and the plan. */
@@ -79,7 +118,8 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const seriesLine = series
     ? (() => {
         const [w, l] = series.high === me ? [series.highWins, series.lowWins] : [series.lowWins, series.highWins];
-        return w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
+        // (before game 1 the tag above says it all)
+        return w + l === 0 ? '' : w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
     : ss
       ? seriesText(ss)

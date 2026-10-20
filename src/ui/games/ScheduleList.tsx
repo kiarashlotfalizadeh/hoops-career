@@ -15,6 +15,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { ordinal, useGamesByGid } from '../league/shared';
 import { gameTag, planSize } from './data';
+import { plural } from '../../core/format';
 import './games.css';
 
 export type ScheduleFilter = 'all' | 'upcoming' | 'results' | 'home' | 'away' | 'cup' | 'post';
@@ -111,11 +112,9 @@ export function TeamScheduleList({
   return (
     <>
       {upcoming.length > 0 && (
-        <Months title="Upcoming" rows={upcoming} all={rows} first={collapse ? 5 : Infinity} {...rowProps} records={false} more={(n) => `${n} more game${n === 1 ? '' : 's'}`} />
+        <Months title="Upcoming" rows={upcoming} all={rows} first={collapse ? 5 : Infinity} {...rowProps} records={false} more={(n) => `Show ${plural(n, 'more game')}`} />
       )}
-      {results.length > 0 && (
-        <Months title="Results" rows={results} all={rows} first={collapse ? 8 : Infinity} {...rowProps} more={(n) => `${n} earlier result${n === 1 ? '' : 's'}`} />
-      )}
+      {results.length > 0 && <Months title="Results" rows={results} all={rows} first={collapse ? 8 : Infinity} {...rowProps} more={(n) => `Show ${plural(n, 'earlier result')}`} />}
     </>
   );
 }
@@ -229,7 +228,7 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
   // the keys to the game met, under the score of the user's results
   const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];
   const met = keys.filter((k) => k.met).length;
-  const under = [r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '', keys.length ? `keys ${met} of ${keys.length}` : ''].filter(Boolean).join(' · ');
+  const ot = r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '';
   return (
     <Link to={to} className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}`}>
       <span className="gs-date">
@@ -243,10 +242,17 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
           <span className="gs-at">{r.home || neutralSite(r.g) ? 'vs' : '@'}</span>
           {opp.name}
         </span>
-        <span className="gs-sub">
-          {tag && <b className="gs-tag">{tag} · </b>}
-          {sub}
-        </span>
+        {(tag || sub) && (
+          <span className="gs-sub">
+            {tag && (
+              <b className="gs-tag">
+                {tag}
+                {sub ? ' · ' : ''}
+              </b>
+            )}
+            {sub}
+          </span>
+        )}
       </span>
       <span className="gs-res">
         {r.res ? (
@@ -254,7 +260,19 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
             <span className={`gs-wl ${r.won ? 'w' : 'l'}`}>{r.won ? 'W' : 'L'}</span>
             <span className="num gs-score">
               {r.us}-{r.them}
-              {under && <span className="gs-ot">{under}</span>}
+              {(ot || keys.length > 0) && (
+                <span className="gs-under">
+                  {ot && <span className="gs-ot">{ot}</span>}
+                  {/* the keys to the game, a dot each, the ones met filled first */}
+                  {keys.length > 0 && (
+                    <span className="gs-keys" role="img" aria-label={`Keys to the game: ${met} of ${keys.length} met`}>
+                      {Array.from({ length: keys.length }, (_, i) => (
+                        <i key={i} className={i < met ? 'met' : undefined} />
+                      ))}
+                    </span>
+                  )}
+                </span>
+              )}
             </span>
           </>
         ) : r.g.played ? (
@@ -270,7 +288,7 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
   );
 }
 
-/** "8-7 · 5th West", or last season's record before a team has played. */
+/** "8-7 · 5th West", or last season's record before a team has played (else nothing). */
 function oppLine(league: League, opp: number, ranks: Map<number, StandingRow>) {
   const st = ranks.get(opp);
   if (!st) {
@@ -279,7 +297,8 @@ function oppLine(league: League, opp: number, ranks: Map<number, StandingRow>) {
   }
   if (st.won + st.lost) return `${st.won}-${st.lost} · ${ordinal(st.confRank)} ${st.conf === 'E' ? 'East' : 'West'}`;
   const prev = league.teams[opp].seasons.find((s) => s.season === league.season - 1);
-  return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '0-0';
+  // (nobody has played and there's no last season to go by: nothing worth a line)
+  return prev && prev.won + prev.lost ? `Last season ${prev.won}-${prev.lost}` : '';
 }
 
 /** "9-5", or "3-1 · Play-In 1-0 · Playoffs 2-4" in April: postseason games stay out of the regular-season record. */

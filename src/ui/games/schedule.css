@@ -102,11 +102,34 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  /* room for "130-102", so the W/L badges line up down the list */
+  min-width: 54px;
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 800;
   font-size: 17px;
   line-height: 1.05;
+}
+.gs-under {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+/* the keys to the game under a result: a dot each, filled when met */
+.gs-keys {
+  display: inline-flex;
+  gap: 3px;
+}
+.gs-keys > i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--line-3);
+}
+.gs-keys > i.met {
+  background: var(--good);
+  box-shadow: none;
 }
 .gs-ot {
   font-family: var(--font);
@@ -155,7 +178,34 @@
 .gs-more:active {
   background: var(--surface);
 }
-/* the filters: one row that scrolls sideways */
+/* the filters: one row that scrolls sideways, its edges fading where more chips wait */
+.gs-filters {
+  position: relative;
+}
+.gs-filters::before,
+.gs-filters::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease-out;
+  z-index: 1;
+}
+.gs-filters::before {
+  left: calc(-1 * var(--gut-l));
+  background: linear-gradient(90deg, var(--bg) 20%, transparent);
+}
+.gs-filters::after {
+  right: calc(-1 * var(--gut-r));
+  background: linear-gradient(270deg, var(--bg) 20%, transparent);
+}
+.gs-filters.fl::before,
+.gs-filters.fr::after {
+  opacity: 1;
+}
 .gs-filters .chips {
   flex-wrap: nowrap;
   overflow-x: auto;

@@ -260,7 +260,7 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
         {breakEven !== null && (
           <div className="list-divider list-h" aria-hidden="true">
             <span>Pays under {breakEven}% from the line</span>
-            <span>FT</span>
+            <span className="as-is">FT%</span>
           </div>
         )}
         {rows.map((p) => {
@@ -280,7 +280,8 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
               <Ovr v={p.ovr} size="sm" />
               <span className="grow lr-name">{names(p.pid)}</span>
               {breakEven !== null && pct < breakEven && <Tag tone="good">Pays</Tag>}
-              <span className="num mu-ft">FT {pct}%</span>
+              {/* (the column is named once in its header when there is one) */}
+              <span className="num mu-ft">{breakEven !== null ? pct : `FT ${pct}%`}</span>
             </button>
           );
         })}
