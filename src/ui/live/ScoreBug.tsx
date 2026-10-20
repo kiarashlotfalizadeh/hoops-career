@@ -1,4 +1,5 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { fmtClock, periodLabel } from '../stats';
@@ -45,6 +46,7 @@ export function ScoreBug({
   atBreak,
   context,
   wpHome,
+  onLeave,
   children,
 }: {
   ticker: Ticker;
@@ -59,6 +61,8 @@ export function ScoreBug({
   wpHome?: number;
   /** A bottom line under it (the night's other scores). */
   children?: ReactNode;
+  /** The way out: the game waits where it is, to be resumed from the Continue bar or its Matchup page. */
+  onLeave?: () => void;
 }) {
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
@@ -102,7 +106,17 @@ export function ScoreBug({
   };
   return (
     <div className="lv-lb">
-      {context && <div className="lv-lb-ctx ellipsis">{context}</div>}
+      {/* its top line: the way out on the left, what's at stake (or that it's live) in the middle */}
+      {onLeave ? (
+        <div className="lv-lb-ctx has-leave">
+          <button type="button" className="lv-lb-leave" onClick={onLeave} aria-label="Leave the game. It waits here: resume it from Continue.">
+            <ChevronLeft size={14} aria-hidden="true" /> Leave
+          </button>
+          <span className="ellipsis">{context ?? 'Live'}</span>
+        </div>
+      ) : (
+        context && <div className="lv-lb-ctx ellipsis">{context}</div>
+      )}
       <div
         className="lv-lb-main live-bug"
         role="group"

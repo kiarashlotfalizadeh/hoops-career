@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore, type TaskOp } from '../state/store';
-import type { FlowAction } from './flow';
+import { simStart, simSummary, type FlowAction } from './flow';
 import { newSeasonBlockedReason } from '../core/league/season';
 import { seasonLabel } from '../core/constants';
 
@@ -16,7 +16,12 @@ export function useFlowRunner() {
     // a sim or a phase change is already running: ignore double taps
     if (st.sim) return;
     if (a.sim) {
+      // what the sim did for the user, once it stops (after any "Stopped for news")
+      const before = simStart(st.league!);
       await st.simulate(a.sim);
+      const l = useStore.getState().league;
+      const said = l && simSummary(before, l);
+      if (said) st.toast(said.text, said.tone, said.link);
       return;
     }
     // phase changes run in the worker behind the progress bar (buttons disabled); each is also a

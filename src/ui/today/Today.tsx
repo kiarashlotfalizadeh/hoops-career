@@ -13,15 +13,16 @@ import { assistantFeed, type AssistantArea, type AssistantCard } from '../../cor
 import { jobSecurity, type JobSecurity } from '../../core/league/jobSecurity';
 import { FIRING_LINE } from '../../core/league/owner';
 import { confStandings } from '../../core/league/standings';
-import { leagueForecast, pct } from '../../core/analysis/odds';
+import { pct } from '../../core/analysis/odds';
 import { AgendaList } from '../components/Agenda';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { NextGameSlab, PhaseCard, nextGame } from './NextGame';
-import { MessageRow, MessageSheet, decisionId, markRead } from './messages';
+import { MessageRow, MessageSheet, decisionId, markRead, needsYou } from './messages';
 import './today.css';
+import { useForecast } from '../useForecast';
 
 /** Today's advice leaves the owner to the job-security line below it. */
 const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
@@ -50,7 +51,8 @@ export default function Today() {
   const opp = g ? (g.home === league.userTid ? g.away : g.home) : undefined;
   const noPlan = opp !== undefined && full.some((c) => c.id === `plan:${opp}`);
   const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}`);
-  const js = useLeagueMemo(() => jobSecurity(league, leagueForecast(league)), [league]);
+  const forecast = useForecast(league);
+  const js = useLeagueMemo(() => jobSecurity(league, forecast), [league, forecast]);
   const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
   // "All advice" when the feed says more than Today shows somewhere
   const onToday = new Set([...feed.slice(0, 3).map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
@@ -180,7 +182,7 @@ function StandingsNearby({ league }: { league: League }) {
   const me = league.userTid;
   const conf = league.teams[me].conf;
   const rows = useLeagueMemo(() => confStandings(league, conf), [league, conf]);
-  const fc = useLeagueMemo(() => leagueForecast(league), [league]);
+  const fc = useForecast(league);
   const played = rows.some((r) => r.won + r.lost > 0);
   if (!played) return null;
   const i = rows.findIndex((r) => r.tid === me);
@@ -273,6 +275,9 @@ function LastResults({ league }: { league: League }) {
 function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: string[]; onOpen: (id: number) => void }) {
   const open = new Set(agendaIds);
   const all = league.inbox.filter((m) => !m.read);
+  // the count is what needs him (as on the bell); the rows are the newest unread, whatever they are
+  const decisions = new Map(agendaIds.map((id) => [id, true]));
+  const need = all.filter((m) => needsYou(m, decisions)).length;
   const shown = all
     .filter((m) => {
       const d = decisionId(m);
@@ -286,7 +291,7 @@ function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: 
       title="Inbox"
       right={
         <Link className="card-link" to="/inbox?f=unread">
-          {all.length} unread <ChevronRight size={14} aria-hidden="true" />
+          {need ? `${need} need${need === 1 ? 's' : ''} you` : 'All unread'} <ChevronRight size={14} aria-hidden="true" />
         </Link>
       }
     >

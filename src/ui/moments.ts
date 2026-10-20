@@ -106,11 +106,12 @@ export function currentMoments(league: League): Moment[] {
       });
   }
 
-  // this season's moves: the user's draft picks and the stars he signs (the log keeps his moves for good)
+  // this season's moves: the user's first-round picks and the stars he signs (the log keeps his moves
+  // for good). A second-rounder isn't a moment: three of them would take three taps on draft night
   for (const t of league.transactions ?? []) {
     if (t.season !== season || t.tids[0] !== me || t.pid === undefined) continue;
     const p = league.players[t.pid];
-    if (t.kind === 'draft' && p) {
+    if (t.kind === 'draft' && p && p.draft.round === 1) {
       const pick = p.draft.round && p.draft.pick ? `Round ${p.draft.round}, Pick ${p.draft.pick}` : 'Draft night';
       out.push({
         key: `txn-${t.id}`,

@@ -57,7 +57,8 @@ export default function FreeAgents() {
   const [pos, setPos] = useState<'all' | Pos>('all');
   const [minOvr, setMinOvr] = useState(0);
   const [sort, setSort] = useState<SortKey>('value');
-  const [onlySignable, setOnlySignable] = useState(false);
+  // null: the screen's own pick (see `signableFirst` below); a tap on the chip makes it the user's
+  const [signablePick, setOnlySignable] = useState<boolean | null>(null);
   const [twoWayMode, setTwoWayMode] = useState(false);
   const [tenDayMode, setTenDayMode] = useState(false);
   const tenDays = tenDayMode && tenDayOpen;
@@ -95,6 +96,10 @@ export default function FreeAgents() {
     [league, tid, s],
   );
 
+  // over the cap (the best asks need room he hasn't got) or a full roster: the list opens on who he can
+  // sign, one tap from everyone
+  const signableFirst = space <= 0 || n >= max;
+  const onlySignable = signablePick ?? signableFirst;
   // what the user could actually do today: the window is open and there's a spot to fill (a hardship one for a 10-day)
   const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : tenDays ? n < max + hs.spots : n < max);
   const rows = all
@@ -235,7 +240,20 @@ export default function FreeAgents() {
       </div>
 
       {rows.length === 0 ? (
-        <Empty>{all.length === 0 ? 'No free agents on the market right now.' : 'No free agents match these filters.'}</Empty>
+        <Empty>
+          {all.length === 0 ? (
+            'No free agents on the market right now.'
+          ) : onlySignable ? (
+            <>
+              No one you can sign right now matches.{' '}
+              <button className="btn sm ghost" onClick={() => setOnlySignable(false)}>
+                Show everyone
+              </button>
+            </>
+          ) : (
+            'No free agents match these filters.'
+          )}
+        </Empty>
       ) : (
         <div className="card flush">
           <div className="list wide2">

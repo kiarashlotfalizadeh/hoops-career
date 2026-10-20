@@ -18,6 +18,43 @@
   text-transform: uppercase;
   color: var(--text-2);
 }
+/* with the way out: the button on the left, the line centred between it and a matching gap */
+.lv-lb-ctx.has-leave {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) 72px;
+  align-items: center;
+  padding: 0 4px;
+}
+.lv-lb-ctx.has-leave > span {
+  grid-column: 2;
+}
+.lv-lb-leave {
+  position: relative;
+  grid-column: 1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 24px;
+  padding: 0 8px 0 2px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+/* a slim line, a full-size target */
+.lv-lb-leave::after {
+  content: '';
+  position: absolute;
+  inset: -10px -6px;
+}
+.lv-lb-leave:active {
+  background: var(--surface);
+}
 .lv-lb-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);

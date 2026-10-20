@@ -239,6 +239,8 @@ Broadcast first: the court is always the biggest thing on screen.
 - **Every move is measured**: a tactics change, sub or timeout shows in Your moves with what it has
   done since (`coachMoves`, drawn with `MovesList`), in the live game and in the report.
 - Playback (pause, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
+- **The way out is on the scorebug's top line** (Leave, beside what's at stake): the game waits where
+  it is, and the Continue bar and its Matchup page resume it.
 - **The breaks are on the screen, not over it**: at a period's end or in your timeout the court
   steps aside for the period report or the huddle in the console; the next period starts from the
   bench bar.
@@ -278,6 +280,8 @@ Broadcast first: the court is always the biggest thing on screen.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.
+- **The bell's badge counts what needs you** (`needsYou`: important mail, or a decision still open);
+  other mail is unread in the list without feeding the badge or Today's count.
 
 ## Motion
 

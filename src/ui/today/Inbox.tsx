@@ -7,7 +7,7 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { seasonLabel } from '../../core/constants';
 import { PageHeader, Segmented } from '../components/ui';
-import { MessageRow, MessageSheet, decisionId, markRead, useAgendaById } from './messages';
+import { MessageRow, MessageSheet, decisionId, markRead, needsYou, useAgendaById } from './messages';
 import './today.css';
 
 type Filter = 'all' | 'unread';
@@ -35,6 +35,8 @@ export default function Inbox() {
   const byId = useAgendaById(league);
   const sorted = useLeagueMemo(() => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const unread = sorted.filter((m) => !m.read).length;
+  // what the bell's badge counts: big news and decisions still open
+  const need = sorted.filter((m) => needsYou(m, byId)).length;
   const list = filter === 'unread' ? sorted.filter((m) => !m.read || m.id === keepId) : sorted;
   const open = openId !== null ? league.inbox.find((m) => m.id === openId) : undefined;
 
@@ -46,8 +48,8 @@ export default function Inbox() {
   let lastKey = '';
   return (
     <main className="page td-inbox">
-      {/* (the unread count is on its filter) */}
-      <PageHeader title="Inbox" sub={unread ? undefined : 'All caught up'} back />
+      {/* (the unread count is on its filter; the sub names what the bell counts) */}
+      <PageHeader title="Inbox" sub={need ? `${need} need${need === 1 ? 's' : ''} you` : unread ? undefined : 'All caught up'} back />
       <div className="td-ibar">
         <Segmented<Filter>
           label="Show"

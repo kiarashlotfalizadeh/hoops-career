@@ -1,13 +1,14 @@
 // Phase-aware "what can I do next" actions: the Continue bar's primary and its Play options. A
 // required agenda item (see core/league/agenda.ts) comes first and holds every sim and phase change
 // until it's settled; letting the staff make the user's draft pick stays open, as it settles it.
-import type { League, ScheduledGame } from '../core/types';
+import type { League, Phase, ScheduledGame } from '../core/types';
 import { allStarStop, type SimTarget } from '../state/store';
-import { liveInProgress } from '../state/live';
+import { liveInProgress, type LiveStatus } from '../state/live';
 import { canStartRegularSeason, FA_DAYS, faDayNumber, faOver, newSeasonBlockedReason, regularGamesLeft } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
-import { curTeamSeason, fmtDate } from '../core/league/helpers';
-import { seasonLabel } from '../core/constants';
+import { curTeamSeason, fmtDate, standardRoster } from '../core/league/helpers';
+import { CAP, seasonLabel } from '../core/constants';
+import { plural } from '../core/format';
 import { agendaBlocker } from '../core/league/agenda';
 import { draftOrder } from '../core/league/draft';
 import { periodLabel } from './stats';
@@ -41,6 +42,75 @@ export function opponentText(league: League, g: ScheduledGame): string {
   const ts = league.teams[opp].seasons.find((x) => x.season === league.season);
   const rec = s ? `series ${s.high === opp ? `${s.lowWins}-${s.highWins}` : `${s.highWins}-${s.lowWins}`}` : `${ts?.won ?? 0}-${ts?.lost ?? 0}`;
   return `${home ? 'vs' : '@'} ${league.teams[opp].abbrev} (${rec})`;
+}
+
+/** A game in progress from the user's side: "NYK up 11-10", "NYK down 88-92", "Tied 50-50". */
+export function liveScoreText(league: League, live: Pick<LiveStatus, 'score'>): string {
+  const [us, them] = live.score;
+  const ab = league.teams[league.userTid].abbrev;
+  return us === them ? `Tied ${us}-${them}` : `${ab} ${us > them ? 'up' : 'down'} ${us}-${them}`;
+}
+
+const POST_ROUND = ['', 'first round', 'conference semifinals', 'conference finals', 'NBA Finals'];
+
+/** Where the league stood when a sim started, for `simSummary`. */
+export interface SimStart {
+  season: number;
+  phase: Phase;
+  day: number;
+  games: number;
+  /** The user's season still had games in it (the regular season, or alive in the postseason). */
+  alive: boolean;
+}
+
+const playing = (l: League) => l.phase === 'regular' || ((l.phase === 'playin' || l.phase === 'playoffs') && stillAlive(l));
+
+export const simStart = (l: League): SimStart => ({ season: l.season, phase: l.phase, day: l.day, games: l.games.length, alive: playing(l) });
+
+/**
+ * What a long sim did for the user, said once it stops (the top bar has the record, not the
+ * change): "4-3 since Feb 11 · now 31-24"; how his season ended if it did ("Out in the first
+ * round: TOR won 4-2"); and the champion when the sim ran through the Finals. A title or a series
+ * won is a moment instead; a sim of a day or to the next game says nothing.
+ */
+export function simSummary(before: SimStart, l: League): { text: string; tone: 'good' | 'bad' | 'neutral'; link: string } | null {
+  if (l.season !== before.season) return null;
+  const me = l.userTid;
+  const finals = l.playoffs.find((s) => s.round === 4 && s.winner !== undefined);
+  const crowned = finals && before.phase !== 'draftLottery' && l.phase === 'draftLottery' ? finals : undefined;
+  const champ = crowned && crowned.winner !== me ? `${l.teams[crowned.winner!].abbrev} won the title` : '';
+  if (before.alive && !playing(l) && l.phase !== 'regular') {
+    // his season ended in this sim: how
+    const ts = curTeamSeason(l, me);
+    const lost = l.playoffs.filter((s) => (s.high === me || s.low === me) && s.winner !== undefined && s.winner !== me).sort((a, b) => b.round - a.round)[0];
+    if (!lost && crowned?.winner === me) return null;
+    const how = lost
+      ? `Out in the ${POST_ROUND[lost.round] ?? 'playoffs'}: ${l.teams[lost.winner!].abbrev} won ${Math.max(lost.highWins, lost.lowWins)}-${Math.min(lost.highWins, lost.lowWins)}`
+      : l.playIn.some((g) => g.loser === me)
+        ? 'Out in the play-in'
+        : `Season over at ${ts.won}-${ts.lost}, short of the postseason`;
+    return { text: [how, champ].filter(Boolean).join(' · '), tone: 'bad', link: '/league/playoffs' };
+  }
+  if (champ && crowned) {
+    const [w, lo] = [Math.max(crowned.highWins, crowned.lowWins), Math.min(crowned.highWins, crowned.lowWins)];
+    const loser = crowned.winner === crowned.high ? crowned.low : crowned.high;
+    return { text: `${champ}, ${w}-${lo} over ${l.teams[loser].abbrev}`, tone: 'neutral', link: '/league/playoffs' };
+  }
+  let w = 0;
+  let lo = 0;
+  for (let i = before.games; i < l.games.length; i++) {
+    const g = l.games[i];
+    if (g.home.tid !== me && g.away.tid !== me) continue;
+    const us = g.home.tid === me ? g.home : g.away;
+    const them = g.home.tid === me ? g.away : g.home;
+    if (us.pts > them.pts) w++;
+    else lo++;
+  }
+  if (w + lo < 2) return null;
+  const ts = curTeamSeason(l, me);
+  const since = fmtDate(l.season, before.day, { month: 'short', day: 'numeric' });
+  const now = l.phase === 'regular' && ts.won + ts.lost > w + lo ? ` · now ${ts.won}-${ts.lost}` : '';
+  return { text: `${w}-${lo} since ${since}${now}`, tone: w > lo ? 'good' : w < lo ? 'bad' : 'neutral', link: '/games' };
 }
 
 /** The user's games still to play from today up to (not including) `end`. */
@@ -95,7 +165,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       const out = league.phase !== 'regular' && !stillAlive(league);
       if (live) {
         const q = live.clock <= 0.05 ? `End of ${periodLabel(live.q)}` : periodLabel(live.q);
-        a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${live.score[0]}-${live.score[1]}`, primary: true, cmd: 'watchLive' });
+        a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${liveScoreText(league, live)}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
         a.push({ id: 'live', label: 'Watch & coach live', sub: `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });
@@ -180,10 +250,12 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       }
       // an offer sheet on one of the user's restricted free agents waits for his call first
       const blocked = newSeasonBlockedReason(league) ?? undefined;
+      // short of opening night's minimum: camp opens, but the season won't start until he signs more
+      const short = CAP.rosterMin - standardRoster(league, league.userTid).length;
       a.push({
         id: 'new',
         label: `Start ${seasonLabel(league.season + 1)} season`,
-        sub: blocked ?? 'Training camp: players develop and age.',
+        sub: blocked ?? (short > 0 ? `Sign ${plural(short, 'more player')} by opening night.` : 'Training camp: players develop and age.'),
         primary: over,
         cmd: 'newSeason',
         disabled: blocked,

@@ -8,7 +8,7 @@ import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { curTeamSeason, fmtDate, standardRoster, teamPlayers } from '../../core/league/helpers';
-import { outFor } from '../../core/format';
+import { ordinal, outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
@@ -16,7 +16,7 @@ import { expiringPlayers } from '../../core/league/freeAgency';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { CAP, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
-import { flowActions, stillAlive } from '../flow';
+import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
 import { scoutTeam } from '../../core/ai/advisor';
@@ -81,7 +81,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const series = pv?.playoff;
   // on the team's colours every tag is the slab's glass; what's at stake is a solid one
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
-  if (live?.gid === g.gid) tags.push({ text: `Live · ${live.score[0]}-${live.score[1]}` });
+  if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
   if (series && series.wins + series.losses > 0)
     tags.push({
       text:
@@ -94,6 +94,10 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
   // (the missing plan is a link to the Plan tab: the one tag here with something to do)
   if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
+  // the trade deadline's last week: deals close at the end of its day
+  const toDeadline = league.phase === 'regular' ? league.tradeDeadlineDay - league.day : -1;
+  if (toDeadline >= 0 && toDeadline <= 7)
+    tags.push({ text: toDeadline === 0 ? 'Trade deadline today' : `Trade deadline in ${toDeadline === 1 ? '1 day' : `${toDeadline} days`}`, to: '/office/trade' });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
   // the staff's one line on them: who to watch, and where to hit them
   const staff = useLeagueMemo(() => {
@@ -204,7 +208,7 @@ function phaseCard(league: League): { over: string; title: string; line: string;
         line: !alive
           ? `Your season is over at ${ts.won}-${ts.lost}.`
           : league.phase === 'playin' && ts.playoffRound >= 1
-            ? 'You are in. Your first-round opponent comes out of the play-in.'
+            ? `You are in${ts.seed ? ` as the ${ordinal(ts.seed)} seed` : ''}. Your first-round opponent comes out of the play-in.`
             : 'Your next game is set once the round before it ends.',
         link: { to: '/league/playoffs', label: 'Bracket' },
       };

@@ -19,6 +19,7 @@ import { Empty, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
 import { matchupColors, teamLook } from '../teamColors';
 import { flowActions } from '../flow';
+import { canGoBack } from '../nav';
 import { skipChoices } from '../live/skip';
 import { Court, courtFloor } from '../live/Court';
 import { drawnPlayer } from '../live/drawn';
@@ -125,6 +126,14 @@ export default function Live() {
     const today = userGameOnDay(l, l.day);
     if (l.settings.pregame !== false && today) nav(`/games/${today.home === l.userTid ? today.away : today.home}?tab=preview`, { replace: true });
     else s.start();
+  };
+
+  // the way out mid-game: where the game is goes to the save, and it waits to be resumed (Continue,
+  // its Matchup page); Back to the screen before, or Today after a reload
+  const leave = () => {
+    void useStore.getState().flush();
+    if (canGoBack()) nav(-1);
+    else nav('/', { replace: true });
   };
 
   if (status === 'none') return <NoGame league={league} canSim={!!nextAction?.sim} next={nextAction?.sub} busy={simBusy} onNext={() => void nextGame()} />;
@@ -360,7 +369,7 @@ export default function Live() {
       </div>
 
       <div className="lv-bug" ref={setBugEl}>
-        <ScoreBug ticker={s.ticker} view={view} home={home} away={away} quarter={quarter} atBreak={atBreak} context={context} wpHome={wpHome}>
+        <ScoreBug ticker={s.ticker} view={view} home={home} away={away} quarter={quarter} atBreak={atBreak} context={context} wpHome={wpHome} onLeave={over ? undefined : leave}>
           {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
         </ScoreBug>
       </div>

@@ -22,6 +22,17 @@ export function decisionId(m: InboxMessage): string | null {
   return null;
 }
 
+/**
+ * Unread mail that needs the user: big news (`important`) or a decision still open. The rest is
+ * unread in the list but doesn't feed the top bar's badge or Today's count: a season of injury
+ * notes and check-ins would bury the two that matter.
+ */
+export const needsYou = (m: InboxMessage, open: ReadonlyMap<string, unknown>) => {
+  if (m.read) return false;
+  const d = decisionId(m);
+  return !!m.important || (!!d && open.has(d));
+};
+
 /** The agenda by id, worked out once per league change. */
 export function useAgendaById(league: League): Map<string, AgendaItem> {
   return useLeagueMemo(() => new Map(agenda(league).map((i) => [i.id, i])), [league]);
@@ -102,7 +113,11 @@ function settledLine(league: League, m: InboxMessage): string {
   if (m.proposal !== undefined) {
     const p = openProposals(league).find((x) => x.id === m.proposal);
     const err = p && proposalError(league, p);
-    return err ? `Can't be taken now: ${err}` : 'Settled: this offer is closed.';
+    if (err) return `Can't be taken now: ${err}`;
+    // gone from the open offers: taken (a trade with that team since), or turned down or lapsed
+    const from = Object.values(league.teams).find((t) => m.from.startsWith(`${t.region} ${t.name}`));
+    const took = from && (league.transactions ?? []).some((t) => t.kind === 'trade' && t.season === m.season && t.day >= m.day && t.tids.includes(me) && t.tids.includes(from.tid));
+    return took ? `Settled: you made a deal with the ${from.name}.` : 'This offer is no longer open.';
   }
   const pid = m.sheet ?? m.tenDay;
   const p = pid !== undefined ? league.players[pid] : undefined;

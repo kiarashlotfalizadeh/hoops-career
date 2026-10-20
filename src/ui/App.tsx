@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import {
   AlertCircle,
@@ -44,6 +44,8 @@ import { applyAccent } from './teamColors';
 import { haptic } from '../native';
 import { TABS, tabFor, type TabId } from './nav';
 import { AgendaList } from './components/Agenda';
+import { needsYou, useAgendaById } from './today/messages';
+import { agenda } from '../core/league/agenda';
 import { todayRoutes } from './routes/today';
 import { teamRoutes } from './routes/team';
 import { gamesRoutes } from './routes/games';
@@ -201,7 +203,9 @@ function TopBar() {
   const { pathname } = useLocation();
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
-  const unread = league.inbox.filter((m) => !m.read).length;
+  // the badge counts what needs him; the rest is unread in the list without a number on the bell
+  const decisions = useAgendaById(league);
+  const unread = league.inbox.filter((m) => needsYou(m, decisions)).length;
   // the standings scan every game: worked out again when a game is played, not on every edit
   const status = gamesMemo(statusLines, league, () => statusLine(league));
   const [searching, setSearching] = useState(false);
@@ -252,11 +256,11 @@ function TopBar() {
         <button className="iconbtn" onClick={() => setSearching(true)} aria-label="Search" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K /">
           <Search size={20} />
         </button>
-        {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
+        {/* named by the badge it shows, then the rest: "9+ need you (12). Inbox" */}
         <button className="iconbtn" onClick={() => nav('/inbox')} aria-current={pathname.startsWith('/inbox') ? 'page' : undefined}>
           <Bell size={20} aria-hidden="true" />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
-          <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
+          <span className="sr-only">{unread > 9 ? ` need you (${unread}). Inbox` : unread > 0 ? ' need you. Inbox' : 'Inbox'}</span>
         </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings" aria-current={pathname === '/settings' ? 'page' : undefined}>
           <SettingsIcon size={20} />
@@ -318,9 +322,12 @@ function ContinueBar() {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const go = (a: FlowAction, fromBar = false) => {
     haptic();
-    // a decision the league waits on: settle it right here (its row links to the whole screen)
+    // a decision the league waits on: settle it right here (its row links to the whole screen); one
+    // with nothing to settle in a sheet (sign players, find a job) opens its screen straight away
     if (a.agenda) {
-      setAgendaOpen(true);
+      const item = agenda(league).find((i) => i.id === a.agenda);
+      if (item && !item.suggestion && !item.choices?.length && item.to) nav(item.to);
+      else setAgendaOpen(true);
       return;
     }
     const live = liveInProgress(league);
@@ -511,6 +518,34 @@ function Toasts() {
 
 const scrollPositions = new Map<string, number>();
 
+/**
+ * A new screen takes focus when the control that opened it went with the old one (a link in a
+ * list, a row): screen readers start at the new screen, and Tab goes on from its top instead of
+ * from the document's. Focus that's still on the page (a tab in the bottom bar) stays put.
+ */
+function FocusOnNavigate() {
+  const { pathname } = useLocation();
+  // (not on launch: the first screen keeps the browser's own start)
+  const last = useRef(pathname);
+  useEffect(() => {
+    if (last.current === pathname) return;
+    last.current = pathname;
+    const lost = () => !document.activeElement || document.activeElement === document.body || !document.activeElement.isConnected;
+    // lazy screens render a moment later: try again once they have
+    const timers = [0, 250].map((ms) =>
+      setTimeout(() => {
+        if (!lost() || document.body.classList.contains('sheet-open')) return;
+        const main = document.querySelector<HTMLElement>('main');
+        if (!main) return;
+        if (!main.hasAttribute('tabindex')) main.tabIndex = -1;
+        main.focus({ preventScroll: true });
+      }, ms),
+    );
+    return () => timers.forEach(clearTimeout);
+  }, [pathname]);
+  return null;
+}
+
 /** New screens start at the top; Back/Forward return to where you were on that screen. */
 function ScrollTop() {
   const loc = useLocation();
@@ -566,6 +601,7 @@ export function App() {
     <HashRouter>
       <ErrorBoundary>
         <ScrollTop />
+        <FocusOnNavigate />
         <Boot>
           <Suspense fallback={<Waiting />}>
             <Routes>

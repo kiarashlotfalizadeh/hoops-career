@@ -150,7 +150,8 @@ body.sheet-open {
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
-input[type='range']:focus-visible {
+input[type='range']:focus-visible,
+main[tabindex='-1']:focus-visible {
   outline: none;
 }
 .card.flush :focus-visible {
