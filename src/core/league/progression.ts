@@ -3,7 +3,7 @@
 
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
-import { Rng, clamp } from '../random';
+import { Rng, clamp, hashString } from '../random';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, toDisplay } from '../ratings';
 import { followTendencies, playerAge, refreshPlayerDerived } from '../playerGen';
 import { seasonTotals } from './helpers';
@@ -103,7 +103,33 @@ export interface DevContext {
   coachingBudget: number; // 0..100
   practice: 'light' | 'normal' | 'intense';
   mpg: number;
+  /** League-wide mean of each attribute (ratingMeans): with it, a strong attribute fades faster with age than a weak one. */
+  means?: Partial<Record<RatingKey, number>>;
+  /** His hidden development arc through 25 (see trajectory): z-score, 0 without one. */
+  trajectory?: number;
 }
+
+/**
+ * Summer-to-summer pull of a young player's hidden arc (DevContext.trajectory) at 19-25: it fades
+ * out by 26. POT reads only his growth, so the arc is what scouting can't see. With every young
+ * player's course in his POT, the draft went to form: over 27 simulated classes the best player by
+ * his fourth season was a top-ten pick every time, picks after the tenth reached 85 by then once and
+ * one top-three pick in 80 fell short of 75. With the arc, picks 11-20 reach 85 about one class in four,
+ * the best of a class now and then comes from outside the top ten, and a top-three pick misses one
+ * time in twenty (still kinder than the NBA's lottery).
+ */
+const TRAJECTORY = [1.1, 1.1, 1.1, 1, 0.8, 0.5, 0.25];
+
+/** A player's hidden development arc in a league: a z-score from a stream of his own, the same every summer. */
+export const trajectory = (league: Pick<League, 'id'>, pid: number) => new Rng(hashString(`${league.id}:arc:${pid}`)).normal(0, 1);
+
+/**
+ * How much faster a strong attribute fades past his peak than an average one: (rating / league
+ * mean)^0.7, within 0.6-1.6. Athleticism and skill a player has more of have more to lose; with the
+ * same decline for everyone, a 95 lost about half the OVR a 75 did at 30-34 (the display scale's top
+ * is stretched), so stars held MVP form to 34-36 and the real league's MVPs averaged 31.
+ */
+const fadeScale = (rating: number, mean?: number) => (mean && mean > 0 ? clamp(Math.pow(rating / mean, 0.7), 0.6, 1.6) : 1);
 
 /** Apply `frac` of a year's development. Returns OVR change. */
 export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, frac = 1, scale?: League['ovrScale']): number {
@@ -111,7 +137,8 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   const before = scale ? toDisplay(ovrRaw(p.ratings), scale) : 0;
   const young = a <= 25;
   // a good or bad summer moves all skills together
-  const summer = rng.normal(young ? p.growth * 1.1 : p.growth * 0.4, young ? 1.7 : 1.2);
+  const arc = young ? (ctx.trajectory ?? 0) * TRAJECTORY[clamp(a - 19, 0, 6)] : 0;
+  const summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? 1.7 : 1.2);
   const coaching = ((ctx.coachDev - 50) / 50) * 0.7 + ((ctx.coachingBudget - 50) / 50) * 0.5;
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
   const minutes = young ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
@@ -126,6 +153,7 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   for (const k of RATING_KEYS) {
     const g = GROUP_OF[k];
     let d = curve(g, a);
+    if (d < 0) d *= fadeScale(p.ratings[k], ctx.means?.[k]);
     if (g !== 'hgt') {
       const isSkill = g !== 'athletic' && g !== 'end' && g !== 'str';
       d += summer * (isSkill ? SUMMER_SKILLS : SUMMER_BODY) + rng.normal(0, OWN_NOISE);
@@ -146,7 +174,7 @@ export function refreshDerived(league: League, p: Player) {
 }
 
 /** `statsSeason` is the season whose minutes count: the one just finished in the offseason, the current one in season. */
-function devContext(league: League, p: Player, statsSeason: number): DevContext {
+function devContext(league: League, p: Player, statsSeason: number, means: DevContext['means']): DevContext {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const st = seasonTotals(p, statsSeason);
   const mpg = st && st.gp ? st.min / st.gp : 0;
@@ -155,6 +183,8 @@ function devContext(league: League, p: Player, statsSeason: number): DevContext 
     coachingBudget: team ? team.budget.coaching : 40,
     practice: team ? team.practice : 'normal',
     mpg,
+    means,
+    trajectory: playerAge(p, league.season) <= 25 ? trajectory(league, p.pid) : 0,
   };
 }
 
@@ -240,9 +270,10 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
   const out: { pid: number; delta: number }[] = [];
   const before = new Map(Object.values(league.players).map((p) => [p.pid, p.ovr]));
   // (this summer's prospects are drafted or gone by now; next year's class arrives after this)
+  const means = ratingMeans(league);
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
-    develop(p, league.season, devContext(league, p, league.season - 1), rng, 0.8);
+    develop(p, league.season, devContext(league, p, league.season - 1, means), rng, 0.8);
   }
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
@@ -269,7 +300,7 @@ export function inSeasonProgression(league: League, rng: Rng): { pid: number; de
     const a = playerAge(p, league.season);
     if (a > 26) continue;
     const before = p.ovr;
-    develop(p, league.season, devContext(league, p, league.season), rng, 0.07);
+    develop(p, league.season, devContext(league, p, league.season, undefined), rng, 0.07);
     refreshDerived(league, p);
     if (p.ovr !== before) out.push({ pid: p.pid, delta: p.ovr - before });
   }

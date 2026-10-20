@@ -417,7 +417,8 @@ export function firingOdds(league: League, r: CoachRecord, resid: (season: numbe
   const before = whole.some((l) => l.season === season - 1) ? resid(season - 1).get(s.tid) : undefined;
   const short = -(before === undefined ? now : 0.6 * now + 0.4 * before) / SHORTFALL;
   const round = cur.round ?? -1;
-  let logit = -1.9 + short + 10 * Math.max(0, 0.4 - wp);
+  // (from -1.9: about 3-4 changes a summer, against the NBA's 6 or so a season)
+  let logit = -1.6 + short + 10 * Math.max(0, 0.4 - wp);
   if (league.teams[s.tid].strategy === 'contend' && round <= 1) logit += 0.5;
   if (lines.some((l) => l.round === 5 && l.season >= season - 2)) logit -= 2;
   const p = (first ? 0.5 : 1) / (1 + Math.exp(-logit));

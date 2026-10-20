@@ -9,6 +9,8 @@ import { standings } from '../src/core/league/standings';
 import { nextPick } from '../src/core/league/draft';
 import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeAgency';
 import { askingContract, releasePlayer } from '../src/core/league/contracts';
+import { takeJob } from '../src/core/league/jobs';
+import { aiMatchVerdict, restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from '../src/core/league/rfa';
 import { ovrRaw } from '../src/core/ratings';
 
 const seedIdx = process.argv.indexOf('--seed');
@@ -86,6 +88,12 @@ for (let s = 0; s < seasons; s++) {
   const injured = Object.values(league.players).filter((p) => p.injuryCount > 0).length;
   console.log(`Players injured at least once (cumulative): ${injured}; news items ${league.news.length}; games stored ${league.games.length}`);
 
+  // a fired coach takes the best job on offer (or the worst team's) so the league can go on
+  if (league.fired) {
+    const to = league.jobOffers?.offers[0]?.tid ?? [...st].sort((a, b) => a.pct - b.pct).find((r) => r.tid !== league.userTid)!.tid;
+    console.log(`Fired: takes over ${league.teams[to].abbrev}`);
+    takeJob(league, to);
+  }
   // offseason
   startDraft(league);
   let g2 = 0;
@@ -96,7 +104,11 @@ for (let s = 0; s < seasons; s++) {
     if (p.ovr >= 72) console.log('resign', playerName(p), userResign(league, p.pid, ask.amount, ask.years).reason);
   }
   startFreeAgency(league);
-  newSeason(league);
+  // an offer sheet on one of the user's restricted free agents waits for his call: decide it as his staff would
+  for (let k = 0; k < 5 && !newSeason(league); k++)
+    for (const p of restrictedFreeAgents(league, league.userTid).filter((x) => x.rfa!.sheet))
+      userDecideSheet(league, p.pid, aiMatchVerdict(league, p).match && !sheetDecisionBlocked(league, p.pid, true));
+  if (league.phase !== 'preseason') throw new Error(`The new season didn't start (phase ${league.phase})`);
   const sizes = league.teams.map((t) => teamPlayers(league, t.tid).length);
   const pays = league.teams.map((t) => payroll(league, t.tid) / 1000);
   console.log(

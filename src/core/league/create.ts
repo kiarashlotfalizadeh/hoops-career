@@ -13,12 +13,23 @@ import { cupState } from './cup';
 import { ensureFuturePicks, generateDraftClass } from './draft';
 import { ensureRotation } from './games';
 import { JERSEYS } from './jerseys';
-import { FA_PRICE_CUT_DAYS, askingContract, makeContract, marketSalary, preferredYears, releasePlayer, rookieContract, twoWaySalary, valueScore } from './contracts';
+import {
+  FA_PRICE_CUT_DAYS,
+  askingContract,
+  makeContract,
+  marketSalary,
+  preferredYears,
+  releaseDeadMoney,
+  releasePlayer,
+  rookieContract,
+  twoWaySalary,
+  valueScore,
+} from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './aiTrades';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
-import { injuryName } from '../format';
+import { injuryName, money } from '../format';
 
 export interface SeedPlayer {
   id: string;
@@ -416,10 +427,13 @@ export function createLeague(opts: CreateOpts): League {
   const over = standard.length - CAP.rosterMax;
   if (over > 0) {
     const cuts = cutOrder(league, standard).slice(0, over);
+    // what each cut leaves on the books: camp and minimum deals aren't guaranteed until opening night, the rest are
+    const dead = (p: Player) => releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
+    const cost = (p: Player) => (dead(p) > 0 ? `${money(dead(p))} in dead money` : 'free');
     addInbox(league, {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${standard.length} players on standard contracts into camp${twoWays ? ` (two-way deals don't count)` : ''}; the league allows ${CAP.rosterMax} on opening night. Camp and minimum deals aren't guaranteed until then, so cutting those costs nothing.\n\nMy suggestion, least value first: ${cuts.map((p) => `${playerName(p)} (${p.ovr})`).join(', ')}. One tap on Today.`,
+      body: `We carry ${standard.length} players on standard contracts into camp${twoWays ? ` (two-way deals don't count)` : ''}; the league allows ${CAP.rosterMax} on opening night. Camp and minimum deals aren't guaranteed until then, so cutting those costs nothing; anyone else's salary stays on our books as dead money.\n\nMy suggestion, least value first: ${cuts.map((p) => `${playerName(p)} (${p.ovr}, ${cost(p)})`).join(', ')}. One tap on Today.`,
       tone: 'alert',
       link: '/',
     });

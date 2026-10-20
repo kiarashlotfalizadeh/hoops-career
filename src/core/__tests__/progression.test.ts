@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { anchorRatings, develop } from '../league/progression';
+import { anchorRatings, develop, ratingMeans, trajectory } from '../league/progression';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw } from '../ratings';
 import { Rng } from '../random';
 import { standardRoster } from '../league/helpers';
@@ -50,6 +50,55 @@ describe('age curve', () => {
     const [a34, a37, a40] = [at(34), at(37), at(40)];
     expect(a37).toBeLessThan(a34 - 0.8);
     expect(a40).toBeLessThan(a37 - 0.8);
+  });
+});
+
+describe('aging stars', () => {
+  it('a strong attribute fades faster past the peak than a weak one, with the league means given', () => {
+    const l = league();
+    const means = ratingMeans(l);
+    const ctx = { coachDev: 50, coachingBudget: 50, practice: 'normal' as const, mpg: 25 };
+    const ps = Object.values(l.players).filter((p) => p.tid >= 0);
+    // the same players at 33, the summer's draws the same: athleticism lost against how much he had
+    const lost = (withMeans: boolean, strong: boolean) => {
+      const sel = ps.filter((p) => (strong ? p.ratings.ath > (means.ath ?? 0) + 10 : p.ratings.ath < (means.ath ?? 0) - 10));
+      return (
+        sel.reduce((sum, p) => {
+          const c = structuredClone(p);
+          c.bornYear = l.season - 33;
+          develop(c, l.season, withMeans ? { ...ctx, means } : ctx, new Rng(300 + p.pid), 1);
+          return sum + (p.ratings.ath - c.ratings.ath);
+        }, 0) / sel.length
+      );
+    };
+    expect(lost(true, true)).toBeGreaterThan(lost(false, true) + 0.2);
+    expect(lost(true, false)).toBeLessThan(lost(true, true) - 0.4);
+  });
+});
+
+describe('hidden development arc', () => {
+  it("is the same every summer for a player in a league, differs between leagues, and moves a young player's course", () => {
+    const l = league();
+    const p = Object.values(l.players).find((x) => x.tid >= 0)!;
+    expect(trajectory(l, p.pid)).toBe(trajectory(l, p.pid));
+    expect(trajectory({ id: 'other' }, p.pid)).not.toBe(trajectory(l, p.pid));
+    const arcs = Object.values(l.players).map((x) => trajectory(l, x.pid));
+    const m = arcs.reduce((a, b) => a + b, 0) / arcs.length;
+    expect(Math.abs(m)).toBeLessThan(0.1);
+    // three summers at 20-22 with a good arc against a poor one, everything else the same
+    const ctx = { coachDev: 50, coachingBudget: 50, practice: 'normal' as const, mpg: 25 };
+    const young = Object.values(l.players).filter((x) => x.tid >= 0);
+    const gain = (arc: number) =>
+      young.reduce((sum, x) => {
+        const c = structuredClone(x);
+        let d = 0;
+        for (let k = 0; k < 3; k++) {
+          c.bornYear = l.season - 20 - k;
+          d += develop(c, l.season, { ...ctx, trajectory: arc }, new Rng(700 + x.pid + k), 1, l.ovrScale);
+        }
+        return sum + d;
+      }, 0) / young.length;
+    expect(gain(1) - gain(-1)).toBeGreaterThan(3);
   });
 });
 

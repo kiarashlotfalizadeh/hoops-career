@@ -163,10 +163,11 @@ function check() {
     for (const r of [1, 2])
       for (let t = 0; t < 30; t++)
         if ((cnt.get(`${s}-${r}-${t}`) ?? 0) !== 1 && !(ph === 'draft' && s === season)) bad('pick count != 1', `${s} r${r} orig ${t}: ${cnt.get(`${s}-${r}-${t}`) ?? 0}`);
-  // AI trade offers: none outlives ten days, every asset is still with the team that would send it,
-  // and none asks for a player the user made untouchable (who must be on the user's team)
+  // AI trade offers: none outlives its longest stand (three weeks, for one whose mail is still
+  // unread: see P.OFFER_MAX_DAYS), every asset is still with the team that would send it, and none
+  // asks for a player the user made untouchable (who must be on the user's team)
   for (const p of L.proposals ?? []) {
-    if (p.season !== season || L.day - p.day > 10) bad('trade offer older than 10 days', `#${p.id} ${p.season} d${p.day}`);
+    if (p.season !== season || L.day - p.day > P.OFFER_MAX_DAYS) bad(`trade offer older than ${P.OFFER_MAX_DAYS} days`, `#${p.id} ${p.season} d${p.day}`);
     for (const side of [p.offer.a, p.offer.b]) {
       for (const pid of side.pids) if (L.players[pid]?.tid !== side.tid) bad('trade offer player not on his team', `#${p.id} ${nm(pid)}`);
       for (const d of side.dpids) if (L.draftPicks.find((x) => x.dpid === d)?.tid !== side.tid) bad('trade offer pick not with its team', `#${p.id} pick ${d}`);
@@ -858,7 +859,8 @@ function tenDayStep() {
   if (L.day === TD.tenDayOpenDay(L)) {
     if (std(u).length >= CAP.rosterMax) releaseStretched(std(u).sort((a, b) => C.valueScore(L, a) - C.valueScore(L, b))[0]);
     const p = H.freeAgents(L)
-      .filter((x) => TD.wantsTenDay(L, x, u) && !x.injury)
+      // (not one he released this season: the rule refuses him, and the check is whether the signing works)
+      .filter((x) => TD.wantsTenDay(L, x, u) && !x.injury && !C.releasedBy(L, x, u))
       .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
     if (!p) return;
     const r = TD.userTenDay(L, p.pid);

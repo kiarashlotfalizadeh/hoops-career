@@ -1,5 +1,6 @@
 import type { League, Player, PlayerStats, SeasonAwards } from '../types';
 import { composites } from '../ratings';
+import { playerAge } from '../playerGen';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
 
@@ -55,15 +56,24 @@ function awardPools(league: League, season = league.season) {
   };
 }
 
-/** MVP: production first; winning and on-court impact break ties (teammates share those, so they can't carry a sidekick). */
+/**
+ * MVP: production first, then winning and on-court impact (teammates share those, so they can't
+ * carry a sidekick). Voters want a contender: a 62-win team's star is worth about four points of
+ * game score more than a .500 team's, and under 49 wins (.600) each win costs twice as much. At a
+ * third of that, a sixth or eighth seed's scorer won it one season in three, and the average MVP's
+ * team won 53; now it's 55-57 and a top-two seed, as in the NBA.
+ */
 export function mvpScore(c: Cand) {
-  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 8 + c.pmPerGame * 0.15;
+  return c.gmsc * Math.pow(Math.min(1, c.gp / 70), 0.3) + c.winPct * 16 + 20 * Math.min(0, c.winPct - 0.6) + c.pmPerGame * 0.15;
 }
 
 /**
  * Defensive Player of the Year: defensive quality, rim protection and event production
  * (capped, so a gambler's steals or a backup's blocks can't carry it), how good his team's
- * defense was and how much it held up with him on the floor, and a real workload.
+ * defense was (within six points of the league's either way) and how much it held up with him on
+ * the floor, and a real workload. Voters look past a team's go-to scorer: past 20 points a game
+ * each point counts against him, or the best team's 30-point star took it most years (and the MVP
+ * with it one season in six, which the NBA has seen twice).
  */
 export function dpoyScore(c: Cand, ctx: DefContext = { lgDRtg: 0, teamDRtg: new Map() }) {
   const cm = composites(c.p.ratings);
@@ -78,9 +88,10 @@ export function dpoyScore(c: Cand, ctx: DefContext = { lgDRtg: 0, teamDRtg: new 
     1.2 * Math.min(per(c.s.blk), 3.5) +
     0.6 * Math.min(per(c.s.stl), 2.5) +
     0.1 * per(c.s.drb) +
-    0.5 * (ctx.lgDRtg - teamD) +
+    0.35 * clamp(ctx.lgDRtg - teamD, -6, 6) +
     0.2 * clamp(teamD - onD, -6, 6) +
-    0.15 * (Math.min(c.mpg, 36) - 30)
+    0.15 * (Math.min(c.mpg, 36) - 30) -
+    0.15 * Math.max(0, per(c.s.pts) - 20)
   );
 }
 
@@ -137,12 +148,16 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   const before = new Map<Cand, number>();
   for (const c of eligible) {
     const prev = seasonTotals(c.p, season - 1, false);
-    if (c.p.draft.year === season - 1 || !prev || prev.gp < 20) continue;
+    // a real role last season (12 minutes a game) to improve on, and a real one now: a bench
+    // player handed minutes isn't a breakout (by game score alone, players who went from 2 points a
+    // game in 3 minutes to 10 won it most years)
+    if (c.p.draft.year === season - 1 || !prev || prev.gp < 20 || prev.min / prev.gp < 12 || c.gmsc < 10) continue;
     const g = gameScore(prev) / prev.gp;
     // voters reward a breakout, not an established star bouncing back
     if (g < 15) before.set(c, g);
   }
-  const mip = rank([...before.keys()], (c) => c.gmsc - before.get(c)!);
+  // the jump, how good he became (winners score 17-26 a game), and youth: a veteran's career year rarely wins it
+  const mip = rank([...before.keys()], (c) => c.gmsc - before.get(c)! + 0.25 * c.gmsc - 0.4 * Math.max(0, playerAge(c.p, season) - 26));
   const coy = [...league.teams].sort((a, b) => {
     const imp = (tid: number) => {
       const t = league.teams[tid];

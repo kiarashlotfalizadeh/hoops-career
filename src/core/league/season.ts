@@ -381,7 +381,8 @@ function retirements(league: League, rng: Rng) {
     if (p.tid === RETIRED || p.tid === DRAFT_PROSPECT) continue;
     const a = playerAge(p, league.season);
     let prob = 0;
-    if (a >= 34) prob = 1 / (1 + Math.exp(-((a - 37.5) * 0.9 + (72 - p.ovr) * 0.18)));
+    // from 34, more each year and the more he has slipped; past 38 even a star rarely goes on
+    if (a >= 34) prob = 1 / (1 + Math.exp(-((a - 36.5) * 0.9 + 0.6 * Math.max(0, a - 38) + (72 - p.ovr) * 0.18)));
     else if (p.tid === FREE_AGENT) {
       // nobody wanted him: unsigned veterans and fringe players move on
       const playedThisSeason = p.stats.some((s) => s.season === league.season && s.gp > 0);
@@ -390,8 +391,10 @@ function retirements(league: League, rng: Rng) {
       else if (!playedThisSeason && p.ovr < 70) prob = 0.45;
       else if (!playedThisSeason && a >= 27) prob = 0.25;
     }
-    // players under contract rarely walk away
-    if (p.tid >= 0 && contractExp(p.contract) > league.season) prob *= 0.25;
+    // players under contract rarely walk away, though a veteran of 35 or more sometimes does (with a
+    // quarter of the odds at every age, players of 36 and over grew from 13 to 30 in the real league
+    // over twelve seasons, against the NBA's dozen or so)
+    if (p.tid >= 0 && contractExp(p.contract) > league.season) prob *= a >= 35 ? 0.4 : 0.25;
     if (rng.chance(prob)) {
       const wasTid = p.tid;
       if (p.tid >= 0) leaveTeam(league.teams[p.tid], p.pid);
