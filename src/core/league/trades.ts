@@ -164,7 +164,16 @@ interface Outlook {
   sum: number;
   /** What the player taken at slot `k` of the round is worth in a trade today. */
   at: (k: number) => number;
+  /** Its value under each top-N protection (see ownValue), kept as asked for while the outlook is cached. */
+  own?: Map<number, number>;
 }
+
+/**
+ * Outlooks of picks whose slot isn't set, by draft, round and the record they're projected from:
+ * kept for a day, a phase and a class as classProspects keeps it (the slots' values depend on
+ * nothing else), so a deal search prices each pick once instead of on every look.
+ */
+const outlookCache = new WeakMap<League, { key: string; byPick: Map<string, Outlook> }>();
 
 /**
  * A pick's outlook: what the player taken there would be worth once drafted, his rookie-scale
@@ -180,7 +189,7 @@ function outlook(league: League, dp: DraftPick): Outlook {
   const years = Math.max(0, yearsOut + (dateToDay(league.season, 5, 25) - league.day) / 365);
   const discount = years <= 1 ? 1 - 0.15 * years : 0.85 * Math.pow(0.93, years - 1);
   const known = dp.pick !== undefined;
-  const at = (inRound: number) => {
+  const slot = (inRound: number) => {
     const overall = (dp.round - 1) * 30 + inRound;
     // during the draft the next pick gets the best prospect left
     const idx = known ? league.draftPicks.filter((d) => d.season === dp.season && d.pick !== undefined && (d.round - 1) * 30 + d.pick < overall).length : overall - 1;
@@ -191,13 +200,22 @@ function outlook(league: League, dp: DraftPick): Outlook {
   };
   if (known) {
     const w = Array.from({ length: Math.max(30, dp.pick!) }, (_, i) => (i === dp.pick! - 1 ? 1 : 0));
-    return { w, sum: 1, at };
+    return { w, sum: 1, at: slot };
   }
   const orig = league.teams[dp.originalTid];
   const ts = curTeamSeason(league, orig.tid);
   const games = ts.won + ts.lost;
   const prev = orig.seasons.find((s) => s.season === league.season - 1);
   const wp = games >= 15 ? winPct(ts) : prev ? winPct(prev) * 0.6 + 0.2 : 0.5;
+  // (classProspects' key: one class per entry)
+  const key = `${league.season}:${league.phase}:${league.day}:${league.draftPicks.length}`;
+  let hit = outlookCache.get(league);
+  if (hit?.key !== key) outlookCache.set(league, (hit = { key, byPick: new Map() }));
+  const pickKey = `${dp.season}:${dp.round}:${games}:${wp}`;
+  const cached = hit.byPick.get(pickKey);
+  if (cached) return cached;
+  const values: number[] = [];
+  const at = (k: number) => (values[k - 1] ??= slot(k));
   // projected slot in the round (worst record = 1), regressing toward the middle for future years
   const keep = Math.pow(0.75, Math.max(0, yearsOut));
   const center = (1 + clamp(wp, 0, 1) * 29) * keep + 15.5 * (1 - keep);
@@ -208,7 +226,9 @@ function outlook(league: League, dp: DraftPick): Outlook {
     w.push(Math.exp(-((k - center) ** 2) / (2 * sd * sd)));
     sum += w[k - 1];
   }
-  return { w, sum, at };
+  const o = { w, sum, at, own: new Map<number, number>() };
+  hit.byPick.set(pickKey, o);
+  return o;
 }
 
 /** The protection a pick carries for its holder: top-N, or 0 (back with its original team it has nothing to protect). */
@@ -218,9 +238,13 @@ const protectionOf = (dp: DraftPick) => (dp.protection && dp.tid !== dp.original
 function ownValue(league: League, dp: DraftPick, prot = protectionOf(dp)): number {
   const o = outlook(league, dp);
   if (dp.pick !== undefined) return dp.pick <= prot ? 0 : o.at(dp.pick);
+  const hit = o.own?.get(prot);
+  if (hit !== undefined) return hit;
   let total = 0;
   for (let k = 1; k <= 30; k++) if (k > prot) total += o.w[k - 1] * o.at(k);
-  return total / o.sum;
+  const value = total / o.sum;
+  o.own?.set(prot, value);
+  return value;
 }
 
 /** The pick holding the right to swap for `dp`, if `dp` is subject to a swap. */

@@ -26,14 +26,26 @@ type Criterion = (e: Entry, group: Entry[]) => number;
 const EPS = 1e-9;
 const frac = (w: number, l: number) => (w + l ? w / (w + l) : 0);
 
+/** Each season's head-to-head counts, by the results list they were read from (results are only ever added to a list, so its length and last game tell if it changed). */
+const beatCache = new WeakMap<League['games'], Map<number, { key: string; beat: Map<string, number> }>>();
+
 /** Regular-season wins of one team over another this season, from the stored results. */
 function winsOver(league: League, season: number) {
-  const beat = new Map<string, number>();
-  for (const g of league.games) {
-    if (g.type !== 'regular' || g.season !== season) continue;
-    const [w, l] = g.home.pts > g.away.pts ? [g.home.tid, g.away.tid] : [g.away.tid, g.home.tid];
-    beat.set(`${w}-${l}`, (beat.get(`${w}-${l}`) ?? 0) + 1);
+  const games = league.games;
+  const key = `${games.length}:${games[games.length - 1]?.gid}`;
+  let seasons = beatCache.get(games);
+  if (!seasons) beatCache.set(games, (seasons = new Map()));
+  let hit = seasons.get(season);
+  if (hit?.key !== key) {
+    const beat = new Map<string, number>();
+    for (const g of games) {
+      if (g.type !== 'regular' || g.season !== season) continue;
+      const [w, l] = g.home.pts > g.away.pts ? [g.home.tid, g.away.tid] : [g.away.tid, g.home.tid];
+      beat.set(`${w}-${l}`, (beat.get(`${w}-${l}`) ?? 0) + 1);
+    }
+    seasons.set(season, (hit = { key, beat }));
   }
+  const { beat } = hit;
   return (a: number, b: number) => beat.get(`${a}-${b}`) ?? 0;
 }
 
