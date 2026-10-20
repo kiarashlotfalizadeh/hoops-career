@@ -32,7 +32,7 @@ export function AwardsTab({ league }: { league: League }) {
   const isCurrent = season === league.season;
   let status = '';
   if (decided) status = isCurrent && (league.phase === 'playin' || league.phase === 'playoffs') ? 'Finals MVP to come' : 'Final';
-  else if (isCurrent) status = started ? 'The races' : 'Season not started';
+  else if (isCurrent) status = started ? 'Award races so far' : 'Season not started';
   // the season's awards, its All-NBA (and Defense, Rookie) teams once named, its All-Star weekend once picked
   const views: { id: AwardsView; label: string }[] = [
     { id: 'awards', label: 'Awards' },
@@ -140,10 +140,13 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
                 )}
                 {mvp && (
                   <>
-                    {aw.cupRunnerUp !== undefined ? ' · ' : ''}MVP{' '}
-                    <Link to={`/player/${mvp.pid}`} className="lg-name-link">
-                      {playerName(mvp)}
-                    </Link>
+                    {aw.cupRunnerUp !== undefined ? ' · ' : ''}
+                    <span className="nowrap">
+                      MVP{' '}
+                      <Link to={`/player/${mvp.pid}`} className="lg-name-link">
+                        {playerName(mvp)}
+                      </Link>
+                    </span>
                   </>
                 )}
               </span>
@@ -392,7 +395,8 @@ function RaceCard({
           {icon} {title}
         </h3>
       }
-      right={<span className="lg-race-key">Score, #1 = 100{right}</span>}
+      // the scale is named once, on the first ladder, with its Help
+      right={right ? <span className="lg-race-key">Score, #1 = 100{right}</span> : undefined}
     >
       <div className="card flush list">
         {list.length === 0 ? (
@@ -411,7 +415,7 @@ function RaceCard({
                   {/* (wraps: on a narrow phone the last number was cut off) */}
                   <span className="sub">
                     {teamAbbrev(league, c.tid)}
-                    {ts ? `\u00a0(${ts.won}-${ts.lost})` : ''} · {statLine(c.p, league.season, kind)}
+                    {ts ? `\u00a0${ts.won}-${ts.lost}` : ''} · {statLine(c.p, league.season, kind)}
                   </span>
                 </span>
                 <span className="lg-race-v num">

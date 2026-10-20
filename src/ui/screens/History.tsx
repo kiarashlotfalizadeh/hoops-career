@@ -1,7 +1,7 @@
 // League → History (/league/history): the seasons and their champions, each franchise's history
 // (?tid=), the record book, the Hall of Fame and the coaches. A season's winners in full are on the
 // Awards tab; this is the league's memory.
-import { useState, type CSSProperties } from 'react';
+import { Fragment, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight, Crown } from 'lucide-react';
 import type { League, Player } from '../../core/types';
@@ -78,11 +78,12 @@ function Seasons({ league }: { league: League }) {
               {/* each award whole, wrapping between them rather than cutting a name short */}
               {winners.length > 0 && (
                 <span className="sub">
+                  {/* (the separator outside the unbreakable award: a line can break after it) */}
                   {winners.map((w, i) => (
-                    <span key={i} className="nowrap">
+                    <Fragment key={i}>
                       {i > 0 ? ' · ' : ''}
-                      {w}
-                    </span>
+                      <span className="nowrap">{w}</span>
+                    </Fragment>
                   ))}
                 </span>
               )}
@@ -198,6 +199,7 @@ function HallOfFame({ league }: { league: League }) {
           </>
         )}
       </Section>
+      {hof.length + retired.length > 0 && <div className="lg-note">Regular-season careers, figures per game; the badge is his peak OVR.</div>}
     </>
   );
 }
@@ -228,15 +230,14 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
         </span>
         <span className="sub">
           {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp.toLocaleString('en-US')} game{c.gp === 1 ? '' : 's'}
-          {tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
+          {tracked > from ? ` since ${seasonLabel(tracked)}` : ''} · {Math.round(c.pts).toLocaleString('en-US')} points
         </span>
         <span className="line num">
           {(
             [
-              [c.gp ? (c.pts / c.gp).toFixed(1) : '—', 'ppg'],
-              [c.gp ? (c.reb / c.gp).toFixed(1) : '—', 'rpg'],
-              [c.gp ? (c.ast / c.gp).toFixed(1) : '—', 'apg'],
-              [Math.round(c.pts).toLocaleString(), 'pts'],
+              [c.gp ? (c.pts / c.gp).toFixed(1) : '—', 'PTS'],
+              [c.gp ? (c.reb / c.gp).toFixed(1) : '—', 'REB'],
+              [c.gp ? (c.ast / c.gp).toFixed(1) : '—', 'AST'],
             ] as const
           ).map(([v, k]) => (
             <span key={k}>

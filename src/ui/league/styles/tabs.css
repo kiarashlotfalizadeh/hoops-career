@@ -26,27 +26,37 @@
 .lg-tabs .seg.tabs button.on::before {
   bottom: 0;
 }
-.lg-tabs::before,
-.lg-tabs::after {
-  content: '';
+/* more tabs past an edge: the edge fades out under a chevron that pages the row along */
+.lg-tabs-more {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 32px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s;
   z-index: 1;
+  width: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--text-2);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-fast, 0.15s) ease;
 }
-.lg-tabs::before {
+.lg-tabs-more.l {
   left: 0;
-  background: linear-gradient(90deg, var(--bg) 20%, transparent);
+  justify-content: flex-start;
+  padding-left: max(4px, calc(var(--gut-l) - 12px));
+  background: linear-gradient(90deg, var(--bg) 45%, transparent);
 }
-.lg-tabs::after {
+.lg-tabs-more.r {
   right: 0;
-  background: linear-gradient(270deg, var(--bg) 20%, transparent);
+  justify-content: flex-end;
+  padding-right: max(4px, calc(var(--gut-r) - 12px));
+  background: linear-gradient(270deg, var(--bg) 45%, transparent);
 }
-.lg-tabs.fl::before,
-.lg-tabs.fr::after {
+.lg-tabs.fl .lg-tabs-more.l,
+.lg-tabs.fr .lg-tabs-more.r {
   opacity: 1;
+  pointer-events: auto;
+}
+.lg-tabs-more:active {
+  color: var(--text);
 }

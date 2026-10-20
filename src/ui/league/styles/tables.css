@@ -4,16 +4,16 @@
 .lg-tbl-wrap {
   position: relative;
 }
-/* more figures to the right: the table's edge fades out */
+/* more figures to the right: the table's edge fades out (narrow, so the last whole column stays clear) */
 .lg-tbl-wrap::after {
   content: '';
   position: absolute;
   top: 1px;
   right: 1px;
   bottom: 1px;
-  width: 28px;
+  width: 14px;
   border-radius: 0 var(--radius) var(--radius) 0;
-  background: linear-gradient(270deg, var(--raised) 15%, transparent);
+  background: linear-gradient(270deg, var(--raised) 10%, transparent);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
@@ -37,7 +37,7 @@
 .lg-tbl-row {
   display: grid;
   /* one width for the team column in every table, so the figures line up from one to the next */
-  grid-template-columns: 174px var(--cols);
+  grid-template-columns: 170px var(--cols);
   align-items: center;
   column-gap: 4px;
   min-height: 46px;
@@ -61,7 +61,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   padding: 0 6px 0 8px;
   background: var(--raised);
   transition: box-shadow 0.15s;
@@ -84,14 +84,15 @@
 }
 .lg-tbl-row.head .lead {
   background: var(--bg-2);
-  padding-left: 35px;
+  /* the label starts over the team marks */
+  padding-left: 32px;
 }
 .lg-tbl-row.head + .lg-tbl-row {
   border-top: none;
 }
 .lg-tbl-row .rk {
   flex: none;
-  width: 20px;
+  width: 18px;
   text-align: right;
   font-family: var(--display);
   font-stretch: var(--display-w);
@@ -110,6 +111,12 @@
 }
 .lg-tbl-row .lead > :not(.nm) {
   flex: none;
+}
+/* the narrowest phones: the team column gives up some room so a third figure still shows whole */
+@media (max-width: 359px) {
+  .lg-tbl-row {
+    grid-template-columns: 150px var(--cols);
+  }
 }
 @media (min-width: 640px) {
   .lg-tbl-in {
@@ -174,11 +181,33 @@ a.lg-tbl-row:active,
 a.lg-tbl-row:active .lead {
   background: var(--surface);
 }
-/* the play-in and lottery lines: named at the left, where the team column stays */
-.lg-cut.lg-tbl-cut span {
-  left: 40px;
-  right: auto;
+/* the play-in and lottery lines: a dashed rule of their own between two places, named at the left
+   over the team marks (and staying there while the figures scroll) */
+.lg-tbl-cut {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 20px;
+  padding-right: 12px;
+}
+.lg-tbl-cut::after {
+  content: '';
+  flex: 1;
+  border-top: 1px dashed var(--line-3);
+}
+.lg-tbl-cut span {
+  position: sticky;
+  left: 0;
   z-index: 2;
+  padding: 0 2px 0 32px;
+  background: var(--raised);
+  font-size: 9.5px;
+  line-height: 20px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 /* the clinch marks' key, on the toolbar line */
 .lg-keys {

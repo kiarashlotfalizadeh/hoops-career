@@ -18,6 +18,7 @@ import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
+import { plural } from '../format';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -443,8 +444,18 @@ function notableNews(league: League, res: GameResult) {
       if (bl.pts >= 45 || (tdbl && bl.pts >= 20 && (bl.orb + bl.drb >= 12 || bl.ast >= 12))) {
         const team = league.teams[side.tid];
         const opp = league.teams[side === res.home ? res.away.tid : res.home.tid];
-        const line = `${bl.pts} pts, ${bl.orb + bl.drb} reb, ${bl.ast} ast`;
-        addNews(league, { kind: 'milestone', text: `${playerName(p)} (${team.abbrev}) put up ${line} vs ${opp.abbrev}.`, tids: [team.tid], pids: [p.pid] });
+        // in words, as a story reads: a triple-double named as one, a scoring night led by its points
+        const reb = bl.orb + bl.drb;
+        const text = tdbl
+          ? `${playerName(p)} (${team.abbrev}) had a triple-double vs ${opp.abbrev}: ${[
+              `${bl.pts} points`,
+              `${reb} rebounds`,
+              `${bl.ast} assists`,
+              ...(bl.stl >= 10 ? [`${bl.stl} steals`] : []),
+              ...(bl.blk >= 10 ? [`${bl.blk} blocks`] : []),
+            ].join(', ')}.`
+          : `${playerName(p)} (${team.abbrev}) scored ${bl.pts} vs ${opp.abbrev}, with ${plural(reb, 'rebound')} and ${plural(bl.ast, 'assist')}.`;
+        addNews(league, { kind: 'milestone', text, tids: [team.tid], pids: [p.pid] });
       }
     }
   }

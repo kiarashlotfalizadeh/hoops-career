@@ -10,6 +10,7 @@ import { Chips, StatTable, type Col } from '../components/ui';
 import { RatingKey, ratingCols } from '../ratingCols';
 import { OvrKey } from '../components/OvrKey';
 import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from './shared';
+import { plural } from '../../core/format';
 
 const PAGE = 100;
 
@@ -98,9 +99,7 @@ export function RatingsTab({ league }: { league: League }) {
               <ChevronDown size={15} /> Show {Math.min(PAGE, filtered.length - limit)} more
             </button>
           )}
-          <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · current ratings
-          </div>
+          <div className="lg-note">{filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : plural(filtered.length, 'player')} · current ratings</div>
           <div className="lg-note row between wrap top">
             <RatingKey />
             <OvrKey />

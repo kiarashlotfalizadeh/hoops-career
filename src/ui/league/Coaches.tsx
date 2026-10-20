@@ -12,6 +12,7 @@ import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecor
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
 import { OutcomeTag, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
+import { plural } from '../../core/format';
 
 interface Row {
   r: CoachRecord;
@@ -34,8 +35,6 @@ function jobSpan(league: League, j: CoachTotals & { stint: CoachStint }) {
   if (!j.stint.to) return first > league.season ? `from ${seasonLabel(first)}` : seasonRange(first, first, true);
   return seasonRange(first, j.lines[j.lines.length - 1]?.season ?? first, false);
 }
-
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** A career's figures in a row: seasons, record (with its win %), playoff runs and titles. */
 function CareerLine({ k }: { k: CoachCareer }) {

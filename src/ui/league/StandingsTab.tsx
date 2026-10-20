@@ -9,6 +9,7 @@ import { f0, f1, signed, teamRatings } from '../stats';
 import { Toolbar, confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
 import { OddsView, LotteryView } from './OddsView';
 import { TableCut, TeamRow, TeamTable } from './Table';
+import { plural } from '../../core/format';
 
 type View = 'E' | 'W' | 'league' | 'power' | 'odds' | 'lottery';
 
@@ -94,7 +95,7 @@ function rowDetails(r: StandingRow, conf: boolean) {
   const cols = [
     conf ? `${ordinal(r.confRank)} in the ${confName(r.conf)}` : `${ordinal(r.leagueRank)} in the league`,
     `${r.won}-${r.lost}`,
-    r.gb ? `${r.gb} game${r.gb === 1 ? '' : 's'} back` : '',
+    r.gb ? `${plural(r.gb, 'game')} back` : '',
     `${r.lastTen} in the last 10`,
     r.streak ? `${r.streak > 0 ? 'won' : 'lost'} ${Math.abs(r.streak) === 1 ? 'the last game' : `${Math.abs(r.streak)} straight`}` : '',
     `${r.home} at home`,
@@ -110,8 +111,9 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    // (the streak before the last ten, so a phone shows it without a swipe; "Last 10" so "L10" can't read as a streak)
-    <TeamTable cols={[50, 38, 32, 46, 44, 44, 44, 44]} head={['W-L', 'GB', 'Strk', 'Last 10', 'Home', 'Away', 'Conf', 'Diff']}>
+    // (the streak before the last ten, and the first four columns sized to sit whole beside the team on a
+    // phone, so it shows them without a swipe; "Last 10" so "L10" can't read as a streak)
+    <TeamTable cols={[42, 32, 34, 50, 44, 44, 44, 44]} head={['W-L', 'GB', 'Strk', 'Last 10', 'Home', 'Away', 'Conf', 'Diff']}>
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
         const played = r.won + r.lost > 0;
@@ -209,19 +211,20 @@ function PowerRankings({ league }: { league: League }) {
         )}
       </Toolbar>
       <TeamTable
-        cols={[48, 46, 48, 48, 36]}
+        // (roster strength third, in a phone's view without a swipe: it orders the table until games are played)
+        cols={[48, 50, 52, 52, 48]}
         head={[
           <span key="n" className="as-is">
             Net
           </span>,
           'W-L',
+          'Tal',
           <span key="o" className="as-is">
             ORtg
           </span>,
           <span key="d" className="as-is">
             DRtg
           </span>,
-          'Tal',
         ]}
       >
         {list.map((x, i) => (
@@ -240,9 +243,9 @@ function PowerRankings({ league }: { league: League }) {
             <span aria-hidden="true">
               {x.ts.won}-{x.ts.lost}
             </span>
+            <span aria-hidden="true">{f0(x.talent)}</span>
             <span aria-hidden="true">{x.gp ? f1(x.tr.ortg) : '—'}</span>
             <span aria-hidden="true">{x.gp ? f1(x.tr.drtg) : '—'}</span>
-            <span aria-hidden="true">{f0(x.talent)}</span>
           </TeamRow>
         ))}
       </TeamTable>

@@ -78,10 +78,10 @@ export function TeamRow({
   );
 }
 
-/** A line across the table between two places (the play-in, the lottery), named at its left. */
+/** A dashed line across the table between two places (the play-in, the lottery), named at its left. */
 export function TableCut({ label }: { label: string }) {
   return (
-    <div className="lg-cut lg-tbl-cut" aria-hidden="true">
+    <div className="lg-tbl-cut" aria-hidden="true">
       <span>{label}</span>
     </div>
   );

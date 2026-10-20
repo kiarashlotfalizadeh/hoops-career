@@ -9,6 +9,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Segmented } from '../components/ui';
 import { TitleSlab, Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
+import { plural } from '../../core/format';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
 function dateRange(league: League, a: number, b: number) {
@@ -58,7 +59,7 @@ export function CupTab({ league }: { league: League }) {
       : cup.seeds
         ? `Knockouts · ${koRound}`
         : projected
-          ? `Group stage · ${groupGamesLeft} game${groupGamesLeft === 1 ? '' : 's'} left`
+          ? `Group stage · ${plural(groupGamesLeft, 'game')} left`
           : `Groups start ${fmtDate(league.season, cup.nights[0])}`;
 
   return (

@@ -14,6 +14,9 @@ import { ordinal } from '../../stats';
 import { OutcomeTag, seasonOutcome } from '../shared';
 import { useBack } from '../../nav';
 import { slabVars } from '../../teamColors';
+// the roster rows (team/RosterList, RosterViews) are styled by the Team section's sheet, which only
+// the Team tab loads: a team's page opened straight from the League tab needs it too
+import '../../screens/team.css';
 
 /** The team's slab, in its colours: who they are and where they stand. */
 export function TeamHero({ league, tid, onEdit }: { league: League; tid: number; onEdit?: () => void }) {

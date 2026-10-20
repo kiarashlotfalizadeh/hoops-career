@@ -12,6 +12,7 @@ import { rosterNames } from '../stats';
 import { RetiredBanners } from './RetiredBanners';
 import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
+import { plural } from '../../core/format';
 
 /** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
 export function FranchiseFigures({ league, tid }: { league: League; tid: number }) {
@@ -120,7 +121,7 @@ function FranchiseLeaders({ league, tid }: { league: League; tid: number }) {
               <span className="who">
                 <span className="nm">{name(r.p.pid)}</span>
                 <span className="sub">
-                  {r.seasons} season{r.seasons === 1 ? '' : 's'} here
+                  {plural(r.seasons, 'season')} here
                   {r.p.tid === tid ? ' · active' : r.p.tid === RETIRED ? ' · retired' : ''}
                 </span>
               </span>

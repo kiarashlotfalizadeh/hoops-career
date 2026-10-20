@@ -33,6 +33,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Sheet } from '../components/ui';
 import { f1, p1, rosterNames } from '../stats';
 import { teamPath, useQueryParam } from './shared';
+import { plural } from '../../core/format';
 
 const SEASON_STATS: SeasonStat[] = ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'pts', 'tpm', 'fg', 'tp', 'ft'];
 const TEAM_SEASON_STATS: TeamSeasonStat[] = ['wins', 'losses', 'net', 'ortg', 'drtg', 'ppg'];
@@ -70,7 +71,8 @@ function listNames(league: League, pids: number[]): (pid: number, frozen?: strin
 
 const when = (league: League, m: { season: number; day: number; opp: number }) =>
   `vs ${league.teams[m.opp]?.abbrev ?? '?'} · ${fmtDate(m.season, m.day, { month: 'short', day: 'numeric', year: 'numeric' })}`;
-const fmtSeason = (stat: SeasonStat, v: number) => (stat === 'fg' || stat === 'tp' || stat === 'ft' ? p1(v) : stat === 'pts' || stat === 'tpm' ? String(Math.round(v)) : f1(v));
+const fmtSeason = (stat: SeasonStat, v: number) =>
+  stat === 'fg' || stat === 'tp' || stat === 'ft' ? p1(v) : stat === 'pts' || stat === 'tpm' ? Math.round(v).toLocaleString('en-US') : f1(v);
 const fmtTeam = (stat: TeamSeasonStat, v: number) => (stat === 'wins' || stat === 'losses' ? '' : stat === 'net' ? `${v > 0 ? '+' : ''}${f1(v)}` : f1(v));
 
 function Who({ tid, name, decorative }: { tid?: number; name: ReactNode; decorative?: boolean }) {
@@ -138,7 +140,7 @@ function useBook(league: League, tid: number | undefined, post: boolean) {
           key: `${r.pid}-${r.season}`,
           to: league.players[r.pid] ? `/player/${r.pid}` : undefined,
           who: <Who tid={r.tid} name={name(r.pid)} />,
-          sub: `${seasonLabel(r.season)} · ${r.gp} game${r.gp === 1 ? '' : 's'}${r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}`,
+          sub: `${seasonLabel(r.season)} · ${plural(r.gp, 'game')}${r.teams ? ` · ${r.teams.map((t) => league.teams[t]?.abbrev ?? '?').join('/')}` : ''}`,
           v: fmtSeason(stat, r.v),
         })),
       };
@@ -176,7 +178,7 @@ function useBook(league: League, tid: number | undefined, post: boolean) {
           key: String(r.pid),
           to: league.players[r.pid] ? `/player/${r.pid}` : undefined,
           who: <Who name={name(r.pid)} />,
-          sub: `${r.seasons} season${r.seasons === 1 ? '' : 's'}${r.active ? '' : ' · retired'}`,
+          sub: `${plural(r.seasons, 'season')}${r.active ? '' : ' · retired'}`,
           v: Math.round(r.v).toLocaleString('en-US'),
         })),
       };
@@ -198,9 +200,10 @@ export function RecordBook({ league }: { league: League }) {
     ['Team season', book.team, 'Starts when a regular season is over.'],
     [tid !== undefined ? 'With the franchise' : 'Career', book.career, 'No games yet.'],
   ];
+  const bare = sections.every(([, recs]) => recs.every((r) => !r.lines.length));
   return (
     <>
-      <div className="lg-sub">
+      <div className="lg-sub lg-nowrap lg-book-sub">
         <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
           <option value="league">League records</option>
           {[...league.teams]
@@ -216,8 +219,10 @@ export function RecordBook({ league }: { league: League }) {
           <option value="post">Playoffs</option>
         </select>
       </div>
+      {/* a book with nothing in it yet is one line, not four empty sections */}
+      {bare && <div className="card empty">{post === 'post' ? 'No playoff games in the book yet.' : 'No games in the book yet: records land here as they are set.'}</div>}
       {sections.map(([title, recs, empty], i) =>
-        recs.length ? (
+        recs.length && !bare ? (
           <Section
             key={title}
             title={title}

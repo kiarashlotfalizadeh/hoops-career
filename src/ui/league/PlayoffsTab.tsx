@@ -86,6 +86,7 @@ export function PlayoffsTab({ league }: { league: League }) {
   const phase: Phase =
     champ !== undefined ? 'done' : league.playoffs.length ? 'live' : league.playIn.length ? 'playin' : league.phase === 'regular' && played ? 'projected' : 'none';
   const slots = useLeagueMemo(() => ({ E: confSlots(league, 'E'), W: confSlots(league, 'W') }), [league]);
+  const playInDone = phase === 'live' || phase === 'done';
   const lastAw = [...league.awards].filter((a) => a.champion !== undefined).sort((a, b) => b.season - a.season)[0];
 
   if (phase === 'none') {
@@ -114,6 +115,7 @@ export function PlayoffsTab({ league }: { league: League }) {
           season={league.season}
           tid={champ}
           runnerUp={finals ? (finals.high === champ ? finals.low : finals.high) : undefined}
+          result={finals ? `${Math.max(finals.highWins, finals.lowWins)}-${Math.min(finals.highWins, finals.lowWins)}` : undefined}
           fmvp={league.awards.find((a) => a.season === league.season)?.finalsMvp}
         />
       )}
@@ -137,27 +139,45 @@ export function PlayoffsTab({ league }: { league: League }) {
                 <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
               </div>
             </Section>
-            <PlayIn league={league} conf={c} projected={phase === 'projected'} />
+            {!playInDone && <PlayIn league={league} conf={c} projected={phase === 'projected'} />}
           </div>
         ))}
       </div>
       <FinalsCard league={league} finals={finals} onOpen={setOpen} />
+      {/* once the bracket is set, the play-in is its prologue: under the Finals */}
+      {playInDone && (
+        <div className="bk-panel-wrap">
+          {confOrder(conf).map((c) => (
+            <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+              <PlayIn league={league} conf={c} projected={false} />
+            </div>
+          ))}
+        </div>
+      )}
       <SeriesSheet league={league} series={open} onClose={() => setOpen(null)} />
     </>
   );
 }
 
-function ChampionSlab({ league, season, tid, runnerUp, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; fmvp?: number }) {
+function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; result?: string; fmvp?: number }) {
   const p = fmvp !== undefined ? league.players[fmvp] : undefined;
   return (
     <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} champions`}>
-      {runnerUp !== undefined && <>def. {league.teams[runnerUp].name}</>}
+      {runnerUp !== undefined && (
+        <span className="nowrap">
+          def. {league.teams[runnerUp].name}
+          {result ? ` ${result}` : ''}
+        </span>
+      )}
       {p && (
         <>
-          {runnerUp !== undefined ? ' · ' : ''}Finals MVP{' '}
-          <Link to={`/player/${p.pid}`} className="lg-slab-link">
-            {playerName(p)}
-          </Link>
+          {runnerUp !== undefined ? ' · ' : ''}
+          <span className="nowrap">
+            Finals MVP{' '}
+            <Link to={`/player/${p.pid}`} className="lg-slab-link">
+              {playerName(p)}
+            </Link>
+          </span>
         </>
       )}
     </TitleSlab>
@@ -310,7 +330,7 @@ function PlayIn({ league, conf, projected }: { league: League; conf: 'E' | 'W'; 
   const META: Record<string, [string, string]> = {
     '78': ['7 vs 8', 'Winner: 7 seed'],
     '910': ['9 vs 10', 'Loser is out'],
-    '8': ['For the 8 seed', 'Loser 7/8 vs winner 9/10'],
+    '8': ['8 seed game', 'Loser 7/8 vs winner 9/10'],
   };
   let games: { id: string; title: string; sub: string; home?: number; away?: number; pi?: PlayInGame }[];
   if (projected) {
@@ -403,10 +423,13 @@ function SeriesSheet({ league, series, onClose }: { league: League; series: Play
   if (!series) return null;
   const hi = league.teams[series.high];
   const lo = league.teams[series.low];
+  // the score is the big figure above it: the line says only who has it
   const lead =
     series.highWins === series.lowWins
-      ? `Series tied ${series.highWins}-${series.lowWins}`
-      : `${(series.highWins > series.lowWins ? hi : lo).abbrev} ${series.winner !== undefined ? 'won' : 'leads'} ${Math.max(series.highWins, series.lowWins)}-${Math.min(series.highWins, series.lowWins)}`;
+      ? series.highWins
+        ? 'Series tied'
+        : 'Not started'
+      : `${(series.highWins > series.lowWins ? hi : lo).abbrev} ${series.winner !== undefined ? 'won the series' : 'leads'}`;
   const upcoming = league.schedule.find((g) => g.seriesId === series.id && !g.played);
   return (
     <Sheet open={!!series} onClose={onClose} title={seriesLabel(series)}>

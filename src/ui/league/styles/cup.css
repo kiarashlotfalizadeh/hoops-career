@@ -16,7 +16,7 @@ a.bk-s:hover {
   text-decoration: none;
 }
 .lg-st.mode-cup .lg-st-row {
-  grid-template-columns: 20px 22px minmax(0, 1fr) 38px 38px 34px 32px;
+  grid-template-columns: 20px 22px minmax(0, 1fr) 34px 36px 34px 40px;
 }
 .lg-st.mode-cup .list-divider + .lg-st-row {
   border-top: none;

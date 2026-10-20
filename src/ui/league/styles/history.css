@@ -93,15 +93,18 @@
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-/* the record gets the room a long career's needs ("412-326"); the labels never run into each other */
-.lg-frfig .statline {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.1fr) minmax(0, 0.9fr);
+/* each figure gets at least the room its label and value need ("PLAYOFFS", a long career's
+   "412-326"), the rest shared out: the labels never run into the next hairline */
+.lg-frfig .statline,
+.lg-fr-figs .statline {
+  grid-template-columns: repeat(4, minmax(max-content, 1fr));
+}
+.lg-frfig .statline .k,
+.lg-fr-figs .statline .k {
+  letter-spacing: 0.07em;
 }
 .lg-strip .lg-frfig .statline .v {
   font-size: 22px;
-}
-.lg-fr-figs .statline {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1.1fr) minmax(0, 0.9fr);
 }
 .lg-fr-figs .statline > * {
   padding: 2px 10px;
@@ -472,4 +475,14 @@ button.lg-rec:active {
 .lg-page .seg:not(.tabs) button {
   padding: 0 7px;
   font-size: 12.5px;
+}
+
+/* the record book's two switches share a line: the book's name gives way first */
+.lg-book-sub .lg-select {
+  min-width: 0;
+  flex: 0 1 auto;
+  text-overflow: ellipsis;
+}
+.lg-book-sub .lg-select + .lg-select {
+  flex: none;
 }

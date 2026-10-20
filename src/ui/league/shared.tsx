@@ -1,13 +1,13 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { SlidersHorizontal, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SlidersHorizontal, Trophy } from 'lucide-react';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
 import { RATED_SEASONS } from '../../core/constants';
-import { Segmented, Sheet } from '../components/ui';
+import { Segmented, Sheet, scrollBehavior } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import './league.css';
@@ -56,7 +56,8 @@ export function useSetParams() {
 
 /**
  * A screen's own sections: underlined page tabs that stick under the top bar and scroll sideways,
- * keeping the active one in view.
+ * keeping the active one in view. When they run past an edge, that edge fades and carries a chevron
+ * that pages the row along (a swipe does the same; keyboard users move with the arrow keys).
  */
 export function TabBar<T extends string>({ value, options, onChange, label }: { value: T; options: { id: T; label: ReactNode }[]; onChange: (v: T) => void; label: string }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -71,15 +72,31 @@ export function TabBar<T extends string>({ value, options, onChange, label }: { 
     };
     update();
     seg.addEventListener('scroll', update, { passive: true });
+    // the tabs' widths settle once the web font is in, and a tab can come or go (the Cup)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    ro?.observe(seg);
+    if (seg.firstElementChild) ro?.observe(seg.firstElementChild);
     window.addEventListener('resize', update);
     return () => {
       seg.removeEventListener('scroll', update);
+      ro?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, []);
+  }, [options.length]);
+  const page = (dir: 1 | -1) => {
+    const seg = ref.current?.querySelector<HTMLElement>('.seg');
+    seg?.scrollBy({ left: dir * seg.clientWidth * 0.6, behavior: scrollBehavior() });
+  };
   return (
     <div className="lg-tabs" ref={ref}>
       <Segmented value={value} options={options} onChange={onChange} label={label} tabs />
+      {/* pointer-only: the tabs themselves are reachable by keyboard */}
+      <button type="button" className="lg-tabs-more l" tabIndex={-1} aria-hidden="true" onClick={() => page(-1)}>
+        <ChevronLeft size={16} />
+      </button>
+      <button type="button" className="lg-tabs-more r" tabIndex={-1} aria-hidden="true" onClick={() => page(1)}>
+        <ChevronRight size={16} />
+      </button>
     </div>
   );
 }

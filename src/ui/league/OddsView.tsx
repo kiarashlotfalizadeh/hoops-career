@@ -44,7 +44,7 @@ export function LotteryView({ league }: { league: League }) {
   return (
     <>
       <Toolbar right={<OddsHelp />}>Each team&apos;s own first-round pick</Toolbar>
-      <TeamTable cols={[54, 46, 46, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
+      <TeamTable cols={[54, 46, 50, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
         {rows.map((t, i) => (
           <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />
         ))}

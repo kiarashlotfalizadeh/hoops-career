@@ -5,6 +5,7 @@ import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { p0 } from '../stats';
+import { plural } from '../../core/format';
 import { roundName, useGamesByGid, useQueryParam } from './shared';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 
@@ -69,7 +70,7 @@ export function DayScoreboard({ league }: { league: League }) {
           <div className="lg-day-d">{fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
           <div className="lg-day-s">
             {isToday ? 'Today · ' : ''}
-            {games.length} game{games.length === 1 ? '' : 's'}
+            {plural(games.length, 'game')}
             {played && played < games.length ? ` · ${played} final` : played ? ' · final' : ''}
           </div>
         </div>

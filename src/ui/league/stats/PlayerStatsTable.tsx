@@ -12,6 +12,7 @@ import { f1, signed } from '../../stats';
 import { FilterField, FiltersButton, shortName, teamAbbrev, useQueryParam } from '../shared';
 import { pctCell, qualifier, type StatRow } from './rows';
 import { SeasonSelect, TypeSelect, type StatSeason } from './season';
+import { plural } from '../../../core/format';
 
 const PAGE = 100;
 
@@ -254,7 +255,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
             </button>
           )}
           <div className="lg-note">
-            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : `${filtered.length} player${filtered.length === 1 ? '' : 's'}`} · {seasonLabel(season)}
+            {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : plural(filtered.length, 'player')} · {seasonLabel(season)}
             {playoffs ? ' playoffs' : real ? ' (real)' : ''} · {tot ? 'totals' : 'per game'}
           </div>
         </>

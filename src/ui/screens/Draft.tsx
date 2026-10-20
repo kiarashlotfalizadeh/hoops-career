@@ -15,10 +15,10 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { act, edit } from '../../state/actions';
 import { draftPick, useBusy } from '../../state/actions/office';
 import { runAgenda } from '../components/Agenda';
-import { Avatar, PageHeader, Segmented, Sheet, Toggle } from '../components/ui';
+import { Avatar, PageHeader, Sheet, Toggle } from '../components/ui';
 import { HelpSheet, OvrPot } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
-import { overallPick } from '../league/shared';
+import { TabBar, overallPick } from '../league/shared';
 import { BoardList } from '../draft/rows';
 import { boardRank, picksText } from '../draft/common';
 import { LiveView, OnTheClock } from '../draft/LiveView';
@@ -170,7 +170,10 @@ export default function Draft() {
         />
       )}
 
-      {(league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
+      {views.length > 1 && <TabBar value={view} onChange={setView} options={views} label="Draft sections" />}
+
+      {/* how draft night runs: with the order (the lottery) and on the night, under the tabs that hold them */}
+      {(view === 'lottery' || view === 'live') && (league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
         <div className="card tight">
           <Toggle
             on={!!league.settings.draftPause}
@@ -180,8 +183,6 @@ export default function Draft() {
           />
         </div>
       )}
-
-      {views.length > 1 && <Segmented tabs value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && (
         <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
