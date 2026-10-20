@@ -36,7 +36,7 @@ export default function Inbox() {
   const sorted = useLeagueMemo(() => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const unread = sorted.filter((m) => !m.read).length;
   // what the bell's badge counts: big news and decisions still open
-  const need = sorted.filter((m) => needsYou(m, byId)).length;
+  const need = sorted.filter((m) => needsYou(m, byId, league)).length;
   const list = filter === 'unread' ? sorted.filter((m) => !m.read || m.id === keepId) : sorted;
   const open = openId !== null ? league.inbox.find((m) => m.id === openId) : undefined;
 

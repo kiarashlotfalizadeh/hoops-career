@@ -20,6 +20,8 @@ export function runAgenda(label: string, a: AgendaAction) {
 
 export function AgendaRow({ item }: { item: AgendaItem }) {
   const choices = [...(item.suggestion ? [item.suggestion] : []), ...(item.choices ?? [])];
+  // (the league can't change while a sim runs: act would only say so)
+  const simming = useStore((s) => !!s.sim);
   // a choice that can't be undone takes a second tap, its cost said in between
   const [armed, setArmed] = useState<string | null>(null);
   useEffect(() => {
@@ -57,7 +59,7 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
             <button
               key={c.label}
               className={`btn xs ${armed === c.label ? 'danger' : i === 0 && item.suggestion ? 'primary' : c.tone === 'good' ? 'good' : ''}`}
-              disabled={!!c.blocked}
+              disabled={!!c.blocked || simming}
               title={c.blocked}
               onClick={() => {
                 if (c.confirm && armed !== c.label) return setArmed(c.label);

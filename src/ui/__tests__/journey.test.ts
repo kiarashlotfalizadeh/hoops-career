@@ -8,7 +8,7 @@ import { curTeamSeason, standardRoster } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
 import { currentMoments } from '../moments';
-import { needsYou } from '../today/messages';
+import { NEWS_DAYS, needsYou } from '../today/messages';
 
 const make = (): League => createLeague({ name: 'j', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 11 });
 
@@ -72,6 +72,18 @@ describe('simSummary', () => {
     expect(s.link).toBe('/league/playoffs');
   });
 
+  it('names the champion once when he lost the Finals to it', () => {
+    const l = make();
+    l.phase = 'playoffs';
+    l.playoffs = [series(4, 17, 0, 3, 3)];
+    curTeamSeason(l, 0).playoffRound = 4;
+    const before = simStart(l);
+    l.playoffs[0].highWins = 4;
+    l.playoffs[0].winner = 17;
+    l.phase = 'draftLottery';
+    expect(simSummary(before, l)!.text).toBe(`Lost the NBA Finals: ${l.teams[17].abbrev} won 4-3`);
+  });
+
   it('leaves a title to its moment', () => {
     const l = make();
     l.phase = 'playoffs';
@@ -131,5 +143,15 @@ describe('the unread badge', () => {
     expect(needsYou({ ...base, id: 4, read: false, proposal: 4 }, open)).toBe(true);
     // an offer that closed is just mail
     expect(needsYou({ ...base, id: 5, read: false, proposal: 9 }, open)).toBe(false);
+  });
+
+  it('lets big news go stale: two weeks on, or a new season', () => {
+    const news = { season: 2027, day: 200, from: 'x', subject: 's', body: 'b', id: 1, read: false, important: true };
+    const open = new Map<string, boolean>();
+    expect(needsYou(news, open, { season: 2027, day: 210 })).toBe(true);
+    expect(needsYou(news, open, { season: 2027, day: 200 + NEWS_DAYS + 1 })).toBe(false);
+    expect(needsYou(news, open, { season: 2028, day: 0 })).toBe(false);
+    // a decision still open needs him however old it is
+    expect(needsYou({ ...news, important: false, proposal: 4 }, new Map([['tradeOffer:4', true]]), { season: 2028, day: 0 })).toBe(true);
   });
 });

@@ -163,6 +163,8 @@ main[tabindex='-1']:focus-visible {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* (a staggered entrance would otherwise sit invisible through its delay) */
+    animation-delay: 0s !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;

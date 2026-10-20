@@ -17,7 +17,7 @@ import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, u
 import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
-import { money } from '../format';
+import { money, plural } from '../format';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide';
 
@@ -98,7 +98,6 @@ export function bestSigning(league: League): { p: Player; amount: number; years:
 }
 
 const short = (l: League, day: number) => fmtDate(l.season, day, { month: 'short', day: 'numeric' });
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
  * Who the staff would cut first: least value to the team, a release's dead money counted against it
@@ -208,7 +207,7 @@ export function agenda(league: League): AgendaItem[] {
       kind: 'fired',
       required: true,
       title: 'Find a new job',
-      line: 'Take over another team. The league waits until you do.',
+      line: 'The league waits until you take a team.',
       tone: 'bad',
       to: '/office/career',
     });
@@ -226,7 +225,7 @@ export function agenda(league: League): AgendaItem[] {
         kind: 'cuts',
         required: true,
         title: `Cut ${plural(over, 'player')}`,
-        line: `${std.length} on standard deals; ${CAP.rosterMax} allowed on opening night.`,
+        line: `${std.length} signed · ${CAP.rosterMax} allowed on opening night`,
         tone: 'bad',
         to: '/team',
         suggestion: releaseChoice(league, first),
@@ -242,7 +241,7 @@ export function agenda(league: League): AgendaItem[] {
         kind: 'signings',
         required: true,
         title: `Sign ${plural(under, 'player')}`,
-        line: `${std.length} on standard deals; ${CAP.rosterMin} needed on opening night. Minimum deals always fit.`,
+        line: `${std.length} signed · ${CAP.rosterMin} needed on opening night. Minimum deals always fit.`,
         tone: 'bad',
         to: '/office/free-agents',
         ...signingSuggestion(league),
@@ -343,7 +342,8 @@ export function agenda(league: League): AgendaItem[] {
       to: `/office/trade?offer=${pr.id}`,
       due: `Stands until ${short(league, pr.expires)}`,
       choices: [
-        { label: 'Accept', action: { kind: 'proposal', id: pr.id, accept: true }, tone: 'good' },
+        // (a trade from a row on Today: the second tap is the handshake)
+        { label: 'Accept', action: { kind: 'proposal', id: pr.id, accept: true }, tone: 'good', confirm: 'The trade goes through at once.' },
         { label: 'Turn down', action: { kind: 'proposal', id: pr.id, accept: false } },
       ],
       pids: want.map((p) => p.pid),

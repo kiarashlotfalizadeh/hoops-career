@@ -280,8 +280,9 @@ Broadcast first: the court is always the biggest thing on screen.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.
-- **The bell's badge counts what needs you** (`needsYou`: important mail, or a decision still open);
-  other mail is unread in the list without feeding the badge or Today's count.
+- **The bell's badge counts what needs you** (`needsYou`: important mail from the last two weeks of
+  this season, or a decision still open); other mail is unread in the list without feeding the badge
+  or Today's count.
 
 ## Motion
 

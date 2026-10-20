@@ -105,6 +105,16 @@
   box-shadow: 0 0 0 2px var(--bg);
 }
 
+/* a small phone (320-359px): four icons leave the record its room */
+@media (max-width: 359px) {
+  .topbar .iconbtn {
+    width: 36px;
+  }
+  .topbar .tb-team {
+    gap: 8px;
+  }
+}
+
 /* ------------------------------------------------------------------ tab bar */
 .bottomnav {
   position: fixed;

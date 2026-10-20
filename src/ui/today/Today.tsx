@@ -1,6 +1,6 @@
 // Today: what needs you now. The first screen after every sim, short enough to read at a glance:
-// the next game (or where the offseason stands), practice between games (the focus, and what the team
-// knows of its system when it's short), the decisions waiting, the staff's top advice, the
+// the next game (or where the offseason stands), the decisions waiting, practice between games (the
+// focus, and what the team knows of its system when it's short), the staff's top advice, the
 // owner when the seat is warm, the standings around you, your last results and new mail. Anything
 // with more to it is one tap away on its own screen; nothing here repeats something else here.
 import { useState } from 'react';
@@ -67,8 +67,6 @@ export default function Today() {
     <main className="page td-page">
       {g ? <NextGameSlab league={league} g={g} noPlan={noPlan} /> : <PhaseCard league={league} linked={items.map((i) => i.to)} />}
 
-      {g && <PracticeCard league={league} />}
-
       {(items.length > 0 || hidden) && (
         <Section
           title="To do"
@@ -83,6 +81,9 @@ export default function Today() {
           {items.length > 0 ? <AgendaList league={league} /> : <div className="td-none">Nothing waiting on you.</div>}
         </Section>
       )}
+
+      {/* (after the decisions: practice is a standing setting, they lapse) */}
+      {g && <PracticeCard league={league} />}
 
       {feed.length > 0 && (
         <Section
@@ -282,7 +283,7 @@ function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: 
   const all = league.inbox.filter((m) => !m.read);
   // the count is what needs him (as on the bell); the rows are the newest unread, whatever they are
   const decisions = new Map(agendaIds.map((id) => [id, true]));
-  const need = all.filter((m) => needsYou(m, decisions)).length;
+  const need = all.filter((m) => needsYou(m, decisions, league)).length;
   const shown = all
     .filter((m) => {
       const d = decisionId(m);

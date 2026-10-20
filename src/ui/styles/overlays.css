@@ -138,13 +138,15 @@
   z-index: 90;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  /* over the Continue bar, lined up with it: on a wide screen it sits at the page column's right edge */
+  align-items: flex-end;
   gap: 8px;
   pointer-events: none;
-  padding: 0 var(--gut-r) 0 var(--gut-l);
+  padding: 0 max(var(--gut-r), calc((100% - 788px) / 2)) 0 var(--gut-l);
 }
 body:not(:has(.continue)) .toasts {
   --toast-b: calc(var(--nav-h) + var(--safe-b) + 12px);
+  align-items: center;
 }
 body:has(.dockbar, .fo-dock) .toasts {
   --toast-b: calc(var(--nav-h) + var(--safe-b) + 84px);
@@ -159,7 +161,8 @@ body.sheet-open .toasts {
 }
 .toast {
   pointer-events: auto;
-  width: min(100%, 440px);
+  /* the Continue bar's width */
+  width: min(100%, 420px);
   display: flex;
   align-items: center;
   gap: 10px;

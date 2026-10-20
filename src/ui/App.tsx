@@ -27,7 +27,7 @@ import { liveInProgress } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { confStandings } from '../core/league/standings';
-import { faDayNumber } from '../core/league/season';
+import { FA_DAYS, faDayNumber } from '../core/league/season';
 import type { League } from '../core/types';
 import { ordinal } from './league/shared';
 import { gamesMemo } from './stats';
@@ -185,13 +185,13 @@ function statusLine(league: League): string {
     case 'playoffs':
       return `Playoffs · ${date}`;
     case 'draftLottery':
-      return `Draft Lottery · ${league.season}`;
+      return `Draft lottery · ${league.season}`;
     case 'draft':
       return `${league.season} NBA Draft`;
     case 'resign':
       return `Re-signing · ${league.season}`;
     case 'freeAgency':
-      return `Free Agency · day ${faDayNumber(league)}`;
+      return `Free agency · Day ${faDayNumber(league)} of ${FA_DAYS}`;
     default:
       return PHASE_LABEL[league.phase] ?? '';
   }
@@ -205,9 +205,10 @@ function TopBar() {
   const ts = curTeamSeason(league, league.userTid);
   // the badge counts what needs him; the rest is unread in the list without a number on the bell
   const decisions = useAgendaById(league);
-  const unread = league.inbox.filter((m) => needsYou(m, decisions)).length;
+  const unread = league.inbox.filter((m) => needsYou(m, decisions, league)).length;
   // the standings scan every game: worked out again when a game is played, not on every edit
-  const status = gamesMemo(statusLines, league, () => statusLine(league));
+  // (fired: the old team's mark stays up there, but it isn't his to run; outside the memo, as a firing plays no game)
+  const status = league.fired ? `Between jobs · ${PHASE_LABEL[league.phase] ?? seasonLabel(league.season)}` : gamesMemo(statusLines, league, () => statusLine(league));
   const [searching, setSearching] = useState(false);
   // Ctrl/⌘ K anywhere, or "/" when not typing, opens search
   useEffect(() => {
@@ -312,6 +313,10 @@ function ContinueBar() {
   // screen readers hear a sim start and finish, not every simmed day: the status region stays put and its text only changes then
   const [ran, setRan] = useState(false);
   if (sim && !ran) setRan(true);
+  // the step this bar started, to name the sim while it runs ("Sim to trade deadline…", not "Simulating…")
+  const [running, setRunning] = useState<string | null>(null);
+  if (!sim && running) setRunning(null);
+  const busyLabel = sim && sim.label === 'Simulating' && running ? running : sim?.label;
   const onLive = pathname === '/live';
   const actions = flowActions(league, { onLive });
   const primary = actions.find((a) => a.primary) ?? actions[0];
@@ -336,6 +341,7 @@ function ContinueBar() {
       nav(`/games/${today.home === league.userTid ? today.away : today.home}?tab=preview`);
       return;
     }
+    if (a.sim) setRunning(a.label);
     void run(a);
   };
   const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
@@ -344,7 +350,7 @@ function ContinueBar() {
   return (
     <>
       <div className="sr-only" role="status">
-        {sim ? `${sim.label}…` : ran ? 'Done.' : ''}
+        {sim ? `${busyLabel}…` : ran ? 'Done.' : ''}
       </div>
       {sim ? (
         <div className="continue is-busy">
@@ -353,7 +359,7 @@ function ContinueBar() {
             <div className="continue-busy">
               <Spinner />
               <div className="grow">
-                <span className="cg-label ellipsis">{sim.label}…</span>
+                <span className="cg-label ellipsis">{busyLabel}…</span>
                 {steps && (
                   <span className="cg-sub num">
                     Day {Math.max(1, sim.done)} of {sim.total}

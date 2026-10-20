@@ -120,13 +120,13 @@ export function assistantFeed(league: League): AssistantCard[] {
     if (due.length) {
       // what the call turns on: how good he is, what he makes now and what the market says he's worth
       const p = due[0];
-      const more = due.length > 1 ? ` · ${due.length - 1} more in a final season` : '';
+      const more = due.length > 1 ? ` · ${due.length - 1} more expiring` : '';
       cards.push({
         id: `extend:${p.pid}`,
         area: 'office',
         tone: 'tip',
         title: `${playerName(p)} can be extended`,
-        line: `${p.ovr} OVR · ${money(salaryFor(p, season))} in his final season · market ${money(marketSalary(league, p))}${more}`,
+        line: `${p.ovr} OVR · ${money(salaryFor(p, season))}, expiring · market value ${money(marketSalary(league, p))}${more}`,
         to: `/player/${p.pid}`,
         weight: 30,
       });

@@ -141,7 +141,7 @@ export default function NewLeague() {
         <div className="grow">
           <h1>New League</h1>
           <div className="ph-sub">
-            Step {stepNo} of 3 · {step === 'type' ? 'The league' : step === 'team' ? 'Your team' : 'You'}
+            Step {stepNo} of 3 · {step === 'type' ? 'The league' : step === 'team' ? 'Your team' : 'Your career'}
           </div>
         </div>
       </div>

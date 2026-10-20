@@ -22,15 +22,20 @@ export function decisionId(m: InboxMessage): string | null {
   return null;
 }
 
+/** Big news needs the user for this many days; after that (or once a new season starts) it's just unread mail. */
+export const NEWS_DAYS = 14;
+
 /**
- * Unread mail that needs the user: big news (`important`) or a decision still open. The rest is
- * unread in the list but doesn't feed the top bar's badge or Today's count: a season of injury
- * notes and check-ins would bury the two that matter.
+ * Unread mail that needs the user: recent big news (`important`) or a decision still open. The rest
+ * is unread in the list but doesn't feed the top bar's badge or Today's count: a season of injury
+ * notes and check-ins would bury the two that matter, and last June's title mail isn't news in
+ * October. `now`: the league's date (without it, big news never goes stale).
  */
-export const needsYou = (m: InboxMessage, open: ReadonlyMap<string, unknown>) => {
+export const needsYou = (m: InboxMessage, open: ReadonlyMap<string, unknown>, now?: Pick<League, 'season' | 'day'>) => {
   if (m.read) return false;
   const d = decisionId(m);
-  return !!m.important || (!!d && open.has(d));
+  if (d) return open.has(d);
+  return !!m.important && (!now || (m.season === now.season && now.day - m.day <= NEWS_DAYS));
 };
 
 /** The agenda by id, worked out once per league change. */

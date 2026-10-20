@@ -84,12 +84,16 @@ export function simSummary(before: SimStart, l: League): { text: string; tone: '
     const ts = curTeamSeason(l, me);
     const lost = l.playoffs.filter((s) => (s.high === me || s.low === me) && s.winner !== undefined && s.winner !== me).sort((a, b) => b.round - a.round)[0];
     if (!lost && crowned?.winner === me) return null;
+    const score = lost && `${Math.max(lost.highWins, lost.lowWins)}-${Math.min(lost.highWins, lost.lowWins)}`;
     const how = lost
-      ? `Out in the ${POST_ROUND[lost.round] ?? 'playoffs'}: ${l.teams[lost.winner!].abbrev} won ${Math.max(lost.highWins, lost.lowWins)}-${Math.min(lost.highWins, lost.lowWins)}`
+      ? lost.round === 4
+        ? `Lost the NBA Finals: ${l.teams[lost.winner!].abbrev} won ${score}`
+        : `Out in the ${POST_ROUND[lost.round] ?? 'playoffs'}: ${l.teams[lost.winner!].abbrev} won ${score}`
       : l.playIn.some((g) => g.loser === me)
         ? 'Out in the play-in'
         : `Season over at ${ts.won}-${ts.lost}, short of the postseason`;
-    return { text: [how, champ].filter(Boolean).join(' · '), tone: 'bad', link: '/league/playoffs' };
+    // (beaten in the Finals: the champion is the team just named)
+    return { text: [how, lost?.round === 4 ? '' : champ].filter(Boolean).join(' · '), tone: 'bad', link: '/league/playoffs' };
   }
   if (champ && crowned) {
     const [w, lo] = [Math.max(crowned.highWins, crowned.lowWins), Math.min(crowned.highWins, crowned.lowWins)];
@@ -138,10 +142,17 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
   switch (league.phase) {
     case 'preseason': {
       const errs = canStartRegularSeason(league);
+      const me = league.userTid;
+      const opener = league.schedule.filter((x) => !x.played && x.type === 'regular' && (x.home === me || x.away === me)).sort((x, y) => x.day - y.day)[0];
       a.push({
         id: 'start',
         label: 'Start regular season',
-        sub: errs[0] ?? 'Opening night is set. Rotations and tactics can be changed any time.',
+        // (short enough for the bar: the opener, not a sentence a phone cuts off)
+        sub:
+          errs[0] ??
+          (opener
+            ? `Opening night: ${fmtDate(league.season, opener.day, { weekday: 'short', month: 'short', day: 'numeric' })} ${opponentText(league, opener).replace(/ \(.*\)$/, '')}`
+            : undefined),
         primary: true,
         cmd: 'startRegular',
         disabled: errs[0],
@@ -204,10 +215,19 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       }
       break;
     }
-    case 'draftLottery':
-      a.push({ id: 'draft', label: 'Go to the draft', sub: 'Lottery results are in.', primary: true, cmd: 'startDraft' });
+    case 'draftLottery': {
+      // (Today's card says the lottery is in: the bar says where the user picks)
+      const first = draftOrder(league).find((d) => d.tid === league.userTid);
+      a.push({
+        id: 'draft',
+        label: 'Go to the draft',
+        sub: first ? `Your first pick: ${first.round === 1 ? '' : '2nd round, '}No. ${first.pick}` : 'You have no pick this year.',
+        primary: true,
+        cmd: 'startDraft',
+      });
       a.push({ id: 'board', label: 'Scout prospects', to: '/office/draft' });
       break;
+    }
     case 'draft': {
       // with no picks left the board has nothing for the user to do: finishing it is the next step
       const mine = draftOrder(league).filter((d) => d.tid === league.userTid);

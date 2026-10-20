@@ -59,8 +59,18 @@ export function currentMoments(league: League): Moment[] {
     // a play-in spot is only news until a playoff spot is
     if (row?.clinched === 'x')
       out.push({ key: `clinch-x-${season}`, kind: 'clinch', over: `${seasonLabel(season)} · ${conf}`, title: 'Playoff bound', sub: `The ${nick} have clinched a top-six seed.` });
-    else if (row?.clinched === 'p')
-      out.push({ key: `clinch-p-${season}`, kind: 'clinch', over: `${seasonLabel(season)} · ${conf}`, title: 'In the play-in', sub: `The ${nick} have clinched a play-in spot.` });
+    else if (row?.clinched === 'p') {
+      // clinching the top ten mid-season is "at least the play-in", not a play-in seed: a team
+      // sitting first can clinch it in February
+      const playIn = league.phase !== 'regular';
+      out.push({
+        key: `clinch-p-${season}`,
+        kind: 'clinch',
+        over: `${seasonLabel(season)} · ${conf}`,
+        title: playIn ? 'In the play-in' : 'Postseason bound',
+        sub: playIn ? `The ${nick} play on in the play-in.` : `The ${nick} have clinched at least a play-in spot.`,
+      });
+    }
   }
 
   for (const s of league.playoffs) {

@@ -113,7 +113,8 @@ export default function Start() {
         </button>
       )}
       <div className="col st-actions">
-        <button className="btn primary big block" onClick={() => nav('/new')}>
+        {/* (with a league to continue, that card leads: a new one is the second choice) */}
+        <button className={`btn ${latest ? '' : 'primary'} big block`} onClick={() => nav('/new')}>
           <Plus size={20} /> New league
         </button>
         <ImportButton block ghost />

@@ -7,18 +7,18 @@ import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { curTeamSeason, fmtDate, standardRoster, teamPlayers } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
 import { ordinal, outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
 import { expiringPlayers } from '../../core/league/freeAgency';
-import { FA_DAYS, faDayNumber } from '../../core/league/season';
-import { CAP, seasonLabel } from '../../core/constants';
+import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
+import { rosterLine } from '../office/basis';
 import { scoutTeam } from '../../core/ai/advisor';
 import { leadAssistant } from '../../core/ai/assistant';
 
@@ -62,7 +62,8 @@ export function gist(text: string): string {
   const sentences = text.split(/(?<=\.)\s+(?=[A-Z])/);
   let last = sentences[sentences.length - 1];
   const colon = last.indexOf(': ');
-  if (colon > 0) last = last.slice(colon + 2);
+  // "X makes 54% of his free throws: a candidate for…" says who after all: only advice ("…: attack the rim") is cut loose
+  if (colon > 0 && !/^(a|an|the)\s/i.test(last.slice(colon + 2))) last = last.slice(colon + 2);
   // "…: hunt that mismatch" needs what came before it
   if (sentences.length === 1 && /\b(that|this|those|him)\b/i.test(last)) return text;
   return last.charAt(0).toUpperCase() + last.slice(1);
@@ -189,7 +190,7 @@ function phaseCard(league: League): { over: string; title: string; line: string;
         title: 'Preseason',
         line:
           g && opp !== undefined
-            ? `Opening night ${fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })}, ${g.home === me ? 'vs' : '@'} ${league.teams[opp].abbrev}.`
+            ? `Opening night: ${fmtDate(league.season, g.day, { weekday: 'short', month: 'short', day: 'numeric' })} ${g.home === me ? 'vs' : '@'} ${league.teams[opp].abbrev}`
             : 'Opening night is set.',
         link: opp !== undefined ? { to: `/games/${opp}`, label: 'Opener' } : undefined,
       };
@@ -235,11 +236,11 @@ function phaseCard(league: League): { over: string; title: string; line: string;
       };
     }
     case 'freeAgency': {
-      const n = standardRoster(league, me).length;
+      // (the day of the market is on the top bar and the Continue bar: the card says where the roster stands, as the Office does)
       return {
         over: off,
         title: 'Free agency',
-        line: `Day ${faDayNumber(league)} of ${FA_DAYS} · ${n} of ${CAP.rosterMax} roster spots filled.`,
+        line: rosterLine(league),
         link: { to: '/office/free-agents', label: 'Free agents' },
       };
     }

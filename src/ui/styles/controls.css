@@ -67,7 +67,7 @@
 .btn.xs::after {
   content: '';
   position: absolute;
-  inset: -6px -2px;
+  inset: -8px -2px;
 }
 .btn.block {
   width: 100%;
@@ -203,7 +203,12 @@
 .chip {
   position: relative;
 }
-.btn.sm::after,
+/* compact controls reach 44px with an invisible margin: a 34px button 5px each way, a segment 3px */
+.btn.sm::after {
+  content: '';
+  position: absolute;
+  inset: -5px -1px;
+}
 .seg button::after {
   content: '';
   position: absolute;
