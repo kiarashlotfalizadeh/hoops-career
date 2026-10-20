@@ -87,13 +87,6 @@ export function useOverCourt({ paused, atBreak }: { paused: boolean; atBreak: bo
     [queueBanner],
   );
 
-  // a graphic stays up a few seconds of play (it waits out a break)
-  const graphicId = graphic?.id;
-  useEffect(() => {
-    if (!graphicId || atBreak) return;
-    const t = setTimeout(() => setGraphic(null), GRAPHIC_MS);
-    return () => clearTimeout(t);
-  }, [graphicId, atBreak]);
   // one banner at a time, for a few seconds of play (it waits out a pause)
   const banner = banners[0];
   useEffect(() => {
@@ -101,13 +94,22 @@ export function useOverCourt({ paused, atBreak }: { paused: boolean; atBreak: bo
     const t = setTimeout(() => setBanners((b) => b.slice(1)), banner.kicker === 'Staff' ? WORD_MS : EVENT_MS);
     return () => clearTimeout(t);
   }, [banner, paused]);
+  // a graphic stays up a few seconds of play (it waits out a break, and a banner: the court shows one or the other)
+  const graphicId = graphic?.id;
+  const bannerUp = !!banner;
+  useEffect(() => {
+    if (!graphicId || atBreak || bannerUp) return;
+    const t = setTimeout(() => setGraphic(null), GRAPHIC_MS);
+    return () => clearTimeout(t);
+  }, [graphicId, atBreak, bannerUp]);
 
   /** Take down the banner up now. */
   const dropBanner = useCallback(() => setBanners((b) => b.slice(1)), []);
 
   return {
     banner,
-    graphic,
+    /** The graphic up now: none while a banner is up (it waits for it, then has its few seconds). */
+    graphic: banner ? null : graphic,
     /** The graphics shown so far tonight and when the last went up, as the graphics read them. */
     gfx,
     queueBanner,

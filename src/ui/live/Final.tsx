@@ -8,8 +8,8 @@ import { FinalSlab } from '../components/FinalSlab';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { stillAlive } from '../flow';
 
-/** No game for your team today: why, and Sim to next game when there is one to sim to. */
-export function NoGame({ league, canSim, busy, onNext }: { league: League; canSim: boolean; busy: boolean; onNext: () => void }) {
+/** No game for your team today: why, and Sim to next game (named: `next`) when there is one to sim to. */
+export function NoGame({ league, canSim, next, busy, onNext }: { league: League; canSim: boolean; next?: string; busy: boolean; onNext: () => void }) {
   return (
     <main className="page">
       <PageHeader title="Live" back backTo="/games" />
@@ -21,6 +21,8 @@ export function NoGame({ league, canSim, busy, onNext }: { league: League; canSi
             : ['regular', 'playin', 'playoffs'].includes(league.phase)
               ? 'No game for your team today.'
               : 'No games until next season.'}
+        {/* (the flow's line: a game's "Thu, Oct 22 · vs DEN (3-1)", or why there's none) */}
+        {canSim && next && <div className="lv-nogame-next small">{next.includes(' · ') ? `Next: ${next}` : next}</div>}
       </Empty>
       {canSim && (
         <button className="btn primary block big" disabled={busy} onClick={onNext}>

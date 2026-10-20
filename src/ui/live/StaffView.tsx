@@ -7,10 +7,11 @@ import type { CoachMove, GameResult } from '../../core/types';
 import type { GameKey } from '../../core/analysis/keys';
 import { madeAtt } from '../../core/format';
 import { Section, Toggle } from '../components/ui';
-import { KeysLive, gameShare } from '../components/GameKeys';
+import { KeysLive } from '../components/GameKeys';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
+import { keysShare } from './session';
 
 /** Moves listed before "All". */
 const MOVES_SHOWN = 4;
@@ -74,7 +75,7 @@ export function StaffView({
         </div>
       )}
       {watch && <Watch view={view} side={side} watch={watch} nameOf={nameOf} onPlayer={onPlayer} />}
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box as Pick<GameResult, 'home' | 'away'>} side={side} share={gameShare(view.elapsed, view.q)} compact />}
+      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box as Pick<GameResult, 'home' | 'away'>} side={side} share={keysShare(view.elapsed, view.q)} compact />}
       <Section
         title="Your moves"
         right={

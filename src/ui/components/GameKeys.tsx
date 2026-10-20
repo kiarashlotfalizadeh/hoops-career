@@ -40,7 +40,7 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
               <div className="gd-kl-t">{k.title}</div>
               <div className="gd-kl-n num">
                 {v ?? 0}
-                {u} so far{pace !== null ? ` · on pace for ${pace}` : ''} · goal {k.dir === 'max' ? '≤' : '≥'} {k.target}
+                {u} so far{pace ? ` · on pace for ${pace}` : ''} · goal {k.dir === 'max' ? '≤' : '≥'} {k.target}
                 {u}
               </div>
             </div>

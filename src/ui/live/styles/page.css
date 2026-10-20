@@ -48,6 +48,44 @@
   .lv.more-bench .lv-stage > .live-intro {
     border-radius: 10px;
   }
+  /* the lineups on the smaller court: the names and numbers alone, one line each, so Tip off stays in view
+     (the season lines are on the bigger court, a tap on "Bigger court" away) */
+  .lv.more-bench .live-intro {
+    gap: 6px;
+    padding: 8px 8px 12px;
+  }
+  .lv.more-bench .lv-li-kicker {
+    font-size: 17px;
+  }
+  .lv.more-bench .lv-li-where,
+  .lv.more-bench .lv-li-line,
+  .lv.more-bench .lv-li-pos {
+    display: none;
+  }
+  .lv.more-bench .lv-li-grid {
+    gap: 8px;
+  }
+  .lv.more-bench .lv-li-team {
+    font-size: 12.5px;
+    padding: 2px 10px 3px 6px;
+  }
+  .lv.more-bench .lv-li-row {
+    gap: 5px;
+  }
+  .lv.more-bench .lv-li-num {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+  .lv.more-bench .lv-li-name {
+    overflow: hidden;
+    overflow-wrap: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .lv.more-bench .lv-li-who {
+    flex: 1;
+  }
 }
 /* wider, upright (tablets): the court as big as leaves the console room under it */
 @media (min-width: 600px) {
@@ -74,5 +112,22 @@
 @media (min-width: 600px) and (orientation: portrait) {
   .lv-bug .lv-lb {
     width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
+  }
+}
+/* the states hand over without a jump cut: the court comes back from a break, the report or the huddle
+   takes its place, and a console view comes in, each with a short fade (opacity only) */
+.lv-stage,
+.lv-con-body > * {
+  animation: lv-fade-in 0.2s ease-out;
+}
+@keyframes lv-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-stage,
+  .lv-con-body > * {
+    animation: none;
   }
 }

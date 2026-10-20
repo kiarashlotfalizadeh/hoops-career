@@ -52,6 +52,68 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
+/** How long a new possession's opening frame takes to dissolve in over the last one's (ms, at 1×): a broadcast's cut. */
+const CUT_MS = 200;
+
+/** Each player's velocity (feet a ms) as he passes through each frame of a script: [frame][offense..., defense...]. */
+type Tangents = Pt[][];
+const ZERO: Pt = { x: 0, y: 0 };
+const tangentCache = new WeakMap<Script, Tangents>();
+
+/**
+ * The velocity a player carries through a frame, so a run through several frames is one smooth move
+ * instead of a stop at each (the frames are a few hundred ms apart). He stops at a frame where he
+ * stands still on either side of it, turns back, or the move is a cut (no time to get there); a turn
+ * slows him, and he's never faster through a frame than on the slower of the moves either side of it
+ * (no overshoot).
+ */
+function tangentsOf(sc: Script): Tangents {
+  const hit = tangentCache.get(sc);
+  if (hit) return hit;
+  const f = sc.frames;
+  const at = (i: number, j: number) => (j < sc.oPids.length ? f[i].o[j] : f[i].d[j - sc.oPids.length]);
+  const n = sc.oPids.length + sc.dPids.length;
+  const out: Tangents = f.map((_, i) =>
+    Array.from({ length: n }, (_, j) => {
+      if (i === 0 || i === f.length - 1) return ZERO;
+      const dtA = f[i].dur;
+      const dtB = f[i + 1].dur;
+      const p0 = at(i - 1, j);
+      const p1 = at(i, j);
+      const p2 = at(i + 1, j);
+      if (!dtA || !dtB || !p0 || !p1 || !p2) return ZERO;
+      const ax = p1.x - p0.x;
+      const ay = p1.y - p0.y;
+      const bx = p2.x - p1.x;
+      const by = p2.y - p1.y;
+      const la = Math.hypot(ax, ay);
+      const lb = Math.hypot(bx, by);
+      if (la < 0.05 || lb < 0.05) return ZERO;
+      const cos = (ax * bx + ay * by) / (la * lb);
+      if (cos <= 0) return ZERO;
+      const va = { x: ax / dtA, y: ay / dtA };
+      const vb = { x: bx / dtB, y: by / dtB };
+      const m = { x: (va.x + vb.x) / 2, y: (va.y + vb.y) / 2 };
+      const lm = Math.hypot(m.x, m.y) || 1;
+      const cap = Math.min(la / dtA, lb / dtB) * cos;
+      return { x: (m.x / lm) * cap, y: (m.y / lm) * cap };
+    }),
+  );
+  tangentCache.set(sc, out);
+  return out;
+}
+
+/** Cubic Hermite between two frames: `u` 0..1 of the move's time, `dt` its length (ms), `ma`/`mb` the velocities through each end. */
+function hermite(a: Pt, b: Pt, ma: Pt, mb: Pt, u: number, dt: number): Pt {
+  const u2 = u * u;
+  const u3 = u2 * u;
+  const h00 = 2 * u3 - 3 * u2 + 1;
+  const h10 = u3 - 2 * u2 + u;
+  const h01 = -2 * u3 + 3 * u2;
+  const h11 = u3 - u2;
+  return { x: h00 * a.x + h10 * dt * ma.x + h01 * b.x + h11 * dt * mb.x, y: h00 * a.y + h10 * dt * ma.y + h01 * b.y + h11 * dt * mb.y };
+}
+
 /** Canvas text in the app's face, condensed like its scoreboard figures. */
 function setFont(ctx: CanvasRenderingContext2D, weight: number, px: number, stretch: 'condensed' | 'semi-condensed' = 'condensed') {
   // (an engine that doesn't take the width keyword in the shorthand ignores that line and keeps the first;
@@ -88,6 +150,9 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
     document.fonts?.ready.then(() => void (fontsIn = 1));
     // reduced motion: players and the ball jump from spot to spot instead of gliding, and nothing flashes over the court
     const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    // a new possession (or the court clearing for a break) dissolves in over the last frame of the one before
+    const cut = document.createElement('canvas');
+    let cutAt = 0;
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const s = state.current;
@@ -109,9 +174,17 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       }
       const key = `${canvas.width}x${canvas.height}|${fontsIn}|${floorId}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
-      const sig = `${key}|${s.t}|${s.done}`;
+      const cutting = cutAt > 0 && now - cutAt < CUT_MS;
+      const sig = `${key}|${s.t}|${s.done}|${cutting ? now : ''}`;
       if (sig === drawn && s.script === lastScript) return;
       drawn = sig;
+      if (s.script !== lastScript && lastScript !== undefined && !still?.matches && canvas.width && canvas.height) {
+        // (what's on the canvas now is the last frame of the possession before)
+        cut.width = canvas.width;
+        cut.height = canvas.height;
+        cut.getContext('2d')!.drawImage(canvas, 0, 0);
+        cutAt = now;
+      }
       lastScript = s.script;
       const k = cssW / FLOOR_W;
       if (key !== floorKey) {
@@ -129,6 +202,13 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       ctx.setTransform(dpr, 0, 0, dpr, SIDE * k * dpr, TOP * k * dpr);
       const sc = s.script;
       if (sc && sc.frames.length > 0) drawScript(sc);
+      const p = cutAt ? (now - cutAt) / CUT_MS : 1;
+      if (p < 1 && cut.width === canvas.width) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalAlpha = 1 - ease(Math.max(0, p));
+        ctx.drawImage(cut, 0, 0);
+        ctx.globalAlpha = 1;
+      }
     };
     const drawScript = (sc: Script) => {
       const s = state.current;
@@ -144,13 +224,16 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       let a: Frame;
       let b: Frame;
       let u: number;
+      // (the move's time, linear: the players' paths run on it; `u`, eased, times the ball, the flashes and the rim)
+      let lu: number;
       if (i >= sc.frames.length) {
         a = b = sc.frames[sc.frames.length - 1];
-        u = 1;
+        u = lu = 1;
       } else {
         a = sc.frames[i - 1];
         b = sc.frames[i];
-        u = b.dur && !still?.matches ? ease(Math.min(1, (s.t - acc) / b.dur)) : 1;
+        lu = b.dur && !still?.matches ? Math.min(1, (s.t - acc) / b.dur) : 1;
+        u = ease(lu);
       }
       // score/clock callbacks
       const reached = sc.frames.slice(0, i + (u >= 1 ? 1 : 0)).filter((f) => f.score);
@@ -177,8 +260,13 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const hold = u >= 0.5 ? b.hold : a.hold;
       const hotSet = props.current.hot;
       const glow = calm ? 0 : 0.5 + 0.5 * Math.sin(s.t / 160);
-      const dAt = sc.dPids.map((_, j) => lerpPt(a.d[j], b.d[j], u));
-      const oAt = sc.oPids.map((_, j) => lerpPt(a.o[j], b.o[j], u));
+      // each player along a smooth path through the frames (see tangentsOf); reduced motion: from spot to spot
+      const bi = Math.min(i, sc.frames.length - 1);
+      const tan = tangentsOf(sc);
+      const nO = sc.oPids.length;
+      const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 || calm ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, lu, b.dur));
+      const dAt = sc.dPids.map((_, j) => path(a.d[j], b.d[j], nO + j));
+      const oAt = sc.oPids.map((_, j) => path(a.o[j], b.o[j], j));
       sc.dPids.forEach((pid, j) =>
         drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false, { holder: hold === sc.oPids.length + j, hot: !!hotSet?.has(pid), glow }),
       );
@@ -192,7 +280,9 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
         if (pid !== undefined && at) drawTag(ctx, k, at, nm(pid));
       }
       // ball: its shadow stays on the floor and shrinks as it rises; it spins as it travels
-      const bp = lerpPt(a.ball, b.ball, u);
+      // (in one man's hands from frame to frame, it goes where he goes)
+      const carried = a.hold !== undefined && a.hold >= 0 && a.hold === b.hold ? (a.hold < nO ? oAt[a.hold] : dAt[a.hold - nO]) : undefined;
+      const bp = carried ?? lerpPt(a.ball, b.ball, u);
       const z = b.ballZ ? Math.sin(Math.PI * u) * 7 : 0;
       // a shot's flight leaves a faint trail behind the ball
       if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, k, a.ball, b.ball, u);

@@ -577,7 +577,8 @@
   border-radius: 2px;
   background: currentColor;
 }
-/* player grades: the letter in scoreboard type, A green to D-F red */
+/* player grades: the letter in scoreboard type, in the "how good" order (DESIGN.md): A purple, B blue,
+   C plain, D grey, F red (only a failing night is red) */
 .gv-grades td:first-child {
   width: 34px;
   padding-right: 0;
@@ -588,16 +589,19 @@
   font-weight: 800;
   font-size: 18px;
   line-height: 1;
-  color: var(--bad);
+  color: var(--text);
 }
 .gv-g.A {
-  color: var(--good);
+  color: var(--tier-star);
 }
 .gv-g.B {
-  color: var(--info);
+  color: var(--tier-good);
 }
-.gv-g.C {
-  color: var(--warn);
+.gv-g.D {
+  color: var(--tier-bad);
+}
+.gv-g.F {
+  color: var(--bad);
 }
 .gv-grade-n {
   max-width: 150px;

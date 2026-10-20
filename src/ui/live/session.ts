@@ -13,6 +13,7 @@ import type { SubOptions } from './MyPlayer';
 import { drawnPlayer, subsLine, type Drawn } from './drawn';
 import { HOT_STREAK } from './OnCourt';
 import { livePills, type Pill } from './pills';
+import { gameShare } from '../components/GameKeys';
 
 /** The play-by-play lines the console keeps. */
 export const FEED_MAX = 80;
@@ -22,6 +23,12 @@ export const FF_MS = 90;
 /** How long a banner stays over the court: an event, and the assistant's word (it has a line to read). */
 export const EVENT_MS = 4000;
 export const WORD_MS = 6500;
+
+/** Game seconds before a key's pace is worth reading: before then a key isn't called behind on a few trips. */
+export const KEYS_EARLY_SEC = 360;
+
+/** The part of the game a key's pace is read against (GameKeys' gameShare), none before KEYS_EARLY_SEC: a minute in, a 0-for-1 isn't "behind". */
+export const keysShare = (elapsed: number, q: number) => (elapsed < KEYS_EARLY_SEC ? 0 : gameShare(elapsed, q));
 
 /** The screen: setting up, no game today, a game on, its final, or a game the Play menu simmed. */
 export type Status = 'loading' | 'none' | 'live' | 'final' | 'simmed';
@@ -49,7 +56,10 @@ export function userSetup(league: League, lg: LiveGame): { tactics: Tactics; see
 /** An injury, a foul-out or the other coach's adjustment, as its banner over the court. */
 export function eventBanner(e: LiveEvent): BannerItem {
   const { title, text } = eventLines(e);
-  return { id: e.id, tone: e.kind === 'adjust' ? 'info' : 'bad', kicker: EVENT_KICKER[e.kind], title, line: text || undefined };
+  // the kicker already says what happened: an injury or a foul-out names the player, and the line says what it means
+  const who = e.kind === 'injury' ? title.replace(/ is hurt and out for the game$/, '') : e.kind === 'foulout' ? title.replace(/ has fouled out$/, '') : title;
+  const line = e.kind === 'injury' && who !== title ? 'Out for the rest of the game.' : e.kind === 'foulout' && who !== title ? "He's done for the night." : text;
+  return { id: e.id, tone: e.kind === 'adjust' ? 'info' : 'bad', kicker: EVENT_KICKER[e.kind], title: who, line: line || undefined };
 }
 
 /**

@@ -4,7 +4,8 @@
 import { ArrowLeftRight, Bot, Check, Timer, X } from 'lucide-react';
 import type { CoachMove } from '../../core/types';
 import { moveVerdict, type MoveVerdict } from '../../core/analysis/moves';
-import { fmtClock, periodLabel } from '../stats';
+import { fmtClock, periodLabel, signed } from '../stats';
+import { plural } from '../../core/format';
 import type { StaffAction, StaffNote } from '../live/staff';
 import './staff.css';
 
@@ -76,7 +77,7 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   if (v.what === 'margin') {
     const t = m.after;
     const d = t.us.pts - t.them.pts;
-    return `${d > 0 ? '+' : ''}${d} since (${abbrevs.us} ${t.us.pts}-${t.them.pts})${v.was !== null ? `, ${v.was >= 0 ? '+' : ''}${v.was.toFixed(2)} a trip before` : ''}.`;
+    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since (${signed(d, 0)})${v.was !== null ? `; ${signed(v.was, 2)} a trip before` : ''}.`;
   }
   // one of theirs it was aimed at: his points and the trips he finished, since and before
   if (v.what === 'focus' && m.pid !== undefined) {
@@ -86,7 +87,7 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   }
   const team = m.end === 'off' || v.what === 'us' ? abbrevs.us : abbrevs.them;
   const who = v.what === 'focus' && m.aim ? `${team} ${m.aim}` : team;
-  const now = `${who} ${v.now.toFixed(2)} a trip since (${v.trips})`;
+  const now = `${who} ${v.now.toFixed(2)} a trip since (${plural(v.trips, 'trip')})`;
   return v.was !== null ? `${now}, ${v.was.toFixed(2)} before.` : `${now}.`;
 }
 

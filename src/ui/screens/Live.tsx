@@ -127,7 +127,7 @@ export default function Live() {
     else s.start();
   };
 
-  if (status === 'none') return <NoGame league={league} canSim={!!nextAction?.sim} busy={simBusy} onNext={() => void nextGame()} />;
+  if (status === 'none') return <NoGame league={league} canSim={!!nextAction?.sim} next={nextAction?.sub} busy={simBusy} onNext={() => void nextGame()} />;
   if (!game || !home || !away || !colors || !view || !tactics)
     return (
       <main className="page">
@@ -176,7 +176,6 @@ export default function Live() {
   // whose floor: the home team's, or a neutral one for the Cup final
   const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const myView = view.sides[userSide];
-  const win = wpHome === undefined ? undefined : userSide === 0 ? wpHome : 1 - wpHome;
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];
   const read = staffRead({ view, side: userSide, teams });
@@ -242,7 +241,6 @@ export default function Live() {
     subFor: s.subFor,
     substitute: subAtStop,
     keys: s.keys,
-    win,
     moves,
     busy: simBusy,
   };

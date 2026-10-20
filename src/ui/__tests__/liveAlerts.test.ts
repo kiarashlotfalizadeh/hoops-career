@@ -127,7 +127,7 @@ describe('live alerts', () => {
     const run = liveAlerts(input(g, view, { manualSubs: true })).find((x) => x.id.startsWith('run-'))!;
     expect(run.action?.kind).toBe('timeout');
     expect(run.title).toBe(`${g.league.teams[1].abbrev} on a 9-0 run`);
-    expect(run.text).toMatch(/rests legs.*resets the run.*their coach a chance to adjust/);
+    expect(run.text).toMatch(/rests legs.*stop the run.*their coach a chance to adjust/);
     expect(run.text).not.toMatch(/momentum/i);
     // already called, or at a break: nothing to offer
     expect(liveAlerts(input(g, view, { manualSubs: true, timeoutPending: true })).some((x) => x.id.startsWith('run-'))).toBe(false);

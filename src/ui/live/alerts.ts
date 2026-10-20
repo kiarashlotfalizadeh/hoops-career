@@ -135,7 +135,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       id: `run-${them.score - them.run}`,
       tone: 'warn',
       title: `${themTeam.abbrev} on ${aRun(them.run)}`,
-      text: 'A timeout rests legs (+5% energy) and resets the run, but gives their coach a chance to adjust.',
+      text: 'A timeout rests legs and can stop the run, but gives their coach a chance to adjust.',
       action: { kind: 'timeout', label: 'Timeout' },
     });
 

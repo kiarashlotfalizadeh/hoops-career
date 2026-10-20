@@ -3,7 +3,7 @@
 // make for the next period, who's tired or in foul trouble going into it, the keys, the score by
 // quarter, the battle of play types, the teams side by side, the scorers, their coach's plan and
 // adjustments, and your moves so far with what each did). The huddle is the short version for a
-// timeout: the score and the clock, who to sub, the staff's top move and the play out of it. The next
+// timeout: who to sub, the staff's top move and the play out of it. The next
 // period, or the game, goes on from the bench bar.
 import { useMemo } from 'react';
 import { FastForward } from 'lucide-react';
@@ -13,18 +13,18 @@ import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { atoLabel } from '../../core/sim/sets';
-import { wpText } from '../../core/analysis/winProb';
 import { zScore } from '../../core/analysis/playTypes';
 import { plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
-import { Section, Statline } from '../components/ui';
+import { Section } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
-import { KeysLive, gameShare } from '../components/GameKeys';
+import { KeysLive } from '../components/GameKeys';
 import { fmtClock, periodLabel } from '../stats';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
+import { keysShare } from './session';
 
 interface Common {
   league: League;
@@ -44,8 +44,6 @@ interface Common {
   subFor: (pid: number) => number | undefined;
   substitute: (out: number, inn: number) => boolean;
   keys?: GameKey[];
-  /** Your chance to win now (absent when switched off). */
-  win?: number;
   moves: CoachMove[];
   busy?: boolean;
 }
@@ -198,13 +196,18 @@ export function PeriodReport(
     onSkip?: () => void;
   },
 ) {
-  const { view, side, teams, names, keys, win, assistant, read, moves, colors, oppPlan, adjustments, onSkip } = props;
+  const { view, side, teams, names, keys, assistant, read, moves, colors, oppPlan, adjustments, onSkip } = props;
   const [home, away] = teams;
   const me = view.sides[side];
   const them = view.sides[1 - side];
   const lead = me.score - them.score;
   const q = view.q;
+  // the timeouts the next period starts with, when its rule cuts them (the scorebug has the ones left now)
   const timeouts = q + 1 >= 5 ? 2 : q + 1 === 4 ? Math.min(4, me.timeouts) : me.timeouts;
+  const sub = [
+    ...(q >= 4 && lead === 0 ? [`Tied at ${me.score}: overtime next.`] : []),
+    ...(timeouts !== me.timeouts ? [`${plural(timeouts, 'timeout')} for ${q + 1 >= 5 ? 'overtime' : periodLabel(q + 1)}.`] : []),
+  ];
   const scorers = (s: 0 | 1) =>
     [...view.sides[s].players]
       .filter((p) => p.pts > 0)
@@ -217,6 +220,7 @@ export function PeriodReport(
   const deciding = useDeciding(props.league, view, props.tactics);
   return (
     <div className="lv-rep">
+      {/* (the score, the chance to win and the timeouts are on the scorebug just above: said once) */}
       <div className="lv-rep-head">
         <div className="lv-rep-kicker">
           <span>{q === 2 ? 'Halftime' : q === 4 ? 'End of regulation' : `End of ${periodLabel(q)}`}</span>
@@ -226,19 +230,12 @@ export function PeriodReport(
             </button>
           )}
         </div>
-        {q >= 4 && lead === 0 && <div className="small dim">Tied at {me.score}: overtime next.</div>}
-        <Statline
-          items={[
-            { k: teams[side].abbrev, v: `${me.score}-${them.score}`, color: lead > 0 ? 'var(--good)' : lead < 0 ? 'var(--bad)' : undefined },
-            ...(win !== undefined ? [{ k: 'To win', v: wpText(win) }] : []),
-            { k: 'Timeouts', v: timeouts },
-          ]}
-        />
+        {sub.length > 0 && <div className="small dim2">{sub.join(' ')}</div>}
       </div>
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
       <Decisions {...props} max={3} deciding={deciding} />
       <Trouble {...props} huddle={false} />
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, q)} />}
+      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, q)} />}
       <Section title="By quarter">
         <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
       </Section>
@@ -280,12 +277,9 @@ export function PeriodReport(
   );
 }
 
-/** Your timeout: the score and the clock, who to sub, the staff's top move, the keys and the play out of it. Resume is on the bench bar. */
+/** Your timeout: the staff's read and top move, who to sub, the keys and the play out of it (the score and the clock are on the scorebug). Resume is on the bench bar. */
 export function Huddle(props: Common) {
-  const { view, side, teams, tactics, names, keys, win, assistant, read } = props;
-  const me = view.sides[side];
-  const them = view.sides[1 - side];
-  const lead = me.score - them.score;
+  const { view, side, teams, tactics, names, keys, assistant, read } = props;
   const deciding = useDeciding(props.league, view, tactics).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
@@ -293,19 +287,11 @@ export function Huddle(props: Common) {
     <div className="lv-rep huddle">
       <div className="lv-rep-head">
         <div className="lv-rep-kicker">Timeout {teams[side].abbrev}</div>
-        <Statline
-          items={[
-            { k: teams[side].abbrev, v: `${me.score}-${them.score}`, color: lead > 0 ? 'var(--good)' : lead < 0 ? 'var(--bad)' : undefined },
-            { k: periodLabel(view.q), v: fmtClock(view.clock) },
-            ...(win !== undefined ? [{ k: 'To win', v: wpText(win) }] : []),
-            { k: 'Timeouts', v: me.timeouts },
-          ]}
-        />
       </div>
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
       <Decisions {...props} max={2} deciding={deciding} />
       <Trouble {...props} huddle />
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={gameShare(view.elapsed, view.q)} compact />}
+      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} compact />}
       <Section title="Out of the timeout">
         <div className="small">
           {atoText ? (
@@ -313,7 +299,7 @@ export function Huddle(props: Common) {
               Your after-timeout play: <b>{atoText}</b>
             </>
           ) : (
-            <span className="dim">No after-timeout play set (Tactics → Game Mgmt): the team runs its offense.</span>
+            <span className="dim">No play set: the team runs its offense. Set one in Tactics → Game Mgmt.</span>
           )}
         </div>
       </Section>
