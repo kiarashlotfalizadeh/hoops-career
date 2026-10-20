@@ -2,7 +2,7 @@
 // is shown: a saved playbook against the tactics now, a game plan's items, the staff's counters, a
 // situational plan. One name for each setting everywhere.
 import { tacticsChanges, type TacticsChange } from '../../core/sim/playbooks';
-import { ACTION_META, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, levelName, type LeveledTactic } from '../../core/sim/tactics';
+import { ACTION_META, COVERAGE_META, MENTALITY_META, PRESS_META, SCHEME_META, STAR_PLAN_META, levelName, type LeveledTactic } from '../../core/sim/tactics';
 import type { Tactics, TacticsPatch } from '../../core/types';
 
 /** Every setting that differs from `a` to `b` (core/sim/playbooks names each as the Tactics screen does). */
@@ -27,11 +27,13 @@ const LEVELED: Record<string, { label: string; level: LeveledTactic }> = {
 const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x)}`;
 
 /**
- * A patch's changes, a few words each: a setting it sets reads as its level ("Pace: Run & gun"), one
- * it moves as the move ("Pace −25"), a scheme or press by name.
+ * A patch's changes, a few words each: the mentality it plays ("Mentality: Very aggressive"), a
+ * setting it sets reads as its level ("Pace: Run & gun"), one it moves as the move ("Pace −25"), a
+ * scheme or press by name.
  */
 export function patchParts(p: TacticsPatch): string[] {
   const out: string[] = [];
+  if (p.mentality !== undefined) out.push(`Mentality: ${MENTALITY_META[p.mentality].label}`);
   const { actions, ...off } = p.offense ?? {};
   if (off.huntMismatch) out.push('Hunt mismatches');
   for (const [k, v] of Object.entries(off)) if (typeof v === 'number' && LEVELED[k]) out.push(`${LEVELED[k].label}: ${levelName(LEVELED[k].level, v)}`);

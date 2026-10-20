@@ -52,7 +52,12 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
     meta: 'Team · your system: its report, offense, defense, players, game management',
     also: 'playbook offense defense roles sets system report grades',
   },
-  { title: 'Player roles', to: '/team/tactics?tab=roles', meta: 'Team · each player’s role, how he fits it, his shot freedom', also: 'roles role fit freedom screeners' },
+  {
+    title: 'Player roles',
+    to: '/team/tactics?tab=players',
+    meta: 'Team · each player’s roles at both ends, how he fits them, his shot freedom and glass duty',
+    also: 'roles role fit freedom screeners defensive role glass',
+  },
   { title: 'Lineups', to: '/team/lineups', meta: 'Team · five-man units and their ratings', also: 'units five man' },
   { title: 'Compare players', to: '/compare', meta: 'Team · two players side by side', also: 'versus vs' },
   { title: 'Schedule', to: '/games', meta: 'Games · your schedule and results', also: 'games results calendar' },

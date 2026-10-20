@@ -1,0 +1,633 @@
+/* The Football Manager layer of Team → Tactics (`tx-`): the tactic slots and the mentality dial over
+   the tabs, the tactics board with its formation picker and bench, familiarity everywhere (bars,
+   dots, the ring, each option's %), the phases of play on Instructions, the Players rows with both
+   roles, and the Familiarity tab. */
+
+/* ------------------------------------------------------------ familiarity, wherever it shows */
+.tx-fambar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.tx-fambar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--text-dim);
+  transition: width var(--dur) var(--ease-out);
+}
+.tx-fambar i.good {
+  background: var(--good);
+}
+.tx-fambar i.warn {
+  background: var(--warn);
+}
+.tx-fambar i.bad {
+  background: var(--bad);
+}
+/* a player's familiarity with his role pair, as a dot */
+.tx-famdot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  vertical-align: middle;
+}
+.tx-famdot.good {
+  background: var(--good);
+}
+.tx-famdot.warn {
+  background: var(--warn);
+}
+.tx-famdot.bad {
+  background: var(--bad);
+}
+/* an option's familiarity, in its chip: "Blitz 40%" */
+.tx-optfam {
+  margin-left: 6px;
+  font-size: 11.5px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.chip.on .tx-optfam.good {
+  color: var(--good);
+}
+/* a setting off what's drilled: a line under its levels */
+.tx-lv {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tx-lv-fam {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+.tx-lv-fam b {
+  color: var(--text-2);
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------ the tactic slots */
+.tx-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.tx-slot {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-2);
+  background: var(--raised);
+  transition:
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
+}
+.tx-slot.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+}
+.tx-slot.vacant {
+  border-style: dashed;
+  background: transparent;
+}
+.tx-slot-b {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 4px;
+  padding: 8px 10px 9px;
+  text-align: left;
+  border-radius: inherit;
+}
+.tx-slot:not(.on) .tx-slot-b:active {
+  background: var(--surface);
+}
+.tx-slot-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* room for ⋯ */
+.tx-slot:not(.vacant) .tx-slot-top {
+  padding-right: 16px;
+}
+/* its familiarity as a bar along the tile's foot */
+.tx-slot-bar {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  overflow: hidden;
+}
+.tx-slot-bar i {
+  display: block;
+  height: 100%;
+  background: var(--text-dim);
+}
+.tx-slot-bar i.good {
+  background: var(--good);
+}
+.tx-slot-bar i.warn {
+  background: var(--warn);
+}
+.tx-slot-bar i.bad {
+  background: var(--bad);
+}
+.tx-slot-l {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 14px;
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+.tx-slot.on .tx-slot-l {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tx-slot-n {
+  min-width: 0;
+  font-weight: 700;
+  font-size: 13px;
+}
+.tx-slot-f {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 650;
+}
+.tx-slot-f .num {
+  font-size: 15px;
+  font-weight: 800;
+}
+.tx-slot-fl {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tx-slot-f.dim {
+  align-items: center;
+  gap: 3px;
+  min-height: 22px;
+}
+.tx-slot-m {
+  position: absolute;
+  top: 2px;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ the mentality dial */
+.tx-mentality {
+  position: relative;
+}
+.tx-mentality > .help-btn {
+  position: absolute;
+  top: -3px;
+  left: 76px;
+}
+
+/* ------------------------------------------------------------ the Tactic tab */
+.tx-tactic,
+.tx-tactic-head,
+.tx-tactic-main,
+.tx-tactic-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-page);
+  min-width: 0;
+}
+/* a wide screen: the board on the left, the switch, the mentality and the style beside it */
+@media (min-width: 900px) {
+  .tx-tactic {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 'main head' 'main side';
+    align-items: start;
+    gap: var(--gap-page) 20px;
+  }
+  .tx-tactic-head {
+    grid-area: head;
+  }
+  .tx-tactic-main {
+    grid-area: main;
+  }
+  .tx-tactic-side {
+    grid-area: side;
+  }
+}
+/* the formation's pickers over the court */
+.tx-formation .tx-pickrow-v {
+  font-weight: 750;
+}
+.tx-shape-gb {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+}
+.tx-shape-gb b {
+  display: inline-block;
+  width: 10px;
+  font-weight: 800;
+}
+/* the court: the five's plates, a dot for each one's familiarity */
+.tx-board {
+  max-width: none;
+}
+.tx-board.out .tx-floor-p {
+  background: rgba(10, 18, 34, 0.88);
+  border-color: color-mix(in srgb, var(--info) 45%, transparent);
+}
+.tx-board.out .tx-floor-p.off {
+  border-color: var(--warn);
+}
+.tx-board .tx-floor-n {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.tx-board .tx-famdot {
+  width: 0.5em;
+  height: 0.5em;
+}
+.tx-board-tag {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(8, 10, 14, 0.6);
+  color: #dfe5ee;
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.tx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: -2px;
+}
+.tx-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tx-legend .tx-famdot + .tx-famdot {
+  margin-left: -1px;
+}
+.tx-legend-off {
+  display: inline-block;
+  width: 12px;
+  height: 8px;
+  border-radius: 2px;
+  border: 1.5px solid var(--warn);
+}
+.tx-benchrow .tx-floor-s {
+  flex: none;
+  font-size: 10px;
+}
+.tx-benchrow > .tx-famdot {
+  margin-right: 4px;
+}
+/* the style: the playbook and identity it loads, a tap from the picker */
+.tx-stylebtn {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+}
+.tx-stylebtn > .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.tx-style-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 750;
+  font-size: 14.5px;
+}
+.tx-style-row .over {
+  min-width: 70px;
+  flex: none;
+}
+.tx-stylebtn > .btn {
+  flex: none;
+  pointer-events: none;
+}
+.tx-style {
+  gap: 16px;
+}
+
+/* ------------------------------------------------------------ Instructions: the phases of play */
+.tx-phases {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+@media (min-width: 640px) {
+  .tx-phases {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.tx-phase {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px 9px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-2);
+  background: var(--raised);
+  text-align: left;
+  transition:
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
+}
+.tx-phase:not(.on):active {
+  background: var(--surface);
+}
+.tx-phase.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+}
+.tx-phase-n {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tx-phase.on .tx-phase-n {
+  color: var(--text);
+}
+.tx-phase-v {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tx-phase-v .num {
+  font-size: 17px;
+  font-weight: 800;
+}
+.tx-phase-l {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.tx-phase-dims {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tx-phase-dims b {
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------ Players: both roles on each row */
+.tx-prow-m {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tx-prow-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tx-prow-top .lr-name {
+  min-width: 0;
+}
+.tx-prow-top .tag {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
+}
+.tx-prow-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.tx-prow-r {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tx-prow-r .ellipsis {
+  min-width: 0;
+}
+.tx-prow-r .tx-floor-s {
+  flex: none;
+  font-size: 10px;
+}
+.tx-prow-k {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  font-size: 9.5px;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  color: var(--accent-text);
+}
+.tx-prow-k.def {
+  background: color-mix(in srgb, var(--info) 22%, transparent);
+  color: var(--info);
+}
+.tx-prow-fam {
+  flex: none;
+  min-width: 36px;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------ the Familiarity tab */
+.tx-ring {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+}
+.tx-ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+.tx-ring-bg {
+  fill: none;
+  stroke: var(--line-2);
+  stroke-width: 3.2;
+}
+.tx-ring-fg {
+  fill: none;
+  stroke: var(--text-dim);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--dur) var(--ease-out);
+}
+.tx-ring.good .tx-ring-fg {
+  stroke: var(--good);
+}
+.tx-ring.warn .tx-ring-fg {
+  stroke: var(--warn);
+}
+.tx-ring.bad .tx-ring-fg {
+  stroke: var(--bad);
+}
+.tx-ring-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+}
+.tx-ring-v small {
+  font-size: 0.55em;
+  margin-left: 1px;
+}
+.tx-famtop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.tx-famtop-r {
+  gap: 6px;
+  min-width: 0;
+}
+.tx-famtop-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-famends {
+  display: flex;
+  gap: 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.tx-famends b {
+  font-weight: 800;
+}
+.tx-fam-ends {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+@media (min-width: 760px) {
+  .tx-fam-ends {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.tx-famrow {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px var(--row-px);
+}
+.tx-famrow-top {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.tx-famrow-n {
+  font-weight: 700;
+  font-size: 14px;
+}
+.tx-famrow-v {
+  font-weight: 800;
+  font-size: 14px;
+}
+.tx-famrow-s {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.tx-prep .tx-preset-t {
+  white-space: normal;
+  line-height: 1.35;
+}
+.tx-prep .tx-preset-pick {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.tx-famp-h > :nth-child(2),
+.tx-famp-h > :nth-child(3) {
+  width: 64px;
+  flex: none;
+  text-align: right;
+}
+.tx-famp .lr-name {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-famp .tag {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
+}
+.tx-famp-c {
+  flex: none;
+  width: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.tx-famp-c .tx-fambar {
+  width: 100%;
+}

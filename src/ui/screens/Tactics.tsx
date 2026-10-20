@@ -1,51 +1,66 @@
-// Team → Tactics: your system and its parts in six tabs (System, Offense, Defense, Players, Game
-// Mgmt, Insights; advice in core links to them by their ids, so those stay), each its own module in
-// src/ui/tactics. The System tab opens on the system report: your system's grades at both ends against
-// the league's, which the Offense and Defense tabs carry in a strip over their settings, moving as you
-// change one, so every lever shows what it buys and what it costs. The staff's advice on tactics sits
-// on top; every explanation is behind a "?". Edits save as they're made; while this visit has any, a
-// compact dock says what they did to the grades and offers Undo and Done (which hands the Continue
-// bar back).
+// Team → Tactics, Football Manager's way: your three tactics (A, B, C) as tabs over everything, each
+// with how well the team knows it, then six sections, each its own module in src/ui/tactics. Tactic
+// (the board: your five where the shape and the scheme put them, the mentality, the style), the
+// Instructions by phase of play, Players (roles at both ends), Familiarity (what the team knows and
+// the practice that builds it), Game Mgmt and the Report (the system report and the season's
+// insights). Advice in core links here by the old section ids (playbook, offense, defense, roles,
+// manage, insights), which open the section that now holds them. The grades the open section moves
+// sit in a strip over it, so every lever shows what it buys and what it costs. Edits save as they're
+// made; while this visit has any, a compact dock says what they did to the grades and offers Undo
+// and Done (which hands the Continue bar back).
 import { useEffect, useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { edit, touch } from '../../state/actions';
-import { cloneTactics } from '../../core/sim/tactics';
+import { touch } from '../../state/actions';
 import { guideVisit } from '../../core/league/agenda';
 import { rosterSorted } from '../../core/league/helpers';
+import { systemFamiliarity } from '../../core/league/practice';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { Segmented } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
 import { useQueryParam } from '../league/shared';
-import { tacticsSig, visitStart } from '../tactics/edit';
-import { SystemTab } from '../tactics/SystemTab';
+import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
 import { GradeStrip } from '../tactics/SystemReport';
-import { OffenseTab } from '../tactics/OffenseTab';
-import { DefenseTab } from '../tactics/DefenseTab';
+import { TacticTab } from '../tactics/TacticTab';
+import { InstructionsTab } from '../tactics/InstructionsTab';
 import { RolesTab } from '../tactics/RolesTab';
+import { FamiliarityTab } from '../tactics/FamiliarityTab';
 import { ManageTab } from '../tactics/ManageTab';
-import { InsightsTab } from '../tactics/InsightsTab';
+import { ReportTab } from '../tactics/ReportTab';
+import { MentalityDial, SlotBar } from '../tactics/SlotBar';
+import { PHASES, type Phase } from '../tactics/fam';
+import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
 
-type Tab = 'playbook' | 'offense' | 'defense' | 'roles' | 'manage' | 'insights';
+type Tab = 'tactic' | 'instructions' | 'players' | 'familiarity' | 'manage' | 'report';
+/** The sections' old ids, which advice and search still link to. */
+type OldTab = 'playbook' | 'offense' | 'defense' | 'roles' | 'insights';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'playbook', label: 'System' },
-  { id: 'offense', label: 'Offense' },
-  { id: 'defense', label: 'Defense' },
-  { id: 'roles', label: 'Players' },
+  { id: 'tactic', label: 'Tactic' },
+  { id: 'instructions', label: 'Instructions' },
+  { id: 'players', label: 'Players' },
+  { id: 'familiarity', label: 'Familiarity' },
   { id: 'manage', label: 'Game Mgmt' },
-  { id: 'insights', label: 'Insights' },
+  { id: 'report', label: 'Report' },
 ];
+
+const OLD: Record<OldTab, Tab> = { playbook: 'tactic', offense: 'instructions', defense: 'instructions', roles: 'players', insights: 'report' };
+const ALL_IDS = [...TABS.map((x) => x.id), ...(Object.keys(OLD) as OldTab[])];
 
 export default function Tactics() {
   const league = useLeague();
-  const [tab, setTab] = useQueryParam<Tab>(
-    'tab',
-    'playbook',
-    TABS.map((x) => x.id),
+  const [raw, setTab] = useQueryParam<Tab | OldTab>('tab', 'tactic', ALL_IDS);
+  const tab: Tab = (OLD as Record<string, Tab>)[raw] ?? (raw as Tab);
+  // a link to the old Defense section opens Instructions out of possession
+  const [phase, setPhase] = useQueryParam<Phase>(
+    'phase',
+    raw === 'defense' ? 'outPoss' : 'inPoss',
+    PHASES.map((p) => p.id),
   );
-  const t = league.teams[league.userTid].tactics;
+  const [side, setSide] = useQueryParam<BoardSide>('side', 'in', ['in', 'out']);
+  const team = league.teams[league.userTid];
+  const t = team.tactics;
   // a sim hands back a new league (where the assistant may have refit a playbook he manages): a new starting point
   const [start, setStart] = useState(() => visitStart(league));
   if (start.of !== league) setStart(visitStart(league));
@@ -53,6 +68,7 @@ export default function Tactics() {
   // a Play-menu sim's progress bar takes the same spot as the changes dock
   const simming = useStore((s) => !!s.sim);
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
+  const sys = useLeagueMemo(() => systemFamiliarity(league, league.userTid), [league]);
   // the guided first week's "pick a playbook" is done once it's been looked at
   useEffect(() => void touch((l) => void guideVisit(l, 'playbook')), []);
 
@@ -61,23 +77,29 @@ export default function Tactics() {
   const sig = tacticsSig(t);
   const report = useMemo(() => (changed ? systemReport(league, league.userTid, t, base.others) : base), [changed, sig, base, league]); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = changed ? gradeChanges(base, report) : [];
+  // the grades the open section's levers move
+  const end = tab === 'tactic' ? (side === 'in' ? 'off' : 'def') : tab === 'instructions' ? PHASES.find((p) => p.id === phase)!.end : tab === 'players' ? 'both' : null;
 
   return (
     <>
       <AssistantCards league={league} areas={['tactics']} max={2} />
+      {/* while a sim plays on a copy of the league, nothing here can change it */}
+      <fieldset className="tx-fieldset" disabled={simming}>
+        <SlotBar />
+      </fieldset>
       <div className="tx-tabs">
         <Segmented value={tab} onChange={setTab} options={TABS} label="Tactics sections" />
       </div>
-      {(tab === 'offense' || tab === 'defense') && <GradeStrip report={report} was={base} end={tab === 'offense' ? 'off' : 'def'} />}
+      {end && <GradeStrip report={report} was={base} end={end} />}
 
-      {/* while a sim plays on a copy of the league, nothing here can change it */}
       <fieldset className="tx-fieldset" disabled={simming}>
-        {tab === 'playbook' && <SystemTab report={report} was={changed ? base : undefined} />}
-        {tab === 'offense' && <OffenseTab t={t} players={players} />}
-        {tab === 'defense' && <DefenseTab t={t} />}
-        {tab === 'roles' && <RolesTab />}
+        {tab === 'instructions' && <MentalityDial t={t} />}
+        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} />}
+        {tab === 'instructions' && <InstructionsTab t={t} players={players} sys={sys} phase={phase} setPhase={setPhase} />}
+        {tab === 'players' && <RolesTab players={players} />}
+        {tab === 'familiarity' && <FamiliarityTab sys={sys} players={players} />}
         {tab === 'manage' && <ManageTab t={t} players={players} />}
-        {tab === 'insights' && <InsightsTab />}
+        {tab === 'report' && <ReportTab report={report} was={changed ? base : undefined} />}
       </fieldset>
 
       {changed && !simming && (
@@ -94,7 +116,7 @@ export default function Tactics() {
             )}
             {moved.length > 2 && <span className="dim"> +{moved.length - 2}</span>}
           </span>
-          <button className="btn sm ghost" aria-label="Undo your changes" onClick={() => edit((l) => void (l.teams[l.userTid].tactics = cloneTactics(start.tactics)))}>
+          <button className="btn sm ghost" aria-label="Undo your changes" onClick={() => undoTo(start)}>
             <Undo2 size={16} />
           </button>
           <button className="btn sm primary" aria-label="Done: keep the changes" onClick={() => setStart(visitStart(league))}>

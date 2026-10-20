@@ -1,42 +1,66 @@
-// Tactics → Players: each player's offensive role and shot freedom (a tap opens his editor), and the
-// preferred ball screeners.
+// Tactics → Players: each player's roles at both ends with how well he suits them (★), his shot
+// freedom and glass duty, and how well he knows his pair of roles; a tap opens his role sheet. Then
+// the preferred ball screeners.
 import { useMemo, useState } from 'react';
-import { useLeague, useLeagueMemo } from '../../state/store';
+import { useLeague } from '../../state/store';
 import type { ShotFreedom } from '../../core/types';
-import { rosterSorted } from '../../core/league/helpers';
 import { ROLE_META, archetype } from '../../core/ratings';
-import { Avatar, Help, Ovr, Section, Sheet, Tag, activateOnKey } from '../components/ui';
+import { DEF_ROLE_META, GLASS_META, defRoleOf } from '../../core/sim/tactics';
+import { roleFam } from '../../core/sim/familiarity';
+import { defRoleFits, fitStars, roleFits } from '../../core/analysis/system';
+import type { Player } from '../../core/types';
+import { Avatar, Help, Section, Sheet, Tag, activateOnKey } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
+import { Term } from '../components/Glossary';
 import { rosterNames } from '../stats';
 import { tweak } from './edit';
+import { famTone } from './formation';
+import { useFam } from './useFam';
 
-export function RolesTab() {
+const Stars = ({ v }: { v: number }) => (
+  <span className="tx-floor-s" aria-label={`${fitStars(v)} of 5`}>
+    {'★'.repeat(fitStars(v))}
+    <span className="dim">{'★'.repeat(5 - fitStars(v))}</span>
+  </span>
+);
+
+export function RolesTab({ players }: { players: Player[] }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
-  const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
+  const fam = useFam();
   const nameOf = useMemo(() => rosterNames(players, { initial: true }), [players]);
   const [pick, setPick] = useState<number | null>(null);
   const p = pick !== null ? league.players[pick] : null;
   return (
     <>
       <Section
-        title="Roles & shot freedom"
+        title="Roles"
         right={
-          <Help title="Roles and freedom">
-            A role decides which actions a player is involved in and how often the offense looks for him. Shot freedom scales his shot volume: green light for scorers, limited for
-            players who should keep it moving. Tap a player to change his.
+          <Help title="Roles">
+            <p>
+              <b>In possession:</b> which actions a player is in and how often the offense looks for him. <b>Out of possession:</b> whom he guards and what else he does (
+              <Term id="defroles">defensive roles</Term>: point of attack, wing stopper, rim anchor, roamer, or hidden on their weakest player).
+            </p>
+            <p>
+              ★ is how well he suits each role. The % is how well he knows the pair (<Term id="familiarity">familiarity</Term>): a new pair is played a step slow until drilled.
+            </p>
+            <p>Shot freedom scales his shot volume; glass duty sends him to the offensive boards, or back on defense, whatever the team does. Tap a player to change any of it.</p>
           </Help>
         }
       >
         <div className="card flush list wide2">
           {players.map((pl) => {
             const role = t.offense.roles[pl.pid] ?? archetype(pl.ratings).role;
+            const drole = defRoleOf(t.defense, pl.pid);
+            const of = roleFits(pl);
+            const df = defRoleFits(pl);
             const fr = (t.offense.freedom[pl.pid] ?? 0) as ShotFreedom;
-            const off = archetype(pl.ratings).role !== role;
+            const glass = t.offense.glass?.[pl.pid] ?? 0;
+            const pair = roleFam(fam, t, pl);
             return (
               <div
                 key={pl.pid}
-                className="listrow clickable"
+                className="listrow clickable tx-prow"
                 role="button"
                 tabIndex={0}
                 aria-haspopup="dialog"
@@ -44,19 +68,36 @@ export function RolesTab() {
                 onKeyDown={activateOnKey(() => setPick(pl.pid))}
               >
                 <Avatar p={pl} />
-                <div className="grow">
-                  <div className="lr-name ellipsis">{nameOf(pl.pid)}</div>
-                  {/* his freedom and an injury ride the role's line, so the name keeps the row's width */}
-                  <div className="lr-meta tx-rolemeta">
-                    <span className={`ellipsis ${off ? 'warn' : ''}`}>
-                      {ROLE_META[role].label}
-                      {off ? ' · out of position' : ''}
-                    </span>
+                <div className="grow tx-prow-m">
+                  <div className="tx-prow-top">
+                    <span className="lr-name ellipsis">{nameOf(pl.pid)}</span>
                     {fr !== 0 && <Tag tone={fr === 1 ? 'good' : 'warn'}>{fr === 1 ? 'Green light' : 'Limited'}</Tag>}
+                    {glass !== 0 && <Tag tone="info">{GLASS_META[glass].label}</Tag>}
                     {pl.injury && <Tag tone="bad">Out</Tag>}
                   </div>
+                  <div className="tx-prow-roles">
+                    <span className="tx-prow-r">
+                      <span className="tx-prow-k" aria-hidden="true">
+                        O
+                      </span>
+                      <span className="sr-only">In possession: </span>
+                      <span className="ellipsis">{ROLE_META[role].label}</span>
+                      <Stars v={of[role]} />
+                    </span>
+                    <span className="tx-prow-r">
+                      <span className="tx-prow-k def" aria-hidden="true">
+                        D
+                      </span>
+                      <span className="sr-only">Out of possession: </span>
+                      <span className="ellipsis">{DEF_ROLE_META[drole].short}</span>
+                      <Stars v={df[drole]} />
+                    </span>
+                  </div>
                 </div>
-                <Ovr v={pl.ovr} size="sm" />
+                <span className={`tx-prow-fam num ${famTone(pair)}`}>
+                  <span className="sr-only">Knows his roles </span>
+                  {Math.round(pair)}%
+                </span>
               </div>
             );
           })}
@@ -90,7 +131,7 @@ export function RolesTab() {
         </div>
       </Section>
       <Sheet open={!!p} onClose={() => setPick(null)} title={p ? `${p.firstName} ${p.lastName}` : ''}>
-        {p && <RoleEditor p={p} onDone={() => setPick(null)} />}
+        {p && <RoleEditor key={p.pid} p={p} onDone={() => setPick(null)} />}
       </Sheet>
     </>
   );

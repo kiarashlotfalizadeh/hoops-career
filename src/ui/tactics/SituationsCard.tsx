@@ -1,11 +1,15 @@
 // Game Mgmt's situational plans: each changes the tactics while its situation lasts (a quarter, the
-// time left, the score, the second unit), the first enabled match applying, top to bottom. A row per
-// plan with what it changes; its sheet edits the trigger and the changes.
+// time left, the score, the second unit), the first enabled match applying, top to bottom. A plan
+// either changes settings and the mentality on top of the tactic, or switches to another of your
+// tactics (B or C) as it is. A row per plan with what it does; its sheet edits the trigger and the
+// changes.
 import { useState } from 'react';
 import { ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react';
-import type { DefScheme, PressMode, SituationalPlan, SituationTrigger, Tactics, TacticsPatch } from '../../core/types';
+import { useLeague } from '../../state/store';
+import type { DefScheme, Mentality, PressMode, SituationalPlan, SituationTrigger, Tactics, TacticsPatch, Team } from '../../core/types';
 import { ACTIONS } from '../../core/types';
-import { MAX_SITUATIONS, PRESS_META, SCHEME_META, SITUATION_TEMPLATES, situationFromTemplate, situationText, type SituationTemplate } from '../../core/sim/tactics';
+import { MAX_SITUATIONS, MENTALITY_META, PRESS_META, SCHEME_META, SITUATION_TEMPLATES, situationFromTemplate, situationText, type SituationTemplate } from '../../core/sim/tactics';
+import { SLOT_COUNT, SLOT_LETTERS, activeSlot, slotTactics } from '../../core/sim/slots';
 import { Chips, Help, Section, Sheet, Slider, Toggle } from '../components/ui';
 import { patchParts, patchText } from './changes';
 import '../screens/tactics.css';
@@ -14,7 +18,7 @@ type Edit = (fn: (t: Tactics) => void) => void;
 
 const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x)}`;
 
-/** The plan editor's own controls: six relative sliders, the base scheme and the press. */
+/** The plan editor's own controls: the mentality, six relative sliders, the base scheme and the press. */
 const EDITOR_NUDGES = { offense: ['pace', 'threePoint', 'crashBoards'], defense: ['pressure', 'help', 'getBack'] } as const;
 
 /** A plan's changes the editor has no control for (a template's extras, kept as they are). */
@@ -25,13 +29,25 @@ function extraPatch(p: TacticsPatch): TacticsPatch {
   const nudge = { ...p.nudge, offense: { ...p.nudge?.offense }, defense: { ...p.nudge?.defense } };
   for (const k of EDITOR_NUDGES.offense) delete nudge.offense[k];
   for (const k of EDITOR_NUDGES.defense) delete nudge.defense[k];
-  return { ...p, defense, nudge };
+  return { ...p, defense, nudge, mentality: undefined };
 }
 
 const plans = (t: Tactics) => t.situations ?? [];
 
+/** A slot's name as a plan says it: "Tactic B · Plan B". */
+const slotName = (team: Team, i: number) => `Tactic ${SLOT_LETTERS[i]} · ${team.slots?.names[i] ?? ''}`.replace(/ · $/, '');
+
+/** What a plan does, in a few words: the tactic it switches to, or its changes. */
+export function planText(team: Team, s: SituationalPlan): string {
+  if (s.slot === undefined) return patchText(s.patch);
+  const ready = s.slot !== activeSlot(team) && !!slotTactics(team, s.slot);
+  return `Switch to ${slotName(team, s.slot)}${ready ? '' : ' (nothing to switch to)'}`;
+}
+
 /** Game Mgmt's situational plans, with their triggers and what each one changes. */
 export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
+  const league = useLeague();
+  const team = league.teams[league.userTid];
   const [editing, setEditing] = useState<string | null>(null);
   const list = plans(t);
   const full = list.length >= MAX_SITUATIONS;
@@ -84,6 +100,7 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
               applies (top to bottom), and your tactics come back when it ends.
             </p>
             <p>Changes like &quot;Pace −25&quot; build on whatever playbook you run. Up to {MAX_SITUATIONS} plans.</p>
+            <p>A plan can also set your mentality for the situation, or switch to your Tactic B or C as it is (practice drills those too, a little less than the active one).</p>
             {(Object.keys(SITUATION_TEMPLATES) as SituationTemplate[]).map((k) => (
               <p key={k}>
                 <b>{SITUATION_TEMPLATES[k].label}:</b> {SITUATION_TEMPLATES[k].help}
@@ -105,7 +122,7 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
                     {s.label} <Pencil size={13} className="dim" aria-hidden="true" />
                   </span>
                   <span className="lr-meta">{situationText(s.when)}</span>
-                  <span className="tx-sit-then">{patchText(s.patch)}</span>
+                  <span className="tx-sit-then">{planText(team, s)}</span>
                 </button>
                 <button
                   className={`toggle ${s.enabled ? 'on' : ''}`}
@@ -133,7 +150,7 @@ export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
         </div>
       </div>
       <Sheet open={!!open} onClose={close} title={open ? `Plan: ${open.label || 'Plan'}` : 'Plan'}>
-        {open && <SituationEditor s={open} change={(fn) => change(open.id, fn)} />}
+        {open && <SituationEditor team={team} s={open} change={(fn) => change(open.id, fn)} />}
         {open && (
           <div className="row tx-btns tx-sheet-foot">
             {openAt > 0 && (
@@ -176,7 +193,7 @@ function setWhen<K extends keyof SituationTrigger>(s: SituationalPlan, k: K, v: 
   else s.when[k] = v;
 }
 
-function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: SituationalPlan) => void) => void }) {
+function SituationEditor({ team, s, change }: { team: Team; s: SituationalPlan; change: (fn: (s: SituationalPlan) => void) => void }) {
   const w = s.when;
   const nudge = (group: 'offense' | 'defense', key: string) => (s.patch.nudge?.[group] as Record<string, number> | undefined)?.[key] ?? 0;
   const q = (x: number) => (x >= 4 ? 'Q4 & OT' : `Q${x}`);
@@ -285,51 +302,92 @@ function SituationEditor({ s, change }: { s: SituationalPlan; change: (fn: (s: S
       </div>
       <div className="tx-sub">
         <div className="over">Then</div>
-        <div className="tx-when">{patchText(s.patch)}</div>
+        <div className="tx-when">{planText(team, s)}</div>
       </div>
       <div className="card col tx-group">
-        {nudgeSlider('offense', 'pace', 'Pace')}
-        {nudgeSlider('offense', 'threePoint', 'Three-point emphasis')}
-        {nudgeSlider('offense', 'crashBoards', 'Crash the offensive glass')}
-        {nudgeSlider('defense', 'pressure', 'Ball pressure')}
-        {nudgeSlider('defense', 'help', 'Help defense')}
-        {nudgeSlider('defense', 'getBack', 'Transition defense')}
         <div className="tx-ctl-chips">
-          <div className="slider-label">Base scheme</div>
+          <div className="slider-label">Play</div>
           <Chips
-            label="Base scheme"
-            value={s.patch.defense?.scheme ?? 'keep'}
-            onChange={(x: DefScheme | 'keep') =>
+            label="Play"
+            value={s.slot ?? -1}
+            onChange={(x: number) =>
               change((p) => {
-                const d = { ...p.patch.defense };
-                if (x === 'keep') delete d.scheme;
-                else d.scheme = x;
-                p.patch.defense = d;
-                if (!Object.keys(d).length) delete p.patch.defense;
+                if (x < 0) delete p.slot;
+                else p.slot = x;
               })
             }
-            options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))]}
+            options={[
+              { id: -1, label: 'This tactic' },
+              ...Array.from({ length: SLOT_COUNT }, (_, i) => i)
+                .filter((i) => i !== activeSlot(team) && (!!slotTactics(team, i) || s.slot === i))
+                .map((i) => ({ id: i, label: slotName(team, i) })),
+            ]}
           />
         </div>
-        <div className="tx-ctl-chips">
-          <div className="slider-label">Full-court press</div>
-          <Chips
-            label="Full-court press"
-            value={s.patch.defense?.press ?? 'keep'}
-            onChange={(x: PressMode | 'keep') =>
-              change((p) => {
-                const d = { ...p.patch.defense };
-                if (x === 'keep') delete d.press;
-                else d.press = x;
-                p.patch.defense = d;
-                if (!Object.keys(d).length) delete p.patch.defense;
-              })
-            }
-            options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))]}
-          />
-        </div>
-        {extras.length > 0 && <div className="small dim">Also in this plan: {extras.join(' · ')}.</div>}
-        {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
+        {s.slot !== undefined ? (
+          <div className="small dim">
+            While the situation lasts, your team plays Tactic {SLOT_LETTERS[s.slot]} as it is, at the familiarity they have with it. Set it up from the tactic tabs at the top.
+          </div>
+        ) : (
+          <>
+            <div className="tx-ctl-chips">
+              <div className="slider-label">Mentality</div>
+              <Chips
+                label="Mentality"
+                value={s.patch.mentality ?? 'keep'}
+                onChange={(x: Mentality | 'keep') =>
+                  change((p) => {
+                    if (x === 'keep') delete p.patch.mentality;
+                    else p.patch.mentality = x;
+                  })
+                }
+                options={[{ id: 'keep' as const, label: 'Keep' }, ...([-2, -1, 0, 1, 2] as const).map((k) => ({ id: k, label: MENTALITY_META[k].label }))]}
+              />
+            </div>
+            {nudgeSlider('offense', 'pace', 'Pace')}
+            {nudgeSlider('offense', 'threePoint', 'Three-point emphasis')}
+            {nudgeSlider('offense', 'crashBoards', 'Crash the offensive glass')}
+            {nudgeSlider('defense', 'pressure', 'Ball pressure')}
+            {nudgeSlider('defense', 'help', 'Help defense')}
+            {nudgeSlider('defense', 'getBack', 'Transition defense')}
+            <div className="tx-ctl-chips">
+              <div className="slider-label">Base scheme</div>
+              <Chips
+                label="Base scheme"
+                value={s.patch.defense?.scheme ?? 'keep'}
+                onChange={(x: DefScheme | 'keep') =>
+                  change((p) => {
+                    const d = { ...p.patch.defense };
+                    if (x === 'keep') delete d.scheme;
+                    else d.scheme = x;
+                    p.patch.defense = d;
+                    if (!Object.keys(d).length) delete p.patch.defense;
+                  })
+                }
+                options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(SCHEME_META) as DefScheme[]).map((k) => ({ id: k, label: SCHEME_META[k].label }))]}
+              />
+            </div>
+            <div className="tx-ctl-chips">
+              <div className="slider-label">Full-court press</div>
+              <Chips
+                label="Full-court press"
+                value={s.patch.defense?.press ?? 'keep'}
+                onChange={(x: PressMode | 'keep') =>
+                  change((p) => {
+                    const d = { ...p.patch.defense };
+                    if (x === 'keep') delete d.press;
+                    else d.press = x;
+                    p.patch.defense = d;
+                    if (!Object.keys(d).length) delete p.patch.defense;
+                  })
+                }
+                options={[{ id: 'keep' as const, label: 'Keep' }, ...(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))]}
+              />
+            </div>
+            {extras.length > 0 && <div className="small dim">Also in this plan: {extras.join(' · ')}.</div>}
+            {ACTIONS.some((a) => s.patch.nudge?.actions?.[a]) && <div className="tiny dim">Action changes come from the template and stay as they are.</div>}
+          </>
+        )}
       </div>
     </div>
   );

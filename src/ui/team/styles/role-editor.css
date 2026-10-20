@@ -53,3 +53,69 @@
   border-color: transparent;
   color: var(--accent-ink);
 }
+/* his stars for a role, the empty ones dimmed */
+.tm-role-stars {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--warn);
+  white-space: nowrap;
+}
+.tm-role-stars .dim {
+  color: var(--line-3);
+}
+.tm-role-opt-l .ellipsis {
+  min-width: 0;
+}
+.tm-role-opt-l .tag {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
+}
+/* how well he'd know the pair this role makes */
+.tm-role-fam {
+  flex: none;
+  width: 38px;
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 750;
+}
+/* his pair and his familiarity, over the pickers */
+.tm-ed-sum {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+.tm-ed-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tm-ed-role {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  font-weight: 750;
+  font-size: 14.5px;
+}
+.tm-ed-role .tm-role-stars {
+  margin-left: 0;
+}
+.tm-ed-fam {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tm-ed-fam b {
+  font-weight: 800;
+}

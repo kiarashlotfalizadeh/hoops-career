@@ -46,6 +46,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'Offense',
     text: 'Running isolations and ball screens at the weakest defender on the floor, or at whoever a switch has left on your scorer.',
   },
+  {
+    id: 'shape',
+    term: 'Shape',
+    group: 'Offense',
+    text: 'Where your five stand in the half court: 4-out 1-in (the default), 5-out, horns (two bigs at the elbows) or a double post. Each suits a different roster.',
+  },
   { id: 'twoforone', term: '2-for-1', group: 'Offense', text: 'A quick shot with about 35 seconds left in a quarter, so you get the ball back for the last shot too.' },
   {
     id: 'usage',
@@ -71,6 +77,12 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'Box-and-one, triangle-and-two',
     group: 'Defense',
     text: 'A zone behind one or two chasers who face-guard the other team’s main creators. Good against a one- or two-man offense whose others can’t shoot.',
+  },
+  {
+    id: 'defroles',
+    term: 'Defensive roles',
+    group: 'Defense',
+    text: 'A player’s job out of possession: position defender, point-of-attack stopper (their lead ball handler), wing stopper (their best other scorer), rim anchor (lives in the paint), roamer (helps off a non-shooter) or hidden (on their least dangerous player).',
   },
   { id: 'help', term: 'Help defense', group: 'Defense', text: 'How far defenders leave their man to stop drives. More help protects the rim and opens up kick-out threes.' },
   {
@@ -288,6 +300,30 @@ export const GLOSSARY: GlossaryEntry[] = [
     term: 'System report',
     group: 'The game',
     text: 'Team → Tactics: what your system should be good and bad at, from your rotation and your settings, graded against the other teams’ systems (A+ the top tenth). Change a setting and the grades move.',
+  },
+  {
+    id: 'familiarity',
+    term: 'Familiarity',
+    group: 'The game',
+    text: 'How well your team knows the tactic it plays: its shape, actions, tempo, roles, scheme, coverage and pressure, and each player the system and his roles. At 95 and up it’s played as drawn up; below that a step slow. Games and practice build it; what you stop running fades.',
+  },
+  {
+    id: 'slots',
+    term: 'Tactic slots (A, B, C)',
+    group: 'The game',
+    text: 'Three whole tactics you can keep: the active one is what every game plays, and practice drills the other two a little less, so switching to one (or a situational plan that switches to it) plays it at the familiarity you’ve built.',
+  },
+  {
+    id: 'mentality',
+    term: 'Mentality',
+    group: 'The game',
+    text: 'How much risk your team takes, from very cautious to very aggressive, on top of every setting: aggressive pushes the pace, crashes the glass and gets into the ball; cautious protects the ball and gets back.',
+  },
+  {
+    id: 'practice',
+    term: 'Practice focus',
+    group: 'The game',
+    text: 'What your days between games are for: balanced, tactical drills (familiarity twice as fast), opponent prep (tonight’s game-plan changes are drilled) or recovery (fatigue comes off faster).',
   },
   {
     id: 'bench',

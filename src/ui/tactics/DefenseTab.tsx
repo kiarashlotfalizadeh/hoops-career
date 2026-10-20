@@ -1,30 +1,52 @@
-// Tactics → Defense: the identity it starts from, the base scheme, pick-and-roll coverage (with how
-// your starting big suits it), help and pressure, the full-court press and the star plan. Each
-// control marks the identity's own setting.
+// Tactics → Instructions, the defense's controls by phase of play. Out of possession: the base
+// scheme, pick-and-roll coverage (with how your starting big suits it), switching off the ball, help,
+// pressure, physicality and the star plan. Defensive transition: getting back and the full-court
+// press. Each control marks the identity's own setting, and every scheme, coverage and press shows
+// how well the team knows it, so the cost of a switch is in view before you make it.
 import type { ReactNode } from 'react';
 import { useLeague } from '../../state/store';
-import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
-import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META, TACTIC_LEVELS } from '../../core/sim/tactics';
+import type { DefScheme, Familiarity, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
+import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
+import { optValue } from '../../core/sim/familiarity';
 import { composites } from '../../core/ratings';
 import { shortName } from '../../core/league/helpers';
 import { ratingText } from '../../core/analysis/guarding';
-import { Chips, Help, Levels, Section, Tag, Toggle } from '../components/ui';
+import { Chips, Help, Section, Tag, Toggle } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { tweak } from './edit';
-import { PlaybookLine, defPresetOf } from './PlaybookLine';
+import { defPresetOf } from './PlaybookLine';
+import { famTone } from './formation';
+import { Lv } from './Lv';
 
-/** A choice's name, with the dot when it's the identity's own. */
-const own = (label: string, mine: boolean): ReactNode =>
-  mine ? (
+/**
+ * A choice's name, with the dot when it's the identity's own, and how well the team knows it
+ * (`key`: its familiarity key, 'pnr:blitz'; none for a choice with nothing to learn).
+ */
+export const optLabel = (label: string, mine: boolean, fam?: Familiarity, key?: string | null): ReactNode => {
+  const v = fam && key ? optValue(fam, key) : null;
+  return (
     <>
       {label}
-      <i className="tx-dot" aria-hidden="true" />
-      <span className="sr-only"> (the identity&apos;s own)</span>
+      {mine && (
+        <>
+          <i className="tx-dot" aria-hidden="true" />
+          <span className="sr-only"> (the identity&apos;s own)</span>
+        </>
+      )}
+      {v !== null && (
+        <span className={`tx-optfam ${famTone(v)}`}>
+          <span className="sr-only">, familiarity </span>
+          {Math.round(v)}%
+        </span>
+      )}
     </>
-  ) : (
-    label
   );
+};
 
-export function DefenseTab({ t }: { t: Tactics }) {
+type Props = { t: Tactics; fam: Familiarity };
+
+/** Out of possession: scheme, coverage, help and pressure, the star plan. */
+export function OutOfPossession({ t, fam }: Props) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   // personnel hints, for the five who start next: the first healthy ones in the depth chart
@@ -38,7 +60,6 @@ export function DefenseTab({ t }: { t: Tactics }) {
   const pv = defPresetOf(t).values;
   return (
     <>
-      <PlaybookLine kind="def" />
       <Section
         title="Base scheme"
         right={
@@ -52,6 +73,9 @@ export function DefenseTab({ t }: { t: Tactics }) {
               A box-and-one or triangle-and-two as your base scheme sends its chasers at their main creators on the floor, every game. To name who, and play it only while
               they&apos;re on the floor, use a game plan (Junk defense) or the live Adjust sheet.
             </p>
+            <p>
+              The % on each is how well your team knows it (<Term id="familiarity">familiarity</Term>): below 95 they play it a step slow.
+            </p>
           </Help>
         }
       >
@@ -60,7 +84,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
             label="Base scheme"
             value={t.defense.scheme}
             onChange={(x: DefScheme) => tweak((tt) => void (tt.defense.scheme = x))}
-            options={ALL_SCHEMES.map((k) => ({ id: k, label: own(SCHEME_META[k].label, k === pv.scheme) }))}
+            options={ALL_SCHEMES.map((k) => ({ id: k, label: optLabel(SCHEME_META[k].label, k === pv.scheme, fam, `scheme:${k}`) }))}
           />
         </div>
       </Section>
@@ -86,7 +110,7 @@ export function DefenseTab({ t }: { t: Tactics }) {
             label="Pick-and-roll coverage"
             value={t.defense.pnr}
             onChange={(x: PnrCoverage) => tweak((tt) => void (tt.defense.pnr = x))}
-            options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: own(COVERAGE_META[k].label, k === pv.pnr) }))}
+            options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: optLabel(COVERAGE_META[k].label, k === pv.pnr, fam, `pnr:${k}`) }))}
           />
           {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
             <div className="tx-bigfit">
@@ -116,57 +140,13 @@ export function DefenseTab({ t }: { t: Tactics }) {
             <p>
               <b>Physicality:</b> tighter contests vs more free throws for the opponent.
             </p>
-            <p>
-              <b>Transition defense:</b> how hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash the offensive
-              glass (Offense) sets how many players go after them.
-            </p>
           </Help>
         }
       >
         <div className="card col tx-group">
-          <Levels label="Help defense" value={t.defense.help} mark={pv.help} names={TACTIC_LEVELS.help} onChange={(x) => tweak((tt) => void (tt.defense.help = x))} />
-          <Levels
-            label="Ball pressure"
-            value={t.defense.pressure}
-            mark={pv.pressure}
-            names={TACTIC_LEVELS.pressure}
-            onChange={(x) => tweak((tt) => void (tt.defense.pressure = x))}
-          />
-          <Levels
-            label="Physicality"
-            value={t.defense.physicality}
-            mark={pv.physicality}
-            names={TACTIC_LEVELS.physicality}
-            onChange={(x) => tweak((tt) => void (tt.defense.physicality = x))}
-          />
-          <Levels
-            label="Transition defense"
-            value={t.defense.getBack}
-            mark={pv.getBack}
-            names={TACTIC_LEVELS.getBack}
-            onChange={(x) => tweak((tt) => void (tt.defense.getBack = x))}
-          />
-        </div>
-      </Section>
-      <Section
-        title="Full-court press"
-        right={
-          <Help title="Full-court press">
-            {(Object.keys(PRESS_META) as PressMode[]).map((k) => (
-              <p key={k}>
-                <b>{PRESS_META[k].label}:</b> {PRESS_META[k].help}
-              </p>
-            ))}
-          </Help>
-        }
-      >
-        <div className="card col tx-group tight">
-          <Chips
-            label="Full-court press"
-            value={t.defense.press}
-            onChange={(x: PressMode) => tweak((tt) => void (tt.defense.press = x))}
-            options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: own(PRESS_META[k].label, k === pv.press) }))}
-          />
+          <Lv label="Help defense" k="help" level="help" t={t} fam={fam} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
+          <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
+          <Lv label="Physicality" k="physicality" level="physicality" t={t} fam={fam} mark={pv.physicality} set={(tt, x) => void (tt.defense.physicality = x)} />
         </div>
       </Section>
       <Section
@@ -191,6 +171,54 @@ export function DefenseTab({ t }: { t: Tactics }) {
             value={t.defense.starPlan}
             onChange={(x: StarPlan) => tweak((tt) => void (tt.defense.starPlan = x))}
             options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
+          />
+        </div>
+      </Section>
+    </>
+  );
+}
+
+/** Defensive transition: getting back after your own shots, and the full-court press. */
+export function DefTransition({ t, fam }: Props) {
+  const pv = defPresetOf(t).values;
+  return (
+    <>
+      <Section
+        title="Getting back"
+        right={
+          <Help title="Transition defense">
+            <p>
+              How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash the offensive glass (In transition) sets
+              how many players go after them.
+            </p>
+          </Help>
+        }
+      >
+        <div className="card col tx-group">
+          <Lv label="Transition defense" k="getBack" level="getBack" t={t} fam={fam} mark={pv.getBack} set={(tt, x) => void (tt.defense.getBack = x)} />
+        </div>
+      </Section>
+      <Section
+        title="Full-court press"
+        right={
+          <Help title="Full-court press">
+            {(Object.keys(PRESS_META) as PressMode[]).map((k) => (
+              <p key={k}>
+                <b>{PRESS_META[k].label}:</b> {PRESS_META[k].help}
+              </p>
+            ))}
+          </Help>
+        }
+      >
+        <div className="card col tx-group tight">
+          <Chips
+            label="Full-court press"
+            value={t.defense.press}
+            onChange={(x: PressMode) => tweak((tt) => void (tt.defense.press = x))}
+            options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({
+              id: k,
+              label: optLabel(PRESS_META[k].label, k === pv.press, fam, k === 'none' ? null : `press:${k}`),
+            }))}
           />
         </div>
       </Section>

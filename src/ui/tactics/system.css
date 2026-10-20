@@ -368,12 +368,3 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
-.tm-role-stars {
-  margin-left: auto;
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--warn);
-}
-.tm-role-stars .dim {
-  color: var(--line-3);
-}
