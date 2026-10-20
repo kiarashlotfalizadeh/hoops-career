@@ -105,11 +105,13 @@ export const clockMethods = {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false };
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, tie: false };
     if (final && clock <= 26 && diff >= -2 && diff <= 0) res.hold = true;
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;
     if (final && clock <= 35 && diff <= -3 && diff >= -5) res.need3 = true;
+    // down two with the last shot: most coaches play for the tie
+    if (final && clock <= 24 && diff === -2) res.tie = true;
     // two possessions or more down late, still within reach: quick shots, more of them threes
     if (final && diff <= -4 && diff >= -3 - clock / 12 && clock > 1 && clock <= 20 + 10 * -diff) res.hurry = true;
     if (off.t.manage.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;

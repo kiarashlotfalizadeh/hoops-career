@@ -197,8 +197,8 @@ describe('engine rules', () => {
     type G = {
       q: number;
       clock: number;
-      T: { score: number; garbage: boolean; subSig: string; on: { pid: number }[]; t: Team['tactics']; team: Team }[];
-      subSignature(t: unknown): string;
+      T: { score: number; garbage: boolean; subSig: number[]; on: { pid: number }[]; t: Team['tactics']; team: Team }[];
+      subSignature(t: unknown): number[];
       checkSubs(t: unknown): void;
     };
     const sim = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
@@ -229,8 +229,8 @@ describe('engine rules', () => {
       q: number;
       clock: number;
       elapsed: number;
-      T: { score: number; garbage: boolean; subSig: string; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
-      subSignature(t: unknown): string;
+      T: { score: number; garbage: boolean; subSig: number[]; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
+      subSignature(t: unknown): number[];
       checkSubs(t: unknown): void;
     };
     const game = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false });
@@ -347,7 +347,7 @@ describe('engine rules', () => {
     // trips from one inbound (no press, run-out or second chance) with a non-shooting foul that was only a side out
     let sideOuts = 0;
     let longer = 0;
-    for (let g = 0; g < 24; g++) {
+    for (let g = 0; g < 36; g++) {
       const sim = new GameSim(side(10, { defense: { physicality: 90, pressure: 80 } }), side(11, { defense: { physicality: 90, pressure: 80 } }), {
         rng: new Rng(900 + g),
         type: 'regular',
@@ -366,9 +366,9 @@ describe('engine rules', () => {
         if (used > GAME.shotClock + 0.5) longer++;
       }
     }
-    expect(sideOuts).toBeGreaterThan(100);
+    expect(sideOuts).toBeGreaterThan(150);
     // without the reset no such trip could last past 24 seconds
-    expect(longer).toBeGreaterThan(5);
+    expect(longer).toBeGreaterThan(7);
   });
 
   it('awards free throws only in the penalty, with the two-minute rule in every period and four fouls in overtime', () => {
@@ -420,7 +420,7 @@ describe('engine rules', () => {
     const off = s.T[s.poss];
     const def = s.T[1 - s.poss];
     s.toChance = () => 1;
-    const late = { hold: false, quick: false, milk: false, need3: false, hurry: false, need2: false };
+    const late = { hold: false, quick: false, milk: false, need3: false, hurry: false, tie: false };
     s.iso(off, def, 0, late, false, { actor: off.on[0], defender: def.on[0], tag: 'switch_mismatch', fromPnr: true });
     expect(off.pt.pnrBH?.poss).toBe(1);
     expect(off.pt.iso).toBeUndefined();
@@ -455,10 +455,30 @@ describe('engine rules', () => {
     };
     expect(at(20, 2)).not.toBeNull();
     expect(at(2, 2)).not.toBeNull();
-    expect(at(20, 3)).not.toBeNull();
+    // down three a stop and a three tie it: they defend rather than make it a two-possession game
+    expect(at(20, 3)).toBeNull();
     expect(at(3, 3)).toBeNull();
-    expect(at(40, 7)).not.toBeNull();
+    // down four to six they defend until the leader could run the shot clock out, then foul
+    expect(at(40, 5)).toBeNull();
+    expect(at(25, 5)).not.toBeNull();
     expect(at(4, 7)).toBeNull();
+    // down seven to nine they foul sooner, though fewer coaches do the further down they are
+    const fouls = (down: number) => {
+      let n = 0;
+      for (let g = 0; g < 40; g++) {
+        const sim = new GameSim(side(0), side(1), { rng: new Rng(g), type: 'regular', injuries: false }) as unknown as F;
+        const [off, def] = sim.T;
+        sim.q = 4;
+        sim.clock = 40;
+        off.score = 100 + down;
+        def.score = 100;
+        if (sim.intentionalFoul(off, def)) n++;
+      }
+      return n;
+    };
+    expect(fouls(7)).toBeGreaterThan(fouls(9));
+    expect(fouls(9)).toBeGreaterThan(0);
+    expect(fouls(10)).toBe(0);
   });
 
   it('hacks a poor free-throw shooter only before the last two minutes of a period', () => {

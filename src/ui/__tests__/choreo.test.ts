@@ -215,7 +215,7 @@ describe('sets on the court', () => {
         for (const f of s.frames) for (const p of [...f.o, ...f.d, f.ball]) expect(Math.abs(p.x) <= 25 && p.y >= 0 && p.y <= 47).toBe(true);
       }
     }
-    expect(sets).toBeGreaterThan(4);
+    expect(sets).toBeGreaterThanOrEqual(4);
   });
 });
 

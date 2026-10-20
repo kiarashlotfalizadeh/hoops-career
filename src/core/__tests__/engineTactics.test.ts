@@ -343,14 +343,18 @@ describe('engine tactics', () => {
   });
 
   describe('zones', () => {
-    it('plays the 2-3 exactly as before the per-scheme table', () => {
+    it('plays the 2-3 from its table', () => {
+      // (the table from before the per-scheme ones, with the back line on the roller and a firmer post
+      // defense for less of a glass cost since the late-2026 polish: man-to-man had beaten the 2-3 even
+      // against post-up teams)
       expect(K.zone.zone23).toEqual({
+        roll: 0.3,
         pnr: 0.3,
         pnrTag: 0.3 * 0.1,
         iso: 0.35,
         isoTag: 0.035,
-        post: 0.25,
-        postTag: 0.025,
+        post: 0.55,
+        postTag: 0.055,
         drive: 0.3,
         kick: 0.2,
         pop: 0.15,
@@ -360,12 +364,13 @@ describe('engine tactics', () => {
         swingW: 1.35,
         swing: 0.22,
         corner: 0.45,
-        glass: 1.12,
-        glassTag: 0.12,
+        glass: 1.07,
+        glassTag: 0.07,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
-      // much: tacticLeverage.test.ts plays them at 1x leverage and gets the ones from before that)
+      // much: tacticLeverage.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
+      // late game, crunch-time touches, home court and the staff's substitutions were polished)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -373,10 +378,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [116, 124, 81, 93, 36, 30, 10, 13],
-        [103, 111, 96, 79, 49, 32, 15, 11],
-        [109, 136, 98, 94, 44, 47, 16, 7],
-        [112, 118, 87, 86, 44, 25, 13, 18],
+        [105, 119, 92, 87, 43, 35, 14, 12],
+        [113, 122, 92, 83, 43, 27, 12, 11],
+        [116, 125, 101, 92, 54, 53, 13, 6],
+        [105, 117, 88, 83, 44, 31, 11, 11],
       ]);
     });
 

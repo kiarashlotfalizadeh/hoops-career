@@ -63,10 +63,14 @@ export const recordMethods = {
     const charge = !stealer && this.rng.chance(0.24);
     if (this.record) {
       const text = stealer
-        ? `${handler.name} turnover, stolen by ${stealer.name}.`
+        ? // (a pass picked off: the pocket pass to the roller, a pass round the perimeter; else a strip)
+          this.fx.pick([
+            `${handler.name} turnover, stolen by ${stealer.name}.`,
+            finish === 'pnrRoll' || finish === 'spotup' ? `${stealer.name} picks off ${handler.name}'s pass.` : `${stealer.name} strips ${handler.name}.`,
+          ])
         : charge
-          ? `${handler.name} offensive foul.`
-          : `${handler.name} turnover (${this.fx.pick(['bad pass', 'lost ball', 'traveling', 'out of bounds', 'bad pass'])}).`;
+          ? `${handler.name} offensive foul (charge).`
+          : `${handler.name} turnover (${this.fx.pick(['bad pass', 'lost ball', 'traveling', 'stepped out of bounds', 'bad pass', 'lost ball'])}).`;
       this.addPbp(off.side, text, 'to');
       this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid });
     }

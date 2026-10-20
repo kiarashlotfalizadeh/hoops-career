@@ -203,7 +203,7 @@ export const possessionMethods = {
         const want = set ?? (fresh && quiet ? this.packageSet(off, def) : null);
         if (want) play = this.setPlay(off, def, want.id, want.pid);
       }
-      const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off);
+      const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off, late);
       let dt = forced ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5)) : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
@@ -263,14 +263,18 @@ export const possessionMethods = {
     let three = (0.48 + 0.8 * t3) * (1 + levExtra(K.recenter.three));
     let mid = 1.43 - 0.95 * t3;
     const rim = 0.7 + 0.6 * (off.t.offense.rimAttack / 100);
+    // (two: the weight left on the looks that can only be twos, the roll and the drive on the catch)
+    let two = 1;
     if (late.need3) {
       three *= 6;
       mid *= 0.1;
+      // with the clock nearly out a two doesn't tie it: only a three will do
+      two = this.clock <= 12 ? 0.08 : 0.3;
     } else if (late.hurry) {
       three *= 1.8;
       mid *= 0.5;
-    }
-    return { three, mid, rim: late.need3 ? rim * 0.15 : rim };
+    } else if (late.tie) three *= 0.6;
+    return { three, mid, rim: late.need3 ? rim * two : rim, two };
   },
 
   spacingBonus(this: GameSim, off: ST) {

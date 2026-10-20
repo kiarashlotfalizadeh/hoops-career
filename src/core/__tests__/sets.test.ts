@@ -329,18 +329,19 @@ describe('sets in the engine', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
     // and a coached side with an after-timeout action, a go-to player and two timeouts), taken again
     // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
-    // tactics were made to matter twice as much (K.tacticEdge)
+    // tactics were made to matter twice as much (K.tacticEdge), and when the late game, crunch-time touches,
+    // home court and the staff's substitutions were polished
     const expected = {
       ai: [
-        [131, 125, 88, 44, 15, 18, 16, 0],
-        [124, 118, 93, 18, 17, 23, 14, 0],
-        [132, 91, 90, 27, 8, 22, 13, 0],
+        [121, 115, 77, 45, 14, 13, 18, 0],
+        [118, 117, 93, 19, 16, 32, 11, 0],
+        [112, 116, 85, 31, 7, 32, 17, 0],
       ],
       // (taken again when play calls from the bench were retired)
       coached: [
-        [126, 107, 80, 19, 9, 19, 14, 0],
-        [120, 115, 84, 26, 10, 21, 16, 0],
-        [111, 129, 81, 46, 11, 27, 19, 0],
+        [125, 94, 81, 19, 11, 32, 16, 0],
+        [117, 106, 92, 36, 11, 21, 15, 0],
+        [110, 135, 75, 43, 11, 35, 21, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

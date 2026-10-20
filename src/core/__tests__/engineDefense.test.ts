@@ -245,7 +245,7 @@ describe('engine defense', () => {
       let isoAt = [0, 0];
       let screens = [0, 0];
       const tags = [0, 0];
-      for (let g = 0; g < 12; g++)
+      for (let g = 0; g < 24; g++)
         for (const i of [0, 1]) {
           const sim = new GameSim(side(5, i ? { offense: { huntTarget: target.pid } } : undefined), side(3), opts(60 + g, true));
           const s = sim as unknown as In;
@@ -332,34 +332,35 @@ describe('engine defense', () => {
     // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
     // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
     // tactics were made to matter twice as much: tacticLeverage.test.ts plays these games at 1x leverage and gets
-    // the fingerprints from before that)
+    // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
+    // staff's substitutions were polished)
     const expected: Record<string, number[][]> = {
       default: [
-        [131, 125, 88, 44, 15, 18, 16, 0],
-        [124, 118, 93, 18, 17, 23, 14, 0],
-        [132, 91, 90, 27, 8, 22, 13, 0],
+        [121, 115, 77, 45, 14, 13, 18, 0],
+        [118, 117, 93, 19, 16, 32, 11, 0],
+        [112, 116, 85, 31, 7, 32, 17, 0],
       ],
       zone23: [
-        [114, 104, 81, 48, 13, 22, 12, 0],
-        [105, 128, 84, 14, 13, 35, 14, 0],
-        [122, 132, 110, 29, 19, 28, 14, 1],
+        [119, 111, 74, 53, 16, 17, 14, 0],
+        [107, 106, 87, 18, 6, 28, 13, 0],
+        [112, 97, 86, 32, 8, 16, 17, 0],
       ],
       zone32: [
-        [109, 99, 80, 43, 11, 19, 19, 0],
+        [110, 113, 75, 30, 9, 31, 17, 0],
         [111, 119, 100, 13, 21, 25, 10, 0],
-        [99, 97, 97, 28, 16, 17, 17, 0],
+        [109, 101, 95, 28, 14, 17, 16, 0],
       ],
       double: [
-        [119, 105, 91, 36, 18, 18, 18, 0],
-        [123, 104, 88, 29, 13, 25, 11, 0],
-        [110, 80, 92, 26, 11, 26, 14, 0],
+        [123, 113, 88, 32, 17, 20, 16, 0],
+        [126, 107, 82, 25, 13, 19, 17, 0],
+        [115, 88, 90, 28, 11, 22, 15, 0],
       ],
       // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
       // the couple of trips the mismatch hunt changes back to the same team lines)
       hunt: [
-        [131, 125, 88, 44, 15, 18, 16, 0],
-        [133, 122, 92, 18, 14, 25, 12, 0],
-        [108, 115, 89, 29, 5, 32, 15, 0],
+        [126, 120, 80, 46, 13, 16, 13, 0],
+        [113, 106, 80, 17, 10, 22, 15, 0],
+        [121, 131, 90, 36, 9, 29, 20, 1],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

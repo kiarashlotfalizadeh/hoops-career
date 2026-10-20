@@ -258,7 +258,9 @@ export const defenseMethods = {
     const pr0 = this.pressure(def);
     const off = this.T[1 - def.side];
     const sec = pr0 > 0 ? Math.max(0.2, 1 - levExtra((off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.to)) : 1;
-    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0) * sec;
+    // (backing off gives up a smaller share of the turnovers than pressing forces: containing is a
+    // trade, not a trap; see K.containTO)
+    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0 * K.containTO) * sec;
     const p = (base * (1 + levExtra(K.recenter.tov)) * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
     if (pr !== 0) this.impact('pressure_to', def.side, base * 0.32 * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
     return clamp(p, 0.01, 0.4);
@@ -282,6 +284,6 @@ export const defenseMethods = {
 
   /** Live-ball steal by `d` with base chance `base`, scaled by his steal tendency; else a dead-ball turnover. */
   stealBy(this: GameSim, d: SP, base: number): SP | null {
-    return this.rng.chance(clamp(base * d.tsl, 0, 0.92)) ? d : null;
+    return this.rng.chance(clamp(base * K.stealShare * d.tsl, 0, 0.92)) ? d : null;
   },
 };

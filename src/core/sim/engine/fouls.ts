@@ -19,8 +19,15 @@ export const foulsMethods = {
     if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
       const down = -defDiff;
       // only while there is time to score twice more after the free throws: down one or two, a foul
-      // still buys a last shot; down three or more with seconds left it only pads the margin
-      if ((down >= 4 && down <= 9 && clock <= 50 && clock > 6) || (down <= 3 && clock <= 24 && clock > (down === 3 ? 6 : 1.2))) {
+      // still buys a last shot; down three a stop and a three tie it, and a foul (two free throws)
+      // would make it a two-possession game, so they defend; down four or more with seconds left a
+      // foul only pads the margin
+      // (down four to six there's time for a stop until the leader can run the shot clock out; down
+      // seven to nine they foul sooner, though the further down the fewer coaches still do: there's
+      // hardly a way back)
+      const reach = down <= 6 ? 1 : down === 7 ? 0.6 : down === 8 ? 0.35 : 0.15;
+      const from = down <= 6 ? 30 : 50;
+      if ((down >= 4 && down <= 9 && clock <= from && clock > 6 && (reach === 1 || this.rng.chance(reach))) || (down <= 2 && clock <= 24 && clock > 1.2)) {
         // offense gets the ball to its best free throw shooters
         const ws = off.on.map((p) => Math.pow(p.ftPct, 6) * (0.5 + p.c.ballSec / 100));
         fouled = off.on[this.rng.weighted(ws)];
@@ -116,7 +123,7 @@ export const foulsMethods = {
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     if (this.record) {
-      this.addPbp(def.side, `Foul on ${fouler.name}.`, 'foul');
+      this.addPbp(def.side, `${this.fx.pick(['Foul', 'Reach-in foul', 'Holding foul', 'Foul'])} on ${fouler.name}.`, 'foul');
       this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: handler.pid });
     }
     this.addFoul(def, fouler);

@@ -8,7 +8,7 @@ import type { ActionType } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { K, lev, levW } from './constants';
-import { type SP, type ST, ACTION_LIST } from './state';
+import { type SP, type ST, type LateMode, ACTION_LIST } from './state';
 import type { GameSim } from './game';
 
 export const usageMethods = {
@@ -99,36 +99,51 @@ export const usageMethods = {
       if (i >= 0) ws[i] *= levW(K.denyTouch);
     }
     for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= c === denied ? levW(K.chaseTouch) / levW(K.denyTouch) : levW(K.chaseTouch);
-    // crunch time: the ball finds the go-to player
+    // crunch time: the ball finds the go-to player (the one named, or else the staff's: his best scorer on the floor)
     const go = this.goTo(t);
-    if (go) ws[t.on.indexOf(go)] *= K.goToPick;
+    if (go) ws[t.on.indexOf(go)] *= go.pid === t.t.manage.goTo ? K.goToPick : K.goToAuto;
     const actor = t.on[this.rng.weighted(ws)];
     for (const p of t.on) p.b.tActs++;
     actor.b.acts++;
     return actor;
   },
 
-  /** The go-to player, when he is on the floor in crunch time: the last two minutes of the 4th quarter or overtime, within five. */
+  /**
+   * The go-to player in crunch time (the last two minutes of the 4th quarter or overtime, within five):
+   * the one the coach named while he's on the floor, else the best scorer on the floor (his shot
+   * creation and his own usage), whom the ball finds a little less (K.goToAuto).
+   */
   goTo(this: GameSim, t: ST): SP | null {
+    if (this.q < 4 || this.clock > 120 || Math.abs(t.score - this.T[1 - t.side].score) > 5) return null;
     const pid = t.t.manage.goTo;
-    if (pid == null || this.q < 4 || this.clock > 120 || Math.abs(t.score - this.T[1 - t.side].score) > 5) return null;
-    const p = t.byId.get(pid);
-    return p?.on ? p : null;
+    const p = pid == null ? undefined : t.byId.get(pid);
+    if (p?.on) return p;
+    let best: SP | null = null;
+    let top = 0;
+    for (const x of t.on) {
+      const s = ROLE_USAGE[x.role] * x.tu * x.tcr * x.freedom * (0.55 * x.c.create + 0.45 * Math.max(x.c.midShot, x.c.pu3, x.c.rim)) ** 2;
+      if (s > top) {
+        top = s;
+        best = x;
+      }
+    }
+    return best;
   },
 
-  chooseAction(this: GameSim, off: ST): ActionType {
+  chooseAction(this: GameSim, off: ST, late?: LateMode): ActionType {
     const a = off.t.offense.actions;
     const ws = ACTION_LIST.map((act) => {
       const emph = Math.pow(Math.max(1, a[act]) / 50, 1.4);
       return emph * off.cap[act];
     });
-    // a called three looks for the arc: no post-up (its shots are twos)
+    // down three late the offense looks for the arc: hardly a post-up (its shots are twos)
+    if (late?.need3) ws[ACTION_LIST.indexOf('post')] *= 0.1;
     // crunch time: more of what the go-to player does best
     const go = this.goTo(off);
     if (go) {
       const mine: ActionType[] = ['pnr', 'iso', 'post', 'handoff'];
       const best = mine.reduce((b, act) => (this.usageWeight(go, off, act) > this.usageWeight(go, off, b) ? act : b), mine[0]);
-      ws[ACTION_LIST.indexOf(best)] *= K.goToAction;
+      ws[ACTION_LIST.indexOf(best)] *= go.pid === off.t.manage.goTo ? K.goToAction : K.goToAutoAction;
     }
     return ACTION_LIST[this.rng.weighted(ws)];
   },
@@ -140,25 +155,34 @@ export const usageMethods = {
     return p;
   },
 
-  /** How well the current lineup can run an action (0.2..~1.6). */
+  /** How well the current lineup can run an action (0.2..~1.6). (Loops, not spreads: it runs at every substitution.) */
   capability(this: GameSim, t: ST, act: ActionType): number {
     const on = t.on;
+    let a = -Infinity;
+    let b = -Infinity;
     switch (act) {
       case 'pnr': {
-        const h = Math.max(...on.map((p) => p.c.pnrHandle));
-        return Math.pow(h / 55, 2);
+        for (const p of on) a = Math.max(a, p.c.pnrHandle);
+        return Math.pow(a / 55, 2);
       }
       case 'iso': {
-        const c = Math.max(...on.map((p) => 0.55 * p.c.create + 0.45 * Math.max(p.c.midShot, p.c.pu3, p.c.rim)));
-        return 0.4 * Math.pow(c / 60, 2.2);
+        for (const p of on) a = Math.max(a, 0.55 * p.c.create + 0.45 * Math.max(p.c.midShot, p.c.pu3, p.c.rim));
+        return 0.4 * Math.pow(a / 60, 2.2);
       }
       case 'post': {
-        const ps = Math.max(...on.map((p) => p.c.postScore));
-        return 0.36 * Math.pow(ps / 62, 3);
+        for (const p of on) a = Math.max(a, p.c.postScore);
+        return 0.36 * Math.pow(a / 62, 3);
       }
       case 'handoff': {
-        const s = on.map((p) => p.c.offBall).sort((a, b) => b - a);
-        return Math.pow((s[0] + s[1]) / 2 / 55, 2);
+        // the two best off the ball
+        for (const p of on) {
+          const x = p.c.offBall;
+          if (x > a) {
+            b = a;
+            a = x;
+          } else if (x > b) b = x;
+        }
+        return Math.pow((a + b) / 2 / 55, 2);
       }
       case 'motion':
         return 1.5 * Math.pow((t.passQ + t.spacing) / 2 / 50, 1.5);

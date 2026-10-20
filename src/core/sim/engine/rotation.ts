@@ -72,15 +72,16 @@ export const rotationMethods = {
     // foul trouble: bench players at the limit (except crunch time)
     const crunch = this.q >= 4 && this.clock < 360;
     const limit = this.foulLimit(t);
+    const bigsWanted = desired.filter((p) => p.big).length;
     desired = desired.filter((p) => crunch || p.fouls < limit);
-    // fatigue: swap exhausted players for rested teammates of the same type (in the playoffs,
-    // only players in the shortened rotation)
+    // fatigue: swap exhausted players for rested teammates of the same type from the rotation (a
+    // coach doesn't reach past it for a breather: the deep bench plays in blowouts and emergencies)
     const fatigueLine = t.t.manage.fatigueSub;
     const playoffs = this.opts.type === 'playoffs';
     const bench = ordered.filter((p) => !desired.includes(p) && (crunch || p.fouls < limit));
     desired = desired.map((p) => {
       if (p.energy >= fatigueLine || crunch) return p;
-      const alt = bench.filter((b) => b.energy > 0.82 && b.big === p.big && (!playoffs || b.planMin > 0)).sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
+      const alt = bench.filter((b) => b.energy > 0.82 && b.big === p.big && b.planMin > 0).sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
       if (alt) {
         bench.splice(bench.indexOf(alt), 1);
         return alt;
@@ -100,7 +101,15 @@ export const rotationMethods = {
         return alt;
       });
     }
-    // fill to five from the bench in depth order
+    // fill to five from the bench: first the rotation's players of the size that sat (a big in foul
+    // trouble makes way for a big), then in depth order
+    let bigs = desired.filter((p) => p.big).length;
+    for (const p of bench) {
+      if (desired.length >= 5) break;
+      if (desired.includes(p) || p.planMin <= 0 || (p.big ? bigs >= bigsWanted : 5 - desired.length <= bigsWanted - bigs)) continue;
+      desired.push(p);
+      if (p.big) bigs++;
+    }
     for (const p of bench) {
       if (desired.length >= 5) break;
       if (!desired.includes(p)) desired.push(p);
@@ -113,14 +122,19 @@ export const rotationMethods = {
     return desired.slice(0, 5);
   },
 
-  subSignature(this: GameSim, t: ST): string {
+  /**
+   * What the staff's lineup decision depends on (the minute of the plan, the foul limit, crunch time, a
+   * blowout, and each player's availability, fatigue, fouls, minute cap and hack count): checkSubs
+   * looks at the lineup again only when it changes. Numbers, not a string: it's built twice a trip.
+   */
+  subSignature(this: GameSim, t: ST): number[] {
     const fl = t.t.manage.fatigueSub;
-    let sig = `${this.q <= 4 ? this.planSlot() : 'ot' + this.q}|${this.foulLimit(t)}|`;
-    for (const p of t.players) sig += p.out + (p.on ? (p.energy < fl ? 'f' : 'o') : p.energy > 0.82 ? 'r' : 'b') + p.fouls + (this.capped(p) ? 'k' : '');
-    if (this.q >= 4 && this.clock < 360) sig += 'c';
-    // a blowout (or one getting back within reach) changes the lineup now, not at the next minute mark
-    if (this.wantsGarbage(t)) sig += 'g';
-    for (const [pid, n] of t.hacked) if (n >= 2) sig += `h${pid}`;
+    // (a blowout, or one getting back within reach, changes the lineup now, not at the next minute mark)
+    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.q >= 4 && this.clock < 360 ? 1 : 0, this.wantsGarbage(t) ? 1 : 0];
+    for (const p of t.players) {
+      const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;
+      sig.push(p.out + 4 * state + 16 * p.fouls + (this.capped(p) ? 1024 : 0) + (t.hacked.size && (t.hacked.get(p.pid) ?? 0) >= 2 ? 2048 : 0));
+    }
     return sig;
   },
 
@@ -134,7 +148,8 @@ export const rotationMethods = {
     }
     if (!force) {
       const sig = this.subSignature(t);
-      if (sig === t.subSig && !t.subLock.size && !expired) return;
+      const prev = t.subSig;
+      if (!t.subLock.size && !expired && sig.length === prev.length && sig.every((x, i) => x === prev[i])) return;
       t.subSig = sig;
     }
     if (t.manualSubs && !force) {

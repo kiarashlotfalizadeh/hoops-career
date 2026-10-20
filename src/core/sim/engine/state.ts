@@ -173,7 +173,8 @@ export interface ST {
   lineupKey: string;
   ls: LineupStat | null;
   cap: Record<ActionType, number>;
-  subSig: string;
+  /** The lineup decision's inputs when the staff last looked (see subSignature). */
+  subSig: number[];
   manualSubs: boolean; // user drives subs live
   injMult: number;
   subLock: Map<number, number>; // pid -> game second until which a manual sub sticks
@@ -276,6 +277,8 @@ export interface LateMode {
   need3: boolean;
   /** Two possessions or more down late, still within reach: quick shots, more of them threes. */
   hurry: boolean;
+  /** Down two with the last shot: playing for the tie, a two more often than a three. */
+  tie: boolean;
 }
 
 /** How an action ends: the possession is over ('done'), or the ball moves on to the next action with what's left of the advantage. */

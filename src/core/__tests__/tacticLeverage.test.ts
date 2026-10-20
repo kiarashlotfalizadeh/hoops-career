@@ -27,42 +27,44 @@ describe('tactical leverage', () => {
     // box-score fingerprints from the engine before the change (with no in-game adjustments, which read the
     // tags, so the tags can be made more honest without moving them): games using none of the tactical tools,
     // the zones and a box-and-one, a star plan with switching, the pressure tools with crashing and running,
-    // and mismatch hunting with a set package, heavy help and getting back
+    // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
+    // game, crunch-time touches, home court and the staff's substitutions were polished: what this pins is
+    // that 1x leverage plays every tactical edge at its 1x size, game after game)
     const expected: Record<string, number[][]> = {
       default: [
-        [115, 108, 78, 51, 12, 16, 18, 0],
-        [114, 99, 99, 20, 16, 30, 9, 0],
-        [104, 107, 89, 23, 9, 27, 14, 0],
+        [118, 112, 85, 50, 14, 14, 17, 0],
+        [113, 102, 97, 19, 14, 34, 10, 0],
+        [104, 102, 91, 26, 11, 16, 18, 0],
       ],
       zone23: [
-        [121, 115, 86, 43, 15, 22, 13, 0],
-        [116, 102, 84, 24, 10, 34, 11, 0],
-        [117, 101, 92, 33, 9, 20, 15, 0],
+        [118, 106, 85, 49, 13, 16, 14, 0],
+        [118, 105, 92, 21, 11, 36, 10, 0],
+        [118, 124, 89, 32, 10, 21, 16, 0],
       ],
       zone32: [
-        [122, 102, 87, 34, 16, 29, 13, 0],
-        [106, 95, 87, 14, 9, 29, 10, 0],
-        [108, 104, 94, 32, 14, 25, 16, 0],
+        [117, 101, 86, 37, 15, 22, 14, 0],
+        [112, 102, 84, 19, 7, 21, 13, 0],
+        [108, 109, 91, 34, 11, 26, 18, 0],
       ],
       box1: [
-        [118, 101, 86, 43, 18, 10, 15, 0],
-        [125, 116, 91, 17, 8, 20, 11, 0],
-        [99, 110, 88, 41, 9, 20, 20, 0],
+        [123, 91, 83, 48, 12, 19, 17, 0],
+        [122, 119, 85, 21, 10, 21, 13, 0],
+        [108, 115, 100, 43, 15, 14, 21, 1],
       ],
       double: [
-        [103, 125, 86, 33, 18, 31, 18, 0],
-        [121, 98, 90, 25, 8, 12, 10, 0],
-        [124, 105, 96, 32, 13, 19, 12, 0],
+        [106, 116, 82, 35, 18, 28, 16, 0],
+        [118, 113, 94, 30, 15, 17, 9, 0],
+        [109, 89, 97, 30, 13, 11, 13, 0],
       ],
       pressure: [
-        [114, 102, 84, 39, 12, 25, 20, 0],
-        [121, 122, 72, 15, 3, 23, 20, 0],
-        [115, 101, 104, 35, 12, 19, 10, 0],
+        [116, 106, 83, 38, 11, 25, 21, 0],
+        [115, 129, 80, 20, 7, 38, 17, 0],
+        [110, 113, 103, 32, 14, 23, 12, 0],
       ],
       hunting: [
-        [128, 118, 78, 50, 6, 18, 17, 0],
-        [104, 116, 87, 24, 11, 13, 11, 0],
-        [127, 102, 100, 43, 9, 9, 11, 0],
+        [117, 115, 78, 50, 6, 14, 19, 0],
+        [112, 111, 84, 16, 12, 16, 13, 0],
+        [126, 105, 103, 35, 13, 16, 10, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

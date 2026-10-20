@@ -150,6 +150,9 @@ export const pnrMethods = {
     } else if (zone) {
       advH -= lev(zone.pnr);
       this.impact('zone_paint', def.side, lev(zone.pnrTag));
+      // the back line is waiting for the roller, as a drop big is
+      rollOpen -= lev(zone.roll);
+      tagsRoll.push(['zone_paint', -lev(zone.roll)]);
       kickOpen += lev(zone.kick);
       tagsKick.push([this.openKey(def), lev(zone.kick)]);
       // (a chased screener's chaser stays with him)
@@ -232,7 +235,8 @@ export const pnrMethods = {
         (Math.pow(S.tu, 0.75) / Math.sqrt(S.tcr)) *
         0.85 *
         (1 + rollOpen) *
-        (S.c.pop > S.c.roll ? 0.4 : 1), // roll
+        (S.c.pop > S.c.roll ? 0.4 : 1) *
+        pf.two, // roll
       S.c.pop > 50
         ? Math.pow(H.c.passing / 50, 1.2) *
           this.passT(H) *

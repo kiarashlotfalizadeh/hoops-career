@@ -18,7 +18,7 @@ export const K = {
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.262,
   toBase: 0.15,
-  nonShootFoul: 0.17,
+  nonShootFoul: 0.18,
   /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
   teamReb: { orb: 0.02, drb: 0.07 },
   transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
@@ -30,7 +30,8 @@ export const K = {
   gameTimeRisk: 2,
   drain: 0.00068,
   recover: 0.0012,
-  home: 0.007,
+  /** Home court: field-goal percentage the home side gains (the away side loses 0.3 of it): about 2 points a game, 54% home wins. */
+  home: 0.009,
   usageExp: 2.0,
   /** Usage damping counts free-throw attempts (0.44 each); fitted when it counted trips, hence the odd values. */
   usageDamp: 5.2,
@@ -109,9 +110,14 @@ export const K = {
   orbPts: 1.6,
   toPts: 1.45,
   runOutPts: 0.18,
-  /** Crunch time: how much more often the ball finds the go-to player, and how much more his best action is run. */
+  /**
+   * Crunch time: how much more often the ball finds the go-to player, and how much more his best action
+   * is run; and the same for the staff's own go-to (the best scorer on the floor) when nobody is named.
+   */
   goToPick: 2.5,
   goToAction: 1.6,
+  goToAuto: 1.7,
+  goToAutoAction: 1.25,
   /** Chance an off-ball cross-screen against a switching defense leaves a big posting up a small (when the mismatch is there). */
   crossSwitch: 0.12,
   /** ...and the size edge (height rating, about 4.3 an inch) it takes. */
@@ -125,7 +131,8 @@ export const K = {
   /** Shooting fouls on a switched post-up grow by one per this much size edge (height rating). */
   mismatchFoul: 30,
   /**
-   * Zone defenses by scheme: the edge each takes off the pick-and-roll handler, an isolation, a
+   * Zone defenses by scheme: the openness its back line takes off the roller (the 2-3's big sits in
+   * the lane as a drop big does; the 3-2's is spread thinner), the edge each takes off the pick-and-roll handler, an isolation, a
    * post-up and a drive (with their expected points for the zone_paint tags); the openness it
    * leaves on kick-outs, pops and handoffs; motion's cuts (weight lost, openness lost), swings
    * (weight multiplier, openness, the corner's share of them); and its offensive-board multiplier
@@ -135,12 +142,13 @@ export const K = {
    */
   zone: {
     zone23: {
+      roll: 0.3,
       pnr: 0.3,
       pnrTag: 0.3 * 0.1,
       iso: 0.35,
       isoTag: 0.035,
-      post: 0.25,
-      postTag: 0.025,
+      post: 0.55,
+      postTag: 0.055,
       drive: 0.3,
       kick: 0.2,
       pop: 0.15,
@@ -150,10 +158,11 @@ export const K = {
       swingW: 1.35,
       swing: 0.22,
       corner: 0.45,
-      glass: 1.12,
-      glassTag: 0.12,
+      glass: 1.07,
+      glassTag: 0.07,
     },
     zone32: {
+      roll: 0.08,
       pnr: 0.1,
       pnrTag: 0.01,
       iso: 0.1,
@@ -176,6 +185,7 @@ export const K = {
     // bodies wall off less of the paint and the glass and leave more of the arc open for everyone
     // the chasers aren't on
     box1: {
+      roll: 0.18,
       pnr: 0.28,
       pnrTag: 0.028,
       iso: 0.3,
@@ -195,6 +205,7 @@ export const K = {
       glassTag: 0.08,
     },
     tri2: {
+      roll: 0.14,
       pnr: 0.2,
       pnrTag: 0.02,
       iso: 0.22,
@@ -280,6 +291,19 @@ export const K = {
    */
   tradeOff: { pressure: 0.45, blitz: 0.6, crash: 1.5, sec: { avg: 55, open: 20, to: 70 } },
   /**
+   * Ball pressure under 50: the share of the turnover rate's swing a containing defense gives up
+   * (above 50 an average lineup, ST.pressQ 50, forces half of it). At the full swing, dropping from 50
+   * to 20 cost more than a third of the turnovers it forced and about 3.5 points per 100 against
+   * every kind of offense (paired sweeps against each team's own setting): a trap, not a trade.
+   */
+  containTO: 0.35,
+  /**
+   * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
+   * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
+   * 8.2 with turnovers on its 13.9.
+   */
+  stealShare: 0.94,
+  /**
    * A guarding instruction's give-back on the player it names (the open catch a sag leaves him, the
    * room going under gives his pull-ups, the drives and back-cuts a top-lock gives up, the fouls
    * getting physical sends him to the line for) grows as the leverage to this power, about 1.6
@@ -292,9 +316,10 @@ export const K = {
    * play leave more pull-ups and kick-outs and fewer drives, and most of them crash less and get back
    * more than 50), so these base rates move back by this share per unit of leverage past 1, keeping
    * AI-vs-AI games on their 2025-26 averages: the offense's taste for threes, shooting fouls,
-   * offensive boards, turnovers and blocks.
+   * offensive boards, turnovers and blocks. (Turnovers moved back down when backing off the ball
+   * stopped giving up the full swing of them, K.containTO: most AI defenses play under 50.)
    */
-  recenter: { three: -0.1, foul: 0.053, orb: 0.057, tov: 0.045, blk: 0.06 },
+  recenter: { three: -0.1, foul: 0.053, orb: 0.057, tov: -0.005, blk: 0.06 },
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */
@@ -318,6 +343,8 @@ export const levGiftW = (m: number) => m ** (K.tacticEdge ** K.giftExp);
 export const blowByTag = (edge: number, from: keyof typeof K.advPts) => (edge * K.advPts[from]) / (1 + (edge / K.blowBySat) ** 2);
 
 export interface ZoneK {
+  /** Openness the zone's back line takes off the roll man (the drop's job in man-to-man). */
+  roll: number;
   pnr: number;
   pnrTag: number;
   iso: number;

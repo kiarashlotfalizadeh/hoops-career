@@ -192,7 +192,7 @@ export const shotsMethods = {
     this.possFinish = s.finish;
     this.lastShooter = sh;
 
-    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast) : '';
+    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast, made, !!blocker) : '';
     // the court's captions call the shot as the play-by-play does
     if (shotStep) shotStep.d = desc;
     if (made) {
@@ -265,6 +265,8 @@ export const shotsMethods = {
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
     if (lk) wDrive *= 1 + 2 * lk.beat;
+    // (down three late, the catch is for the three)
+    if (this.q >= 4 && this.clock <= 35) wDrive *= this.prefs(off, this.lateMode(off, def)).two;
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
       return;
@@ -281,6 +283,12 @@ export const shotsMethods = {
     if (lk) {
       o += lk.beat;
       tags.push([lk.beatTag, lk.beat]);
+    }
+    // (a zone walls off the drive off the catch as it does any other)
+    const zd = this.zone(def);
+    if (zd && zone !== 'mid') {
+      o -= lev(zd.drive);
+      tags.push(['zone_paint', -lev(zd.drive)]);
     }
     const body = this.body(def, sh);
     if (body) {
@@ -317,15 +325,25 @@ export const shotsMethods = {
     }
   },
 
-  /** Play-by-play wording for a shot (an alley-oop needs the pass it's credited to). */
-  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean) {
+  /**
+   * Play-by-play wording for a shot (an alley-oop needs the pass it's credited to). A dunk is nearly
+   * always good (about 9 in 10 go down, against about 6 in 10 layups), so a miss at the rim, and most
+   * blocks there, are layups.
+   */
+  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean, made = true, blocked = false) {
     const r = this.fx;
     switch (zone) {
       case 'rim':
+        if (!made) {
+          if (r.chance(blocked ? 0.08 : 0.06)) return f === 'putback' ? 'putback dunk' : 'dunk';
+          if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback layup']);
+          if (f === 'post') return r.pick(['drop-step layup', 'layup', 'up-and-under']);
+          return f === 'pnrRoll' || f === 'cut' || f === 'transition' ? 'layup' : r.pick(['driving layup', 'layup', 'reverse layup', 'layup']);
+        }
         if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback dunk', 'putback layup']);
         if (f === 'post') return r.pick(['drop-step layup', 'layup', 'dunk', 'up-and-under']);
         return f === 'pnrRoll' || f === 'cut' || f === 'transition'
-          ? r.pick(['dunk', 'layup', assisted ? 'alley-oop' : 'dunk', 'layup'])
+          ? r.pick(['dunk', 'layup', assisted ? 'alley-oop' : 'dunk', 'dunk'])
           : r.pick(['driving layup', 'layup', 'dunk', 'reverse layup']);
       case 'paint':
         if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback']);

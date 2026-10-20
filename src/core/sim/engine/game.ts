@@ -9,7 +9,7 @@ import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, S
 import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
-import { buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
+import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PossLog } from '../log';
 import { cloneTactics } from '../tactics';
 import { isSetId, readAfter } from '../sets';
@@ -32,6 +32,24 @@ import { shotsMethods } from './shots';
 import { reboundsMethods } from './rebounds';
 import { foulsMethods } from './fouls';
 import { recordMethods } from './record';
+
+/**
+ * Stint plans by their inputs: a team plays most games with the same rotation and the same players
+ * available, and the plan is a pure function of them (the engine only reads it), so a season builds
+ * each one once rather than every game.
+ */
+const plans = new Map<string, number[][]>();
+function cachedPlan(players: PlanPlayer[]): number[][] {
+  let key = '';
+  for (const p of players) key += `${p.pid},${p.minutes},${+p.starter},${+p.closer},${+p.guard},${+p.big},${p.endurance},${p.cap ?? ''};`;
+  let plan = plans.get(key);
+  if (!plan) {
+    if (plans.size >= 256) plans.clear();
+    plan = buildMinutePlan(players);
+    plans.set(key, plan);
+  }
+  return plan;
+}
 
 function shortName(p: Player) {
   return p.lastName || p.firstName;
@@ -247,7 +265,7 @@ export class GameSim {
       ls: null,
       cap: { pnr: 1, iso: 1, post: 1, handoff: 1, motion: 1 },
       injMult: input.injuryMult ?? 1,
-      subSig: '',
+      subSig: [],
       manualSubs: false,
       subLock: new Map(),
       adjust: input.adjust ? 0.15 + 0.6 * (input.team.coach.tactics / 100) : 0,
@@ -272,7 +290,7 @@ export class GameSim {
     const planPlayers = planInputs(src, rot, { playoffs: this.opts.type === 'playoffs' });
     if (!planPlayers.length) return [];
     for (const p of t.players) p.cap = rot.caps[p.pid] || undefined;
-    const plan = buildMinutePlan(planPlayers);
+    const plan = cachedPlan(planPlayers);
     for (const slot of plan) for (const pid of slot) t.byId.get(pid)!.planMin++;
     return plan;
   }

@@ -130,11 +130,13 @@ export const coachMethods = {
       } else if (rate('help_paint:o') + rate('spacing:o') >= 0.6 && d.help < 75) {
         change = (x) => void (x.defense.help = Math.min(100, x.defense.help + 15));
         what = 'packs the paint';
-      } else if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.5 && d.pressure > 35) {
-        change = (x) => void (x.defense.pressure = Math.max(0, x.defense.pressure - 15));
+        // (backing off and crashing less pay only from an extreme: the change stops at the middle,
+        // where giving up turnovers or boards would cost more than the blow-bys or run-outs it saves)
+      } else if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.5 && d.pressure > 60) {
+        change = (x) => void (x.defense.pressure = Math.max(50, x.defense.pressure - 15));
         what = 'backs off the ball';
-      } else if (rate('crash_leak:o') >= 0.5 && t.t.offense.crashBoards > 25) {
-        change = (x) => void (x.offense.crashBoards = Math.max(0, x.offense.crashBoards - 20));
+      } else if (rate('crash_leak:o') >= 0.5 && t.t.offense.crashBoards > 65) {
+        change = (x) => void (x.offense.crashBoards = Math.max(55, x.offense.crashBoards - 20));
         what = 'sends fewer players to the offensive glass';
       } else if (rate('getback:o') >= 0.4 && d.getBack < 80) {
         change = (x) => void (x.defense.getBack = Math.min(100, x.defense.getBack + 15));
