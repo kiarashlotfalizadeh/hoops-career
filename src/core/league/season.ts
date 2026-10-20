@@ -26,7 +26,7 @@ import {
 } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
-import { applyStaffTactics, ensureRotation, gamesOnDay, playGame } from './games';
+import { applyStaffTactics, ensureRotation, gamesOnDay, playGame, youthNews } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -164,6 +164,8 @@ function periodic(league: League, rng: Rng) {
   if (d === 30 || d === 60 || d === league.tradeDeadlineDay - 5) teamStrategyUpdate(league);
   // the day after the deadline, rebuilders let some veterans go to contenders
   if (d === league.tradeDeadlineDay + 1) aiBuyouts(league);
+  // rebuilders out of the race turn to their young players (see youthMovement)
+  youthNews(league);
   aiToAiTrade(league, rng);
   // (offers to the user draw on their own random stream)
   aiProposals(league);

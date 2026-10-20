@@ -72,9 +72,11 @@ function combos<T>(arr: T[], k: number): T[][] {
   return out;
 }
 
-export function bestLineup(players: Player[], pool = 9, roles?: Map<number, RoleMemory | null>): Player[] {
-  // candidates by what each brings to a lineup's score: quality, plus an incumbent's edge
-  const key = (p: Player) => p.ovr + startBonus(roles?.get(p.pid) ?? null);
+export function bestLineup(players: Player[], pool = 9, roles?: Map<number, RoleMemory | null>, lean?: (p: Player) => number): Player[] {
+  // candidates by what each brings to a lineup's score: quality, plus an incumbent's edge (and
+  // the front office's lean toward youth, when it has one)
+  const bonus = (p: Player) => startBonus(roles?.get(p.pid) ?? null) + (lean?.(p) ?? 0);
+  const key = (p: Player) => p.ovr + bonus(p);
   const cands = [...players].sort((a, b) => key(b) - key(a)).slice(0, pool);
   if (cands.length <= 5) return cands;
   let best = cands.slice(0, 5);
@@ -87,7 +89,7 @@ export function bestLineup(players: Player[], pool = 9, roles?: Map<number, Role
       c.map((p) => comp.get(p)!),
     ).score;
     // incumbents: a player who started last season keeps an edge for the job
-    if (roles) for (const p of c) s += startBonus(roles.get(p.pid) ?? null);
+    if (roles || lean) for (const p of c) s += bonus(p);
     if (s > bs) {
       bs = s;
       best = c;
@@ -281,22 +283,37 @@ function startersByMinutes(starters: Player[], bench: Player[], minutes: Record<
   return five.every((p, i) => p === starters[i]) ? starters : sortByPosition(five);
 }
 
-export function autoRotation(players: Player[], prev?: Rotation): Rotation {
+/**
+ * A rotation for the roster. `lean` (OVR points by player) is a front office's lean toward the
+ * players it is building around: a rebuilding team out of the race after the deadline plays its
+ * young players over its veterans (see youthLean in league/games.ts). It counts as quality in the
+ * pecking order and the starting five, and last season's roles count for less. `maxMinutes` holds
+ * everyone's plan under it (the minutes go down the bench).
+ */
+export function autoRotation(players: Player[], prev?: Rotation, opts: { lean?: (p: Player) => number; maxMinutes?: number } = {}): Rotation {
+  const { lean, maxMinutes = MAX_PLAN } = opts;
   const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 0);
   const season = rosterSeason(players);
-  const roles = new Map(players.map((p) => [p.pid, roleMemory(p, season)]));
-  let starters = sortByPosition(bestLineup(healthy, 9, roles));
-  const byOvr = (a: Player, b: Player) => b.ovr - a.ovr;
+  const roles = new Map(
+    players.map((p) => {
+      const r = roleMemory(p, season);
+      // a youth movement is a new direction: the old pecking order counts for a third as much
+      return [p.pid, r && lean ? { ...r, w: r.w / 3 } : r];
+    }),
+  );
+  let starters = sortByPosition(bestLineup(healthy, 9, roles, lean));
+  const q = (p: Player) => p.ovr + (lean?.(p) ?? 0);
+  const byOvr = (a: Player, b: Player) => q(b) - q(a);
   // the pecking order is quality alone (starter minutes follow it too, not position); memory
   // comes in below, once
   let depth = [...[...starters].sort(byOvr), ...healthy.filter((p) => !starters.includes(p)).sort(byOvr)];
   const base = defaultMinutesByDepth(depth.length);
   // stars play more, weak starters less: adjust by OVR relative to team
-  const avgStarter = starters.reduce((a, p) => a + p.ovr, 0) / Math.max(1, starters.length);
+  const avgStarter = starters.reduce((a, p) => a + q(p), 0) / Math.max(1, starters.length);
   let talent = depth.map((p, i) => {
     let m = base[i] ?? 0;
-    if (i < 5) m += (p.ovr - avgStarter) * 0.3;
-    if (i >= 5 && i < 9) m += (p.ovr - (depth[4]?.ovr ?? p.ovr)) * 0.4;
+    if (i < 5) m += (q(p) - avgStarter) * 0.3;
+    if (i >= 5 && i < 9) m += (q(p) - (depth[4] ? q(depth[4]) : q(p))) * 0.4;
     return Math.max(0, m);
   });
   // role memory: blend toward last season's minutes, as healthy-night minutes
@@ -318,7 +335,7 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   const hardCaps: Rotation['caps'] = {};
   for (const p of players) if (prev?.caps?.[p.pid]) hardCaps[p.pid] = prev.caps[p.pid];
   // six or fewer healthy can't fill a game at 38 apiece: the ceiling rises to what does (48 at most)
-  const most = clamp(240 / Math.max(1, depth.length), MAX_PLAN, 48);
+  const most = clamp(240 / Math.max(1, depth.length), Math.min(MAX_PLAN, maxMinutes), 48);
   const ceiling = depth.map((p) => Math.min(most, hardCaps[p.pid] ?? most));
   // stamina sets what a player can sustain; a proven heavy-minute role counts too
   const caps = depth.map((p, i) => {
@@ -393,7 +410,7 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   }
   const bench = depth.filter((p) => !five.has(p)).sort((a, b) => minutes[b.pid] - minutes[a.pid]);
   const order = [...starters, ...bench, ...injured].map((p) => p.pid);
-  const closers = sortByPosition(bestLineup(healthy, 8, roles)).map((p) => p.pid);
+  const closers = sortByPosition(bestLineup(healthy, 8, roles, lean)).map((p) => p.pid);
   return {
     order,
     minutes,

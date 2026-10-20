@@ -4,7 +4,7 @@ import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine,
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
-import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
+import { addInbox, addNews, andList, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { playerAge } from '../playerGen';
@@ -85,6 +85,126 @@ export function applyStaffTactics(league: League, tid: number) {
   team.tactics = next;
 }
 
+/**
+ * How far an AI team has turned to its young players for the rest of the season (0 to 1): all the
+ * way for a rebuilding team in its conference's bottom four from about 20 games in, and for every
+ * rebuilding team out of the race after the trade deadline (11th or lower in its conference);
+ * halfway for any other team that isn't contending, 12th or lower with 15 games or fewer left.
+ * The young play over the veterans (youthLean) and the minutes go down the bench, and a full youth
+ * movement sits its veterans some nights (restVeterans): it costs games, as it does in the NBA,
+ * and the lottery pays for them. The user's team is the user's call.
+ *
+ * Without it the bottom of the league was too shallow: over 12 simulated seasons in four leagues,
+ * teams under 25 wins 1.6 a season (the NBA's 2023-24 to 2025-26: 5-6) and a win SD of 10.5 (13).
+ */
+export function youthMovement(league: League, tid: number): number {
+  if (tid === league.userTid || league.phase !== 'regular' || league.day < YOUTH_FROM) return 0;
+  const key = `${league.season}:${league.day}`;
+  let memo = youthMemo.get(league);
+  if (!memo || memo.key !== key) {
+    memo = { key, level: youthLevels(league) };
+    youthMemo.set(league, memo);
+  }
+  return memo.level.get(tid) ?? 0;
+}
+
+const youthMemo = new WeakMap<League, { key: string; level: Map<number, number> }>();
+
+/** The day of the season a rebuilding team at the bottom of its conference starts to play its young players (about 20 games in). */
+const YOUTH_FROM = 40;
+
+/** Standings as the day began (today's games already played taken off), so every game of a day reads the same. */
+function youthLevels(league: League): Map<number, number> {
+  const out = new Map<number, number>();
+  const after = league.day > league.tradeDeadlineDay;
+  const left = new Map<number, number>();
+  for (const g of league.schedule) if (g.type === 'regular' && g.day >= league.day) for (const tid of [g.home, g.away]) left.set(tid, (left.get(tid) ?? 0) + 1);
+  const today = new Map<number, [number, number]>();
+  for (let i = league.games.length - 1; i >= 0; i--) {
+    const g = league.games[i];
+    if (g.season !== league.season || g.day !== league.day) break;
+    if (g.type !== 'regular') continue;
+    const homeWon = g.home.pts > g.away.pts;
+    for (const [tid, won] of [
+      [g.home.tid, homeWon],
+      [g.away.tid, !homeWon],
+    ] as const) {
+      const x = today.get(tid) ?? [0, 0];
+      x[won ? 0 : 1]++;
+      today.set(tid, x);
+    }
+  }
+  const pct = (t: Team) => {
+    const ts = teamSeason(t, league.season);
+    const [w, l] = today.get(t.tid) ?? [0, 0];
+    const gp = ts.won - w + ts.lost - l;
+    return gp ? (ts.won - w) / gp : 0.5;
+  };
+  for (const conf of ['E', 'W'] as const) {
+    const rows = league.teams
+      .filter((t) => t.conf === conf)
+      .map((t) => ({ t, wp: pct(t) }))
+      .sort((a, b) => b.wp - a.wp || a.t.tid - b.t.tid);
+    rows.forEach(({ t }, i) => {
+      if (t.tid === league.userTid) return;
+      if (!after) {
+        if (t.strategy === 'rebuild' && i >= rows.length - 4) out.set(t.tid, 1);
+      } else if (t.strategy === 'rebuild' && i >= 10) out.set(t.tid, 1);
+      else if (t.strategy !== 'contend' && i >= 11 && (left.get(t.tid) ?? 0) <= 15) out.set(t.tid, 0.5);
+    });
+  }
+  return out;
+}
+
+/**
+ * A youth movement's lean (OVR points) toward a player in the rotation: up to 7 for the
+ * 22-and-unders it is building around, down 3 at 28-29, 6 at 30-31 and 8 after that. With the
+ * veterans' nights off it costs a team about 3 points per 100 (2 in the real league, whose
+ * rebuilders are already young), measured over paired games against the league.
+ */
+export function youthLean(age: number): number {
+  if (age <= 22) return 7;
+  if (age <= 25) return [5, 3, 1][age - 23];
+  if (age <= 27) return 0;
+  return age <= 29 ? -3 : age <= 31 ? -6 : -8;
+}
+
+/**
+ * A full youth movement's veterans sit some nights: the 30-and-ups every other night, the
+ * 28-and-ups and its two best players 24 or older every third (load management, a sore knee).
+ */
+export function restVeterans(league: League, players: Player[], day: number, rest: number[]) {
+  const best = players
+    .filter((p) => playerAge(p, league.season) >= 24 && !p.contract.twoWay)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, 2);
+  for (const p of players) {
+    const age = playerAge(p, league.season);
+    if (rest.includes(p.pid) || (age < 28 && !best.includes(p))) continue;
+    if ((p.pid + day) % (age >= 30 ? 2 : 3) === 0) rest.push(p.pid);
+  }
+}
+
+/** The day a team turns to its young players, a word in the news (once a season). */
+export function youthNews(league: League) {
+  for (const t of league.teams) {
+    if (youthMovement(league, t.tid) < 1) continue;
+    if (league.news.some((n) => n.season === league.season && n.kind === 'general' && n.tids[0] === t.tid && n.text.includes(YOUTH_NEWS))) continue;
+    const young = teamPlayers(league, t.tid)
+      .filter((p) => playerAge(p, league.season) <= 23)
+      .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+      .slice(0, 2);
+    addNews(league, {
+      kind: 'general',
+      text: `The ${teamName(t)} ${YOUTH_NEWS}${young.length ? `: more minutes for ${andList(young.map(playerName))}` : ''}, and their veterans will sit some nights.`,
+      tids: [t.tid],
+      pids: young.map((p) => p.pid),
+    });
+  }
+}
+
+const YOUTH_NEWS = 'turn to their young players';
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
@@ -95,7 +215,9 @@ export function ensureRotation(league: League, tid: number) {
   const stale = rot.order.some((pid) => !pids.has(pid)) || players.some((p) => !rot.order.includes(p.pid));
   const isUser = tid === league.userTid;
   if (!isUser || !rot.manual) {
-    team.rotation = autoRotation(players, rot);
+    const youth = youthMovement(league, tid);
+    // (a youth movement also spreads the minutes: nobody past 30, the end of the bench plays)
+    team.rotation = autoRotation(players, rot, youth ? { lean: (p) => youth * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * youth } : {});
   } else if (stale) {
     // keep the user's order, drop departed players, append new ones at the end
     rot.order = rot.order.filter((pid) => pids.has(pid));
@@ -105,7 +227,8 @@ export function ensureRotation(league: League, tid: number) {
     rot.restB2B = rot.restB2B.filter((pid) => pids.has(pid));
     for (const k of Object.keys(rot.caps)) if (!pids.has(+k)) delete rot.caps[+k];
   }
-  if (!isUser || !team.rotation.manual) benchTwoWays(team.rotation, players);
+  // (a youth movement plays its two-way prospects too)
+  if ((!isUser || !team.rotation.manual) && youthMovement(league, tid) < 1) benchTwoWays(team.rotation, players);
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change
   // the best fit (the Tactics screen's fit scores count the same players)
@@ -155,6 +278,7 @@ export function buildSimInput(
       }
     }
   }
+  if (type === 'regular' && youthMovement(league, tid) >= 1) restVeterans(league, players, day, rest);
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = wearPerf(p);
   // practice intensity: intense camps build skills but add wear and injury risk
