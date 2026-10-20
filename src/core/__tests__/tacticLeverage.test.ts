@@ -11,12 +11,20 @@ import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } f
 import { Rng } from '../random';
 import type { Player, Tactics } from '../types';
 
+/** The tactics without the overhaul's shape and out-of-possession roles: the games these numbers were taken from. */
+function basic(t: Tactics): Tactics {
+  const out = structuredClone(t);
+  delete out.offense.shape;
+  delete out.defense.roles;
+  return out;
+}
+
 describe('tactical leverage', () => {
   const EDGE = K.tacticEdge;
   afterEach(() => void (K.tacticEdge = EDGE));
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
   const side = (tid: number, patch?: TacticsPatch, players?: Player[], tactics?: Tactics): SimTeamInput => ({
-    team: { ...league.teams[tid], tactics: applyPatch(tactics ?? league.teams[tid].tactics, patch) },
+    team: { ...league.teams[tid], tactics: applyPatch(basic(tactics ?? league.teams[tid].tactics), patch) },
     players: players ?? teamPlayers(league, tid),
   });
   const man: TacticsPatch = { defense: { scheme: 'man', pnr: 'drop', switchOffBall: false } };

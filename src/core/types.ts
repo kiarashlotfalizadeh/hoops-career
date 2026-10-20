@@ -51,6 +51,29 @@ export type OffRole =
 
 export type ShotFreedom = -1 | 0 | 1; // limited / normal / green light
 
+/**
+ * A player's job out of possession (see DEF_ROLE_META): who the matchups send him to and what he
+ * does there. 'standard' guards whom the staff's matchups give him and nothing more.
+ */
+export type DefRole = 'standard' | 'poa' | 'stopper' | 'anchor' | 'roamer' | 'hide';
+export const DEF_ROLES: DefRole[] = ['standard', 'poa', 'stopper', 'anchor', 'roamer', 'hide'];
+
+/** A player's work on the offensive glass when a shot goes up: get back (-1), as the team does (0) or crash (1). */
+export type GlassDuty = -1 | 0 | 1;
+
+/**
+ * The offense's half-court alignment, its "formation" (see SHAPE_META): where the five stand before
+ * the action starts. Four-out, one-in is the league's default and the engine's baseline.
+ */
+export type OffShape = 'fourOut' | 'fiveOut' | 'horns' | 'twoIn';
+export const OFF_SHAPES: OffShape[] = ['fourOut', 'fiveOut', 'horns', 'twoIn'];
+
+/** The team's mentality, -2 (very cautious) to 2 (very aggressive): one dial over the risk the whole system takes. */
+export type Mentality = -2 | -1 | 0 | 1 | 2;
+
+/** What the team works on between games (see src/core/sim/familiarity.ts): its system, the next opponent, or rest. */
+export type PrepFocus = 'balanced' | 'system' | 'opponent' | 'recovery';
+
 export type TrainingFocus = 'balanced' | 'shooting' | 'finishing' | 'playmaking' | 'perimeterD' | 'interiorD' | 'rebounding' | 'conditioning';
 
 export interface Contract {
@@ -452,6 +475,10 @@ export interface OffenseTactics {
    * when the players on the floor fit them. AI coaches run none.
    */
   sets?: SetId[];
+  /** The half-court alignment (absent: four-out, one-in). */
+  shape?: OffShape;
+  /** Player instructions on the offensive glass, by pid (absent: as the team crashes). */
+  glass?: Record<number, GlassDuty>;
 }
 
 export interface DefenseTactics {
@@ -482,6 +509,8 @@ export interface DefenseTactics {
   chase?: number[];
   /** Scouting-report instructions by opponent pid (game-specific). */
   playerD?: Record<number, PlayerDefense>;
+  /** Out-of-possession roles by pid (absent: 'standard'). */
+  roles?: Record<number, DefRole>;
 }
 
 export interface GameManagement {
@@ -543,6 +572,8 @@ export interface SituationalPlan {
   enabled: boolean;
   when: SituationTrigger;
   patch: TacticsPatch;
+  /** Switch to another tactic slot while the situation lasts (its index in Team.slots), in place of the patch. */
+  slot?: number;
 }
 
 export interface Rotation {
@@ -573,6 +604,31 @@ export interface Tactics {
   playbook?: { id: string; name: string } | null;
   /** Situational plans (at most four): the first enabled one whose trigger matches is played on top of the rest. */
   situations?: SituationalPlan[];
+  /** The team's mentality (absent: balanced), played on top of every setting (see withMentality). */
+  mentality?: Mentality;
+}
+
+/**
+ * The coach's three tactics, as Football Manager keeps them (see src/core/sim/slots.ts): the active
+ * one is Team.tactics itself, the others wait in `stored` (null at the active index).
+ */
+export interface TacticSlots {
+  active: number;
+  names: string[];
+  stored: (Tactics | null)[];
+}
+
+/**
+ * What a team has drilled (see src/core/sim/familiarity.ts): how well it knows each discrete option
+ * it could play (`opt`: 'scheme:zone23', 'pnr:blitz', 'shape:fiveOut', 'press:always', 0-100), the
+ * values its sliders are drilled at (`habit`), each player's knowledge of the system (`know`, 0-100)
+ * and the role pair he's drilled in ('slasher|stopper') with how well.
+ */
+export interface Familiarity {
+  opt: Record<string, number>;
+  habit: Record<string, number>;
+  know: Record<number, number>;
+  roles: Record<number, [string, number]>;
 }
 
 /**
@@ -585,14 +641,17 @@ export interface SavedPlaybook {
   name: string;
   /** When it was saved or last overwritten. */
   saved: { season: number; day: number };
-  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget'>;
-  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'playerD'>;
+  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget' | 'glass'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'playerD' | 'roles'>;
   manage: GameManagement;
   offPreset: string;
   defPreset: string;
   roles?: Record<number, OffRole>;
   freedom?: Record<number, ShotFreedom>;
   screeners?: number[];
+  /** Glass duties and out-of-possession roles by player (they load for players still on the roster). */
+  glass?: Record<number, GlassDuty>;
+  defRoles?: Record<number, DefRole>;
   /** Other parts of the tactics (features newer than this type), kept as they were saved. */
   extra?: Record<string, unknown>;
 }
@@ -665,6 +724,12 @@ export interface Team {
   /** Market size factor ~ metro population in millions. */
   pop: number;
   tactics: Tactics;
+  /** The coach's other tactics (the user's team: AI coaches keep one). */
+  slots?: TacticSlots;
+  /** What the team knows of its tactics (see src/core/sim/familiarity.ts); absent: fully drilled in what it plays. */
+  fam?: Familiarity;
+  /** Between games: the practice focus (absent: balanced). */
+  prep?: PrepFocus;
   rotation: Rotation;
   strategy: 'contend' | 'retool' | 'rebuild';
   budget: Budget;
@@ -1435,6 +1500,8 @@ export interface CupState {
  * them, so a counter like "more pick-and-roll" builds on whatever playbook it is applied to.
  */
 export interface TacticsPatch {
+  /** The mentality while the patch is in effect. */
+  mentality?: Mentality;
   offense?: Partial<Omit<OffenseTactics, 'actions'>> & { actions?: Partial<Record<ActionType, number>> };
   defense?: Partial<DefenseTactics>;
   manage?: Partial<GameManagement>;

@@ -184,9 +184,9 @@ export const pnrMethods = {
     const sag = this.sagHelp(def, off, H, S);
     if (sag) {
       rimOpen -= sag;
-      tagsRim.push(['pd_sag', -sag]);
+      tagsRim.push([this.sagKey, -sag]);
       rollOpen -= sag;
-      tagsRoll.push(['pd_sag', -sag]);
+      tagsRoll.push([this.sagKey, -sag]);
     }
 
     // help defense / spacing on drives

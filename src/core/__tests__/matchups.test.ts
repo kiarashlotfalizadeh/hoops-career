@@ -128,7 +128,12 @@ describe('matchup solver', () => {
     const play = (seed: number) => {
       const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: seed });
       return [0, 1, 2].map((g) => {
-        const side = (tid: number) => ({ team: structuredClone(league.teams[tid]), players: teamPlayers(league, tid) });
+        const side = (tid: number) => {
+          const team = structuredClone(league.teams[tid]);
+          // (the legacy search has no out-of-possession roles)
+          delete team.tactics.defense.roles;
+          return { team, players: teamPlayers(league, tid) };
+        };
         const a = side(g);
         const b = side(g + 10);
         // planned matchups on one side: three of their players on three of our bench

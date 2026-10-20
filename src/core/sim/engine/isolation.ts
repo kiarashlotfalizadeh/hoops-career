@@ -79,7 +79,7 @@ export const isolationMethods = {
         const body = this.body(def, A);
         if (body) tags.push(['pd_body', -lev(K.pd.body.drive)]);
         const sag = this.sagHelp(def, off, A);
-        if (sag) tags.push(['pd_sag', -sag]);
+        if (sag) tags.push([this.sagKey, -sag]);
         this.shoot(off, def, {
           shooter: A,
           zone,

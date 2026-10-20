@@ -6,6 +6,7 @@ import type { League, Player, RatingKey, ScheduledGame, Tactics } from '../types
 import { ROLE_USAGE, archetype, attrDisplay, composites } from '../ratings';
 import { K, type SimTeamInput } from '../sim/engine';
 import { solveMatchups } from '../sim/matchups';
+import { defRoleOf } from '../sim/tactics';
 import { buildMinutePlan, planInputs, planRoles } from '../sim/rotationPlan';
 import { ratingText } from './guarding';
 import { buildSimInput } from '../league/games';
@@ -33,14 +34,15 @@ export interface MatchupPreview {
  * How much an offense runs through a player at tip-off (fresh legs, nothing in the box yet): the
  * engine's usage weight for isolations plus pick-and-rolls, which is what its matchups weigh.
  */
-function tipOffThreat(p: Player, t: Tactics, perf = 1): number {
+/** A player's isolations and ball screens, as the engine's usage weighs them at tip-off. */
+function tipOffParts(p: Player, t: Tactics, perf = 1): [number, number] {
   const role = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
   const c = composites(p.ratings);
   const fr = t.offense.freedom[p.pid] ?? 0;
   const freedom = fr === 1 ? K.freedomGreen : fr === -1 ? K.freedomLimited : 1;
   const w = (skill: number) => ROLE_USAGE[role] * freedom * (p.tend?.use ?? 1) * (p.tend?.create ?? 1) * Math.pow(Math.max(5, skill) / 50, K.usageExp) * perf;
   const pnr = role === 'roller' || role === 'stretch' ? c.pnrHandle * 0.55 : c.pnrHandle;
-  return w(0.55 * c.create + 0.45 * Math.max(c.midShot, c.pu3, c.rim)) + w(pnr);
+  return [w(0.55 * c.create + 0.45 * Math.max(c.midShot, c.pu3, c.rim)), w(pnr)];
 }
 
 /** The engine's split for matchups: a big is guarded by interior defense. */
@@ -87,10 +89,13 @@ export function previewMatchups(league: League, opp: number): MatchupPreview {
   const mine = projected(mineIn, 10, type);
   const theirs = projected(theirIn, 8, type);
   const manual = mineIn.team.tactics.defense.matchups;
-  const scorer = (p: Player) => ({ pid: p.pid, hgt: p.ratings.hgt, big: isBig(p), threat: tipOffThreat(p, theirIn.team.tactics, theirIn.perf?.[p.pid] ?? 1) });
+  const scorer = (p: Player) => {
+    const [iso, pnr] = tipOffParts(p, theirIn.team.tactics, theirIn.perf?.[p.pid] ?? 1);
+    return { pid: p.pid, hgt: p.ratings.hgt, big: isBig(p), threat: iso + pnr, handle: pnr, shoot: composites(p.ratings).spacing };
+  };
   const defender = (p: Player) => {
     const c = composites(p.ratings);
-    return { pid: p.pid, hgt: p.ratings.hgt, intDef: c.intDef, perDef: c.perDef };
+    return { pid: p.pid, hgt: p.ratings.hgt, intDef: c.intDef, perDef: c.perDef, role: defRoleOf(mineIn.team.tactics.defense, p.pid) };
   };
   const auto = new Map<number, number>();
   const solve = (off: Player[], def: Player[]) => {

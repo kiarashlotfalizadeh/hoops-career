@@ -7,6 +7,7 @@
 import type { ActionType } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
+import { shapeOf } from '../tactics';
 import { K, lev, levW } from './constants';
 import { type SP, type ST, type LateMode, ACTION_LIST } from './state';
 import type { GameSim } from './game';
@@ -38,6 +39,8 @@ export const usageMethods = {
     }
     let w = roleU * p.freedom * p.tu * p.tcr * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
+    // a wing stopper on him keeps the ball out of his hands a little
+    if (this.T && this.T[1 - t.side].guardOf.get(p.pid)?.drole === 'stopper') w *= levW(K.role.stopperTouch);
     // defenses load up on a high-usage player as the game goes on (a junk defense's chaser sooner)
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12.5) {
@@ -155,8 +158,29 @@ export const usageMethods = {
     return p;
   },
 
-  /** How well the current lineup can run an action (0.2..~1.6). (Loops, not spreads: it runs at every substitution.) */
+  /** How well the current lineup can run an action, in the offense's shape (see K.shape). */
   capability(this: GameSim, t: ST, act: ActionType): number {
+    const c = this.baseCapability(t, act);
+    switch (shapeOf(t.t.offense)) {
+      case 'fiveOut':
+        return act === 'post' ? c * levW(K.shape.fiveOut.post) : c;
+      case 'horns': {
+        if (act === 'pnr') return c * levW(K.shape.horns.pnr);
+        if (act === 'motion') return c * levW(K.shape.horns.motion);
+        if (act !== 'handoff') return c;
+        // the elbow bigs run the handoffs: as well as the better passer of them
+        const [a, b] = this.bigTwo(t);
+        return c * levW(Math.max(0.9, K.shape.horns.handoff + (K.shape.horns.handoffW * (Math.max(a.c.passing, b.c.passing) - 55)) / 20));
+      }
+      case 'twoIn':
+        return act === 'post' ? c * levW(K.shape.twoIn.post) : c;
+      default:
+        return c;
+    }
+  },
+
+  /** How well the current lineup can run an action (0.2..~1.6). (Loops, not spreads: it runs at every substitution.) */
+  baseCapability(this: GameSim, t: ST, act: ActionType): number {
     const on = t.on;
     let a = -Infinity;
     let b = -Infinity;

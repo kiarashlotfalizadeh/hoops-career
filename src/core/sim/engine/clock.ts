@@ -78,6 +78,8 @@ export const clockMethods = {
           if (press) drain *= levW(1.15);
           if (t.t.defense.press === 'always') drain *= levW(1.12);
           if (p === denyD || (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p))) drain *= levW(K.denyDrain);
+          // (the chasing roles wear their players down on defense)
+          else if (t.side !== this.poss && (p.drole === 'poa' || p.drole === 'stopper')) drain *= K.role.drain;
           p.energy = Math.max(0.2, p.energy - drain * dt);
         } else if (p.out === 0 || p.out === 1) {
           p.energy = Math.min(1, p.energy + K.recover * dt);

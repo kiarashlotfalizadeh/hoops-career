@@ -154,7 +154,7 @@ export const handoffMethods = {
         const sag = this.sagHelp(def, off, Sh, B);
         if (sag) {
           o -= sag;
-          rt.push(['pd_sag', -sag]);
+          rt.push([this.sagKey, -sag]);
         }
         if (play) o += this.setOpen(play, 'rim', rt);
         this.shoot(off, def, { shooter: Sh, zone: 'rim', open: o, contest: this.rimContester(def, D), assister: B, finish, tags: rt, ...body });

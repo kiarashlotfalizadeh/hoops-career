@@ -1,8 +1,12 @@
 import type {
   ActionType,
+  DefRole,
   DefScheme,
   DefenseTactics,
   GameManagement,
+  GlassDuty,
+  Mentality,
+  OffShape,
   OffenseTactics,
   PlayerDefense,
   PnrCoverage,
@@ -253,6 +257,118 @@ export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> =
   double: { label: 'Double-team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
 };
 
+// ---------------------------------------------------------------- shape, out-of-possession roles, mentality
+
+export const SHAPE_META: Record<OffShape, { label: string; short: string; help: string; good: string; bad: string }> = {
+  fourOut: {
+    label: '4-Out, 1-In',
+    short: '4-out',
+    help: 'Four on the arc, one big in the dunker spot. The league’s default: the man inside doesn’t have to shoot, and he’s where the misses fall.',
+    good: 'Hides a big who can’t shoot; normal glass',
+    bad: 'One help defender already in the paint',
+  },
+  fiveOut: {
+    label: '5-Out',
+    short: '5-out',
+    help: 'All five on the arc and the paint empty: drives, cuts and rolls get more room, so long as all five can shoot. Anyone who can’t is sagged off, and nobody is near the glass.',
+    good: 'More room for drives, cuts and rolls with five shooters',
+    bad: 'Non-shooters get sagged off; fewer offensive boards; no post game',
+  },
+  horns: {
+    label: 'Horns',
+    short: 'Horns',
+    help: 'Two bigs at the elbows, two shooters in the corners: every trip starts with a choice of ball screens and handoffs, out of a set the players know cold. Less ball movement, fewer turnovers.',
+    good: 'Better ball screens and handoffs; fewer turnovers',
+    bad: 'Less motion and cutting; a little less spacing',
+  },
+  twoIn: {
+    label: 'Double Post',
+    short: 'Twin bigs',
+    help: 'Two bigs inside, three outside: post-ups, high-low passes and the offensive glass, at the cost of a crowded paint for everyone else’s drives.',
+    good: 'Post-ups and offensive boards',
+    bad: 'Crowded paint: drives and spacing suffer',
+  },
+};
+
+export const DEF_ROLE_META: Record<DefRole, { label: string; short: string; help: string }> = {
+  standard: { label: 'Position Defender', short: 'Position', help: 'Guards whomever the staff’s matchups give him, plays the scheme and nothing more.' },
+  poa: {
+    label: 'Point-of-Attack Stopper',
+    short: 'Point of attack',
+    help: 'Picks up their lead ball handler wherever he goes: harder to blow by and more turnovers forced on the ball, but the chase wears him down, and a big one can be beaten for speed.',
+  },
+  stopper: {
+    label: 'Wing Stopper',
+    short: 'Stopper',
+    help: 'Takes their best scorer who isn’t the lead handler: fewer touches for him and tougher shots when he gets one. It’s tiring work.',
+  },
+  anchor: {
+    label: 'Rim Anchor',
+    short: 'Anchor',
+    help: 'Guards their least dangerous big and lives in the paint, contesting everyone’s shots at the rim; if the man he leaves can shoot, he gets open looks.',
+  },
+  roamer: {
+    label: 'Roamer',
+    short: 'Roamer',
+    help: 'Guards their weakest shooter and roams off him into driving lanes, helping on everyone else’s drives, cuts and rolls. His man’s kick-outs come open, so it pays only against a player who can’t make them.',
+  },
+  hide: {
+    label: 'Hidden',
+    short: 'Hidden',
+    help: 'Guards their least dangerous player, so a weak defender is out of the action as much as the matchups allow. No other duty.',
+  },
+};
+
+export const GLASS_META: Record<GlassDuty, { label: string; help: string }> = {
+  [-1]: { label: 'Get back', help: 'Retreats on every shot: fewer offensive boards for him, fewer run-outs for them.' },
+  0: { label: 'Team setting', help: 'Crashes or gets back as the team does.' },
+  1: { label: 'Crash', help: 'Goes to the glass on every shot: more offensive boards for him, and more run-outs for them when he doesn’t get it.' },
+};
+
+/** The five mentalities, from very cautious (-2) to very aggressive (2). */
+export const MENTALITY_META: Record<Mentality, { label: string; help: string }> = {
+  [-2]: {
+    label: 'Very cautious',
+    help: 'Long possessions, nobody leaks or crashes, no gambles on defense: fewer turnovers and run-outs, fewer possessions. Protects a lead; can’t chase one.',
+  },
+  [-1]: { label: 'Cautious', help: 'A little slower and safer at both ends than your settings: fewer gambles, more bodies back.' },
+  0: { label: 'Balanced', help: 'Your settings as they are.' },
+  1: { label: 'Aggressive', help: 'A little faster and riskier at both ends than your settings: push, crash, pressure the ball.' },
+  2: {
+    label: 'Very aggressive',
+    help: 'Run on everything, shoot early, crash the glass, get into the ball: more possessions and more variance, and more run-outs given up. For chasing a game, or an underdog looking for chaos.',
+  },
+};
+
+/** One step of mentality, as it nudges the settings (see withMentality). */
+const MENTALITY_STEP = { pace: 9, transition: 9, crashBoards: 7, threePoint: 3, pressure: 7, physicality: 3, getBack: -7 } as const;
+
+/**
+ * Tactics as the team plays them: the mentality's nudges on top of the settings (a copy when there are
+ * any, kept within 0..100). Balanced, or none set, plays the settings as they are.
+ */
+export function withMentality(t: Tactics): Tactics {
+  const m = t.mentality ?? 0;
+  if (!m) return t;
+  const out = cloneTactics(t);
+  const o = out.offense;
+  const d = out.defense;
+  o.pace = clamp(o.pace + m * MENTALITY_STEP.pace, 0, 100);
+  o.transition = clamp(o.transition + m * MENTALITY_STEP.transition, 0, 100);
+  o.crashBoards = clamp(o.crashBoards + m * MENTALITY_STEP.crashBoards, 0, 100);
+  o.threePoint = clamp(o.threePoint + m * MENTALITY_STEP.threePoint, 0, 100);
+  d.pressure = clamp(d.pressure + m * MENTALITY_STEP.pressure, 0, 100);
+  d.physicality = clamp(d.physicality + m * MENTALITY_STEP.physicality, 0, 100);
+  d.getBack = clamp(d.getBack + m * MENTALITY_STEP.getBack, 0, 100);
+  return out;
+}
+
+/** The shape the offense plays (four-out, one-in when none is set). */
+export const shapeOf = (o: Pick<OffenseTactics, 'shape'>): OffShape => o.shape ?? 'fourOut';
+
+/** A player's out-of-possession role (standard when none is set). */
+export const defRoleOf = (d: Pick<DefenseTactics, 'roles'>, pid: number): DefRole => d.roles?.[pid] ?? 'standard';
+
 export function defaultManagement(): GameManagement {
   return {
     foulUp3: true,
@@ -323,12 +439,14 @@ export function cloneTactics(t: Tactics): Tactics {
       freedom: { ...t.offense.freedom },
       screeners: [...t.offense.screeners],
       ...(t.offense.sets && { sets: [...t.offense.sets] }),
+      ...(t.offense.glass && { glass: { ...t.offense.glass } }),
     },
     defense: {
       ...t.defense,
       matchups: { ...t.defense.matchups },
       ...(t.defense.chase && { chase: [...t.defense.chase] }),
       ...(t.defense.playerD && { playerD: { ...t.defense.playerD } }),
+      ...(t.defense.roles && { roles: { ...t.defense.roles } }),
     },
     manage: t.manage.hackTargets ? { ...t.manage, hackTargets: [...t.manage.hackTargets] } : { ...t.manage },
     ...(t.situations && { situations: t.situations.map(cloneSituation) }),
@@ -396,6 +514,7 @@ export function cloneSituation(s: SituationalPlan): SituationalPlan {
 export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   const out = cloneTactics(t);
   if (!patch) return out;
+  if (patch.mentality !== undefined) out.mentality = patch.mentality;
   if (patch.offense) {
     const { actions, ...rest } = patch.offense;
     out.offense = { ...out.offense, ...rest, actions: { ...out.offense.actions } };
@@ -434,6 +553,7 @@ const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && JS
  */
 export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   const patch: TacticsPatch = {};
+  if ((a.mentality ?? 0) !== (b.mentality ?? 0)) patch.mentality = b.mentality ?? 0;
   const offense: NonNullable<TacticsPatch['offense']> = {};
   // (both sides' keys: a set package taken off is a change too)
   for (const k of new Set([...Object.keys(a.offense), ...Object.keys(b.offense)]) as Set<keyof OffenseTactics>) {
@@ -459,7 +579,7 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
 }
 
 /** A patch changes nothing. */
-export const emptyPatch = (p: TacticsPatch) => !p.offense && !p.defense && !p.manage && !p.nudge;
+export const emptyPatch = (p: TacticsPatch) => !p.offense && !p.defense && !p.manage && !p.nudge && p.mentality === undefined;
 // ---------------------------------------------------------------- situations
 
 /** A team plays at most this many situational plans (the first enabled one that matches applies). */

@@ -5,15 +5,16 @@
 // defense, possession, transition, setPlays, the actions (pnr, isolation, postUp, handoff, motion),
 // shots, rebounds, fouls and record.
 
-import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, Tactics, TacticImpact } from '../../types';
+import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact } from '../../types';
 import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
 import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PossLog } from '../log';
-import { cloneTactics } from '../tactics';
+import { cloneTactics, defRoleOf, shapeOf, withMentality } from '../tactics';
 import { isSetId, readAfter } from '../sets';
-import { K, ftChance } from './constants';
+import { K, ftChance, lev } from './constants';
+import { execution, famPenalty } from '../familiarity';
 import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
@@ -117,6 +118,8 @@ export class GameSim {
   firstOpen = 0;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
+  /** The tag the last sagHelp's openness goes under ('pd_sag', or 'role_roam' for a roamer's). */
+  sagKey = 'pd_sag';
   /** A set handed to the action about to run (it takes it: see takePlay). */
   play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -174,6 +177,8 @@ export class GameSim {
     const players: SP[] = roster.map((p) => {
       const role = tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
       const sp: SP = {
+        drole: defRoleOf(tactics.defense, p.pid),
+        glass: tactics.offense.glass?.[p.pid] ?? 0,
         pid: p.pid,
         name: shortName(p),
         full: `${p.firstName} ${p.lastName}`.trim(),
@@ -238,7 +243,7 @@ export class GameSim {
       side,
       tid: input.team.tid,
       team: input.team,
-      t: tactics,
+      t: withMentality(tactics),
       players,
       byId: new Map(players.map((p) => [p.pid, p])),
       on: [],
@@ -273,6 +278,10 @@ export class GameSim {
       adjust: input.adjust ? 0.15 + 0.6 * (input.team.coach.tactics / 100) : 0,
       adjustedQ: 0,
       base: cloneTactics(tactics),
+      drilled: cloneTactics(tactics),
+      fam: input.fam ?? input.team.fam,
+      famOff: 0,
+      famDef: 0,
       sit: null,
       hacked: new Map(),
       nextSet: null,
@@ -328,7 +337,7 @@ export class GameSim {
 
   private updateCaches(t: ST) {
     const on = t.on;
-    t.spacing = on.reduce((a, p) => a + p.c.spacing, 0) / on.length;
+    t.spacing = this.shapeSpacing(t);
     const passes = on.map((p) => p.c.passing).sort((a, b) => b - a);
     t.passQ = passes[0] * 0.45 + passes[1] * 0.35 + passes[2] * 0.2 || 50;
     t.helpQ = on.reduce((a, p) => a + p.c.helpD, 0) / on.length;
@@ -343,6 +352,68 @@ export class GameSim {
       .join('-');
     t.ls = null;
     for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
+    this.refreshFam(t);
+  }
+
+  /** The lineup's spacing: its five's average (horns crowds it a little, see K.shape). */
+  shapeSpacing(t: ST): number {
+    const avg = t.on.reduce((a, p) => a + p.c.spacing, 0) / t.on.length;
+    return shapeOf(t.t.offense) === 'horns' ? avg + lev(K.shape.horns.space) : avg;
+  }
+
+  /**
+   * The openness the offense's shape gives a half-court shot (none in transition or on a putback):
+   * five-out's open paint for shots at the rim and in the paint, as much as the five's shooting
+   * keeps the defense out of it; the double post's crowded paint for everyone but its bigs, who
+   * finish better inside.
+   */
+  shapeOpen(t: ST, sh: SP, zone: ShotZone, finish: FinishType): number {
+    if (finish === 'transition' || finish === 'putback' || (zone !== 'rim' && zone !== 'paint')) return 0;
+    const shape = shapeOf(t.t.offense);
+    if (shape === 'fiveOut') {
+      let exposed = 0;
+      for (const p of t.on) exposed += Math.max(0, 40 - p.c.spacing) / 40;
+      return lev(K.shape.fiveOut.rim * (1 - K.shape.fiveOut.exposed * exposed));
+    }
+    if (shape === 'twoIn') {
+      const [a, b] = this.bigTwo(t);
+      if (sh === a || sh === b) return lev(K.shape.twoIn.bigs);
+      const waste = Math.max(0, a.c.spacing - K.shape.twoIn.inside) + Math.max(0, b.c.spacing - K.shape.twoIn.inside);
+      return -lev(K.shape.twoIn.crowd + K.shape.twoIn.waste * waste);
+    }
+    return 0;
+  }
+
+  /** The two biggest players on the floor (by height, then rebounding): a double post's bigs, horns' elbows. */
+  bigTwo(t: ST): [SP, SP] {
+    const s = [...t.on].sort((a, b) => b.r.hgt - a.r.hgt || b.c.orb - a.c.orb);
+    return [s[0], s[1] ?? s[0]];
+  }
+
+  /**
+   * How the five on the floor execute what they play: the familiarity penalty at each end (see
+   * src/core/sim/familiarity.ts), none for a team without a record of what it knows.
+   */
+  refreshFam(t: ST) {
+    if (!t.fam || !t.on.length) {
+      t.famOff = 0;
+      t.famDef = 0;
+      return;
+    }
+    const e = execution(
+      t.fam,
+      t.drilled,
+      t.on.map((p) => ({ pid: p.pid, ratings: p.r })),
+    );
+    t.famOff = famPenalty(e.off);
+    t.famDef = famPenalty(e.def);
+  }
+
+  /** The team's offensive crashing (0-100) with the five on the floor: the team's setting, and each player's glass duty on top. */
+  crashOf(t: ST): number {
+    let duty = 0;
+    for (const p of t.on) duty += p.glass;
+    return duty ? clamp(t.t.offense.crashBoards + K.glassDuty.team * duty, 0, 100) : t.t.offense.crashBoards;
   }
 
   // ------------------------------------------------------------ public control API (live games)

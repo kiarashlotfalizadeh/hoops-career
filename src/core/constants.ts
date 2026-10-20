@@ -19,10 +19,12 @@ export const RATED_SEASONS = 3;
  * 6: the playbooks' settings and fits were re-measured against the engine: migrate() re-fits every
  *    staff-run team's tactics (the user's own are left alone), so a save doesn't run yesterday's
  *    values under today's names ("Custom (Drop base)").
+ * 7: the tactics overhaul (shapes, out-of-possession roles, mentality, three tactic slots, and each
+ *    team's familiarity and practice focus). A clean break: saves from before it can't be opened.
  */
-export const SAVE_VERSION = 6;
-/** The oldest save format this build opens (a version-4 save loses its morale on the way in). */
-export const MIN_SAVE_VERSION = 4;
+export const SAVE_VERSION = 7;
+/** The oldest save format this build opens: the tactics overhaul's (see 7 above). */
+export const MIN_SAVE_VERSION = 7;
 
 export const CAP = {
   salaryCap: 165_000,

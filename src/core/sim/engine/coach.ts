@@ -7,8 +7,8 @@ import type { SituationalPlan, Tactics } from '../../types';
 import { archetype } from '../../ratings';
 import { GAME } from '../../constants';
 import type { FinishType } from '../log';
-import { MAX_SITUATIONS, applyPatch, cloneTactics } from '../tactics';
-import { type ST, freedomMult } from './state';
+import { MAX_SITUATIONS, applyPatch, cloneTactics, defRoleOf, withMentality } from '../tactics';
+import { type ST, ACTION_LIST, freedomMult } from './state';
 import type { GameSim } from './game';
 
 export const coachMethods = {
@@ -39,15 +39,25 @@ export const coachMethods = {
     const changed = (plan?.id ?? '') !== (t.sit?.id ?? '');
     if (!changed && !rebase) return;
     const before = JSON.stringify(t.t.defense);
-    t.t = plan ? applyPatch(t.base, plan.patch) : cloneTactics(t.base);
+    const shape = t.t.offense.shape;
+    t.drilled = plan ? applyPatch(t.base, plan.patch) : cloneTactics(t.base);
+    t.t = withMentality(t.drilled);
     t.sit = plan && { id: plan.id, label: plan.label };
     // (a role the tactics no longer set goes back to his archetype's, as at the tip: a plan's role
     // doesn't outlast the plan)
     for (const p of t.players) {
       p.role = t.t.offense.roles[p.pid] ?? archetype(p.r).role;
       p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
+      p.drole = defRoleOf(t.t.defense, p.pid);
+      p.glass = t.t.offense.glass?.[p.pid] ?? 0;
     }
     if (rebase || JSON.stringify(t.t.defense) !== before) this.refreshMatchups();
+    // (a new shape is new spacing for the five on the floor)
+    if (t.t.offense.shape !== shape && t.on.length) {
+      t.spacing = this.shapeSpacing(t);
+      for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
+    }
+    this.refreshFam(t);
     if (changed) this.addPbp(t.side, plan ? `${t.team.abbrev} switches to its "${plan.label}" plan.` : `${t.team.abbrev} goes back to its base plan.`, 'other');
   },
 
@@ -146,6 +156,8 @@ export const coachMethods = {
     if (!what) return;
     change(t.t);
     change(t.base);
+    change(t.drilled);
+    this.refreshFam(t);
     // a hidden defender and chasers called off are new assignments
     if ((huntedD && weak) || junk) this.refreshMatchups();
     t.adjustedQ = this.q;

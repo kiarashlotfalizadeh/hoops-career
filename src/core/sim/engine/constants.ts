@@ -348,6 +348,54 @@ export const K = {
    * under (two real-league seasons, rng 7 and 11, now every rate within 5%).
    */
   recenter: { three: 0.03, foul: -0.1, orb: -0.15, tov: -0.16, blk: -0.03 },
+  /**
+   * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
+   * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,
+   * and the make probability its defense gives up. A unit is played at famPenalty of it, none when
+   * fluid (scripts/system-impact.ts, against the same tactics drilled): a never-drilled coverage costs
+   * about 0.4 points per 100, a never-drilled 2-3 zone about 0.6, a new shape about 0.25, a new
+   * offense with new roles for everyone about 1.8. Not a tactical edge: no leverage.
+   */
+  fam: { shot: 0.029, tov: 0.15, shotD: 0.036 },
+  /**
+   * The offense's shape (SHAPE_META), against four-out, one-in (the engine's baseline). In the half
+   * court, five-out opens the rim for everyone's drives, rolls and cuts (`rim`, the openness), less
+   * `exposed` of it per non-shooter on the floor (his spacing short of 40, over 40: his man sits in the
+   * paint), costs post-ups' capability and the offensive glass. Horns: spacing, ball screens, handoffs
+   * at an average passing big (each 20 points of the better elbow big's passing over 55 adds
+   * handoffW), motion and turnovers. The double post: its two bigs finish better inside (`bigs`) and
+   * weigh more on the offensive glass (glassW), everyone else's drives find a crowded paint (`crowd`,
+   * more by `waste` for each point of a big's spacing over `inside`, shooting wasted under the
+   * basket), and post-ups are easier to get. Tactical edges (at the leverage). Measured in
+   * scripts/system-impact.ts: each is a trade that pays for some rosters and costs others.
+   */
+  shape: {
+    fiveOut: { rim: 0.18, exposed: 0.75, post: 0.6, glass: -0.02 },
+    horns: { space: -1.5, pnr: 1.0, handoff: 1.0, handoffW: 0.03, motion: 0.95, tov: -0.005 },
+    twoIn: { inside: 25, crowd: 0.07, waste: 0.002, bigs: 0.04, post: 1.15, glassW: 1.04 },
+  },
+  /**
+   * Out-of-possession roles (DEF_ROLE_META): the point-of-attack stopper's edge against the
+   * handler's blow-bys and the turnovers he forces on him; the wing stopper's man's touches and the
+   * contest he adds; the rim anchor's weight among the rim's contesters and the open catch his man
+   * gets per unit of shooting over 50; the roamer's help (a share of a sag's) and his man's open
+   * catch (a share of a sag's); and the extra drain of the chasing roles. How hard the matchups send
+   * each role to its man is `pull` (a cost the matchup solver weighs against size and quality).
+   */
+  role: {
+    poaBlowBy: 0.035,
+    poaTO: 0.04,
+    stopperTouch: 0.95,
+    stopperContest: 0.006,
+    anchorRim: 1.15,
+    anchorKick: 0.06,
+    roamHelp: 0.8,
+    roamKick: 0.85,
+    drain: 1.1,
+    pull: 2.5,
+  },
+  /** A player's glass duty: his weight among the offensive rebounders when he crashes or gets back, and what each crasher on the floor adds to the team's crashing (out of 100). */
+  glassDuty: { crash: 1.35, back: 0.45, team: 6 },
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */

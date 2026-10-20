@@ -8,6 +8,7 @@ import type { DefScheme, PlayerDefense } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { solveMatchups } from '../matchups';
+import { shapeOf } from '../tactics';
 import { K, blowByTag, lev, levExtra, levGift, levGiftW, levW, type ZoneK } from './constants';
 import { type SP, type ST, NONE } from './state';
 import type { GameSim } from './game';
@@ -34,7 +35,7 @@ export const defenseMethods = {
       return;
     }
     // threat: how much the offense runs through him
-    const scorers = O.map((o) => ({ pid: o.pid, hgt: o.r.hgt, big: o.big, threat: this.threat(o, off) }));
+    const scorers = O.map((o) => ({ pid: o.pid, hgt: o.r.hgt, big: o.big, threat: this.threat(o, off), handle: this.usageWeight(o, off, 'pnr'), shoot: o.c.spacing }));
     // a junk defense sends its best perimeter defenders to chase: the chased count as its top
     // threats, guarded on the perimeter whatever their size
     const chased = this.chased(def, off);
@@ -44,7 +45,7 @@ export const defenseMethods = {
     }
     const best = solveMatchups(
       scorers,
-      D.map((d) => ({ pid: d.pid, hgt: d.r.hgt, intDef: d.c.intDef, perDef: d.c.perDef })),
+      D.map((d) => ({ pid: d.pid, hgt: d.r.hgt, intDef: d.c.intDef, perDef: d.c.perDef, role: d.drole })),
       def.t.defense.matchups,
     );
     O.forEach((o, i) => def.guardOf.set(o.pid, D[best[i]]));
@@ -141,14 +142,21 @@ export const defenseMethods = {
 
   /**
    * Rim openness taken off a shot at the basket by `sh` because the defense sags off non-shooters
-   * ("sag" instructions on teammates of his who are off the ball), up to two of them.
+   * ("sag" instructions on teammates of his who are off the ball, and roamers off theirs), up to two
+   * of them; `sagKey` is the tag it goes under (whichever gives more of it).
    */
   sagHelp(this: GameSim, def: ST, off: ST, ...onBall: SP[]): number {
     const pd = def.t.defense.playerD;
-    if (!pd) return 0;
     let n = 0;
-    for (const p of off.on) if (pd[p.pid] === 'sag' && !onBall.includes(p)) n++;
-    return Math.min(2, n) * lev(K.pd.sag.help);
+    let roam = 0;
+    for (const p of off.on) {
+      if (onBall.includes(p)) continue;
+      if (pd?.[p.pid] === 'sag') n++;
+      // a roamer helps off his man as a sag would, a little less
+      else if (def.guardOf.get(p.pid)?.drole === 'roamer') roam += K.role.roamHelp;
+    }
+    this.sagKey = roam > n ? 'role_roam' : 'pd_sag';
+    return Math.min(2, n + roam) * lev(K.pd.sag.help);
   },
 
   /** The offensive player the defender being hunted guards (while both are on the floor), or null. */
@@ -188,7 +196,8 @@ export const defenseMethods = {
     const help = 1 + 0.4 * lev(this.help(def));
     const ws = def.on.map((p) => {
       const w = Math.pow(Math.max(10, p.c.rimProt * this.dq(p)) / 50, 3);
-      return p === own ? w * 2.2 : w * help * pull;
+      // (a rim anchor lives in the paint: he gets to more of the shots there that aren't his man's)
+      return p === own ? w * 2.2 : w * help * pull * (p.drole === 'anchor' ? levW(K.role.anchorRim) : 1);
     });
     return def.on[this.rng.weighted(ws)];
   },
@@ -263,8 +272,18 @@ export const defenseMethods = {
     const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0 * K.containTO) * sec;
     // (the league's recentring moves the base rate only: the turnovers pressure forces keep their size)
     const swing = pr > 0 ? K.pressureTO : 0.32;
-    const p = (base * (1 + levExtra(K.recenter.tov) + swing * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
+    // what the offense knows of its system (an unfamiliar one turns it over more), the structure of a
+    // horns set (fewer), and a point-of-attack stopper on the handler (more)
+    const fam = off.famOff * K.fam.tov;
+    const horns = shapeOf(off.t.offense) === 'horns' ? lev(K.shape.horns.tov) : 0;
+    const poa = this.defOf(def, handler).drole === 'poa' && handler.on ? lev(K.role.poaTO) : 0;
+    const sys = 1 + fam + horns + poa;
+    const p = (base * (1 + levExtra(K.recenter.tov) + swing * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv * sys;
     if (pr !== 0) this.impact('pressure_to', def.side, base * swing * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
+    const sysTo = base * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts;
+    if (fam) this.impact('fam_off', def.side, fam * sysTo, handler.pid);
+    if (horns) this.impact('shape_tov', off.side, -horns * sysTo, handler.pid);
+    if (poa) this.impact('role_poa', def.side, poa * sysTo, handler.pid);
     return clamp(p, 0.01, 0.4);
   },
 
@@ -276,7 +295,10 @@ export const defenseMethods = {
     const pr = this.pressure(def);
     const edge = lev(K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2);
     if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, blowByTag(edge, from), h.pid);
-    return edge;
+    // a point-of-attack stopper on him stays in front more often
+    const poa = this.defOf(def, h).drole === 'poa' ? lev(K.role.poaBlowBy) : 0;
+    if (poa) this.impact('role_poa', def.side, blowByTag(poa, from), h.pid);
+    return edge - poa;
   },
 
   /** The defender who gets his hands on the ball when nobody in particular is beaten: quick hands, steal tendency. */

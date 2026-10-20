@@ -7,8 +7,6 @@ import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
 import type { League } from '../../core/types';
-import { autoTactics } from '../../core/ai/coachAI';
-import { teamPlayers } from '../../core/league/helpers';
 import { testLeague, userGames } from './fixtures';
 
 const put = IDBObjectStore.prototype.put;
@@ -310,7 +308,7 @@ describe('reading a league', () => {
     expect(back.teams[2].colors).toEqual(FRANCHISES[2].colors);
   });
 
-  it('turns away saves from before the redesign (format 4) with a clear reason', () => {
+  it('turns away saves from before the redesign with a clear reason', () => {
     const l = testLeague('before the redesign');
     const old = JSON.parse(JSON.stringify({ ...l, version: 3 })) as League;
     expect(() => migrate(old)).toThrow(OldSaveError);
@@ -320,32 +318,39 @@ describe('reading a league', () => {
     expect(migrate(JSON.parse(JSON.stringify(l))).version).toBe(SAVE_VERSION);
   });
 
-  it("re-fits a version-5 save's staff-run playbooks, and leaves the user's own tactics alone", () => {
-    const l = testLeague('refit');
-    const v5 = JSON.parse(JSON.stringify({ ...l, version: 5 })) as League;
-    // yesterday's values under a staff-run team's name, and the user's own tactics
-    const ai = v5.teams.find((t) => t.tid !== l.userTid)!;
-    ai.tactics.offense.crashBoards = 18;
-    v5.teams[l.userTid].tactics.manual = true;
-    v5.teams[l.userTid].tactics.offense.crashBoards = 18;
-    const back = migrate(v5);
-    expect(back.teams[ai.tid].tactics).toEqual(autoTactics(back.teams[ai.tid], teamPlayers(back, ai.tid), false));
-    expect(back.teams[l.userTid].tactics.offense.crashBoards).toBe(18);
+  it('turns away saves from before the tactics overhaul (format 7): a clean break', () => {
+    const l = testLeague('before the overhaul');
+    for (const version of [4, 5, 6]) expect(() => migrate(JSON.parse(JSON.stringify({ ...l, version })))).toThrow(OldSaveError);
   });
 
-  it('opens a version-4 save without its player morale and press conference', () => {
-    const l = testLeague('morale');
-    const v4 = JSON.parse(JSON.stringify({ ...l, version: 4, press: { gid: 1, choice: 'pog' } })) as League;
-    // every player had a mood; the user's could have a promise and a meeting
-    for (const p of Object.values(v4.players))
-      Object.assign(p, { mood: { score: -3, ptComponent: 0, winComponent: 0, roleComponent: 0, contractComponent: 0, expectedMin: 20, tradeRequest: true, notes: [] } });
-    const mine = Object.values(v4.players).find((p) => p.tid === l.userTid)!;
-    Object.assign(mine, { promise: { kind: 'role', tid: l.userTid, season: l.season, day: 3, request: true, minutes: 30 }, meeting: { season: l.season, day: 3 } });
-    const back = migrate(v4);
-    expect(back.version).toBe(SAVE_VERSION);
-    expect('press' in back).toBe(false);
-    expect(Object.values(back.players).filter((p) => 'mood' in p || 'promise' in p || 'meeting' in p)).toEqual([]);
-    expect(back).toEqual(migrate(JSON.parse(JSON.stringify(l))));
+  it("keeps a team's tactic slots, familiarity and practice focus in shape, and drops damaged ones", () => {
+    const l = testLeague('system');
+    const t = l.teams[l.userTid];
+    t.slots = { active: 1, names: ['Main', 'Small ball', 'Plan C'], stored: [structuredClone(t.tactics), null, null] };
+    t.prep = 'opponent';
+    t.tactics.mentality = 2;
+    t.tactics.offense.shape = 'fiveOut';
+    t.tactics.defense.roles = { [Object.values(l.players).find((p) => p.tid === l.userTid)!.pid]: 'poa' };
+    const back = migrate(JSON.parse(JSON.stringify(l)));
+    expect(back.teams[l.userTid].slots?.active).toBe(1);
+    expect(back.teams[l.userTid].prep).toBe('opponent');
+    expect(back.teams[l.userTid].tactics.mentality).toBe(2);
+    expect(back.teams[l.userTid].tactics.offense.shape).toBe('fiveOut');
+    const bad = JSON.parse(JSON.stringify(l)) as League;
+    const bt = bad.teams[l.userTid] as unknown as Record<string, unknown>;
+    bt.slots = { active: 5, names: [], stored: [] };
+    bt.prep = 'yoga';
+    bt.fam = { opt: { 'pnr:drop': 'lots' } };
+    (bt.tactics as Record<string, unknown>).mentality = 9;
+    (bt.tactics as { offense: Record<string, unknown> }).offense.shape = 'diamond';
+    (bt.tactics as { defense: Record<string, unknown> }).defense.roles = { 1: 'goalie' };
+    const fixed = migrate(bad).teams[l.userTid];
+    expect(fixed.slots).toBeUndefined();
+    expect(fixed.prep).toBeUndefined();
+    expect(fixed.tactics.mentality).toBeUndefined();
+    expect(fixed.tactics.offense.shape).toBeUndefined();
+    expect(fixed.tactics.defense.roles).toBeUndefined();
+    expect(Object.values(fixed.fam!.opt).every((v) => typeof v === 'number')).toBe(true);
   });
 
   it('accepts real and fictional leagues, as saved or as backup files', () => {

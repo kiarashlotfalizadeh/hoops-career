@@ -40,7 +40,7 @@ export const transitionMethods = {
   crashRunOut(this: GameSim, def: ST, ctx: Ctx) {
     if (ctx !== 'dreb') return 0;
     // (and less of one against a team that sent fewer to the glass: its defenders are back)
-    const c = (def.t.offense.crashBoards - 50) / 50;
+    const c = (this.crashOf(def) - 50) / 50;
     return c > 0 ? lev(K.crashRunOut * c) : lev(K.crashLow.back * c);
   },
 

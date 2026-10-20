@@ -92,7 +92,7 @@ export const motionMethods = {
         const sag = this.sagHelp(def, off, cutter, passer);
         if (sag) {
           o -= sag;
-          tags.push(['pd_sag', -sag]);
+          tags.push([this.sagKey, -sag]);
         }
         const body = this.body(def, cutter);
         if (body) {
@@ -169,7 +169,7 @@ export const motionMethods = {
           const sag = this.sagHelp(def, off, dr, passer);
           if (sag) {
             o -= sag;
-            tags.push(['pd_sag', -sag]);
+            tags.push([this.sagKey, -sag]);
           }
           this.shoot(off, def, { shooter: dr, zone: zoneS, open: o, contest: zoneS === 'rim' ? this.rimContester(def, d) : d, assister: passer, finish: 'spotup', tags, ...body });
         }

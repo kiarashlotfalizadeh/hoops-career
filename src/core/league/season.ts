@@ -27,6 +27,7 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { applyStaffTactics, ensureRotation, gamesOnDay, playGame, youthNews } from './games';
+import { practiceDays, trainingCamps } from './practice';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -117,6 +118,8 @@ export function startRegularSeason(league: League): string[] {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
+  // training camp drills what each team opens the season with (and its new players learn the system)
+  trainingCamps(league);
   for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
   aiExtensions(league);
   league.phase = 'regular';
@@ -137,7 +140,7 @@ function periodic(league: League, rng: Rng) {
       // also acts on what this season's games say a setting costs, and says so
       if (t.tactics.manual) continue;
       if (t.tid !== league.userTid) {
-        t.tactics = autoTactics(t, teamPlayers(league, t.tid), true);
+        t.tactics = autoTactics(t, teamPlayers(league, t.tid), true, { sticky: true });
         continue;
       }
       applyStaffTactics(league, t.tid);
@@ -266,6 +269,8 @@ export function advanceDay(league: League) {
     }
     healIdle(league, rng);
   });
+  // the day's practices: teams without a game work on their tactics at their focus
+  if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') practiceDays(league);
   // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
   for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   // an assistant-run rotation follows today's injuries and recoveries now, not at the next game:

@@ -5,12 +5,16 @@
 // player, hack-a targets) are never saved. Also here: the names the screens give a team's playbook,
 // which say "Custom" once the sliders leave the preset.
 
-import { ACTIONS, type League, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
+import { ACTIONS, type League, type Mentality, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
 import {
   ACTION_META,
   COVERAGE_META,
   DEF_PRESETS,
+  DEF_ROLE_META,
+  GLASS_META,
+  MENTALITY_META,
+  SHAPE_META,
   OFF_PRESETS,
   PRESS_META,
   SCHEME_META,
@@ -79,8 +83,8 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     name: meta.name,
     saved: { ...meta.saved },
     // (the hunt, chase targets and instructions by player name one night's opponents, like the matchups)
-    offense: { ...omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget']), sets: c.offense.sets ?? [] } as SavedPlaybook['offense'],
-    defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD']) as SavedPlaybook['defense'],
+    offense: { ...omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget', 'glass']), sets: c.offense.sets ?? [] } as SavedPlaybook['offense'],
+    defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD', 'roles']) as SavedPlaybook['defense'],
     // hack-a-player targets are one opponent's players: they belong in game plans
     manage: { ...omit(c.manage, ['hackTargets', 'hackFromQ']), assistantAdjusts: !!c.manage.assistantAdjusts } as SavedPlaybook['manage'],
     offPreset: c.offPreset,
@@ -88,6 +92,9 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     roles: c.offense.roles,
     freedom: c.offense.freedom,
     screeners: c.offense.screeners,
+    // (by player, like the roles: they load for players still on the roster)
+    glass: c.offense.glass ?? {},
+    defRoles: c.defense.roles ?? {},
     ...(Object.keys(extra).length ? { extra } : {}),
   };
 }
@@ -107,8 +114,16 @@ export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<num
   const freedom = { ...out.offense.freedom };
   for (const [pid, f] of Object.entries(src.freedom ?? {})) if (on.has(+pid)) freedom[+pid] = f;
   const screeners = src.screeners ? src.screeners.filter((pid) => on.has(pid)) : out.offense.screeners;
-  out.offense = { ...out.offense, ...src.offense, roles, freedom, screeners };
-  out.defense = { ...out.defense, ...src.defense };
+  const glass = { ...out.offense.glass };
+  for (const [pid, g] of Object.entries(src.glass ?? {})) if (on.has(+pid)) glass[+pid] = g;
+  const droles = { ...out.defense.roles };
+  for (const [pid, r] of Object.entries(src.defRoles ?? {})) if (on.has(+pid)) droles[+pid] = r;
+  out.offense = { ...out.offense, ...src.offense, roles, freedom, screeners, glass };
+  out.defense = { ...out.defense, ...src.defense, roles: droles };
+  // (a playbook from before shapes plays four-out; empty duties and roles are none)
+  if (!src.offense.shape) delete out.offense.shape;
+  if (!Object.keys(glass).length) delete out.offense.glass;
+  if (!Object.keys(droles).length) delete out.defense.roles;
   out.manage = { ...out.manage, ...src.manage };
   // a go-to player (or the player of the after-timeout play) who has left stays with the current one
   if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
@@ -201,6 +216,10 @@ const NOT_COMPARED = new Set([
   'atoPid',
   'hackTargets',
   'hackFromQ',
+  'glass',
+  'roles',
+  'shape',
+  'mentality',
   ...KNOWN,
 ]);
 
@@ -233,6 +252,10 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
     const known = new Set(fields.map((f) => f[0]));
     for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) if (!known.has(k) && !NOT_COMPARED.has(k)) add(humanize(k), x[k], y[k], onOffOr);
   };
+  add('Mentality', a.mentality ?? 0, b.mentality ?? 0, (v) => MENTALITY_META[v as Mentality]?.label ?? String(v));
+  // (no shape is four-out: a playbook from before shapes and four-out read the same)
+  if ((a.offense.shape ?? 'fourOut') !== (b.offense.shape ?? 'fourOut'))
+    out.push({ label: 'Shape', from: SHAPE_META[a.offense.shape ?? 'fourOut'].label, to: SHAPE_META[b.offense.shape ?? 'fourOut'].label });
   add('Offensive playbook', a.offPreset, b.offPreset, presetName(OFF_PRESETS));
   add('Defensive identity', a.defPreset, b.defPreset, presetName(DEF_PRESETS));
   section(a.offense as unknown as Record<string, unknown>, b.offense as unknown as Record<string, unknown>, OFFENSE_FIELDS);
@@ -255,6 +278,14 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   for (const pid of pids(a.offense.freedom, b.offense.freedom)) {
     const [x, y] = [a.offense.freedom[pid] ?? 0, b.offense.freedom[pid] ?? 0];
     if (x !== y) out.push({ label: `${nameOf(pid)} (shot freedom)`, from: FREEDOM_LABEL[x], to: FREEDOM_LABEL[y] });
+  }
+  for (const pid of pids(a.defense.roles ?? {}, b.defense.roles ?? {})) {
+    const [x, y] = [a.defense.roles?.[pid] ?? 'standard', b.defense.roles?.[pid] ?? 'standard'];
+    if (x !== y) out.push({ label: `${nameOf(pid)} (defensive role)`, from: DEF_ROLE_META[x].label, to: DEF_ROLE_META[y].label });
+  }
+  for (const pid of pids(a.offense.glass ?? {}, b.offense.glass ?? {})) {
+    const [x, y] = [a.offense.glass?.[pid] ?? 0, b.offense.glass?.[pid] ?? 0];
+    if (x !== y) out.push({ label: `${nameOf(pid)} (glass)`, from: GLASS_META[x].label, to: GLASS_META[y].label });
   }
   const scr = (s: number[]) => (s.length ? s.map(nameOf).join(', ') : 'Auto');
   if (!same(a.offense.screeners, b.offense.screeners)) out.push({ label: 'Screeners', from: scr(a.offense.screeners), to: scr(b.offense.screeners) });

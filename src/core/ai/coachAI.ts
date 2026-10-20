@@ -1,9 +1,11 @@
 // Automatic coaching: builds rotations and fits tactics to a roster. Used for AI teams,
 // for the user's "Auto" buttons, and by the assistant coach to propose changes.
 
-import type { OffRole, Player, Pos, Rotation, ShotFreedom, Tactics, Team } from '../types';
+import type { DefRole, OffRole, OffShape, Player, Pos, Rotation, ShotFreedom, Tactics, Team } from '../types';
+import { OFF_SHAPES } from '../types';
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
+import { defRoleFits } from '../analysis/system';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
 
@@ -630,6 +632,90 @@ export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; 
   return { roles, freedom };
 }
 
+/** The five a shape is fitted to, and the rest of the top eight: the rotation's starters (the best five by OVR without one). */
+function shapeUnits(players: Player[], order?: number[]): { five: Player[]; eight: Player[] } {
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const ranked = [...(order ?? []).map((pid) => byId.get(pid)).filter((p): p is Player => !!p && !p.injury), ...[...players].sort((a, b) => b.ovr - a.ovr)];
+  const seen = new Set<number>();
+  const eight: Player[] = [];
+  for (const p of ranked) {
+    if (seen.has(p.pid) || eight.length >= 8) continue;
+    seen.add(p.pid);
+    eight.push(p);
+  }
+  return { five: eight.slice(0, 5), eight };
+}
+
+/**
+ * How well each shape fits a roster, in fit points against four-out, one-in (a tenth of a point per
+ * 100 possessions, as the playbooks' fits), from what each shape does in the engine (K.shape) for its
+ * starting five: five-out's open paint, worth less for each non-shooter in the five, against the
+ * offensive boards it gives up; the double post's two bigs on the glass and finishing inside, against
+ * the crowded paint (more so when they're shooters, wasted inside); horns' handoffs from a passing
+ * elbow big and its fewer turnovers. Each shape's value at the league's average roster is its measured
+ * one (scripts/system-impact.ts: about −0.1, +0.2 and +0.3 per 100); real rosters vary less than the
+ * games' noise, so the slopes come from rosters built to the extremes (all shooters, two post bigs, a
+ * non-shooting center).
+ */
+export function shapeFits(players: Player[], tactics?: Pick<Tactics, 'offense'>, order?: number[]): Record<OffShape, number> {
+  const { five } = shapeUnits(players, order);
+  const cs = five.map((p) => composites(p.ratings));
+  const n = Math.max(1, cs.length);
+  const exposed = cs.reduce((a, c) => a + Math.max(0, 40 - c.spacing) / 40, 0);
+  const orb = cs.reduce((a, c) => a + c.orb, 0) / n;
+  const bigs = five
+    .map((p, i) => ({ p, c: cs[i] }))
+    .sort((a, b) => b.p.ratings.hgt - a.p.ratings.hgt || b.c.orb - a.c.orb)
+    .slice(0, 2);
+  const bigOrb = bigs.reduce((a, x) => a + x.c.orb, 0) / Math.max(1, bigs.length);
+  const waste = bigs.reduce((a, x) => a + Math.max(0, x.c.spacing - 25), 0);
+  const bigPass = Math.max(0, ...bigs.map((x) => x.c.passing));
+  const a = tactics?.offense.actions;
+  const lean = (k: 'pnr' | 'handoff' | 'motion' | 'post') => (a ? (a[k] - 50) / 50 : 0);
+  const drives = tactics ? (tactics.offense.rimAttack - 50) / 50 : 0;
+  return {
+    fourOut: 0,
+    fiveOut: 20 * (1 - 0.75 * exposed) * (1 + 0.3 * drives) - 9 * (orb / 46.5) - 3 * lean('post'),
+    horns: 1.5 + 0.15 * (bigPass - 55) + 2 * lean('handoff') + 1 * lean('pnr') - 2 * lean('motion'),
+    twoIn: 8 * (bigOrb / 50) + 2 - 9.5 * (1 + 0.3 * drives) - 0.1 * waste + 3 * lean('post'),
+  };
+}
+
+/** Fit points another shape has to win by before the staff leaves four-out, the shape every player knows. */
+const SHAPE_EDGE = 4;
+
+/** The shape the staff would play with this roster: the best fit, if it beats four-out by SHAPE_EDGE. */
+export function autoShape(players: Player[], tactics?: Pick<Tactics, 'offense'>, order?: number[]): OffShape {
+  const fits = shapeFits(players, tactics, order);
+  const best = OFF_SHAPES.reduce((b, s) => (fits[s] > fits[b] ? s : b), 'fourOut' as OffShape);
+  return fits[best] >= SHAPE_EDGE ? best : 'fourOut';
+}
+
+/** A defensive role fit the staff gives the role at, at least. */
+const DEF_ROLE_MIN = 66;
+
+/**
+ * The staff's out-of-possession roles for the rotation's top ten: a point-of-attack stopper, a wing
+ * stopper and a rim anchor among the starters where one suits it well (each at most once), the same
+ * for the bench unit, and everyone else a position defender.
+ */
+export function autoDefRoles(players: Player[], rotation?: Pick<Rotation, 'order'>): Record<number, DefRole> {
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const order = (rotation?.order ?? []).map((pid) => byId.get(pid)).filter((p): p is Player => !!p);
+  const ranked = order.length >= 5 ? order : [...players].sort((a, b) => b.ovr - a.ovr);
+  const out: Record<number, DefRole> = {};
+  const unit = (ps: Player[]) => {
+    const fits = new Map(ps.map((p) => [p.pid, defRoleFits(p)]));
+    for (const role of ['anchor', 'poa', 'stopper'] as const) {
+      const pick = ps.filter((p) => !out[p.pid]).sort((a, b) => fits.get(b.pid)![role] - fits.get(a.pid)![role])[0];
+      if (pick && fits.get(pick.pid)![role] >= DEF_ROLE_MIN) out[pick.pid] = role;
+    }
+  };
+  unit(ranked.slice(0, 5));
+  unit(ranked.slice(5, 10));
+  return out;
+}
+
 /** The players a playbook is fitted to: a knock of five games or fewer doesn't swing the fits, nor do injuries that leave fewer than eight. */
 export function fitRoster(players: Player[]): Player[] {
   const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 5);
@@ -644,24 +730,44 @@ export function fitScale(fits: Record<string, number>): (k: string) => number {
   return (k: string) => Math.round(45 + ((fits[k] - min) / Math.max(1, max - min)) * 55);
 }
 
-/** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
-export function rankedPresets(team: Team, players: Player[]): { off: string[]; def: string[] } {
+/** Each preset's fit for this roster and coach, his philosophy's lean included. */
+export function presetScores(team: Team, players: Player[]): { off: Record<string, number>; def: Record<string, number> } {
   const pr = rosterProfile(fitRoster(players));
-  const offBias: Record<string, number> = { [team.coach.offPhilosophy]: PHILOSOPHY_LEAN };
-  const defBias: Record<string, number> = { [team.coach.defPhilosophy]: PHILOSOPHY_LEAN };
-  const rank = (fits: Record<string, number>, bias: Record<string, number>) =>
-    Object.entries(fits)
-      .map(([k, v]) => [k, v + (bias[k] ?? 0)] as const)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k]) => k);
-  return { off: rank(offPresetFit(pr), offBias), def: rank(defPresetFit(pr), defBias) };
+  const lean = (fits: Record<string, number>, mine: string) => Object.fromEntries(Object.entries(fits).map(([k, v]) => [k, v + (k === mine ? PHILOSOPHY_LEAN : 0)]));
+  return { off: lean(offPresetFit(pr), team.coach.offPhilosophy), def: lean(defPresetFit(pr), team.coach.defPhilosophy) };
 }
 
-export function autoTactics(team: Team, players: Player[], keepManual = true): Tactics {
+/** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
+export function rankedPresets(team: Team, players: Player[]): { off: string[]; def: string[] } {
+  const sc = presetScores(team, players);
+  const rank = (fits: Record<string, number>) =>
+    Object.entries(fits)
+      .sort((a, b) => b[1] - a[1])
+      .map(([k]) => k);
+  return { off: rank(sc.off), def: rank(sc.def) };
+}
+
+/**
+ * In season, how much better (in fit points, a tenth of a point per 100 each) another playbook or
+ * shape has to fit before the staff changes to it: a new system costs familiarity for weeks (see
+ * src/core/sim/familiarity.ts), so a marginal gain isn't worth relearning for.
+ */
+export const STICK = { preset: 8, shape: 6 };
+
+/**
+ * The staff's tactics for a roster: the best-fitting playbooks, roles and shot freedom at both ends,
+ * and the shape. `sticky` (in season): the team keeps the playbooks and shape it runs unless another
+ * fits better by STICK.
+ */
+export function autoTactics(team: Team, players: Player[], keepManual = true, opts: { sticky?: boolean } = {}): Tactics {
   if (keepManual && team.tactics.manual) return team.tactics;
-  const ranked = rankedPresets(team, players);
-  const off = ranked.off[0];
-  const def = ranked.def[0];
+  const sc = presetScores(team, players);
+  const best = (fits: Record<string, number>, cur: string | undefined) => {
+    const top = Object.entries(fits).sort((a, b) => b[1] - a[1])[0][0];
+    return opts.sticky && cur && fits[cur] !== undefined && fits[top] - fits[cur] < STICK.preset ? cur : top;
+  };
+  const off = best(sc.off, team.tactics?.offPreset);
+  const def = best(sc.def, team.tactics?.defPreset);
   const base = team.tactics ? cloneTactics(team.tactics) : defaultTactics(off, def);
   base.offense = applyOffPreset(base.offense, off);
   base.defense = applyDefPreset(base.defense, def);
@@ -671,6 +777,16 @@ export function autoTactics(team: Team, players: Player[], keepManual = true): T
   base.offense.roles = roles;
   base.offense.freedom = freedom;
   base.offense.screeners = [];
+  delete base.offense.glass;
+  const healthy = fitRoster(players);
+  const fits = shapeFits(healthy, base, team.rotation?.order);
+  const cur = team.tactics?.offense.shape ?? 'fourOut';
+  const shape = autoShape(healthy, base, team.rotation?.order);
+  base.offense.shape = opts.sticky && fits[shape] - fits[cur] < STICK.shape ? cur : shape;
+  if (base.offense.shape === 'fourOut') delete base.offense.shape;
+  const droles = autoDefRoles(healthy, team.rotation);
+  if (Object.keys(droles).length) base.defense.roles = droles;
+  else delete base.defense.roles;
   base.defense.matchups = {};
   base.defense.starPlan = 'none';
   base.defense.starTarget = null;

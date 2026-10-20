@@ -8,10 +8,12 @@
 // turnovers and gets beaten off the dribble. A projection to tinker against, not a promise: the
 // season's numbers (Insights) say what actually happened. Pure.
 
-import type { DefScheme, League, OffRole, Player, Tactics } from '../types';
+import type { DefRole, DefScheme, League, OffRole, Player, Tactics } from '../types';
+import { clamp } from '../random';
 import { composites, type Composites } from '../ratings';
 import { teamPlayers } from '../league/helpers';
-import { COVERAGE_META, SCHEME_META, levelName } from '../sim/tactics';
+import { COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, levelName, shapeOf, withMentality } from '../sim/tactics';
+import { famDims, famEnds, famLabel, famPenalty, rotationWeights } from '../sim/familiarity';
 
 export type QualityId = 'creation' | 'spacing' | 'rim' | 'movement' | 'transition' | 'glass' | 'security' | 'rimD' | 'perimD' | 'pnrD' | 'threeD' | 'boards' | 'transD' | 'forceTo';
 
@@ -102,15 +104,18 @@ const ZONE_ARC: Record<DefScheme, number> = { man: 0, zone23: -7, zone32: 6, box
 const ZONE_GLASS: Record<DefScheme, number> = { man: 0, zone23: -5, zone32: -6, box1: -4, tri2: -5 };
 
 /** The raw score and parts of every quality for a team playing `t` with its rotation. */
-function qualities(league: League, tid: number, t: Tactics, name: (p: Player) => string): Record<QualityId, { raw: number; parts: QualityPart[] }> {
+function qualities(league: League, tid: number, tactics: Tactics, name: (p: Player) => string): Record<QualityId, { raw: number; parts: QualityPart[] }> {
   const rows = rotationOf(league, tid);
+  // (the settings as the mentality plays them)
+  const t = withMentality(tactics);
   const o = t.offense;
   const d = t.defense;
+  const sys = systemMods(league, tid, tactics, rows, name);
   const out = {} as Record<QualityId, { raw: number; parts: QualityPart[] }>;
   const set = (id: QualityId, base: number, who: string, mods: [string, number][]) => {
     const parts: QualityPart[] = [{ text: who, v: base }];
     let raw = base;
-    for (const [text, v] of mods) {
+    for (const [text, v] of [...mods, ...(sys[id] ?? [])]) {
       if (Math.abs(v) < 0.4) continue;
       parts.push({ text, v });
       raw += v;
@@ -239,6 +244,68 @@ function qualities(league: League, tid: number, t: Tactics, name: (p: Player) =>
   return out;
 }
 
+/**
+ * What the overhaul's levers add to each quality, as the engine plays them: the shape (five-out's open
+ * paint as far as the five can shoot, and its glass; horns' handoffs and ball security; the double
+ * post's glass and crowded paint), out-of-possession roles, glass duties, and the team's familiarity
+ * with the tactics (a unit a step slow creates, moves the ball and defends worse).
+ */
+function systemMods(league: League, tid: number, t: Tactics, rows: Row[], name: (p: Player) => string): Partial<Record<QualityId, [string, number][]>> {
+  const out: Partial<Record<QualityId, [string, number][]>> = {};
+  const add = (id: QualityId, text: string, v: number) => void (out[id] ??= []).push([text, v]);
+  const five = [...rows].sort((a, b) => b.w - a.w).slice(0, 5);
+  const shape = shapeOf(t.offense);
+  const label = `Shape: ${SHAPE_META[shape].label}`;
+  if (shape === 'fiveOut') {
+    const exposed = five.reduce((a, x) => a + Math.max(0, 40 - x.c.spacing) / 40, 0);
+    const open = 1 - 0.75 * exposed;
+    add('spacing', label, 6 * open);
+    add('rim', label, 7 * open);
+    add('glass', label, -5);
+  } else if (shape === 'horns') {
+    const bigPass = Math.max(0, ...five.filter((x) => x.p.ratings.hgt >= 58).map((x) => x.c.passing));
+    add('movement', label, 2 + (bigPass - 55) / 8);
+    add('security', label, 2);
+    add('spacing', label, -1);
+  } else if (shape === 'twoIn') {
+    const bigs = [...five].sort((a, b) => b.p.ratings.hgt - a.p.ratings.hgt).slice(0, 2);
+    const orb = bigs.reduce((a, x) => a + x.c.orb, 0) / Math.max(1, bigs.length);
+    add('glass', label, 3 + (orb - 50) / 6);
+    add('rim', label, -5);
+    add('spacing', label, -5);
+  }
+  for (const x of five) {
+    const role = defRoleOf(t.defense, x.p.pid);
+    const who = `${name(x.p)}: ${DEF_ROLE_META[role].short}`;
+    if (role === 'poa') {
+      add('perimD', who, 2 + (x.c.perDef - 60) / 10);
+      add('forceTo', who, 2);
+    } else if (role === 'stopper') add('perimD', who, 2 + (x.c.perDef - 60) / 10);
+    else if (role === 'anchor') {
+      add('rimD', who, 2 + (x.c.rimProt - 60) / 8);
+      add('pnrD', who, 1);
+    } else if (role === 'roamer') {
+      add('rimD', who, 2);
+      add('threeD', who, -2);
+    }
+    const g = t.offense.glass?.[x.p.pid] ?? 0;
+    if (g) {
+      add('glass', `${name(x.p)}: ${g > 0 ? 'crashes' : 'gets back'}`, 2.5 * g);
+      add('transD', `${name(x.p)}: ${g > 0 ? 'crashes' : 'gets back'}`, -1.5 * g);
+    }
+  }
+  const team = league.teams[tid];
+  if (team.fam) {
+    const ps = rows.map((x) => x.p);
+    const e = famEnds(famDims(team.fam, t, ps, rotationWeights(team, ps)));
+    const off = famPenalty(e.off) * 14;
+    const def = famPenalty(e.def) * 14;
+    if (off) for (const id of ['creation', 'movement', 'security'] as QualityId[]) add(id, `Familiarity: ${famLabel(e.off)} (${Math.round(e.off)}%)`, -off);
+    if (def) for (const id of ['rimD', 'perimD', 'pnrD'] as QualityId[]) add(id, `Familiarity: ${famLabel(e.def)} (${Math.round(e.def)}%)`, -def);
+  }
+  return out;
+}
+
 export interface SystemReport {
   off: Quality[];
   def: Quality[];
@@ -298,6 +365,28 @@ export function roleFits(p: Player): Record<OffRole, number> {
     post: c.postScore - (h < 50 ? 10 : 0),
     hub: 0.6 * c.passing + 0.4 * p.ratings.oiq - small(15),
     glue: 0.35 * c.c3 + 0.35 * c.perDef + 0.3 * c.passing,
+  };
+}
+
+/**
+ * How well a player suits each out-of-possession role (0-100): the point-of-attack stopper's feet
+ * and hands on the ball, the wing stopper's on-ball defense and length, the rim anchor's rim
+ * protection (a small one can't be one), the roamer's reads and help. A hidden defender suits the
+ * role as much as he doesn't suit the others, and a position defender is his defense in general.
+ */
+export function defRoleFits(p: Player): Record<DefRole, number> {
+  const c = composites(p.ratings);
+  const r = p.ratings;
+  const small = (n: number) => (r.hgt < 55 ? n : 0);
+  const big = (n: number) => (r.hgt >= 62 ? n : 0);
+  const general = 0.45 * c.perDef + 0.3 * c.intDef + 0.25 * c.helpD;
+  return {
+    standard: general,
+    poa: 0.55 * c.perDef + 0.25 * c.steal + 0.2 * r.spd - big(15),
+    stopper: 0.6 * c.perDef + 0.2 * r.diq + 0.2 * Math.min(r.hgt, 65) - big(8),
+    anchor: 0.6 * c.rimProt + 0.4 * c.intDef - small(20),
+    roamer: 0.55 * c.helpD + 0.25 * c.steal + 0.2 * c.rimProt,
+    hide: clamp(110 - general, 30, 75),
   };
 }
 

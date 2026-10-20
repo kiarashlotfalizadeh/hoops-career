@@ -4,7 +4,24 @@
 // fouls, calls from the bench, the sets run), the inputs a game takes, and the small types and helpers
 // the engine's modules share.
 
-import type { ActionType, LineupStat, OffRole, Player, Pos, Ratings, SetId, ShotZone, Tactics, Team, TeamBox, TeamTotals, GameType } from '../../types';
+import type {
+  ActionType,
+  DefRole,
+  Familiarity,
+  GlassDuty,
+  LineupStat,
+  OffRole,
+  Player,
+  Pos,
+  Ratings,
+  SetId,
+  ShotZone,
+  Tactics,
+  Team,
+  TeamBox,
+  TeamTotals,
+  GameType,
+} from '../../types';
 import type { Rng } from '../../random';
 import type { Composites } from '../../ratings';
 import type { FinishType } from '../log';
@@ -91,6 +108,9 @@ export interface SP {
   r: Ratings;
   c: Composites;
   role: OffRole;
+  /** His out-of-possession role and his glass duty. */
+  drole: DefRole;
+  glass: GlassDuty;
   freedom: number; // usage multiplier from shot freedom
   energy: number;
   fouls: number;
@@ -182,8 +202,14 @@ export interface ST {
   adjust: number;
   /** Period of the coach's last adjustment (one per period). */
   adjustedQ: number;
-  /** The tactics the coach set; `t` is what is played: these, with the situational plan in effect on top. */
+  /** The tactics the coach set; `t` is what is played: these, with the situational plan in effect on top, and the mentality's nudges. */
   base: Tactics;
+  /** What the team drills of what it plays: `t` without the mentality (familiarity reads these). */
+  drilled: Tactics;
+  /** What the team knows of its tactics (none: fully drilled), and the familiarity penalty its five play at, on offense and defense (0 fluid, 1 knows nothing). */
+  fam?: Familiarity;
+  famOff: number;
+  famDef: number;
   /** The situational plan in effect. */
   sit: { id: string; label: string } | null;
   /** Times each player has been hacked this period. */
@@ -229,6 +255,8 @@ export interface SimTeamInput {
   play?: number[];
   /** A coach (AI, or the user's assistant in simmed games) who may adjust the game plan at quarter breaks and timeouts. */
   adjust?: boolean;
+  /** What the team knows of its tactics, in place of the team's own (a game plan it prepared for); none anywhere: fully drilled. */
+  fam?: Familiarity;
 }
 
 export interface SimOptions {

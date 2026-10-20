@@ -1,5 +1,8 @@
 // Who guards whom: the staff's matchup assignment, as the engine makes it for the ten players on the
-// floor, and as the game plan screen previews it before tip-off.
+// floor, and as the game plan screen previews it before tip-off. Out-of-possession roles send their
+// players to the man their job is (the lead handler, the best scorer, the least dangerous big...).
+
+import type { DefRole } from '../types';
 
 /** An offensive player as the assignment reads him. */
 export interface MatchupScorer {
@@ -10,6 +13,10 @@ export interface MatchupScorer {
   big: boolean;
   /** How much the offense runs through him (any scale: only the ratio to the top one counts). */
   threat: number;
+  /** How much of that is his ball screens, on the same scale (none given: none of it). */
+  handle?: number;
+  /** His shooting gravity, 0-100 (none given: 50). */
+  shoot?: number;
 }
 
 /** A defender as the assignment reads him. */
@@ -18,6 +25,37 @@ export interface MatchupDefender {
   hgt: number;
   intDef: number;
   perDef: number;
+  /** His out-of-possession role (none: standard). */
+  role?: DefRole;
+}
+
+/** How hard an out-of-possession role pulls its player to his man: a cost of this much at most, against size gaps and defensive quality. */
+export const ROLE_PULL = 2.5;
+
+/**
+ * How well scorer `o` suits the job of a defender in role `role` (0 to 1): the point-of-attack
+ * stopper wants the lead ball handler, the wing stopper the best scorer who isn't, the anchor the
+ * big who stays furthest from the arc, the roamer the weakest shooter, and the hidden defender the
+ * least dangerous player. A standard defender has no preference.
+ */
+export function roleTarget(role: DefRole | undefined, o: MatchupScorer, maxThreat: number, maxHandle: number): number {
+  const threat = o.threat / (maxThreat || 1);
+  const handle = maxHandle > 0 ? (o.handle ?? 0) / maxHandle : 0;
+  const noShot = 1 - Math.min(100, Math.max(0, o.shoot ?? 50)) / 100;
+  switch (role) {
+    case 'poa':
+      return handle;
+    case 'stopper':
+      return threat * (1 - 0.8 * handle);
+    case 'anchor':
+      return (o.big ? 0.6 : 0) + 0.4 * noShot;
+    case 'roamer':
+      return noShot * (1 - 0.5 * threat);
+    case 'hide':
+      return 1 - threat;
+    default:
+      return 0;
+  }
 }
 
 /** All 120 orderings of five defenders. */
@@ -33,11 +71,12 @@ const PERMS5: number[][] = (() => {
 
 /**
  * Cost of defender j guarding scorer i (lower is better): size gaps cost, a good defender on the
- * scorers the offense runs through saves, and a planned matchup (`manual`: scorer pid -> defender
- * pid) all but decides it.
+ * scorers the offense runs through saves, a defender's role pulls him to the man his job is (see
+ * roleTarget), and a planned matchup (`manual`: scorer pid -> defender pid) all but decides it.
  */
 function costMatrix(off: MatchupScorer[], def: MatchupDefender[], manual: Record<number, number>): number[] {
   const maxThreat = Math.max(...off.map((o) => o.threat)) || 1;
+  const maxHandle = Math.max(0, ...off.map((o) => o.handle ?? 0));
   const n = def.length;
   const cost: number[] = new Array(off.length * n);
   for (let i = 0; i < off.length; i++) {
@@ -48,6 +87,7 @@ function costMatrix(off: MatchupScorer[], def: MatchupDefender[], manual: Record
       let c = Math.abs(o.hgt - d.hgt) * 0.09;
       const quality = o.big ? d.intDef : d.perDef;
       c -= (o.threat / maxThreat) * (quality - 50) * 0.06;
+      if (d.role && d.role !== 'standard') c -= ROLE_PULL * roleTarget(d.role, o, maxThreat, maxHandle);
       if (m !== undefined) c += m === d.pid ? -50 : 4;
       cost[i * n + j] = c;
     }

@@ -6,7 +6,7 @@
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
-import { K, engineDiag, lev, levExtra, levGift } from './constants';
+import { K, engineDiag, lev, levExtra, levGift, levW } from './constants';
 import type { SP, ST, ShotOpts } from './state';
 import type { GameSim } from './game';
 
@@ -99,18 +99,29 @@ export const shotsMethods = {
     const beat = clamp(1 + (off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.open, 0.25, 1.5);
     const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)) * beat);
     // (the room tactics have to open or close a look grows with the tactical leverage)
-    const open = clamp(s.open + over + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
+    // the shape: five-out's open paint, the double post's crowded one (and its bigs inside)
+    const shape = this.shapeOpen(off, sh, zone, s.finish);
+    const open = clamp(s.open + over + shape + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
     // contesting defender quality
     const c = s.contest;
+    let stopper = 0;
     if (c) {
       if (zone === 'rim' || zone === 'paint') p -= ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07;
       else p -= ((c.c.perDef * this.dq(c) - 50) / 50) * 0.022;
+      // a wing stopper on his own man makes every look a little tougher
+      if (c.drole === 'stopper' && def.guardOf.get(sh.pid) === c) stopper = lev(K.role.stopperContest);
+      p -= stopper;
     }
     // the offense's feel (reads, passing, handling) against the defense's team defense (help,
     // on-ball, inside): what lets good teams get good shots and bad ones not, beyond the matchups
     p += ((off.feelQ - def.defQ - K.feelGap) / 50) * K.feel;
+    // familiarity: an offense that doesn't know what it's running gets worse looks, a defense that
+    // doesn't know its rotations gives up better ones (none for a fluid unit)
+    const famO = off.famOff * K.fam.shot;
+    const famD = def.famDef * K.fam.shotD;
+    p += famD - famO;
     // fatigue
     p -= (1 - sh.energy) * 0.12;
     // physicality: tighter contests
@@ -131,6 +142,15 @@ export const shotsMethods = {
       }
     }
     if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value, sh.pid);
+    if (famO) this.impact('fam_off', def.side, famO * value, sh.pid);
+    if (shape) this.impact('shape_space', off.side, shape * K.zoneOpen[zone] * value, sh.pid);
+    if (stopper) this.impact('role_stopper', def.side, stopper * value, sh.pid);
+    // (the anchor's share of the rim's contests beyond what he'd get as anyone else, at his edge over an average contester)
+    if (c?.drole === 'anchor' && (zone === 'rim' || zone === 'paint') && def.guardOf.get(sh.pid) !== c) {
+      const extra = 1 - 1 / levW(K.role.anchorRim);
+      this.impact('role_anchor', def.side, extra * ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07 * value, sh.pid);
+    }
+    if (famD) this.impact('fam_def', off.side, famD * value, sh.pid);
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
 
     // block?
@@ -259,6 +279,12 @@ export const shotsMethods = {
     } else if (this.pd(def, sh) === 'sag') {
       // sagged off: the kick-out finds him open
       s = { ...s, open: s.open + levGift(K.pd.sag.kick), tags: [...(s.tags ?? []), ['pd_sag', levGift(K.pd.sag.kick)]] };
+    } else {
+      // a roamer has left him to help, and a rim anchor stays home in the paint: the catch is open
+      // (the anchor's man only as far as he's a shooter)
+      const md = def.guardOf.get(sh.pid);
+      const gift = md?.drole === 'roamer' ? levGift(K.pd.sag.kick) * K.role.roamKick : md?.drole === 'anchor' ? lev(K.role.anchorKick) * clamp((sh.c.c3 - 40) / 30, 0, 1.5) : 0;
+      if (gift) s = { ...s, open: s.open + gift, tags: [...(s.tags ?? []), [md!.drole === 'roamer' ? 'role_roam' : 'role_anchor', gift]] };
     }
     const t3 = off.t.offense.threePoint / 100;
     const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * (1 + levExtra(K.recenter.three)) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
@@ -298,7 +324,7 @@ export const shotsMethods = {
     const sag = zone !== 'mid' ? this.sagHelp(def, off, sh) : 0;
     if (sag) {
       o -= sag;
-      tags.push(['pd_sag', -sag]);
+      tags.push([this.sagKey, -sag]);
     }
     this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags, ...body });
   },

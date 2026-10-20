@@ -123,7 +123,7 @@ describe('the season forecast', () => {
       }
     }
     // up three games or more, a team is a big favourite in its series
-    const up = playoffs.playoffs.find((s) => s.winner === undefined && Math.abs(s.highWins - s.lowWins) >= 2);
+    const up = playoffs.playoffs.find((s) => s.winner === undefined && Math.abs(s.highWins - s.lowWins) >= 3);
     if (up) {
       const lead = up.highWins > up.lowWins ? up.high : up.low;
       expect(f.teams[lead].reach[up.round]).toBeGreaterThan(0.5);

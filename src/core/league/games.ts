@@ -4,7 +4,7 @@ import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine,
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
-import { addInbox, addNews, andList, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
+import { addInbox, addNews, andList, inSeason, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { playerAge } from '../playerGen';
@@ -16,6 +16,9 @@ import { staffLeverChanges, staffTactics } from '../ai/advisor';
 import { leadAssistant } from '../ai/assistant';
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, markText, newsworthy, type MilestoneStat } from '../analysis/milestones';
+import { learnFromGame } from './practice';
+import { prepared } from '../sim/familiarity';
+import { withSlotPlans } from '../sim/slots';
 import { gameKeys, gradeKey } from '../analysis/keys';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
@@ -236,7 +239,7 @@ export function ensureRotation(league: League, tid: number) {
   if ((!isUser || !team.tactics.manual) && (stale || missingRoles || refit)) {
     // the user's staff-run playbook also carries the staff's changes from this season's evidence
     if (isUser) applyStaffTactics(league, tid);
-    else team.tactics = autoTactics(team, players, false);
+    else team.tactics = autoTactics(team, players, false, { sticky: inSeason(league) });
   } else if (missingRoles) {
     // manual tactics: fill roles/freedom for newly acquired players only
     const auto = autoTactics({ ...team, tactics: { ...team.tactics, manual: false } }, players, false);
@@ -296,12 +299,17 @@ export function buildSimInput(
       benchTwoWays(rotation, ready);
     }
     const extra = play.length ? { play } : {};
-    // opponent-specific game plan for the user's team; the user's own assistant adjusts at breaks only if asked to
+    // opponent-specific game plan for the user's team (drilled for tonight after a day of opponent
+    // prep); the user's own assistant adjusts at breaks only if asked to; situational plans that
+    // switch to another tactic slot carry its changes
     if (opp !== undefined && planFor(league, opp, game)) {
-      const tactics = effectiveTactics(league, opp, game);
-      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts, ...extra };
+      const tactics = withSlotPlans(team, effectiveTactics(league, opp, game));
+      const fam = team.prep === 'opponent' && team.fam ? { fam: prepared(team.fam, team.tactics, tactics) } : {};
+      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts, ...extra, ...fam };
     }
-    return { team: rotation === team.rotation ? team : { ...team, rotation }, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts, ...extra };
+    const tactics = withSlotPlans(team, team.tactics);
+    const same = rotation === team.rotation && tactics === team.tactics;
+    return { team: same ? team : { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts, ...extra };
   }
   // an AI coach never plays the situational plans or crunch-time calls a user left on this team
   const t = team.tactics;
@@ -309,7 +317,11 @@ export function buildSimInput(
   const tactics = userPlans ? withoutCoachPlans(t) : t;
   // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
   const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
-  if (plan) return { team: planTeam(team, withOppPlan(tactics, plan), plan), players, perf, rest, injuryMult, adjust: true };
+  // (a coach who comes in with a plan has drilled it)
+  if (plan) {
+    const planned = withOppPlan(tactics, plan);
+    return { team: planTeam(team, planned, plan), players, perf, rest, injuryMult, adjust: true, ...(team.fam && { fam: prepared(team.fam, tactics, planned) }) };
+  }
   return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
 }
 
@@ -429,6 +441,8 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     );
   }
   g.played = true;
+  // both teams learn from the tactics they played (an All-Star game teaches nobody anything)
+  if (g.type !== 'allstar') learnFromGame(league, sim);
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
   consumePlans(league, g);
   const playoffs = g.type === 'playoffs';
