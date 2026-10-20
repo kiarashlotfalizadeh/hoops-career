@@ -36,10 +36,14 @@ export function CounterSheet({
 }) {
   const open = !!base && counters.length > 0;
   return (
-    <Sheet open={open} onClose={onClose} title={base ? `${league.teams[base.b.tid].abbrev} say no` : undefined}>
+    <Sheet open={open} onClose={onClose} title={base ? `The ${league.teams[base.b.tid].name} say no` : undefined}>
       {open && base && (
         <div className="col fo-sheet">
-          <p className="fo-lede">But they'd sign one of these now: the best for you first, by league-neutral value.</p>
+          <p className="fo-lede">
+            {counters.length === 1
+              ? "But they'd take this version now."
+              : `But they'd take any of these ${counters.length} versions now, the best for you first (by league-neutral value).`}
+          </p>
           <div className="card flush list">
             {counters.map((c, i) => (
               <CounterCard key={`${i}:${c.label}`} league={league} base={base} c={c} onAccept={onAccept} onEdit={onEdit} />
@@ -121,13 +125,15 @@ function CounterCard({
       <div className="tiny dim num">
         {info.inc >= info.out ? 'You take on' : 'You shed'} {money(Math.abs(info.inc - info.out))} in salary · payroll after{' '}
         <b className={info.after > cap.luxuryTax ? 'bad' : info.after > cap.salaryCap ? 'warn' : 'good'}>{money(info.after)}</b>
-        {info.after > cap.firstApron
-          ? `, ${money(info.after - cap.firstApron)} over the first apron`
-          : info.after > cap.luxuryTax
-            ? `, ${money(info.after - cap.luxuryTax)} over the tax`
-            : info.after > cap.salaryCap
-              ? `, ${money(info.after - cap.salaryCap)} over the cap`
-              : `, ${money(cap.salaryCap - info.after)} in cap space`}
+        {info.after > cap.secondApron
+          ? `, ${money(info.after - cap.secondApron)} over the second apron`
+          : info.after > cap.firstApron
+            ? `, ${money(info.after - cap.firstApron)} over the first apron`
+            : info.after > cap.luxuryTax
+              ? `, ${money(info.after - cap.luxuryTax)} over the tax`
+              : info.after > cap.salaryCap
+                ? `, ${money(info.after - cap.salaryCap)} over the cap`
+                : `, ${money(cap.salaryCap - info.after)} in cap space`}
       </div>
       {info.warn.length > 0 && <TradeNotes notes={info.warn} />}
       <div className="row">

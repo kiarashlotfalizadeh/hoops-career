@@ -31,24 +31,37 @@
 
 .fo-cap {
   position: relative;
-  padding-top: 15px;
+  padding-top: 16px;
 }
 
 .fo-cap-track {
   position: relative;
-  height: 10px;
-  border-radius: 5px;
+  height: 12px;
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
   overflow: hidden;
 }
 
+/* the payroll in zones: to the cap (neutral), the cap to the tax line (warn), past the tax (bad) */
 .fo-cap-fill {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 0;
-  border-radius: 5px 0 0 5px;
-  transition: width 0.25s ease;
+  background: color-mix(in srgb, var(--text-2) 70%, var(--surface-3));
+  transition:
+    width var(--dur) var(--ease-out),
+    left var(--dur) var(--ease-out);
+}
+
+.fo-cap-fill.over {
+  background: var(--warn);
+  box-shadow: inset 2px 0 0 var(--raised);
+}
+
+.fo-cap-fill.tax {
+  background: var(--bad);
+  box-shadow: inset 2px 0 0 var(--raised);
 }
 
 .fo-cap-add {
@@ -57,44 +70,60 @@
   bottom: 0;
   background: repeating-linear-gradient(135deg, var(--accent) 0 5px, color-mix(in srgb, var(--accent) 50%, transparent) 5px 10px);
   transition:
-    width 0.2s ease,
-    left 0.2s ease;
+    width var(--dur) var(--ease-out),
+    left var(--dur) var(--ease-out);
 }
 
+/* the aprons: notches cut into the bar past the tax line (the legend names them) */
+.fo-cap-notch {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: -1px;
+  background: repeating-linear-gradient(180deg, var(--raised) 0 2px, transparent 2px 4px);
+}
+
+.fo-cap-notch::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(180deg, transparent 0 2px, color-mix(in srgb, var(--bad) 70%, var(--text)) 2px 4px);
+}
+
+/* the cap and the tax line: ticks through the bar, labelled over it */
 .fo-cap-mark {
   position: absolute;
-  top: 11px;
+  top: 12px;
   width: 2px;
-  height: 18px;
+  height: 20px;
   margin-left: -1px;
   background: var(--text);
   border-radius: 1px;
+  box-shadow: 0 0 0 1.5px var(--raised);
 }
 
 .fo-cap-mark.tax {
-  background: var(--bad);
+  background: color-mix(in srgb, var(--bad) 80%, white);
 }
 
 .fo-cap-mark span {
   position: absolute;
-  top: -13px;
+  top: -14px;
   left: 50%;
   transform: translateX(-50%);
   font-size: 10px;
+  line-height: 12px;
   font-weight: 750;
   font-stretch: 100%;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-2);
+  white-space: nowrap;
 }
 
 .fo-cap-mark.tax span {
   color: color-mix(in srgb, var(--bad) 80%, white);
-}
-
-/* the aprons past the tax line: dashed, quieter than the line itself */
-.fo-cap-mark.apron {
-  background: repeating-linear-gradient(180deg, var(--bad) 0 3px, transparent 3px 5px);
 }
 
 .fo-legend {
@@ -126,10 +155,29 @@
 .fo-legend i.fo-legend-apron {
   width: 2px;
   height: 10px;
-  margin: 0 7px 0 3px;
+  margin: 0 6px 0 2px;
+  vertical-align: -1px;
+  border-radius: 0;
+  background: repeating-linear-gradient(180deg, color-mix(in srgb, var(--bad) 70%, var(--text)) 0 2px, transparent 2px 4px);
+}
+
+/* the payroll's swatch: its three zones, as the bar shows them */
+.fo-legend i.fo-legend-pay {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--text-2) 70%, var(--surface-3)) 0 40%, var(--warn) 40% 70%, var(--bad) 70%);
+}
+
+/* the lines' swatches: a short tick, as on the bar */
+.fo-legend i.fo-legend-line {
+  width: 2px;
+  height: 10px;
+  margin: 0 6px 0 2px;
   vertical-align: -1px;
   border-radius: 1px;
-  background: repeating-linear-gradient(180deg, var(--bad) 0 3px, transparent 3px 5px);
+  background: var(--text);
+}
+
+.fo-legend i.fo-legend-line.tax {
+  background: color-mix(in srgb, var(--bad) 80%, white);
 }
 
 .fo-legend i.fo-legend-add {

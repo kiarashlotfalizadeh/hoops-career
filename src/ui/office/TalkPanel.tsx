@@ -10,7 +10,7 @@ import { playerName, shortName } from '../../core/league/helpers';
 import { useLeague } from '../../state/store';
 import { More } from '../components/ui';
 import { Callout } from './common';
-import { money } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
 
@@ -62,6 +62,8 @@ export function TalkPanel({
   const cWhy = c ? counterBlocked(c) : null;
   const cTotal = c ? makeContract(league, c.amount, c.years, season, p.experience).salaries.reduce((a, x) => a + x, 0) : 0;
   const tone = st.patience <= 1 ? 'bad' : st.patience === 2 ? 'warn' : 'good';
+  // his counter shows in its own row: the reply keeps only what it adds (that a lowball stung)
+  const replyText = reply && c && reply.tone === 'warn' ? reply.text.replace(/^.*? counters at .*? over \d+ years?\.\s*/, '') : reply?.text;
   return (
     <section className="fo-talk" aria-label="Talks with his agent">
       <div className="fo-talk-h">
@@ -75,19 +77,20 @@ export function TalkPanel({
       </div>
       {st.firm ? (
         <div className="small warn">
-          He's had enough: only his ask now, {money(askAt, 2)} for {yrs(years)}
+          He's had enough: only his ask now, {moneyExact(askAt)} for {yrs(years)}
           {option ? ` with a ${option} option` : ''}, for the rest of the re-sign period.
         </div>
       ) : (
         <div className="small dim2">
-          Offer his ask (<b className="num">{money(askAt, 2)}</b> on these terms) and he signs. A little less may do; below that he counters.
+          Offer his ask (<b className="num">{moneyExact(askAt)}</b> on these terms) and he signs. A little less may do; below that he counters.
         </div>
       )}
       {c && (
-        <div className="fo-counter-row">
+        // (keyed: a new counter slides in, his answer arriving)
+        <div className="fo-counter-row fo-react-row" key={`${c.amount}:${c.years}`}>
           <Handshake size={16} className="good" />
           <div className="grow">
-            <b>His counter:</b> <span className="num">{money(c.amount, 2)}</span> × {yrs(c.years)}
+            <b>His counter:</b> <span className="num">{moneyExact(c.amount)}</span> × {yrs(c.years)}
             <span className="dim"> · {money(cTotal)} total</span>
             {cWhy && <div className="tiny warn">{cWhy}</div>}
           </div>
@@ -101,9 +104,9 @@ export function TalkPanel({
           <TriangleAlert size={14} /> Under {Math.round(LOWBALL * 100)}% of his ask: {name} takes it as a lowball.
         </div>
       )}
-      {reply && (
+      {reply && replyText && (
         <Callout tone={reply.tone} icon={<MessagesSquare size={16} className={reply.tone} />}>
-          {reply.text}
+          {replyText}
         </Callout>
       )}
       {!st.firm && (

@@ -82,6 +82,7 @@ function Now({
   sub,
   action,
   second,
+  calm = false,
   children,
 }: {
   over: ReactNode;
@@ -90,11 +91,13 @@ function Now({
   sub?: ReactNode;
   action?: Action;
   second?: Action;
+  /** Nothing waits on it (a look ahead): its action is a plain button, the Continue bar stays the focus. */
+  calm?: boolean;
   children?: ReactNode;
 }) {
   const nav = useNavigate();
   const busy = useBusy();
-  const quiet = useContext(Quiet);
+  const quiet = useContext(Quiet) || calm;
   const button = (a: Action, primary: boolean, block: boolean) => (
     <button className={`btn ${block ? 'block' : ''} ${primary ? 'primary' : ''}`} disabled={!!a.run && busy} onClick={() => (a.run ? a.run() : nav(a.to!))}>
       {a.label}
@@ -141,12 +144,13 @@ function PhaseCard({ league }: { league: League }) {
             title="Trades locked"
             sub="Signings stay open to the end of the season."
             action={{ label: 'Sign free agents', to: '/office/free-agents' }}
+            calm
           />
         );
       return (
         <Now
           over={`Trade deadline · ${fmtDate(league.season, league.tradeDeadlineDay)}`}
-          title={d === 0 ? 'Deadline today' : `${plural(d, 'day')} left`}
+          title={d === 0 ? 'Last day to trade' : `${plural(d, 'day')} left`}
           action={{ label: 'Make a trade', to: '/office/trade' }}
         />
       );
@@ -160,6 +164,7 @@ function PhaseCard({ league }: { league: League }) {
           title="Trades frozen"
           sub={exp ? `${plural(exp, 'contract')} ${exp === 1 ? 'expires' : 'expire'} this summer.` : 'No contracts expire this summer.'}
           action={exp ? { label: 'Expiring deals', to: '/office/resign' } : undefined}
+          calm
         />
       );
     }
@@ -337,19 +342,23 @@ function SeasonsAhead({ league, from }: { league: League; from: number }) {
           Committed
         </span>
         <span className="over" role="columnheader">
-          Cap space
+          <Term id="cap">Cap</Term>
         </span>
       </div>
       {[from, from + 1, from + 2].map((s) => {
-        const room = CAP_FOR(league, s).salaryCap - payroll(league, tid, s);
+        const pay = payroll(league, tid, s);
+        const room = CAP_FOR(league, s).salaryCap - pay;
         return (
-          <div key={s} className="fo-next-row num" role="row">
+          <div key={s} className="fo-next-row" role="row">
             <span className="dim2" role="cell">
               {shortSeason(s)}
             </span>
-            <span role="cell">{money(payroll(league, tid, s))}</span>
-            <span className={room >= 0 ? 'good' : 'warn'} role="cell">
-              {room >= 0 ? money(room) : `over by ${money(-room)}`}
+            <span className="num" role="cell">
+              {money(pay)}
+            </span>
+            {/* never a negative room: over by, or the space left */}
+            <span role="cell">
+              <span className="fo-next-k">{room >= 0 ? 'space' : 'over'}</span> <b className={`num ${room >= 0 ? 'good' : 'warn'}`}>{money(Math.abs(room))}</b>
             </span>
           </div>
         );

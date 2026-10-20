@@ -1,7 +1,8 @@
 // The dock: their GM's live reaction to the deal (the verdict, how much of the value they give up
 // you cover, his reasons), what it does to your cap and both rosters, always in view, and the
 // buttons (make it work, propose, force in god mode).
-import { Handshake, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronDown, Handshake, Zap } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, inSeason, payroll, rosterMaxNow } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
@@ -11,6 +12,7 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
+import { useDockHeight } from '../office/common';
 import { TermsList } from './Terms';
 import { type EditCheck } from '../../core/league/godMode';
 import { money } from '../../core/format';
@@ -21,16 +23,20 @@ import { money } from '../../core/format';
  * the meter short of a deal.
  */
 function reaction(ev: TradeEval): { pct: number; label: string; color: string; figure: string } {
-  if (ev.accept) return { pct: 100, label: ev.message, color: 'var(--good)', figure: '✓ Deal' };
+  if (ev.accept) return { pct: 100, label: ev.delta > Math.abs(ev.valueOut) * 0.25 ? "They'd jump at it" : "They'd take it", color: 'var(--good)', figure: 'Deal' };
   // the AI's own verdict on how far the value is from enough
   const { gap: rel, label } = valueVerdict(ev);
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
   if (ev.delta >= 0)
     return ev.ok
       ? { pct: 94, label: ev.message, color: 'var(--warn)', figure: 'Value there' }
-      : { pct: 100, label: 'They would take it', color: 'var(--good)', figure: 'Value there' };
-  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: `${Math.round(pct)}% of value` };
+      : // the value works for them, but a rule stops the deal (the reason is under the figures)
+        { pct: 100, label: 'The value works for them', color: 'var(--warn)', figure: 'Blocked' };
+  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: `${Math.round(pct)}% of ask` };
 }
+
+/** Whether the dock's details are folded away (kept for the session, across deals and partners); until it's tapped, folded on a short screen (a phone held sideways). */
+let folded: boolean | null = null;
 
 export function Dock({
   league,
@@ -83,12 +89,16 @@ export function Dock({
   const rosterAfter = tradeRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
   const theirAfter = tradeRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
   const maxSize = rosterMaxNow(league);
+  const [fold, setFold] = useState(() => folded ?? window.innerHeight < 560);
+  const [ruleOpen, setRuleOpen] = useState(false);
+  // the dock's height, for toasts to rise above it rather than cover its verdict
+  const ref = useDockHeight<HTMLDivElement>(!empty && !!ev);
   const waives = inSeason(league) && theirAfter - maxSize <= TRADE_WAIVE_MAX;
   if (empty || !ev) {
     return (
       <div className="fo-dock idle">
         <Handshake size={18} className="dim" />
-        <span className="small dim2">Tap players or picks. Their GM reacts live.</span>
+        <span className="small dim2">Tap players or picks to build a deal: their GM reacts as you go.</span>
       </div>
     );
   }
@@ -99,66 +109,95 @@ export function Dock({
   const fixable = !ev.accept && capView.workable;
   const abbrev = league.teams[offer.b.tid].abbrev;
   return (
-    <div className="fo-dock" style={{ ['--react' as string]: r.color }}>
-      <div className="fo-dock-top">
+    <div ref={ref} className={`fo-dock ${fold ? 'folded' : ''}`} style={{ ['--react' as string]: r.color }}>
+      <button
+        className="fo-dock-top"
+        aria-expanded={!fold}
+        onClick={() => {
+          folded = !fold;
+          setFold(!fold);
+        }}
+      >
         <TeamLogo tid={offer.b.tid} size={22} decorative />
-        <span className="fo-dock-says">
-          <span className="sr-only">{abbrev}: </span>
-          {r.label}
+        {/* (keyed: a new verdict fades in, their GM reacting) */}
+        <span className="fo-dock-says" aria-live="polite">
+          <span className="fo-react" key={r.label}>
+            <span className="sr-only">{abbrev}: </span>
+            {r.label}
+          </span>
         </span>
-        <span className="fo-dock-pct num">{r.figure}</span>
-      </div>
+        <span className="fo-dock-pct num">
+          <span className="fo-react" key={r.figure}>
+            {r.figure}
+          </span>
+        </span>
+        <ChevronDown size={16} className="fo-dock-fold" aria-hidden="true" />
+        <span className="sr-only">{fold ? 'Show the details' : 'Hide the details'}</span>
+      </button>
       <div className="fo-meter" aria-hidden="true">
         <i style={{ width: `${r.pct}%` }} />
       </div>
-      {/* their two main reasons (one when a rule problem already needs the room) */}
-      {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
-      {/* what each protection and swap does, a line each (the cash shows in its own control) */}
-      <TermsList league={league} offer={offer} short />
-      <div className="statline fo-dock-figs">
-        <div>
-          <div className="k">
-            <Term id="matching">Salary out · in</Term>
+      {!fold && (
+        <>
+          {/* their two main reasons (one when a rule problem already needs the room) */}
+          {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
+          {/* what each protection and swap does, a line each (the cash shows in its own control) */}
+          <TermsList league={league} offer={offer} short />
+          <div className="statline fo-dock-figs">
+            <div>
+              <div className="k">
+                <Term id="matching">Salary out · in</Term>
+              </div>
+              <div className="v num">
+                {money(out)} · {money(inc)}
+              </div>
+            </div>
+            <div>
+              <div className="k">Payroll after</div>
+              <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
+                {money(after)}
+              </div>
+              <div className="s num">
+                {after > cap.secondApron
+                  ? `${money(after - cap.secondApron)} over the 2nd apron`
+                  : after > cap.firstApron
+                    ? `${money(after - cap.firstApron)} over the 1st apron`
+                    : after > cap.luxuryTax
+                      ? `${money(after - cap.luxuryTax)} over the tax`
+                      : after > cap.salaryCap
+                        ? `${money(after - cap.salaryCap)} over the cap`
+                        : `${money(cap.salaryCap - after)} cap space`}
+                {holds > 0 ? `, incl. ${money(holds)} holds` : ''}
+              </div>
+            </div>
+            <div>
+              <div className="k">Rosters</div>
+              <div className="v num" style={{ color: rosterAfter > maxSize || (theirAfter > maxSize && !waives) ? 'var(--bad)' : undefined }}>
+                {rosterAfter} · {theirAfter}
+              </div>
+              {/* (in season an AI team waives its end of the bench to make room) */}
+              <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
+            </div>
           </div>
-          <div className="v num">
-            {money(out)} · {money(inc)}
-          </div>
-        </div>
-        <div>
-          <div className="k">Payroll after</div>
-          <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-            {money(after)}
-          </div>
-          <div className="s num">
-            {after > cap.secondApron
-              ? `${money(after - cap.secondApron)} over the 2nd apron`
-              : after > cap.firstApron
-                ? `${money(after - cap.firstApron)} over the 1st apron`
-                : after > cap.luxuryTax
-                  ? `${money(after - cap.luxuryTax)} over the tax`
-                  : after > cap.salaryCap
-                    ? `${money(after - cap.salaryCap)} over the cap`
-                    : `${money(cap.salaryCap - after)} cap space`}
-            {holds > 0 ? `, incl. ${money(holds)} holds` : ''}
-          </div>
-        </div>
-        <div>
-          <div className="k">Rosters</div>
-          <div className="v num" style={{ color: rosterAfter > maxSize || (theirAfter > maxSize && !waives) ? 'var(--bad)' : undefined }}>
-            {rosterAfter} · {theirAfter}
-          </div>
-          {/* (in season an AI team waives its end of the bench to make room) */}
-          <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
-        </div>
-      </div>
+        </>
+      )}
       {ruleErrors.length > 0 && (
-        <div className="fo-dock-rule">
+        // the first rule the deal breaks, cut to two lines until tapped (then every one)
+        <button className={`fo-dock-rule ${ruleOpen ? 'open' : ''}`} aria-expanded={ruleOpen} onClick={() => setRuleOpen(!ruleOpen)}>
           <span className="tag bad">Not allowed</span>
-          <span>
-            {ruleErrors[0]}
-            {ruleErrors.length > 1 ? ` (+${ruleErrors.length - 1} more)` : ''}
-          </span>
-        </div>
+          {ruleOpen ? (
+            <span className="col">
+              {ruleErrors.map((e) => (
+                <span key={e}>{e}</span>
+              ))}
+            </span>
+          ) : (
+            <span className="fo-dock-rule-t">
+              {ruleErrors[0]}
+              {ruleErrors.length > 1 ? ` (+${ruleErrors.length - 1} more)` : ''}
+            </span>
+          )}
+        </button>
       )}
       <div className="fo-dock-btns">
         <button className="btn sm grow" disabled={!fixable} onClick={onWork}>

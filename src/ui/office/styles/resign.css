@@ -108,3 +108,9 @@
   padding: 6px 14px;
   font-size: 14px;
 }
+
+/* why a player can't be extended now, under his line (wraps: it's a sentence) */
+.fo-why {
+  margin-top: 3px;
+  line-height: 1.3;
+}

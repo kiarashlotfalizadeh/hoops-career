@@ -57,7 +57,7 @@ import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { compareHref, counterpart } from '../compare';
-import { money } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
@@ -231,7 +231,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       <div className="fo-ask">
         <Statline
           items={[
-            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: money(askOwn, 2), s: `${forYears(ask.years)} · market ${money(market, 1)}` },
+            { k: talks?.firm ? 'His ask · firm' : 'His ask', v: moneyExact(askOwn), s: `${forYears(ask.years)} · market ${money(market, 1)}` },
             {
               k: 'Interest',
               v: (
@@ -315,14 +315,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       {capBlocked && !rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
           <div className="row between">
-            <b>Not enough cap space.</b>
+            <b>This offer doesn't fit under the cap.</b>
             <HelpSheet title="Why can't I sign him?">
               <p>
                 The <b>soft cap</b> is {money(cap.salaryCap)}. A free agent signs to any contract that fits under it: you have <b>{money(Math.max(0, space))}</b> of room for{' '}
                 {seasonLabel(season)}.
               </p>
               <p>
-                Over the cap you can still add players on <b>minimum contracts</b> (his is {money(minAmt, 2)} a season) with a roster spot.
+                Over the cap you can still add players on <b>minimum contracts</b> (his is {moneyExact(minAmt)} a season) with a roster spot.
               </p>
               <p>
                 Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {money(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
@@ -347,14 +347,14 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                   setVia(k)
                 )}
               >
-                Use the {EXCEPTIONS[k].name} ({money(room, 2)})
+                Use the {EXCEPTIONS[k].name} ({moneyExact(room)})
               </button>
             ))}
             <button className="btn xs" onClick={() => set(minAmt)}>
               Offer the minimum instead
             </button>
           </div>
-          {ask.amount > minAmt && <div className="tiny dim">He asks {money(ask.amount, 2)}: a minimum deal is unlikely.</div>}
+          {ask.amount > minAmt && <div className="tiny dim">He asks {moneyExact(ask.amount)}: a minimum deal is unlikely.</div>}
         </Callout>
       )}
 
@@ -397,7 +397,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This offer" />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
-              ? `Minimum deals (up to ${money(minAmt, 2)} for him) sign over the cap.`
+              ? `Minimum deals (up to ${moneyExact(minAmt)} for him) sign over the cap.`
               : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
                 ? `Signing with cap space trades your mid-level for the smaller room exception for ${shortSeason(season)}.`
                 : route === 'mle'

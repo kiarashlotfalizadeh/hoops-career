@@ -16,7 +16,7 @@
   align-items: center;
   gap: 3px;
   padding: 5px 0 6px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-size: 11px;
   font-weight: 750;
   font-stretch: 100%;
@@ -160,11 +160,18 @@
   max-width: 100%;
   min-height: 32px;
   padding: 3px 3px 3px 4px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface-2);
   border: 1px solid var(--line-2);
   font-size: 13px;
   font-weight: 700;
+}
+
+/* a player's name wraps rather than cut off in a narrow column ("Jay. / Williams") */
+.fo-pill-name {
+  min-width: 0;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .fo-pill-ic {
@@ -177,7 +184,7 @@
   position: relative;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   display: grid;
   place-items: center;
   color: var(--text-dim);
@@ -293,7 +300,7 @@
   min-height: var(--row-min);
   text-align: left;
   box-shadow: inset 3px 0 0 transparent;
-  transition: background 0.12s ease;
+  transition: background var(--dur-fast) var(--ease-out);
 }
 
 .fo-asset > .grow {
@@ -395,7 +402,7 @@
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line-2);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 8px 12px 10px;
   box-shadow:
     0 -8px 30px rgba(0, 0, 0, 0.5),
@@ -409,11 +416,39 @@
   padding: 12px 14px;
 }
 
+/* the verdict line: tap it to fold the details away (the meter and the buttons stay) */
 .fo-dock-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
+  width: 100%;
+  min-height: 32px;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+
+.fo-dock-fold {
+  flex: none;
+  margin-right: -4px;
+  color: var(--text-dim);
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.fo-dock.folded .fo-dock-fold {
+  transform: rotate(180deg);
+}
+
+/* a new verdict fades in: their GM reacting */
+.fo-react {
+  display: inline-block;
+  animation: fo-react-in var(--dur) var(--ease-out);
+}
+
+@keyframes fo-react-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
 }
 
 .fo-dock-says {
@@ -449,7 +484,17 @@
   bottom: 0;
   border-radius: 4px;
   background: var(--react, var(--accent));
-  transition: width 0.3s ease;
+  transform-origin: left;
+  transition:
+    width var(--dur) var(--ease-out),
+    background-color var(--dur) var(--ease-out);
+  animation: fo-meter-in 0.35s var(--ease-out);
+}
+
+@keyframes fo-meter-in {
+  from {
+    transform: scaleX(0);
+  }
 }
 
 /* what the deal does: salary out and in, your payroll after it, both rosters after it */
@@ -484,9 +529,25 @@
   display: flex;
   align-items: flex-start;
   gap: 8px;
+  width: 100%;
+  text-align: left;
   font-size: 12.5px;
   line-height: 1.35;
   color: color-mix(in srgb, var(--bad) 75%, white);
+}
+
+.fo-dock-rule .col {
+  gap: 4px;
+}
+
+/* two lines until tapped */
+.fo-dock-rule-t {
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 
 .fo-dock-rule .tag {
@@ -505,6 +566,11 @@
 
 .fo-dock-force {
   gap: 4px;
+}
+
+/* toasts rise above a desk's dock, whatever its height (useDockHeight), instead of covering it */
+body:has(.fo-dock:not(.idle)) .toasts {
+  --toast-b: calc(var(--nav-h) + var(--safe-b) + var(--fo-dock-h, 68px) + 16px);
 }
 
 /* while a sim runs its progress shows where the Continue bar is (theme.css keeps the busy one), and the dock rides above it */
@@ -572,27 +638,6 @@ body:has(.simbar) .fo-dock {
 
 .fo-pkg-h .grow {
   min-width: 0;
-}
-
-/* the package's details and its verdict ("Fair value · 100%" of his value) on one line */
-.fo-pkg-sub {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.fo-pkg-sub .fo-meta {
-  min-width: 0;
-}
-
-.fo-pkg-sub .tag {
-  flex: none;
-  margin-left: auto;
-}
-
-.fo-pkg-h .right .tag {
-  margin-bottom: 2px;
 }
 
 .fo-pkg-items {
@@ -739,7 +784,20 @@ body:has(.simbar) .fo-dock {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: 5px;
+}
+
+.fo-pkg-h {
+  align-items: flex-start;
+}
+
+/* the package's details wrap rather than cut off: the share of his value is the point */
+.fo-pkg-h .fo-meta {
+  white-space: normal;
+}
+
+.fo-pkg-h > :first-child {
+  margin-top: 2px;
 }
 
 /* an AI team's offer: its agenda row over the two sides */

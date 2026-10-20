@@ -18,7 +18,7 @@ import { Statline } from '../components/ui';
 import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, forYears, salaryText, shortSeason } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { type Reply, TalkPanel } from './TalkPanel';
-import { money } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
   const league = useLeague();
@@ -63,7 +63,8 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
     <div className="col fo-sheet fo-contract">
       <PlayerHead league={league} p={p} right={<OvrPot p={p} />}>
         <div className="fo-meta fo-wrap">
-          {salaryText(league, salaryFor(p, exp))} in {shortSeason(exp)}, his last season · extension from {shortSeason(season)}
+          {salaryText(league, salaryFor(p, exp))} in <span className="nowrap">{shortSeason(exp)}</span>, his last season · extension from{' '}
+          <span className="nowrap">{shortSeason(season)}</span>
         </div>
       </PlayerHead>
 
@@ -72,7 +73,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
           items={[
             {
               k: talkState(league, p, 'extend').firm ? 'His ask · firm' : 'His ask',
-              v: money(askFor(league, p, 'extend', ask.years), 2),
+              v: moneyExact(askFor(league, p, 'extend', ask.years)),
               s: `${forYears(ask.years)} from ${shortSeason(season)}`,
             },
             {

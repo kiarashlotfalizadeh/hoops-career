@@ -120,7 +120,8 @@ export function CashControl({
         <>
           <Range value={Math.min(value, max)} min={0} max={max} step={100} onChange={onChange} label={mine ? 'Cash you send' : `Cash ${f} send`} />
           <div className="tiny dim">
-            Up to {moneyExact(max)} ({moneyExact(send.limit)} a season each way, {s}). Not salary: it doesn't match or count on the cap.
+            {max < send.limit ? `Up to ${moneyExact(max)} left of ${moneyExact(send.limit)} for ${s}` : `Up to ${moneyExact(max)} for ${s}`}. Cash isn't salary: it doesn't match or
+            count on the cap.
           </div>
         </>
       )}

@@ -42,11 +42,17 @@ export function sheetTerms(league: League, p: Player): string {
 }
 
 /** What a list says about a restricted free agent: the user's own, another team's he could sign to an offer sheet, or one who has signed one. */
-export function rfaTag(league: League, p: Player): { label: string; tone: 'info' | 'warn' | 'good' } | null {
+export function rfaTag(league: League, p: Player): { label: string; tone: 'info' | 'warn' | 'good'; wait?: string } | null {
   const r = p.rfa;
   if (!r || p.tid !== FREE_AGENT) return null;
   const own = league.teams[r.tid].abbrev;
-  if (r.sheet) return { label: `Offer sheet · ${league.teams[r.sheet.tid].abbrev} · ${own} decides day ${r.sheet.until + 1}`, tone: 'warn' };
+  // (the tag stays short; when his team answers goes on the status line under it)
+  if (r.sheet)
+    return {
+      label: `Offer sheet · ${league.teams[r.sheet.tid].abbrev}`,
+      tone: 'warn',
+      wait: `${r.tid === league.userTid ? 'You decide' : `${own} decide`} by day ${r.sheet.until + 1}`,
+    };
   if (r.tid === league.userTid) return { label: 'Your RFA · Bird rights', tone: 'good' };
   return { label: `RFA · ${own} can match`, tone: 'info' };
 }

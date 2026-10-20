@@ -9,7 +9,7 @@ import { useLeague } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Sheet } from '../components/ui';
 import { Line, OvrPot, PlayerHead, capSeason } from './common';
-import { money } from '../../core/format';
+import { moneyExact } from '../../core/format';
 
 /** Fixed-terms two-way offer: no negotiation, he takes it if he's a minimum-level player. */
 export function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: () => void }) {
@@ -35,7 +35,7 @@ export function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <div className="fo-lines">
-            <Line k="Pay a season">{money(twoWaySalary(league, s), 2)}</Line>
+            <Line k="Pay a season">{moneyExact(twoWaySalary(league, s))}</Line>
             <Line k="Seasons">
               {twoWayYears(p)} from {seasonLabel(s)}
             </Line>
@@ -87,7 +87,7 @@ export function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: ()
               const season = w.contract.start + i;
               return season < league.season ? null : (
                 <Line key={season} k={seasonLabel(season)}>
-                  {money(amt, 2)}
+                  {moneyExact(amt)}
                 </Line>
               );
             })}

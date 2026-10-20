@@ -52,7 +52,7 @@ export function DealCard({
         return (
           <span key={pid} className="fo-pill">
             <Ovr v={p.ovr} size="sm" />
-            <span className="ellipsis grow">{nameOf(tid)(pid)}</span>
+            <span className="fo-pill-name grow">{nameOf(tid)(pid)}</span>
             <button className="x" aria-label={`Remove ${nameOf(tid)(pid)}`} onClick={() => set({ ...sel, pids: sel.pids.filter((x) => x !== pid) })}>
               <X size={14} />
             </button>

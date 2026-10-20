@@ -390,7 +390,7 @@ describe('cash (G3)', () => {
     const txn = l.transactions!.at(-1)!;
     expect(txn.sides![0].cash).toBe(3_000);
     expect(txnText(l, txnLine(txn, { tid: U }))).toBe(`Acquired a ${second.season} 2nd from ${l.teams[AI].abbrev} for $3.0M in cash`);
-    expect(l.news.at(-1)!.text).toBe(`Trade: ${l.teams[U].abbrev} send $3.0M in cash to ${l.teams[AI].abbrev} for ${second.season} 2nd (${l.teams[AI].abbrev}).`);
+    expect(l.news.at(-1)!.text).toBe(`Trade: the ${l.teams[U].name} send $3.0M in cash to the ${l.teams[AI].name} for ${second.season} 2nd (${l.teams[AI].abbrev}).`);
   });
 
   it('"what would make this work?" closes a small gap with a little cash before a pick or a player, and so does a counter', () => {
@@ -464,7 +464,7 @@ describe('deal terms (G1-G3)', () => {
     const y = l.season + 2;
     executeTrade(l, deal({ swaps: [y], cash: 1_000 }, { dpids: [own(l, AI, l.season + 1, 2).dpid] }));
     expect(l.news.at(-1)!.text).toBe(
-      `Trade: ${l.teams[U].abbrev} send the right to swap ${y} firsts, $1.0M in cash to ${l.teams[AI].abbrev} for ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
+      `Trade: the ${l.teams[U].name} send the right to swap ${y} firsts and $1.0M in cash to the ${l.teams[AI].name} for ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
     );
     const txn = l.transactions!.at(-1)!;
     expect(txnText(l, txnLine(txn, { tid: AI }))).toBe(`Acquired the right to swap ${y} firsts and $1.0M in cash from ${l.teams[U].abbrev} for a ${l.season + 1} 2nd`);

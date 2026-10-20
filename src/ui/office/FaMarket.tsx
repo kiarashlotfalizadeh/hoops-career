@@ -13,7 +13,7 @@ import { settle, useBusy } from '../../state/actions/office';
 import { useFlowRunner } from '../useFlow';
 import { More, Section } from '../components/ui';
 import { MySheets } from './RfaPanel';
-import { forYears } from './common';
+import { forYears, useDockHeight } from './common';
 import { money } from '../../core/format';
 
 /**
@@ -91,6 +91,8 @@ export function FaDock() {
   const seasonBlocked = over ? newSeasonBlockedReason(league) : null;
   // a decision the league waits on (an offer sheet on your restricted free agent) holds the calendar, as it holds the Continue bar
   const held = agendaBlocker(league);
+  // (toasts rise above the dock: see useDockHeight)
+  const ref = useDockHeight<HTMLDivElement>(over);
   const advance = async (days: number) => {
     const before = freeAgents(league).map((p) => p.pid);
     const offered = bids.map((b) => b.pid);
@@ -135,7 +137,7 @@ export function FaDock() {
     );
   };
   return (
-    <div className={`fo-dock ${over ? 'fo-dock-go' : 'fo-dock-days'}`}>
+    <div ref={ref} className={`fo-dock ${over ? 'fo-dock-go' : 'fo-dock-days'}`}>
       {over ? (
         <button className="btn primary block big" disabled={busy || !!seasonBlocked} onClick={() => void runFlow({ id: 'new', label: newSeasonLabel, cmd: 'newSeason' })}>
           <Play size={18} fill="currentColor" /> {newSeasonLabel}

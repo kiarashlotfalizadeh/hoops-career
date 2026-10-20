@@ -127,7 +127,7 @@
 
 .fo-meterbar {
   position: relative;
-  padding: 16px 0 4px;
+  padding: 16px 0 18px;
 }
 
 .fo-meterbar-track {
@@ -140,8 +140,31 @@
 
 .fo-meterbar-track .z {
   display: block;
+  flex: 1 1 0;
   height: 100%;
   opacity: 0.55;
+}
+
+/* goals met exactly: a short tick under the track, labelled */
+.fo-meterbar-mid {
+  position: absolute;
+  left: 50%;
+  top: 24px;
+  width: 2px;
+  height: 6px;
+  margin-left: -1px;
+  background: var(--text-dim);
+}
+
+.fo-meterbar-mid span {
+  position: absolute;
+  top: 7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  line-height: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .fo-meterbar-track .hot {
@@ -180,6 +203,7 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .fo-meterbar-pin {
@@ -192,6 +216,7 @@
   background: var(--seat);
   border: 3px solid var(--raised);
   box-shadow: 0 0 0 1px var(--line-3);
+  transition: left var(--dur) var(--ease-out);
 }
 
 .fo-ultimatum {

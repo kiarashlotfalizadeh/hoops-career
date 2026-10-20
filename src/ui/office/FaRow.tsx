@@ -71,8 +71,8 @@ export function FaRow({
           )}
           {w ? (
             <span className="dim">Claim his contract</span>
-          ) : p.rfa?.sheet ? (
-            <span className="dim">Waiting on his team</span>
+          ) : rfa?.wait ? (
+            <span className="warn">{rfa.wait}</span>
           ) : own ? (
             <span className="good">Bird rights</span>
           ) : twoWayMode ? (

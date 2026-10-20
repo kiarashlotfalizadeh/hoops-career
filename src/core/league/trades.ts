@@ -921,7 +921,7 @@ function matchLimitText(league: League, m: ReturnType<typeof matchInfo>): string
   const cap = CAP_FOR(league, s).salaryCap;
   const base = m.limit - m.tpe;
   const rule = m.apron1
-    ? `100% of ${money(m.outSal)} sent: over the first apron (${money(CAP_FOR(league, s).firstApron)}) after the deal`
+    ? `100% of ${money(m.outSal)} sent, over the first apron after it`
     : m.outSal <= 0
       ? 'the buffer alone, with no salary sent'
       : m.outSal <= cap * MATCH_SMALL_PCT
@@ -998,7 +998,7 @@ export function evaluateTrade(league: League, offer: TradeOffer): TradeEval {
 export function valueVerdict(ev: { delta: number; valueOut: number }): { gap: number; label: string } {
   const missing = Math.max(0, -ev.delta);
   const gap = ev.valueOut > 0 ? missing / ev.valueOut : missing > 0 ? 1 : 0;
-  return { gap, label: gap > 0.6 ? 'Not even close' : gap > 0.25 ? 'You need to add significant value' : 'Close — add a little more' };
+  return { gap, label: gap > 0.6 ? 'Not even close' : gap > 0.25 ? 'They want a lot more' : 'Close: add a little more' };
 }
 
 function evaluate(league: League, offer: TradeOffer): TradeEval {
@@ -1010,7 +1010,7 @@ function evaluate(league: League, offer: TradeOffer): TradeEval {
   let message: string;
   if (errors.length) message = errors[0];
   else if (tooManyFirsts) message = `No team gives up more than ${MAX_FIRSTS_OUT} first-round picks in one deal.`;
-  else if (accept) message = delta > Math.abs(valueOut) * 0.25 ? 'Deal! (They seem eager.)' : 'Deal!';
+  else if (accept) message = delta > Math.abs(valueOut) * 0.25 ? 'Deal! They seem eager.' : 'Deal!';
   else message = `${valueVerdict({ delta, valueOut }).label}.`;
   const ev = { ok: errors.length === 0, errors, delta, valueIn, valueOut, accept, message, parts };
   return { ...ev, notes: tradeNotes(league, offer, ev) };
@@ -1204,16 +1204,17 @@ export function executeTrade(league: League, offer: TradeOffer) {
   for (const { tid, m } of books) settleTpes(league, tid, m);
   const ta = league.teams[offer.a.tid];
   const tb = league.teams[offer.b.tid];
-  const desc = (side: TradeSide) =>
-    [
-      ...side.pids.map((pid) => playerName(league.players[pid])),
-      ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
-      ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
-      ...((side.cash ?? 0) > 0 ? [`${moneyExact(side.cash!)} in cash`] : []),
-    ].join(', ') || 'nothing';
+  const desc = (side: TradeSide) => [
+    ...side.pids.map((pid) => playerName(league.players[pid])),
+    ...side.dpids.map((dpid) => pickLabel(league, findPick(league, dpid)!)),
+    ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
+    ...((side.cash ?? 0) > 0 ? [`${moneyExact(side.cash!)} in cash`] : []),
+  ];
+  // (in words, the teams by name: "Trade: the Raptors send Scottie Barnes and a 2027 1st (TOR) to the Knicks for ...")
+  const list = (side: TradeSide) => andList(desc(side)) || 'nothing';
   addNews(league, {
     kind: 'trade',
-    text: sentence(`Trade: ${ta.abbrev} send ${desc(offer.a)} to ${tb.abbrev} for ${desc(offer.b)}`),
+    text: sentence(`Trade: the ${ta.name} send ${list(offer.a)} to the ${tb.name} for ${list(offer.b)}`),
     tids: [ta.tid, tb.tid],
     pids: [...offer.a.pids, ...offer.b.pids],
   });

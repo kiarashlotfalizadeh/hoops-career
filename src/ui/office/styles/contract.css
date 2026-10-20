@@ -100,7 +100,7 @@
   position: relative;
   width: 36px;
   height: 36px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
   background: var(--surface-2);
@@ -133,7 +133,7 @@
 .fo-yr {
   flex: 1;
   height: 48px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background: var(--surface);
   display: flex;
@@ -331,4 +331,14 @@
     margin-bottom: -20px;
     padding-bottom: 14px;
   }
+}
+
+/* his counter arrives: it fades up into place (fo-react-in, trade.css) */
+.fo-react-row {
+  animation: fo-react-in var(--dur) var(--ease-out);
+}
+
+/* "Over the cap now" beside a label that wraps ("Over the cap if he signs"): the figures line up at the foot */
+.fo-capimpact .statline {
+  align-items: end;
 }

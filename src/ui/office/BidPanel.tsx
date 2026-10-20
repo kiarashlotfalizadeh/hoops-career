@@ -8,7 +8,7 @@ import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
-import { money } from '../../core/format';
+import { moneyExact } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
 
@@ -53,7 +53,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         {bid && (
           <div className="fo-bid-mine">
             <span className="small dim2">
-              Your offer: {money(bid.amount, 2)} {forYears(bid.years)}
+              Your offer: {moneyExact(bid.amount)} {forYears(bid.years)}
             </span>
             <button className="btn xs" disabled={busy} onClick={withdraw}>
               Withdraw
@@ -64,7 +64,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
 
       {amount < floor ? (
         <Callout tone="bad" icon={<X size={18} className="bad" />}>
-          <b>Too low to consider.</b> Not under {money(floor, 2)} a season for {years} year{years > 1 ? 's' : ''}.
+          <b>Too low to consider.</b> Not under {moneyExact(floor)} a season for {years} year{years > 1 ? 's' : ''}.
         </Callout>
       ) : standing.leads ? (
         <Callout tone="good" icon={<Check size={18} className="good" />}>
@@ -75,7 +75,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
           <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
           {standing.toLead !== null ? (
             <button className="btn xs fo-lead" onClick={() => onAmount(standing.toLead!)}>
-              {best ? 'Lead with' : 'Offer'} {money(standing.toLead, 2)}
+              {best ? 'Lead with' : 'Offer'} {moneyExact(standing.toLead)}
             </button>
           ) : (
             'Even a max offer would not top theirs now.'

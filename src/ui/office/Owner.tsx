@@ -190,12 +190,10 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
         {!league.fired && <span className="fo-seat-v num">{js.score}</span>}
         <div className="grow">
           <div className="fo-seat-l">{js.label}</div>
-          <div className="over">Job security</div>
+          <div className="over">Job security · out of 100</div>
         </div>
       </div>
       {!league.fired && <SeatMeter score={js.score} />}
-      {/* the scale, so a number can be read against the goals below */}
-      {!league.fired && !js.off && <div className="tiny dim">Out of 100: 50 is his goals met exactly; under {Math.round(50 + 50 * FIRING_LINE)} he can fire you.</div>}
       {!js.ultimatum && (
         <p className="fo-seat-line">
           {js.line}
@@ -241,13 +239,17 @@ function SeatMeter({ score }: { score: number }) {
   return (
     <div className="fo-meterbar" aria-hidden="true">
       <div className="fo-meterbar-track">
-        <i className="z hot" style={{ width: '32%' }} />
-        <i className="z warm" style={{ width: '13%' }} />
-        <i className="z steady" style={{ width: '20%' }} />
-        <i className="z secure" style={{ width: '35%' }} />
+        <i className="z hot" style={{ flexGrow: 32 }} />
+        <i className="z warm" style={{ flexGrow: 13 }} />
+        <i className="z steady" style={{ flexGrow: 20 }} />
+        <i className="z secure" style={{ flexGrow: 35 }} />
       </div>
+      {/* the scale, so a number reads against the goals below: the firing line over the track, goals met exactly (50) under it */}
       <span className="fo-meterbar-line" style={{ left: `${line}%` }}>
-        <span>Fired</span>
+        <span>Fired under {line}</span>
+      </span>
+      <span className="fo-meterbar-mid">
+        <span>50: goals met</span>
       </span>
       <span className="fo-meterbar-pin" style={{ left: `${Math.max(1, Math.min(99, score))}%` }} />
     </div>

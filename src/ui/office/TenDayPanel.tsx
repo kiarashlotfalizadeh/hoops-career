@@ -26,7 +26,7 @@ import { settle } from '../../state/actions/office';
 import { liveInProgress } from '../../state/live';
 import { Sheet } from '../components/ui';
 import { Line, OvrPot, PlayerHead } from './common';
-import { money } from '../../core/format';
+import { moneyExact } from '../../core/format';
 
 /** Run a core move as one league action and toast its answer. */
 const act = (label: string, fn: (l: League) => { ok: boolean; reason: string }) => !!settle(label, fn)?.ok;
@@ -43,7 +43,7 @@ export function tenDayLabel(league: League, p: Player): string | null {
 export function tenDayLine(league: League, p: Player): string {
   const td = p.contract.tenDay!;
   const n = tenDaysWith(league, p, p.tid);
-  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name} (${money(p.contract.salaries[0], 2)}, paid at signing): ends after ${tenDayEnds(league, td.until)}${
+  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name} (${moneyExact(p.contract.salaries[0])}, paid at signing): ends after ${tenDayEnds(league, td.until)}${
     td.hardship ? `, on a hardship spot beyond ${CAP.rosterMax}` : ''
   }. No dead money if he goes.`;
 }
@@ -62,10 +62,10 @@ export function TenDayActions({ league, p }: { league: League; p: Player }) {
     <div className="col">
       <div className="chips">
         <button className="btn xs" disabled={!!again} onClick={() => act('A second 10-day', (l) => userTenDay(l, p.pid))}>
-          Second 10-day{again ? '' : ` · ${money(tenDayPay(league, p, next - p.contract.tenDay.until), 2)}`}
+          Second 10-day{again ? '' : ` · ${moneyExact(tenDayPay(league, p, next - p.contract.tenDay.until))}`}
         </button>
         <button className="btn xs primary" disabled={!!rest} onClick={() => act('Signing him for the season', (l) => userTenDayRest(l, p.pid))}>
-          Rest of season · {money(min, 2)}
+          Rest of season · {moneyExact(min)}
         </button>
         <button className="btn xs" disabled={!!end} onClick={() => act('Ending his 10-day', (l) => userEndTenDay(l, p.pid))}>
           Let him go
@@ -106,7 +106,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <div className="fo-lines">
-            <Line k="Pay (paid at signing)">{money(tenDayPay(league, p, until - league.day), 2)}</Line>
+            <Line k="Pay (paid at signing)">{moneyExact(tenDayPay(league, p, until - league.day))}</Line>
             <Line k="Through">
               {tenDayEnds(league, until)} · {until - league.day} day{until - league.day === 1 ? '' : 's'}
             </Line>

@@ -73,7 +73,7 @@ export function TradingBlock({
       ) : locked ? (
         <Empty>{locked.why}</Empty>
       ) : offers.length === 0 ? (
-        <Empty>No package works for {shortName(league, target)} right now (value or salary matching).</Empty>
+        <Empty>No team has a package for {shortName(league, target)} that works on value and salary right now.</Empty>
       ) : (
         <Section title={`${offers.length} team${offers.length > 1 ? 's' : ''} would deal for ${shortName(league, target)}`}>
           <div className="card flush list">
@@ -97,22 +97,21 @@ export function TradingBlock({
                   <div className="fo-pkg-h">
                     <TeamLogo tid={o.tid} size={26} decorative />
                     <div className="grow">
-                      <div className="fo-name">
+                      <div className="fo-name ellipsis">
                         {t.region} {t.name}
                       </div>
-                      <div className="fo-pkg-sub">
-                        <span className="fo-meta">
-                          {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${money(inSal)} salary back` : 'no salary back'}
-                        </span>
-                        <span className={`tag ${tone.c}`}>
-                          {tone.l}
-                          {dump ? '' : ` · ${Math.round(ratio * 100)}%`}
-                        </span>
+                      {/* (wraps rather than cut off: the share of his value is the point) */}
+                      <div className="fo-meta">
+                        {STRATEGY_META[t.strategy].label}
+                        {dump ? '' : ` · ${Math.round(ratio * 100)}% of his value`} · {inSal > 0 ? `${money(inSal)} back` : 'no salary back'}
                       </div>
                     </div>
-                    <button className="btn xs" aria-label={`Open the ${t.name}' package in the builder`} onClick={() => onLoad(o.offer)}>
-                      Open
-                    </button>
+                    <div className="right">
+                      <span className={`tag ${tone.c}`}>{tone.l}</span>
+                      <button className="btn xs" aria-label={`Open the ${t.name}' package in the builder`} onClick={() => onLoad(o.offer)}>
+                        Open
+                      </button>
+                    </div>
                   </div>
                   <div className="fo-pkg-items">
                     {o.offer.b.pids.map((x) => {

@@ -148,7 +148,12 @@ export default function FreeAgents() {
             // (in the offseason up to 21 can sign: past 15, cut down by opening night)
             rosterFig(league),
             exceptions.length
-              ? { k: 'Best exception', v: money(exceptions[0].room), color: 'var(--good)', s: exceptions.map((x) => EXCEPTIONS[x.k].short).join(' · ') }
+              ? {
+                  k: 'Best exception',
+                  v: money(exceptions[0].room),
+                  color: 'var(--good)',
+                  s: `${EXCEPTIONS[exceptions[0].k].short}${exceptions.length > 1 ? ` +${exceptions.length - 1} more` : ''}`,
+                }
               : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${moneyExact(cap.vetMin)}` },
           ]}
         />

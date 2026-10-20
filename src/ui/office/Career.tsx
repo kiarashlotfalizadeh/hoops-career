@@ -20,10 +20,9 @@ import { slabVars } from '../teamColors';
 import { STRATEGY_META, capSeason, shortSeason } from './common';
 import '../screens/start.css';
 import './office.css';
-import { money } from '../../core/format';
+import { money, plural } from '../../core/format';
 
 const pct = (w: number, l: number) => (w + l ? (w / (w + l)).toFixed(3).replace(/^0/, '') : '—');
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 export default function Career() {
   const league = useLeague();

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { ShieldCheck } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, payroll, playerName, shortName, teamPlayers } from '../../core/league/helpers';
-import { askingContract } from '../../core/league/contracts';
+import { askingContract, extensionBlockedReason } from '../../core/league/contracts';
 import { capHolds } from '../../core/league/freeAgency';
 import { extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
@@ -82,12 +82,16 @@ export function ResignClosed({ league }: { league: League }) {
             {list.map((p) => {
               if (canExtend.has(p.pid)) return <ExtendRow key={p.pid} league={league} p={p} onExtend={setExt} />;
               const ask = askingContract(league, p, tid);
+              // why he can't be extended now (a two-way, a deal signed this season), unless it's the calendar's reason for everyone
+              const why = extensionBlockedReason(league, p);
+              const own = why && !/^(Extensions reopen|No extensions during)/.test(why) ? why : null;
               return (
                 <Link key={p.pid} to={`/player/${p.pid}`} className="fo-prow">
                   <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
                     <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+                    {own && <div className="tiny dim fo-why">{own}</div>}
                   </div>
                   <div className="fo-money">
                     <div className="a">{salaryText(league, salaryFor(p, s))}</div>

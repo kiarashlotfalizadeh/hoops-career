@@ -17,6 +17,7 @@ import { Chips, Ovr, Segmented, Sheet, Slider, Toggle } from '../components/ui';
 
 import { Field, Foot, HEIGHTS, Select, applyEdit, teamOptions, useEditBlock, whole } from './common';
 import { money } from '../../core/format';
+import { RATING_COLOR, ratingTone } from '../ratingCols';
 
 type Tab = 'ratings' | 'bio' | 'status' | 'contract';
 const GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const;
@@ -125,7 +126,7 @@ export function PlayerEditor({ pid, onClose }: { pid: number | null; onClose: ()
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
   return (
-    <Sheet open={!!p} onClose={onClose} title={p ? `Edit ${playerName(p)}` : undefined}>
+    <Sheet open={!!p} onClose={onClose} title={p ? 'Edit player' : undefined}>
       {p && <Editor key={p.pid} league={league} p={p} onClose={onClose} />}
     </Sheet>
   );
@@ -219,9 +220,15 @@ function RatingsTab({ league, f, set, was, ovr, pot }: TabProps & { league: Leag
         <div key={g} className="col" style={{ gap: 10 }}>
           <div className="over god-sec">{g}</div>
           <div className="god-sliders">
-            {RATING_META.filter((m) => m.group === g).map((m) => (
-              <Slider key={m.key} label={m.label} min={ATTR_MIN} max={99} value={attrDisplay(f.ratings[m.key])} onChange={(d) => rate(m.key, d)} />
-            ))}
+            {RATING_META.filter((m) => m.group === g).map((m) => {
+              const v = attrDisplay(f.ratings[m.key]);
+              // (the value in its rating band's colour, as in every ratings table)
+              return (
+                <div key={m.key} className="god-rating" style={{ ['--rating' as string]: RATING_COLOR[ratingTone(v)] }}>
+                  <Slider label={m.label} min={ATTR_MIN} max={99} value={v} onChange={(d) => rate(m.key, d)} />
+                </div>
+              );
+            })}
           </div>
         </div>
       ))}

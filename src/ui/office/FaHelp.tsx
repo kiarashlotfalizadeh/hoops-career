@@ -8,7 +8,7 @@ import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS } from '../../core/league/tenDay';
 import { HelpSheet } from './common';
 import { MATCH_DAYS, SHEET_MAX_YEARS, SHEET_MIN_YEARS } from '../../core/league/rfa';
-import { money } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 /** The rules of signing, behind the header's "?": `space` and `exceptions` are what's open to you now. */
 export function FaHelp({ league, s, space, exceptions }: { league: League; s: number; space: number; exceptions: { k: Exception; room: number }[] }) {
@@ -19,7 +19,7 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
         <b>Cap space.</b> Sign anyone whose deal fits under the {money(cap.salaryCap)} cap. You have <b>{money(Math.max(0, space))}</b> of room for {seasonLabel(s)}.
       </p>
       <p>
-        <b>Minimum deals.</b> Over the cap, players still sign for their minimum: {money(cap.minContract, 2)} in a player's first three seasons, {money(cap.vetMin, 2)} after. A
+        <b>Minimum deals.</b> Over the cap, players still sign for their minimum: {moneyExact(cap.minContract)} in a player's first three seasons, {moneyExact(cap.vetMin)} after. A
         minimum deal for the coming season isn't guaranteed until opening night.
       </p>
       <p>
@@ -65,8 +65,8 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
         <b>Roster.</b> Up to {OFFSEASON_ROSTER_MAX} players in the offseason, {CAP.rosterMax} from opening night, plus up to {TWO_WAY_MAX} on two-way deals.
       </p>
       <p>
-        <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {money(twoWaySalary(league, s), 2)}. They don't use a roster
-        spot or count on the cap, and sit at the end of the bench unless you run short.
+        <b>Two-way deals.</b> Players with three seasons or fewer who'd sign for the minimum can take a two-way slot at {moneyExact(twoWaySalary(league, s))}. They don't use a
+        roster spot or count on the cap, and sit at the end of the bench unless you run short.
       </p>
       <p>
         <b>10-day contracts.</b> From January 5 to the end of the regular season, a free agent who'd sign for the minimum takes a {TEN_DAYS}-day deal: his minimum prorated, paid at

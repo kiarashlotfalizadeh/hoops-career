@@ -22,10 +22,25 @@
   padding: 8px 4px 7px;
 }
 
+/* (narrower letters, so "Timberwolves" fits a quarter of a phone) */
 .fo-career .nl-team-name {
   font-size: 12.5px;
+  font-stretch: 78%;
 }
 
 .fo-career .nl-team-sub {
   font-size: 11px;
+}
+
+/* four figures across a phone: tighter columns, so "Playoffs" stays inside its own */
+.fo-career-slab .statline > * {
+  padding-inline: 8px;
+}
+
+.fo-career-slab .statline > :first-child {
+  padding-left: 0;
+}
+
+.fo-career-slab .statline .k {
+  letter-spacing: 0.06em;
 }

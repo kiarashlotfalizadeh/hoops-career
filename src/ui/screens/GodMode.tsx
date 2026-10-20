@@ -97,7 +97,8 @@ export default function GodMode() {
                   <span className="row" style={{ gap: 6 }}>
                     Owner's confidence in you
                     <Help title="Owner's confidence">
-                      With Job security on, a coach under −50 at a season's review is fired once the owner's grace period is over (Difficulty sets how long).
+                      Your standing with him, −100 to +100: Office → Owner&apos;s job-security meter reads it out of 100 (50 + half of it). With job security on, a review under −50
+                      fires you once his grace period is over (Difficulty sets how long).
                     </Help>
                   </span>
                 }

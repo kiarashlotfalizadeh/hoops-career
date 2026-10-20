@@ -579,7 +579,7 @@ describe('AI trade valuation', () => {
     const deal = offer([mine.pid], [theirs.pid]);
     expect(validateTrade(l, deal).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
     to(cap.firstApron - 500);
-    expect(validateTrade(l, deal).find((e) => /Salary doesn't match/.test(e))).toMatch(/100% of \$9\.0M sent: over the first apron/);
+    expect(validateTrade(l, deal).find((e) => /Salary doesn't match/.test(e))).toMatch(/100% of \$9\.0M sent, over the first apron/);
     // sending out more than it takes back is always fine
     expect(validateTrade(l, offer([mine.pid], [])).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
     // over the second apron: two contracts can't add up to take back a bigger one, and no cash goes out

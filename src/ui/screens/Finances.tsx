@@ -24,7 +24,7 @@ import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
-import { money, moneySigned } from '../../core/format';
+import { money, moneySigned, moneyExact } from '../../core/format';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -371,7 +371,7 @@ function BudgetTab({ team }: { team: Team }) {
                 s: `${Math.round((att / ARENA_CAPACITY) * 100)}% full`,
                 color: att >= ARENA_CAPACITY ? 'var(--good)' : undefined,
               },
-              { k: 'Gate / game', v: money(gate, 2), s: 'ticket revenue' },
+              { k: 'Gate / game', v: moneyExact(gate), s: 'ticket revenue' },
               { k: 'Season gate', v: money(gate * 41), s: '41 home games' },
             ]}
           />

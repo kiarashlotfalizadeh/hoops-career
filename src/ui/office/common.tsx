@@ -1,7 +1,7 @@
 // Shared Front Office helpers: the cap sheet's words (cap room, the tax, roster spots, when a
 // contract ends), the cap bar, and the small building blocks of the desks' rows and sheets (Office,
 // Trade, Free agents, Re-sign, Draft, Finances, Owner, and the player page's contract).
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, type ReactNode } from 'react';
 import { TriangleAlert } from 'lucide-react';
 import type { League, Player, Team } from '../../core/types';
 import { CAP } from '../../core/constants';
@@ -15,7 +15,7 @@ import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
 import { Term } from '../components/Glossary';
 import './office.css';
-import { money, outFor } from '../../core/format';
+import { money, outFor, moneyExact } from '../../core/format';
 
 // the seasons the desks count on, and their roster and contract counts (CSS-free, so the Team header
 // and Today can use them without the Office's styles)
@@ -132,6 +132,26 @@ export const fmtGrade = (x: number) => `${x >= 0 ? '+' : ''}${Math.round(x * 100
 // ------------------------------------------------------------------ components
 
 /**
+ * A desk's floating dock (the trade dock, free agency's days) tells the page its height
+ * (--fo-dock-h on the body), so toasts rise above it instead of covering it. `dep` re-measures
+ * when the dock's element changes.
+ */
+export function useDockHeight<T extends HTMLElement>(dep?: unknown) {
+  const ref = useRef<T>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => document.body.style.setProperty('--fo-dock-h', `${Math.round(el.offsetHeight)}px`));
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.body.style.removeProperty('--fo-dock-h');
+    };
+  }, [dep]);
+  return ref;
+}
+
+/**
  * Payroll against the cap and the tax line, with an amount on top of it striped (cap holds, an
  * offer). The legend names each part: the payroll and the stripe with their swatches (`full`), or
  * only the two lines when the payroll is the figure above it (`lines`).
@@ -158,13 +178,27 @@ export function CapBar({
   const total = pay + Math.max(0, add);
   const max = Math.max(aprons ? aprons.second * 1.05 : tax * 1.14, total * 1.03);
   const pct = (x: number) => clamp((x / max) * 100, 0, 100);
-  const tone = (x: number) => (x > tax ? 'var(--bad)' : x > cap ? 'var(--warn)' : 'var(--good)');
+  // the payroll in its zones: up to the cap, the cap to the tax line, past the tax (a team deep in
+  // the tax reads as mostly paid-for room with a red tail, not one red bar)
+  const zones = [
+    { from: 0, to: Math.min(pay, cap), cls: '' },
+    { from: cap, to: Math.min(pay, tax), cls: 'over' },
+    { from: tax, to: pay, cls: 'tax' },
+  ].filter((z) => z.to > z.from);
   return (
     <div>
       <div className="fo-cap">
         <div className="fo-cap-track">
-          <div className="fo-cap-fill" style={{ width: `${pct(pay)}%`, background: tone(pay) }} />
+          {zones.map((z) => (
+            <div key={z.cls || 'base'} className={`fo-cap-fill ${z.cls}`} style={{ left: `${pct(z.from)}%`, width: `${pct(z.to) - pct(z.from)}%` }} />
+          ))}
           {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
+          {aprons && (
+            <>
+              <div className="fo-cap-notch" style={{ left: `${pct(aprons.first)}%` }} />
+              <div className="fo-cap-notch" style={{ left: `${pct(aprons.second)}%` }} />
+            </>
+          )}
         </div>
         <div className="fo-cap-mark" style={{ left: `${pct(cap)}%` }}>
           <span>Cap</span>
@@ -172,18 +206,13 @@ export function CapBar({
         <div className="fo-cap-mark tax" style={{ left: `${pct(tax)}%` }}>
           <span>Tax</span>
         </div>
-        {aprons && (
-          <>
-            <div className="fo-cap-mark apron" style={{ left: `${pct(aprons.first)}%` }} aria-label="First apron" />
-            <div className="fo-cap-mark apron" style={{ left: `${pct(aprons.second)}%` }} aria-label="Second apron" />
-          </>
-        )}
       </div>
       {legend && (
         <div className="fo-legend">
           {legend === 'full' && (
             <span>
-              <i style={{ background: tone(pay) }} />
+              {/* (the payroll's swatch carries its zones: to the cap, to the tax line, past it) */}
+              <i className="fo-legend-pay" />
               Payroll <b>{money(pay)}</b>
             </span>
           )}
@@ -194,9 +223,11 @@ export function CapBar({
             </span>
           )}
           <span>
+            <i className="fo-legend-line" />
             Cap <b>{money(cap)}</b>
           </span>
           <span>
+            <i className="fo-legend-line tax" />
             Tax line <b>{money(tax)}</b>
           </span>
           {aprons && (
@@ -252,7 +283,7 @@ export function Range({ value, min, max, step = 1, onChange, label }: { value: n
       step={step}
       value={clamp(value, min, max)}
       aria-label={label}
-      aria-valuetext={money(value, 2)}
+      aria-valuetext={moneyExact(value)}
       onChange={(e) => onChange(Number(e.target.value))}
       style={{ ['--fill' as string]: `${fill}%` }}
     />
