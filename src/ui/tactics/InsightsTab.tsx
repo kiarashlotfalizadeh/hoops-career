@@ -9,14 +9,15 @@ import { scoutTeam } from '../../core/ai/advisor';
 import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
 import { Help, More, Section, Segmented } from '../components/ui';
 import { Term } from '../components/Glossary';
+import { plural } from '../../core/format';
 import { PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
-import { seasonImpacts } from '../seasonAnalysis';
+import { seasonImpacts, strongerSides } from '../seasonAnalysis';
 
 export function InsightsTab() {
   const league = useLeague();
   // the games the effects were tracked in, whether or not any effect is big enough to list
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
-  const imps = effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3);
+  const imps = strongerSides(effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3));
   const helping = imps.filter((x) => x.forUser).slice(0, 5);
   const hurting = imps.filter((x) => !x.forUser).slice(0, 5);
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
@@ -27,7 +28,7 @@ export function InsightsTab() {
     return (
       <div key={`${x.key}${x.forUser}`} className="tx-imp">
         <span className={`tx-imp-v num ${x.forUser ? 'good' : 'bad'}`}>
-          {x.forUser ? '+' : '-'}
+          {x.forUser ? '+' : '−'}
           {x.perGame.toFixed(1)}
         </span>
         <span className="grow">
@@ -41,7 +42,7 @@ export function InsightsTab() {
     <>
       {games > 0 ? (
         <>
-          <Section title="What's working" right={<span className="tiny dim">pts a game · {`${games} game${games === 1 ? '' : 's'}`}</span>}>
+          <Section title="What's working" right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}>
             <div className="card flush list">{helping.length ? helping.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
           </Section>
           <Section title="What's hurting you" right={<span className="tiny dim">pts a game</span>}>

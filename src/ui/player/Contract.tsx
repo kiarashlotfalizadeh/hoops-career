@@ -17,7 +17,7 @@ import { act } from '../../state/actions';
 import { useStore } from '../../state/store';
 import { Section, Statline } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { capSeason, contractEnd, contractUpNote, openOption, salaryText, shortSeason, tradeClosedNote } from '../office/common';
+import { capSeason, contractUpNote, forYears, openOption, salaryText, shortSeason, tradeClosedNote } from '../office/common';
 import { sheetTerms } from '../office/RfaPanel';
 import { TenDayActions, tenDayLine } from '../office/TenDayPanel';
 
@@ -59,10 +59,20 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
               items={[
                 { k: 'Salary', v: salaryText(league, sal), s: shortSeason(salSeason) },
                 {
-                  // when it ends as every desk says it ("thru 30-31 PO", "expiring"), an extension's seasons included
+                  // its last season as the figure (an extension's seasons included) and what's special about it under it, as
+                  // every desk's "thru 30-31 PO" / "expiring" says it: the season alone keeps the figure to one line
                   k: 'Ends',
-                  v: contractEnd(league, p, salSeason),
-                  s: extStart !== null ? 'extended' : openOption(league, p) ? `${openOption(league, p)} option` : rookieScaleDeal(p) ? 'rookie scale' : undefined,
+                  v: shortSeason(Math.max(contractExp(p.contract), salSeason)),
+                  s:
+                    contractExp(p.contract) <= salSeason
+                      ? 'expiring'
+                      : extStart !== null
+                        ? 'extended'
+                        : openOption(league, p)
+                          ? `${openOption(league, p)} option`
+                          : rookieScaleDeal(p)
+                            ? 'rookie scale'
+                            : undefined,
                 },
                 { k: 'Market', v: money(marketSalary(league, p)), s: 'value' },
               ]}
@@ -93,10 +103,10 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
                 : p.rfa?.sheet
                   ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
                   : p.rfa?.tid === league.userTid
-                    ? `Your restricted free agent: asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'}. Unsigned at the close, he takes his ${money(p.rfa.qo)} qualifying offer.`
+                    ? `Your restricted free agent: asking ${money(faAsk.amount)} ${forYears(faAsk.years)}. Unsigned at the close, he takes his ${money(p.rfa.qo)} qualifying offer.`
                     : p.rfa
-                      ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`
-                      : `Asking ${money(faAsk.amount)} × ${faAsk.years} yr${faAsk.years === 1 ? '' : 's'} from you.`}
+                      ? `Restricted: ${league.teams[p.rfa.tid].abbrev} can match any offer sheet. Asking ${money(faAsk.amount)} ${forYears(faAsk.years)} from you.`
+                      : `Asking ${money(faAsk.amount)} ${forYears(faAsk.years)} from you.`}
             </div>
             {/* straight to his offer (or claim) sheet on the Free Agents screen */}
             {!p.rfa?.sheet && (

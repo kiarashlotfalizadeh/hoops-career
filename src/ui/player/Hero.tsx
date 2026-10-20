@@ -89,15 +89,23 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
         {/* a tap: the OVR ladder, his band marked */}
         <OvrBadge ovr={p.ovr} pot={p.pot} size="lg" />
       </div>
+      {/* each particular whole on its line, the dots only between two on the same line */}
       <div className="tm-meta">
-        {age} yrs · {fmtHeight(p.heightIn)} · {p.weightLb} lb · {p.country}
-        {p.college ? ` · ${p.college}` : ''}
-        {/* (the draft slot held together, in the picks' words: "2018 1st round #11") */}
-        {p.draft.round > 0
-          ? ` · ${p.draft.year}\u00a0${p.draft.round === 1 ? '1st' : '2nd'}\u00a0round\u00a0#${p.draft.pick}`
-          : p.draft.year && p.tid !== DRAFT_PROSPECT
-            ? ' · Undrafted'
-            : ''}
+        <span className="tm-meta-in">
+          {[
+            `${age} yrs`,
+            fmtHeight(p.heightIn),
+            `${p.weightLb} lb`,
+            p.country,
+            p.college,
+            // the draft slot in the picks' words: "2018 1st round #11"
+            p.draft.round > 0 ? `${p.draft.year} ${p.draft.round === 1 ? '1st' : '2nd'} round #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? 'Undrafted' : '',
+          ]
+            .filter(Boolean)
+            .map((x, i) => (
+              <span key={i}>{x}</span>
+            ))}
+        </span>
       </div>
       <div className="tm-tags">
         <Tag>{p.archetype}</Tag>

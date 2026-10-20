@@ -15,8 +15,14 @@ export const tweak: Edit = (fn) =>
     tt.manual = true;
   });
 
+/**
+ * The tactics as a signature to tell an edit by: without the saved playbook they came from, since
+ * saving them as a playbook (or renaming it) changes no setting and isn't an edit to undo.
+ */
+export const tacticsSig = (t: Tactics) => JSON.stringify({ ...t, playbook: undefined });
+
 /** Where Undo and Compare go back to: the tactics as this visit found them. */
 export const visitStart = (league: League) => {
   const tactics = cloneTactics(league.teams[league.userTid].tactics);
-  return { of: league, tactics, sig: JSON.stringify(tactics) };
+  return { of: league, tactics, sig: tacticsSig(tactics) };
 };

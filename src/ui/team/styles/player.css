@@ -77,6 +77,23 @@
   color: var(--text-2);
   line-height: 1.35;
   margin-top: -2px;
+  overflow: hidden;
+}
+/* a dot before each particular, pulled into the gap: the one that starts a line hangs past the
+   left edge and is clipped, so no line starts or ends on a dot */
+.tm-meta-in {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: -14px;
+}
+.tm-meta-in > span {
+  white-space: nowrap;
+}
+.tm-meta-in > span::before {
+  content: '·';
+  display: inline-block;
+  width: 14px;
+  text-align: center;
 }
 .tm-tags {
   display: flex;

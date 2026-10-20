@@ -148,9 +148,25 @@
 .lg-pcell.tm-ncell {
   max-width: 118px;
 }
+/* room for the OUT mark beside a hurt player's name */
+.lg-pcell.tm-ncell:has(.tm-ncell-out) {
+  max-width: 156px;
+}
 /* a hyphenated name wraps at its hyphen rather than lose its end ("Gilgeous-Ale...") */
 .tm-ncell .n {
   max-width: 88px;
   white-space: normal;
   line-height: 1.15;
+}
+/* a hurt player in a table's name column: "OUT" in the injury tag's colours */
+.tm-ncell-out {
+  flex: none;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  font-size: 9.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--bad) 80%, white);
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
 }

@@ -71,19 +71,42 @@
 .tm-rhead > :last-child {
   text-align: center;
 }
-.tm-rrow-main > .tm-rname {
+/* the name on one line across the figures' columns; his marks on the line under it */
+.tm-rname {
   grid-column: 1 / 4;
   grid-row: 1;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 20px;
+}
+.tm-rrow.out .tm-rname {
+  color: var(--text-2);
 }
 .tm-rmeta {
   grid-column: 1;
   grid-row: 2;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12.5px;
+  line-height: 18px;
   color: var(--text-dim);
+}
+.tm-rmeta > .ellipsis {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.tm-rmeta > .tag,
+.tm-rmeta > svg {
+  flex: none;
+}
+/* the meta line's tags keep to its height, so a closer's row is as tall as anyone's */
+.tm-rmeta > .tag {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
 }
 /* hurt: the injury takes the figures' room */
 .tm-rrow.out .tm-rmeta {
@@ -94,6 +117,7 @@
   text-align: right;
   font-size: 13px;
   font-weight: 650;
+  line-height: 18px;
   color: var(--text-2);
 }
 .tm-rfig.m {
@@ -111,26 +135,6 @@
   grid-column: 5;
   grid-row: 1 / -1;
   justify-self: center;
-}
-.tm-rname {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px 6px;
-  min-width: 0;
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1.2;
-}
-/* a long name wraps (at its hyphen) on a narrow phone rather than lose its end */
-.tm-rname > .ellipsis {
-  min-width: 0;
-  max-width: 100%;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.tm-rrow.out .tm-rname > .ellipsis {
-  color: var(--text-2);
 }
 /* his target: the row's big figure */
 .tm-rmin {
@@ -156,7 +160,7 @@
 }
 .tm-plan-row {
   display: grid;
-  grid-template-columns: minmax(0, 92px) minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr) 24px;
   align-items: center;
   gap: 8px;
 }
@@ -198,10 +202,17 @@
 .tm-plan-q i.on + i.on {
   box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.16);
 }
+/* names in the narrow cut, so a long one fits the column whole */
 .tm-plan-n {
   font-size: 12.5px;
   font-weight: 600;
+  font-stretch: 75%;
   color: var(--text-2);
+}
+@media (min-width: 640px) {
+  .tm-plan-row {
+    grid-template-columns: minmax(0, 140px) minmax(0, 1fr) 28px;
+  }
 }
 .tm-plan-m {
   text-align: right;
@@ -246,4 +257,11 @@
 .tm-swap-n.s {
   color: var(--accent-ink);
   background: var(--text-2);
+}
+.tm-swap-out {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bad);
 }

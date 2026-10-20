@@ -8,8 +8,17 @@
   padding: 10px 12px 10px 14px;
   text-align: left;
 }
+/* pressed and hovered as a shared list row is */
+.tm-role-opt {
+  transition: background var(--dur-fast) ease;
+}
 .tm-role-opt:active {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tm-role-opt:not(.on):hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 .tm-role-opt.on {
   background: color-mix(in srgb, var(--accent) 10%, var(--raised));

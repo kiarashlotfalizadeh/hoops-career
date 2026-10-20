@@ -13,7 +13,8 @@ import { IMPACT_TEXT, impactSentence } from '../../core/analysis/gameReport';
 import type { SystemReport } from '../../core/analysis/system';
 import { Help, More, Section, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { seasonImpacts } from '../seasonAnalysis';
+import { plural } from '../../core/format';
+import { seasonImpacts, strongerSides } from '../seasonAnalysis';
 import { PresetPicker } from './PresetPicker';
 import { MyPlaybooksCard } from './MyPlaybooks';
 import { SystemReportCard } from './SystemReport';
@@ -23,7 +24,7 @@ export function SystemTab({ report, was }: { report: SystemReport; was?: SystemR
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
-  const imps = effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3);
+  const imps = strongerSides(effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3));
   const helping = imps.filter((x) => x.forUser).slice(0, 2);
   const hurting = imps.filter((x) => !x.forUser).slice(0, 2);
   return (
@@ -67,16 +68,14 @@ export function SystemTab({ report, was }: { report: SystemReport; was?: SystemR
             {[...helping, ...hurting].map((x) => (
               <div key={`${x.key}${x.forUser}`} className="tx-imp">
                 <span className={`tx-imp-v num ${x.forUser ? 'good' : 'bad'}`}>
-                  {x.forUser ? '+' : '-'}
+                  {x.forUser ? '+' : '−'}
                   {x.perGame.toFixed(1)}
                 </span>
                 <span className="grow tx-imp-t">{impactSentence(x.key, x.forUser ? 'your team' : 'the opposition', x.forUser ? 'the opposition' : 'your team')}</span>
               </div>
             ))}
           </div>
-          <div className="tiny dim" style={{ marginTop: 4 }}>
-            Points a game over {games} game{games === 1 ? '' : 's'}: what your tactics actually won and gave up.
-          </div>
+          <div className="tx-note">Points a game over {plural(games, 'game')}: what your tactics actually won and gave up.</div>
         </Section>
       )}
 

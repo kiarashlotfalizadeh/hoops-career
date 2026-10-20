@@ -171,11 +171,24 @@
 .tm-rt-row[aria-expanded='true'] {
   background: var(--surface);
 }
-/* a long name (Offensive rebounding) wraps rather than lose its end on a phone */
+/* one line a rating: on a phone the names are set narrower, so the longest (Offensive rebounding)
+   fits its half of the card whole */
 .tm-rt-l {
   color: var(--text-2);
   line-height: 1.2;
   min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 479px) {
+  .tm-rt-row {
+    grid-template-columns: minmax(0, 1fr) auto 20px;
+    padding-right: 8px;
+  }
+  .tm-rt-l {
+    font-stretch: 76%;
+  }
 }
 .tm-rt-v {
   text-align: right;
@@ -272,4 +285,9 @@ a.tm-hi:active {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.tm-log-date {
+  font-size: 12.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
 }

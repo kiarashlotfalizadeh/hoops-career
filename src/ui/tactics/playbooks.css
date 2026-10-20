@@ -81,7 +81,7 @@
   place-items: center;
   min-height: 44px;
   min-width: 44px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 .tx-fit:active {
   background: var(--surface);

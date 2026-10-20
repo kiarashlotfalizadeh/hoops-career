@@ -65,7 +65,7 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
     >
       <div className="card flush list wide2">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
-          <span>Best fit on your roster · runs at {SET_K.fit}+</span>
+          <span className="ellipsis">Best fit · runs at {SET_K.fit}+</span>
           <span>Fit</span>
         </div>
         {SET_IDS.map((id) => {

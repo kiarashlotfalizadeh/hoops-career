@@ -21,8 +21,17 @@
   padding: 8px 14px;
   text-align: left;
 }
+/* pressed and hovered as a shared list row is */
+.tm-pick {
+  transition: background var(--dur-fast) ease;
+}
 .tm-pick:active {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .tm-pick:not(.on):hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 .tm-pick-n {
   display: block;

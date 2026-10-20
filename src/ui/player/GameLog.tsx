@@ -1,7 +1,9 @@
-// A player's page, Games: this season's game log, newest first; a row opens the game's report.
+// A player's page, Games: this season's game log, newest first, each game dated; a row opens the game's report.
 import type { League, Player } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { neutralSite } from '../../core/league/games';
+import { fmtDate } from '../../core/league/helpers';
+import { plural } from '../../core/format';
 import { Empty, Section, StatTable, type Col } from '../components/ui';
 import { f1, signed } from '../stats';
 
@@ -40,6 +42,7 @@ export function GameLog({ p, league, onOpen }: { p: Player; league: League; onOp
         </span>
       ),
     },
+    { key: 'day', label: 'Date', left: true, get: (r) => r.g.day, fmt: (_, r) => <span className="tm-log-date">{fmtDate(r.g.season, r.g.day)}</span> },
     { key: 'min', label: 'MIN', get: (r) => r.box.min, fmt: (v) => f1(v as number) },
     { key: 'pts', label: 'PTS', get: (r) => r.box.pts },
     { key: 'reb', label: 'REB', get: (r) => r.box.orb + r.box.drb },
@@ -53,7 +56,7 @@ export function GameLog({ p, league, onOpen }: { p: Player; league: League; onOp
     { key: 'pm', label: '+/-', get: (r) => r.box.pm, fmt: (v) => signed(v as number, 0) },
   ];
   return (
-    <Section title={`${seasonLabel(league.season)} · ${rows.length} game${rows.length === 1 ? '' : 's'}`}>
+    <Section title={`${seasonLabel(league.season)} · ${plural(rows.length, 'game')}`}>
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.g.gid} onRow={(r) => onOpen(r.g.gid)} />
     </Section>
   );

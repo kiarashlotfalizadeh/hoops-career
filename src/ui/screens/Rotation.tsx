@@ -191,17 +191,19 @@ export default function Rotation() {
                       onClick={() => setEditing(pid)}
                       onKeyDown={activateOnKey(() => setEditing(pid))}
                     >
-                      {/* tags drop below a long name instead of cutting it off */}
-                      <div className="tm-rname">
-                        <span className="ellipsis">{fullNameOf(pid)}</span>
-                        {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
-                        {closers.includes(pid) && <Tag>Closer</Tag>}
-                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" aria-label="Rests on back-to-backs" />}
-                      </div>
+                      {/* the name has its line to itself; his marks ride the line under it, so every row is two lines */}
+                      <div className="tm-rname ellipsis">{fullNameOf(pid)}</div>
                       {/* an injured player's line is his injury: his figures wait for his return */}
                       <div className="tm-rmeta">
-                        {p.pos}
-                        {p.injury ? ` · ${injuryName(p.injury.type)}` : ''}
+                        {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
+                        <span className="ellipsis">{p.injury ? injuryName(p.injury.type) : p.pos}</span>
+                        {p.contract.twoWay && (
+                          <Tag>
+                            2W<span className="sr-only"> (two-way)</span>
+                          </Tag>
+                        )}
+                        {closers.includes(pid) && <Tag>Closer</Tag>}
+                        {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" role="img" aria-label="Rests on back-to-backs" />}
                       </div>
                       {!p.injury && (
                         <>
@@ -276,7 +278,19 @@ export default function Rotation() {
       </Section>
 
       <Sheet open={!!ep} onClose={() => setEditing(null)} title={ep ? `${ep.firstName} ${ep.lastName}` : ''}>
-        {ep && <EditPlayer p={ep} rot={rot} update={update} close={() => setEditing(null)} order={order} names={nameOf} starters={startSet} busy={simming} />}
+        {ep && (
+          <EditPlayer
+            p={ep}
+            rot={rot}
+            update={update}
+            close={() => setEditing(null)}
+            order={order}
+            names={nameOf}
+            starters={startSet}
+            busy={simming}
+            injured={new Set(players.filter((x) => x.injury).map((x) => x.pid))}
+          />
+        )}
       </Sheet>
     </>
   );
@@ -320,6 +334,7 @@ function EditPlayer({
   names,
   starters,
   busy,
+  injured,
 }: {
   p: Player;
   rot: RotationT;
@@ -331,6 +346,8 @@ function EditPlayer({
   starters: Set<number>;
   /** A sim is running: the league can't change. */
   busy: boolean;
+  /** Who's hurt: marked on his chip. */
+  injured: Set<number>;
 }) {
   const starting = starters.has(p.pid);
   const m = rot.minutes[p.pid] ?? 0;
@@ -360,6 +377,7 @@ function EditPlayer({
                 <button key={pid} className="chip tm-swap" disabled={busy} onClick={() => swap(pid)}>
                   <span className={`tm-swap-n ${starters.has(pid) ? 's' : ''}`}>{starters.has(pid) ? 'S' : j + 1}</span>
                   {names(pid)}
+                  {injured.has(pid) && <span className="tm-swap-out">out</span>}
                   {/* the S badge and spot number spelled out: "S Dixon, starter", "9 Warren, 9th on the depth chart" */}
                   <span className="sr-only">{starters.has(pid) ? ', starter' : `, ${ordinal(j + 1)} on the depth chart`}</span>
                 </button>

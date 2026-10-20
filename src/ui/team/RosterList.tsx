@@ -13,6 +13,8 @@ import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
 import { tenDayLabel } from '../office/TenDayPanel';
 import { injuryName, plural } from '../../core/format';
+// its rows' styles, wherever a roster shows (another team's page, not only the Team tab)
+import '../screens/team.css';
 
 const FIGS = [
   ['min', 'MIN', 'minutes'],

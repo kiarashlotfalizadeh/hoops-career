@@ -29,3 +29,11 @@ export function seasonImpacts(league: League, tid = league.userTid): { games: nu
     .sort((a, b) => b.perGame - a.perGame);
   return { games, effects };
 }
+
+/**
+ * One line an effect: where one worked both ways (both teams got back instead of crashing), only
+ * its stronger side, so a list of what helped and what hurt has no near-repeats.
+ */
+export function strongerSides<T extends { key: string; forUser: boolean; perGame: number }>(effects: T[]): T[] {
+  return effects.filter((x) => !effects.some((y) => y.key === x.key && y.forUser !== x.forUser && (y.perGame > x.perGame || (y.perGame === x.perGame && y.forUser))));
+}

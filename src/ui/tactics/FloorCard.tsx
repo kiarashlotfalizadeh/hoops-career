@@ -1,7 +1,7 @@
 // Your system on the floor: the starting five on a half court, each where his role puts him (the
 // creator up top, shooters in the corners, the roll man at the dunker spot, a hub at the elbow), with
 // his role and how well he suits it in stars. A tap opens his role and shot freedom.
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { League, OffRole, Player } from '../../core/types';
 import { ROLE_META, archetype } from '../../core/ratings';
 import { fitStars, roleFits } from '../../core/analysis/system';
@@ -11,70 +11,76 @@ import { rosterNames } from '../stats';
 import { Help, Section, Sheet } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
 
+/** The drawing's height in its units (x across 0-100, y down from the baseline): the arc's top is at 58, the rest is room above it for the top of the key. */
+const H = 84;
 /**
- * Where each role stands on the half court drawn below (its units: x across 0-100, y down from the
- * baseline 0-70; the arc's top is at 58), first choice first; a name plate is about a sixth of the court high, so none sits lower than 56.
+ * Where each role stands on the half court drawn below, first choice first. A name plate is about a
+ * third of the court wide and a fifth of it high, so the spots sit on a grid of three columns (15,
+ * 50, 85) and four rows (the baseline 9-12, the wings 31, the slots 52, the top 71) that keeps the
+ * five apart.
  */
 const SPOTS: Record<OffRole, [number, number][]> = {
   creator: [
-    [50, 56],
-    [24, 50],
+    [50, 71],
+    [20, 52],
   ],
   playmaker: [
-    [50, 56],
-    [76, 50],
+    [50, 71],
+    [80, 52],
   ],
   scorer: [
-    [83, 34],
-    [17, 34],
+    [85, 31],
+    [15, 31],
   ],
   shooter: [
-    [83, 8],
-    [17, 8],
-    [83, 34],
+    [85, 9],
+    [15, 9],
+    [85, 31],
   ],
   slasher: [
-    [17, 34],
-    [83, 34],
+    [15, 31],
+    [85, 31],
   ],
   roller: [
-    [33, 13],
-    [67, 13],
+    [50, 12],
+    [50, 31],
   ],
   stretch: [
-    [76, 50],
-    [24, 50],
+    [80, 52],
+    [20, 52],
   ],
   post: [
-    [36, 22],
-    [64, 22],
+    [50, 12],
+    [50, 31],
   ],
   hub: [
-    [64, 31],
-    [36, 31],
+    [50, 31],
+    [50, 12],
   ],
   glue: [
-    [17, 8],
-    [83, 8],
-    [17, 34],
+    [15, 9],
+    [85, 9],
+    [15, 31],
   ],
 };
 const ALL: [number, number][] = [
-  [50, 56],
-  [83, 34],
-  [17, 34],
-  [83, 8],
-  [17, 8],
-  [33, 13],
-  [67, 31],
+  [50, 71],
+  [85, 31],
+  [15, 31],
+  [85, 9],
+  [15, 9],
+  [50, 31],
+  [50, 12],
+  [20, 52],
+  [80, 52],
 ];
 
 /** Each of the five's spot, taken in turn by role (a spot already taken goes to the next free one). */
 function placements(five: { pid: number; role: OffRole }[]): Map<number, [number, number]> {
   const taken: [number, number][] = [];
   const out = new Map<number, [number, number]>();
-  // (each name plate is about a third of the court wide)
-  const free = (s: [number, number]) => !taken.some((t) => Math.abs(t[0] - s[0]) < 30 && Math.abs(t[1] - s[1]) < 12);
+  // two plates clear each other a plate's width across or its height down
+  const free = (s: [number, number]) => !taken.some((t) => Math.abs(t[0] - s[0]) < 35 && Math.abs(t[1] - s[1]) < 18);
   // the ball handlers first, then the bigs, then the rest
   const order = [...five].sort((a, b) => rank(a.role) - rank(b.role));
   for (const x of order) {
@@ -115,8 +121,8 @@ export function FloorCard({ league }: { league: League }) {
       }
     >
       <div className="tx-floor" role="list" aria-label="Your starting five by role">
-        <svg className="tx-floor-court" viewBox="0 0 100 70" preserveAspectRatio="none" aria-hidden="true">
-          <rect x="0" y="0" width="100" height="70" className="tx-floor-wood" />
+        <svg className="tx-floor-court" viewBox={`0 0 100 ${H}`} preserveAspectRatio="none" aria-hidden="true">
+          <rect x="0" y="0" width="100" height={H} className="tx-floor-wood" />
           <rect x="33" y="0" width="34" height="27" className="tx-floor-paint" />
           <path d="M 6 0 L 6 14 A 44 44 0 0 0 94 14 L 94 0" className="tx-floor-line" fill="none" />
           <circle cx="50" cy="27" r="9" className="tx-floor-line" fill="none" />
@@ -130,8 +136,8 @@ export function FloorCard({ league }: { league: League }) {
               key={r.p.pid}
               role="listitem"
               className={`tx-floor-p${off ? ' off' : ''}`}
-              // (the drawing's units: y from the baseline, at its top, over its 70)
-              style={{ left: `${x}%`, top: `${(y / 70) * 100}%` }}
+              // (the drawing's units: y from the baseline, at its top; the stylesheet keeps a plate inside the court's edges)
+              style={{ '--x': `${x}%`, '--y': `${(y / H) * 100}%` } as CSSProperties}
               onClick={() => setPick(r.p.pid)}
               aria-label={`${nameOf(r.p.pid)}, ${ROLE_META[r.role].label}, ${r.stars} of 5 for it${off ? `; best as ${ROLE_META[r.best].label}` : ''}`}
             >

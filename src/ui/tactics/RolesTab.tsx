@@ -46,12 +46,16 @@ export function RolesTab() {
                 <Avatar p={pl} />
                 <div className="grow">
                   <div className="lr-name ellipsis">{nameOf(pl.pid)}</div>
-                  <div className={`lr-meta ellipsis ${off ? 'warn' : ''}`}>
-                    {ROLE_META[role].label}
-                    {off ? ' · out of position' : ''}
+                  {/* his freedom and an injury ride the role's line, so the name keeps the row's width */}
+                  <div className="lr-meta tx-rolemeta">
+                    <span className={`ellipsis ${off ? 'warn' : ''}`}>
+                      {ROLE_META[role].label}
+                      {off ? ' · out of position' : ''}
+                    </span>
+                    {fr !== 0 && <Tag tone={fr === 1 ? 'good' : 'warn'}>{fr === 1 ? 'Green light' : 'Limited'}</Tag>}
+                    {pl.injury && <Tag tone="bad">Out</Tag>}
                   </div>
                 </div>
-                {fr !== 0 && <Tag tone={fr === 1 ? 'good' : 'warn'}>{fr === 1 ? 'Green light' : 'Limited'}</Tag>}
                 <Ovr v={pl.ovr} size="sm" />
               </div>
             );

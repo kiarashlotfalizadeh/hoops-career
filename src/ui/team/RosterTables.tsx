@@ -10,7 +10,7 @@ import { CAP_FOR, contractSeason, payroll } from '../../core/league/helpers';
 import { capPayroll } from '../../core/league/freeAgency';
 import { contractExp, extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { seasonLabel } from '../../core/constants';
-import { money } from '../../core/format';
+import { injuryName, money, outFor, plural } from '../../core/format';
 import { Bar, Ovr, StatTable, pct, type Col } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { OvrKey } from '../components/OvrKey';
@@ -32,6 +32,16 @@ function nameCol<T>(player: (r: T) => Player | undefined, name: (r: T) => string
         {/* (held together at its spaces: a long name wraps only at a hyphen) */}
         <span className="n">{name(r).replace(/ /g, '\u00a0')}</span>
         {player(r) && <span className="tiny dim">{player(r)!.pos}</span>}
+        {/* hurt: marked as on the Players view, short enough for the name column (the games and injury for screen readers and a hover) */}
+        {player(r)?.injury && (
+          <span className="tm-ncell-out" title={`${injuryName(player(r)!.injury!.type)} · ${outFor(player(r)!.injury!.gamesRemaining)}`}>
+            Out
+            <span className="sr-only">
+              {' '}
+              {plural(player(r)!.injury!.gamesRemaining, 'game')}, {injuryName(player(r)!.injury!.type)}
+            </span>
+          </span>
+        )}
         {extra?.(r)}
       </span>
     ),
@@ -182,7 +192,15 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
       nameCol<ContractRow>(
         (r) => r.p,
         (r) => r.name,
-        (r) => (r.p?.contract.twoWay ? <span className="tag">2W</span> : !r.p ? <span className="tiny dim">dead money</span> : null),
+        // (between seasons, a deal that ran out with the last one: his rights, up for re-signing, as the header counts them)
+        (r) =>
+          r.p?.contract.twoWay ? (
+            <span className="tag">2W</span>
+          ) : !r.p ? (
+            <span className="tiny dim">dead money</span>
+          ) : contractExp(r.p.contract) < cs ? (
+            <span className="tiny dim">expiring</span>
+          ) : null,
       ),
       { key: 'ovr', label: 'OVR', get: (r) => r.p?.ovr ?? -1, fmt: (x, r) => (r.p ? <Ovr v={x as number} size="sm" /> : '') },
       { key: 'age', label: 'Age', get: (r) => (r.p ? playerAge(r.p, league.season) : -1), fmt: (x, r) => (r.p ? x : '') },
@@ -219,7 +237,15 @@ export function RosterContracts({ league, tid, roster }: { league: League; tid: 
       <StatTable rows={rows} cols={cols} rowKey={(r) => r.key} onRow={(r) => nav(`/player/${r.pid}`)} />
       <div className="tm-foot lg-legend">
         {/* the seasons after this one: this one's payroll is on the header (yours) or the bar above (theirs) */}
-        <span className="num">Committed {[1, 2, 3].map((i) => `${shortSeason(cs + i)} ${money(payroll(league, tid, cs + i))}`).join(' · ')}</span>
+        <span className="num">
+          Committed{' '}
+          {[1, 2, 3]
+            .map((i) => {
+              const amt = payroll(league, tid, cs + i);
+              return `${shortSeason(cs + i)} ${amt > 0 ? money(amt) : '—'}`;
+            })
+            .join(' · ')}
+        </span>
         <span>
           <Term id="options">PO / TO</Term> player / team option
         </span>

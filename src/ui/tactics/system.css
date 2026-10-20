@@ -6,7 +6,7 @@
   min-width: 30px;
   height: 24px;
   padding: 0 5px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-size: 15px;
@@ -20,18 +20,19 @@
   font-size: 13px;
   border-radius: 5px;
 }
+/* grades in the "how good" order (DESIGN.md), as the live game's player grades: A purple, B blue,
+   C light grey, D-F grey. A weak area is a grey, not a red: red is for losses and warnings */
 .tx-grade.good {
-  background: var(--good);
+  background: var(--tier-star);
 }
 .tx-grade.ok {
-  background: color-mix(in srgb, var(--good) 55%, var(--warn));
+  background: var(--tier-good);
 }
 .tx-grade.meh {
-  background: var(--warn);
+  background: var(--tier-low);
 }
 .tx-grade.bad {
-  background: var(--bad);
-  color: #fff;
+  background: var(--tier-bad);
 }
 .tx-sys {
   display: grid;
@@ -60,6 +61,9 @@
   min-height: 42px;
   padding: 6px var(--row-px) 2px;
   text-align: left;
+}
+.tx-q-top:active {
+  background: var(--surface);
 }
 .tx-q-n {
   font-size: 14px;
@@ -90,19 +94,21 @@
   display: block;
   height: 100%;
   border-radius: 2px;
-  transition: width 0.3s ease;
+  transition:
+    width 0.25s ease-out,
+    background-color 0.25s ease-out;
 }
 .tx-q-bar > .good {
-  background: var(--good);
+  background: var(--tier-star);
 }
 .tx-q-bar > .ok {
-  background: color-mix(in srgb, var(--good) 55%, var(--warn));
+  background: var(--tier-good);
 }
 .tx-q-bar > .meh {
-  background: var(--warn);
+  background: var(--tier-low);
 }
 .tx-q-bar > .bad {
-  background: var(--bad);
+  background: var(--tier-bad);
 }
 .tx-q-parts {
   display: flex;
@@ -146,20 +152,23 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 5px 8px;
-  border-radius: 8px;
+  gap: 4px;
+  min-width: 88px;
+  padding: 5px 8px 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background: var(--raised);
   transition: border-color 0.2s ease;
 }
 .tx-strip-q.up {
   border-color: var(--good);
-  animation: tx-flash 0.6s ease;
+  background: color-mix(in srgb, var(--good) 8%, var(--raised));
+  animation: tx-flash 0.35s ease-out;
 }
 .tx-strip-q.down {
   border-color: var(--bad);
-  animation: tx-flash 0.6s ease;
+  background: color-mix(in srgb, var(--bad) 8%, var(--raised));
+  animation: tx-flash 0.35s ease-out;
 }
 .tx-strip-n {
   font-size: 10.5px;
@@ -179,9 +188,40 @@
   font-weight: 800;
   color: var(--text-dim);
 }
+.tx-strip-rank {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+/* where it ranks: slides as a setting moves it, even when the grade holds */
+.tx-strip-bar {
+  align-self: stretch;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.tx-strip-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease-out;
+}
+.tx-strip-bar > .good {
+  background: var(--tier-star);
+}
+.tx-strip-bar > .ok {
+  background: var(--tier-good);
+}
+.tx-strip-bar > .meh {
+  background: var(--tier-low);
+}
+.tx-strip-bar > .bad {
+  background: var(--tier-bad);
+}
 @keyframes tx-flash {
   40% {
-    transform: scale(1.06);
+    transform: scale(1.05);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -213,8 +253,12 @@
 /* your five on the floor */
 .tx-floor {
   position: relative;
-  aspect-ratio: 100 / 70;
-  border-radius: 12px;
+  container-type: inline-size;
+  max-width: 600px;
+  margin-inline: auto;
+  width: 100%;
+  aspect-ratio: 100 / 84;
+  border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--line-2);
 }
@@ -238,45 +282,78 @@
   stroke: var(--accent);
   stroke-width: 0.6;
 }
+/* a name plate, centred on its spot but never past the court's edges (half a plate in from each) */
 .tx-floor-p {
+  --hh: 1.95em;
+  /* the plates grow with the court (13px on a 390px phone, 12px on a narrower one) */
+  font-size: clamp(12px, 3.65cqw, 17px);
   position: absolute;
+  left: clamp(16.5%, var(--x), 83.5%);
+  top: clamp(calc(var(--hh) + 5px), var(--y), calc(100% - var(--hh) - 5px));
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
-  max-width: 32%;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: rgba(8, 10, 14, 0.82);
+  width: max-content;
+  max-width: 33%;
+  padding: 0.3em 0.55em 0.38em;
+  border-radius: var(--radius-sm);
+  background: rgba(8, 10, 14, 0.84);
   border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   color: #fff;
   text-align: center;
+  transition:
+    transform 0.15s ease-out,
+    border-color 0.15s ease-out;
 }
+/* out of his best role: a line more, and a warning edge */
 .tx-floor-p.off {
+  --hh: 2.5em;
   border-color: var(--warn);
 }
 .tx-floor-p:active {
   transform: translate(-50%, -50%) scale(0.97);
 }
+.tx-floor-p:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+}
+@media (hover: hover) {
+  .tx-floor-p:hover {
+    border-color: rgba(255, 255, 255, 0.4);
+  }
+  .tx-floor-p.off:hover {
+    border-color: var(--warn);
+  }
+}
+/* the name in the narrow cut, so a long one fits the plate whole */
 .tx-floor-n {
-  font-size: 13px;
+  font-size: 1em;
   font-weight: 750;
+  font-stretch: 72%;
+  line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
 .tx-floor-r {
-  font-size: 9.5px;
+  font-size: 0.73em;
   font-weight: 750;
-  letter-spacing: 0.04em;
+  font-stretch: 82%;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
   color: #cfd6e0;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .tx-floor-s {
-  font-size: 10px;
+  font-size: 0.77em;
+  line-height: 1.2;
   letter-spacing: 1px;
   color: #ffc23d;
 }
@@ -284,9 +361,12 @@
   color: rgba(255, 255, 255, 0.25);
 }
 .tx-floor-best {
-  font-size: 9.5px;
+  font-size: 0.73em;
   color: #ffd68a;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .tm-role-stars {
   margin-left: auto;

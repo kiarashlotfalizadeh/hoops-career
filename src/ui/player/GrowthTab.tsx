@@ -23,7 +23,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
           ) : (
             <div className="small dim">
               {/* (his OVR and potential are on the slab and under Outlook: not a third time here) */}
-              The chart starts once this season ends.
+              The chart starts next preseason, once a summer&apos;s development is in.
             </div>
           )}
         </div>

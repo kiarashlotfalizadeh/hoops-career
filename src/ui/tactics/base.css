@@ -160,6 +160,18 @@
 .tx-fieldset {
   display: contents;
 }
+/* a level takes the tap at once: it gives under the finger and the fill slides along the scale */
+.tx-fieldset .levels-row button {
+  transition:
+    background-color 0.15s ease-out,
+    border-color 0.15s ease-out,
+    color 0.15s ease-out,
+    transform 0.1s ease-out;
+}
+.tx-fieldset .levels-row button:not(.on):not(:disabled):active {
+  transform: scale(0.97);
+  background: var(--surface);
+}
 /* the six sections as a three-by-two switch: every one in view, none cut off on a phone */
 .tx-tabs .seg {
   display: grid;
@@ -169,6 +181,12 @@
   min-width: 0;
   height: 32px;
   padding: 0 6px;
+}
+/* room for all six on one line: a tablet, a phone held sideways */
+@media (min-width: 640px) {
+  .tx-tabs .seg {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
 }
 /* how teams see you: the rank grid, the play types, what they'll attack */
 .tx-seen {
@@ -208,4 +226,37 @@
 }
 .tx-bullets.good li::before {
   background: var(--good);
+}
+/* Players: a role's line with his shot freedom (and an injury) as small tags after it */
+.tx-rolemeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tx-rolemeta > .ellipsis {
+  min-width: 0;
+}
+.tx-rolemeta > .tag {
+  flex: none;
+  height: 18px;
+  padding: 0 6px;
+  font-size: 9.5px;
+}
+/* the tabs' tappable rows press and hover as a shared list row does */
+.tx-opt,
+.tx-pickrow,
+.tx-preset-pick,
+.tx-set-pick,
+.tx-q-top {
+  transition: background var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tx-opt:not(.on):hover,
+  .tx-pickrow:hover,
+  .tx-preset-pick:hover,
+  .tx-set-pick:not(:disabled):hover,
+  .tx-q-top:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }

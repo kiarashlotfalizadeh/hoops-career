@@ -17,7 +17,7 @@ import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/sy
 import { Segmented } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
 import { useQueryParam } from '../league/shared';
-import { visitStart } from '../tactics/edit';
+import { tacticsSig, visitStart } from '../tactics/edit';
 import { SystemTab } from '../tactics/SystemTab';
 import { GradeStrip } from '../tactics/SystemReport';
 import { OffenseTab } from '../tactics/OffenseTab';
@@ -49,7 +49,7 @@ export default function Tactics() {
   // a sim hands back a new league (where the assistant may have refit a playbook he manages): a new starting point
   const [start, setStart] = useState(() => visitStart(league));
   if (start.of !== league) setStart(visitStart(league));
-  const changed = start.sig !== JSON.stringify(t);
+  const changed = start.sig !== tacticsSig(t);
   // a Play-menu sim's progress bar takes the same spot as the changes dock
   const simming = useStore((s) => !!s.sim);
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
@@ -58,7 +58,7 @@ export default function Tactics() {
 
   // the system report now and as this visit found it (the other teams' systems worked out once)
   const base = useLeagueMemo(() => systemReport(league, league.userTid, start.tactics), [league, start]);
-  const sig = JSON.stringify(t);
+  const sig = tacticsSig(t);
   const report = useMemo(() => (changed ? systemReport(league, league.userTid, t, base.others) : base), [changed, sig, base, league]); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = changed ? gradeChanges(base, report) : [];
 

@@ -38,7 +38,8 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
     if (p.contract.tenDay) return { main: `${money(salaryFor(p, s), 2)}`, sub: '10-day contract' };
     return {
       main: `${money(salaryFor(p, s))} · ${yrs(exp - s + 1)}`,
-      sub: p.contract.twoWay ? 'Two-way deal' : `through ${shortSeason(exp)}${opt ? ` · ${opt} option` : ''}`,
+      // when it ends as every desk says it ("thru 30-31 · player option", "expiring")
+      sub: p.contract.twoWay ? 'Two-way deal' : exp <= s ? 'expiring' : `thru ${shortSeason(exp)}${opt ? ` · ${opt} option` : ''}`,
     };
   }
   if (p.tid === FREE_AGENT) {
@@ -107,14 +108,16 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
           {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)}
         </span>
       </div>
-      <span className="tag cmp-tag" title={p.archetype}>
-        {p.archetype}
-      </span>
-      {p.injury && (
-        <span className="tag bad cmp-tag">
-          {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
+      <div className="cmp-tags">
+        <span className="tag cmp-tag" title={p.archetype}>
+          {p.archetype}
         </span>
-      )}
+        {p.injury && (
+          <span className="tag bad cmp-tag">
+            {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
+          </span>
+        )}
+      </div>
       <div className="cmp-deal">
         <div className="cmp-deal-m num">{deal.main}</div>
         {deal.sub && <div className="cmp-deal-s">{deal.sub}</div>}
