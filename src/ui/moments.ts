@@ -5,7 +5,7 @@
 import type { League, Player } from '../core/types';
 import { confStandings } from '../core/league/standings';
 import { seasonLabel } from '../core/constants';
-import { money } from '../core/format';
+import { money, plural } from '../core/format';
 
 export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award';
 
@@ -25,7 +25,7 @@ export interface Moment {
 }
 
 const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
-const NEXT = ['', 'Conference semifinals', 'Conference finals', 'NBA Finals'];
+const NEXT = ['', 'the conference semifinals', 'the conference finals', 'the NBA Finals'];
 
 /** A free agent this good (OVR) or this expensive (share of the cap, in $K) makes his signing a moment. */
 export const BIG_SIGNING_OVR = 80;
@@ -82,7 +82,7 @@ export function currentMoments(league: League): Moment[] {
         kind: 'series',
         over: `${seasonLabel(season)} · ${ROUND[s.round] ?? 'Playoffs'}`,
         title: 'Series won',
-        sub: `${w}-${l} over the ${opp?.name ?? 'other side'}. Next: ${NEXT[s.round] ?? 'the next round'}.`,
+        sub: `${w}-${l} over the ${opp?.name ?? 'other side'}. Next up: ${NEXT[s.round] ?? 'the next round'}.`,
       });
   }
 
@@ -128,7 +128,7 @@ export function currentMoments(league: League): Moment[] {
         kind: 'signing',
         over: `${seasonLabel(season)} · Free agency`,
         title: 'Signed',
-        sub: [name(p, t.name), t.years ? `${t.years} year${t.years > 1 ? 's' : ''}` : '', perYear].filter(Boolean).join(' · '),
+        sub: [name(p, t.name), t.years ? plural(t.years, 'year') : '', perYear].filter(Boolean).join(' · '),
         pid: t.pid,
       });
     }

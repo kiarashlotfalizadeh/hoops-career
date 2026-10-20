@@ -62,9 +62,21 @@
   --team-ink: #ffffff;
   --team-text: #8fb1ff;
   --team-slab: #18366f;
-  --radius: 12px;
+  /* corners, one scale: tags and compact buttons (xs), small controls and rows (sm), buttons and
+     inputs (md), cards and panels (--radius), floating bars (lg), sheets (xl) */
+  --radius-xs: 6px;
   --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  /* depth: a panel over the page (toasts, docks), a bar floating over the tab bar */
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-float: 0 10px 28px rgba(0, 0, 0, 0.55);
+  /* motion: quick and deliberate, easing out */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 0.15s;
+  --dur: 0.22s;
   --font: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --display: 'Archivo Variable', system-ui, sans-serif;
   /* widths of the one family: text, labels, display */
@@ -115,6 +127,8 @@ body,
 
 html {
   background: var(--bg);
+  /* a desktop scrollbar keeps its room while a sheet locks the page: nothing shifts sideways */
+  scrollbar-gutter: stable;
 }
 body {
   background: transparent;

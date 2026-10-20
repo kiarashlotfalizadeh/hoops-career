@@ -59,7 +59,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 10px 10px 13px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--raised);
   border: 1px solid var(--line);
   box-shadow: inset 3px 0 0 var(--tone);
@@ -129,7 +129,7 @@
   margin: -4px -4px 0 0;
   display: grid;
   place-items: center;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   color: var(--text-dim);
 }
 .lv-note-x::after {

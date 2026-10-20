@@ -73,3 +73,10 @@
 .qs-alt {
   margin-right: 6px;
 }
+.qs-main:active {
+  background: var(--surface);
+}
+.qs-row,
+.qs-main {
+  border-radius: var(--radius-sm);
+}

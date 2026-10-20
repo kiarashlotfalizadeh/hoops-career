@@ -1,8 +1,11 @@
 import { Suspense, useCallback, useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { HashRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import {
+  AlertCircle,
   AlertTriangle,
   Bell,
+  CheckCircle2,
+  Info,
   Briefcase,
   CalendarDays,
   ChevronRight,
@@ -143,13 +146,21 @@ function Boot({ children }: { children: ReactNode }) {
       </main>
     );
   }
-  if (!ready)
-    return (
-      <div className="empty" style={{ marginTop: '40vh' }}>
-        Loading…{blocked && <div className="small">{BLOCKED}</div>}
-      </div>
-    );
+  if (!ready) return <Waiting note={blocked ? BLOCKED : undefined} />;
   return <>{children}</>;
+}
+
+/**
+ * While a screen's code or the league loads: nothing for a moment (most loads are quicker than a
+ * flash), then a calm spinner where the screen will be.
+ */
+function Waiting({ note }: { note?: ReactNode }) {
+  return (
+    <div className="page-wait" role="status" aria-label="Loading">
+      <Spinner />
+      {note && <div className="small dim">{note}</div>}
+    </div>
+  );
 }
 
 const statusLines = new WeakMap<League, { key: string; value: string }>();
@@ -187,6 +198,7 @@ function statusLine(league: League): string {
 function TopBar() {
   const league = useLeague();
   const nav = useNavigate();
+  const { pathname } = useLocation();
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
   const unread = league.inbox.filter((m) => !m.read).length;
@@ -227,7 +239,13 @@ function TopBar() {
         <div className="grow" />
         {/* god mode on: the editor is a tap away, and the wand says it's on */}
         {league.settings.godMode && (
-          <button className="iconbtn god-wand" style={{ color: 'var(--warn)' }} onClick={() => nav('/god')} aria-label="God mode editor">
+          <button
+            className="iconbtn god-wand"
+            style={{ color: 'var(--warn)' }}
+            onClick={() => nav('/god')}
+            aria-label="God mode editor"
+            aria-current={pathname === '/god' ? 'page' : undefined}
+          >
             <Wand2 size={20} />
           </button>
         )}
@@ -235,12 +253,12 @@ function TopBar() {
           <Search size={20} />
         </button>
         {/* named by the badge it shows, then the rest: "9+ unread (52). Inbox" */}
-        <button className="iconbtn" onClick={() => nav('/inbox')}>
+        <button className="iconbtn" onClick={() => nav('/inbox')} aria-current={pathname.startsWith('/inbox') ? 'page' : undefined}>
           <Bell size={20} aria-hidden="true" />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
           <span className="sr-only">{unread > 9 ? ` unread (${unread}). Inbox` : unread > 0 ? ' unread. Inbox' : 'Inbox'}</span>
         </button>
-        <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings">
+        <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings" aria-current={pathname === '/settings' ? 'page' : undefined}>
           <SettingsIcon size={20} />
         </button>
       </div>
@@ -328,8 +346,12 @@ function ContinueBar() {
             <div className="continue-busy">
               <Spinner />
               <div className="grow">
-                <span className="cg-label">{sim.label}…</span>
-                {steps && <span className="cg-sub num">Day {sim.done}</span>}
+                <span className="cg-label ellipsis">{sim.label}…</span>
+                {steps && (
+                  <span className="cg-sub num">
+                    Day {Math.max(1, sim.done)} of {sim.total}
+                  </span>
+                )}
               </div>
             </div>
             {/* one-shot jobs (new season, free agency) can't be stopped midway: they show as busy */}
@@ -441,21 +463,48 @@ function SaveBanner() {
   );
 }
 
+/** At most this many toasts show at once: the newest, nearest the Continue bar. */
+const MAX_TOASTS = 2;
+const TOAST_ICON = { good: CheckCircle2, bad: AlertCircle, neutral: Info } as const;
+
+/**
+ * Short notes on what just happened. A sim or a phase change starting makes the ones before it stale
+ * (the season opener's note on Nov 26), so they go; a tap dismisses one (or opens its link).
+ */
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
+  const simming = useStore((s) => !!s.sim);
+  // the newest toast id when the latest sim started: anything up to it is about the league before
+  const [staleTo, setStaleTo] = useState(0);
+  const [wasSimming, setWasSimming] = useState(false);
+  if (simming !== wasSimming) {
+    setWasSimming(simming);
+    if (simming) setStaleTo(Math.max(0, ...useStore.getState().toasts.map((t) => t.id)));
+  }
+  const dismiss = (id: number) => useStore.setState((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) }));
+  const shown = toasts.filter((t) => t.id > staleTo).slice(-MAX_TOASTS);
   return (
     <div className="toasts" role="status" aria-live="polite">
-      {toasts.map((t) =>
-        t.link ? (
-          <Link key={t.id} to={t.link} className={`toast ${t.tone} has-link`}>
-            {t.text} <ChevronRight size={15} aria-hidden="true" />
+      {shown.map((t) => {
+        const Icon = TOAST_ICON[t.tone];
+        const body = (
+          <>
+            <Icon size={18} className="toast-ic" aria-hidden="true" />
+            <span className="toast-t">{t.text}</span>
+          </>
+        );
+        return t.link ? (
+          <Link key={t.id} to={t.link} className={`toast ${t.tone} has-link`} onClick={() => dismiss(t.id)}>
+            {body}
+            <ChevronRight size={16} className="toast-go" aria-hidden="true" />
           </Link>
         ) : (
-          <div key={t.id} className={`toast ${t.tone}`}>
-            {t.text}
+          // (screen readers hear it from the live region; the tap to dismiss is for fingers)
+          <div key={t.id} className={`toast ${t.tone}`} onClick={() => dismiss(t.id)}>
+            {body}
           </div>
-        ),
-      )}
+        );
+      })}
     </div>
   );
 }
@@ -493,7 +542,7 @@ function GameShell() {
       <TopBar />
       <SaveBanner />
       <ErrorBoundary scope="screen" key={loc.pathname} resetKey={loc.key}>
-        <Suspense fallback={<div className="empty">Loading…</div>}>
+        <Suspense fallback={<Waiting />}>
           <Routes>
             {todayRoutes}
             {teamRoutes}
@@ -518,7 +567,7 @@ export function App() {
       <ErrorBoundary>
         <ScrollTop />
         <Boot>
-          <Suspense fallback={<div className="empty">Loading…</div>}>
+          <Suspense fallback={<Waiting />}>
             <Routes>
               <Route path="/start" element={<Start />} />
               <Route path="/new" element={<NewLeague />} />

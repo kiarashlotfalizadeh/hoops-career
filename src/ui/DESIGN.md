@@ -88,25 +88,29 @@ Rules that follow from it:
 
 ## Tokens (theme.css `:root`)
 
-| Token                                           | Use                                                               |
-| ----------------------------------------------- | ----------------------------------------------------------------- |
-| `--bg` `--bg-2`                                 | page ground; sheets, table heads, field grounds                   |
-| `--raised`                                      | cards, tables, list grounds                                       |
-| `--surface` `--surface-2` `--surface-3`         | pressed rows, buttons, chips on, tracks                           |
-| `--line` `--line-2` `--line-3`                  | hairlines: between rows / around controls / strong                |
-| `--text` `--text-2` `--text-dim`                | primary / secondary / labels and meta (all 4.5:1 on every ground) |
-| `--accent` `--accent-text` `--accent-ink`       | brand fill / brand text and links / ink on brand fills            |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips)                         |
-| `--tier-*`                                      | OVR badge tiers (via `ovrColor`)                                  |
-| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                       |
-| `--display-w` `--text-w`                        | the font's width axis for display (68%) and text (90%)            |
-| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                 |
-| `--gap-page` `--gap-sec` `--pad-card`           | density: between sections (12), heading to content (8), in a card |
-| `--row-min` `--row-py` `--row-px`               | a list row: 48px tall at least, its padding                       |
-| `--cell-py` `--cell-px`                         | a stat table's cell padding                                       |
+| Token                                           | Use                                                                                                                                                           |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bg` `--bg-2`                                 | page ground; sheets, table heads, field grounds                                                                                                               |
+| `--raised`                                      | cards, tables, list grounds                                                                                                                                   |
+| `--surface` `--surface-2` `--surface-3`         | pressed rows, buttons, chips on, tracks                                                                                                                       |
+| `--line` `--line-2` `--line-3`                  | hairlines: between rows / around controls / strong                                                                                                            |
+| `--text` `--text-2` `--text-dim`                | primary / secondary / labels and meta (all 4.5:1 on every ground)                                                                                             |
+| `--accent` `--accent-text` `--accent-ink`       | brand fill / brand text and links / ink on brand fills                                                                                                        |
+| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips)                                                                                                                     |
+| `--tier-*`                                      | OVR badge tiers (via `ovrColor`)                                                                                                                              |
+| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                   |
+| `--display-w` `--text-w`                        | the font's width axis for display (68%) and text (90%)                                                                                                        |
+| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                             |
+| `--gap-page` `--gap-sec` `--pad-card`           | density: between sections (12), heading to content (8), in a card                                                                                             |
+| `--row-min` `--row-py` `--row-px`               | a list row: 48px tall at least, its padding                                                                                                                   |
+| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                   |
+| `--radius-xs` … `--radius-xl`                   | corners: xs 6 tags/compact buttons, sm 8 small controls and rows, md 10 buttons and inputs, `--radius` 12 cards and panels, lg 14 floating bars, xl 22 sheets |
+| `--shadow` `--shadow-float`                     | a panel over the page (toasts, docks); a bar floating over the tab bar                                                                                        |
+| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                          |
 
-Don't hard-code colours or spacing that exist as tokens: screens read the density tokens so they
-tighten (or loosen) together.
+Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
+tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the
+box's corner is the control's plus the padding: `.seg`).
 
 Figures are written by `src/core/format.ts`, the same way on every screen and in every message:
 `money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums, two-ways and
@@ -189,7 +193,11 @@ One family, Archivo (variable width). Whenever you set `font-family: var(--displ
   it means. `GlossarySheet` is the whole list. Use `Term` the first time a screen shows jargon.
 - `AgendaList` / `AgendaRow` (`components/Agenda.tsx`): decisions with their actions in reach.
 - `AssistantCards` (`components/Assistant.tsx`): the staff's advice for an area, with one-tap fixes.
-- `Sheet`: bottom sheet (dialog on tablets). Title in `h2`.
+- `Sheet`: bottom sheet (dialog on tablets). Title in `h2`. It locks the page behind it and slides out
+  on close; its content must not assume the sheet unmounts the instant `open` turns false. A sheet
+  that filters a list as you type gives its box `.sheet-filter`, so it keeps its height.
+- A first-run or setup flow (New League) keeps its step's call to action in a sticky foot
+  (`.nl-cta`) so a long grid never hides it.
 - `.dockbar`: a screen's own fixed action bar over the tab bar; the Continue bar steps aside for it.
 - The Continue bar (App.tsx) names the next step and runs it. A required agenda item takes its place
   and opens in a sheet to be settled. On the screen the next step names, it shrinks to its options.
@@ -274,7 +282,17 @@ Broadcast first: the court is always the biggest thing on screen.
 ## Motion
 
 - Screens fade in (opacity only: a transform would trap fixed docks). Sheets and the Continue bar
-  slide up; toasts drop in. Press states scale to 0.97.
+  slide up; a sheet slides back down when it closes (showing what it showed while open), and a drag
+  let go short of closing settles back. Press states scale to 0.97 (buttons, team tiles) or darken
+  (rows, chips, segments, icon buttons); a mouse gets a hover state too (`(hover: hover)` only, never
+  something a touch needs).
+- **Toasts** rise above the Continue bar (over a sheet: at the top, clear of its buttons), at most two
+  at once, one width, an icon for their tone. A tap dismisses one or opens its link. A sim or a phase
+  change starting clears the ones before it: a toast is about the league as it was.
+- **Loading**: nothing for 300ms, then a spinner fades in where the screen will be (`Waiting` in
+  App.tsx). Never a "Loading…" line that flashes on every lazy screen.
+- While a sim runs, the Continue bar fills from the left with a brand edge along its foot and says
+  "Day n of N"; a one-shot job (a new season, free agency) shows a sweeping glow instead.
 - Figures in a `Statline` count up when a screen opens (`CountUp`), once.
 - Big moments get a full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once,
   after a sim and outside the live game.

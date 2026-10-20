@@ -61,7 +61,7 @@
   gap: 10px;
   min-height: 40px;
   padding: 4px 8px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
 }
 .ok-ladder li + li {
   border-top: 1px solid var(--line);

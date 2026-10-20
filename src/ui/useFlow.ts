@@ -50,7 +50,7 @@ export function useFlowRunner() {
         if (!r) return;
         const errs = r.errors ?? [];
         if (errs.length) st.toast(errs[0], 'bad');
-        else st.toast('The regular season has begun!', 'good');
+        else st.toast('The regular season is under way.', 'good');
         return;
       }
       case 'startDraft':
@@ -79,7 +79,8 @@ export function useFlowRunner() {
           nav('/office/free-agents');
           return;
         }
-        if (done) st.toast(`Welcome to the ${seasonLabel(useStore.getState().league!.season)} season. Check the training camp report in your inbox.`, 'good');
+        // (the camp report is a tap away)
+        if (done) st.toast(`The ${seasonLabel(useStore.getState().league!.season)} season is here · Training camp report`, 'good', '/inbox');
         nav('/');
         return;
       }

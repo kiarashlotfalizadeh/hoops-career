@@ -7,6 +7,7 @@ import { exportLeague } from '../../state/backup';
 import { ImportButton } from '../components/ImportButton';
 import type { Settings as GameSettings } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
+import { plural } from '../../core/format';
 import { deleteLeague } from '../../state/persistence';
 import { seasonsInCharge } from '../../core/league/owner';
 import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
@@ -22,7 +23,6 @@ import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../se
 import './settings.css';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
 export default function Settings() {
   const league = useLeague();
@@ -263,7 +263,7 @@ export default function Settings() {
             </button>
           ) : null}
           <div className="set-about">
-            <BrandMark size={34} />
+            <BrandMark size={20} />
             <div className="grow">
               <div className="set-link-t">Hoops Career</div>
               {/* a build hash keeps its own case */}

@@ -195,9 +195,11 @@ export default function NewLeague() {
               in the engine.
             </p>
           </More>
-          <button className="btn primary big block" disabled={kind === 'real' && !seed} onClick={() => setStep('team')}>
-            Choose your team
-          </button>
+          <div className="nl-cta">
+            <button className="btn primary big block" disabled={kind === 'real' && !seed} onClick={() => setStep('team')}>
+              Choose your team
+            </button>
+          </div>
         </>
       )}
 
@@ -259,9 +261,12 @@ export default function NewLeague() {
               )}
             </section>
           )}
-          <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
-            {f ? `Take over the ${f.name}` : 'Pick a team'}
-          </button>
+          {/* in reach while the grid scrolls: the pick shows on the button */}
+          <div className="nl-cta">
+            <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
+              {f ? `Take over the ${f.name}` : 'Pick a team'}
+            </button>
+          </div>
         </>
       )}
 
@@ -313,12 +318,14 @@ export default function NewLeague() {
             </div>
           </Section>
           {/* a reload on this step starts over as a real league: wait for its rosters rather than silently make a fictional one */}
-          <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
-            {busy ? <Spinner /> : null} Start career
-          </button>
-          {kind === 'real' && seedLoaded && !seed && (
-            <div className="small warn">The real rosters couldn't load. Check your connection and open New League again, or go back and pick a fictional league.</div>
-          )}
+          <div className="nl-cta">
+            {kind === 'real' && seedLoaded && !seed && (
+              <div className="small warn">The real rosters couldn't load. Check your connection and open New League again, or go back and pick a fictional league.</div>
+            )}
+            <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
+              {busy ? <Spinner /> : null} {busy ? 'Building the league…' : 'Start career'}
+            </button>
+          </div>
         </>
       )}
       <UnsavedSheet

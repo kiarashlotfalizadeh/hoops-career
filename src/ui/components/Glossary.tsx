@@ -19,7 +19,7 @@ export function Term({ id, children }: { id: string; children?: ReactNode }) {
         {children ?? e.term}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={e.term}>
-        <p className="help-body" style={{ color: 'var(--text-2)' }}>
+        <p className="help-body" style={{ color: 'var(--text-2)', margin: 0 }}>
           {e.text}
         </p>
       </Sheet>
@@ -37,7 +37,14 @@ export function GlossarySheet({ open, onClose }: { open: boolean; onClose: () =>
   }, [q]);
   return (
     <Sheet open={open} onClose={onClose} title="Glossary">
-      <input className="input" type="search" placeholder="Search: drop, MLE, eFG..." value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search the glossary" />
+      <input
+        className="input sheet-filter"
+        type="search"
+        placeholder="Search: drop, MLE, eFG..."
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        aria-label="Search the glossary"
+      />
       <div className="col" style={{ gap: 14, marginTop: 12 }}>
         {GROUPS.map((grp) => {
           const rows = hits.filter((g) => g.group === grp);

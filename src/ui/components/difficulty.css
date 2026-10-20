@@ -39,7 +39,7 @@
 .dif-opt {
   width: 100%;
   min-height: 46px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   text-align: left;
   color: var(--text-2);
   transition: background 0.15s ease;

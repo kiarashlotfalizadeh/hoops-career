@@ -7,7 +7,7 @@
   gap: 8px;
   height: 44px;
   padding: 0 16px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface-2);
   border: 1px solid var(--line-2);
   color: var(--text);
@@ -16,11 +16,12 @@
   white-space: nowrap;
   transition:
     transform 0.08s ease,
-    background 0.15s ease,
-    border-color 0.15s ease;
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
 }
 .btn:active {
   transform: scale(0.97);
+  background: var(--surface-3);
 }
 .btn:disabled {
   opacity: 0.42;
@@ -38,6 +39,9 @@
   background: transparent;
   border-color: var(--line-2);
 }
+.btn.ghost:active {
+  background: var(--surface);
+}
 .btn.danger {
   background: color-mix(in srgb, var(--bad) 12%, var(--surface));
   border-color: color-mix(in srgb, var(--bad) 42%, transparent);
@@ -51,14 +55,14 @@
   height: 34px;
   padding: 0 12px;
   font-size: 13px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
 }
 .btn.xs {
   position: relative;
   height: 28px;
   padding: 0 10px;
   font-size: 12px;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
 }
 .btn.xs::after {
   content: '';
@@ -86,7 +90,8 @@
   display: flex;
   background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 11px;
+  /* concentric with its options: their corner plus the 3px inset */
+  border-radius: calc(var(--radius-sm) + 3px);
   padding: 3px;
   gap: 2px;
   overflow-x: auto;
@@ -99,14 +104,18 @@
   flex: 1;
   height: 34px;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 700;
   color: var(--text-dim);
   white-space: nowrap;
   transition:
-    background 0.15s ease,
-    color 0.15s ease;
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.seg button:not(.on):active {
+  background: var(--surface);
+  color: var(--text-2);
 }
 .seg button.on {
   background: var(--surface-3);
@@ -139,6 +148,10 @@
   box-shadow: none;
   color: var(--text);
 }
+.seg.tabs button:not(.on):active {
+  background: none;
+  color: var(--text);
+}
 .seg.tabs button.on::before {
   content: '';
   position: absolute;
@@ -167,6 +180,14 @@
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
+.chip:not(.on):active {
+  background: var(--surface);
+  color: var(--text);
 }
 .chip.on {
   border-color: var(--accent);
@@ -228,4 +249,27 @@
 .tag.brand {
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent-text);
+}
+
+/* a mouse or trackpad: controls answer the pointer before the press */
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(:disabled):hover {
+    border-color: var(--line-3);
+  }
+  .btn:not(.primary, .danger, .good):not(:disabled):hover {
+    background: var(--surface-3);
+  }
+  .btn.ghost:not(:disabled):hover {
+    background: var(--surface);
+  }
+  .btn.primary:not(:disabled):hover {
+    background: color-mix(in srgb, var(--accent) 92%, #fff);
+  }
+  .seg button:not(.on):not(:disabled):hover,
+  .chip:not(.on):not(:disabled):hover {
+    color: var(--text);
+  }
+  .chip:not(.on):not(:disabled):hover {
+    border-color: var(--line-3);
+  }
 }

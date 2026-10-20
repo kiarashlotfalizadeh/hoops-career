@@ -360,6 +360,9 @@ export function Bar({ value, max = 100, color, height = 6 }: { value: number; ma
   );
 }
 
+/** How long a closing sheet takes to slide out (overlays.css `.sheet.closing`). */
+const SHEET_OUT_MS = 180;
+
 /** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). */
 const openSheets: object[] = [];
 
@@ -385,6 +388,28 @@ export function Sheet({
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const [drag, setDrag] = useState(0);
+  // closing plays a short slide out: the sheet stays on the page that long, showing what it showed
+  // when it was last open (whatever it showed may be gone by then: a deleted league's name)
+  const [mounted, setMounted] = useState(open);
+  const [closing, setClosing] = useState(false);
+  const kept = useRef<{ children: ReactNode; title: ReactNode }>({ children, title });
+  if (open) kept.current = { children, title };
+  if (open && (!mounted || closing)) {
+    setMounted(true);
+    setClosing(false);
+  } else if (!open && mounted && !closing) setClosing(true);
+  useEffect(() => {
+    if (!closing) return;
+    const t = setTimeout(
+      () => {
+        setMounted(false);
+        setClosing(false);
+        setDrag(0);
+      },
+      reducedMotion() ? 0 : SHEET_OUT_MS,
+    );
+    return () => clearTimeout(t);
+  }, [closing]);
   const start = useRef<{ x: number; y: number; locked: boolean } | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
@@ -422,10 +447,8 @@ export function Sheet({
       prev?.focus?.({ preventScroll: true });
     };
   }, [open]);
-  useEffect(() => {
-    if (!open) setDrag(0);
-  }, [open]);
-  if (!open) return null;
+  if (!mounted) return null;
+  const shown = open ? { children, title } : kept.current;
   // swipe down from the top of the sheet to dismiss; sliders, tables and scrollers keep their own drags,
   // and a sheet opened from this one (its touches bubble up the React tree) drags itself, not this one
   const onTouchStart = (e: React.TouchEvent) => {
@@ -450,35 +473,38 @@ export function Sheet({
     setDrag(Math.max(0, dy));
   };
   const onTouchEnd = () => {
+    // (the closing slide carries on from where the finger let go)
     if (drag > 90) onClose();
     else setDrag(0);
     start.current = null;
   };
+  const dragging = drag > 0 && !closing && !!start.current;
   return createPortal(
     <>
-      <div className="sheet-backdrop" onClick={onClose} />
+      <div className={`sheet-backdrop ${closing ? 'closing' : ''}`} onClick={closing ? undefined : onClose} />
       <div
         ref={ref}
-        className="sheet"
+        className={`sheet ${closing ? 'closing' : ''}`}
         role="dialog"
-        aria-modal="true"
-        aria-labelledby={title ? titleId : undefined}
-        aria-label={title ? undefined : (label ?? 'Dialog')}
+        aria-modal={closing ? undefined : true}
+        aria-hidden={closing || undefined}
+        aria-labelledby={shown.title ? titleId : undefined}
+        aria-label={shown.title ? undefined : (label ?? 'Dialog')}
         tabIndex={-1}
-        style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
+        style={drag ? { transform: `translateY(${drag}px)`, transition: dragging ? 'none' : undefined } : undefined}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onTouchCancel={onTouchEnd}
       >
-        <div className="sheet-grip" />
-        <div className={`sheet-head ${title ? '' : 'bare'}`}>
-          {title ? <h2 id={titleId}>{title}</h2> : <span />}
-          <button className="iconbtn sheet-close" onClick={onClose} aria-label="Close">
+        <div className="sheet-grip" aria-hidden="true" />
+        <div className={`sheet-head ${shown.title ? '' : 'bare'}`}>
+          {shown.title ? <h2 id={titleId}>{shown.title}</h2> : <span />}
+          <button className="iconbtn sheet-close" onClick={onClose} aria-label="Close" tabIndex={closing ? -1 : undefined}>
             <X size={20} />
           </button>
         </div>
-        {children}
+        {shown.children}
       </div>
     </>,
     document.body,

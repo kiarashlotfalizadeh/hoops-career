@@ -85,7 +85,7 @@ export default function Start() {
   const others = leagues?.filter((m) => m !== latest) ?? [];
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
-    <main className="page standalone st-page">
+    <main className="page standalone st-page st-menu">
       <header className="st-hero">
         <BrandMark size={104} />
         <h1 className="st-word">Hoops Career</h1>

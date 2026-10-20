@@ -188,3 +188,19 @@ button.card:disabled {
   color: var(--text-dim);
   margin-top: 2px;
 }
+
+/* a mouse: rows and cards that go somewhere light up before the press */
+.listrow.clickable,
+.card.clickable {
+  transition:
+    background var(--dur-fast) ease,
+    transform 0.08s ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .listrow.clickable:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+  .card.clickable:hover {
+    border-color: var(--line-2);
+  }
+}

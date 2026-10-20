@@ -50,15 +50,38 @@
 .iconbtn {
   width: 42px;
   height: 42px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   display: grid;
   place-items: center;
   color: var(--text-2);
   position: relative;
   flex: none;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
 .iconbtn:active {
   background: var(--surface-2);
+  color: var(--text);
+}
+/* the top bar's own screens (search's sheet, the inbox, settings) light their button while open */
+.topbar .iconbtn[aria-current='page'] {
+  color: var(--accent-text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .iconbtn:not(:disabled):hover {
+    background: var(--surface);
+    color: var(--text);
+  }
+  .navitem:not(.active):hover {
+    color: var(--text-2);
+  }
+}
+.topbar .tb-team {
+  border-radius: var(--radius);
+}
+.topbar .tb-team:active {
+  opacity: 0.75;
 }
 .iconbtn:disabled {
   opacity: 0.35;
@@ -117,8 +140,14 @@
   text-transform: uppercase;
   position: relative;
 }
+.navitem {
+  transition: color var(--dur-fast) ease;
+}
 .navitem svg {
   transition: transform 0.18s ease;
+}
+.navitem:active svg {
+  transform: scale(0.9);
 }
 .navitem.active {
   color: var(--text);
@@ -148,7 +177,8 @@
   z-index: 45;
   display: flex;
   justify-content: flex-end;
-  padding: 0 var(--gut-r) 0 var(--gut-l);
+  /* its right edge lines up with the page column's on a wide screen */
+  padding: 0 max(var(--gut-r), calc((100% - 788px) / 2)) 0 var(--gut-l);
   pointer-events: none;
 }
 .continue-inner {
@@ -157,15 +187,15 @@
   align-items: stretch;
   height: var(--cont-h);
   width: min(100%, 420px);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: var(--accent);
   color: var(--accent-ink);
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.55),
+    var(--shadow-float),
     0 0 0 1px rgba(255, 255, 255, 0.08) inset;
   overflow: hidden;
   position: relative;
-  animation: cont-in 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: cont-in 0.26s var(--ease-out);
 }
 @keyframes cont-in {
   from {
@@ -211,34 +241,83 @@
 }
 /* on the screen the next step names: just the options, a round button at the side */
 .continue-inner.compact {
-  width: var(--cont-h);
+  /* smaller than the bar it stands in for: the screen's own buttons lead here */
+  width: 46px;
+  height: 46px;
+  margin-top: calc(var(--cont-h) - 46px);
   border-radius: 50%;
 }
 .continue-inner.compact .continue-more {
   width: 100%;
   border-left: none;
 }
+.continue-go,
+.continue-more {
+  transition: background var(--dur-fast) ease;
+}
 .continue-go:active,
 .continue-more:active {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.12);
+}
+.continue-go:disabled {
+  cursor: default;
+}
+.continue-go:disabled .cg-label {
+  opacity: 0.7;
+}
+@media (hover: hover) and (pointer: fine) {
+  .continue-go:not(:disabled):hover,
+  .continue-more:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
 }
 .continue-inner.busy {
-  background: var(--surface-3);
+  background: var(--surface-2);
   color: var(--text);
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.55),
+    var(--shadow-float),
     0 0 0 1px var(--line-2) inset;
 }
-/* the sim's progress fills the bar from the left */
+/* the sim's progress fills the bar from the left, a brand edge along its foot */
 .continue-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: color-mix(in srgb, var(--accent) 26%, transparent);
-  transition: width 0.25s ease;
+  background: var(--surface-3);
+  box-shadow: inset 0 -3px 0 var(--accent);
+  transition: width 0.3s ease-out;
   pointer-events: none;
 }
+/* a one-shot job (a new season, free agency): no count to show, so a glow sweeps across */
 .continue-fill.pulse {
   width: 100%;
+  box-shadow: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 22%, transparent), transparent) 0 0 / 50% 100% no-repeat;
+  animation: cont-sweep 1.3s ease-in-out infinite;
+}
+@keyframes cont-sweep {
+  from {
+    background-position: -100% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.continue-busy .cg-label {
+  display: block;
+  font-family: var(--display);
+  font-stretch: 72%;
+  font-weight: 800;
+  font-size: 17px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.continue-busy .cg-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-dim);
 }
 .continue-busy {
   position: relative;
@@ -254,7 +333,7 @@
   flex: none;
   margin: 8px 8px 8px 0;
   padding: 0 14px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--line-2);
   font-weight: 700;
@@ -262,16 +341,25 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  transition: background var(--dur-fast) ease;
+}
+.continue-stop:active {
+  background: var(--surface-3);
 }
 /* the Play options sheet: one row per step, the primary one in brand */
 .flow-opt {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  /* one line or two, centred in the row */
+  align-content: center;
   column-gap: 10px;
   min-height: 56px;
   padding: 10px 12px 10px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius);
+  transition:
+    transform 0.08s ease,
+    background var(--dur-fast) ease;
   background: var(--surface);
   border: 1px solid var(--line);
   text-align: left;
@@ -312,8 +400,18 @@
 .flow-opt:active {
   transform: scale(0.99);
 }
+.flow-opt:not(.primary):active {
+  background: var(--surface-2);
+}
 .flow-opt:disabled {
   opacity: 0.5;
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .flow-opt:not(.primary):not(:disabled):hover {
+    background: var(--surface-2);
+    border-color: var(--line-2);
+  }
 }
 /* while the bar shows, the end of a page scrolls clear of it */
 body:has(.continue) .page {

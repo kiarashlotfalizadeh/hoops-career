@@ -10,6 +10,16 @@ import { Ovr, Sheet } from './ui';
 import './search.css';
 
 const KIND_LABEL: Record<SearchKind, string> = { player: 'Player', team: 'Team', screen: 'Screen', term: 'Glossary' };
+/** Before anything's been searched: the screens players reach for most, the season's own first. */
+const JUMP_TO = ['s:/league/standings', 's:/team/tactics', 's:/team/rotation', 's:/office/trade', 's:/office/free-agents', 's:/league/stats'];
+const JUMP_PHASE: Partial<Record<string, string>> = {
+  playin: 's:/league/playoffs',
+  playoffs: 's:/league/playoffs',
+  draftLottery: 's:/office/draft',
+  draft: 's:/office/draft',
+  resign: 's:/office/resign',
+  freeAgency: 's:/office/free-agents',
+};
 
 export function QuickSearch({ open, onClose }: { open: boolean; onClose: () => void }) {
   const league = useLeague();
@@ -26,7 +36,12 @@ export function QuickSearch({ open, onClose }: { open: boolean; onClose: () => v
     // read again each time it opens
     [open, league.id, byId],
   );
-  const hits = useMemo(() => (q.trim() ? search(index, q) : recent), [index, q, recent]);
+  const jump = useMemo(() => {
+    const first = JUMP_PHASE[league.phase];
+    const ids = first ? [first, ...JUMP_TO.filter((id) => id !== first)].slice(0, JUMP_TO.length) : JUMP_TO;
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }, [byId, league.phase]);
+  const hits = useMemo(() => (q.trim() ? search(index, q) : recent.length ? recent : jump), [index, q, recent, jump]);
 
   useEffect(() => {
     if (!open) return;
@@ -84,7 +99,7 @@ export function QuickSearch({ open, onClose }: { open: boolean; onClose: () => v
           aria-label="Search the league"
         />
       </div>
-      {!q.trim() && <div className="qs-over over">{recent.length ? 'Recent' : 'Type a name: "brunson", "okc", "draft", "drop"'}</div>}
+      {!q.trim() && <div className="qs-over over">{recent.length ? 'Recent' : 'Jump to'}</div>}
       <div ref={list} id="qs-results" className="qs-list" role="listbox" aria-label="Results">
         {hits.map((e, i) => (
           <div key={e.id} className="qs-item">

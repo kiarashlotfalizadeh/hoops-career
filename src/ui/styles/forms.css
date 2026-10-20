@@ -13,7 +13,7 @@
 .levels-row button {
   min-height: 44px;
   padding: 4px 2px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-2);
   background: var(--bg-2);
   font-size: 11.5px;
@@ -23,6 +23,16 @@
   text-align: center;
   hyphens: auto;
   overflow-wrap: anywhere;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    transform var(--dur-fast) var(--ease-out);
+}
+.levels-row button:active {
+  transform: scale(0.97);
+}
+.levels-row button:not(.on):active {
+  background: var(--surface-2);
 }
 .levels-row button.below {
   border-color: color-mix(in srgb, var(--accent) 26%, var(--line-2));
@@ -133,11 +143,12 @@ input[type='range']:focus-visible::-moz-range-thumb {
 .input {
   height: 46px;
   width: 100%;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background: var(--bg-2);
   padding: 0 12px;
   font-size: 16px;
+  transition: border-color var(--dur-fast) ease;
 }
 .input:focus {
   border-color: var(--accent-text);
@@ -164,7 +175,15 @@ input[type='range']:focus-visible::-moz-range-thumb {
   background: var(--text-2);
   transition:
     transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.2),
+    width 0.15s ease,
     background 0.15s;
+}
+/* pressed: the knob stretches toward where it's going */
+.toggle:not(:disabled):active::after {
+  width: 24px;
+}
+.toggle.on:not(:disabled):active::after {
+  transform: translateX(14px);
 }
 .toggle.on {
   background: var(--accent);
@@ -173,4 +192,18 @@ input[type='range']:focus-visible::-moz-range-thumb {
 .toggle.on::after {
   transform: translateX(18px);
   background: var(--accent-ink);
+}
+/* a search box's clear button: a thin cross like every other icon, not the browser's bold one */
+.input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-right: -2px;
+  cursor: pointer;
+  background: var(--text-dim);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M18 6 6 18M6 6l12 12'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }

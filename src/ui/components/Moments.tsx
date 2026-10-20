@@ -93,11 +93,6 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
   return (
     <div className={`moment ${m.kind}`} role="dialog" aria-modal="true" aria-labelledby="moment-title" style={slabVars(colors) as CSSProperties} onClick={onDone}>
       <div className="moment-bg" aria-hidden="true" />
-      <div className="moment-stripes" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
       {confetti.length > 0 && (
         <div className="moment-confetti" aria-hidden="true">
           {confetti.map((s, i) => (
@@ -106,7 +101,15 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
         </div>
       )}
       <div className="moment-body">
-        <div className="moment-mark">{p ? <Avatar p={p} size="lg" /> : <TeamLogo tid={tid} size={132} decorative />}</div>
+        {/* three slabs sweep in behind the mark, clear of the words under it on any screen */}
+        <div className="moment-hero">
+          <div className="moment-stripes" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="moment-mark">{p ? <Avatar p={p} size="lg" /> : <TeamLogo tid={tid} size={132} decorative />}</div>
+        </div>
         <div className="moment-over">{m.over}</div>
         <h2 id="moment-title" className="moment-title">
           {m.title}

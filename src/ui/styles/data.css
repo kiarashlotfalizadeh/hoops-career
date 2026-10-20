@@ -108,6 +108,21 @@ table.stats tr.me td:first-child {
 table.stats th.sorted {
   color: var(--accent-text);
 }
+/* a row that opens something (a player): pressed, it darkens like a list row (sticky cells too) */
+table.stats tr[tabindex]:active > td {
+  background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  table.stats tr[tabindex]:hover > td {
+    background: color-mix(in srgb, var(--surface) 70%, var(--raised));
+  }
+  table.stats th:has(.th-sort):hover {
+    color: var(--text-2);
+  }
+  table.stats th.sorted:hover {
+    color: var(--accent-text);
+  }
+}
 table.stats tr[tabindex]:focus-visible {
   outline: none;
 }

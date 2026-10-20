@@ -46,6 +46,7 @@
   padding-left: 0;
 }
 .statline .k {
+  max-width: 100%;
   font-size: 10.5px;
   font-weight: 750;
   font-stretch: 100%;
@@ -53,6 +54,9 @@
   text-transform: uppercase;
   color: var(--text-dim);
   white-space: nowrap;
+  /* a long label ("Owed to others") ends in an ellipsis inside its column, never past it */
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .statline .v {
   font-family: var(--display);

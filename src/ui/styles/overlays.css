@@ -8,6 +8,17 @@
   -webkit-backdrop-filter: blur(2px);
   z-index: 80;
   animation: fade 0.18s ease;
+  /* a drag on the dimmed page doesn't scroll it behind the sheet (iOS ignores the body's overflow) */
+  touch-action: none;
+}
+/* closing: the sheet slides back down and the backdrop fades, then both leave the page */
+.sheet-backdrop.closing {
+  animation: fade-out 0.18s ease forwards;
+  pointer-events: none;
+}
+.sheet.closing {
+  animation: sheet-down 0.18s ease-in forwards;
+  pointer-events: none;
 }
 .sheet {
   position: fixed;
@@ -21,12 +32,17 @@
   overscroll-behavior: contain;
   background: var(--bg-2);
   border-top: 1px solid var(--line-2);
-  border-radius: 22px 22px 0 0;
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 6px var(--gut-r) calc(22px + var(--safe-b)) var(--gut-l);
-  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: sheet-up 0.26s var(--ease-out);
   max-width: 720px;
   margin: 0 auto;
   box-shadow: 0 -20px 50px rgba(0, 0, 0, 0.5);
+  /* a drag let go short of closing settles back */
+  transition: transform 0.2s var(--ease-out);
+}
+.sheet:focus {
+  outline: none;
 }
 .sheet-head {
   display: flex;
@@ -53,8 +69,12 @@
     max-height: 82dvh;
     max-width: 560px;
     border: 1px solid var(--line-2);
-    border-radius: 20px;
+    border-radius: var(--radius-xl);
     padding-bottom: 20px;
+    animation-name: dialog-in;
+  }
+  .sheet.closing {
+    animation-name: dialog-out;
   }
   .sheet .sheet-grip {
     display: none;
@@ -73,6 +93,29 @@
     opacity: 0;
   }
 }
+@keyframes sheet-down {
+  to {
+    transform: translateY(60px);
+    opacity: 0;
+  }
+}
+@keyframes dialog-in {
+  from {
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+  }
+}
+@keyframes dialog-out {
+  to {
+    transform: scale(0.98);
+    opacity: 0;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
 @keyframes slideup {
   from {
     transform: translateY(30px);
@@ -85,10 +128,13 @@
   }
 }
 .toasts {
+  /* toasts rise above the Continue bar, beside the button that made them, and never cover the
+     screen's top (its slab). Where the bar isn't (a dock, the main menu, a sheet) they move with it */
+  --toast-b: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 18px);
   position: fixed;
   left: 0;
   right: 0;
-  top: calc(var(--top-h) + var(--safe-t) + 8px);
+  bottom: var(--toast-b);
   z-index: 90;
   display: flex;
   flex-direction: column;
@@ -97,38 +143,78 @@
   pointer-events: none;
   padding: 0 var(--gut-r) 0 var(--gut-l);
 }
+body:not(:has(.continue)) .toasts {
+  --toast-b: calc(var(--nav-h) + var(--safe-b) + 12px);
+}
+body:has(.dockbar, .fo-dock) .toasts {
+  --toast-b: calc(var(--nav-h) + var(--safe-b) + 84px);
+}
+body:not(:has(.bottomnav)) .toasts {
+  --toast-b: calc(var(--safe-b) + 16px);
+}
+/* over a sheet: at the top, clear of its buttons */
+body.sheet-open .toasts {
+  bottom: auto;
+  top: calc(var(--safe-t) + 12px);
+}
 .toast {
   pointer-events: auto;
-  max-width: 520px;
-  padding: 11px 14px 11px 12px;
-  border-radius: 12px;
+  width: min(100%, 440px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px 10px 12px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   border: 1px solid var(--line-2);
-  border-left: 3px solid var(--text-dim);
   box-shadow: var(--shadow);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
-  animation: toast-in 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+  line-height: 1.3;
+  text-align: left;
+  animation: toast-in 0.24s var(--ease-out);
+}
+.toast > .toast-t {
+  flex: 1;
+  min-width: 0;
+}
+.toast > svg {
+  flex: none;
+}
+.toast-ic {
+  color: var(--text-dim);
+}
+.toast.good .toast-ic {
+  color: var(--good);
+}
+.toast.bad .toast-ic {
+  color: var(--bad);
+}
+.toast.bad {
+  border-color: color-mix(in srgb, var(--bad) 40%, var(--line-2));
+}
+.toast-go {
+  color: var(--text-dim);
+}
+.toast:active {
+  background: var(--surface-3);
 }
 @keyframes toast-in {
   from {
-    transform: translateY(-14px);
+    transform: translateY(12px);
     opacity: 0;
   }
 }
-.toast.good {
-  border-left-color: var(--good);
+body.sheet-open .toast {
+  animation-name: toast-drop;
 }
-.toast.bad {
-  border-left-color: var(--bad);
-}
-.toast.has-link {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--text);
-  text-decoration: none;
-  min-height: 44px;
+@keyframes toast-drop {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
 }
 
 /* ------------------------------------------------------------------ docks
@@ -144,15 +230,21 @@
   margin: 0 auto;
   background: var(--surface-2);
   border: 1px solid var(--line-2);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   padding: 10px 12px;
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;
   gap: 10px;
-  animation: cont-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  animation: cont-in 0.24s var(--ease-out);
 }
 /* (a running sim's progress still shows: the docks ride above it) */
 body:has(.dockbar, .fo-dock) .continue:not(.is-busy) {
   display: none;
+}
+
+/* a sheet that filters a list as you type keeps its height: it doesn't jump with every letter */
+.sheet:has(.sheet-filter) {
+  min-height: 72vh;
+  min-height: 72dvh;
 }
