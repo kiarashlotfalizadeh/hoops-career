@@ -27,6 +27,18 @@ describe.skipIf(!real)('real-player seed', () => {
     // efficient bench bigs no longer outrank stars
     const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
     if (kessler) expect(kessler.ovr).toBeLessThan(88);
+    // a seed built with the season's EPM projection rates its rotation players by it above all
+    const projected = players.filter((p) => p.proj && p.proj.mpg >= 15);
+    if (projected.length) {
+      expect(projected.length).toBeGreaterThan(250);
+      expect(projected.every((p) => p.proj!.season === league.season)).toBe(true);
+      const x = projected.map((p) => p.ovr);
+      const y = projected.map((p) => p.proj!.epm);
+      const mean = (v: number[]) => v.reduce((a, b) => a + b, 0) / v.length;
+      const [mx, my] = [mean(x), mean(y)];
+      const r = x.reduce((a, v, i) => a + (v - mx) * (y[i] - my), 0) / Math.sqrt(x.reduce((a, v) => a + (v - mx) ** 2, 0) * y.reduce((a, v) => a + (v - my) ** 2, 0));
+      expect(r).toBeGreaterThan(0.97);
+    }
     // careers: experience never contradicts the seasons on record; an undrafted veteran with no entry class on
     // record who was already playing when the record begins isn't a third-year player (one whose class is known
     // counts from it: Gillespie, Tshiebwe and Spencer came in for 2023-24); undrafted rookies are rookies; a seed

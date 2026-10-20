@@ -245,6 +245,8 @@ export interface Player {
   highs?: Partial<Record<RecStat, HighRow>>;
   /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
   jerseys?: Record<number, string>;
+  /** Dunks & Threes' projection for the season a real league opens in (minutes a game, EPM offense, defense and total), for seeds built with it. */
+  proj?: { season: number; mpg: number; oepm: number; depm: number; epm: number };
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */

@@ -4,7 +4,8 @@
 // back to 2003-04 (careers on record, see careers.ts); the current contracts table (who plays where
 // in 2026-27 and their salaries); team roster pages (height, weight, birth date, jersey, country,
 // college, and the numbers players wore at franchises they've left); draft pages (draft slot);
-// Dunks & Threes EPM exports for the stat seasons (data/epm/, see epm.ts).
+// Dunks & Threes EPM exports for the stat seasons (data/epm/, see epm.ts), and its projection for
+// the seed season (data/epm/projection/, see epm-projection.ts).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES, FIRST_SEASON, HISTORY_SEASONS } from './sources';
@@ -38,6 +39,7 @@ import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 import { aggregateEpm, epmByBbref, epmFields, epmSourceNote, loadEpm, matchEpm, type EpmRow } from './epm';
+import { applyProjection, loadProjection } from './epm-projection';
 import { byId, formerNumbers, historyLines, loadSeasons, realLine, seedIds } from './careers';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -410,6 +412,13 @@ async function main() {
       .map((p) => `${p!.first} ${p!.last} ${p!.pos}`)
       .join(', ')}`,
   );
+
+  // the season's EPM projection: the seed's last and heaviest word (epm-projection.ts)
+  const projRows = loadProjection(SEED_SEASON);
+  if (projRows.length) {
+    const rep = applyProjection(seed, projRows);
+    console.log(`EPM projection: ${rep.matched} players; OVR vs projected EPM r ${rep.r[0].toFixed(3)} → ${rep.r[1].toFixed(3)}`);
+  }
 
   // sanity report: OVR vs real impact
   const finalScale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));

@@ -117,6 +117,12 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
           'PER and win shares come from each box score, as Basketball Reference works them (not in the playoffs).'
         )}
       </div>
+      {!po && p.proj?.season === league.season && (
+        <div className="tm-foot">
+          Projected for {seasonLabel(p.proj.season)} by Dunks & Threes: {signed(p.proj.epm)} EPM ({signed(p.proj.oepm)} offense, {signed(p.proj.depm)} defense) in{' '}
+          {Math.round(p.proj.mpg)} minutes a game. His ratings lean on it most of all.
+        </div>
+      )}
       {!po && <CareerHighs p={p} league={league} />}
     </>
   );

@@ -57,6 +57,17 @@ export interface SeedPlayer {
   injury?: SeedInjury;
   /** The number he last wore at each franchise he gave five seasons and has left, by its Basketball Reference code today. */
   jerseys?: Record<string, string>;
+  /** Dunks & Threes' projection for the season the seed opens, for seeds built with it. */
+  proj?: SeedProjection;
+}
+
+/** A projected season: minutes a game and EPM (offense, defense, total). */
+export interface SeedProjection {
+  season: number;
+  mpg: number;
+  oepm: number;
+  depm: number;
+  epm: number;
 }
 
 export interface SeedInjury {
@@ -195,6 +206,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
     ...(sp.jerseys
       ? { jerseys: Object.fromEntries(Object.entries(sp.jerseys).flatMap(([team, j]) => (BBREF_TO_TID[team] === undefined ? [] : [[BBREF_TO_TID[team], lastNumber(j)]]))) }
       : {}),
+    ...(sp.proj ? { proj: { ...sp.proj } } : {}),
     injury: null,
     injuryCount: 0,
     training: 'balanced',
