@@ -11,9 +11,23 @@ import { TeamLogo } from './TeamLogo';
 import { QuarterTable } from './gameBlocks';
 import './gameday.css';
 
-/** "NBA Cup · Final", "Playoffs", "Play-In", "Regular season". */
+/** "NBA Cup · Final", "West R1 · Game 3", "NBA Finals · Game 7", "Playoffs" (an older season's), "Play-In", "Regular season". */
 export function gameTypeLabel(league: League, g: GameResult): string {
-  return cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season }) ?? (g.type === 'playoffs' ? 'Playoffs' : g.type === 'playin' ? 'Play-In' : 'Regular season');
+  const cup = cupLabel(league, { cup: g.cup, home: g.home.tid, season: g.season });
+  if (cup) return cup;
+  if (g.type === 'playoffs') {
+    const s = g.season === league.season && g.seriesId ? league.playoffs.find((x) => x.id === g.seriesId) : undefined;
+    if (!s) return 'Playoffs';
+    // (its number in the series: the series' games up to this one)
+    const n = league.games.filter(
+      (x) => x.season === g.season && x.type === 'playoffs' && x.seriesId === g.seriesId && (x.day < g.day || (x.day === g.day && x.gid <= g.gid)),
+    ).length;
+    // (short enough to share the slab's top line with the date and the crowd on a phone)
+    const conf = s.conf === 'E' ? 'East' : 'West';
+    const round = s.round === 4 ? 'NBA Finals' : s.round === 3 ? `${conf} Finals` : s.round === 2 ? `${conf} Semis` : `${conf} R1`;
+    return `${round} · Game ${Math.max(1, n)}`;
+  }
+  return g.type === 'playin' ? 'Play-In' : 'Regular season';
 }
 
 /**

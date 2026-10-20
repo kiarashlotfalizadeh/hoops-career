@@ -283,6 +283,8 @@
 .mu-five-n {
   font-weight: 700;
   font-size: 14px;
+  line-height: 1.2;
+  overflow-wrap: break-word;
 }
 .mu-five-m {
   display: flex;

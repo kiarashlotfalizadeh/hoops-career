@@ -1,6 +1,6 @@
 import type { GameResult, League } from '../../core/types';
 import { Help, Section } from './ui';
-import { fmtClock, periodLabel } from '../stats';
+import { gameTime } from '../../core/format';
 
 /**
  * The game plan the other coach brought against you, and both coaches' in-game adjustments by
@@ -44,9 +44,7 @@ export function AdjustmentsCard({ g, league }: { g: GameResult; league: League }
               const mine = tid === league.userTid;
               return (
                 <div key={`${q}-${i}`} className="gv-adj">
-                  <span className="gv-adj-when num">
-                    {periodLabel(q)} {fmtClock(a.clock)}
-                  </span>
+                  <span className="gv-adj-when num">{gameTime(q, a.clock)}</span>
                   <span className="grow">
                     <b className={mine ? 'gv-mine' : undefined}>{mine ? 'Your staff' : league.teams[tid]?.abbrev}</b> {a.text}.
                   </span>

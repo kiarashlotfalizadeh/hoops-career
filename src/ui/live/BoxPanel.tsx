@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import type { GameType, League } from '../../core/types';
 import { GAME } from '../../core/constants';
-import { madeAtt } from '../../core/format';
+import { gameTime, madeAtt } from '../../core/format';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { Card, Chips, Section, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
-import { fmtClock, periodLabel } from '../stats';
+import { periodLabel } from '../stats';
 import { BoxScore } from '../components/BoxScore';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
@@ -297,7 +297,7 @@ function WinProbCard({
             colorOther={kits[1 - side]}
             describe={(i) => {
               const p = series[i];
-              return p.i < 0 ? 'Tip-off' : `${periodLabel(p.q)} ${fmtClock(p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
+              return p.i < 0 ? 'Tip-off' : `${gameTime(p.q, p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
             }}
             label={`${me} win probability over the game so far: ${wpText(mine(series[0].wp))} at tip-off, ${wpText(mine(series[series.length - 1].wp))} now`}
             height={130}

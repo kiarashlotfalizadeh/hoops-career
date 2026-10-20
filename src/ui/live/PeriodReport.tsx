@@ -8,18 +8,18 @@
 import { useMemo } from 'react';
 import { FastForward } from 'lucide-react';
 import type { CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
-import { buildGameReport } from '../../core/analysis/gameReport';
+import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
 import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { atoLabel } from '../../core/sim/sets';
 import { zScore } from '../../core/analysis/playTypes';
-import { plural } from '../../core/format';
+import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
 import { Section } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { KeysLive } from '../components/GameKeys';
-import { fmtClock, periodLabel } from '../stats';
+import { periodLabel } from '../stats';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
@@ -58,7 +58,8 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
   const fat = tactics.manage.fatigueSub;
   const trouble = me.players
     .filter((p) => me.on.includes(p.pid))
-    .map((p) => ({ p, energy: Math.min(1, p.energy + rest), fouls: p.fouls >= limit - 1 }))
+    // (one foul from where the staff sits him, and never a single foul: one in the first quarter isn't trouble)
+    .map((p) => ({ p, energy: Math.min(1, p.energy + rest), fouls: p.fouls >= Math.max(2, limit - 1) }))
     .filter((x) => x.p.out === 0 && (x.energy < fat + 0.1 || x.fouls))
     .sort((a, b) => a.energy - b.energy)
     .slice(0, 4);
@@ -101,7 +102,7 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
 function useDeciding(league: League, view: Drawn, tactics: Tactics): StaffNote[] {
   return useMemo(() => {
     const rep = buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics });
-    return (rep?.factors ?? []).slice(0, 3).map((f): StaffNote => {
+    return decidingFactors(rep?.factors ?? []).map((f): StaffNote => {
       const fix = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
       return {
         id: `f-${f.key ?? f.title}`,
@@ -261,10 +262,7 @@ export function PeriodReport(
             )}
             {theirs.map((a, i) => (
               <div key={i}>
-                <span className="dim2 num">
-                  {periodLabel(a.q)} {fmtClock(a.clock)}
-                </span>{' '}
-                {a.text}.
+                <span className="dim2 num">{gameTime(a.q, a.clock)}</span> {a.text}.
               </div>
             ))}
           </div>

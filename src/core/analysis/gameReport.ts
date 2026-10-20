@@ -18,6 +18,16 @@ export interface Factor {
   advice?: string;
   /** The engine's impact key behind a tactical factor (e.g. 'drop_pullup:o'), for a one-tap counter. */
   key?: string;
+  /**
+   * What the edge is about, so the edges that decided a game are told once each (see decidingFactors):
+   * a box-score factor's category, the same for a tactical effect that is part of it (traps forcing
+   * turnovers are part of the turnover battle), else the effect itself.
+   */
+  topic?: string;
+  /** A tactical effect that one of the user's settings won (the setting, as LEVERS names it). */
+  won?: string;
+  /** A cost of one of the user's settings that the same setting won back that night (the setting): its row carries both numbers. */
+  paid?: string;
 }
 
 interface Tpl {
@@ -64,7 +74,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_rim:d': {
     text: (X) => `${possessive(X)} drop coverage walled off the rim on pick-and-rolls.`,
-    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs (Offense > Actions).',
+    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs (Instructions > Actions).',
   },
   'drop_pop:o': {
     text: (X, _Y, w) => `${possessive(X)} popping big punished the drop with open threes${w}.`,
@@ -73,7 +83,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_handoff:o': {
     text: (X, _Y, w) => `${X} ran handoffs into the drop for clean looks${w}.`,
-    advice: 'Switching off-ball screens (Defense > Switch off-ball screens) neutralizes handoffs.',
+    advice: 'Switching off-ball screens (Instructions > Switch off-ball screens) neutralizes handoffs.',
     uses: (t) => dropping(t) && !t.defense.switchOffBall,
   },
   'switch_mismatch:o': {
@@ -84,11 +94,11 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'switch_mismatch:d': { text: (X) => `${X} switched screens without giving up real mismatches.` },
   'switch_deny:d': {
     text: (X) => `${possessive(X)} switching blew up off-ball screens and handoffs.`,
-    advice: 'Against a switching defense, isolate mismatches (Offense > Hunt mismatches) and post up smaller defenders.',
+    advice: 'Against a switching defense, isolate mismatches (Instructions > Hunt mismatches) and post up smaller defenders.',
   },
   'switch_screen:d': {
     text: (X) => `${possessive(X)} switches took away the screen on pick-and-rolls: no open roll man, no pull-up space.`,
-    advice: 'Against a switching defense, hunt the weakest defender (Offense > Hunt mismatches) and post up smaller players.',
+    advice: 'Against a switching defense, hunt the weakest defender (Instructions > Hunt mismatches) and post up smaller players.',
   },
   'hedge_stall:d': { text: (X) => `${possessive(X)} hedges stalled ball handlers on the pick-and-roll.` },
   'hedge_roll:o': {
@@ -105,14 +115,14 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'blitz_4v3:o': {
     text: (X, _Y, w) => `${X} beat the blitz with quick passes into 4-on-3s${w}.`,
     // a Star plan double traps the star's ball screens too
-    advice: 'Stop trapping good passers: Hedge or Drop instead of Blitz, and no Star plan double (Defense).',
+    advice: 'Stop trapping good passers: Hedge or Drop instead of Blitz, and no Star plan double (Instructions).',
     uses: (t) => t.defense.scheme === 'man' && (t.defense.pnr === 'blitz' || t.defense.starPlan === 'double'),
   },
   'blitz_4v3:d': { text: (X) => `${possessive(X)} traps left the offense no clean outlet.` },
   'ice_contain:d': { text: (X) => `${possessive(X)} ice coverage kept ball handlers out of the middle.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & cuts (Offense > Actions), shooters in the corners and a high-post passer.',
+    advice: 'Beat zones with Motion & cuts (Instructions > Actions), shooters in the corners and a high-post passer.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -127,16 +137,16 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'help_paint:d': {
     text: (X) => `${X} packed the paint and contested drives at the rim.`,
-    advice: 'Space the floor with more shooters, and raise Three-point emphasis (Offense) to punish help.',
+    advice: 'Space the floor with more shooters, and raise Three-point emphasis (Instructions) to punish help.',
   },
   'help_paint:o': {
     text: (X, Y) => `${Y} stayed home on shooters, and ${X} drove into the open lanes.`,
-    advice: 'Raise Help defense (Defense) against teams that live at the rim.',
+    advice: 'Raise Help defense (Instructions) against teams that live at the rim.',
     uses: (t) => t.defense.help < 50,
   },
   'help_kick:o': {
     text: (X, _Y, w) => `${X} punished heavy help with kick-out threes${w}.`,
-    advice: 'Lower Help defense (Defense) to stay home on good shooting teams.',
+    advice: 'Lower Help defense (Instructions) to stay home on good shooting teams.',
     uses: (t) => t.defense.help > 50,
   },
   'help_kick:d': { text: (X) => `${X} helped less and left fewer shooters open for kick-outs.` },
@@ -147,22 +157,22 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pressure_to:d': {
     text: (X) => `${possessive(X)} ball pressure forced turnovers.`,
-    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Offense > Actions) against pressure.',
+    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Instructions > Actions) against pressure.',
   },
   'pressure_to:o': {
     text: (X, Y) => `${X} turned it over less with ${Y} sitting off the ball.`,
-    advice: 'Turn up Ball pressure (Defense) against shaky ball handlers.',
+    advice: 'Turn up Ball pressure (Instructions) against shaky ball handlers.',
     uses: (t) => t.defense.pressure < 50,
   },
   'pressure_blowby:o': {
     text: (X, _Y, w) => `${possessive(X)} handlers blew by aggressive on-ball defenders${w}.`,
-    advice: 'Back off the Ball pressure (Defense) against quick creators.',
+    advice: 'Back off the Ball pressure (Instructions) against quick creators.',
     uses: (t) => t.defense.pressure > 60,
   },
   'pressure_blowby:d': { text: (X) => `${X} gave ball handlers room and kept them in front.` },
   'pressure_foul:o': {
     text: (X, _Y, w) => `${X} drew reach-in fouls against aggressive ball pressure${w}.`,
-    advice: 'Lower Ball pressure (Defense) once you are in the penalty.',
+    advice: 'Lower Ball pressure (Instructions) once you are in the penalty.',
     uses: (t) => t.defense.pressure > 60,
     cat: 'fouls',
   },
@@ -171,34 +181,34 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'press_to:d': { text: (X) => `${possessive(X)} full-court press created turnovers.` },
   'press_break:o': {
     text: (X) => `${X} broke the press for easy baskets.`,
-    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Defense > Full-court press).',
+    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Instructions > Full-court press).',
     uses: (t) => t.defense.press !== 'none',
   },
   'crash_orb:o': {
     text: (X) => `${X} crashed the glass and got second chances.`,
-    advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Offense > Push in transition).',
+    advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Instructions > Push in transition).',
   },
   'crash_orb:d': {
     text: (_X, Y) => `${Y} passed up second chances by staying off the offensive glass.`,
-    advice: 'Send more players to the offensive glass (Offense > Crash the offensive glass).',
+    advice: 'Send more players to the offensive glass (Instructions > Crash the offensive glass).',
     uses: (t) => t.offense.crashBoards < 45,
   },
   'crash_leak:o': {
     text: (X, Y) => `${X} got out in transition because ${Y} crashed the offensive glass.`,
-    advice: 'Crash the offensive glass less (Offense) if you keep giving up run-outs.',
+    advice: 'Crash the offensive glass less (Instructions) if you keep giving up run-outs.',
     uses: (t) => t.offense.crashBoards > 60,
   },
   'crash_leak:d': { text: (X) => `${X} kept players back from the glass and gave up fewer run-outs.` },
   'getback:d': { text: (X) => `${possessive(X)} transition defense limited fast breaks.` },
   'getback:o': {
     text: (X, Y) => `${possessive(Y)} slow transition defense gave ${X} run-outs.`,
-    advice: 'Raise Transition defense (Defense) against fast teams.',
+    advice: 'Raise Transition defense (Instructions) against fast teams.',
     uses: (t) => t.defense.getBack < 50,
   },
   'transition:o': { text: (X) => `${X} ran after stops for easy transition chances.`, cat: 'pace' },
   'transition:d': {
     text: (X, Y) => `${Y} walked the ball up, so ${X} got set on defense more often.`,
-    advice: 'Push the ball after stops and steals (Offense > Push in transition).',
+    advice: 'Push the ball after stops and steals (Instructions > Push in transition).',
     uses: (t) => t.offense.transition < 50,
     cat: 'pace',
   },
@@ -213,20 +223,20 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'double_kick:o': {
     text: (X, _Y, w) => `${X} punished double teams with open looks${w}.`,
     // doubles come from the Star plan, and from heavy help on drives and post-ups
-    advice: 'Stop doubling a good passer when his teammates can shoot: no Star plan double, less Help defense (Defense).',
+    advice: 'Stop doubling a good passer when his teammates can shoot: no Star plan double, less Help defense (Instructions).',
     uses: (t) => t.defense.starPlan === 'double' || t.defense.help > 50,
   },
   'mismatch_post:o': { text: (X, _Y, w) => `${X} posted up smaller defenders${w}.` },
   'physicality:o': {
     text: (X) => `${X} drew fouls against an overly physical defense.`,
-    advice: 'Lower Physicality (Defense) to cut down free throws.',
+    advice: 'Lower Physicality (Instructions) to cut down free throws.',
     uses: (t) => t.defense.physicality > 50,
     cat: 'fouls',
   },
   'physicality:d': { text: (X) => `${possessive(X)} physical defense won more on contests than it gave away at the line.`, cat: 'fouls' },
   'clean_defense:o': {
     text: (X, Y) => `${X} got clean looks against ${possessive(Y)} foul-wary defense.`,
-    advice: 'Raise Physicality (Defense) to contest harder.',
+    advice: 'Raise Physicality (Instructions) to contest harder.',
     uses: (t) => t.defense.physicality < 50,
     cat: 'fouls',
   },
@@ -239,17 +249,17 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'box_chase:d': {
     text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
     advice:
-      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Offense > Motion & cuts, Handoffs & screens).',
+      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Instructions > Motion & cuts, Handoffs & screens).',
     uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
   },
   'box_open:o': {
     text: (X, _Y, w) => `${X} found open threes and gaps against the junk defense${w}.`,
-    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Defense > Base scheme).',
+    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Instructions > Base scheme).',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'box_beat:o': {
     text: (X, _Y, w) => `${possessive(X)} chased player beat a defender caught high, on the catch and backdoor${w}.`,
-    advice: 'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Defense > Base scheme).',
+    advice: 'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Instructions > Base scheme).',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'pd_under:o': {
@@ -311,13 +321,13 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'shape_glass:d': {
     text: (X, Y) => `${Y} had nobody near the offensive glass out of the 5-Out, and ${X} cleaned up the misses.`,
-    advice: 'Five-out trades the offensive glass for room to drive: worth it only while the spacing pays (Offense > Shape).',
+    advice: 'Five-out trades the offensive glass for room to drive: worth it only while the spacing pays (Tactic > Shape).',
     cat: 'rebounding',
   },
   'shape_space:o': { text: (X, _Y, w) => `${possessive(X)} half-court shape opened the paint: more room at the rim for drives, cuts and bigs inside${w}.` },
   'shape_space:d': {
     text: (X, Y, w) => `${possessive(Y)} half-court shape crowded the paint, and ${X} walled off the rim${w}.`,
-    advice: 'Your shape is costing you room: play the one that suits the five on the floor (Offense > Shape), five-out only with five who can shoot.',
+    advice: 'Your shape is costing you room: play the one that suits the five on the floor (Tactic > Shape), five-out only with five who can shoot.',
   },
   'shape_tov:o': { text: (X, _Y, w) => `${X} took care of the ball out of Horns, every trip starting from a set they know cold${w}.`, cat: 'turnovers' },
   // out-of-possession roles
@@ -335,13 +345,13 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'role_anchor:o': {
     text: (X, Y, w) => `${X} made ${possessive(Y)} rim anchor pay for living in the paint${w}.`,
-    advice: 'The man your rim anchor leaves is making him pay: give the role to a big guarding a non-shooter, or make him a Position Defender (Tactics > Roles).',
+    advice: 'The man your rim anchor leaves is making him pay: give the role to a big guarding a non-shooter, or make him a Position Defender (Tactic, on the board).',
     uses: (t) => hasRole(t, 'anchor'),
   },
   'role_roam:d': { text: (X, _Y, w) => `${possessive(X)} roamer left a non-shooter to help, and walled off drives, cuts and rolls${w}.` },
   'role_roam:o': {
     text: (X, Y, w) => `${X} found the man ${possessive(Y)} roamer left, open on kick-outs${w}.`,
-    advice: 'Their kick-outs are finding the man your roamer leaves: roam off a player who can’t shoot, or make him a Position Defender (Tactics > Roles).',
+    advice: 'Their kick-outs are finding the man your roamer leaves: roam off a player who can’t shoot, or make him a Position Defender (Tactic, on the board).',
     uses: (t) => hasRole(t, 'roamer'),
   },
   'hack:o': {
@@ -387,7 +397,7 @@ for (const id of SET_IDS) {
   IMPACT_TEXT[`set_${id}:o`] = { text: SET_TEXT[id].o };
   IMPACT_TEXT[`set_${id}:d`] = {
     text: SET_TEXT[id].d,
-    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Offense > Set package), or call something else.`,
+    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Instructions > Set package), or call something else.`,
     uses: (t) => !!t.offense.sets?.includes(id),
   };
 }
@@ -440,6 +450,45 @@ const LEVERS: { what: string; costs: string[]; gains: string[] }[] = [
   { what: 'the shape', costs: ['shape_space:d', 'shape_glass:d'], gains: ['shape_space:o', 'shape_glass:o', 'shape_tov:o'] },
   { what: 'the roamer', costs: ['role_roam:o'], gains: ['role_roam:d'] },
 ];
+
+/**
+ * Tactical effects that are part of a box-score factor (the turnover battle, the glass, the line),
+ * besides the ones whose template already files them there: told as one edge with it.
+ */
+const PART_OF: Record<string, Factor['category']> = {
+  'blitz_to:d': 'turnovers',
+  'pressure_to:d': 'turnovers',
+  'pressure_to:o': 'turnovers',
+  'press_to:d': 'turnovers',
+  'role_poa:d': 'turnovers',
+  'crash_orb:o': 'rebounding',
+  'crash_orb:d': 'rebounding',
+  'zone_glass:o': 'rebounding',
+};
+
+/** What a tactical effect is about (see Factor.topic). */
+function impactTopic(key: string): string {
+  const cat = PART_OF[key] ?? IMPACT_TEXT[key]?.cat;
+  return cat === 'turnovers' || cat === 'rebounding' || cat === 'fouls' ? cat : key;
+}
+
+/**
+ * The edges that decided a game (or the game so far), biggest first, each told once: a setting's
+ * win isn't a card of its own when its cost's card says it won that back, and an edge that is part
+ * of one already told the same way (traps forcing turnovers, under a turnover battle won) gives way
+ * to the next one. The Why keeps every factor.
+ */
+export function decidingFactors(factors: Factor[], n = 3): Factor[] {
+  const paid = new Set(factors.flatMap((f) => (f.paid ? [f.paid] : [])));
+  const out: Factor[] = [];
+  for (const f of factors) {
+    if (out.length >= n) break;
+    if (f.won && paid.has(f.won)) continue;
+    if (f.topic && out.some((o) => o.topic === f.topic && o.pts > 0 === f.pts > 0)) continue;
+    out.push(f);
+  }
+  return out;
+}
 
 /** Every effect that is a setting's cost, each lever's first cost first. */
 export const LEVER_KEYS = LEVERS.flatMap((l) => l.costs);
@@ -571,6 +620,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     // a cost of one of the user's settings that the same setting more than won back: no fix for it
     const lv = benefitUser ? null : leverNet(res.impacts, im.key, userSide);
     const paid = !benefitUser && leverPaid(res.impacts, im.key, userSide);
+    const won = benefitUser ? LEVERS.find((l) => l.gains.includes(im.key))?.what : undefined;
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
       // (the report leads the row with what it was worth)
@@ -579,6 +629,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       category: tpl.cat ?? 'tactics',
       advice: benefitUser || paid ? undefined : impactAdvice(im.key, tactics),
       ...(paid ? {} : { key: im.key }),
+      topic: impactTopic(im.key),
+      ...(won && { won }),
+      ...(paid && { paid: lv!.what }),
     });
   }
 
@@ -593,6 +646,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)} (${madeAtt(u.t.tpm, u.t.tpa)} 3P) · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)} (${madeAtt(o.t.tpm, o.t.tpa)} 3P)`,
       pts: efgSwing,
       category: 'shooting',
+      topic: 'shooting',
     });
   }
   const tovSwing = (o.t.tov - u.t.tov) * 1.05;
@@ -602,6 +656,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `Points off turnovers: ${ut.abbrev} ${u.extra.offTov}, ${ot.abbrev} ${o.extra.offTov}.`,
       pts: tovSwing,
       category: 'turnovers',
+      topic: 'turnovers',
       advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics → Players) or lower the pace.' : undefined,
     });
   }
@@ -612,10 +667,11 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       detail: `Second-chance points: ${ut.abbrev} ${u.extra.secondChance}, ${ot.abbrev} ${o.extra.secondChance}.`,
       pts: orbSwing,
       category: 'rebounding',
+      topic: 'rebounding',
       // your own crashing only changes your own offensive boards
       advice:
         orbSwing < 0
-          ? 'Play better defensive rebounders, and avoid a zone against strong rebounding teams; to win the glass yourself, raise Crash the offensive glass (Offense).'
+          ? 'Play better defensive rebounders, and avoid a zone against strong rebounding teams; to win the glass yourself, raise Crash the offensive glass (Instructions).'
           : undefined,
     });
   }
@@ -623,9 +679,11 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   if (Math.abs(ftSwing) >= 3) {
     factors.push({
       title: `Free throws: ${ut.abbrev} ${madeAtt(u.t.ftm, u.t.fta)}, ${ot.abbrev} ${madeAtt(o.t.ftm, o.t.fta)}.`,
-      detail: `Fouls committed: ${ut.abbrev} ${u.t.pf}, ${ot.abbrev} ${o.t.pf}.`,
+      // (every personal foul, offensive ones too: the scorebug's team fouls count the ones toward the penalty)
+      detail: `Personal fouls: ${ut.abbrev} ${u.t.pf}, ${ot.abbrev} ${o.t.pf}.`,
       pts: ftSwing,
       category: 'fouls',
+      topic: 'fouls',
     });
   }
 
@@ -648,12 +706,13 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
             : `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
+        topic: `star-${side.tid}`,
         // (not named: a Star plan goes after their primary creator, who isn't always the scorer)
         advice:
           sign < 0 && tactics.defense.starPlan === 'none'
             ? opts.partial
-              ? 'Try a Star plan (Defense): deny him the ball.'
-              : 'Next time try a Star plan (Defense): deny him the ball.'
+              ? 'Try a Star plan (Instructions): deny him the ball.'
+              : 'Next time try a Star plan (Instructions): deny him the ball.'
             : undefined,
       });
     }
@@ -723,11 +782,12 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     });
 
   const margin = Math.abs(u.pts - o.pts);
-  // the biggest factor that went the winner's way (the biggest of all can favor the loser)
-  const top = factors.find((f) => f.pts > 0 === userWon);
+  // the biggest factor that went the winner's way (the biggest of all can favor the loser), as the deciding edges tell them
+  const told = decidingFactors(factors, factors.length);
+  const top = told.find((f) => f.pts > 0 === userWon);
   const topText = top && factorPhrase(top.title);
   // at a break, the factor that went the leader's way (the biggest of all when tied)
-  const lead = u.pts === o.pts ? factors[0] : top;
+  const lead = u.pts === o.pts ? told[0] : top;
   const how = res.ot ? ` in ${res.ot > 1 ? `${res.ot}OT` : 'OT'}` : margin <= 3 ? ' in a nail-biter' : margin >= 20 ? ' in a rout' : '';
   const headline = opts.partial
     ? partialHeadline(ut.name, ot.name, u.pts, o.pts, periods, lead && factorPhrase(lead.title))

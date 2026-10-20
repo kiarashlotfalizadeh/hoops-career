@@ -62,7 +62,7 @@ export function Touchline({
       <div className="lv-slots" role="group" aria-label="Your tactics">
         {slots.map((s) => {
           const on = s.i === cur;
-          const name = team.slots?.names[s.i] ?? (s.i === 0 ? 'Main system' : `Plan ${SLOT_LETTERS[s.i]}`);
+          const name = team.slots?.names[s.i] ?? (s.i === 0 ? 'Main' : `Plan ${SLOT_LETTERS[s.i]}`);
           return (
             <button
               key={s.i}

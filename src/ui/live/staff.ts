@@ -152,6 +152,15 @@ function fromAlert(a: LiveAlert): StaffNote {
 }
 
 /**
+ * A game out of reach in the fourth quarter (or overtime): the margin the engine's staff empties its
+ * bench at (22 with five minutes left, 16 with two and a half), or 30 at any point of the quarter.
+ */
+export function gameDecided(q: number, clock: number, margin: number): boolean {
+  const m = Math.abs(margin);
+  return q >= 4 && clock > 5 && (m >= 30 || (clock < 300 && m >= 22) || (clock < 150 && m >= 16));
+}
+
+/**
  * Everything the staff has to say now, most pressing first: the alerts (with their fixes), their hot
  * scorer and who could take him, the defender of theirs you're beating, your own actions stalling or
  * working, and the late-game switches that are off when they matter.
@@ -290,7 +299,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         id: `late-foul-${view.q}`,
         kind: 'decision',
         tone: 'warn',
-        title: `Down ${-margin} with ${Math.ceil(view.clock)} seconds left`,
+        title: `Down ${-margin} with ${view.clock >= 60 ? `${Math.floor(view.clock / 60)}:${String(Math.floor(view.clock % 60)).padStart(2, '0')}` : `${Math.ceil(view.clock)} seconds`} left`,
         text: 'Foul when trailing is off: they can run the clock out.',
         actions: [{ kind: 'tactics', label: 'Foul when trailing', apply: (x) => void (x.manage.foulWhenTrailing = true) }],
         rank: 92,
@@ -309,9 +318,23 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       });
   }
 
+  // a decided game: no tactics to chase (their scorer's garbage-time points, an action running hot),
+  // and with the lead safe, the bench can finish it if the coach hasn't said so
+  const decided = gameDecided(view.q, view.clock, margin);
+  if (decided && margin > 0 && !t.manage.garbageTime && !a.atBreak)
+    out.push({
+      id: `garbage-${view.q}`,
+      kind: 'decision',
+      tone: 'info',
+      title: `Up ${margin}: rest the starters`,
+      text: 'The game is decided: the deep bench can finish it, and nobody gets hurt in the last minutes of a blowout.',
+      actions: [{ kind: 'tactics', label: 'Rest starters in blowouts', apply: (x) => void (x.manage.garbageTime = true) }],
+      rank: 88,
+    });
   // a fix for the same thing only once (the hot play type and the tactical edge often agree)
   const seen = new Set<string>();
   return out
+    .filter((n) => !decided || n.id.startsWith('garbage-') || !n.actions.some((x) => x.kind === 'tactics'))
     .sort((x, y) => y.rank - x.rank)
     .filter((n) => {
       const key = n.actions[0]?.label;
@@ -338,7 +361,7 @@ export function staffRead(a: Pick<AlertInput, 'view' | 'side' | 'teams'>): strin
   const tov = them.t.tov - us.t.tov;
   edges.push({ d: tov / 3, good: `${them.t.tov} turnovers from them to our ${us.t.tov}`, bad: `${us.t.tov} turnovers to their ${them.t.tov}` });
   const paint = (us.extra?.paint ?? 0) - (them.extra?.paint ?? 0);
-  edges.push({ d: paint / 8, good: `+${paint} in the paint`, bad: `${abbrev} +${-paint} in the paint` });
+  edges.push({ d: paint / 8, good: `We're +${paint} in the paint`, bad: `They're +${-paint} in the paint` });
   const threes = us.t.tpm - them.t.tpm;
   edges.push({
     d: threes / 2.5,
@@ -349,7 +372,8 @@ export function staffRead(a: Pick<AlertInput, 'view' | 'side' | 'teams'>): strin
   edges.push({ d: fta / 6, good: `${fta} more free throws than them`, bad: `${-fta} fewer free throws than them` });
   const good = edges.filter((e) => e.d >= 1).sort((x, y) => y.d - x.d)[0];
   const bad = edges.filter((e) => e.d <= -1).sort((x, y) => x.d - y.d)[0];
-  if (good && bad) return `${good.good}, but ${bad.bad.charAt(0).toLowerCase()}${bad.bad.slice(1)}.`;
+  // (the second clause runs on from the first: "…, but they're winning the glass by 6"; a count or a team's abbreviation keeps its case)
+  if (good && bad) return `${good.good}, but ${bad.bad.replace(/^(They|We)\b/, (w) => w.toLowerCase())}.`;
   if (good) return `${good.good}.`;
   if (bad) return `${bad.bad}.`;
   return 'Even on the glass, the turnovers and the threes.';

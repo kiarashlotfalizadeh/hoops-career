@@ -564,7 +564,7 @@ function read(league: League, d: ScoutData) {
   if (swing && Math.abs(swing.on! - swing.off!) >= 8) {
     const gap = swing.on! - swing.off!;
     tendencies.push({
-      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : ''}${gap.toFixed(1)} net rating per 100 possessions on vs off.`,
+      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} net rating per 100 possessions on vs off.`,
       weight: Math.abs(gap) / 10,
     });
   }
@@ -654,7 +654,11 @@ function read(league: League, d: ScoutData) {
       weight: 2 + (0.54 - volume.ts) * 40,
     });
   const brick = d.players.filter((p) => p.min >= 15 && p.fta >= 2 && p.ft < 0.6).sort((a, b) => a.ft - b.ft)[0];
-  if (brick) exploits.push({ text: `${brick.name} makes ${pct0(brick.ft)} of his free throws: a candidate for Hack-a-player (Plan).`, weight: 1.5 + (0.6 - brick.ft) * 10 });
+  if (brick)
+    exploits.push({
+      text: `${brick.name} makes ${pct0(brick.ft)} of his free throws: worth fouling on purpose (Hack-a-player, on the Plan).`,
+      weight: 1.5 + (0.6 - brick.ft) * 10,
+    });
 
   readHeadToHead(league, d, counters);
   d.tendencies = tendencies

@@ -84,7 +84,7 @@ describe('batch sims & reports', () => {
     // an opposing star's big night suggests a Star plan only to a team without one
     const star: GameResult = { ...res, [oppSide]: { ...res[oppSide], players: res[oppSide].players.map((p, i) => (i === 0 ? { ...p, pts: 45 } : p)) } };
     const t = league.teams[0].tactics;
-    expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toMatch(/Star plan \(Defense\)/);
+    expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toMatch(/Star plan \(Instructions\)/);
     league.teams[0].tactics = applyPatch(t, { defense: { starPlan: 'deny' } });
     expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
     league.teams[0].tactics = t;

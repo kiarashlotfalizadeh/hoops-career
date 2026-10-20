@@ -17,9 +17,9 @@ import { recordWhat, recordsHeld } from '../../core/league/records';
 import { seriesLabel } from '../../core/league/playoffs';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
-import { finalLabel, fmtClock, ordinal, periodLabel } from '../stats';
+import { finalLabel, ordinal } from '../stats';
 import { streakText } from '../games/series';
-import { madeAtt } from '../../core/format';
+import { gameTime, madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
 import { Debrief } from './Debrief';
 import { TeamLogo } from './TeamLogo';
@@ -90,7 +90,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
   const turn = story && story.turn.to - story.turn.from >= TURN_MIN ? story.turn : null;
   const turnPlay = turn ? playAt(res, turn.point) : null;
   const turnText = turn
-    ? `${periodLabel(turn.point.q)} ${fmtClock(turn.point.clock)}, ${
+    ? `${gameTime(turn.point.q, turn.point.clock)}, ${
         turnPlay ? turnPlay.text.replace(/\.$/, '') : `${winAbbrev} ${swingWords(winnerMargin(turn.prev.margin), winnerMargin(turn.point.margin))}`
       }: ${winAbbrev} ${pct(turn.from)} → ${pct(turn.to)} to win.`
     : null;
@@ -98,7 +98,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
   const low = story && story.low.wp <= COMEBACK_WP ? story.low : null;
   const lowWhere = (p: WpPoint) => {
     const m = ourMargin(p.margin);
-    return `${m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : 'tied'}, ${periodLabel(p.q)} ${fmtClock(p.clock)}`;
+    return `${m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : 'tied'}, ${gameTime(p.q, p.clock)}`;
   };
   const swing = !low
     ? null

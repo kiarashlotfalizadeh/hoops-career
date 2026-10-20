@@ -248,14 +248,16 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
   const theirs = useLeagueMemo(() => projectedRotation(league, opp, 10), [league, opp]);
   // (told apart from every teammate, the injured too, not just the ones shown)
   const names = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
-  // their poor shooters: under 70% from the line, three at least, six at most
-  const sorted = [...theirs].sort((a, b) => a.ratings.ft - b.ratings.ft);
-  const rows = sorted.slice(0, Math.max(3, Math.min(6, sorted.filter((p) => ftPct(p.ratings.ft) < 0.7).length)));
-  const targets = eff.manage.hackTargets ?? [];
   const fromQ = eff.manage.hackFromQ ?? 1;
   // two free throws pay against a normal possession below half the league's points per possession
   const ppp = useLeagueMemo(() => leaguePpp(league), [league]);
   const breakEven = ppp !== null ? Math.round((ppp / 2) * 100) : null;
+  // their poor shooters: within a few points of paying (under 70% before the league has a number), six
+  // at most, and anyone already on the list
+  const poor = breakEven !== null ? (breakEven + 5) / 100 : 0.7;
+  const sorted = [...theirs].sort((a, b) => a.ratings.ft - b.ratings.ft);
+  const targets = eff.manage.hackTargets ?? [];
+  const rows = sorted.filter((p, i) => (i < 6 && ftPct(p.ratings.ft) < poor) || targets.includes(p.pid));
   const set = (pids: number[], q: number) =>
     edit((l) => {
       if (!pids.length) {
@@ -284,7 +286,13 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
         </Help>
       }
     >
-      <div className="card flush list">
+      {/* nobody worth fouling: say who comes closest, rather than offer a 76% shooter */}
+      {!rows.length && sorted[0] && (
+        <div className="mu-note">
+          Nobody in their rotation is a poor free-throw shooter: the worst, {names(sorted[0].pid)}, makes {Math.round(ftPct(sorted[0].ratings.ft) * 100)}%.
+        </div>
+      )}
+      <div className="card flush list" hidden={!rows.length}>
         {breakEven !== null && (
           <div className="list-divider list-h" aria-hidden="true">
             <span>Pays under {breakEven}% from the line</span>

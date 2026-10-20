@@ -6,7 +6,7 @@
 import type { BoxLine, GameResult, League, Player, TeamBox } from '../types';
 import { hashString } from '../random';
 import { playerName, shortName } from '../league/helpers';
-import type { Factor, GameReport } from './gameReport';
+import { decidingFactors, type Factor, type GameReport } from './gameReport';
 import { COMEBACK_WP, wpStory } from './winProb';
 
 export interface Quote {
@@ -194,7 +194,7 @@ function facts(league: League, res: GameResult, report?: GameReport | null): Fac
     streak: res.type === 'regular' ? streakAfter(league, res) : 0,
     upset: gap,
     hurt: hurtInGame(league, res, us),
-    decided: report?.factors.find((x) => x.pts > 0 === won)?.category,
+    decided: report ? decidingFactors(report.factors, report.factors.length).find((x) => x.pts > 0 === won)?.category : undefined,
     low: comebackLow(res),
   };
 }

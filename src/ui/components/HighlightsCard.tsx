@@ -8,10 +8,10 @@ import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
 import { Court, courtFloor } from '../live/Court';
 import { jerseyColors } from '../teamColors';
-import { fmtClock, periodLabel, rosterNames } from '../stats';
+import { rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
 import { neutralSite } from '../../core/league/games';
-import { plural } from '../../core/format';
+import { gameTime, plural } from '../../core/format';
 import { Section } from './ui';
 import './gameday.css';
 
@@ -50,7 +50,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
   const sc = cur?.sc ?? null;
   const at = (k: number) => {
     const l = reel.plays[k].log;
-    return `${periodLabel(l.q)} ${fmtClock(l.clockEnd)} · ${away.abbrev} ${l.score[1]}, ${home.abbrev} ${l.score[0]}`;
+    return `${gameTime(l.q, l.clockEnd)} · ${away.abbrev} ${l.score[1]}, ${home.abbrev} ${l.score[0]}`;
   };
   const go = (k: number | null) => {
     setBeat(0);

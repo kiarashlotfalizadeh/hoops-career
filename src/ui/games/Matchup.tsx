@@ -44,7 +44,9 @@ export default function Matchup() {
     return (
       <main className="page">
         <PageHeader title="Matchup" back backTo="/games" />
-        <Empty>{team ? 'Pick an opponent from your schedule.' : 'That team does not exist.'}</Empty>
+        <div className="card">
+          <Empty>{team ? 'Pick an opponent from your schedule.' : 'That team does not exist.'}</Empty>
+        </div>
       </main>
     );
   return <MatchupScreen league={league} opp={opp} />;

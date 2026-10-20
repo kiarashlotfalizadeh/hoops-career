@@ -1,4 +1,4 @@
-// Scouting numbers as a matchup page's Scout and Tactics → Insights show them: league ranks, play
+// Scouting numbers as a matchup page's Scout and Tactics → Report show them: league ranks, play
 // types against the league, key players with on/off, the user's meetings with the team and what its
 // coach has planned for the next one. Colours always rate the team shown: green where it is better
 // than the league, red where it is worse, whoever's team it is.

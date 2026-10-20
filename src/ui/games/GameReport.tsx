@@ -31,7 +31,10 @@ export default function GameReport() {
     return (
       <main className="page">
         <PageHeader title="Game" back backTo="/games" />
-        <Empty>This game is no longer stored. Detailed results are kept for the current season.</Empty>
+        {/* (in a card, as a missing player's page has it) */}
+        <div className="card">
+          <Empty>This game is no longer stored. Detailed results are kept for the current season.</Empty>
+        </div>
       </main>
     );
   }

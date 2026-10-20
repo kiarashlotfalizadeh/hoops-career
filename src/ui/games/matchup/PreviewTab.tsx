@@ -274,7 +274,8 @@ function StartingFives({ league, away, home }: { league: League; away: SidePrevi
       <Link to={`/player/${p.pid}`} className={`mu-five-p ${right ? 'r' : ''}`}>
         <Avatar p={pl} />
         <span className="mu-five-who">
-          <span className="mu-five-n ellipsis">{name(p.pid) || pl.lastName}</span>
+          {/* (a long name wraps, at its hyphen if it has one: "Gilgeous-" over "Alexander") */}
+          <span className="mu-five-n">{name(p.pid) || pl.lastName}</span>
           <span className="mu-five-m">
             {p.pos} <Ovr v={p.ovr} size="sm" />
           </span>

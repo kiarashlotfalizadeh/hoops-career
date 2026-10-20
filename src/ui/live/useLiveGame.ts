@@ -10,6 +10,7 @@ import { useLeague, useStore, useVersion } from '../../state/store';
 import { act, edit } from '../../state/actions';
 import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { composites } from '../../core/ratings';
+import { gameTime } from '../../core/format';
 import type { League, PbpEntry } from '../../core/types';
 import type { PossLog } from '../../core/sim/log';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
@@ -266,8 +267,11 @@ export function useLiveGame() {
       setView(viewRef.current);
       setEvents([]);
       resetOverCourt(!!lg && lg.steps > 0);
-      setToPending(false);
-      huddleNext.current = false;
+      // a game picked up with your timeout called and not yet shown (the screen was left right after
+      // calling it): the huddle still comes, as the court gets to it
+      const called = !!lg && lg.steps > 0 && !lg.over && (lg.timeoutWaiting || lg.sim.timeoutOpens() === lg.userSide);
+      setToPending(called);
+      huddleNext.current = called;
       setGame(lg);
       setScript(null);
       const intro = !!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false;
@@ -348,8 +352,7 @@ export function useLiveGame() {
       const s = found.sim;
       if (found.resumed === 'restarted') useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
       // (one picked up before its tip has nothing to say: the starting lineups go up as on a fresh one)
-      else if (found.steps > 0)
-        useStore.getState().toast(`Picked up where you left off: ${s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : `${periodLabel(s.q)} ${fmtClock(s.clock)}`}.`);
+      else if (found.steps > 0) useStore.getState().toast(`Picked up where you left off: ${s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : `${gameTime(s.q, s.clock)}`}.`);
       found.resumed = undefined;
     }
     if (notes.length) useStore.getState().toast(notes.join(' '));

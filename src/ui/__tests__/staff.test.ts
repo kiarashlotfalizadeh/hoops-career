@@ -11,7 +11,7 @@ import { cloneTactics } from '../../core/sim/tactics';
 import { DEFAULT_PPP } from '../../core/analysis/playTypes';
 import type { PossLog } from '../../core/sim/log';
 import { snapshot } from '../live/drawn';
-import { finisher, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
+import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 
 function game(seed = 5) {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
@@ -122,5 +122,23 @@ describe('the bench', () => {
     const read = staffRead(input(g));
     expect(read.length).toBeGreaterThan(10);
     expect(read).toMatch(/\.$/);
+  });
+  it('stands down in a decided game, as the bench empties', () => {
+    expect(gameDecided(3, 30, 35)).toBe(false);
+    expect(gameDecided(4, 400, 25)).toBe(false);
+    expect(gameDecided(4, 280, 22)).toBe(true);
+    expect(gameDecided(4, 140, -16)).toBe(true);
+    expect(gameDecided(4, 600, 30)).toBe(true);
+    expect(gameDecided(4, 3, 30)).toBe(false);
+  });
+  it('runs the edge against you on from the one for you, a count keeping its figure', () => {
+    const box = (t: Record<string, number>, paint: number) => ({ t: { orb: 0, drb: 0, tov: 0, tpm: 0, tpa: 0, fta: 0, ...t }, extra: { paint } });
+    const read = (us: ReturnType<typeof box>, them: ReturnType<typeof box>) =>
+      staffRead({ view: { elapsed: 1200, box: { home: us, away: them } }, side: 0, teams: [{ abbrev: 'OKC' }, { abbrev: 'SAS' }] } as unknown as Parameters<typeof staffRead>[0]);
+    // more turnovers from them, and more paint points for them
+    expect(read(box({ tov: 4 }, 20), box({ tov: 12 }, 36))).toBe("12 turnovers from them to our 4, but they're +16 in the paint.");
+    // the glass the other way: "they're" runs on in lower case
+    expect(read(box({ tov: 4, drb: 10 }, 30), box({ tov: 12, drb: 20 }, 30))).toBe("12 turnovers from them to our 4, but they're winning the glass by 10.");
+    expect(read(box({ fta: 6 }, 40), box({ fta: 24 }, 24))).toBe("We're +16 in the paint, but 18 fewer free throws than them.");
   });
 });

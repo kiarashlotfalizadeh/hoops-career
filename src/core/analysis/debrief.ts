@@ -7,7 +7,7 @@
 
 import type { GameResult, League, PrepFocus, TacticsPatch } from '../types';
 import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
-import { buildGameReport, type GameReport, type Factor } from './gameReport';
+import { buildGameReport, decidingFactors, type GameReport, type Factor } from './gameReport';
 import { moveVerdict } from './moves';
 import { pick } from './quotes';
 import { famReadout, impactCounter } from '../ai/advisor';
@@ -157,8 +157,8 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
         : m <= 3
           ? say('lclose', ['A close one, and it got away.', `We lost by ${m}.`, 'It came down to the last few plays, and they made them.'])
           : say('l', [`They beat us by ${m}.`, `A ${m}-point loss.`, `We came up ${m} short.`]);
-  // the biggest edge that went the winner's way
-  const top = report.factors.find((f) => f.pts > 0 === won);
+  // the biggest edge that went the winner's way (as the deciding edges tell them: a setting that only won back what it cost didn't win it)
+  const top = decidingFactors(report.factors, report.factors.length).find((f) => f.pts > 0 === won);
   const why: Partial<Record<Factor['category'], string[]>> = {
     shooting: won ? ['We shot it better.', "Our shots fell and theirs didn't."] : ['They shot it better.', "Their shots fell and ours didn't."],
     turnovers: won ? ['Their turnovers decided it.', 'We won the turnover battle.'] : ['Our turnovers decided it.', 'We gave it away too often.'],
@@ -182,7 +182,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const seen = new Set<string>();
   // what the advice so far is about, so the same fix isn't given twice in other words
   const topics = new Set<string>();
-  const decided = report.factors.slice(0, 3);
+  const decided = decidingFactors(report.factors);
   // a standing cost the staff named after the last game too isn't said again every night (once it
   // adds up over the season, the staff's card on Tactics carries it), unless it's one of tonight's
   // deciding edges

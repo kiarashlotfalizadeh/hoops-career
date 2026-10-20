@@ -110,6 +110,10 @@
   margin: 0 auto;
 }
 @media (min-width: 600px) and (orientation: portrait) {
+  /* more of the bench: the court gives the console more room */
+  .lv.more-bench {
+    --lv-dock-min: 520px;
+  }
   .lv-bug .lv-lb {
     width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }

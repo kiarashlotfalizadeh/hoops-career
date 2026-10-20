@@ -7,7 +7,8 @@ import { biggestSwings, marginWords, playAt, swingWords, wpSeries, wpText } from
 import { Chips, Help, More, Section } from '../../components/ui';
 import { FlowChart, WinProbChart } from '../../components/charts';
 import { Term } from '../../components/Glossary';
-import { fmtClock, pbpOpacity, periodLabel } from '../../stats';
+import { gameTime } from '../../../core/format';
+import { pbpOpacity, periodLabel } from '../../stats';
 
 /**
  * `side` is whose view the charts take (your team in your games, else the home team's); `kits` the
@@ -72,7 +73,7 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
     const gainer: 0 | 1 = p.wp >= prev.wp ? 0 : 1;
     const m = (x: number) => (gainer === 0 ? x : -x);
     const play = playAt(g, p);
-    return `${periodLabel(p.q)} ${fmtClock(p.clock)} · ${play ? play.text.replace(/\.$/, '') : `${abbrevs[gainer]} ${swingWords(m(prev.margin), m(p.margin))}`}`;
+    return `${gameTime(p.q, p.clock)} · ${play ? play.text.replace(/\.$/, '') : `${abbrevs[gainer]} ${swingWords(m(prev.margin), m(p.margin))}`}`;
   };
   return (
     <Section
@@ -103,7 +104,7 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
           marks={swings.map((x) => x.at)}
           describe={(i) => {
             const p = series[i];
-            return p.i < 0 ? 'Tip-off' : `${periodLabel(p.q)} ${fmtClock(p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
+            return p.i < 0 ? 'Tip-off' : `${gameTime(p.q, p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
           }}
           label={`${me} win probability over the game: ${pct(mine(series[0].wp))} at tip-off${swings.length ? `; biggest swings: ${swings.map((x) => `${say(x.at)}, ${pct(mine(x.from))} to ${pct(mine(x.to))}`).join('; ')}` : ''}`}
           height={140}
@@ -142,9 +143,7 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
       <div className="card flush list">
         {rows.map((e, i) => (
           <div key={i} className={`gv-pbp${e.kind === 'period' ? ' strong' : ''}`} style={{ opacity: pbpOpacity(e.kind) }}>
-            <span className="gv-pbp-when num">
-              {periodLabel(e.q)} {fmtClock(e.clock)}
-            </span>
+            <span className="gv-pbp-when num">{gameTime(e.q, e.clock)}</span>
             <span className="grow">{e.text}</span>
             <span className="gv-pbp-sc num">
               {e.as}-{e.hs}

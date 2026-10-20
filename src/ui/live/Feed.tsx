@@ -1,6 +1,7 @@
 import { memo, useState } from 'react';
 import type { PbpEntry } from '../../core/types';
-import { fmtClock, pbpOpacity, periodLabel } from '../stats';
+import { gameTime } from '../../core/format';
+import { pbpOpacity } from '../stats';
 import { Segmented } from '../components/ui';
 
 /**
@@ -41,9 +42,7 @@ export const Feed = memo(function Feed({
         {shown.length === 0 && <div className="small dim lv-fd-row">Nothing yet.</div>}
         {shown.map(({ i, e }) => (
           <div key={i} className={`lv-fd-row${e.kind === 'period' || e.kind === 'timeout' ? ' strong' : ''}`} style={{ opacity: pbpOpacity(e.kind) }}>
-            <span className="lv-fd-when num">
-              {periodLabel(e.q)} {fmtClock(e.clock)}
-            </span>
+            <span className="lv-fd-when num">{gameTime(e.q, e.clock)}</span>
             <span className="lv-fd-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
             <span className="grow">{e.text}</span>
             <span className="lv-fd-sc num">

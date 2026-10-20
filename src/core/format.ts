@@ -46,3 +46,16 @@ export function injuryName(name: string): string {
 
 /** How long an injury keeps him out: "out 1 game", "out 8 games"; past a whole season's 82, "out over a season". */
 export const outFor = (games: number) => (games > 82 ? 'out over a season' : `out ${plural(games, 'game')}`);
+
+/**
+ * A moment of a game in a sentence or a list: "Q4 5:03", "Q4 0:35.0", "OT 2:06", "2OT 0:00.4". (The
+ * scorebug's clock reads "35.0" under a minute, as a broadcast's does; in a line of text "Q4 35.0"
+ * would read as thirty-five minutes.)
+ */
+export function gameTime(q: number, sec: number): string {
+  const period = q <= 4 ? `Q${q}` : q === 5 ? 'OT' : `${q - 4}OT`;
+  // (to the tenth, as the scorebug rounds: a hair added so a stored 24.3 that reads 24.2999… stays 24.3)
+  const s = Math.floor(Math.max(0, sec) * 10 + 1e-6) / 10;
+  const clock = s < 60 ? `0:${s.toFixed(1).padStart(4, '0')}` : `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  return `${period} ${clock}`;
+}

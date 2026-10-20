@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { playGame } from '../league/games';
-import { buildGameReport } from '../analysis/gameReport';
+import { buildGameReport, decidingFactors } from '../analysis/gameReport';
 import { debrief } from '../analysis/debrief';
 import { applyPatch } from '../sim/tactics';
 
@@ -58,5 +58,31 @@ describe('the debrief', () => {
     res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
     expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
     expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')?.label).toBe('Switch to Hedge');
+  });
+  it('tells each deciding edge once: a won-back setting in one row, an edge that is part of another under it', () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
+    league.phase = 'regular';
+    const g = league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!;
+    const res = playGame(league, g);
+    const me: 0 | 1 = res.home.tid === 0 ? 0 : 1;
+    const them = (1 - me) as 0 | 1;
+    league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'man', pnr: 'blitz' } });
+    const im = (key: string, t: 0 | 1, pts: number) => ({ key, t, pts, count: 20, players: {} });
+    // the blitz gave up 8.9 in 4-on-3s and won 8.8 back in turnovers: one row carries both numbers
+    res.impacts = [im('blitz_4v3:o', them, 8.9), im('blitz_to:d', me, 8.8), im('help_kick:o', me, 2)];
+    const rep = buildGameReport(league, res)!;
+    expect(rep.factors.some((f) => f.won === 'blitzing')).toBe(true);
+    const told = decidingFactors(rep.factors, rep.factors.length);
+    expect(told.some((f) => f.won === 'blitzing')).toBe(false);
+    expect(told.find((f) => f.paid === 'blitzing')?.detail).toMatch(/won 8\.8 back/);
+    // traps that forced turnovers under a turnover battle won the same way: the battle is told, the traps give way
+    res.impacts = [im('blitz_to:d', me, 5)];
+    const f = buildGameReport(league, res)!.factors;
+    const battle = f.find((x) => x.category === 'turnovers' && x.title.startsWith('Turnover battle'));
+    const traps = f.find((x) => x.key === 'blitz_to:d')!;
+    expect(traps.topic).toBe('turnovers');
+    if (battle && battle.pts > 0) expect(decidingFactors(f, f.length).filter((x) => x.topic === 'turnovers')).toHaveLength(1);
+    // the debrief's edges are the deciding ones
+    expect(debrief(league, res, buildGameReport(league, res)!).decided).toEqual(decidingFactors(buildGameReport(league, res)!.factors));
   });
 });

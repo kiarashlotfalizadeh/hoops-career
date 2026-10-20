@@ -27,6 +27,8 @@ export interface MoveMark {
 const TIMEOUT_TRIPS = 8;
 /** Trips at a rate before a move's effect reads as anything but early. */
 export const MOVE_MIN_TRIPS = 8;
+/** Trips each side the stretch before a timeout needs for its margin a trip to be quoted. */
+const MARGIN_MIN_BEFORE = 4;
 
 /** What a move is aimed at: the end of the floor, and on it the play types or the one player it's about. */
 interface Aim {
@@ -221,7 +223,8 @@ export function moveVerdict(m: CoachMove): { now: number | null; was: number | n
   if (what === 'margin') {
     const per = (t: MoveTally) => (t.us.poss + t.them.poss ? (t.us.pts - t.them.pts) / ((t.us.poss + t.them.poss) / 2) : null);
     const now = per(m.after);
-    const was = per(m.before);
+    // (a margin a trip over a trip or two before isn't a rate: a timeout a minute in has none to compare)
+    const was = Math.min(m.before.us.poss, m.before.them.poss) >= MARGIN_MIN_BEFORE ? per(m.before) : null;
     const trips = Math.min(m.after.us.poss, m.after.them.poss);
     return { now, was, trips, what, verdict: judge(now, was, trips, 1, 1.5) };
   }
