@@ -96,22 +96,16 @@ export default function FreeAgents() {
     [league, tid, s],
   );
 
-  // over the cap (the best asks need room he hasn't got) or a full roster: the list opens on who he can
-  // sign, one tap from everyone
-  const signableFirst = space <= 0 || n >= max;
-  const onlySignable = signablePick ?? signableFirst;
   // what the user could actually do today: the window is open and there's a spot to fill (a hardship one for a 10-day)
   const canAdd = !closed && (twoWayMode ? tw < TWO_WAY_MAX : tenDays ? n < max + hs.spots : n < max);
+  // (your own restricted free agent re-signs with Bird rights; one who signed an offer sheet waits on it)
+  const signable = (r: (typeof all)[number]) => !r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || tenDays || !!r.route || r.p.rfa?.tid === tid);
+  // over the cap (the best asks need room he hasn't got): the list opens on who he can sign, one tap
+  // from everyone. With nobody he can sign (a full roster, the window shut) it shows everyone
+  const signableFirst = (space <= 0 || n >= max) && all.some(signable);
+  const onlySignable = signablePick ?? signableFirst;
   const rows = all
-    .filter(
-      (r) =>
-        (pos === 'all' || r.p.pos === pos) &&
-        r.p.ovr >= minOvr &&
-        (!twoWayMode || r.twoWay) &&
-        (!tenDays || r.tenDay) &&
-        // (your own restricted free agent re-signs with Bird rights; one who signed an offer sheet waits on it)
-        (!onlySignable || (!r.p.waivers && !r.p.rfa?.sheet && canAdd && (twoWayMode || tenDays || r.route || r.p.rfa?.tid === tid))),
-    )
+    .filter((r) => (pos === 'all' || r.p.pos === pos) && r.p.ovr >= minOvr && (!twoWayMode || r.twoWay) && (!tenDays || r.tenDay) && (!onlySignable || signable(r)))
     .sort((a, b) => {
       switch (sort) {
         case 'ovr':
