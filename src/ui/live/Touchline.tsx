@@ -5,7 +5,7 @@
 import type { OffShape, Tactics, Team } from '../../core/types';
 import { OFF_SHAPES } from '../../core/types';
 import { MENTALITY_META, SHAPE_META, shapeOf } from '../../core/sim/tactics';
-import { SLOT_LETTERS } from '../../core/sim/slots';
+import { SLOT_LETTERS, slotName } from '../../core/sim/slots';
 import { famLabel } from '../../core/sim/familiarity';
 import { Chips, Help, Levels } from '../components/ui';
 import { FAM_OK, OPT, famSuffix, withMentalityOf, withShapeOf, type LiveSlot } from './familiar';
@@ -62,7 +62,7 @@ export function Touchline({
       <div className="lv-slots" role="group" aria-label="Your tactics">
         {slots.map((s) => {
           const on = s.i === cur;
-          const name = team.slots?.names[s.i] ?? (s.i === 0 ? 'Main' : `Plan ${SLOT_LETTERS[s.i]}`);
+          const name = slotName(team, s.i);
           return (
             <button
               key={s.i}

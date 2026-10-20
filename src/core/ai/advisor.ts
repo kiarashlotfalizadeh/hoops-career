@@ -19,6 +19,7 @@ import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
 import { SETS } from '../sim/sets';
+import { plural } from '../format';
 
 /** A change the staff would make against one opponent (see counterCandidates). */
 export interface Candidate {
@@ -615,14 +616,16 @@ function seasonLever(league: League, tid: number): Alert | null {
     if (!counter) continue;
     const after = cloneTactics(tactics);
     counter.apply(after);
+    const patch = tacticsDiff(tactics, after);
     const what = e.what.charAt(0).toUpperCase() + e.what.slice(1);
     return {
       id: `lever-${e.what}`,
       tone: 'alert',
       title: `${what} is costing you`,
       body: `It gives up ${e.lost.toFixed(1)} points a game and wins ${e.won.toFixed(1)} back (${e.games} games).`,
-      link: '/team/tactics',
-      fix: { kind: 'patch', patch: tacticsDiff(tactics, after), label: counter.label },
+      // (the Instructions phase the change is made in)
+      link: `/team/tactics?tab=instructions${patch.defense ? '&phase=outPoss' : ''}`,
+      fix: { kind: 'patch', patch, label: counter.label },
     };
   }
   return null;
@@ -774,8 +777,8 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       id: `fam-opt-${worst.key}`,
       tone: 'alert',
       title: `${worst.name.charAt(0).toUpperCase()}${worst.name.slice(1)} is new to us (${pct(worst.v)})`,
-      body: `We play it a step slow until it's drilled: about ${left} game${left === 1 ? '' : 's'} to fluid at a balanced focus, fewer with ${PREP_META.system.label.toLowerCase()}. Stick with it rather than changing again mid-stretch, or go back to what we know.`,
-      link: '/team/tactics',
+      body: `We play it a step slow until it's drilled: about ${plural(left, 'game')} to fluid at a balanced focus, fewer with ${PREP_META.system.label.toLowerCase()}. Stick with it rather than changing again mid-stretch, or go back to what we know.`,
+      link: '/team/tactics?tab=familiarity',
       fix: drills(),
     });
   } else if (r.overall < 80) {
@@ -785,7 +788,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'alert',
       title: `Still learning the system: ${pct(r.overall)}`,
       body: `${famLabel(r.overall)} so far, the ${end} most of all: a step slow until it's drilled. ${r.prep === 'system' ? 'The drills are on: give them time, and keep the changes for later.' : `${PREP_META.system.label} between games build it about twice as fast; changing it again starts over.`}`,
-      link: '/team/tactics',
+      link: '/team/tactics?tab=familiarity',
       fix: drills(),
     });
   } else if (r.learning.length) {
@@ -796,7 +799,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'neutral',
       title: `${andList(names)} ${one ? 'is' : 'are'} still learning the system`,
       body: `A new player is a step behind in what we run until he knows it; games and practice teach it. ${r.prep === 'system' ? 'The tactical drills are teaching it about twice as fast.' : `${PREP_META.system.label} teach it about twice as fast.`}`,
-      link: '/team/tactics',
+      link: '/team/tactics?tab=familiarity',
       fix: drills(),
     });
   } else if (r.prep === 'system' && r.overall >= FLUID - 3) {
@@ -805,7 +808,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'good',
       title: `The system is fluid (${pct(r.overall)})`,
       body: `The tactical drills have done their job. ${PREP_META.balanced.label} practice keeps it there; ${PREP_META.opponent.label.toLowerCase()} drills each game plan for its game.`,
-      link: '/team/tactics',
+      link: '/team/tactics?tab=familiarity',
       fix: { kind: 'prep', focus: 'balanced', label: PREP_META.balanced.label },
     });
   }
@@ -841,7 +844,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'neutral',
       title: `${p.lastName} is a natural ${meta.label.toLowerCase()}`,
       body: `Nobody in the starting five has the role, and he suits it (${'★'.repeat(fitStars(defRoleFits(p)[role]))}). ${meta.help}`,
-      link: '/team/tactics',
+      link: '/team/tactics?tab=players',
       fix: { kind: 'patch', patch: { defense: { roles: { ...(t.defense.roles ?? {}), [p.pid]: role } } }, label: `Make him ${role === 'poa' ? 'POA stopper' : 'rim anchor'}` },
     });
     break;
@@ -890,7 +893,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: 'Drop coverage without a rim protector',
         body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
-        link: '/team/tactics',
+        link: '/team/tactics?side=out',
         fix: { kind: 'coverage', pnr: 'hedge', label: 'Hedge instead' },
       });
     // only a switch on a ball screen leaves him on a guard (off-ball switches don't), so Drop or Ice fixes it
@@ -901,7 +904,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         tone: 'alert',
         title: 'Switching with a slow big',
         body: `Opponents will hunt ${slow.lastName} on switched ball screens. Drop or Ice coverage keeps him near the rim.`,
-        link: '/team/tactics',
+        link: '/team/tactics?side=out',
         fix: { kind: 'coverage', pnr: 'drop', label: 'Drop instead' },
       });
     }

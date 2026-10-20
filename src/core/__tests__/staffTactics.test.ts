@@ -57,10 +57,11 @@ describe('the staff acts on the season', () => {
     l.teams[0].tactics.manual = true;
     const mine = structuredClone(l.teams[0].tactics);
     expect(staffTactics(l, 0)).toEqual(mine);
+    // (in season the staff keeps the shape and playbooks it runs unless another fits clearly better: sticky)
     const ai = l.teams[1];
-    expect(staffTactics(l, 1)).toEqual(autoTactics(ai, teamPlayers(l, 1), true));
+    expect(staffTactics(l, 1)).toEqual(autoTactics(ai, teamPlayers(l, 1), true, { sticky: true }));
     const quiet = league(() => []);
-    expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true));
+    expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true, { sticky: true }));
   });
 
   it('names each change it makes once, with what the setting cost', () => {

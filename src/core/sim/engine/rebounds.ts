@@ -45,7 +45,7 @@ export const reboundsMethods = {
     // switching off-ball screens leaves smalls boxing out bigs
     if (!zd && def.t.defense.switchOffBall && K.switchGlass) {
       pOrb *= 1 + lev(K.switchGlass);
-      this.impact('switch_mismatch', off.side, orbRate * lev(K.switchGlass) * K.orbPts);
+      this.impact('switch_mismatch', off.side, orbRate * lev(K.switchGlass) * K.orbPts * K.offBallTag.glass);
     }
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {

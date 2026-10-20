@@ -1,7 +1,7 @@
 // The system report on Team → Tactics: your system's grade at seven things at each end, against the
 // league's other systems, each a tap from what it's made of (the players who carry it, then what each
-// setting adds or takes away), and the strip of the same grades over the Offense and Defense tabs,
-// which moves as you change a setting so you see what each lever buys and what it costs.
+// setting adds or takes away), and the strip of the same grades over the Tactic, Instructions and
+// Players tabs, which moves as you change a setting so you see what each lever buys and what it costs.
 import { useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { QUALITY_META, gradeTone, type Grade, type Quality, type QualityId, type SystemReport } from '../../core/analysis/system';
@@ -55,11 +55,11 @@ export function SystemReportCard({ report, was }: { report: SystemReport; was?: 
       right={
         <Help title="System report">
           <p>
-            What your system should be good and bad at, from the players who play its minutes (your rotation) and the settings you give them, graded against the other 29
-            teams&apos; systems: A+ is the top tenth of the league, F the bottom tenth.
+            What your system should be good and bad at, from the players who play its minutes (your rotation) and the settings you give them, graded against the other{' '}
+            {report.off[0] ? report.off[0].of - 1 : 29} teams&apos; systems: A+ is the top tenth of the league, F the bottom tenth.
           </p>
           <p>Tap a line to see what it&apos;s made of: who carries it, and what each setting adds or takes away. Change a setting and the grades move with it.</p>
-          <p>It&apos;s a projection to tinker against; Insights shows what your tactics actually won and gave up this season.</p>
+          <p>It&apos;s a projection to tinker against; under it, the season&apos;s games show what your tactics actually won and gave up.</p>
         </Help>
       }
     >

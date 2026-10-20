@@ -268,8 +268,10 @@ describe('sets in the engine', () => {
     ];
     for (const [id, beats, kills] of cases) {
       const o = teamFor(id);
-      const a = pairedValue(id, o, DEF[beats], 10, 500);
-      const b = pairedValue(id, o, DEF[kills], 10, 500);
+      // (Chicago's gap is the smallest, about 0.19 a run: forty games measure it to 0.05, ten only to 0.1)
+      const games = id === 'chicago' ? 40 : 10;
+      const a = pairedValue(id, o, DEF[beats], games, 500);
+      const b = pairedValue(id, o, DEF[kills], games, 500);
       expect(a.mean, `${id} vs ${beats}`).toBeGreaterThan(0);
       expect(a.mean - b.mean, `${id}: ${beats} vs ${kills}`).toBeGreaterThan(2 * Math.hypot(a.se, b.se));
     }
@@ -340,18 +342,18 @@ describe('sets in the engine', () => {
     // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
     // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
     // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-    // and the league's rates recentred
+    // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth
     const expected = {
       ai: [
-        [125, 116, 78, 37, 9, 23, 12, 0],
-        [138, 128, 98, 22, 16, 36, 13, 0],
-        [123, 110, 89, 41, 9, 9, 13, 0],
+        [119, 105, 79, 36, 12, 25, 15, 0],
+        [121, 110, 105, 27, 18, 31, 8, 0],
+        [117, 104, 88, 37, 8, 10, 15, 0],
       ],
       // (taken again when play calls from the bench were retired)
       coached: [
-        [121, 104, 96, 25, 14, 25, 9, 0],
-        [123, 126, 96, 32, 13, 19, 16, 0],
-        [115, 118, 84, 41, 9, 30, 16, 0],
+        [116, 107, 88, 25, 11, 26, 12, 0],
+        [122, 123, 95, 34, 12, 23, 18, 0],
+        [113, 119, 86, 44, 9, 30, 15, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

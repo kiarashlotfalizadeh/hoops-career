@@ -127,6 +127,24 @@ async function write(l: League): Promise<boolean> {
   }
 }
 
+/**
+ * Another window has saved over this copy of the league: a sim or a phase change here could never be
+ * saved, so it isn't started (the save banner offers the reload that picks the other one up).
+ */
+function stale(): boolean {
+  const problem = useStore.getState().saveProblem;
+  if (problem?.kind !== 'conflict') return false;
+  useStore
+    .getState()
+    .toast(
+      problem.deleted
+        ? 'This league was deleted in another window. Export a backup to keep this copy.'
+        : 'This league was changed in another window. Reload to pick it up, then sim.',
+      'bad',
+    );
+  return true;
+}
+
 /** Bumped by every run in the worker and by opening another league: a run whose token is stale has nothing to hand back. */
 let runToken = 0;
 
@@ -211,7 +229,7 @@ export const useStore = create<AppState>((set, get) => ({
   saveBeforeLeaving: async () => (await get().flush()) || get().saveProblem?.kind === 'conflict',
   simulate: async (target) => {
     const l = get().league;
-    if (!l || get().sim) return;
+    if (!l || get().sim || stale()) return;
     const token = ++runToken;
     set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false });
     // what the sim starts from is on the device first
@@ -267,7 +285,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
   task: async (label, op) => {
     const l = get().league;
-    if (!l || get().sim) return null;
+    if (!l || get().sim || stale()) return null;
     const token = ++runToken;
     set({ sim: { label, done: 0, total: 1 } });
     await get().flush();

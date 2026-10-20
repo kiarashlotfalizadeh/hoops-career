@@ -342,34 +342,34 @@ describe('engine defense', () => {
     // tactics were made to matter twice as much: tacticLeverage.test.ts plays these games at 1x leverage and gets
     // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
     // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
-    // recentred)
+    // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read)
     const expected: Record<string, number[][]> = {
       default: [
-        [125, 116, 78, 37, 9, 23, 12, 0],
-        [138, 128, 98, 22, 16, 36, 13, 0],
-        [123, 110, 89, 41, 9, 9, 13, 0],
+        [119, 105, 79, 36, 12, 25, 15, 0],
+        [121, 110, 105, 27, 18, 31, 8, 0],
+        [117, 104, 88, 37, 8, 10, 15, 0],
       ],
       zone23: [
-        [113, 124, 94, 48, 10, 21, 11, 0],
-        [114, 116, 96, 33, 16, 20, 13, 0],
-        [117, 131, 97, 41, 9, 20, 11, 0],
+        [110, 119, 93, 43, 15, 18, 12, 0],
+        [121, 106, 112, 36, 26, 18, 10, 0],
+        [114, 126, 92, 38, 9, 16, 17, 0],
       ],
       zone32: [
-        [117, 123, 83, 37, 10, 33, 11, 0],
-        [122, 107, 93, 26, 10, 21, 13, 0],
-        [117, 113, 93, 28, 9, 22, 14, 0],
+        [105, 112, 79, 48, 11, 20, 21, 0],
+        [120, 109, 97, 24, 13, 26, 8, 0],
+        [105, 118, 100, 23, 14, 27, 12, 0],
       ],
       double: [
-        [116, 100, 85, 38, 12, 27, 12, 0],
-        [132, 129, 95, 23, 16, 26, 12, 0],
-        [129, 103, 98, 38, 14, 14, 13, 0],
+        [114, 98, 86, 38, 13, 22, 11, 0],
+        [135, 115, 99, 26, 17, 22, 12, 0],
+        [122, 103, 93, 37, 11, 19, 15, 0],
       ],
       // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
       // the couple of trips the mismatch hunt changes back to the same team lines)
       hunt: [
-        [131, 110, 73, 35, 8, 16, 14, 0],
-        [120, 116, 96, 23, 13, 23, 8, 0],
-        [125, 109, 90, 40, 10, 9, 13, 0],
+        [119, 105, 79, 36, 12, 25, 15, 0],
+        [128, 126, 97, 22, 13, 40, 12, 0],
+        [117, 104, 89, 37, 8, 10, 15, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

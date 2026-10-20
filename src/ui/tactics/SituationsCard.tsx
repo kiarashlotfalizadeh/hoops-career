@@ -16,6 +16,8 @@ import '../screens/tactics.css';
 
 type Edit = (fn: (t: Tactics) => void) => void;
 
+/** A score margin as the plan's trigger reads it: "Down 6", "Tied", "Up 3". */
+const margin = (x: number) => (x > 0 ? `Up ${x}` : x < 0 ? `Down ${-x}` : 'Tied');
 const signed = (x: number) => `${x > 0 ? '+' : x < 0 ? '−' : ''}${Math.abs(x)}`;
 
 /** The plan editor's own controls: the mentality, six relative sliders, the base scheme and the press. */
@@ -266,7 +268,7 @@ function SituationEditor({ team, s, change }: { team: Team; s: SituationalPlan; 
           format={(v) => (v >= 720 ? 'Any time' : `Last ${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}`)}
         />
         <Slider
-          label="Our lead at least"
+          label="Score from"
           value={lead(w.minLead, ANY_LO)}
           min={ANY_LO}
           max={30}
@@ -276,11 +278,10 @@ function SituationEditor({ team, s, change }: { team: Team; s: SituationalPlan; 
               if (p.when.maxLead !== undefined && v > p.when.maxLead) setWhen(p, 'maxLead', v < ANY_HI ? v : undefined);
             })
           }
-          format={(v) => (v <= ANY_LO ? 'Any' : signed(v))}
-          help="Negative: trailing by at most that much."
+          format={(v) => (v <= ANY_LO ? 'Any' : margin(v))}
         />
         <Slider
-          label="Our lead at most"
+          label="Score to"
           value={lead(w.maxLead, ANY_HI)}
           min={-30}
           max={ANY_HI}
@@ -290,8 +291,7 @@ function SituationEditor({ team, s, change }: { team: Team; s: SituationalPlan; 
               if (p.when.minLead !== undefined && v < p.when.minLead) setWhen(p, 'minLead', v > ANY_LO ? v : undefined);
             })
           }
-          format={(v) => (v >= ANY_HI ? 'Any' : signed(v))}
-          help="Negative: trailing by at least that much."
+          format={(v) => (v >= ANY_HI ? 'Any' : margin(v))}
         />
         <Toggle
           on={!!w.benchUnit}

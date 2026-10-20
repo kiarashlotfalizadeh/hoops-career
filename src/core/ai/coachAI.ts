@@ -5,7 +5,7 @@ import type { DefRole, OffRole, OffShape, Player, Pos, Rotation, ShotFreedom, Ta
 import { OFF_SHAPES } from '../types';
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
-import { defRoleFits } from '../analysis/system';
+import { defRoleFits, miscast, roleFits } from '../analysis/system';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
 
@@ -622,6 +622,14 @@ export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; 
     }
     roles[p.pid] = role;
   });
+  // nobody stays miscast (two stars short of his best role, as the Tactics screen marks it), except
+  // the lead creator, and not into a second creator's role
+  for (const p of sorted) {
+    if (roles[p.pid] === 'creator') continue;
+    const better = miscast(roleFits(p), roles[p.pid]);
+    if (!better || (better === 'creator' && creators++ > 0)) continue;
+    roles[p.pid] = better;
+  }
   // green light for the top two options, limited for poor shooters
   sorted.forEach((p, i) => {
     const c = composites(p.ratings);

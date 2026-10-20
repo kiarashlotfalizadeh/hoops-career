@@ -374,7 +374,7 @@ describe('engine tactics', () => {
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
       // much: tacticLeverage.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
       // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
-      // playbooks were recalibrated and the league's rates recentred)
+      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -382,10 +382,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [112, 120, 96, 90, 46, 37, 13, 6],
-        [106, 118, 97, 95, 50, 41, 15, 12],
-        [106, 123, 97, 101, 60, 60, 13, 4],
-        [102, 112, 85, 91, 40, 32, 8, 12],
+        [94, 105, 99, 92, 49, 39, 11, 12],
+        [109, 122, 92, 101, 51, 48, 9, 14],
+        [108, 127, 91, 99, 50, 56, 11, 9],
+        [121, 115, 79, 93, 44, 29, 4, 9],
       ]);
     });
 

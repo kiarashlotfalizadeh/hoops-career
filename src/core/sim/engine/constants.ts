@@ -19,6 +19,21 @@ export const K = {
   orbBase: 0.262,
   toBase: 0.15,
   nonShootFoul: 0.23,
+  /**
+   * A side-out foul in an action that plays on: the seconds the inbound and the reset take before the
+   * action's shot (it used to go up on the same tick as the whistle).
+   */
+  sideOutTime: { min: 2, max: 4 },
+  /**
+   * The share of dead-ball turnovers that are offensive fouls (a personal foul on the handler): about
+   * 1.8 a team game, the NBA's rate (at 0.24, 1.4, the league's fouls ran 8% under its 19.4).
+   */
+  chargeShare: 0.3,
+  /**
+   * The reach-in rate of a defense protecting a one-to-three-point lead in the last 24 seconds of the
+   * fourth quarter or overtime: it plays without fouling (a reach-in there was a free tie or lead).
+   */
+  lateLeadFoul: 0.3,
   /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
   teamReb: { orb: 0.02, drb: 0.09 },
   transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
@@ -73,6 +88,15 @@ export const K = {
    */
   switchDeny: { handoff: 0.25, motion: 0.1 },
   switchGlass: 0.03,
+  /**
+   * What the "why" tags of switching off-ball screens count of their own estimates, measured: paired
+   * runs over ten seed sets (two real matchups, 150 games each) with each mechanism on and off showed
+   * the cross-screen mismatch post-ups worth about 0.24 of their tagged points, the switched-handoff
+   * hunts 0.6, the boards a switch gives up 0.28 and the handoffs and ball movement it denies 0.24
+   * (each tag priced the look against the same action, not against the trip the offense would
+   * otherwise have run). Before, not switching tagged +1.7 a game against a measured +0.8.
+   */
+  offBallTag: { cross: 0.24, hunt: 0.6, glass: 0.28, deny: 0.24 },
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
   /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
@@ -119,11 +143,14 @@ export const K = {
    * impact tags. A run-out is worth less than it looks: the extra run-outs crashing gives up cost
    * about 0.15 points each in the final margin (paired runs with and without the leak, at 1x and
    * 2x), where the boards, turnovers and open looks the tags count show about 0.6 of their tagged
-   * points in the margin (leads ease off), so a run-out tags 0.18 and the runners' edge 0.05 a unit.
+   * points in the margin (leads ease off), so a run-out tagged 0.18 and the runners' edge 0.05 a unit.
+   * Over ten seed sets of the real league, the run-outs pushing in transition makes were worth 0.06
+   * to 0.13 each in the margin (the seed's turnover tendencies re-fit or not) against that 0.18, so a
+   * run-out tags 0.15: the cost crashing's leak was measured at.
    */
   orbPts: 1.6,
   toPts: 1.45,
-  runOutPts: 0.18,
+  runOutPts: 0.15,
   /**
    * Crunch time: how much more often the ball finds the go-to player, and how much more his best action
    * is run; and the same for the staff's own go-to (the best scorer on the floor) when nobody is named.

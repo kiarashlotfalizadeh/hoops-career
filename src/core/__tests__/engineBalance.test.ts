@@ -47,17 +47,30 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
   const games = 150;
   // the AI coaches' in-game adjustments would react to the change being measured
   const side = (tid: number, opp: number) => ({ ...buildSimInput(league, tid, 1, 'regular', opp), adjust: false });
-  const base = pairs.map(([a, b]) => runLab({ a: side(a, b), b: side(b, a), games, seed: 4242 + a }));
+  /** Seed sets the games are played over: one game's noise is as big as some effects, so a measure averages several. */
+  const SEEDS = [0, 1000, 2000, 3000, 4000];
+  const baseOf = new Map<number, LabSummary[]>();
+  const base = (off: number) => {
+    let b = baseOf.get(off);
+    if (!b) baseOf.set(off, (b = pairs.map(([a, bb]) => runLab({ a: side(a, bb), b: side(bb, a), games, seed: 4242 + a + off }))));
+    return b;
+  };
   const tags = (r: LabSummary, prefixes: string[]) => Object.entries(r.impacts).reduce((s, [k, v]) => s + (prefixes.some((p) => k.startsWith(p)) ? v.us - v.them : 0), 0);
-  /** Measured change (points per game, paired) and the change in the matching tags. */
-  const measure = (patch: TacticsPatch, prefixes: string[]) => {
-    const rs = pairs.map(([a, b]) => runLab({ a: side(a, b), b: side(b, a), games, seed: 4242 + a, patch }));
-    const d = rs.map((r, i) => pairedDelta(base[i], r));
-    const perGame = (x: number, i: number) => (x * (rs[i].pace + base[i].pace)) / 200;
+  /** Measured change (points per game, paired) and the change in the matching tags, over the seed sets `seeds`. */
+  const measure = (patch: TacticsPatch, prefixes: string[], seeds = [0]) => {
+    const rows = seeds.flatMap((off) =>
+      pairs.map(([a, b], i) => {
+        const was = base(off)[i];
+        const r = runLab({ a: side(a, b), b: side(b, a), games, seed: 4242 + a + off, patch });
+        const d = pairedDelta(was, r);
+        const perGame = (x: number) => (x * (r.pace + was.pace)) / 200;
+        return { delta: perGame(d.delta), se: perGame(d.se), tags: tags(r, prefixes) - tags(was, prefixes) };
+      }),
+    );
     return {
-      delta: d.reduce((s, x, i) => s + perGame(x.delta, i), 0) / d.length,
-      se: Math.sqrt(d.reduce((s, x, i) => s + perGame(x.se, i) ** 2, 0)) / d.length,
-      tags: rs.reduce((s, r, i) => s + tags(r, prefixes) - tags(base[i], prefixes), 0) / rs.length,
+      delta: rows.reduce((s, x) => s + x.delta, 0) / rows.length,
+      se: Math.sqrt(rows.reduce((s, x) => s + x.se ** 2, 0)) / rows.length,
+      tags: rows.reduce((s, x) => s + x.tags, 0) / rows.length,
     };
   };
 
@@ -73,7 +86,7 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
       [{ defense: { physicality: 100 } }, ['physicality', 'clean_defense']],
     ];
     for (const [patch, prefixes] of cases) {
-      const m = measure(patch, prefixes);
+      const m = measure(patch, prefixes, SEEDS);
       // within the measurement's noise, or within half of it; and the right sign when it's clear
       expect(Math.abs(m.tags - m.delta)).toBeLessThan(2 * m.se + 0.5 * Math.abs(m.delta));
       if (Math.abs(m.delta) > 2 * m.se) expect(Math.sign(m.tags)).toBe(Math.sign(m.delta));

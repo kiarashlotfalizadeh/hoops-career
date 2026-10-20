@@ -392,3 +392,17 @@ export function defRoleFits(p: Player): Record<DefRole, number> {
 
 /** A role fit as stars, one to five (a fit of 70 or more is five). */
 export const fitStars = (v: number) => Math.max(1, Math.min(5, Math.round((v - 30) / 10)));
+
+/**
+ * Stars another role has to be ahead by before a player counts as miscast. One star is inside what the
+ * fits can tell apart: measured over the real league (paired seeds against every team), moving every
+ * player one star short of his best role to it played no better, while moving the ones two or more
+ * short won a little.
+ */
+export const MISCAST_STARS = 2;
+
+/** His best role among `fits` when it's MISCAST_STARS or more ahead of the one he plays (`cur`), else null. */
+export function miscast<R extends string>(fits: Record<R, number>, cur: R): R | null {
+  const best = (Object.keys(fits) as R[]).reduce((a, r) => (fits[r] > fits[a] ? r : a), cur);
+  return fitStars(fits[best]) - fitStars(fits[cur]) >= MISCAST_STARS ? best : null;
+}

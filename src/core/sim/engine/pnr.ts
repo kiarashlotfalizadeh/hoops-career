@@ -214,10 +214,13 @@ export const pnrMethods = {
       return 'done';
     }
     // non-shooting foul: free throws in the penalty, else a side out (the shot clock restarts at 14 or
-    // more: an action the shot clock was rushing is reset, any other plays on), with a defender who
+    // more: an action the shot clock was rushing is reset, any other plays on from the inbound), with a defender who
     // fouled out on it replaced
     if (this.nonShootingFoul(off, def, H, dH, 'pnrBH')) return 'done';
-    if (this.sideOut && forced) return { carry: 0, ball: H };
+    if (this.sideOut) {
+      if (forced) return { carry: 0, ball: H };
+      this.sideOutInbound();
+    }
     if (!dH.on || !dS.on) {
       dH = this.defOf(def, H);
       dS = this.defOf(def, S);

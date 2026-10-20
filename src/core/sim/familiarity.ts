@@ -66,10 +66,10 @@ const HABIT_COST = 1.6;
 /** Knowledge of the system a player who just arrived has. */
 export const NEW_KNOW = 35;
 /** A role pair never played: a player new to both roles, and one keeping one of the two. */
-const NEW_PAIR = 45;
+export const NEW_PAIR = 45;
 const HALF_PAIR = 65;
 /** ...and one new to them but playing his natural offensive role (his archetype's: he's played it all his career). */
-const NATURAL_PAIR = 70;
+export const NATURAL_PAIR = 70;
 
 /** How much of the way to 100 a game played with an option closes, and a habit's way to the setting. */
 const GAME_GROW = 0.09;
@@ -107,7 +107,7 @@ export const PREP_META: Record<PrepFocus, { label: string; help: string; active:
   },
   recovery: {
     label: 'Recovery',
-    help: 'Rest, treatment and film: wear comes off faster (about 1.6 points a day instead of 0.75), but the system doesn’t build between games.',
+    help: 'Rest, treatment and film: wear comes off about twice as fast, but the system doesn’t build between games.',
     active: 0,
     alt: 0,
     know: 0,

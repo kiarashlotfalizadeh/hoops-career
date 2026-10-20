@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { ROLE_META, archetype, composites } from '../../core/ratings';
+import { DEF_ROLE_META, defRoleOf } from '../../core/sim/tactics';
 import { Bar, Help, Section, Statline, Tag, pct } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { ordinalSuffix, playerSeason, signed } from '../stats';
@@ -84,6 +85,7 @@ export function Overview({ league, p, onRole, onExtend, onRelease }: { league: L
             <div className="row between top">
               <div className="grow">
                 <div className="tm-role-name">{ROLE_META[role].label}</div>
+                {team && <div className="small dim">Out of possession: {DEF_ROLE_META[defRoleOf(team.tactics.defense, p.pid)].label}</div>}
                 {arch.role !== role && <div className="small warn">Natural role: {ROLE_META[arch.role].label}</div>}
               </div>
               {freedom && freedom !== 'Normal' && <Tag tone={freedom === 'Green light' ? 'good' : 'warn'}>{freedom}</Tag>}

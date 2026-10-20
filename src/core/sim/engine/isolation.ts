@@ -11,7 +11,15 @@ import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
 export const isolationMethods = {
-  iso(this: GameSim, off: ST, def: ST, open: number, late: LateMode, forced: boolean, fixed: { actor: SP; defender: SP; tag: string; fromPnr?: boolean } | null): ActionResult {
+  iso(
+    this: GameSim,
+    off: ST,
+    def: ST,
+    open: number,
+    late: LateMode,
+    forced: boolean,
+    fixed: { actor: SP; defender: SP; tag: string; fromPnr?: boolean; tagW?: number } | null,
+  ): ActionResult {
     const A = fixed?.actor ?? this.pickActor(off, 'iso');
     let D = fixed?.defender ?? this.defOf(def, A);
     const finish: FinishType = fixed?.fromPnr ? 'pnrBH' : 'iso';
@@ -52,7 +60,10 @@ export const isolationMethods = {
       return 'done';
     }
     if (this.nonShootingFoul(off, def, A, D, finish)) return 'done';
-    if (this.sideOut && forced) return { carry: 0, ball: A };
+    if (this.sideOut) {
+      if (forced) return { carry: 0, ball: A };
+      this.sideOutInbound();
+    }
     if (!D.on) D = this.defOf(def, A);
     const spacing = this.spacingBonus(off);
     const rimOpen = adv * 0.35 + spacing * 0.5 - lev(help * 0.25);
@@ -99,7 +110,7 @@ export const isolationMethods = {
         this.shoot(off, def, { shooter: A, zone: 'ab3', open: advOpen * 0.6 - 0.2, contest: D, assister: null, finish, pullup: true });
         return 'done';
       case 3:
-        return this.post(off, def, open, forced, { actor: A, defender: D, tag: fixed?.tag ?? 'mismatch_post', entry: null });
+        return this.post(off, def, open, forced, { actor: A, defender: D, tag: fixed?.tag ?? 'mismatch_post', entry: null, tagW: fixed?.tagW });
       case 4: {
         const sh = this.kickTarget(off, A);
         this.passStep(A, sh);

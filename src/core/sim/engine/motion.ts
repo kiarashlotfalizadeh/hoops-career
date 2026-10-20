@@ -20,7 +20,7 @@ export const motionMethods = {
     const sw = def.t.defense.switchOffBall && !zone;
     if (sw) {
       adv -= lev(K.switchDeny.motion);
-      this.impact('switch_deny', def.side, lev(K.switchDeny.motion) * 0.2);
+      this.impact('switch_deny', def.side, lev(K.switchDeny.motion) * 0.2 * K.offBallTag.deny);
     }
     // the ball sticks while the offense waits on the matchup it hunts
     if (this.hunted(off, def)) {
@@ -48,10 +48,16 @@ export const motionMethods = {
       const nd = small && this.defOf(def, small);
       if (P && own && nd && nd !== own && P.c.postScore > 50 && P.r.hgt - nd.r.hgt >= K.crossSize && this.rng.chance(lev(K.crossSwitch))) {
         const gain = ((own.c.intDef * this.dq(own) - nd.c.intDef * this.dq(nd)) / 20 + (own.r.hgt - nd.r.hgt) / 70) * K.advPts.post;
-        this.impact('switch_mismatch', off.side, lev(gain), P.pid);
+        this.impact('switch_mismatch', off.side, lev(gain) * K.offBallTag.cross, P.pid);
         if (this.cur) this.cur.label = `Switch! ${P.name} posts up ${nd.name}`;
         this.passStep(passer, P);
-        return this.post(off, def, open + lev(K.switchScramble) + levExtra(gain / K.advPts.post), forced, { actor: P, defender: nd, tag: 'switch_mismatch', entry: passer });
+        return this.post(off, def, open + lev(K.switchScramble) + levExtra(gain / K.advPts.post), forced, {
+          actor: P,
+          defender: nd,
+          tag: 'switch_mismatch',
+          entry: passer,
+          tagW: K.offBallTag.cross,
+        });
       }
     }
     const cutters = off.on.filter((p) => p !== passer);

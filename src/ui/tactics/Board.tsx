@@ -11,7 +11,7 @@ import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
 import { ROLE_META, archetype } from '../../core/ratings';
 import { ALL_SCHEMES, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
 import { famLabel, optValue, roleFam } from '../../core/sim/familiarity';
-import { defRoleFits, fitStars, roleFits } from '../../core/analysis/system';
+import { defRoleFits, fitStars, miscast, roleFits } from '../../core/analysis/system';
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
@@ -33,9 +33,9 @@ interface Row {
   def: (typeof DEF_ROLES)[number];
   offFit: number;
   defFit: number;
-  /** His best role at each end and its fit. */
-  offBest: { r: keyof typeof ROLE_META; v: number };
-  defBest: { r: (typeof DEF_ROLES)[number]; v: number };
+  /** A role at each end that suits him clearly better (miscast: two stars or more), if there is one. */
+  offBetter: keyof typeof ROLE_META | null;
+  defBetter: (typeof DEF_ROLES)[number] | null;
   pair: number;
 }
 
@@ -44,9 +44,7 @@ function rowOf(t: Tactics, fam: Familiarity, p: Player): Row {
   const df = defRoleFits(p);
   const off = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
   const def = defRoleOf(t.defense, p.pid);
-  const ob = (Object.keys(of) as (keyof typeof of)[]).sort((a, b) => of[b] - of[a])[0];
-  const db = [...DEF_ROLES].sort((a, b) => df[b] - df[a])[0];
-  return { p, off, def, offFit: of[off], defFit: df[def], offBest: { r: ob, v: of[ob] }, defBest: { r: db, v: df[db] }, pair: roleFam(fam, t, p) };
+  return { p, off, def, offFit: of[off], defFit: df[def], offBetter: miscast(of, off), defBetter: miscast(df, def), pair: roleFam(fam, t, p) };
 }
 
 /** A shape's fit as a tone: half a point per 100 or more either way shows. */
@@ -108,8 +106,8 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
             and each player&apos;s <Term id="defroles">defensive role</Term>.
           </p>
           <p>
-            ★ is how well he suits his role at that end (★★★★★ the best); a warning edge means another role suits him better. The dot is how well he knows his pair of roles (
-            <Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
+            ★ is how well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he
+            knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
           </p>
           <p>Tap a player to change his roles, shot freedom and glass duty.</p>
         </Help>
@@ -161,9 +159,13 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
                 ),
               }))}
             note={
-              <>
-                <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> per 100 vs 4-out · {famSub(`shape:${shape}`)}
-              </>
+              shape === 'fourOut' ? (
+                <>The baseline shape · {famSub('shape:fourOut')}</>
+              ) : (
+                <>
+                  <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> per 100 vs 4-out · {famSub(`shape:${shape}`)}
+                </>
+              )
             }
           />
         ) : (
@@ -204,9 +206,9 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
           if (!spot) return null;
           const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].short;
           const fit = inPoss ? r.offFit : r.defFit;
-          const best = inPoss ? r.offBest : r.defBest;
-          const off = fitStars(best.v) > fitStars(fit);
-          const bestName = inPoss ? ROLE_META[best.r as keyof typeof ROLE_META].label : DEF_ROLE_META[best.r as (typeof DEF_ROLES)[number]].label;
+          const better = inPoss ? r.offBetter : r.defBetter;
+          const off = !!better;
+          const bestName = !better ? '' : inPoss ? ROLE_META[better as keyof typeof ROLE_META].label : DEF_ROLE_META[better as (typeof DEF_ROLES)[number]].label;
           return (
             <button
               key={r.p.pid}
@@ -214,11 +216,11 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
               className={`tx-floor-p${off ? ' off' : ''}`}
               style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
               onClick={() => setPick(r.p.pid)}
-              aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; best as ${bestName}` : ''}; knows his roles ${Math.round(r.pair)}%`}
+              aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}; knows his roles ${Math.round(r.pair)}%`}
             >
               <span className="tx-floor-n">
                 <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
-                {nameOf(r.p.pid)}
+                <span className="ellipsis">{nameOf(r.p.pid)}</span>
               </span>
               <span className="tx-floor-r">{role}</span>
               <span className="tx-floor-s" aria-hidden="true">
@@ -237,7 +239,7 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
           <i className="tx-famdot good" /> <i className="tx-famdot warn" /> <i className="tx-famdot bad" /> knows his roles
         </span>
         <span>
-          <i className="tx-legend-off" /> better in another role
+          <i className="tx-legend-off" /> suits another role better
         </span>
       </div>
 

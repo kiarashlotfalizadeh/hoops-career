@@ -149,8 +149,8 @@ export default function Lineups() {
                 </p>
               )}
               <p>
-                Faded rows have fewer than {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}: over that few, a net rating can swing ±16 or more by
-                chance. Trust the ones with more minutes.
+                Faded rows have fewer than {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}: over that few, a net rating can swing ±
+                {Math.round(netSE(LOW_SAMPLE_POSS))} or more by chance. Trust the ones with more minutes.
               </p>
               {view === '5' && <p>Tap a five to make it your starters or closers.</p>}
             </Help>
@@ -357,13 +357,15 @@ function UnitSheet({
       </div>
       <Statline
         items={[
-          { k: <span className="as-is">Net</span>, v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+          { k: <span className="as-is">Net</span>, v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(2 * se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
           { k: <span className="as-is">ORtg</span>, v: f1(u.ortg) },
           { k: <span className="as-is">DRtg</span>, v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
       />
-      <div className="tm-foot">{u.poss < LOW_SAMPLE_POSS ? 'A small sample: the ratings can swing a lot by chance.' : `The net rating's 95% range is about ± ${f1(2 * se)}.`}</div>
+      <div className="tm-foot">
+        {u.poss < LOW_SAMPLE_POSS ? 'A small sample: the ratings can swing a lot by chance.' : 'The ± under Net is its 95% range: chance alone could move it that much.'}
+      </div>
       <div className="col" style={{ gap: 8 }}>
         <button className="btn primary block" disabled={busy || !!why || hurt.length > 0 || isStarters} onClick={() => make('starters')}>
           {isStarters ? 'Your starters' : 'Make these the starters'}

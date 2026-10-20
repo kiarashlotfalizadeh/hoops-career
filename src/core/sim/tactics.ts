@@ -291,7 +291,7 @@ export const SHAPE_META: Record<OffShape, { label: string; short: string; help: 
 };
 
 export const DEF_ROLE_META: Record<DefRole, { label: string; short: string; help: string }> = {
-  standard: { label: 'Position Defender', short: 'Position', help: 'Guards whomever the staff’s matchups give him, plays the scheme and nothing more.' },
+  standard: { label: 'Position Defender', short: 'Position D', help: 'Guards whomever the staff’s matchups give him, plays the scheme and nothing more.' },
   poa: {
     label: 'Point-of-Attack Stopper',
     short: 'Point of attack',

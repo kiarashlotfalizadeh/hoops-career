@@ -3,7 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { DEF_QUALITIES, OFF_QUALITIES, fitStars, gradeChanges, gradeOf, roleFits, systemReport } from '../analysis/system';
+import { DEF_QUALITIES, OFF_QUALITIES, fitStars, gradeChanges, gradeOf, miscast, roleFits, systemReport } from '../analysis/system';
+import { autoRoles } from '../ai/coachAI';
 import { cloneTactics } from '../sim/tactics';
 
 const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
@@ -59,5 +60,23 @@ describe('the system report', () => {
     expect(fb.roller).toBeGreaterThan(fb.shooter - 10);
     for (const v of Object.values(fs)) expect(fitStars(v)).toBeGreaterThanOrEqual(1);
     expect(fitStars(90)).toBe(5);
+  });
+});
+
+describe('a miscast player', () => {
+  it('is two stars or more short of his best role; one star is within the fits', () => {
+    const fits = { creator: 70, scorer: 60, shooter: 45 };
+    expect(miscast(fits, 'creator')).toBeNull();
+    expect(miscast(fits, 'scorer')).toBeNull();
+    expect(miscast(fits, 'shooter')).toBe('creator');
+  });
+
+  it("isn't left that way by the staff, but for the lead creator", () => {
+    for (const team of league.teams) {
+      const ps = teamPlayers(league, team.tid);
+      const { roles } = autoRoles(ps);
+      expect(Object.values(roles).filter((r) => r === 'creator').length).toBeLessThanOrEqual(1);
+      for (const p of ps) if (roles[p.pid] !== 'creator') expect(miscast(roleFits(p), roles[p.pid]) ?? 'creator').toBe('creator');
+    }
   });
 });

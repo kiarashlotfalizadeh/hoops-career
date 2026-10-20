@@ -62,7 +62,7 @@ export function TacticTab({ players, side, setSide }: { players: Player[]; side:
               </p>
               <p>
                 <Term id="fit">Fit</Term> scores how well your roster suits each (100 your best fit of them, 45 your worst). A new style costs{' '}
-                <Term id="familiarity">familiarity</Term> until it&apos;s drilled.
+                <Term id="familiarity">familiarity</Term> until it&apos;s drilled: each one you don&apos;t run says how well your team knows it.
               </p>
             </Help>
           }

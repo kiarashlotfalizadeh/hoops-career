@@ -10,13 +10,13 @@ import { DRAFT_PROSPECT, FREE_AGENT } from '../../core/types';
 import { fmtHeight } from '../../core/ratings';
 import { playerName } from '../../core/league/helpers';
 import { askingContract, waiverSalary } from '../../core/league/contracts';
-import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
+import { playerAge, salaryFor } from '../../core/playerGen';
 import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Avatar, Bar, Empty, Help, Ovr, PageHeader, Section, Segmented } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
-import { capSeason, openOption, shortSeason } from '../office/common';
+import { capSeason, contractEnd, forYears } from '../office/common';
 import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
@@ -27,25 +27,19 @@ type View = 'profile' | 'ratings' | 'stats';
 /** The view each section is in: who they are first, then the ratings, then the numbers. */
 const VIEW_OF: Record<CmpSection['id'], View> = { overview: 'profile', skills: 'profile', honors: 'profile', ratings: 'ratings', season: 'stats', career: 'stats', highs: 'stats' };
 
-/** His deal as a line and a note: salary and years left, a free agent's asking price, a prospect's board rank. */
+/** His deal as a line and a note: salary and when it ends, a free agent's asking price, a prospect's board rank. */
 function contractOf(league: League, p: Player): { main: string; sub?: string } {
-  const yrs = (n: number) => `${n} yr${n === 1 ? '' : 's'}`;
   if (p.tid >= 0) {
     // the season contracts count against (next season's in the offseason), or this one for a contract that's up
     const s = salaryFor(p, capSeason(league)) ? capSeason(league) : league.season;
-    const exp = contractExp(p.contract);
-    const opt = openOption(league, p);
     if (p.contract.tenDay) return { main: `${money(salaryFor(p, s), 2)}`, sub: '10-day contract' };
-    return {
-      main: `${money(salaryFor(p, s))} · ${yrs(exp - s + 1)}`,
-      // when it ends as every desk says it ("thru 30-31 · player option", "expiring")
-      sub: p.contract.twoWay ? 'Two-way deal' : exp <= s ? 'expiring' : `thru ${shortSeason(exp)}${opt ? ` · ${opt} option` : ''}`,
-    };
+    // an existing deal says when it ends, as every desk says it ("thru 30-31 PO", "expiring")
+    return { main: money(salaryFor(p, s)), sub: p.contract.twoWay ? 'Two-way deal' : contractEnd(league, p, s) };
   }
   if (p.tid === FREE_AGENT) {
     if (p.waivers) return { main: money(waiverSalary(league, p)), sub: 'On waivers' };
     const ask = askingContract(league, p, league.userTid);
-    return { main: `${money(ask.amount)} · ${yrs(ask.years)}`, sub: p.rfa ? `asking · ${league.teams[p.rfa.tid]?.abbrev ?? ''} can match` : 'asking' };
+    return { main: `${money(ask.amount)} ${forYears(ask.years)}`, sub: p.rfa ? `asking · ${league.teams[p.rfa.tid]?.abbrev ?? ''} can match` : 'asking' };
   }
   if (p.tid === DRAFT_PROSPECT) return { main: `#${p.prospect?.rank ?? '—'} on the board`, sub: `${p.draft.year} draft` };
   return { main: '—' };

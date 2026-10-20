@@ -56,9 +56,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
             items={[
               { k: 'Age', v: age },
               { k: 'Potential', v: p.pot, s: p.pot > p.ovr ? `+${p.pot - p.ovr} to go` : 'reached' },
-              ...(p.tid >= 0
-                ? [{ k: 'Season wear', v: `${Math.round(p.wear)}/100`, s: p.wear > 50 ? 'needs rest' : 'fresh', color: p.wear > 50 ? 'var(--warn)' : undefined }]
-                : []),
+              ...(p.tid >= 0 ? [{ k: 'Wear', v: `${Math.round(p.wear)}/100`, s: p.wear >= 55 ? 'needs rest' : 'fresh', color: p.wear >= 55 ? 'var(--warn)' : undefined }] : []),
             ]}
           />
         </div>

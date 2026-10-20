@@ -5,6 +5,7 @@
 
 import type { BoxLine, GameResult, LineupStat, PbpEntry, TeamBox } from '../../types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../log';
+import { K } from './constants';
 import type { Box, SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -60,7 +61,7 @@ export const recordMethods = {
       stealer.b.stl++;
       def.tot.stl++;
     }
-    const charge = !stealer && this.rng.chance(0.24);
+    const charge = !stealer && this.rng.chance(K.chargeShare);
     if (this.record) {
       const text = stealer
         ? // (a pass picked off: the pocket pass to the roller, a pass round the perimeter; else a strip)

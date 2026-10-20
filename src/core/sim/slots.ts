@@ -9,7 +9,7 @@ import { cloneTactics, tacticsDiff, withoutGameSpecific } from './tactics';
 
 export const SLOT_COUNT = 3;
 export const SLOT_LETTERS = ['A', 'B', 'C'] as const;
-const DEFAULT_NAMES = ['Main system', 'Plan B', 'Plan C'];
+const DEFAULT_NAMES = ['Main', 'Plan B', 'Plan C'];
 
 /** The team's slots, made if it has none (A is its tactics, B and C empty). */
 export function ensureSlots(team: Team): TacticSlots {
@@ -23,10 +23,12 @@ export function slotTactics(team: Team, i: number): Tactics | null {
   return s.stored[i] ?? null;
 }
 
-/** A slot's label: "A · Main system". */
+/** A slot's name: "Main", "Plan B", or what the coach called it. */
+export const slotName = (team: Team, i: number): string => team.slots?.names[i] ?? DEFAULT_NAMES[i];
+
+/** A slot's label: "A · Main". */
 export function slotLabel(team: Team, i: number): string {
-  const name = team.slots?.names[i] ?? DEFAULT_NAMES[i];
-  return `${SLOT_LETTERS[i]} · ${name}`;
+  return `${SLOT_LETTERS[i]} · ${slotName(team, i)}`;
 }
 
 /** The active slot's index (0 when the team keeps one tactic). */

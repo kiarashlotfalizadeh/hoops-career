@@ -8,7 +8,7 @@ import { MoreHorizontal, Plus } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { League, Mentality, Tactics } from '../../core/types';
-import { SLOT_COUNT, SLOT_LETTERS, activeSlot, clearSlot, copyToSlot, renameSlot, slotTactics, switchSlot } from '../../core/sim/slots';
+import { SLOT_COUNT, SLOT_LETTERS, activeSlot, clearSlot, copyToSlot, renameSlot, slotName, slotTactics, switchSlot } from '../../core/sim/slots';
 import { MENTALITY_META } from '../../core/sim/tactics';
 import { playbookLabel } from '../../core/sim/playbooks';
 import { famLabel } from '../../core/sim/familiarity';
@@ -18,8 +18,6 @@ import { Term } from '../components/Glossary';
 import { PresetPicker } from './PresetPicker';
 import { famTone } from './formation';
 import { tweak } from './edit';
-
-const DEFAULT_NAMES = ['Main system', 'Plan B', 'Plan C'];
 
 /** Make slot `i` the team's tactic: the coach's call (the assistant stops refitting it). */
 const switchTo = (i: number) =>
@@ -39,7 +37,7 @@ function slotsOf(league: League): SlotInfo[] {
   const team = league.teams[league.userTid];
   return Array.from({ length: SLOT_COUNT }, (_, i) => {
     const t = slotTactics(team, i);
-    return { i, name: team.slots?.names[i] ?? DEFAULT_NAMES[i], t, fam: t ? systemFamiliarity(league, league.userTid, t).overall : null };
+    return { i, name: slotName(team, i), t, fam: t ? systemFamiliarity(league, league.userTid, t).overall : null };
   });
 }
 

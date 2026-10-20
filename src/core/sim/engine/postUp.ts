@@ -8,7 +8,7 @@ import type { SP, ST, ActionResult } from './state';
 import type { GameSim } from './game';
 
 export const postUpMethods = {
-  post(this: GameSim, off: ST, def: ST, open: number, forced: boolean, fixed: { actor: SP; defender: SP; tag: string; entry: SP | null } | null): ActionResult {
+  post(this: GameSim, off: ST, def: ST, open: number, forced: boolean, fixed: { actor: SP; defender: SP; tag: string; entry: SP | null; tagW?: number } | null): ActionResult {
     // Post split: its post player, its entry passer, and the pair splitting around him
     const play = fixed ? null : this.takePlay('post');
     const A = fixed?.actor ?? (play ? this.useActor(off, play.cast.a) : this.pickActor(off, 'post'));
@@ -52,7 +52,7 @@ export const postUpMethods = {
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
     // a small switched onto a big can only hold his ground by fouling
     let reach = fixed?.tag === 'switch_mismatch' ? 1 + lev(Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul) : 1;
-    let foulTag: [string, number] | undefined = reach > 1 ? ['switch_mismatch', reach] : undefined;
+    let foulTag: [string, number, number?] | undefined = reach > 1 ? ['switch_mismatch', reach, fixed?.tagW] : undefined;
     // (the physical defender's extra fouls go to the instruction unless a switch already put a small on him)
     if (body) {
       reach *= levGiftW(K.pd.body.foul);

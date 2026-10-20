@@ -47,7 +47,7 @@ export const handoffMethods = {
       adv -= lev(K.switchDeny.handoff);
       // (tagged at half a point of openness a unit, over the 0.35 the shot's openness counts: a denied
       // curl also ends in more resets and fewer shots)
-      tags.push(['switch_deny', -lev(K.switchDeny.handoff) * 0.5]);
+      tags.push(['switch_deny', -lev(K.switchDeny.handoff) * 0.5 * K.offBallTag.deny]);
     }
     if (!sw && def.t.defense.pnr === 'drop' && !zd) {
       adv += lev(0.18);
@@ -81,14 +81,20 @@ export const handoffMethods = {
       if (edge > K.switchHuntFrom && this.rng.chance(clamp((edge - K.switchHuntFrom) * K.switchHunt, 0, K.switchHuntMax))) {
         if (postAdv >= isoAdv && B.c.postScore > 50) {
           const gain = ((dB.c.intDef * this.dq(dB) - D.c.intDef * this.dq(D)) / 20 + (dB.r.hgt - D.r.hgt) / 70) * K.advPts.post;
-          this.impact('switch_mismatch', off.side, lev(gain), B.pid);
+          this.impact('switch_mismatch', off.side, lev(gain) * K.offBallTag.hunt, B.pid);
           if (this.cur) this.cur.label = `Switch! ${B.name} posts up ${D.name}`;
           this.passStep(Sh, B);
-          return this.post(off, def, open + lev(K.switchScramble) + levExtra(gain / K.advPts.post), forced, { actor: B, defender: D, tag: 'switch_mismatch', entry: Sh });
+          return this.post(off, def, open + lev(K.switchScramble) + levExtra(gain / K.advPts.post), forced, {
+            actor: B,
+            defender: D,
+            tag: 'switch_mismatch',
+            entry: Sh,
+            tagW: K.offBallTag.hunt,
+          });
         }
         const swap = (D.c.perDef * this.dq(D) - dB.c.perDef * this.dq(dB)) / 20;
-        this.impact('switch_mismatch', off.side, lev(swap) * K.advPts.iso, Sh.pid);
-        return this.iso(off, def, open + lev(K.switchScramble) + levExtra(swap), late, forced, { actor: Sh, defender: dB, tag: 'switch_mismatch' });
+        this.impact('switch_mismatch', off.side, lev(swap) * K.advPts.iso * K.offBallTag.hunt, Sh.pid);
+        return this.iso(off, def, open + lev(K.switchScramble) + levExtra(swap), late, forced, { actor: Sh, defender: dB, tag: 'switch_mismatch', tagW: K.offBallTag.hunt });
       }
     }
     const pTO = this.toChance(K.toBase * 0.7, B, def, this.setJump(play, def, B));

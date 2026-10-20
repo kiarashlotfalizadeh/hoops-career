@@ -19,10 +19,33 @@ void initNative();
 
 // Offline support on the web. Inside the native app the files ship with the APK, so no service worker.
 if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator && !import.meta.env.DEV) {
-  void import('virtual:pwa-register').then(({ registerSW }) =>
-    registerSW({
+  void import('virtual:pwa-register').then(({ registerSW }) => {
+    /** A new version is downloaded and waiting for this tab to let it in. */
+    let waiting = false;
+    /** This tab let it in (while hidden, with the league saved): the reload it takes over with is due now. */
+    let switching = false;
+    /** Another tab let it in: this one reloads into it the next time it's left. */
+    let reloadDue = false;
+    // a home-screen app is rarely closed, so "next launch" could be weeks away: the update goes in
+    // the next time the app is left instead, while nobody's looking and once the league is safely
+    // saved (the reload opens it on the same screen). Never mid-sim, in a live game or a new
+    // league's setup: those wait for the next time.
+    const safeToReload = async () => {
+      const st = useStore.getState();
+      const route = window.location.hash.replace(/^#/, '') || '/';
+      if (st.sim || /^\/(live|new)(\/|$)/.test(route)) return false;
+      return st.saveBeforeLeaving();
+    };
+    const update = registerSW({
       immediate: true,
-      onNeedRefresh: () => useStore.getState().toast('Update downloaded: it applies next time you open the app.', 'neutral'),
+      onNeedRefresh: () => {
+        waiting = true;
+        useStore.getState().toast('Update downloaded: it goes in the next time you leave the app.', 'neutral');
+      },
+      onNeedReload: () => {
+        if (switching) window.location.reload();
+        else reloadDue = true;
+      },
       // the browser looks for a new version when the app is opened, but a home-screen app can stay
       // open in the background for days: look again when it comes back to the front (at most hourly)
       onRegisteredSW: (_url, reg) => {
@@ -34,8 +57,21 @@ if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator && !import.met
           void reg.update().catch(() => {});
         });
       },
-    }),
-  );
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'hidden' || (!waiting && !reloadDue)) return;
+      void safeToReload().then((ok) => {
+        // (not if the app is back in front by the time the save is done)
+        if (!ok || document.visibilityState !== 'hidden') return;
+        if (reloadDue) {
+          window.location.reload();
+          return;
+        }
+        switching = true;
+        void update();
+      });
+    });
+  });
 }
 
 // Ask the browser not to evict saved careers under storage pressure (Safari clears idle sites).

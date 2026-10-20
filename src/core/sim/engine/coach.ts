@@ -126,7 +126,9 @@ export const coachMethods = {
     } else if (d.pnr === 'blitz' && rate('blitz_4v3:o') >= 0.6) {
       change = (x) => void (x.defense.pnr = 'hedge');
       what = 'stops blitzing ball screens';
-    } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.8 || rate('hedge_roll:o') >= 0.6)) {
+      // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
+      // so this is the 0.8 the coaches read before, the same games for them to react to)
+    } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.3 || rate('hedge_roll:o') >= 0.6)) {
       change = (x) => {
         x.defense.pnr = 'drop';
         x.defense.switchOffBall = false;

@@ -8,9 +8,9 @@ import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import { ROLE_META, archetype } from '../../core/ratings';
 import { DEF_ROLES, type DefRole, type GlassDuty, type OffRole, type Player, type ShotFreedom, type Tactics } from '../../core/types';
-import { fitStars, defRoleFits, roleFits } from '../../core/analysis/system';
+import { fitStars, defRoleFits, miscast, roleFits } from '../../core/analysis/system';
 import { DEF_ROLE_META, GLASS_META, defRoleOf } from '../../core/sim/tactics';
-import { famLabel, knowOf, roleFam } from '../../core/sim/familiarity';
+import { NATURAL_PAIR, NEW_KNOW, NEW_PAIR, famLabel, FLUID, knowOf, roleFam } from '../../core/sim/familiarity';
 import { teamFam } from '../tactics/fam';
 import { famTone } from '../tactics/formation';
 import { Help, Section, Segmented } from './ui';
@@ -57,8 +57,9 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
   const know = knowOf(fam, p.pid);
   const roles = side === 'off' ? (Object.keys(ROLE_META) as OffRole[]) : DEF_ROLES;
   const fits: Record<string, number> = side === 'off' ? offFits : defFits;
-  const best = [...roles].sort((a, b) => fits[b] - fits[a])[0];
   const cur = side === 'off' ? offRole : defRole;
+  // a role that suits him clearly better than the one he plays (two stars or more: one is within the fits' noise)
+  const better = miscast(fits, cur);
   const glass = (t.offense.glass?.[p.pid] ?? 0) as GlassDuty;
   return (
     <div className="tm-ed">
@@ -85,11 +86,14 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
           </span>
           <Help title="His familiarity">
             <p>
-              <b>Role pair:</b> how well he knows the two roles you give him together. A pair he&apos;s new to starts at 45 (70 when the offensive one is his natural role) and
-              builds with his minutes and practice; below 95 he plays it a step slow.
+              <b>Role pair:</b> how well he knows the two roles you give him together. A pair he&apos;s new to starts at {NEW_PAIR} ({NATURAL_PAIR} when the offensive one is his
+              natural role) and builds with his minutes and practice; below {FLUID} he plays it a step slow.
             </p>
             <p>
-              <b>Knows the system:</b> your playbook as a whole. A new arrival starts at 35. See <Term id="familiarity">familiarity</Term>.
+              ★ is how well he suits a role. One star either way is within what the ratings can tell; <b>Better fit</b> marks a role two or more stars above the one he plays.
+            </p>
+            <p>
+              <b>Knows the system:</b> your playbook as a whole. A new arrival starts at {NEW_KNOW}. See <Term id="familiarity">familiarity</Term>.
             </p>
           </Help>
         </div>
@@ -127,8 +131,8 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
                 <span className="grow">
                   <span className="tm-role-opt-l">
                     <span className="ellipsis">{meta.label}</span>
-                    {r === best && <span className="tag good">Best</span>}
-                    {side === 'off' && r === natural && r !== best && <span className="tag">Natural</span>}
+                    {r === better && <span className="tag good">Better fit</span>}
+                    {side === 'off' && r === natural && <span className="tag">Natural</span>}
                     <Stars v={fits[r]} label={`${fitStars(fits[r])} of 5 for it`} />
                   </span>
                   <span className="tm-role-opt-h">{meta.help}</span>
@@ -145,7 +149,14 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
           })}
         </div>
       </Section>
-      <Section title="Shot freedom">
+      <Section
+        title="Shot freedom"
+        right={
+          <Help title="Shot freedom">
+            How many of the shots that come his way he takes: a green light looks for his own, limited passes up all but the open ones. It scales his shot volume whatever his role.
+          </Help>
+        }
+      >
         <Segmented
           value={String(t.offense.freedom[p.pid] ?? 0)}
           disabled={busy}

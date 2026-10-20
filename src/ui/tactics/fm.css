@@ -168,6 +168,7 @@
   min-width: 0;
   font-weight: 700;
   font-size: 13px;
+  font-stretch: 88%;
 }
 .tx-slot-f {
   display: flex;
@@ -256,10 +257,8 @@
   width: 10px;
   font-weight: 800;
 }
-/* the court: the five's plates, a dot for each one's familiarity */
-.tx-board {
-  max-width: none;
-}
+/* the court: the five's plates, a dot for each one's familiarity (as wide as .tx-floor lets it: on a
+   tablet a full-width court would push the bench and the style off the screen) */
 .tx-board.out .tx-floor-p {
   background: rgba(10, 18, 34, 0.88);
   border-color: color-mix(in srgb, var(--info) 45%, transparent);
@@ -273,6 +272,7 @@
   gap: 4px;
 }
 .tx-board .tx-famdot {
+  flex: none;
   width: 0.5em;
   height: 0.5em;
 }

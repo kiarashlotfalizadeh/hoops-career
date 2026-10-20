@@ -289,8 +289,11 @@ export interface ShotOpts {
   tags?: [string, number][];
   pullup?: boolean;
   forcedFoulMult?: number;
-  /** The impact tag owed the fouls drawn above the shot's usual rate, and the multiplier that drew them. */
-  foulTag?: [string, number];
+  /**
+   * The impact tag owed the fouls drawn above the shot's usual rate, the multiplier that drew them, and
+   * the share of its estimate the tag counts (1 when absent: see K.offBallTag).
+   */
+  foulTag?: [string, number, number?];
 }
 
 /** The late-game modes the clock and the score put an offense in (see lateMode). */

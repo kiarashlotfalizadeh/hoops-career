@@ -119,7 +119,10 @@ export const foulsMethods = {
     const body = this.pd(def, handler) === 'body' ? levGiftW(K.pd.body.foul) : 1;
     // (a clean, containing defense at past-1x leverage still reaches in now and then)
     const mult = Math.max(0.25, 1 + 0.3 * phys + 0.25 * pr);
-    const p = K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body;
+    // (a defense protecting a narrow lead in the last 24 seconds keeps its hands off)
+    const lead = def.score - off.score;
+    const careful = this.q >= 4 && this.clock <= 24 && lead >= 1 && lead <= 3 ? K.lateLeadFoul : 1;
+    const p = K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * body * careful;
     if (!this.rng.chance(p)) return false;
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
     if (this.record) {
@@ -138,6 +141,16 @@ export const foulsMethods = {
     // side out: offense keeps the ball, and the shot clock restarts at 14 or more (see halfCourt)
     this.sideOut = true;
     return false;
+  },
+
+  /**
+   * The inbound after a side-out foul in an action that plays on (one the shot clock wasn't rushing):
+   * the ball comes in and the action is run again from the side, so its shot goes up a few seconds
+   * after the whistle, never past the end of the period.
+   */
+  sideOutInbound(this: GameSim) {
+    const dt = Math.min(this.rng.uniform(K.sideOutTime.min, K.sideOutTime.max), this.clock - 1.5);
+    if (dt > 0) this.tick(dt);
   },
 
   /** Who is charged with a shooting foul: the help defender takes most contact, the beaten man some. */

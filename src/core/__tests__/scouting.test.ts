@@ -203,8 +203,12 @@ describe('scouting data', () => {
     expect(hedge.evidence).toMatch(/ball handlers score 1\.60/);
     const firstPlain = cands.findIndex((c) => !c.evidence);
     expect(cands.findIndex((c) => c.id === 'cov-hedge')).toBeLessThan(firstPlain < 0 ? Infinity : firstPlain);
-    // and the scouting report's attack line reads the numbers first
-    expect(scoutTeam(m, tid).weaknesses[0]).toMatch(/^Their defense gives up/);
+    // and the scouting report's attack lines read the numbers before the rules of thumb (another
+    // line from the numbers, a volume shooter's, may outweigh this one)
+    const lines = scoutTeam(m, tid).weaknesses;
+    const at = lines.findIndex((w) => /^Their defense gives up/.test(w));
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(at).toBeLessThan(d.exploits.length);
   });
 });
 

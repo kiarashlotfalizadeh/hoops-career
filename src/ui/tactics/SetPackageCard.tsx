@@ -65,35 +65,37 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
     >
       <div className="card flush list wide2">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
-          <span className="ellipsis">Best fit · runs at {SET_K.fit}+</span>
+          <span className="ellipsis">Best fit first · runs at {SET_K.fit}+</span>
           <span>Fit</span>
         </div>
-        {SET_IDS.map((id) => {
-          const on = pkg.includes(id);
-          const best = fitOf(id);
-          const full = !on && pkg.length >= MAX_SETS;
-          return (
-            <div key={id} className={`tx-set ${on ? 'on' : ''}`}>
-              <button className="tx-set-pick" aria-pressed={on} disabled={full} onClick={() => toggle(id)}>
-                <span className="tx-check" aria-hidden="true">
-                  {on && <Check size={14} strokeWidth={3} />}
-                </span>
-                <span className="grow">
-                  <span className="lr-name">{SETS[id].name}</span>
-                  <span className="lr-meta">{best ? (best.fit >= SET_K.fit ? `For ${names(best.pid)}` : `${names(best.pid)} · won't run`) : 'Nobody fits it'}</span>
-                </span>
-              </button>
-              {best && (
-                <span className="tx-fit" aria-label={`Fit ${best.fit}${best.fit >= SET_K.fit ? '' : `, under ${SET_K.fit}: not run`}`}>
-                  <FitScore v={best.fit} tone={best.fit >= SET_K.fit ? 'good' : ''} />
-                </span>
-              )}
-              <button className="iconbtn tx-about" aria-label={`About ${SETS[id].name}`} aria-haspopup="dialog" onClick={() => setAbout(id)}>
-                <Info size={18} />
-              </button>
-            </div>
-          );
-        })}
+        {[...SET_IDS]
+          .map((id) => ({ id, best: fitOf(id) }))
+          .sort((a, b) => (b.best?.fit ?? -1) - (a.best?.fit ?? -1))
+          .map(({ id, best }) => {
+            const on = pkg.includes(id);
+            const full = !on && pkg.length >= MAX_SETS;
+            return (
+              <div key={id} className={`tx-set ${on ? 'on' : ''}`}>
+                <button className="tx-set-pick" aria-pressed={on} disabled={full} onClick={() => toggle(id)}>
+                  <span className="tx-check" aria-hidden="true">
+                    {on && <Check size={14} strokeWidth={3} />}
+                  </span>
+                  <span className="grow">
+                    <span className="lr-name">{SETS[id].name}</span>
+                    <span className="lr-meta">{best ? (best.fit >= SET_K.fit ? `For ${names(best.pid)}` : `${names(best.pid)} · won't run`) : 'Nobody fits it'}</span>
+                  </span>
+                </button>
+                {best && (
+                  <span className="tx-fit" aria-label={`Fit ${best.fit}${best.fit >= SET_K.fit ? '' : `, under ${SET_K.fit}: not run`}`}>
+                    <FitScore v={best.fit} tone={best.fit >= SET_K.fit ? 'good' : ''} />
+                  </span>
+                )}
+                <button className="iconbtn tx-about" aria-label={`About ${SETS[id].name}`} aria-haspopup="dialog" onClick={() => setAbout(id)}>
+                  <Info size={18} />
+                </button>
+              </div>
+            );
+          })}
       </div>
       {!pkg.length && <div className="tx-note">None picked: your offense runs no sets on its own.</div>}
       <Sheet open={!!s} onClose={() => setAbout(null)} title={s?.name}>

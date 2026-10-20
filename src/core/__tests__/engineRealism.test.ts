@@ -14,7 +14,8 @@ describe('engine realism', () => {
   let teamGames = 0;
   resetEngineDiag();
   const rng = new Rng(9);
-  for (let g = 0; g < 90; g++) {
+  // (eight games a team: at six, one team's handful of blocks could fall to one player by chance)
+  for (let g = 0; g < 120; g++) {
     const h = g % 30;
     const a = (h + 7) % 30;
     const sim = new GameSim(side(h), side(a), { rng, type: 'regular' });

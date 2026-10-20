@@ -1,12 +1,14 @@
-// The System tab's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
-// roster first, each a row to pick it by with its fit in a column. Its fit or ⓘ opens one sheet: what
+// The style sheet's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
+// roster first, each a row to pick it by with how well the team knows it (what a switch costs) and its fit in a column. Its fit or ⓘ opens one sheet: what
 // it is, who it's for, the fit broken into its parts (on the row's scale), what would raise it, and
 // Use.
 import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
-import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
+import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics, type DefPreset, type OffPreset } from '../../core/sim/tactics';
+import { famLabel } from '../../core/sim/familiarity';
+import { systemFamiliarity } from '../../core/league/practice';
 import { presetMatches } from '../../core/sim/playbooks';
 import { defPresetFit, defPresetTerms, fitRoster, fitScale, offPresetFit, offPresetTerms, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
@@ -15,6 +17,7 @@ import { Sheet, Tag } from '../components/ui';
 import { FitScore } from './FitScore';
 import { PresetFit } from './PresetFit';
 import { byFit, fitTone } from './fit';
+import { famTone } from './formation';
 import '../screens/tactics.css';
 
 type Preset = OffPreset | DefPreset;
@@ -34,6 +37,17 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const [open, setOpen] = useState<string | null>(null);
   const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits), [kind, fits]);
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
+  // how well the team knows each at this end: what a switch costs before it's drilled
+  const known = useLeagueMemo(() => {
+    const out: Record<string, number> = {};
+    for (const p of presets) {
+      const tt = cloneTactics(t);
+      if (kind === 'off') tt.offense = applyOffPreset(tt.offense, p.id);
+      else tt.defense = applyDefPreset(tt.defense, p.id);
+      out[p.id] = systemFamiliarity(league, league.userTid, tt)[kind];
+    }
+    return out;
+  }, [league, kind, presets, t]);
   const pick = (id: string) =>
     edit((l) => {
       const tt = l.teams[l.userTid].tactics;
@@ -71,7 +85,17 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
                     <span className="ellipsis">{p.name}</span>
                     {custom && <Tag>Custom</Tag>}
                   </span>
-                  <span className={`tx-preset-t ${custom ? 'accent-text' : ''}`}>{custom ? 'Settings moved: tap to put them back' : p.tagline}</span>
+                  <span className={`tx-preset-t ${custom ? 'accent-text' : ''}`}>
+                    {custom ? 'Settings moved: tap to put them back' : p.tagline}
+                    {!on && known[p.id] !== undefined && (
+                      <>
+                        {' · '}
+                        <span className={famTone(known[p.id])}>
+                          {Math.round(known[p.id])}% {famLabel(known[p.id]).toLowerCase()}
+                        </span>
+                      </>
+                    )}
+                  </span>
                 </span>
               </button>
               <button className="tx-fit" aria-label={`Fit ${v} of 100: why, for ${p.name}`} aria-haspopup="dialog" onClick={() => setOpen(p.id)}>

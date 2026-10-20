@@ -115,7 +115,7 @@ export function place(spots: Spot[], five: BoardPlayer[]): Map<number, Spot> {
   return out;
 }
 
-/** A familiarity figure's tone: familiar (75 and up) good, learning (55 to 75) a warning, below that bad. */
+/** A familiarity figure's tone: 80 and up good, 60 to 80 a warning, below that bad. */
 export const famTone = (v: number): 'good' | 'warn' | 'bad' => (v >= 80 ? 'good' : v >= 60 ? 'warn' : 'bad');
 
 /** A shape's fit as the board shows it: fit points are a tenth of a point per 100 possessions ("+0.8", "−1.2", "±0"). */

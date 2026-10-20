@@ -6,9 +6,10 @@ import { useMemo } from 'react';
 import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { Player, PrepFocus } from '../../core/types';
-import { FAM_DIMS, FLUID, NEW_KNOW, PREP_META, famLabel, gamesTo } from '../../core/sim/familiarity';
+import { FAM_DIMS, FLUID, NATURAL_PAIR, NEW_KNOW, NEW_PAIR, PREP_META, famLabel, gamesTo } from '../../core/sim/familiarity';
 import type { SystemFamiliarity } from '../../core/league/practice';
 import { plural } from '../../core/format';
+import { inSeason } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
 import { Avatar, Help, More, Section, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -164,6 +165,7 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
             );
           })}
         </div>
+        {!inSeason(league) && <div className="tx-note">No practice between seasons: training camp drills your tactics before opening night, then this focus takes over.</div>}
       </Section>
 
       <Section
@@ -175,13 +177,13 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
               their tactic a step slower while one of them is still learning it.
             </p>
             <p>
-              <b>Roles:</b> how well he knows the pair of roles you give him (offense and defense). Change either and he starts that pair over (45, or 70 when the offensive one is
-              his natural role), keeping some of it when one of the two stays.
+              <b>Roles:</b> how well he knows the pair of roles you give him (offense and defense). Change either and he starts that pair over ({NEW_PAIR}, or {NATURAL_PAIR} when
+              the offensive one is his natural role), keeping some of it when one of the two stays.
             </p>
           </Help>
         }
       >
-        <div className="card flush list wide2">
+        <div className="card flush list">
           <div className="list-divider list-h tx-famp-h" aria-hidden="true">
             <span>Player</span>
             <span>System</span>
@@ -217,8 +219,8 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
       <More label="What it costs, and how it's built">
         <ul className="tx-bullets">
           <li>
-            A unit below {FLUID} plays a step slow. A coverage the team has never drilled costs about 0.4 points per 100 possessions, a zone about 0.6, a new shape about 0.25, a
-            new offense with new roles for everyone about 1.8.
+            A unit below {FLUID} plays a step slow, and the further below, the slower. A whole new system costs the most, then a new offense with new roles for everyone; a new
+            zone, coverage or shape on its own costs much less.
           </li>
           <li>Each game drills the tactic it was played with; each practice day drills it again at your focus, and your other tactic slots a little less.</li>
           <li>Moving a setting off where it&apos;s drilled costs that part of the tactic until it&apos;s drilled again: the Instructions tab says what each change costs.</li>

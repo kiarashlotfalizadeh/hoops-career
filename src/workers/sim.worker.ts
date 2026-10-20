@@ -68,7 +68,8 @@ const api = {
     // what the main thread holds now: each checkpoint sends only what's new since the last one
     let sent = gamesSig(l.games);
     let last = performance.now();
-    let inFlight = false;
+    /** The checkpoint the main thread is taking in, until it has. */
+    let inFlight: Promise<void> | null = null;
     try {
       const r = await runSim(l, target, {
         progress: (p) => void cb.progress(p),
@@ -77,13 +78,19 @@ const api = {
           if (inFlight || (!checkpointAsked && performance.now() - last < CHECKPOINT_MS)) return;
           checkpointAsked = false;
           const out = pack(x, sent);
+          const before = sent;
           sent = gamesSig(x.games);
-          inFlight = true;
           // (the message is a copy: the sim can go on changing the league at once)
-          void Promise.resolve(cb.checkpoint(out.core, out.delta))
-            .catch(() => {})
+          inFlight = Promise.resolve(cb.checkpoint(out.core, out.delta))
+            .then(
+              () => {},
+              // (one that didn't get through: the next delta is made against what the other side had before it)
+              () => {
+                sent = before;
+              },
+            )
             .finally(() => {
-              inFlight = false;
+              inFlight = null;
               last = performance.now();
             });
         },
@@ -91,6 +98,9 @@ const api = {
         checkpointDays: 1,
         yieldDay,
       });
+      // the end's delta is made against the last checkpoint's results: they're in on the other side
+      // first (the two travel by different ports, which needn't keep their order)
+      if (inFlight) await inFlight;
       cache = { id: l.id, games: l.games };
       return { ...pack(l, sent), ...r };
     } catch (e) {

@@ -169,7 +169,7 @@ export const shotsMethods = {
     if (s.foulTag) {
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
       const foulGain = andOne * (value + 0.78) + (1 - andOne) * value * 0.78 - p * value;
-      this.impact(s.foulTag[0], off.side, (pFoul - pFoul / s.foulTag[1]) * foulGain, sh.pid);
+      this.impact(s.foulTag[0], off.side, (pFoul - pFoul / s.foulTag[1]) * foulGain * (s.foulTag[2] ?? 1), sh.pid);
     }
     const fouled = this.rng.chance(pFoul);
     let made: boolean;

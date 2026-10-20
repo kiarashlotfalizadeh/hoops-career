@@ -260,7 +260,7 @@ describe('the live court score', () => {
     };
     const away = { team: league.teams[1], players: teamPlayers(league, 1) };
     let techs = 0;
-    for (const seed of [103, 106]) {
+    for (const seed of [103, 113]) {
       const sim = new GameSim(home, away, { rng: new Rng(seed), type: 'regular', record: true, injuries: false });
       let shown: [number, number] = [0, 0];
       while (!sim.over) {

@@ -48,7 +48,11 @@ export function RolesTab({ players }: { players: Player[] }) {
           </Help>
         }
       >
-        <div className="card flush list wide2">
+        <div className="card flush list">
+          <div className="list-divider list-h" aria-hidden="true">
+            <span>Roles · O in possession · D out</span>
+            <span>Knows them</span>
+          </div>
           {players.map((pl) => {
             const role = t.offense.roles[pl.pid] ?? archetype(pl.ratings).role;
             const drole = defRoleOf(t.defense, pl.pid);
@@ -89,7 +93,7 @@ export function RolesTab({ players }: { players: Player[] }) {
                         D
                       </span>
                       <span className="sr-only">Out of possession: </span>
-                      <span className="ellipsis">{DEF_ROLE_META[drole].short}</span>
+                      <span className="ellipsis">{DEF_ROLE_META[drole].label}</span>
                       <Stars v={df[drole]} />
                     </span>
                   </div>
