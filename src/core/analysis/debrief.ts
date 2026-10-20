@@ -5,8 +5,9 @@
 // Pure: it reads the stored result and the report built from it.
 
 import type { GameResult, League, TacticsPatch } from '../types';
-import type { GameReport, Factor } from './gameReport';
+import { buildGameReport, type GameReport, type Factor } from './gameReport';
 import { moveVerdict } from './moves';
+import { pick } from './quotes';
 import { impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
 
@@ -37,11 +38,12 @@ export interface Debrief {
 
 /**
  * The offense's answer to a defense's edge on you (an impact key won by their defense, 'x:d'), as
- * the report's advice names it: relative nudges, so it builds on whatever playbook you run.
+ * the report's advice names it: relative nudges, so it builds on whatever playbook you run. (Moving
+ * the ball instead of running pick-and-roll into a hedge isn't one: in paired engine games it cost
+ * the team that took it about half a point per 100 possessions.)
  */
 const OFFENSE_FIXES: Record<string, { label: string; patch: TacticsPatch }> = {
   'drop_rim:d': { label: 'More handoffs against the drop', patch: { nudge: { actions: { handoff: 25, pnr: -10 } } } },
-  'hedge_stall:d': { label: 'Move it after the hedge', patch: { nudge: { actions: { motion: 25, pnr: -15 } } } },
   'switch_deny:d': { label: 'Hunt mismatches', patch: { offense: { huntMismatch: true } } },
   'switch_screen:d': { label: 'Hunt mismatches', patch: { offense: { huntMismatch: true } } },
   'zone_paint:d': { label: 'More motion & cuts against the zone', patch: { nudge: { actions: { motion: 25, iso: -15 } } } },
@@ -61,7 +63,7 @@ const KEY_ADVICE: Record<string, string> = {
   attack: 'You never got to the line: attack the rim more.',
   fly: "Their defense gave up threes and you didn't take them: more threes next time.",
   pressure: 'Their handlers were loose and you let them be: more ball pressure, or a press after makes.',
-  star: 'Their scorer got his: deny him, double him, or put your best defender on him.',
+  star: 'Their scorer got his: deny him the ball (Star plan), or put your best defender on him (Matchups).',
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
 
@@ -87,34 +89,36 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
   const won = us > them;
   const m = Math.abs(us - them);
   const ot = res.ot ? (res.ot > 1 ? `${res.ot} overtimes` : 'overtime') : '';
+  // (a template per case, picked by the game's id: a game always reads the same, a season doesn't repeat itself)
+  const say = (slot: string, list: string[]) => pick(res.gid, `verdict-${slot}`, list);
   const how = won
     ? ot
-      ? `We won it in ${ot}.`
+      ? say('wot', [`We won it in ${ot}.`, `${ot.charAt(0).toUpperCase()}${ot.slice(1)}, and we found a way.`])
       : m >= 20
-        ? `A ${m}-point rout.`
+        ? say('wbig', [`A ${m}-point rout.`, `We won by ${m}, and it was never close.`, `Never in doubt: a ${m}-point win.`])
         : m <= 3
-          ? 'A nail-biter, and it went our way.'
-          : `We won by ${m}.`
+          ? say('wclose', ['A nail-biter, and it went our way.', `We held on by ${m}.`, 'A close one, and we closed it out.'])
+          : say('w', [`We won by ${m}.`, `A ${m}-point win.`, `We were ${m} points better tonight.`])
     : ot
-      ? `We lost it in ${ot}.`
+      ? say('lot', [`We lost it in ${ot}.`, `${ot.charAt(0).toUpperCase()}${ot.slice(1)}, and it got away.`])
       : m >= 20
-        ? `Run off the floor by ${m}.`
+        ? say('lbig', [`Run off the floor by ${m}.`, `A ${m}-point loss. Never in it.`, `They beat us by ${m}, and it wasn't that close.`])
         : m <= 3
-          ? 'A close one, and it got away.'
-          : `They beat us by ${m}.`;
+          ? say('lclose', ['A close one, and it got away.', `We lost by ${m}.`, 'It came down to the last few plays, and they made them.'])
+          : say('l', [`They beat us by ${m}.`, `A ${m}-point loss.`, `We came up ${m} short.`]);
   // the biggest edge that went the winner's way
   const top = report.factors.find((f) => f.pts > 0 === won);
-  const why: Partial<Record<Factor['category'], string>> = {
-    shooting: won ? 'We shot it better.' : 'They shot it better.',
-    turnovers: won ? 'Their turnovers decided it.' : 'Our turnovers decided it.',
-    rebounding: won ? 'We won it on the glass.' : 'They won it on the glass.',
-    fouls: won ? 'We won it at the line.' : 'They won it at the line.',
-    stars: won ? 'Our star took it over.' : 'Their star took it over.',
-    tactics: won ? 'We won the tactical battle.' : 'They won the tactical battle.',
-    pace: won ? 'Our pace wore them down.' : 'Their pace hurt us.',
-    fatigue: won ? 'Their legs went before ours.' : 'Our legs went before theirs.',
+  const why: Partial<Record<Factor['category'], string[]>> = {
+    shooting: won ? ['We shot it better.', "Our shots fell and theirs didn't."] : ['They shot it better.', "Their shots fell and ours didn't."],
+    turnovers: won ? ['Their turnovers decided it.', 'We won the turnover battle.'] : ['Our turnovers decided it.', 'We gave it away too often.'],
+    rebounding: won ? ['We won it on the glass.', 'The extra possessions on the glass did it.'] : ['They won it on the glass.', 'Their second chances did it.'],
+    fouls: won ? ['We won it at the line.', 'The free throws did it.'] : ['They won it at the line.', 'Their free throws did it.'],
+    stars: won ? ['Our star took it over.'] : ['Their star took it over.'],
+    tactics: won ? ['We won the tactical battle.', 'The game plan won it.'] : ['They won the tactical battle.', 'Their game plan won it.'],
+    pace: won ? ['Our pace wore them down.'] : ['Their pace hurt us.'],
+    fatigue: won ? ['Their legs went before ours.'] : ['Our legs went before theirs.'],
   };
-  const second = top ? why[top.category] : undefined;
+  const second = top && why[top.category] ? say(`why-${top.category}`, why[top.category]!) : undefined;
   return second ? `${how} ${second}` : how;
 }
 
@@ -128,8 +132,15 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   // what the advice so far is about, so the same fix isn't given twice in other words
   const topics = new Set<string>();
   const decided = report.factors.slice(0, 3);
+  // a standing cost the staff named after the last game too isn't said again every night (once it
+  // adds up over the season, the staff's card on Tactics carries it), unless it's one of tonight's
+  // deciding edges
+  const prev = league.games.filter((g) => g.season === res.season && g.gid !== res.gid && g.day < res.day && (g.home.tid === me || g.away.tid === me)).pop();
+  const prevRep = prev?.impacts ? buildGameReport(league, prev) : null;
+  const saidLast = new Set((prevRep?.factors ?? []).filter((f) => f.key && f.pts <= -0.8).map((f) => f.key!));
   for (const f of report.factors) {
     if (f.pts > -0.8) continue;
+    if (f.key && saidLast.has(f.key) && !decided.includes(f)) continue;
     const fix = f.key ? impactCounter(f.key, tactics) : undefined;
     const off = f.key ? OFFENSE_FIXES[f.key] : undefined;
     if (!fix && off && !seen.has(off.label)) {

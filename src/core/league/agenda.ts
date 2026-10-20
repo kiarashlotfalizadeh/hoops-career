@@ -8,8 +8,9 @@
 // decision. Nothing here is stored except the guided week's progress (League.onboarding).
 import type { League, Player } from '../types';
 import { CAP } from '../constants';
-import { addInbox, fmtDate, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
-import { FIRED_REASON, releaseDeadMoney, releasePlayer, valueScore } from './contracts';
+import { addInbox, fmtDate, freeAgents, playerName, standardRoster, teamPlayers, twoWayRoster, TWO_WAY_MAX } from './helpers';
+import { FIRED_REASON, askingContract, releaseDeadMoney, releasePlayer, releasedBy, valueScore } from './contracts';
+import { marqueeFA, offerBlockedReason, signingClosedReason, userOffer } from './freeAgency';
 import { acceptProposal, declineProposal, offerSubject, openProposals, proposalError } from './proposals';
 import { restrictedFreeAgents, sheetDecisionBlocked, userDecideSheet } from './rfa';
 import { tenDayBlockedReason, tenDayEndBlockedReason, tenDayRestBlockedReason, userEndTenDay, userTenDay, userTenDayRest } from './tenDay';
@@ -26,6 +27,7 @@ export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
 /** What a tap on an agenda item's suggestion or choice does (see resolveAgenda). */
 export type AgendaAction =
   | { kind: 'release'; pid: number }
+  | { kind: 'sign'; pid: number }
   | { kind: 'sheet'; pid: number; match: boolean }
   | { kind: 'autoPick' }
   | { kind: 'tenDay'; pid: number; choice: 'again' | 'rest' | 'end' }
@@ -74,6 +76,25 @@ function releaseChoice(league: League, p: Player): AgendaChoice {
     action: { kind: 'release', pid: p.pid },
     ...(dead > 0 ? { confirm: `${money(dead)} stays on your books as dead money.` } : {}),
   };
+}
+
+/**
+ * The free agent the staff would sign first for an open spot: the most valuable one who'd take his
+ * asking deal and whom the cap and the rules let the user sign at it now (a top free agent who weighs
+ * offers, a restricted free agent and a player on waivers are decisions for the Free Agents screen).
+ */
+export function bestSigning(league: League): { p: Player; amount: number; years: number } | null {
+  if (signingClosedReason(league)) return null;
+  const me = league.userTid;
+  const pool = freeAgents(league)
+    .filter((p) => !p.waivers && !p.rfa && !releasedBy(league, p, me) && !marqueeFA(league, p))
+    .map((p) => ({ p, v: valueScore(league, p) }))
+    .sort((a, b) => b.v - a.v || a.p.pid - b.p.pid);
+  for (const { p } of pool.slice(0, 60)) {
+    const ask = askingContract(league, p, me);
+    if (!offerBlockedReason(league, p, ask.amount, ask.years)) return { p, amount: ask.amount, years: ask.years };
+  }
+  return null;
 }
 
 const short = (l: League, day: number) => fmtDate(l.season, day, { month: 'short', day: 'numeric' });
@@ -164,6 +185,20 @@ export function nextOpponent(league: League): number | undefined {
 
 // ---------------------------------------------------------------- the agenda
 
+/** The staff's call for an open spot: sign the best free agent who fits, at his asking deal. */
+function signingSuggestion(league: League): Pick<AgendaItem, 'suggestion'> {
+  const b = bestSigning(league);
+  if (!b) return {};
+  const pos = b.p.pos;
+  return {
+    suggestion: {
+      label: `Sign ${playerName(b.p)} (${pos} · ${b.p.ovr} OVR)`,
+      action: { kind: 'sign', pid: b.p.pid },
+      confirm: `${money(b.amount)} × ${plural(b.years, 'yr')}.`,
+    },
+  };
+}
+
 export function agenda(league: League): AgendaItem[] {
   const items: AgendaItem[] = [];
   const me = league.userTid;
@@ -210,6 +245,7 @@ export function agenda(league: League): AgendaItem[] {
         line: `${std.length} on standard deals; ${CAP.rosterMin} needed on opening night. Minimum deals always fit.`,
         tone: 'bad',
         to: '/office/free-agents',
+        ...signingSuggestion(league),
       });
     const tw = twoWayRoster(league, me);
     if (tw.length > TWO_WAY_MAX) {
@@ -364,6 +400,13 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       if (league.fired) return { ok: false, text: FIRED_REASON };
       releasePlayer(league, p);
       return { ok: true, text: `${playerName(p)} released.` };
+    }
+    case 'sign': {
+      const p = league.players[a.pid];
+      if (!p) return { ok: false, text: 'He is no longer a free agent.' };
+      const ask = askingContract(league, p, league.userTid);
+      const r = userOffer(league, a.pid, ask.amount, ask.years);
+      return { ok: r.ok, text: r.ok ? `${playerName(p)} signed: ${money(ask.amount)} × ${plural(ask.years, 'yr')}.` : r.reason };
     }
     case 'sheet': {
       const r = userDecideSheet(league, a.pid, a.match);

@@ -5,13 +5,13 @@ import type { ActionType, League, Player, PlayerDefense, PnrCoverage, RatingKey,
 import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
-import { ACTION_META, DEF_PRESETS, OFF_PRESETS, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking } from '../sim/tactics';
-import { CRAMPED_SPACING, defPresetFit, evaluateLineup, fitRoster, fitScale, offPresetFit, rosterProfile, sustainableMinutes } from './coachAI';
+import { ACTION_META, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking, tacticsDiff } from '../sim/tactics';
+import { CRAMPED_SPACING, evaluateLineup, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
 import { andList, playerName, rosterSorted, shortName, teamPlayers } from '../league/helpers';
-import { IMPACT_TEXT, possessive } from '../analysis/gameReport';
+import { IMPACT_TEXT, LEVER_KEYS, leverNet } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
@@ -169,16 +169,29 @@ export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidat
 }
 
 /**
- * Counters for the lab to test against a specific opponent, drafted against the tactics the user
- * plays them with now (the game plan for them included). Each names its game-plan group (a plan
- * keeps one item per group), slider changes to actions and shot profile are relative so they build
- * on whatever playbook is run, and counters the scouting numbers back carry that evidence and come
- * first. A counter already in the plan, or one that would change nothing, isn't offered.
+ * The staff's counters against a specific opponent, drafted against the tactics the user plays them
+ * with now (the game plan for them included). Each names its game-plan group (a plan keeps one item
+ * per group), slider changes to actions and shot profile are relative so they build on whatever
+ * playbook is run, and counters the scouting numbers back carry that evidence and come first. A
+ * counter already in the plan, or one that would change nothing, isn't offered.
+ *
+ * Gambles are only offered where they pay: over real rosters in paired engine games, doubling a
+ * star, a 2-3 zone and the junk defenses cost the team that tried them points against almost every
+ * opponent the old rules flagged (a high-usage star, a below-average three-point percentage). A
+ * double now needs a star who can't pass with non-shooters around him, a box-and-one or
+ * triangle-and-two a cast that can't shoot by its ratings (a percentage over twenty games is mostly
+ * noise), and the staff doesn't suggest a zone at all: it lost points even against a cramped post-up
+ * team, the case it's built for (the Defense tab still has it).
  */
 export function counterCandidates(league: League, userTid: number, oppTid: number): Candidate[] {
   const opp = league.teams[oppTid];
-  const { rot, creators, spacing, security } = readRotation(league, oppTid);
+  const { rot, cs, creators, spacing, security } = readRotation(league, oppTid);
   const top = creators[0];
+  /** How the five who play most besides `skip` space the floor (what a double or a junk defense dares). */
+  const castSpacing = (skip: number[]) => {
+    const five = cs.filter((x) => !skip.includes(x.p.pid)).slice(0, 5);
+    return five.reduce((a, x) => a + x.c.spacing, 0) / Math.max(1, five.length);
+  };
   const forUser = userTid === league.userTid;
   const plan = forUser ? planFor(league, oppTid) : null;
   const cur = forUser ? effectiveTactics(league, oppTid) : cloneTactics(league.teams[userTid].tactics);
@@ -206,19 +219,26 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     cov('blitz', `${top.p.lastName} is a shaky passer; trap him and make others beat you.`, top.c.passing < 55);
     cov('drop', 'Protect the rim and live with contested pull-ups.', top.c.passing >= 55);
     cov('switch', 'Switch everything to take away ball screens and handoffs.', true);
-    // the player the numbers say they run through, else their best creator
+    // the player the numbers say they run through, else their best creator: denied the ball, or
+    // doubled when he can't pass out of it and the players around him can't make the shots it leaves
     const star = (data.star !== undefined && league.players[data.star]) || top.p;
+    const starPass = composites(star.ratings).passing;
+    const around = castSpacing([star.pid]);
     const plans = [
-      ['double', `Double-team ${star.lastName}`, `Force the ${possessive(opp.name)} supporting cast to beat you.`],
+      ...(starPass < 55 && around < CRAMPED_SPACING
+        ? ([
+            ['double', `Double-team ${star.lastName}`, `${star.lastName} doesn't pass out of traps, and the ${opp.name} around him can't shoot (spacing ${Math.round(around)}).`],
+          ] as const)
+        : []),
       ['deny', `Deny ${star.lastName}`, 'Keep the ball out of his hands without giving up 4-on-3s.'],
     ] as const;
     for (const [sp, label, why] of plans)
       if (cur.defense.starPlan !== sp || cur.defense.starTarget !== star.pid)
         add({ id: `star-${sp}`, label, why, group: 'star', patch: { defense: { starPlan: sp, starTarget: star.pid } } });
   }
-  // spacing as scouting reads it: a zone only against the cramped fifth it flags, packing the
-  // paint a little beyond that, staying home against about the best-spaced third; between those,
-  // the numbers decide (never both at once)
+  // spacing as scouting reads it: packing the paint against a little more than the cramped fifth it
+  // flags, staying home against about the best-spaced third; between those, the numbers decide
+  // (never both at once)
   const packs = spacing < CRAMPED_SPACING + 4 || (spacing < 45 && backed('help-high') && !backed('help-low'));
   const stays = spacing >= 45 || (!packs && backed('help-low'));
   if (packs && cur.defense.help < 70)
@@ -240,8 +260,6 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       group: 'help',
       patch: { defense: { help: 32 } },
     });
-  if (spacing < CRAMPED_SPACING && cur.defense.scheme === 'man')
-    add({ id: 'zone', label: SCHEME_META.zone23.label, why: 'Dare a poor-shooting team to beat you from outside.', group: 'coverage', patch: { defense: { scheme: 'zone23' } } });
   // junk defenses: their offense runs through one or two players (by the numbers) and everyone else
   // shoots threes worse than the league
   const heavy = data.enough ? data.players.filter((p) => !p.elsewhere && p.min >= 20).sort((a, b) => b.usg - a.usg) : [];
@@ -252,6 +270,8 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   ] as const) {
     const chased = heavy.slice(0, n);
     if (chased.length < n || chased[0].usg < 0.28 || (n === 2 && chased[1].usg < 0.25)) continue;
+    // the players left to the zone have to be poor shooters by their ratings, not only by a percentage
+    if (castSpacing(chased.map((p) => p.pid)) >= CRAMPED_SPACING) continue;
     const cast = castThrees(
       league,
       oppTid,
@@ -414,7 +434,7 @@ export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined
   else if (ft === 'transition')
     c = {
       label: 'Sprint back',
-      apply: (x) => void ((x.defense.getBack = Math.max(x.defense.getBack, 85)), (x.offense.crashBoards = Math.min(x.offense.crashBoards, 30))),
+      apply: (x) => void ((x.defense.getBack = Math.max(x.defense.getBack, 85)), (x.offense.crashBoards = Math.min(x.offense.crashBoards, 45))),
     };
   else if (ft === 'post') c = { label: 'Double the post', apply: (x) => void (x.defense.help = Math.max(x.defense.help, 80)) };
   else if (ft === 'pnrRoll' && man && cov !== 'drop') c = { label: 'Go to Drop', apply: (x) => void (x.defense.pnr = 'drop') };
@@ -443,10 +463,13 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'help_kick:o': { label: 'Stay home', apply: (t) => void (t.defense.help = 35) },
   'help_paint:o': { label: 'Pack the paint', apply: (t) => void (t.defense.help = 65) },
   'pressure_to:o': { label: 'Pressure the ball', apply: (t) => void (t.defense.pressure = 65) },
-  'pressure_blowby:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = 35) },
-  'pressure_foul:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = 35) },
+  // (backing off further than the middle costs more turnovers forced than it saves in blow-bys)
+  'pressure_blowby:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = Math.min(t.defense.pressure, 55)) },
+  'pressure_foul:o': { label: 'Back off the ball', apply: (t) => void (t.defense.pressure = Math.min(t.defense.pressure, 55)) },
   'press_break:o': { label: 'Call off the press', apply: (t) => void (t.defense.press = 'none') },
-  'crash_leak:o': { label: 'Crash less', apply: (t) => void (t.offense.crashBoards = 30) },
+  // (to the middle: crashing less than that gives up more second chances than run-outs it saves)
+  'crash_leak:o': { label: 'Crash less', apply: (t) => void (t.offense.crashBoards = Math.min(t.offense.crashBoards, 50)) },
+  'crash_orb:d': { label: 'Crash the glass', apply: (t) => void (t.offense.crashBoards = Math.max(t.offense.crashBoards, 60)) },
   'getback:o': { label: 'Sprint back', apply: (t) => void (t.defense.getBack = 80) },
   'double_kick:o': {
     label: 'Stop doubling',
@@ -510,7 +533,8 @@ export type AlertFix =
   | { kind: 'offPreset'; id: string; label: string }
   | { kind: 'defPreset'; id: string; label: string }
   | { kind: 'coverage'; pnr: PnrCoverage; label: string }
-  | { kind: 'restB2B'; pid: number; label: string };
+  | { kind: 'restB2B'; pid: number; label: string }
+  | { kind: 'patch'; patch: TacticsPatch; label: string };
 
 export interface Alert {
   id: string;
@@ -521,53 +545,96 @@ export interface Alert {
   fix?: AlertFix;
 }
 
+/** Games of this season's trade-offs before the staff reads a pattern into them. */
+const LEVER_GAMES = 8;
+/** Points a game a setting has to give away beyond what it wins back for the staff to want it changed. */
+const LEVER_COST = 0.6;
+
+/**
+ * The user's setting whose trade-off has cost the most this season (its effects against him less
+ * what it won back, a game, over his stored games), when it's worth changing and the staff's counter
+ * for it changes something: an alert with that counter as its fix.
+ */
+function seasonLever(league: League, tid: number): Alert | null {
+  const tactics = league.teams[tid].tactics;
+  const sums = new Map<string, { what: string; lost: number; won: number; key: string }>();
+  let n = 0;
+  for (const g of league.games) {
+    if (g.season !== league.season || g.type === 'allstar' || !g.impacts) continue;
+    const side = g.home.tid === tid ? 0 : g.away.tid === tid ? 1 : -1;
+    if (side < 0) continue;
+    n++;
+    for (const key of LEVER_KEYS) {
+      const lv = leverNet(g.impacts, key, side as 0 | 1);
+      if (!lv) continue;
+      const e = sums.get(lv.what) ?? { what: lv.what, lost: 0, won: 0, key };
+      // (each lever is read once a game, from its first cost key)
+      if (e.key === key) {
+        e.lost += lv.lost;
+        e.won += lv.won;
+      }
+      sums.set(lv.what, e);
+    }
+  }
+  if (n < LEVER_GAMES) return null;
+  const worst = [...sums.values()]
+    .map((e) => ({ ...e, net: (e.won - e.lost) / n }))
+    .filter((e) => e.net <= -LEVER_COST)
+    .sort((a, b) => a.net - b.net);
+  for (const e of worst) {
+    const counter = leverCounter(e.what, tactics);
+    if (!counter) continue;
+    const after = cloneTactics(tactics);
+    counter.apply(after);
+    const what = e.what.charAt(0).toUpperCase() + e.what.slice(1);
+    return {
+      id: `lever-${e.what}`,
+      tone: 'alert',
+      title: `${what} is costing you`,
+      body: `It gives up ${(e.lost / n).toFixed(1)} points a game and wins ${(e.won / n).toFixed(1)} back (${n} games).`,
+      link: '/team/tactics',
+      fix: { kind: 'patch', patch: tacticsDiff(tactics, after), label: counter.label },
+    };
+  }
+  return null;
+}
+
+/** The staff's change for a setting's trade-off (named as leverNet names it): the counter to its first cost the tactics still give. */
+function leverCounter(what: string, t: Tactics): LiveCounter | undefined {
+  for (const key of LEVER_KEYS) {
+    if (leverNet([], key, 0)?.what !== what) continue;
+    const c = impactCounter(key, t);
+    if (c) return c;
+  }
+  return undefined;
+}
+
 export function teamAlerts(league: League, tid: number): Alert[] {
   const team = league.teams[tid];
   const players = teamPlayers(league, tid);
   const healthy = players.filter((p) => !p.injury);
   const alerts: Alert[] = [];
-  // the roster and fit scores the Tactics screen shows next to each playbook
-  const pr = rosterProfile(fitRoster(players));
-  const offFit = offPresetFit(pr);
-  const defFit = defPresetFit(pr);
-  const [offShown, defShown] = [fitScale(offFit), fitScale(defFit)];
-  const curOff = team.tactics.offPreset;
-  const curDef = team.tactics.defPreset;
-  const bestOff = Object.entries(offFit).sort((a, b) => b[1] - a[1])[0];
-  const bestDef = Object.entries(defFit).sort((a, b) => b[1] - a[1])[0];
-  if (team.tactics.manual && offFit[curOff] !== undefined && bestOff[1] - offFit[curOff] > 12) {
-    const nm = OFF_PRESETS.find((x) => x.id === bestOff[0])?.name;
-    alerts.push({
-      id: 'off-fit',
-      tone: 'alert',
-      title: `Offense may not fit: try ${nm}`,
-      body: `Your roster profile fits ${nm} better (fit ${offShown(bestOff[0])} vs ${offShown(curOff)}).`,
-      link: '/team/tactics',
-      fix: { kind: 'offPreset', id: bestOff[0], label: `Run ${nm}` },
-    });
-  }
-  if (team.tactics.manual && defFit[curDef] !== undefined && bestDef[1] - defFit[curDef] > 12) {
-    const nm = DEF_PRESETS.find((x) => x.id === bestDef[0])?.name;
-    alerts.push({
-      id: 'def-fit',
-      tone: 'alert',
-      title: `Defense may not fit: try ${nm}`,
-      body: `Your personnel fits ${nm} better (fit ${defShown(bestDef[0])} vs ${defShown(curDef)}).`,
-      link: '/team/tactics',
-      fix: { kind: 'defPreset', id: bestDef[0], label: `Play ${nm}` },
-    });
-  }
+  // what the season's games say one of the user's settings costs more than it wins back (the engine's
+  // own accounting of both sides of it), with the staff's change for it. Not a playbook swap on its
+  // fit: over real rosters a playbook's fit doesn't predict what it's worth in the engine, and the
+  // swap the old card offered cost points as often as not. Only for tactics the user runs himself.
+  const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
+  const lever = inSeason && team.tactics.manual ? seasonLever(league, tid) : null;
+  if (lever) alerts.push(lever);
   const rot = team.rotation;
   // the five who start: the first healthy ones in the depth chart, as the engine and the Rotation screen have it
   const starters = rot.order
     .map((pid) => league.players[pid])
     .filter((p) => p && p.tid === tid && !p.injury)
     .slice(0, 5);
-  if (starters.length === 5) {
+  // lineups are a game-season matter (the summer's roster isn't the one that plays), and the staff
+  // doesn't flag what it decides itself: holes in a five it picked, a coverage it chose
+  const games = league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
+  if (games && starters.length === 5) {
     const ev = evaluateLineup(starters);
     // each hole says who's best at it in the five, and who on the bench would fill it
     const bench = teamPlayers(league, tid).filter((p) => !p.injury && !starters.includes(p));
-    for (const n of ev.notes)
+    for (const n of rot.manual ? ev.notes : [])
       alerts.push({
         id: `lineup-${n}`,
         tone: 'bad',
@@ -576,7 +643,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         link: '/team/rotation',
       });
     // (coverages only apply in man-to-man)
-    const man = team.tactics.defense.scheme === 'man';
+    const man = team.tactics.defense.scheme === 'man' && team.tactics.manual;
     if (man && team.tactics.defense.pnr === 'drop' && ev.rimProtection < 52)
       alerts.push({
         id: 'drop-noprot',
@@ -610,8 +677,8 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       link: '/team/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
-  // (an assistant-run rotation plans a newcomer at the next game: in the offseason, or the day of a trade, it hasn't yet)
-  if (best && (rot.manual || rot.minutes[best.pid] !== undefined)) {
+  // (only the user's own minutes: an assistant-run rotation plans them itself)
+  if (games && best && rot.manual) {
     // stamina sets a ceiling; only flag minutes well below what he can carry
     const sustain = Math.round(sustainableMinutes(best));
     const m = rot.minutes[best.pid] ?? 0;

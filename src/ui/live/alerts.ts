@@ -7,7 +7,7 @@
 import type { GameAdjustment, GameManagement, Tactics } from '../../core/types';
 import type { InGameInjury } from '../../core/sim/engine';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
-import { impactAdvice, impactSentence, teamRef } from '../../core/analysis/gameReport';
+import { impactAdvice, impactSentence, leverPaid, teamRef } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
 import type { Drawn, DrawnPlayer } from './drawn';
@@ -192,8 +192,11 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     });
   }
 
-  // the biggest tactical edge against us so far, while the tactics still give it to them
-  const worst = view.impacts.filter((im) => im.t !== side && im.pts >= 2.5 && impactAdvice(im.key, tactics)).sort((x, y) => y.pts - x.pts)[0];
+  // the biggest tactical edge against us so far, while the tactics still give it to them and the
+  // setting behind it hasn't won back what it cost (as the report judges it)
+  const worst = view.impacts
+    .filter((im) => im.t !== side && im.pts >= 2.5 && impactAdvice(im.key, tactics) && !leverPaid(view.impacts, im.key, side))
+    .sort((x, y) => y.pts - x.pts)[0];
   if (worst) {
     const fix = impactCounter(worst.key, tactics);
     out.push({

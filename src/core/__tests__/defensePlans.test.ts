@@ -46,6 +46,8 @@ function oneManTeam(l: League, tid: number): Player {
     } else {
       s.tpa = Math.max(s.tpa, 6);
       s.tpm = Math.floor(s.tpa * 0.25);
+      // and poor shooters by their ratings too (a percentage over a few games is mostly noise)
+      p.ratings.tp = Math.min(p.ratings.tp, 40);
     }
   }
   return star;
@@ -125,6 +127,9 @@ describe('counters and opposing plans', () => {
     expect(box!.label).toBe(`Box-and-one on ${star.lastName}`);
     expect(box!.patch).toEqual({ defense: { scheme: 'box1', chase: [star.pid] } });
     expect(box!.evidence).toMatch(/uses 38% of their possessions; the rest make 2\d\.\d% of their threes/);
+    // the same percentages from players who can shoot by their ratings: no junk defense (it costs points then)
+    for (const p of teamPlayers(l, opp)) if (p !== star) p.ratings.tp = Math.max(p.ratings.tp, 70);
+    expect(counterCandidates(l, l.userTid, opp).some((c) => c.id === 'box-1')).toBe(false);
   });
 
   it('the assistant suggests attacking a real weak link', () => {

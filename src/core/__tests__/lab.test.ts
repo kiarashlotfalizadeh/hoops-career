@@ -3,11 +3,10 @@ import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers, wholeMinutes } from '../league/helpers';
 import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
 import { counterCandidates, liveCounter, scoutTeam, teamAlerts } from '../ai/advisor';
-import { fitRoster, offPresetFit, rosterProfile } from '../ai/coachAI';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { playGame } from '../league/games';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
-import { OFF_PRESETS, cloneTactics } from '../sim/tactics';
+import { cloneTactics } from '../sim/tactics';
 import type { GameResult, Tactics } from '../types';
 
 describe('batch sims & reports', () => {
@@ -113,17 +112,37 @@ describe('batch sims & reports', () => {
     expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
     league.teams[0].tactics = t;
   });
-  it("quotes playbook fits on the Tactics screen's scale: 100 for the best fit, 45 for the worst", () => {
+  it("flags the user's setting whose trade-off the season's games say he's losing, with the staff's change for it", () => {
     const team = league.teams[0];
-    const saved = team.tactics;
-    const fits = offPresetFit(rosterProfile(fitRoster(teamPlayers(league, 0))));
-    const [best, worst] = [Object.keys(fits).sort((a, b) => fits[b] - fits[a])[0], Object.keys(fits).sort((a, b) => fits[a] - fits[b])[0]];
-    expect(fits[best] - fits[worst]).toBeGreaterThan(12);
-    team.tactics = { ...applyPatch(saved), offPreset: worst, manual: true };
-    const alert = teamAlerts(league, 0).find((a) => a.id === 'off-fit')!;
-    expect(alert.title).toBe(`Offense may not fit: try ${OFF_PRESETS.find((p) => p.id === best)!.name}`);
-    expect(alert.body).toMatch(/\(fit 100 vs 45\)\.$/);
-    team.tactics = saved;
+    const [saved, games] = [team.tactics, league.games];
+    const mine = league.games.find((g) => g.home.tid === 0 || g.away.tid === 0)!;
+    const me: 0 | 1 = mine.home.tid === 0 ? 0 : 1;
+    const im = (key: string, t: 0 | 1, pts: number) => ({ key, t, pts, count: 6, players: {} });
+    const season = (n: number, lost: number, won: number) =>
+      (league.games = Array.from({ length: n }, (_, i) => ({
+        ...mine,
+        gid: 90000 + i,
+        impacts: [im('pressure_to:o', (1 - me) as 0 | 1, lost), im('pressure_blowby:d', me, won)],
+      })));
+    const lever = () => teamAlerts(league, 0).find((a) => a.id.startsWith('lever-'));
+    team.tactics = { ...applyPatch(saved, { defense: { pressure: 40 } }), manual: true };
+    season(10, 1.5, 0.3);
+    const a = lever()!;
+    expect(a).toMatchObject({ title: 'Soft ball pressure is costing you', body: 'It gives up 1.5 points a game and wins 0.3 back (10 games).' });
+    expect(a.fix).toMatchObject({ kind: 'patch', label: 'Pressure the ball' });
+    expect(applyPatch(team.tactics, (a.fix as { patch: TacticsPatch }).patch).defense.pressure).toBe(65);
+    // what it wins back covers it, or too few games to read, or the staff's own tactics: nothing to say
+    season(10, 1.5, 1.2);
+    expect(lever()).toBeUndefined();
+    season(5, 1.5, 0.3);
+    expect(lever()).toBeUndefined();
+    season(10, 1.5, 0.3);
+    team.tactics = { ...team.tactics, manual: false };
+    expect(lever()).toBeUndefined();
+    // and no playbook swap on its fit alone (it didn't predict what a playbook is worth)
+    team.tactics = { ...applyPatch(saved), offPreset: 'grind', defPreset: 'chaos', manual: true };
+    expect(teamAlerts(league, 0).some((x) => x.id === 'off-fit' || x.id === 'def-fit')).toBe(false);
+    [team.tactics, league.games] = [saved, games];
   });
   it('warns about a slow big only where the engine hunts him: on switched ball screens, not off-ball switches', () => {
     const team = league.teams[1];
@@ -139,7 +158,10 @@ describe('batch sims & reports', () => {
     expect(ids()).not.toContain('switch-slow');
     expect(slowWeakness()).toBe(false);
     expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch off-ball screens;/);
-    team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } });
+    // the staff's own coverage isn't flagged: only one the user chose
+    team.tactics = { ...applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } }), manual: false };
+    expect(ids()).not.toContain('switch-slow');
+    team.tactics = { ...applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } }), manual: true };
     expect(teamAlerts(league, 1).find((a) => a.id === 'switch-slow')!.body).toContain(big.lastName);
     expect(slowWeakness()).toBe(true);
     expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch everything;/);
@@ -153,7 +175,7 @@ describe('batch sims & reports', () => {
     const r = { ...big.ratings };
     big.ratings.hgt = 70;
     big.ratings.spd = 30;
-    team.tactics = applyPatch(tactics, { defense: { scheme: 'man', pnr: 'switch' } });
+    team.tactics = { ...applyPatch(tactics, { defense: { scheme: 'man', pnr: 'switch' } }), manual: true };
     // a custom rotation whose targets add up to 240, the slow big starting
     const minutes = Object.fromEntries(rotation.order.map((pid, i) => [pid, [36, 34, 33, 31, 29, 24, 20, 16, 12, 5][i] ?? 0]));
     team.rotation = { ...rotation, minutes, manual: true };
@@ -196,6 +218,24 @@ describe('batch sims & reports', () => {
     league.teams[2].rotation = rotation;
     p.wear = wear;
   });
+  it("doesn't flag the holes in a five the staff picked, nor any lineup in the offseason", () => {
+    const lineupAlerts = (tid: number) => teamAlerts(league, tid).filter((a) => a.id.startsWith('lineup-') || a.id === 'star-min');
+    const saved = league.teams.map((t) => t.rotation);
+    let flagged = 0;
+    for (const t of league.teams) {
+      t.rotation = { ...t.rotation, manual: false };
+      expect(lineupAlerts(t.tid)).toEqual([]);
+      t.rotation = { ...t.rotation, manual: true };
+      flagged += lineupAlerts(t.tid).length;
+    }
+    // the same fives, the user's own: some have holes worth a word
+    expect(flagged).toBeGreaterThan(0);
+    const phase = league.phase;
+    league.phase = 'freeAgency';
+    for (const t of league.teams) expect(lineupAlerts(t.tid)).toEqual([]);
+    league.phase = phase;
+    league.teams.forEach((t, i) => (t.rotation = saved[i]));
+  });
   it("leaves a newcomer's minutes to an assistant-run rotation, and names a star a manual one leaves out", () => {
     const rotation = league.teams[2].rotation;
     const best = teamPlayers(league, 2)
@@ -220,11 +260,12 @@ describe('batch sims & reports', () => {
       return x;
     };
     // already getting back and off the glass: "Sprint back" would do nothing
-    expect(liveCounter('transition', at({ defense: { getBack: 85 }, offense: { crashBoards: 30 } }))).toBeUndefined();
+    expect(liveCounter('transition', at({ defense: { getBack: 85 }, offense: { crashBoards: 45 } }))).toBeUndefined();
     expect(liveCounter('transition', at({ defense: { getBack: 95 }, offense: { crashBoards: 10 } }))).toBeUndefined();
-    // still crashing: it pulls back from the glass and keeps the faster transition defense
+    // still crashing: it pulls back from the glass to the middle (crashing less than that gives up more
+    // second chances than the run-outs it saves) and keeps the faster transition defense
     const crashing = after('transition', at({ defense: { getBack: 95 }, offense: { crashBoards: 60 } }));
-    expect([crashing.defense.getBack, crashing.offense.crashBoards]).toEqual([95, 30]);
+    expect([crashing.defense.getBack, crashing.offense.crashBoards]).toEqual([95, 45]);
     // already doubling the post: no "Double the post" that would lower help from 90 to 80
     expect(liveCounter('post', at({ defense: { help: 80 } }))).toBeUndefined();
     expect(liveCounter('post', at({ defense: { help: 90 } }))).toBeUndefined();
@@ -272,7 +313,7 @@ describe('batch sims & reports', () => {
     }
     [mine.tactics, opp.tactics] = saved;
   });
-  it('reads spacing as scouting does: a zone only against the poor spacing it flags, never pack the paint and stay home at once', () => {
+  it('reads spacing as scouting does: packs the paint against the poor spacing it flags, never suggests a zone, never pack the paint and stay home at once', () => {
     const mine = league.teams[0];
     const saved = mine.tactics;
     mine.tactics = applyPatch(saved, { defense: { scheme: 'man', help: 55 } });
@@ -280,7 +321,8 @@ describe('batch sims & reports', () => {
     for (let tid = 1; tid < 30; tid++) {
       const poor = scoutTeam(league, tid).weaknesses.some((w) => w.startsWith('Few shooters in their five'));
       const ids = counterCandidates(league, 0, tid).map((c) => c.id);
-      expect(ids.includes('zone')).toBe(poor);
+      // (a 2-3 zone lost points even against the cramped post-up teams it's built for: the staff leaves it to the Defense tab)
+      expect(ids).not.toContain('zone');
       if (poor) expect(ids).toContain('help-high');
       expect(ids.includes('help-high') && ids.includes('help-low')).toBe(false);
       flagged += +poor;

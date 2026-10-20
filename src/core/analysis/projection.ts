@@ -10,8 +10,8 @@ import type { GameSim } from '../sim/engine';
 export const TALENT_NET = 1.7;
 /** Games of this season's net rating that weigh as much as the talent prior (the blend predicts a season's final net best). */
 export const PRIOR_GAMES = 15;
-/** Points a home team gains in the engine (about 1.3, a 54% home win rate). */
-export const HOME_EDGE = 1.3;
+/** Points a home team gains in the engine (measured over 2,460 simulated games: 1.8, a 55% home win rate). */
+export const HOME_EDGE = 1.8;
 /** Spread of game margins for a given matchup (the engine's, like the NBA's, is near 13). */
 export const MARGIN_SD = 13;
 

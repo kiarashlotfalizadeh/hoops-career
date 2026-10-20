@@ -588,8 +588,6 @@ function read(league: League, d: ScoutData) {
       `${pct0(d.rimRate.v)} of their shots come at the rim (${most(d.rimRate.rank)} in the league) and only ${pct0(d.threeRate.v)} from three.`,
       6 - d.rimRate.rank,
     );
-  if (worst(d.threeRate) <= 5)
-    backs(counters, 'zone', `They rarely shoot threes: ${pct0(d.threeRate.v)} of their shots, ${most(worst(d.threeRate), 'fewest')} in the league.`, 6 - worst(d.threeRate));
   const tr = d.playTypes.find((x) => x.key === 'transition');
   if (tr && (tr.shareRank <= 5 || (tr.poss >= MIN_PT_POSS && tr.z >= 2)))
     backs(

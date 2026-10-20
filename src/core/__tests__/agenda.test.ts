@@ -7,6 +7,7 @@ import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { standardRoster } from '../league/helpers';
+import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerEvaluation } from '../league/owner';
@@ -36,6 +37,24 @@ describe('the agenda', () => {
     expect(agendaBlocker(l)).toBeNull();
     expect(canStartRegularSeason(l)).toEqual([]);
     expect(flowActions(l)[0]).toMatchObject({ cmd: 'startRegular', primary: true });
+  });
+
+  it('holds opening night on a roster under 13, with the signing the staff would make one tap away', () => {
+    const l = camp(5);
+    // cut down to 11 standard deals
+    for (const p of cutOrder(l, standardRoster(l, l.userTid)).slice(0, standardRoster(l, l.userTid).length - 11)) releasePlayer(l, p, { news: false });
+    const item = agenda(l).find((i) => i.kind === 'signings')!;
+    expect(item).toMatchObject({ required: true, title: 'Sign 2 players' });
+    expect(item.suggestion?.action.kind).toBe('sign');
+    expect(item.suggestion?.label).toMatch(/^Sign .+ \((PG|SG|SF|PF|C) · \d+ OVR\)$/);
+    expect(item.suggestion?.confirm).toMatch(/× \d yrs?\.$/);
+    // two taps fill the roster, each with the best free agent the cap lets him sign at his asking deal
+    for (let i = 0; i < 2; i++) {
+      const s = agenda(l).find((x) => x.kind === 'signings')!.suggestion!;
+      expect(resolveAgenda(l, s.action).ok).toBe(true);
+    }
+    expect(agenda(l).some((i) => i.kind === 'signings')).toBe(false);
+    expect(standardRoster(l, l.userTid).length).toBe(CAP.rosterMin);
   });
 
   it("a fired coach's only way on is a new job", () => {

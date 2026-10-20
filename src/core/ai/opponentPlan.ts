@@ -13,10 +13,11 @@ import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics
 import { Rng, clamp, hashString } from '../random';
 import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
-import { SCOUT_MIN_GAMES } from '../analysis/scouting';
+import { SCOUT_MIN_GAMES, projectedRotation } from '../analysis/scouting';
 import { guardingPlan, huntPick } from '../analysis/guarding';
 import { playerName, seasonLine, seasonTotals, shortName, teamPlayers } from '../league/helpers';
-import { defPresetFit, rosterProfile } from './coachAI';
+import { CRAMPED_SPACING, defPresetFit, rosterProfile } from './coachAI';
+import { composites } from '../ratings';
 
 export interface OppPlanItem {
   id: string;
@@ -199,6 +200,14 @@ function restingTonight(league: League, userTid: number, day: number): Set<numbe
   const plays = (g: ScheduledGame) => g.home === userTid || g.away === userTid;
   const b2b = !league.schedule.some((g) => g.day === day && g.type !== 'regular' && plays(g)) && league.schedule.some((g) => g.day === day - 1 && plays(g));
   return new Set(b2b ? league.teams[userTid].rotation.restB2B : []);
+}
+
+/** How the five who play most for `tid` besides `skip` (and the players resting) space the floor, by their ratings. */
+function castSpacing(league: League, tid: number, skip: number, resting: Set<number>): number {
+  const five = projectedRotation(league, tid, 8, resting)
+    .filter((x) => x.pid !== skip)
+    .slice(0, 5);
+  return five.reduce((a, x) => a + composites(x.ratings).spacing, 0) / Math.max(1, five.length);
 }
 
 /** The player the user's team runs its offense through, by usage (this season's numbers, else last season's). */
@@ -405,12 +414,16 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         w: 1.2,
       });
   }
-  // ---- the player the user's offense runs through: doubled when he carries it, denied the ball otherwise
+  // ---- the player the user's offense runs through: denied the ball, doubled only when he can't pass
+  // out of it and the players around him can't shoot by their ratings (over real rosters a double, or
+  // a box-and-one read off a three-point percentage, cost the coach who tried it points)
   const star = userStar(league, userTid, day);
+  const around = star ? castSpacing(league, userTid, star.p.pid, resting) : 100;
+  const selfish = !!star && composites(star.p.ratings).passing < 55;
   // ...or chased in a box-and-one when the players around him don't make their threes
   const cast = star && p ? castThrees(league, userTid, star.p.pid) : null;
   const lgTp = p ? div(p.lg.tpm, p.lg.tpa) : NaN;
-  if (star && star.usg >= 0.28 && cast && lgTp - cast.pct >= 0.02 && d.scheme === 'man')
+  if (star && star.usg >= 0.28 && cast && lgTp - cast.pct >= 0.02 && around < CRAMPED_SPACING && d.scheme === 'man')
     out.push({
       id: 'box1',
       group: 'star',
@@ -424,7 +437,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     const spot = p ? ptRead(p, p.off, 'spotup') : null;
     // a double leaves a shooter open: not against a team whose shooters make it pay
     const shooters = !!p && ((!!spot && spot.z >= 1) || div(p.off.tpm, p.off.tpa) > div(p.lg.tpm, p.lg.tpa) + 0.02);
-    const double = star.usg >= 0.32 && !shooters;
+    const double = star.usg >= 0.32 && !shooters && selfish && around < CRAMPED_SPACING;
     out.push({
       id: double ? 'star-double' : 'star-deny',
       group: 'star',

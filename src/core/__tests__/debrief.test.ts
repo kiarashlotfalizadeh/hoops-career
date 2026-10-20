@@ -38,4 +38,25 @@ describe('the debrief', () => {
     }
     expect(fixes).toBeGreaterThan(0);
   });
+  it("offers no fix for a setting's cost that the same setting won back that night", () => {
+    const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
+    league.phase = 'regular';
+    const g = league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!;
+    const res = playGame(league, g);
+    const me: 0 | 1 = res.home.tid === 0 ? 0 : 1;
+    const them = (1 - me) as 0 | 1;
+    league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'man', pnr: 'drop' } });
+    const im = (key: string, t: 0 | 1, pts: number) => ({ key, t, pts, count: 8, players: {} });
+    const factor = () => buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up jumpers'))!;
+    // drop gave up 2.5 in pull-ups and won 3.1 back at the rim: no reason to leave it
+    res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 3.1)];
+    expect(factor()).toMatchObject({ pts: -2.5, detail: 'Over 8 plays. Your drop coverage won 3.1 back.' });
+    expect(factor().key).toBeUndefined();
+    expect(factor().advice).toBeUndefined();
+    expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.id === 'fix-drop_pullup:o')).toBe(false);
+    // it won back only 0.4: the fix stands
+    res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
+    expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
+    expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')?.label).toBe('Switch to Hedge');
+  });
 });

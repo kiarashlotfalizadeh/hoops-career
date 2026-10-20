@@ -200,7 +200,7 @@ function facts(league: League, res: GameResult, report?: GameReport | null): Fac
 }
 
 /** One of the templates, the same one every time for this game and slot. */
-function pick<T>(gid: number, slot: string, list: T[]): T {
+export function pick<T>(gid: number, slot: string, list: T[]): T {
   // (mixed again: neighbouring game ids otherwise land on the same template too often)
   let h = hashString(`${slot}:${gid}`);
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
@@ -253,6 +253,7 @@ function voiceLine(f: Facts, gid: number, league: League): string {
       `Good team win. We moved the ball and got stops when we needed them.`,
       `We did our jobs tonight. On to the next one.`,
       `Everybody chipped in. That's the formula.`,
+      `We stuck to the game plan and it showed.`,
     ]);
   }
   if (comeback)
@@ -272,21 +273,50 @@ function voiceLine(f: Facts, gid: number, league: League): string {
       `That one's going to sting. We'll learn from the end of that game.`,
     ]);
   if (f.margin >= 20) return pick(gid, 'lbig', [`That one's on us. We didn't bring the energy and they made us pay.`, `Flush it. That wasn't us out there.`]);
-  return pick(gid, 'l', [`They were the better team tonight. We'll watch the film and bounce back.`, `We didn't execute down the stretch. We'll get it fixed.`]);
+  return pick(gid, 'l', [
+    `They were the better team tonight. We'll watch the film and bounce back.`,
+    `We didn't execute down the stretch. We'll get it fixed.`,
+    `Not our night. We'll be back in the gym tomorrow.`,
+    `We dug ourselves a hole with too many empty trips. That's fixable.`,
+  ]);
 }
 
 /** The other coach on what decided it, when the report names it. */
-const WON_ON: Partial<Record<Factor['category'], string>> = {
-  turnovers: 'We took care of the ball and turned their mistakes into points.',
-  rebounding: 'We won the glass, and that was the difference.',
-  shooting: "We made shots tonight. When we do that, we're dangerous.",
-  fouls: "We got to the line and they didn't. That adds up.",
+const WON_ON: Partial<Record<Factor['category'], string[]>> = {
+  turnovers: [
+    'We took care of the ball and turned their mistakes into points.',
+    'We made them pay for every turnover. That was the game.',
+    'Our hands were active tonight, and the steals turned into easy ones.',
+  ],
+  rebounding: [
+    'We won the glass, and that was the difference.',
+    'Second chances. We kept getting them, and they kept hurting.',
+    'We were tougher on the boards tonight. Simple as that.',
+  ],
+  shooting: ["We made shots tonight. When we do that, we're dangerous.", 'The ball was moving and the shots were falling.', 'Our shooters got good looks and knocked them down.'],
+  fouls: [
+    "We got to the line and they didn't. That adds up.",
+    'We kept attacking the rim, and the free throws came.',
+    'We put pressure on the rim all night. The whistle followed.',
+  ],
 };
-const LOST_ON: Partial<Record<Factor['category'], string>> = {
-  turnovers: "Too many turnovers. You can't give a good team extra possessions.",
-  rebounding: 'They beat us on the glass. That was the game.',
-  shooting: "They shot the ball well, and we didn't have an answer.",
-  fouls: 'We fouled too much and put them on the line all night.',
+const LOST_ON: Partial<Record<Factor['category'], string[]>> = {
+  turnovers: [
+    "Too many turnovers. You can't give a good team extra possessions.",
+    "We kept giving it away, and they kept running. That's the game.",
+    "We were careless with the ball. That's on us to clean up.",
+  ],
+  rebounding: [
+    'They beat us on the glass. That was the game.',
+    "We didn't finish our defense with the rebound, and they made us pay.",
+    'Too many second chances for them. We have to box out.',
+  ],
+  shooting: ["They shot the ball well, and we didn't have an answer.", "We didn't make shots tonight, and they did.", "We got some good looks. They just didn't go down."],
+  fouls: [
+    'We fouled too much and put them on the line all night.',
+    'We were reaching instead of moving our feet. The free throws added up.',
+    "They lived at the line. We've got to defend without fouling.",
+  ],
 };
 
 function coachLine(f: Facts, gid: number, league: League): string {
@@ -307,7 +337,7 @@ function coachLine(f: Facts, gid: number, league: League): string {
     if (f.upset >= 10) return pick(gid, 'cup', [`People counted us out against a team like ${us}. Our guys believed.`, `Nobody gave us a chance tonight. I love this group.`]);
     if (f.margin >= 20) return pick(gid, 'cbig', [`Our guys came out ready. That was as complete a game as we've played.`, `Everything clicked tonight, on both ends.`]);
     const why = f.decided && WON_ON[f.decided];
-    if (why) return why;
+    if (why) return pick(gid, 'cwon', why);
     return pick(gid, 'cw', [`Tough, physical game. Credit to ${us}: they made us earn every point.`, `We got enough stops when it mattered. Good win for us.`]);
   }
   if (comeback)
@@ -320,12 +350,14 @@ function coachLine(f: Facts, gid: number, league: League): string {
     return pick(gid, 'cl30', [
       `We threw everything at ${lastName(league, v)}. Sometimes a great player just beats you.`,
       `${lastName(league, v)} was terrific. We have to be better.`,
+      `${v.pts} for ${lastName(league, v)}. We'll look at what we could have done differently on him.`,
+      `You live with some of those. ${lastName(league, v)} made a lot of tough shots.`,
     ]);
   if (f.upset >= 10) return pick(gid, 'clup', [`We didn't take them seriously enough, and they made us pay.`, `Give ${us} credit. They outworked us.`]);
   if (f.margin >= 20) return pick(gid, 'clbig', [`We got beat in every way tonight. That starts with me.`, `That's not who we are. We'll regroup.`]);
   if (f.ot || f.margin <= 4) return pick(gid, 'clclose', [`Proud of the fight. We just didn't make enough plays at the end.`, `Coin-flip game. It went their way tonight.`]);
   const why = f.decided && LOST_ON[f.decided];
-  if (why) return why;
+  if (why) return pick(gid, 'clost', why);
   return pick(gid, 'cl', [`${us.charAt(0).toUpperCase()}${us.slice(1)} played well. We'll regroup.`, `They executed better than we did. Simple as that.`]);
 }
 

@@ -152,13 +152,13 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'pressure_blowby:o': {
     text: (X, _Y, w) => `${possessive(X)} handlers blew by aggressive on-ball defenders${w}.`,
     advice: 'Back off the Ball pressure (Defense) against quick creators.',
-    uses: (t) => t.defense.pressure > 50,
+    uses: (t) => t.defense.pressure > 60,
   },
   'pressure_blowby:d': { text: (X) => `${X} gave ball handlers room and kept them in front.` },
   'pressure_foul:o': {
     text: (X, _Y, w) => `${X} drew reach-in fouls against aggressive ball pressure${w}.`,
     advice: 'Lower Ball pressure (Defense) once you are in the penalty.',
-    uses: (t) => t.defense.pressure > 50,
+    uses: (t) => t.defense.pressure > 60,
     cat: 'fouls',
   },
   'pressure_foul:d': { text: (X) => `${X} stayed off the ball and saved the reach-in fouls.`, cat: 'fouls' },
@@ -173,11 +173,15 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     text: (X) => `${X} crashed the glass and got second chances.`,
     advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Offense > Push in transition).',
   },
-  'crash_orb:d': { text: (_X, Y) => `${Y} passed up second chances by staying off the offensive glass.` },
+  'crash_orb:d': {
+    text: (_X, Y) => `${Y} passed up second chances by staying off the offensive glass.`,
+    advice: 'Send more players to the offensive glass (Offense > Crash the offensive glass).',
+    uses: (t) => t.offense.crashBoards < 45,
+  },
   'crash_leak:o': {
     text: (X, Y) => `${X} got out in transition because ${Y} crashed the offensive glass.`,
     advice: 'Crash the offensive glass less (Offense) if you keep giving up run-outs.',
-    uses: (t) => t.offense.crashBoards > 50,
+    uses: (t) => t.offense.crashBoards > 60,
   },
   'crash_leak:d': { text: (X) => `${X} kept players back from the glass and gave up fewer run-outs.` },
   'getback:d': { text: (X) => `${possessive(X)} transition defense limited fast breaks.` },
@@ -355,6 +359,58 @@ const factorPhrase = (title: string) =>
     .replace(/: (.+)$/, ' ($1)')
     .replace(/^The /, 'the ');
 
+/**
+ * Settings that trade one effect for another: what the other team got from the setting (`costs`)
+ * and what the same setting won back (`gains`), as the engine tags both. A cost the setting more
+ * than won back that night isn't a reason to change it.
+ */
+const LEVERS: { what: string; costs: string[]; gains: string[] }[] = [
+  { what: 'drop coverage', costs: ['drop_pullup:o', 'drop_pop:o'], gains: ['drop_rim:d'] },
+  { what: 'switching', costs: ['switch_mismatch:o'], gains: ['switch_deny:d', 'switch_screen:d', 'switch_mismatch:d'] },
+  { what: 'hedging', costs: ['hedge_roll:o', 'hedge_rotate:o'], gains: ['hedge_stall:d', 'hedge_roll:d'] },
+  { what: 'blitzing', costs: ['blitz_4v3:o'], gains: ['blitz_to:d', 'blitz_4v3:d'] },
+  { what: 'zone defense', costs: ['zone_3pt:o', 'zone_glass:o'], gains: ['zone_paint:d', 'zone_3pt:d'] },
+  { what: 'heavy help', costs: ['help_kick:o'], gains: ['help_paint:d'] },
+  { what: 'staying home on shooters', costs: ['help_paint:o'], gains: ['help_kick:d'] },
+  { what: 'soft ball pressure', costs: ['pressure_to:o'], gains: ['pressure_blowby:d', 'pressure_foul:d'] },
+  { what: 'ball pressure', costs: ['pressure_blowby:o', 'pressure_foul:o', 'pressure_backdoor:o'], gains: ['pressure_to:d'] },
+  { what: 'physical defense', costs: ['physicality:o'], gains: ['physicality:d'] },
+  { what: 'clean defense', costs: ['clean_defense:o'], gains: ['clean_defense:d'] },
+  { what: 'full-court press', costs: ['press_break:o'], gains: ['press_to:d'] },
+  { what: 'crashing', costs: ['crash_leak:o'], gains: ['crash_orb:o'] },
+  { what: 'staying off the glass', costs: ['crash_orb:d'], gains: ['crash_leak:d'] },
+  { what: 'doubling', costs: ['double_kick:o'], gains: ['star_double:d'] },
+  { what: 'junk defense', costs: ['box_open:o', 'box_beat:o'], gains: ['box_chase:d'] },
+];
+
+/** Every effect that is a setting's cost, each lever's first cost first. */
+export const LEVER_KEYS = LEVERS.flatMap((l) => l.costs);
+
+/**
+ * What the setting behind an effect against `side` traded that night: the points it gave the other
+ * team (`lost`) and won back for `side` (`won`), or null when the effect isn't a trade-off.
+ */
+export function leverNet(impacts: TacticImpact[] | undefined, key: string, side: 0 | 1): { what: string; lost: number; won: number } | null {
+  const lv = LEVERS.find((l) => l.costs.includes(key));
+  if (!lv) return null;
+  let lost = 0;
+  let won = 0;
+  for (const im of impacts ?? []) {
+    if (im.t !== side && lv.costs.includes(im.key)) lost += im.pts;
+    if (im.t === side && lv.gains.includes(im.key)) won += im.pts;
+  }
+  return { what: lv.what, lost, won };
+}
+
+/** A setting whose cost tonight is worth changing it for: it gave away this much more than it won back. */
+const NET_LOSS = 0.5;
+
+/** Whether the setting behind an effect against `side` won back about what it cost (so no fix is offered for it). */
+export function leverPaid(impacts: TacticImpact[] | undefined, key: string, side: 0 | 1): boolean {
+  const lv = leverNet(impacts, key, side);
+  return !!lv && lv.won - lv.lost > -NET_LOSS;
+}
+
 /** Advice for the team an effect hurt, unless its tactics no longer use what caused it. */
 export function impactAdvice(key: string, hurt: Tactics): string | undefined {
   const tpl = IMPACT_TEXT[key];
@@ -454,14 +510,17 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const benefitUser = im.t === userSide;
     const X = teamRef(benefitUser ? ut : ot);
     const Y = teamRef(benefitUser ? ot : ut);
+    // a cost of one of the user's settings that the same setting more than won back: no fix for it
+    const lv = benefitUser ? null : leverNet(res.impacts, im.key, userSide);
+    const paid = !benefitUser && leverPaid(res.impacts, im.key, userSide);
     factors.push({
       title: impactSentence(im.key, X, Y, names(league, im)),
       // (the report leads the row with what it was worth)
-      detail: `Over ${plural(im.count, 'play')}.`,
+      detail: paid ? `Over ${plural(im.count, 'play')}. Your ${lv!.what} won ${lv!.won.toFixed(1)} back.` : `Over ${plural(im.count, 'play')}.`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
-      advice: benefitUser ? undefined : impactAdvice(im.key, tactics),
-      key: im.key,
+      advice: benefitUser || paid ? undefined : impactAdvice(im.key, tactics),
+      ...(paid ? {} : { key: im.key }),
     });
   }
 
@@ -535,8 +594,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
         advice:
           sign < 0 && tactics.defense.starPlan === 'none'
             ? opts.partial
-              ? 'Try a Star plan (Defense): deny him the ball or double him.'
-              : 'Next time try a Star plan (Defense): deny him the ball or double him.'
+              ? 'Try a Star plan (Defense): deny him the ball.'
+              : 'Next time try a Star plan (Defense): deny him the ball.'
             : undefined,
       });
     }

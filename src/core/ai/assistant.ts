@@ -7,7 +7,7 @@
 // drawn with the same card.
 import type { League } from '../types';
 import { teamAlerts, type AlertFix } from './advisor';
-import { applyDefPreset, applyOffPreset } from '../sim/tactics';
+import { applyDefPreset, applyOffPreset, applyPatch } from '../sim/tactics';
 import { CAP } from '../constants';
 import { contractSeason, playerName, standardRoster, teamPlayers } from '../league/helpers';
 import { contractExp, salaryFor } from '../playerGen';
@@ -90,7 +90,7 @@ export function assistantFeed(league: League): AssistantCard[] {
       area: 'games',
       tone: 'tip',
       title: `No game plan for ${league.teams[opp].abbrev} yet`,
-      line: 'The staff’s counters are ready on the Plan tab, each one testable.',
+      line: 'The staff’s counters are on the Plan tab, the ones the numbers back first.',
       to: `/games/${opp}?tab=plan`,
       weight: 40,
     });
@@ -152,6 +152,9 @@ export function applyFix(league: League, fix: AlertFix): string {
       t.tactics.defense.pnr = fix.pnr;
       t.tactics.manual = true;
       return `Ball screens: ${fix.pnr} coverage.`;
+    case 'patch':
+      league.teams[league.userTid].tactics = { ...applyPatch(t.tactics, fix.patch), manual: true };
+      return `${fix.label}: done.`;
     case 'restB2B':
       if (!t.rotation.restB2B.includes(fix.pid)) t.rotation.restB2B.push(fix.pid);
       return `${playerName(league.players[fix.pid])} rests on back-to-backs.`;
