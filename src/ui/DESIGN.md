@@ -275,8 +275,8 @@ Broadcast first: the court is always the biggest thing on screen.
   less than pressure would have made them"), never as a count the box score's factors could
   contradict.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
-- Names of controls in advice must match the controls on screen (Team → Tactics tabs: System,
-  Offense, Defense, Players, Game Mgmt, Insights).
+- Names of controls in advice must match the controls on screen (Team → Tactics tabs: Tactic,
+  Instructions, Players, Familiarity, Game Mgmt, Report).
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

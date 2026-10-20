@@ -455,7 +455,7 @@ function endPlayoffs(league: League) {
   if (champ === league.userTid) {
     addInbox(league, {
       from: 'Owner',
-      subject: 'CHAMPIONS!',
+      subject: 'Champions',
       body: "You did it. The city is going to be partying for a week. Enjoy it, then let's do it again.",
       tone: 'good',
       link: '/league/history',

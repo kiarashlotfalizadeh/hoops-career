@@ -78,7 +78,7 @@ export function startPlayoffs(league: League) {
   const inIt = league.playoffs.some((s) => s.high === user || s.low === user);
   addInbox(league, {
     from: 'League Office',
-    subject: inIt ? 'Playoffs: you are in!' : 'Playoffs begin',
+    subject: inIt ? "You're in the playoffs" : 'Playoffs begin',
     body: inIt
       ? 'Your team has qualified for the playoffs. Tactics matter more than ever: the assistant coach will scout each opponent before the series.'
       : 'The playoffs are underway. Your season is over. Use the time to plan the draft and free agency.',

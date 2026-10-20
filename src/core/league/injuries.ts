@@ -1,7 +1,7 @@
 import type { Injury, League, Player } from '../types';
 import { Rng, clamp } from '../random';
 import { addInbox, addNews, age, playerName } from './helpers';
-import { outFor, plural } from '../format';
+import { injuryName, outFor, plural } from '../format';
 import { refreshPlayerDerived } from '../playerGen';
 
 interface InjuryType {
@@ -104,7 +104,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
       important: inj.gamesRemaining >= 15 && rank < 6,
       from: 'Medical Staff',
       // what happened in the subject: who, for how long, with what
-      subject: `${playerName(p)} out ${plural(inj.gamesRemaining, 'game')} (${injuryText(inj.type)})`,
+      subject: `${playerName(p)}: ${injuryName(inj.type)} · ${outFor(inj.gamesRemaining)}`,
       body: `${playerName(p)} is out with ${injuryText(inj.type, true)}: about ${plural(inj.gamesRemaining, 'game')}.${LASTING[inj.severity] ?? ''} His minutes go to the healthy players until he's back; Rotation has them.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
