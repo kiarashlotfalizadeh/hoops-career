@@ -121,14 +121,23 @@ export function FlowChart({
   const h = height;
   if (flow.length < 2) return null;
   const max = Math.max(8, ...flow.map((v) => Math.abs(v)));
-  const x = (i: number) => (i / (flow.length - 1)) * w;
+  const total = periods.reduce((a, p) => a + p, 0);
+  // periods sit at their game time, as on the win-probability chart: with recorded starts, each
+  // period's points spread evenly across its own stretch of the axis
+  const at = periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
+  const marks = periodStarts?.length === periods.length ? periodStarts.map((i) => Math.min(i, flow.length - 1)) : null;
+  const x = (i: number) => {
+    if (!marks) return (i / (flow.length - 1)) * w;
+    let k = 0;
+    while (k + 1 < marks.length && i >= marks[k + 1]) k++;
+    const from = marks[k];
+    const to = k + 1 < marks.length ? marks[k + 1] : flow.length - 1;
+    const end = at[k + 1] ?? w;
+    return to > from ? at[k] + ((i - from) / (to - from)) * (end - at[k]) : at[k];
+  };
   const y = (v: number) => h / 2 - (v / max) * (h / 2 - 6);
   const d = flow.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const total = periods.reduce((a, p) => a + p, 0);
-  const starts =
-    periodStarts?.length === periods.length
-      ? periodStarts.map((i) => x(Math.min(i, flow.length - 1)))
-      : periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
+  const starts = at;
   return (
     <div ref={ref}>
       <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
@@ -156,7 +165,7 @@ export function FlowChart({
           +{max}
         </text>
         <text x={4} y={h - 4} fontSize="10" fill="var(--text-dim)">
-          -{max}
+          −{max}
         </text>
       </svg>
     </div>

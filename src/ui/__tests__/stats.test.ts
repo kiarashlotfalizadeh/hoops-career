@@ -36,7 +36,7 @@ describe('number formats', () => {
     expect(signed(0)).toBe('0.0');
     expect(signed(-0.4, 0)).toBe('0');
     expect(signed(0.06)).toBe('+0.1');
-    expect(signed(-0.06)).toBe('-0.1');
+    expect(signed(-0.06)).toBe('−0.1');
     expect(signed(3)).toBe('+3.0');
     expect(f1(-0.04)).toBe('0.0');
     expect(f1(-2.35)).toBe('-2.4');

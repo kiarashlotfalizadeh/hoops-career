@@ -142,11 +142,11 @@ export const f1 = (v: number) => (isFinite(v) ? fixed(v, 1) : '—');
 export const f0 = (v: number) => (isFinite(v) ? fixed(v, 0) : '—');
 export const p1 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 1)}%` : '—');
 export const p0 = (v: number) => (isFinite(v) ? `${fixed(v * 100, 0)}%` : '—');
-/** "+2.4", "-1.3", and "0.0" for anything that rounds to zero (no sign: it favours neither side). */
+/** "+2.4", "−1.3" (a true minus, as wide as the plus), and "0.0" for anything that rounds to zero (no sign: it favours neither side). */
 export const signed = (v: number, d = 1) => {
   if (!isFinite(v)) return '—';
   const s = fixed(v, d);
-  return Number(s) > 0 ? `+${s}` : s;
+  return Number(s) > 0 ? `+${s}` : Number(s) < 0 ? `−${s.slice(1)}` : s;
 };
 // (ordinals live with the game's other formats, in core/format.ts)
 export { ordinal, ordinalSuffix } from '../core/format';

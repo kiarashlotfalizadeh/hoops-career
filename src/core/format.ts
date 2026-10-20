@@ -44,5 +44,5 @@ export function injuryName(name: string): string {
     .join(' ');
 }
 
-/** How long an injury keeps him out: "out 1 game", "out 8 games". */
-export const outFor = (games: number) => `out ${plural(games, 'game')}`;
+/** How long an injury keeps him out: "out 1 game", "out 8 games"; past a whole season's 82, "out over a season". */
+export const outFor = (games: number) => (games > 82 ? 'out over a season' : `out ${plural(games, 'game')}`);

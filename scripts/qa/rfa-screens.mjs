@@ -99,7 +99,7 @@ await page.waitForTimeout(400);
 await page.getByRole('button', { name: `Extend ${names[1].name} a qualifying offer` }).click();
 await page.waitForTimeout(400);
 await shot('d02-resign-qualified', true);
-await page.locator('.fo-hero').first().scrollIntoViewIfNeeded();
+await page.evaluate(() => window.scrollTo(0, 0));
 await shot('d02b-resign-top');
 await go('/office');
 await shot('d03-office-resign');

@@ -1,6 +1,6 @@
 import { useMemo, type DependencyList } from 'react';
 import { create } from 'zustand';
-import type { League } from '../core/types';
+import type { InboxMessage, League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
 import { estimateTotal, targetDone, type SimProgress, type SimTarget, type TaskOp, type TaskResult } from './simCore';
@@ -72,6 +72,16 @@ let changes = 0;
 let saving: Promise<boolean> | null = null;
 let queued: Promise<boolean> | null = null;
 let toastId = 1;
+
+/** A sim that stopped for big news says which, and opens it: the newest important unread mail. */
+function newsStop(l: League): [string, Toast['tone'], string] {
+  const news = l.inbox.filter((m) => !m.read && m.important).reduce<InboxMessage | null>((a, m) => (!a || m.id > a.id ? m : a), null);
+  return [
+    news ? `Stopped for news: ${news.subject}` : 'Stopped for news in your inbox.',
+    news?.tone === 'bad' || news?.tone === 'alert' ? 'bad' : 'neutral',
+    news?.link ?? '/inbox',
+  ];
+}
 
 export function problemOf(e: unknown): SaveProblem {
   if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };
@@ -204,7 +214,7 @@ export const useStore = create<AppState>((set, get) => ({
     // what the sim starts from is on the device first
     await get().flush();
     if (runToken !== token) return;
-    const done = (toast?: [string, Toast['tone']]) => {
+    const done = (toast?: [string, Toast['tone'], string?]) => {
       if (runToken !== token) return;
       set({ sim: null, stopRequested: false, v: get().v + 1 });
       if (toast) get().toast(...toast);
@@ -245,7 +255,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
       if (runToken !== token) return;
       replaceLeague(shown, out.league);
-      done(out.stop === 'news' ? ['Stopped: something needs your attention.', 'neutral'] : undefined);
+      done(out.stop === 'news' ? newsStop(out.league) : undefined);
     } catch (e) {
       console.error('sim failed', e);
       // the league on screen is the last good one: before the sim, or its latest checkpoint
