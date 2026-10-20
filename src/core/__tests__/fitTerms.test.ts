@@ -77,7 +77,10 @@ describe('fit terms', () => {
     });
     const def = (v: Partial<RosterProfile>) => defPresetFit(at(v));
     const off = (v: Partial<RosterProfile>) => offPresetFit(at(v));
-    expect(def({ steals: 57 }).blitz).toBeGreaterThan(def({ steals: 57 }).drop);
+    // (since the trap's turnovers come from the trappers' hands alone, trapping pays only the league's
+    // quickest: the Thunder's 60, not a good 57)
+    expect(def({ steals: 60 }).blitz).toBeGreaterThan(def({ steals: 60 }).drop);
+    expect(def({ steals: 60 }).blitz - def({ steals: 60 }).drop).toBeGreaterThan(def({ steals: 52 }).blitz - def({ steals: 52 }).drop);
     expect(def({ steals: 44 }).drop).toBeGreaterThan(def({ steals: 44 }).blitz);
     expect(off({ size: 53 }).grind - off({ size: 53 }).fiveOut).toBeGreaterThan(off({ size: 41 }).grind - off({ size: 41 }).fiveOut);
     expect(off({ starCreator: 74 }).helio - off({ starCreator: 74 }).hub).toBeGreaterThan(off({ starCreator: 56 }).helio - off({ starCreator: 56 }).hub);

@@ -269,7 +269,7 @@ export const defenseMethods = {
     const sec = pr0 > 0 ? Math.max(0.2, 1 - levExtra((off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.to)) : 1;
     // (backing off gives up a smaller share of the turnovers than pressing forces: containing is a
     // trade, not a trap; see K.containTO)
-    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0 * K.containTO) * sec;
+    const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / K.pressQ.per, K.pressQ.min, K.pressQ.max) : pr0 * K.containTO) * sec;
     // (the league's recentring moves the base rate only: the turnovers pressure forces keep their size)
     const swing = pr > 0 ? K.pressureTO : 0.32;
     // what the offense knows of its system (an unfamiliar one turns it over more), the structure of a

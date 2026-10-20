@@ -342,18 +342,18 @@ describe('sets in the engine', () => {
     // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
     // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
     // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-    // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth
+    // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred
     const expected = {
       ai: [
-        [119, 105, 79, 36, 12, 25, 15, 0],
-        [121, 110, 105, 27, 18, 31, 8, 0],
-        [117, 104, 88, 37, 8, 10, 15, 0],
+        [119, 107, 79, 37, 12, 26, 15, 0],
+        [121, 110, 105, 27, 18, 34, 8, 0],
+        [117, 106, 89, 38, 9, 8, 14, 0],
       ],
       // (taken again when play calls from the bench were retired)
       coached: [
-        [116, 107, 88, 25, 11, 26, 12, 0],
-        [122, 123, 95, 34, 12, 23, 18, 0],
-        [113, 119, 86, 44, 9, 30, 15, 0],
+        [136, 125, 93, 31, 15, 23, 10, 0],
+        [117, 118, 93, 33, 14, 23, 19, 0],
+        [107, 119, 77, 44, 4, 26, 20, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

@@ -129,7 +129,7 @@ export const pnrMethods = {
       handlerShoots = levW(0.18);
       const trap = ((dH.c.steal + dS.c.steal) / 2 + (dH.r.hgt + dS.r.hgt) / 4 - 50) / 100;
       const escape = (H.c.passing - 55) / 100;
-      const pTrapTO = lev(clamp(K.blitzTO + trap * 0.2 - escape * 0.3, 0.02, 0.18));
+      const pTrapTO = lev(clamp(K.blitzTO + trap * K.blitzHands - escape * 0.18, 0.012, 0.108));
       toExtra += pTrapTO;
       this.impact('blitz_to', def.side, pTrapTO * H.ttv * K.toPts, H.pid);
       // 4-on-3 behind the trap: quality scales with the handler's passing and the short-roll big

@@ -37,7 +37,7 @@ describe('tactical leverage', () => {
     // the zones and a box-and-one, a star plan with switching, the pressure tools with crashing and running,
     // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
     // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
-    // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate: what this pins is that 1x leverage plays
+    // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them): what this pins is that 1x leverage plays
     // every tactical edge at its 1x size, game after game)
     const expected: Record<string, number[][]> = {
       default: [
@@ -61,17 +61,17 @@ describe('tactical leverage', () => {
         [129, 116, 87, 36, 11, 18, 14, 0],
       ],
       double: [
-        [118, 113, 78, 31, 14, 23, 11, 0],
-        [117, 111, 104, 27, 21, 28, 12, 0],
-        [115, 111, 93, 28, 12, 14, 12, 0],
+        [118, 115, 78, 33, 14, 25, 11, 0],
+        [123, 109, 98, 36, 20, 21, 13, 0],
+        [116, 107, 94, 23, 9, 15, 9, 0],
       ],
       pressure: [
-        [135, 129, 92, 44, 14, 34, 21, 1],
-        [139, 125, 92, 25, 12, 40, 18, 0],
+        [116, 121, 75, 39, 8, 29, 16, 0],
+        [140, 142, 95, 31, 9, 41, 19, 0],
         [122, 111, 102, 37, 12, 21, 17, 0],
       ],
       hunting: [
-        [119, 114, 80, 37, 13, 23, 16, 0],
+        [121, 123, 82, 36, 13, 24, 16, 0],
         [135, 123, 90, 26, 9, 37, 10, 0],
         [116, 104, 96, 36, 12, 20, 14, 0],
       ],

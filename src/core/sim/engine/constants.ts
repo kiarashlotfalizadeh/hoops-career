@@ -78,9 +78,11 @@ export const K = {
    * Crashing under 50 (sending fewer to the glass): the offensive-board rate given up per unit below
    * 50, the run-outs it saves (chance multiplier per unit), the edge the runners lose against the
    * defenders who got back, and the openness the other side's first half-court action loses against
-   * a defense that is set (per unit, before the leverage).
+   * a defense that is set (per unit, before the leverage); setPts, what a unit of that openness is
+   * worth in the tags (0.05 had tagged the set defense at 2.7 points a game where switching it off
+   * measured 1.6: ten seed sets of engineBalance's crash case).
    */
-  crashLow: { orb: 0.1, leak: 0.7, back: 0.6, set: 0.8, setPts: 0.05 },
+  crashLow: { orb: 0.1, leak: 0.7, back: 0.6, set: 0.8, setPts: 0.03 },
   /**
    * Switching off-ball screens: the edge it takes off the man coming off a handoff or a screen, and off
    * motion's ball movement; and the offensive boards it gives up (a guard switched onto a big can't
@@ -122,9 +124,17 @@ export const K = {
   feelGap: 3,
   /** Full-court press: turnover rate against average ball handlers. */
   pressTO: 0.06,
-  /** Blitz: trap turnover rate for an average trap and handler, and the 4-on-3's openness behind it. */
-  blitzTO: 0.045,
-  blitz4v3: 0.65,
+  /**
+   * Blitz: the trap's turnover rate, a flat part and a part per unit of the trappers' hands and length
+   * (pnr.ts; about 0.24 for the league's average pair, 0.34 for the quickest), and the 4-on-3's
+   * openness behind it. The trap's turnovers had run far past the NBA's (the blitz playbook forcing up
+   * to 1.5 times ice's, the Thunder 20 a game): now the turnovers come from the hands alone and the
+   * 4-on-3 is 0.6 of what it was (0.65), so trapping costs an average defense about 1 per 100 against
+   * ice and pays the quickest hands about as much (paired preset runs, every team's offense).
+   */
+  blitzTO: 0,
+  blitzHands: 0.24,
+  blitz4v3: 0.39,
   /** Field-goal percentage a fully physical defense takes off every shot. */
   physContest: 0.01,
   /** Points per switched pick-and-roll the switch takes away (the screen's advantage). */
@@ -134,7 +144,7 @@ export const K = {
    * edge at which its tag counts a unit of it at half of K.advPts (see blowByTag).
    */
   blowBy: 0.15,
-  blowByConvex: 0.8,
+  blowByConvex: 0.48,
   blowBySat: 2,
   /** Expected points of one unit of handler advantage per action, for impact tags. */
   advPts: { pnr: 0.04, handoff: 0.04, iso: 0.04, post: 0.04 },
@@ -330,7 +340,7 @@ export const K = {
    * 1.5 times; and the turnovers pressure forces lean the same way, by that difference over sec.to
    * (see toChance). Pressure is the call against loose handlers, not against everyone.
    */
-  tradeOff: { pressure: 0.45, blitz: 0.6, crash: 1.5, sec: { avg: 55, open: 20, to: 70 } },
+  tradeOff: { pressure: 0.27, blitz: 0.36, crash: 1.5, sec: { avg: 55, open: 20, to: 70 } },
   /**
    * Ball pressure under 50: the share of the turnover rate's swing a containing defense gives up
    * (above 50 an average lineup, ST.pressQ 50, forces half of it). At the full swing, dropping from 50
@@ -342,8 +352,13 @@ export const K = {
    * The turnover rate's swing per unit of ball pressure above 50 (under 50 it is 0.32, of which
    * containing gives up K.containTO). Raised from 0.32 when the league's turnovers were recentred
    * (K.recenter.tov): at 0.32 pressing loose handlers at 85 was worth nothing at 2x (it had been +1.2).
+   * Then cut to 0.6 of that with the costs that pay for it (blowByConvex, tradeOff.pressure and
+   * .blitz): pressure and the blitz are the same trade at a realistic size, as the league's forced
+   * turnovers spread about as the NBA's do (top team about 1.3 times the average, not 1.5).
    */
-  pressureTO: 0.4,
+  pressureTO: 0.24,
+  /** How much of K.pressureTO's swing a pressing unit gets for its hands and feet (ST.pressQ): half at 50, a step per `per` points, within [min, max]. */
+  pressQ: { per: 16, min: 0.15, max: 1.2 },
   /**
    * Seconds a press takes off the shot clock (the walk-up included: the half court's setup is shortened
    * by it), and the share secure handlers save per unit of their edge on the trap: before both,
@@ -372,9 +387,11 @@ export const K = {
    * 0.23 and a 9% team share of defensive boards) when the AI's playbooks were recalibrated: AI teams
    * now press the ball at 52 and more, switch off-ball screens and crash 42-72, which had sent
    * turnovers 17% over the league's, steals 15%, free throws 15% and offensive boards 10%, and threes 9%
-   * under (two real-league seasons, rng 7 and 11, now every rate within 5%).
+   * under (two real-league seasons, rng 7 and 11, now every rate within 5%). Moved again (turnovers
+   * −0.16 → −0.12, fouls −0.1 → −0.05, blocks −0.03 → 0) when pressure and the blitz were cut to a
+   * realistic size and fewer AI teams pressed: those had fallen 3-6% under (rng 7, 11 and 23).
    */
-  recenter: { three: 0.03, foul: -0.1, orb: -0.15, tov: -0.16, blk: -0.03 },
+  recenter: { three: 0.03, foul: -0.05, orb: -0.15, tov: -0.12, blk: 0 },
   /**
    * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
    * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,

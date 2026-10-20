@@ -547,11 +547,15 @@ const OFF_FIT: Record<string, FitModel> = {
   grind: { base: 41.3, terms: [['size', 0.58, 47]] },
 };
 
-/** The defensive playbooks' fit models (see FitModel). */
+/**
+ * The defensive playbooks' fit models (see FitModel). Blitz and chaos were moved by what paired preset
+ * runs against ice measured when pressure and the blitz were cut to a realistic size (at 50 hands
+ * −5.6 each, and 0.3 and 0.79 less per point of hands: trapping now pays only the quickest hands), the rest left as fitted.
+ */
 const DEF_FIT: Record<string, FitModel> = {
   drop: { base: 56.4, terms: [['steals', -0.61, 50]] },
   switch: { base: 53.9, terms: [['steals', -0.7, 50]] },
-  blitz: { base: 50.3, terms: [['steals', 1.06, 50]] },
+  blitz: { base: 44.7, terms: [['steals', 0.76, 50]] },
   ice: { base: 56.9, terms: [['steals', -0.49, 50]] },
   hedge: {
     base: 53.2,
@@ -563,9 +567,9 @@ const DEF_FIT: Record<string, FitModel> = {
   },
   zone: { base: 43, terms: [['steals', -0.62, 50]] },
   chaos: {
-    base: 36.4,
+    base: 30.8,
     terms: [
-      ['steals', 1.44, 50],
+      ['steals', 0.65, 50],
       ['depth', 0.47, -14],
       ['athleticism', 0.34, 54],
     ],
