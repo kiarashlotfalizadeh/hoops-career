@@ -74,10 +74,11 @@ describe('game-time decisions', () => {
 
     simDay(l);
     const res = l.games.find((r) => r.gid === g.gid)!;
-    expect(lineOf(res, star.pid)!.min).toBeGreaterThan(10);
+    // healed by the game, or hurt again in it (a new injury, which can end his night early)
+    const hurtAgain = star.injury !== null;
+    expect(!hurtAgain || star.injury!.gamesRemaining === star.injury!.gamesTotal).toBe(true);
+    expect(lineOf(res, star.pid)!.min).toBeGreaterThan(hurtAgain ? 0 : 10);
     expect(lineOf(res, star.pid)!.dnp).toBeUndefined();
-    // healed by the game, or hurt again in it (a new injury)
-    expect(star.injury === null || star.injury.gamesRemaining === star.injury.gamesTotal).toBe(true);
     expect(l.gameTime).toBeUndefined();
   });
 

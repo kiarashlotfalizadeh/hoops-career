@@ -8,7 +8,7 @@
 import type { DefScheme, ShotZone } from '../../types';
 
 export const K = {
-  zoneBase: { rim: 0.638, paint: 0.458, mid: 0.42, c3: 0.383, ab3: 0.346 } as Record<ShotZone, number>,
+  zoneBase: { rim: 0.629, paint: 0.451, mid: 0.414, c3: 0.377, ab3: 0.341 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
   foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
@@ -18,9 +18,9 @@ export const K = {
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.262,
   toBase: 0.15,
-  nonShootFoul: 0.18,
+  nonShootFoul: 0.23,
   /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
-  teamReb: { orb: 0.02, drb: 0.07 },
+  teamReb: { orb: 0.02, drb: 0.09 },
   transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
   setup: { made: 8.6, dreb: 4.9, steal: 2.0, ft: 8.4, deadTO: 8.0, start: 5.6 } as Record<string, number>,
   actionTime: 7.6,
@@ -59,6 +59,20 @@ export const K = {
   transAdvPts: 0.05,
   /** Diminishing returns on crashing past 50: offensive-board rate given back at 100. */
   crashFade: 0.11,
+  /**
+   * Crashing under 50 (sending fewer to the glass): the offensive-board rate given up per unit below
+   * 50, the run-outs it saves (chance multiplier per unit), the edge the runners lose against the
+   * defenders who got back, and the openness the other side's first half-court action loses against
+   * a defense that is set (per unit, before the leverage).
+   */
+  crashLow: { orb: 0.1, leak: 0.7, back: 0.6, set: 0.8, setPts: 0.05 },
+  /**
+   * Switching off-ball screens: the edge it takes off the man coming off a handoff or a screen, and off
+   * motion's ball movement; and the offensive boards it gives up (a guard switched onto a big can't
+   * keep him off the glass), as a share of the offensive-board rate.
+   */
+  switchDeny: { handoff: 0.25, motion: 0.1 },
+  switchGlass: 0.03,
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
   /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
@@ -123,7 +137,7 @@ export const K = {
   /** ...and the size edge (height rating, about 4.3 an inch) it takes. */
   crossSize: 20,
   /** A switched handoff: the matchup edge past which the offense goes after it, how fast its chance of doing so grows, and its cap. */
-  switchHuntFrom: 0.3,
+  switchHuntFrom: 0.2,
   switchHunt: 0.6,
   switchHuntMax: 0.75,
   /** The scramble a late switch leaves: openness for the mismatch it hands the offense. */
@@ -298,6 +312,18 @@ export const K = {
    */
   containTO: 0.35,
   /**
+   * The turnover rate's swing per unit of ball pressure above 50 (under 50 it is 0.32, of which
+   * containing gives up K.containTO). Raised from 0.32 when the league's turnovers were recentred
+   * (K.recenter.tov): at 0.32 pressing loose handlers at 85 was worth nothing at 2x (it had been +1.2).
+   */
+  pressureTO: 0.4,
+  /**
+   * Seconds a press takes off the shot clock (the walk-up included: the half court's setup is shortened
+   * by it), and the share secure handlers save per unit of their edge on the trap: before both,
+   * pressing secure handlers after makes was a win at 2x (about +0.9 per 100) its tags called a loss.
+   */
+  pressTime: { min: 3, max: 6, beat: 0.4 },
+  /**
    * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
    * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
    * 8.2 with turnovers on its 13.9.
@@ -312,14 +338,16 @@ export const K = {
    */
   giftExp: 0.65,
   /**
-   * Past 1x leverage the doubled edges move the league's averages a little (the coverages AI coaches
-   * play leave more pull-ups and kick-outs and fewer drives, and most of them crash less and get back
-   * more than 50), so these base rates move back by this share per unit of leverage past 1, keeping
-   * AI-vs-AI games on their 2025-26 averages: the offense's taste for threes, shooting fouls,
-   * offensive boards, turnovers and blocks. (Turnovers moved back down when backing off the ball
-   * stopped giving up the full swing of them, K.containTO: most AI defenses play under 50.)
+   * Past 1x leverage the doubled edges move the league's averages (the coverages, pressure, switching
+   * and crashing AI coaches play), so these base rates move back by this share per unit of leverage
+   * past 1, keeping AI-vs-AI games on their 2025-26 averages: the offense's taste for threes, shooting
+   * fouls, offensive boards, turnovers and blocks. Last set (with K.zoneBase 1.5% lower, reach-ins at
+   * 0.23 and a 9% team share of defensive boards) when the AI's playbooks were recalibrated: AI teams
+   * now press the ball at 52 and more, switch off-ball screens and crash 42-72, which had sent
+   * turnovers 17% over the league's, steals 15%, free throws 15% and offensive boards 10%, and threes 9%
+   * under (two real-league seasons, rng 7 and 11, now every rate within 5%).
    */
-  recenter: { three: -0.1, foul: 0.053, orb: 0.057, tov: -0.005, blk: 0.06 },
+  recenter: { three: 0.03, foul: -0.1, orb: -0.15, tov: -0.16, blk: -0.03 },
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */

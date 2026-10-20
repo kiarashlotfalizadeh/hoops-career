@@ -67,8 +67,9 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
       [{ offense: { crashBoards: 0 } }, ['crash_']],
       [{ offense: { transition: 0 } }, ['transition']],
       [{ defense: { pnr: 'switch', switchOffBall: true } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
-      // switching off the ball: handoffs denied, mismatches handed out
-      [{ defense: { switchOffBall: true } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
+      // switching off the ball: handoffs denied, mismatches (and boards) handed out; AI defenses switch, so
+      // the change measured is not switching
+      [{ defense: { switchOffBall: false } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
       [{ defense: { physicality: 100 } }, ['physicality', 'clean_defense']],
     ];
     for (const [patch, prefixes] of cases) {
@@ -79,13 +80,14 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
     }
   });
 
-  it('has no dominant extreme: pressing, crashing, blitzing, pressing full court and switching off the ball all cost something', () => {
+  it('has no dominant extreme: pressing, crashing, blitzing, pressing full court and switching off the ball or not all cost something', () => {
     for (const patch of [
       { defense: { pressure: 100 } },
       { offense: { crashBoards: 100 } },
       { defense: { pnr: 'blitz' as const, switchOffBall: false } },
       { defense: { press: 'always' as const } },
-      { defense: { switchOffBall: true } },
+      // (AI defenses switch off the ball: not switching is the extreme left to try)
+      { defense: { switchOffBall: false } },
     ]) {
       expect(measure(patch, []).delta).toBeLessThan(2.5);
     }

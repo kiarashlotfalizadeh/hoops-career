@@ -5,6 +5,8 @@
 import { ACTIONS, FREE_AGENT, PLAYER_DEFENSES, SET_IDS, type League, type Player, type PlayerDefense, type Tactics } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
+import { autoTactics } from '../core/ai/coachAI';
+import { teamPlayers } from '../core/league/helpers';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
@@ -287,6 +289,9 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
+  // version 6 re-measured the playbooks: a staff-run team's tactics from before are re-fit to the
+  // roster (the user's staff then acts on the season's evidence again at the next weekly refit)
+  if ((version as number) < 6) for (const t of x.teams) if (!t.tactics.manual) t.tactics = autoTactics(t, teamPlayers(x, t.tid), t.tid === x.userTid);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;

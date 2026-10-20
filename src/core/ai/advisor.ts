@@ -6,7 +6,7 @@ import { SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
 import { ACTION_META, COVERAGE_META, SCHEME_META, cloneTactics, isJunk, stopHacking, tacticsDiff } from '../sim/tactics';
-import { CRAMPED_SPACING, evaluateLineup, rosterProfile, sustainableMinutes } from './coachAI';
+import { CRAMPED_SPACING, autoTactics, evaluateLineup, rosterProfile, sustainableMinutes } from './coachAI';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
@@ -550,13 +550,21 @@ const LEVER_GAMES = 8;
 /** Points a game a setting has to give away beyond what it wins back for the staff to want it changed. */
 const LEVER_COST = 0.6;
 
+/** One setting's trade-off over this season's games: what it gave away and won back, a game. */
+export interface SeasonLever {
+  what: string;
+  lost: number;
+  won: number;
+  /** Won less lost, a game. */
+  net: number;
+  games: number;
+}
+
 /**
- * The user's setting whose trade-off has cost the most this season (its effects against him less
- * what it won back, a game, over his stored games), when it's worth changing and the staff's counter
- * for it changes something: an alert with that counter as its fix.
+ * Every setting's trade-off over a team's stored games this season (the user's games keep the engine's
+ * accounting of both sides of each setting), worst first; empty before LEVER_GAMES games.
  */
-function seasonLever(league: League, tid: number): Alert | null {
-  const tactics = league.teams[tid].tactics;
+export function seasonLevers(league: League, tid: number): SeasonLever[] {
   const sums = new Map<string, { what: string; lost: number; won: number; key: string }>();
   let n = 0;
   for (const g of league.games) {
@@ -576,12 +584,18 @@ function seasonLever(league: League, tid: number): Alert | null {
       sums.set(lv.what, e);
     }
   }
-  if (n < LEVER_GAMES) return null;
-  const worst = [...sums.values()]
-    .map((e) => ({ ...e, net: (e.won - e.lost) / n }))
-    .filter((e) => e.net <= -LEVER_COST)
-    .sort((a, b) => a.net - b.net);
-  for (const e of worst) {
+  if (n < LEVER_GAMES) return [];
+  return [...sums.values()].map((e) => ({ what: e.what, lost: e.lost / n, won: e.won / n, net: (e.won - e.lost) / n, games: n })).sort((a, b) => a.net - b.net);
+}
+
+/**
+ * The user's setting whose trade-off has cost the most this season (its effects against him less
+ * what it won back, a game, over his stored games), when it's worth changing and the staff's counter
+ * for it changes something: an alert with that counter as its fix.
+ */
+function seasonLever(league: League, tid: number): Alert | null {
+  const tactics = league.teams[tid].tactics;
+  for (const e of seasonLevers(league, tid).filter((x) => x.net <= -LEVER_COST)) {
     const counter = leverCounter(e.what, tactics);
     if (!counter) continue;
     const after = cloneTactics(tactics);
@@ -591,13 +605,74 @@ function seasonLever(league: League, tid: number): Alert | null {
       id: `lever-${e.what}`,
       tone: 'alert',
       title: `${what} is costing you`,
-      body: `It gives up ${(e.lost / n).toFixed(1)} points a game and wins ${(e.won / n).toFixed(1)} back (${n} games).`,
+      body: `It gives up ${e.lost.toFixed(1)} points a game and wins ${e.won.toFixed(1)} back (${e.games} games).`,
       link: '/team/tactics',
       fix: { kind: 'patch', patch: tacticsDiff(tactics, after), label: counter.label },
     };
   }
   return null;
 }
+
+/**
+ * The tactics the staff runs for a team it manages (tactics not the user's own): the playbook that
+ * fits the roster (autoTactics), with the staff's change to each setting this season's games say is
+ * giving away more than it wins back, as the trade-off card names it for the user's own tactics. A
+ * change the staff made stays while the setting it moved off still reads as costing half as much, so
+ * a week of better games doesn't undo it. Only the user's games keep that accounting: AI teams get autoTactics.
+ */
+export function staffTactics(league: League, tid: number): Tactics {
+  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true);
+  return t.manual || tid !== league.userTid ? t : seasonAdjust(league, tid, t);
+}
+
+/**
+ * What the staff changed in a playbook it runs that the season's evidence called for, between the
+ * tactics it ran (`prev`) and the ones it runs now (`next`): each setting the games say was costing
+ * the team that the new tactics no longer use, with what it cost a game.
+ */
+export function staffLeverChanges(league: League, tid: number, prev: Tactics, next: Tactics): { what: string; label: string; lost: number; won: number; games: number }[] {
+  if (prev.manual || next.manual) return [];
+  return seasonLevers(league, tid)
+    .filter((e) => e.net <= -LEVER_COST / 2)
+    .flatMap((e) => {
+      const was = leverCounter(e.what, prev);
+      return was && !leverCounter(e.what, next) ? [{ what: e.what, label: was.label, lost: e.lost, won: e.won, games: e.games }] : [];
+    });
+}
+
+/** Tactics `t` (a copy) with the staff's change to each setting this season's games say is costing the team (see staffTactics). */
+export function seasonAdjust(league: League, tid: number, t: Tactics): Tactics {
+  const out = cloneTactics(t);
+  const prev = league.teams[tid].tactics;
+  for (const e of seasonLevers(league, tid)) {
+    if (!STAFF_LEVERS.has(e.what)) continue;
+    // in force already: the counter changes nothing in the tactics the staff ran last
+    const held = !prev.manual && !leverCounter(e.what, prev);
+    if (e.net > -LEVER_COST && !(held && e.net <= -LEVER_COST / 2)) continue;
+    leverCounter(e.what, out)?.apply(out);
+  }
+  return out;
+}
+
+/** The trade-offs the staff acts on by itself (each measured to win back more than it costs). */
+const STAFF_LEVERS = new Set([
+  'drop coverage',
+  'switching',
+  'hedging',
+  'blitzing',
+  'zone defense',
+  'heavy help',
+  'staying home on shooters',
+  'soft ball pressure',
+  'ball pressure',
+  'physical defense',
+  'clean defense',
+  'full-court press',
+  'crashing',
+  'staying off the glass',
+  'doubling',
+  'junk defense',
+]);
 
 /** The staff's change for a setting's trade-off (named as leverNet names it): the counter to its first cost the tactics still give. */
 function leverCounter(what: string, t: Tactics): LiveCounter | undefined {

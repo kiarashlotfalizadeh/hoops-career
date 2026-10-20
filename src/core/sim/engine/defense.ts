@@ -261,8 +261,10 @@ export const defenseMethods = {
     // (backing off gives up a smaller share of the turnovers than pressing forces: containing is a
     // trade, not a trap; see K.containTO)
     const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / 16, 0.15, 1.2) : pr0 * K.containTO) * sec;
-    const p = (base * (1 + levExtra(K.recenter.tov)) * (1 + 0.32 * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
-    if (pr !== 0) this.impact('pressure_to', def.side, base * 0.32 * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
+    // (the league's recentring moves the base rate only: the turnovers pressure forces keep their size)
+    const swing = pr > 0 ? K.pressureTO : 0.32;
+    const p = (base * (1 + levExtra(K.recenter.tov) + swing * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv;
+    if (pr !== 0) this.impact('pressure_to', def.side, base * swing * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
     return clamp(p, 0.01, 0.4);
   },
 

@@ -234,9 +234,12 @@ describe('engine tactics', () => {
         const sim = new GameSim(side(12, { manage: { ato: 'post' } }), side(13), opts(1200 + g));
         for (let i = 0; i < 20 + 7 * g && !sim.over; i++) sim.step();
         sim.drainLogs();
+        const q = (sim as unknown as { q: number }).q;
         if (!sim.callTimeout(0)) continue;
         const l = nextTrip(sim, 0);
-        if (!l || l.kind !== 'half' || !l.action) continue;
+        // (a timeout in a period's last seconds, with their ball, can see the period out: the play is
+        // for this period, and the break clears it, as it does a queued set)
+        if (!l || l.kind !== 'half' || !l.action || l.q !== q) continue;
         trips++;
         if (l.action === 'post') ran++;
       }
@@ -370,7 +373,8 @@ describe('engine tactics', () => {
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
       // much: tacticLeverage.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
-      // late game, crunch-time touches, home court and the staff's substitutions were polished)
+      // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
+      // playbooks were recalibrated and the league's rates recentred)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -378,10 +382,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [105, 119, 92, 87, 43, 35, 14, 12],
-        [113, 122, 92, 83, 43, 27, 12, 11],
-        [116, 125, 101, 92, 54, 53, 13, 6],
-        [105, 117, 88, 83, 44, 31, 11, 11],
+        [112, 120, 96, 90, 46, 37, 13, 6],
+        [106, 118, 97, 95, 50, 41, 15, 12],
+        [106, 123, 97, 101, 60, 60, 13, 4],
+        [102, 112, 85, 91, 40, 32, 8, 12],
       ]);
     });
 

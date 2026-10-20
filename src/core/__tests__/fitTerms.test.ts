@@ -1,34 +1,11 @@
 // Playbook fits as named terms ("Why fit 72"): the terms add up to the fit exactly, so the scores the
-// Tactics screen shows and the assistant's preset choices are what they were.
+// Tactics screen shows and the assistant's preset choices are the same numbers.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { defPresetFit, defPresetTerms, fitRoster, fitScale, offPresetFit, offPresetTerms, rosterProfile, type ProfileKey, type RosterProfile } from '../ai/coachAI';
 import { composites } from '../ratings';
 import { Rng } from '../random';
-
-// the formulas as they were written before they became terms
-function oldOff(pr: RosterProfile): Record<string, number> {
-  return {
-    balanced: 50,
-    helio: 40 + (pr.starCreator - 62) * 1.4 + pr.creatorGap * 0.8 + (pr.shooting - 50) * 0.4,
-    fiveOut: 40 + (pr.shooting - 47) * 1.3 + (pr.passing - 50) * 0.8 - pr.creatorGap * 0.3,
-    hub: 30 + (pr.bigPassing - 55) * 1.5 + (pr.passing - 50) * 0.4,
-    paceSpace: 40 + (pr.athleticism - 52) * 1.1 + (pr.shooting - 47) * 0.6 + pr.depth * 0.2,
-    grind: 27 + (pr.postScoring - 58) * 1.0 + (pr.size - 50) * 0.6 - (pr.shooting - 45) * 0.8,
-  };
-}
-function oldDef(pr: RosterProfile): Record<string, number> {
-  return {
-    drop: 45 + (pr.rimProtection - 60) * 1.2 - (pr.bigMobility - 45) * 0.2,
-    switch: 35 + (pr.perimeterD - 52) * 1.0 + (pr.bigMobility - 45) * 0.9 - Math.abs(pr.size - 52) * 0.3,
-    blitz: 34 + (pr.steals - 50) * 0.9 + (pr.athleticism - 52) * 0.6 + (pr.bigMobility - 45) * 0.3,
-    ice: 42 + (pr.perimeterD - 52) * 0.6 + (pr.rimProtection - 55) * 0.4,
-    hedge: 38 + (pr.bigMobility - 45) * 1.0 + (pr.perimeterD - 50) * 0.3,
-    zone: 30 + (pr.size - 52) * 0.7 + (pr.rimProtection - 60) * 0.6 - (pr.perimeterD - 50) * 0.6,
-    chaos: 22 + (pr.athleticism - 55) * 0.8 + (pr.steals - 52) * 0.8 + pr.depth * 0.3,
-  };
-}
 
 const KEYS: ProfileKey[] = [
   'starCreator',
@@ -61,21 +38,49 @@ describe('fit terms', () => {
 
   it('each fit is the sum of its terms, to the last bit, for every preset', () => {
     for (const pr of profiles) {
-      for (const [terms, fits, old] of [
-        [offPresetTerms(pr), offPresetFit(pr), oldOff(pr)],
-        [defPresetTerms(pr), defPresetFit(pr), oldDef(pr)],
+      for (const [terms, fits] of [
+        [offPresetTerms(pr), offPresetFit(pr)],
+        [defPresetTerms(pr), defPresetFit(pr)],
       ] as const) {
-        expect(Object.keys(fits).sort()).toEqual(Object.keys(old).sort());
-        for (const k of Object.keys(old)) {
-          expect(fits[k]).toBe(old[k]);
-          expect(terms[k].reduce((a, x) => a + x.value, 0)).toBe(old[k]);
+        expect(Object.keys(fits).sort()).toEqual(Object.keys(terms).sort());
+        for (const k of Object.keys(fits)) {
+          expect(terms[k].reduce((a, x) => a + x.value, 0)).toBe(fits[k]);
           expect(terms[k][0].key).toBe('base');
+          expect(Number.isFinite(fits[k])).toBe(true);
         }
-        // the scores the Tactics screen shows don't move
-        const [now, was] = [fitScale(fits), fitScale(old)];
-        for (const k of Object.keys(old)) expect(now(k)).toBe(was(k));
+        // the shown scale runs from 45 for the worst to 100 for the best
+        const scale = fitScale(fits);
+        const shown = Object.keys(fits).map(scale);
+        expect(Math.max(...shown)).toBe(100);
+        expect(Math.min(...shown)).toBe(45);
       }
     }
+  });
+
+  it('follows what the engine rewards: quick hands trap, size grinds, a lead creator keeps the ball', () => {
+    const at = (v: Partial<RosterProfile>) => ({
+      ...rosterProfile([]),
+      starCreator: 64,
+      creatorGap: 5,
+      shooting: 33,
+      passing: 52,
+      bigPassing: 42,
+      postScoring: 62,
+      rimProtection: 67,
+      athleticism: 54,
+      size: 47,
+      perimeterD: 52,
+      depth: -14,
+      steals: 50,
+      bigMobility: 48,
+      ...v,
+    });
+    const def = (v: Partial<RosterProfile>) => defPresetFit(at(v));
+    const off = (v: Partial<RosterProfile>) => offPresetFit(at(v));
+    expect(def({ steals: 57 }).blitz).toBeGreaterThan(def({ steals: 57 }).drop);
+    expect(def({ steals: 44 }).drop).toBeGreaterThan(def({ steals: 44 }).blitz);
+    expect(off({ size: 53 }).grind - off({ size: 53 }).fiveOut).toBeGreaterThan(off({ size: 41 }).grind - off({ size: 41 }).fiveOut);
+    expect(off({ starCreator: 74 }).helio - off({ starCreator: 74 }).hub).toBeGreaterThan(off({ starCreator: 56 }).helio - off({ starCreator: 56 }).hub);
   });
 
   it('a term rises with its quality as its weight says', () => {

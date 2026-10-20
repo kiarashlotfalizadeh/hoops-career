@@ -19,8 +19,8 @@ export const motionMethods = {
     let adv = (off.passQ - def.helpQ) / 22 + this.spacingBonus(off) * 0.8 + this.rng.normal(0, 0.55) + open;
     const sw = def.t.defense.switchOffBall && !zone;
     if (sw) {
-      adv -= lev(0.15);
-      this.impact('switch_deny', def.side, lev(0.15) * 0.1);
+      adv -= lev(K.switchDeny.motion);
+      this.impact('switch_deny', def.side, lev(K.switchDeny.motion) * 0.2);
     }
     // the ball sticks while the offense waits on the matchup it hunts
     if (this.hunted(off, def)) {

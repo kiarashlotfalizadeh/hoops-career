@@ -7,6 +7,8 @@ import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
 import type { League } from '../../core/types';
+import { autoTactics } from '../../core/ai/coachAI';
+import { teamPlayers } from '../../core/league/helpers';
 import { testLeague, userGames } from './fixtures';
 
 const put = IDBObjectStore.prototype.put;
@@ -316,6 +318,19 @@ describe('reading a league', () => {
     delete unversioned.version;
     expect(() => migrate(unversioned)).toThrow(/older version/);
     expect(migrate(JSON.parse(JSON.stringify(l))).version).toBe(SAVE_VERSION);
+  });
+
+  it("re-fits a version-5 save's staff-run playbooks, and leaves the user's own tactics alone", () => {
+    const l = testLeague('refit');
+    const v5 = JSON.parse(JSON.stringify({ ...l, version: 5 })) as League;
+    // yesterday's values under a staff-run team's name, and the user's own tactics
+    const ai = v5.teams.find((t) => t.tid !== l.userTid)!;
+    ai.tactics.offense.crashBoards = 18;
+    v5.teams[l.userTid].tactics.manual = true;
+    v5.teams[l.userTid].tactics.offense.crashBoards = 18;
+    const back = migrate(v5);
+    expect(back.teams[ai.tid].tactics).toEqual(autoTactics(back.teams[ai.tid], teamPlayers(back, ai.tid), false));
+    expect(back.teams[l.userTid].tactics.offense.crashBoards).toBe(18);
   });
 
   it('opens a version-4 save without its player morale and press conference', () => {

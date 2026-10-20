@@ -113,6 +113,8 @@ export class GameSim {
   calledActor: SP | null = null;
   /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
   inbound = false;
+  /** Openness this trip's first half-court action starts with (a defense set because it didn't crash the glass). */
+  firstOpen = 0;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
   /** A set handed to the action about to run (it takes it: see takePlay). */

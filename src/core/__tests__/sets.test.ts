@@ -23,7 +23,8 @@ const side = (tid: number, patch?: TacticsPatch, tactics?: Tactics): SimTeamInpu
   players: teamPlayers(league, tid),
 });
 const opts = (seed: number, record = false) => ({ rng: new Rng(seed), type: 'regular' as const, record, injuries: false });
-const MAN: TacticsPatch = { defense: { scheme: 'man', pnr: 'hedge', switchOffBall: false, help: 50, pressure: 50 } };
+// (an even glass too: a defense that sends fewer to the offensive glass is set when the ball comes up, which takes some of every set's look away)
+const MAN: TacticsPatch = { defense: { scheme: 'man', pnr: 'hedge', switchOffBall: false, help: 50, pressure: 50 }, offense: { crashBoards: 50 } };
 const DEF: Record<string, TacticsPatch> = {
   drop: { defense: { ...MAN.defense, pnr: 'drop' } },
   hedge: MAN,
@@ -329,19 +330,20 @@ describe('sets in the engine', () => {
     // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
     // and a coached side with an after-timeout action, a go-to player and two timeouts), taken again
     // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
-    // tactics were made to matter twice as much (K.tacticEdge), and when the late game, crunch-time touches,
-    // home court and the staff's substitutions were polished
+    // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
+    // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
+    // and the league's rates recentred
     const expected = {
       ai: [
-        [121, 115, 77, 45, 14, 13, 18, 0],
-        [118, 117, 93, 19, 16, 32, 11, 0],
-        [112, 116, 85, 31, 7, 32, 17, 0],
+        [125, 116, 78, 37, 9, 23, 12, 0],
+        [138, 128, 98, 22, 16, 36, 13, 0],
+        [123, 110, 89, 41, 9, 9, 13, 0],
       ],
       // (taken again when play calls from the bench were retired)
       coached: [
-        [125, 94, 81, 19, 11, 32, 16, 0],
-        [117, 106, 92, 36, 11, 21, 15, 0],
-        [110, 135, 75, 43, 11, 35, 21, 0],
+        [121, 104, 96, 25, 14, 25, 9, 0],
+        [123, 126, 96, 32, 13, 19, 16, 0],
+        [115, 118, 84, 41, 9, 30, 16, 0],
       ],
     };
     const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

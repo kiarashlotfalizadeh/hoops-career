@@ -333,34 +333,35 @@ describe('engine defense', () => {
     // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
     // tactics were made to matter twice as much: tacticLeverage.test.ts plays these games at 1x leverage and gets
     // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
-    // staff's substitutions were polished)
+    // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
+    // recentred)
     const expected: Record<string, number[][]> = {
       default: [
-        [121, 115, 77, 45, 14, 13, 18, 0],
-        [118, 117, 93, 19, 16, 32, 11, 0],
-        [112, 116, 85, 31, 7, 32, 17, 0],
+        [125, 116, 78, 37, 9, 23, 12, 0],
+        [138, 128, 98, 22, 16, 36, 13, 0],
+        [123, 110, 89, 41, 9, 9, 13, 0],
       ],
       zone23: [
-        [119, 111, 74, 53, 16, 17, 14, 0],
-        [107, 106, 87, 18, 6, 28, 13, 0],
-        [112, 97, 86, 32, 8, 16, 17, 0],
+        [113, 124, 94, 48, 10, 21, 11, 0],
+        [114, 116, 96, 33, 16, 20, 13, 0],
+        [117, 131, 97, 41, 9, 20, 11, 0],
       ],
       zone32: [
-        [110, 113, 75, 30, 9, 31, 17, 0],
-        [111, 119, 100, 13, 21, 25, 10, 0],
-        [109, 101, 95, 28, 14, 17, 16, 0],
+        [117, 123, 83, 37, 10, 33, 11, 0],
+        [122, 107, 93, 26, 10, 21, 13, 0],
+        [117, 113, 93, 28, 9, 22, 14, 0],
       ],
       double: [
-        [123, 113, 88, 32, 17, 20, 16, 0],
-        [126, 107, 82, 25, 13, 19, 17, 0],
-        [115, 88, 90, 28, 11, 22, 15, 0],
+        [116, 100, 85, 38, 12, 27, 12, 0],
+        [132, 129, 95, 23, 16, 26, 12, 0],
+        [129, 103, 98, 38, 14, 14, 13, 0],
       ],
       // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
       // the couple of trips the mismatch hunt changes back to the same team lines)
       hunt: [
-        [126, 120, 80, 46, 13, 16, 13, 0],
-        [113, 106, 80, 17, 10, 22, 15, 0],
-        [121, 131, 90, 36, 9, 29, 20, 1],
+        [131, 110, 73, 35, 8, 16, 14, 0],
+        [120, 116, 96, 23, 13, 23, 8, 0],
+        [125, 109, 90, 40, 10, 9, 13, 0],
       ],
     };
     const patches: Record<string, TacticsPatch | undefined> = {

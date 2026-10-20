@@ -212,7 +212,7 @@ describe('counters for a game plan', () => {
   const l = playedLeague(6);
   const opp = (l.userTid + 7) % 30;
   // a packed drop defense: both "Attack the drop" and "Spread & move" apply
-  l.teams[opp].tactics = applyPatch(l.teams[opp].tactics, { defense: { scheme: 'man', pnr: 'drop', help: 70 } });
+  l.teams[opp].tactics = applyPatch(l.teams[opp].tactics, { defense: { scheme: 'man', pnr: 'drop', help: 70, switchOffBall: false } });
   const base = l.teams[l.userTid].tactics;
 
   it('names a group for every counter, and changes actions relative to the playbook', () => {

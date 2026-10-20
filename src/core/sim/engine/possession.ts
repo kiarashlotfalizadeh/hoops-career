@@ -22,6 +22,7 @@ export const possessionMethods = {
     const def = this.T[1 - o];
     let ctx = this.ctx;
     this.inbound = false;
+    this.firstOpen = 0;
     this.sideOut = false;
     this.possPts = 0;
     this.secondChance = false;
@@ -94,9 +95,12 @@ export const possessionMethods = {
 
     // ---- full court press
     let pressBroken = false;
+    let pressed = 0;
     const pressOn = def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'));
     if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start' || outOfTimeout) && !late.hold) {
+      const before = this.clock;
       const res = this.press(off, def);
+      pressed = before - this.clock;
       if (res === 'to') return;
       pressBroken = res === 'broken';
     }
@@ -110,7 +114,8 @@ export const possessionMethods = {
     // crashing the offensive glass leaves you exposed (the defense crashed on its last
     // possession): a little below 50, a lot above it (more so past 1x leverage, see K.tradeOff)
     const crashLeak = ctx === 'dreb' ? (def.t.offense.crashBoards - 50) / 50 : 0;
-    const leak = 1 + lev((crashLeak > 0 ? K.crashLeak : 0.35) * crashLeak) + levExtra(K.tradeOff.crash * Math.max(0, crashLeak));
+    // (never quite none: each run-out that happens books its share of the ones saved)
+    const leak = Math.max(0.1, 1 + lev((crashLeak > 0 ? K.crashLeak : K.crashLow.leak) * crashLeak) + levExtra(K.tradeOff.crash * Math.max(0, crashLeak)));
     transP *= leak;
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
@@ -132,10 +137,17 @@ export const possessionMethods = {
 
     // ---- half court: the trip uses up the after-timeout play and a queued set
     if (this.cur) this.cur.kind = 'half';
+    // a defense that didn't crash the glass is back and set when the ball comes up the floor
+    if (crashLeak < 0 && !outOfTimeout) {
+      this.firstOpen = lev(K.crashLow.set * crashLeak);
+      this.impact('crash_leak', o, this.firstOpen * K.crashLow.setPts);
+    }
     off.atoNext = false;
     off.nextSet = null;
     // (out of a timeout, the ball is inbounded and brought up, as after any dead ball)
     let setup = (K.setup[outOfTimeout && (ctx === 'steal' || ctx === 'dreb') ? 'deadTO' : ctx] ?? 4) * paceF * this.rng.uniform(0.75, 1.25);
+    // (a press beaten is the ball brought up: the time it took was the walk-up)
+    if (pressed) setup = Math.max(2, setup - pressed);
     if (late.milk) setup += 6;
     if (late.hold) {
       // run the clock down for a last shot
@@ -180,8 +192,9 @@ export const possessionMethods = {
   ) {
     // an inbounds play after a foul to give starts from a worse look
     const inbound = this.inbound;
-    let carryOpen = this.inbound ? -K.ftg.open : 0;
+    let carryOpen = (this.inbound ? -K.ftg.open : 0) + this.firstOpen;
     this.inbound = false;
+    this.firstOpen = 0;
     let ballFrom: SP | null = null;
     let forced = false;
     // (rushed actions a side-out foul cut short, which don't count toward the trip's six)
@@ -199,7 +212,9 @@ export const possessionMethods = {
       // fresh trip with the time to run it and nothing else to do (no late-game situation)
       let play: SetPlay | null = null;
       if (n === 0) {
-        const quiet = !first && !inbound && !forced && left >= 14 && !late.hold && !late.quick && !late.milk && !late.need3 && !late.hurry;
+        // (nor in a close game's last 50 seconds, whatever the clock asks for)
+        const crunch = this.q >= 4 && this.clock <= 50 && Math.abs(off.score - def.score) <= 5;
+        const quiet = !first && !inbound && !forced && left >= 14 && !crunch && !late.hold && !late.quick && !late.milk && !late.need3 && !late.hurry;
         const want = set ?? (fresh && quiet ? this.packageSet(off, def) : null);
         if (want) play = this.setPlay(off, def, want.id, want.pid);
       }

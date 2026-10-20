@@ -44,8 +44,10 @@ export const handoffMethods = {
     const zd = this.zone(def);
     const sw = !zd && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall);
     if (sw) {
-      adv -= lev(0.35);
-      tags.push(['switch_deny', -lev(0.35) * 0.35]);
+      adv -= lev(K.switchDeny.handoff);
+      // (tagged at half a point of openness a unit, over the 0.35 the shot's openness counts: a denied
+      // curl also ends in more resets and fewer shots)
+      tags.push(['switch_deny', -lev(K.switchDeny.handoff) * 0.5]);
     }
     if (!sw && def.t.defense.pnr === 'drop' && !zd) {
       adv += lev(0.18);

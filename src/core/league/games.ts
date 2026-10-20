@@ -4,7 +4,7 @@ import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine,
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
 import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
-import { addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
+import { addInbox, addNews, playerName, statsLine, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
 import { playerAge } from '../playerGen';
@@ -12,6 +12,8 @@ import { consumePlans, effectiveTactics, planFor } from './gamePlans';
 import { confStandings } from './standings';
 import { hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan';
+import { staffLeverChanges, staffTactics } from '../ai/advisor';
+import { leadAssistant } from '../ai/assistant';
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, markText, newsworthy, type MilestoneStat } from '../analysis/milestones';
 import { gameKeys, gradeKey } from '../analysis/keys';
@@ -64,6 +66,25 @@ function bestPresetsChanged(team: Team, players: Player[]): boolean {
   return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
 }
 
+/**
+ * The playbook the staff runs for the user (staffTactics: the roster's best fit, with its changes from
+ * this season's evidence), put in place, with a word from the lead assistant for each setting the
+ * evidence moved it off.
+ */
+export function applyStaffTactics(league: League, tid: number) {
+  const team = league.teams[tid];
+  const next = staffTactics(league, tid);
+  const lead = leadAssistant(league);
+  for (const c of staffLeverChanges(league, tid, team.tactics, next))
+    addInbox(league, {
+      from: `${lead.name}, lead assistant`,
+      subject: `Staff change: ${c.label}`,
+      body: `Our ${c.what} has given up ${c.lost.toFixed(1)} points a game and won ${c.won.toFixed(1)} back over ${plural(c.games, 'game')}, so I've changed it. Team → Tactics has it; set the tactics yourself to take it back.`,
+      link: '/team/tactics',
+    });
+  team.tactics = next;
+}
+
 /** Keep AI rotations/tactics fresh (injuries, trades) and validate the user's. */
 export function ensureRotation(league: League, tid: number) {
   const team = league.teams[tid];
@@ -90,7 +111,9 @@ export function ensureRotation(league: League, tid: number) {
   // the best fit (the Tactics screen's fit scores count the same players)
   const refit = (!isUser || !team.tactics.manual) && !stale && !missingRoles && bestPresetsChanged(team, players);
   if ((!isUser || !team.tactics.manual) && (stale || missingRoles || refit)) {
-    team.tactics = autoTactics(team, players, isUser);
+    // the user's staff-run playbook also carries the staff's changes from this season's evidence
+    if (isUser) applyStaffTactics(league, tid);
+    else team.tactics = autoTactics(team, players, false);
   } else if (missingRoles) {
     // manual tactics: fill roles/freedom for newly acquired players only
     const auto = autoTactics({ ...team, tactics: { ...team.tactics, manual: false } }, players, false);

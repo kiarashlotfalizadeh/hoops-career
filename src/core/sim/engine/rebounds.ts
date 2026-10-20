@@ -20,7 +20,9 @@ export const reboundsMethods = {
     // crashing wins offensive boards (the fourth and fifth crasher add less); sprinting back
     // on the shot (transition D above 50) gives some up
     const crash = (off.t.offense.crashBoards - 50) / 50;
-    const glass = (1 + lev(0.22 * crash) - lev(K.crashFade * Math.max(0, crash) ** 2)) * (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
+    const glass =
+      (1 + lev((crash > 0 ? 0.22 : K.crashLow.orb) * crash) - lev(K.crashFade * Math.max(0, crash) ** 2)) *
+      (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
     let pOrb = K.orbBase * (1 + levExtra(K.recenter.orb)) * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;
@@ -32,6 +34,11 @@ export const reboundsMethods = {
       this.impact('zone_glass', off.side, orbRate * lev(zd.glassTag) * K.orbPts);
     }
     if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
+    // switching off-ball screens leaves smalls boxing out bigs
+    if (!zd && def.t.defense.switchOffBall && K.switchGlass) {
+      pOrb *= 1 + lev(K.switchGlass);
+      this.impact('switch_mismatch', off.side, orbRate * lev(K.switchGlass) * K.orbPts);
+    }
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
       // the shooter has a step on his own miss (not on a free throw)

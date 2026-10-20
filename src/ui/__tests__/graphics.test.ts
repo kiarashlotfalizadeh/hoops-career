@@ -159,7 +159,9 @@ describe('broadcast graphics', () => {
     }
     const top = [...view.box.home.players, ...view.box.away.players].sort((a, b) => b.pts - a.pts)[0];
     expect([view.q, top.pts > 20]).toEqual([4, true]);
-    const with_ = (high: PlayerBefore['high']) => nextGraphic(input(view, logs, { before: new Map([[top.pid, { high }]]) }));
+    // (his big-night graphic, at 30 or 40, has already gone up: it outranks the watch)
+    const shown = new Set([30, 40, 50].map((n) => `big-${top.pid}-${n}`));
+    const with_ = (high: PlayerBefore['high']) => nextGraphic(input(view, logs, { before: new Map([[top.pid, { high }]]), shown }));
     expect(with_({ pts: top.pts + 2, games: 20, career: false })).toMatchObject({ kind: 'watch', text: `P${top.pid}: ${top.pts} points, 2 off his season high (${top.pts + 2})` });
     expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
     expect(with_({ pts: top.pts - 1, games: 20, career: true })?.tag).toBe('New career high');

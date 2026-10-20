@@ -207,11 +207,85 @@ function healthyMinutes(mpg: number): number {
   return clamp(1.5 * mpg - 14, 0, MAX_PLAN);
 }
 
+/**
+ * The fewest minutes a planned reserve plays: a coach doesn't plan a two-minute stint for his 12th
+ * man (he plays in blowouts and when others are out), so smaller shares go to the rotation.
+ */
+const MIN_STINT = 6;
+
+/**
+ * Minutes in depth order with the reserves under MIN_STINT taken out of the plan, while nine or more
+ * still play: their minutes go to the regulars with room under their caps, reserves first.
+ */
+function trimRotation(mins: number[], caps: number[]): number[] {
+  const out = [...mins];
+  if (out.filter((m) => m >= MIN_STINT).length < 9) return out;
+  const small = out
+    .map((_, i) => i)
+    .filter((i) => i >= 5 && out[i] > 0 && out[i] < MIN_STINT)
+    .sort((a, b) => out[a] - out[b]);
+  for (const i of small) {
+    let give = out[i];
+    const takers = out.map((_, j) => j).filter((j) => j !== i && out[j] >= MIN_STINT && out[j] < caps[j] - 0.05);
+    if (takers.reduce((a, j) => a + caps[j] - out[j], 0) < give) continue;
+    out[i] = 0;
+    for (let it = 0; it < 6 && give > 0.01; it++) {
+      const open = takers.filter((j) => out[j] < caps[j] - 0.05);
+      const w = open.map((j) => (caps[j] - out[j]) * (j >= 5 ? 2 : 1));
+      const sw = w.reduce((a, b) => a + b, 0);
+      if (sw <= 0) break;
+      let placed = 0;
+      open.forEach((j, k) => {
+        const add = Math.min(caps[j] - out[j], (give * w[k]) / sw);
+        out[j] += add;
+        placed += add;
+      });
+      give -= placed;
+    }
+  }
+  return out;
+}
+
+/** The fewest minutes a starter plays when the reserves have them to give (stamina and hard caps allowing). */
+const STARTER_FLOOR = 20;
+
+/** How much worse (in lineup score) a five may be for its starters to be the players who play the most. */
+const STARTER_SWAP_TOL = 3;
+
+/**
+ * The starting five with a starter the plan gives a bench role (under 22 minutes) swapped for a
+ * reserve who plays at least 8 more (or any reserve who plays a starter's 34), when the five that
+ * results is about as good: a coach doesn't start a 14-minute player over his 28-minute sixth man
+ * unless the five needs him.
+ */
+function startersByMinutes(starters: Player[], bench: Player[], minutes: Record<number, number>): Player[] {
+  let five = [...starters];
+  for (let k = 0; k < 2; k++) {
+    const low = [...five].sort((a, b) => minutes[a.pid] - minutes[b.pid])[0];
+    if (!low) break;
+    const cur = evaluateLineup(five).score;
+    let best: Player | undefined;
+    let bs = -Infinity;
+    for (const b of bench) {
+      if (five.includes(b) || minutes[b.pid] < minutes[low.pid] + 8 || (minutes[low.pid] >= 22 && minutes[b.pid] < 34)) continue;
+      const s = evaluateLineup(five.map((p) => (p === low ? b : p))).score;
+      if (s > bs) {
+        bs = s;
+        best = b;
+      }
+    }
+    if (!best || bs < cur - STARTER_SWAP_TOL) break;
+    const swapIn = best;
+    five = five.map((p) => (p === low ? swapIn : p));
+  }
+  return five.every((p, i) => p === starters[i]) ? starters : sortByPosition(five);
+}
+
 export function autoRotation(players: Player[], prev?: Rotation): Rotation {
   const healthy = players.filter((p) => !p.injury || p.injury.gamesRemaining <= 0);
   const season = rosterSeason(players);
   const roles = new Map(players.map((p) => [p.pid, roleMemory(p, season)]));
-  const starters = sortByPosition(bestLineup(healthy, 9, roles));
+  let starters = sortByPosition(bestLineup(healthy, 9, roles));
   const byOvr = (a: Player, b: Player) => b.ovr - a.ovr;
   // the pecking order is quality alone (starter minutes follow it too, not position); memory
   // comes in below, once
@@ -297,11 +371,27 @@ export function autoRotation(players: Player[], prev?: Rotation): Rotation {
     const f = (240 - total) / room;
     mins = mins.map((m, i) => (open[i] ? Math.min(caps[i], m + open[i] * f) : m));
   }
+  mins = trimRotation(mins, caps);
   const minutes: Record<number, number> = {};
   depth.forEach((p, i) => (minutes[p.pid] = Math.round(mins[i])));
   const injured = players.filter((p) => !healthy.includes(p)).sort(byOvr);
   for (const p of injured) minutes[p.pid] = 0;
-  const bench = depth.slice(5).sort((a, b) => minutes[b.pid] - minutes[a.pid]);
+  starters = startersByMinutes(starters, depth.slice(5), minutes);
+  const five = new Set(starters);
+  // a starter the five still needs plays a starter's minutes, from the reserves who play the most
+  const capOf = new Map(depth.map((p, i) => [p.pid, caps[i]]));
+  for (const s of starters) {
+    let short = Math.min(STARTER_FLOOR, Math.floor(capOf.get(s.pid) ?? STARTER_FLOOR)) - minutes[s.pid];
+    for (const b of depth.filter((p) => !five.has(p)).sort((x, y) => minutes[y.pid] - minutes[x.pid])) {
+      if (short <= 0) break;
+      const give = Math.min(short, minutes[b.pid] - STARTER_FLOOR);
+      if (give <= 0) break;
+      minutes[b.pid] -= give;
+      minutes[s.pid] += give;
+      short -= give;
+    }
+  }
+  const bench = depth.filter((p) => !five.has(p)).sort((a, b) => minutes[b.pid] - minutes[a.pid]);
   const order = [...starters, ...bench, ...injured].map((p) => p.pid);
   const closers = sortByPosition(bestLineup(healthy, 8, roles)).map((p) => p.pid);
   return {
@@ -391,41 +481,88 @@ export interface FitTerm {
   weight: number;
 }
 
-const base = (value: number): FitTerm => ({ key: 'base', value, weight: 0 });
-const term = (key: ProfileKey, value: number, weight: number): FitTerm => ({ key, value, weight });
-// each term is its part of the formula as it was written, added in the same order, so the sums come
-// out the same to the last bit (a minus is the same addition of a negated part)
+/**
+ * A playbook's fit model: its starting score and, for each roster quality it leans on, fit points per
+ * rating point of it from the level where it's neutral. One fit point is a tenth of a point per 100
+ * possessions: the models are fitted to what each playbook was worth in paired engine games over 150
+ * real and fictional rosters (healthy and missing their two best players), as a difference from the
+ * roster's average playbook, so a fit says what the engine rewards and a gap of 10 is a point per 100.
+ */
+interface FitModel {
+  base: number;
+  terms: [key: ProfileKey, weight: number, neutral: number][];
+}
+
+const termsOf = (m: FitModel, pr: RosterProfile): FitTerm[] => [
+  { key: 'base', value: m.base, weight: 0 },
+  ...m.terms.map(([key, weight, neutral]): FitTerm => ({ key, value: (pr[key] - neutral) * weight, weight })),
+];
 const fitSum = (terms: Record<string, FitTerm[]>): Record<string, number> => Object.fromEntries(Object.entries(terms).map(([k, ts]) => [k, ts.reduce((a, x) => a + x.value, 0)]));
+
+/** The offensive playbooks' fit models (see FitModel). */
+const OFF_FIT: Record<string, FitModel> = {
+  balanced: { base: 51.7, terms: [] },
+  helio: { base: 49.4, terms: [['starCreator', 0.31, 64]] },
+  fiveOut: {
+    base: 52.4,
+    terms: [
+      ['size', -0.66, 47],
+      ['creatorGap', -0.29, 5],
+    ],
+  },
+  hub: {
+    base: 53.7,
+    terms: [
+      ['starCreator', -0.26, 64],
+      ['passing', 0.22, 52],
+      ['shooting', 0.12, 33],
+    ],
+  },
+  paceSpace: {
+    base: 51.4,
+    terms: [
+      ['perimeterD', 0.52, 52],
+      ['passing', 0.27, 52],
+    ],
+  },
+  grind: { base: 41.3, terms: [['size', 0.58, 47]] },
+};
+
+/** The defensive playbooks' fit models (see FitModel). */
+const DEF_FIT: Record<string, FitModel> = {
+  drop: { base: 56.4, terms: [['steals', -0.61, 50]] },
+  switch: { base: 53.9, terms: [['steals', -0.7, 50]] },
+  blitz: { base: 50.3, terms: [['steals', 1.06, 50]] },
+  ice: { base: 56.9, terms: [['steals', -0.49, 50]] },
+  hedge: {
+    base: 53.2,
+    terms: [
+      ['size', -0.21, 47],
+      ['rimProtection', 0.11, 67],
+      ['steals', -0.15, 50],
+    ],
+  },
+  zone: { base: 43, terms: [['steals', -0.62, 50]] },
+  chaos: {
+    base: 36.4,
+    terms: [
+      ['steals', 1.44, 50],
+      ['depth', 0.47, -14],
+      ['athleticism', 0.34, 54],
+    ],
+  },
+};
+
+const modelTerms = (models: Record<string, FitModel>, pr: RosterProfile) => Object.fromEntries(Object.entries(models).map(([k, m]) => [k, termsOf(m, pr)]));
 
 /** What each offensive preset's fit is made of. */
 export function offPresetTerms(pr: RosterProfile): Record<string, FitTerm[]> {
-  return {
-    balanced: [base(50)],
-    helio: [base(40), term('starCreator', (pr.starCreator - 62) * 1.4, 1.4), term('creatorGap', pr.creatorGap * 0.8, 0.8), term('shooting', (pr.shooting - 50) * 0.4, 0.4)],
-    fiveOut: [base(40), term('shooting', (pr.shooting - 47) * 1.3, 1.3), term('passing', (pr.passing - 50) * 0.8, 0.8), term('creatorGap', -(pr.creatorGap * 0.3), -0.3)],
-    hub: [base(30), term('bigPassing', (pr.bigPassing - 55) * 1.5, 1.5), term('passing', (pr.passing - 50) * 0.4, 0.4)],
-    paceSpace: [base(40), term('athleticism', (pr.athleticism - 52) * 1.1, 1.1), term('shooting', (pr.shooting - 47) * 0.6, 0.6), term('depth', pr.depth * 0.2, 0.2)],
-    grind: [base(27), term('postScoring', (pr.postScoring - 58) * 1.0, 1.0), term('size', (pr.size - 50) * 0.6, 0.6), term('shooting', -((pr.shooting - 45) * 0.8), -0.8)],
-  };
+  return modelTerms(OFF_FIT, pr);
 }
 
 /** What each defensive preset's fit is made of. */
 export function defPresetTerms(pr: RosterProfile): Record<string, FitTerm[]> {
-  return {
-    drop: [base(45), term('rimProtection', (pr.rimProtection - 60) * 1.2, 1.2), term('bigMobility', -((pr.bigMobility - 45) * 0.2), -0.2)],
-    // switching wants sizes near the middle: a bigger or a smaller lineup both cost
-    switch: [
-      base(35),
-      term('perimeterD', (pr.perimeterD - 52) * 1.0, 1.0),
-      term('bigMobility', (pr.bigMobility - 45) * 0.9, 0.9),
-      term('size', -(Math.abs(pr.size - 52) * 0.3), pr.size >= 52 ? -0.3 : 0.3),
-    ],
-    blitz: [base(34), term('steals', (pr.steals - 50) * 0.9, 0.9), term('athleticism', (pr.athleticism - 52) * 0.6, 0.6), term('bigMobility', (pr.bigMobility - 45) * 0.3, 0.3)],
-    ice: [base(42), term('perimeterD', (pr.perimeterD - 52) * 0.6, 0.6), term('rimProtection', (pr.rimProtection - 55) * 0.4, 0.4)],
-    hedge: [base(38), term('bigMobility', (pr.bigMobility - 45) * 1.0, 1.0), term('perimeterD', (pr.perimeterD - 50) * 0.3, 0.3)],
-    zone: [base(30), term('size', (pr.size - 52) * 0.7, 0.7), term('rimProtection', (pr.rimProtection - 60) * 0.6, 0.6), term('perimeterD', -((pr.perimeterD - 50) * 0.6), -0.6)],
-    chaos: [base(22), term('athleticism', (pr.athleticism - 55) * 0.8, 0.8), term('steals', (pr.steals - 52) * 0.8, 0.8), term('depth', pr.depth * 0.3, 0.3)],
-  };
+  return modelTerms(DEF_FIT, pr);
 }
 
 /** Score how well each offensive preset fits a roster (higher = better): the sum of its terms. */
@@ -437,14 +574,11 @@ export function defPresetFit(pr: RosterProfile): Record<string, number> {
   return fitSum(defPresetTerms(pr));
 }
 
-const PHILOSOPHY_BIAS: Record<string, Record<string, number>> = {
-  balanced: {},
-  helio: { helio: 8 },
-  fiveOut: { fiveOut: 8 },
-  hub: { hub: 8 },
-  paceSpace: { paceSpace: 8 },
-  grind: { grind: 8 },
-};
+/**
+ * A coach's lean toward his own playbooks, in fit points: enough to pick his among playbooks about as
+ * good for the roster (a few tenths of a point per 100), never one the roster plays clearly worse.
+ */
+const PHILOSOPHY_LEAN = 3;
 
 export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; freedom: Record<number, ShotFreedom> } {
   const roles: Record<number, OffRole> = {};
@@ -496,8 +630,8 @@ export function fitScale(fits: Record<string, number>): (k: string) => number {
 /** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
 export function rankedPresets(team: Team, players: Player[]): { off: string[]; def: string[] } {
   const pr = rosterProfile(fitRoster(players));
-  const offBias = PHILOSOPHY_BIAS[team.coach.offPhilosophy] ?? {};
-  const defBias: Record<string, number> = { [team.coach.defPhilosophy]: 7 };
+  const offBias: Record<string, number> = { [team.coach.offPhilosophy]: PHILOSOPHY_LEAN };
+  const defBias: Record<string, number> = { [team.coach.defPhilosophy]: PHILOSOPHY_LEAN };
   const rank = (fits: Record<string, number>, bias: Record<string, number>) =>
     Object.entries(fits)
       .map(([k, v]) => [k, v + (bias[k] ?? 0)] as const)

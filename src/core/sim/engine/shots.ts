@@ -303,21 +303,26 @@ export const shotsMethods = {
     this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags, ...body });
   },
 
-  /** Chance a made shot off a pass is credited as an assist (NBA: ~85% of threes, ~65% at the rim, ~40% of mid-range). */
+  /**
+   * Chance a made shot off a pass is credited as an assist. A catch-and-shoot three, a lob or a dump-off
+   * at the rim nearly always is; a floater, a runner or a pull-up after the catch only when the pass
+   * led straight to it (about half the time), so the NBA's shares hold: about 65% of makes at the rim,
+   * 45% in the paint, 40% from mid-range and 85% from three.
+   */
   assistProb(this: GameSim, f: FinishType, zone: ShotZone) {
     const three = zone === 'c3' || zone === 'ab3';
     switch (f) {
       case 'spotup':
-        return three ? 0.98 : 0.75;
+        return three ? 0.98 : zone === 'rim' ? 0.7 : zone === 'paint' ? 0.5 : 0.75;
       case 'cut':
-        return 0.98;
       case 'pnrRoll':
-        return 0.97;
+        return zone === 'paint' ? 0.85 : 0.93;
       case 'offscreen':
       case 'handoff':
-        return three ? 0.96 : zone === 'rim' ? 0.5 : 0.7;
+        return three ? 0.96 : zone === 'rim' ? 0.5 : zone === 'paint' ? 0.55 : 0.65;
       case 'transition':
-        return 0.92;
+        // (an outlet or a hit-ahead the runner still has to take to the basket himself, often enough)
+        return 0.8;
       case 'post':
         return 0.25;
       default:

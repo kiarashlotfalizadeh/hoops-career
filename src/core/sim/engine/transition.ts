@@ -16,7 +16,8 @@ export const transitionMethods = {
     const adv = (secQ - trapQ) / 20;
     const pTO = clamp(K.pressTO - lev(adv * 0.035), 0.02, 0.16);
     const pBroken = clamp(0.2 + lev(adv * 0.08), 0.06, 0.4);
-    this.tick(this.rng.uniform(3, 6));
+    // (secure handlers beat it sooner: less of the shot clock is gone)
+    this.tick(this.rng.uniform(K.pressTime.min, K.pressTime.max) * clamp(1 - K.pressTime.beat * adv, 0.5, 1.3));
     if (this.cur) {
       this.cur.kind = 'press';
       this.cur.label = 'Full-court press';
@@ -35,9 +36,12 @@ export const transitionMethods = {
     return 'neutral';
   },
 
-  /** The runners' edge off a defensive board against a team that crashed the glass. */
+  /** The runners' edge off a defensive board against a team that crashed the glass (negative against one that got back). */
   crashRunOut(this: GameSim, def: ST, ctx: Ctx) {
-    return ctx === 'dreb' ? lev(K.crashRunOut * Math.max(0, (def.t.offense.crashBoards - 50) / 50)) : 0;
+    if (ctx !== 'dreb') return 0;
+    // (and less of one against a team that sent fewer to the glass: its defenders are back)
+    const c = (def.t.offense.crashBoards - 50) / 50;
+    return c > 0 ? lev(K.crashRunOut * c) : lev(K.crashLow.back * c);
   },
 
   transition(this: GameSim, off: ST, def: ST, ctx: Ctx, pressBroken: boolean) {

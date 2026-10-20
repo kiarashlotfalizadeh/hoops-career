@@ -16,8 +16,11 @@ export const RATED_SEASONS = 3;
  * 5: no player morale or press conference (players have no mood, promise or meetings, the league no
  *    press): migrate() strips them from a version-4 save, and a build from before refuses a
  *    version-5 one instead of reading a player without a mood.
+ * 6: the playbooks' settings and fits were re-measured against the engine: migrate() re-fits every
+ *    staff-run team's tactics (the user's own are left alone), so a save doesn't run yesterday's
+ *    values under today's names ("Custom (Drop base)").
  */
-export const SAVE_VERSION = 5;
+export const SAVE_VERSION = 6;
 /** The oldest save format this build opens (a version-4 save loses its morale on the way in). */
 export const MIN_SAVE_VERSION = 4;
 

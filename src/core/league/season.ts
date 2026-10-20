@@ -26,7 +26,7 @@ import {
 } from './helpers';
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
-import { ensureRotation, gamesOnDay, playGame } from './games';
+import { applyStaffTactics, ensureRotation, gamesOnDay, playGame } from './games';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -133,8 +133,14 @@ function periodic(league: League, rng: Rng) {
   const d = league.day;
   if (d % 7 === 0) {
     for (const t of league.teams) {
-      // assistant-managed teams re-fit their playbook to the healthy roster weekly
-      if (!t.tactics.manual) t.tactics = autoTactics(t, teamPlayers(league, t.tid), true);
+      // assistant-managed teams re-fit their playbook to the healthy roster weekly; the user's staff
+      // also acts on what this season's games say a setting costs, and says so
+      if (t.tactics.manual) continue;
+      if (t.tid !== league.userTid) {
+        t.tactics = autoTactics(t, teamPlayers(league, t.tid), true);
+        continue;
+      }
+      applyStaffTactics(league, t.tid);
     }
   }
   if (d === 45 || d === 90 || d === 135) {

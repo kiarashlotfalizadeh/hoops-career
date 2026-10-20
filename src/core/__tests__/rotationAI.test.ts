@@ -124,6 +124,29 @@ describe('rotation AI: role memory', () => {
     expect(rot.minutes[1]).toBeGreaterThanOrEqual(free.minutes[1]);
   });
 
+  it('plans no token stints: a reserve plays real minutes or none', () => {
+    for (const seed of [1, 2, 3, 4]) {
+      const ps = roster(seed, (_, i) => [34, 33, 31, 30, 29, 25, 22, 18, 14, 11, 9, 6, 4, 3][i]);
+      const m = Object.values(autoRotation(ps).minutes);
+      expect(m.filter((x) => x > 0 && x < 6)).toEqual([]);
+      expect(m.filter((x) => x >= 6).length).toBeGreaterThanOrEqual(9);
+      expect(Math.abs(total(autoRotation(ps).minutes) - 240)).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("doesn't start a bench-minutes player over a reserve who plays far more, unless the five needs him", () => {
+    // player 3 (OVR 79.5) was a 12-minute player last season; player 6 (75) a 30-minute sixth man
+    const ps = roster(10, (_, i) => [34, 33, 31, 12, 29, 25, 30, 18, 14, 11, 9, 6, 4, 3][i]);
+    const rot = autoRotation(ps);
+    const starters = rot.order.slice(0, 5);
+    const bench = rot.order.slice(5);
+    // every starter plays a starter's minutes (20 or more), or no reserve plays 8 more than he does
+    for (const pid of starters) {
+      const most = Math.max(...bench.map((b) => rot.minutes[b] ?? 0));
+      expect(rot.minutes[pid] >= 20 || most < rot.minutes[pid] + 8).toBe(true);
+    }
+  });
+
   it('lists the starters 1 through 5: a tall point guard still comes first', () => {
     const ps = roster(6).slice(0, 5);
     (['C', 'SF', 'PG', 'PF', 'SG'] as const).forEach((pos, i) => (ps[i].pos = pos));
