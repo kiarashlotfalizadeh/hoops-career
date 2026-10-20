@@ -50,7 +50,7 @@ await page
   .catch(() => {});
 await shot('r06-roster-ratings');
 await page.getByText('Players', { exact: true }).first().click();
-await page.locator('.listrow.clickable').nth(1).click();
+await page.locator('.tm-rl-row').nth(1).click();
 await page.waitForTimeout(500);
 await shot('r07-player', true);
 await page

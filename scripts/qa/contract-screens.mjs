@@ -137,7 +137,7 @@ const setup = await mutate((l) => {
 await go('/office');
 await shot('e07-office-cap-sheet');
 await page
-  .locator('.fo-hero')
+  .locator('.fo-exc')
   .first()
   .screenshot({ path: `${out}/e07b-office-exceptions.png` });
 await go(`/player/${setup.ext.pid}`);

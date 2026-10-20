@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { League } from '../../core/types';
-import { leagueForecast, pct } from '../../core/analysis/odds';
-import { useLeagueMemo } from '../../state/store';
+import { pct } from '../../core/analysis/odds';
+import { useForecast } from '../useForecast';
 
 /**
  * A team's line from the season forecast (src/core/analysis/odds.ts), linking to the Odds view: its
@@ -10,7 +10,7 @@ import { useLeagueMemo } from '../../state/store';
  * something. Nothing when there's no season left to forecast.
  */
 export function OddsLine({ league, tid }: { league: League; tid: number }) {
-  const f = useLeagueMemo(() => leagueForecast(league), [league]);
+  const f = useForecast(league);
   if (!f) return null;
   const t = f.teams[tid];
   const series = league.playoffs.find((s) => s.winner === undefined && (s.high === tid || s.low === tid));

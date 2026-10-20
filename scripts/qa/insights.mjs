@@ -2,6 +2,7 @@
 // tablet. Works on any build (dev server or preview).
 // Usage: node scripts/qa/insights.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
+import { play } from './play.mjs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';
 const browser = await chromium.launch();
@@ -27,20 +28,12 @@ async function run(viewport, prefix) {
   await page.fill('input[placeholder="Your name"]', 'QA');
   await page.getByText('Start career').click();
   await page.waitForTimeout(1500);
-  await page.getByRole('button', { name: 'Start regular season' }).first().click();
-  await page.waitForTimeout(500);
+  await play(page, 'Start regular season');
+  // a few games: quick-sim the game on a game day, sim to the next game otherwise
   for (let i = 0; i < 4; i++) {
     await page.goto(`${base}/#/`);
     await page.waitForTimeout(400);
-    const quick = page.getByRole('button', { name: /Quick sim/ });
-    if (await quick.count()) await quick.first().click();
-    else
-      await page
-        .getByRole('button', { name: /Sim to next game/ })
-        .first()
-        .click();
-    await page.waitForTimeout(400);
-    await page.waitForSelector('.simbar', { state: 'detached', timeout: 120000 }).catch(() => {});
+    if (!(await play(page, 'Quick sim this game'))) await play(page, 'Sim to next game');
   }
   await page.goto(`${base}/#/tactics?tab=insights`);
   await shot('insights');

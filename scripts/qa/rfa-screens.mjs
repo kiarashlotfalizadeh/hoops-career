@@ -115,6 +115,13 @@ await shot('d05-open-fa-confirm');
 await page.locator('.sheet').getByRole('button', { name: 'Open free agency' }).click();
 await waitSim();
 await page.waitForTimeout(1200);
+// other teams may sign them to offer sheets on opening day: the script makes its own below
+await mutate(
+  (l, a) => {
+    for (const pid of a.pids) if (l.players[pid]?.rfa) delete l.players[pid].rfa.sheet;
+  },
+  { pids: names.map((x) => x.pid) },
+);
 
 // ------------------------------------------------------------------ free agency: your restricted free agents
 await go('/office/free-agents');

@@ -23,6 +23,17 @@ if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator && !import.met
     registerSW({
       immediate: true,
       onNeedRefresh: () => useStore.getState().toast('Update downloaded: it applies next time you open the app.', 'neutral'),
+      // the browser looks for a new version when the app is opened, but a home-screen app can stay
+      // open in the background for days: look again when it comes back to the front (at most hourly)
+      onRegisteredSW: (_url, reg) => {
+        if (!reg) return;
+        let looked = Date.now();
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible' || !navigator.onLine || Date.now() - looked < 60 * 60 * 1000) return;
+          looked = Date.now();
+          void reg.update().catch(() => {});
+        });
+      },
     }),
   );
 }

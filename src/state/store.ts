@@ -4,7 +4,7 @@ import type { InboxMessage, League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
 import { estimateTotal, targetDone, type SimProgress, type SimTarget, type TaskOp, type TaskResult } from './simCore';
-import { simLeague, stopSimRun, taskLeague } from './simClient';
+import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
 
 export type { SimProgress, SimTarget, TaskOp, TaskResult } from './simCore';
 export { allStarStop } from './simCore';
@@ -43,7 +43,7 @@ interface AppState {
   mutate: (fn: (l: League) => void, save?: boolean) => boolean;
   /** Write the league to the device now. Resolves false (see saveProblem) if it didn't get there. */
   save: () => Promise<boolean>;
-  /** Save only if something changed since the last save. */
+  /** Save only if something changed since the last save (during a sim, the worker is asked for where it has got to as well). */
   flush: () => Promise<boolean>;
   /**
    * Get the open league's changes onto the device before another league replaces it or the app
@@ -51,7 +51,7 @@ interface AppState {
    * export first; a copy another window has saved over has nothing worth keeping.
    */
   saveBeforeLeaving: () => Promise<boolean>;
-  /** Sim days in the worker up to `target`; the screens show the league as it stands meanwhile (every 20 days). */
+  /** Sim days in the worker up to `target`; the screens show the league as it stands meanwhile (every few seconds), and it is saved then. */
   simulate: (target: SimTarget) => Promise<void>;
   /** A phase change in the worker, behind the progress bar: buttons that watch `sim` are disabled
    * meanwhile and a second call is ignored. Resolves to its result, or null if it didn't run. */
@@ -197,6 +197,9 @@ export const useStore = create<AppState>((set, get) => ({
     return (saving = write(l).finally(() => (saving = null)));
   },
   flush: () => {
+    // a sim in the worker is further on than the league on screen: it sends where it has got to,
+    // which is saved when it arrives
+    if (get().sim) checkpointSimRun();
     const l = get().league;
     // a live game plays on without a save every possession: where it has got to is a change now
     if (l && checkpointLive(l)) {

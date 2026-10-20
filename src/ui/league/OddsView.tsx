@@ -1,11 +1,11 @@
 import type { League } from '../../core/types';
-import { FORECAST_SIMS, leagueForecast, pct, type Forecast, type TeamOdds } from '../../core/analysis/odds';
+import { FORECAST_SIMS, pct, type Forecast, type TeamOdds } from '../../core/analysis/odds';
 import { fmtDate } from '../../core/league/helpers';
-import { useLeagueMemo } from '../../state/store';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
 import { Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { TeamRow, TeamTable } from './Table';
+import { useForecast } from '../useForecast';
 
 /**
  * The season forecast (src/core/analysis/odds.ts): both conferences by projected record with the
@@ -15,7 +15,7 @@ export function OddsView({ league }: { league: League }) {
   const userConf = league.teams[league.userTid].conf;
   // a link names the conference to read first (a team page's odds line)
   const [first] = useQueryParam<'E' | 'W'>('oconf', userConf, ['E', 'W']);
-  const f = useLeagueMemo(() => leagueForecast(league), [league]);
+  const f = useForecast(league);
   if (!f) return <NoForecast />;
   return (
     <>
@@ -38,7 +38,7 @@ export function OddsView({ league }: { league: League }) {
 
 /** The lottery as it stands: every team not sure of the playoffs, worst projected first, with the chances for its own first-round pick. */
 export function LotteryView({ league }: { league: League }) {
-  const f = useLeagueMemo(() => leagueForecast(league), [league]);
+  const f = useForecast(league);
   if (!f) return <NoForecast />;
   const rows = f.teams.filter((t) => !t.clinched).sort((a, b) => a.w - b.w || b.pick1 - a.pick1);
   return (

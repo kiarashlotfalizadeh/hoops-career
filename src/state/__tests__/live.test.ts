@@ -263,7 +263,8 @@ describe('live game', () => {
     const off = flowActions(l);
     expect(off[0].label).toBe('Resume live game');
     const me = lg.sim.T[lg.userSide].score;
-    expect(off[0].sub).toBe(`End of Q1 · ${me}-${lg.sim.T[1 - lg.userSide].score}`);
+    // where the game stands: the break, and the score from the user's side (however the menu words it)
+    expect(off[0].sub).toMatch(new RegExp(`^End of Q1 · .*\\b${me}-${lg.sim.T[1 - lg.userSide].score}$`));
     expect(off.find((a) => a.id === 'quick')?.label).toBe('Finish this game');
   });
 });
@@ -491,7 +492,7 @@ describe('a live game survives the app being closed (W12)', () => {
     expect(pendingLive(back)).toBeNull();
     expect(liveInProgress(back)).toEqual({ gid: lg.game.gid, q: 1, clock: lg.sim.clock, score: [q1[me], q1[1 - me]] });
     const menu = flowActions(back);
-    expect(menu[0]).toMatchObject({ label: 'Resume live game', sub: `End of Q1 · ${q1[me]}-${q1[1 - me]}`, cmd: 'watchLive' });
+    expect(menu[0]).toMatchObject({ label: 'Resume live game', sub: expect.stringMatching(new RegExp(`^End of Q1 · .*\\b${q1[me]}-${q1[1 - me]}$`)), cmd: 'watchLive' });
     expect(menu.find((a) => a.id === 'quick')?.label).toBe('Finish this game');
     expect(flowActions(back, { onLive: true }).map((a) => a.label)).toEqual(['Finish this game']);
     const day = back.day;

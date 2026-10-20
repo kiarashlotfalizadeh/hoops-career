@@ -2,7 +2,7 @@
 // roster, the pre-game screen, a live game and its report. Works on any build.
 // Usage: node scripts/qa/core-screens.mjs <baseUrl> <outDir>
 import { chromium } from 'playwright';
-import { clearMoments } from './moments.mjs';
+import { play } from './play.mjs';
 const base = process.argv[2] ?? 'http://127.0.0.1:5173';
 const out = process.argv[3] ?? 'shots';
 const browser = await chromium.launch();
@@ -17,11 +17,6 @@ const shot = async (name, full = false) => {
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${out}/${name}.png`, fullPage: full });
   console.log('shot', name);
-};
-const waitSim = async () => {
-  await page.waitForTimeout(300);
-  await page.waitForSelector('.simbar', { state: 'detached', timeout: 180000 }).catch(() => {});
-  await clearMoments(page);
 };
 await page.goto(`${base}/#/start`);
 await page.waitForTimeout(600);
@@ -40,22 +35,18 @@ await page.goto(`${base}/#/rotation`);
 await shot('12-rotation', true);
 await page.goto(`${base}/#/roster`);
 await shot('13-roster');
-const first = page.locator('.listrow.clickable').first();
+// (a player's row on the roster opens his page)
+const first = page.locator('.tm-rl-row').first();
 await first.click();
 await page.waitForTimeout(400);
 await shot('14-player', true);
 // start season
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(400);
-await page.getByRole('button', { name: 'Start regular season' }).first().click();
-await page.waitForTimeout(800);
+await play(page, 'Start regular season');
 await shot('17-home-season');
-await page
-  .getByRole('button', { name: /Sim to next game|Watch/ })
-  .first()
-  .click()
-  .catch(() => {});
-await waitSim();
+// on to the first game day (opening night may be it already)
+await play(page, 'Sim to next game');
 await page.goto(`${base}/#/`);
 await page.waitForTimeout(500);
 await shot('18-home-gameday', true);

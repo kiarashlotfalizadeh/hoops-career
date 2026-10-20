@@ -9,8 +9,33 @@ import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type Ga
 /** The results this worker holds, for one league. */
 let cache: { id: string; games: GameResult[] } | null = null;
 let stopFlag = false;
+/** The main thread asked for a checkpoint as soon as it can have one (the app is going to the background). */
+let checkpointAsked = false;
 
-const yieldDay = () => new Promise<void>((r) => setTimeout(r, 0));
+/**
+ * Between days the sim lets the worker's messages in (a stop). A timer would do, but nested timers
+ * are held back to 4 ms each, about a second a season; a message on a channel of its own isn't.
+ */
+const wakeup = new MessageChannel();
+let wake: (() => void) | null = null;
+wakeup.port1.onmessage = () => {
+  const w = wake;
+  wake = null;
+  w?.();
+};
+const yieldDay = () =>
+  new Promise<void>((r) => {
+    wake = r;
+    wakeup.port2.postMessage(0);
+  });
+
+/**
+ * A checkpoint is the league as a long sim stands, for the screens to show and the main thread to
+ * save. Taking one in costs the main thread a moment (the league crosses over, the screens draw it,
+ * it's written to the device), so one goes at most every few seconds and only once the last is in;
+ * the sim plays on meanwhile instead of waiting for it.
+ */
+const CHECKPOINT_MS = 5000;
 
 /** The league to work on: `core` with the cached results brought up to date by `delta`. */
 function open(core: League, delta: GamesDelta): League {
@@ -32,6 +57,7 @@ export interface SimCallbacks {
 const api = {
   async sim(core: League, delta: GamesDelta, target: SimTarget, cb: SimCallbacks) {
     stopFlag = false;
+    checkpointAsked = false;
     let l: League;
     try {
       l = open(core, delta);
@@ -41,15 +67,28 @@ const api = {
     }
     // what the main thread holds now: each checkpoint sends only what's new since the last one
     let sent = gamesSig(l.games);
+    let last = performance.now();
+    let inFlight = false;
     try {
       const r = await runSim(l, target, {
         progress: (p) => void cb.progress(p),
         shouldStop: () => stopFlag,
-        checkpoint: async (x) => {
+        checkpoint: (x) => {
+          if (inFlight || (!checkpointAsked && performance.now() - last < CHECKPOINT_MS)) return;
+          checkpointAsked = false;
           const out = pack(x, sent);
           sent = gamesSig(x.games);
-          await cb.checkpoint(out.core, out.delta);
+          inFlight = true;
+          // (the message is a copy: the sim can go on changing the league at once)
+          void Promise.resolve(cb.checkpoint(out.core, out.delta))
+            .catch(() => {})
+            .finally(() => {
+              inFlight = false;
+              last = performance.now();
+            });
         },
+        // (whether one is due is looked at every day)
+        checkpointDays: 1,
         yieldDay,
       });
       cache = { id: l.id, games: l.games };
@@ -76,6 +115,10 @@ const api = {
   },
   stop() {
     stopFlag = true;
+  },
+  /** Send a checkpoint after the day being played, whenever the last one went. */
+  checkpointNow() {
+    checkpointAsked = true;
   },
   /** Forget the cached results (the main thread lost track of them). */
   reset() {

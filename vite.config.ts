@@ -58,6 +58,16 @@ export default defineConfig({
     }),
   ],
   worker: { format: 'es' },
-  build: { target: 'es2022', chunkSizeWarningLimit: 2000 },
+  build: {
+    target: 'es2022',
+    chunkSizeWarningLimit: 2000,
+    rollupOptions: {
+      output: {
+        // the libraries the first screen needs, in a chunk of their own: they change less often than
+        // the app, so an update downloads only the app's code and keeps them from the cache
+        manualChunks: (id) => (/node_modules\/(react|react-dom|scheduler|react-router|react-router-dom|zustand|idb|comlink|@capacitor\/core)\//.test(id) ? 'vendor' : undefined),
+      },
+    },
+  },
   test: { environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'], testTimeout: 60_000 },
 });

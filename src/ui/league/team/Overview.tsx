@@ -5,7 +5,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League } from '../../../core/types';
 import { useLeagueMemo } from '../../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted } from '../../../core/league/helpers';
-import { leagueForecast, pct } from '../../../core/analysis/odds';
+import { pct } from '../../../core/analysis/odds';
 import { DEF_PRESETS, OFF_PRESETS } from '../../../core/sim/tactics';
 import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coaches';
 import { seasonLabel } from '../../../core/constants';
@@ -15,6 +15,7 @@ import { Term } from '../../components/Glossary';
 import { f1, signed, teamRatings } from '../../stats';
 import { STRATEGY_META, StrategyTag } from '../shared';
 import { RosterRows } from '../../team/RosterList';
+import { useForecast } from '../../useForecast';
 
 /** League ranks among the teams that have played ("4th"), and how many have (`of`). */
 function useRatingRanks(league: League, tid: number) {
@@ -31,7 +32,7 @@ function useRatingRanks(league: League, tid: number) {
 
 /** The season forecast's line for a team: its series in the playoffs, else its projected record and odds. */
 function useOutlook(league: League, tid: number): string | null {
-  const f = useLeagueMemo(() => leagueForecast(league), [league]);
+  const f = useForecast(league);
   if (!f) return null;
   const t = f.teams[tid];
   const series = league.playoffs.find((s) => s.winner === undefined && (s.high === tid || s.low === tid));
