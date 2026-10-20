@@ -37,8 +37,11 @@ export const hackThreshold = (ftPct: number) => Math.ceil(ftPct * 100) + 1;
 /** Whether tonight's tactics have moved off the game plan (what "Reset to game plan" is offered for). */
 export const offPlan = (t: Tactics, plan: Tactics) => JSON.stringify(t) !== JSON.stringify(plan);
 
-/** "Reset to game plan": back to the tactics the game tipped off with. */
-export const resetToPlan = (x: Tactics, plan: Tactics) => void Object.assign(x, cloneTactics(plan));
+/** "Reset to game plan": back to the tactics the game tipped off with (a field they don't have, a mentality set since, goes too). */
+export function resetToPlan(x: Tactics, plan: Tactics) {
+  for (const k of Object.keys(x)) delete (x as unknown as Record<string, unknown>)[k];
+  Object.assign(x, cloneTactics(plan));
+}
 
 /**
  * The quick changes on offer, at most seven: the defense's shape (zone or man), the pace (pushing,

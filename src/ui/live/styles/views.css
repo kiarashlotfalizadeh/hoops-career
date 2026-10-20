@@ -295,6 +295,108 @@
   gap: 4px;
 }
 
+/* the touchline: the three tactics, the mentality, the shape */
+.lv-touch {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lv-touch-h {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.lv-slots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.lv-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: 56px;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-2);
+  background: var(--bg-2);
+  color: var(--text-2);
+  text-align: left;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.lv-slot:not(:disabled):active {
+  background: var(--surface-2);
+}
+.lv-slot.on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-2));
+  color: var(--text);
+}
+.lv-slot:disabled:not(.on) {
+  opacity: 0.55;
+}
+.lv-slot-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.lv-slot-l {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text);
+}
+.lv-slot.on .lv-slot-l {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.lv-slot-n {
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lv-slot-f {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lv-slot-f.good {
+  color: var(--good);
+}
+.lv-slot-f.warn {
+  color: var(--warn);
+}
+.lv-slot-f.bad {
+  color: var(--bad);
+}
+/* the familiarity key under a control's options */
+.lv-fam-key {
+  line-height: 1.35;
+}
+.lv-plan-touch {
+  padding-bottom: 4px;
+}
+
 /* the box score's play types */
 .lv-bx-pt {
   display: flex;

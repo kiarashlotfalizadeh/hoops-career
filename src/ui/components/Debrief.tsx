@@ -1,7 +1,7 @@
 // The staff's debrief at the top of a game's recap (the live final card and the report's Debrief
 // tab): the lead assistant's verdict, the edges that decided it in points, your moves in a live
 // game and what each did, and what to do next time, the fix one tap away for the plan against this
-// opponent or for every game.
+// opponent or for every game (or, for playing a step slow, the practice focus between games).
 import { useMemo } from 'react';
 import type { GameResult, League } from '../../core/types';
 import type { GameReport } from '../../core/analysis/gameReport';
@@ -12,6 +12,7 @@ import { persistableTactics, planFor, setPlanItem } from '../../core/league/game
 import { shortName } from '../../core/league/helpers';
 import { useStore } from '../../state/store';
 import { act } from '../../state/actions';
+import { PREP_META } from '../../core/sim/familiarity';
 import { Section, Tag } from './ui';
 import { AssistantHead, MovesList, NoteCard } from './StaffCards';
 
@@ -33,6 +34,13 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
     });
     if (ok) useStore.getState().toast(scope === 'plan' ? `Plan vs ${opp.abbrev}: ${a.label}` : `Your tactics: ${a.label}`, 'good');
   };
+  /** A practice focus the advice asks for, from the next practice day. */
+  const practice = (a: DebriefAdvice) => {
+    if (!a.prep) return;
+    const focus = a.prep;
+    if (act('Practice', (l) => void (l.teams[l.userTid].prep = focus))) useStore.getState().toast(`Practice: ${PREP_META[focus].label}.`, 'good');
+  };
+  const prepNow = league.teams[me].prep ?? 'balanced';
   const us = res.home.tid === me ? league.teams[res.home.tid] : league.teams[res.away.tid];
   // (a move a live game made: its team's abbreviations for the lines)
   const abbrevs = { us: us.abbrev, them: opp.abbrev };
@@ -84,6 +92,17 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
               <div key={a.id} className="gd-next-row">
                 <div className="gd-next-t">{a.title}</div>
                 <div className="gd-next-x small dim2">{a.text}</div>
+                {a.prep && (
+                  <div className="gd-next-acts">
+                    {prepNow === a.prep ? (
+                      <Tag tone="good">Practice: {PREP_META[a.prep].label}</Tag>
+                    ) : (
+                      <button className="btn xs primary" disabled={simming} onClick={() => practice(a)}>
+                        Practice: {PREP_META[a.prep].label}
+                      </button>
+                    )}
+                  </div>
+                )}
                 {a.patch && (
                   <div className="gd-next-acts">
                     {inPlan.has(a.id) ? (

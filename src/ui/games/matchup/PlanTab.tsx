@@ -1,5 +1,6 @@
 // The matchup page's Plan: your plan against this team first (each item with exactly what it
-// changes, and how long it lasts), then the staff's counters, a star plan, a junk
+// changes, and how long it lasts), what the team knows of the tactics it plays them with (and the
+// practice focus), then the staff's counters, a star plan, a junk
 // defense and who it chases, a defender to attack, players to hack, and a note. Every change is the
 // user's tactics against this team only, on top of his playbook (see core/league/gamePlans.ts).
 import { useEffect, useRef, useState } from 'react';
@@ -23,6 +24,8 @@ import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
 import { ftChance } from '../../../core/sim/engine';
+import { nextUserGame } from '../../../core/analysis/preview';
+import { FamBrief } from '../../today/Practice';
 
 export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
@@ -88,6 +91,7 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
         </div>
       </Section>
 
+      <FamiliarityCard league={league} opp={opp} />
       <CountersCard league={league} opp={opp} />
       <StarPlanCard league={league} opp={opp} />
       <JunkCard league={league} opp={opp} />
@@ -95,6 +99,30 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
       <HackCard league={league} opp={opp} />
       <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </>
+  );
+}
+
+/** What the team knows of the tactics it plays them with (the plan on top), and the practice focus. */
+function FamiliarityCard({ league, opp }: { league: League; opp: number }) {
+  const next = useLeagueMemo(() => nextUserGame(league), [league]);
+  const tonight = !!next && (next.home === opp || next.away === opp);
+  return (
+    <Section
+      title="Familiarity"
+      right={
+        <Help title="Familiarity">
+          <p>
+            How well the team knows the tactics it plays against them, your plan included: what practice and games have drilled. Below 95% it plays a step slow: worse shots and
+            more turnovers on offense, more open looks given up on defense.
+          </p>
+          <p>Opponent prep before the next game drills whatever your plan for it changes; tactical drills build the system itself about twice as fast.</p>
+        </Help>
+      }
+    >
+      <div className="card">
+        <FamBrief league={league} opp={opp} tonight={tonight} chips />
+      </div>
+    </Section>
   );
 }
 

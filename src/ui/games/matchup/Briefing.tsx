@@ -1,5 +1,6 @@
 // The staff's briefing at the top of the matchup page's Preview: the lead assistant's read of them
-// (what they run, who to watch, where they can be beaten), and his plan for tonight (the counters the
+// (what they run, who to watch, where they can be beaten), what the team knows of tonight's tactics
+// (a gap flagged, with the practice focus that closes it), and his plan for tonight (the counters the
 // numbers back first, one per kind), each a tap into your game plan or all of them at once. The full
 // counters, the star plan, matchups and the rest are on the Plan and Matchups tabs.
 import { useMemo } from 'react';
@@ -13,6 +14,7 @@ import { act } from '../../../state/actions';
 import { Section, Tag } from '../../components/ui';
 import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
+import { FamBrief } from '../../today/Practice';
 
 /** Counters the briefing proposes: the ones the numbers back first, one per game-plan group. */
 const PLAN_MAX = 3;
@@ -60,6 +62,7 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
             </div>
           )}
         </dl>
+        <FamBrief league={league} opp={opp} tonight />
         {picks.length > 0 ? (
           <div className="mu-brief-plan">
             <div className="over">{more ? 'The staff would also add' : <>The staff&apos;s plan for tonight</>}</div>

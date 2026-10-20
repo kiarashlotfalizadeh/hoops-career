@@ -1,4 +1,5 @@
-// The live game's Game plan: the battle as it stands, each number next to the lever that moves it.
+// The live game's Game plan: the touchline first (your three tactics with the team's familiarity
+// with each, and the mentality), then the battle as it stands, each number next to the lever that moves it.
 // Their play types tonight against the league's, each with the setting that defends it (the
 // ball-screen coverage beside their pick-and-roll, help beside their spot-ups, transition defense
 // beside their run-outs); their scorers and who's been on each, a tap from their sheet; the
@@ -16,6 +17,7 @@ import { Section, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
 import { matchups, sumBy } from './staff';
+import { OPT, famSuffix } from './familiar';
 import type { PossLog } from '../../core/sim/log';
 
 /** A three-way lever on a 0-100 setting: its low, middle and high settings. */
@@ -162,7 +164,13 @@ export function PlanView({
   onPlayer,
   onAll,
   abbrevs,
+  touchline,
+  famOf = () => 100,
 }: {
+  /** The touchline (see Touchline.tsx), at the top. */
+  touchline?: ReactNode;
+  /** How well the team knows a discrete option ('pnr:blitz'), as tonight plays it. */
+  famOf?: (key: string) => number;
   view: Drawn;
   side: 0 | 1;
   tactics: Tactics;
@@ -206,6 +214,7 @@ export function PlanView({
 
   return (
     <div className="lv-plan">
+      {touchline && <div className="lv-plan-touch">{touchline}</div>}
       {(plan.length > 0 || changed) && (
         <div className="lv-plan-top">
           {plan.length > 0 && (
@@ -249,6 +258,7 @@ export function PlanView({
                         onClick={() => apply((x) => void (x.defense.pnr = c))}
                       >
                         {COVERAGE_META[c].label}
+                        {famSuffix(famOf(OPT.pnr(c)))}
                       </button>
                     ))}
                   </div>
@@ -340,6 +350,7 @@ export function PlanView({
                   onClick={() => apply((x) => void (x.defense.scheme = k))}
                 >
                   {SCHEME_META[k].label}
+                  {famSuffix(famOf(OPT.scheme(k)))}
                 </button>
               ))}
             </div>
@@ -361,6 +372,7 @@ export function PlanView({
                   onClick={() => apply((x) => void (x.defense.press = k))}
                 >
                   {PRESS_META[k].label}
+                  {k !== 'none' && famSuffix(famOf(OPT.press(k)!))}
                 </button>
               ))}
             </div>

@@ -5,10 +5,12 @@
 // Read by the live game's bench as the night goes, and kept with the result for the post-game
 // report. Pure: it reads the possession logs the game already keeps.
 
-import type { CoachMove, LiveOp, MoveTally, Tactics } from '../types';
+import type { CoachMove, League, LiveOp, MoveTally, ScheduledGame, Tactics } from '../types';
 import type { FinishType, PossLog } from '../sim/log';
 import { tacticsChanges } from '../sim/playbooks';
-import { PLAYER_D_META, SCHEME_META } from '../sim/tactics';
+import { PLAYER_D_META, SCHEME_META, emptyPatch, tacticsDiff } from '../sim/tactics';
+import { SLOT_COUNT, SLOT_LETTERS, activeSlot, slotTactics } from '../sim/slots';
+import { effectiveTactics } from '../league/gamePlans';
 
 /** A move as the live game made it (see LiveMark in state/live.ts). */
 export interface MoveMark {
@@ -118,9 +120,42 @@ export function moveText(a: Tactics, b: Tactics, nameOf: (pid: number) => string
   return parts.join(' · ') || 'Tactics adjusted';
 }
 
-/** The night's moves, oldest first: `marks` are the game's, in the order made; `side` is the user's (0 home, 1 away). */
-export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string): CoachMove[] {
+/**
+ * Which of a team's tactic slots (Tactic A, B, C) some tactics are, in a game against the other team
+ * in `game`: each slot as that game plays it (tonight's game plan on top of it, for the user's team),
+ * matched on everything but tonight's opponent-specific orders. The active slot first (a copy in
+ * another slot is the same tactics); null when they're none of them (a slot with changes made since).
+ */
+export function slotMatcher(league: League, game: Pick<ScheduledGame, 'home' | 'away' | 'seriesId'>, tid = league.userTid): (t: Tactics) => number | null {
+  const team = league.teams[tid];
+  // one tactic and no other: nothing to switch to
+  if (!team.slots?.stored.some(Boolean)) return () => null;
+  const opp = game.home === tid ? game.away : game.home;
+  const active = activeSlot(team);
+  const order = [active, ...Array.from({ length: SLOT_COUNT }, (_, i) => i).filter((i) => i !== active)];
+  const targets = order.flatMap((i) => {
+    const s = slotTactics(team, i);
+    return s ? [{ i, t: tid === league.userTid ? effectiveTactics(league, opp, game, s) : s }] : [];
+  });
+  return (t) => targets.find((x) => emptyPatch(tacticsDiff(x.t, t)))?.i ?? null;
+}
+
+/** "Tactic B (Plan B)": a slot as the night's moves name a switch to it. */
+export function slotMoveName(league: League, i: number, tid = league.userTid): string {
+  const name = league.teams[tid].slots?.names[i];
+  return `Tactic ${SLOT_LETTERS[i]}${name ? ` (${name})` : ''}`;
+}
+
+/**
+ * The night's moves, oldest first: `marks` are the game's, in the order made; `side` is the user's (0
+ * home, 1 away). `slotName` names the tactic slot some tactics are, if any (see slotMatcher): a change
+ * onto one from anything else reads as the switch it was ("Switched to Tactic B (Plan B)").
+ */
+export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string, slotName?: (t: Tactics) => string | null): CoachMove[] {
   const out: CoachMove[] = [];
+  // the slot the game tipped off with: the tactics the first change replaced
+  const first = marks.find((m) => m.op.op === 'tactics' && m.before);
+  const tip = first?.before && slotName ? slotName(first.before) : null;
   const nextOf = (i: number, kind: LiveOp['op']) => marks.slice(i + 1).find((m) => m.op.op === kind)?.log ?? logs.length;
   const prevOf = (i: number, kind: LiveOp['op']) =>
     marks
@@ -132,10 +167,14 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
     if (m.op.op === 'tactics' && m.before) {
       const after = m.op.args.tactics;
       const aim = aimOf(m.before, after);
+      // (back onto the slot the game tipped off with from changes made on it is "Reset to game plan", not a switch)
+      const to = slotName?.(after);
+      const from = slotName?.(m.before) ?? null;
+      const switched = !!to && to !== from && (from !== null || to !== tip);
       out.push({
         kind: 'tactics',
         ...at,
-        text: moveText(m.before, after, nameOf),
+        text: switched ? `Switched to ${to}` : moveText(m.before, after, nameOf),
         end: aim.end,
         ...(m.op.args.staff ? { by: 'staff' as const } : {}),
         ...(aim.pid !== undefined ? { pid: aim.pid } : {}),

@@ -45,6 +45,10 @@ import { SkipSheet } from '../live/SkipSheet';
 import { useLiveGame } from '../live/useLiveGame';
 import { useBugHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
+import { Touchline } from '../live/Touchline';
+import { liveOpt, liveSlots, tipSlot } from '../live/familiar';
+import { slotMatcher, slotMoveName } from '../../core/analysis/moves';
+import type { Tactics } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
@@ -58,7 +62,7 @@ export default function Live() {
   const [statsTab, setStatsTab] = useState<'box' | 'pbp'>('box');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
-  const { applyTactics, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
+  const { applyTactics, switchSlot, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
   const setBugEl = useBugHeight();
   const conRef = useRef<HTMLDivElement>(null);
 
@@ -70,12 +74,22 @@ export default function Live() {
     [game, s.tick],
   );
   const pills = useMemo(() => (game && view && tactics && !over ? quickPills(view, game.userSide, tactics, game.planned, nameOf) : []), [game, view, tactics, over, nameOf]);
-  // the night's moves as the court has drawn the game, each with what it has done since
+  // the coach's three tactics as tonight plays them, each with the team's familiarity with it, and the one in play
+  const slots = useMemo(() => (game && tactics ? liveSlots(league, game, tactics) : null), [league, game, tactics]);
+  // the night's moves as the court has drawn the game, each with what it has done since (a switch of tactic named as one)
+  const slotName = useMemo(() => {
+    if (!game) return undefined;
+    const match = slotMatcher(league, game.game);
+    return (t: Tactics) => {
+      const i = match(t);
+      return i === null ? null : slotMoveName(league, i);
+    };
+  }, [league, game]);
   const moves = useMemo(
-    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf) : []),
+    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf, slotName) : []),
     // (the marks grow with every move: tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [game, view, s.tick, nameOf],
+    [game, view, s.tick, nameOf, slotName],
   );
   const assistant = useMemo(() => leadAssistant(league), [league]);
 
@@ -234,6 +248,22 @@ export default function Live() {
   };
   const dismiss = (n: StaffNote) => s.setDismissed((d) => [...d, n.id]);
   const changed = offPlan(tactics, game.planned) ? changesLine(screenChanges(game.planned, tactics, nameOf).slice(0, 3)) : '';
+  // the touchline: your three tactics, the mentality and (in Every setting) the shape, with what the team knows of each
+  const famOf = (key: string) => liveOpt(game, key);
+  const touchline = (shape: boolean) =>
+    slots && (
+      <Touchline
+        team={league.teams[league.userTid]}
+        slots={slots.slots}
+        cur={slots.cur}
+        onSwitch={switchSlot}
+        tactics={tactics}
+        planned={game.planned}
+        apply={applyTactics}
+        famOf={famOf}
+        shape={shape}
+      />
+    );
 
   const common = {
     league,
@@ -305,6 +335,8 @@ export default function Live() {
           onPlayer={pickPlayer}
           onAll={() => s.setClipOpen(true)}
           abbrevs={abbrevs}
+          touchline={touchline(false)}
+          famOf={famOf}
         />
       );
     if (cview === 'lineup')
@@ -477,6 +509,9 @@ export default function Live() {
             oppOn={sim.T[1 - userSide].on.map((p) => p.pid)}
             nameOf={nameOf}
             q={view.q}
+            touchline={touchline(true)}
+            famOf={famOf}
+            away={!!slots && slots.cur !== tipSlot(league, game)}
           />
         )}
       </Sheet>

@@ -1,5 +1,6 @@
 // Today: what needs you now. The first screen after every sim, short enough to read at a glance:
-// the next game (or where the offseason stands), the decisions waiting, the staff's top advice, the
+// the next game (or where the offseason stands), practice between games (the focus, and what the team
+// knows of its system when it's short), the decisions waiting, the staff's top advice, the
 // owner when the seat is warm, the standings around you, your last results and new mail. Anything
 // with more to it is one tap away on its own screen; nothing here repeats something else here.
 import { useState } from 'react';
@@ -20,6 +21,7 @@ import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { NextGameSlab, PhaseCard, nextGame } from './NextGame';
+import { PracticeCard } from './Practice';
 import { MessageRow, MessageSheet, decisionId, markRead, needsYou } from './messages';
 import './today.css';
 import { useForecast } from '../useForecast';
@@ -50,7 +52,8 @@ export default function Today() {
   const full = useLeagueMemo(() => assistantFeed(league), [league]);
   const opp = g ? (g.home === league.userTid ? g.away : g.home) : undefined;
   const noPlan = opp !== undefined && full.some((c) => c.id === `plan:${opp}`);
-  const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}`);
+  // (and what the team knows of its system to the practice card, which carries the focus that answers it)
+  const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}` && !(g && c.id.startsWith('alert:fam-')));
   const forecast = useForecast(league);
   const js = useLeagueMemo(() => jobSecurity(league, forecast), [league, forecast]);
   const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
@@ -63,6 +66,8 @@ export default function Today() {
   return (
     <main className="page td-page">
       {g ? <NextGameSlab league={league} g={g} noPlan={noPlan} /> : <PhaseCard league={league} linked={items.map((i) => i.to)} />}
+
+      {g && <PracticeCard league={league} />}
 
       {(items.length > 0 || hidden) && (
         <Section

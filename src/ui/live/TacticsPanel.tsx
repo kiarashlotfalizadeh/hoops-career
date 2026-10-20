@@ -6,6 +6,7 @@ import { Chips, Help, Levels, Segmented, Slider, Tag, Toggle } from '../componen
 import { Term } from '../components/Glossary';
 import type { Pill } from './pills';
 import { changesLine, screenChanges } from '../tactics/changes';
+import { OPT, famSuffix } from './familiar';
 
 /** Changes listed before "N more". */
 const CHANGES_SHOWN = 3;
@@ -21,8 +22,10 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
 }
 
 /**
- * Every setting, the sheet under the Game plan view: tonight's game plan, what's changed since the tip (in the Tactics
- * screen's words) and the way back to it, a short row of quick changes, then every team-wide lever (defense, offense, the late game), and whether tonight's
+ * Every setting, the sheet under the Game plan view: the touchline (your three tactics, the mentality,
+ * the shape), tonight's game plan, what's changed since the tip (in the Tactics screen's words) and the
+ * way back to it, a short row of quick changes, then every team-wide lever (defense, offense, the late
+ * game), each discrete option with the team's familiarity when it isn't fluid, and whether tonight's
  * changes stay after the game. Player-by-player orders (matchups, a defender's instructions, a
  * Hack-a on one man) live on each player's sheet. Every change goes through the live game.
  */
@@ -39,7 +42,16 @@ export function TacticsPanel({
   oppOn,
   nameOf,
   q,
+  touchline,
+  famOf = () => 100,
+  away = false,
 }: {
+  /** The touchline (see Touchline.tsx), at the top. */
+  touchline?: ReactNode;
+  /** How well the team knows a discrete option ('scheme:zone23'), as tonight plays it. */
+  famOf?: (key: string) => number;
+  /** The team plays another tactic than the one the game tipped off with (its changes aren't kept). */
+  away?: boolean;
   /** What the team plays now. */
   tactics: Tactics;
   apply: (fn: (t: Tactics) => void) => void;
@@ -64,8 +76,11 @@ export function TacticsPanel({
   const set = apply;
   // what's changed since the tip, named as the Tactics screen names each control
   const changed = offPlan ? screenChanges(planned, t, nameOf) : [];
+  /** An option's label with the team's familiarity beside it when it isn't fluid ("2-3 Zone · 35%"). */
+  const fam = (label: string, key: string | null) => (key ? `${label}${famSuffix(famOf(key))}` : label);
   return (
     <div className="lv-tp">
+      {touchline}
       {(plan.length > 0 || offPlan) && (
         <div className="lv-tp-top">
           {plan.length > 0 && (
@@ -133,8 +148,9 @@ export function TacticsPanel({
               label="Base scheme"
               value={t.defense.scheme}
               onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
-              options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
+              options={ALL_SCHEMES.map((k) => ({ id: k, label: fam(SCHEME_META[k].label, OPT.scheme(k)) }))}
             />
+            <div className="tiny dim lv-fam-key">A figure beside an option is how familiar the team is with it: below fluid, it plays a step slow.</div>
             {n > 0 && (
               <>
                 <div className="over" style={{ marginTop: 6 }}>
@@ -177,7 +193,7 @@ export function TacticsPanel({
               label="Pick-and-roll coverage"
               value={t.defense.pnr}
               onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
-              options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
+              options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: fam(COVERAGE_META[k].label, OPT.pnr(k)) }))}
             />
           </Field>
           <Levels label="Help defense" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} />
@@ -190,7 +206,7 @@ export function TacticsPanel({
               label="Full-court press"
               value={t.defense.press}
               onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
-              options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
+              options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: fam(PRESS_META[k].label, OPT.press(k)) }))}
             />
           </Field>
           <Field label="Star plan">
@@ -304,7 +320,7 @@ export function TacticsPanel({
         label="Keep changes after this game"
         help={
           persist
-            ? "Tonight's changes, before and from now on, are your saved tactics (not tonight's matchups or star target). Off puts them back."
+            ? `Tonight's changes, before and from now on, are your saved tactics (not tonight's matchups or star target). Off puts them back.${away ? " While you play another of your tactics than the one you tipped off with, its changes are tonight's only." : ''}`
             : 'Off: changes last this game only.'
         }
       />

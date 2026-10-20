@@ -1,14 +1,16 @@
 // The staff's debrief after one of the user's games: the verdict (the report's headline), the edges
 // that decided it, how the coach's moves in a live game went, and what to do next time: the
 // one-tap counter for each edge that went against him while his tactics still give it (as a patch,
-// for the plan against this opponent or for good), and a word on each key to the game he missed.
+// for the plan against this opponent or for good), the practice focus when playing a step slow in
+// tactics the team hasn't drilled cost points, and a word on each key to the game he missed.
 // Pure: it reads the stored result and the report built from it.
 
-import type { GameResult, League, TacticsPatch } from '../types';
+import type { GameResult, League, PrepFocus, TacticsPatch } from '../types';
+import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
 import { buildGameReport, type GameReport, type Factor } from './gameReport';
 import { moveVerdict } from './moves';
 import { pick } from './quotes';
-import { impactCounter } from '../ai/advisor';
+import { famReadout, impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
 
 export interface DebriefAdvice {
@@ -21,6 +23,8 @@ export interface DebriefAdvice {
   label?: string;
   /** Game-plan group: it replaces the plan's item in the same group. */
   group?: string;
+  /** A practice focus to switch to between games (one tap, instead of a tactics change). */
+  prep?: PrepFocus;
 }
 
 export interface Debrief {
@@ -69,7 +73,54 @@ const KEY_ADVICE: Record<string, string> = {
 
 /** What a missed key is about, so advice on the same thing isn't given twice (a factor's category, or a tactical effect's topic). */
 const KEY_TOPIC: Record<string, string> = { glass: 'rebounding', ball: 'turnovers', line: 'fouls', crash: 'rebounding', star: 'stars' };
-const IMPACT_TOPIC: Record<string, string> = { 'crash_orb:o': 'rebounding', 'zone_glass:o': 'rebounding' };
+const IMPACT_TOPIC: Record<string, string> = {
+  'crash_orb:o': 'rebounding',
+  'zone_glass:o': 'rebounding',
+  'shape_glass:o': 'rebounding',
+  'shape_glass:d': 'rebounding',
+  'role_poa:d': 'turnovers',
+};
+
+/** The edges a team a step slow in its tactics gives away (see sim/familiarity.ts): practice answers them, not a tactics change. */
+const FAM_KEYS = new Set(['fam_off:d', 'fam_def:o']);
+/** Points playing a step slow has to cost before the staff talks practice. */
+const FAM_COST = 0.8;
+/** At or above this the system itself is learned: a cost came from tonight's plan instead. */
+const SYSTEM_KNOWN = 85;
+
+/**
+ * The staff's word on practice when playing a step slow cost points: the system still being learned
+ * (Tactical drills, and no more changes to it), or a game plan that asked for what the team hadn't
+ * drilled (Opponent prep drills the plan for the game). Null when it cost little.
+ */
+export function practiceAdvice(league: League, cost: number): DebriefAdvice | null {
+  if (cost < FAM_COST) return null;
+  const me = league.userTid;
+  const prep = league.teams[me].prep ?? 'balanced';
+  const r = famReadout(league);
+  const sys = r.overall;
+  const pts = `${cost.toFixed(1)} points`;
+  if (sys >= SYSTEM_KNOWN && !r.risks.length) {
+    // the system is drilled: what wasn't is what tonight changed (the game plan, another tactic)
+    return {
+      id: 'prep-opponent',
+      title: 'Drill the game plan',
+      text: `Playing a step slow cost us ${pts}: tonight we played things we haven't drilled. ${prep === 'opponent' ? 'Opponent prep has the next plan drilled for its game.' : `${PREP_META.opponent.label} drills the next game's plan for that game.`}`,
+      ...(prep !== 'opponent' && { prep: 'opponent' as const, label: PREP_META.opponent.label }),
+    };
+  }
+  const left = gamesTo(sys);
+  return {
+    id: 'prep-system',
+    title: prep === 'system' ? 'Stick with the system' : 'Drill the system',
+    text:
+      `Playing a step slow cost us ${pts}: we're ${Math.round(sys)}% familiar with what we play (${famLabel(sys).toLowerCase()}). ` +
+      (prep === 'system'
+        ? `Keep the drills going and don't change it again${left > 0 ? `: about ${left} game${left === 1 ? '' : 's'} to fluid` : ''}.`
+        : `${PREP_META.system.label} between games build it about twice as fast. Don't change it again until it's learned.`),
+    ...(prep !== 'system' && { prep: 'system' as const, label: PREP_META.system.label }),
+  };
+}
 
 /** A four-factor or star edge's advice row, when its card is already up top: what to do, not the figures again. */
 const DO_TITLE: Partial<Record<Factor['category'], string>> = {
@@ -138,7 +189,21 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const prev = league.games.filter((g) => g.season === res.season && g.gid !== res.gid && g.day < res.day && (g.home.tid === me || g.away.tid === me)).pop();
   const prevRep = prev?.impacts ? buildGameReport(league, prev) : null;
   const saidLast = new Set((prevRep?.factors ?? []).filter((f) => f.key && f.pts <= -0.8).map((f) => f.key!));
+  // playing a step slow (every play of it, the report's rows only show the big ones): one word on
+  // practice for both ends, where the first of them would have gone, or after the fixes
+  const famCostOf = (g: GameResult | undefined) => {
+    const s = g ? (g.home.tid === me ? 0 : 1) : side;
+    return (g?.impacts ?? []).filter((im) => im.t !== s && FAM_KEYS.has(im.key)).reduce((a, im) => a + im.pts, 0);
+  };
+  const famCost = famCostOf(res);
+  const fa = practiceAdvice(league, famCost);
+  // with the focus already the one it asks for, it's said once, not after every game of the stretch
+  const famAdvice = fa && !fa.prep && famCostOf(prev) >= FAM_COST ? null : fa;
   for (const f of report.factors) {
+    if (f.key && FAM_KEYS.has(f.key)) {
+      if (famAdvice && f.pts < 0 && !advice.includes(famAdvice)) advice.push(famAdvice);
+      continue;
+    }
     if (f.pts > -0.8) continue;
     if (f.key && saidLast.has(f.key) && !decided.includes(f)) continue;
     const fix = f.key ? impactCounter(f.key, tactics) : undefined;
@@ -170,6 +235,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       advice.push({ id: `adv-${f.title}`, title: title.replace(/\.$/, ''), text: f.advice });
     }
   }
+  if (famAdvice && !advice.includes(famAdvice)) advice.splice(Math.min(advice.length, 3), 0, famAdvice);
   for (const k of res.keys ?? []) {
     if (k.met !== false || advice.length >= 5) continue;
     const text = KEY_ADVICE[k.id] ?? '';

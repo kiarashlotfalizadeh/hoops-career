@@ -5,7 +5,7 @@ import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, defaultTactics, emptyPatch, namedJunk, tacticsDiff } from '../sim/tactics';
 import { Rng } from '../random';
-import { PLAYER_DEFENSES, SET_IDS, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
+import { DEF_ROLES, PLAYER_DEFENSES, SET_IDS, type DefRole, type DefScheme, type PlayerDefense, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
 /** Tactics with every setting an impact's `uses` reads spread over its range. */
 function randomTactics(rng: Rng): Tactics {
@@ -15,6 +15,10 @@ function randomTactics(rng: Rng): Tactics {
   const pd: Record<number, PlayerDefense> = {};
   for (const pid of [31, 32]) if (rng.chance(0.4)) pd[pid] = rng.pick(PLAYER_DEFENSES);
   if (Object.keys(pd).length) t.defense.playerD = pd;
+  // out-of-possession roles on a couple of your players
+  const roles: Record<number, DefRole> = {};
+  for (const pid of [1, 2]) if (rng.chance(0.5)) roles[pid] = rng.pick(DEF_ROLES);
+  if (Object.keys(roles).length) t.defense.roles = roles;
   if (rng.chance(0.3)) t.offense.huntTarget = 33;
   t.manage.foulToGive = rng.chance(0.5);
   t.offense.actions.motion = rng.int(0, 100);

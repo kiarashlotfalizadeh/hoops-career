@@ -510,3 +510,55 @@
   text-transform: uppercase;
   color: var(--text-dim);
 }
+
+/* ------------------------------------------------------------ practice: the focus and what the team knows */
+.pr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pr-fam,
+.pr-brief {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-fam {
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.pr-meter {
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.pr-meter-k {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.pr-meter-v {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.pr-risk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.pr-risk > .btn {
+  flex: none;
+}
+.pr-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}

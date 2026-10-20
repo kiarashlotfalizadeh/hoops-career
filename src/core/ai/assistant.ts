@@ -1,5 +1,6 @@
 // The assistant: one voice for the staff's advice. Everything the staff would tell the user about
-// his team (the advisor's alerts on fit, lineups, coverages, minutes and wear), his next
+// his team (the advisor's alerts on fit, lineups, coverages, minutes and wear, and on what the team
+// knows of its system, its shape and its defensive roles, with the practice focus), his next
 // opponent, his roster spots and contracts, and the owner's mood comes through this feed as cards
 // of one shape, each tagged with the area it's about so a screen can show its own (Today shows the
 // most urgent). A card can carry a one-tap fix the staff makes (applyFix) and the screen to open.
@@ -17,6 +18,7 @@ import { jobSecurity } from '../league/jobSecurity';
 import { nextOpponent } from '../league/agenda';
 import { Rng, hashString } from '../random';
 import { coachName } from '../teamFactory';
+import { PREP_META } from '../sim/familiarity';
 
 export type AssistantArea = 'team' | 'tactics' | 'games' | 'office' | 'owner';
 
@@ -158,5 +160,8 @@ export function applyFix(league: League, fix: AlertFix): string {
     case 'restB2B':
       if (!t.rotation.restB2B.includes(fix.pid)) t.rotation.restB2B.push(fix.pid);
       return `${playerName(league.players[fix.pid])} rests on back-to-backs.`;
+    case 'prep':
+      t.prep = fix.focus;
+      return `Practice: ${PREP_META[fix.focus].label}, from the next practice day.`;
   }
 }

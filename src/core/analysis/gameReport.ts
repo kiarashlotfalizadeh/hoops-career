@@ -1,7 +1,7 @@
 // Post-game "why" report: turns engine impact tags, four factors, play types, runs and
 // lineups into ranked, plain-language factors with concrete advice.
 
-import type { GameResult, League, PlayerDefense, SetId, TacticImpact, Tactics, TeamBox } from '../types';
+import type { DefRole, GameResult, League, PlayerDefense, SetId, TacticImpact, Tactics, TeamBox } from '../types';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
@@ -30,6 +30,11 @@ interface Tpl {
 }
 
 const dropping = (t: Tactics) => t.defense.scheme === 'man' && t.defense.pnr === 'drop';
+/** Whether the tactics give anyone this out-of-possession role. */
+const hasRole = (t: Tactics, r: DefRole) => Object.values(t.defense.roles ?? {}).includes(r);
+/** A team a step slow in what it plays: the advice for both ends (practice is the fix, not another change). */
+const FAM_ADVICE =
+  'A system the team hasn’t drilled plays a step slow. Stick with it and drill it (Tactical drills, on Today) rather than changing it again, or go back to what the team knows until it’s learned.';
 /** Whether the tactics give this instruction on any of tonight's opponents. */
 const instructs = (t: Tactics, d: PlayerDefense) => Object.values(t.defense.playerD ?? {}).includes(d);
 
@@ -289,6 +294,56 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     cat: 'fouls',
   },
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a-player paid off${w}.` },
+  // familiarity: a unit a step slow in tactics it hasn't drilled (see sim/familiarity.ts)
+  'fam_off:d': {
+    text: (X, Y, w) => `${Y} ran an offense it hasn't learned yet: a step slow, it settled for tougher shots and turned it over more against ${X}${w}.`,
+    advice: FAM_ADVICE,
+  },
+  'fam_def:o': {
+    text: (X, Y, w) => `${X} got cleaner looks against ${possessive(Y)} defense, a step slow in a scheme it hasn't drilled${w}.`,
+    advice: FAM_ADVICE,
+  },
+  // the half-court shape
+  'shape_glass:o': {
+    text: (X) => `${possessive(X)} double post kept two bigs under the glass for second chances.`,
+    advice: 'Against two bigs inside, play your best defensive rebounders and keep bodies back to box out.',
+    cat: 'rebounding',
+  },
+  'shape_glass:d': {
+    text: (X, Y) => `${Y} had nobody near the offensive glass out of the 5-Out, and ${X} cleaned up the misses.`,
+    advice: 'Five-out trades the offensive glass for room to drive: worth it only while the spacing pays (Offense > Shape).',
+    cat: 'rebounding',
+  },
+  'shape_space:o': { text: (X, _Y, w) => `${possessive(X)} half-court shape opened the paint: more room at the rim for drives, cuts and bigs inside${w}.` },
+  'shape_space:d': {
+    text: (X, Y, w) => `${possessive(Y)} half-court shape crowded the paint, and ${X} walled off the rim${w}.`,
+    advice: 'Your shape is costing you room: play the one that suits the five on the floor (Offense > Shape), five-out only with five who can shoot.',
+  },
+  'shape_tov:o': { text: (X, _Y, w) => `${X} took care of the ball out of Horns, every trip starting from a set they know cold${w}.`, cat: 'turnovers' },
+  // out-of-possession roles
+  'role_poa:d': {
+    text: (X, _Y, w) => `${possessive(X)} point-of-attack stopper stayed in front of the ball and forced turnovers${w}.`,
+    advice: 'Against a point-of-attack stopper, start the offense with someone else: more handoffs and off-ball screens, fewer isolations for the man he picks up.',
+  },
+  'role_stopper:d': {
+    text: (X, _Y, w) => `${possessive(X)} wing stopper made every look tough for the scorer he guarded${w}.`,
+    advice: 'Against a wing stopper, run your scorer off screens and handoffs and let others create.',
+  },
+  'role_anchor:d': {
+    text: (X, _Y, w) => `${possessive(X)} rim anchor contested everything at the rim${w}.`,
+    advice: 'Against a rim anchor, pull him out of the paint: more threes, and a big who can shoot so the man he leaves makes him pay.',
+  },
+  'role_anchor:o': {
+    text: (X, Y, w) => `${X} made ${possessive(Y)} rim anchor pay for living in the paint${w}.`,
+    advice: 'The man your rim anchor leaves is making him pay: give the role to a big guarding a non-shooter, or make him a Position Defender (Tactics > Roles).',
+    uses: (t) => hasRole(t, 'anchor'),
+  },
+  'role_roam:d': { text: (X, _Y, w) => `${possessive(X)} roamer left a non-shooter to help, and walled off drives, cuts and rolls${w}.` },
+  'role_roam:o': {
+    text: (X, Y, w) => `${X} found the man ${possessive(Y)} roamer left, open on kick-outs${w}.`,
+    advice: 'Their kick-outs are finding the man your roamer leaves: roam off a player who can’t shoot, or make him a Position Defender (Tactics > Roles).',
+    uses: (t) => hasRole(t, 'roamer'),
+  },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
     advice: 'Hack-a-player only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
@@ -381,6 +436,9 @@ const LEVERS: { what: string; costs: string[]; gains: string[] }[] = [
   { what: 'staying off the glass', costs: ['crash_orb:d'], gains: ['crash_leak:d'] },
   { what: 'doubling', costs: ['double_kick:o'], gains: ['star_double:d'] },
   { what: 'junk defense', costs: ['box_open:o', 'box_beat:o'], gains: ['box_chase:d'] },
+  { what: 'the rim anchor', costs: ['role_anchor:o'], gains: ['role_anchor:d'] },
+  { what: 'the shape', costs: ['shape_space:d', 'shape_glass:d'], gains: ['shape_space:o', 'shape_glass:o', 'shape_tov:o'] },
+  { what: 'the roamer', costs: ['role_roam:o'], gains: ['role_roam:d'] },
 ];
 
 /** Every effect that is a setting's cost, each lever's first cost first. */
