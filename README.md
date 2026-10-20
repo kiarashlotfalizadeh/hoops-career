@@ -122,7 +122,7 @@ npm run data:epm-reweight # move a seed's impact ratings to derive.ts's current 
 npm run data:history     # apply the careers back to 2003-04 to a seed built without them (no recalibration; see below)
 ```
 
-Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches everything on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, commits `src/data/seed.json` to `main` and then runs CI and the Android APK build on it. It also keeps the Basketball Reference pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing, plus the contracts and current rosters, which change all summer and are always fetched again. Its options:
+Or let GitHub do it: run the **Build seed data** workflow (Actions tab → Run workflow). It fetches everything on GitHub's runners, builds and calibrates the seed, verifies the app still builds and passes its tests, commits `src/data/seed.json` to `main` and then runs CI, the Android APK build and the Pages deploy on it. It also keeps the Basketball Reference pages as a tarball on the `data-raw` branch, so later runs only fetch what's missing, plus the contracts and current rosters, which change all summer and are always fetched again. Its options:
 
 - **commit_seed** (on by default): untick it to only build the seed and upload it as the run's `seed` artifact. A seed that differs from the committed one only in its timestamps isn't committed either way.
 - **extras_only**: just refresh the injuries, pick ownership, two-way contracts and schedule in the current seed (no recalibration).
@@ -196,7 +196,7 @@ Visual QA: `node scripts/qa/tour.mjs <devServerUrl> <outDir> [stages]` screensho
   ```
   Then add four repository secrets (Settings → Secrets and variables → Actions): `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`hoops` above) and `ANDROID_KEY_PASSWORD`. Debug APKs are then signed with that key, and `v*` tags also get a signed release APK (`app-release.apk`) on the release. The version code is the workflow's run number, so each build counts as newer than the last.
 - **iOS**: `npm run cap:sync && npx cap open ios` on a Mac with Xcode.
-- **GitHub Pages**: run the _Deploy PWA to Pages_ workflow manually after setting Settings → Pages → Source to "GitHub Actions". It builds for the site's own path (`/<repo>/` for a project site, `/` for a user site or a custom domain). Pages on a private repo needs a paid GitHub plan.
+- **GitHub Pages**: the _Deploy PWA to Pages_ workflow publishes every push to `main` (and runs by hand from the Actions tab), once Settings → Pages → Source is set to "GitHub Actions". It builds for the site's own path (`/<repo>/` for a project site, `/` for a user site or a custom domain). Pages on a private repo needs a paid GitHub plan.
 
 ## Layout
 

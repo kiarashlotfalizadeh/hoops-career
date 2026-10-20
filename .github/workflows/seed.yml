@@ -25,7 +25,7 @@ on:
         default: false
 permissions:
   contents: write
-  actions: write # starts CI and the APK build on a committed seed
+  actions: write # starts CI, the APK build and the Pages deploy on a committed seed
 # two runs would race to push the seed to main and the pages to data-raw
 concurrency:
   group: seed
@@ -108,9 +108,10 @@ jobs:
           auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "$auth" pull --rebase origin main
           git -c "$auth" push origin HEAD:main
-          # a push made with this token starts no workflows: run CI and the APK build on the new seed
+          # a push made with this token starts no workflows: run CI, the APK build and the Pages deploy on the new seed
           gh workflow run ci.yml --ref main --repo "$GITHUB_REPOSITORY"
           gh workflow run android.yml --ref main --repo "$GITHUB_REPOSITORY"
+          gh workflow run pages.yml --ref main --repo "$GITHUB_REPOSITORY"
       - name: Push raw pages to data-raw branch
         if: ${{ !cancelled() && !inputs.extras_only && steps.archive.outcome == 'success' }}
         env:

@@ -1,8 +1,11 @@
-# Publishes the PWA to GitHub Pages. One-time setup: Settings → Pages → Source: "GitHub Actions".
-# (Pages on private repositories needs a paid GitHub plan; otherwise make the repo public
-# or deploy dist/ to any static host.)
+# Publishes the PWA to GitHub Pages on every push to main (and by hand from the Actions tab).
+# One-time setup: Settings → Pages → Source: "GitHub Actions". (Pages on private repositories needs
+# a paid GitHub plan; otherwise make the repo public or deploy dist/ to any static host.)
 name: Deploy PWA to Pages
 on:
+  push:
+    branches: [main]
+  # by hand, and the seed workflow starts it after committing a new seed (a push with its token starts nothing)
   workflow_dispatch:
 permissions:
   contents: read
