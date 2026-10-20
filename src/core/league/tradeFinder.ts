@@ -6,6 +6,7 @@ import { CAP_FOR, contractSeason, standardRoster } from './helpers';
 import { hardCapLine, tradeValue } from './contracts';
 import { capPayroll } from './freeAgency';
 import { capSalary, tradeMatchLimit, untradeable } from './trades';
+import { sellable } from './aiTrades';
 
 // ---------------------------------------------------------------- trade finder
 
@@ -57,11 +58,24 @@ export function valueTier(league: League, p: Player): ValueTier {
 
 export type Availability = 'franchise' | 'block' | null;
 
+const shopCache = new WeakMap<League, { key: string; teams: Map<number, Set<number>> }>();
+
+/** Is his team shopping him (see sellable: what AI teams put up in their own deals and the rumors)? Worked out once a team a day, or after a move. */
+function shopped(league: League, p: Player): boolean {
+  const key = `${league.season}:${league.phase}:${league.day}:${league.nextTxnId ?? 0}`;
+  let hit = shopCache.get(league);
+  if (hit?.key !== key) shopCache.set(league, (hit = { key, teams: new Map() }));
+  let set = hit.teams.get(p.tid);
+  if (!set) hit.teams.set(p.tid, (set = new Set(sellable(league, p.tid).map((x) => x.pid))));
+  return set.has(p.pid);
+}
+
 /**
- * How gettable an AI team's player looks: 'franchise' for a young star it builds around (a
- * franchise-tier player 27 or younger, an All-Star 25 or younger), 'block' for a player it would
- * move (his contract is worth less than nothing, or he's a rebuilder's veteran of 72+ OVR aged
- * 28 or more), null otherwise and for your own players. A label only.
+ * How gettable an AI team's player looks: 'block' for a player it would move (his contract is
+ * worth less than nothing, or his team is shopping him as its own deals do: a rebuilder's or a
+ * fading team's veteran, a star in his last season it can't keep, see sellable), 'franchise' for
+ * a young star it builds around (a franchise-tier player 27 or younger, an All-Star 25 or
+ * younger), null otherwise and for your own players. A label only.
  */
 export function availability(league: League, p: Player): Availability {
   return availabilityAt(league, p, tradeValue(league, p));
@@ -70,11 +84,10 @@ export function availability(league: League, p: Player): Availability {
 /** availability for a player whose neutral trade value is known. */
 function availabilityAt(league: League, p: Player, value: number): Availability {
   if (p.tid < 0 || p.tid === league.userTid || !league.teams[p.tid]) return null;
-  if (value < 0) return 'block';
+  if (value < 0 || shopped(league, p)) return 'block';
   const a = playerAge(p, league.season);
   const tier = tierOf(league, value);
   if ((tier === 'Franchise' && a <= 27) || (tier === 'All-Star' && a <= 25)) return 'franchise';
-  if (league.teams[p.tid].strategy === 'rebuild' && p.ovr >= 72 && a >= 28) return 'block';
   return null;
 }
 

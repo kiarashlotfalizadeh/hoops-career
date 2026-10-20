@@ -137,12 +137,16 @@ function aiTradeOnce(league: League, rng: Rng): boolean {
 
 // ---------------------------------------------------------------- sales: a veteran for youth and picks
 
+/** A retooling team this far under .500 (with 20 games played) is out of it: its veterans are for sale. */
+const FADING = { games: 20, pct: 0.45 };
+
 /**
- * Players a team will shop: a rebuilder's veterans (29 or older, 70+), and its 27- and
- * 28-year-olds outside its two best (a young franchise player stays); a retooling team's 31+
- * outside its three best; and anyone's star (80+, 26 or older) in the last season of his deal who
- * won't extend there, unless his team contends: better to get something for him now. Only players
- * the rules let move.
+ * Players a team will shop: a rebuilder's veterans (28 or older, 70+, its stars too), and its
+ * 27-year-olds outside its two best (a young franchise player stays); a retooling team's 31+
+ * outside its three best, and once it is out of it in season (under .450) every veteran of 30 or
+ * older, its stars included; and anyone's star (80+, 26 or older) in the last season of his deal
+ * who won't extend there, unless his team contends: better to get something for him now. Only
+ * players the rules let move.
  */
 export function sellable(league: League, tid: number): Player[] {
   const t = league.teams[tid];
@@ -150,14 +154,16 @@ export function sellable(league: League, tid: number): Player[] {
   const roster = tradeRoster(league, tid).sort((a, b) => valueScore(league, b) - valueScore(league, a));
   const rank = new Map(roster.map((p, i) => [p.pid, i]));
   const cs = contractSeason(league);
+  const ts = curTeamSeason(league, tid);
+  const fading = league.phase === 'regular' && ts.won + ts.lost >= FADING.games && winPct(ts) < FADING.pct;
   return roster.filter((p) => {
     if (untradeable(league, p) || p.ovr < 70) return false;
     const a = age(league, p);
     const r = rank.get(p.pid)!;
     const leaving = p.ovr >= 80 && a >= 26 && contractExp(p.contract) === cs && !p.contract.next && !!extensionRefusal(league, p);
     if (leaving) return true;
-    if (t.strategy === 'rebuild') return a >= 29 || (a >= 27 && r >= 2);
-    return a >= 31 && r >= 3;
+    if (t.strategy === 'rebuild') return a >= 28 || (a >= 27 && r >= 2);
+    return (a >= 31 && r >= 3) || (fading && a >= 30);
   });
 }
 
@@ -224,21 +230,26 @@ export function onTheBlock(league: League, max = 3): BlockRumor[] {
   });
 }
 
+/** A player this good is worth a buyer's third-best player (see aiPackage). */
+const STAR_TARGET = 85;
+
 /**
  * The buyer's offer for one player: salary that matches first (without sending an over-the-cap
  * seller more than it can take back, or taking a hard-capped buyer past its apron), then its two
  * most valuable young players and picks from the cheapest up (three at most, so better ones
  * replace the cheapest; two firsts at most) until the seller agrees; null unless both teams sign
- * off and the rules allow it. The buyer's three best players are off the table, and it keeps 13 in
- * season; up to four of its players go (a 2-for-1 or 3-for-1 consolidates its depth into one
- * better player), the seller waiving its end of the bench to make room (see waiveForTrade).
+ * off and the rules allow it. The buyer's three best players are off the table (its two best for
+ * a star, 85+), and it keeps 13 in season; up to four of its players go (a 2-for-1 or 3-for-1
+ * consolidates its depth into one better player), the seller waiving its end of the bench to make
+ * room (see waiveForTrade).
  */
 export function aiPackage(league: League, buyer: number, seller: number, vet: Player): TradeOffer | null {
   const sal = (p: Player) => capSalary(league, p.pid);
   // nothing the rules hold back: a recent signing, or an asset the seller traded away this season
   const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && untradeable(league, a));
   const roster = tradeRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
-  const avail = roster.slice(3).filter((p) => p.ovr < vet.ovr && movable(p));
+  // (for a star, 85+, only its two best: a contender gives up its third-best player to land one)
+  const avail = roster.slice(vet.ovr >= STAR_TARGET ? 2 : 3).filter((p) => p.ovr < vet.ovr && movable(p));
   // the buyer keeps 13 in season; the seller waives to make room for what comes back
   const maxPkg = inSeason(league) ? Math.min(4, roster.length - CAP.rosterMin + 1) : 4;
   if (maxPkg < 1) return null;

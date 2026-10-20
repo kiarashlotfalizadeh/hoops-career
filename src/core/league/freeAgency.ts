@@ -346,7 +346,7 @@ function aiSheetTerms(league: League, t: Team, p: Player, season: number): { amo
  * One AI team's shot at the market: the best fit it can pay (cap space, an exception or the
  * minimum). A full roster only adds a clearly better player than the one he'd displace. A
  * restricted free agent gets an offer sheet instead of a contract (see rfa.ts): a team is a bit
- * pickier about one his team may match (worth 68+, and 1.5 points off its interest), signs one at
+ * pickier about one his team may match (worth 72+, and 2 points off its interest), signs one at
  * a time, and only while the market leaves his team its full two days to decide.
  */
 function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infinity) {
@@ -360,6 +360,7 @@ function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infin
   const sheetDay = league.faDay + 1;
   const sheets = league.phase === 'freeAgency' && matchDeadline(sheetDay) === sheetDay + MATCH_DAYS - 1 && !pendingSheets(league, t.tid).length;
   let pick: Player | undefined;
+  let pickBird = false;
   let bs = -Infinity;
   // a top free agent weighing the user's offer waits for his decision day (see resolveBids), and
   // one who isn't weighs the AI teams' bids on his own (see aiMarquee)
@@ -375,11 +376,15 @@ function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infin
     // (a young player with upside asking the minimum clears a lower bar)
     const bar = playerAge(p, season) <= 24 && p.pot >= 70 ? 60 : 64;
     if (v < floor || (size >= 13 && v < bar) || (r && v < AI_SHEET_VALUE)) continue;
+    // his old team can bring him back on his Bird rights, over the cap, at a price its budget allows (see birdRoom)
+    let bird = false;
     if (r) {
       if (!aiSheetTerms(league, t, p, season)) continue;
     } else {
       const amount = askingContract(league, p, t.tid).amount;
-      const route = signingRoute(league, t.tid, amount, season, p);
+      const own = seasonTid(p, league.season) === t.tid ? birdRoom(league, p, season) : null;
+      bird = !!own && own.tid === t.tid && amount <= own.room;
+      const route = bird ? 'min' : signingRoute(league, t.tid, amount, season, p);
       // over the cap only a contender pays an exception into the tax; a rebuilder keeps its room
       // for youth (and the dumps it takes picks for), not veterans on real money; and nobody spends
       // its cap space before the top free agents have decided (their first three days)
@@ -391,6 +396,7 @@ function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infin
     if (s > bs) {
       bs = s;
       pick = p;
+      pickBird = bird;
     }
   }
   if (!pick) return;
@@ -401,6 +407,10 @@ function aiSign(league: League, t: Team, rng: Rng, season: number, today = Infin
   if (pick.rfa) {
     const terms = aiSheetTerms(league, t, pick, season)!;
     signOfferSheet(league, pick, t.tid, terms.amount, terms.years, terms.route, sheetDay);
+    return;
+  }
+  if (pickBird) {
+    signPlayer(league, pick, t.tid, ask.amount, ask.years, { start: season, option: aiOption(league, pick, ask.amount, ask.years), bird: true });
     return;
   }
   const route = aiRoute(league, t.tid, ask.amount, season, pick, ask.years)!;
@@ -427,18 +437,20 @@ const marqueeDay = (league: League, p: Player) => 1 + (hashString(`${league.id}:
 const STAR_HOLD = { value: 82, day: 15, floor: 0.6, late: 25 };
 
 /**
- * What his old team would still pay a top free agent (see marqueeFA) to bring him back on his Bird
- * rights, over the cap: what those rights allow (see resignLimit) and its re-signing budget leave
- * (see payrollBudget: a star, or a player who'd be among its three best, counts as core), when it
- * wants him and has the spot. Null for a restricted free agent (his team holds his rights another
- * way) and outside the summer market.
+ * What his old team would still pay a free agent to bring him back on his Bird rights, over the
+ * cap: what those rights allow (see resignLimit) and its re-signing budget leave (see
+ * payrollBudget: a star, or a player who'd be among its three best, counts as core), when it wants
+ * him and has the spot. A top free agent weighs it among his bids (see faInterest); anyone else
+ * signs when his price comes down to it (see aiSign), though a rebuilder doesn't bring back a
+ * veteran of 29 or older that way. Null for a restricted free agent (his team holds his rights
+ * another way) and outside the summer market.
  */
 function birdRoom(league: League, p: Player, season: number): { tid: number; room: number } | null {
   if (league.phase !== 'freeAgency' || p.rfa) return null;
   const old = seasonTid(p, league.season);
   if (old === null || old === league.userTid || releasedBy(league, p, old)) return null;
   const t = league.teams[old];
-  if (!aiWants(league, t, p, season)) return null;
+  if (!aiWants(league, t, p, season) || (t.strategy === 'rebuild' && playerAge(p, season) >= 29 && !marqueeFA(league, p))) return null;
   const v = valueScore(league, p);
   const better = regularRoster(league, old).filter((x) => valueScore(league, x) > v).length;
   const budget = payrollBudget(CAP_FOR(league, season), t, v, { core: v >= STAR_HOLD.value || better < 3, young: playerAge(p, season) <= 28 });
@@ -469,8 +481,8 @@ function aiMarquee(league: League, today: number) {
 /**
  * One day of free agency: AI teams make offers, players accept the best fit, open two-way slots
  * go to young minimum-level players, and unsigned players cut their price every 5 days: by 15%, or
- * down to the most an AI team that would take him could still pay (cap space or an exception, at
- * his interest in that team), on deals of 3 years at most. In season this runs once a week, so every
+ * down to the most an AI team that would take him could still pay (cap space, an exception or his
+ * old team on his Bird rights, at his interest in that team), on deals of 3 years at most. In season this runs once a week, so every
  * call is a price cut.
  */
 export function faDay(league: League, rng: Rng, intensity = 1, today = league.faDay + 1) {
@@ -498,10 +510,10 @@ export function faDay(league: League, rng: Rng, intensity = 1, today = league.fa
     return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
   });
   // what a player asks a team moves with his interest in it, up to 10% either way (see askingContract);
-  // a top free agent's old team can also pay him on his Bird rights (see birdRoom)
+  // his old team can also pay him on his Bird rights (see birdRoom)
   const asks = (tid: number, p: Player, room: number) => room * Math.min(1.1, Math.max(0.9, teamAppeal(league, tid, p)));
   const roomFor = (p: Player) => {
-    const bird = marqueeFA(league, p) ? birdRoom(league, p, season) : null;
+    const bird = birdRoom(league, p, season);
     return Math.max(0, bird ? asks(bird.tid, p, bird.room) : 0, ...buyers.filter((b) => valueScore(league, p) >= b.bar).map((b) => asks(b.t.tid, p, b.room)));
   };
   for (const p of freeAgents(league)) {

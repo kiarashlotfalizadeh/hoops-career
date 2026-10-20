@@ -9,7 +9,7 @@
 
 import type { DraftPick, League, Player, Proposal, Team } from '../types';
 import { Rng, hashString } from '../random';
-import { CAP_FOR, addInbox, andList, contractSeason, fmtDate, playerName, sentence, shortName, standardRoster } from './helpers';
+import { CAP_FOR, addInbox, andList, contractSeason, curTeamSeason, fmtDate, playerName, sentence, shortName, standardRoster } from './helpers';
 import { tradeValue } from './contracts';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { nextPick } from './draft';
@@ -63,13 +63,33 @@ export function proposalError(league: League, p: Proposal): string | null {
   return evaluateTrade(league, p.offer).accept ? null : `The ${league.teams[p.tid].name} have changed their minds.`;
 }
 
+/** An offer whose mail is still unread stands at least this many days more, up to OFFER_MAX_DAYS days after it was made. */
+const UNSEEN_LEFT = STANDS[0];
+/** The longest an offer stands: one the user hasn't seen yet, three weeks after it was made (see holdUnseen). */
+export const OFFER_MAX_DAYS = PITCH_REST;
+
+/**
+ * An offer's days run from when the user could see it: while its mail is unread (a long sim goes
+ * on), it stands at least UNSEEN_LEFT days more, up to OFFER_MAX_DAYS days after it was made; the trade
+ * deadline (or a pick being made) still ends it.
+ */
+function holdUnseen(league: League) {
+  for (const p of openProposals(league)) {
+    if (p.kind === 'pick' || p.season !== league.season) continue;
+    const unread = league.inbox.some((m) => m.proposal === p.id && !m.read);
+    if (unread) p.expires = Math.max(p.expires, Math.min(league.day + UNSEEN_LEFT, p.day + OFFER_MAX_DAYS));
+  }
+}
+
 /**
  * Drop offers that expired or stopped being valid (an asset moved, the deadline passed, the AI's
- * view changed), and untouchables who left the user's team. Daily and at every phase change.
+ * view changed), and untouchables who left the user's team. Daily and at every phase change. An
+ * offer the user hasn't seen yet keeps standing (see holdUnseen).
  */
 export function cleanProposals(league: League) {
   if (league.untouchable) league.untouchable = league.untouchable.filter((pid) => league.players[pid]?.tid === league.userTid);
   if (!league.proposals?.length) return;
+  holdUnseen(league);
   const open = league.proposals;
   const keep = withHoldsMemo(() => open.filter((p) => !proposalError(league, p)));
   if (keep.length !== open.length) league.proposals = keep;
@@ -136,6 +156,9 @@ export function offerSubject(league: League, offer: TradeOffer): string {
 function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposal | null {
   const open = openProposals(league);
   if (open.length >= MAX_OPEN || open.some((p) => p.tid === pitch.tid)) return null;
+  // a player is in one open offer at a time (the one it's about, or a part of its package)
+  const players = (o: TradeOffer) => [...o.a.pids, ...o.b.pids];
+  if (open.some((p) => players(p.offer).some((pid) => players(pitch.offer).includes(pid)))) return null;
   const days = rng.int(STANDS[0], STANDS[1]);
   const p: Proposal = {
     id: league.nextProposalId ?? 1,
@@ -199,6 +222,43 @@ function pitchedLately(league: League, pid: number, pitch: string): boolean {
   return league.inbox.some((m) => m.season === league.season && m.pitch === pitch && league.day - m.day < PITCH_REST);
 }
 
+/** A player's spot on the floor, as a GM talks about it. */
+const spot = (p: Player) => (p.pos === 'PG' || p.pos === 'SG' ? 'guard' : p.pos === 'C' || p.pos === 'PF' ? 'big' : 'wing');
+
+/**
+ * Why a team wants the user's player, in its GM's words: its plan, its record once ten games are in,
+ * and a thin spot he'd fill (fewer than two players at his spot within three points of him). One of
+ * a few lines, picked by a hash of the day and the player, so the same pitch doesn't always read
+ * the same and the league's stream never moves.
+ */
+function buyNote(league: League, t: Team, target: Player): string {
+  const last = shortName(league, target);
+  const ts = curTeamSeason(league, t.tid);
+  const rec = ts.won + ts.lost >= 10 ? `${ts.won}-${ts.lost}` : null;
+  const where = spot(target);
+  const thin = standardRoster(league, t.tid).filter((x) => spot(x) === where && x.ovr >= target.ovr - 3).length < 2;
+  const lines = (
+    t.strategy === 'contend'
+      ? [
+          `We're going for it this season, and ${last} is the piece we're missing.`,
+          rec && ts.won > ts.lost ? `At ${rec} we like our chances, and ${last} makes us better right now.` : `We're built to win now, and ${last} makes us better right away.`,
+          thin && `We need another ${where} for a playoff run, and ${last} is the one we want.`,
+        ]
+      : t.strategy === 'rebuild'
+        ? [
+            `${last} fits our timeline: we're building around young players.`,
+            `${last} is the kind of young player we want to grow with.`,
+            thin && `We're short on young ${where}s, and ${last} is one we'd build around.`,
+          ]
+        : [
+            `${last} would fit right in with what we're building.`,
+            `We're retooling on the fly, and ${last} is the kind of player we want.`,
+            thin && `We're thin at ${where}, and ${last} would fill it.`,
+          ]
+  ).filter((x): x is string => !!x);
+  return lines[hashString(`${league.id}:${league.season}:${league.day}:${target.pid}:note`) % lines.length];
+}
+
 /**
  * An AI team wants one of the user's players (70+, not untouchable) that fits its plan, and offers
  * its best package for him (see packageFor). Two players are tried, each with up to six teams.
@@ -213,14 +273,7 @@ function tryBuy(league: League, rng: Rng): Pitch | null {
     for (const t of rng.shuffle(free(league).filter((x) => fits(league, x, target))).slice(0, 6)) {
       const pkg = packageFor(league, t.tid, { pids: [target.pid], dpids: [] });
       if (!pkg || !fair(league, pkg.offer)) continue;
-      const last = shortName(league, target);
-      const note =
-        t.strategy === 'contend'
-          ? `We're going for it this season, and ${last} is the piece we're missing.`
-          : t.strategy === 'rebuild'
-            ? `${last} fits our timeline: we're building around young players.`
-            : `${last} would fit right in with what we're building.`;
-      return { tid: t.tid, offer: pkg.offer, kind: 'buy', note, pitch: `buy:${target.pid}` };
+      return { tid: t.tid, offer: pkg.offer, kind: 'buy', note: buyNote(league, t, target), pitch: `buy:${target.pid}` };
     }
   }
   return null;

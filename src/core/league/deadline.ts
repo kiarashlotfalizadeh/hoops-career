@@ -57,7 +57,7 @@ function postRumors(league: League) {
   });
 }
 
-/** Deadline day: who is on the block, the offers waiting for the user, and the trades so far. */
+/** Deadline day: who is on the block, the offers waiting for the user (then the mail stops a sim), and the trades so far. */
 function deadlineBriefing(league: League) {
   const block = onTheBlock(league, 3);
   const offers = openProposals(league).length;
@@ -69,6 +69,8 @@ function deadlineBriefing(league: League) {
     `${trades === 0 ? 'No trades' : trades === 1 ? 'One trade' : `${trades} trades`} so far this season.`,
   ];
   addInbox(league, {
+    // (with offers waiting, a long sim stops on deadline day: after it they're gone)
+    important: offers > 0,
     from: 'Assistant GM',
     subject: 'Deadline day',
     body: lines.filter(Boolean).join('\n'),

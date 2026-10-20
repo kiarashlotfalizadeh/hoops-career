@@ -355,9 +355,15 @@ describe('in season', () => {
     const before = off();
     // he looks once a week
     l.day += 6 - (l.day % 7);
+    // a coach his review could fire hears it as big news (it stops a sim); in the grace period, not
+    const veteran = structuredClone(l);
+    veteran.tenureStart = veteran.season - 3;
+    ownerCheckIn(veteran);
+    expect(veteran.inbox.find((m) => m.subject === "We're off pace")?.important).toBe(true);
     ownerCheckIn(l);
     ownerCheckIn(l);
     expect(off()).toBe(1);
+    expect(l.inbox.find((m) => m.subject === "We're off pace")?.important).toBe(false);
     if (before === 0) expect(l.inbox[0].body).toContain(`on course for about ${Math.round(forecast(l)!.teams[U].w)} wins. I expected ${target}`);
     l.day += 7;
     ownerCheckIn(l);

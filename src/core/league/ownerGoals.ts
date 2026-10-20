@@ -13,7 +13,7 @@
 // Nothing here draws from the league's random stream.
 
 import type { League, Player, Team, TeamSeason } from '../types';
-import { maybeUltimatum } from './jobSecurity';
+import { canBeFired, maybeUltimatum } from './jobSecurity';
 import { clamp, hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { playerAge, salaryFor } from '../playerGen';
@@ -663,7 +663,8 @@ export const OFF_PACE = 5;
 /**
  * The owner's in-season mail, once a day of the regular season: goals for a season that has none yet
  * (a save from before them: set quietly from that day, the Owner tab shows them), a word when the team
- * has fallen clearly off pace after PACE_GAMES games (once), and a check-in at the All-Star break
+ * has fallen clearly off pace after PACE_GAMES games (once; important, stopping a sim, only when
+ * this season's review could fire the coach), and a check-in at the All-Star break
  * (once): on track or worried, with the numbers. Both read the season forecast as the screens show it
  * (see leagueForecast), so the numbers he quotes are the ones on Home; for the pace that's a weekly
  * look, and only once the quick projection (the record blended with the roster's expectation) is
@@ -690,7 +691,8 @@ export function ownerCheckIn(league: League) {
   if (pace && wins && wins.status !== 'met' && wins.projected <= line) {
     sent.push('pace');
     addInbox(league, {
-      important: true,
+      // (it stops a sim only when this season's review could cost him his job)
+      important: canBeFired(league),
       from: 'Owner',
       subject: "We're off pace",
       body: `We're ${wins.now}-${since - wins.now}${og.from ? ' since you took over' : ''}, on course for about ${wins.projected} wins. I expected ${wins.goal.target} from this roster. That gap has to close.`,

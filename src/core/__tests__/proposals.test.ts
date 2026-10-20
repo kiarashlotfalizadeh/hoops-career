@@ -180,17 +180,30 @@ describe('AI trade offers', () => {
     expect(l.untouchable).not.toContain(pid);
   });
 
-  it('expire after their last day', () => {
+  it('expire after their last day, counted from when the user could see them', () => {
     const l = season(5);
     const p = waitForOffer(l)!;
     expect(p).toBeDefined();
-    l.day = p.expires;
+    // unseen (its mail unread through a long sim), it keeps standing a few days more, three weeks at most
+    const first = p.expires;
+    l.day = first + 1;
     cleanProposals(l);
     expect(openProposals(l)).toContain(p);
-    l.day = p.expires + 1;
-    expect(proposalError(l, p)).toMatch(/expired/);
+    expect(p.expires).toBeGreaterThan(first);
+    l.day = p.day + 30;
     cleanProposals(l);
     expect(openProposals(l)).not.toContain(p);
+    // seen, it ends on its last day
+    const q = waitForOffer(l, (x) => x.id !== p.id)!;
+    expect(q).toBeDefined();
+    for (const m of l.inbox) m.read = true;
+    l.day = q.expires;
+    cleanProposals(l);
+    expect(openProposals(l)).toContain(q);
+    l.day = q.expires + 1;
+    expect(proposalError(l, q)).toMatch(/expired/);
+    cleanProposals(l);
+    expect(openProposals(l)).not.toContain(q);
   });
 
   it('accepting one goes through; a stale one fails cleanly and changes nothing', () => {
@@ -339,7 +352,8 @@ describe('the trade deadline', () => {
     // $5M past the tax: the deal may not add salary, but it needn't get under the line either
     shape(l, roster[0], 88, 28, vetMin + CAP_FOR(l).luxuryTax + 5_000 - capPayroll(l, B, l.season));
     l.teams[B].mleSeason = l.season;
-    const rumor = onTheBlock(l).find((r) => r.pid === vet.pid);
+    // (every team's top name on the block, not just the three best: others' expiring stars can outrank him)
+    const rumor = onTheBlock(l, 30).find((r) => r.pid === vet.pid);
     expect(rumor?.suitors).toContain(B);
   });
 

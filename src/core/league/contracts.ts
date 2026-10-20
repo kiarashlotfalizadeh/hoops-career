@@ -633,11 +633,13 @@ export function summerRoster(league: League, tid: number): number {
  * (28 or under) up to the tax line; a star worth 86+ up to the second apron, and a young one (28
  * or under) on any team to 10% of the cap past it: a franchise keeps its young star and sheds
  * salary around him later (see dumpDeal).
- * Anyone else: a contender up to a little under the tax line (a starter worth 80+ to the line), a
- * retooling team halfway between cap and tax (80+ a little under the line), a rebuilder under the
- * cap (its veterans past 28 further under), keeping room for the dumps it takes picks for (halfway
- * to the tax for 82+, or 80+ and 28 or under). Re-signing, extensions, qualifying offers and matching offer sheets
- * all budget with it.
+ * Anyone else: a good young player (80+, 28 or under), an asset to keep and trade later rather
+ * than let walk, to the first apron on a contender and the tax line elsewhere; otherwise a
+ * contender up to a little under the tax line (a starter worth 80+ to the line), a retooling team
+ * halfway between cap and tax (80+ a little under the line), a rebuilder under the cap (its
+ * veterans past 28 further under), keeping room for the dumps it takes picks for (halfway to the
+ * tax for 82+). Re-signing, extensions, qualifying offers and matching offer sheets all budget
+ * with it.
  */
 export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number, who: { core: boolean; young: boolean } = { core: false, young: true }): number {
   const star = v >= 86;
@@ -649,9 +651,10 @@ export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: numbe
   }
   const mid = (cap.salaryCap + cap.luxuryTax) / 2;
   const under = cap.luxuryTax - cap.salaryCap * 0.02;
+  if (v >= 80 && who.young) return t.strategy === 'contend' ? cap.firstApron : cap.luxuryTax;
   if (t.strategy === 'contend') return v >= 80 ? cap.luxuryTax : under;
   if (t.strategy === 'retool') return v >= 80 ? under : mid;
-  return v >= 82 || (v >= 80 && who.young) ? mid : cap.salaryCap * (who.young ? 0.95 : 0.85);
+  return v >= 82 ? mid : cap.salaryCap * (who.young ? 0.95 : 0.85);
 }
 
 /** A team's core for its payroll budget (see payrollBudget): its three most valuable players, and any young star (25 or younger, worth 82+). */

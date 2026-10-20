@@ -19,7 +19,7 @@ export function seasonsInCharge(league: League): number {
  * own profile (the user's development and adjustments ratings go with him), the old team goes back to
  * the AI staff, and the new owner starts a fresh evaluation with a new grace period and goals of his
  * own: from that day in season (prorated to the games left; in the postseason, the next round), on
- * opening night in the preseason. Taken over after the season, the job starts with next season, and so
+ * opening night in the preseason. The old job's mail is marked read. Taken over after the season, the job starts with next season, and so
  * do its goals. The coach registry records both moves (see swapJobs).
  */
 export function takeOverTeam(league: League, tid: number) {
@@ -46,6 +46,8 @@ export function takeOverTeam(league: League, tid: number) {
   }
   delete league.proposals;
   delete league.untouchable;
+  // the old job's mail (its extension candidates, camp report, offers) is read: what's unread is the new job's
+  for (const m of league.inbox) m.read = true;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
   league.tenureStart = contractSeason(league);
   // the new owner's goals: from today in season; before opening night, or once the team's season is over, none yet

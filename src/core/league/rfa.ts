@@ -53,9 +53,9 @@ export const RFA_MAX_SERVICE = 3;
 /** AI teams qualify players worth this much (a rotation player) and up. */
 const AI_QUALIFY_VALUE = 66;
 /** AI teams sign restricted free agents worth this much and up to offer sheets: pickier than for unrestricted ones, since his team may match. */
-export const AI_SHEET_VALUE = 68;
+export const AI_SHEET_VALUE = 72;
 /** Points off an AI team's interest in a restricted free agent next to an unrestricted one (see aiSign). */
-export const AI_SHEET_PENALTY = 0.5;
+export const AI_SHEET_PENALTY = 2;
 /** Least trade value (to his team, under its strategy) of the contract an offer sheet would give him for an AI team to match it. */
 const MATCH_VALUE = 2;
 
