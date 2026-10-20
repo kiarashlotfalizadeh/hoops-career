@@ -42,8 +42,12 @@ export function AssetList({
     ...(other.swaps ?? []),
     ...league.draftPicks.filter((d) => d.round === 1 && moving.has(d.dpid) && (d.originalTid === tid || d.originalTid === other.tid)).map((d) => d.season),
   ];
-  const players = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
-  const nameOf = rosterNames(players, { initial: true });
+  const all = teamPlayers(league, tid).sort((a, b) => b.ovr - a.ovr);
+  const nameOf = rosterNames(all, { initial: true });
+  // after the season, players whose deals are up are leaving (re-signed or let go, never traded):
+  // named in one line under the list rather than offered at $0
+  const leaving = all.filter((p) => untradeable(league, p)?.kind === 'expiring');
+  const players = all.filter((p) => !leaving.includes(p));
   // this draft's picks: where they'd land if the season ended today (until the lottery sets the order)
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
   // in the order every pick list uses: by draft, then where each lands
@@ -69,6 +73,7 @@ export function AssetList({
           />
         ))}
       </div>
+      {leaving.length > 0 && <div className="fo-assets-empty">Contracts up, can't be traded: {leaving.map((p) => nameOf(p.pid)).join(', ')}.</div>}
       <div className="list-divider">Draft picks</div>
       {picks.length === 0 ? (
         <div className="fo-assets-empty">No draft picks.</div>
@@ -110,7 +115,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
           <span className="fo-name">{name}</span>
           {p.injury && <span className="fo-flag bad">{outTag(p)}</span>}
           {p.contract.twoWay && <span className="fo-flag">2W</span>}
-          {locked && <span className="fo-flag bad">{{ expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
+          {locked && <span className="fo-flag bad">{p.contract.tenDay ? '10-day' : { expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
         </div>
         <div className="fo-meta fo-wrap">
           {p.pos} · {playerAge(p, league.season)}

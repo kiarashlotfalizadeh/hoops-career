@@ -23,15 +23,17 @@ export const shortSeason = (season: number) => `${String((season - 1) % 100).pad
  * ones whose deals end before it (his rights held until free agency). Two-way deals ride outside
  * the 15.
  */
-export function rosterSpots(league: League, tid = league.userTid): { season: number; signed: number; expiring: number; twoWay: number } {
+export function rosterSpots(league: League, tid = league.userTid): { season: number; signed: number; expiring: number; twoWay: number; hardship: number } {
   const season = capSeason(league);
-  const std = standardRoster(league, tid);
+  // (a hardship 10-day player sits beyond the 15: see tenDay.ts)
+  const all = standardRoster(league, tid);
+  const std = all.filter((p) => !p.contract.tenDay?.hardship);
   const signed = std.filter((p) => contractExp(p.contract) >= season).length;
-  return { season, signed, expiring: std.length - signed, twoWay: twoWayRoster(league, tid).length };
+  return { season, signed, expiring: std.length - signed, twoWay: twoWayRoster(league, tid).length, hardship: all.length - std.length };
 }
 
 /** What a roster count says beside its figure, most pressing first: to cut, open or full, the offseason's limit, the expiring deals, the two-ways. */
-function rosterParts(league: League, r: ReturnType<typeof rosterSpots>): { status: string; max: string; expiring: string; twoWay: string } {
+function rosterParts(league: League, r: ReturnType<typeof rosterSpots>): { status: string; max: string; expiring: string; twoWay: string; hardship: string } {
   const over = r.signed - CAP.rosterMax;
   const max = rosterMaxNow(league);
   return {
@@ -39,12 +41,14 @@ function rosterParts(league: League, r: ReturnType<typeof rosterSpots>): { statu
     max: r.signed + r.expiring >= max && max > CAP.rosterMax ? `${max} max` : '',
     expiring: r.expiring ? `+${r.expiring} expiring` : '',
     twoWay: r.twoWay ? `+${r.twoWay} two-way` : '',
+    hardship: r.hardship ? `+${r.hardship} hardship` : '',
   };
 }
 
 /**
  * Roster spots as every desk counts them (see rosterSpots), against the 15 of opening night: "15/15"
- * over what's most pressing in a figure's short line ("1 to cut", "+3 expiring", "full · +1 two-way").
+ * over what's most pressing in a figure's short line ("1 to cut", "+3 expiring", "full · +1 two-way",
+ * "full · +1 hardship").
  */
 export function rosterFig(league: League, tid = league.userTid): { k: string; v: string; s: string; color?: string } {
   const r = rosterSpots(league, tid);
@@ -56,7 +60,7 @@ export function rosterFig(league: League, tid = league.userTid): { k: string; v:
     v: `${n}/${CAP.rosterMax}`,
     // (short of the 13 only matters in season: the offseason fills it)
     color: n + r.expiring > rosterMaxNow(league) ? 'var(--bad)' : over > 0 || (n < CAP.rosterMin && !isOffseason(league)) ? 'var(--warn)' : undefined,
-    s: over > 0 ? [p.status, p.max].filter(Boolean).join(' · ') : p.expiring || [p.status, p.twoWay].filter(Boolean).join(' · '),
+    s: over > 0 ? [p.status, p.max].filter(Boolean).join(' · ') : p.expiring || [p.status, p.hardship || p.twoWay].filter(Boolean).join(' · '),
   };
 }
 
@@ -67,7 +71,7 @@ export function rosterFig(league: League, tid = league.userTid): { k: string; v:
 export function rosterLine(league: League, tid = league.userTid, label = true): string {
   const f = rosterFig(league, tid);
   const p = rosterParts(league, rosterSpots(league, tid));
-  return `${label ? `${f.k} ` : ''}${[f.v, p.status, p.max, p.expiring, p.twoWay].filter(Boolean).join(' · ')}`;
+  return `${label ? `${f.k} ` : ''}${[f.v, p.status, p.max, p.expiring, p.hardship, p.twoWay].filter(Boolean).join(' · ')}`;
 }
 
 /**

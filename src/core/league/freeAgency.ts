@@ -442,7 +442,10 @@ const marqueeDay = (league: League, p: Player) => 1 + (hashString(`${league.id}:
  * A star (worth 82+) holds his price in the summer: no cut at all before day 15 (space can still
  * open up, and his old team can still bring him back, see faInterest), then 15% a cut down to 60%
  * of his value at most, whatever teams can pay now; from day 25, with the summer's money nearly
- * spent, he takes what is left like anyone (see faDay).
+ * spent, he takes what is left like anyone (see faDay). A star no team could pay 60% of his value
+ * once the marquee days are over doesn't hold: he takes the best money there is (a mid-level from
+ * a contender, as a rule) before it's spent on others, rather than the minimum a month in (80+
+ * free agents signing for about the minimum: 3.1 → 2.6 a summer; 50 seasons a side).
  */
 const STAR_HOLD = { value: 82, day: 15, floor: 0.6, late: 25 };
 
@@ -539,7 +542,10 @@ export function faDay(league: League, rng: Rng, intensity = 1, today = league.fa
     if (p.faDays > 0) continue;
     const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
     const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-    const star = offseason && valueScore(league, p) >= STAR_HOLD.value && league.faDay < STAR_HOLD.late;
+    // (a star nobody could pay most of his value once the first days have passed takes the best
+    // money there is, an exception from a contender as a rule, rather than wait for it to be spent)
+    const room = offseason && league.faDay >= MARQUEE_DAYS ? roomFor(p) : Infinity;
+    const star = offseason && valueScore(league, p) >= STAR_HOLD.value && league.faDay < STAR_HOLD.late && room >= marketSalary(league, p) * STAR_HOLD.floor;
     const cut = !star ? Math.min(ask * 0.85, roomFor(p)) : league.faDay < STAR_HOLD.day ? ask : Math.max(ask * 0.85, marketSalary(league, p) * STAR_HOLD.floor);
     p.asking = { amount: Math.max(min, Math.round(cut / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
     p.faDays = FA_PRICE_CUT_DAYS;

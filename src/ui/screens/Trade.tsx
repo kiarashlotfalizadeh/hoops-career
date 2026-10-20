@@ -222,11 +222,15 @@ export default function Trade() {
         .toast(
           why === 'salary'
             ? `You need to send at least ${money(out + gap)} in salary, and no player (or pair) of yours makes that work.`
-            : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
+            : why === 'theirSalary'
+              ? `${pt.abbrev} can't take back that much salary, and has no contract to send along that makes it work. Send less.`
+              : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
           'bad',
         );
       return;
     }
+    // (their side may add a contract so they can take back your salary)
+    const theirs = r.b.pids.filter((x) => !offer.b.pids.includes(x)).map((pid) => playerName(league.players[pid]));
     const addP = r.a.pids.filter((x) => !offer.a.pids.includes(x));
     const addD = r.a.dpids.filter((x) => !offer.a.dpids.includes(x));
     const addC = (r.a.cash ?? 0) - (offer.a.cash ?? 0);
@@ -241,7 +245,18 @@ export default function Trade() {
       ...(addC > 0 ? [`${moneyExact(addC)} in cash`] : []),
     ];
     setGive(selOf(r.a));
-    useStore.getState().toast(names.length ? `${pt.abbrev} would do it if you add ${names.join(' + ')}.` : `${pt.abbrev} would accept this as is.`, 'good');
+    setGet(selOf(r.b));
+    const match = theirs.length ? `${theirs.join(' + ')} to match salary` : '';
+    useStore
+      .getState()
+      .toast(
+        names.length
+          ? `${pt.abbrev} would do it if you add ${names.join(' + ')}${match ? `, sending ${match}` : ''}.`
+          : match
+            ? `${pt.abbrev} would do it sending ${match}.`
+            : `${pt.abbrev} would accept this as is.`,
+        'good',
+      );
   };
 
   return (

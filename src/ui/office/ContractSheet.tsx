@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Ban, Scale, ShieldCheck, TriangleAlert } from 'lucide-react';
-import type { Player, TalkTerms } from '../../core/types';
+import type { Player, SigningRoute, TalkTerms } from '../../core/types';
 import { FREE_AGENT } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { clamp } from '../../core/random';
@@ -83,10 +83,11 @@ const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
 type OptionChoice = 'none' | 'player' | 'team';
 
 /** The route tag on the cap card: how the signing is paid for. */
-const ROUTE_TAG: Record<string, { label: string; tone: string }> = {
+const ROUTE_TAG: Record<SigningRoute, { label: string; tone: string }> = {
   min: { label: 'Minimum deal', tone: 'good' },
   space: { label: 'Cap space', tone: '' },
   mle: { label: 'Mid-level', tone: 'info' },
+  tmle: { label: 'Taxpayer mid-level', tone: 'info' },
   room: { label: 'Room exception', tone: 'info' },
   bae: { label: 'Bi-annual', tone: 'info' },
 };
@@ -302,9 +303,17 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       {rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
           <b>Roster full ({rosterMax}).</b>{' '}
-          {pendingN > 0
-            ? `Counting ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
-            : 'Release or trade someone from the Office first.'}
+          {pendingN > 0 ? (
+            `Counting ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
+          ) : (
+            <>
+              Release or trade someone first (
+              <Link to="/team?view=contracts" onClick={onClose}>
+                Team → Contracts
+              </Link>
+              ).
+            </>
+          )}
         </Callout>
       )}
       {tooLong && !closed && !rosterBlocked && (
@@ -367,7 +376,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </Callout>
       )}
 
-      {!bidding && !closed && (
+      {/* (a player who takes the minimum on these terms has nothing to talk about) */}
+      {!bidding && !closed && (askAt > minAmt + 1 || !!reply || !!talks?.counter || !!talks?.closed) && (
         <TalkPanel p={p} kind={kind} season={season} amount={amount} years={years} option={option} reply={reply} counterBlocked={counterBlocked} onAcceptCounter={acceptCounter} />
       )}
 

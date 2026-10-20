@@ -43,14 +43,43 @@ function aRosterOver(league: League, o: TradeOffer): boolean {
   return std(o.b.pids) > std(o.a.pids) && roster + held - std(o.a.pids) + std(o.b.pids) > rosterMaxNow(league);
 }
 
-/** Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding side A's players can fix (its salary matching, a full roster)? */
+/**
+ * Is "what would make this work?" worth asking: are the deal's only rule problems ones that adding
+ * players can fix (either side's salary matching: side B adds a contract it would move, side A
+ * players; a full roster on A's side)?
+ */
 export function canMakeWork(league: League, o: TradeOffer): boolean {
-  if (salaryMatchGap(league, o, 'b') > 0) return false;
-  return validateTrade(league, o).length <= (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
+  const n = (salaryMatchGap(league, o, 'a') > 0 ? 1 : 0) + (salaryMatchGap(league, o, 'b') > 0 ? 1 : 0) + (aRosterOver(league, o) ? 1 : 0);
+  return validateTrade(league, o).length <= n;
 }
 
-/** A deal the AI would take, or why none was found: no player (or pair) of A's fixes the salary matching, or not enough value. */
-export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null; why: 'salary' | 'value' };
+/**
+ * A deal the AI would take, or why none was found: no player (or pair) of A's fixes A's salary
+ * matching ('salary'), none of B's fixes B's ('theirSalary'), or not enough value.
+ */
+export type WorkResult = { offer: TradeOffer; why?: undefined } | { offer: null; why: 'salary' | 'theirSalary' | 'value' };
+
+const withB = (offer: TradeOffer, pids: number[]): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids: [...offer.b.pids, ...pids] } });
+
+/**
+ * Side B takes back more salary than matching lets it: the contract (or pair) of its own it would
+ * most like to move that covers the gap, added to what it sends (null when none does). B's
+ * players in the deal already, its untradeable ones and any A traded away this season stay out.
+ */
+function theirFiller(league: League, o: TradeOffer, gap: number): number[] | null {
+  const pool = tradeRoster(league, o.b.tid)
+    .filter((p) => !o.b.pids.includes(p.pid) && !p.contract.twoWay && !untradeable(league, p) && !tradedAwayBy(league, p, o.a.tid))
+    .map((p) => ({ pid: p.pid, sal: capSalary(league, p.pid), v: playerValueFor(league, p, o.b.tid, false) }))
+    .filter((x) => x.sal > 0);
+  const options: { pids: number[]; v: number }[] = [];
+  for (let i = 0; i < pool.length; i++) {
+    if (pool[i].sal >= gap) options.push({ pids: [pool[i].pid], v: pool[i].v });
+    for (let j = i + 1; j < pool.length; j++)
+      if (pool[i].sal < gap && pool[j].sal < gap && pool[i].sal + pool[j].sal >= gap) options.push({ pids: [pool[i].pid, pool[j].pid], v: pool[i].v + pool[j].v });
+  }
+  const fix = options.sort((x, y) => x.v - y.v).find((x) => salaryMatchGap(league, withB(o, x.pids), 'b') === 0 && canMakeWork(league, withB(o, x.pids)));
+  return fix?.pids ?? null;
+}
 
 /**
  * Ask the AI what it would need from side A to accept. When A is over the cap and takes back too
@@ -81,8 +110,15 @@ function cashToClose(league: League, o: TradeOffer, need: number): number | null
 function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
-  const gapA = salaryMatchGap(league, cur, 'a');
   if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
+  // their side first: a contract they'd move that lets them take back what A sends
+  const gapB = salaryMatchGap(league, cur, 'b');
+  if (gapB > 0) {
+    const fill = theirFiller(league, cur, gapB);
+    if (!fill) return { offer: null, why: 'theirSalary' };
+    cur = withB(cur, fill);
+  }
+  const gapA = salaryMatchGap(league, cur, 'a');
   const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
   const off = new Set([...keep, ...(cur.a.tid === league.userTid ? (league.untouchable ?? []) : [])]);
   const spare = () =>
@@ -229,15 +265,15 @@ function findCounters(league: League, offer: TradeOffer, max: number): CounterOf
     .filter((x) => x.v < 0)
     .sort((x, y) => y.v - x.v);
   const take = (p: Player) => `Take ${playerName(p)}'s contract (${money(Math.abs(salaryFor(p, s)))} thru ${seasonLabel(contractExp(p.contract))})`;
-  const withB = (p: Player): TradeOffer => ({ a: offer.a, b: { ...offer.b, pids: [...offer.b.pids, p.pid] } });
+  const plusB = (p: Player): TradeOffer => withB(offer, [p.pid]);
   const n = found.length;
   for (const { p } of bad) {
-    consider(withB(p), 'absorb', take(p));
+    consider(plusB(p), 'absorb', take(p));
     if (found.length > n) break;
   }
   if (found.length === n && bad.length) {
     const worst = bad[bad.length - 1].p;
-    const r = findWork(league, withB(worst));
+    const r = findWork(league, plusB(worst));
     if (r.offer) consider(r.offer, 'absorb', `${take(worst)}, add ${added(offer, r.offer).join(' + ')}`);
   }
 

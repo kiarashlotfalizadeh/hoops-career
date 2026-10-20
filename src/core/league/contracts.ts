@@ -713,6 +713,9 @@ export function aiOption(league: League, p: Player, amount: number, years: numbe
 /** Did team `tid` release (waive or buy out) him this season? Then it can't sign him again until next season. */
 export const releasedBy = (league: League, p: Pick<Player, 'released'>, tid: number) => p.released?.tid === tid && p.released.season === league.season;
 
+/** A minimum or two-way signing makes the league's news only for a player this good (or the user's team): see signPlayer. */
+const NEWS_OVR = 75;
+
 /**
  * `log: false`: the caller logs the move itself (restricted free agency's matches and qualifying
  * offers, 10-day contracts). `option`: a player or team option on the final season (the user's
@@ -768,7 +771,12 @@ export function signPlayer(
   if (!team.rotation.order.includes(p.pid)) team.rotation.order.push(p.pid);
   // a newcomer takes a number nobody there wears (nor has retired) now, not at the next game
   numberTeam(league, tid);
-  if (opts.news !== false) {
+  // the league's news carries the signings worth reading: the user's own, and an AI team's beyond
+  // the minimum or of a player still good (75+); its two-way deals and minimum camp bodies would
+  // bury the summer's real moves (they stay in the team's transaction log when it keeps them)
+  const minimum = opts.twoWay || (!opts.tenDay && p.contract.salaries[0] <= CAP_FOR(league, p.contract.start).vetMin + 10);
+  const notable = tid === league.userTid || prevTid === league.userTid || p.ovr >= NEWS_OVR || !minimum;
+  if (opts.news !== false && notable) {
     const verb = own ? 're-signed with' : opts.twoWay ? 'signed a two-way deal with' : 'signed with';
     addNews(league, {
       kind: 'signing',

@@ -331,17 +331,22 @@ export function aiPackage(league: League, buyer: number, seller: number, vet: Pl
 
 // ---------------------------------------------------------------- salary dumps
 
+/** The least a salary dump that can't get a team under the tax line saves it, as a share of the cap (about $5M). */
+const PARTIAL_DUMP = 0.03;
+
 /**
  * A team over the tax line sheds salary, as the NBA's deadline and summer dumps go: the contract that
- * gets it under the line at the least cost in value (a player outside its eight best; a
- * rebuilder's veteran outside its three best), else its
- * worst contract, to a team that can absorb it (cap room, or a traded player exception that covers
- * it) for nothing back, or failing that for a cheaper player of the taker's that still leaves it
- * under (salary matching allows a small contract to bring back up to twice its salary), with picks
- * attached from the cheapest up until the taker would do it. The giver signs off when the tax it
- * saves is worth what it gives (see moneyCost). The teams nearest the line, which a deal gets
- * under most easily, are likelier to be tried: up to three, each with up to six takers (`only`:
- * that team's dump, see aiTaxDumps).
+ * gets it under the line at the least cost in value (a player outside its eight best; a retooling
+ * team's outside its five best; a rebuilder's veteran outside its three best) to a team that can
+ * absorb it (cap room, or a traded player exception that covers it) for nothing back, or failing
+ * that for a cheaper player of the taker's that still leaves it under and lets the taker match the
+ * salary, with picks attached from the cheapest up until the taker would do it. When no taker can
+ * get it under, or no one contract would, a step toward the line: a contract worth shedding that
+ * saves at least PARTIAL_DUMP of the cap (else its worst contract). The giver signs off when the
+ * tax it saves is worth what it gives (see moneyCost). The teams nearest the line, which a deal
+ * gets under most easily, are likelier to be tried: up to three, each with up to six takers
+ * (`only`: that team's dump, see aiTaxDumps). The partial steps and the matching-aware player back
+ * took season-end taxpayers from 12.2 to 10.6 a season (50 seasons a side).
  */
 function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
   const s = contractSeason(league);
@@ -352,28 +357,44 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
   while (givers.length < 3 && over.length) givers.push(over.splice(rng.weighted(over.map((x) => 1 / (1 + x.over / (cap.salaryCap * 0.05)))), 1)[0]);
   for (const { t, over } of givers) {
     const roster = tradeRoster(league, t.tid).filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p));
-    // what it won't give up to get under: its eight best; a rebuilder only its three best and its
-    // young players (25 or under, worth 70+)
+    // what it won't give up to get under: its eight best; a retooling team its five best; a
+    // rebuilder only its three best and its young players (25 or under, worth 70+)
     const ranked = [...roster].sort((a, b) => valueScore(league, b) - valueScore(league, a));
     const keep = new Set(
-      (t.strategy === 'rebuild' ? ranked.filter((p, i) => i < 3 || (age(league, p) <= 25 && valueScore(league, p) >= 70)) : ranked.slice(0, 8)).map((p) => p.pid),
+      (t.strategy === 'rebuild' ? ranked.filter((p, i) => i < 3 || (age(league, p) <= 25 && valueScore(league, p) >= 70)) : ranked.slice(0, t.strategy === 'retool' ? 5 : 8)).map(
+        (p) => p.pid,
+      ),
     );
     const under = roster.filter((p) => !keep.has(p.pid) && capSalary(league, p.pid) >= over).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-    const bad = under ?? roster.filter((p) => tradeValue(league, p) < 0).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-    if (!bad) continue;
-    const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && !tradedAwayBy(league, bad, x.tid))).slice(0, 6);
-    const sal = capSalary(league, bad.pid);
-    for (const x of takers) {
-      const taker = (o: TradeOffer) => teamDelta(league, o, x.tid) >= 0;
-      const deal = dumpPackage(league, t.tid, x.tid, bad, taker);
-      if (deal && teamDelta(league, deal, t.tid) >= 0) return deal;
-      // for a cheaper player back: the taker's least valuable one whose salary still leaves the giver under the line
-      const back = tradeRoster(league, x.tid)
-        .filter((p) => capSalary(league, p.pid) > 0 && capSalary(league, p.pid) <= sal - over && !untradeable(league, p) && !tradedAwayBy(league, p, t.tid))
-        .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-      if (!back) continue;
-      const shed = dumpPackage(league, t.tid, x.tid, bad, taker, [back]);
-      if (shed && teamDelta(league, shed, t.tid) >= 0) return shed;
+    // a step toward the line: the least valuable contract outside the ones it keeps that a taker
+    // can match while saving at least PARTIAL_DUMP of the cap (about half his salary at most)
+    const step = Math.min(over, cap.salaryCap * PARTIAL_DUMP);
+    const partial = roster.filter((p) => !keep.has(p.pid) && capSalary(league, p.pid) >= step * 2).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
+    const worst = roster.filter((p) => tradeValue(league, p) < 0).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
+    // the contract that gets it under first; if no taker can absorb that, a step closer
+    const tries: { bad: Player; saves: number }[] = [
+      ...(under ? [{ bad: under, saves: over }] : []),
+      ...(partial && (partial !== under || step < over) ? [{ bad: partial, saves: step }] : []),
+    ];
+    if (!tries.length && worst) tries.push({ bad: worst, saves: over });
+    for (const { bad, saves } of tries) {
+      const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && !tradedAwayBy(league, bad, x.tid))).slice(0, 6);
+      const sal = capSalary(league, bad.pid);
+      for (const x of takers) {
+        const taker = (o: TradeOffer) => teamDelta(league, o, x.tid) >= 0;
+        const deal = dumpPackage(league, t.tid, x.tid, bad, taker);
+        if (deal && teamDelta(league, deal, t.tid) >= 0) return deal;
+        // for a cheaper player back: the taker's least valuable one whose salary still leaves the giver
+        // under the line (or a step closer) and lets the taker match the salary it takes in
+        const swap = (b: Player): TradeOffer => ({ a: { tid: x.tid, pids: [b.pid], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: [] } });
+        const back = tradeRoster(league, x.tid)
+          .filter((p) => capSalary(league, p.pid) > 0 && capSalary(league, p.pid) <= sal - saves && !untradeable(league, p) && !tradedAwayBy(league, p, t.tid))
+          .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))
+          .find((p) => salaryMatchGap(league, swap(p), 'a') === 0);
+        if (!back) continue;
+        const shed = dumpPackage(league, t.tid, x.tid, bad, taker, [back]);
+        if (shed && teamDelta(league, shed, t.tid) >= 0) return shed;
+      }
     }
   }
   return null;

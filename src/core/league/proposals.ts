@@ -74,10 +74,13 @@ export const OFFER_MAX_DAYS = PITCH_REST;
  * deadline (or a pick being made) still ends it.
  */
 function holdUnseen(league: League) {
+  // (never past the trade deadline: the offer would read as standing after trading closed)
+  const last = league.phase === 'regular' ? league.tradeDeadlineDay : Infinity;
   for (const p of openProposals(league)) {
     if (p.kind === 'pick' || p.season !== league.season) continue;
     const unread = league.inbox.some((m) => m.proposal === p.id && !m.read);
-    if (unread) p.expires = Math.max(p.expires, Math.min(league.day + UNSEEN_LEFT, p.day + OFFER_MAX_DAYS));
+    if (unread) p.expires = Math.max(p.expires, Math.min(league.day + UNSEEN_LEFT, p.day + OFFER_MAX_DAYS, last));
+    p.expires = Math.min(p.expires, Math.max(last, league.day));
   }
 }
 

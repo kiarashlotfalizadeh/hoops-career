@@ -178,19 +178,24 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
   const om = league.ownerMood;
   const tone = league.fired ? 'bad' : js.off ? 'info' : HEAT_TONE[js.heat];
   // (js.line names the grace period itself when the seat is warm)
-  const graceSaid = !js.off && js.grace > 0 && (js.heat === 'warm' || js.heat === 'hot');
+  // after the season's review the grace left starts with next season
+  const done = isOff(league);
+  const left = done ? js.grace - 1 : js.grace;
+  const graceSaid = !js.off && left > 0 && (js.heat === 'warm' || js.heat === 'hot');
+  const graceText = left > 0 ? ` · he can't fire you ${left === 1 ? (done ? 'next season' : 'this season') : `for ${done ? 'the next ' : ''}${left} seasons`}` : ' · no grace left';
   const tenure = league.fired
     ? null
     : seasonsIn < 1
       ? 'Your tenure starts next season'
-      : `Season ${seasonsIn} in charge${!js.off && !graceSaid ? (js.grace > 0 ? ` · he can't fire you ${js.grace === 1 ? 'this season' : `for ${js.grace} seasons`}` : ' · no grace left') : ''}`;
+      : `Season ${seasonsIn} ${done ? 'done' : 'in charge'}${!js.off && !graceSaid ? graceText : ''}`;
   return (
     <section className={`card fo-seat tone-${tone}`} aria-label={`Job security: ${js.label}, ${js.score} of 100`}>
       <div className="fo-seat-top">
         {!league.fired && <span className="fo-seat-v num">{js.score}</span>}
         <div className="grow">
           <div className="fo-seat-l">{js.label}</div>
-          <div className="over">Job security · out of 100</div>
+          {/* (fired, there's no figure for it to describe) */}
+          <div className="over">{league.fired ? 'Job security' : 'Job security · out of 100'}</div>
         </div>
       </div>
       {!league.fired && <SeatMeter score={js.score} />}

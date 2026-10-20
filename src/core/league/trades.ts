@@ -1210,17 +1210,36 @@ export function executeTrade(league: League, offer: TradeOffer) {
     ...(side.swaps ?? []).map((y) => `the right to swap ${y} firsts`),
     ...((side.cash ?? 0) > 0 ? [`${moneyExact(side.cash!)} in cash`] : []),
   ];
-  // (in words, the teams by name: "Trade: the Raptors send Scottie Barnes and a 2027 1st (TOR) to the Knicks for ...")
-  const list = (side: TradeSide) => andList(desc(side)) || 'nothing';
   addNews(league, {
     kind: 'trade',
-    text: sentence(`Trade: the ${ta.name} send ${list(offer.a)} to the ${tb.name} for ${list(offer.b)}`),
+    text: sentence(`Trade: ${tradeHeadline(ta.name, desc(offer.a), offer.a.pids.length, tb.name, desc(offer.b), offer.b.pids.length)}`),
     tids: [ta.tid, tb.tid],
     pids: [...offer.a.pids, ...offer.b.pids],
   });
   // an AI team over 15 waives its end of the bench (the user's rosters are held to the limit)
   waiveForTrade(league, offer.a.tid);
   waiveForTrade(league, offer.b.tid);
+}
+
+/** "the Hornets'", "the Magic's": a team name in the possessive. */
+const teamPossessive = (name: string) => `the ${name}${name.endsWith('s') ? "'" : "'s"}`;
+
+/**
+ * A trade in words, the teams by name: "the Raptors send Scottie Barnes and a 2027 1st (TOR) to
+ * the Knicks for ...". When one side sends nothing back, it reads as what it is: a salary dump
+ * ("the Timberwolves take Terry Rozier off the Hornets' hands, with a 2028 2nd for it") or picks or
+ * cash bought for nothing ("the Nets get a 2029 2nd from the Kings"). `x` lists what each side sends
+ * (players first), `xPlayers` how many of them are players.
+ */
+export function tradeHeadline(a: string, aList: string[], aPlayers: number, b: string, bList: string[], bPlayers: number): string {
+  const one = (giver: string, list: string[], players: number, taker: string) => {
+    if (!players) return `the ${taker} get ${andList(list)} from the ${giver}`;
+    const extra = list.slice(players);
+    return `the ${taker} take ${andList(list.slice(0, players))} off ${teamPossessive(giver)} hands${extra.length ? `, with ${andList(extra)} for it` : ''}`;
+  };
+  if (aList.length && !bList.length) return one(a, aList, aPlayers, b);
+  if (bList.length && !aList.length) return one(b, bList, bPlayers, a);
+  return `the ${a} send ${andList(aList)} to the ${b} for ${andList(bList)}`;
 }
 
 /**

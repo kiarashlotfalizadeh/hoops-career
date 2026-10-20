@@ -27,7 +27,7 @@ import { Bar, PageHeader, Section, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, payStatus, rosterFig, shortSeason, taxFig } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
@@ -131,10 +131,25 @@ function PhaseCard({ league }: { league: League }) {
   const run = useFlowRunner();
   const tid = league.userTid;
   switch (league.phase) {
-    case 'preseason':
+    case 'preseason': {
+      // the move that fits the roster: an open spot to fill, else a deal to extend, else a trade
+      const open = CAP.rosterMax - rosterSpots(league).signed;
+      const extendable = teamPlayers(league, tid).some((p) => !extensionBlockedReason(league, p));
+      const action =
+        open > 0
+          ? { label: 'Sign free agents', to: '/office/free-agents' }
+          : extendable
+            ? { label: 'Extend players', to: '/office/resign' }
+            : { label: 'Make a trade', to: '/office/trade' };
       return (
-        <Now over="Preseason" title="Opening night is next" sub="Signings, trades and extensions are open." action={{ label: 'Sign free agents', to: '/office/free-agents' }} />
+        <Now
+          over="Preseason"
+          title="Opening night is next"
+          sub={`Signings, trades and extensions are open.${open > 0 ? ` ${plural(open, 'roster spot')} open.` : ''}`}
+          action={action}
+        />
       );
+    }
     case 'regular': {
       const d = league.tradeDeadlineDay - league.day;
       if (d < 0)

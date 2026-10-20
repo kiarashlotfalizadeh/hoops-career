@@ -104,7 +104,7 @@ export function Dock({
   }
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
-  // the helper can fix our side's salary matching, a full roster and the value, nothing else
+  // the helper can fix either side's salary matching, a full roster and the value, nothing else
   const theyreOver = capView.theyreOver;
   const fixable = !ev.accept && capView.workable;
   const abbrev = league.teams[offer.b.tid].abbrev;
@@ -201,7 +201,7 @@ export function Dock({
       )}
       <div className="fo-dock-btns">
         <button className="btn sm grow" disabled={!fixable} onClick={onWork}>
-          {theyreOver ? "They can't absorb that salary" : 'What would make this work?'}
+          {theyreOver && !fixable ? "They can't absorb that salary" : 'What would make this work?'}
         </button>
         <button className={`btn sm ${ev.accept ? 'good' : 'primary'}`} disabled={!ev.ok} onClick={onPropose}>
           <Handshake size={16} /> Propose

@@ -43,6 +43,7 @@ import {
   untradeableReason,
   validateTrade,
   type TradeOffer,
+  tradeHeadline,
 } from '../league/trades';
 import { aiPackage, aiToAiTrade } from '../league/aiTrades';
 import { canMakeWork, makeItWork } from '../league/tradeHelp';
@@ -370,6 +371,28 @@ describe('AI trade valuation', () => {
     expect(evaluateTrade(l, fixed).accept).toBe(true);
   });
 
+  it('"what would make this work?" has them add a contract when they can\'t take back our salary', () => {
+    const l = league(11);
+    l.phase = 'regular';
+    l.teams[AI].strategy = 'retool';
+    const cap = CAP_FOR(l).salaryCap;
+    const ours = shape(l, standardRoster(l, U)[0], 82, 27, 30_000);
+    const theirs = shape(l, standardRoster(l, AI)[0], 66, 27, 3_000);
+    shape(l, standardRoster(l, AI)[1], 70, 31, 22_000);
+    // both teams a little over the cap: our $30M player for their $3M one breaks their matching
+    for (const tid of [U, AI]) l.teams[tid].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap + 5_000 - payroll(l, tid) });
+    const ask = offer([ours.pid], [theirs.pid]);
+    expect(salaryMatchGap(l, ask, 'b')).toBeGreaterThan(0);
+    expect(canMakeWork(l, ask)).toBe(true);
+    const r = makeItWork(l, ask);
+    expect(r.offer).not.toBeNull();
+    expect(r.offer!.b.pids).toContain(theirs.pid);
+    expect(r.offer!.b.pids.length).toBeGreaterThan(1);
+    expect(salaryMatchGap(l, r.offer!, 'b')).toBe(0);
+    expect(validateTrade(l, r.offer!)).toEqual([]);
+    expect(evaluateTrade(l, r.offer!).accept).toBe(true);
+  });
+
   it('"what would make this work?" sends a player when the roster is full or picks fall short', () => {
     const l = league(11);
     l.phase = 'regular';
@@ -676,6 +699,17 @@ describe('AI trade valuation', () => {
   });
 });
 
+describe('trade news', () => {
+  it("reads a one-sided deal as what it is: a dump taken off a team's hands, or picks bought for nothing", () => {
+    expect(tradeHeadline('Hornets', ['Terry Rozier', '2028 2nd'], 1, 'Timberwolves', [], 0)).toBe(
+      "the Timberwolves take Terry Rozier off the Hornets' hands, with 2028 2nd for it",
+    );
+    expect(tradeHeadline('Kings', [], 0, 'Magic', ['Ben Simmons'], 1)).toBe("the Kings take Ben Simmons off the Magic's hands");
+    expect(tradeHeadline('Kings', ['2029 2nd'], 0, 'Nets', [], 0)).toBe('the Nets get 2029 2nd from the Kings');
+    expect(tradeHeadline('Raptors', ['Scottie Barnes'], 1, 'Knicks', ['Mikal Bridges'], 1)).toBe('the Raptors send Scottie Barnes to the Knicks for Mikal Bridges');
+  });
+});
+
 describe('cap holds (T7)', () => {
   it('holds room for expiring players until they are renounced', () => {
     const l = league();
@@ -834,7 +868,7 @@ describe('free agency', () => {
     expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toMatch(/No open roster spot \(21\)/);
   });
 
-  it('a star holds his price for the first two weeks of free agency, then comes down 15% a cut, never below 60% of his value', () => {
+  it('a star holds his price over the first days of free agency, and takes the best money there is when no team could pay most of his value', () => {
     const l = league();
     l.phase = 'freeAgency';
     l.faDay = 0;
@@ -847,10 +881,12 @@ describe('free agency', () => {
     const rng = new Rng(4);
     faDay(l, rng, 0, 1);
     expect(star.asking.amount).toBe(start);
+    // every team over the cap: no one can pay him 60% of his value, so he doesn't wait for the summer's money to be spent
     l.faDay = 15;
     star.faDays = 1;
     faDay(l, rng, 0, 16);
-    expect(star.asking.amount).toBe(Math.round(Math.max(start * 0.85, marketSalary(l, star) * 0.6) / 10) * 10);
+    const now = star.tid === FREE_AGENT ? star.asking!.amount : star.contract.salaries[0];
+    expect(now).toBeLessThan(marketSalary(l, star) * 0.6);
   });
 
   it('cuts prices every 5 days until the market can pay, and the market clears (T1)', () => {

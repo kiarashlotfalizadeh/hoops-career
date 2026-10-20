@@ -100,7 +100,11 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
           ? 'On track with his goals, but your standing from before still weighs on it.'
           : 'On track with his goals.';
   }
-  if (!off && grace > 0 && (h.heat === 'warm' || h.heat === 'hot')) line += ` He can't fire you for ${grace === 1 ? 'this season' : `${grace} seasons`}.`;
+  // (after the season's review, the grace left starts with next season)
+  const reviewed = ['draftLottery', 'draft', 'resign', 'freeAgency'].includes(league.phase);
+  const left = reviewed ? grace - 1 : grace;
+  if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
+    line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}.`;
   return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, standing, projected, grace, ultimatum, off };
 }
 
