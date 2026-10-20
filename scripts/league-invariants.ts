@@ -22,7 +22,7 @@ import * as P from '../src/core/league/proposals';
 import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
-import { ARENA_CAPACITY } from '../src/core/league/finances';
+import { arenaCapacity } from '../src/core/league/finances';
 import * as REC from '../src/core/league/records';
 import type { League, Player } from '../src/core/types';
 
@@ -414,8 +414,9 @@ function checkSeasonEnd() {
   }
   for (const t of L.teams) {
     const ts = H.curTeamSeason(L, t.tid);
-    if (ts.attendance / Math.max(1, ts.homeWon + ts.homeLost) > ARENA_CAPACITY) bad('attendance over capacity', t.abbrev);
+    if (ts.attendance / Math.max(1, ts.homeWon + ts.homeLost) > arenaCapacity(t)) bad('attendance over capacity', t.abbrev);
   }
+  for (const g of L.games) if (g.season === L.season && (g.att ?? 0) > arenaCapacity(L.teams[g.home.tid])) bad('a crowd over capacity', `${g.gid} ${g.att}`);
   // playoff series: every other day at most
   for (const s of L.playoffs) {
     const days = L.schedule

@@ -525,7 +525,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     // championship is the league's event on a neutral floor
     const postseason = g.type !== 'regular';
     if (g.type !== 'cup') {
-      res.att = gameFinances(league, home, true, postseason);
+      res.att = gameFinances(league, home, true, postseason, { opp: away, gid: g.gid });
       gameFinances(league, away, false, postseason);
     }
     updateHype(home, homeWon, playoffs);
