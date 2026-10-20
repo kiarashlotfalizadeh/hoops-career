@@ -77,7 +77,10 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   if (v.what === 'margin') {
     const t = m.after;
     const d = t.us.pts - t.them.pts;
-    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since (${signed(d, 0)})${v.was !== null ? `; ${signed(v.was, 2)} a trip before` : ''}.`;
+    // (the rate before in words: "-0.80 a trip before" read as a figure with no subject)
+    const was =
+      v.was === null ? '' : Math.abs(v.was) < 0.005 ? '; level before' : `; ${v.was > 0 ? 'outscoring them' : 'outscored'} by ${Math.abs(v.was).toFixed(2)} a trip before`;
+    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since (${signed(d, 0)})${was}.`;
   }
   // one of theirs it was aimed at: his points and the trips he finished, since and before
   if (v.what === 'focus' && m.pid !== undefined) {
