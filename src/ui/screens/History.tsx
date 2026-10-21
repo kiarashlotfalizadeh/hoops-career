@@ -1,5 +1,6 @@
-// League → History (/league/history): the seasons and their champions, each franchise's history
-// (?tid=), the record book, the Hall of Fame and the coaches. A season's winners in full are on the
+// League → History (/league/history): the seasons and their champions (the user's titles marked),
+// each franchise's history (?tid=, his seasons with it marked), the record book, the Hall of Fame
+// and the coaches (his row marked). A season's winners in full are on the
 // Awards tab; this is the league's memory.
 import { Fragment, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
@@ -16,6 +17,7 @@ import { CoachesView } from '../league/Coaches';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
 import { slabVars } from '../teamColors';
 import { careerOnRecord } from '../../core/analysis/milestones';
+import { coachCareer, userCoach } from '../../core/league/coaches';
 
 type View = 'seasons' | 'franchise' | 'records' | 'hof' | 'coaches';
 const VIEWS: { id: View; label: string }[] = [
@@ -51,11 +53,20 @@ export default function History() {
 /** Every season that has a champion (or its winners named): who won it, whom they beat, the MVPs. Its awards in full on the Awards tab. */
 function Seasons({ league }: { league: League }) {
   const list = [...league.awards].filter((a) => a.champion !== undefined || a.mvp !== undefined || a.cupWinner !== undefined).sort((a, b) => b.season - a.season);
+  // the user's titles, whichever team he won them with (a team taken over later won its earlier titles under another coach)
+  const mine = useLeagueMemo(() => {
+    const me = userCoach(league);
+    return new Set(
+      me
+        ? coachCareer(league, me, new Map())
+            .lines.filter((l) => l.round === 5)
+            .map((l) => l.season)
+        : [],
+    );
+  }, [league]);
   if (!list.length) {
     return <div className="card empty">No seasons finished yet: each season&apos;s champion and MVPs land here.</div>;
   }
-  // a team taken over later won its earlier titles under another coach
-  const tenure = league.tenureStart ?? league.startSeason;
   const name = (pid?: number) => (pid !== undefined && league.players[pid] ? shortName(league.players[pid]) : undefined);
   return (
     <div className="card flush list">
@@ -67,13 +78,14 @@ function Seasons({ league }: { league: League }) {
           a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
         ].filter(Boolean);
         return (
-          <Link key={a.season} to={`/league/awards?aseason=${a.season}`} className={`lg-yr-row ${a.champion === league.userTid && a.season >= tenure ? 'me' : ''}`}>
+          <Link key={a.season} to={`/league/awards?aseason=${a.season}`} className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}>
             <span className="yr">{seasonLabel(a.season)}</span>
             {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
             <span className="lg-yr-t">
               <span className="nm ellipsis">
                 {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
                 {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
+                {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
               </span>
               {/* each award whole, wrapping between them rather than cutting a name short */}
               {winners.length > 0 && (

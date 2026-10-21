@@ -6,7 +6,7 @@
 // a money goal (a profit from the season's budget, or staying under the luxury tax for a team near
 // the line). Each franchise's owner has a personality of his own (a builder, win-now or frugal), the
 // same every season of a league, which moves the targets and weights a little. In season the goals
-// report their progress (ownerProgress) and the owner checks in at the All-Star break and when the
+// report their progress (ownerProgress) and the owner checks in at the All-Star break (monthly too: legacyPulse.ts) and when the
 // team falls clearly off pace; after the playoffs each goal is graded −1..1 by how far the result beat
 // or missed its target, and the weights make the season's grade (see owner.ts for the running
 // standing and firing). A team that takes over mid-season gets goals from that day, prorated.
@@ -448,7 +448,7 @@ export function setOwnerGoals(league: League, quiet = false) {
     body: [
       og.from ? 'Here is what I expect for the rest of the season:' : 'Here is what I expect from this roster:',
       ...og.goals.map((g) => `${g.title} (${Math.round(g.weight * 100)}% of my review)`),
-      `${who === 'win-now' ? 'I want results.' : who === 'frugal' ? 'Every dollar counts.' : "I'm patient, but I'm watching."} I'll check in at the All-Star break.`,
+      `${who === 'win-now' ? 'I want results.' : who === 'frugal' ? 'Every dollar counts.' : "I'm patient, but I'm watching."} I'll check in once a month.`,
     ].join('\n'),
     tone: 'neutral',
     link: '/office/owner',

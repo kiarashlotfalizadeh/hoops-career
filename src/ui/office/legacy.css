@@ -1,0 +1,403 @@
+/* The coach's career (Career.tsx) and the season's review (SeasonReview.tsx): the profile's job line,
+   the honors cabinet, signature wins, the milestones' timeline, and the review's ceremony. Prefixed
+   fo-lc- (career), fo-cab- (cabinet), fo-tl- (timeline) and fo-rv- (review). */
+
+.fo-lc-rank {
+  color: var(--text-2);
+}
+
+/* the job in a row: the meter's figure in its heat, the owner and the fans */
+.fo-lc-job {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+  --heat: var(--info);
+}
+
+.fo-lc-job.tone-secure {
+  --heat: var(--good);
+}
+
+.fo-lc-job.tone-warm {
+  --heat: var(--warn);
+}
+
+.fo-lc-job.tone-hot {
+  --heat: var(--bad);
+}
+
+.fo-lc-job:active {
+  background: var(--surface);
+}
+
+.fo-lc-job-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 34px;
+  line-height: 1;
+  color: var(--heat);
+}
+
+.fo-lc-job .grow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fo-lc-job-l {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* the latest season's review: a card in that team's colours */
+.fo-lc-review {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 40px;
+  color: #fff;
+  text-decoration: none;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--slab) 88%, #fff 6%), color-mix(in srgb, var(--slab) 70%, #000) 80%);
+  border-color: transparent;
+  --text-dim: rgba(255, 255, 255, 0.78);
+}
+
+.fo-lc-review .over {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.fo-lc-review-h {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.fo-lc-review-go {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -9px;
+}
+
+.fo-lc-review:active {
+  transform: scale(0.99);
+}
+
+/* the cabinet: a tile a piece, three across a phone */
+.fo-cab {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (min-width: 600px) {
+  .fo-cab {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fo-cab-t {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 6px 10px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  text-align: center;
+  --tone: var(--tier-avg);
+  color: var(--tone);
+}
+
+.fo-cab-t.gold {
+  --tone: var(--tier-elite);
+  background: color-mix(in srgb, var(--tier-elite) 10%, var(--raised));
+  border-color: color-mix(in srgb, var(--tier-elite) 40%, var(--line));
+}
+
+.fo-cab-t.coy {
+  --tone: var(--tier-star);
+}
+
+.fo-cab-t.cup,
+.fo-cab-t.conf {
+  --tone: var(--tier-good);
+}
+
+.fo-cab-n {
+  font-size: 12.5px;
+  font-weight: 750;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.fo-cab-s {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.fo-lc-rec {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.fo-lc-ic {
+  flex: none;
+  width: 30px;
+  color: var(--text-dim);
+}
+
+.fo-lc-ic.title {
+  color: var(--tier-elite);
+}
+
+.fo-lc-ic.upset {
+  color: var(--warn);
+}
+
+.fo-lc-ic.series,
+.fo-lc-ic.elimination {
+  color: var(--tier-good);
+}
+
+/* the milestones' timeline: a rail down the left, a dot a milestone, the front pages larger */
+.fo-tl {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.fo-tl-row {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 10px 14px 10px 36px;
+}
+
+.fo-tl-row::before {
+  content: '';
+  position: absolute;
+  left: 19px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--line-2);
+}
+
+.fo-tl-row:first-child::before {
+  top: 18px;
+}
+
+.fo-tl-row:last-child::before {
+  bottom: calc(100% - 18px);
+}
+
+.fo-tl-dot {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--raised);
+  border: 2px solid var(--text-dim);
+}
+
+.fo-tl-row.big .fo-tl-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.fo-tl-head {
+  font-weight: 750;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.fo-tl-row.big .fo-tl-head {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ the review */
+
+/* the sections come in one after another (about 0.9s in all), and not at all with reduced motion */
+.fo-rv-in {
+  animation: fo-rv-in var(--dur) var(--ease-out) both;
+  animation-delay: calc(var(--fo-rv-i, 0) * 90ms);
+}
+
+@keyframes fo-rv-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fo-rv-slab {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fo-rv-head {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.fo-rv-crown {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  color: var(--tier-elite);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 12px;
+}
+
+.fo-rv-slab .statline .v {
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.fo-rv-grade {
+  font-size: 12.5px;
+  font-weight: 750;
+}
+
+.fo-rv-grade.good,
+.fo-goal-v.good {
+  color: var(--good);
+}
+
+.fo-rv-grade.bad,
+.fo-goal-v.bad {
+  color: var(--bad);
+}
+
+.fo-rv-grade.warn,
+.fo-goal-v.warn {
+  color: var(--warn);
+}
+
+.fo-rv-row {
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.fo-rv-row:active {
+  background: var(--surface);
+}
+
+.fo-rv-row + .fo-rv-row,
+.fo-rv-honor + .fo-rv-honor,
+.fo-review .listrow + .listrow {
+  border-top: 1px solid var(--line);
+}
+
+.fo-rv-icon {
+  display: inline-flex;
+  flex: none;
+  width: 34px;
+  justify-content: center;
+  color: var(--warn);
+}
+
+.fo-rv-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fo-rv-k {
+  flex: none;
+  width: 56px;
+}
+
+.fo-rv-gold {
+  flex: none;
+  color: var(--tier-elite);
+}
+
+.fo-rv-star {
+  flex: none;
+  color: var(--tier-star);
+}
+
+.fo-rv-good,
+.fo-rv-rec {
+  flex: none;
+  color: var(--tier-good);
+}
+
+.fo-ms-i {
+  flex: none;
+  color: var(--text-dim);
+}
+
+.fo-ms.big .fo-ms-i {
+  color: var(--accent-text);
+}
+
+.fo-rv-pulse {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fo-rv-key {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  border-radius: 2px;
+  vertical-align: middle;
+  background: var(--accent);
+}
+
+.fo-rv-key.fans {
+  background: var(--tier-good);
+}
+
+.fo-rv-next {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.fo-rv-next-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 44px;
+  line-height: 0.9;
+  color: var(--accent-text);
+}
+
+/* four figures across a phone on the career's slab: a little smaller, so "Playoffs" fits its column */
+.fo-career-slab .statline .v {
+  font-size: 22px;
+}

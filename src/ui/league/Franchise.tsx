@@ -1,6 +1,7 @@
 // A franchise's history, in one place for both of its doors: League → History → Teams (any team,
 // the user's included) and another team's page (its History tab). Its all-time figures, its
-// banners (titles and retired numbers), every season and its leaders.
+// banners (titles and retired numbers), every season (the user's own seasons with it marked) and
+// its leaders.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
@@ -12,6 +13,8 @@ import { rosterNames } from '../stats';
 import { RetiredBanners } from './RetiredBanners';
 import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
+import { userSeasonsWith } from '../../core/league/legacy';
+import './legacy.css';
 import { plural } from '../../core/format';
 
 /** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
@@ -45,6 +48,9 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
   const team = league.teams[tid];
   const seasons = [...team.seasons].sort((a, b) => b.season - a.season);
   const titles = seasons.filter((s) => s.playoffRound === 5);
+  // the seasons the user coached it (a game or its playoff run)
+  const mine = useLeagueMemo(() => userSeasonsWith(league, tid), [league, tid]);
+  const myRec = [...mine.values()].reduce((a, l) => [a[0] + l.won, a[1] + l.lost], [0, 0]);
   return (
     <>
       {(titles.length > 0 || (team.retired?.length ?? 0) > 0) && (
@@ -61,15 +67,27 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
           <RetiredBanners league={league} tid={tid} />
         </Section>
       )}
-      <Section title="Season by season">
+      <Section
+        title="Season by season"
+        right={
+          mine.size > 0 ? (
+            <span className="lg-sec-meta">
+              Yours: {plural(mine.size, 'season')} · {myRec[0]}-{myRec[1]}
+            </span>
+          ) : undefined
+        }
+      >
         <div className="card flush list">
           {seasons.map((s) => (
-            <div key={s.season} className="lg-season">
+            <div key={s.season} className={`lg-season ${mine.has(s.season) ? 'lg-mine' : ''}`}>
               <span className="yr">{seasonLabel(s.season)}</span>
               <span className="rec">
                 {s.won}-{s.lost}
               </span>
-              <span className="sd ellipsis">{s.seed ? `${ordinal(s.seed)} seed` : ''}</span>
+              <span className="sd ellipsis">
+                {mine.has(s.season) && <span className="sr-only">Your season. </span>}
+                {s.seed ? `${ordinal(s.seed)} seed` : ''}
+              </span>
               {/* a season not yet begun is next, not in progress */}
               <OutcomeTag
                 o={

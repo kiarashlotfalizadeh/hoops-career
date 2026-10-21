@@ -1,6 +1,8 @@
 // The owner: the one place for him (Office → Owner). Job security as one meter (see
-// core/league/jobSecurity.ts), his ultimatum when there is one, the season's goals and how each
-// stands, the kind of owner he is, and his past reviews. How he grades is behind the "?".
+// core/league/jobSecurity.ts), his ultimatum when there is one, the pulse (his mood and the fans'
+// through the season, see Pulse.tsx), the season's goals and how each stands, the kind of owner he
+// is, and his past reviews, each opening its season's review (Career). How he grades is behind the "?".
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { TriangleAlert } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -26,6 +28,8 @@ import {
   type GoalStatus,
 } from '../../core/league/ownerGoals';
 import { forecastFor, seatOf } from './seat';
+import { PulseSection } from './Pulse';
+import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Bar, More, PageHeader, Section, Tag } from '../components/ui';
 import { CenterBar, HelpSheet, fmtGrade } from './common';
@@ -56,6 +60,8 @@ export default function Owner() {
       <Seat league={league} js={js} seasonsIn={seasonsIn} />
 
       {js.ultimatum && og && !review && <UltimatumCard league={league} js={js} />}
+
+      <PulseSection league={league} />
 
       {shown && (
         <Section
@@ -111,6 +117,11 @@ export default function Owner() {
               Each goal is graded −100 to +100 against its target (0: met exactly); weighted, they make the season&apos;s grade, which moves your job security.
             </div>
           )}
+          {review && seasonReviewOf(league, review.season) && (
+            <Link to={reviewPath(review.season)} className="card-link">
+              The season in review
+            </Link>
+          )}
           {shown.from && !review && (
             <div className="tiny dim">
               Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
@@ -134,7 +145,7 @@ export default function Owner() {
         <Section title="Past reviews">
           <div className="card flush list">
             {past.map((r, i) => (
-              <div key={`${r.season}-${r.tid}`} className="fo-goal">
+              <PastReview key={`${r.season}-${r.tid}`} league={league} season={r.season}>
                 <div className="fo-goal-h">
                   <span className="bold grow">
                     {seasonLabel(r.season)}
@@ -160,12 +171,23 @@ export default function Owner() {
                       : 'Graded on wins, the playoffs and profit.'}
                   </div>
                 )}
-              </div>
+              </PastReview>
             ))}
           </div>
         </Section>
       )}
     </main>
+  );
+}
+
+/** A past review's row: a link to that season's review in Career when one was kept. */
+function PastReview({ league, season, children }: { league: League; season: number; children: ReactNode }) {
+  return seasonReviewOf(league, season) ? (
+    <Link to={reviewPath(season)} className="fo-goal fo-goal-link">
+      {children}
+    </Link>
+  ) : (
+    <div className="fo-goal">{children}</div>
   );
 }
 

@@ -1,0 +1,13 @@
+/* The user's era in the league's history (Franchise.tsx, History.tsx): his seasons with a franchise
+   and his titles, on his team's tint as his rows are everywhere. */
+
+.lg-season.lg-mine {
+  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  box-shadow: inset 3px 0 0 var(--team-text);
+  --text-dim: var(--text-2);
+}
+
+.lg-yr-you {
+  margin-left: 6px;
+  vertical-align: 1px;
+}

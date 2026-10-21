@@ -1,0 +1,157 @@
+/* The owner's and the fans' pulse (Pulse.tsx): Today's one line, and Office → Owner's moods and chart. */
+
+.fo-pulse {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  row-gap: 2px;
+  min-height: 44px;
+  padding: 8px 12px 8px 14px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.fo-pulse:active {
+  background: var(--surface);
+}
+
+.fo-pulse > .dim {
+  margin-left: auto;
+  flex: none;
+}
+
+.fo-pulse-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.fo-pulse-k {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.fo-pulse-v {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.fo-pulse .tone-good,
+.fo-pulse-card .tone-good {
+  color: var(--good);
+}
+
+.fo-pulse .tone-info,
+.fo-pulse-card .tone-info {
+  color: var(--text);
+}
+
+.fo-pulse .tone-warn,
+.fo-pulse-card .tone-warn {
+  color: var(--warn);
+}
+
+.fo-pulse .tone-bad,
+.fo-pulse-card .tone-bad {
+  color: var(--bad);
+}
+
+.fo-trend {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim);
+}
+
+.fo-trend.up {
+  color: var(--good);
+}
+
+.fo-trend.down {
+  color: var(--bad);
+}
+
+/* a narrow phone: the labels give way before the moods do */
+@media (max-width: 359px) {
+  .fo-pulse-k {
+    display: none;
+  }
+}
+
+.fo-pulse-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fo-pulse-moods {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.fo-pulse-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* the series' swatch beside its name, as the chart draws it */
+.fo-pulse-fig .over i {
+  display: inline-block;
+  width: 10px;
+  height: 3px;
+  margin-right: 2px;
+  vertical-align: middle;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.fo-pulse-fig.fans .over i {
+  background: var(--tier-good);
+}
+
+.fo-pulse-word {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.fo-pulse-chart svg {
+  display: block;
+}
+
+.fo-pulse-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+
+.fo-pulse-line {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+/* a past review that opens its season's review */
+a.fo-goal-link {
+  color: var(--text);
+  text-decoration: none;
+}
+
+a.fo-goal-link:active {
+  background: var(--surface);
+}
