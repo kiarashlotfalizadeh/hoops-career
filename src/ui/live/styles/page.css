@@ -30,6 +30,11 @@
 .lv-stage > :not(canvas) {
   color: #fff;
 }
+/* the plates text sits on over the court: warm ink, see-through enough to keep the floor under them */
+.lv {
+  --lv-plate: color-mix(in srgb, var(--bg) 86%, transparent);
+  --lv-plate-hi: color-mix(in srgb, var(--bg) 94%, transparent);
+}
 /* phones: the scorebug and the court edge to edge, like a broadcast */
 @media (max-width: 599px) {
   .lv .lv-bug,
@@ -46,7 +51,7 @@
   }
   .lv.more-bench .lv-stage .court-cv,
   .lv.more-bench .lv-stage > .live-intro {
-    border-radius: 10px;
+    border-radius: var(--radius);
   }
   /* the lineups on the smaller court: the names and numbers alone, one line each, so Tip off stays in view
      (the season lines are on the bigger court, a tap on "Bigger court" away) */
@@ -67,7 +72,10 @@
   }
   .lv.more-bench .lv-li-team {
     font-size: 12.5px;
-    padding: 2px 10px 3px 6px;
+    padding: 2px 8px 3px;
+  }
+  .lv.more-bench .live-intro .gd-intro-bill {
+    font-size: 18px;
   }
   .lv.more-bench .lv-li-row {
     gap: 5px;
@@ -96,11 +104,11 @@
     width: min(100%, calc((100dvh - var(--top-h) - var(--safe-t) - var(--lv-bug-h, 100px) - var(--lq-h) - var(--safe-b) - var(--lv-dock-min)) * 532 / 494));
   }
   .lv .lv-lb {
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--radius) var(--radius) 0 0;
   }
   .lv-stage .court-cv,
   .lv-stage > .live-intro {
-    border-radius: 0 0 12px 12px;
+    border-radius: 0 0 var(--radius) var(--radius);
   }
   .lv-con {
     padding-top: 6px;

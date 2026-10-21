@@ -45,11 +45,11 @@
   .lv .lv-lb {
     width: auto;
     border: 1px solid var(--line-2);
-    border-radius: 12px;
+    border-radius: var(--radius);
   }
   .lv-stage .court-cv,
   .lv-stage > .live-intro {
-    border-radius: 12px;
+    border-radius: var(--radius);
   }
   .lv-bar {
     grid-area: bar;

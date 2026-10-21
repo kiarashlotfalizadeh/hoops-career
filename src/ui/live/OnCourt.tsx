@@ -55,7 +55,7 @@ export const OnCourt = memo(function OnCourt({
           <span>{info[s].abbrev}</span>
           {mine && <span className="lv-oc-you">You</span>}
           <span className="lv-oc-head-pts" aria-hidden="true">
-            Pts
+            PTS
           </span>
         </div>
         {fives[s].map((pid) => {

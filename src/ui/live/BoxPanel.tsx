@@ -58,7 +58,7 @@ export function BoxPanel({
   const drawnFlow = flow.slice(0, view.flowLen);
   const periods = Math.max(1, Math.min(view.q, flowPeriods.length));
   return (
-    <div className="col" style={{ gap: 12 }}>
+    <div className="lv-bx">
       <Segmented
         tabs
         value={tab}
@@ -163,7 +163,7 @@ export function BoxPanel({
               height={150}
             />
           )}
-          <div className="small dim" style={{ marginTop: 8 }}>
+          <div className="small dim lv-bx-foot">
             Largest leads: {away.abbrev} {res.away.extra.biggestLead}, {home.abbrev} {res.home.extra.biggestLead}.
           </div>
         </Card>
@@ -226,27 +226,22 @@ function ShotsTab({
         ) : (
           <>
             <ShotChart shots={shots} color={color} />
-            <div className="col" style={{ gap: 0, marginTop: 8 }} role="group" aria-label="Shooters: tap one to see only his shots">
-              <div className="row tiny dim upper bold" style={{ padding: '0 4px' }}>
-                <span className="grow">Shooter</span>
-                <span style={{ width: 52, textAlign: 'right' }}>FG</span>
-                <span style={{ width: 52, textAlign: 'right' }}>3P</span>
+            <div className="lv-sh" role="group" aria-label="Shooters: tap one to see only his shots">
+              <div className="lv-sh-h">
+                <span>Shooter</span>
+                <span>FG</span>
+                <span>3P</span>
               </div>
               {rows.map((r) => (
                 <button
                   key={r.pid}
-                  className={`row small ${shooter === r.pid ? 'bold' : ''}`}
-                  style={{ minHeight: 34, padding: '0 4px', borderRadius: 8, background: shooter === r.pid ? 'var(--surface-3)' : undefined, textAlign: 'left' }}
+                  className={`lv-sh-row${shooter === r.pid ? ' on' : ''}`}
                   aria-pressed={shooter === r.pid}
                   onClick={() => setShooter(shooter === r.pid ? null : r.pid)}
                 >
                   <span className="grow ellipsis">{nameOf(r.pid)}</span>
-                  <span className="num" style={{ width: 52, textAlign: 'right' }}>
-                    {madeAtt(r.fgm, r.fga)}
-                  </span>
-                  <span className="num dim2" style={{ width: 52, textAlign: 'right' }}>
-                    {madeAtt(r.tpm, r.tpa)}
-                  </span>
+                  <span className="num">{madeAtt(r.fgm, r.fga)}</span>
+                  <span className="num dim2">{madeAtt(r.tpm, r.tpa)}</span>
                 </button>
               ))}
             </div>
@@ -302,7 +297,7 @@ function WinProbCard({
             label={`${me} win probability over the game so far: ${wpText(mine(series[0].wp))} at tip-off, ${wpText(mine(series[series.length - 1].wp))} now`}
             height={130}
           />
-          <div className="small dim" style={{ marginTop: 8 }}>
+          <div className="small dim lv-bx-foot">
             {me} {wpText(mine(series[series.length - 1].wp))} to win now, {wpText(mine(series[0].wp))} at tip-off.
           </div>
         </>

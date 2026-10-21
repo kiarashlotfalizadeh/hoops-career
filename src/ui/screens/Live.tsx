@@ -480,7 +480,7 @@ export default function Live() {
         )}
         {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side); after
             the playback controls, so clutch time's offer can step down under them */}
-        {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? '#e8edf5' : identityColor(home.colors)} clutch={clutch} />}
+        {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? 'var(--accent)' : identityColor(home.colors)} clutch={clutch} />}
         {!s.intro && !atBreak && s.call && <CallOut ev={s.call} kit={callKit} />}
         {!s.intro && !atBreak && s.crowdLine && !offer && <CrowdLine ev={s.crowdLine} level={crowd} />}
         {offer && !atBreak && (

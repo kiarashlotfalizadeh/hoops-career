@@ -98,6 +98,8 @@ export function ScoreBug({
   // once they put the other team in the bonus: it shoots on every foul from here)
   const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean) => {
     const look = looks[isHome ? 0 : 1];
+    // (the side behind reads a shade quieter, as a broadcast's bug has it)
+    const behind = pts < (isHome ? score[1] : score[0]);
     return (
       <div className={`lv-lb-side${isHome ? ' home' : ''}`} style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
         <div className="lv-lb-id">
@@ -111,7 +113,7 @@ export function ScoreBug({
             </span>
           </span>
         </div>
-        <span className="lv-lb-score num" aria-hidden="true">
+        <span className={`lv-lb-score num${behind ? ' behind' : ''}`} aria-hidden="true">
           {pts}
         </span>
       </div>
@@ -125,7 +127,7 @@ export function ScoreBug({
           <button type="button" className="lv-lb-leave" onClick={onLeave} aria-label="Leave the game. It waits here: resume it from Continue.">
             <ChevronLeft size={14} aria-hidden="true" /> Leave
           </button>
-          <span className="ellipsis">{context ?? 'Live'}</span>
+          <span className={`ellipsis${context ? '' : ' lv-lb-live'}`}>{context ?? 'Live'}</span>
         </div>
       ) : (
         context && <div className="lv-lb-ctx ellipsis">{context}</div>

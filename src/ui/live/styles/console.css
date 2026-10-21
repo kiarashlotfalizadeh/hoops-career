@@ -30,15 +30,13 @@
   background: var(--bg);
   box-shadow: 0 5px 6px var(--bg);
   color: var(--text-dim);
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 620;
 }
 .lv-grab::before {
   content: '';
-  width: 34px;
-  height: 4px;
+  width: 28px;
+  height: 3px;
   border-radius: 2px;
   background: var(--line-3);
 }
@@ -63,11 +61,11 @@
   bottom: 0;
   z-index: 40;
   padding: 0 max(6px, var(--safe-r)) var(--safe-b) max(6px, var(--safe-l));
-  background: rgba(11, 15, 21, 0.96);
-  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter: blur(16px) saturate(150%);
-  -webkit-backdrop-filter: blur(16px) saturate(150%);
-  border-top: 1px solid var(--line);
+  background: rgba(13, 12, 10, 0.92);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+  border-top: 1px solid var(--line-2);
 }
 .lv-bb {
   max-width: 640px;
@@ -76,7 +74,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 .lv-bb.stopped {
   grid-template-columns: minmax(0, 1.6fr) minmax(0, 4fr);
@@ -88,28 +86,45 @@
 }
 .lv-bb-btn {
   position: relative;
-  height: 54px;
+  height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  border-radius: 10px;
+  gap: 5px;
+  border-radius: var(--radius-md);
   color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 620;
+  transition:
+    color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
 }
 .lv-bb-btn.on {
   color: var(--text);
+  font-weight: 720;
 }
-.lv-bb-btn.on .lv-bb-ic {
-  color: var(--accent-text);
+.lv-bb-btn.on .lv-bb-ic svg {
+  stroke-width: 2.3;
+}
+/* the view that's on: a short paper rule along the bar's top edge, as the tab bar has it */
+.lv-bb-views .lv-bb-btn.on::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 22px;
+  height: 2px;
+  margin-left: -11px;
+  background: var(--text);
 }
 .lv-bb-btn:active:not(:disabled) {
   background: var(--surface-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-bb-btn:hover:not(:disabled):not(.on) {
+    color: var(--text-2);
+  }
 }
 .lv-bb-btn:disabled {
   opacity: 0.4;
@@ -126,65 +141,71 @@
 /* the timeout: its own block, the ones left on it */
 .lv-bb-to {
   background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2);
   color: var(--text-2);
 }
 .lv-bb-to.on {
-  color: var(--text);
-}
-.lv-bb-to.on .lv-bb-ic {
-  color: var(--accent-text);
+  background: var(--accent);
+  box-shadow: none;
+  color: var(--accent-ink);
 }
 .lv-bb-to.on:disabled {
   opacity: 1;
 }
 .lv-bb-n {
   position: absolute;
-  top: -6px;
-  right: -12px;
-  min-width: 17px;
-  height: 17px;
+  top: -5px;
+  right: -13px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 4px;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--surface-3);
   color: var(--text);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 17px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 11.5px;
+  font-weight: 720;
+  line-height: 16px;
 }
+.lv-bb-to.on .lv-bb-n {
+  background: var(--accent-ink);
+  color: var(--accent);
+}
+/* the staff's calls waiting on you: the brand's count, as the bell has it */
 .lv-bb-badge {
   position: absolute;
   top: -6px;
   right: -11px;
-  min-width: 17px;
-  height: 17px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 4px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 17px;
-  box-shadow: 0 0 0 2px var(--bg-2);
-  animation: lv-up 0.3s ease;
+  border-radius: 8px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 760;
+  font-stretch: 85%;
+  line-height: 16px;
+  box-shadow: 0 0 0 2px var(--bg);
+  animation: lv-up 0.3s var(--ease-out);
 }
-/* at a stop: the way on, in the brand's colour */
+/* at a stop: the way on, paper on ink */
 .lv-bb-go {
   height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 12px;
+  gap: 7px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
   background: var(--accent);
   color: var(--accent-ink);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-size: 15px;
+  font-weight: 700;
   white-space: nowrap;
-  animation: lv-up 0.3s ease;
+  animation: lv-up 0.3s var(--ease-out);
+  transition: transform var(--dur-fast) ease;
 }
 .lv-bb-go:active {
   transform: scale(0.97);
@@ -211,18 +232,28 @@
   flex-direction: column;
   gap: 2px;
   width: 100%;
-  padding: 9px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
-  background: var(--raised);
+  padding: 11px 0;
+  border-top: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line);
   text-align: left;
+  transition: background var(--dur-fast) ease;
 }
 .lv-watch:active {
   background: var(--surface);
 }
 .lv-watch-n {
-  font-size: 15px;
-  font-weight: 750;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 16px;
+  font-weight: 680;
+}
+.lv-watch-n .num {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 22px;
+  font-weight: 740;
+  line-height: 1;
 }
 .lv-calm {
   padding: 4px 0;
@@ -250,7 +281,7 @@
   align-items: center;
   gap: 3px;
   margin-left: 2px;
-  font-weight: 750;
+  font-weight: 650;
   color: var(--accent-text);
 }
 /* a play type tonight, and the lever under it */
@@ -267,14 +298,14 @@
 }
 .lv-pr-n {
   min-width: 0;
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 650;
 }
 .lv-pr-ppp {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 19px;
+  font-weight: 720;
 }
 .lv-pr-ppp.good {
   color: var(--good);
@@ -294,7 +325,7 @@
   flex-wrap: wrap;
   gap: 5px;
 }
-.chip.sm {
+.lv-lev .chip.sm {
   height: 32px;
   padding: 0 11px;
   font-size: 12.5px;
@@ -317,8 +348,8 @@
   width: 30px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 22px;
-  font-weight: 800;
+  font-size: 23px;
+  font-weight: 740;
   text-align: center;
 }
 .lv-sc-t {
@@ -328,7 +359,7 @@
 }
 .lv-sc-n {
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
 }
 .lv-team-lev {
   display: flex;
@@ -352,14 +383,11 @@
   border-bottom: 1px solid var(--line);
   font-size: 14px;
   font-weight: 650;
-  color: var(--text-2);
+  color: var(--accent-text);
   text-align: left;
 }
 .lv-plan-all:active {
   background: var(--surface);
-}
-.lv-plan-all > svg:first-child {
-  color: var(--accent-text);
 }
 
 /* ------------------------------------------------------------------ the breaks: the report and the huddle */
@@ -371,58 +399,90 @@
 .lv-rep-head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-top: 6px;
+  gap: 8px;
+  padding-top: 16px;
 }
+/* the stop's headline: serif, as the paper's running story would have it */
 .lv-rep-kicker {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 26px;
-  font-weight: 800;
-  text-transform: uppercase;
-  line-height: 1;
+  gap: 12px;
+  font-family: var(--serif);
+  font-size: 30px;
+  font-weight: 560;
+  letter-spacing: -0.018em;
+  line-height: 1.05;
+  text-wrap: balance;
 }
 .lv-rep-skip {
+  position: relative;
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
+  font-stretch: var(--text-w);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0;
   color: var(--accent-text);
-  text-transform: none;
+}
+.lv-rep-skip::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
 }
 .lv-bk-row {
   display: flex;
   align-items: center;
   gap: 10px;
   min-height: var(--row-min);
-  padding: 8px 12px 8px 14px;
+  padding: var(--row-py) var(--row-px);
+}
+.lv-bk-who {
+  flex: 1;
+  min-width: 0;
 }
 .lv-bk-scorers {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  margin-top: 12px;
+}
+.lv-coach {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 .lv-bt {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px;
+  gap: 18px;
 }
 .lv-bt-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
+}
+.lv-bt-col > .over {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line);
 }
 .lv-bt-row {
   display: flex;
   align-items: baseline;
   gap: 6px;
+  padding: 4px 0;
+}
+.lv-bt-row + .lv-bt-row {
+  border-top: 1px solid var(--line);
+}
+.lv-bt-row .num.bold {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
+  font-weight: 720;
 }
 .lv-bt-row .num.good {
   color: var(--good);
@@ -450,7 +510,7 @@
 }
 .lv-simmed,
 .lv-final-next {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-2);
 }
 /* no game today: the next one, under why */
 .lv-nogame-next {

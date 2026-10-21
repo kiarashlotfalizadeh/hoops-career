@@ -319,7 +319,7 @@ const grain = (n: number) => {
 
 /** The colours a floor is painted in: the wood (top, bottom), the paint and apron, the pinstripe, and the lines. */
 function palette(floor: CourtFloor | undefined) {
-  if (floor?.kind !== 'home') return { wood: ['#a8774a', '#8a5d36'], paint: '#26303b', apron: '#151b22', trim: '#c9a24a', mark: null };
+  if (floor?.kind !== 'home') return { wood: ['#a8774a', '#8a5d36'], paint: '#2b2823', apron: '#171512', trim: '#c9a24a', mark: null };
   const look = teamLook(floor.colors);
   // a darker stain under the team's colours, so the paint and the jerseys stand out from the wood
   return { wood: ['#7e5232', '#5f3c22'], paint: look.slab, apron: look.slab, trim: look.trim, mark: floor };
@@ -362,7 +362,7 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.stroke();
   // the home team's name behind the basket, between the scoreboards
   if (floor?.name) {
-    setFont(ctx, 800, Math.max(9, TOP * k * 0.5));
+    setFont(ctx, 760, Math.max(9, TOP * k * 0.5));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
@@ -504,7 +504,7 @@ function drawMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: n
   ctx.stroke();
   ctx.globalAlpha = 1;
   const text = f.abbrev.slice(0, 3);
-  setFont(ctx, 800, text.length === 3 ? 30 : 36);
+  setFont(ctx, 760, text.length === 3 ? 30 : 36);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = inkOn(c1);
@@ -546,12 +546,12 @@ function drawPlayer(
   const r = 1.45 * k;
   // the ball handler stands in a pool of his team's light
   if (mark.holder) {
-    const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, r * 3.2);
-    g.addColorStop(0, hexA(colors[0], 0.45));
+    const g = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 2.6);
+    g.addColorStop(0, hexA(colors[0], 0.32));
     g.addColorStop(1, hexA(colors[0], 0));
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+    ctx.arc(x, y, r * 2.6, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.fillStyle = 'rgba(0,0,0,0.42)';
@@ -596,7 +596,7 @@ function drawPlayer(
     ctx.stroke();
   }
   ctx.fillStyle = inkOn(colors[0]);
-  setFont(ctx, 800, Math.max(10, r * 1.1));
+  setFont(ctx, 760, Math.max(10, r * 1.1));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(num, x, y + 0.5);
@@ -678,13 +678,13 @@ function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, 
   const h = (TOP - 0.6) * k;
   const w = 7 * k;
   const bar = Math.max(2, 0.28 * k);
-  setFont(ctx, 800, Math.max(9, h * 0.66));
+  setFont(ctx, 760, Math.max(9, h * 0.66));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const cx of [-14.5, 14.5]) {
     const x = (cx + W_FT / 2) * k - w / 2;
     const y = -TOP * k + 0.2 * k;
-    ctx.fillStyle = 'rgba(8,10,14,0.88)';
+    ctx.fillStyle = 'rgba(13,12,10,0.88)';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = colors[0];
     ctx.fillRect(x, y + h - bar, w, bar);
@@ -741,7 +741,7 @@ function drawTag(ctx: CanvasRenderingContext2D, k: number, p: Pt, name: string) 
   ctx.textBaseline = 'middle';
   const w = ctx.measureText(name).width + 10;
   const h = Math.max(15, k * 1.85);
-  ctx.fillStyle = 'rgba(6,8,12,0.84)';
+  ctx.fillStyle = 'rgba(13,12,10,0.86)';
   ctx.beginPath();
   ctx.roundRect?.(x - w / 2, y - h / 2, w, h, 3);
   if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
@@ -755,10 +755,11 @@ function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind:
   const x = (clamp(fx, -13, 13) + W_FT / 2) * k;
   const y = fy * k;
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  setFont(ctx, 800, Math.max(17, k * 2.8));
+  setFont(ctx, 760, Math.max(17, k * 2.8));
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const color = kind === 'make' ? '#2fd27a' : kind === 'miss' ? '#ffffff' : kind === 'block' || kind === 'to' ? '#ff5468' : kind === 'foul' ? '#ffb547' : '#e8ecf3';
+  // (the app's signal colours: --good, --bad, --warn, and paper for the rest)
+  const color = kind === 'make' ? '#55d08b' : kind === 'miss' ? '#ffffff' : kind === 'block' || kind === 'to' ? '#ff6b5e' : kind === 'foul' ? '#f2c14e' : '#f4efe6';
   ctx.lineWidth = 4;
   ctx.lineJoin = 'round';
   ctx.strokeStyle = 'rgba(0,0,0,0.75)';

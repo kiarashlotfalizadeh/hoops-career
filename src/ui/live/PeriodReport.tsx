@@ -73,7 +73,7 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
           const tired = energy < fat + 0.1;
           return (
             <div key={p.pid} className="lv-bk-row">
-              <div className="grow" style={{ minWidth: 0 }}>
+              <div className="lv-bk-who">
                 <div className="bold ellipsis">{names(p.pid)}</div>
                 <div className="small num">
                   <span className={tired ? 'warn' : 'dim'}>{Math.round(energy * 100)}% energy</span>
@@ -247,7 +247,7 @@ export function PeriodReport(
       <Battle view={view} side={side} teams={teams} baselines={props.baselines} />
       <Section title="Side by side">
         <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov', 'paint', 'ast']} />
-        <div className="lv-bk-scorers small" style={{ marginTop: 10 }}>
+        <div className="lv-bk-scorers small">
           <div>
             <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
           </div>
@@ -258,7 +258,7 @@ export function PeriodReport(
       </Section>
       {(oppPlan?.length || theirs.length > 0) && (
         <Section title="Their coach">
-          <div className="small col" style={{ gap: 4 }}>
+          <div className="small lv-coach">
             {oppPlan && oppPlan.length > 0 && (
               <div>
                 <span className="dim2">His plan tonight:</span> {oppPlan.map((x) => x.text).join(', ')}.

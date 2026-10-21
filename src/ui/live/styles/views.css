@@ -9,8 +9,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .lv-oc-col {
@@ -24,23 +23,22 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 32px;
   padding: 2px 10px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--line-2);
   box-shadow: inset 0 2px 0 var(--oc-edge, var(--line-3));
-  font-size: 11px;
-  font-weight: 800;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 720;
 }
 .lv-oc-you {
   color: var(--text-dim);
-  font-weight: 750;
+  font-size: 12px;
+  font-weight: 600;
 }
 .lv-oc-head-pts {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .lv-oc-row {
@@ -74,7 +72,7 @@
   place-items: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 720;
   font-size: 11px;
   line-height: 1;
 }
@@ -84,8 +82,8 @@
   align-items: center;
   gap: 3px;
   min-width: 0;
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 13.5px;
+  font-weight: 620;
   line-height: 1.1;
 }
 .lv-oc-mark {
@@ -94,7 +92,7 @@
   gap: 1px;
   flex: none;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 680;
 }
 .lv-oc-mark.hot {
   color: var(--warn);
@@ -106,8 +104,8 @@
   grid-area: pts;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 19px;
+  font-weight: 740;
+  font-size: 21px;
   line-height: 1;
   text-align: right;
 }
@@ -118,8 +116,8 @@
   align-items: center;
   gap: 5px;
   min-width: 0;
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1;
   color: var(--text-dim);
 }
@@ -152,19 +150,19 @@
 /* personal fouls: amber at the staff's foul-trouble limit for the period, red at five */
 .lv-oc-pf {
   grid-area: pf;
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1;
   text-align: right;
   color: var(--text-dim);
 }
 .lv-oc-pf.warn {
   color: var(--warn);
-  font-weight: 800;
+  font-weight: 720;
 }
 .lv-oc-pf.bad {
   color: var(--bad);
-  font-weight: 800;
+  font-weight: 720;
 }
 .lv-lu-head,
 .lv-lu-row {
@@ -175,11 +173,8 @@
 }
 .lv-lu-head {
   flex: 1;
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 620;
   color: var(--text-dim);
   text-align: right;
   padding-right: var(--row-px);
@@ -223,7 +218,10 @@
 }
 .lv-lu-n {
   text-align: right;
-  font-size: 13px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 15px;
+  font-weight: 680;
   color: var(--text-2);
 }
 
@@ -333,7 +331,7 @@
 }
 .lv-slot.on {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-2));
+  background: var(--surface-3);
   color: var(--text);
 }
 .lv-slot:disabled:not(.on) {
@@ -355,7 +353,7 @@
   background: var(--surface-2);
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 720;
   font-size: 13px;
   color: var(--text);
 }
@@ -365,16 +363,16 @@
 }
 .lv-slot-n {
   min-width: 0;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 650;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .lv-slot-f {
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -403,7 +401,7 @@
   align-items: center;
   gap: 12px;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 var(--row-px);
   font-size: 13.5px;
 }
 .lv-bx-ppp {
@@ -411,8 +409,59 @@
   text-align: right;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 720;
   font-size: 17px;
+}
+.lv-bx {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lv-bx-foot {
+  margin-top: 8px;
+}
+/* the shots tab's shooters: tap one for only his shots */
+.lv-sh {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+.lv-sh-h,
+.lv-sh-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px 56px;
+  align-items: center;
+  column-gap: 6px;
+  padding: 0 6px;
+}
+.lv-sh-h {
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--text-dim);
+}
+.lv-sh-h > :not(:first-child),
+.lv-sh-row > .num {
+  text-align: right;
+}
+.lv-sh-row {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  text-align: left;
+  font-size: 13.5px;
+  transition: background var(--dur-fast) ease;
+}
+.lv-sh-row + .lv-sh-row {
+  box-shadow: inset 0 1px 0 var(--line);
+}
+.lv-sh-row:active {
+  background: var(--surface-2);
+}
+.lv-sh-row.on {
+  background: var(--surface-3);
+  box-shadow: none;
+  font-weight: 680;
 }
 
 /* the play-by-play */
@@ -423,8 +472,7 @@
 }
 .lv-fd-list {
   background: var(--raised);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius);
   overflow: hidden;
 }
 .lv-fd-row {
@@ -441,25 +489,30 @@
 }
 .lv-fd-row.strong {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 650;
   background: var(--bg-2);
 }
 .lv-fd-when {
   flex: none;
-  width: 62px;
+  width: 58px;
   padding-top: 1px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 .lv-fd-sc {
   flex: none;
   padding-top: 1px;
-  font-size: 11.5px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 13px;
+  font-weight: 650;
   color: var(--text-dim);
 }
+/* whose play: a small square in the team's colour */
 .lv-fd-team {
   flex: none;
-  align-self: stretch;
-  width: 3px;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
   border-radius: 2px;
 }

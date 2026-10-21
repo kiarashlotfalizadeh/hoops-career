@@ -14,11 +14,23 @@
   pointer-events: none;
 }
 .lv-cap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   max-width: 100%;
-  padding: 6px 10px 6px 11px;
-  border-radius: 4px;
-  background: rgba(6, 8, 12, 0.86);
-  box-shadow: inset 3px 0 0 var(--cap-c, rgba(255, 255, 255, 0.4));
+  padding: 6px 11px 6px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--lv-plate);
+}
+/* the offense's colour, a small square before the call: who has the ball */
+.lv-cap::before {
+  content: '';
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--cap-c, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 /* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
 .lv-cap-t {
@@ -26,48 +38,46 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1.3;
 }
 .lv-cap-t.ff {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #d6dbe3;
+  color: rgba(255, 255, 255, 0.82);
 }
-/* a broadcast lower third: the team's colour holds the label, the line on a dark plate */
+/* a broadcast lower third: the team's colour holds the label, the line on an ink plate under it */
 .live-l3 {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   max-width: 100%;
-  animation: l3-in 0.3s ease;
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.45));
+  animation: l3-in 0.3s var(--ease-out);
 }
 .live-l3-tag {
-  padding: 3px 14px 3px 9px;
+  padding: 3px 9px 3px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   background: var(--l3-c, var(--surface-3));
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
-  font-size: 10.5px;
-  font-weight: 800;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
+  font-size: 11.5px;
+  font-weight: 680;
+  line-height: 1.25;
 }
 .live-l3-text {
   max-width: 100%;
-  padding: 6px 11px 7px;
-  background: rgba(6, 8, 12, 0.92);
-  box-shadow: inset 3px 0 0 var(--l3-c, var(--surface-3));
-  font-size: 14px;
-  font-weight: 700;
+  padding: 7px 12px 8px 9px;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
+  background: var(--lv-plate-hi);
+  font-size: 14.5px;
+  font-weight: 640;
   line-height: 1.25;
 }
 @keyframes l3-in {
   from {
     opacity: 0;
-    transform: translateX(-10px);
+    transform: translateX(-8px);
   }
 }
 @keyframes lv-up {
@@ -77,21 +87,20 @@
   }
 }
 
-/* the one banner: the assistant's row look on a dark plate, its tone on the edge */
+/* the one banner: an ink plate with a hairline, its tone in the icon and the kicker word */
 .lv-banner {
-  --tone: var(--accent);
+  --tone: var(--text);
   pointer-events: auto;
   align-self: stretch;
   display: flex;
   align-items: flex-start;
   gap: 9px;
-  padding: 9px 4px 9px 12px;
-  border-radius: 6px;
-  background: rgba(8, 11, 16, 0.95);
-  box-shadow:
-    inset 3px 0 0 var(--tone),
-    0 10px 26px rgba(0, 0, 0, 0.45);
-  animation: lv-up 0.28s ease;
+  padding: 10px 4px 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--lv-plate-hi);
+  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.7);
+  animation: lv-up var(--dur) var(--ease-out);
 }
 .lv-banner.tone-bad {
   --tone: var(--bad);
@@ -99,37 +108,32 @@
 .lv-banner.tone-warn {
   --tone: var(--warn);
 }
+.lv-banner.tone-info {
+  --tone: var(--accent-text);
+}
 .lv-banner-ic {
   flex: none;
   margin-top: 2px;
   color: var(--tone);
 }
-.lv-banner.tone-info .lv-banner-ic,
-.lv-banner.tone-info .lv-banner-k {
-  color: var(--accent-text);
-}
 .lv-banner-body {
   min-width: 0;
 }
 .lv-banner-t {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.25;
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.3;
 }
 .lv-banner-k {
   margin-right: 3px;
-  font-size: 10.5px;
-  font-weight: 800;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-weight: 700;
   color: var(--tone);
 }
 .lv-banner-l {
   margin-top: 2px;
-  font-size: 12.5px;
-  line-height: 1.3;
-  color: #c9d1dc;
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.76);
 }
 .lv-banner-x {
   position: relative;
@@ -139,13 +143,16 @@
   margin: -5px 0;
   display: grid;
   place-items: center;
-  border-radius: 6px;
-  color: #c9d1dc;
+  border-radius: var(--radius-md);
+  color: rgba(255, 255, 255, 0.76);
 }
 .lv-banner-x::after {
   content: '';
   position: absolute;
   inset: -7px -6px;
+}
+.lv-banner-x:active {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* ------------------------------------------------------------------ playback: tap the court, like a video player */
@@ -158,14 +165,14 @@
 .lv-pb-scrim {
   position: absolute;
   inset: 0;
-  background: radial-gradient(closest-side, rgba(6, 8, 12, 0.6), rgba(6, 8, 12, 0.28));
+  background: rgba(0, 0, 0, 0.42);
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--dur) ease;
 }
 .lv-pb-top,
 .lv-pb-mid {
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--dur) ease;
 }
 .lv-pb.up .lv-pb-scrim,
 .lv-pb.up .lv-pb-top,
@@ -181,7 +188,7 @@
   top: 10px;
   right: 10px;
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 .lv-pb-mid {
   position: absolute;
@@ -189,7 +196,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 28px;
   pointer-events: none;
 }
 .lv-pb.up .lv-pb-mid button {
@@ -203,15 +210,16 @@
   display: grid;
   place-items: center;
   color: #fff;
-  background: rgba(6, 8, 12, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--lv-plate);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  transition: transform var(--dur-fast) ease;
 }
 .lv-pb-btn.big {
-  width: 70px;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.94);
+  width: 68px;
+  height: 68px;
+  background: var(--accent);
   border: none;
-  color: #0b0f15;
+  color: var(--accent-ink);
 }
 .lv-pb-btn:active {
   transform: scale(0.94);
@@ -219,23 +227,23 @@
 .lv-pb-chip {
   position: relative;
   height: 34px;
-  padding: 0 12px;
-  border-radius: 17px;
+  padding: 0 11px;
+  border-radius: var(--radius-md);
   display: inline-flex;
   align-items: center;
   gap: 5px;
   color: #fff;
-  background: rgba(6, 8, 12, 0.78);
+  background: var(--lv-plate);
   border: 1px solid rgba(255, 255, 255, 0.2);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 650;
 }
 .lv-pb-chip.num {
   min-width: 46px;
   justify-content: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 720;
   font-size: 16px;
 }
 .lv-pb-chip::after {
@@ -245,7 +253,7 @@
 }
 .lv-pb-chip.on {
   background: var(--accent);
-  border-color: transparent;
+  border-color: var(--accent);
   color: var(--accent-ink);
 }
 
@@ -258,56 +266,80 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 10px 12px 16px;
-  background: linear-gradient(180deg, rgba(6, 8, 12, 0.9), rgba(6, 8, 12, 0.78));
+  gap: 12px;
+  padding: 12px 14px 16px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
   overflow: hidden;
 }
 .lv-li-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
   text-align: center;
   min-width: 0;
   max-width: 100%;
 }
+/* the night's billing: a serif headline, as the paper would run it */
+.live-intro .gd-intro-bill {
+  max-width: 22ch;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: clamp(22px, 6.4vw, 30px);
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  text-transform: none;
+  text-wrap: balance;
+}
+.live-intro .gd-intro-line {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.76);
+}
+/* "Starting lineups": the kicker over the fives, a headline only when there's no billing */
 .lv-li-kicker {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
+  font-family: var(--serif);
+  font-weight: 560;
   font-size: 24px;
-  line-height: 1;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+.gd-intro-bill ~ .lv-li-kicker,
+.gd-intro-line ~ .lv-li-kicker {
+  margin-top: 8px;
+  font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 12.5px;
+  font-weight: 620;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.76);
 }
 .lv-li-where {
-  margin-top: 3px;
-  font-size: 11.5px;
-  color: #c9d1dc;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
 }
 .lv-li-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: 14px;
   width: 100%;
   max-width: 520px;
 }
 .lv-li-col {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
 }
-/* each five under its team's colour */
+/* each five under its team's colour: a flat block, its trim along the foot */
 .lv-li-team {
-  margin-bottom: 2px;
-  padding: 3px 12px 4px 8px;
+  margin-bottom: 3px;
+  padding: 4px 10px 5px;
+  border-radius: var(--radius-xs);
   background: var(--lb-c);
   box-shadow: inset 0 -2px 0 var(--lb-t);
-  clip-path: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 0 100%);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 15px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  font-size: 14px;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -315,9 +347,9 @@
 .lv-li-row {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
-  animation: intro-in 0.35s ease both;
+  animation: intro-in 0.35s var(--ease-out) both;
 }
 .lv-li-row:nth-child(3) {
   animation-delay: 0.08s;
@@ -333,16 +365,16 @@
 }
 .lv-li-num {
   flex: none;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 2px solid;
   display: grid;
   place-items: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 11px;
+  font-weight: 720;
+  font-size: 11.5px;
 }
 .lv-li-who {
   display: flex;
@@ -350,19 +382,20 @@
   min-width: 0;
 }
 .lv-li-name {
-  font-size: 12.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 650;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
 .lv-li-pos {
-  font-size: 10px;
-  font-weight: 700;
-  color: #9aa5b5;
+  font-size: 11px;
+  font-weight: 560;
+  color: rgba(255, 255, 255, 0.66);
 }
 .lv-li-line {
-  font-size: 10.5px;
-  color: #b4bdca;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
 }
 .live-intro-whole {
   display: none;
@@ -382,32 +415,38 @@
    off clear of the last line */
 @media (max-width: 399px), (max-height: 520px) {
   .live-intro {
-    gap: 6px;
+    gap: 8px;
     padding: 8px 10px 12px;
+  }
+  .live-intro .gd-intro-bill {
+    font-size: 21px;
   }
   .lv-li-kicker {
     font-size: 20px;
   }
   .lv-li-col {
-    gap: 3px;
+    gap: 4px;
   }
   .lv-li-team {
-    font-size: 13.5px;
+    font-size: 13px;
   }
   .lv-li-name {
     font-size: 12px;
   }
   .lv-li-line {
-    font-size: 10px;
+    font-size: 10.5px;
   }
+}
+.lv-li-tip {
+  margin-top: 2px;
 }
 .lv-li-bar {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
 }
 .lv-li-bar > span {
   display: block;
@@ -424,8 +463,7 @@
 @media (prefers-reduced-motion: reduce) {
   .lv-li-row,
   .live-l3,
-  .lv-banner,
-  .lv-lq-fix {
+  .lv-banner {
     animation: none;
   }
   .lv-pb-scrim,
