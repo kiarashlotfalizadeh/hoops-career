@@ -130,13 +130,33 @@
   text-wrap: balance;
   animation: fade 0.4s ease 0.45s both;
 }
-.moment-go {
+/* Continue, and Read the story under it for a story */
+.moment-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   margin-top: 22px;
+}
+.moment-go {
   min-width: 220px;
   background: #fff;
   color: #0b0f15;
   border-color: transparent;
   animation: fade 0.4s ease 0.6s both;
+}
+.moment-read {
+  min-width: 220px;
+  background: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+  animation: fade 0.4s ease 0.7s both;
+}
+/* a story's headline is a sentence, not a word: set smaller so it fits in three lines on a phone */
+.moment.story .moment-title {
+  font-size: clamp(32px, 9.5vw, 52px);
+  line-height: 0.96;
+  max-width: 16ch;
 }
 /* confetti for a title or the Cup */
 .moment-confetti {

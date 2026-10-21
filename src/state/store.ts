@@ -3,11 +3,15 @@ import { create } from 'zustand';
 import type { InboxMessage, League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
-import { estimateTotal, targetDone, type SimProgress, type SimTarget, type TaskOp, type TaskResult } from './simCore';
+import { estimateTotal, isFrontPage, loopSetting, targetDone, type SimProgress, type SimStop, type SimTarget, type TaskOp, type TaskResult } from './simCore';
 import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
+import { buildDigest, digestMark, type Digest, type DigestMark } from '../ui/today/digest';
+import { storyLink } from '../ui/today/front';
+import { userGameOnDay } from '../core/league/games';
+import { billingFor } from '../core/analysis/gameStory';
 
 export type { SimProgress, SimTarget, TaskOp, TaskResult } from './simCore';
-export { allStarStop } from './simCore';
+export { allStarStop, loopSetting, MONTH_DAYS, type LoopSettings } from './simCore';
 
 export interface Toast {
   id: number;
@@ -35,6 +39,16 @@ interface AppState {
   dirty: boolean;
   /** Why the latest save failed; cleared by the next one that works. */
   saveProblem: SaveProblem | null;
+  /**
+   * "While you were away": what the latest sim of more than a day did (see ui/today/digest.ts),
+   * until the next sim. `digestOpen`: it's up on screen (it opens by itself after the sim, unless
+   * Settings turns that off, once any big moment has had the screen).
+   */
+  digest: Digest | null;
+  digestOpen: boolean;
+  /** A big moment has the screen (Moments.tsx): the digest waits for it. */
+  momentUp: boolean;
+  showDigest: (open: boolean) => void;
   setLeague: (l: League | null) => void;
   /**
    * Mutate the league in place and re-render. Refused (false) while a sim or a phase change runs:
@@ -82,6 +96,47 @@ function newsStop(l: League): [string, Toast['tone'], string] {
     news?.link ?? '/inbox',
   ];
 }
+
+/** What a sim that stopped short says, and opens: big news, a front-page story, or a big night ahead. */
+function stopToast(l: League, stop: SimStop, newsFrom: number): [string, Toast['tone'], string] | undefined {
+  if (stop === 'news') return newsStop(l);
+  if (stop === 'frontPage') {
+    const n = [...l.news].reverse().find((x) => x.id >= newsFrom && isFrontPage(l, x));
+    return [n ? `Front page: ${n.head ?? n.text}` : 'Stopped for a story about your team.', 'neutral', n ? storyLink(n.id) : '/league/news'];
+  }
+  if (stop === 'bigGame') {
+    const g = userGameOnDay(l, l.day);
+    const b = g && billingFor(l, g);
+    const opp = g && l.teams[g.home === l.userTid ? g.away : g.home];
+    return [b && opp ? `Stopped for tonight: ${b.tag} ${g.home === l.userTid ? 'vs' : 'at'} ${opp.name}` : 'Stopped for a big night.', 'neutral', opp ? `/games/${opp.tid}` : '/'];
+  }
+  return undefined;
+}
+
+/** The latest digest is kept on this device, so it's still there after the app is closed and opened again. */
+const DIGEST_KEY = 'hc:digest';
+
+function keepDigest(d: Digest | null) {
+  try {
+    if (d) localStorage.setItem(DIGEST_KEY, JSON.stringify(d));
+    else localStorage.removeItem(DIGEST_KEY);
+  } catch {
+    /* (private mode, storage full: it lasts until the app closes) */
+  }
+}
+
+function keptDigest(leagueId: string): Digest | null {
+  try {
+    const d = JSON.parse(localStorage.getItem(DIGEST_KEY) ?? 'null') as Digest | null;
+    return d?.leagueId === leagueId ? d : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The long offseason steps, which get a digest too. */
+const longTask = (op: TaskOp) => (op.kind === 'faAdvance' && op.days >= 7) || op.kind === 'newSeason';
+const TASK_SPAN: Partial<Record<TaskOp['kind'], string>> = { faAdvance: 'A week of free agency', newSeason: 'Training camp' };
 
 export function problemOf(e: unknown): SaveProblem {
   if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };
@@ -163,6 +218,10 @@ export const useStore = create<AppState>((set, get) => ({
   toasts: [],
   dirty: false,
   saveProblem: null,
+  digest: null,
+  digestOpen: false,
+  momentUp: false,
+  showDigest: (open) => set({ digestOpen: open && !!get().digest }),
   setLeague: (l) => {
     const old = get().league;
     // another league opened over this one (Back to the main menu, then another save): keep its
@@ -184,7 +243,9 @@ export const useStore = create<AppState>((set, get) => ({
     if (get().sim) stopSimRun();
     runToken++;
     // a league that was never saved (just created) counts as a change until its first save works
-    set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: !!l && !onDevice(l), saveProblem: null });
+    // (the digest kept on the device is this league's, or none)
+    const digest = l ? (get().digest?.leagueId === l.id ? get().digest : keptDigest(l.id)) : null;
+    set({ league: l, v: get().v + 1, sim: null, stopRequested: false, dirty: !!l && !onDevice(l), saveProblem: null, digest, digestOpen: false });
     setLastLeagueId(l?.id ?? null);
   },
   mutate: (fn, save = true) => {
@@ -231,13 +292,15 @@ export const useStore = create<AppState>((set, get) => ({
     const l = get().league;
     if (!l || get().sim || stale()) return;
     const token = ++runToken;
-    set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false });
+    // where the league stands, for the digest once it's done (a new sim retires the last one)
+    const mark = digestMark(l);
+    set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false, digest: null, digestOpen: false });
     // what the sim starts from is on the device first
     await get().flush();
     if (runToken !== token) return;
     const done = (toast?: [string, Toast['tone'], string?]) => {
       if (runToken !== token) return;
-      set({ sim: null, stopRequested: false, v: get().v + 1 });
+      set({ sim: null, stopRequested: false, v: get().v + 1, ...digestFor(mark) });
       if (toast) get().toast(...toast);
       void get().save();
     };
@@ -276,7 +339,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
       if (runToken !== token) return;
       replaceLeague(shown, out.league);
-      done(out.stop === 'news' ? newsStop(out.league) : undefined);
+      done(stopToast(out.league, out.stop, mark.msgId));
     } catch (e) {
       console.error('sim failed', e);
       // the league on screen is the last good one: before the sim, or its latest checkpoint
@@ -287,13 +350,15 @@ export const useStore = create<AppState>((set, get) => ({
     const l = get().league;
     if (!l || get().sim || stale()) return null;
     const token = ++runToken;
-    set({ sim: { label, done: 0, total: 1 } });
+    const mark = longTask(op) ? digestMark(l) : null;
+    set({ sim: { label, done: 0, total: 1 }, ...(mark ? { digest: null, digestOpen: false } : {}) });
     await get().flush();
     if (runToken !== token) return null;
     try {
       const out = await taskLeague(l, op);
       if (runToken !== token) return null;
       replaceLeague(l, out.league);
+      if (mark) set(digestFor(mark, { long: true, span: TASK_SPAN[op.kind] }));
       return out.result;
     } catch (e) {
       console.error(`${label} failed`, e);
@@ -331,6 +396,23 @@ export const useStore = create<AppState>((set, get) => ({
     setTimeout(() => set({ toasts: get().toasts.filter((x) => x.id !== t.id) }), link ? 5000 : 3200);
   },
 }));
+
+/**
+ * The digest of a sim that started at `mark`, built once from the league it ended on, and whether
+ * it opens by itself (Settings → While you were away). A short sim has none.
+ */
+function digestFor(mark: DigestMark, opts?: { long?: boolean; span?: string }): Pick<AppState, 'digest' | 'digestOpen'> {
+  const l = useStore.getState().league;
+  let digest: Digest | null = null;
+  try {
+    digest = l ? buildDigest(mark, l, opts) : null;
+  } catch (e) {
+    // (a digest that can't be read is no reason to lose the sim)
+    console.error('the digest failed', e);
+  }
+  keepDigest(digest);
+  return { digest, digestOpen: !!digest && !!l && loopSetting(l, 'digest') };
+}
 
 /** Subscribe to league changes; returns the league (asserted non-null inside the game shell). */
 export function useLeague(): League {

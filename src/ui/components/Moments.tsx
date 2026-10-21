@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../state/store';
-import { currentMoments, newMoments, type Moment } from '../moments';
+import { currentMoments, newMoments, pickMoments, type Moment } from '../moments';
 import { TeamLogo } from './TeamLogo';
 import { Avatar } from './ui';
 import { slabVars } from '../teamColors';
@@ -12,13 +12,15 @@ import './moments.css';
 function momentsKey(l: NonNullable<ReturnType<typeof useStore.getState>['league']>): string {
   const won = l.playoffs.map((s) => s.winner ?? '-').join('');
   const aw = l.awards[l.awards.length - 1];
-  return [l.id, l.userTid, l.season, l.phase, l.games.length, won, l.awards.length, aw?.champion, aw?.cupWinner, aw?.mvp, l.transactions?.length].join('|');
+  return [l.id, l.userTid, l.season, l.phase, l.games.length, won, l.awards.length, aw?.champion, aw?.cupWinner, aw?.mvp, l.transactions?.length, l.nextMsgId].join('|');
 }
 
 /**
  * Watches the open league for big moments and shows each new one full-screen, once: what's already
  * true when a league opens (or the user takes over another team) counts as seen. They wait for a sim
- * to finish and for the live game to be left, and Settings → Big moments turns them off.
+ * to finish and for the live game to be left, and Settings → Big moments turns them off. Of the
+ * front-page stories that come out together, only the biggest shows (pickMoments); the story of a
+ * game the user has just watched live is his already.
  */
 export function Moments() {
   const league = useStore((s) => s.league);
@@ -44,11 +46,15 @@ export function Moments() {
     if (!fresh.length) return;
     for (const m of fresh) seen.current.keys.add(m.key);
     if (league.settings.moments === false) return;
-    // a sim through the playoffs ends on the title: that's the moment, not every series on the way
-    const title = fresh.some((m) => m.kind === 'title');
-    setQueue((q) => [...q, ...fresh].filter((m) => !title || m.kind !== 'series'));
+    const onLive = window.location.hash.startsWith('#/live');
+    setQueue((q) => pickMoments([...q, ...fresh].filter((m) => !(onLive && m.news === 'game'))));
   }, [league, v]);
   const showing = !simming && pathname !== '/live' && league ? queue[0] : undefined;
+  // the digest waits while a moment has the screen
+  const up = !!showing;
+  useEffect(() => {
+    if (useStore.getState().momentUp !== up) useStore.setState({ momentUp: up });
+  }, [up]);
   if (!showing || !league) return null;
   return <MomentCard key={showing.key} m={showing} tid={league.userTid} colors={league.teams[league.userTid].colors} onDone={() => setQueue((q) => q.slice(1))} />;
 }
@@ -57,16 +63,19 @@ const PIECES = 46;
 
 function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors: [string, string, string]; onDone: () => void }) {
   const btn = useRef<HTMLButtonElement>(null);
+  const nav = useNavigate();
   const p = useStore((s) => (m.pid !== undefined ? s.league?.players[m.pid] : undefined));
   useEffect(() => {
     haptic(m.big ? 'success' : 'tap');
     btn.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onDone();
-      // the one control: Tab stays on it
+      // Tab stays on the card's buttons (Continue, and Read the story when there's one)
       if (e.key === 'Tab') {
         e.preventDefault();
-        btn.current?.focus();
+        const all = [...(btn.current?.parentElement?.querySelectorAll('button') ?? [])];
+        const at = all.indexOf(document.activeElement as HTMLButtonElement);
+        (all[(at + (e.shiftKey ? all.length - 1 : 1)) % all.length] ?? btn.current)?.focus();
       }
     };
     window.addEventListener('keydown', onKey);
@@ -114,17 +123,31 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
         <h2 id="moment-title" className="moment-title">
           {m.title}
         </h2>
-        <p className="moment-sub">{m.sub}</p>
-        <button
-          ref={btn}
-          className="btn big moment-go"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDone();
-          }}
-        >
-          Continue
-        </button>
+        {m.sub && <p className="moment-sub">{m.sub}</p>}
+        <div className="moment-acts">
+          <button
+            ref={btn}
+            className="btn big moment-go"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDone();
+            }}
+          >
+            Continue
+          </button>
+          {m.link && (
+            <button
+              className="btn big moment-read"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDone();
+                nav(m.link!);
+              }}
+            >
+              Read the story
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -117,7 +117,7 @@ describe('the Continue bar', () => {
 });
 
 describe('moments', () => {
-  it('a first-round pick is a moment; a second-rounder is not', () => {
+  it("draft picks aren't moments: the draft screen's announcer card has them", () => {
     const l = make();
     const [a, b] = Object.values(l.players).filter((p) => p.tid === 0);
     a.draft = { ...a.draft, year: l.season, round: 1, pick: 12 };
@@ -129,7 +129,7 @@ describe('moments', () => {
     const keys = currentMoments(l)
       .filter((m) => m.kind === 'draft')
       .map((m) => m.pid);
-    expect(keys).toEqual([a.pid]);
+    expect(keys).toEqual([]);
   });
 });
 

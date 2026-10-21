@@ -1,10 +1,11 @@
 // What the sim worker runs: days of the season up to a target, and the phase changes. Pure league
 // code (no DOM, no store), so the same functions run in the worker and, where there are no workers
 // (tests, a browser that can't start one), on a copy of the league in this thread.
-import type { GameResult, League } from '../core/types';
+import type { GameResult, League, NewsItem, Settings } from '../core/types';
 import { faAdvance, finishDraftPhase, newSeason, regularGamesLeft, simDay, startDraft, startFreeAgency, startRegularSeason } from '../core/league/season';
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
+import { billingFor } from '../core/analysis/gameStory';
 
 export type SimTarget =
   | { kind: 'days'; n: number }
@@ -15,7 +16,11 @@ export type SimTarget =
   | { kind: 'endRegular' }
   | { kind: 'endPostseason' }
   /** Through the play-in and the playoffs in one go (for teams that are out). */
-  | { kind: 'endPlayoffs' };
+  | { kind: 'endPlayoffs' }
+  /** A month of the calendar (30 days), stopping for what's worth stopping for, as a week does. */
+  | { kind: 'month' }
+  /** To the morning of a big night (`day`, the user's game with a billing): see flow.ts's nextBigNight. */
+  | { kind: 'bigNight'; day: number };
 
 /** The phase changes, by name (a worker can't be handed a function). */
 export type TaskOp =
@@ -30,8 +35,24 @@ export interface SimProgress {
   total: number;
 }
 
-/** Why a sim stopped short of its target: the user stopped it, or big news for the user's team. */
-export type SimStop = 'target' | 'stopped' | 'news';
+/**
+ * Why a sim stopped short of its target: the user stopped it, big news for the user's team (an
+ * important message), a front-page story about his team, or the morning of one of his biggest games.
+ */
+export type SimStop = 'target' | 'stopped' | 'news' | 'frontPage' | 'bigGame';
+
+/**
+ * The Continue loop's settings, all on unless turned off. (Kept here until the shared Settings type
+ * carries them: old saves lack them either way, so absent means on.)
+ */
+/** The Continue loop's settings (each on unless set false). */
+export type LoopSettings = Pick<Settings, 'stopOnFrontPage' | 'stopForBigGames' | 'digest'>;
+
+/** A Continue-loop setting: on unless it's been turned off. */
+export const loopSetting = (l: Pick<League, 'settings'>, k: keyof LoopSettings) => l.settings[k] !== false;
+
+/** The day "Sim 1 month" runs to. */
+export const MONTH_DAYS = 30;
 
 /** Day "Sim to All-Star break" lands on: the day before the All-Star Game, so the user can act first. */
 export function allStarStop(l: League) {
@@ -47,6 +68,10 @@ export function targetDone(l: League, target: SimTarget, startDay: number, start
       return l.day - startDay >= target.n;
     case 'week':
       return l.day - startDay >= 7;
+    case 'month':
+      return l.day - startDay >= MONTH_DAYS;
+    case 'bigNight':
+      return l.day >= target.day;
     case 'untilUserGame':
       if (l.day === startDay) return false;
       if (l.phase === 'playoffs') schedulePlayoffDay(l);
@@ -70,6 +95,10 @@ export function estimateTotal(l: League, target: SimTarget): number {
       return target.n;
     case 'week':
       return 7;
+    case 'month':
+      return MONTH_DAYS;
+    case 'bigNight':
+      return Math.max(1, target.day - l.day);
     case 'untilUserGame':
       return 3;
     case 'allStar':
@@ -97,9 +126,11 @@ export interface SimHooks {
 }
 
 /**
- * Play days until `target` (or a stop): the league in hand moves on in place. Stops early for big
- * news for the user's team (an important unread message) when `stopOnNews`, except on a sim of a
- * set number of days.
+ * Play days until `target` (or a stop): the league in hand moves on in place. Under `stopOnNews`, a
+ * sim stops early (except one of a set number of days) for big news for the user's team (an
+ * important unread message), a front-page story about his team, or the morning of one of his
+ * biggest games (the last two each with a setting of their own). Stopping early changes nothing
+ * that's played: the next sim carries on from the same day.
  */
 export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {}): Promise<{ days: number; stop: SimStop }> {
   const startDay = l.day;
@@ -107,6 +138,10 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const total = estimateTotal(l, target);
   const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
   const newsBefore = bigNews();
+  const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
+  const frontPage = stops && loopSetting(l, 'stopOnFrontPage') ? frontPageWatch(l) : null;
+  // (a sim to the next game, or to a big night, stops there anyway)
+  const bigGames = stops && loopSetting(l, 'stopForBigGames') && target.kind !== 'untilUserGame' && target.kind !== 'bigNight';
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
   for (;;) {
@@ -116,10 +151,43 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
     hooks.progress?.({ label: 'Simulating', done: days, total: Math.max(total, days) });
     if (targetDone(l, target, startDay, startPhase)) return { days, stop: 'target' };
     // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
-    if (l.settings.stopOnNews !== false && days > 1 && target.kind !== 'days' && bigNews() > newsBefore) return { days, stop: 'news' };
+    if (stops && days > 1 && bigNews() > newsBefore) return { days, stop: 'news' };
+    if (frontPage?.()) return { days, stop: 'frontPage' };
+    if (bigGames && bigNightToday(l)) return { days, stop: 'bigGame' };
     if (days % every === 0) await hooks.checkpoint?.(l);
     await hooks.yieldDay?.();
   }
+}
+
+/**
+ * The press's opinions (the power rankings, a column, a preview) are read in the digest; a sim
+ * stops for what happened.
+ */
+export const OPINION: ReadonlySet<NewsItem['kind']> = new Set(['power', 'column', 'preview']);
+
+/** A front-page story (weight 3) about the user's team that's an event, not an opinion: a sim stops for it, and it can take the screen. */
+export const isFrontPage = (l: League, n: NewsItem) => n.weight === 3 && n.tids.includes(l.userTid) && !OPINION.has(n.kind);
+
+/**
+ * Whether a front-page story about the user's team has come out since the last call (the first:
+ * since the sim started). News and mail share one id counter, so nothing new costs nothing, and a
+ * new day's stories are read from the end of the list back.
+ */
+export function frontPageWatch(l: League): () => boolean {
+  let from = l.nextMsgId;
+  return () => {
+    if (l.nextMsgId === from) return false;
+    let hit = false;
+    for (let i = l.news.length - 1; i >= 0 && l.news[i].id >= from; i--) if (isFrontPage(l, l.news[i])) hit = true;
+    from = l.nextMsgId;
+    return hit;
+  };
+}
+
+/** The user plays one of his biggest games today (a billing of weight 3: a Game 7, a homecoming...). */
+export function bigNightToday(l: League): boolean {
+  const g = userGameOnDay(l, l.day);
+  return !!g && billingFor(l, g)?.weight === 3;
 }
 
 export function runTask(l: League, op: TaskOp): TaskResult {

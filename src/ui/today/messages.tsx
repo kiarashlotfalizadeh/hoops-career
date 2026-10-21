@@ -13,6 +13,7 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { AgendaRow } from '../components/Agenda';
 import { Sheet } from '../components/ui';
 import { inAppPath } from '../nav';
+import { senderOf, senderText } from './senders';
 
 /** The agenda item a message's decision is, by its id (`tradeOffer:<id>`, `offerSheet:<pid>`, `tenDay:<pid>`). */
 export function decisionId(m: InboxMessage): string | null {
@@ -61,24 +62,33 @@ export const markRead = (id: number) =>
 
 const shortDate = (m: InboxMessage) => fmtDate(m.season, m.day, { month: 'short', day: 'numeric' });
 
+/** Mail that matters more than the rest: big news (long sims stop for it) or an alert. */
+export const isImportant = (m: InboxMessage) => !!m.important || m.tone === 'alert';
+
 /**
- * One message in a list, as mail apps show it: unread dot, subject (two lines at most: a headline
- * like "BKN want Williams + McCain + 1 pick" is read whole) and date, then who it's from and its
- * first words. `open`: its decision is still on the agenda.
+ * One message in a list, as mail apps show it: who it's from (a badge with his initials, in his
+ * folder's colour), the unread dot, subject (two lines at most: a headline like "BKN want Williams +
+ * McCain + 1 pick" is read whole) and date, then his name and the first words. Important mail is
+ * flagged; `open`: its decision is still on the agenda.
  */
-export function MessageRow({ m, open, onOpen }: { m: InboxMessage; open?: boolean; onOpen: () => void }) {
+export function MessageRow({ league, m, open, onOpen }: { league: League; m: InboxMessage; open?: boolean; onOpen: () => void }) {
+  const who = senderOf(league, m);
+  const important = isImportant(m);
   return (
-    <button type="button" className={`td-msg ${m.read ? '' : 'unread'}`} aria-haspopup="dialog" onClick={onOpen}>
-      <span className="td-msg-dot" aria-hidden="true" />
+    <button type="button" className={`td-msg ${m.read ? '' : 'unread'} ${important ? 'important' : ''}`} aria-haspopup="dialog" onClick={onOpen}>
+      <span className={`td-msg-who ${who.group}`} aria-hidden="true">
+        {who.initials}
+        <span className="td-msg-dot" />
+      </span>
       <span className="grow">
         <span className="td-msg-subj">
           {!m.read && <span className="sr-only">Unread: </span>}
           <span className="td-msg-s">{m.subject}</span>
-          {open && <span className="tag warn">Decide</span>}
+          {open ? <span className="tag warn">Decide</span> : important && !m.read && <span className="tag bad">Important</span>}
           <span className="td-msg-date">{shortDate(m)}</span>
         </span>
         <span className="td-msg-prev ellipsis">
-          <span className="td-msg-from">{m.from}</span> · {previewText(m.body)}
+          <span className="td-msg-from">{who.name}</span> · {previewText(m.body)}
         </span>
       </span>
     </button>
@@ -145,7 +155,7 @@ export function MessageSheet({ league, m, onClose }: { league: League; m?: Inbox
     <Sheet open onClose={onClose} title={m.subject}>
       <div className="td-sheet col">
         <div className="td-sheet-meta">
-          {m.from} · {fmtDate(m.season, m.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+          {senderText(senderOf(league, m))} · {fmtDate(m.season, m.day, { weekday: 'short', month: 'short', day: 'numeric' })}
         </div>
         <div className="td-sheet-body">
           {paras.map((p, i) => (

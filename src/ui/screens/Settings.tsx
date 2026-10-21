@@ -13,7 +13,7 @@ import { seasonsInCharge } from '../../core/league/owner';
 import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { guideOpen, showGuide } from '../../core/league/agenda';
 import { edit } from '../../state/actions';
-import { useLeague, useStore } from '../../state/store';
+import { loopSetting, useLeague, useStore, type LoopSettings } from '../../state/store';
 import { Help, More, PageHeader, Section, Segmented, Sheet, Toggle } from '../components/ui';
 import { GlossarySheet } from '../components/Glossary';
 import { DifficultyPicker } from '../components/DifficultyPicker';
@@ -30,6 +30,7 @@ export default function Settings() {
   const team = league.teams[league.userTid];
   const st = league.settings;
   const set = <K extends keyof GameSettings>(k: K, v: GameSettings[K]) => edit((l) => void (l.settings[k] = v));
+  const setLoop = (k: keyof LoopSettings, v: boolean) => edit((l) => void (l.settings[k] = v));
   const [name, setName] = useState(league.name);
   const [coach, setCoach] = useState(league.coachName);
   const [sheet, setSheet] = useState<null | 'delete' | 'unsaved' | 'glossary'>(null);
@@ -173,16 +174,41 @@ export default function Settings() {
             help="After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals. Off, he never does."
           />
           <Toggle
-            on={st.stopOnNews !== false}
-            onChange={(v) => set('stopOnNews', v)}
-            label="Pause sims for big news"
-            help="A trade request, a month-long injury to a top-six player or an owner verdict stops a long sim."
-          />
-          <Toggle
             on={st.moments !== false}
             onChange={(v) => set('moments', v)}
             label="Big moments"
-            help="A clinch, a title, your draft pick, a big signing or an award takes the screen for a moment."
+            help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment. A long sim ends on one story at most, the biggest."
+          />
+        </fieldset>
+      </Section>
+
+      <Section title="Sims">
+        <fieldset className="card flush set-list" disabled={simming}>
+          <Toggle
+            on={st.stopOnNews !== false}
+            onChange={(v) => set('stopOnNews', v)}
+            label="Pause sims for big news"
+            help="A trade request, a month-long injury to a top-six player or an owner verdict stops a long sim (any sim but one of a set number of days). Off, the two below are off too."
+          />
+          <Toggle
+            on={st.stopOnNews !== false && loopSetting(league, 'stopOnFrontPage')}
+            onChange={(v) => setLoop('stopOnFrontPage', v)}
+            disabled={st.stopOnNews === false}
+            label="Pause for front-page news"
+            help="A front-page story about your team (a milestone, an honor, a career night, a long streak) stops a long sim."
+          />
+          <Toggle
+            on={st.stopOnNews !== false && loopSetting(league, 'stopForBigGames')}
+            onChange={(v) => setLoop('stopForBigGames', v)}
+            disabled={st.stopOnNews === false}
+            label="Pause before your biggest games"
+            help="A long sim stops on the morning of one of the season's biggest nights for you, so you can coach it."
+          />
+          <Toggle
+            on={loopSetting(league, 'digest')}
+            onChange={(v) => setLoop('digest', v)}
+            label="While you were away"
+            help="After a sim of more than a day, a digest of what happened opens first: your results and their headlines, your team's stories, the standings, injuries, new mail and the league's top stories. Off, it waits on Today."
           />
         </fieldset>
       </Section>

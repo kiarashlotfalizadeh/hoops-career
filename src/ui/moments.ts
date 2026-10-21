@@ -1,13 +1,17 @@
 // Big moments: the events of the user's career that take the screen for a moment (a clinch, a
-// series, a title, the Cup, his draft picks, a big signing, an award). Each is read from the league
-// as it stands and has a stable key, so the shell can show only the ones that happen while it's open:
-// whatever is already true when a league opens counts as seen.
-import type { League, Player } from '../core/types';
+// series, a title, the Cup, his draft picks, a big signing, an award, and the front-page stories
+// about his team: a milestone, an honor, a career night, a streak, a breakout). Each is read from the
+// league as it stands and has a stable key, so the shell can show only the ones that happen while
+// it's open: whatever is already true when a league opens counts as seen.
+import type { League, NewsItem, Player } from '../core/types';
 import { confStandings } from '../core/league/standings';
 import { seasonLabel } from '../core/constants';
 import { money, plural } from '../core/format';
+import { fmtDate } from '../core/league/helpers';
+import { storyLink } from './today/front';
+import { isFrontPage } from '../state/simCore';
 
-export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award';
+export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award' | 'story';
 
 export interface Moment {
   key: string;
@@ -22,6 +26,12 @@ export interface Moment {
   pid?: number;
   /** Titles get confetti. */
   big?: boolean;
+  /** Where "Read" goes (a story's page). */
+  link?: string;
+  /** A story's size among others at the same time: the bigger shows (see pickMoments). */
+  rank?: number;
+  /** The kind of news a story is. */
+  news?: NewsItem['kind'];
 }
 
 const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
@@ -41,6 +51,60 @@ const AWARD_NAME: Record<string, string> = {
 const AWARD_SHORT: Record<string, string> = { mvp: 'MVP', finalsMvp: 'Finals MVP', dpoy: 'DPOY', roy: 'Rookie of the Year', smoy: 'Sixth Man', mip: 'Most Improved' };
 
 const name = (p: Player | undefined, fallback = '') => (p ? `${p.firstName} ${p.lastName}` : fallback);
+
+/** What a front-page story is, over its headline, and how it ranks against another at the same time. */
+const STORY_KIND: Partial<Record<NewsItem['kind'], [string, number]>> = {
+  milestone: ['Milestone', 6],
+  record: ['Record', 6],
+  award: ['Award', 5],
+  honor: ['Honor', 5],
+  game: ['Final', 4],
+  draft: ['Draft', 3],
+  trade: ['Trade', 2],
+  signing: ['Signing', 2],
+};
+
+/** How far back a story can be and still be a moment: this season's latest news, read from the end. */
+const STORY_SCAN = 80;
+
+/** The front-page stories about the user's team this season (events, not the press's opinions), newest first. */
+function storyMoments(league: League): Moment[] {
+  const out: Moment[] = [];
+  const me = league.userTid;
+  for (let i = league.news.length - 1, n = 0; i >= 0 && n < STORY_SCAN; i--, n++) {
+    const x = league.news[i];
+    if (x.season !== league.season) break;
+    if (!isFrontPage(league, x)) continue;
+    const [label, rank] = STORY_KIND[x.kind] ?? ['Front page', 1];
+    // his own player's jersey, when the story is about one
+    const pid = x.pids.find((p) => league.players[p]?.tid === me);
+    out.push({
+      key: `news-${x.id}`,
+      kind: 'story',
+      over: `${fmtDate(x.season, x.day)} · ${label}`,
+      title: x.head ?? x.text,
+      sub: x.head ? x.text : '',
+      pid,
+      link: storyLink(x.id),
+      rank: rank * 1e6 + x.id,
+      news: x.kind,
+    });
+  }
+  return out;
+}
+
+/**
+ * The moments to show from those new at once: every career moment (but the title alone, not the
+ * series on the way to it), or else the single biggest front-page story, so a long sim ends on
+ * one card, not a stack of headlines.
+ */
+export function pickMoments(fresh: Moment[]): Moment[] {
+  const title = fresh.some((m) => m.kind === 'title');
+  const career = fresh.filter((m) => m.kind !== 'story' && (!title || m.kind !== 'series'));
+  if (career.length) return career;
+  const stories = fresh.filter((m) => m.kind === 'story').sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
+  return stories.slice(0, 1);
+}
 
 /** Every moment the league holds for the user's team right now, oldest kinds first. */
 export function currentMoments(league: League): Moment[] {
@@ -116,22 +180,11 @@ export function currentMoments(league: League): Moment[] {
       });
   }
 
-  // this season's moves: the user's first-round picks and the stars he signs (the log keeps his moves
-  // for good). A second-rounder isn't a moment: three of them would take three taps on draft night
+  // this season's moves: the stars the user signs (the log keeps his moves for good). His draft picks
+  // have their moment on the draft screen, the announcer's card
   for (const t of league.transactions ?? []) {
     if (t.season !== season || t.tids[0] !== me || t.pid === undefined) continue;
     const p = league.players[t.pid];
-    if (t.kind === 'draft' && p && p.draft.round === 1) {
-      const pick = p.draft.round && p.draft.pick ? `Round ${p.draft.round}, Pick ${p.draft.pick}` : 'Draft night';
-      out.push({
-        key: `txn-${t.id}`,
-        kind: 'draft',
-        over: `${p.draft.year} NBA Draft · ${pick}`,
-        title: 'The pick is in',
-        sub: `${name(p, t.name)}, ${p.pos}${p.college ? ` from ${p.college}` : ''}.`,
-        pid: t.pid,
-      });
-    }
     if (t.kind === 'sign' && p && p.ovr >= BIG_SIGNING_OVR) {
       const perYear = t.amount ? `${money(t.amount)} a year` : '';
       out.push({
@@ -144,7 +197,7 @@ export function currentMoments(league: League): Moment[] {
       });
     }
   }
-  return out;
+  return out.concat(storyMoments(league));
 }
 
 /** The moments in `now` that weren't in `seen`, oldest first. */

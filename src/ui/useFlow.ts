@@ -20,6 +20,8 @@ export function useFlowRunner() {
       const before = simStart(st.league!);
       await st.simulate(a.sim);
       const l = useStore.getState().league;
+      // (the digest, opening now, says it and more)
+      if (useStore.getState().digestOpen) return;
       const said = l && simSummary(before, l);
       if (said) st.toast(said.text, said.tone, said.link);
       return;
@@ -38,16 +40,9 @@ export function useFlowRunner() {
         const l = useStore.getState().league;
         const mine = l?.games.slice(before).find((g) => g.home.tid === l.userTid || g.away.tid === l.userTid);
         if (!mine || !l) return;
-        // from the Live screen, the report replaces it (Back shouldn't land on a finished game);
-        // anywhere else the result is a toast that opens it, and the screen stays put
-        if (pathname === '/live') {
-          nav(`/game/${mine.gid}`, { replace: true });
-          return;
-        }
-        const home = mine.home.tid === l.userTid;
-        const [us, them] = home ? [mine.home.pts, mine.away.pts] : [mine.away.pts, mine.home.pts];
-        const opp = l.teams[home ? mine.away.tid : mine.home.tid].abbrev;
-        st.toast(`${us > them ? 'W' : 'L'} ${us}-${them} ${home ? 'vs' : '@'} ${opp} · Report`, us > them ? 'good' : 'bad', `/game/${mine.gid}`);
+        // the game's report opens on its result moment; from the Live screen it replaces it (Back
+        // shouldn't land on a finished game)
+        nav(`/game/${mine.gid}`, { replace: pathname === '/live' });
         return;
       }
       case 'startRegular': {

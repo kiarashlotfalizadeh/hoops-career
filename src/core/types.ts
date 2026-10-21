@@ -1297,6 +1297,12 @@ export interface Settings {
   liveKeyPlays?: boolean;
   /** Pause long sims for big news (default on). */
   stopOnNews?: boolean;
+  /** A long sim also stops for a front-page story (weight 3) about the user's team (default on; under stopOnNews). */
+  stopOnFrontPage?: boolean;
+  /** A long sim also stops on the morning of one of the user's biggest games, a billing of weight 3 (default on; under stopOnNews). */
+  stopForBigGames?: boolean;
+  /** After a sim of more than a day, the "While you were away" digest opens first (default on; off: it waits on Today). */
+  digest?: boolean;
   /** Watch & coach (the Continue bar on game day) opens the pre-game screen first (default on). */
   pregame?: boolean;
   /** Big moments (a clinch, a title, your draft pick, a big signing, an award) take the screen for a moment (default on). */

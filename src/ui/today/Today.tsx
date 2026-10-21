@@ -1,8 +1,10 @@
-// Today: what needs you now. The first screen after every sim, short enough to read at a glance:
-// the next game (or where the offseason stands), the decisions waiting, practice between games (the
-// focus, and what the team knows of its system when it's short), the staff's top advice, the
-// owner when the seat is warm, the standings around you, your last results and new mail. Anything
-// with more to it is one tap away on its own screen; nothing here repeats something else here.
+// Today: the front page of your season. The first screen after every sim, short enough to read at
+// a glance: the way back to "While you were away" after a long sim, the lead (your last result while
+// it's fresh, or the top story about your team), the next game with its billing (or where the
+// offseason stands), the decisions waiting, practice between games, your season at a glance (form,
+// where you stand, the owner's and fans' pulse), the staff's top advice, the owner when the seat is
+// warm, the league's top headlines and new mail. Anything with more to it is one tap away on its own
+// screen; nothing here repeats something else here.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -13,14 +15,12 @@ import { agenda, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/age
 import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
 import { jobSecurity, type JobSecurity } from '../../core/league/jobSecurity';
 import { FIRING_LINE } from '../../core/league/owner';
-import { confStandings } from '../../core/league/standings';
-import { pct } from '../../core/analysis/odds';
 import { AgendaList } from '../components/Agenda';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
-import { TeamLogo } from '../components/TeamLogo';
 import { NextGameSlab, PhaseCard, nextGame } from './NextGame';
+import { DigestLink, Headlines, LeadStory, YourSeason } from './FrontPage';
 import { PracticeCard } from './Practice';
 import { MessageRow, MessageSheet, decisionId, markRead, needsYou } from './messages';
 import './today.css';
@@ -30,6 +30,9 @@ import { useForecast } from '../useForecast';
 const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
 
 const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs';
+
+/** The staff's cards Today shows (the rest are behind All advice). */
+const STAFF_SHOWN = 2;
 
 /** The guide was put away, but its weeks aren't over (Today offers it back). */
 function guideHidden(league: League): boolean {
@@ -58,32 +61,41 @@ export default function Today() {
   const js = useLeagueMemo(() => jobSecurity(league, forecast), [league, forecast]);
   const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
   // "All advice" when the feed says more than Today shows somewhere
-  const onToday = new Set([...feed.slice(0, 3).map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
+  const onToday = new Set([...feed.slice(0, STAFF_SHOWN).map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
   const more = full.some((c) => !onToday.has(c.id));
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
+  // a decision the season waits on goes above the news: it holds the Continue bar
+  const urgent = items.some((i) => i.required);
+  const todo = (items.length > 0 || hidden) && (
+    <Section
+      title="To do"
+      right={
+        hidden && (
+          <button type="button" className="card-link" disabled={simming} onClick={() => edit((l) => showGuide(l))}>
+            Show the guide
+          </button>
+        )
+      }
+    >
+      {items.length > 0 ? <AgendaList league={league} /> : <div className="td-none">Nothing waiting on you.</div>}
+    </Section>
+  );
 
   return (
     <main className="page td-page">
+      <DigestLink />
+      {urgent && todo}
+      <LeadStory league={league} />
+
       {g ? <NextGameSlab league={league} g={g} noPlan={noPlan} /> : <PhaseCard league={league} linked={items.map((i) => i.to)} />}
 
-      {(items.length > 0 || hidden) && (
-        <Section
-          title="To do"
-          right={
-            hidden && (
-              <button type="button" className="card-link" disabled={simming} onClick={() => edit((l) => showGuide(l))}>
-                Show the guide
-              </button>
-            )
-          }
-        >
-          {items.length > 0 ? <AgendaList league={league} /> : <div className="td-none">Nothing waiting on you.</div>}
-        </Section>
-      )}
+      {!urgent && todo}
 
       {/* (after the decisions: practice is a standing setting, they lapse) */}
       {g && <PracticeCard league={league} />}
+
+      {inSeason(league) && !league.fired && <YourSeason league={league} />}
 
       {feed.length > 0 && (
         <Section
@@ -97,7 +109,7 @@ export default function Today() {
           }
         >
           <div className="card flush ag-list" role="list" aria-label="From your staff">
-            {feed.slice(0, 3).map((c) => (
+            {feed.slice(0, STAFF_SHOWN).map((c) => (
               <div role="listitem" key={c.id}>
                 <AssistantRow card={c} />
               </div>
@@ -108,8 +120,7 @@ export default function Today() {
 
       {seat && <JobSecurityLine js={js} />}
 
-      {league.phase === 'regular' && <StandingsNearby league={league} />}
-      {inSeason(league) && <LastResults league={league} />}
+      <Headlines league={league} />
 
       <UnreadMail league={league} agendaIds={items.map((i) => i.id)} onOpen={setOpenMsg} />
 
@@ -183,100 +194,6 @@ function JobSecurityLine({ js }: { js: JobSecurity }) {
   );
 }
 
-/** Your conference rank with the two teams above and below, and the playoff odds in one figure. */
-function StandingsNearby({ league }: { league: League }) {
-  const me = league.userTid;
-  const conf = league.teams[me].conf;
-  const rows = useLeagueMemo(() => confStandings(league, conf), [league, conf]);
-  const fc = useForecast(league);
-  const played = rows.some((r) => r.won + r.lost > 0);
-  if (!played) return null;
-  const i = rows.findIndex((r) => r.tid === me);
-  const from = Math.max(0, Math.min(i - 2, rows.length - 5));
-  const odds = fc?.teams[me];
-  return (
-    <Section
-      title={
-        <h3>
-          {conf === 'E' ? 'East' : 'West'}
-          {odds && <span className="td-odds">{odds.out ? 'Out of the playoffs' : `Playoff odds ${pct(odds.reach[0], odds.clinched)}`}</span>}
-        </h3>
-      }
-      right={
-        <Link className="card-link" to="/league">
-          Standings <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      }
-    >
-      <div className="list td-flat">
-        {rows.slice(from, from + 5).map((r) => (
-          <Link key={r.tid} to={r.tid === me ? '/team' : `/teams/${r.tid}`} className={`td-st ${r.tid === me ? 'me' : ''}`}>
-            <span className="num td-st-rank">{r.confRank}</span>
-            <TeamLogo tid={r.tid} size={22} decorative />
-            <span className="grow ellipsis">{league.teams[r.tid].name}</span>
-            <span className="num td-st-rec">
-              {r.won}-{r.lost}
-            </span>
-            {/* games behind the conference leader, named once a row: the list has no header */}
-            <span className="num td-st-gb">
-              {r.gb === 0 ? '—' : r.gb.toFixed(1)}
-              <small> GB</small>
-            </span>
-          </Link>
-        ))}
-      </div>
-    </Section>
-  );
-}
-
-/** Your last three games this season, newest first. */
-function LastResults({ league }: { league: League }) {
-  const me = league.userTid;
-  const games = useLeagueMemo(() => {
-    const out = [];
-    for (let k = league.games.length - 1; k >= 0 && out.length < 3; k--) {
-      const x = league.games[k];
-      if (x.season === league.season && (x.home.tid === me || x.away.tid === me)) out.push(x);
-    }
-    return out;
-  }, [league, me]);
-  if (!games.length) return null;
-  return (
-    <Section
-      title="Last games"
-      right={
-        <Link className="card-link" to="/games">
-          Schedule <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      }
-    >
-      <div className="list td-flat">
-        {games.map((x) => {
-          const home = x.home.tid === me;
-          const us = home ? x.home : x.away;
-          const them = home ? x.away : x.home;
-          const won = us.pts > them.pts;
-          return (
-            <Link key={x.gid} to={`/game/${x.gid}`} className="td-game">
-              <span className={`td-wl ${won ? 'w' : 'l'}`}>
-                <span aria-hidden="true">{won ? 'W' : 'L'}</span>
-                <span className="sr-only">{won ? 'Won' : 'Lost'}</span>
-              </span>
-              <span className="num td-score">
-                {us.pts}-{them.pts}
-              </span>
-              <span className="td-ha dim">{home ? 'vs' : '@'}</span>
-              <TeamLogo tid={them.tid} size={22} decorative />
-              <span className="grow ellipsis">{league.teams[them.tid].name}</span>
-              <ChevronRight size={16} className="dim" aria-hidden="true" />
-            </Link>
-          );
-        })}
-      </div>
-    </Section>
-  );
-}
-
 /** The newest unread mail, leaving out what Today already shows: decisions in To do, and messages that point at Today. */
 function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: string[]; onOpen: (id: number) => void }) {
   const open = new Set(agendaIds);
@@ -305,6 +222,7 @@ function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: 
         {shown.map((m) => (
           <MessageRow
             key={m.id}
+            league={league}
             m={m}
             onOpen={() => {
               onOpen(m.id);

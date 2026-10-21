@@ -7,6 +7,7 @@ import { flowActions, opponentText, type FlowAction } from '../../ui/flow';
 import { simDay } from '../../core/league/season';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
+import { billingFor } from '../../core/analysis/gameStory';
 import { takeOverTeam } from '../../core/league/owner';
 import { validateTrade } from '../../core/league/trades';
 import type { League } from '../../core/types';
@@ -86,7 +87,11 @@ describe('Play menu', () => {
     const next = l.schedule.filter((g) => !g.played && g.day > l.day && (g.home === l.userTid || g.away === l.userTid)).sort((a, b) => a.day - b.day)[0];
     const home = next.home === l.userTid;
     const opp = l.teams[home ? next.away : next.home].abbrev;
-    expect(flowActions(l)[0].sub).toBe(`${fmtDate(l.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${home ? 'vs' : '@'} ${opp} (0-0)`);
+    // (a billed game leads with its billing: "Rivalry · Fri, Oct 23 · @ BOS (0-0)")
+    const tag = billingFor(l, next)?.tag;
+    expect(flowActions(l)[0].sub).toBe(
+      `${tag ? `${tag} · ` : ''}${fmtDate(l.season, next.day, { weekday: 'short', month: 'short', day: 'numeric' })} · ${home ? 'vs' : '@'} ${opp} (0-0)`,
+    );
   });
 
   it('"Watch & coach live" names tonight\'s opponent and its record; in the playoffs, the series', () => {
@@ -96,7 +101,9 @@ describe('Play menu', () => {
     const home = g.home === l.userTid;
     const opp = home ? g.away : g.home;
     const ts = curTeamSeason(l, opp);
-    expect(flowActions(l)[0]).toMatchObject({ label: 'Watch & coach live', sub: `${home ? 'vs' : '@'} ${l.teams[opp].abbrev} (${ts.won}-${ts.lost}) · today` });
+    const tag = billingFor(l, g)?.tag;
+    const vs = `${home ? 'vs' : '@'} ${l.teams[opp].abbrev} (${ts.won}-${ts.lost})`;
+    expect(flowActions(l)[0]).toMatchObject({ label: 'Watch & coach live', sub: tag ? `${tag} · ${vs}` : `${vs} · today` });
     // a playoff game shows the series from the user's side
     l.playoffs = [{ id: 'E1-0', round: 1, conf: 'E', high: opp, low: l.userTid, highSeed: 1, lowSeed: 8, highWins: 2, lowWins: 1 }];
     g.type = 'playoffs';

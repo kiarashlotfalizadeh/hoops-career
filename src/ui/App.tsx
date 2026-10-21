@@ -39,6 +39,7 @@ import { useFlowRunner } from './useFlow';
 import { lazyRetry } from './lazyRetry';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Moments } from './components/Moments';
+import { DigestHost } from './today/AwaySheet';
 import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
@@ -598,6 +599,7 @@ function GameShell() {
       <ContinueBar />
       <BottomNav />
       <Moments />
+      <DigestHost />
     </div>
   );
 }
