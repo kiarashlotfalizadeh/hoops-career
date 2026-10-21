@@ -303,7 +303,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                     <span className="num">{g.home.pts}</span>
                   </span>
                   <span className="grow" />
-                  <span className="tiny dim">{finalLabel(g.ot)}</span>
+                  <span className="gd-other-f">{g.ot ? finalLabel(g.ot) : 'Final'}</span>
                 </Link>
               );
             })}

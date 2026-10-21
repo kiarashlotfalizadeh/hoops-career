@@ -1,6 +1,6 @@
 // Keys to the game on screen (see core/analysis/keys.ts), as the matchup preview sets them: tracked
 // live at the breaks and in the huddle, and graded with the result.
-import { Check, KeyRound, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { GameResult, KeyGrade } from '../../core/types';
 import { isRate, keyState, keyValue, type GameKey, type KeyState } from '../../core/analysis/keys';
 
@@ -36,7 +36,7 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
         const u = rate ? '%' : '';
         return (
           <div key={k.id} className="gd-kl">
-            <div className="grow" style={{ minWidth: 0 }}>
+            <div className="grow">
               <div className="gd-kl-t">{k.title}</div>
               <div className="gd-kl-n num">
                 {v ?? 0}
@@ -44,9 +44,7 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
                 {u}
               </div>
             </div>
-            <span className={`tag ${tag.tone}`} style={{ flex: 'none' }}>
-              {tag.text}
-            </span>
+            <span className={`tag ${tag.tone}`}>{tag.text}</span>
           </div>
         );
       })}
@@ -61,9 +59,7 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
   return (
     <section className="sec">
       <div className="sec-h">
-        <h3>
-          <KeyRound size={13} aria-hidden="true" /> Keys to the game
-        </h3>
+        <h3>Keys to the game</h3>
         <span className={`tag ${met === counted.length && met > 0 ? 'good' : met === 0 ? 'bad' : ''}`}>
           {met} of {counted.length}
         </span>
@@ -78,7 +74,7 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
             >
               {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
             </span>
-            <div className="grow" style={{ minWidth: 0 }}>
+            <div className="grow">
               <div className="gd-key-t">{k.title}</div>
               <div className="gd-key-g">{k.goal}</div>
             </div>

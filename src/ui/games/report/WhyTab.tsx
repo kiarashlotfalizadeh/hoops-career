@@ -5,7 +5,7 @@
 // lineups and the momentum swings.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, Lightbulb } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { GameResult, League } from '../../../core/types';
 import { setLineText, type GameReport } from '../../../core/analysis/gameReport';
 import { Help, More, Section } from '../../components/ui';
@@ -174,14 +174,10 @@ function Factors({ factors }: { factors: GameReport['factors'] }) {
             {signed(f.pts)}
             <span className="gv-pts-u">pts</span>
           </span>
-          <div className="grow" style={{ minWidth: 0 }}>
+          <div className="grow">
             <div className="gv-factor-t">{f.title}</div>
             <div className="gv-factor-d">{f.detail}</div>
-            {f.advice && (
-              <div className="gv-advice">
-                <Lightbulb size={13} aria-hidden="true" /> {f.advice}
-              </div>
-            )}
+            {f.advice && <div className="gv-advice">{f.advice}</div>}
           </div>
         </div>
       ))}

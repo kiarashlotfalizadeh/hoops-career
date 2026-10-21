@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useState, type CSSProperties, type ReactNode } 
 import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
+import './gameday.css';
 
 /**
  * Track an element's width so charts draw at their real size instead of a letterboxed 320px. A
@@ -59,16 +60,17 @@ export function LineChart({
   return (
     <div ref={ref}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => (isFinite(v) ? Math.round(v) : 'none')).join(', ')}`}>
-        {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-2)" strokeDasharray="4 4" />}
-        {known.length === points.length && <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.12} />}
-        <path d={d} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" />
+        <line x1={0} x2={w} y1={h - 18} y2={h - 18} stroke="var(--line-2)" />
+        {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-3)" strokeDasharray="2 4" />}
+        {known.length === points.length && <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.08} />}
+        <path d={d} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
         {points.map(
           (v, i) =>
             isFinite(v) && (
               <g key={i}>
-                <circle cx={x(i)} cy={y(v)} r={3.5} fill={color} />
+                <circle cx={x(i)} cy={y(v)} r={2.75} fill={color} stroke="var(--raised)" strokeWidth={1.5} />
                 {values && points.length <= 12 && (
-                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" fontSize="10" fill="var(--text-2)" fontFamily="Archivo Variable" style={{ fontStretch: '72%' }}>
+                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" className="ch-val">
                     {Math.round(v)}
                   </text>
                 )}
@@ -84,8 +86,7 @@ export function LineChart({
                 x={x(i)}
                 y={h - 4}
                 textAnchor={labels.length > 1 && i === 0 ? 'start' : labels.length > 1 && i === labels.length - 1 ? 'end' : 'middle'}
-                fontSize="10"
-                fill="var(--text-dim)"
+                className="ch-axis"
               >
                 {l}
               </text>
@@ -152,42 +153,25 @@ export function FlowChart({
         {starts.map((sx, i) => (
           <g key={i}>
             {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
-            <text x={(sx + (starts[i + 1] ?? w)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+            <text x={(sx + (starts[i + 1] ?? w)) / 2} y={h + 13} textAnchor="middle" className="ch-axis">
               {periodLabel(i + 1)}
             </text>
           </g>
         ))}
-        <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-2)" />
-        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.35} clipPath={`url(#${clip}-top)`} />
-        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.35} clipPath={`url(#${clip}-bot)`} />
-        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={1.5} />
-        <text x={4} y={12} fontSize="10" fill="var(--text-dim)">
+        <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-3)" />
+        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.3} clipPath={`url(#${clip}-top)`} />
+        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.3} clipPath={`url(#${clip}-bot)`} />
+        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={1.25} strokeLinejoin="round" />
+        <text x={4} y={12} className="ch-axis">
           +{max}
         </text>
-        <text x={4} y={h - 4} fontSize="10" fill="var(--text-dim)">
+        <text x={4} y={h - 4} className="ch-axis">
           −{max}
         </text>
       </svg>
     </div>
   );
 }
-
-/** The crosshair's readout, over the top of the chart (centred on the point, kept inside the card). */
-const TIP: React.CSSProperties = {
-  position: 'absolute',
-  top: -4,
-  transform: 'translateX(-50%)',
-  maxWidth: 220,
-  padding: '4px 8px',
-  borderRadius: 8,
-  background: 'var(--surface-3)',
-  border: '1px solid var(--line-2)',
-  boxShadow: 'var(--shadow)',
-  pointerEvents: 'none',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
 
 /** One point of a win-probability line: game seconds played, and one team's chance to win (0..1). */
 export interface WpChartPoint {
@@ -252,7 +236,7 @@ export function WinProbChart({
   const shown = at !== null && at < points.length ? at : null;
   const tipLeft = shown !== null ? Math.min(Math.max(x(points[shown].t), 110), w - 110) : 0;
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
+    <div ref={ref} className="ch-wrap">
       <svg
         viewBox={`0 0 ${w} ${h + 16}`}
         width="100%"
@@ -282,25 +266,28 @@ export function WinProbChart({
         {starts.map((sx, i) => (
           <g key={i}>
             {i > 0 && <line x1={sx} x2={sx} y1={0} y2={h} stroke="var(--line)" />}
-            <text x={(sx + (starts[i + 1] ?? w - 4)) / 2} y={h + 12} textAnchor="middle" fontSize="10" fill="var(--text-dim)">
+            <text x={(sx + (starts[i + 1] ?? w - 4)) / 2} y={h + 13} textAnchor="middle" className="ch-axis">
               {periodLabel(i + 1)}
             </text>
           </g>
         ))}
-        <line x1={left} x2={w} y1={y(0.5)} y2={y(0.5)} stroke="var(--line-2)" />
+        {[1, 0].map((v) => (
+          <line key={v} x1={left} x2={w} y1={y(v)} y2={y(v)} stroke="var(--line)" />
+        ))}
+        <line x1={left} x2={w} y1={y(0.5)} y2={y(0.5)} stroke="var(--line-3)" />
         {[1, 0.5, 0].map((v) => (
-          <text key={v} x={left - 4} y={y(v) + 3} textAnchor="end" fontSize="10" fill="var(--text-dim)">
+          <text key={v} x={left - 5} y={y(v) + 3.5} textAnchor="end" className="ch-axis">
             {Math.round(v * 100)}%
           </text>
         ))}
-        <path d={area} fill={color} opacity={0.3} clipPath={`url(#${clip}-top)`} />
-        <path d={area} fill={colorOther} opacity={0.3} clipPath={`url(#${clip}-bot)`} />
-        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path d={area} fill={color} opacity={0.26} clipPath={`url(#${clip}-top)`} />
+        <path d={area} fill={colorOther} opacity={0.26} clipPath={`url(#${clip}-bot)`} />
+        <path d={d} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
         {marks.map((i, k) =>
           points[i] ? (
             <g key={i}>
-              <circle cx={x(points[i].t)} cy={y(points[i].wp)} r={5} fill="var(--text)" stroke="var(--surface)" strokeWidth={2} />
-              <text x={x(points[i].t)} y={y(points[i].wp) + (points[i].wp > 0.5 ? 17 : -9)} textAnchor="middle" fontSize="10" fontWeight={700} fill="var(--text)">
+              <circle cx={x(points[i].t)} cy={y(points[i].wp)} r={7.5} fill="var(--accent)" stroke="var(--raised)" strokeWidth={2} />
+              <text x={x(points[i].t)} y={y(points[i].wp) + 3.5} textAnchor="middle" className="ch-mark">
                 {k + 1}
               </text>
             </g>
@@ -308,13 +295,13 @@ export function WinProbChart({
         )}
         {shown !== null && (
           <g pointerEvents="none">
-            <line x1={x(points[shown].t)} x2={x(points[shown].t)} y1={0} y2={h} stroke="var(--text-dim)" />
-            <circle cx={x(points[shown].t)} cy={y(points[shown].wp)} r={4} fill="var(--text)" stroke="var(--surface)" strokeWidth={2} />
+            <line x1={x(points[shown].t)} x2={x(points[shown].t)} y1={0} y2={h} stroke="var(--line-3)" />
+            <circle cx={x(points[shown].t)} cy={y(points[shown].wp)} r={4} fill="var(--text)" stroke="var(--raised)" strokeWidth={2} />
           </g>
         )}
       </svg>
       {shown !== null && (
-        <div className="small" style={{ ...TIP, left: tipLeft }} role="status">
+        <div className="ch-tip" style={{ left: tipLeft }} role="status">
           <b className="num">{wpText(points[shown].wp)}</b> <span className="dim2">{describe(shown)}</span>
         </div>
       )}
@@ -323,7 +310,7 @@ export function WinProbChart({
 }
 
 /** A missed shot's cross on the shot chart: neutral, so a team's made shots keep its own colour, red ones included. */
-const MISS = '#9aa5b4';
+const MISS = 'var(--text-dim)';
 
 /** The shot chart's key: each team's made shots in its colour (`made`: label and colour), and the misses. */
 export function ShotKey({ made }: { made: { label: string; color: string }[] }) {
@@ -357,15 +344,9 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
   const made = shots.filter((s) => s.made).length;
   return (
     <div className="shot-chart">
-      <svg
-        viewBox={`0 0 ${size} ${h}`}
-        width="100%"
-        style={{ maxWidth: size * 1.4, display: 'block', margin: '0 auto' }}
-        role="img"
-        aria-label={`Shot chart: ${made} of ${shots.length} shots made`}
-      >
-        <rect x={0} y={0} width={size} height={h} rx={8} fill="#1a140f" />
-        <g stroke="rgba(255,255,255,0.22)" strokeWidth={1.4} fill="none">
+      <svg viewBox={`0 0 ${size} ${h}`} style={{ maxWidth: size * 1.4 }} role="img" aria-label={`Shot chart: ${made} of ${shots.length} shots made`}>
+        <rect x={0} y={0} width={size} height={h} rx={6} fill="var(--bg-2)" />
+        <g stroke="var(--line-3)" strokeWidth={1.1} fill="none">
           <rect x={sx(-8)} y={0} width={sx(8) - sx(-8)} height={sy(19)} />
           <circle cx={sx(0)} cy={sy(19)} r={(6 / W) * size} />
           <circle cx={sx(0)} cy={sy(by)} r={(0.75 / W) * size} />
@@ -377,11 +358,11 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
         </g>
         {shots.map((s, i) =>
           s.made ? (
-            <circle key={i} cx={sx(s.x)} cy={sy(s.y)} r={4.2} fill={color} stroke="#0b0f15" strokeWidth={1} opacity={0.95} />
+            <circle key={i} cx={sx(s.x)} cy={sy(s.y)} r={4} fill={color} stroke="var(--bg-2)" strokeWidth={1.25} />
           ) : (
-            <g key={i} stroke={MISS} strokeWidth={1.6} opacity={0.8}>
-              <line x1={sx(s.x) - 3.2} y1={sy(s.y) - 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) + 3.2} />
-              <line x1={sx(s.x) - 3.2} y1={sy(s.y) + 3.2} x2={sx(s.x) + 3.2} y2={sy(s.y) - 3.2} />
+            <g key={i} stroke={MISS} strokeWidth={1.4} strokeLinecap="round" opacity={0.75}>
+              <line x1={sx(s.x) - 3} y1={sy(s.y) - 3} x2={sx(s.x) + 3} y2={sy(s.y) + 3} />
+              <line x1={sx(s.x) - 3} y1={sy(s.y) + 3} x2={sx(s.x) + 3} y2={sy(s.y) - 3} />
             </g>
           ),
         )}
@@ -431,15 +412,15 @@ export function CompareBar({
     </span>
   );
   return (
-    <div className="col" style={{ gap: 4 }}>
-      <div className="row between small">
+    <div className="ch-cmp">
+      <div className="ch-cmp-top">
         {fig(a, aWins, colorA)}
-        <span className="tiny dim upper">{label}</span>
+        <span className="ch-cmp-l">{label}</span>
         {fig(b, bWins, colorB)}
       </div>
-      <div className="row" style={{ gap: 3 }}>
-        <div style={{ flex: wa / total, height: 6, borderRadius: 3, background: colorA, opacity: aWins || tie ? 1 : 0.45 }} />
-        <div style={{ flex: wb / total, height: 6, borderRadius: 3, background: colorB, opacity: bWins || tie ? 1 : 0.45 }} />
+      <div className="ch-cmp-bars" aria-hidden="true">
+        <i className={aWins || tie ? undefined : 'dim'} style={{ flex: wa / total, background: colorA }} />
+        <i className={bWins || tie ? undefined : 'dim'} style={{ flex: wb / total, background: colorB }} />
       </div>
     </div>
   );

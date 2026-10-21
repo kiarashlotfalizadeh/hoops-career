@@ -152,7 +152,7 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
   if (!d.h2h.games.length) return <div className="small dim">No meetings with the {opp.name} this season or last.</div>;
   const effects = d.h2h.effects.filter((e) => e.perGame >= 0.8).slice(0, 4);
   return (
-    <div className="col" style={{ gap: 10 }}>
+    <div className="scout-h2h-wrap">
       <div className="card flush list">
         {[...d.h2h.games].reverse().map((g) => (
           <Link key={g.gid} to={`/game/${g.gid}`} className="scout-h2h">
@@ -161,7 +161,7 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
               {/* the Cup final is on a neutral floor: nobody's home */}
               {g.cupFinal ? `vs ${opp.abbrev} · Cup final` : `${g.home ? 'vs' : '@'} ${opp.abbrev}`}
             </span>
-            <span className={`bold num ${g.won ? 'good' : 'bad'}`}>
+            <span className={`num scout-h2h-r ${g.won ? 'w' : 'l'}`}>
               {g.won ? 'W' : 'L'} {g.us}-{g.them}
             </span>
             <ChevronRight size={16} className="dim" aria-hidden="true" />
@@ -169,7 +169,7 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
         ))}
       </div>
       {effects.length > 0 && (
-        <div className="col" style={{ gap: 6 }}>
+        <div className="scout-dec">
           <div className="over">What decided them</div>
           {/* the figures in a column of their own, the sentences beside them */}
           <div className="scout-imps">
@@ -201,7 +201,7 @@ const gameDayWord = (league: League, day: number) =>
 export function OppPlanNote({ league, items, day }: { league: League; items: readonly OppPlanItem[] | null | undefined; day: number }) {
   if (!items?.length) return null;
   return (
-    <div className="col" style={{ gap: 4 }}>
+    <div className="scout-opp">
       <div className="small">
         <b>Expect from them {gameDayWord(league, day)}:</b> {items.map((it) => it.text).join(', ')}.
       </div>

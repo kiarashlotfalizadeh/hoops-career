@@ -74,7 +74,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
           title="Your moves"
           right={
             d.moves && (
-              <span className="row" style={{ gap: 6 }}>
+              <span className="gd-tally">
                 {d.moves.working > 0 && <Tag tone="good">{d.moves.working} working</Tag>}
                 {d.moves.notWorking > 0 && <Tag tone="bad">{d.moves.notWorking} not</Tag>}
               </span>

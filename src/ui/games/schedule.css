@@ -10,7 +10,8 @@
   gap: 10px;
 }
 .gs-month .num {
-  letter-spacing: 0.04em;
+  font-weight: 680;
+  color: var(--text-2);
 }
 .gs-row {
   display: grid;
@@ -19,6 +20,8 @@
   gap: 0 10px;
   padding: var(--row-py) var(--row-px);
   min-height: var(--row-min);
+  color: inherit;
+  transition: background var(--dur-fast) ease;
 }
 .gs-row + .gs-row,
 .gs-row + .list-divider,
@@ -28,18 +31,24 @@
 .gs-row:active {
   background: var(--surface);
 }
-/* today's game: a brand edge, as the Continue bar that plays it */
+@media (hover: hover) and (pointer: fine) {
+  .gs-row:hover,
+  .gs-more:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
+/* today's game: a step up from the list, its day in the brand's "needs you" */
 .gs-row.today {
   --text-dim: var(--text-2);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface);
 }
 .gs-row.today .wd {
-  color: var(--accent-text);
+  color: var(--brand);
+  font-weight: 700;
 }
 /* games against your team on another club's page: your team's edge */
 .gs-row.h2h {
-  box-shadow: inset 3px 0 0 var(--team-text);
+  box-shadow: inset 2px 0 0 var(--team-text);
 }
 .gs-date {
   display: flex;
@@ -47,15 +56,13 @@
   line-height: 1.15;
 }
 .gs-date .wd {
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .gs-date .d {
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 660;
 }
 .gs-opp {
   display: flex;
@@ -63,13 +70,13 @@
   min-width: 0;
 }
 .gs-name {
-  font-weight: 700;
-  font-size: 14.5px;
+  font-weight: 660;
+  font-size: 15px;
 }
 .gs-at {
   margin-right: 5px;
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 560;
   color: var(--text-dim);
 }
 .gs-sub {
@@ -90,7 +97,7 @@
   flex: none;
 }
 .gs-tag {
-  font-weight: 750;
+  font-weight: 650;
   color: var(--text-2);
 }
 .gs-res {
@@ -103,12 +110,12 @@
   flex-direction: column;
   align-items: flex-end;
   /* room for "130-102", so the W/L badges line up down the list */
-  min-width: 54px;
+  min-width: 56px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 17px;
-  line-height: 1.05;
+  font-weight: 740;
+  font-size: 19px;
+  line-height: 1.02;
 }
 .gs-under {
   display: flex;
@@ -133,37 +140,35 @@
 }
 .gs-ot {
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 11px;
-  font-weight: 650;
+  font-stretch: var(--text-w);
+  font-size: 11.5px;
+  font-weight: 620;
   color: var(--text-dim);
 }
+/* the result: its letter in its signal, before the score */
 .gs-wl {
   flex: none;
-  display: inline-grid;
-  place-items: center;
-  width: 21px;
-  height: 21px;
-  border-radius: 5px;
+  align-self: flex-start;
+  width: 12px;
+  text-align: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 13.5px;
+  font-weight: 740;
+  font-size: 19px;
+  line-height: 1.02;
 }
 .gs-wl.w {
-  background: color-mix(in srgb, var(--good) 18%, transparent);
   color: var(--good);
 }
 .gs-wl.l {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: color-mix(in srgb, var(--bad) 85%, white);
 }
 .gs-more {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 13.5px;
+  font-weight: 650;
   color: var(--accent-text);
   display: flex;
   align-items: center;
@@ -222,19 +227,26 @@
 .gs-sub > .gs-tag {
   flex: none;
 }
-/* the user's big nights: an upcoming game's billing, a result's headline */
+/* the user's big nights: an upcoming game's billing, a result's headline (the front page's in the serif) */
 .gs-bill {
   flex: none;
-  font-weight: 750;
-  color: var(--accent-text);
+  font-weight: 680;
+  color: var(--text);
 }
 .gs-bill.w3 {
-  color: var(--warn);
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-style: italic;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 .gs-head {
   color: var(--text-2);
 }
 .gs-head.big {
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-size: 13.5px;
+  font-weight: 560;
   color: var(--text);
-  font-weight: 650;
 }

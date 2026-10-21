@@ -5,7 +5,6 @@
 // storylines a broadcast would lead with.
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Crown, Flame, History, Medal, Repeat, Star, TrendingUp, type LucideIcon } from 'lucide-react';
 import type { League, ScheduledGame } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { edit, touch } from '../../../state/actions';
@@ -13,7 +12,7 @@ import { liveInProgress } from '../../../state/live';
 import { ensureRotation } from '../../../core/league/games';
 import { matchupPreview, type MatchupPreview, type SidePreview } from '../../../core/analysis/preview';
 import { gameKeys } from '../../../core/analysis/keys';
-import { storylines, type StorylineKind } from '../../../core/analysis/storylines';
+import { storylines } from '../../../core/analysis/storylines';
 import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
 import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
 import { injuryName, plural } from '../../../core/format';
@@ -114,10 +113,21 @@ function Projection({ league, game, pv }: { league: League; game: ScheduledGame;
     >
       <div className="mu-proj">
         <div className="mu-proj-top">
-          <div className="mu-big">{Math.abs(margin) < 0.5 ? 'A toss-up' : `${fav.abbrev} by ${Math.abs(margin).toFixed(1)}`}</div>
+          {Math.abs(margin) < 0.5 ? (
+            <div className="mu-toss">A toss-up</div>
+          ) : (
+            <div>
+              <div className="mu-big num">
+                {fav.abbrev}
+                <span className="mu-by">by</span>
+                {Math.abs(margin).toFixed(1)}
+              </div>
+              <div className="mu-proj-k">Projected margin</div>
+            </div>
+          )}
           <div className="right">
             <div className="mu-big num">{p0(win)}</div>
-            <div className="tiny dim">{me.abbrev} to win</div>
+            <div className="mu-proj-k">{me.abbrev} to win</div>
           </div>
         </div>
         <div className="mu-winbar" aria-hidden="true">
@@ -127,7 +137,7 @@ function Projection({ league, game, pv }: { league: League; game: ScheduledGame;
         <div className="mu-proj-form">
           {[pv.us.tid, pv.them.tid].map((tid) => (
             <span key={tid} className="mu-proj-fs">
-              <span className="tiny dim">{league.teams[tid].abbrev}</span>
+              <span className="mu-proj-ab">{league.teams[tid].abbrev}</span>
               <TeamForm league={league} tid={tid} page />
             </span>
           ))}
@@ -360,8 +370,6 @@ function TheirNight({ league, pv }: { league: League; pv: MatchupPreview }) {
   );
 }
 
-const STORY_ICON: Record<StorylineKind, LucideIcon> = { revenge: History, milestone: Medal, streak: TrendingUp, hot: Flame, rematch: Repeat, mvp: Crown, picks: Star };
-
 /** What a broadcast would lead with (see storylines.ts): the top three, each with the jersey of the player it's about. */
 function Storylines({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
   const stories = useLeagueMemo(() => {
@@ -373,13 +381,11 @@ function Storylines({ league, game, pv }: { league: League; game: ScheduledGame;
     <Section title="Storylines">
       <div className="card flush list">
         {stories.map((st) => {
-          const Icon = STORY_ICON[st.kind];
           const p = st.pids.length ? league.players[st.pids[0]] : undefined;
           return (
             <div key={st.id} className="mu-story">
               {p ? <Avatar p={p} /> : st.tids.length ? <TeamLogo tid={st.tids[0]} size={34} decorative /> : null}
               <span className="grow">{st.text}</span>
-              <Icon size={15} className="dim" aria-hidden="true" />
             </div>
           );
         })}

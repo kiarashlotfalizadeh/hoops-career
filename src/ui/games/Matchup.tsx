@@ -138,9 +138,6 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
   const plan = planStatus(league, opp, next[0]);
   return (
     <section className="slab mu-slab" style={slabVars(t.colors) as CSSProperties} aria-label={`Matchup: the ${t.region} ${t.name}`}>
-      <span className="slab-mark">
-        <TeamLogo tid={opp} size={200} decorative />
-      </span>
       <div className="mu-top">
         <button className="iconbtn" onClick={goBack} aria-label="Back">
           <ChevronLeft size={24} />
@@ -151,8 +148,8 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         </Link>
       </div>
       <div className="mu-id">
-        <TeamLogo tid={opp} size={56} decorative />
-        <div className="grow" style={{ minWidth: 0 }}>
+        <TeamLogo tid={opp} size={52} decorative />
+        <div className="mu-who">
           <div className="mu-region">{t.region}</div>
           <h1 className="mu-name ellipsis">{t.name}</h1>
         </div>

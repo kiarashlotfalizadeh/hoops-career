@@ -34,9 +34,7 @@ export function FlowTab({ g, league, side, kits }: { g: GameResult; league: Leag
               periodStarts={g.flowPeriods}
               height={150}
             />
-            <div className="small dim" style={{ marginTop: 8 }}>
-              {leadsText(away.abbrev, g.away.extra.biggestLead, home.abbrev, g.home.extra.biggestLead)}
-            </div>
+            <div className="gv-lead">{leadsText(away.abbrev, g.away.extra.biggestLead, home.abbrev, g.home.extra.biggestLead)}</div>
           </div>
         </Section>
       )}
@@ -133,7 +131,7 @@ function PlayByPlay({ pbp }: { pbp: PbpEntry[] }) {
   const periods = Math.max(4, ...pbp.map((e) => e.q));
   const rows = q ? pbp.filter((e) => e.q === q) : pbp;
   return (
-    <div className="col" style={{ gap: 10, marginTop: 6 }}>
+    <div className="gv-pbp-wrap">
       <Chips
         label="Period"
         value={q}

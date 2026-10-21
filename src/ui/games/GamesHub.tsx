@@ -134,9 +134,6 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       : '';
   return (
     <section className="slab gn" style={slabVars(t.colors) as CSSProperties} aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
-      <span className="slab-mark">
-        <TeamLogo tid={opp} size={180} decorative />
-      </span>
       <div className="gn-over">
         <span className={days <= 0 ? 'today' : undefined}>
           {when} · {where}
@@ -146,8 +143,8 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       <BillingLine billings={bills} />
       {series && <SeriesStrip league={league} seriesId={series.id} />}
       <div className="gn-id">
-        <TeamLogo tid={opp} size={52} decorative />
-        <div className="grow" style={{ minWidth: 0 }}>
+        <TeamLogo tid={opp} size={48} decorative />
+        <div className="gn-who">
           <div className="gn-region">{t.region}</div>
           <div className="gn-name ellipsis">
             <span className="gn-at">{g.home === me || neutral ? 'vs' : '@'}</span>
@@ -204,7 +201,7 @@ function SeriesStrip({ league, seriesId }: { league: League; seriesId: string })
         <div className="gn-ss-games">
           {games.map((r, i) => (
             <Link key={r.gid} to={`/game/${r.gid}`} className={`gn-ss-g ${won(r) ? 'w' : 'l'}`} aria-label={`Game ${i + 1}: ${won(r) ? 'won' : 'lost'} ${score(r)}`}>
-              <span className="tiny">G{i + 1}</span>
+              <span className="gn-ss-n">G{i + 1}</span>
               <span className="num">{score(r)}</span>
             </Link>
           ))}

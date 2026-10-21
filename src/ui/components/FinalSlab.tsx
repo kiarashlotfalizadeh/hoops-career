@@ -1,7 +1,7 @@
-// A game's result as a broadcast's final graphic, at the top of its report and of the live game's
-// final card: both teams in their colours, the score, whether the user won and, for his games, the
-// result as an event: the occasion, the headline and its dek, the player of the game's jersey and
-// line, and what it means (the story from gameStory.ts), over the linescore. The first time a result
+// A game's result as a newspaper's game story, at the top of its report and of the live game's final
+// card: the scoreboard in both teams' colours (the score, whether the user won), then for his games
+// the result as an event on the page: the headline in the serif and its dek, the player of the
+// game's jersey and line, and what it means (the story from gameStory.ts), over the linescore. The first time a result
 // shows, its score counts up and the headline rises in (under a second; reduced motion shows it still).
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -37,8 +37,8 @@ export function gameTypeLabel(league: League, g: GameResult): string {
 }
 
 /**
- * The result as a broadcast's final: both teams in their colours, the score, the linescore, and
- * whether the user won. `children` go under it (the final card's buttons).
+ * The result: the scoreboard in both teams' colours with whether the user won, the story, the
+ * linescore. `children` go under it (the final card's buttons).
  */
 export function FinalSlab({
   res,
@@ -63,32 +63,36 @@ export function FinalSlab({
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
   const side = (t: typeof home, pts: number, win: boolean, isHome: boolean) => (
     <Link to={t.tid === league.userTid ? '/team' : `/teams/${t.tid}`} className={`gd-fs-team${isHome ? ' home' : ''}${win ? '' : ' lost'}`}>
-      <TeamLogo tid={t.tid} size={40} decorative />
-      <span className="gd-fs-ab">{t.abbrev}</span>
+      <span className="gd-fs-id">
+        <TeamLogo tid={t.tid} size={36} decorative />
+        <span className="gd-fs-ab">{t.abbrev}</span>
+      </span>
       <span className="gd-fs-pts num">{moment ? <CountUp value={String(pts)} ms={800} /> : pts}</span>
     </Link>
   );
   return (
     <section
-      className={`slab gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}
+      className={`gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}
       aria-label={`Final: ${away.name} ${res.away.pts}, ${home.name} ${res.home.pts}`}
       style={{ '--fa': la.slab, '--fh': lh.slab, '--ta': la.trim, '--th': lh.trim } as CSSProperties}
     >
-      <div className="gd-fs-over">
-        {/* (a regular-season night's occasion in place of "Regular season": a series, the play-in and the Cup say theirs) */}
-        <span>{story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : gameTypeLabel(league, res)}</span>
-        <span>
-          {fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}
-          {res.att ? ` · Att ${res.att.toLocaleString()}` : ''}
-        </span>
-      </div>
-      <div className="gd-fs-row">
-        {side(away, res.away.pts, res.away.pts > res.home.pts, false)}
-        <div className="gd-fs-mid">
-          <span className="gd-fs-final">{finalLabel(res.ot)}</span>
-          {us && <span className={`gd-fs-wl ${won ? 'w' : 'l'}`}>{won ? 'Win' : 'Loss'}</span>}
+      <div className="gd-fs-board">
+        <div className="gd-fs-over">
+          {/* (a regular-season night's occasion in place of "Regular season": a series, the play-in and the Cup say theirs) */}
+          <span>{story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : gameTypeLabel(league, res)}</span>
+          <span>
+            {fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+            {res.att ? ` · Att ${res.att.toLocaleString()}` : ''}
+          </span>
         </div>
-        {side(home, res.home.pts, res.home.pts > res.away.pts, true)}
+        <div className="gd-fs-row">
+          {side(away, res.away.pts, res.away.pts > res.home.pts, false)}
+          <div className="gd-fs-mid">
+            <span className="gd-fs-final">{res.ot ? finalLabel(res.ot) : 'Final'}</span>
+            {us && <span className={`gd-fs-wl ${won ? 'w' : 'l'}`}>{won ? 'Win' : 'Loss'}</span>}
+          </div>
+          {side(home, res.home.pts, res.home.pts > res.away.pts, true)}
+        </div>
       </div>
       {story && <StoryBlock league={league} story={story} moment={moment} />}
       <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />

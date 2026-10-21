@@ -2,7 +2,7 @@
 // (League.reel), played on the court as the live game drew them, with the running call of each play.
 // Until it's played it is one line with its Play button: the court opens for the reel and closes after.
 import { useMemo, useState } from 'react';
-import { Clapperboard, Play, SkipBack, SkipForward, Square } from 'lucide-react';
+import { Play, SkipBack, SkipForward, Square } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
@@ -58,11 +58,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
   };
   return (
     <Section
-      title={
-        <h3>
-          <Clapperboard size={13} aria-hidden="true" /> Highlights
-        </h3>
-      }
+      title="Highlights"
       right={
         sc === null ? (
           <button className="btn sm" onClick={() => go(0)}>
@@ -91,7 +87,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
             />
           </div>
           <div className="gd-hl-bar small">
-            <span className="tag brand" style={{ flex: 'none' }}>
+            <span className="tag">
               {i + 1}/{scripts.length}
             </span>
             <span className="grow">{captionAt(sc, beat)}</span>
