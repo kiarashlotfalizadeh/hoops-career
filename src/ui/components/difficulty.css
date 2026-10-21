@@ -27,6 +27,7 @@
 .dif-col {
   font-size: 11.5px;
   font-weight: 600;
+  letter-spacing: -0.005em;
   line-height: 1.2;
   text-align: center;
   text-wrap: balance;
@@ -40,7 +41,7 @@
 .dif-opt {
   width: 100%;
   min-height: 46px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   text-align: left;
   color: var(--text-2);
   transition: background 0.15s ease;
@@ -48,10 +49,10 @@
 .dif-opt:active {
   background: var(--surface);
 }
+/* the chosen preset: solid ink, as every chosen level is */
 .dif-opt.on {
-  --text-dim: var(--text-2);
-  color: var(--text);
-  background: var(--surface-2);
+  color: var(--on-ink);
+  background: var(--on);
 }
 .dif-opt:disabled {
   opacity: 0.5;
@@ -70,11 +71,11 @@
   border-radius: 50%;
   border: 1.5px solid var(--line-3);
 }
-/* the chosen one: a white dot in a white ring, as every chosen option is */
+/* the chosen one: a filled dot in a ring, in the ink's own white */
 .dif-opt.on .dif-dot {
-  border-color: var(--on);
-  box-shadow: inset 0 0 0 3.5px var(--surface-2);
-  background: var(--on);
+  border-color: var(--on-ink);
+  box-shadow: inset 0 0 0 3.5px var(--on);
+  background: var(--on-ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .dif-opt:not(.on):not(:disabled):hover {
@@ -83,10 +84,10 @@
 }
 .dif-v {
   text-align: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 18px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14.5px;
+  letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

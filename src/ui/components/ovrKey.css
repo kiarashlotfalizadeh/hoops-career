@@ -1,5 +1,5 @@
-/* The keys to what colours mean: the OVR tiers (OvrKey and its sheet) and a ratings
-   table's bands (RatingKey). */
+/* The keys to what colours mean: the OVR tiers (OvrKey and its sheet), a ratings
+   table's bands (RatingKey); and the glossary's sheet. */
 .ok-key {
   position: relative;
   display: inline-flex;
@@ -38,10 +38,10 @@
   height: 19px;
   padding: 0 3px;
   border-radius: var(--radius-xs);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   color: var(--tier);
@@ -72,7 +72,7 @@
   border-top: 1px solid var(--line);
 }
 .ok-ladder li.on {
-  background: var(--surface);
+  background: color-mix(in srgb, var(--team) 10%, transparent);
 }
 .ok-sw {
   display: grid;
@@ -80,18 +80,18 @@
   width: 30px;
   height: 24px;
   border-radius: var(--radius-xs);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 15px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 13.5px;
+  letter-spacing: -0.04em;
   color: var(--tier);
   background: color-mix(in srgb, var(--tier) 14%, transparent);
 }
 .ok-span {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
 .ok-names {
@@ -120,4 +120,42 @@
 .ok-rkey-list b {
   display: inline-block;
   min-width: 3.2em;
+}
+
+/* the glossary's sheet (components/Glossary.tsx): each group under a black head, its terms on card
+   stock, the word in bold over what it means */
+.gl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  margin-top: 14px;
+}
+.gl-grp {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.gl-h {
+  font-family: var(--head);
+  font-stretch: 114%;
+  font-size: 18px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
+}
+.gl-terms {
+  margin: 0;
+}
+.gl-term {
+  padding: 12px var(--row-px) 13px;
+}
+.gl-term dt {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.gl-term dd {
+  margin: 3px 0 0;
+  font-size: 13.5px;
+  line-height: 1.42;
+  color: var(--text-2);
 }

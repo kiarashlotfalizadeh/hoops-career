@@ -113,7 +113,7 @@ export default function Inbox() {
       {list.length === 0 ? (
         <div className="empty">{filter === 'unread' ? 'No unread messages.' : filter === 'need' ? 'Nothing needs you.' : 'No messages here yet.'}</div>
       ) : (
-        <div className="list td-mail">
+        <div className="card flush list td-mail">
           {list.slice(0, shown).map((m) => {
             // older seasons under a divider of their own
             const key = String(m.season);

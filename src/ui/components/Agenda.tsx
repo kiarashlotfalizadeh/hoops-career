@@ -59,7 +59,7 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
           {choices.map((c, i) => (
             <button
               key={c.label}
-              className={`btn xs ${armed === c.label ? 'danger' : i === 0 && item.suggestion ? 'primary' : c.tone === 'good' ? 'good' : ''}`}
+              className={`btn xs ${armed === c.label ? 'danger' : i === 0 && item.suggestion ? 'primary' : ''}`}
               disabled={!!c.blocked || simming}
               title={c.blocked}
               onClick={() => {

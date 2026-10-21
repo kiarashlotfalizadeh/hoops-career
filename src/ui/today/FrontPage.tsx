@@ -10,8 +10,8 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate } from '../../core/league/helpers';
 import { pct } from '../../core/analysis/odds';
-import { Avatar, Section } from '../components/ui';
-import { TeamLogo } from '../components/TeamLogo';
+import { Avatar, Section, Statline } from '../components/ui';
+import { madeAtt } from '../../core/format';
 import { TrendMark, usePulse } from '../office/Pulse';
 import { useForecast } from '../useForecast';
 import { freshResult, headOf, lastResults, leagueHeadlines, runOf, scoreText, storyLink, topStory, type Result } from './front';
@@ -74,9 +74,10 @@ export function LeadStory({ league, lead }: { league: League; lead: Lead }) {
     const n = lead.n;
     const pid = n.pids.find((p) => league.players[p]?.tid === league.userTid);
     const p = pid !== undefined ? league.players[pid] : undefined;
+    // a story about the team: the black headline on the paper is the poster
     return (
-      <Link to={storyLink(n.id)} className={`td-lead w${n.weight ?? 1}`} aria-label={`${headOf(n)}. Read the story`}>
-        <span className="td-lead-over">
+      <Link to={storyLink(n.id)} className={`td-lead td-story w${n.weight ?? 1}`} aria-label={`${headOf(n)}. Read the story`}>
+        <span className="td-lead-over over">
           <span>
             {NEWS_LABEL[n.kind] ?? 'Your team'} · {fmtDate(n.season, n.day)}
           </span>
@@ -94,53 +95,70 @@ export function LeadStory({ league, lead }: { league: League; lead: Lead }) {
       </Link>
     );
   }
+  return <ResultPoster league={league} lead={lead} />;
+}
+
+/** The figures under a result's headline, from the game's box: how it shot, from three, the bench, the biggest lead. */
+function resultFigures(league: League, gid: number) {
+  const g = league.games.find((x) => x.gid === gid);
+  if (!g) return null;
+  const us = g.home.tid === league.userTid ? g.home : g.away;
+  const t = us.t;
+  return [
+    { k: 'FG%', v: t.fga ? ((t.fgm / t.fga) * 100).toFixed(1) : '—' },
+    { k: '3P', v: madeAtt(t.tpm, t.tpa) },
+    { k: 'Bench pts', v: String(us.extra.bench) },
+    { k: 'Biggest lead', v: String(us.extra.biggestLead) },
+  ];
+}
+
+/**
+ * The last result as a poster: the score on your team's slab (yours on the left, theirs on the
+ * right, the loser's figure a step back), by how much under it; then the press's headline on the
+ * paper, its line, and the box score's figures under an ink rule. All of it opens the report.
+ */
+function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { kind: 'result' }> }) {
   const { r, story, pog } = lead;
-  const hero = story?.hero !== undefined ? league.players[story.hero] : pog ? league.players[pog.pid] : undefined;
   const opp = league.teams[r.opp];
+  const me = league.teams[league.userTid];
   const dek = story?.dek ?? pog?.text;
+  const figs = useLeagueMemo(() => resultFigures(league, r.gid), [league, r.gid]);
+  const ot = r.ot > 0 ? `${r.ot > 1 ? r.ot : ''}OT` : '';
+  const by = Math.abs(r.us - r.them);
+  const over = [story?.kicker, ...(story?.means.slice(0, 1) ?? [])].filter(Boolean).join(' · ');
   return (
     <Link
       to={`/game/${r.gid}`}
-      className={`td-lead result ${r.won ? 'won' : 'lost'}`}
+      className={`td-lead td-result ${r.won ? 'won' : 'lost'}`}
       aria-label={`${r.won ? 'Won' : 'Lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${opp.name}. ${story?.head ?? ''} Game report`}
     >
-      <span className="td-lead-over">
-        <span>Final · {fmtDate(league.season, r.day, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
-        <span className="td-lead-go">
-          Report <ChevronRight size={14} aria-hidden="true" />
+      <span className="slab td-score" aria-hidden="true">
+        <span className="td-score-over">
+          <span>
+            Final{ot && `/${ot}`} · {fmtDate(league.season, r.day, { weekday: 'short', month: 'short', day: 'numeric' })}
+          </span>
+          <span className="td-lead-go">
+            Report <ChevronRight size={14} />
+          </span>
         </span>
-      </span>
-      {/* the score as the scoreboard has it: ours first, the winning side's figure in full ink */}
-      <span className="td-lead-score">
-        <span className="num td-lead-pts">
-          <span className={r.won ? '' : 'td-lead-lose'}>{r.us}</span>
-          <span className="td-lead-dash">-</span>
-          <span className={r.won ? 'td-lead-lose' : ''}>{r.them}</span>
-          {r.ot > 0 && <small>{r.ot > 1 ? r.ot : ''}OT</small>}
+        <span className="td-score-figs">
+          <span className={`td-score-n ${r.won ? '' : 'lo'}`}>{r.us}</span>
+          <span className={`td-score-n them ${r.won ? 'lo' : ''}`}>{r.them}</span>
         </span>
-        <span className="td-lead-vs">
-          <span className={`td-lead-wl ${r.won ? 'good' : 'bad'}`}>{r.won ? 'Won' : 'Lost'}</span>
-          <span className="td-lead-opp">
-            {r.home ? 'vs' : 'at'} <TeamLogo tid={r.opp} size={18} decorative /> <span className="ellipsis">{opp.name}</span>
+        <span className="td-score-foot">
+          <span className="td-score-tm">{me.name}</span>
+          <span className="td-score-by">
+            {r.won ? 'Won' : 'Lost'} by {by}
+          </span>
+          <span className="td-score-tm them">
+            {r.home ? 'vs' : 'at'} {opp.name}
           </span>
         </span>
       </span>
+      {over && <span className="td-lead-kick over">{over}</span>}
       <span className="td-lead-head">{story?.head ?? plainHead(league, r)}</span>
-      {dek && (
-        <span className="td-lead-by">
-          {hero && <Avatar p={hero} />}
-          <span className="td-lead-dek">{dek}</span>
-        </span>
-      )}
-      {!!story?.means.length && (
-        <span className="td-lead-means">
-          {story.means.slice(0, 2).map((m) => (
-            <span key={m} className="tag">
-              {m}
-            </span>
-          ))}
-        </span>
-      )}
+      {dek && <span className="td-lead-dek">{dek}</span>}
+      {figs && <Statline items={figs} />}
     </Link>
   );
 }
@@ -167,8 +185,8 @@ export function YourSeason({ league }: { league: League }) {
       <div className="td-strip">
         {played && odds && (
           <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the playoffs. Standings' : `Playoff odds ${pct(odds.reach[0], odds.clinched)}. Standings`}>
-            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(odds.reach[0], odds.clinched)}</span>
             <span className="td-cell-k">{odds.out ? 'Of the playoffs' : 'Playoff odds'}</span>
+            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(odds.reach[0], odds.clinched)}</span>
           </Link>
         )}
         {results.length > 0 && (
@@ -180,6 +198,7 @@ export function YourSeason({ league }: { league: League }) {
               .map((r) => `${r.won ? 'won' : 'lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${league.teams[r.opp].abbrev}`)
               .join(', ')}${run && run.n >= 2 ? `. ${run.won ? 'Won' : 'Lost'} ${run.n} straight` : ''}. Schedule`}
           >
+            <span className="td-cell-k">Last {results.length}</span>
             <span className="td-cell-v td-form" aria-hidden="true">
               {[...results].reverse().map((r) => (
                 <span key={r.gid} className={r.won ? 'w' : 'l'}>
@@ -187,22 +206,21 @@ export function YourSeason({ league }: { league: League }) {
                 </span>
               ))}
             </span>
-            <span className="td-cell-k">Last {results.length}</span>
           </Link>
         )}
         {!league.fired && (
           <>
             <Link to="/office/owner" className="td-cell" aria-label={`The owner is ${pulse.owner.word}. Owner`}>
-              <span className={`td-cell-v td-word tone-${pulse.owner.tone}`}>{MOOD_WORD(pulse.owner.word)}</span>
               <span className="td-cell-k">
                 Owner <TrendMark trend={pulse.owner.trend} />
               </span>
+              <span className={`td-cell-v td-word tone-${pulse.owner.tone}`}>{MOOD_WORD(pulse.owner.word)}</span>
             </Link>
             <Link to="/office/owner" className="td-cell" aria-label={`The fans are ${pulse.fans.word}. Owner`}>
-              <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
               <span className="td-cell-k">
                 Fans <TrendMark trend={pulse.fans.trend} />
               </span>
+              <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
             </Link>
           </>
         )}
@@ -250,7 +268,7 @@ export function Headlines({ league, lead }: { league: League; lead?: Lead | null
         </Link>
       }
     >
-      <div className="list td-rows">
+      <div className="card flush list td-news">
         {lead && <LeadRow league={league} lead={lead} />}
         {items.map((x) => (
           <Link key={x.id} to={storyLink(x.id)} className="td-hl">

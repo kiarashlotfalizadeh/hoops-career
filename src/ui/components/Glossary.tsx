@@ -3,6 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { GLOSSARY, glossaryEntry, type GlossaryGroup } from '../glossary';
 import { Sheet } from './ui';
+import './ovrKey.css';
 
 export function Term({ id, children }: { id: string; children?: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -45,19 +46,21 @@ export function GlossarySheet({ open, onClose }: { open: boolean; onClose: () =>
         onChange={(e) => setQ(e.target.value)}
         aria-label="Search the glossary"
       />
-      <div className="col" style={{ gap: 14, marginTop: 12 }}>
+      <div className="gl-list">
         {GROUPS.map((grp) => {
           const rows = hits.filter((g) => g.group === grp);
           if (!rows.length) return null;
           return (
-            <section key={grp} className="col" style={{ gap: 8 }}>
-              <h3 className="over">{grp}</h3>
-              {rows.map((g) => (
-                <div key={g.id}>
-                  <div className="bold">{g.term}</div>
-                  <div className="small dim2">{g.text}</div>
-                </div>
-              ))}
+            <section key={grp} className="gl-grp">
+              <h3 className="gl-h">{grp}</h3>
+              <dl className="card flush list gl-terms">
+                {rows.map((g) => (
+                  <div key={g.id} className="gl-term">
+                    <dt>{g.term}</dt>
+                    <dd>{g.text}</dd>
+                  </div>
+                ))}
+              </dl>
             </section>
           );
         })}

@@ -27,7 +27,7 @@
   gap: 8px;
   margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
   padding: 6px 52px 12px var(--gut-l);
-  background: var(--raised);
+  background: var(--bg);
 }
 .qs-box > svg {
   position: absolute;
@@ -53,7 +53,8 @@
   transition: background var(--dur-fast) ease;
 }
 .qs-row.on {
-  background: var(--surface);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
 }
 .qs-main {
   flex: 1;
@@ -79,7 +80,7 @@
   color: var(--text-dim);
 }
 .qs-t {
-  font-weight: 620;
+  font-weight: 680;
   font-size: 15.5px;
   line-height: 1.22;
 }

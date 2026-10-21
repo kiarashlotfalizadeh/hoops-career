@@ -35,6 +35,8 @@ const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' ||
 
 /** The most of the staff's cards in Needs you (the rest are behind All advice): fewer when the list is long already. */
 const STAFF_SHOWN = 2;
+/** The most rows Needs you shows on the page (required decisions always show); the rest are in its sheet. */
+const NEEDS_SHOWN = 3;
 /** The most mail in Needs you (the rest is in the inbox, behind the bell). */
 const MAIL_SHOWN = 2;
 
@@ -45,7 +47,7 @@ function guideHidden(league: League): boolean {
   return guideDone(league).size < GUIDE_STEPS.length;
 }
 
-type Opened = null | 'advice' | 'glossary' | 'practice';
+type Opened = null | 'advice' | 'glossary' | 'practice' | 'needs';
 
 export default function Today() {
   const league = useLeague();
@@ -95,6 +97,55 @@ export default function Today() {
     <NextGameSlab league={league} g={g} noPlan={noPlan} />
   );
   const needs = before + advice.length > 0;
+  // every row of Needs you, in order: the decisions (required first), the deadline, mail, the owner, the staff
+  const needRows = [
+    ...[...items]
+      .sort((a, b) => Number(b.required) - Number(a.required))
+      .map((i) => (
+        <div role="listitem" className="td-need" key={i.id}>
+          <AgendaRow item={i} />
+        </div>
+      )),
+    ...(showDeadline
+      ? [
+          <div role="listitem" className="td-need" key="deadline">
+            <NeedRow
+              to="/office/trade"
+              tone="warn"
+              title={deadlineText(deadline)}
+              line={deadline === 0 ? 'Deals have to be done by the end of the day.' : `The last day for deals: ${fmtDate(league.season, league.tradeDeadlineDay)}.`}
+            />
+          </div>,
+        ]
+      : []),
+    ...mail.map((m) => (
+      <div role="listitem" className="td-need" key={`mail:${m.id}`}>
+        <MailRow
+          league={league}
+          m={m}
+          onOpen={() => {
+            setOpenMsg(m.id);
+            markRead(m.id);
+          }}
+        />
+      </div>
+    )),
+    ...(seat
+      ? [
+          <div role="listitem" className="td-need" key="owner">
+            <NeedRow to="/office/owner" tone={js.heat === 'hot' ? 'bad' : 'warn'} title={`Job security ${js.score} · ${js.label}`} line={js.line} />
+          </div>,
+        ]
+      : []),
+    ...advice.map((c) => (
+      <div role="listitem" className="td-need" key={c.id}>
+        <AssistantRow card={c} />
+      </div>
+    )),
+  ];
+  // a few on the front page (every required one), the rest one tap away in a sheet
+  const shownNeeds = Math.max(NEEDS_SHOWN, items.filter((i) => i.required).length);
+  const hiddenNeeds = Math.max(0, needRows.length - shownNeeds);
 
   return (
     <main className="page td-page">
@@ -104,53 +155,15 @@ export default function Today() {
         <Section
           title="Needs you"
           right={
-            moreAdvice > 0 && (
-              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
-                All advice <ChevronRight size={14} aria-hidden="true" />
+            hiddenNeeds > 0 && (
+              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('needs')}>
+                All {needRows.length} <ChevronRight size={14} aria-hidden="true" />
               </button>
             )
           }
         >
-          <div className="ag-list td-rows" role="list" aria-label="Needs you">
-            {[...items]
-              .sort((a, b) => Number(b.required) - Number(a.required))
-              .map((i) => (
-                <div role="listitem" key={i.id}>
-                  <AgendaRow item={i} />
-                </div>
-              ))}
-            {showDeadline && (
-              <div role="listitem">
-                <NeedRow
-                  to="/office/trade"
-                  tone="warn"
-                  title={deadlineText(deadline)}
-                  line={deadline === 0 ? 'Deals have to be done by the end of the day.' : `The last day for deals: ${fmtDate(league.season, league.tradeDeadlineDay)}.`}
-                />
-              </div>
-            )}
-            {mail.map((m) => (
-              <div role="listitem" key={m.id}>
-                <MailRow
-                  league={league}
-                  m={m}
-                  onOpen={() => {
-                    setOpenMsg(m.id);
-                    markRead(m.id);
-                  }}
-                />
-              </div>
-            ))}
-            {seat && (
-              <div role="listitem">
-                <NeedRow to="/office/owner" tone={js.heat === 'hot' ? 'bad' : 'warn'} title={`Job security ${js.score} · ${js.label}`} line={js.line} />
-              </div>
-            )}
-            {advice.map((c) => (
-              <div role="listitem" key={c.id}>
-                <AssistantRow card={c} />
-              </div>
-            ))}
+          <div className="td-needs" role="list" aria-label="Needs you">
+            {needRows.slice(0, shownNeeds)}
           </div>
         </Section>
       )}
@@ -167,10 +180,10 @@ export default function Today() {
       <Headlines league={league} lead={leadIsHero ? null : lead} />
 
       <Section title="More">
-        <div className="td-more">
+        <div className="card flush td-more">
           {g && <PracticeRow league={league} onOpen={() => setSheet('practice')} />}
           <DigestRow />
-          {!needs && moreAdvice > 0 && (
+          {moreAdvice > 0 && (
             <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
               <span className="grow td-mrow-k">From your staff</span>
               <span className="td-mrow-v">{moreAdvice}</span>
@@ -192,6 +205,11 @@ export default function Today() {
         </div>
       </Section>
 
+      <Sheet open={sheet === 'needs'} onClose={() => setSheet(null)} title="Needs you">
+        <div className="td-needs" role="list" aria-label="Needs you">
+          {needRows}
+        </div>
+      </Sheet>
       <Sheet open={sheet === 'advice'} onClose={() => setSheet(null)} title="From your staff">
         <AllAdvice feed={full} />
       </Sheet>

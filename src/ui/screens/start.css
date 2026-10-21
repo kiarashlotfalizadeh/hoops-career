@@ -6,49 +6,47 @@
   max-width: 560px;
 }
 
-/* ------------------------------------------------------------ the masthead */
+/* ------------------------------------------------------------ the masthead: a poster's headline */
 .st-hero {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 20px 0 22px;
+  align-items: flex-start;
+  padding: 8px 0 14px;
 }
 .st-mark {
-  color: var(--text-2);
-}
-/* the wordmark in the headline cut, two words on two lines */
-.st-word {
-  margin-top: 20px;
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 800;
-  font-size: clamp(52px, 16vw, 72px);
-  line-height: 0.92;
-  letter-spacing: -0.045em;
   color: var(--text);
 }
-.st-word em {
-  display: block;
-  font-style: normal;
-  color: var(--text-2);
+/* the wordmark in the headline cut, black, as big as the page allows */
+.st-word {
+  margin-top: 22px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 900;
+  font-size: clamp(64px, 22.5vw, 118px);
+  line-height: 0.84;
+  letter-spacing: -0.035em;
+  color: var(--text);
 }
 .st-tag {
   margin: 18px 0 0;
-  max-width: 30ch;
-  text-wrap: balance;
-  font-size: 15px;
+  max-width: 32ch;
+  text-wrap: pretty;
+  font-size: 15.5px;
   line-height: 1.45;
-  color: var(--text-dim);
+  color: var(--text-2);
+}
+.st-hero .statline {
+  align-self: stretch;
+  margin-top: 22px;
 }
 
-/* continue: the latest league as a slab in its team's colours */
+/* continue: the latest league as its team's poster, the record as big as it fits */
 .st-continue {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
   width: 100%;
-  padding: 15px 16px 16px;
+  padding: 16px 20px 20px;
   text-align: left;
   transition: transform 0.08s ease;
 }
@@ -60,38 +58,52 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
 .st-c-main {
   display: flex;
-  align-items: center;
-  gap: 13px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+}
+.st-c-who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
 }
 .st-c-team {
   display: block;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  font-size: 23px;
-  line-height: 1.04;
-  letter-spacing: -0.03em;
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
 .st-c-name {
   display: block;
-  margin-top: 4px;
-  font-size: 13px;
+  max-width: 100%;
+  margin-top: -4px;
+  font-family: var(--mono);
+  font-size: 12.5px;
   color: var(--text-2);
 }
 .st-c-rec {
   flex: none;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 780;
-  font-size: 38px;
-  line-height: 1;
+  font-weight: 900;
+  font-size: 72px;
+  line-height: 0.8;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
 }
 .st-actions {
   gap: 10px;
@@ -144,32 +156,36 @@
 .nl-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  margin-top: -4px;
+  gap: 6px;
+  margin-top: -6px;
 }
 .nl-steps span {
-  height: 2px;
+  height: 3px;
+  border-radius: 2px;
   background: var(--line-2);
 }
 .nl-steps span.on {
-  background: var(--accent);
+  background: var(--ink);
 }
-/* the league's kind: two choices, the chosen one a step lighter with its mark white */
+/* the league's kind: two cards of card stock, the chosen one ringed in ink with its check solid */
 .nl-choice {
   display: flex;
   align-items: flex-start;
   gap: 14px;
   width: 100%;
-  padding: 18px 16px;
+  padding: 20px 18px;
   text-align: left;
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   transition:
     transform 0.08s ease,
-    background var(--dur-fast) ease;
+    box-shadow var(--dur-fast) ease;
 }
 .nl-choice.on {
-  background: var(--surface-2);
+  box-shadow:
+    inset 0 0 0 2px var(--ink),
+    var(--shadow-card);
 }
 .nl-choice:disabled {
   opacity: 0.6;
@@ -177,14 +193,15 @@
 .nl-choice h3 {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 770;
-  font-size: 20px;
-  letter-spacing: -0.03em;
+  font-weight: 900;
+  font-size: 23px;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 .nl-body {
   display: block;
-  margin-top: 5px;
-  font-size: 13.5px;
+  margin-top: 8px;
+  font-size: 14px;
   color: var(--text-2);
 }
 .nl-note {
@@ -193,9 +210,8 @@
 }
 .nl-check {
   flex: none;
-  width: 22px;
-  height: 22px;
-  margin-top: 2px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -206,7 +222,12 @@
   background: var(--on);
   color: var(--on-ink);
 }
-/* the team grid: the chosen one wears its colours */
+/* the team grid: card stock, the chosen one printed in its colours */
+.nl-hint {
+  margin-top: -4px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
 .nl-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -216,18 +237,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   min-width: 0;
-  padding: 13px 6px 11px;
+  padding: 14px 6px 12px;
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   transition:
     transform 0.08s ease,
     background var(--dur-fast) ease;
 }
 .nl-team.on {
-  --text-dim: rgba(255, 255, 255, 0.8);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--slab) 92%, #fff), color-mix(in srgb, var(--slab) 70%, #000));
+  --text-dim: rgba(255, 255, 255, 0.84);
+  background: var(--slab);
   color: #fff;
 }
 .nl-team-name {
@@ -236,64 +258,114 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
-  font-weight: 620;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 .nl-team-sub {
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
 }
-/* the team you picked, as a slab: its name as the headline */
-.nl-pick {
+/* the team you'd take over, as its poster: its name as the headline, its roster's rank as the figure */
+.nl-pick,
+.nl-chosen {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  padding: 16px 20px 20px;
 }
 .nl-pick-over {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-2);
-}
-.nl-pick-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  min-height: 30px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+}
+.nl-pick-over > svg {
+  flex: none;
 }
 .nl-pick-name {
+  display: block;
+  margin-top: 2px;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 790;
-  font-size: 32px;
-  line-height: 0.98;
-  letter-spacing: -0.035em;
+  font-weight: 900;
+  font-size: 40px;
+  line-height: 0.92;
+  letter-spacing: -0.045em;
 }
 .nl-pick-region {
   display: block;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0;
+  font-weight: 640;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
 .nl-pick-sub {
-  font-size: 13px;
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-size: 12.5px;
   color: var(--text-2);
+}
+.nl-pick-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 2px solid rgba(255, 255, 255, 0.85);
 }
 .nl-pick-top {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 7px;
+  min-width: 0;
   font-size: 14.5px;
-  font-weight: 600;
+  font-weight: 640;
 }
-.nl-pick-top .ovr {
-  background: rgba(0, 0, 0, 0.24);
+.nl-pick-rank {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
-.nl-chosen {
-  gap: 12px;
+.nl-pick-rank-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: 76px;
+  line-height: 0.8;
+  letter-spacing: -0.035em;
+}
+.nl-pick-rank-k {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-2);
+}
+.nl-chosen-main {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 14px;
+}
+.nl-chosen-main > svg {
+  flex: none;
+}
+.nl-chosen .nl-pick-name {
+  font-size: 34px;
+}
+.nl-chosen .nl-pick-over .btn {
+  margin: -6px -6px 0 0;
 }
 /* a name and its field on one line */
 .nl-field {
@@ -310,7 +382,7 @@
   height: 42px;
 }
 .nl-label {
-  font-weight: 620;
+  font-weight: 680;
 }
 /* the game's settings: the difficulty rows, then the switches, a hairline between each */
 .nl-game {

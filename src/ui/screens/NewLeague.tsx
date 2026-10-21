@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, ChevronLeft } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
-import { rankOf } from '../../core/format';
+import { ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
 import { DifficultyPicker } from '../components/DifficultyPicker';
@@ -199,6 +199,42 @@ export default function NewLeague() {
 
       {step === 'team' && (
         <>
+          {/* the team you'd take over, as its poster: the grid under it picks another */}
+          {f && tid !== null && (
+            <section className="slab nl-pick" style={slabVars(f.colors)} aria-label={`${f.region} ${f.name}`}>
+              <span className="nl-pick-over">
+                <span className="ellipsis">
+                  {f.div} · {market(f.pop)} market
+                </span>
+                <TeamLogo tid={tid} size={44} decorative />
+              </span>
+              <span className="nl-pick-name">
+                <span className="nl-pick-region">{f.region}</span>
+                {f.name}
+              </span>
+              <span className="nl-pick-sub">{kind === 'fictional' ? 'New players, generated at the start' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
+              {(teamInfo?.[tid] || rank) && (
+                <span className="nl-pick-foot">
+                  {teamInfo?.[tid] && (
+                    <span className="nl-pick-top">
+                      {teamInfo[tid].top.map((p) => (
+                        <span key={p.name} className="row">
+                          <Ovr v={p.ovr} size="sm" />
+                          <span className="ellipsis">{p.name}</span>
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                  {rank && (
+                    <span className="nl-pick-rank">
+                      <span className="nl-pick-rank-v">{ordinal(rank[tid])}</span>
+                      <span className="nl-pick-rank-k">roster of {FRANCHISES.length}</span>
+                    </span>
+                  )}
+                </span>
+              )}
+            </section>
+          )}
           <Segmented
             value={conf}
             onChange={(c) => {
@@ -212,7 +248,7 @@ export default function NewLeague() {
               { id: 'W', label: 'West' },
             ]}
           />
-          {rank && <div className="tiny dim">Under each team: its roster&apos;s strength, ranked among the 30.</div>}
+          {rank && <div className="nl-hint">Under each team: its roster&apos;s strength, ranked among the {FRANCHISES.length}.</div>}
           <div className="nl-grid">
             {FRANCHISES.map((fr, i) => ({ fr, i }))
               .filter(({ fr }) => fr.conf === conf)
@@ -230,31 +266,6 @@ export default function NewLeague() {
                 </button>
               ))}
           </div>
-          {f && tid !== null && (
-            <section className="slab nl-pick" style={slabVars(f.colors)} aria-label={`${f.region} ${f.name}`}>
-              <span className="nl-pick-over">
-                {f.div} · {market(f.pop)} market
-              </span>
-              <span className="nl-pick-head">
-                <span className="nl-pick-name">
-                  <span className="nl-pick-region">{f.region}</span>
-                  {f.name}
-                </span>
-                <TeamLogo tid={tid} size={56} decorative />
-              </span>
-              <span className="nl-pick-sub">{kind === 'fictional' ? 'New players, generated at the start' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
-              {teamInfo?.[tid] && (
-                <span className="nl-pick-top">
-                  {teamInfo[tid].top.map((p) => (
-                    <span key={p.name} className="row">
-                      <Ovr v={p.ovr} size="sm" />
-                      <span className="ellipsis">{p.name}</span>
-                    </span>
-                  ))}
-                </span>
-              )}
-            </section>
-          )}
           {/* in reach while the grid scrolls: the pick shows on the button */}
           <div className="nl-cta">
             <button className="btn primary big block" disabled={!f} onClick={() => setStep('setup')}>
@@ -266,18 +277,21 @@ export default function NewLeague() {
 
       {step === 'setup' && f && tid !== null && (
         <>
-          <div className="card row nl-chosen">
-            <TeamLogo tid={tid} size={40} decorative />
-            <div className="grow">
-              <div className="lr-name">
-                {f.region} {f.name}
-              </div>
-              <div className="lr-meta">{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</div>
-            </div>
-            <button className="btn sm" onClick={back}>
-              Change
-            </button>
-          </div>
+          <section className="slab nl-chosen" style={slabVars(f.colors)} aria-label="Your team">
+            <span className="nl-pick-over">
+              <span>{kind === 'real' ? 'Real 2026-27 NBA' : 'Fictional league'}</span>
+              <button className="btn sm" onClick={back}>
+                Change
+              </button>
+            </span>
+            <span className="nl-chosen-main">
+              <TeamLogo tid={tid} size={52} decorative />
+              <span className="nl-pick-name">
+                <span className="nl-pick-region">{f.region}</span>
+                {f.name}
+              </span>
+            </span>
+          </section>
           <Section title="You">
             <div className="card flush nl-game">
               <label className="nl-field">

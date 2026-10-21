@@ -161,14 +161,14 @@ function DigestSection({ title, more, go, children }: { title: string; more?: { 
   return (
     <section className="dg-sec">
       <div className="dg-sec-h">
-        <h3 className="over">{title}</h3>
+        <h3 className="dg-h">{title}</h3>
         {more && (
           <button type="button" className="card-link" onClick={() => go(more.to)}>
             {more.label} <ChevronRight size={14} aria-hidden="true" />
           </button>
         )}
       </div>
-      <div className="dg-list">{children}</div>
+      <div className="card flush dg-list">{children}</div>
     </section>
   );
 }

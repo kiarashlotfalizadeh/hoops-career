@@ -52,7 +52,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
                 ? 'Your league is safe. Go back or reload to continue.'
                 : 'Your saved leagues are kept on this device. Reload, or return to the main menu to pick a league.'}
           </div>
-          <div className="tiny dim" style={{ wordBreak: 'break-word' }}>
+          <div className="tiny dim mono" style={{ wordBreak: 'break-word' }}>
             {error.message}
           </div>
           <div className="row wrap" style={{ marginTop: 6 }}>

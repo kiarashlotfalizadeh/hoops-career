@@ -7,10 +7,10 @@ import { ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, openable, type LeagueMeta } from '../../state/persistence';
 import { exportRawSave } from '../../state/backup';
 import { useStore } from '../../state/store';
-import { PHASE_LABEL, seasonLabel } from '../../core/constants';
+import { PHASE_LABEL, START_SEASON, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { FRANCHISES } from '../../core/teams';
-import { Section, Sheet } from '../components/ui';
+import { Section, Sheet, Statline } from '../components/ui';
 import { BrandMark } from '../components/BrandMark';
 import { slabVars } from '../teamColors';
 import './start.css';
@@ -86,30 +86,39 @@ export default function Start() {
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
     <main className="page standalone st-page st-menu">
-      {/* the masthead: the wordmark in the headline cut, the mark over it */}
+      {/* the masthead: the wordmark as a poster's headline, the box score's line under it */}
       <header className="st-hero">
-        <BrandMark size={34} className="st-mark" />
+        <BrandMark size={30} className="st-mark" />
         <h1 className="st-word">
-          Hoops <em>Career</em>
+          Hoops
+          <br />
+          Career
         </h1>
-        <p className="st-tag">GM and head coach of a real 2026-27 roster.</p>
+        <p className="st-tag">GM and head coach of a real NBA roster: build it in the office, coach it on the floor.</p>
+        <Statline
+          items={[
+            { k: 'Teams', v: String(FRANCHISES.length) },
+            { k: 'Games', v: '82' },
+            { k: 'Season', v: seasonLabel(START_SEASON) },
+          ]}
+        />
       </header>
       {latest && (
-        // the league played last, one tap from where you left it
+        // the league played last, one tap from where you left it: its team's poster
         <button className="slab st-continue" style={slabVars(latest.colors)} onClick={() => void open(latest.id)}>
           <span className="st-c-over">
-            <span>
+            <span className="ellipsis">
               Continue · {seasonLabel(latest.season)} · {PHASE_LABEL[latest.phase]}
             </span>
-            <ChevronRight size={20} aria-hidden="true" />
+            <ChevronRight size={18} aria-hidden="true" />
           </span>
           <span className="st-c-main">
-            <TeamLogo tid={Math.max(0, tidOf(latest))} size={48} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
-            <span className="grow">
+            <span className="st-c-who">
+              <TeamLogo tid={Math.max(0, tidOf(latest))} size={44} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
               <span className="st-c-team">{latest.teamName}</span>
               <span className="st-c-name ellipsis">{latest.name}</span>
             </span>
-            <span className="num st-c-rec">{latest.record}</span>
+            <span className="st-c-rec">{latest.record}</span>
           </span>
         </button>
       )}

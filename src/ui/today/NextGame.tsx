@@ -20,7 +20,8 @@ import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
-import { BillingLine, useBillings } from '../games/occasion';
+import { billingTitle, useBillings } from '../games/occasion';
+import { gameProjection } from '../../core/analysis/preview';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -113,54 +114,66 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
   for (const b of bills.slice(1, 3)) if (b.weight >= 2) tags.push({ text: b.tag });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
+  const t = league.teams[opp];
+  const home = g.home === me;
+  // the night's name as the headline on the paper ("Rivalry night in Denver"), its reason as the dek
+  const top = bills[0];
+  const head = top ? `${billingTitle(top)} ${home ? `vs the ${t.name}` : `in ${t.region}`}` : home ? `The ${t.name} in town` : `On the road in ${t.region}`;
+  const win = pv?.projection.win;
   return (
-    <section className="slab td-slab" aria-label="Next game">
-      <div className="td-over">
-        <span>
-          {kind} · {whenLabel(league, g.day)}
-        </span>
-        <Link to={`/games/${opp}`} className="card-link">
-          Matchup <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      </div>
-      {bills.length > 0 ? (
-        <BillingLine billings={bills} className="td-bill" />
-      ) : (
-        <h2 className="td-bill-plain">
-          {g.home === me ? 'vs' : 'at'} the {league.teams[opp].name}
-        </h2>
-      )}
-      <div className="td-match">
-        {[g.away, g.home].map((tid, i) => {
-          const r = curTeamSeason(league, tid);
-          return (
-            <div key={tid} className={`td-side ${i ? 'home' : ''}`}>
-              <TeamLogo tid={tid} size={46} decorative />
-              <span className="td-side-t">
-                <span className="td-ab">{league.teams[tid].abbrev}</span>
-                <span className="td-rec num">
-                  {r.won}-{r.lost}
-                </span>
+    <section className="td-gameday" aria-label="Next game">
+      <div className="slab td-gd">
+        <div className="td-score-over">
+          <span>
+            {kind} · {whenLabel(league, g.day)}
+          </span>
+          <Link to={`/games/${opp}`} className="td-gd-go">
+            Matchup <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        </div>
+        <div className="td-gd-main">
+          {/* the preview's chance to win, as big as it fits */}
+          {win !== undefined && (
+            <div className="td-gd-win">
+              <span className="td-gd-pct">
+                {Math.round(win * 100)}
+                <small>%</small>
               </span>
+              <span className="td-gd-k">Chance to win</span>
             </div>
-          );
-        })}
-        <span className="td-at" aria-label={g.home === me ? 'versus' : 'at'}>
-          {g.home === me ? 'vs' : '@'}
-        </span>
+          )}
+          {/* away over home, as the scoreboard lists them */}
+          <div className="td-gd-teams">
+            {[g.away, g.home].map((tid) => {
+              const r = curTeamSeason(league, tid);
+              return (
+                <div key={tid} className="td-gd-team">
+                  <span className="td-gd-at">{tid === g.home ? '@' : ''}</span>
+                  <TeamLogo tid={tid} size={34} decorative />
+                  <span className="td-gd-ab">{league.teams[tid].abbrev}</span>
+                  <span className="td-gd-rec">
+                    {r.won}-{r.lost}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+      <h2 className="td-lead-head">{head}</h2>
+      {top && <p className="td-lead-dek">{top.line}</p>}
       {(tags.length > 0 || outs.length > 0) && (
         <div className="td-foot-s">
           {tags.length > 0 && (
             <div className="td-tags">
-              {tags.slice(0, 2).map((t) =>
-                t.to ? (
-                  <Link key={t.text} to={t.to} className="tag td-tag-link">
-                    {t.text} <ChevronRight size={12} aria-hidden="true" />
+              {tags.slice(0, 2).map((x) =>
+                x.to ? (
+                  <Link key={x.text} to={x.to} className="tag td-tag-link">
+                    {x.text} <ChevronRight size={12} aria-hidden="true" />
                   </Link>
                 ) : (
-                  <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
-                    {t.text}
+                  <span key={x.text} className={`tag ${x.stake ? 'warn' : ''}`}>
+                    {x.text}
                   </span>
                 ),
               )}
@@ -192,21 +205,28 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
   const bills = useBillings(league, g);
   const r = curTeamSeason(league, opp);
   const t = league.teams[opp];
+  // the preview's chance to win (from the home side), turned to ours
+  const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
+  const win = Math.round((g.home === me ? proj.win : 1 - proj.win) * 100);
   return (
-    <Link to={`/games/${opp}`} className="td-next" aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}. Matchup`}>
-      <TeamLogo tid={opp} size={34} decorative />
+    <Link
+      to={`/games/${opp}`}
+      className="card td-next"
+      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}, ${win}% chance to win. Matchup`}
+    >
+      <TeamLogo tid={opp} size={40} decorative />
       <span className="grow">
         <span className="td-next-t">
-          {g.home === me ? 'vs' : 'at'} {t.name}{' '}
-          <span className="num td-next-rec">
-            {r.won}-{r.lost}
-          </span>
+          {g.home === me ? 'vs' : 'at'} {t.name}
         </span>
         <span className="td-next-m">
-          {whenLabel(league, g.day)} · {bills[0]?.tag ?? kindOf(league, g)}
+          {whenLabel(league, g.day)} · {bills[0]?.tag ?? kindOf(league, g)} · {r.won}-{r.lost}
         </span>
       </span>
-      <ChevronRight size={18} className="dim" aria-hidden="true" />
+      <span className="td-next-win">
+        <span className="td-next-pct">{win}%</span>
+        <span className="td-next-k">to win</span>
+      </span>
     </Link>
   );
 }
@@ -296,8 +316,8 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
   const taken = new Set([...linked, flowActions(league).find((a) => a.primary)?.to].map(path));
   const link = c.link && !taken.has(path(c.link.to)) ? c.link : undefined;
   return (
-    <section className="slab td-slab td-phase" aria-label={c.title}>
-      <div className="td-over">
+    <section className="slab td-phase" aria-label={c.title}>
+      <div className="td-score-over">
         <span>{c.over}</span>
         {link && (
           <Link to={link.to} className="card-link">
