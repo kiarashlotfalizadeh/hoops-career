@@ -16,6 +16,7 @@ import {
   practiceDay,
   roleFam,
   rotationWeights,
+  sharedSeconds,
   trainingCamp,
   PREP_META,
   type FamDim,
@@ -23,15 +24,16 @@ import {
 import { gamesOnDay } from './games';
 import { teamPlayers } from './helpers';
 
-/** After a game between two of the league's teams: each learns from the tactics it played (its coach's, as the game ended) by its players' minutes. */
+/** After a game between two of the league's teams: each learns from the tactics it played (its coach's, as the game ended) by its players' minutes, and each pair by the minutes they shared. */
 export function learnFromGame(league: League, sim: GameSim) {
+  const lineups = [...sim.lineups.values()];
   for (const t of sim.T) {
     const team = league.teams[t.tid];
     if (!team || team.tid !== t.tid) continue;
     const roster = teamPlayers(league, t.tid);
     const secs: Record<number, number> = {};
     for (const p of t.players) secs[p.pid] = p.b.sec;
-    afterGame(ensureFam(team, roster), t.base, roster, secs);
+    afterGame(ensureFam(team, roster), t.base, roster, secs, sharedSeconds(lineups, t.side));
   }
 }
 

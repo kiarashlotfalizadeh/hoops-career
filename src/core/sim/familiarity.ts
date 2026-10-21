@@ -12,6 +12,7 @@ import { ACTIONS } from '../types';
 import { clamp } from '../random';
 import { archetype } from '../ratings';
 import { defRoleOf, shapeOf } from './tactics';
+import { duoKey, duoOf, NEW_DUO } from './links';
 
 /** The parts of a system familiarity is kept by, as the screens show them. */
 export type FamDim = 'shape' | 'actions' | 'tempo' | 'roles' | 'scheme' | 'coverage' | 'pressure';
@@ -78,6 +79,9 @@ const GAME_KNOW = 0.08;
 const GAME_ROLE = 0.1;
 /** A day's fade of an option nobody on the team runs, toward its floor. */
 const FADE = 0.004;
+/** How much of the way to 100 a pair's understanding closes for a full game (24 minutes) shared on the floor, and for a practice day in the rotation together (at a balanced focus). */
+const DUO_GAME = 0.12;
+const DUO_PRACTICE = 0.004;
 
 /** A practice focus's share of a game's learning, for the tactics in play and for the other slots, and of a game's knowledge. */
 export const PREP_META: Record<PrepFocus, { label: string; help: string; active: number; alt: number; know: number; rest: number }> = {
@@ -281,7 +285,15 @@ export function freshFamiliarity(team: Team, roster: Pick<Player, 'pid' | 'ratin
     fam.know[p.pid] = level - 1;
     fam.roles[p.pid] = [rolePair(team.tactics, p), level - 3];
   }
+  fam.duo = {};
+  const rot = rotationPids(team, roster);
+  for (let i = 0; i < rot.length; i++) for (let j = i + 1; j < rot.length; j++) fam.duo[duoKey(rot[i], rot[j])] = level - 7;
   return fam;
+}
+
+/** The players in the team's rotation (the ones its plan gives minutes, or its top ten). */
+function rotationPids(team: Team, roster: Pick<Player, 'pid'>[]): number[] {
+  return Object.keys(rotationWeights(team, roster)).map(Number);
 }
 
 /** The team's familiarity, made fresh if it has none (a save from before it was kept). */
@@ -309,10 +321,11 @@ function learn(fam: Familiarity, t: Tactics, rate: number, players: Pick<Player,
 }
 
 /**
- * After a game: the tactics it was played with are drilled a game's worth, and each player who
- * played learns the system and his roles by his minutes (a full game's worth at 24 minutes).
+ * After a game: the tactics it was played with are drilled a game's worth, each player who played
+ * learns the system and his roles by his minutes (a full game's worth at 24 minutes), and each pair
+ * who shared the floor understands each other better by their minutes together (`shared`, seconds by duoKey).
  */
-export function afterGame(fam: Familiarity, t: Tactics, roster: Pick<Player, 'pid' | 'ratings'>[], secs: Record<number, number>) {
+export function afterGame(fam: Familiarity, t: Tactics, roster: Pick<Player, 'pid' | 'ratings'>[], secs: Record<number, number>, shared: Record<string, number> = {}) {
   learn(fam, t, 1, [], 0);
   for (const p of roster) {
     const share = Math.min(1, (secs[p.pid] ?? 0) / 1440);
@@ -320,6 +333,25 @@ export function afterGame(fam: Familiarity, t: Tactics, roster: Pick<Player, 'pi
     fam.know[p.pid] = grow(knowOf(fam, p.pid), GAME_KNOW * share);
     fam.roles[p.pid] = [rolePair(t, p), grow(roleFam(fam, t, p), GAME_ROLE * share)];
   }
+  const duo = (fam.duo ??= {});
+  for (const [k, sec] of Object.entries(shared)) {
+    const [a, b] = k.split('-').map(Number);
+    duo[k] = grow(duoOf(fam, a, b), DUO_GAME * Math.min(1, sec / 1440));
+  }
+}
+
+/** Seconds each pair of a side's players shared on the floor, by duoKey, from a game's lineup tallies. */
+export function sharedSeconds(lineups: { t: 0 | 1; pids: number[]; sec: number }[], side: 0 | 1): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const ls of lineups) {
+    if (ls.t !== side || ls.sec <= 0) continue;
+    for (let i = 0; i < ls.pids.length; i++)
+      for (let j = i + 1; j < ls.pids.length; j++) {
+        const k = duoKey(ls.pids[i], ls.pids[j]);
+        out[k] = (out[k] ?? 0) + ls.sec;
+      }
+  }
+  return out;
 }
 
 /**
@@ -344,6 +376,21 @@ export function practiceDay(team: Team, roster: Pick<Player, 'pid' | 'ratings'>[
   for (const p of roster) fam.know[p.pid] = grow(knowOf(fam, p.pid), 0.03 * focus.know * x);
   for (const pid of Object.keys(fam.know)) if (!on.has(+pid)) delete fam.know[+pid];
   for (const pid of Object.keys(fam.roles)) if (!on.has(+pid)) delete fam.roles[+pid];
+  // the rotation's pairs work together in practice too; pairs with a player gone are forgotten
+  const duo = (fam.duo ??= {});
+  const rate = DUO_PRACTICE * focus.know * x;
+  if (rate > 0) {
+    const rot = rotationPids(team, roster);
+    for (let i = 0; i < rot.length; i++)
+      for (let j = i + 1; j < rot.length; j++) {
+        const k = duoKey(rot[i], rot[j]);
+        duo[k] = grow(duoOf(fam, rot[i], rot[j]), rate);
+      }
+  }
+  for (const k of Object.keys(duo)) {
+    const [a, b] = k.split('-').map(Number);
+    if (!on.has(a) || !on.has(b) || duo[k] <= NEW_DUO) delete duo[k];
+  }
 }
 
 /** Training camp: three weeks of tactical drills before opening night. */

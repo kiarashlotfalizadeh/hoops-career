@@ -261,6 +261,28 @@
   font-size: 11.5px;
   color: var(--warn);
 }
+/* each five's partnerships (sim/links.ts), under the fives */
+.mu-links {
+  padding: 8px var(--row-px) 10px;
+}
+.mu-links-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.mu-links-side.r {
+  text-align: right;
+}
+.mu-link b {
+  font-weight: 650;
+}
+.mu-link.bad {
+  color: var(--bad);
+  font-weight: 600;
+}
 
 /* storylines */
 .mu-story {

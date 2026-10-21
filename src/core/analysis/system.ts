@@ -13,7 +13,8 @@ import { clamp } from '../random';
 import { composites, type Composites } from '../ratings';
 import { teamPlayers } from '../league/helpers';
 import { COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, levelName, shapeOf, withMentality } from '../sim/tactics';
-import { famDims, famEnds, famLabel, famPenalty, rotationWeights } from '../sim/familiarity';
+import { famDims, famEnds, famLabel, famPenalty, freshFamiliarity, rotationWeights } from '../sim/familiarity';
+import { LINK_NAMED, lineupLinks, type Link } from '../sim/links';
 
 export type QualityId = 'creation' | 'spacing' | 'rim' | 'movement' | 'transition' | 'glass' | 'security' | 'rimD' | 'perimD' | 'pnrD' | 'threeD' | 'boards' | 'transD' | 'forceTo';
 
@@ -405,4 +406,25 @@ export const MISCAST_STARS = 2;
 export function miscast<R extends string>(fits: Record<R, number>, cur: R): R | null {
   const best = (Object.keys(fits) as R[]).reduce((a, r) => (fits[r] > fits[a] ? r : a), cur);
   return fitStars(fits[best]) - fitStars(fits[cur]) >= MISCAST_STARS ? best : null;
+}
+
+/**
+ * A team's partnerships across its rotation (its top eight, any pair of them, as they'd play on the
+ * floor together), strongest first: what a trade or a signing would break or make.
+ */
+export function rotationLinks(league: League, tid: number): Link[] {
+  const team = league.teams[tid];
+  const players = teamPlayers(league, tid);
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const eight = (team.rotation?.order ?? [])
+    .map((pid) => byId.get(pid))
+    .filter((p): p is Player => !!p)
+    .slice(0, 8);
+  return lineupLinks(team.tactics, eight, team.fam ?? freshFamiliarity(team, players)).links;
+}
+
+/** The team's named partnerships that sending these players away would break. */
+export function brokenLinks(league: League, tid: number, out: number[]): Link[] {
+  const gone = new Set(out);
+  return rotationLinks(league, tid).filter((l) => l.strength >= LINK_NAMED && (gone.has(l.a) || gone.has(l.b)));
 }

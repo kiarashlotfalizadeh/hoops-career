@@ -632,6 +632,12 @@ export interface Familiarity {
   habit: Record<string, number>;
   know: Record<number, number>;
   roles: Record<number, [string, number]>;
+  /**
+   * Understanding between two teammates (0-100), by duoKey ('12-345', the lower pid first): built by
+   * the minutes they share on the floor, what their partnerships play at (see src/core/sim/links.ts).
+   * Pairs not kept are at NEW_DUO.
+   */
+  duo?: Record<string, number>;
 }
 
 /**

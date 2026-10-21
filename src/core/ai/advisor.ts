@@ -1,7 +1,7 @@
 // The assistant coach: opponent scouting, counter-tactic candidates, and alerts about rotation and
 // tactics issues on your own team.
 
-import type { ActionType, DefRole, DefScheme, League, OffShape, Player, PlayerDefense, PnrCoverage, PrepFocus, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
+import type { ActionType, DefRole, DefScheme, League, OffRole, OffShape, Player, PlayerDefense, PnrCoverage, PrepFocus, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
 import { OFF_SHAPES, SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
@@ -9,7 +9,8 @@ import { ACTION_META, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, clo
 import { CRAMPED_SPACING, autoDefRoles, autoTactics, evaluateLineup, rosterProfile, shapeFits, sustainableMinutes } from './coachAI';
 import { FLUID, PREP_META, famLabel, freshFamiliarity, gamesTo, optValue, optionsOf } from '../sim/familiarity';
 import { systemFamiliarity } from '../league/practice';
-import { defRoleFits, fitStars } from '../analysis/system';
+import { defRoleFits, fitStars, roleFits } from '../analysis/system';
+import { CLASH_META, LINK_META, duoShare, lineupLinks, linksByRole, offRoleOf } from '../sim/links';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
@@ -503,6 +504,8 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'role_anchor:o': { label: 'No rim anchor', apply: (t) => dropRole(t, 'anchor') },
   'role_roam:o': { label: 'No roamer', apply: (t) => dropRole(t, 'roamer') },
   'foul_give:o': { label: 'No foul to give', apply: (t) => void (t.manage.foulToGive = false) },
+  // (two inside bigs: the shape built for them)
+  'clash_crowd:d': { label: 'Double post', apply: (t) => void (t.offense.shape = 'twoIn') },
   // a set the defense takes away comes out of the package
   ...Object.fromEntries(SET_IDS.map((id) => [`set_${id}:d`, { label: `Drop ${SETS[id].short}`, apply: (t: Tactics) => dropSet(t, id) }])),
 };
@@ -639,7 +642,7 @@ function seasonLever(league: League, tid: number): Alert | null {
  * a week of better games doesn't undo it. Only the user's games keep that accounting: AI teams get autoTactics.
  */
 export function staffTactics(league: League, tid: number): Tactics {
-  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league) });
+  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), links: tid === league.userTid });
   return t.manual || tid !== league.userTid ? t : seasonAdjust(league, tid, t);
 }
 
@@ -778,7 +781,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'alert',
       title: `${worst.name.charAt(0).toUpperCase()}${worst.name.slice(1)} is new to us (${pct(worst.v)})`,
       body: `We play it a step slow until it's drilled: about ${plural(left, 'game')} to fluid at a balanced focus, fewer with ${PREP_META.system.label.toLowerCase()}. Stick with it rather than changing again mid-stretch, or go back to what we know.`,
-      link: '/team/tactics?tab=familiarity',
+      link: '/team/tactics?tab=analysis&view=familiarity',
       fix: drills(),
     });
   } else if (r.overall < 80) {
@@ -788,7 +791,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'alert',
       title: `Still learning the system: ${pct(r.overall)}`,
       body: `${famLabel(r.overall)} so far, the ${end} most of all: a step slow until it's drilled. ${r.prep === 'system' ? 'The drills are on: give them time, and keep the changes for later.' : `${PREP_META.system.label} between games build it about twice as fast; changing it again starts over.`}`,
-      link: '/team/tactics?tab=familiarity',
+      link: '/team/tactics?tab=analysis&view=familiarity',
       fix: drills(),
     });
   } else if (r.learning.length) {
@@ -799,7 +802,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'neutral',
       title: `${andList(names)} ${one ? 'is' : 'are'} still learning the system`,
       body: `A new player is a step behind in what we run until he knows it; games and practice teach it. ${r.prep === 'system' ? 'The tactical drills are teaching it about twice as fast.' : `${PREP_META.system.label} teach it about twice as fast.`}`,
-      link: '/team/tactics?tab=familiarity',
+      link: '/team/tactics?tab=analysis&view=familiarity',
       fix: drills(),
     });
   } else if (r.prep === 'system' && r.overall >= FLUID - 3) {
@@ -808,7 +811,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'good',
       title: `The system is fluid (${pct(r.overall)})`,
       body: `The tactical drills have done their job. ${PREP_META.balanced.label} practice keeps it there; ${PREP_META.opponent.label.toLowerCase()} drills each game plan for its game.`,
-      link: '/team/tactics?tab=familiarity',
+      link: '/team/tactics?tab=analysis&view=familiarity',
       fix: { kind: 'prep', focus: 'balanced', label: PREP_META.balanced.label },
     });
   }
@@ -829,6 +832,8 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       fix: { kind: 'patch', patch: { offense: { shape: best } }, label: `Play ${SHAPE_META[best].short}` },
     });
   }
+  const link = partnershipAlert(league, tid, starters);
+  if (link) out.push(link);
   const auto = autoDefRoles(players, team.rotation);
   const five = new Set(starters.map((p) => p.pid));
   for (const role of ['poa', 'anchor'] as const) {
@@ -844,12 +849,91 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'neutral',
       title: `${p.lastName} is a natural ${meta.label.toLowerCase()}`,
       body: `Nobody in the starting five has the role, and he suits it (${'★'.repeat(fitStars(defRoleFits(p)[role]))}). ${meta.help}`,
-      link: '/team/tactics?tab=players',
+      link: '/team/tactics',
       fix: { kind: 'patch', patch: { defense: { roles: { ...(t.defense.roles ?? {}), [p.pid]: role } } }, label: `Make him ${role === 'poa' ? 'POA stopper' : 'rim anchor'}` },
     });
     break;
   }
   return out;
+}
+
+/** A link the staff calls worth a role change (its strength with the five as they know each other). */
+const LINK_WORTH = 0.6;
+/** Non-inside roles the staff would move a crowding big to. */
+const OUTSIDE_BIG: OffRole[] = ['stretch', 'hub', 'glue'];
+
+/**
+ * The staff on the starting five's partnerships (see sim/links.ts), one thing at a time: two inside
+ * bigs crowding the paint (with the role or the shape that ends it), a role change that would make a
+ * strong partnership without miscasting anyone, or the five's best partnership still building after a
+ * new arrival.
+ */
+function partnershipAlert(league: League, tid: number, starters: Player[]): Alert | null {
+  const team = league.teams[tid];
+  const t = team.tactics;
+  const fam = team.fam ?? freshFamiliarity(team, teamPlayers(league, tid));
+  const name = (pid: number) => league.players[pid].lastName;
+  const { links, clashes } = lineupLinks(t, starters, fam);
+  const crowd = clashes.find((c) => c.id === 'crowd');
+  if (crowd) {
+    const bigs = crowd.pids.map((pid) => league.players[pid]);
+    // the big who loses least by moving outside, to his best outside role
+    const moves = bigs
+      .map((p) => {
+        const fits = roleFits(p);
+        const to = OUTSIDE_BIG.reduce((a, r) => (fits[r] > fits[a] ? r : a), OUTSIDE_BIG[0]);
+        return { p, to, loss: fitStars(fits[offRoleOf(t, p)]) - fitStars(fits[to]) };
+      })
+      .sort((a, b) => a.loss - b.loss);
+    const m = moves[0];
+    const fix: AlertFix =
+      m.loss <= 1
+        ? { kind: 'patch', patch: { offense: { roles: { ...t.offense.roles, [m.p.pid]: m.to } } }, label: `Make ${m.p.lastName} a ${ROLE_META[m.to].label}` }
+        : { kind: 'patch', patch: { offense: { shape: 'twoIn' } }, label: `Play ${SHAPE_META.twoIn.short}` };
+    return {
+      id: 'link-crowd',
+      tone: 'alert',
+      title: `${andList(bigs.map((p) => p.lastName))} crowd the paint`,
+      body: `${CLASH_META.crowd.help} ${m.loss <= 1 ? `${m.p.lastName} can play ${ROLE_META[m.to].label} and keep the paint open.` : `Neither plays outside well: the ${SHAPE_META.twoIn.label} is built for two bigs.`}`,
+      link: '/team/tactics',
+      fix,
+    };
+  }
+  // a role change that makes a strong partnership, the player no worse cast for it
+  const inLink = new Set(links.filter((l) => LINK_META[l.id].end === 'off').flatMap((l) => [l.a, l.b]));
+  let best: { pid: number; role: OffRole; s: number; with: number; id: keyof typeof LINK_META } | null = null;
+  for (const p of starters) {
+    if (inLink.has(p.pid)) continue;
+    const fits = roleFits(p);
+    const cur = fitStars(fits[offRoleOf(t, p)]);
+    for (const [role, ls] of Object.entries(linksByRole(t, starters, p.pid, fam)) as [OffRole, NonNullable<ReturnType<typeof linksByRole>[OffRole]>][]) {
+      if (role === offRoleOf(t, p) || fitStars(fits[role]) < cur) continue;
+      const l = ls[0];
+      if (l.strength >= LINK_WORTH && (!best || l.strength > best.s)) best = { pid: p.pid, role, s: l.strength, with: l.a === p.pid ? l.b : l.a, id: l.id };
+    }
+  }
+  if (best) {
+    return {
+      id: `link-make-${best.pid}`,
+      tone: 'neutral',
+      title: `${name(best.pid)} as a ${ROLE_META[best.role].label}: a ${LINK_META[best.id].label.toLowerCase()} with ${name(best.with)}`,
+      body: `${LINK_META[best.id].help} He suits the role at least as well as the one he plays.`,
+      link: '/team/tactics',
+      fix: { kind: 'patch', patch: { offense: { roles: { ...t.offense.roles, [best.pid]: best.role } } }, label: `Make him a ${ROLE_META[best.role].label}` },
+    };
+  }
+  // the five's best partnership, still building (a new arrival in it)
+  const top = links[0];
+  if (top && duoShare(top.understanding) < 0.7 && top.fit >= 60) {
+    return {
+      id: `link-building-${top.a}-${top.b}`,
+      tone: 'neutral',
+      title: `${name(top.a)} and ${name(top.b)} are still learning each other`,
+      body: `Their ${LINK_META[top.id].label.toLowerCase()} plays at ${Math.round(duoShare(top.understanding) * 100)}% of what it will once they know each other (understanding ${Math.round(top.understanding)}%). Minutes together build it.`,
+      link: '/team/tactics',
+    };
+  }
+  return null;
 }
 
 export function teamAlerts(league: League, tid: number): Alert[] {

@@ -5,7 +5,7 @@
 // seed, never from the league's random stream. Callers run ensureRotation on both teams first, so
 // the starters are the ones the real game will start.
 
-import type { GameType, League, Player, Pos, ScheduledGame, TeamSeason } from '../types';
+import type { Familiarity, GameType, League, Player, Pos, ScheduledGame, Tactics, TeamSeason } from '../types';
 import type { Ranked } from './projection';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
@@ -19,6 +19,7 @@ import { scoutTeam } from '../ai/advisor';
 import { oppPlanIn, type OppPlanItem } from '../ai/opponentPlan';
 import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META } from '../sim/tactics';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
+import { LINK_NAMED, lineupLinks, linkState, type LinkId } from '../sim/links';
 import { playTypeBaselines, seasonPlayTypes, zScore } from './playTypes';
 import { leagueRatings, projectGame, winChance } from './projection';
 
@@ -81,6 +82,9 @@ export interface SidePreview {
   worn: (PreviewPlayer & { wear: number })[];
   /** The five on the floor for the tip, with the usual starter each one stands in for. */
   starters: (PreviewPlayer & { for?: PreviewPlayer })[];
+  /** That five's partnerships worth naming (strongest first, at most two) and whether it crowds the paint (see sim/links.ts). */
+  links: { a: number; b: number; id: LinkId; word: string }[];
+  crowd: boolean;
   /** How their possessions have finished this season, most used first. */
   playTypes: PlayTypeTendency[];
   offense: { preset: string; pace: number; threePoint: number };
@@ -210,6 +214,18 @@ function usualStarters(league: League, tid: number, roster: Player[]): Player[] 
 
 const POS_IDX: Record<Pos, number> = { PG: 0, SG: 1, SF: 2, PF: 3, C: 4 };
 
+/** A starting five's partnerships worth naming, and whether it crowds the paint. */
+function fiveLinks(t: Tactics, five: Player[], fam: Familiarity | undefined): Pick<SidePreview, 'links' | 'crowd'> {
+  const { links, clashes } = lineupLinks(t, five, fam);
+  return {
+    links: links
+      .filter((l) => l.strength >= LINK_NAMED)
+      .slice(0, 2)
+      .map((l) => ({ a: l.a, b: l.b, id: l.id, word: linkState(l).word })),
+    crowd: clashes.length > 0,
+  };
+}
+
 function side(
   league: League,
   sim: GameSim,
@@ -295,6 +311,7 @@ function side(
       .sort((a, b) => b.wear - a.wear)
       .map((p) => ({ ...preview(p), wear: Math.round(p.wear) })),
     starters,
+    ...fiveLinks(t, five, team.fam),
     playTypes,
     offense: { preset: OFF_PRESETS.find((x) => x.id === t.offPreset)?.name ?? 'Custom', pace: t.offense.pace, threePoint: t.offense.threePoint },
     defense: {

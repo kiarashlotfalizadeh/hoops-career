@@ -74,7 +74,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_rim:d': {
     text: (X) => `${possessive(X)} drop coverage walled off the rim on pick-and-rolls.`,
-    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs (Instructions > Actions).',
+    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs (Instructions > In possession > Play through).',
   },
   'drop_pop:o': {
     text: (X, _Y, w) => `${possessive(X)} popping big punished the drop with open threes${w}.`,
@@ -83,7 +83,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_handoff:o': {
     text: (X, _Y, w) => `${X} ran handoffs into the drop for clean looks${w}.`,
-    advice: 'Switching off-ball screens (Instructions > Switch off-ball screens) neutralizes handoffs.',
+    advice: 'Switching off-ball screens (Instructions > Out of possession > Fine-tune) neutralizes handoffs.',
     uses: (t) => dropping(t) && !t.defense.switchOffBall,
   },
   'switch_mismatch:o': {
@@ -94,11 +94,11 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'switch_mismatch:d': { text: (X) => `${X} switched screens without giving up real mismatches.` },
   'switch_deny:d': {
     text: (X) => `${possessive(X)} switching blew up off-ball screens and handoffs.`,
-    advice: 'Against a switching defense, isolate mismatches (Instructions > Hunt mismatches) and post up smaller defenders.',
+    advice: 'Against a switching defense, isolate mismatches (Instructions > In possession > Fine-tune) and post up smaller defenders.',
   },
   'switch_screen:d': {
     text: (X) => `${possessive(X)} switches took away the screen on pick-and-rolls: no open roll man, no pull-up space.`,
-    advice: 'Against a switching defense, hunt the weakest defender (Instructions > Hunt mismatches) and post up smaller players.',
+    advice: 'Against a switching defense, hunt the weakest defender (Instructions > In possession > Fine-tune) and post up smaller players.',
   },
   'hedge_stall:d': { text: (X) => `${possessive(X)} hedges stalled ball handlers on the pick-and-roll.` },
   'hedge_roll:o': {
@@ -122,7 +122,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'ice_contain:d': { text: (X) => `${possessive(X)} ice coverage kept ball handlers out of the middle.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & cuts (Instructions > Actions), shooters in the corners and a high-post passer.',
+    advice: 'Beat zones with Motion & cuts (Instructions > In possession > Play through), shooters in the corners and a high-post passer.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -157,7 +157,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pressure_to:d': {
     text: (X) => `${possessive(X)} ball pressure forced turnovers.`,
-    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Instructions > Actions) against pressure.',
+    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Instructions > In possession > Play through) against pressure.',
   },
   'pressure_to:o': {
     text: (X, Y) => `${X} turned it over less with ${Y} sitting off the ball.`,
@@ -181,16 +181,16 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'press_to:d': { text: (X) => `${possessive(X)} full-court press created turnovers.` },
   'press_break:o': {
     text: (X) => `${X} broke the press for easy baskets.`,
-    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Instructions > Full-court press).',
+    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Instructions > Transition > Full-court press).',
     uses: (t) => t.defense.press !== 'none',
   },
   'crash_orb:o': {
     text: (X) => `${X} crashed the glass and got second chances.`,
-    advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Instructions > Push in transition).',
+    advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Instructions > Transition > After a stop).',
   },
   'crash_orb:d': {
     text: (_X, Y) => `${Y} passed up second chances by staying off the offensive glass.`,
-    advice: 'Send more players to the offensive glass (Instructions > Crash the offensive glass).',
+    advice: 'Send more players to the offensive glass (Instructions > Transition > When a shot goes up).',
     uses: (t) => t.offense.crashBoards < 45,
   },
   'crash_leak:o': {
@@ -208,7 +208,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'transition:o': { text: (X) => `${X} ran after stops for easy transition chances.`, cat: 'pace' },
   'transition:d': {
     text: (X, Y) => `${Y} walked the ball up, so ${X} got set on defense more often.`,
-    advice: 'Push the ball after stops and steals (Instructions > Push in transition).',
+    advice: 'Push the ball after stops and steals (Instructions > Transition > After a stop).',
     uses: (t) => t.offense.transition < 50,
     cat: 'pace',
   },
@@ -243,23 +243,24 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'clean_defense:d': { text: (X) => `${X} defended without contact and saved the free throws a physical defense gives up.`, cat: 'fouls' },
   'fatigue:d': {
     text: (_X, Y) => `${Y} wore down: tired legs cost them shooting accuracy.`,
-    advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Game Mgmt) to sub tired players out sooner; heavy minutes cost shooting.',
+    advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Tactics > Match) to sub tired players out sooner; heavy minutes cost shooting.',
     cat: 'fatigue',
   },
   'box_chase:d': {
     text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
     advice:
-      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Instructions > Motion & cuts, Handoffs & screens).',
+      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Instructions > In possession > Play through: Motion or Handoffs).',
     uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
   },
   'box_open:o': {
     text: (X, _Y, w) => `${X} found open threes and gaps against the junk defense${w}.`,
-    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Instructions > Base scheme).',
+    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Instructions > Out of possession > Scheme).',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'box_beat:o': {
     text: (X, _Y, w) => `${possessive(X)} chased player beat a defender caught high, on the catch and backdoor${w}.`,
-    advice: 'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Instructions > Base scheme).',
+    advice:
+      'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Instructions > Out of possession > Scheme).',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'pd_under:o': {
@@ -299,7 +300,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'foul_give:d': { text: (X) => `${possessive(X)} fouls to give broke up last-shot plays.` },
   'foul_give:o': {
     text: (X, _Y, w) => `${X} got free throws when a foul to give came on the shot${w}.`,
-    advice: 'A foul to give has to come before the shot: turn it off if it keeps sending them to the line (Game Mgmt).',
+    advice: 'A foul to give has to come before the shot: turn it off if it keeps sending them to the line (Tactics > Match).',
     uses: (t) => !!t.manage.foulToGive,
     cat: 'fouls',
   },
@@ -354,9 +355,24 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Their kick-outs are finding the man your roamer leaves: roam off a player who can’t shoot, or make him a Position Defender (Tactic, on the board).',
     uses: (t) => hasRole(t, 'roamer'),
   },
+  // partnerships (see sim/links.ts)
+  'link_twoMan:o': { text: (X, _Y, w) => `${possessive(X)} two-man game kept finding the roll man${w}.` },
+  'link_popMan:o': { text: (X, _Y, w) => `${X} ran their pick-and-pop in rhythm${w}.` },
+  'link_inOut:o': { text: (X, _Y, w) => `${possessive(X)} post hub found his shooters on the kick-out${w}.` },
+  'link_dho:o': { text: (X, _Y, w) => `${possessive(X)} hub and his runners worked the handoffs and backdoor cuts${w}.` },
+  'link_wall:d': {
+    text: (X, _Y, w) => `${possessive(X)} stopper sent the drives into his rim anchor${w}.`,
+    advice:
+      'Against a stopper and a rim anchor working together, start the offense away from the stopper (handoffs, off-ball screens) and pull the anchor out with a big who can shoot.',
+  },
+  'clash_crowd:d': {
+    text: (X, Y, w) => `${Y} had two bigs living in the paint, and ${X} packed it against everyone else's drives${w}.`,
+    advice: 'Two inside bigs crowd the paint out of this shape: play a Double Post (Tactic > Shape), make one of them a Stretch Big or Glue Guy, or stagger their minutes.',
+    uses: (t) => (t.offense.shape ?? 'fourOut') !== 'twoIn',
+  },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a-player only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Game Mgmt) or drop the target from your game plan.',
+    advice: 'Hack-a-player only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Tactics > Match) or drop the target from your game plan.',
     uses: (t) => hacks(t.manage),
   },
 };
@@ -397,7 +413,7 @@ for (const id of SET_IDS) {
   IMPACT_TEXT[`set_${id}:o`] = { text: SET_TEXT[id].o };
   IMPACT_TEXT[`set_${id}:d`] = {
     text: SET_TEXT[id].d,
-    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Instructions > Set package), or call something else.`,
+    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Instructions > In possession > Set package), or call something else.`,
     uses: (t) => !!t.offense.sets?.includes(id),
   };
 }

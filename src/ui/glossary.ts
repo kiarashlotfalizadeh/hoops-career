@@ -305,7 +305,19 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'familiarity',
     term: 'Familiarity',
     group: 'The game',
-    text: 'How well your team knows the tactic it plays: its shape, actions, tempo, roles, scheme, coverage and pressure, and each player the system and his roles. At 95 and up it’s played as drawn up; below that a step slow. Games and practice build it; what you stop running fades.',
+    text: 'How well your team knows the tactic it plays, by phase (in possession, in transition, out of possession): its shape, actions, tempo, roles, scheme, coverage and pressure, and each player the system and his roles. At 95 and up it’s played as drawn up; below that a step slow. Games and practice build it; what you stop running fades.',
+  },
+  {
+    id: 'partnership',
+    term: 'Partnerships',
+    group: 'The game',
+    text: 'Two players whose roles work together on the floor: a handler and a Rim Runner (two-man game), a handler and a Stretch Big (pick-and-pop), a Post Hub and a shooter (inside-out), a Playmaking Hub and a shooter or slasher (handoff chain), a point-of-attack stopper and a Rim Anchor (the wall). A partnership plays at what the two bring to it and their understanding. Two inside bigs outside a Double Post crowd the paint instead.',
+  },
+  {
+    id: 'understanding',
+    term: 'Understanding',
+    group: 'The game',
+    text: 'How well two teammates know each other’s game, built by minutes on the floor together (and a little in practice): a pair a trade just put together has little, and their partnership plays at little of its worth for the first weeks.',
   },
   {
     id: 'slots',

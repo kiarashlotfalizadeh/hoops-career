@@ -26,6 +26,7 @@ import type { Rng } from '../../random';
 import type { Composites } from '../../ratings';
 import type { FinishType } from '../log';
 import type { Cast, Slot } from '../sets';
+import type { LinkId } from '../links';
 import { K } from './constants';
 
 export interface Box {
@@ -210,6 +211,15 @@ export interface ST {
   fam?: Familiarity;
   famOff: number;
   famDef: number;
+  /**
+   * The five's partnerships (see src/core/sim/links.ts), refreshed with the familiarity: the offense's
+   * by passer and shooter (linkKey), the wall's by its stopper, and the bigs who crowd the paint.
+   * None (null) when there are none, and for a team without a record of what it knows (understanding
+   * lives there).
+   */
+  links: Map<number, { id: LinkId; s: number }> | null;
+  wall: Map<number, number> | null;
+  crowd: Set<number> | null;
   /** The situational plan in effect. */
   sit: { id: string; label: string } | null;
   /** Times each player has been hacked this period. */
@@ -319,6 +329,9 @@ export const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'moti
 
 /** No players (shared: never added to). */
 export const NONE: SP[] = [];
+
+/** A partnership's key in ST.links: the passer's pid and the shooter's, as one number. */
+export const linkKey = (a: number, b: number) => a * 1048576 + b;
 
 /** Usage multiplier for a player's shot freedom: green light (1), normal (0) or limited (-1). */
 export function freedomMult(fr: number) {

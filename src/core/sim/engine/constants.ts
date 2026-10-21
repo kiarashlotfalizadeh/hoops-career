@@ -456,6 +456,31 @@ export const K = {
   },
   /** A player's glass duty: his weight among the offensive rebounders when he crashes or gets back, and what each crasher on the floor adds to the team's crashing (out of 100). */
   glassDuty: { crash: 1.35, back: 0.45, team: 6 },
+  /**
+   * Partnerships (src/core/sim/links.ts), at a link's full strength: a two-man game or a pick-and-pop
+   * adds `adv` to the handler's edge on the pick-and-roll and openness to the roll man's finish or the
+   * pop; inside-out adds openness to the post hub's kick-outs, a handoff chain to the hub's handoffs
+   * and cuts, and the wall takes `wall` off the edge of a handler its stopper guards, on the
+   * pick-and-roll and the isolation; `screen` is how much more
+   * often a handler's linked big sets his screens (a weight, 1 + screen at full strength). The crowded
+   * paint takes `crowd` off everyone else's half-court shots at the rim and in the paint. Tactical
+   * edges (at the leverage). Measured in scripts/link-impact.ts (paired, each team's own links gelled
+   * against its pairs new to each other): about +0.5 per 100 on average, +0.66 for an elite two-man
+   * game, +1.4 for an elite pick-and-pop, −0.14 for a crowded starting five. `tag` is the share of
+   * its openness and edge a link's impact tag counts, so the reports say what it measures (the
+   * two-man game's and the crowd's rim openness tag about three times what they're worth).
+   */
+  link: {
+    adv: 0.9,
+    twoMan: 0.9,
+    popMan: 1.0,
+    inOut: 1.6,
+    dho: 1.6,
+    wall: 2.0,
+    screen: 0.4,
+    crowd: 0.25,
+    tag: { link_twoMan: 0.35, link_popMan: 0.65, link_wall: 0.5, clash_crowd: 0.25 } as Record<string, number>,
+  },
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */

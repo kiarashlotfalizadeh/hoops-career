@@ -186,6 +186,8 @@ function cleanSystem(x: League, t: Team) {
       rec(f.roles) &&
       Object.values(f.roles as object).every((r) => Array.isArray(r) && r.length === 2 && str(r[0]) && num(r[1]));
     if (!ok) t.fam = freshFamiliarity(t, teamPlayers(x, t.tid));
+    // pairs' understanding: damaged, or a save from before it was kept (its rotation's pairs as camp would leave them)
+    else if (!rec(t.fam.duo) || !Object.values(t.fam.duo as object).every(num)) t.fam.duo = freshFamiliarity(t, teamPlayers(x, t.tid)).duo;
   }
   if (t.prep !== undefined && !PREPS.has(t.prep as string)) delete t.prep;
 }

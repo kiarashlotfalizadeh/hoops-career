@@ -11,6 +11,9 @@ import { MAX_SITUATIONS, applyPatch, cloneTactics, defRoleOf, withMentality } fr
 import { type ST, ACTION_LIST, freedomMult } from './state';
 import type { GameSim } from './game';
 
+/** The on-ball defense every one of the five needs before a coach switches ball screens to break up a partnership. */
+const SWITCH_PERD = 50;
+
 export const coachMethods = {
   /** The first enabled situational plan whose trigger matches the game right now. */
   situationFor(this: GameSim, t: ST): SituationalPlan | null {
@@ -128,6 +131,10 @@ export const coachMethods = {
       what = 'stops blitzing ball screens';
       // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
       // so this is the 0.8 the coaches read before, the same games for them to react to)
+    } else if (d.pnr !== 'switch' && rate('link_twoMan:o') + rate('link_popMan:o') >= 0.3 && Math.min(...t.on.map((p) => p.c.perDef)) >= SWITCH_PERD) {
+      // a two-man game or a pick-and-pop they know cold: switching takes the screen, and the link, away
+      change = (x) => void (x.defense.pnr = 'switch');
+      what = 'switches ball screens to break up their two-man game';
     } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.3 || rate('hedge_roll:o') >= 0.6)) {
       change = (x) => {
         x.defense.pnr = 'drop';

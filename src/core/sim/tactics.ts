@@ -257,6 +257,99 @@ export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> =
   double: { label: 'Double-team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
 };
 
+// ---------------------------------------------------------------- headline decisions
+
+/**
+ * What the half court plays through: one choice over the five action weights (the fine-tuning keeps
+ * all five). Each is a mix of weights; tactics read as the focus nearest their weights, or as their
+ * own mix when none is near.
+ */
+export type PlayFocus = 'balanced' | 'pnr' | 'handoff' | 'motion' | 'post' | 'iso';
+export const PLAY_FOCI: PlayFocus[] = ['balanced', 'pnr', 'handoff', 'motion', 'post', 'iso'];
+
+export const FOCUS_META: Record<PlayFocus, { label: string; help: string; actions: Record<ActionType, number> }> = {
+  balanced: {
+    label: 'Balanced',
+    help: 'A bit of everything, pick-and-roll first: the half court runs whatever the five on the floor run best.',
+    actions: { pnr: 58, iso: 35, post: 25, handoff: 52, motion: 55 },
+  },
+  pnr: {
+    label: 'Pick-and-roll',
+    help: 'Ball screens for your handlers on most trips, the rest isolations: the creators carry it, and a handler with a roll man or a popping big makes it sing.',
+    actions: { pnr: 82, iso: 45, post: 15, handoff: 35, motion: 40 },
+  },
+  handoff: {
+    label: 'Handoffs',
+    help: 'Dribble handoffs and off-ball screens: shooters and cutters running off a passing big. Strong against a drop and against defenses that don’t switch.',
+    actions: { pnr: 45, iso: 18, post: 40, handoff: 80, motion: 70 },
+  },
+  motion: {
+    label: 'Motion',
+    help: 'Cuts, drive-and-kick and the extra pass, with almost no isolations: needs passers and shooters everywhere, and beats defenses that overplay.',
+    actions: { pnr: 48, iso: 18, post: 10, handoff: 72, motion: 88 },
+  },
+  post: {
+    label: 'Inside',
+    help: 'Post-ups and touches near the basket, with isolations to go with them: for a post scorer, a big who passes out of the double, and a slower game.',
+    actions: { pnr: 45, iso: 45, post: 72, handoff: 30, motion: 40 },
+  },
+  iso: {
+    label: 'Isolation',
+    help: 'Clear out for your scorers: efficient only for elite creators, or against a defender you can hunt. Little ball movement.',
+    actions: { pnr: 60, iso: 80, post: 25, handoff: 25, motion: 30 },
+  },
+};
+
+/** How far action weights can sit from a focus (summed over the five) and still read as it. */
+const FOCUS_NEAR = 60;
+
+/** The focus offense tactics play through: the nearest to their weights, or null when they're their own mix. */
+export function focusOf(o: Pick<OffenseTactics, 'actions'>): PlayFocus | null {
+  let best: PlayFocus | null = null;
+  let bestD = Infinity;
+  for (const f of PLAY_FOCI) {
+    const d = (Object.keys(o.actions) as ActionType[]).reduce((a, k) => a + Math.abs(o.actions[k] - FOCUS_META[f].actions[k]), 0);
+    if (d < bestD) [best, bestD] = [f, d];
+  }
+  return bestD <= FOCUS_NEAR ? best : null;
+}
+
+/** Play through a focus: its action weights in place of the offense's (in place, on `o`). */
+export function applyFocus(o: OffenseTactics, f: PlayFocus) {
+  o.actions = { ...FOCUS_META[f].actions };
+}
+
+/**
+ * When a shot goes up: one dial over the offensive glass and transition defense, the same choice
+ * from the two ends (the fine-tuning keeps both). Each level is a pair of settings; tactics read as
+ * the nearest.
+ */
+export const GLASS_LEVELS: { label: string; crash: number; getBack: number }[] = [
+  { label: 'Crash hard', crash: 85, getBack: 30 },
+  { label: 'Crash', crash: 68, getBack: 45 },
+  { label: 'Balanced', crash: 52, getBack: 60 },
+  { label: 'Get back', crash: 38, getBack: 74 },
+  { label: 'Sprint back', crash: 22, getBack: 88 },
+];
+
+/** The "when a shot goes up" level tactics read as (0 crash hard .. 4 sprint back). */
+export function glassLevel(t: Pick<Tactics, 'offense' | 'defense'>): number {
+  let best = 2;
+  let bestD = Infinity;
+  GLASS_LEVELS.forEach((l, i) => {
+    const d = Math.abs(t.offense.crashBoards - l.crash) + Math.abs(t.defense.getBack - l.getBack);
+    if (d < bestD) [best, bestD] = [i, d];
+  });
+  return best;
+}
+
+/** Set the glass dial: both settings of level `i` (in place). */
+export function setGlassLevel(t: Pick<Tactics, 'offense' | 'defense'>, i: number) {
+  const l = GLASS_LEVELS[clamp(Math.round(i), 0, GLASS_LEVELS.length - 1)];
+  t.offense.crashBoards = l.crash;
+  t.defense.getBack = l.getBack;
+}
+
 // ---------------------------------------------------------------- shape, out-of-possession roles, mentality
 
 export const SHAPE_META: Record<OffShape, { label: string; short: string; help: string; good: string; bad: string }> = {

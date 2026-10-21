@@ -55,7 +55,7 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   },
   {
     title: 'Player roles',
-    to: '/team/tactics?tab=players',
+    to: '/team/tactics',
     meta: 'Team · each player’s roles at both ends, how he fits them, his shot freedom and glass duty',
     also: 'roles role fit freedom screeners defensive role glass',
   },

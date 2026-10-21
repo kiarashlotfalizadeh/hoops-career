@@ -5,7 +5,8 @@ import type { DefRole, OffRole, OffShape, Player, Pos, Rotation, ShotFreedom, Ta
 import { OFF_SHAPES } from '../types';
 import { archetype, composites } from '../ratings';
 import { applyDefPreset, applyOffPreset, cloneTactics, defaultTactics } from '../sim/tactics';
-import { defRoleFits, miscast, roleFits } from '../analysis/system';
+import { defRoleFits, fitStars, miscast, roleFits } from '../analysis/system';
+import { HANDLER_ROLES } from '../sim/links';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
 
@@ -664,7 +665,8 @@ function shapeUnits(players: Player[], order?: number[]): { five: Player[]; eigh
  * starting five: five-out's open paint, worth less for each non-shooter in the five, against the
  * offensive boards it gives up; the double post's two bigs on the glass and finishing inside, against
  * the crowded paint (more so when they're shooters, wasted inside); horns' handoffs from a passing
- * elbow big and its fewer turnovers. Each shape's value at the league's average roster is its measured
+ * elbow big and its fewer turnovers; the double post also spares a five with two inside bigs (Rim Runners,
+ * Post Hubs) the crowded paint. Each shape's value at the league's average roster is its measured
  * one (scripts/system-impact.ts: about −0.1, +0.2 and +0.3 per 100); real rosters vary less than the
  * games' noise, so the slopes come from rosters built to the extremes (all shooters, two post bigs, a
  * non-shooting center).
@@ -685,13 +687,21 @@ export function shapeFits(players: Player[], tactics?: Pick<Tactics, 'offense'>,
   const a = tactics?.offense.actions;
   const lean = (k: 'pnr' | 'handoff' | 'motion' | 'post') => (a ? (a[k] - 50) / 50 : 0);
   const drives = tactics ? (tactics.offense.rimAttack - 50) / 50 : 0;
+  // two bigs who live inside crowd the paint in every shape but the double post (see sim/links.ts)
+  const inside = five.filter((p) => {
+    const r = tactics?.offense.roles[p.pid] ?? archetype(p.ratings).role;
+    return r === 'roller' || r === 'post';
+  }).length;
   return {
     fourOut: 0,
     fiveOut: 20 * (1 - 0.75 * exposed) * (1 + 0.3 * drives) - 9 * (orb / 46.5) - 3 * lean('post'),
     horns: 1.5 + 0.15 * (bigPass - 55) + 2 * lean('handoff') + 1 * lean('pnr') - 2 * lean('motion'),
-    twoIn: 8 * (bigOrb / 50) + 2 - 9.5 * (1 + 0.3 * drives) - 0.1 * waste + 3 * lean('post'),
+    twoIn: 8 * (bigOrb / 50) + 2 - 9.5 * (1 + 0.3 * drives) - 0.1 * waste + 3 * lean('post') + (inside >= 2 ? CROWD_FIT : 0),
   };
 }
+
+/** What the double post saves a five with two inside bigs (the crowded paint they'd play into otherwise), in fit points. */
+const CROWD_FIT = 4;
 
 /** Fit points another shape has to win by before the staff leaves four-out, the shape every player knows. */
 const SHAPE_EDGE = 4;
@@ -726,6 +736,48 @@ export function autoDefRoles(players: Player[], rotation?: Pick<Rotation, 'order
   unit(ranked.slice(0, 5));
   unit(ranked.slice(5, 10));
   return out;
+}
+
+/**
+ * The staff's roles, with the starting five's partnerships in mind (see sim/links.ts), in place: a big
+ * who can play a role outside as well as the one inside moves out of a crowded paint, and a big with
+ * a handler beside him who can play Rim Runner or Stretch Big as well as his role takes it, for a
+ * two-man game or a pick-and-pop. Never the two focal players (their roles keep the ball in scoring
+ * spots), never anyone cast worse, and the double post stays the answer for two bigs who can't.
+ */
+export function partnerRoles(roles: Record<number, OffRole>, players: Player[], order?: number[]) {
+  const { five } = shapeUnits(players, order);
+  const focal = new Set(
+    [...players]
+      .sort((a, b) => b.ovr + 8 * Math.log(clamp(b.tend?.use ?? 1, 0.3, 4)) - (a.ovr + 8 * Math.log(clamp(a.tend?.use ?? 1, 0.3, 4))))
+      .slice(0, 2)
+      .map((p) => p.pid),
+  );
+  const role = (p: Player) => roles[p.pid] ?? archetype(p.ratings).role;
+  const stars = (p: Player, r: OffRole) => fitStars(roleFits(p)[r]);
+  const inside = (r: OffRole) => r === 'roller' || r === 'post';
+  // a crowded paint: every inside big but the best at it moves out if he loses nothing by it
+  const bigs = five.filter((p) => inside(role(p))).sort((a, b) => stars(b, role(b)) - stars(a, role(a)));
+  for (const p of bigs.slice(1)) {
+    if (focal.has(p.pid)) continue;
+    const out = (['stretch', 'hub', 'glue'] as const).reduce((a, r) => (stars(p, r) > stars(p, a) ? r : a), 'stretch' as OffRole);
+    if (stars(p, out) >= stars(p, role(p))) roles[p.pid] = out;
+  }
+  // a handler with no big to work with: a big who's as good a Rim Runner or Stretch Big as he is in his role
+  const handlers = five.filter((p) => HANDLER_ROLES.includes(role(p)));
+  if (!handlers.length || five.some((p) => role(p) === 'roller' || role(p) === 'stretch')) return;
+  const crowded = five.filter((p) => inside(role(p))).length;
+  let best: { p: Player; r: OffRole; v: number } | null = null;
+  for (const p of five) {
+    if (focal.has(p.pid) || p.ratings.hgt < 55 || HANDLER_ROLES.includes(role(p))) continue;
+    for (const r of ['roller', 'stretch'] as const) {
+      // (a second big inside would crowd the paint)
+      if (r === 'roller' && crowded >= 1 && !inside(role(p))) continue;
+      const v = roleFits(p)[r];
+      if (stars(p, r) >= stars(p, role(p)) && (!best || v > best.v)) best = { p, r, v };
+    }
+  }
+  if (best) roles[best.p.pid] = best.r;
 }
 
 /** The players a playbook is fitted to: a knock of five games or fewer doesn't swing the fits, nor do injuries that leave fewer than eight. */
@@ -769,9 +821,10 @@ export const STICK = { preset: 8, shape: 6 };
 /**
  * The staff's tactics for a roster: the best-fitting playbooks, roles and shot freedom at both ends,
  * and the shape. `sticky` (in season): the team keeps the playbooks and shape it runs unless another
- * fits better by STICK.
+ * fits better by STICK. `links`: the user's own staff also casts the starting five for partnerships
+ * (partnerRoles).
  */
-export function autoTactics(team: Team, players: Player[], keepManual = true, opts: { sticky?: boolean } = {}): Tactics {
+export function autoTactics(team: Team, players: Player[], keepManual = true, opts: { sticky?: boolean; links?: boolean } = {}): Tactics {
   if (keepManual && team.tactics.manual) return team.tactics;
   const sc = presetScores(team, players);
   const best = (fits: Record<string, number>, cur: string | undefined) => {
@@ -786,6 +839,7 @@ export function autoTactics(team: Team, players: Player[], keepManual = true, op
   base.offPreset = off;
   base.defPreset = def;
   const { roles, freedom } = autoRoles(players);
+  if (opts.links) partnerRoles(roles, fitRoster(players), team.rotation?.order);
   base.offense.roles = roles;
   base.offense.freedom = freedom;
   base.offense.screeners = [];

@@ -18,6 +18,7 @@ import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
 import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
 import { injuryName, plural } from '../../../core/format';
 import { K } from '../../../core/sim/engine';
+import { CLASH_META, LINK_META } from '../../../core/sim/links';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { OppPlanNote } from '../../components/scouting';
@@ -354,8 +355,30 @@ function StartingFives({
             {cell(h, true)}
           </div>
         ))}
+        {(away.links.length > 0 || home.links.length > 0 || away.crowd || home.crowd) && (
+          <div className="mu-five mu-links">
+            <FiveLinks league={league} s={away} name={names[0]} />
+            <FiveLinks league={league} s={home} name={names[1]} right />
+          </div>
+        )}
         <Availability league={league} pv={pv} game={game} locked={locked} />
       </div>
     </Section>
+  );
+}
+
+/** A starting five's partnerships worth naming (see sim/links.ts), and its crowded paint. */
+function FiveLinks({ league, s, name, right }: { league: League; s: SidePreview; name: (pid: number) => string; right?: boolean }) {
+  const who = (pid: number) => name(pid) || league.players[pid]?.lastName;
+  return (
+    <span className={`mu-links-side ${right ? 'r' : ''}`}>
+      {s.links.map((l) => (
+        <span key={`${l.id}-${l.a}-${l.b}`} className="mu-link">
+          <b>{LINK_META[l.id].label}</b> {who(l.a)} → {who(l.b)}
+          <span className="dim"> · {l.word}</span>
+        </span>
+      ))}
+      {s.crowd && <span className="mu-link bad">{CLASH_META.crowd.label}</span>}
+    </span>
   );
 }

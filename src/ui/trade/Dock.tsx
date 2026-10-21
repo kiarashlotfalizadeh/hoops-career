@@ -8,6 +8,8 @@ import { CAP_FOR, inSeason, payroll, rosterMaxNow } from '../../core/league/help
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { TRADE_WAIVE_MAX, capSalary, salaryMatchGap, tradeRoster, valueVerdict, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { canMakeWork } from '../../core/league/tradeHelp';
+import { brokenLinks } from '../../core/analysis/system';
+import { LINK_META } from '../../core/sim/links';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Term } from '../components/Glossary';
@@ -72,6 +74,8 @@ export function Dock({
         capPay: capPayroll(league, user, season),
         theyreOver: !empty && salaryMatchGap(league, offer, 'b') > 0,
         workable: !empty && canMakeWork(league, offer),
+        // the partnerships your rotation loses with the players going out (see sim/links.ts)
+        broken: empty ? [] : brokenLinks(league, user, offer.a.pids).slice(0, 2),
       })),
     // key stands for the offer (a new object every render)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,6 +141,17 @@ export function Dock({
           {ev.notes.length > 0 && <TradeNotes notes={ev.notes.slice(0, ruleErrors.length ? 1 : 2)} />}
           {/* what each protection and swap does, a line each (the cash shows in its own control) */}
           <TermsList league={league} offer={offer} short />
+          {capView.broken.length > 0 && (
+            <div className="fo-dock-links tiny">
+              <Term id="partnership">Breaks</Term>{' '}
+              {capView.broken.map((l, i) => (
+                <span key={`${l.id}-${l.a}-${l.b}`}>
+                  {i > 0 && ', '}
+                  {league.players[l.a]?.lastName} → {league.players[l.b]?.lastName} ({LINK_META[l.id].label.toLowerCase()})
+                </span>
+              ))}
+            </div>
+          )}
           <div className="statline fo-dock-figs">
             <div>
               <div className="k">

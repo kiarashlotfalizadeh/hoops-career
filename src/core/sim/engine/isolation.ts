@@ -45,6 +45,7 @@ export const isolationMethods = {
       adv -= lev(zd.iso);
       this.impact('zone_paint', def.side, lev(zd.isoTag), A.pid);
     }
+    adv -= this.wallEdge(def, D, 'iso', A.pid);
     // the Star plan doubles him; heavy help sends a second defender at anyone who beats his man
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     let doubled = false;
