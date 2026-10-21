@@ -16,7 +16,7 @@ const opponentOf = (l: League) => {
 };
 
 describe('game management', () => {
-  it("lets the user's assistant adjust at breaks in simmed games only when asked, deterministically", () => {
+  it("lets the user's assistant adjust at breaks in simmed games while the staff runs the tactics, or when asked, deterministically", () => {
     const l = testLeague();
     const opp = (l.userTid + 1) % 30;
     const run = () => {
@@ -28,6 +28,11 @@ describe('game management', () => {
       }
       return out;
     };
+    // the staff runs the tactics: it adjusts, as AI coaches do
+    l.teams[l.userTid].tactics.manual = false;
+    expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(true);
+    // the user runs them: only when asked
+    l.teams[l.userTid].tactics.manual = true;
     expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(false);
     expect(run()).toEqual([]);
     l.teams[l.userTid].tactics.manage.assistantAdjusts = true;

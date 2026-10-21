@@ -87,7 +87,8 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
         )}
         <div className="tx-ctl">
           <Toggle
-            on={!!t.manage.assistantAdjusts}
+            // (while the staff runs the tactics it adjusts, as AI coaches do: a change here takes them over)
+            on={!!t.manage.assistantAdjusts || !t.manual}
             onChange={(x) =>
               edit((tt) => {
                 if (x) tt.manage.assistantAdjusts = true;
@@ -95,6 +96,7 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
               })
             }
             label="Assistant adjusts in simmed games"
+            help="At the breaks of a game you don't watch, the assistant changes one thing the other team is cashing in on (a switch they keep hunting, a drop they keep pulling up over), as AI coaches do. While the staff runs your tactics it always does; once you run them, it's your call."
           />
         </div>
       </div>

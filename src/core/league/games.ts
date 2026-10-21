@@ -300,16 +300,19 @@ export function buildSimInput(
     }
     const extra = play.length ? { play } : {};
     // opponent-specific game plan for the user's team (drilled for tonight after a day of opponent
-    // prep); the user's own assistant adjusts at breaks only if asked to; situational plans that
-    // switch to another tactic slot carry its changes
+    // prep); situational plans that switch to another tactic slot carry its changes. The assistant
+    // adjusts at breaks as AI coaches do when the staff runs the tactics, and when the user runs them,
+    // only if asked to (without it the other bench kept cashing in on what it had found: a switch
+    // hunted all night, the smaller man fouling)
+    const adjust = !!team.tactics.manage.assistantAdjusts || !team.tactics.manual;
     if (opp !== undefined && planFor(league, opp, game)) {
       const tactics = withSlotPlans(team, effectiveTactics(league, opp, game));
       const fam = team.prep === 'opponent' && team.fam ? { fam: prepared(team.fam, team.tactics, tactics) } : {};
-      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!tactics.manage.assistantAdjusts, ...extra, ...fam };
+      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust, ...extra, ...fam };
     }
     const tactics = withSlotPlans(team, team.tactics);
     const same = rotation === team.rotation && tactics === team.tactics;
-    return { team: same ? team : { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust: !!team.tactics.manage.assistantAdjusts, ...extra };
+    return { team: same ? team : { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust, ...extra };
   }
   // an AI coach never plays the situational plans or crunch-time calls a user left on this team
   const t = team.tactics;
