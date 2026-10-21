@@ -117,6 +117,8 @@ try {
   step(`coached a live game to the final (${await page.locator('main h1').first().textContent()})`);
 
   await page.goto(`${base}/#/`);
+  // (the final's story moment can come up a beat after Home does: let it, then dismiss it)
+  await page.waitForTimeout(800);
   await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   await page
@@ -179,19 +181,29 @@ try {
   }
   await page.setViewportSize({ width: 390, height: 844 });
 
-  // a game report from the week
-  await page.goto(`${base}/#/`);
+  // a game report from the week (the Games tab lists the results; Home leads with the next game on game days)
+  await page.goto(`${base}/#/games`);
+  await page.waitForTimeout(500);
+  await clearMoments(page);
+  // (the week's "While you were away" digest can open over it: close it as a reader would)
+  if (await page.locator('.sheet').count()) await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
   const recent = page.locator('a[href^="#/game/"]').first();
-  // the screen it came from stays up until Home has loaded
+  // the screen it came from stays up until Games has loaded
   await recent.waitFor({ timeout: 15_000 }).catch(() => {});
   if (await recent.count()) {
     await recent.click();
     await page.waitForSelector('text=Game report');
     step('opened a game report');
-  } else fail.push('no recent game on Home');
+  } else fail.push('no recent game on Games');
 
   // backup round trip
-  await page.goto(`${base}/#/settings`);
+  // (the league file's buttons are on Settings' League tab)
+  await page.goto(`${base}/#/settings?tab=league`);
+  await page.waitForTimeout(500);
+  await clearMoments(page);
+  if (await page.locator('.sheet').count()) await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Export backup/ }).click()]);
   const file = join(mkdtempSync(join(tmpdir(), 'hc-')), download.suggestedFilename());
   await download.saveAs(file);
@@ -205,6 +217,8 @@ try {
   // the app closed mid-game (a reload, last: a file input doesn't take a file after one): a pause
   // saves where the game is, and the game picks up there instead of at tip-off
   await page.goto(`${base}/#/`);
+  // (the final's story moment can come up a beat after Home does: let it, then dismiss it)
+  await page.waitForTimeout(800);
   await clearMoments(page);
   await page.getByRole('button', { name: 'Play options', exact: true }).click();
   if (!(await watch.count())) {
