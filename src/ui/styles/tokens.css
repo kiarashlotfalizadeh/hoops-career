@@ -1,8 +1,8 @@
 /* The fonts, the colour and size tokens, and the reset under everything. */
-/* One family, three widths. Archivo (variable width and weight) runs everything: its normal width
-   for reading, expanded and heavy for headlines (a team's name, a page's title, a story), condensed
-   for scoreboard figures. Latin + Latin Extended cover every player name (Dončić, Şengün,
-   Valančiūnas). */
+/* Hardwood: a printed sports poster. Archivo (variable width and weight) sets the words: expanded and
+   black for headlines, condensed and black for the big scoreboard figures, normal width for reading.
+   IBM Plex Mono sets the box score: stat figures, tables, kickers and dates. Latin + Latin Extended
+   cover every player name (Dončić, Şengün, Valančiūnas). */
 @font-face {
   font-family: 'Archivo Variable';
   font-style: normal;
@@ -24,82 +24,150 @@
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-500-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 500;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-ext-600-normal.woff2') format('woff2');
+  unicode-range:
+    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('../../../node_modules/@fontsource/ibm-plex-mono/files/ibm-plex-mono-latin-600-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 :root {
-  /* grounds: graphite, darkest to lightest. Neutral, so the one colour on screen is a team's */
-  --bg: #0a0a0c;
-  --bg-2: #0f1012;
-  --raised: #151619;
-  --surface: #1c1d21;
-  --surface-2: #24262b;
-  --surface-3: #2e3036;
-  --line: rgba(255, 255, 255, 0.065);
-  --line-2: rgba(255, 255, 255, 0.11);
-  --line-3: rgba(255, 255, 255, 0.2);
-  /* ink: every one keeps 4.5:1 on every ground above */
-  --text: #f5f6f8;
-  --text-2: #bfc2c9;
-  --text-dim: #8e929b;
-  /* your team runs the controls: a primary button, the play button, a switch that's on, a link.
-     applyAccent sets the --team tokens from its colours; these follow them */
+  /* grounds: warm bone paper and white card stock. The ink is near-black; the one colour on a screen is a team's */
+  --bg: #f3efe7;
+  --bg-2: #ebe5d9;
+  --raised: #ffffff;
+  --surface: #f1ece2;
+  --surface-2: #e7e1d4;
+  --surface-3: #d9d1c1;
+  --line: rgba(48, 36, 14, 0.1);
+  --line-2: rgba(48, 36, 14, 0.18);
+  --line-3: rgba(18, 18, 18, 0.55);
+  /* ink: every one keeps 4.5:1 on paper, card stock and --surface-2 */
+  --text: #121212;
+  --text-2: #3b3833;
+  --text-dim: #645f55;
+  /* the ink runs the controls (a primary button, a chosen chip, the tab that's on); your team's
+     colour runs identity (slabs, the play button, a switch that's on, links). applyAccent sets the
+     --team tokens from its colours; these follow them */
+  --ink: #121212;
+  --ink-2: #2a2826;
+  --paper-ink: #ffffff;
   --accent: var(--team-fill);
   --accent-ink: var(--team-fill-ink);
   --accent-text: var(--team-text);
-  /* a chosen option (a chip, a segment, a level): white on graphite, whatever the team */
-  --on: #f5f6f8;
-  --on-ink: #0a0a0c;
+  /* a chosen option (a chip, a segment, a level): white on ink */
+  --on: #121212;
+  --on-ink: #ffffff;
   /* a mark that needs you (the inbox's count, a live game) */
-  --brand: #ff5b3a;
-  --accent-2: #f2c14e;
-  /* signals */
-  --good: #4fd18b;
-  --bad: #ff6464;
-  --warn: #f5c451;
-  --info: #72b8ff;
-  /* rating tiers (OVR), gold > violet > blue > green > grey > dark grey: the figure is set in its
-     tier's colour on a faint wash of it, never a solid block */
-  --tier-elite: #f5c451;
-  --tier-star: #c2a5ff;
-  --tier-good: #6fc0ff;
-  --tier-avg: #79dba0;
-  --tier-low: #c6c9cf;
-  --tier-bad: #8e929b;
+  --brand: #e3402a;
+  --accent-2: #b57a00;
+  /* signals, deep enough to read on paper */
+  --good: #13804a;
+  --bad: #c42f25;
+  --warn: #a86400;
+  --info: #1d68bd;
+  /* rating tiers (OVR), gold > violet > blue > green > grey > light grey: the figure in its tier's
+     colour on a wash of it, like a printed tint */
+  --tier-elite: #9a6b00;
+  --tier-star: #6744cc;
+  --tier-good: #1764b8;
+  --tier-avg: #19804a;
+  --tier-low: #57534b;
+  --tier-bad: #7d786e;
   /* your team: set by applyAccent from its colours */
   --team: #2f6fde;
   --team-2: #ffc72c;
   --team-ink: #ffffff;
-  --team-text: #8fb1ff;
-  --team-slab: #18366f;
+  --team-text: #1f56b8;
+  --team-slab: #1f56b8;
   --team-fill: #2f6fde;
   --team-fill-ink: #ffffff;
-  /* corners: soft and consistent. Tags (xs), small controls (sm), buttons and inputs (md),
-     groups and panels (--radius), heroes (lg), sheets (xl) */
-  --radius-xs: 5px;
-  --radius-sm: 8px;
-  --radius-md: 11px;
-  --radius: 14px;
-  --radius-lg: 18px;
-  --radius-xl: 24px;
-  /* depth: a panel over the page (toasts, docks, sheets) */
-  --shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.35);
-  --shadow-float: 0 16px 36px -10px rgba(0, 0, 0, 0.75), 0 2px 8px rgba(0, 0, 0, 0.4);
+  /* your colour on an ink ground (the dock's play button): lightened until it reads there */
+  --team-night: #4b8bff;
+  --team-night-ink: #0b0b0c;
+  /* corners: round and friendly, like card stock. Tags (xs), small controls (sm), inputs (md),
+     cards (--radius), heroes (lg), sheets (xl); buttons and chips are pills */
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius: 20px;
+  --radius-lg: 26px;
+  --radius-xl: 30px;
+  --radius-pill: 999px;
+  /* depth: card stock lifted off the paper, warm shadows. A card, a panel over the page, a floating bar */
+  --shadow-card: 0 1px 0 rgba(60, 40, 10, 0.04), 0 10px 26px -16px rgba(60, 40, 10, 0.32);
+  --shadow: 0 22px 44px -18px rgba(40, 26, 6, 0.42), 0 2px 6px rgba(40, 26, 6, 0.1);
+  --shadow-float: 0 16px 34px -10px rgba(20, 14, 4, 0.45), 0 2px 8px rgba(20, 14, 4, 0.16);
   /* motion: quick and deliberate, easing out */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur-fast: 0.15s;
   --dur: 0.22s;
   --font: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* figures: the condensed cut */
+  /* big figures (a score, a lead number): the condensed cut, black */
   --display: 'Archivo Variable', system-ui, sans-serif;
-  /* headlines: the expanded cut, heavy (--serif is its old name, kept so every headline follows) */
+  /* headlines: the expanded cut, black (--serif is its old name, kept so every headline follows) */
   --head: 'Archivo Variable', system-ui, sans-serif;
   --serif: var(--head);
+  /* the box score: stat figures, tables, kickers, dates */
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
   /* widths of the one family: text, figures, headlines */
   --text-w: 100%;
-  --display-w: 70%;
-  --head-w: 112%;
+  --display-w: 72%;
+  --head-w: 118%;
   --nav-h: 58px;
-  --top-h: 54px;
+  --top-h: 56px;
   /* the play row on top of the tab bar (the dock): its height */
-  --cont-h: 56px;
+  --cont-h: 62px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
@@ -107,16 +175,16 @@
   /* the page's side gutter */
   --gut-l: max(16px, var(--safe-l));
   --gut-r: max(16px, var(--safe-r));
-  /* rhythm. Space, not rules, separates a page's sections; rows stay at least 44px for a finger */
-  --gap-page: 30px; /* between a page's sections */
+  /* rhythm. Space separates a page's sections; rows stay at least 44px for a finger */
+  --gap-page: 32px; /* between a page's sections */
   --gap-sec: 12px; /* between a section's heading and its content */
-  --pad-card: 16px; /* inside a group */
-  --row-min: 52px; /* a list row */
-  --row-py: 8px;
-  --row-px: 16px;
+  --pad-card: 18px; /* inside a card */
+  --row-min: 54px; /* a list row */
+  --row-py: 9px;
+  --row-px: 18px;
   --cell-py: 9px; /* a stat table's cell */
   --cell-px: 8px;
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 * {

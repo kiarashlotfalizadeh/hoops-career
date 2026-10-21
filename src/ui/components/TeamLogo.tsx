@@ -50,7 +50,7 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
         y="61"
         textAnchor="middle"
         fontFamily="Archivo Variable, sans-serif"
-        fontWeight="760"
+        fontWeight="860"
         style={{ fontStretch: '74%' }}
         fontSize={text.length === 3 ? 31 : 37}
         fill={ink}

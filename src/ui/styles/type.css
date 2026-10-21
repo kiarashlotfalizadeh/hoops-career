@@ -1,24 +1,32 @@
-/* Type: headlines (expanded), figures (condensed), section heads, the kicker and text utilities. */
+/* Type: headlines (expanded, black), big figures (condensed, black), the box score (mono), section
+   heads, the kicker and text utilities. */
 /* ------------------------------------------------------------------ type */
 .num {
   font-variant-numeric: tabular-nums;
 }
+/* the box score's type: stat figures, tables, kickers, dates. Monospaced, so columns line up by eye */
+.mono {
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
 
-/* figures: the condensed cut, heavy and tabular (scores, ratings, money that leads a block) */
+/* big figures: the condensed cut, black and tabular (a score, a lead number, money that leads a block) */
 .display {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  letter-spacing: -0.01em;
+  font-weight: 880;
+  letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
 }
-/* headlines: the expanded cut, heavy and tight (`.serif` is its old name) */
+/* headlines: the expanded cut, black and tight (`.serif` is its old name) */
 .head,
 .serif {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  letter-spacing: -0.028em;
+  font-weight: 880;
+  letter-spacing: -0.035em;
 }
 
 h1,
@@ -34,46 +42,52 @@ h1,
 h2 {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  letter-spacing: -0.03em;
+  font-weight: 900;
+  letter-spacing: -0.04em;
 }
 h1 {
-  font-size: 28px;
-  line-height: 1.04;
+  font-size: 32px;
+  line-height: 0.98;
 }
 h2 {
-  font-size: 22px;
+  font-size: 23px;
+  line-height: 1.02;
 }
 /* a group's or a block's own heading: the reading cut, bold, sentence case */
 h3,
 h4 {
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-weight: 700;
+  font-weight: 720;
   font-size: 16px;
   letter-spacing: -0.012em;
 }
 
-/* a section's head: a size up from the text, bold, no rule above it (space opens a section) */
+/* a section's head: the headline cut a size down, black, no rule above it (space opens a section) */
 .card-h h3,
 .sec-h h3 {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 17px;
-  font-weight: 720;
-  letter-spacing: -0.015em;
+  font-family: var(--head);
+  font-stretch: 114%;
+  font-size: 19px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
   color: var(--text);
-  line-height: 1.2;
+  line-height: 1.1;
 }
-/* the kicker over a headline or a figure's label: small, quiet, sentence case. Never tracked capitals */
+/* inside a card the head steps down: the card itself already says "a block" */
+.card .card-h h3 {
+  font-size: 16.5px;
+  font-stretch: 108%;
+}
+/* the kicker over a headline or a figure's label: small mono, quiet, sentence case. Never tracked capitals */
 .over {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 12.5px;
-  font-weight: 560;
-  letter-spacing: 0;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .dim {
@@ -124,4 +138,7 @@ h4 {
 /* a label written as it is even inside caps (an overline, a figure's label): ORtg, DRtg, Net, 3P% */
 .as-is {
   text-transform: none;
+}
+::selection {
+  background: color-mix(in srgb, var(--team) 26%, transparent);
 }

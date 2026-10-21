@@ -1,12 +1,13 @@
-// Team colours: readable variants of a team's colours on the dark theme, for identity surfaces
-// (slabs, jerseys, floors, your rows) and, for your own team, the app's controls.
+// Team colours: readable variants of a team's colours on the Hardwood paper, for identity surfaces
+// (slabs, jerseys, floors, your rows) and, for your own team, links, switches and the play button.
 
-const DEFAULT_ACCENT = '#3b82f6';
-/** --surface-2, the lightest neutral surface team-coloured text sits on. */
-const SURFACE_2 = '#24262b';
-const INK = '#0a0a0c';
-/** --bg, the ground an accent button sits on. */
-const BG = '#0a0a0c';
+const DEFAULT_ACCENT = '#2f6fde';
+/** --surface-2, the darkest paper surface team-coloured text sits on. */
+const SURFACE_2 = '#e7e1d4';
+/** --ink: text, and the dock's ground. */
+const INK = '#121212';
+/** --bg, the paper a switch or a fill sits on. */
+const BG = '#f3efe7';
 
 function rgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -62,7 +63,7 @@ const CLASH = 90;
 /** One readable colour per team for two-team charts, with the away side switching when they clash. */
 export function matchupColors(home: [string, string, string], away: [string, string, string]): [string, string] {
   const h = teamAccent(home);
-  const a = [teamAccent(away), ...away, '#e8ecf3'].find((c) => luminance(c) > 0.03 && colorDistance(c, h) >= CLASH) ?? '#e8ecf3';
+  const a = [teamAccent(away), ...away, '#57534b'].find((c) => luminance(c) < 0.6 && colorDistance(c, h) >= CLASH) ?? '#57534b';
   return [h, a];
 }
 
@@ -78,12 +79,12 @@ export interface TeamLook {
   slab: string;
   /** The trim along a slab and a jersey's neck and armholes: the next colour that stands apart from the slab. */
   trim: string;
-  /** The colour it's known by (identityColor), lightened until it reads as text on the dark theme's raised surfaces. */
+  /** The colour it's known by (identityColor), darkened until it reads as text on the paper and its surfaces. */
   text: string;
 }
 
-/** --surface-2 and --raised: the grounds team-coloured text sits on (a row of yours is tinted toward --raised). */
-const RAISED = '#151619';
+/** --raised: card stock, the other ground team-coloured text sits on. */
+const RAISED = '#ffffff';
 
 export function teamLook(colors: [string, string, string]): TeamLook {
   const [p, ...rest] = colors;
@@ -92,23 +93,18 @@ export function teamLook(colors: [string, string, string]): TeamLook {
   let slab = base;
   // white text on the slab's lightest corner (the base with 8% white mixed in) keeps 4.5:1
   for (let t = 0.08; contrast('#ffffff', mix(slab, '#ffffff', 0.08)) < 4.5 && t <= 1; t += 0.08) slab = mix(base, '#000000', t);
-  // a near-black slab (the Spurs', the Nets') would vanish into the graphite page: lift it toward the team's lightest colour
-  if (luminance(slab) < 0.02) {
-    const light = [...colors].sort((a, b) => luminance(b) - luminance(a))[0];
-    slab = mix(slab, light, 0.3);
-  }
   const trim = [...colors, '#ffffff'].find((c) => c.toLowerCase() !== base.toLowerCase() && colorDistance(c, slab) >= CLASH) ?? '#ffffff';
   // the primary, unless it's near-black or near-white (the Nets' black, the Spurs' silver): then the most vivid other
   const accent = identityColor(colors);
   let text = accent;
-  for (let t = 0.1; [SURFACE_2, RAISED].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(accent, '#ffffff', t);
+  for (let t = 0.1; [SURFACE_2, RAISED, BG].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(accent, '#000000', t);
   return { slab, trim, text };
 }
 
-/** The colour a team is known by: its primary, unless that's too dark or too light to read as a colour on the dark theme. */
+/** The colour a team is known by: its primary, unless that's too light to read as a colour on the paper (a black primary is printed as black). */
 export function identityColor(colors: [string, string, string]): string {
   const l = luminance(colors[0]);
-  return l > 0.03 && l < 0.6 ? colors[0] : teamAccent(colors);
+  return l < 0.45 ? colors[0] : teamAccent(colors);
 }
 
 /**
@@ -138,11 +134,12 @@ export function jerseyKit(colors: [string, string, string]): { fill: string; tri
   return { fill, trim, num: contrast(trim, fill) >= 3 ? trim : inkOn(fill) };
 }
 
-/** Your team's tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text, --team-ink, and --team-fill / --team-fill-ink (the app's controls). */
+/** Your team's tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text, --team-ink, --team-fill / --team-fill-ink (a switch, a fill on the paper) and --team-night / --team-night-ink (the play button on the ink dock). */
 export function applyAccent(colors: [string, string, string] | null) {
   const root = document.documentElement.style;
   if (!colors) {
-    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab', '--team-fill', '--team-fill-ink']) root.removeProperty(k);
+    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab', '--team-fill', '--team-fill-ink', '--team-night', '--team-night-ink'])
+      root.removeProperty(k);
     return;
   }
   const l = teamLook(colors);
@@ -155,11 +152,22 @@ export function applyAccent(colors: [string, string, string] | null) {
   const fill = accentFill(team);
   root.setProperty('--team-fill', fill);
   root.setProperty('--team-fill-ink', inkOn(fill));
+  // the play button sits on the ink dock: the team's trim (its second colour), lightened until it stands out there
+  const night = nightFill(l.trim);
+  root.setProperty('--team-night', night);
+  root.setProperty('--team-night-ink', inkOn(night));
 }
 
-/** A team colour as a control's fill (a primary button, the play button): lightened until it stands out from the page (3:1). */
+/** A team colour as a fill on the paper (a switch that's on, a progress bar): darkened until it stands out from the page (3:1). */
 export function accentFill(color: string): string {
   let fill = color;
-  for (let t = 0.08; contrast(fill, BG) < 3 && t <= 1; t += 0.08) fill = mix(color, '#ffffff', t);
+  for (let t = 0.08; contrast(fill, BG) < 3 && t <= 1; t += 0.08) fill = mix(color, '#000000', t);
+  return fill;
+}
+
+/** A team colour as a fill on the ink dock (the play button): lightened until it stands out from the ink (3:1). */
+export function nightFill(color: string): string {
+  let fill = color;
+  for (let t = 0.08; contrast(fill, INK) < 3 && t <= 1; t += 0.08) fill = mix(color, '#ffffff', t);
   return fill;
 }

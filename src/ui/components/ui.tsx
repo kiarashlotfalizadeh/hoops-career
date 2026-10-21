@@ -81,7 +81,7 @@ export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastNa
     // a badge beside the name it stands for: nothing more for a screen reader to read
     <div className={`avatar ${size}`} aria-hidden="true">
       <svg viewBox="0 0 40 40">
-        <path d={JERSEY_BODY} fill={kit.fill} stroke="rgba(255,255,255,0.16)" strokeWidth="0.8" />
+        <path d={JERSEY_BODY} fill={kit.fill} stroke="rgba(18,18,18,0.16)" strokeWidth="0.8" />
         <path d={JERSEY_TRIM} fill="none" stroke={kit.trim} strokeWidth="2.2" strokeLinecap="round" />
         <text
           x="20"

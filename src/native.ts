@@ -21,8 +21,8 @@ export async function initNative() {
   if (!Capacitor.isNativePlatform()) return;
   const [{ App }, { StatusBar, Style }] = await Promise.all([import('@capacitor/app'), import('@capacitor/status-bar')]);
   try {
-    await StatusBar.setStyle({ style: Style.Dark });
-    if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#06080c' });
+    await StatusBar.setStyle({ style: Style.Light });
+    if (Capacitor.getPlatform() === 'android') await StatusBar.setBackgroundColor({ color: '#f3efe7' });
   } catch {
     /* status bar not available */
   }

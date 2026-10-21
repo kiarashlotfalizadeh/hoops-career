@@ -1,8 +1,9 @@
-# Box Score: the Hoops Career design system
+# Hardwood: the Hoops Career design system
 
-Your team's own app, on a phone: graphite grounds, one type family in three widths (expanded
-headlines, condensed scoreboard figures, normal text), your team's colour on the controls, and
-screens that show a few things well instead of everything at once. Built for players who want the whole sim: depth is always there, one tap
+A printed sports poster in your hand: warm bone paper and white card stock, black ink, your team's
+colour as solid blocks with the court's white lines on them, black expanded headlines, the box
+score in mono, one ink dock at the foot, and screens that show a few things well instead of
+everything at once. Built for players who want the whole sim: depth is always there, one tap
 down, never hidden behind a mode. Read this before changing a screen;
 `src/ui/theme.css` indexes the design system's partials (`src/ui/styles/`: tokens, type, layout,
 the app's chrome, surfaces, controls, badges, forms, data, overlays, figures, and the rules that
@@ -101,20 +102,24 @@ world (no people layer: no morale, personalities or player conversations, by the
    tab, a row that opens, a `More`, or a sheet away, never deleted and never shown all at once. A
    row carries a name and at most one line of detail; a block carries one short explanation at
    most, the rest behind its `Help`.
-2. **Your team runs the controls.** Primary buttons, the play button, a switch that's on, the
-   active tab, links and "go there" text are your team's colour (`--accent`, `--accent-text`, set
-   by `applyAccent`). A chosen option (a chip, a segment, a level) is white on graphite (`--on`).
-   Other colour means something: team identity (slabs, jerseys, marks), results and signals
-   (`--good` `--bad` `--warn` `--info`), rating tiers. `--brand` marks only what needs you (the
-   inbox count, live). Never tint a whole screen.
-3. **Space, not lines or boxes.** Sections are a bold head and content, separated by
-   `--gap-page`; no rule over every section. A group (`.card`, borderless, 14px corners) holds one
-   object: a list, a table, a form, a figure block. Never a group inside a group, never a group
-   around a single line. One slab per screen at most, at the top.
-4. **One family, three widths.** Archivo expanded and heavy (`--head`, `.head`, `h1` `h2`) for
-   headlines: page and sheet titles, a team's name, a story, a game's result. Condensed
-   (`--display`, `.display`) for figures. Normal width (`--font`) for everything else. No serif,
-   no italics for display.
+2. **Ink runs the controls, your team runs the identity.** A primary button is a solid ink pill,
+   a secondary an ink ring (`.btn`), a chosen chip or level solid ink (`--on`), the page tab that's
+   on carries a thick ink rule. Your team's colour (set by `applyAccent`) is the slab, the play
+   button on the dock (`--team-night`), a switch that's on (`--accent`), links and "go there" text
+   (`--accent-text`) and your rows' wash. Other colour means something: other teams' identity
+   (slabs, jerseys, marks), results and signals (`--good` `--bad` `--warn` `--info`), rating tiers.
+   `--brand` marks only what needs you (the inbox count, live). Never tint a whole screen.
+3. **Paper, card stock and space.** The page is paper (`--bg`); a group is a white card
+   (`.card`, 20px corners, a warm `--shadow-card`, no outline) holding one object: a list, a table,
+   a form, a figure block. Sections are a black head and content, separated by `--gap-page`; no
+   rule over every section. Never a card inside a card, never a card around a single line. One slab
+   per screen at most, at the top: it's the screen's poster.
+4. **One family in three widths, and the box score in mono.** Archivo expanded and black (`--head`,
+   `.head`, `h1` `h2`, section heads) for headlines: page and sheet titles, a team's name, a story,
+   a game's result. Condensed and black (`--display`, `.display`) for the one big figure a hero
+   leads with (a score, a win chance). Normal width (`--font`) for reading. IBM Plex Mono (`--mono`,
+   `.mono`) for the box score: stat figures, tables, `Statline`, `Kpi`, kickers (`.over`), dates and
+   meta that is data. No serif, no italics.
 5. **Sentence case, always.** No tracked-out capitals: not for section labels, kickers, tags,
    buttons, tabs or table heads. Abbreviations keep their own capitals (PTS, OKC, MLE). A kicker over
    a headline is `.over`: small, quiet, sentence case ("Final · Tue, Oct 20").
@@ -122,8 +127,9 @@ world (no people layer: no morale, personalities or player conversations, by the
    surface, no weaves, cut corners or giant faded logos, no icons in rounded squares beside every
    row, no glows, no outlines around every chip. An icon appears where it names an action or a kind
    (a toast's tone, a nav tab), small and in the text's colour.
-7. **Scoreboard figures.** Numbers people look at are condensed, tabular and big, with a small
-   sentence-case label. A figure appears once per screen (the record is in the top bar: a screen
+7. **Box-score figures.** Numbers people read are mono, tabular, with a small sentence-case label;
+   a line of them sits under a 2px ink rule (`.statline`), as a printed box score does. The one figure
+   a hero leads with is the condensed black cut, as big as it can be. A figure appears once per screen (the record is in the top bar: a screen
    doesn't repeat it unless it's the subject).
 8. **Short copy.** See Copy.
 9. **Thumb first.** Primary actions sit low (the dock's play row, a screen's own `.dockbar`),
@@ -131,29 +137,30 @@ world (no people layer: no morale, personalities or player conversations, by the
 
 ## Tokens (theme.css `:root`)
 
-| Token                                           | Use                                                                                                                                                |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--bg` `--bg-2`                                 | page ground (graphite); the dock                                                                                                                   |
-| `--raised`                                      | groups (cards), tables, list grounds, sheets                                                                                                       |
-| `--surface` `--surface-2` `--surface-3`         | pressed rows, buttons, tracks, a segment that's on                                                                                                 |
-| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a table's head, an outlined control / strong                                                                             |
-| `--text` `--text-2` `--text-dim`                | primary / secondary / labels and meta (all 4.5:1 on every ground)                                                                                  |
-| `--accent` `--accent-ink`                       | your team's colour as a control's fill (primary, play, switch on, active tab) / ink on it                                                          |
-| `--accent-text`                                 | links and "go there" text: your team's colour, readable as text                                                                                    |
-| `--on` `--on-ink`                               | a chosen option: a chip, a segment's pill, a level (white on graphite)                                                                             |
-| `--brand`                                       | the brand orange, only for what needs you: the inbox count, a sim's progress edge, live                                                            |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips)                                                                                                          |
-| `--tier-*`                                      | OVR badge tiers (via `ovrColor`)                                                                                                                   |
-| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                        |
-| `--font` `--display` `--head`                   | text / figures (with `font-stretch: var(--display-w)`) / headlines (with `--head-w`); `--serif` is `--head`'s old name                             |
-| `--display-w` `--text-w` `--head-w`             | the width axis for figures (70%), text (100%) and headlines (112%)                                                                                 |
-| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                  |
-| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (30), head to content (12), in a group (16)                                                                               |
-| `--row-min` `--row-py` `--row-px`               | a list row: 52px tall at least, its padding                                                                                                        |
-| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                        |
-| `--radius-xs` … `--radius-xl`                   | corners: xs 5 tags and badges, sm 8 small controls and chips, md 11 buttons and inputs, `--radius` 14 groups, lg 18 slabs and heroes, xl 24 sheets |
-| `--shadow` `--shadow-float`                     | a panel over the page (toasts, docks); a bar floating over the tab bar                                                                             |
-| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                               |
+| Token                                           | Use                                                                                                                                                                               |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bg` `--bg-2`                                 | the paper; a recessed track (a `Segmented`)                                                                                                                                       |
+| `--raised`                                      | white card stock: cards, tables, list grounds                                                                                                                                     |
+| `--surface` `--surface-2` `--surface-3`         | pressed rows, level buttons, tracks, tags (paper tones, darker each step)                                                                                                         |
+| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a chip's ring, a table's foot / strong ink rule                                                                                                         |
+| `--text` `--text-2` `--text-dim`                | ink / secondary / labels and meta (all 4.5:1 on paper, card and `--surface-2`)                                                                                                    |
+| `--ink` `--ink-2` `--paper-ink`                 | the controls' ink (a primary pill, a ring, the dock) / pressed / text on ink                                                                                                      |
+| `--on` `--on-ink`                               | a chosen option: a chip, a level (solid ink, white text)                                                                                                                          |
+| `--accent` `--accent-ink`                       | your team's colour as a fill on paper (a switch that's on, progress) / ink on it                                                                                                  |
+| `--accent-text`                                 | links and "go there" text: your team's colour, darkened to read on paper                                                                                                          |
+| `--team-night` `--team-night-ink`               | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                    |
+| `--brand`                                       | red-orange, only for what needs you: the inbox count, live                                                                                                                        |
+| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper                                                                                                           |
+| `--tier-*`                                      | OVR tiers (via `ovrColor`), text colours that read on white                                                                                                                       |
+| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                                       |
+| `--font` `--display` `--head` `--mono`          | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                            |
+| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                                                 |
+| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (32), head to content (12), in a card (18)                                                                                                               |
+| `--row-min` `--row-py` `--row-px`               | a list row: 54px tall at least, its padding                                                                                                                                       |
+| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                                       |
+| `--radius-xs` … `--radius-xl`, `--radius-pill`  | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment |
+| `--shadow-card` `--shadow` `--shadow-float`     | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                  |
+| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                                              |
 
 Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
 tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the
@@ -203,32 +210,39 @@ lines and jerseys.
 
 ## Type
 
-One family: Archivo, variable in width and weight.
+Archivo, variable in width and weight, for words and big figures; IBM Plex Mono for the box score.
 
-- `h1` 28-30px, the headline cut (`--head`, `font-stretch: var(--head-w)`), weight 780, tracking
-  -0.03em: the page title (`PageHeader`), a team's or a player's name on its slab.
-- `h2` 22px headline cut: a sheet's title, a slab's headline.
-- A story's or a result's headline: `.head` (or the screen's own class on `--head`), 20-30px,
-  weight 740-780, `text-wrap: balance`. Shorter is better: the expanded cut is for a few words.
-  A dek under it in `--text-2`, 14.5-15px.
-- A section's head (`Section`, a group's `h3`): 17px, 720, sentence case, `--text`.
-- `.over`, a kicker over a headline or a figure's label: 12.5px, 560, `--text-dim`.
-- Body 15px at 420; `.small` 13.5px; `.tiny` 12px. Meta lines 13px `--text-dim`.
-- Figures: `--display` with `font-stretch: var(--display-w)`, weight 700-780, tabular (`.num`).
+- `h1` 32-34px, the headline cut (`--head`, `font-stretch: var(--head-w)` 118%), weight 900,
+  tracking -0.04em, leading under 1: the page title (`PageHeader`), a team's or a player's name on
+  its slab.
+- `h2` 23-24px headline cut: a sheet's title, a slab's headline.
+- A story's or a result's headline: `.head` (or the screen's own class on `--head`), 22-34px,
+  weight 860-900, tracking -0.035em, `text-wrap: balance`. Shorter is better. A dek under it in
+  `--text-2`, 14.5-15px.
+- A section's head (`Section`, `.sec-h h3`): the headline cut at 114%, 19px, 880, `--text`. Inside a
+  card (`.card-h h3`) a step down: 16.5px.
+- `.over`, a kicker over a headline or a figure's label: mono 12px, 500, `--text-dim` ("Final · Tue,
+  Oct 20").
+- Body 15px at 420; `.small` 13.5px; `.tiny` 12px. Meta lines 13px `--text-dim` in the text cut
+  (mono when the meta is data: a date, a record, a line of figures).
+- Big figures: `--display` with `font-stretch: var(--display-w)` (72%), weight 860-900,
+  tracking -0.03em. Stat figures: `--mono`, 500-600, tracking -0.03 to -0.06em. Both tabular.
   Never in capitals-only words: a figure's label sits beside it in sentence case.
-- Names in rows 15.5px at 600-640. Nothing in the text cut above 720.
+- Names in rows 15.5px at 680. Nothing in the text cut above 760.
 
 ## Components and classes
 
-- `PageHeader` (`.ph`): back button, title, one short sub line, a control on the right. A hub's
+- `PageHeader` (`.ph`): back button, title (34px black), one short mono sub line, a control on the right. A hub's
   sections use `TabBar` (`league/shared.tsx`, sticky page tabs) under it, never a second header.
 - `Section` (`.sec`, `.sec-h`): a bold head + right-side link (`.card-link`), then content. No rule.
-- `Card` (`.card`): a borderless `--raised` group for one object. `.flush` + `.list` for rows.
-  `accent` (a lighter ground) sparingly.
-- `.slab`: the identity hero, a team-colour field deepening toward its foot (no stripe, no mark).
-  Your team by default; another with `slabVars(colors)`. A primary button on it is white.
-- Lists: `.card.flush` > `.list` > rows. `.listrow` (`--row-min`, 52px), `.lr-name`, `.lr-meta`
-  (one line). Your own rows: an 11% wash of `--team-text`, no edge stripe.
+- `Card` (`.card`): white card stock on the paper (`--raised`, `--shadow-card`) for one object.
+  `.flush` + `.list` for rows. `accent` (printed on the paper, ruled in ink) sparingly.
+- `.slab`: the identity hero, the team's colour as one solid block with the court's white lines
+  under the content (`::before`; `.no-court` drops them). Your team by default; another with
+  `slabVars(colors)`. Inside it the ink inverts: white text, white rings, a white primary, white OVR
+  badges. Its one big figure is `--display` black, as large as fits.
+- Lists: `.card.flush` > `.list` > rows. `.listrow` (`--row-min`, 54px), `.lr-name`, `.lr-meta`
+  (one line). Your own rows: a 10% wash of `--team`, no edge stripe.
 - **A list of players with figures is a row grid** (`team/RosterViews`): the jersey, the name over
   position and age, then figures in columns named once per group (in the divider), OVR beside POT.
   Never a unit on every figure. Every team's roster is the same component.
@@ -240,12 +254,13 @@ One family: Archivo, variable in width and weight.
   table of badges carries `OvrKey` under it; a player's own badge opens the ladder. Attribute
   ratings use `ratingTone` everywhere, with `RatingKey` under a ratings table.
 - Figures: `Statline` for 2-4 figures in a row; `Kpi` tiles only for a grid of many.
-- `Segmented` (`tabs` for page tabs: sentence case, a rule in your colour under the one that's
-  on; one row of tabs per screen, a boxed `Segmented` under it at most), `Chips` (filled
-  graphite; a chosen chip is white), `.tag` (a soft filled label in sentence case; a tone colours
-  the word and its wash), `Ovr`, `Avatar`, buttons (`.btn` graphite, `.primary` your colour,
-  `.ghost` outlined, `.text` a link-like action, `.danger` and `.good` washed in their signal,
-  `.sm`, `.xs`, `.block`, `.big`).
+- `Segmented` (`tabs` for page tabs: the headline cut, a thick ink rule under the one that's on;
+  one row of tabs per screen; a boxed `Segmented` under it at most: a recessed pill track with the
+  option that's on as a white card), `Chips` (ink-ring pills; a chosen chip is solid ink), `.tag` (a
+  printed tint in sentence case; a tone colours the word and its wash), `Ovr` (the figure in mono,
+  in its tier's colour on a tint of it), `Avatar`, buttons (all pills: `.btn` an ink ring,
+  `.primary` solid ink, `.ghost` a quieter ring, `.text` a link-like action, `.danger` and `.good`
+  washed in their signal, `.sm`, `.xs`, `.block`, `.big`).
 - `Help` ("?" opening a sheet) and `More` (an expander) carry every explanation. `Toggle`'s `help`
   goes behind its "?" automatically.
 - `Term` (keeps the caps of the heading it sits in) (`components/Glossary.tsx`): a word with a glossary entry (drop, MLE, eFG...): tap for what
@@ -257,9 +272,12 @@ One family: Archivo, variable in width and weight.
   that filters a list as you type gives its box `.sheet-filter`, so it keeps its height.
 - A first-run or setup flow (New League) keeps its step's call to action in a sticky foot
   (`.nl-cta`) so a long grid never hides it.
-- `.dockbar`: a screen's own fixed action bar over the tab bar; the play row steps aside for it.
-- The dock (App.tsx): the tab bar with the play row on top of it, on one glass. The play row names
-  the next step and runs it (a round play button in your colour); its arrow opens every option. A
+- `.dockbar`: a screen's own fixed action bar over the tab bar (an ink bar, inverted tokens); the
+  play row steps aside for it.
+- The dock (App.tsx): the tab bar with the play row on top of it, one ink slab with round top
+  corners; inside it the tokens invert (white text, `--accent` = `--team-night`). The play row names
+  the next step in the headline cut and runs it (a round play button in your team's trim); its
+  arrow opens every option. A
   required agenda item takes its place and opens in a sheet to be settled. On the screen the next
   step names, it shrinks to a round options button.
 - `.empty` for empty states: one line, what to do next; no icon or display headline.
@@ -277,7 +295,9 @@ first: wide screens get the same single column, centred, at most 788px. Grid col
 
 ## The live game
 
-Broadcast first: the court is always the biggest thing on screen.
+Broadcast first: the court is always the biggest thing on screen. It is a maple floor with your
+colours painted in the key and the centre circle, under an ink scorebug (the broadcast's own
+graphics package); the console under it is paper and card stock like every other screen.
 
 - A slim scorebug sits over a full-width court (the win-probability sliver and the scores ticker
   under it when Settings has them on). Captions, graphics and **one banner at a time** (injuries,
@@ -352,12 +372,12 @@ Broadcast first: the court is always the biggest thing on screen.
   let go short of closing settles back. Press states scale to 0.97 (buttons, team tiles) or darken
   (rows, chips, segments, icon buttons); a mouse gets a hover state too (`(hover: hover)` only, never
   something a touch needs).
-- **Toasts** rise above the Continue bar (over a sheet: at the top, clear of its buttons), at most two
+- **Toasts** (ink pills with white text) rise above the Continue bar (over a sheet: at the top, clear of its buttons), at most two
   at once, one width, an icon for their tone. A tap dismisses one or opens its link. A sim or a phase
   change starting clears the ones before it: a toast is about the league as it was.
 - **Loading**: nothing for 300ms, then a spinner fades in where the screen will be (`Waiting` in
   App.tsx). Never a "Loading…" line that flashes on every lazy screen.
-- While a sim runs, the Continue bar fills from the left with a `--brand` edge along its foot and says
+- While a sim runs, the Continue bar fills from the left with your colour's edge along its foot and says
   "Day n of N"; a one-shot job (a new season, free agency) shows a sweeping glow instead.
 - Figures in a `Statline` count up when a screen opens (`CountUp`), once.
 - Big moments get a full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once,

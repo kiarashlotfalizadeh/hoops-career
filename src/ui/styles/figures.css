@@ -4,41 +4,44 @@
 .kpi {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 12px 14px 13px;
-  border-radius: var(--radius);
+  gap: 4px;
+  padding: 13px 15px 14px;
+  border-radius: var(--radius-md);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   min-width: 0;
 }
 
 .kpi .k {
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-dim);
-  font-weight: 560;
+  font-weight: 600;
   white-space: nowrap;
 }
 .kpi .v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 28px;
-  font-weight: 760;
+  font-family: var(--mono);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.05em;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
-/* figures in a row: big condensed numbers with small labels, space between them, no boxes */
+/* figures in a row: the box score's line, big mono numbers over small labels, ruled in ink above */
 .statline {
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: minmax(0, 1fr);
   column-gap: 14px;
+  padding-top: 11px;
+  border-top: 2px solid var(--text);
 }
 .statline > * {
   min-width: 0;
 }
 .statline .k {
   max-width: 100%;
-  font-size: 12.5px;
-  font-weight: 560;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-dim);
   white-space: nowrap;
   /* a long label ("Owed to others") ends in an ellipsis inside its column, never past it */
@@ -46,13 +49,12 @@
   text-overflow: ellipsis;
 }
 .statline .v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 32px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 27px;
   margin-top: 2px;
-  line-height: 1;
-  letter-spacing: -0.01em;
+  line-height: 1.05;
+  letter-spacing: -0.06em;
   font-variant-numeric: tabular-nums;
 }
 .statline .s {
@@ -73,7 +75,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-pill);
   background: var(--surface-2);
   font-size: 12px;
   font-weight: 620;
@@ -88,6 +90,7 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--text-dim);
+  box-shadow: inset 0 0 0 1.25px var(--line-2);
   flex: none;
 }
 .help-btn::after {
@@ -172,10 +175,10 @@
   border-radius: var(--radius-xs);
 }
 .cmp-v.win {
-  font-weight: 740;
+  font-weight: 700;
   color: var(--text);
-  background: color-mix(in srgb, var(--cmp-c) 26%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cmp-c) 70%, transparent);
+  background: color-mix(in srgb, var(--cmp-c) 20%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cmp-c) 60%, transparent);
 }
 .cmp-v.lose {
   color: var(--text-dim);

@@ -1,14 +1,15 @@
-/* The app's chrome: the top bar, the tab bar and the Continue bar with its Play options. */
+/* The app's chrome: the top bar on the paper, the dock (the tab bar with the play row on it) as one
+   ink slab at the foot, and the Play options. */
 /* ------------------------------------------------------------------ top bar */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 30;
   padding-top: var(--safe-t);
-  background: rgba(10, 10, 12, 0.8);
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  background: rgba(243, 239, 231, 0.86);
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
   border-bottom: 1px solid var(--line);
 }
 .topbar-inner {
@@ -31,23 +32,25 @@
 .topbar .title {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  font-size: 15.5px;
+  font-weight: 900;
+  font-size: 16.5px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.035em;
 }
 .topbar .title .num {
-  font-family: var(--display);
-  font-stretch: 80%;
+  font-family: var(--mono);
+  font-stretch: normal;
   color: var(--text-2);
-  font-weight: 640;
-  font-size: 16px;
-  letter-spacing: 0;
-  margin-left: 4px;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.03em;
+  margin-left: 5px;
 }
 .topbar .sub {
   margin-top: 4px;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
   font-weight: 500;
 }
@@ -57,7 +60,7 @@
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--text-2);
+  color: var(--text);
   position: relative;
   flex: none;
   transition:
@@ -68,10 +71,21 @@
   background: var(--surface-2);
   color: var(--text);
 }
-/* the top bar's own screens (search's sheet, the inbox, settings) light their button while open */
+/* the top bar's buttons: ink rings on the paper; the screen that's open fills its ring */
+.topbar .iconbtn {
+  width: 38px;
+  height: 38px;
+  margin-left: 6px;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.topbar .iconbtn::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
 .topbar .iconbtn[aria-current='page'] {
-  color: var(--text);
-  background: var(--surface);
+  color: var(--paper-ink);
+  background: var(--ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .iconbtn:not(:disabled):hover {
@@ -94,17 +108,18 @@
 }
 .badge-dot {
   position: absolute;
-  top: 6px;
-  right: 5px;
+  top: -4px;
+  right: -5px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--brand);
   color: #fff;
+  font-family: var(--mono);
   font-size: 10px;
-  font-weight: 740;
-  font-stretch: 85%;
+  font-weight: 600;
+  letter-spacing: -0.04em;
   display: grid;
   place-items: center;
   box-shadow: 0 0 0 2px var(--bg);
@@ -121,8 +136,22 @@
 }
 
 /* ------------------------------------------------------------------ the dock: tab bar + play row
-   One unit at the foot of the screen: the next step's row (when there is one) sits on the tab bar,
-   on the same glass, so the screen never carries two floating bars */
+   One ink slab at the foot of the screen: the next step's row (when there is one) sits on the tab
+   bar, on the same slab, so the screen never carries two floating bars. Inside it the ink inverts */
+.bottomnav,
+.continue:not(.is-compact) {
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.8);
+  --text-dim: rgba(255, 255, 255, 0.58);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-2: rgba(255, 255, 255, 0.13);
+  --surface-3: rgba(255, 255, 255, 0.2);
+  --line: rgba(255, 255, 255, 0.1);
+  --accent: var(--team-night);
+  --accent-ink: var(--team-night-ink);
+  --accent-text: var(--team-night);
+  color: var(--text);
+}
 .bottomnav {
   position: fixed;
   left: 0;
@@ -130,11 +159,9 @@
   bottom: 0;
   z-index: 40;
   padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
-  background: rgba(15, 16, 18, 0.97);
-  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  border-top: 1px solid var(--line);
+  background: var(--ink);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -10px 30px -18px rgba(20, 14, 4, 0.5);
 }
 .bottomnav-inner {
   max-width: 640px;
@@ -164,10 +191,7 @@
 }
 .navitem.active {
   color: var(--text);
-  font-weight: 680;
-}
-.navitem.active svg {
-  color: var(--accent-text);
+  font-weight: 720;
 }
 
 /* ------------------------------------------------------------------ the play row
@@ -181,16 +205,18 @@
   z-index: 45;
   display: flex;
   justify-content: center;
-  padding: 0 var(--safe-r) 0 var(--safe-l);
-  background: rgba(15, 16, 18, 0.97);
-  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  border-top: 1px solid var(--line);
+  padding: 6px var(--safe-r) 0 var(--safe-l);
+  background: var(--ink);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: 0 -10px 30px -18px rgba(20, 14, 4, 0.5);
 }
-/* (the bar's own top hairline: the row and the tabs read as one dock) */
+/* the row and the tabs read as one slab: the tab bar loses its own top corners and shadow under it */
 body:has(.continue:not(.is-compact)) .bottomnav {
-  border-top-color: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+body:has(.continue:not(.is-compact)) .bottomnav-inner {
+  border-top: 1px solid var(--line);
 }
 .continue-inner {
   display: flex;
@@ -221,8 +247,8 @@ body:has(.continue:not(.is-compact)) .bottomnav {
 /* the play button: your colour, round */
 .cg-disc {
   flex: none;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   display: grid;
   place-items: center;
@@ -238,16 +264,21 @@ body:has(.continue:not(.is-compact)) .bottomnav {
 }
 .continue-go .cg-label {
   display: block;
-  font-size: 15.5px;
-  font-weight: 700;
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 16px;
+  font-weight: 820;
   line-height: 1.15;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.025em;
 }
-.continue-go .cg-sub {
+.continue-go .cg-sub,
+.continue-busy .cg-sub {
   display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
+  margin-top: 3px;
+  font-family: var(--mono);
+  font-size: 11.5px;
   font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
 }
 .continue-more {
@@ -270,16 +301,19 @@ body:has(.continue:not(.is-compact)) .bottomnav {
   -webkit-backdrop-filter: none;
 }
 .continue-inner.compact {
-  width: 46px;
-  height: 46px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: var(--surface-3);
+  background: var(--ink);
   box-shadow: var(--shadow-float);
 }
 .continue-inner.compact .continue-more {
   width: 100%;
   margin: 0;
-  color: var(--text);
+  color: #fff;
+}
+.continue-inner.compact .continue-more:active {
+  background: var(--ink-2);
 }
 .continue-go,
 .continue-more {
@@ -306,12 +340,12 @@ body:has(.continue:not(.is-compact)) .bottomnav {
     background: var(--surface);
   }
 }
-/* the sim's progress fills the row from the left, your colour along its top edge */
+/* the sim's progress fills the row from the left, your colour along its foot */
 .continue-fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow: inset 0 2px 0 var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  box-shadow: inset 0 -3px 0 var(--accent);
   transition: width 0.3s ease-out;
   pointer-events: none;
 }
@@ -332,16 +366,12 @@ body:has(.continue:not(.is-compact)) .bottomnav {
 }
 .continue-busy .cg-label {
   display: block;
-  font-size: 15px;
-  font-weight: 680;
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 15.5px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
   line-height: 1.15;
-}
-.continue-busy .cg-sub {
-  display: block;
-  margin-top: 3px;
-  font-size: 12.5px;
-  font-weight: 560;
-  color: var(--text-dim);
 }
 .continue-busy {
   position: relative;
@@ -355,9 +385,9 @@ body:has(.continue:not(.is-compact)) .bottomnav {
 .continue-stop {
   position: relative;
   flex: none;
-  margin: 10px max(10px, var(--gut-r)) 10px 0;
-  padding: 0 14px;
-  border-radius: var(--radius-sm);
+  margin: 12px max(10px, var(--gut-r)) 12px 0;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
   background: var(--surface-2);
   font-weight: 640;
   font-size: 13.5px;
@@ -377,25 +407,29 @@ body:has(.continue:not(.is-compact)) .bottomnav {
   /* one line or two, centred in the row */
   align-content: center;
   column-gap: 10px;
-  min-height: 60px;
-  padding: 10px 12px 10px 16px;
-  border-radius: var(--radius);
+  min-height: 62px;
+  padding: 11px 14px 11px 18px;
+  border-radius: var(--radius-md);
   transition:
     transform 0.08s ease,
     background var(--dur-fast) ease;
-  background: var(--surface);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
   border: 1px solid transparent;
   text-align: left;
 }
 .flow-opt .fo-l {
-  font-weight: 660;
+  font-weight: 700;
   font-size: 15.5px;
+  letter-spacing: -0.01em;
 }
 .flow-opt .fo-s {
   grid-column: 1;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .flow-opt .fo-c {
   grid-column: 2;
@@ -403,24 +437,27 @@ body:has(.continue:not(.is-compact)) .bottomnav {
   color: var(--text-dim);
 }
 .flow-opt.primary {
-  background: var(--accent);
+  background: var(--ink);
   border-color: transparent;
-  color: var(--accent-ink);
+  color: #fff;
 }
 .flow-opt.primary .fo-l {
-  font-weight: 720;
-  font-size: 16.5px;
+  font-family: var(--head);
+  font-stretch: 110%;
+  font-weight: 860;
+  font-size: 17px;
+  letter-spacing: -0.03em;
 }
 .flow-opt.primary .fo-s,
 .flow-opt.primary .fo-c {
-  color: var(--accent-ink);
-  opacity: 0.75;
+  color: #fff;
+  opacity: 0.7;
 }
 .flow-opt:active {
   transform: scale(0.99);
 }
 .flow-opt:not(.primary):active {
-  background: var(--surface-2);
+  background: var(--surface);
 }
 .flow-opt:disabled {
   opacity: 0.5;
@@ -428,7 +465,7 @@ body:has(.continue:not(.is-compact)) .bottomnav {
 }
 @media (hover: hover) and (pointer: fine) {
   .flow-opt:not(.primary):not(:disabled):hover {
-    background: var(--surface-2);
+    background: var(--surface);
   }
 }
 /* while the play row shows, the end of a page scrolls clear of it */

@@ -9,7 +9,7 @@
 .bar > div {
   height: 100%;
   border-radius: 3px;
-  background: var(--text-2);
+  background: var(--ink);
 }
 
 /* ------------------------------------------------------------------ tables */
@@ -19,6 +19,7 @@
   border-radius: var(--radius);
   border: 1px solid transparent;
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   scrollbar-width: none;
 }
 .tablewrap::-webkit-scrollbar {
@@ -49,21 +50,32 @@ table.stats {
   border-collapse: separate;
   border-spacing: 0;
   width: 100%;
-  font-size: 13.5px;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+}
+/* names and words in a table read in the text cut; the figures stay in the box score's mono */
+table.stats td.l {
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
 }
 table.stats th {
   position: sticky;
   top: 0;
   background: var(--raised);
   color: var(--text-dim);
+  font-family: var(--font);
   font-size: 11.5px;
-  font-weight: 580;
-  letter-spacing: 0.01em;
-  padding: 11px var(--cell-px) 8px;
+  font-weight: 640;
+  letter-spacing: 0;
+  padding: 12px var(--cell-px) 8px;
   text-align: right;
   white-space: nowrap;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 2px solid var(--ink);
   user-select: none;
 }
 table.stats th.as-is {
@@ -100,22 +112,21 @@ table.stats th.sticky {
   background: var(--raised);
   z-index: 2;
 }
-/* your rows: a team-coloured edge and a faint tint */
 /* your rows: a faint wash of your colour */
 table.stats tr.me td {
-  background: color-mix(in srgb, var(--team-text) 11%, var(--raised));
+  background: color-mix(in srgb, var(--team) 10%, var(--raised));
 }
 table.stats th.sorted {
   color: var(--text);
-  font-weight: 720;
+  font-weight: 800;
 }
 /* a row that opens something (a player): pressed, it darkens like a list row (sticky cells too) */
 table.stats tr[tabindex]:active > td {
-  background: var(--surface);
+  background: var(--surface-2);
 }
 @media (hover: hover) and (pointer: fine) {
   table.stats tr[tabindex]:hover > td {
-    background: color-mix(in srgb, var(--surface) 70%, var(--raised));
+    background: var(--surface);
   }
   table.stats th:has(.th-sort):hover {
     color: var(--text-2);
