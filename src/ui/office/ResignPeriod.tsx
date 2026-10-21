@@ -179,10 +179,10 @@ export function ResignPeriod() {
                         <span className={worth ? 'good' : 'warn'}>staff: {worth ? 'exercise' : 'decline'}</span>
                       </div>
                     </div>
-                    <button className="btn sm" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
+                    <button className="btn sm ghost" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
                       Decline
                     </button>
-                    <button className="btn sm primary" disabled={busy} aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
+                    <button className="btn sm" disabled={busy} aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
                       Exercise
                     </button>
                   </div>

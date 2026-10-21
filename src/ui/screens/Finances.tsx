@@ -24,7 +24,7 @@ import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
-import { money, moneySigned, moneyExact } from '../../core/format';
+import { money, moneySigned, moneyExact, plural } from '../../core/format';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -106,7 +106,7 @@ function Overview({ team }: { team: Team }) {
                 k: `${pr >= 0 ? 'Profit' : 'Loss'} ${shortSeason(league.season)}`,
                 v: games || pr ? money(Math.abs(pr)) : '—',
                 color: games || pr ? (pr >= 0 ? 'var(--good)' : 'var(--bad)') : undefined,
-                s: isOffseason(league) ? 'season over' : games ? `so far · ${games} games` : 'not started',
+                s: isOffseason(league) ? 'season over' : games ? `so far · ${plural(games, 'game')}` : 'not started',
               },
               { k: 'Revenue', v: games || ts.revenue ? money(ts.revenue) : '—', s: isOffseason(league) ? undefined : 'so far' },
               { k: 'Expenses', v: games || ts.expenses ? money(ts.expenses) : '—', s: isOffseason(league) ? undefined : 'so far' },

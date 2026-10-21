@@ -58,7 +58,7 @@
   padding: 0 6px;
   border-radius: var(--radius-xs);
   font-size: 11.5px;
-  font-weight: 600;
+  font-weight: 640;
   line-height: 1;
   font-style: normal;
   background: var(--surface-2);
@@ -76,8 +76,8 @@
 }
 
 .fo-flag.bad {
-  color: color-mix(in srgb, var(--bad) 80%, white);
-  background: color-mix(in srgb, var(--bad) 14%, transparent);
+  color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
 }
 
 .fo-flag.good {
@@ -132,7 +132,9 @@
 }
 
 .fo-line-v {
-  font-weight: 680;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -162,17 +164,17 @@
 }
 
 .fo-dead .num {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 /* the total under a firmer rule, as a statement sets it */
 .fo-dead-t {
   font-weight: 700;
   padding-top: 6px;
-  border-top: 1px solid var(--line-3);
+  border-top: 2px solid var(--text);
 }
 
 .fo-buyout {
@@ -182,6 +184,7 @@
   padding: var(--pad-card);
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
 }
 
 /* ------------------------------------------------------------ notes */
@@ -196,6 +199,14 @@
   line-height: 1.4;
   color: var(--text-2);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
+}
+
+/* (on card stock it's pressed into the card instead) */
+.card .fo-callout,
+.fo-buyout .fo-callout {
+  background: var(--surface);
+  box-shadow: none;
 }
 
 .fo-callout b {
@@ -252,12 +263,12 @@
   width: 36px;
 }
 
-/* "POT 89" under the badge: the label quiet, the figure in the display face */
+/* "POT 89" under the badge: the label quiet, the figure in mono, as the box score sets it */
 .fo-ovrstack .pot {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: -0.04em;
   line-height: 1;
   white-space: nowrap;
   color: var(--text-2);
@@ -266,15 +277,16 @@
 
 .fo-ovrstack .pot-k {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
 .fo-name {
   display: block;
-  font-weight: 660;
-  font-size: 15px;
+  font-weight: 680;
+  font-size: 15.5px;
   line-height: 1.2;
+  letter-spacing: -0.012em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -294,18 +306,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* money in a row: the ledger's figure in mono, its terms in small mono under it */
 .fo-money .a,
 .fo-money-a {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
-  line-height: 1.05;
-  letter-spacing: -0.003em;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15.5px;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
 }
 
 .fo-money .b {
+  font-family: var(--mono);
   font-size: 11.5px;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
 }
 
@@ -314,13 +328,13 @@
   height: 38px;
   width: 100%;
   min-width: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a0a1a8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--line-2);
+  background-color: var(--raised);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23121212' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
-  padding: 0 28px 0 11px;
+  background-position: right 12px center;
+  padding: 0 30px 0 14px;
   font-size: 13px;
   font-weight: 620;
   color: var(--text);
@@ -436,4 +450,12 @@
 .fo-page > .lg-tabs + .sec > .sec-h {
   border-top: none;
   padding-top: 2px;
+}
+
+/* a row's line of figures (salary, terms, dates) is the box score's: mono */
+.fo-meta.num,
+.fo-offer-foot .num {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: -0.03em;
 }

@@ -5,16 +5,18 @@
 .fo-clock {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 14px 16px;
+  gap: 14px;
+  padding: 16px 18px 18px;
 }
 
 .fo-clock-over {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  font-family: var(--mono);
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
 
@@ -22,42 +24,54 @@
   color: #fff;
 }
 
+/* the pick's number and the team's mark across the top, who's picking under them */
 .fo-clock-main {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'n mark'
+    'team team';
+  align-items: start;
   gap: 12px;
 }
 
 .fo-clock-main .grow {
+  grid-area: team;
   min-width: 0;
 }
 
+.fo-clock-main > :last-child {
+  grid-area: mark;
+}
+
+/* the pick: the poster's figure, as big as it fits */
 .fo-clock-n {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 66px;
-  line-height: 0.85;
-  letter-spacing: -0.015em;
+  font-weight: 900;
+  grid-area: n;
+  font-size: clamp(96px, 30vw, 132px);
+  line-height: 0.76;
+  letter-spacing: -0.04em;
 }
 
 /* the team (or "You're up"): the slab's headline */
 .fo-clock-team {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  font-size: 26px;
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 
 .fo-clock-sub {
-  margin-top: 4px;
-  font-size: 13px;
-  font-weight: 600;
+  margin-top: 5px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
 
@@ -82,11 +96,11 @@
   width: 30px;
   flex: none;
   text-align: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 21px;
-  color: var(--text-2);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.05em;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -96,10 +110,11 @@
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  width: 58px;
-  padding: 8px 0 7px;
+  width: 60px;
+  padding: 9px 0 8px;
   border-radius: var(--radius-md);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
 }
 
 .fo-pickchip:active {
@@ -108,29 +123,36 @@
 
 /* yours: a wash of your colour */
 .fo-pickchip.me {
-  background: color-mix(in srgb, var(--team-text) 14%, var(--raised));
+  background: var(--ink);
+  color: var(--paper-ink);
 }
 
 .fo-pickchip .n {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 18px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.05em;
   line-height: 1;
 }
 
 .fo-pickchip .ab {
-  font-size: 11.5px;
-  font-weight: 640;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-2);
+}
+
+.fo-pickchip.me .ab {
+  color: inherit;
 }
 
 .fo-move {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 12.5px;
-  font-weight: 680;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
@@ -164,10 +186,11 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 9px var(--row-px) 7px 10px;
-  border-bottom: 1px solid var(--line-2);
-  font-size: 12px;
-  font-weight: 620;
+  padding: 12px var(--row-px) 8px 10px;
+  border-bottom: 2px solid var(--text);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
@@ -179,7 +202,7 @@
 
 .fo-board-proj {
   margin-top: 2px;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-dim);
   line-height: 1.3;
 }
@@ -203,7 +226,7 @@ button.listrow {
 }
 
 .fo-sel.me {
-  background: color-mix(in srgb, var(--team-text) 11%, transparent);
+  background: color-mix(in srgb, var(--team) 10%, transparent);
 }
 
 .fo-wrap {
@@ -233,8 +256,8 @@ button.listrow {
 }
 
 .fo-prospect-last {
-  font-size: 32px;
-  line-height: 1;
+  font-size: 34px;
+  line-height: 0.96;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -271,9 +294,9 @@ button.listrow {
 }
 
 .fo-combine .v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 21px;
-  line-height: 1.1;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.05em;
+  line-height: 1.2;
 }

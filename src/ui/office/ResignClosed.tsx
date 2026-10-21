@@ -39,6 +39,7 @@ export function ResignClosed({ league }: { league: League }) {
   const after = payroll(league, tid, s + 1);
   // from the lottery on, the expiring players hold room against it (their cap holds), as on the Office's cap sheet
   const holds = s + 1 === league.season + 1 ? capHolds(league, tid).reduce((a, h) => a + h.amount, 0) : 0;
+  const room = capRoomFig(cap.salaryCap - after - holds);
   const [title, when] =
     league.phase === 'freeAgency'
       ? ['Closed for this summer', 'These deals run out after next season: extend them now, or re-sign them next summer.']
@@ -66,12 +67,16 @@ export function ResignClosed({ league }: { league: League }) {
           </HelpSheet>
         }
       />
-      <section className="fo-capsheet fo-statement" aria-label="Re-sign period">
+      {/* the desk's poster: next season's room as big as it fits (the same cap figure as the Office's cap sheet, holds said) */}
+      <section className="fo-room" aria-label="Re-sign period">
+        <div className="over">
+          {room.k} · {shortSeason(s + 1)}
+        </div>
+        <div className="fo-room-v num">{room.v}</div>
+        <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : when}</div>
         <Statline
           items={[
-            // (the same cap figure as the Office's cap sheet, holds said; the season they're about once)
-            { ...capRoomFig(cap.salaryCap - after - holds), s: holds > 0 ? `after ${money(holds)} in holds` : shortSeason(s + 1) },
-            { k: 'Committed', v: money(after), s: holds > 0 ? shortSeason(s + 1) : undefined },
+            { k: 'Committed', v: money(after), s: shortSeason(s + 1) },
             { k: 'Expiring', v: String(list.length), s: `frees ${money(freed)}` },
           ]}
         />

@@ -10,15 +10,17 @@
   gap: 14px;
 }
 
-/* the headline and, when there's one action, its button beside it */
+/* the headline and, when there's one action, its button under it (a headline gets the full width) */
 .fo-now-main {
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 14px;
 }
 
 .fo-now-main > .grow {
   min-width: 0;
+  align-self: stretch;
 }
 
 .fo-now-main > .btn {
@@ -30,20 +32,23 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   line-height: 1.25;
   color: var(--text-dim);
 }
 
+/* the desk's headline: the black expanded cut, the mockup's story head */
 .fo-now-t {
   margin-top: 6px;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-size: 26px;
-  font-weight: 770;
-  line-height: 1.04;
-  letter-spacing: -0.03em;
+  font-size: 30px;
+  font-weight: 900;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
 
@@ -59,80 +64,117 @@
   gap: 8px;
 }
 
-/* the hub's lead opens the page: a little more air above it than a section gets */
+/* the hub's lead under the poster */
 .fo-now-lead {
-  padding-top: 10px;
+  padding-top: 2px;
 }
 
 /* ------------------------------------------------------------ the cap position */
-/* one group that opens the cap sheet: the payroll as the desk's big figure, the bar, the room */
-.fo-capcard {
+/* the desk's poster: your colours as one block, the payroll as big as it fits in the condensed
+   black cut, the bar in white against the cap and the tax line, the room and the tax in mono under
+   the slab's white rule. The whole of it opens the cap sheet */
+.fo-capslab {
   display: flex;
   flex-direction: column;
-  gap: 14px;
   width: 100%;
   text-align: left;
-  color: var(--text);
+  padding: 18px 20px 20px;
   cursor: pointer;
-  transition: background var(--dur-fast) ease;
+  transition: transform 0.08s ease;
 }
 
-.fo-capcard:active {
-  background: var(--surface);
+.fo-capslab:active {
+  transform: scale(0.99);
 }
 
-.fo-capcard-top {
+.fo-capslab-top {
   display: flex;
-  align-items: flex-end;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
 }
 
-.fo-capcard-top .grow {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.fo-capslab-top .over {
+  color: var(--text-2);
 }
 
-.fo-capcard-top .tag {
-  margin-bottom: 6px;
-}
-
-.fo-capcard .fo-pay-v {
-  font-size: 52px;
-  margin-top: 6px;
-}
-
-/* the room and the tax in a line, the way into the sheet on its right */
-.fo-capcard-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 16px;
-  font-size: 13.5px;
-  color: var(--text-dim);
-}
-
-.fo-capcard-line b {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 18px;
-  font-weight: 740;
-  margin-right: 2px;
-}
-
-.fo-capcard-go {
-  margin-left: auto;
+.fo-capslab-go {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-weight: 600;
-  color: var(--accent-text);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.fo-capslab-v {
+  margin-top: 10px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(76px, 25vw, 112px);
+  line-height: 0.8;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* where the payroll stands, in a white pill like the mockup's margin */
+.fo-capslab-status {
+  align-self: flex-start;
+  margin-top: 12px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+  color: var(--slab);
+  font-size: 13.5px;
+  font-weight: 760;
+  letter-spacing: -0.01em;
+}
+
+.fo-capslab .fo-cap {
+  margin-top: 6px;
+}
+
+/* the bar on the slab: a white track, the payroll in white, the zones past the cap in the slab's
+   light signals */
+.fo-capslab .fo-cap-track {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.fo-capslab .fo-cap-fill {
+  background-color: #fff;
+}
+
+.fo-capslab .fo-cap-fill.over {
+  background-color: var(--warn);
+}
+
+.fo-capslab .fo-cap-fill.tax {
+  background-color: var(--bad);
+}
+
+.fo-capslab .fo-cap-mark span {
+  color: #fff;
+}
+
+.fo-capslab-figs {
+  margin-top: 16px;
+}
+
+.fo-capslab-figs > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.fo-capslab-figs .k {
+  color: var(--text-2);
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .fo-capcard:hover {
-    background: color-mix(in srgb, var(--surface) 55%, var(--raised));
+  .fo-capslab:hover .fo-capslab-go {
+    text-decoration: underline;
+    text-underline-offset: 3px;
   }
 }
 
@@ -142,8 +184,7 @@
 }
 
 .fo-statement > .statline {
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  padding-top: 12px;
 }
 
 /* (a statement that opens on its figures has nothing above them to rule off) */
@@ -158,7 +199,7 @@
   flex-direction: column;
   gap: 4px;
   padding-top: 13px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-2);
 }
 
 .fo-exc-row {
@@ -171,14 +212,18 @@
 }
 
 .fo-exc-row > .over {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 680;
+  color: var(--text);
 }
 
 .fo-exc-row > .num {
   text-align: right;
-  font-weight: 640;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .fo-sec-links {
@@ -191,8 +236,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  padding-top: 4px;
 }
 
 .fo-capsheet-help {
@@ -201,12 +245,14 @@
   color: var(--text-2);
 }
 
-/* the seasons ahead: committed payroll and the room it leaves */
+/* the seasons ahead: committed payroll and the room it leaves, a printed ledger on card stock */
 .fo-next {
   display: flex;
   flex-direction: column;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  padding: 12px var(--pad-card) 4px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
   font-size: 14px;
 }
 
@@ -215,8 +261,8 @@
   grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.3fr);
   align-items: baseline;
   gap: 10px;
-  min-height: 36px;
-  padding: 7px 0;
+  min-height: 40px;
+  padding: 9px 0;
 }
 
 .fo-next-row + .fo-next-row:not(.fo-next-h) {
@@ -228,32 +274,34 @@
   font-variant-numeric: tabular-nums;
 }
 
-.fo-next-row:not(.fo-next-h) > .num,
+.fo-next-row:not(.fo-next-h) > *,
 .fo-next-row b {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 18px;
-  letter-spacing: 0;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.04em;
 }
 
 .fo-next-row:not(.fo-next-h) > :first-child {
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--text-2);
 }
 
 .fo-next-k {
   font-size: 12px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
+/* the head ruled off in ink, as a box score's */
 .fo-next-h {
   min-height: 0;
-  padding: 0 0 6px;
+  padding: 0 0 7px;
+  border-bottom: 2px solid var(--text);
 }
 
 .fo-next-h .over {
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 /* ------------------------------------------------------------ the desks */
@@ -289,7 +337,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 640;
+  font-weight: 700;
   font-size: 16px;
   line-height: 1.2;
   letter-spacing: -0.01em;
@@ -337,7 +385,7 @@
 }
 
 .fo-dept-s.bad {
-  color: color-mix(in srgb, var(--bad) 85%, white);
+  color: var(--bad);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -361,4 +409,10 @@
   .fo-dept:nth-child(n + 3) {
     border-top: 1px solid var(--line);
   }
+}
+
+/* (a progress bar under the lead's line: free agency's days) */
+.fo-now-main .grow > .bar,
+.fo-now-main .grow > [role='progressbar'] {
+  margin-top: 12px;
 }

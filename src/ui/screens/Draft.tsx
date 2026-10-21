@@ -25,7 +25,7 @@ import { LiveView, OnTheClock } from '../draft/LiveView';
 import { MockView } from '../draft/MockView';
 import { CombineView } from '../draft/CombineView';
 import { LotteryView } from '../draft/LotteryView';
-import { MyPicks, Results } from '../draft/MyPicks';
+import { MyPicks, PicksPoster, Results } from '../draft/MyPicks';
 import { ProspectSheet } from '../draft/ProspectSheet';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mock' | 'mine' | 'results';
@@ -170,19 +170,10 @@ export default function Draft() {
         />
       )}
 
-      {views.length > 1 && <TabBar value={view} onChange={setView} options={views} label="Draft sections" />}
+      {/* before the lottery the desk's poster is your first pick; the lottery and draft night bring their own */}
+      {league.phase !== 'draft' && league.phase !== 'draftLottery' && !after && <PicksPoster league={league} />}
 
-      {/* how draft night runs: with the order (the lottery) and on the night, under the tabs that hold them */}
-      {(view === 'lottery' || view === 'live') && (league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
-        <div className="card tight">
-          <Toggle
-            on={!!league.settings.draftPause}
-            onChange={setPause}
-            label="Stop before every pick"
-            help="Off, it runs to your next pick. On, it waits before each team's, so you can trade for the pick on the clock."
-          />
-        </div>
-      )}
+      {views.length > 1 && <TabBar value={view} onChange={setView} options={views} label="Draft sections" />}
 
       {view === 'live' && league.phase === 'draft' && (
         <LiveView league={league} cls={cls} mock={mock} onClock={onClock} onOpen={setDetail} onDraft={setConfirmPick} onTrade={canTrade ? setTradePick : undefined} />
@@ -193,6 +184,18 @@ export default function Draft() {
       {view === 'combine' && <CombineView league={league} list={cls} onOpen={setDetail} />}
       {view === 'mine' && <MyPicks league={league} />}
       {view === 'results' && <Results league={league} />}
+
+      {/* how draft night runs: with the order (the lottery) and on the night, at the foot of the views that hold them (the poster and the order come first) */}
+      {(view === 'lottery' || view === 'live') && (league.phase === 'draftLottery' || (league.phase === 'draft' && nextPick(league))) && (
+        <div className="card tight">
+          <Toggle
+            on={!!league.settings.draftPause}
+            onChange={setPause}
+            label="Stop before every pick"
+            help="Off, it runs to your next pick. On, it waits before each team's, so you can trade for the pick on the clock."
+          />
+        </div>
+      )}
 
       <ProspectSheet pid={detail} onClose={() => setDetail(null)} canDraft={onClock} onDraft={(pid) => setConfirmPick(pid)} />
       <PickTradeSheet dpid={tradePick} onClose={() => setTradePick(null)} />

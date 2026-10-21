@@ -10,6 +10,7 @@
   padding: 8px 12px 8px 14px;
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   color: var(--text);
   text-decoration: none;
 }
@@ -124,10 +125,10 @@
   margin-top: 2px;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 22px;
-  line-height: 1.05;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 23px;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
   /* (the word is lower case for the sentences it also sits in: here it leads, so its first letter is a capital) */
   text-transform: capitalize;
 }

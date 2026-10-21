@@ -12,10 +12,10 @@
 }
 
 .fo-owner-row .num {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 720;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
   text-align: right;
   color: var(--text-2);
 }
@@ -59,22 +59,28 @@
 .fo-goal {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px;
+  gap: 7px;
+  padding: 14px var(--row-px);
 }
 
 .fo-goal-h {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .fo-goal-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 21px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.05em;
+}
+
+/* a goal's line of figures ("1 win, on pace for 82") is the box score's */
+.fo-goal > .tiny.dim {
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
 }
 
 /* the owner's meter: the score, the heat, a track from the hot seat to secure with the firing line */
@@ -107,11 +113,11 @@
 .fo-seat-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 76px;
-  line-height: 0.8;
-  letter-spacing: -0.02em;
-  color: var(--seat);
+  font-weight: 900;
+  font-size: 132px;
+  line-height: 0.76;
+  letter-spacing: -0.04em;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -122,11 +128,12 @@
 .fo-seat-l {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 30px;
-  line-height: 1;
-  letter-spacing: -0.028em;
-  margin-bottom: 4px;
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  margin-bottom: 6px;
+  color: var(--seat);
 }
 
 .fo-seat-line {
@@ -143,8 +150,8 @@
 
 .fo-meterbar-track {
   display: flex;
-  height: 6px;
-  border-radius: 1px;
+  height: 8px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   gap: 2px;
 }
@@ -153,7 +160,6 @@
   display: block;
   flex: 1 1 0;
   height: 100%;
-  opacity: 0.5;
 }
 
 /* goals met exactly: a short tick under the track, labelled */
@@ -172,8 +178,10 @@
   top: 7px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11.5px;
+  font-family: var(--mono);
+  font-size: 11px;
   line-height: 12px;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -208,8 +216,10 @@
   top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 11.5px;
-  font-weight: 620;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -218,12 +228,12 @@
 .fo-meterbar-pin {
   position: absolute;
   top: 12px;
-  width: 18px;
-  height: 18px;
-  margin-left: -9px;
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
   border-radius: 50%;
-  background: var(--seat);
-  border: 3px solid var(--bg);
+  background: var(--ink);
+  border: 4px solid var(--bg);
   transition: left var(--dur) var(--ease-out);
 }
 
@@ -231,5 +241,4 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  border-color: color-mix(in srgb, var(--bad) 45%, var(--line));
 }

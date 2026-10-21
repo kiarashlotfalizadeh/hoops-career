@@ -76,6 +76,7 @@ export default function FreeAgents() {
     if (params.has('offer')) setParams({}, { replace: true });
   };
   const fa = league.phase === 'freeAgency';
+  const room = capRoomFig(space);
 
   const all = useLeagueMemo(
     () =>
@@ -147,14 +148,14 @@ export default function FreeAgents() {
         </Callout>
       )}
 
-      <div className="fo-figs-card">
+      {/* the desk's poster: what you can spend, as big as it fits; the roster and the best exception under the rule */}
+      <section className="fo-room" aria-label="Your room">
+        <div className="over">{room.k}</div>
+        <div className="fo-room-v num">{room.v}</div>
+        {/* (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too) */}
+        <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend on free agents' : 'sign for the minimum or with an exception'}</div>
         <Statline
           items={[
-            {
-              ...capRoomFig(space),
-              // (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too)
-              s: holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend' : 'min or exception',
-            },
             // (in the offseason up to 21 can sign: past 15, cut down by opening night)
             rosterFig(league),
             exceptions.length
@@ -167,7 +168,7 @@ export default function FreeAgents() {
               : { k: <Term id="exception">Exceptions</Term>, v: 'None', s: `minimum ${moneyExact(cap.vetMin)}` },
           ]}
         />
-      </div>
+      </section>
 
       {fa && <FaMarket onOpen={setSel} />}
 

@@ -1,9 +1,10 @@
-// The Office hub: the GM's desk. What the desk is doing now (the phase card and its action), the
-// decisions waiting on it, the cap position (the payroll as one figure over its bar against the cap
-// and the tax line, the room in a line) that opens the full cap sheet (the aprons, the roster, the
-// exceptions open and why the others aren't, a hard cap, the traded player exceptions, the seasons
-// ahead, the rules), and the desks as one list, each with a line of live status. The contracts
-// table lives on Team → Roster → Contracts; the owner on his own desk.
+// The Office hub: the GM's desk. Its poster is the cap position in your colours (the payroll as one
+// giant figure over its bar against the cap and the tax line, the room and the tax under it) that
+// opens the full cap sheet (the aprons, the roster, the exceptions open and why the others aren't, a
+// hard cap, the traded player exceptions, the seasons ahead, the rules); then what the desk is doing
+// now (the phase's headline and its action), the decisions waiting on it, and the desks as one list,
+// each with a line of live status. The contracts table lives on Team → Roster → Contracts; the owner
+// on his own desk.
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -28,7 +29,7 @@ import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
 import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
-import { picksText } from '../draft/common';
+import { lotterySeen, picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
 import { seatOf } from '../office/seat';
 import { money, moneyExact, plural } from '../../core/format';
@@ -44,6 +45,7 @@ export default function Office() {
       {/* (the tab bar names the screen: the desk's state is its title) */}
       <h1 className="sr-only">Office</h1>
       {/* a decision the league waits on comes first, and so do offers to settle: the phase card's action steps down */}
+      <CapCard league={league} />
       <Quiet.Provider value={items.some((i) => i.required || i.kind === 'tradeOffer')}>
         <PhaseCard league={league} />
       </Quiet.Provider>
@@ -56,7 +58,6 @@ export default function Office() {
           ))}
         </div>
       )}
-      <CapCard league={league} />
       <Desks league={league} />
       <AssistantCards league={league} areas={['office']} />
     </main>
@@ -113,10 +114,10 @@ function Now({
           </div>
           <h2 className="fo-now-t">{title}</h2>
           {sub && <p className="fo-now-s">{sub}</p>}
+          {children}
         </div>
         {single && button(action, !quiet, false)}
       </div>
-      {children}
       {!single && (action || second) && (
         <div className="grid2 fo-now-acts">
           {action && button(action, !quiet, true)}
@@ -189,7 +190,8 @@ function PhaseCard({ league }: { league: League }) {
         <Now
           over="Draft lottery"
           title={mine.length ? `${plural(mine.length, 'pick')} this year` : 'No picks this year'}
-          sub={mine.length ? `${picksText(league, mine)}. Draft night is next.` : 'Draft night is next.'}
+          // (until the lottery's reveal has played on the Draft desk, where the user picks is its to tell)
+          sub={!lotterySeen(league) ? 'The lottery is in: see where you pick.' : mine.length ? `${picksText(league, mine)}. Draft night is next.` : 'Draft night is next.'}
           action={{ label: 'Scout prospects', to: '/office/draft' }}
         />
       );
@@ -301,31 +303,33 @@ function CapCard({ league }: { league: League }) {
   const bill = teamTaxBill(league, league.userTid, pay, s0);
   return (
     <>
-      <button className="card fo-capcard" onClick={() => setOpen(true)} aria-haspopup="dialog">
-        <span className="fo-capcard-top">
-          <span className="grow">
-            <span className="over">{shortSeason(s0)} payroll</span>
-            <span className="fo-pay-v num">{money(pay)}</span>
+      {/* the desk's poster: the payroll in your colours, as big as it fits; the whole sheet one tap down */}
+      <button className="slab fo-capslab" onClick={() => setOpen(true)} aria-haspopup="dialog">
+        <span className="fo-capslab-top">
+          <span className="over">{shortSeason(s0)} payroll</span>
+          <span className="fo-capslab-go">
+            Cap sheet <ChevronRight size={15} aria-hidden="true" />
           </span>
-          <span className={`tag ${status.tone}`}>{status.label}</span>
         </span>
+        <span className="fo-capslab-v num">{money(pay)}</span>
+        <span className="fo-capslab-status">{status.label}</span>
         <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
-        <span className="fo-capcard-line">
+        <span className="statline fo-capslab-figs">
           <span>
-            <b className={`num ${space >= 0 ? 'good' : 'warn'}`}>{money(Math.abs(space))}</b> {space >= 0 ? 'cap space' : 'over the cap'}
+            <span className="k">{space >= 0 ? 'Cap space' : 'Over the cap'}</span>
+            <span className="v">{money(Math.abs(space))}</span>
           </span>
           {pay > cap.luxuryTax ? (
             <span>
-              <b className="num bad">{money(bill)}</b> tax bill
+              <span className="k">Tax bill</span>
+              <span className="v">{money(bill)}</span>
             </span>
           ) : (
             <span>
-              <b className="num">{money(cap.luxuryTax - pay)}</b> under the tax
+              <span className="k">Under the tax</span>
+              <span className="v">{money(cap.luxuryTax - pay)}</span>
             </span>
           )}
-          <span className="fo-capcard-go">
-            Cap sheet <ChevronRight size={15} aria-hidden="true" />
-          </span>
         </span>
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={`${shortSeason(s0)} cap sheet`}>
@@ -637,18 +641,20 @@ function Desks({ league }: { league: League }) {
         ? drafted.length
           ? `You drafted ${drafted.map((p) => shortName(league, p)).join(', ')}`
           : 'No picks this year'
-        : [
-            league.phase === 'draft' ? 'Draft night' : '',
-            !thisDraft.length
-              ? 'No picks this year'
-              : thisDraft.every((d) => !d.pick && proj(d) === undefined)
-                ? `${plural(thisDraft.length, 'pick')} this year`
-                : `${draftNight ? 'You pick' : thisDraft.some((d) => !d.pick) ? 'Your picks project' : 'Your picks:'} ${picksText(league, thisDraft, proj)}`,
-            // (the picks say enough when there are some: the prospects count stands in when there aren't)
-            draftNight || thisDraft.some((d) => d.pick || proj(d) !== undefined) ? '' : `${prospectsN} prospects`,
-          ]
-            .filter(Boolean)
-            .join(' · '),
+        : league.phase === 'draftLottery' && !lotterySeen(league)
+          ? 'The lottery is in'
+          : [
+              league.phase === 'draft' ? 'Draft night' : '',
+              !thisDraft.length
+                ? 'No picks this year'
+                : thisDraft.every((d) => !d.pick && proj(d) === undefined)
+                  ? `${plural(thisDraft.length, 'pick')} this year`
+                  : `${draftNight ? 'You pick' : thisDraft.some((d) => !d.pick) ? 'Your picks project' : 'Your picks:'} ${picksText(league, thisDraft, proj)}`,
+              // (the picks say enough when there are some: the prospects count stands in when there aren't)
+              draftNight || thisDraft.some((d) => d.pick || proj(d) !== undefined) ? '' : `${prospectsN} prospects`,
+            ]
+              .filter(Boolean)
+              .join(' · '),
       hot: draftNight,
     },
     {

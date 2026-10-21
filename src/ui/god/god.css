@@ -31,6 +31,7 @@
   padding: 10px 12px;
   border-radius: var(--radius-md);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
 }
 /* Save and Cancel stay in reach at the bottom of a long sheet (the sheet's own padding is 20px + the safe area) */
 .god-foot {
@@ -42,8 +43,8 @@
   gap: 8px;
   margin: 14px 0 calc(-22px - var(--safe-b));
   padding: 10px 0 calc(16px + var(--safe-b));
-  background: var(--bg-2);
-  border-top: 1px solid var(--line);
+  background: var(--bg);
+  border-top: 2px solid var(--text);
 }
 @media (min-width: 768px) {
   .god-foot {
@@ -57,11 +58,11 @@
 }
 .god-colors input[type='color'] {
   width: 48px;
-  height: 40px;
+  height: 44px;
   padding: 3px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
-  background: var(--surface);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--ink);
+  background: var(--raised);
   cursor: pointer;
 }
 /* the hub: the switch, a warning wash while the editor is on */
@@ -81,12 +82,15 @@
 .god-sec {
   margin-top: 6px;
   padding-top: 12px;
-  border-top: 1px solid var(--line);
+  border-top: 2px solid var(--text);
 }
 
 /* a rating's value in its band's colour (ratingTone), as in every ratings table */
 .god-rating .slider-val {
   color: var(--rating);
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
 
 /* a rating on one row: its name, the slider, its value (twenty of them read as a table, not a
@@ -141,4 +145,10 @@
 }
 .god-save {
   align-self: flex-start;
+}
+
+/* the edits made, as the box score counts them */
+.god-switch > .tiny {
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
 }

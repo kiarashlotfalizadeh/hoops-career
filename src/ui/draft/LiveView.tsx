@@ -73,6 +73,9 @@ function Announcer({ league, picks }: { league: League; picks: Player[] }) {
         With the {pickWords(n)} in the {league.season} draft, {mine ? 'you select' : `the ${t.region} ${t.name} select`}
         {named ? '' : '…'}
       </span>
+      <span className="dn-stage-pick num" aria-hidden="true">
+        #{n}
+      </span>
       {named ? (
         <span className="dn-stage-name fade-in">
           <span className="dn-stage-n">{playerName(p)}</span>

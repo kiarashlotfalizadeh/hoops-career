@@ -2,11 +2,13 @@
    trading block's packages, AI teams' offers, the finder and the counters. */
 
 /* ------------------------------------------------------------ trade: the partner */
+/* the partner's poster: their colours, their name in the headline cut (the switch), their cap room
+   as the big condensed figure, how they deal in mono under it */
 .fo-partner {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px 16px 16px;
+  padding: 16px 18px 18px;
 }
 
 .fo-partner-top {
@@ -32,8 +34,10 @@
 }
 
 .fo-partner-region {
-  font-size: 13px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
 
@@ -46,45 +50,64 @@
   margin-top: 2px;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  font-size: 26px;
-  line-height: 1.02;
-  letter-spacing: -0.03em;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
 }
 
 .fo-partner-name svg {
   flex: none;
-  opacity: 0.8;
+  opacity: 0.85;
+}
+
+.fo-partner-fig {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 2px solid var(--text);
 }
 
 .fo-partner-cap {
   flex: none;
-  text-align: right;
 }
 
 .fo-partner-cap .v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 28px;
-  line-height: 1;
+  font-weight: 900;
+  font-size: 60px;
+  line-height: 0.84;
+  letter-spacing: -0.035em;
 }
 
 .fo-partner-cap .k {
-  margin-top: 3px;
-  font-size: 12.5px;
-  font-weight: 560;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-2);
 }
 
 .fo-partner-meta {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 7px;
-  font-size: 13px;
-  font-weight: 560;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text-2);
+}
+
+.fo-partner-meta .tag {
+  font-family: var(--font);
+  letter-spacing: -0.005em;
 }
 
 /* the league's teams in the partner sheet: the one you're dealing with is marked */
@@ -101,7 +124,7 @@
 }
 
 .fo-pteam.on {
-  background: color-mix(in srgb, var(--on) 8%, transparent);
+  background: color-mix(in srgb, var(--team) 10%, transparent);
 }
 
 .fo-pteam.on .lr-name::after {
@@ -123,11 +146,11 @@
 }
 
 .fo-deal-swap {
-  align-self: center;
+  align-self: stretch;
   width: 20px;
   display: grid;
   place-items: center;
-  color: var(--text-dim);
+  color: var(--text);
 }
 
 .fo-deal-col {
@@ -142,6 +165,14 @@
   align-items: center;
   gap: 6px;
   min-height: 20px;
+  padding-bottom: 7px;
+  margin-bottom: 2px;
+  border-bottom: 2px solid var(--text);
+}
+
+.fo-deal-h .over {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .fo-deal-none {
@@ -170,12 +201,12 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  min-height: 34px;
-  padding: 3px 3px 3px 4px;
-  border-radius: var(--radius-md);
+  min-height: 36px;
+  padding: 3px 4px 3px 4px;
+  border-radius: var(--radius-pill);
   background: var(--surface);
   font-size: 13.5px;
-  font-weight: 620;
+  font-weight: 660;
 }
 
 /* a player's name wraps rather than cut off in a narrow column ("Jay. / Williams") */
@@ -193,9 +224,9 @@
 
 .fo-pill .x {
   position: relative;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-xs);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   color: var(--text-dim);
@@ -276,6 +307,12 @@
   color: var(--text-2);
 }
 
+/* a team's side of the builder: the head in the headline cut, the roster count in mono */
+.fo-assets-n {
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
+}
+
 /* ------------------------------------------------------------ trade: the asset lists */
 .fo-assets-h {
   display: flex;
@@ -285,7 +322,11 @@
 }
 
 .fo-assets-h h3 {
-  font-size: 15px;
+  font-family: var(--head);
+  font-stretch: 112%;
+  font-size: 17px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -293,6 +334,10 @@
 }
 
 .fo-assets .list {
+  border-top: 2px solid var(--text);
+}
+
+.fo-assets .list-divider + .list {
   border-top: 1px solid var(--line);
 }
 
@@ -364,9 +409,9 @@
   background: var(--surface);
 }
 
-/* in the deal: the row steps up a ground and its check fills with paper */
+/* in the deal: a wash of your colour, its check filled in ink */
 .fo-asset.on {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--team) 10%, transparent);
 }
 
 .fo-asset-name {
@@ -387,7 +432,7 @@
 }
 
 .fo-asset .fo-money .a {
-  font-size: 17px;
+  font-size: 14.5px;
 }
 
 .fo-check {
@@ -402,9 +447,9 @@
 }
 
 .fo-asset.on .fo-check {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-ink);
 }
 
 /* the swap-right chips and the cash slider under an asset list */
@@ -433,22 +478,38 @@
 }
 
 /* ------------------------------------------------------------ trade: the dock (their GM's live reaction) */
-.fo-dock {
+/* the ink slab the app's own dock is: inverted tokens, their GM's verdict in the light signals that
+   read on ink. (A lone call to action, .fo-dock-go, floats on the paper as it is) */
+.fo-dock:not(.fo-dock-go) {
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.82);
+  --text-dim: rgba(255, 255, 255, 0.64);
+  --surface: rgba(255, 255, 255, 0.08);
+  --surface-2: rgba(255, 255, 255, 0.14);
+  --surface-3: rgba(255, 255, 255, 0.22);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-2: rgba(255, 255, 255, 0.32);
+  --line-3: rgba(255, 255, 255, 0.7);
+  --ink: #ffffff;
+  --ink-2: #e9e5dc;
+  --paper-ink: #121212;
+  --accent-text: var(--team-night);
+  --good: #6fdc9c;
+  --warn: #ffc864;
+  --bad: #ff8f80;
+  --info: #8cbcff;
+  --tier-elite: #f2c54b;
   position: sticky;
   bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  /* solid fallback first: iOS before 16.2 has no color-mix */
-  background: var(--surface);
-  background: color-mix(in srgb, var(--surface) 96%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border: 1px solid var(--line);
+  background: #1d1c1a;
+  color: var(--text);
+  border: none;
   border-radius: var(--radius-lg);
-  padding: 10px 12px 12px;
-  gap: 8px;
+  padding: 12px 14px 14px;
+  gap: 9px;
   box-shadow: var(--shadow-float);
 }
 
@@ -505,17 +566,17 @@
 
 .fo-dock-pct {
   flex: none;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 20px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.04em;
   color: var(--react);
 }
 
 .fo-meter {
   position: relative;
-  height: 5px;
-  border-radius: 2px;
+  height: 6px;
+  border-radius: 3px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -542,17 +603,15 @@
 
 /* what the deal does: salary out and in, your payroll after it, both rosters after it */
 .fo-dock-figs {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 0.8fr);
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
-}
-
-.fo-dock-figs > * {
-  padding: 0 8px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.1fr) minmax(0, 0.75fr);
+  column-gap: 12px;
+  padding-top: 8px;
+  border-top: 2px solid var(--line-3);
 }
 
 .fo-dock-figs .v {
-  font-size: 18px;
+  font-size: 15px;
+  letter-spacing: -0.05em;
   white-space: nowrap;
 }
 
@@ -575,7 +634,7 @@
   text-align: left;
   font-size: 12.5px;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--bad) 75%, white);
+  color: var(--bad);
 }
 
 .fo-dock-rule .col {
@@ -700,8 +759,20 @@ body:has(.simbar) .fo-dock {
 .fo-pkg-end {
   flex: none;
   min-width: 62px;
-  font-size: 11.5px;
+  font-size: 11px;
   text-align: right;
+}
+
+/* a package's figures (age, salary, its end) are the box score's */
+.fo-pkg-item > .num,
+.fo-pkg-item > .dim:not(.fo-pkg-ic) {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+  font-size: 12px;
+}
+
+.fo-pkg-item > .num {
+  font-weight: 600;
 }
 
 .fo-pkg-ic {

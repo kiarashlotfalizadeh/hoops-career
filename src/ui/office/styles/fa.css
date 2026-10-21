@@ -2,27 +2,11 @@
 
 /* ------------------------------------------------------------ free agents */
 /* the desk's figures, flat on the page over a hairline */
-.fo-figs-card {
-  padding-top: 4px;
-}
-
-.fo-figs-card .statline .v {
-  font-size: 27px;
-}
-
-.fo-figs-card .statline > * {
-  padding: 2px 10px;
-}
-
-.fo-figs-card .statline > :first-child {
-  padding-left: 0;
-}
-
 .fo-faday {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 18px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.04em;
   color: var(--text);
 }
 
@@ -190,4 +174,36 @@
 .fo-prow .fo-prow-name .fo-name {
   flex: 0 1 auto;
   max-width: 100%;
+}
+
+/* ------------------------------------------------------------ the room: the desk's poster */
+/* what you can spend in the condensed black cut, as big as it fits, the roster and the best
+   exception under the box score's ink rule */
+.fo-room {
+  display: flex;
+  flex-direction: column;
+}
+
+.fo-room > .over {
+  font-size: 12.5px;
+}
+
+.fo-room-v {
+  margin-top: 8px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(76px, 24vw, 108px);
+  line-height: 0.8;
+  letter-spacing: -0.035em;
+}
+
+.fo-room-s {
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.fo-room > .statline {
+  margin-top: 16px;
 }

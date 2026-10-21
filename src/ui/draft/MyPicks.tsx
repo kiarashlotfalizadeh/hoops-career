@@ -12,8 +12,39 @@ import { useLeagueMemo } from '../../state/store';
 import { Empty, Section, Segmented } from '../components/ui';
 import { PROJECTION_NOTE, pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
-import { draftedThisYear, gradeTone, pickGrade, pickOrder, type PickGrade } from './common';
+import { draftedThisYear, gradeTone, pickGrade, pickOrder, pickSlot, picksText, type PickGrade } from './common';
 import { SelectionRow } from './rows';
+
+/**
+ * The draft desk's poster until the lottery: this year's first pick of yours as big as it fits
+ * (its projection from the standings, or its slot), the rest of your picks under it in mono.
+ */
+export function PicksPoster({ league }: { league: League }) {
+  const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  const mine = league.draftPicks.filter((d) => d.tid === league.userTid && d.season === league.season).sort(pickOrder(league, proj));
+  const first = mine[0];
+  const slot = first ? pickSlot(league, first, proj) : undefined;
+  const rest = mine.slice(1);
+  return (
+    <section className="slab dn-poster" aria-label={`The ${league.season} draft`}>
+      <span className="over">{league.season} draft</span>
+      {!first ? (
+        <h2 className="dn-poster-h">No picks this year</h2>
+      ) : slot !== undefined ? (
+        <>
+          <span className="dn-poster-n num">#{slot}</span>
+          <span className="dn-poster-k">{first.pick ? 'Your first pick' : 'Your first pick, as of today'}</span>
+        </>
+      ) : (
+        <>
+          <span className="dn-poster-n num">{mine.length}</span>
+          <span className="dn-poster-k">{mine.length === 1 ? 'pick this year' : 'picks this year'}</span>
+        </>
+      )}
+      {first && slot !== undefined && rest.length > 0 && <span className="dn-poster-s">Then {picksText(league, rest, proj)}</span>}
+    </section>
+  );
+}
 
 export function MyPicks({ league }: { league: League }) {
   const user = league.userTid;

@@ -12,8 +12,8 @@
 .fo-stack {
   display: flex;
   gap: 2px;
-  height: 10px;
-  border-radius: 2px;
+  height: 12px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   margin-bottom: 12px;
 }
@@ -24,9 +24,9 @@
 
 .fo-swatch {
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
   margin-right: 8px;
   vertical-align: 0;
 }
@@ -35,28 +35,32 @@
   margin-bottom: 4px;
 }
 
-/* a statement on the page: the costs line by line, the money in the condensed face down the right,
-   the total under a firmer rule */
+/* a printed statement on card stock: the costs line by line, the money in mono down the right,
+   the total under the box score's ink rule */
+.fo-ledger {
+  padding: var(--pad-card);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
+}
+
 .fo-ledger .fo-lines {
   border-top: none;
 }
 
 .fo-ledger .fo-line-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 15px;
 }
 
 .fo-ledger .fo-line:last-child {
-  border-top: 1px solid var(--line-3);
+  border-top: 2px solid var(--text);
   margin-top: -1px;
   border-bottom: none;
 }
 
 .fo-ledger .fo-line:last-child .fo-line-v {
-  font-size: 19px;
-  font-weight: 760;
+  font-size: 17px;
+  font-weight: 700;
 }
 
 .fo-ledger .more {
@@ -67,8 +71,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 48px;
-  padding: 6px 14px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
 }
 
 .fo-dead-row .grow {
@@ -77,8 +81,9 @@
 
 .fo-dead-s {
   flex: none;
-  width: 44px;
-  font-weight: 640;
+  width: 48px;
+  font-family: var(--mono);
+  font-weight: 500;
   color: var(--text-2);
 }
 
@@ -86,7 +91,7 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px 14px 14px;
+  padding: 14px var(--row-px) 16px;
 }
 
 .fo-budget-h {
@@ -99,12 +104,14 @@
   min-width: 0;
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 15px;
+  font-size: 15.5px;
   font-weight: 700;
-  letter-spacing: 0;
+  letter-spacing: -0.012em;
 }
 
 .fo-line-txt {
+  font-family: var(--font);
+  letter-spacing: 0;
   font-weight: 500;
   font-size: 13px;
   color: var(--text-2);
@@ -113,7 +120,6 @@
 
 .fo-ticket .statline {
   padding-top: 10px;
-  border-top: 1px solid var(--line);
 }
 
 .fo-ticket .statline .v {
@@ -198,11 +204,12 @@
 }
 
 .fo-minichart .down .v {
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: var(--bad);
 }
 
 .fo-minichart .s {
-  font-size: 11.5px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-dim);
 }

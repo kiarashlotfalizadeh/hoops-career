@@ -18,17 +18,18 @@ const BEAT_MS = 520;
 const DRAWN_MS = 1100;
 
 /** The user's slot in words: where he picks, and how the lottery moved him. */
-function userLine(league: League, order: DraftPick[], pre: Map<number, { pre: number }>): { head: string; sub: string; up: boolean } | null {
+function userLine(league: League, order: DraftPick[], pre: Map<number, { pre: number }>): { head: string; sub: string; up: boolean; slot: number } | null {
   const mine = order.filter((d) => d.tid === league.userTid);
   if (!mine.length) return null;
   const d = mine[0];
   const from = pre.get(d.originalTid)?.pre ?? d.pick!;
   const move = from - d.pick!;
   const via = d.originalTid !== d.tid ? ` with ${league.teams[d.originalTid].abbrev}'s pick` : '';
-  if (d.pick === 1) return { head: 'You won the lottery', sub: `The No. 1 pick${via}, from ${ordinal(from)} in the odds.`, up: true };
-  if (move > 0) return { head: `You jump to No. ${d.pick}`, sub: `Up ${plural(move, 'place')} from ${ordinal(from)}${via}.`, up: true };
-  if (move < 0) return { head: `You slip to No. ${d.pick}`, sub: `Down ${plural(-move, 'place')} from ${ordinal(from)}${via}: the balls didn't bounce your way.`, up: false };
-  return { head: `You pick ${ordinal(d.pick!)}`, sub: `Right where the odds had you${via}.`, up: true };
+  const slot = d.pick!;
+  if (d.pick === 1) return { head: 'You won the lottery', sub: `The No. 1 pick${via}, from ${ordinal(from)} in the odds.`, up: true, slot };
+  if (move > 0) return { head: `You jump to No. ${d.pick}`, sub: `Up ${plural(move, 'place')} from ${ordinal(from)}${via}.`, up: true, slot };
+  if (move < 0) return { head: `You slip to No. ${d.pick}`, sub: `Down ${plural(-move, 'place')} from ${ordinal(from)}${via}: the balls didn't bounce your way.`, up: false, slot };
+  return { head: `You pick ${ordinal(d.pick!)}`, sub: `Right where the odds had you${via}.`, up: true, slot };
 }
 
 export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dpid: number) => void }) {
@@ -57,7 +58,7 @@ export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dp
   return (
     <>
       {shown < 0 && (
-        <section className="card dn-start" aria-label="The lottery">
+        <section className="fo-now dn-start" aria-label="The lottery">
           <div className="fo-now-over">Draft lottery</div>
           <h2 className="fo-now-t">The balls have been drawn</h2>
           <p className="fo-now-s">Fourteen teams, four drawn picks. The order is revealed from the 14th pick up.</p>
@@ -72,8 +73,10 @@ export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dp
         </section>
       )}
       {me && myRevealed && (
-        <section className={`dn-moment ${me.up ? 'up' : 'down'}`} aria-live="polite">
-          <TeamLogo tid={league.userTid} size={40} decorative />
+        <section className={`slab dn-moment ${me.up ? 'up' : 'down'}`} aria-live="polite">
+          <span className="dn-moment-n num" aria-hidden="true">
+            #{me.slot}
+          </span>
           <div className="grow">
             <div className="dn-moment-h">{me.head}</div>
             <div className="dn-moment-s">{me.sub}</div>

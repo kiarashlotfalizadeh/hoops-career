@@ -89,20 +89,22 @@ export function PartnerSlab({ league, tid, season, onPick }: { league: League; t
             <ChevronDown size={20} aria-hidden="true" />
           </span>
         </button>
+      </div>
+      {/* their cap room is the figure a deal with them turns on: the slab's big number */}
+      <div className="fo-partner-fig">
         <div className="fo-partner-cap">
           <div className="v num">{v}</div>
           <div className="k">{k}</div>
         </div>
-      </div>
-      <div className="fo-partner-meta">
-        <span className="tag">{st.label}</span>
-        <span className="num">{record(league, tid)}</span>
-        <span aria-hidden="true">·</span>
-        {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
-        <span className="num">
-          payroll {money(pay)}
-          {holds > 0 ? ' with holds' : ''}
-        </span>
+        <div className="fo-partner-meta">
+          <span className="tag">{st.label}</span>
+          <span className="num">{record(league, tid)}</span>
+          {/* (cap holds count: in free agency a team's restricted free agents' and offer sheets', see capHolds) */}
+          <span className="num">
+            payroll {money(pay)}
+            {holds > 0 ? ' with holds' : ''}
+          </span>
+        </div>
       </div>
       <RecentDeals league={league} tid={tid} />
       <TeamSheet league={league} partner={tid} open={open} onClose={() => setOpen(false)} onPick={onPick} />

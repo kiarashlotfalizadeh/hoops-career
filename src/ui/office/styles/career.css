@@ -7,8 +7,33 @@
 }
 
 .fo-career-slab .statline .v {
-  font-size: 28px;
+  font-size: 26px;
   white-space: nowrap;
+}
+
+/* the record: the slab's figure in the condensed black cut, as big as it fits */
+.fo-career-rec {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.fo-career-rec-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(88px, 28vw, 128px);
+  line-height: 0.78;
+  letter-spacing: -0.04em;
+}
+
+.fo-career-rec-k {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
 }
 
 /* New League's team tiles (start.css), smaller: a conference fits a phone's screen */
@@ -32,11 +57,7 @@
   font-size: 11px;
 }
 
-/* four figures across a phone: tighter columns, so "Playoffs" stays inside its own */
-.fo-career-slab .statline > * {
-  padding-inline: 8px;
-}
-
-.fo-career-slab .statline > :first-child {
-  padding-left: 0;
+/* (a title's gold, lightened to read on the slab) */
+.fo-career-slab {
+  --tier-elite: #ffd56b;
 }

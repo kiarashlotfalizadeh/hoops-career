@@ -57,30 +57,34 @@
     transform: none;
   }
 }
+/* your lottery result: the poster in your colours, the slot as big as it fits, the headline beside it */
 .dn-moment {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px var(--pad-card);
-  border-radius: var(--radius);
-  background: var(--raised);
+  align-items: flex-end;
+  gap: 16px;
+  padding: 18px 20px 20px;
   animation: dn-rise var(--dur) var(--ease-out) both;
 }
-/* your lottery result: a headline beside your mark */
+.dn-moment-n {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(96px, 30vw, 132px);
+  line-height: 0.76;
+  letter-spacing: -0.04em;
+}
 .dn-moment-h {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 900;
   font-size: 24px;
-  line-height: 1.05;
-  letter-spacing: -0.028em;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
-.dn-moment.up .dn-moment-h {
-  color: var(--text);
-}
 .dn-moment-s {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 13px;
   color: var(--text-2);
 }
@@ -91,47 +95,78 @@
 }
 
 /* ------------------------------------------------------------ the announcer */
+/* a poster for each pick: the picking team's colours, the pick's number as big as it fits, the
+   name read out in the black expanded cut */
 .dn-stage {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'over n'
+    'name n'
+    'skip skip';
+  align-items: end;
+  column-gap: 14px;
+  row-gap: 8px;
   width: 100%;
-  min-height: 112px;
-  padding: 14px 16px;
+  min-height: 150px;
+  padding: 16px 18px 18px;
   text-align: left;
   font: inherit;
-  color: inherit;
   border: 0;
   cursor: pointer;
 }
 .dn-stage-over {
-  font-size: 13px;
-  font-weight: 650;
+  grid-area: over;
+  align-self: start;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
+.dn-stage-pick {
+  grid-area: n;
+  align-self: start;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(84px, 26vw, 116px);
+  line-height: 0.76;
+  letter-spacing: -0.04em;
+}
 .dn-stage-name {
+  grid-area: name;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 /* the name, read out: the slab's headline */
 .dn-stage-n {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 32px;
-  line-height: 1;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  text-wrap: balance;
 }
 .dn-stage-meta {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
   color: var(--text-2);
 }
+.dn-stage-meta .tag {
+  font-family: var(--font);
+}
 .dn-stage-skip {
+  grid-area: skip;
+  font-family: var(--mono);
   font-size: 11.5px;
   color: var(--text-dim);
 }
@@ -173,18 +208,19 @@
   text-decoration: none;
 }
 .dn-yours-over {
-  font-size: 12.5px;
-  font-weight: 620;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .dn-yours-n {
   display: block;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 24px;
-  line-height: 1.05;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 25px;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }
 .dn-yours-meta {
   display: flex;
@@ -199,4 +235,45 @@
   font-size: 13.5px;
   color: var(--text-2);
   line-height: 1.4;
+}
+
+/* ------------------------------------------------------------ the desk's poster before the lottery */
+/* your first pick in your colours, as big as it fits; the rest of your picks in mono under it */
+.dn-poster {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px 20px;
+}
+.dn-poster > .over {
+  color: var(--text-2);
+}
+.dn-poster-n {
+  margin-top: 4px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: clamp(100px, 30vw, 132px);
+  line-height: 0.76;
+  letter-spacing: -0.04em;
+}
+.dn-poster-k {
+  font-family: var(--head);
+  font-stretch: 112%;
+  font-weight: 880;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.dn-poster-h {
+  font-size: 30px;
+}
+.dn-poster-s {
+  padding-top: 10px;
+  border-top: 2px solid var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-2);
 }

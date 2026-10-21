@@ -81,12 +81,23 @@ function Profile({ league }: { league: League }) {
             </Link>
           )}
         </div>
-        {k && <CareerLine k={k} />}
+        {/* the poster's figure: the career record, as big as it fits */}
+        {k && (
+          <div className="fo-career-rec">
+            <span className="fo-career-rec-v num">
+              {k.won}-{k.lost}
+            </span>
+            <span className="fo-career-rec-k">
+              Career record · <span className="num">{pct(k.won, k.lost)}</span>
+            </span>
+          </div>
+        )}
         {ranks && k && k.won + k.lost > 0 && (
           <div className="fo-lc-rank small">
             {ordinal(ranks.wins)} in wins of {ranks.of} head coaches{ranks.pct !== null ? ` · ${ordinal(ranks.pct)} by win% of ${ranks.pctOf}` : ''}
           </div>
         )}
+        {k && <CareerLine k={k} />}
       </section>
 
       {!league.fired && <JobLine league={league} />}
@@ -110,13 +121,12 @@ function Profile({ league }: { league: League }) {
   );
 }
 
-/** A career's figures in a row: seasons, record (with its win %), playoff runs and titles. */
+/** A career's figures in a row under the record: seasons, playoff runs and titles. */
 function CareerLine({ k }: { k: CoachCareer }) {
   return (
     <Statline
       items={[
         { k: 'Seasons', v: k.seasons },
-        { k: 'Record', v: `${k.won}-${k.lost}`, s: pct(k.won, k.lost) },
         { k: 'Playoffs', v: k.playoffs },
         { k: 'Titles', v: k.titles, s: k.coy.length ? `COY ×${k.coy.length}` : undefined, color: k.titles ? 'var(--tier-elite)' : undefined },
       ]}

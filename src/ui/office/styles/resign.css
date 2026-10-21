@@ -5,14 +5,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: 2px 9px;
+  font-family: var(--mono);
   font-size: 12px;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
 .fo-statline b {
   color: var(--text);
-  font-weight: 680;
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------ re-sign */
@@ -21,12 +23,12 @@
 }
 
 .fo-pay-v2 {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 30px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.05em;
   line-height: 1;
-  margin-top: 3px;
+  margin-top: 5px;
 }
 
 .fo-rs {
@@ -75,11 +77,12 @@
   margin-top: 2px;
 }
 
-.fo-rs-ask b {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
+.fo-rs-ask b,
+.fo-rs-askv {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.04em;
 }
 
 .fo-rs-ext {

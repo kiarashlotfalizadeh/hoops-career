@@ -1,8 +1,8 @@
 // The season in review (Office → Career, ?review=<season>): read like a ceremony when the Finals end.
 // The season's record and how it ended on a slab, the owner's verdict with each goal's grade (his
 // review, owner.ts), the season against what he asked and what the press predicted, its best win,
-// best player and breakout, the records and honors, its milestones, the owner's and the fans' pulse
-// through it, and what next season should bring. Built once (legacyReview.ts) and kept, so an old
+// best player and breakout, the records and honors (its milestones one tap away), the owner's and the
+// fans' pulse through it (one tap down) and what next season should bring. Built once (legacyReview.ts) and kept, so an old
 // season reads the same. The sections come in one after another, quickly; reduced motion shows them.
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,7 +15,7 @@ import { endText, vsPress, type SeasonReview } from '../../core/league/legacyRev
 import { ownerWord } from '../../core/league/legacyPulse';
 import { resultText } from '../../core/league/ownerGoals';
 import { ordinal, plural } from '../../core/format';
-import { Avatar, PageHeader, Section, Statline } from '../components/ui';
+import { Avatar, More, PageHeader, Section, Statline } from '../components/ui';
 import { slabVars } from '../teamColors';
 import { CenterBar, fmtGrade } from './common';
 import { PulseChart } from './Pulse';
@@ -52,6 +52,10 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
           {seasonLabel(r.season)} · {t.name}
         </span>
         <h2 className="fo-rv-head">{r.fired ? 'Fired' : endText(r)}</h2>
+        {/* the poster's figure: the season's record, as big as it fits */}
+        <span className="fo-rv-rec-v num">
+          {r.won}-{r.lost}
+        </span>
         {r.round === 5 && (
           <div className="fo-rv-crown">
             <Crown size={18} aria-hidden="true" /> Champions
@@ -59,7 +63,6 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
         )}
         <Statline
           items={[
-            { k: 'Record', v: `${r.won}-${r.lost}` },
             { k: r.conf === 'E' ? 'East' : 'West', v: r.confRank ? ordinal(r.confRank) : '—', s: r.seed ? `${ordinal(r.seed)} seed` : 'no seed' },
             ...(verdict ? [{ k: 'Owner grade', v: fmtGrade(verdict.grade), s: gradeWord(verdict.grade) }] : []),
           ]}
@@ -85,15 +88,29 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
             ) : (
               <div className="fo-goal tiny dim">Graded on wins, the playoffs and profit (a season from before his goals).</div>
             )}
+            {/* the season against his ask and the press's prediction, under his grades */}
+            <ExpectationRows r={r} />
           </div>
           <div className="tiny dim">
             {verdict.fired ? 'He fired you after this review. ' : ''}Season grade {fmtGrade(verdict.grade)}, standing {fmtGrade(verdict.total)} after it (−100 to +100; 0 is his
             goals met exactly).
           </div>
+          {r.pulse && r.pulse.length >= 2 && (
+            <More label="Owner and fans through the season">
+              <div className="card fo-rv-pulse">
+                <PulseChart owner={r.pulse.map((p) => p[1])} fans={r.pulse.map((p) => p[2])} labels={r.pulse.map((p) => fmtDate(r.season, p[0]))} />
+                <div className="tiny dim">
+                  <span className="fo-rv-key owner" /> The owner{r.owner !== undefined ? `: ${ownerWord(r.owner).word} at the end (${r.owner})` : ''} ·{' '}
+                  <span className="fo-rv-key fans" /> The fans
+                  {r.fans !== undefined ? ` (${r.fans})` : ''} · out of 100
+                </div>
+              </div>
+            </More>
+          )}
         </Section>
       )}
 
-      <Expectations r={r} style={step()} />
+      {!verdict && <Expectations r={r} style={step()} />}
 
       {(r.best || r.star || r.breakout) && (
         <Section title="The season's best">
@@ -129,7 +146,16 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
       )}
 
       {(r.honors.length > 0 || r.records.length > 0) && (
-        <Section title="Honors and records">
+        <Section
+          title="Honors and records"
+          right={
+            milestones.length > 0 ? (
+              <Link to="/office/career?tab=milestones" className="card-link">
+                {plural(milestones.length, 'milestone')}
+              </Link>
+            ) : undefined
+          }
+        >
           <div className="card flush list fo-rv-in" style={step()}>
             {r.honors.map((h) => (
               <div key={h} className="listrow fo-rv-honor">
@@ -143,36 +169,6 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
                 <span className="grow">{h}</span>
               </div>
             ))}
-          </div>
-        </Section>
-      )}
-
-      {milestones.length > 0 && (
-        <Section title="Milestones" right={<span className="tiny dim">{plural(milestones.length, 'milestone')}</span>}>
-          <div className="card flush list fo-rv-in" style={step()}>
-            {milestones.map((m) => (
-              <div key={m.key} className={`listrow fo-ms ${m.big ? 'big' : ''}`}>
-                <div className="grow fo-min0">
-                  <div className="lr-name">{m.head}</div>
-                  <div className="lr-meta">
-                    {fmtDate(m.season, m.day)} · {m.text}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {r.pulse && r.pulse.length >= 2 && (
-        <Section title="Owner and fans through the season">
-          <div className="card fo-rv-pulse fo-rv-in" style={step()}>
-            <PulseChart owner={r.pulse.map((p) => p[1])} fans={r.pulse.map((p) => p[2])} labels={r.pulse.map((p) => fmtDate(r.season, p[0]))} />
-            <div className="tiny dim">
-              <span className="fo-rv-key owner" /> The owner{r.owner !== undefined ? `: ${ownerWord(r.owner).word} at the end (${r.owner})` : ''} ·{' '}
-              <span className="fo-rv-key fans" /> The fans
-              {r.fans !== undefined ? ` (${r.fans})` : ''} · out of 100
-            </div>
           </div>
         </Section>
       )}
@@ -195,37 +191,45 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
   );
 }
 
-/** The season against the owner's ask and the press's prediction. */
+/** The season against the owner's ask and the press's prediction: a section of its own when there's no verdict to sit under. */
 function Expectations({ r, style }: { r: SeasonReview; style: CSSProperties }) {
-  const press = vsPress(r);
-  if (r.ownerWins === undefined && !press) return null;
-  const d = r.ownerWins !== undefined ? r.won - r.ownerWins : 0;
+  if (r.ownerWins === undefined && !vsPress(r)) return null;
   return (
     <Section title="Against expectations">
       <div className="card flush list fo-rv-in" style={style}>
-        {r.ownerWins !== undefined && (
-          <div className="listrow">
-            <span className="over fo-rv-k">Owner</span>
-            <span className="grow">
-              Asked for {r.ownerWins} wins, got {r.won}
-            </span>
-            <span className={`num bold ${d >= 0 ? 'good' : 'bad'}`}>{d === 0 ? '±0' : `${d > 0 ? '+' : '−'}${Math.abs(d)}`}</span>
-          </div>
-        )}
-        {press && r.press && (
-          <div className="listrow">
-            <span className="over fo-rv-k">Press</span>
-            <span className="grow fo-min0 fo-rv-col">
-              Picked {r.press.wins} wins{r.press.champ ? ' and the title' : ''}
-              <span className="lr-meta">{press}</span>
-            </span>
-            <span className={`num bold ${r.won >= r.press.wins ? 'good' : 'bad'}`}>
-              {r.won === r.press.wins ? '±0' : `${r.won > r.press.wins ? '+' : '−'}${Math.abs(r.won - r.press.wins)}`}
-            </span>
-          </div>
-        )}
+        <ExpectationRows r={r} />
       </div>
     </Section>
+  );
+}
+
+function ExpectationRows({ r }: { r: SeasonReview }) {
+  const press = vsPress(r);
+  const d = r.ownerWins !== undefined ? r.won - r.ownerWins : 0;
+  return (
+    <>
+      {r.ownerWins !== undefined && (
+        <div className="listrow">
+          <span className="over fo-rv-k">Owner</span>
+          <span className="grow">
+            Asked for {r.ownerWins} wins, got {r.won}
+          </span>
+          <span className={`num bold ${d >= 0 ? 'good' : 'bad'}`}>{d === 0 ? '±0' : `${d > 0 ? '+' : '−'}${Math.abs(d)}`}</span>
+        </div>
+      )}
+      {press && r.press && (
+        <div className="listrow">
+          <span className="over fo-rv-k">Press</span>
+          <span className="grow fo-min0 fo-rv-col">
+            Picked {r.press.wins} wins{r.press.champ ? ' and the title' : ''}
+            <span className="lr-meta">{press}</span>
+          </span>
+          <span className={`num bold ${r.won >= r.press.wins ? 'good' : 'bad'}`}>
+            {r.won === r.press.wins ? '±0' : `${r.won > r.press.wins ? '+' : '−'}${Math.abs(r.won - r.press.wins)}`}
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 
