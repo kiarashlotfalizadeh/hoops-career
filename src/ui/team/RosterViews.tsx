@@ -3,7 +3,7 @@
 import type { League } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
-import { Segmented } from '../components/ui';
+import { Chips } from '../components/ui';
 import { useQueryParam } from '../league/shared';
 import { RosterList } from './RosterList';
 import { RosterContracts, RosterRatings, RosterStats } from './RosterTables';
@@ -17,7 +17,10 @@ export function RosterViews({ league, tid, param }: { league: League; tid: numbe
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   return (
     <>
-      <Segmented value={view} onChange={setView} label="Roster view" options={VIEWS.map((id) => ({ id, label: LABEL[id] }))} />
+      {/* a light row of chips, not another boxed switch under the page's tabs */}
+      <div className="tm-views">
+        <Chips value={view} onChange={setView} label="Roster view" options={VIEWS.map((id) => ({ id, label: LABEL[id] }))} />
+      </div>
       {view === 'players' && <RosterList league={league} roster={roster} />}
       {view === 'ratings' && <RosterRatings league={league} roster={roster} />}
       {view === 'stats' && <RosterStats league={league} roster={roster} />}

@@ -1,8 +1,9 @@
 // A player's hero: a slab in his team's colours (a neutral kit without one) with his number,
-// position and status, the jersey, the name and his OVR as a big figure (POT beside its label, his
-// change this season under it); then, on the page, his particulars, where his career stands, his
-// tags (development, archetype, tier, injury, the award races he's in) and his per-game line.
-import { useState } from 'react';
+// position and status, the jersey, the name in the headline cut and his OVR as a big figure (POT
+// beside its label, his change this season under it), and his line a game across its foot; under
+// it, his two most pressing marks (hurt, an award race, development...). His particulars, the rest
+// of his marks and where his career stands are on his Overview (bioFacts, usePlayerTags).
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -18,7 +19,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
 import { injuryName, outFor } from '../../core/format';
-import { baseLabel, devBase, devTag, growthStory, ovrChange } from '../../core/league/devWatch';
+import { baseLabel, devBase, devTag, ovrChange } from '../../core/league/devWatch';
 import { DevDelta, DevTagChip } from './dev';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
@@ -55,31 +56,82 @@ function statusLine(league: League, p: Player): string {
           : '';
 }
 
-export function PlayerHero({ league, p }: { league: League; p: Player }) {
-  const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const age = playerAge(p, league.season);
+/** His marks in the order they matter (hurt, an award race, development, the Hall, a two-way deal, his archetype, his tier): the hero shows two, his Overview the rest. */
+export function usePlayerTags(league: League, p: Player): { key: string; node: ReactNode }[] {
   // this season's award ladders, as the Awards tab draws them (once games are played)
   const races = useLeagueMemo(() => {
     if (league.phase !== 'regular' || !league.teams.some((t) => t.seasons.some((s) => s.season === league.season && s.won + s.lost > 0))) return null;
     return awardRaces(league, 5);
   }, [league]);
-  const cur = playerSeason(p, league.season);
-  // before his first game this season, show his most recent season instead
-  const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
-  const line = cur ?? (lastSeason ? playerSeason(p, lastSeason) : null);
-  // where his career stands, and the development tag his roster row carries
-  const story = p.tid >= -1 ? growthStory(league, p) : '';
   const dev = p.tid >= 0 ? devTag(league, p) : null;
-  const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {
         const i = races[k].findIndex((x) => x.c.p.pid === p.pid);
         return i >= 0 ? [`${label} race · ${ordinal(i + 1)}`] : [];
       })
     : [];
+  return [
+    ...(p.injury
+      ? [
+          {
+            key: 'injury',
+            node: (
+              <Tag tone="bad">
+                {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
+              </Tag>
+            ),
+          },
+        ]
+      : []),
+    ...inRaces.map((r) => ({
+      key: r,
+      node: (
+        <Link to="/league/awards" className="tag warn">
+          {r}
+        </Link>
+      ),
+    })),
+    ...(dev ? [{ key: 'dev', node: <DevTagChip tag={dev} /> }] : []),
+    ...(p.hof ? [{ key: 'hof', node: <Tag tone="warn">Hall of Fame</Tag> }] : []),
+    ...(p.contract.twoWay && p.tid >= 0 ? [{ key: 'twoway', node: <Tag>Two-way</Tag> }] : []),
+    { key: 'arch', node: <Tag>{p.archetype}</Tag> },
+    {
+      key: 'tier',
+      // his tier in its badge's colour, so it doesn't read as an award race
+      node: (
+        <span className="tag tm-tier">
+          <i style={{ background: ovrColor(p.ovr) }} aria-hidden="true" />
+          {tierLabel(p.ovr)}
+        </span>
+      ),
+    },
+  ];
+}
+
+/** His particulars, each whole on its line: age, height, weight, country, college, where he was drafted. */
+export function bioFacts(league: League, p: Player): string[] {
+  return [
+    `${playerAge(p, league.season)} yrs`,
+    fmtHeight(p.heightIn),
+    `${p.weightLb} lb`,
+    p.country,
+    p.college,
+    // the draft slot in the picks' words: "2018 1st round #11"
+    p.draft.round > 0 ? `${p.draft.year} ${p.draft.round === 1 ? '1st' : '2nd'} round #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? 'Undrafted' : '',
+  ].filter(Boolean);
+}
+
+export function PlayerHero({ league, p }: { league: League; p: Player }) {
+  const team = p.tid >= 0 ? league.teams[p.tid] : null;
+  const cur = playerSeason(p, league.season);
+  // before his first game this season, show his most recent season instead
+  const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
+  const line = cur ?? (lastSeason ? playerSeason(p, lastSeason) : null);
+  const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
+  const tags = usePlayerTags(league, p).slice(0, 2);
   return (
     <section className="tm-hero" aria-label={`${p.firstName} ${p.lastName}`}>
-      {/* his identity in his team's colours: who he plays for, the jersey, the name, the figure */}
+      {/* his identity in his team's colours: who he plays for, the jersey, the name, the figure, his line */}
       <div className="slab tm-hero-slab" style={slabVars(colors)}>
         <div className="tm-over">
           {team && <TeamLogo tid={team.tid} size={18} decorative />}
@@ -96,64 +148,34 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
           {/* a tap: the OVR ladder, his band marked; under it, his change this season */}
           <HeroOvr league={league} p={p} />
         </div>
+        <div className="tm-hero-figs">
+          <Statline
+            items={[
+              { k: 'PTS', v: line ? f1(line.pts) : '—' },
+              { k: 'REB', v: line ? f1(line.reb) : '—' },
+              { k: 'AST', v: line ? f1(line.ast) : '—' },
+              // no shots, no percentage: "—", not 0.0
+              { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
+            ]}
+          />
+          {/* what the figures are, always: this season's, or his last one's before he plays */}
+          {line ? (
+            <div className="tm-hero-note">
+              {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+            </div>
+          ) : null}
+        </div>
       </div>
-      {/* each particular whole on its line, the dots only between two on the same line */}
-      <div className="tm-meta">
-        <span className="tm-meta-in">
-          {[
-            `${age} yrs`,
-            fmtHeight(p.heightIn),
-            `${p.weightLb} lb`,
-            p.country,
-            p.college,
-            // the draft slot in the picks' words: "2018 1st round #11"
-            p.draft.round > 0 ? `${p.draft.year} ${p.draft.round === 1 ? '1st' : '2nd'} round #${p.draft.pick}` : p.draft.year && p.tid !== DRAFT_PROSPECT ? 'Undrafted' : '',
-          ]
-            .filter(Boolean)
-            .map((x, i) => (
-              <span key={i}>{x}</span>
-            ))}
-        </span>
-      </div>
-      {story && <div className="dv-story">{story}</div>}
-      <div className="tm-tags">
-        {dev && <DevTagChip tag={dev} />}
-        <Tag>{p.archetype}</Tag>
-        {/* his tier in its badge's colour, so it doesn't read as an award race */}
-        <span className="tag tm-tier">
-          <i style={{ background: ovrColor(p.ovr) }} aria-hidden="true" />
-          {tierLabel(p.ovr)}
-        </span>
-        {p.contract.twoWay && p.tid >= 0 && <Tag>Two-way</Tag>}
-        {p.injury && (
-          <Tag tone="bad">
-            {injuryName(p.injury.type)} · {outFor(p.injury.gamesRemaining)}
-          </Tag>
-        )}
-        {p.hof && <Tag tone="warn">Hall of Fame</Tag>}
-        {inRaces.map((r) => (
-          <Link key={r} to="/league/awards" className="tag warn">
-            {r}
-          </Link>
-        ))}
-      </div>
-      <div className="tm-hero-figs">
-        <Statline
-          items={[
-            { k: 'PTS', v: line ? f1(line.pts) : '—' },
-            { k: 'REB', v: line ? f1(line.reb) : '—' },
-            { k: 'AST', v: line ? f1(line.ast) : '—' },
-            // no shots, no percentage: "—", not 0.0
-            { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
-          ]}
-        />
-        {/* what the figures are, always: this season's, or his last one's before he plays */}
-        {line ? (
-          <div className="tm-hero-note">
-            {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
-          </div>
-        ) : null}
-      </div>
+      {/* two marks at most; the rest, his particulars and where his career stands are on his Overview */}
+      {tags.length > 0 && (
+        <div className="tm-tags">
+          {tags.map((t) => (
+            <span key={t.key} className="tm-tagw">
+              {t.node}
+            </span>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

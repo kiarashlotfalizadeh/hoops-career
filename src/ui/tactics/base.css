@@ -55,14 +55,15 @@
 .tx-sheet-foot {
   margin-top: 16px;
 }
-/* a headline in a sheet or over a block: the serif */
+/* a headline in a sheet or over a block: the headline cut */
 .tx-lead {
   margin: 0;
-  font-family: var(--serif);
-  font-weight: 560;
-  font-size: 22px;
-  line-height: 1.15;
-  letter-spacing: -0.012em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 21px;
+  line-height: 1.1;
+  letter-spacing: -0.028em;
   text-wrap: balance;
   color: var(--text);
 }
@@ -109,21 +110,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
-}
-.tx-pbline-n {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-family: var(--serif);
-  font-weight: 560;
-  font-size: 19px;
-  letter-spacing: -0.01em;
-}
-.tx-pbline-n .over {
-  font-family: var(--font);
-  letter-spacing: 0;
+  min-height: 32px;
 }
 /* the dot that marks a playbook's own setting (Levels draws its own in the corner) */
 .tx-dot {
@@ -140,11 +127,6 @@
 }
 
 /* ------------------------------------------------------------ the assistant's switch, the changes dock */
-/* flat on the page: a hairline under it, no box */
-.tx-auto {
-  padding: 0 0 8px;
-  border-bottom: 1px solid var(--line);
-}
 /* this visit's edits: one compact line over the tab bar */
 .tx-dock {
   gap: 6px;
@@ -177,53 +159,21 @@
   transform: scale(0.97);
   background: var(--surface);
 }
-/* the six sections as page tabs in a three-by-two grid: every one in view, none cut off on a phone;
-   the one that's on underlined in paper, a hairline under the lot (not a second boxed switch under
-   the slots) */
-.tx-tabs .seg {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-  padding: 0;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: none;
+/* the six sections as one row of chips that scrolls past the gutter */
+.tx-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  padding: 3px var(--gut-r) 3px var(--gut-l);
+  scroll-padding: 0 var(--gut-l);
 }
-.tx-tabs .seg button {
-  position: relative;
-  min-width: 0;
-  height: 40px;
-  padding: 0 6px;
-  border-radius: 0;
-  font-size: 14px;
-  font-weight: 600;
+.tx-tabs::-webkit-scrollbar {
+  display: none;
 }
-.tx-tabs .seg button.on {
-  background: none;
-  box-shadow: none;
-  color: var(--text);
-  font-weight: 720;
-}
-.tx-tabs .seg button.on::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: 4px;
-  width: 28px;
-  height: 2px;
-  transform: translateX(-50%);
-  background: var(--text);
-}
-.tx-tabs .seg button:not(.on):active {
-  background: none;
-  color: var(--text);
-}
-/* room for all six on one line: a tablet, a phone held sideways */
-@media (min-width: 640px) {
-  .tx-tabs .seg {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
-  }
+.tx-tabs .chip {
+  flex: none;
 }
 /* how teams see you: the rank grid, the play types, what they'll attack */
 .tx-seen {

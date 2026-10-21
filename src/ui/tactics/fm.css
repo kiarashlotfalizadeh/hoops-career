@@ -72,150 +72,193 @@
   font-weight: 700;
 }
 
-/* ------------------------------------------------------------ the tactic slots */
-/* the three slots as one switch, the way a segmented control is drawn: a sunk track, the slot
-   that's on raised out of it */
+/* ------------------------------------------------------------ the hero: the plan in use */
+/* one group: the slots, the style, the grades, the assistant's switch */
+.tx-hero {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px var(--pad-card) 4px;
+  overflow: hidden;
+}
+/* the three tactics as one row of pills: the active one white, as a chosen option is */
+/* (the active one takes the room for its name; the others show their letter and figure) */
 .tx-slots {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 2px;
-  padding: 3px;
-  border-radius: calc(var(--radius-sm) + 3px);
-  border: 1px solid var(--line);
-  background: var(--bg-2);
+  display: flex;
+  gap: 6px;
 }
 .tx-slot {
   position: relative;
-  display: flex;
-  min-width: 0;
-  border-radius: var(--radius-sm);
-  transition: background var(--dur-fast) ease;
-}
-.tx-slot.on {
-  background: var(--surface-3);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-}
-/* an empty slot between two: a hairline, so the three read as three */
-.tx-slot:not(.on) + .tx-slot:not(.on)::before {
-  content: '';
-  position: absolute;
-  left: -2px;
-  top: 10px;
-  bottom: 10px;
-  width: 1px;
-  background: var(--line-2);
-}
-.tx-slot-b {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  gap: 5px;
-  padding: 8px 10px 11px;
-  text-align: left;
-  border-radius: inherit;
-}
-.tx-slot:not(.on) .tx-slot-b:active {
-  background: var(--surface);
-}
-.tx-slot-top {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
+  height: 36px;
+  padding: 0 10px 0 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  text-align: left;
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
-/* room for ⋯ */
-.tx-slot:not(.vacant) .tx-slot-top {
-  padding-right: 16px;
-}
-/* its familiarity as a bar along the tile's foot */
-.tx-slot-bar {
+.tx-slot::after {
+  content: '';
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 5px;
-  height: 2px;
-  border-radius: 1px;
-  overflow: hidden;
-  background: var(--line);
+  inset: -4px -3px;
 }
-.tx-slot-bar i {
-  display: block;
-  height: 100%;
-  background: var(--text-dim);
+.tx-slot:not(.on):active {
+  background: var(--surface-2);
 }
-.tx-slot-bar i.good {
-  background: var(--good);
+@media (hover: hover) and (pointer: fine) {
+  .tx-slot:not(.on):hover {
+    background: var(--surface-2);
+  }
 }
-.tx-slot-bar i.warn {
-  background: var(--warn);
+.tx-slot.on {
+  flex: 1 1 auto;
+  background: var(--on);
+  color: var(--on-ink);
 }
-.tx-slot-bar i.bad {
-  background: var(--bad);
+.tx-slot:not(.on) .tx-slot-n {
+  display: none;
+}
+.tx-slot:not(.on) {
+  padding-right: 9px;
 }
 .tx-slot-l {
   flex: none;
-  width: 19px;
-  height: 19px;
+  width: 22px;
+  height: 22px;
   border-radius: var(--radius-xs);
   display: grid;
   place-items: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 13.5px;
-  border: 1px solid var(--line-3);
-  color: var(--text-2);
+  font-weight: 760;
+  font-size: 14px;
+  background: var(--surface-3);
+  color: var(--text);
 }
 .tx-slot.on .tx-slot-l {
-  border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
 }
 .tx-slot-n {
+  flex: 1;
   min-width: 0;
-  font-weight: 640;
+  font-weight: 620;
   font-size: 13.5px;
-  color: var(--text-2);
-}
-.tx-slot.on .tx-slot-n {
-  color: var(--text);
 }
 .tx-slot-f {
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 650;
-}
-.tx-slot-f .num {
+  flex: none;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 740;
   line-height: 1;
 }
-.tx-slot-fl {
+/* on the white pill, the familiarity reads in ink: its tone is for the dark grounds */
+.tx-slot.on .tx-slot-f {
+  color: var(--on-ink);
+}
+.tx-slot-plus {
+  flex: none;
   color: var(--text-dim);
-  white-space: nowrap;
+}
+/* the style: the offensive playbook as the headline, the defensive identity under it */
+.tx-hero-style {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-hero-pick {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  color: inherit;
+  border-radius: var(--radius-sm);
+}
+.tx-hero-pick > .grow {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tx-hero-off {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 23px;
+  letter-spacing: -0.028em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+.tx-hero-def {
+  font-size: 14px;
+  color: var(--text-2);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.tx-slot-f.dim {
-  align-items: center;
-  gap: 3px;
-  min-height: 18px;
+.tx-hero-pick > .btn {
+  flex: none;
+  pointer-events: none;
 }
-.tx-slot-m {
-  position: absolute;
-  top: 2px;
-  right: 0;
-  width: 30px;
-  height: 30px;
-  color: var(--text-dim);
+.tx-hero-pick:active > .btn {
+  background: var(--surface-3);
+}
+.tx-hero-r {
+  flex: none;
+  display: flex;
+}
+/* the grades, edge to edge across the group */
+/* (relative: the sr-only text in it is clipped by the strip, not placed past the page's edge) */
+.tx-hero .tx-strip {
+  position: relative;
+  top: auto;
+  margin: 0 calc(-1 * var(--pad-card));
+  padding: 2px var(--pad-card) 0;
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-bottom: none;
+  /* four grades share the width on a phone; more scroll */
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(68px, 1fr);
+}
+.tx-hero .tx-strip-q {
+  min-width: 0;
+  padding: 2px 8px 3px;
+}
+.tx-hero .tx-strip-q:first-child {
+  padding-left: 0;
+}
+.tx-hero .tx-strip-n {
+  white-space: normal;
+  line-height: 1.2;
+}
+/* (a phone: names wrap, so every grade sits on the same line) */
+@media (max-width: 479px) {
+  .tx-hero .tx-strip-n {
+    min-height: 2.4em;
+  }
+}
+/* the assistant's switch, the group's foot */
+.tx-hero-auto {
+  margin: 0 calc(-1 * var(--pad-card));
+  padding: 8px var(--pad-card) 8px;
+  border-top: 1px solid var(--line);
+}
+.tx-hero-auto > label {
+  min-height: 44px;
 }
 
 /* ------------------------------------------------------------ the mentality dial */
@@ -230,7 +273,6 @@
 
 /* ------------------------------------------------------------ the Tactic tab */
 .tx-tactic,
-.tx-tactic-head,
 .tx-tactic-main,
 .tx-tactic-side {
   display: flex;
@@ -238,24 +280,13 @@
   gap: var(--gap-page);
   min-width: 0;
 }
-/* a wide screen: the board on the left, the switch, the mentality and the style beside it */
+/* a wide screen: the board on the left, the playbooks beside it */
 @media (min-width: 900px) {
   .tx-tactic {
     display: grid;
     grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: 'main head' 'main side';
     align-items: start;
     gap: var(--gap-page) 20px;
-  }
-  .tx-tactic-head {
-    grid-area: head;
-  }
-  .tx-tactic-main {
-    grid-area: main;
-  }
-  .tx-tactic-side {
-    grid-area: side;
   }
 }
 /* the formation's pickers over the court */
@@ -291,95 +322,41 @@
   width: 0.5em;
   height: 0.5em;
 }
-/* what the board shows, in the court's corner: a quiet label */
-.tx-board-tag {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
-  padding: 3px 7px;
-  border-radius: var(--radius-xs);
-  border: 1px solid var(--line-2);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  color: var(--text-2);
-  font-size: 11.5px;
-  font-weight: 620;
-  pointer-events: none;
-}
-.tx-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: -2px;
-}
-.tx-legend > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.tx-legend .tx-famdot + .tx-famdot {
-  margin-left: -1px;
-}
-.tx-legend-off {
-  display: inline-block;
-  width: 12px;
-  height: 8px;
-  border-radius: 2px;
-  border: 1.5px solid var(--warn);
-}
-.tx-benchrow .tx-floor-s {
-  flex: none;
-  font-size: 10px;
-}
-.tx-benchrow > .tx-famdot {
-  margin-right: 4px;
-}
-/* the style: the playbook and identity it loads, a tap from the picker */
-.tx-stylebtn {
+/* the row to the bench's roles, on Players */
+.tx-benchlink {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  text-align: left;
+  min-height: var(--row-min);
+  padding: 10px 12px 10px var(--pad-card);
 }
-.tx-stylebtn > .grow {
+.tx-benchlink > .grow {
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+  gap: 2px;
 }
-.tx-style-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-family: var(--serif);
-  font-weight: 560;
-  font-size: 18px;
-  letter-spacing: -0.01em;
+.tx-benchlink-n {
+  font-weight: 640;
+  font-size: 15px;
 }
-.tx-style-row .over {
-  font-family: var(--font);
+.tx-benchlink-m {
+  font-size: 13px;
+  color: var(--text-dim);
 }
-.tx-style-row .over {
-  min-width: 70px;
-  flex: none;
-}
-.tx-stylebtn > .btn {
-  flex: none;
-  pointer-events: none;
+.tx-benchlink:active {
+  background: var(--surface);
 }
 .tx-style {
   gap: 16px;
 }
 
 /* ------------------------------------------------------------ Instructions: the phases of play */
+/* four pills, two by two: each phase and how well the team knows it; the chosen one white */
 .tx-phases {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2px;
-  padding: 3px;
-  border-radius: calc(var(--radius-sm) + 3px);
-  border: 1px solid var(--line);
-  background: var(--bg-2);
+  gap: 6px;
 }
 @media (min-width: 640px) {
   .tx-phases {
@@ -387,49 +364,52 @@
   }
 }
 .tx-phase {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   min-width: 0;
-  padding: 8px 10px 9px;
+  height: 40px;
+  padding: 0 12px;
   border-radius: var(--radius-sm);
+  background: var(--surface);
   text-align: left;
   transition: background var(--dur-fast) ease;
 }
+.tx-phase::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
 .tx-phase:not(.on):active {
-  background: var(--surface);
+  background: var(--surface-2);
 }
 .tx-phase.on {
-  background: var(--surface-3);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  background: var(--on);
+  color: var(--on-ink);
 }
 .tx-phase-n {
-  font-size: 12.5px;
-  font-weight: 620;
-  color: var(--text-dim);
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .tx-phase.on .tx-phase-n {
-  color: var(--text);
-}
-.tx-phase-v {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  color: var(--on-ink);
 }
 .tx-phase-v .num {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 740;
   line-height: 1;
 }
-.tx-phase-l {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
+.tx-phase.on .tx-phase-v .num {
+  color: var(--on-ink);
 }
 .tx-phase-dims {
   display: flex;
@@ -650,4 +630,15 @@
 }
 .tx-famp-c .tx-fambar {
   width: 100%;
+}
+/* the rest of the players, at full speed: one quiet row to show them */
+.tx-famp-all {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--pad-card);
+  text-align: left;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+  border-top: 1px solid var(--line);
 }

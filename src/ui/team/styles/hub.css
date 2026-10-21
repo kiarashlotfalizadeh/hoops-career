@@ -1,52 +1,51 @@
-/* Team's header: the team and who runs it, its roster spots and payroll, over the page tabs. */
-/* two lines: the record is in the top bar, the city in its badge */
+/* Team's header: one line over the page tabs. The name in the headline cut, then the roster count
+   and the payroll as two small figures (the record is in the top bar, the city in its badge). */
 .tm-hh {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: -4px;
-}
-.tm-hh-id {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-.tm-hh-top {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0 10px;
+  align-items: flex-end;
+  gap: 18px;
+  margin-top: -2px;
 }
 .tm-hh-name {
-  font-size: 27px;
-  line-height: 1.05;
+  flex: 1;
+  min-width: 0;
+  font-size: 26px;
+  line-height: 1;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tm-hh-meta {
-  font-size: 13px;
-  color: var(--text-dim);
+.tm-hh-fig {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  min-width: 0;
+  max-width: 46%;
 }
-.tm-hh-meta b {
-  font-weight: 680;
-  color: var(--text-2);
+.tm-hh-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 21px;
+  line-height: 1;
+  color: var(--text);
 }
-.tm-hh-meta b.bad {
-  color: var(--bad);
-}
-.tm-hh-staff {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
+.tm-hh-k {
+  font-size: 11.5px;
+  font-weight: 540;
   color: var(--text-dim);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
-.tm-hh-staff svg {
-  flex: none;
+/* the header, its tabs and the first control under them read as one block */
+.tm-hub > .tm-hh + .lg-tabs {
+  margin-top: -16px;
+}
+.tm-hub > .lg-tabs + * {
+  margin-top: -8px;
 }

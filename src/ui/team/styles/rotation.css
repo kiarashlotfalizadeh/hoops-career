@@ -1,12 +1,31 @@
 /* Team → Rotation: the assistant's switch, the depth chart, the stint plan and a player's sheet. */
 /* ------------------------------------------------------------ rotation */
-/* the assistant's switch, flat on the page, and Undo once he has replaced yours */
+/* the hero: the minutes the targets add up to over the assistant's switch (and Undo once he has
+   replaced yours), one group */
+.tm-rhero {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px var(--pad-card) 4px;
+}
+.tm-rhero .statline .v {
+  font-size: 30px;
+}
 .tm-auto {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 2px 0 12px;
-  border-bottom: 1px solid var(--line);
+  margin: 0 calc(-1 * var(--pad-card));
+  padding: 8px var(--pad-card) 10px;
+  border-top: 1px solid var(--line);
+}
+.tm-auto > label {
+  min-height: 44px;
+}
+.tm-depth {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .tm-undo {
   display: flex;
@@ -14,14 +33,6 @@
   gap: 10px;
   font-size: 13px;
   color: var(--text-2);
-}
-.tm-rsum {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.tm-rsum .statline .v {
-  font-size: 26px;
 }
 .tm-rsum-note {
   font-size: 12.5px;
@@ -78,16 +89,22 @@
 .tm-rhead {
   align-items: end;
   padding-bottom: 7px;
-  border-bottom: 1px solid var(--line-3);
+  border-bottom: 1px solid var(--line-2);
   font-size: 11.5px;
   font-weight: 640;
   color: var(--text-dim);
 }
+/* the group's name as a section's head, its Help beside it */
 .tm-rhead-l {
-  font-family: var(--serif);
-  font-size: 19px;
-  font-weight: 560;
-  letter-spacing: -0.012em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.tm-rhead-l h3 {
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -0.015em;
   line-height: 1;
   color: var(--text);
 }

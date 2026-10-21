@@ -1,4 +1,5 @@
-// A player's page, Ratings: why his OVR is what it is (the attributes that lift it and hold it
+// A player's page, Ratings: his scouting profile (each skill a percentile among every rostered
+// player), why his OVR is what it is (the attributes that lift it and hold it
 // back), then every rating on the 40-99 scale by group with an arrow for its change this season; a
 // tap opens what a rating does. The changes are the development watch's: since he ended last season
 // (the summer included), or since opening night in a league's first season.
@@ -11,6 +12,7 @@ import { Term } from '../components/Glossary';
 import { RATING_COLOR, RatingBands, ratingTone } from '../ratingCols';
 import { baseLabel, devBase, ratingDeltas } from '../../core/league/devWatch';
 import { DevDelta } from './dev';
+import { ScoutingProfile } from './Overview';
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
@@ -51,6 +53,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
     .reverse();
   return (
     <>
+      <ScoutingProfile league={league} p={p} />
       <Section title={`Why he's a ${p.ovr}`}>
         <div className="tm-why">
           <div className="tm-why-sum">

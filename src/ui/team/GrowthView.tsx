@@ -1,6 +1,7 @@
-// Team → Growth: the development report as it stands (the monthly mail links here). The player
-// development coach's word on the setup and the next check-in, the one to watch, the young players
-// Rising, Holding and Slipping with a reason each, the veterans (who hold until the summer), the
+// Team → Growth: the development report as it stands (the monthly mail links here). A hero with
+// where the report stands (the check-in, the next one), the one to watch and the development coach's
+// word on the setup; then the young players Rising, Holding and Slipping with a short reason each
+// (the whole of it on his page), the veterans (who hold until the summer), the
 // rookie watch, and the breakouts around the league. Every name opens his page.
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
@@ -12,7 +13,18 @@ import { Avatar, Help, Ovr, Section } from '../components/ui';
 import { DevDelta, DevTagChip } from '../player/dev';
 import '../player/growth.css';
 
-/** One player in the report: his jersey, name and tag, age and position, the coach's reason; OVR with this season's change. */
+/**
+ * The coach's reason, short for a row: its first sentence, without the group's word the section
+ * already says ("Holding; shot blocking +1 since opening night. 29 minutes..." reads "Shot blocking +1
+ * since opening night."). The whole of it is on his Growth tab.
+ */
+function shortWhy(why: string): string {
+  const first = why.split(/(?<=\.)\s/)[0];
+  const t = first.replace(/^(Rising|Holding|Slipping)[;:,]\s*/i, '');
+  return t ? t[0].toUpperCase() + t.slice(1) : first;
+}
+
+/** One player in the report: his jersey, name and tag, then his age and the coach's reason in a line; OVR with this season's change. */
 function DevRow({ league, p, why }: { league: League; p: Player; why: string }) {
   const tag = devTag(league, p);
   return (
@@ -23,10 +35,12 @@ function DevRow({ league, p, why }: { league: League; p: Player; why: string }) 
           <span className="ellipsis">{playerName(p)}</span>
           {tag && <DevTagChip tag={tag} />}
         </span>
-        <span className="dv-row-meta">
-          {p.pos} · {playerAge(p, league.season)} · POT {p.pot}
+        <span className="dv-row-why">
+          <span className="sr-only">
+            {p.pos}, POT {p.pot},{' '}
+          </span>
+          {playerAge(p, league.season)} · {shortWhy(why)}
         </span>
-        <span className="dv-row-why">{why}</span>
       </span>
       <span className="dv-row-ovr">
         <Ovr v={p.ovr} size="sm" />
@@ -61,37 +75,36 @@ export default function GrowthView() {
   const nth = ['first', 'second', 'third'][r.check - 1];
   return (
     <>
-      <Section
-        title="From the development coach"
-        right={
+      {/* the hero: where the report stands, and the one to watch */}
+      <section className="card dv-hero" aria-label="Development report">
+        <div className="dv-hero-top">
+          <span className="over">
+            {r.check ? `After the ${nth} check-in` : league.phase === 'preseason' ? 'The summer’s work is in' : 'Between check-ins'}
+            {next ? ` · next ${next}` : ''}
+          </span>
           <Help title="How players develop">
-            Most of a player&apos;s year happens over the summer: young players climb, veterans fade, and the arrows here measure from where each ended last season. In season the
-            staff checks in three times; players 26 and younger move a little each time. Minutes (25 a night or more), coaching, the coaching budget, practice intensity and his
-            training focus all push the same way. Breakout: well past what his age alone would add.
+            <p>
+              Most of a player&apos;s year happens over the summer: young players climb, veterans fade, and the arrows here measure from where each ended last season. In season the
+              staff checks in three times; players 26 and younger move a little each time. Minutes (25 a night or more), coaching, the coaching budget, practice intensity and his
+              training focus all push the same way. Breakout: well past what his age alone would add.
+            </p>
           </Help>
-        }
-      >
-        <div className="dv-coach">
-          <div className="dv-coach-h">{r.check ? `After the ${nth} check-in` : league.phase === 'preseason' ? 'The summer’s work is in' : 'Between check-ins'}</div>
-          <p>
-            {r.setup}
-            {next ? ` Next check-in ${next}.` : ''}
-          </p>
         </div>
-      </Section>
-
-      {r.watch && (
-        <Section title="The one to watch">
+        {r.watch ? (
           <Link to={`/player/${r.watch.pid}?tab=dev`} className="dv-watch">
             <Avatar p={league.players[r.watch.pid]} size="lg" />
             <span className="dv-watch-t">
+              <span className="over">The one to watch</span>
               <span className="dv-watch-n">{playerName(league.players[r.watch.pid])}</span>
               <span className="dv-watch-why">{r.watch.why[0].toUpperCase() + r.watch.why.slice(1)}.</span>
             </span>
             <Ovr v={league.players[r.watch.pid].ovr} />
           </Link>
-        </Section>
-      )}
+        ) : (
+          <div className="dv-coach-h">From the development coach</div>
+        )}
+        <p className="dv-setup">{r.setup}</p>
+      </section>
 
       {groups.map((g) => (
         <Section key={g} title={`${GROUP_LABEL[g]} · ${r[g].length}`}>

@@ -237,7 +237,13 @@ export function MyPlaybooksCard() {
     >
       <div className="card flush">
         {lib.length === 0 ? (
-          <div className="tx-empty">No saved playbooks yet.</div>
+          // nothing saved: one row, the empty line and the way to start
+          <div className="tx-pb-none">
+            <span className="grow">No saved playbooks yet.</span>
+            <button className="btn sm" onClick={() => setSaving(true)} disabled={busy}>
+              <Save size={15} /> Save current
+            </button>
+          </div>
         ) : (
           <div className="list">
             {lib.map((p) => {
@@ -266,12 +272,14 @@ export function MyPlaybooksCard() {
             })}
           </div>
         )}
-        <div className="tx-pb-foot">
-          <button className="btn block" onClick={() => setSaving(true)} disabled={full || busy}>
-            <Save size={16} /> Save current as…
-          </button>
-          {full && <div className="tiny dim">{`You have ${MAX_PLAYBOOKS}: overwrite or delete one to save another.`}</div>}
-        </div>
+        {lib.length > 0 && (
+          <div className="tx-pb-foot">
+            <button className="btn block" onClick={() => setSaving(true)} disabled={full || busy}>
+              <Save size={16} /> Save current as…
+            </button>
+            {full && <div className="tiny dim">{`You have ${MAX_PLAYBOOKS}: overwrite or delete one to save another.`}</div>}
+          </div>
+        )}
       </div>
       <Sheet open={saving} onClose={() => setSaving(false)} title="Save as a playbook">
         <div className="tx-sheet-lead">{playbookLabel(league.teams[league.userTid].tactics)}, with your roles, shot freedom, screeners and game management.</div>

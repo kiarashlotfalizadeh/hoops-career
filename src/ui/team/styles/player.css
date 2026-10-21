@@ -11,17 +11,17 @@
 .tm-bar .back {
   margin-left: -10px;
 }
-/* the hero: the slab carries who he is; his particulars, tags and line sit under it on the page */
+/* the hero: the slab carries who he is and his line a game; two marks at most sit under it */
 .tm-hero {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 .tm-hero-slab {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 15px 16px 18px;
+  gap: 16px;
+  padding: 15px 16px 16px;
 }
 .tm-over {
   display: flex;
@@ -66,15 +66,16 @@
   color: var(--text-2);
   line-height: 1.15;
 }
-/* the serif, 40px, or smaller until the name's longest run (--run letters, about 0.5em each) fits
-   the column whole */
+/* the headline cut, 36px, or smaller until the name's longest run (--run letters, about 0.66em each
+   in the expanded cut) fits the column whole */
 .tm-last {
-  font-family: var(--serif);
-  font-size: 32px;
-  font-size: clamp(22px, 100cqi / (var(--run, 8) * 0.5), 40px);
-  font-weight: 560;
-  line-height: 0.98;
-  letter-spacing: -0.02em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 30px;
+  font-size: clamp(20px, 100cqi / (var(--run, 8) * 0.66), 36px);
+  font-weight: 780;
+  line-height: 1;
+  letter-spacing: -0.03em;
   overflow-wrap: anywhere;
 }
 /* his OVR: a big condensed figure in paper, his tier's colour as a rule under it */
@@ -129,7 +130,7 @@
   border-radius: var(--radius-xs);
 }
 .tm-meta {
-  font-size: 13.5px;
+  font-size: 14px;
   color: var(--text-2);
   line-height: 1.4;
   overflow: hidden;
@@ -170,18 +171,28 @@ a.tag::after {
   position: absolute;
   inset: -12px -2px;
 }
-/* his line a game: big figures under a hairline, what they are under them */
+/* his line a game across the slab's foot: big figures under a hairline, what they are under them */
 .tm-hero-figs {
   display: flex;
   flex-direction: column;
   gap: 6px;
   padding-top: 12px;
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
 }
 .tm-hero-figs .statline .v {
-  font-size: 34px;
+  font-size: 32px;
 }
 .tm-hero-note {
   font-size: 12px;
   color: var(--text-dim);
+}
+/* a mark's wrapper keeps the tag's own size */
+.tm-tagw {
+  display: contents;
+}
+/* his Overview's About: particulars, the story, his marks and honors */
+.tm-about {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }

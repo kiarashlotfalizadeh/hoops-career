@@ -75,9 +75,26 @@ export function RolesTab({ players }: { players: Player[] }) {
                 <div className="grow tx-prow-m">
                   <div className="tx-prow-top">
                     <span className="lr-name ellipsis">{nameOf(pl.pid)}</span>
-                    {fr !== 0 && <Tag tone={fr === 1 ? 'good' : 'warn'}>{fr === 1 ? 'Green light' : 'Limited'}</Tag>}
-                    {glass !== 0 && <Tag tone="info">{GLASS_META[glass].label}</Tag>}
-                    {pl.injury && <Tag tone="bad">Out</Tag>}
+                    {/* two marks at most: hurt first, then his shot freedom, then glass duty (all in his sheet) */}
+                    {[
+                      pl.injury ? (
+                        <Tag key="out" tone="bad">
+                          Out
+                        </Tag>
+                      ) : null,
+                      fr !== 0 ? (
+                        <Tag key="fr" tone={fr === 1 ? 'good' : 'warn'}>
+                          {fr === 1 ? 'Green light' : 'Limited'}
+                        </Tag>
+                      ) : null,
+                      glass !== 0 ? (
+                        <Tag key="gl" tone="info">
+                          {GLASS_META[glass].label}
+                        </Tag>
+                      ) : null,
+                    ]
+                      .filter(Boolean)
+                      .slice(0, 2)}
                   </div>
                   <div className="tx-prow-roles">
                     <span className="tx-prow-r">

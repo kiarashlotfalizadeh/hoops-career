@@ -2,6 +2,7 @@
 // of the year race) and the season's highlights: career highs set this season, honors (the
 // league's awards and the press's weekly and monthly ones) and the news that named him (milestones,
 // big nights, a breakout). Each links to where it lives.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { REC_LABEL, REC_STATS, type RecStat } from '../../core/league/records';
@@ -98,14 +99,22 @@ function Row({ h }: { h: Highlight }) {
 
 export function SeasonHighlights({ league, p }: { league: League; p: Player }) {
   const list = useLeagueMemo(() => seasonHighlights(league, p), [league, p]);
+  const [all, setAll] = useState(false);
   if (!list.length) return null;
+  // the first three, the rest a tap away
+  const shown = all ? list : list.slice(0, 3);
   return (
     <Section title="This season’s highlights">
       <div className="dv-hl">
-        {list.map((h) => (
+        {shown.map((h) => (
           <Row key={h.key} h={h} />
         ))}
       </div>
+      {list.length > shown.length && (
+        <button className="btn sm dv-hl-more" onClick={() => setAll(true)}>
+          {list.length - shown.length} more
+        </button>
+      )}
     </Section>
   );
 }

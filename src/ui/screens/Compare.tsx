@@ -73,9 +73,8 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const deal = contractOf(league, p);
   const status = p.tid === FREE_AGENT ? (p.rfa ? 'Restricted FA' : 'Free agent') : p.tid === DRAFT_PROSPECT ? 'Prospect' : 'Retired';
-  const edge = sideColor(league, p);
   return (
-    <div className={`card cmp-head ${side}`} style={edge ? { ['--cmp-edge' as string]: edge } : undefined}>
+    <div className={`card cmp-head ${side}`}>
       <div className="cmp-top">
         <Avatar p={p} />
         <div className="cmp-ovr">
@@ -117,7 +116,7 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
         {deal.sub && <div className="cmp-deal-s">{deal.sub}</div>}
       </div>
       <div className="cmp-foot">
-        <button className="btn xs ghost" aria-haspopup="dialog" aria-label={`Change ${playerName(p)} for another player`} onClick={onPick}>
+        <button className="btn xs" aria-haspopup="dialog" aria-label={`Change ${playerName(p)} for another player`} onClick={onPick}>
           Change
         </button>
       </div>
@@ -254,11 +253,12 @@ export default function Compare() {
     <main className="page cmp-page">
       <PageHeader
         title="Compare"
-        sub={pa && pb ? `${pa.lastName} vs ${pb.lastName}` : 'Two players side by side'}
+        // (once both are picked, their heads say who: no line repeating them)
+        sub={pa && pb ? undefined : 'Two players side by side'}
         back
         backTo={pa ? `/player/${pa.pid}` : '/team'}
         right={
-          <button className="btn sm ghost" disabled={ids.a === null && ids.b === null} onClick={() => set(ids.b, ids.a)} aria-label="Swap sides">
+          <button className="btn sm" disabled={ids.a === null && ids.b === null} onClick={() => set(ids.b, ids.a)} aria-label="Swap sides">
             <ArrowLeftRight size={16} /> Swap
           </button>
         }
@@ -272,7 +272,18 @@ export default function Compare() {
       </div>
       {pa || pb ? (
         <>
-          {/* which side is which, kept in view while the rows scroll by */}
+          <Segmented
+            tabs
+            value={view}
+            onChange={setView}
+            label="Compare"
+            options={[
+              { id: 'profile', label: 'Profile' },
+              { id: 'ratings', label: 'Ratings' },
+              { id: 'stats', label: 'Stats' },
+            ]}
+          />
+          {/* which side is which, as the tables' head: kept in view while the rows scroll by */}
           <div className="cmp-strip" aria-hidden>
             {[pa, pb].map((p, i) => (
               <Fragment key={i}>
@@ -284,16 +295,6 @@ export default function Compare() {
               </Fragment>
             ))}
           </div>
-          <Segmented
-            value={view}
-            onChange={setView}
-            label="Compare"
-            options={[
-              { id: 'profile', label: 'Profile' },
-              { id: 'ratings', label: 'Ratings' },
-              { id: 'stats', label: 'Stats' },
-            ]}
-          />
           {sections
             .filter((s) => VIEW_OF[s.id] === view)
             .map((s) => (

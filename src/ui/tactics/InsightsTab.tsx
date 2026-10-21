@@ -18,8 +18,13 @@ export function InsightsTab() {
   // the games the effects were tracked in, whether or not any effect is big enough to list
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
   const imps = strongerSides(effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3));
-  const helping = imps.filter((x) => x.forUser).slice(0, 5);
-  const hurting = imps.filter((x) => !x.forUser).slice(0, 5);
+  // the three biggest each way, two more a tap away
+  const [more, setMore] = useState(false);
+  const helpAll = imps.filter((x) => x.forUser).slice(0, 5);
+  const hurtAll = imps.filter((x) => !x.forUser).slice(0, 5);
+  const helping = more ? helpAll : helpAll.slice(0, 3);
+  const hurting = more ? hurtAll : hurtAll.slice(0, 3);
+  const hidden = helpAll.length + hurtAll.length - helping.length - hurting.length;
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
     // no "go to Hedge" once you already play Hedge
     const advice = x.forUser ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
@@ -47,6 +52,11 @@ export function InsightsTab() {
           </Section>
           <Section title="What's hurting you" right={<span className="tiny dim">pts a game</span>}>
             <div className="card flush list">{hurting.length ? hurting.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
+            {hidden > 0 && (
+              <button className="btn sm tx-imp-more" onClick={() => setMore(true)}>
+                {hidden} more
+              </button>
+            )}
           </Section>
         </>
       ) : (
@@ -85,7 +95,7 @@ function SeenBy({ league }: { league: League }) {
         <div className="col tx-seen">
           <RankStrip d={data} />
           {data.playTypes.length > 0 && (
-            <>
+            <More label="Play types at both ends">
               <Segmented
                 label="Play types at which end"
                 value={end}
@@ -96,7 +106,7 @@ function SeenBy({ league }: { league: League }) {
                 ]}
               />
               <PlayTypeTable rows={end === 'off' ? data.playTypes : data.defPlayTypes} defense={end === 'def'} />
-            </>
+            </More>
           )}
           {weak.length > 0 && (
             <More label={`What they'll go after (${weak.length})`}>

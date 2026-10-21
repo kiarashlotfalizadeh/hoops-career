@@ -1,11 +1,13 @@
-// Team → Tactics, Football Manager's way: your three tactics (A, B, C) as tabs over everything, each
-// with how well the team knows it, then six sections, each its own module in src/ui/tactics. Tactic
-// (the board: your five where the shape and the scheme put them, the mentality, the style), the
-// Instructions by phase of play, Players (roles at both ends), Familiarity (what the team knows and
-// the practice that builds it), Game Mgmt and the Report (the system report and the season's
-// insights). Advice in core links here by the old section ids (playbook, offense, defense, roles,
-// manage, insights), which open the section that now holds them. The grades the open section moves
-// sit in a strip over it, so every lever shows what it buys and what it costs. Edits save as they're
+// Team → Tactics, Football Manager's way. One hero holds the plan in use (tactics/Hero: your three
+// tactics A, B and C with how well the team knows each, the style the active one runs, the grades the
+// open section's levers move, the assistant's switch), then six sections as one row of chips, each
+// its own module in src/ui/tactics: Tactic (the board: your five where the shape and the scheme put
+// them; your saved playbooks), the Instructions by phase of play (with the mentality), Players (roles
+// at both ends), Familiarity (what the team knows and the practice that builds it), Game Mgmt and the
+// Report (the system report and the season's insights). Advice in core links here by the old section
+// ids (playbook, offense, defense, roles, manage, insights), which open the section that now holds
+// them. The grades in the hero move as you change a setting, so every lever shows what it buys and
+// what it costs. Edits save as they're
 // made; while this visit has any, a compact dock says what they did to the grades and offers Undo
 // and Done (which hands the Continue bar back).
 import { useEffect, useMemo, useState } from 'react';
@@ -16,18 +18,17 @@ import { guideVisit } from '../../core/league/agenda';
 import { rosterSorted } from '../../core/league/helpers';
 import { systemFamiliarity } from '../../core/league/practice';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
-import { Segmented } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
 import { useQueryParam } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
-import { GradeStrip } from '../tactics/SystemReport';
+import { TacticsHero } from '../tactics/Hero';
 import { TacticTab } from '../tactics/TacticTab';
 import { InstructionsTab } from '../tactics/InstructionsTab';
 import { RolesTab } from '../tactics/RolesTab';
 import { FamiliarityTab } from '../tactics/FamiliarityTab';
 import { ManageTab } from '../tactics/ManageTab';
 import { ReportTab } from '../tactics/ReportTab';
-import { MentalityDial, SlotBar } from '../tactics/SlotBar';
+import { MentalityDial } from '../tactics/SlotBar';
 import { PHASES, type Phase } from '../tactics/fam';
 import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
@@ -82,19 +83,23 @@ export default function Tactics() {
 
   return (
     <>
-      <AssistantCards league={league} areas={['tactics']} max={2} />
-      {/* while a sim plays on a copy of the league, nothing here can change it */}
+      {/* the hero: the plan in use (its slot, its style, the grades the open tab moves, who runs it) */}
       <fieldset className="tx-fieldset" disabled={simming}>
-        <SlotBar />
+        <TacticsHero report={report} was={base} end={end} />
       </fieldset>
-      <div className="tx-tabs">
-        <Segmented value={tab} onChange={setTab} options={TABS} label="Tactics sections" />
+      <AssistantCards league={league} areas={['tactics']} max={2} />
+      {/* the sections: one row of chips that scrolls, not a grid of tabs */}
+      <div className="tx-tabs" role="group" aria-label="Tactics sections">
+        {TABS.map((x) => (
+          <button key={x.id} className={`chip ${tab === x.id ? 'on' : ''}`} aria-pressed={tab === x.id} onClick={() => setTab(x.id)}>
+            {x.label}
+          </button>
+        ))}
       </div>
-      {end && <GradeStrip report={report} was={base} end={end} />}
 
       <fieldset className="tx-fieldset" disabled={simming}>
         {tab === 'instructions' && <MentalityDial t={t} />}
-        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} />}
+        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} onPlayers={() => setTab('players')} />}
         {tab === 'instructions' && <InstructionsTab t={t} players={players} sys={sys} phase={phase} setPhase={setPhase} />}
         {tab === 'players' && <RolesTab players={players} />}
         {tab === 'familiarity' && <FamiliarityTab sys={sys} players={players} />}

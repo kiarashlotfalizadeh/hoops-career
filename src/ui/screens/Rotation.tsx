@@ -1,8 +1,8 @@
-// Team → Rotation: the depth chart with each player's minute target (wear risks marked on his
-// row), the assistant's switch, the staff's advice on the rotation, and the stint plan the
-// targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
+// Team → Rotation: a hero with the minutes the targets add up to and the assistant's switch, the
+// staff's advice on the rotation, the depth chart with each player's minute target (wear risks
+// marked on his row), and the stint plan the targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type ReactNode } from 'react';
 import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit, touch } from '../../state/actions';
@@ -105,36 +105,8 @@ export default function Rotation() {
 
   return (
     <>
-      <div className="tm-auto">
-        <Toggle
-          on={!rot.manual}
-          disabled={simming}
-          onChange={setAssistant}
-          label="Let the assistant manage"
-          help={
-            !rot.manual
-              ? 'He sets the starters and minutes from the roster and adjusts for injuries. Your next edit takes over.'
-              : 'You set it. Turn on to hand it back: he rebuilds it from the roster.'
-          }
-        />
-        {undo && !simming && (
-          <div className="tm-undo">
-            <span className="grow">{undo.manual ? 'Your rotation was replaced.' : 'Rotation refreshed.'}</span>
-            <button
-              className="btn xs"
-              onClick={() => {
-                if (edit((l) => void (l.teams[l.userTid].rotation = undo))) setUndo(null);
-              }}
-            >
-              <Undo2 size={14} /> Undo
-            </button>
-          </div>
-        )}
-      </div>
-
-      <AssistantCards league={league} areas={['team']} max={2} />
-
-      <div className="tm-rsum">
+      {/* the hero: the minutes the targets add up to, and who runs the rotation */}
+      <section className="card tm-rhero" aria-label="Your rotation">
         <Statline
           items={[
             { k: 'Targets', v: total, s: total === 240 ? 'of 240 min' : 'min, scaled to 240' },
@@ -143,24 +115,37 @@ export default function Rotation() {
           ]}
         />
         {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
-      </div>
+        <div className="tm-auto">
+          <Toggle
+            on={!rot.manual}
+            disabled={simming}
+            onChange={setAssistant}
+            label="Let the assistant manage"
+            help={
+              !rot.manual
+                ? 'He sets the starters and minutes from the roster and adjusts for injuries. Your next edit takes over.'
+                : 'You set it. Turn on to hand it back: he rebuilds it from the roster.'
+            }
+          />
+          {undo && !simming && (
+            <div className="tm-undo">
+              <span className="grow">{undo.manual ? 'Your rotation was replaced.' : 'Rotation refreshed.'}</span>
+              <button
+                className="btn xs"
+                onClick={() => {
+                  if (edit((l) => void (l.teams[l.userTid].rotation = undo))) setUndo(null);
+                }}
+              >
+                <Undo2 size={14} /> Undo
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
 
-      <Section
-        title="Depth chart"
-        right={
-          <Help title="How rotations work">
-            <p>
-              The first five healthy players start. The staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead balls.
-              Fouls, fatigue, injuries and blowouts change it in the game.
-            </p>
-            <p>
-              Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury
-              risk.
-            </p>
-            <p>The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+).</p>
-          </Help>
-        }
-      >
+      <AssistantCards league={league} areas={['team']} max={2} />
+
+      <section className="sec tm-depth" aria-label="Depth chart">
         <div className="tm-rlist">
           <div className="list">
             {order.map((pid, i) => {
@@ -171,7 +156,7 @@ export default function Rotation() {
               const risks = p.wear >= WORN ? `wear ${Math.round(p.wear)}` : '';
               return (
                 <Fragment key={pid}>
-                  {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} />}
+                  {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} help={i === 0 ? <RotationHelp /> : undefined} />}
                   {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
                   <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
                     <button
@@ -196,13 +181,13 @@ export default function Rotation() {
                       {/* an injured player's line is his injury: his figures wait for his return */}
                       <div className="tm-rmeta">
                         {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
-                        <span className="ellipsis">{p.injury ? injuryName(p.injury.type) : p.pos}</span>
+                        {/* a closer says so in words beside his position: no tag on every starter */}
+                        <span className="ellipsis">{p.injury ? injuryName(p.injury.type) : `${p.pos}${closers.includes(pid) ? ' · closer' : ''}`}</span>
                         {p.contract.twoWay && (
                           <Tag>
                             2W<span className="sr-only"> (two-way)</span>
                           </Tag>
                         )}
-                        {closers.includes(pid) && <Tag>Closer</Tag>}
                         {rot.restB2B.includes(pid) && <BedDouble size={14} className="dim" role="img" aria-label="Rests on back-to-backs" />}
                       </div>
                       {!p.injury && (
@@ -232,8 +217,8 @@ export default function Rotation() {
             })}
           </div>
         </div>
-        <div className="tm-foot">MIN is minutes a game this season, STA stamina. ↑ swaps a player with the one above; tap a row for his target, cap and rest.</div>
-      </Section>
+        <div className="tm-foot">MIN a game this season · STA stamina · tap a row for his target, cap and rest</div>
+      </section>
 
       <Section
         title="Stint plan"
@@ -296,11 +281,30 @@ export default function Rotation() {
   );
 }
 
+/** How the depth chart, the targets and the closers work. */
+function RotationHelp() {
+  return (
+    <Help title="How rotations work">
+      <p>
+        The first five healthy players start. The staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead balls. Fouls,
+        fatigue, injuries and blowouts change it in the game.
+      </p>
+      <p>
+        Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury risk.
+      </p>
+      <p>The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+).</p>
+    </Help>
+  );
+}
+
 /** A depth-chart group's divider, with the columns' names over its rows. */
-function RotationHead({ label }: { label: string }) {
+function RotationHead({ label, help }: { label: string; help?: ReactNode }) {
   return (
     <div className="tm-rhead">
-      <span className="tm-rhead-l">{label}</span>
+      <span className="tm-rhead-l">
+        <h3>{label}</h3>
+        {help}
+      </span>
       <span aria-hidden="true">MIN</span>
       <span aria-hidden="true">STA</span>
       <span aria-hidden="true">Target</span>

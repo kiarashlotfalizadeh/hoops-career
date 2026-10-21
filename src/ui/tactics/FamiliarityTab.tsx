@@ -1,8 +1,8 @@
 // Tactics → Familiarity, Football Manager's familiarity panel: how well the team knows the tactic it
 // plays, overall and at each end; each of its seven parts with a word for it and the games until it's
-// fluid; each player's knowledge of the system (new arrivals stand out) and of his pair of roles; the
-// practice focus that builds it between games; and what it costs on the floor.
-import { useMemo } from 'react';
+// fluid; the practice focus that builds it between games; the players still learning the system or
+// their pair of roles (everyone a tap away); and what it costs on the floor.
+import { useMemo, useState } from 'react';
 import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { Player, PrepFocus } from '../../core/types';
@@ -47,6 +47,12 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
   const order = team.rotation?.order ?? [];
   const roster = [...players].sort((a, b) => (order.indexOf(a.pid) + 1 || 99) - (order.indexOf(b.pid) + 1 || 99));
   const fresh = roster.filter((p) => (byPid.get(p.pid)?.know ?? 100) < 60);
+  // the players still learning (the system or their roles) are the list; the rest are one tap away
+  const learning = roster.filter((p) => {
+    const x = byPid.get(p.pid);
+    return !!x && (x.know < FLUID || x.role < FLUID);
+  });
+  const [allPlayers, setAllPlayers] = useState(false);
   return (
     <>
       <div className="card tx-famtop">
@@ -79,6 +85,52 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
           ) : null}
         </div>
       </div>
+
+      <Section
+        title="Practice focus"
+        right={
+          <Help title="Practice focus">
+            <p>
+              What your days between games are for (<Term id="practice">practice focus</Term>). Training camp is always tactical drills.
+            </p>
+            {(Object.keys(PREP_META) as PrepFocus[]).map((k) => (
+              <p key={k}>
+                <b>{PREP_META[k].label}:</b> {PREP_META[k].help}
+              </p>
+            ))}
+          </Help>
+        }
+      >
+        <div className="card flush list tx-presets tx-prep" role="radiogroup" aria-label="Practice focus">
+          {(Object.keys(PREP_META) as PrepFocus[]).map((k) => {
+            const on = prep === k;
+            return (
+              <div key={k} className={`tx-preset ${on ? 'on' : ''}`}>
+                <button
+                  role="radio"
+                  aria-checked={on}
+                  className="tx-preset-pick"
+                  onClick={() =>
+                    edit((l) => {
+                      const tm = l.teams[l.userTid];
+                      if (k === 'balanced') delete tm.prep;
+                      else tm.prep = k;
+                    })
+                  }
+                >
+                  <span className="tx-radio" aria-hidden="true" />
+                  <span className="grow">
+                    <span className="tx-preset-n">{PREP_META[k].label}</span>
+                    {/* what it does, for the one that's on (each one's in the Help) */}
+                    {on && <span className="tx-preset-t">{PREP_META[k].help}</span>}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+        {!inSeason(league) && <div className="tx-note">No practice between seasons: training camp drills your tactics before opening night, then this focus takes over.</div>}
+      </Section>
 
       <Section
         title="By part"
@@ -124,51 +176,6 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
       </Section>
 
       <Section
-        title="Practice focus"
-        right={
-          <Help title="Practice focus">
-            <p>
-              What your days between games are for (<Term id="practice">practice focus</Term>). Training camp is always tactical drills.
-            </p>
-            {(Object.keys(PREP_META) as PrepFocus[]).map((k) => (
-              <p key={k}>
-                <b>{PREP_META[k].label}:</b> {PREP_META[k].help}
-              </p>
-            ))}
-          </Help>
-        }
-      >
-        <div className="card flush list tx-presets tx-prep" role="radiogroup" aria-label="Practice focus">
-          {(Object.keys(PREP_META) as PrepFocus[]).map((k) => {
-            const on = prep === k;
-            return (
-              <div key={k} className={`tx-preset ${on ? 'on' : ''}`}>
-                <button
-                  role="radio"
-                  aria-checked={on}
-                  className="tx-preset-pick"
-                  onClick={() =>
-                    edit((l) => {
-                      const tm = l.teams[l.userTid];
-                      if (k === 'balanced') delete tm.prep;
-                      else tm.prep = k;
-                    })
-                  }
-                >
-                  <span className="tx-radio" aria-hidden="true" />
-                  <span className="grow">
-                    <span className="tx-preset-n">{PREP_META[k].label}</span>
-                    <span className="tx-preset-t">{PREP_META[k].help}</span>
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-        {!inSeason(league) && <div className="tx-note">No practice between seasons: training camp drills your tactics before opening night, then this focus takes over.</div>}
-      </Section>
-
-      <Section
         title="Your players"
         right={
           <Help title="Your players' familiarity">
@@ -189,7 +196,7 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
             <span>System</span>
             <span>Roles</span>
           </div>
-          {roster.map((p) => {
+          {(allPlayers ? roster : learning).map((p) => {
             const x = byPid.get(p.pid);
             if (!x) return null;
             return (
@@ -213,6 +220,11 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
               </div>
             );
           })}
+          {!allPlayers && learning.length < roster.length && (
+            <button className="tx-famp-all" onClick={() => setAllPlayers(true)}>
+              {learning.length ? `${plural(roster.length - learning.length, 'more')} at full speed` : `All ${roster.length} at full speed`}: show
+            </button>
+          )}
         </div>
       </Section>
 

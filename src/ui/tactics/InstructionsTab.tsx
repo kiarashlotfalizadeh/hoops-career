@@ -1,5 +1,5 @@
 // Tactics → Instructions: every team instruction, by phase of play as Football Manager groups them
-// (in possession, in transition, out of possession, defensive transition). Each phase is a tile with
+// (in possession, in transition, out of possession, defensive transition). Each phase is a pill with
 // how well the team knows that part of the system; under the chosen one, the playbook or identity
 // its settings start from, then its controls, each saying what it costs against what's drilled.
 import type { Player, Tactics } from '../../core/types';
@@ -28,10 +28,7 @@ export function InstructionsTab({ t, players, sys, phase, setPhase }: { t: Tacti
               <span className="tx-phase-n">{p.short}</span>
               <span className="tx-phase-v">
                 <span className={`num ${famTone(v)}`}>{Math.round(v)}%</span>
-                <span className="tx-phase-l">{famLabel(v)}</span>
-              </span>
-              <span className="tx-fambar" aria-hidden="true">
-                <i className={famTone(v)} style={{ width: `${Math.round(v)}%` }} />
+                <span className="sr-only"> {famLabel(v)}</span>
               </span>
             </button>
           );

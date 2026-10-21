@@ -32,3 +32,6 @@
   color: var(--accent-text);
   font-weight: 700;
 }
+.tx-imp-more {
+  align-self: flex-start;
+}

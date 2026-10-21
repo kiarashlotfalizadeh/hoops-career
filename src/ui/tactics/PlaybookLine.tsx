@@ -1,4 +1,4 @@
-// The playbook a tab's settings start from, at the top of Offense and Defense: its name, how many of
+// The playbook a tab's settings start from, at the top of each phase's instructions: how many of
 // its settings you've moved (with Put back), and the key to the dot that marks the playbook's own
 // setting on each control below.
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -23,13 +23,9 @@ export function PlaybookLine({ kind }: { kind: 'off' | 'def' }) {
   const moved = useLeagueMemo(() => tacticsChanges(putBack(t, kind), t).length, [t, kind]);
   return (
     <div className="tx-pbline">
-      <span className="grow">
-        <span className="tx-pbline-n">
-          <span className="over">{kind === 'off' ? 'Playbook' : 'Identity'}</span> {p.name}
-        </span>
-        <span className="tx-note">
-          {moved ? `${plural(moved, 'setting')} moved from it` : 'As it comes'} · <i className="tx-dot" aria-hidden="true" /> its own setting
-        </span>
+      {/* (its name is the hero's headline: here, only how far the settings have moved from it) */}
+      <span className="grow tx-note">
+        {moved ? `${plural(moved, 'setting')} moved from ${p.name}` : `${p.name} as it comes`} · <i className="tx-dot" aria-hidden="true" /> its own setting
       </span>
       {moved > 0 && (
         <button

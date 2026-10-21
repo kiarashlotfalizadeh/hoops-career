@@ -1,17 +1,16 @@
-// The Tactics screen's header, as Football Manager keeps it: your three tactics (A, B and C) as tabs,
-// each with how well the team knows it; a tap switches the active one (what every game plays), an
-// empty one offers a copy of the current tactic or a fresh style, and ⋯ renames, overwrites or
-// clears. Then the mentality: a dial from very cautious to very aggressive, played on top of every
+// The Tactics hero's tactic switch, as Football Manager keeps it: your three tactics (A, B and C) as
+// one row of pills, each with how well the team knows it. A tap opens its sheet: make it the active
+// one (what every game plays), rename it, overwrite or clear it; an empty one offers a copy of the
+// current tactic or a fresh style. Then the mentality: a dial from very cautious to very aggressive, played on top of every
 // setting.
 import { useEffect, useRef, useState } from 'react';
-import { MoreHorizontal, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { League, Mentality, Tactics } from '../../core/types';
 import { SLOT_COUNT, SLOT_LETTERS, activeSlot, clearSlot, copyToSlot, renameSlot, slotName, slotTactics, switchSlot } from '../../core/sim/slots';
 import { MENTALITY_META } from '../../core/sim/tactics';
 import { playbookLabel } from '../../core/sim/playbooks';
-import { famLabel } from '../../core/sim/familiarity';
 import { systemFamiliarity } from '../../core/league/practice';
 import { Help, Levels, Section, Sheet } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -51,45 +50,34 @@ export function SlotBar() {
   const open = menu !== null ? slots[menu] : null;
   return (
     <>
-      <div className="tx-slots" role="tablist" aria-label="Your tactics">
+      {/* the three as one row of pills, each with how well the team knows it; a tap opens its sheet
+          (make it the active one, start, overwrite, rename or clear it) */}
+      <div className="tx-slots" role="group" aria-label="Your tactics">
         {slots.map((s) => {
           const on = s.i === active;
           return (
-            <div key={s.i} className={`tx-slot${on ? ' on' : ''}${s.t ? '' : ' vacant'}`}>
-              <button
-                role="tab"
-                aria-selected={on}
-                className="tx-slot-b"
-                aria-haspopup={s.t ? undefined : 'dialog'}
-                onClick={() => (on ? undefined : s.t ? switchTo(s.i) : setMenu(s.i))}
-              >
-                <span className="tx-slot-top">
-                  <span className="tx-slot-l">{SLOT_LETTERS[s.i]}</span>
-                  <span className="tx-slot-n ellipsis">{s.name}</span>
+            <button
+              key={s.i}
+              className={`tx-slot${on ? ' on' : ''}${s.t ? '' : ' vacant'}`}
+              aria-current={on ? 'true' : undefined}
+              aria-haspopup="dialog"
+              aria-label={`Tactic ${SLOT_LETTERS[s.i]}, ${s.name}${on ? ', active' : ''}${s.t && s.fam !== null ? `, ${Math.round(s.fam)}% familiar` : ', empty: set up'}`}
+              onClick={() => setMenu(s.i)}
+            >
+              <span className="tx-slot-l" aria-hidden="true">
+                {SLOT_LETTERS[s.i]}
+              </span>
+              <span className="tx-slot-n ellipsis" aria-hidden="true">
+                {s.t ? s.name : 'Set up'}
+              </span>
+              {s.t && s.fam !== null ? (
+                <span className={`tx-slot-f num ${famTone(s.fam)}`} aria-hidden="true">
+                  {Math.round(s.fam)}%
                 </span>
-                {s.t && s.fam !== null ? (
-                  <>
-                    {/* (its familiarity: the share of the bar along the tile's foot) */}
-                    <span className="tx-slot-bar" aria-hidden="true">
-                      <i className={famTone(s.fam)} style={{ width: `${Math.round(s.fam)}%` }} />
-                    </span>
-                    <span className="tx-slot-f">
-                      <span className={`num ${famTone(s.fam)}`}>{Math.round(s.fam)}%</span>
-                      <span className="tx-slot-fl">{famLabel(s.fam)}</span>
-                    </span>
-                  </>
-                ) : (
-                  <span className="tx-slot-f dim">
-                    <Plus size={13} aria-hidden="true" /> Set up
-                  </span>
-                )}
-              </button>
-              {s.t && (
-                <button className="iconbtn tx-slot-m" aria-label={`Tactic ${SLOT_LETTERS[s.i]}: more`} aria-haspopup="dialog" onClick={() => setMenu(s.i)}>
-                  <MoreHorizontal size={16} />
-                </button>
+              ) : (
+                <Plus size={14} className="tx-slot-plus" aria-hidden="true" />
               )}
-            </div>
+            </button>
           );
         })}
       </div>

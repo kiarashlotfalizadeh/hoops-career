@@ -220,3 +220,16 @@
   text-align: right;
   color: var(--text-2);
 }
+/* no playbooks yet: the empty line and its button on one row */
+.tx-pb-none {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-min);
+  padding: 8px 12px 8px var(--pad-card);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+.tx-pb-none .btn {
+  flex: none;
+}

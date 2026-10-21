@@ -25,17 +25,13 @@
   column-gap: 10px;
   row-gap: 6px;
 }
-/* a side's team colour: its trim as a rule along the top of its head (a hairline for a player
-   without a team) */
+/* a head: one group per side, no edge stripe (his jersey carries his team's colour) */
 .cmp-head {
-  --cmp-edge: var(--line-3);
   display: flex;
   flex-direction: column;
   gap: 7px;
   min-width: 0;
-  padding: 12px 12px 12px;
-  box-shadow: inset 0 3px 0 var(--cmp-edge);
-  padding-top: 15px;
+  padding: 13px 12px 12px;
 }
 .cmp-head.a {
   grid-column: 1;
@@ -80,17 +76,15 @@
   font-size: 11px;
   line-height: 1;
 }
-/* "vs" between the jerseys, in the serif's italic */
+/* "vs" between the jerseys: the text cut, small and dim */
 .cmp-vs-badge {
   position: absolute;
-  top: 28px;
+  top: 26px;
   left: 50%;
   z-index: 1;
   transform: translateX(-50%);
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 17px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 560;
   line-height: 1;
   color: var(--text-dim);
 }
@@ -107,14 +101,15 @@
   font-weight: 600;
   color: var(--text-2);
 }
-/* the serif, 25px, or smaller until the name's longest run (--run letters) fits the column */
+/* the headline cut, 22px, or smaller until the name's longest run (--run letters) fits the column */
 .cmp-last {
-  font-family: var(--serif);
-  font-size: 22px;
-  font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.5), 25px);
-  font-weight: 560;
-  line-height: 1.02;
-  letter-spacing: -0.015em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 20px;
+  font-size: clamp(14px, 100cqi / (var(--run, 8) * 0.66), 22px);
+  font-weight: 760;
+  line-height: 1.04;
+  letter-spacing: -0.028em;
   /* a long one wraps (at its hyphen if it has one) rather than lose its end */
   overflow-wrap: anywhere;
 }
@@ -177,6 +172,10 @@
 }
 
 /* ------------------------------------------------------------ the sides, in view while scrolling */
+/* (right under the views' tabs, as the tables' head) */
+.cmp-page .seg.tabs + .cmp-strip {
+  margin-top: calc(-1 * var(--gap-page) + 6px);
+}
 .cmp-strip {
   position: sticky;
   /* flush under the top bar and its border, so nothing scrolls by between them */
@@ -193,9 +192,8 @@
   background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  font-family: var(--serif);
-  font-size: 17px;
-  font-weight: 560;
+  font-size: 15px;
+  font-weight: 680;
   letter-spacing: -0.01em;
   text-align: center;
 }
@@ -211,14 +209,17 @@
 /* the name, its team colour as a short rule under it */
 .cmp-side > span {
   display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding-bottom: 3px;
   border-bottom: 2px solid var(--cmp-edge);
-  font-size: clamp(12px, 100cqi / (var(--run, 8) * 0.5), 17px);
+  font-size: clamp(12px, 100cqi / (var(--run, 8) * 0.55), 15px);
 }
 .cmp-vs {
-  font-style: italic;
-  font-size: 14px;
-  font-weight: 450;
+  font-size: 12.5px;
+  font-weight: 560;
   color: var(--text-dim);
 }
 
@@ -356,7 +357,7 @@
     height: 56px;
   }
   .cmp-last {
-    font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.5), 30px);
+    font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.66), 28px);
   }
   .cmp-val {
     font-size: 18px;

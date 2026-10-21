@@ -69,11 +69,11 @@ export default function PlayerView() {
         </button>
         <span className="grow" />
         {league.settings.godMode && (
-          <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setEditing(true)}>
+          <button className="btn sm" aria-haspopup="dialog" onClick={() => setEditing(true)}>
             <Pencil size={15} /> Edit
           </button>
         )}
-        <button className="btn sm ghost" aria-haspopup="dialog" onClick={() => setComparing(true)}>
+        <button className="btn sm" aria-haspopup="dialog" onClick={() => setComparing(true)}>
           <Scale size={15} /> Compare
         </button>
       </div>
@@ -96,7 +96,16 @@ export default function PlayerView() {
         />
       </div>
 
-      {tab === 'overview' && <Overview league={league} p={p} onRole={() => setRoleOpen(true)} onExtend={() => setExtending(true)} onRelease={() => setConfirmRelease(true)} />}
+      {tab === 'overview' && (
+        <Overview
+          league={league}
+          p={p}
+          onRole={() => setRoleOpen(true)}
+          onExtend={() => setExtending(true)}
+          onRelease={() => setConfirmRelease(true)}
+          onRatings={() => setTab('ratings')}
+        />
+      )}
       {tab === 'ratings' && <RatingsTab p={p} league={league} />}
       {tab === 'stats' && <StatsTab p={p} league={league} />}
       {tab === 'log' && <GameLog p={p} league={league} onOpen={(gid) => nav(`/game/${gid}`)} />}

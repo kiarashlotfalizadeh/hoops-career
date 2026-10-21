@@ -98,10 +98,11 @@
   gap: 12px;
 }
 .tm-role-name {
-  font-family: var(--serif);
-  font-weight: 560;
-  font-size: 22px;
-  letter-spacing: -0.012em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 20px;
+  letter-spacing: -0.028em;
   line-height: 1.1;
 }
 
@@ -162,7 +163,7 @@
 }
 .tm-rt-gh {
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--line-3);
+  border-bottom: 1px solid var(--line-2);
   font-size: 13.5px;
   font-weight: 700;
   color: var(--text);

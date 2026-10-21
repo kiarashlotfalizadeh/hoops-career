@@ -3,8 +3,9 @@
 // by the defensive scheme. Each plate is a player with his role at that end, how well he suits it (★)
 // and a dot for how well he knows his role pair; a tap opens his role sheet. Over the court, the
 // formation's picker (the shape, or the scheme and coverage) with each choice's fit for this roster
-// and how well the team knows it; under it, the bench.
+// and how well the team knows it; under it, a row to the bench's roles (on Players).
 import { useMemo, useState, type CSSProperties } from 'react';
+import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { DefScheme, Familiarity, OffShape, Player, PnrCoverage, Tactics } from '../../core/types';
 import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
@@ -15,7 +16,7 @@ import { defRoleFits, fitStars, miscast, roleFits } from '../../core/analysis/sy
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
-import { Avatar, Help, Section, Segmented, Sheet, Tag, activateOnKey } from '../components/ui';
+import { Help, Section, Segmented, Sheet } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
 import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
@@ -60,7 +61,22 @@ const stars = (v: number) => (
   </>
 );
 
-export function Board({ t, players, fam, side, setSide }: { t: Tactics; players: Player[]; fam: Familiarity; side: BoardSide; setSide: (s: BoardSide) => void }) {
+export function Board({
+  t,
+  players,
+  fam,
+  side,
+  setSide,
+  onPlayers,
+}: {
+  t: Tactics;
+  players: Player[];
+  fam: Familiarity;
+  side: BoardSide;
+  setSide: (s: BoardSide) => void;
+  /** Opens Players, where the bench's roles are set. */
+  onPlayers?: () => void;
+}) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   const nameOf = useMemo(() => rosterNames(players), [players]);
@@ -71,6 +87,11 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
   const five = inOrder.slice(0, 5);
   const bench = inOrder.slice(5);
   const rows = five.map((p) => rowOf(t, fam, p));
+  // bench players another role suits clearly better (at this end), for the row to Players
+  const miscastBench = bench.filter((p) => {
+    const r = rowOf(t, fam, p);
+    return side === 'in' ? r.offBetter : r.defBetter;
+  }).length;
   const inPoss = side === 'in';
   const shape = shapeOf(t.offense);
   const spots = inPoss ? OFF_SPOTS[shape] : DEF_SPOTS[t.defense.scheme];
@@ -109,7 +130,7 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
             ★ is how well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he
             knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
           </p>
-          <p>Tap a player to change his roles, shot freedom and glass duty.</p>
+          <p>Tap a player to change his roles, shot freedom and glass duty. The bench&apos;s roles are on Players.</p>
         </Help>
       }
     >
@@ -198,9 +219,6 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
           <circle cx="50" cy="27" r="9" className="tx-floor-line" fill="none" />
           <circle cx="50" cy="5" r="1.6" className="tx-floor-rim" fill="none" />
         </svg>
-        <span className="tx-board-tag" aria-hidden="true">
-          {inPoss ? SHAPE_META[shape].label : `${SCHEME_META[t.defense.scheme].label} · ${COVERAGE_META[t.defense.pnr].label}`}
-        </span>
         {rows.map((r) => {
           const spot = placed.get(r.p.pid);
           if (!spot) return null;
@@ -231,54 +249,15 @@ export function Board({ t, players, fam, side, setSide }: { t: Tactics; players:
           );
         })}
       </div>
-      <div className="tx-legend tx-note">
-        <span>
-          <span className="tx-floor-s">★</span> suits his role
-        </span>
-        <span>
-          <i className="tx-famdot good" /> <i className="tx-famdot warn" /> <i className="tx-famdot bad" /> knows his roles
-        </span>
-        <span>
-          <i className="tx-legend-off" /> suits another role better
-        </span>
-      </div>
-
-      {bench.length > 0 && (
-        <div className="card flush list wide2 tx-bench" aria-label="The bench">
-          <div className="list-divider list-h" aria-hidden="true">
-            <span>Bench</span>
-            <span>{inPoss ? 'In possession' : 'Out of possession'}</span>
-          </div>
-          {bench.map((p) => {
-            const r = rowOf(t, fam, p);
-            const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].label;
-            const fit = inPoss ? r.offFit : r.defFit;
-            return (
-              <div
-                key={p.pid}
-                className="listrow clickable tx-benchrow"
-                role="button"
-                tabIndex={0}
-                aria-haspopup="dialog"
-                onClick={() => setPick(p.pid)}
-                onKeyDown={activateOnKey(() => setPick(p.pid))}
-              >
-                <Avatar p={p} />
-                <span className="grow">
-                  <span className="lr-name ellipsis">{nameOf(p.pid)}</span>
-                  <span className="lr-meta tx-rolemeta">
-                    <span className="ellipsis">{role}</span>
-                    <span className="tx-floor-s" aria-label={`${fitStars(fit)} of 5`}>
-                      {stars(fit)}
-                    </span>
-                    {p.injury && <Tag tone="bad">Out</Tag>}
-                  </span>
-                </span>
-                <i className={`tx-famdot ${famTone(r.pair)}`} aria-label={`Knows his roles ${Math.round(r.pair)}%`} />
-              </div>
-            );
-          })}
-        </div>
+      {/* the bench's roles at both ends are on Players, with everyone's: one row here, not the list twice */}
+      {bench.length > 0 && onPlayers && (
+        <button className="card tx-benchlink" onClick={onPlayers}>
+          <span className="grow">
+            <span className="tx-benchlink-n">The bench</span>
+            <span className="tx-benchlink-m">{miscastBench ? `${miscastBench} would suit another role better` : `${bench.length} players: their roles are on Players`}</span>
+          </span>
+          <ChevronRight size={18} className="dim" aria-hidden="true" />
+        </button>
       )}
 
       <Sheet open={!!picked} onClose={() => setPick(null)} title={picked ? `${picked.firstName} ${picked.lastName}` : 'Player'}>

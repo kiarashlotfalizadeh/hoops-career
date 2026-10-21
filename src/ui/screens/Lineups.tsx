@@ -1,6 +1,6 @@
 // Team → Lineups: your five-man units this season (the old "Lineups this season" card, now the
 // tab's first view), the trios and pairs inside them and each player's on/off split, this season
-// or last, sorted and filtered; a five can become the starters or the closers.
+// or last, sorted and filtered (in one sheet); a five can become the starters or the closers.
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, SlidersHorizontal } from 'lucide-react';
@@ -11,7 +11,7 @@ import { sortByPosition } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import type { Player } from '../../core/types';
 import { plural } from '../../core/format';
-import { Avatar, Chips, Empty, Help, More, Ovr, Section, Segmented, Sheet, Statline, Tag, activateOnKey } from '../components/ui';
+import { Avatar, Chips, Empty, Help, More, Ovr, Section, Sheet, Statline, Tag, activateOnKey } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { f1, rosterNames, signed, startingFive } from '../stats';
 import '../league/league.css';
@@ -24,7 +24,8 @@ type Sort = 'min' | 'net' | 'ortg' | 'drtg';
 const MIN_UNIT = [0, 10, 25, 50, 100];
 const MIN_PLAYER = [0, 100, 250, 500, 1000];
 
-const PAGE = 30;
+/** The first rows a view shows: the rest a tap away. */
+const PAGE = 15;
 
 const lowUnit = (u: LineupAgg) => u.poss < LOW_SAMPLE_POSS;
 const lowSplit = (r: OnOff) => Math.min(r.on.poss, r.off.poss) < LOW_SAMPLE_POSS;
@@ -107,8 +108,11 @@ export default function Lineups() {
     season !== league.season ? 'Last season' : 'This season',
     minMin ? `${minMin}+ min` : 'any minutes',
     ...(only !== null ? [view === 'onoff' ? fullName(only) : `with ${fullName(only)}`] : []),
+    `by ${sortLabel(sort)}`,
   ].join(' · ');
-  const sortLabel = (id: Sort) => (id === 'net' && view === 'onoff' ? 'On-off' : SORT_LABEL[id]);
+  function sortLabel(id: Sort) {
+    return id === 'net' && view === 'onoff' ? 'On-off' : SORT_LABEL[id];
+  }
   const reset = () => {
     setOnly(null);
     setLimit(PAGE);
@@ -116,20 +120,23 @@ export default function Lineups() {
 
   return (
     <>
-      <Segmented
-        value={view}
-        onChange={(v) => {
-          setView(v);
-          reset();
-        }}
-        label="Lineup view"
-        options={[
-          { id: '5', label: '5-man' },
-          { id: '3', label: '3-man' },
-          { id: '2', label: '2-man' },
-          { id: 'onoff', label: 'On-off' },
-        ]}
-      />
+      {/* the four views as one light row of chips under the page's tabs */}
+      <div className="tm-views">
+        <Chips
+          value={view}
+          onChange={(v) => {
+            setView(v);
+            reset();
+          }}
+          label="Lineup view"
+          options={[
+            { id: '5', label: '5-man' },
+            { id: '3', label: '3-man' },
+            { id: '2', label: '2-man' },
+            { id: 'onoff', label: 'On-off' },
+          ]}
+        />
+      </div>
 
       <Section
         title={
@@ -164,13 +171,8 @@ export default function Lineups() {
           )
         }
       >
-        {(any || hasLast) && (
-          // what the list shows, and its sort a tap away
-          <div className="tm-lu-bar">
-            <span className="tm-scope">{scope}</span>
-            <Chips label="Sort by" value={sort} onChange={setSort} options={(['min', 'net', 'ortg', 'drtg'] as Sort[]).map((id) => ({ id, label: sortLabel(id) }))} />
-          </div>
-        )}
+        {/* what the list shows and how it's sorted, in a line: both are set in the filters */}
+        {(any || hasLast) && <div className="tm-scope">{scope}</div>}
         {!any ? (
           <div className="card">
             <Empty>
@@ -196,11 +198,11 @@ export default function Lineups() {
                         {p && <Avatar p={p} />}
                         <div className="grow">
                           <div className="tm-lu-who ellipsis">{fullName(r.pid)}</div>
+                          {/* one line: his minutes and the net on and off, or the ratings when they're the sort */}
                           <div className="lr-meta num">
-                            {Math.round(r.min)} min · on {signed(r.on.net)} · off {signed(r.off.net)}
-                          </div>
-                          <div className="lr-meta num">
-                            ORtg {f1(r.on.ortg)} ({signed(r.on.ortg - r.off.ortg)}) · DRtg {f1(r.on.drtg)} ({signed(r.on.drtg - r.off.drtg)})
+                            {sort === 'ortg' || sort === 'drtg'
+                              ? `ORtg ${f1(r.on.ortg)} (${signed(r.on.ortg - r.off.ortg)}) · DRtg ${f1(r.on.drtg)} (${signed(r.on.drtg - r.off.drtg)})`
+                              : `${Math.round(r.min)} min · on ${signed(r.on.net)} · off ${signed(r.off.net)}`}
                           </div>
                         </div>
                         <Net v={r.diff} k="On-off" />
@@ -239,7 +241,7 @@ export default function Lineups() {
             </div>
             {rows > limit && (
               <div className="tm-lu-more">
-                <button className="btn sm block ghost" onClick={() => setLimit((n) => n + PAGE * 3)}>
+                <button className="btn sm block" onClick={() => setLimit((n) => n + PAGE * 3)}>
                   Show {Math.min(rows - limit, PAGE * 3)} more
                 </button>
               </div>
@@ -251,6 +253,10 @@ export default function Lineups() {
 
       <Sheet open={filtering} onClose={() => setFiltering(false)} title="Filters">
         <div className="col tm-fsheet">
+          <div className="tm-fgroup">
+            <div className="over">Sort by</div>
+            <Chips label="Sort by" value={sort} onChange={setSort} options={(['min', 'net', 'ortg', 'drtg'] as Sort[]).map((id) => ({ id, label: sortLabel(id) }))} />
+          </div>
           <div className="tm-fgroup">
             <div className="over">Minimum minutes</div>
             <Chips label="Minimum minutes" value={minIx} onChange={setMinIx} options={thresholds.map((m, i) => ({ id: i, label: m ? `${m}+` : 'All' }))} />
