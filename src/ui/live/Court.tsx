@@ -256,10 +256,9 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       // the net under the rim, swaying on a make
       drawNet(ctx, k, !calm && fx?.kind === 'make' ? fx.p : 0);
       if (fx && !calm) drawRim(ctx, k, fx.kind, fx.p);
-      // defense first (under), then offense; the ball handler in a pool of his team's light, a hot shooter in a heat ring
+      // defense first (under), then offense; a hot shooter in a ring of the warning colour
       const hold = u >= 0.5 ? b.hold : a.hold;
       const hotSet = props.current.hot;
-      const glow = calm ? 0 : 0.5 + 0.5 * Math.sin(s.t / 160);
       // each player along a smooth path through the frames (see tangentsOf); reduced motion: from spot to spot
       const bi = Math.min(i, sc.frames.length - 1);
       const tan = tangentsOf(sc);
@@ -267,10 +266,8 @@ export function Court({ script, speed, paused, colors, jersey, onDone, onTick, o
       const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 || calm ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, lu, b.dur));
       const dAt = sc.dPids.map((_, j) => path(a.d[j], b.d[j], nO + j));
       const oAt = sc.oPids.map((_, j) => path(a.o[j], b.o[j], j));
-      sc.dPids.forEach((pid, j) =>
-        drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false, { holder: hold === sc.oPids.length + j, hot: !!hotSet?.has(pid), glow }),
-      );
-      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true, { holder: hold === j, hot: !!hotSet?.has(pid), glow }));
+      sc.dPids.forEach((pid, j) => drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false, !!hotSet?.has(pid)));
+      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true, !!hotSet?.has(pid)));
       // the ball handler's name, under him (whoever has it at the end of this move, once he does)
       const nm = props.current.names;
       if (nm && hold !== undefined && hold >= 0) {
@@ -317,20 +314,18 @@ const grain = (n: number) => {
   return x - Math.floor(x);
 };
 
-/** The colours a floor is painted in: the wood (top, bottom), the paint and apron, the pinstripe, and the lines. */
+/** The colours a floor is painted in: the wood, the paint and apron, the pinstripe, and the lines. */
 function palette(floor: CourtFloor | undefined) {
-  if (floor?.kind !== 'home') return { wood: ['#a8774a', '#8a5d36'], paint: '#2b2823', apron: '#171512', trim: '#c9a24a', mark: null };
+  if (floor?.kind !== 'home') return { wood: '#98693f', paint: '#26272b', apron: '#151619', trim: '#c9a24a', mark: null };
   const look = teamLook(floor.colors);
   // a darker stain under the team's colours, so the paint and the jerseys stand out from the wood
-  return { wood: ['#7e5232', '#5f3c22'], paint: look.slab, apron: look.slab, trim: look.trim, mark: floor };
+  return { wood: '#6f4729', paint: look.slab, apron: look.slab, trim: look.trim, mark: floor };
 }
 
 function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: number, floor: CourtFloor | undefined) {
   const pal = palette(floor);
-  const g = ctx.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, pal.wood[0]);
-  g.addColorStop(1, pal.wood[1]);
-  ctx.fillStyle = g;
+  // the wood, flat (TV graphics: no lighting, no gloss), its planks a shade apart
+  ctx.fillStyle = pal.wood;
   ctx.fillRect(0, 0, w, h);
   // planks along the court's length, each a shade apart, with their joints staggered
   const plank = k * 1.9;
@@ -448,21 +443,6 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
   ctx.beginPath();
   ctx.arc(X(0), Y(by), 0.75 * k, 0, Math.PI * 2);
   ctx.stroke();
-  // the floor's gloss: a band of the arena's lights across the wood
-  const gloss = ctx.createLinearGradient(0, h * 0.2, w, h * 0.75);
-  gloss.addColorStop(0, 'rgba(255,255,255,0)');
-  gloss.addColorStop(0.45, 'rgba(255,248,235,0.07)');
-  gloss.addColorStop(0.55, 'rgba(255,248,235,0.07)');
-  gloss.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gloss;
-  ctx.fillRect(0, Y(0), w, h - Y(0));
-  // arena light: brighter under the basket, falling off toward the corners
-  const v = ctx.createRadialGradient(X(0), Y(12), h * 0.15, X(0), Y(16), h * 0.95);
-  v.addColorStop(0, 'rgba(255,240,220,0.05)');
-  v.addColorStop(0.55, 'rgba(0,0,0,0)');
-  v.addColorStop(1, 'rgba(0,0,0,0.4)');
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, w, h);
 }
 
 /** The team's mark as TeamLogo draws it (its shape in its colours, the abbreviation inside), `size` across. */
@@ -532,40 +512,19 @@ function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fill();
 }
 
-function drawPlayer(
-  ctx: CanvasRenderingContext2D,
-  k: number,
-  p: Pt,
-  colors: [string, string],
-  num: string,
-  offense: boolean,
-  mark: { holder: boolean; hot: boolean; glow: number } = { holder: false, hot: false, glow: 0 },
-) {
+function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [string, string], num: string, offense: boolean, hot = false) {
   const x = (p.x + W_FT / 2) * k;
   const y = p.y * k;
   const r = 1.45 * k;
-  // the ball handler stands in a pool of his team's light
-  if (mark.holder) {
-    const g = ctx.createRadialGradient(x, y, r * 0.8, x, y, r * 2.6);
-    g.addColorStop(0, hexA(colors[0], 0.32));
-    g.addColorStop(1, hexA(colors[0], 0));
-    ctx.fillStyle = g;
+  // a hot shooter wears a steady ring in the warning colour (the scorebug's run and the feed's flame are its words)
+  if (hot) {
+    ctx.strokeStyle = '#f5c451';
+    ctx.lineWidth = Math.max(2, k * 0.26);
     ctx.beginPath();
-    ctx.arc(x, y, r * 2.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = 'rgba(0,0,0,0.42)';
-  ctx.beginPath();
-  ctx.ellipse(x + 2, y + 3, r, r * 0.8, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // a hot shooter wears a flickering heat ring
-  if (mark.hot) {
-    ctx.strokeStyle = `rgba(255,${Math.round(120 + 60 * mark.glow)},40,${0.55 + 0.35 * mark.glow})`;
-    ctx.lineWidth = Math.max(2, k * 0.32);
-    ctx.beginPath();
-    ctx.arc(x, y, r + Math.max(3, k * 0.5) + mark.glow * 1.5, 0, Math.PI * 2);
+    ctx.arc(x, y, r + Math.max(3.5, k * 0.55), 0, Math.PI * 2);
     ctx.stroke();
   }
+  // the jersey, flat in its colours
   ctx.fillStyle = colors[0];
   ctx.strokeStyle = colors[1];
   ctx.lineWidth = Math.max(2, k * 0.28);
@@ -573,15 +532,6 @@ function drawPlayer(
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  // a sheen on the jersey, lit from above
-  const sheen = ctx.createRadialGradient(x - r * 0.35, y - r * 0.45, r * 0.1, x, y, r);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.32)');
-  sheen.addColorStop(0.55, 'rgba(255,255,255,0.04)');
-  sheen.addColorStop(1, 'rgba(0,0,0,0.18)');
-  ctx.fillStyle = sheen;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
   // a dark hairline around the trim: a dark jersey still reads on the stained wood
   ctx.strokeStyle = 'rgba(0,0,0,0.55)';
   ctx.lineWidth = 1;
@@ -602,20 +552,9 @@ function drawPlayer(
   ctx.fillText(num, x, y + 0.5);
 }
 
-/** A colour as rgba at `a` (#rgb, #rrggbb, or any other colour left as it is). */
-function hexA(c: string, a: number): string {
-  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c.trim());
-  if (!m) return c;
-  const h = m[1].length === 3 ? m[1].replace(/./g, (x) => x + x) : m[1];
-  return `rgba(${parseInt(h.slice(0, 2), 16)},${parseInt(h.slice(2, 4), 16)},${parseInt(h.slice(4, 6), 16)},${a})`;
-}
-
 /** The ball: orange with its seams, turned by `spin`. */
 function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, spin: number) {
-  const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.15, x, y, r);
-  g.addColorStop(0, '#ffb066');
-  g.addColorStop(1, '#e8701a');
-  ctx.fillStyle = g;
+  ctx.fillStyle = '#f07a22';
   ctx.strokeStyle = '#3d1c00';
   ctx.lineWidth = 1;
   ctx.beginPath();

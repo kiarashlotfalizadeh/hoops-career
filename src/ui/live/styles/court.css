@@ -30,7 +30,6 @@
   height: 8px;
   border-radius: 2px;
   background: var(--cap-c, rgba(255, 255, 255, 0.5));
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 /* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
 .lv-cap-t {
@@ -60,9 +59,8 @@
   padding: 3px 9px 3px;
   border-radius: var(--radius-xs) var(--radius-xs) 0 0;
   background: var(--l3-c, var(--surface-3));
-  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.25);
   font-size: 11.5px;
-  font-weight: 680;
+  font-weight: 640;
   line-height: 1.25;
 }
 .live-l3-text {
@@ -71,7 +69,7 @@
   border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
   background: var(--lv-plate-hi);
   font-size: 14.5px;
-  font-weight: 640;
+  font-weight: 620;
   line-height: 1.25;
 }
 @keyframes l3-in {
@@ -87,7 +85,7 @@
   }
 }
 
-/* the one banner: an ink plate with a hairline, its tone in the icon and the kicker word */
+/* the one banner: a flat plate, its tone in the icon and the kicker word */
 .lv-banner {
   --tone: var(--text);
   pointer-events: auto;
@@ -97,9 +95,7 @@
   gap: 9px;
   padding: 10px 4px 10px 12px;
   border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.14);
   background: var(--lv-plate-hi);
-  box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.7);
   animation: lv-up var(--dur) var(--ease-out);
 }
 .lv-banner.tone-bad {
@@ -121,7 +117,7 @@
 }
 .lv-banner-t {
   font-size: 14.5px;
-  font-weight: 650;
+  font-weight: 620;
   line-height: 1.3;
 }
 .lv-banner-k {
@@ -210,8 +206,7 @@
   display: grid;
   place-items: center;
   color: #fff;
-  background: var(--lv-plate);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--lv-plate-hi);
   transition: transform var(--dur-fast) ease;
 }
 .lv-pb-btn.big {
@@ -233,10 +228,9 @@
   align-items: center;
   gap: 5px;
   color: #fff;
-  background: var(--lv-plate);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: var(--lv-plate-hi);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 620;
 }
 .lv-pb-chip.num {
   min-width: 46px;
@@ -252,9 +246,8 @@
   inset: -5px -2px;
 }
 .lv-pb-chip.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--on);
+  color: var(--on-ink);
 }
 
 /* ------------------------------------------------------------------ the starting lineups, before the tip */
@@ -280,39 +273,43 @@
   min-width: 0;
   max-width: 100%;
 }
-/* the night's billing: a serif headline, as the paper would run it */
+/* the night's billing: the headline cut, as the broadcast opens */
 .live-intro .gd-intro-bill {
-  max-width: 22ch;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: clamp(22px, 6.4vw, 30px);
-  line-height: 1.08;
-  letter-spacing: -0.015em;
+  max-width: 20ch;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-style: normal;
+  font-weight: 760;
+  font-size: clamp(21px, 6vw, 28px);
+  line-height: 1.05;
+  letter-spacing: -0.028em;
   text-transform: none;
   text-wrap: balance;
 }
 .live-intro .gd-intro-line {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.76);
+  margin-top: 2px;
+  font-size: 13.5px;
+  font-style: normal;
+  color: rgba(255, 255, 255, 0.78);
 }
 /* "Starting lineups": the kicker over the fives, a headline only when there's no billing */
 .lv-li-kicker {
-  font-family: var(--serif);
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 24px;
   line-height: 1.1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.028em;
 }
 .gd-intro-bill ~ .lv-li-kicker,
 .gd-intro-line ~ .lv-li-kicker {
-  margin-top: 8px;
+  margin-top: 10px;
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 560;
   letter-spacing: 0;
-  color: rgba(255, 255, 255, 0.76);
+  color: rgba(255, 255, 255, 0.72);
 }
 .lv-li-where {
   font-size: 12px;
@@ -334,12 +331,15 @@
 /* each five under its team's colour: a flat block, its trim along the foot */
 .lv-li-team {
   margin-bottom: 3px;
-  padding: 4px 10px 5px;
+  padding: 5px 10px 6px;
   border-radius: var(--radius-xs);
   background: var(--lb-c);
   box-shadow: inset 0 -2px 0 var(--lb-t);
+  font-family: var(--head);
+  font-stretch: var(--head-w);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 760;
+  letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -383,14 +383,14 @@
 }
 .lv-li-name {
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 620;
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
 .lv-li-pos {
   font-size: 11px;
-  font-weight: 560;
-  color: rgba(255, 255, 255, 0.66);
+  font-weight: 520;
+  color: rgba(255, 255, 255, 0.7);
 }
 .lv-li-line {
   font-size: 11px;

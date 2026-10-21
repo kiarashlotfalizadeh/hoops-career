@@ -12,7 +12,8 @@ import { BoxScore } from '../components/BoxScore';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
 
-type Tab = 'players' | 'team' | 'shots' | 'flow';
+/** The Stats view's sections (the play-by-play is the console's own, beside them). */
+export type BoxTab = 'players' | 'team' | 'shots' | 'flow';
 
 /**
  * The console's Stats view, the game as the court has drawn it: each team's players (the box score
@@ -20,6 +21,7 @@ type Tab = 'players' | 'team' | 'shots' | 'flow';
  * and player) and the flow: your chance to win so far (`wp`, when it's on) and the score margin.
  */
 export function BoxPanel({
+  tab,
   view,
   flow,
   flowPeriods,
@@ -30,6 +32,8 @@ export function BoxPanel({
   flowColors,
   wp,
 }: {
+  /** The section shown (its tabs are the Stats view's, one row with the play-by-play). */
+  tab: BoxTab;
   view: Drawn;
   /** The sim's score margin per possession and period starts (read up to the drawn length). */
   flow: number[];
@@ -44,7 +48,6 @@ export function BoxPanel({
   /** Win probability's starting point (the projected home margin) and the game's type; absent when it's switched off. */
   wp?: { edge: number; type: GameType };
 }) {
-  const [tab, setTab] = useState<Tab>('players');
   const [team, setTeam] = useState<0 | 1>(side);
   const [period, setPeriod] = useState(0);
   const [shooter, setShooter] = useState<number | null>(null);
@@ -59,18 +62,6 @@ export function BoxPanel({
   const periods = Math.max(1, Math.min(view.q, flowPeriods.length));
   return (
     <div className="lv-bx">
-      <Segmented
-        tabs
-        value={tab}
-        onChange={setTab}
-        label="Box score sections"
-        options={[
-          { id: 'players', label: 'Players' },
-          { id: 'team', label: 'Team' },
-          { id: 'shots', label: 'Shots' },
-          { id: 'flow', label: 'Flow' },
-        ]}
-      />
       {tab === 'players' && (
         <>
           <Segmented
@@ -106,9 +97,7 @@ export function BoxPanel({
       )}
       {tab === 'team' && (
         <>
-          <div className="card flush">
-            <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
-          </div>
+          <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
           <Card
             title="Team comparison"
             right={
@@ -219,8 +208,11 @@ function ShotsTab({
           { id: '0', label: abbrevs[0] },
         ]}
       />
-      <Chips label="Period" value={period} onChange={setPeriod} options={[{ id: 0, label: 'All' }, ...periods]} />
       <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${madeAtt(made, shots.length)} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
+        {/* (the period narrows the chart: a filter on the card, not another row of controls over it) */}
+        <div className="lv-sh-q">
+          <Chips label="Period" value={period} onChange={setPeriod} options={[{ id: 0, label: 'All' }, ...periods]} />
+        </div>
         {all.length === 0 ? (
           <div className="small dim">No shots yet{period ? ` in ${periodLabel(period)}` : ''}.</div>
         ) : (

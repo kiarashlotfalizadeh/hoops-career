@@ -1,19 +1,20 @@
 // The live game's Game plan: the touchline first (your three tactics with the team's familiarity
-// with each, and the mentality), then the battle as it stands, each number next to the lever that moves it.
-// Their play types tonight against the league's, each with the setting that defends it (the
-// ball-screen coverage beside their pick-and-roll, help beside their spot-ups, transition defense
-// beside their run-outs); their scorers and who's been on each, a tap from their sheet; the
-// defenders of theirs you're scoring on, with Attack; your own play types with the action behind
-// each; then the team-wide levers, and every setting one tap down. Every change goes through the live
+// with each, and the mentality) and tonight's plan, then the battle one end at a time behind one
+// switch, each number next to the lever that moves it. Defense: their play types tonight against the
+// league's, each with the setting that defends it (the ball-screen coverage beside their
+// pick-and-roll, help beside their spot-ups, transition defense beside their run-outs), and their
+// scorers with who's been on each, a tap from their sheet. Offense: your own play types with the
+// action behind each, and the defenders of theirs you're scoring on, with Attack. Team: the
+// team-wide levers. Every setting is one tap down at the foot. Every change goes through the live
 // game, so its journal keeps it and the bench measures it from here.
-import { useMemo, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronRight, RotateCcw, SlidersHorizontal, Target } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, Tactics } from '../../core/types';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META } from '../../core/sim/tactics';
 import { zScore } from '../../core/analysis/playTypes';
 import { madeAtt } from '../../core/format';
-import { Section, Tag } from '../components/ui';
+import { Section, Segmented, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
 import { matchups, sumBy } from './staff';
@@ -211,6 +212,8 @@ export function PlanView({
   // the defenders of theirs you're scoring on
   const theirD = [...sumBy(ourRows, 'def')].filter(([, v]) => v.trips >= 4).sort((a, b) => b[1].pts / b[1].trips - a[1].pts / a[1].trips);
   const hunt = t.offense.huntTarget ?? null;
+  // the battle one end at a time, then the team-wide levers: one view under the touchline
+  const [end, setEnd] = useState<'def' | 'off' | 'team'>('def');
 
   return (
     <div className="lv-plan">
@@ -240,102 +243,119 @@ export function PlanView({
         </div>
       )}
 
-      <Section title={`${abbrevs.them} on offense`}>
-        <div className="card flush list">
-          {!theirs.length && <div className="lv-pr-empty small dim">Their play types show here as the game goes.</div>}
-          {theirs.map(([k, v]) => {
-            const lever = THEIR_LEVER[k as FinishType];
-            const pnr = k === 'pnrBH' || k === 'pnrRoll';
-            return (
-              <PlayRow key={k} k={k} v={v} base={baselines[k]} mine={false}>
-                {pnr && man && (
-                  <div className="lv-lev" role="group" aria-label="Pick-and-roll coverage">
-                    {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((c) => (
-                      <button
-                        key={c}
-                        className={`chip sm ${t.defense.pnr === c ? 'on' : ''}`}
-                        aria-pressed={t.defense.pnr === c}
-                        onClick={() => apply((x) => void (x.defense.pnr = c))}
-                      >
-                        {COVERAGE_META[c].label}
-                        {famSuffix(famOf(OPT.pnr(c)))}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {pnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens: man-to-man brings the coverages back.</div>}
-                {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
-              </PlayRow>
-            );
-          })}
-        </div>
-      </Section>
+      <Segmented
+        value={end}
+        onChange={setEnd}
+        label="Game plan"
+        options={[
+          { id: 'def', label: 'Defense' },
+          { id: 'off', label: 'Offense' },
+          { id: 'team', label: 'Team' },
+        ]}
+      />
 
-      <Section title="Their scorers">
-        <div className="card flush list">
-          {scorers.map((p) => {
-            const on = theirRows.filter((r) => r.off === p.pid).sort((a, b) => b.trips - a.trips)[0];
-            const target = t.defense.starPlan !== 'none' && t.defense.starTarget === p.pid;
-            const how = t.defense.playerD?.[p.pid];
-            return (
-              <button key={p.pid} className="lv-sc-row" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
-                <span className="lv-sc-pts num">{p.pts}</span>
-                <span className="grow lv-sc-t">
-                  <span className="lv-sc-n">
-                    {nameOf(p.pid)}
-                    {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
-                  </span>
-                  <span className="tiny dim2">
-                    {madeAtt(p.fgm, p.fga)}
-                    {on ? ` · ${nameOf(on.def)} on him: ${on.pts} on ${on.trips} trips` : ''}
-                  </span>
-                </span>
-                {target && <Tag tone="info">{t.defense.starPlan === 'double' ? 'Doubled' : 'Denied'}</Tag>}
-                {how && !target && <Tag>{how === 'under' ? 'Under' : how === 'tight' ? 'Top-lock' : how === 'sag' ? 'Sag' : 'Physical'}</Tag>}
-                <ChevronRight size={16} className="dim" aria-hidden="true" />
-              </button>
-            );
-          })}
-        </div>
-      </Section>
+      {end === 'def' && (
+        <Section title={`${abbrevs.them} on offense`}>
+          <div className="card flush list">
+            {!theirs.length && <div className="lv-pr-empty small dim">Their play types show here as the game goes.</div>}
+            {theirs.map(([k, v]) => {
+              const lever = THEIR_LEVER[k as FinishType];
+              const pnr = k === 'pnrBH' || k === 'pnrRoll';
+              return (
+                <PlayRow key={k} k={k} v={v} base={baselines[k]} mine={false}>
+                  {pnr && man && (
+                    <div className="lv-lev" role="group" aria-label="Pick-and-roll coverage">
+                      {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((c) => (
+                        <button
+                          key={c}
+                          className={`chip sm ${t.defense.pnr === c ? 'on' : ''}`}
+                          aria-pressed={t.defense.pnr === c}
+                          onClick={() => apply((x) => void (x.defense.pnr = c))}
+                        >
+                          {COVERAGE_META[c].label}
+                          {famSuffix(famOf(OPT.pnr(c)))}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {pnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens: man-to-man brings the coverages back.</div>}
+                  {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
+                </PlayRow>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
-      <Section title={`${abbrevs.us} on offense`}>
-        <div className="card flush list">
-          {!ours.length && <div className="lv-pr-empty small dim">Your play types show here as the game goes.</div>}
-          {ours.map(([k, v]) => {
-            const lever = OUR_LEVER[k as FinishType];
-            return (
-              <PlayRow key={k} k={k} v={v} base={baselines[k]} mine>
-                {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
-              </PlayRow>
-            );
-          })}
-          {theirD.slice(0, 2).map(([pid, v]) => (
-            <div key={pid} className="lv-pr">
-              <div className="lv-pr-top">
-                <Target size={14} className="dim" aria-hidden="true" />
-                <span className="grow lv-pr-n">
-                  Scoring on {nameOf(pid)}
-                  {!them.on.includes(pid) && <span className="tiny dim"> · bench</span>}
-                </span>
-                <span className="lv-pr-trips tiny dim num">{v.trips} trips</span>
-                <span className={`lv-pr-ppp num ${v.pts / v.trips >= 1.25 ? 'good' : ''}`}>{(v.pts / v.trips).toFixed(2)}</span>
-              </div>
-              <div className="lv-lev">
-                <button
-                  className={`chip sm ${hunt === pid ? 'on' : ''}`}
-                  aria-pressed={hunt === pid}
-                  onClick={() => apply((x) => void (x.offense.huntTarget = hunt === pid ? null : pid))}
-                >
-                  {hunt === pid ? `Attacking ${nameOf(pid)}` : `Attack ${nameOf(pid)}`}
+      {end === 'def' && (
+        <Section title="Their scorers">
+          <div className="card flush list">
+            {scorers.map((p) => {
+              const on = theirRows.filter((r) => r.off === p.pid).sort((a, b) => b.trips - a.trips)[0];
+              const target = t.defense.starPlan !== 'none' && t.defense.starTarget === p.pid;
+              const how = t.defense.playerD?.[p.pid];
+              return (
+                <button key={p.pid} className="lv-sc-row" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
+                  <span className="lv-sc-pts num">{p.pts}</span>
+                  <span className="grow lv-sc-t">
+                    <span className="lv-sc-n">
+                      {nameOf(p.pid)}
+                      {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
+                    </span>
+                    <span className="tiny dim2">
+                      {madeAtt(p.fgm, p.fga)}
+                      {on ? ` · ${nameOf(on.def)} on him: ${on.pts} on ${on.trips} trips` : ''}
+                    </span>
+                  </span>
+                  {target && <Tag tone="info">{t.defense.starPlan === 'double' ? 'Doubled' : 'Denied'}</Tag>}
+                  {how && !target && <Tag>{how === 'under' ? 'Under' : how === 'tight' ? 'Top-lock' : how === 'sag' ? 'Sag' : 'Physical'}</Tag>}
+                  <ChevronRight size={16} className="dim" aria-hidden="true" />
                 </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Section>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
-      <Section title="Team">
+      {end === 'off' && (
+        <Section title={`${abbrevs.us} on offense`}>
+          <div className="card flush list">
+            {!ours.length && <div className="lv-pr-empty small dim">Your play types show here as the game goes.</div>}
+            {ours.map(([k, v]) => {
+              const lever = OUR_LEVER[k as FinishType];
+              return (
+                <PlayRow key={k} k={k} v={v} base={baselines[k]} mine>
+                  {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
+                </PlayRow>
+              );
+            })}
+            {theirD.slice(0, 2).map(([pid, v]) => (
+              <div key={pid} className="lv-pr">
+                <div className="lv-pr-top">
+                  <Target size={14} className="dim" aria-hidden="true" />
+                  <span className="grow lv-pr-n">
+                    Scoring on {nameOf(pid)}
+                    {!them.on.includes(pid) && <span className="tiny dim"> · bench</span>}
+                  </span>
+                  <span className="lv-pr-trips tiny dim num">{v.trips} trips</span>
+                  <span className={`lv-pr-ppp num ${v.pts / v.trips >= 1.25 ? 'good' : ''}`}>{(v.pts / v.trips).toFixed(2)}</span>
+                </div>
+                <div className="lv-lev">
+                  <button
+                    className={`chip sm ${hunt === pid ? 'on' : ''}`}
+                    aria-pressed={hunt === pid}
+                    onClick={() => apply((x) => void (x.offense.huntTarget = hunt === pid ? null : pid))}
+                  >
+                    {hunt === pid ? `Attacking ${nameOf(pid)}` : `Attack ${nameOf(pid)}`}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {end === 'team' && (
         <div className="lv-team-lev">
           <div className="lv-tl">
             <span className="slider-label">
@@ -378,12 +398,13 @@ export function PlanView({
             </div>
           </div>
         </div>
-        <button className="lv-plan-all" onClick={onAll}>
-          <SlidersHorizontal size={16} aria-hidden="true" />
-          <span className="grow">Every setting</span>
-          <ChevronRight size={16} className="dim" aria-hidden="true" />
-        </button>
-      </Section>
+      )}
+
+      <button className="lv-plan-all" onClick={onAll} aria-haspopup="dialog">
+        <SlidersHorizontal size={17} aria-hidden="true" />
+        <span className="grow">Every setting</span>
+        <ChevronRight size={16} className="dim" aria-hidden="true" />
+      </button>
     </div>
   );
 }

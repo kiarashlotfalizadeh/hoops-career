@@ -43,11 +43,9 @@
   --crowd-o: 1;
   --crowd-w: 4px;
 }
-.lv-crowd.lvl-3::before {
-  animation: lv-crowd-pulse 1.5s ease-in-out infinite alternate;
-}
+/* on its feet: the rule breathes with the noise (opacity only) */
 .lv-crowd.lvl-4::before {
-  animation: lv-crowd-pulse 0.85s ease-in-out infinite alternate;
+  animation: lv-crowd-pulse 1.2s ease-in-out infinite alternate;
 }
 @keyframes lv-crowd-pulse {
   from {
@@ -57,25 +55,18 @@
     opacity: var(--crowd-o);
   }
 }
-/* hushed: the building's lights dim at the edges */
+/* clutch time: the frame tightens, a warm rule around the floor (hushed, the crowd's rule is simply off) */
 .lv-crowd::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
   opacity: 0;
-  box-shadow: inset 0 0 60px 14px rgba(0, 0, 0, 0.5);
+  box-shadow: inset 0 0 0 2px var(--warn);
   transition: opacity 0.9s ease;
 }
-.lv-crowd.lvl-0::after {
-  opacity: 1;
-}
-/* clutch time: the frame tightens, a warm rule around the floor */
 .lv-crowd.clutch::after {
   opacity: 1;
-  box-shadow:
-    inset 0 0 0 2px var(--warn),
-    inset 0 0 46px 10px rgba(0, 0, 0, 0.38);
 }
 
 /* ------------------------------------------------------------------ a big moment, called over the court */
@@ -89,54 +80,47 @@
   justify-content: center;
   pointer-events: none;
 }
-/* the paper's headline over the floor: the kicker in the team's colour, the headline in serif on an
-   ink plate, its line under it */
+/* the big moment over the floor, the one place the court uses the headline cut: its kicker on a flat
+   label in the team's colour, the headline on a flat plate, its line under it */
 .lv-call {
   --call-c: var(--surface-3);
+  --call-ink: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
   max-width: min(100%, 440px);
-  padding: 12px 18px 13px;
+  padding: 0 18px 14px;
   border-radius: var(--radius);
   background: var(--lv-plate-hi);
-  border-top: 3px solid var(--call-c);
-  box-shadow: 0 18px 40px -14px rgba(0, 0, 0, 0.75);
   text-align: center;
   animation: lv-call 2.6s var(--ease-out) both;
 }
 .lv-call.neutral {
   --call-c: var(--warn);
+  --call-ink: #0a0a0c;
 }
 .lv-call-k {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 650;
-  color: rgba(255, 255, 255, 0.78);
-}
-.lv-call-k::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 2px;
+  margin-bottom: 8px;
+  padding: 3px 10px 4px;
+  border-radius: 0 0 var(--radius-xs) var(--radius-xs);
   background: var(--call-c);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.3);
+  color: var(--call-ink);
+  font-size: 12px;
+  font-weight: 640;
 }
 .lv-call-t {
   max-width: 100%;
-  margin-top: 4px;
-  font-family: var(--serif);
-  font-weight: 580;
-  font-size: 23px;
-  line-height: 1.1;
-  letter-spacing: -0.015em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: -0.028em;
   text-wrap: balance;
   overflow-wrap: anywhere;
 }
 .lv-call.w-3 .lv-call-t {
-  font-size: 28px;
+  font-size: 27px;
 }
 .lv-call-l {
   max-width: 100%;
@@ -173,10 +157,10 @@
     font-size: 13.5px;
   }
   .lv-call-t {
-    font-size: 34px;
+    font-size: 30px;
   }
   .lv-call.w-3 .lv-call-t {
-    font-size: 42px;
+    font-size: 36px;
   }
   .lv-call-l {
     font-size: 15px;
@@ -187,10 +171,10 @@
 }
 @media (max-width: 399px) {
   .lv-call-t {
-    font-size: 21px;
+    font-size: 20px;
   }
   .lv-call.w-3 .lv-call-t {
-    font-size: 25px;
+    font-size: 24px;
   }
 }
 
@@ -208,7 +192,7 @@
   border-radius: var(--radius-sm);
   background: var(--lv-plate);
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 580;
   pointer-events: none;
   animation: lv-crowd-line 3.8s ease both;
 }
@@ -270,7 +254,6 @@
   padding: 4px 4px 4px 10px;
   border-radius: var(--radius-md);
   background: var(--lv-plate-hi);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
   animation: lv-up var(--dur) var(--ease-out);
   transition: top 0.2s ease;
 }
@@ -284,7 +267,7 @@
 }
 .lv-slow-t {
   font-size: 12.5px;
-  font-weight: 680;
+  font-weight: 640;
   white-space: nowrap;
 }
 .lv-slow-b {
@@ -295,13 +278,12 @@
   background: var(--accent);
   color: var(--accent-ink);
   font-size: 12.5px;
-  font-weight: 680;
+  font-weight: 640;
   white-space: nowrap;
 }
 .lv-slow-b.ghost {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 .lv-slow-b::after,
 .lv-slow-x::after {
@@ -320,48 +302,36 @@
 }
 
 /* ------------------------------------------------------------------ the scorebug: clutch time, the momentum */
+/* clutch time: the period's label in its colour (the court's frame says the rest) */
 .lv-lb.clutch .lv-lb-q {
   color: var(--warn);
-  font-weight: 680;
+  font-weight: 660;
 }
-/* clutch time: a warm rule along the bug's foot */
-.lv-lb.clutch::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--warn);
-}
-/* the side with the momentum: its share of the line stands thicker (surging: it beats) */
+/* the side with the momentum: its share of the line stands thicker (surging: thicker still) */
 .lv-lb-wp-bar.mo-away > span:first-child,
 .lv-lb-wp-bar.mo-home > span:last-child {
   height: 5px;
 }
 .lv-lb-wp-bar.mo-2.mo-away > span:first-child,
 .lv-lb-wp-bar.mo-2.mo-home > span:last-child {
-  --crowd-o: 1;
-  animation: lv-crowd-pulse 1.1s ease-in-out infinite alternate;
+  height: 6px;
 }
 
 /* ------------------------------------------------------------------ the play-by-play's voice */
 .lv-fd-row.tier-1 {
   color: var(--text);
-  font-weight: 600;
+  font-weight: 560;
 }
 .lv-fd-row.tier-2,
 .lv-fd-row.tier-3 {
   color: var(--text);
-  font-weight: 680;
+  font-weight: 640;
 }
-/* the night's biggest plays read as headlines */
+/* the night's biggest plays read a size up */
 .lv-fd-row.tier-3 .grow {
-  font-family: var(--serif);
-  font-weight: 580;
-  font-size: 16px;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 /* a moment the night called: its kicker, on the row's own ground */
 .lv-fd-row.beat {
@@ -373,7 +343,7 @@
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 12px;
-  font-weight: 680;
+  font-weight: 660;
   letter-spacing: 0;
   color: var(--accent-text);
 }
@@ -394,9 +364,9 @@
 
 /* ------------------------------------------------------------------ the break's story so far */
 .lv-rep-story {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 420;
   line-height: 1.45;
   color: var(--text-2);
   text-wrap: pretty;

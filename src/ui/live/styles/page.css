@@ -11,6 +11,7 @@
   display: none;
 }
 .app main.page.lv {
+  position: relative;
   max-width: 820px;
   height: calc(100dvh - var(--top-h) - var(--safe-t) - 1px);
   padding: 0 var(--gut-r) calc(var(--lq-h) + var(--safe-b)) var(--gut-l);

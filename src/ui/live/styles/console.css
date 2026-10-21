@@ -2,7 +2,9 @@
    plan's battle rows with their levers, the breaks' report and huddle, the night's moves. */
 
 /* ------------------------------------------------------------------ the console */
+/* (positioned: the screen-reader text in its rows is clipped by its scroll, not left to stretch the page) */
 .lv-con {
+  position: relative;
   flex: 1 1 0;
   min-height: 0;
   overflow-y: auto;
@@ -53,19 +55,21 @@
   display: none;
 }
 
-/* ------------------------------------------------------------------ the bench bar */
+/* ------------------------------------------------------------------ the bench bar
+   In the tab bar's place, on the tab bar's glass: the moment's one action on the left (Timeout, or at a
+   stop the way on in your colour), then the console's views as the tab bar draws its tabs */
 .lv-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 40;
-  padding: 0 max(6px, var(--safe-r)) var(--safe-b) max(6px, var(--safe-l));
-  background: rgba(13, 12, 10, 0.92);
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
-  backdrop-filter: blur(18px) saturate(120%);
-  -webkit-backdrop-filter: blur(18px) saturate(120%);
-  border-top: 1px solid var(--line-2);
+  padding: 0 max(8px, var(--safe-r)) var(--safe-b) max(8px, var(--safe-l));
+  background: rgba(15, 16, 18, 0.97);
+  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
+  backdrop-filter: blur(24px) saturate(150%);
+  -webkit-backdrop-filter: blur(24px) saturate(150%);
+  border-top: 1px solid var(--line);
 }
 .lv-bb {
   max-width: 640px;
@@ -86,40 +90,33 @@
 }
 .lv-bb-btn {
   position: relative;
-  height: 52px;
+  height: 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   border-radius: var(--radius-md);
   color: var(--text-dim);
   font-size: 11px;
-  font-weight: 620;
+  font-weight: 560;
   transition:
     color var(--dur-fast) ease,
     background var(--dur-fast) ease;
 }
+.lv-bb-btn svg {
+  transition: transform 0.18s ease;
+}
+.lv-bb-btn:active:not(:disabled) svg {
+  transform: scale(0.9);
+}
+/* the view that's on: as the tab bar has it, white words and the icon in your colour */
 .lv-bb-btn.on {
   color: var(--text);
-  font-weight: 720;
+  font-weight: 680;
 }
-.lv-bb-btn.on .lv-bb-ic svg {
-  stroke-width: 2.3;
-}
-/* the view that's on: a short paper rule along the bar's top edge, as the tab bar has it */
-.lv-bb-views .lv-bb-btn.on::before {
-  content: '';
-  position: absolute;
-  top: -3px;
-  left: 50%;
-  width: 22px;
-  height: 2px;
-  margin-left: -11px;
-  background: var(--text);
-}
-.lv-bb-btn:active:not(:disabled) {
-  background: var(--surface-2);
+.lv-bb-views .lv-bb-btn.on .lv-bb-ic {
+  color: var(--accent-text);
 }
 @media (hover: hover) and (pointer: fine) {
   .lv-bb-btn:hover:not(:disabled):not(.on) {
@@ -138,15 +135,18 @@
   display: grid;
   place-items: center;
 }
-/* the timeout: its own block, the ones left on it */
+/* the timeout: a filled block, the ones left on it */
 .lv-bb-to {
+  height: 46px;
   background: var(--surface);
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--text-2);
+  color: var(--text);
+  font-weight: 620;
+}
+.lv-bb-to:active:not(:disabled) {
+  background: var(--surface-2);
 }
 .lv-bb-to.on {
   background: var(--accent);
-  box-shadow: none;
   color: var(--accent-ink);
 }
 .lv-bb-to.on:disabled {
@@ -155,11 +155,11 @@
 .lv-bb-n {
   position: absolute;
   top: -5px;
-  right: -13px;
+  right: -14px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   background: var(--surface-3);
   color: var(--text);
   font-family: var(--display);
@@ -183,26 +183,27 @@
   border-radius: 8px;
   background: var(--brand);
   color: #fff;
-  font-size: 10px;
-  font-weight: 760;
-  font-stretch: 85%;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 11px;
+  font-weight: 720;
   line-height: 16px;
-  box-shadow: 0 0 0 2px var(--bg);
+  box-shadow: 0 0 0 2px var(--bg-2);
   animation: lv-up 0.3s var(--ease-out);
 }
-/* at a stop: the way on, paper on ink */
+/* at a stop: the way on, in your colour */
 .lv-bb-go {
   height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--radius-md);
   background: var(--accent);
   color: var(--accent-ink);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 680;
   white-space: nowrap;
   animation: lv-up 0.3s var(--ease-out);
   transition: transform var(--dur-fast) ease;
@@ -215,45 +216,61 @@
 .lv-staff {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 20px;
 }
 /* (his "nothing to change" belongs to his read, just above it) */
 .lv-staff > .lv-calm {
-  margin-top: -11px;
+  margin-top: -14px;
   padding: 0 0 0 46px;
 }
-.lv-auto {
-  padding-top: 2px;
-  border-top: 1px solid var(--line);
-}
-/* the scorer the staff is watching */
+/* the scorer the staff is watching: his points leading the row, a tap to his sheet */
 .lv-watch {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
   width: 100%;
-  padding: 11px 0;
-  border-top: 1px solid var(--line-2);
-  border-bottom: 1px solid var(--line);
+  min-height: var(--row-min);
+  padding: 8px var(--row-px);
+  border-radius: var(--radius);
+  background: var(--raised);
   text-align: left;
   transition: background var(--dur-fast) ease;
 }
 .lv-watch:active {
   background: var(--surface);
 }
-.lv-watch-n {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 16px;
-  font-weight: 680;
+@media (hover: hover) and (pointer: fine) {
+  .lv-watch:hover {
+    background: var(--surface);
+  }
 }
-.lv-watch-n .num {
+.lv-watch-pts {
+  flex: none;
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+.lv-watch-pts .num {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 22px;
-  font-weight: 740;
-  line-height: 1;
+  font-size: 26px;
+  font-weight: 760;
+}
+.lv-watch-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lv-watch-n {
+  font-size: 15px;
+  font-weight: 600;
+}
+.lv-watch-n .dim2,
+.lv-watch-n .dim {
+  font-weight: 420;
 }
 .lv-calm {
   padding: 4px 0;
@@ -263,7 +280,7 @@
 .lv-plan {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 .lv-plan-top {
   display: flex;
@@ -277,12 +294,18 @@
   line-height: 1.4;
 }
 .lv-plan-reset {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 3px;
   margin-left: 2px;
-  font-weight: 650;
+  font-weight: 620;
   color: var(--accent-text);
+}
+.lv-plan-reset::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
 }
 /* a play type tonight, and the lever under it */
 .lv-pr {
@@ -298,14 +321,14 @@
 }
 .lv-pr-n {
   min-width: 0;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 600;
 }
 .lv-pr-ppp {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 19px;
-  font-weight: 720;
+  font-size: 21px;
+  font-weight: 740;
 }
 .lv-pr-ppp.good {
   color: var(--good);
@@ -358,60 +381,70 @@
   flex-direction: column;
 }
 .lv-sc-n {
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 600;
 }
 .lv-team-lev {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 18px;
 }
 .lv-tl {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
+/* every setting, one tap down: a row of its own at the foot of the plan */
 .lv-plan-all {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   min-height: var(--row-min);
-  margin-top: 12px;
-  padding: 0 2px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--accent-text);
+  padding: 0 var(--row-px);
+  border-radius: var(--radius);
+  background: var(--raised);
+  font-size: 15px;
+  font-weight: 620;
+  color: var(--text);
   text-align: left;
+  transition: background var(--dur-fast) ease;
+}
+.lv-plan-all > svg:first-child {
+  color: var(--accent-text);
 }
 .lv-plan-all:active {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-plan-all:hover {
+    background: var(--surface);
+  }
 }
 
 /* ------------------------------------------------------------------ the breaks: the report and the huddle */
 .lv-rep {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 .lv-rep-head {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-top: 16px;
+  padding-top: 18px;
 }
-/* the stop's headline: serif, as the paper's running story would have it */
+/* the stop's headline: the expanded cut, a few words */
 .lv-rep-kicker {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  font-family: var(--serif);
-  font-size: 30px;
-  font-weight: 560;
-  letter-spacing: -0.018em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 28px;
+  font-weight: 780;
+  letter-spacing: -0.03em;
   line-height: 1.05;
   text-wrap: balance;
 }
@@ -423,8 +456,8 @@
   gap: 4px;
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 620;
   letter-spacing: 0;
   color: var(--accent-text);
 }
@@ -447,13 +480,18 @@
 .lv-bk-scorers {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-top: 12px;
+  gap: 4px;
+  padding: 0 2px;
+}
+.lv-coaches {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 .lv-coach {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 .lv-bt {
   display: grid;
@@ -466,8 +504,8 @@
   gap: 2px;
 }
 .lv-bt-col > .over {
-  padding-bottom: 5px;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-2);
 }
 .lv-bt-row {
   display: flex;
@@ -481,8 +519,8 @@
 .lv-bt-row .num.bold {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-size: 18px;
+  font-weight: 740;
 }
 .lv-bt-row .num.good {
   color: var(--good);

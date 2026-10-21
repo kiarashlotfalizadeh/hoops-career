@@ -1,12 +1,12 @@
 // The breaks, on the live screen itself (the court steps aside for them): a period's end and your
 // timeout. The period report opens on the story so far in a line (the score, the run that made the
-// period, who's carrying you: see atmosphere.ts breakStory), then reads the game as the staff does (its read, the moves it would
-// make for the next period, who's tired or in foul trouble going into it, the keys, the score by
-// quarter, the battle of play types, the teams side by side, the scorers, their coach's plan and
-// adjustments, and your moves so far with what each did). The huddle is the short version for a
-// timeout: who to sub, the staff's top move and the play out of it. The next
-// period, or the game, goes on from the bench bar.
-import { useMemo } from 'react';
+// period, who's carrying you: see atmosphere.ts breakStory), then the staff's one voice (its read, the
+// moves it would make for the next period, what's deciding the game), who's tired or in foul trouble
+// going into it and the keys; the rest of the game so far (the score by quarter and the scorers, the
+// battle of play types, the teams side by side, both coaches' moves) sits behind one switch under it.
+// The huddle is the short version for a timeout: who to sub, the staff's top move and the play out of
+// it. The next period, or the game, goes on from the bench bar.
+import { useMemo, useState } from 'react';
 import { FastForward } from 'lucide-react';
 import type { CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
@@ -17,7 +17,7 @@ import { atoLabel } from '../../core/sim/sets';
 import { zScore } from '../../core/analysis/playTypes';
 import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
-import { Section } from '../components/ui';
+import { Section, Segmented } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { KeysLive } from '../components/GameKeys';
 import { periodLabel } from '../stats';
@@ -175,14 +175,15 @@ function Battle({ view, side, teams, baselines }: Pick<Common, 'view' | 'side' |
     );
   };
   return (
-    <Section title="Points a trip by play">
-      <div className="lv-bt">
-        {col((1 - side) as 0 | 1)}
-        {col(side)}
-      </div>
-    </Section>
+    <div className="lv-bt">
+      {col((1 - side) as 0 | 1)}
+      {col(side)}
+    </div>
   );
 }
+
+/** The game so far behind one switch: the score by quarter and the scorers, the play types, the teams side by side, the coaches' moves. */
+type SoFar = 'score' | 'plays' | 'teams' | 'coaches';
 
 /** The period's end: the report, as the staff reads the game so far. The next period starts from the bench bar. */
 export function PeriodReport(
@@ -222,6 +223,7 @@ export function PeriodReport(
   const theirs = adjustments.filter((a) => a.t !== side);
   const abbrevs = { us: teams[side].abbrev, them: teams[1 - side].abbrev };
   const deciding = useDeciding(props.league, view, props.tactics);
+  const [soFar, setSoFar] = useState<SoFar>('score');
   return (
     <div className="lv-rep">
       {/* (the score, the chance to win and the timeouts are on the scorebug just above: said once) */}
@@ -241,39 +243,55 @@ export function PeriodReport(
       <Decisions {...props} max={3} deciding={deciding} />
       <Trouble {...props} huddle={false} />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, q)} />}
-      <Section title="By quarter">
-        <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
-      </Section>
-      <Battle view={view} side={side} teams={teams} baselines={props.baselines} />
-      <Section title="Side by side">
-        <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov', 'paint', 'ast']} />
-        <div className="lv-bk-scorers small">
-          <div>
-            <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
-          </div>
-          <div>
-            <b>{home.abbrev}</b> <span className="dim2">{scorers(0)}</span>
-          </div>
-        </div>
-      </Section>
-      {(oppPlan?.length || theirs.length > 0) && (
-        <Section title="Their coach">
-          <div className="small lv-coach">
-            {oppPlan && oppPlan.length > 0 && (
+      <Section title="So far">
+        <Segmented
+          value={soFar}
+          onChange={setSoFar}
+          label="The game so far"
+          options={[
+            { id: 'score', label: 'Score' },
+            { id: 'plays', label: 'Play types' },
+            { id: 'teams', label: 'Teams' },
+            { id: 'coaches', label: 'Coaches' },
+          ]}
+        />
+        {soFar === 'score' && (
+          <>
+            <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+            <div className="lv-bk-scorers small">
               <div>
-                <span className="dim2">His plan tonight:</span> {oppPlan.map((x) => x.text).join(', ')}.
+                <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
               </div>
-            )}
-            {theirs.map((a, i) => (
-              <div key={i}>
-                <span className="dim2 num">{gameTime(a.q, a.clock)}</span> {a.text}.
+              <div>
+                <b>{home.abbrev}</b> <span className="dim2">{scorers(0)}</span>
               </div>
-            ))}
+            </div>
+          </>
+        )}
+        {soFar === 'plays' && <Battle view={view} side={side} teams={teams} baselines={props.baselines} />}
+        {soFar === 'teams' && <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov', 'paint', 'ast']} />}
+        {soFar === 'coaches' && (
+          <div className="lv-coaches">
+            <div className="lv-coach small">
+              <div className="over">Their coach</div>
+              {oppPlan && oppPlan.length > 0 && (
+                <div>
+                  <span className="dim2">His plan tonight:</span> {oppPlan.map((x) => x.text).join(', ')}.
+                </div>
+              )}
+              {theirs.map((a, i) => (
+                <div key={i}>
+                  <span className="dim2 num">{gameTime(a.q, a.clock)}</span> {a.text}.
+                </div>
+              ))}
+              {!oppPlan?.length && !theirs.length && <div className="dim">No plan or adjustment from him yet.</div>}
+            </div>
+            <div className="lv-coach">
+              <div className="over">Your moves</div>
+              <MovesList moves={moves} abbrevs={abbrevs} nameOf={names} />
+            </div>
           </div>
-        </Section>
-      )}
-      <Section title="Your moves">
-        <MovesList moves={moves} abbrevs={abbrevs} nameOf={names} />
+        )}
       </Section>
     </div>
   );

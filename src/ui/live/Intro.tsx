@@ -88,6 +88,7 @@ export function Intro({
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
   const lastSeason = withLines.length > 0 && withLines.every((l) => l.last);
+  const perGame = withLines.length > 0 ? `Per game, ${lastSeason ? 'last' : 'this'} season` : '';
   // the two headers never read as one colour: on a clash the away side wears its second
   const looks = matchupLooks(home.colors, away.colors);
   const col = (side: 0 | 1) => {
@@ -135,11 +136,12 @@ export function Intro({
             {!(arena && bill.line.includes(arena)) && <div className="gd-intro-line ellipsis">{bill.line}</div>}
           </>
         )}
-        <div className="lv-li-kicker">Starting lineups</div>
+        {/* (under a billing, one quiet line: what this is and what the figures are) */}
+        <div className="lv-li-kicker">Starting lineups{bill && perGame ? ` · ${perGame.toLowerCase()}` : ''}</div>
         {/* (the billing names the arena) */}
         {!bill && <div className="lv-li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>}
         {context && <div className="lv-li-where ellipsis live-intro-ctx">{context}</div>}
-        {withLines.length > 0 && <div className="lv-li-where ellipsis">Per game, {lastSeason ? 'last' : 'this'} season</div>}
+        {!bill && perGame && <div className="lv-li-where ellipsis">{perGame}</div>}
       </div>
       <div className="lv-li-grid">
         {col(1)}

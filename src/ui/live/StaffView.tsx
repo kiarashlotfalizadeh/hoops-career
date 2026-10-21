@@ -3,6 +3,7 @@
 // what isn't, the keys to the game as they stand and the scorer of theirs he's watching, whether he
 // makes his tactics calls himself, and your moves tonight with what each has done since.
 import { useState } from 'react';
+import { ChevronRight } from 'lucide-react';
 import type { CoachMove, GameResult } from '../../core/types';
 import type { GameKey } from '../../core/analysis/keys';
 import { madeAtt } from '../../core/format';
@@ -76,18 +77,21 @@ export function StaffView({
       )}
       {watch && <Watch view={view} side={side} watch={watch} nameOf={nameOf} onPlayer={onPlayer} />}
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box as Pick<GameResult, 'home' | 'away'>} side={side} share={keysShare(view.elapsed, view.q)} compact />}
-      <Section
-        title="Your moves"
-        right={
-          moves.length > MOVES_SHOWN ? (
-            <button className="lv-mv-all" onClick={() => setAllMoves((x) => !x)}>
-              {allMoves ? 'Fewer' : `All ${moves.length}`}
-            </button>
-          ) : undefined
-        }
-      >
-        <MovesList moves={moves} abbrevs={abbrevs} nameOf={nameOf} max={allMoves ? undefined : MOVES_SHOWN} />
-      </Section>
+      {/* (before the first move there's nothing to measure: the section comes with it) */}
+      {moves.length > 0 && (
+        <Section
+          title="Your moves"
+          right={
+            moves.length > MOVES_SHOWN ? (
+              <button className="lv-mv-all" onClick={() => setAllMoves((x) => !x)}>
+                {allMoves ? 'Fewer' : `All ${moves.length}`}
+              </button>
+            ) : undefined
+          }
+        >
+          <MovesList moves={moves} abbrevs={abbrevs} nameOf={nameOf} max={allMoves ? undefined : MOVES_SHOWN} />
+        </Section>
+      )}
       <div className="lv-auto">
         <Toggle
           on={autonomy === 'auto'}
@@ -119,13 +123,20 @@ function Watch({
   if (!p) return null;
   return (
     <button className="lv-watch" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
-      <span className="over">Watching</span>
-      <span className="lv-watch-n">
-        {nameOf(p.pid)} <span className="num">{p.pts}</span> <span className="tiny dim">pts · {madeAtt(p.fgm, p.fga)}</span>
+      <span className="lv-watch-pts">
+        <span className="num">{p.pts}</span>
+        <span className="tiny dim">pts</span>
       </span>
-      <span className="tiny dim2">
-        {watch.defender !== undefined ? `${nameOf(watch.defender)} is on him` : them.on.includes(p.pid) ? 'The staff picks his matchup' : 'On the bench'} · tap for how to play him
+      <span className="lv-watch-t grow">
+        <span className="lv-watch-n">
+          <span className="dim2">Watching</span> {nameOf(p.pid)} <span className="dim num">{madeAtt(p.fgm, p.fga)}</span>
+        </span>
+        <span className="lv-watch-l small dim">
+          {watch.defender !== undefined ? `${nameOf(watch.defender)} is on him` : them.on.includes(p.pid) ? 'The staff picks his matchup' : 'On the bench'}
+        </span>
       </span>
+      <ChevronRight size={16} className="dim" aria-hidden="true" />
+      <span className="sr-only">: how to play him</span>
     </button>
   );
 }

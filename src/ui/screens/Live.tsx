@@ -28,7 +28,7 @@ import { drawnPlayer } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
 import { ScoreBug, gameContext } from '../live/ScoreBug';
 import { TacticsPanel } from '../live/TacticsPanel';
-import { BoxPanel } from '../live/BoxPanel';
+import { BoxPanel, type BoxTab } from '../live/BoxPanel';
 import { OppPlayer } from '../live/OppPlayer';
 import { MyPlayer } from '../live/MyPlayer';
 import { Lineup } from '../live/Lineup';
@@ -63,7 +63,7 @@ export default function Live() {
   const { league, nav, simBusy, status, game, view, home, away, colors, userSide, nameOf, over, script, panel, setPanel, coach } = s;
   // the console's view (at a stop, its bench is the report or the huddle)
   const [cview, setCview] = useState<ConsoleView>('bench');
-  const [statsTab, setStatsTab] = useState<'box' | 'pbp'>('box');
+  const [statsTab, setStatsTab] = useState<BoxTab | 'pbp'>('players');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
   const { applyTactics, switchSlot, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
@@ -391,18 +391,23 @@ export default function Live() {
       );
     return (
       <div className="lv-stats">
+        {/* one row of tabs: the box score's sections and the play-by-play */}
         <Segmented
           tabs
           value={statsTab}
           onChange={setStatsTab}
           label="Stats"
           options={[
-            { id: 'box', label: 'Box score' },
+            { id: 'players', label: 'Players' },
+            { id: 'team', label: 'Team' },
+            { id: 'shots', label: 'Shots' },
+            { id: 'flow', label: 'Flow' },
             { id: 'pbp', label: 'Play-by-play' },
           ]}
         />
-        {statsTab === 'box' ? (
+        {statsTab !== 'pbp' ? (
           <BoxPanel
+            tab={statsTab}
             view={view}
             flow={sim.flow}
             flowPeriods={sim.flowPeriods}

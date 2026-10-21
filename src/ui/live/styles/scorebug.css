@@ -1,22 +1,21 @@
-/* The scorebug, a broadcast's graphic in the Night Edition's terms: each team's flat colour block (its
-   name, timeouts left and team fouls), the scores in condensed tabular figures, the period and clock
-   between hairlines, a run, the sliver of each team's chance to win; and the bottom line of the
-   night's other scores, with its sheet. Labels in sentence case; no glows, no gradients. */
+/* The scorebug, a broadcast's graphic in Box Score's terms: each team's half a flat field in its
+   colour (its name, timeouts left and team fouls, its score in big condensed figures), the period and
+   the clock on graphite between them, a run under the clock, the sliver of each team's chance to win;
+   and the bottom line of the night's other scores, with its sheet. Labels in sentence case; no glows,
+   no gradients. Text on a team's field is white whatever the theme (the slab keeps 4.5:1). */
 .lv-lb {
   position: relative;
   background: var(--bg-2);
-  border-bottom: 1px solid var(--line-2);
   overflow: hidden;
 }
 /* its top line: what's at stake (a series, a Cup round) or that it's live */
 .lv-lb-ctx {
   min-height: 26px;
   padding: 4px 12px 3px;
-  border-bottom: 1px solid var(--line);
   text-align: center;
-  font-size: 12px;
-  font-weight: 620;
-  line-height: 18px;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 19px;
   color: var(--text-2);
 }
 /* with the way out: the button on the left, the line centred between it and a matching gap */
@@ -24,7 +23,7 @@
   display: grid;
   grid-template-columns: 76px minmax(0, 1fr) 76px;
   align-items: center;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 .lv-lb-ctx.has-leave > span {
   grid-column: 2;
@@ -54,7 +53,7 @@
   background: none;
   color: var(--text);
   font: inherit;
-  font-weight: 650;
+  font-weight: 620;
   cursor: pointer;
   transition: background var(--dur-fast) ease;
 }
@@ -76,34 +75,33 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: stretch;
-  min-height: 52px;
+  min-height: 54px;
 }
+/* a team's half: its colour, flat, with its trim as a rule along the foot (a black team's field still
+   reads on the graphite) */
 .lv-lb-side {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   min-width: 0;
-}
-.lv-lb-side.home {
-  flex-direction: row-reverse;
-}
-/* a team's block: its colour, flat, with its trim as a rule along the foot */
-.lv-lb-id {
-  position: relative;
-  overflow: hidden;
-  flex: 0 1 92px;
-  min-width: 64px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 3px;
-  padding: 4px 8px 6px 14px;
+  padding: 0 4px 0 14px;
   color: #fff;
   background: var(--lb-c);
   box-shadow: inset 0 -2px 0 var(--lb-t);
 }
+.lv-lb-side.home {
+  flex-direction: row-reverse;
+  padding: 0 14px 0 4px;
+}
+.lv-lb-id {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+}
 .lv-lb-side.home .lv-lb-id {
   align-items: flex-end;
-  padding: 4px 14px 6px 8px;
 }
 .lv-lb-ab {
   font-family: var(--display);
@@ -111,15 +109,16 @@
   font-weight: 760;
   font-size: 21px;
   line-height: 0.9;
-  letter-spacing: 0.01em;
 }
 .lv-lb-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 1px;
+  gap: 2px;
+  font-family: var(--font);
+  font-stretch: var(--text-w);
   font-size: 10.5px;
-  font-weight: 560;
+  font-weight: 520;
   line-height: 11px;
   white-space: nowrap;
 }
@@ -127,59 +126,61 @@
   align-items: flex-end;
 }
 .lv-lb-meta b {
-  font-weight: 760;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 12px;
+  font-weight: 720;
   color: #fff;
 }
 .lv-lb-to,
 .lv-lb-tf {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.82);
 }
 .lv-lb-tf {
-  margin: 0 -3px;
-  padding: 0 3px;
+  margin: 0 -4px;
+  padding: 0 4px;
   border-radius: var(--radius-xs);
 }
 /* in the penalty: the other team shoots on every foul */
 .lv-lb-tf.on {
   background: var(--warn);
-  color: var(--accent-ink);
+  color: #0a0a0c;
 }
 .lv-lb-tf.on b {
-  color: var(--accent-ink);
+  color: #0a0a0c;
 }
 .lv-lb-score {
-  flex: 1;
-  min-width: 0;
-  display: grid;
-  place-items: center;
+  flex: none;
+  min-width: 2ch;
+  padding: 0 8px;
+  text-align: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: clamp(32px, 10vw, 42px);
+  font-weight: 760;
+  font-size: clamp(36px, 11vw, 44px);
   line-height: 1;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--text);
-  transition: color var(--dur) ease;
+  color: #fff;
+  transition: opacity var(--dur) ease;
 }
+/* (the side behind reads a shade quieter, as a broadcast's bug has it) */
 .lv-lb-score.behind {
-  color: var(--text-2);
+  opacity: 0.74;
 }
 .lv-lb-mid {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  min-width: 68px;
-  padding: 3px 8px;
-  background: var(--bg);
-  border-left: 1px solid var(--line-2);
-  border-right: 1px solid var(--line-2);
+  gap: 3px;
+  min-width: 72px;
+  padding: 4px 10px;
+  background: var(--raised);
 }
 .lv-lb-q {
-  font-size: 11px;
-  font-weight: 620;
+  font-size: 11.5px;
+  font-weight: 600;
   line-height: 1;
   color: var(--text-dim);
   white-space: nowrap;
@@ -187,15 +188,15 @@
 .lv-lb-clock {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 23px;
+  font-weight: 740;
+  font-size: 25px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .lv-lb-run {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   line-height: 1;
   color: var(--warn);
@@ -220,33 +221,33 @@
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  height: 19px;
-  padding: 0 12px;
-  border-top: 1px solid var(--line);
-  font-size: 11px;
-  font-weight: 560;
+  height: 22px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  font-weight: 520;
   color: var(--text-dim);
   white-space: nowrap;
 }
 .lv-lb-wp b {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--text);
   font-weight: 720;
 }
 .lv-lb-wp-k {
-  font-weight: 620;
+  font-weight: 560;
 }
 .lv-lb-wp-bar {
   display: flex;
   align-items: center;
   gap: 2px;
-  height: 5px;
+  height: 6px;
 }
 .lv-lb-wp-bar > span {
   display: block;
   height: 3px;
+  border-radius: 2px;
   transition:
     width 0.4s ease,
     height var(--dur) ease;
@@ -259,10 +260,10 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 23px;
-  padding: 1px 12px 1px 8px;
+  min-height: 26px;
+  padding: 1px 14px 1px 10px;
   border-top: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--bg-2);
   color: var(--text);
   font-size: 12px;
   text-align: left;
@@ -279,14 +280,14 @@
   flex: none;
   display: inline-grid;
   place-items: center;
-  min-width: 26px;
-  height: 16px;
-  padding: 0 5px;
+  min-width: 28px;
+  height: 18px;
+  padding: 0 6px;
   border-radius: var(--radius-xs);
-  border: 1px solid var(--line-2);
+  background: var(--surface-2);
   color: var(--text-2);
-  font-size: 10px;
-  font-weight: 650;
+  font-size: 10.5px;
+  font-weight: 620;
   line-height: 1;
 }
 .live-ticker-game {

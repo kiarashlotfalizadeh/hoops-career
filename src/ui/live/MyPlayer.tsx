@@ -2,7 +2,7 @@ import { ArrowLeftRight, Lightbulb } from 'lucide-react';
 import { madeAtt } from '../../core/format';
 import type { League, OffRole, ShotFreedom, Tactics } from '../../core/types';
 import { ROLE_META } from '../../core/ratings';
-import { Chips, Help, Statline, Tag, Toggle } from '../components/ui';
+import { Chips, Help, More, Statline, Tag, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
 import { fitPlayers } from './plays';
 
@@ -136,17 +136,25 @@ export function MyPlayer({
         <Chips label={`Shot freedom for ${name}`} value={freedom} onChange={(v: ShotFreedom) => apply((t) => void (t.offense.freedom[pid] = v))} options={FREEDOM} />
       </div>
 
+      {/* his role: the one he plays, its ten options a tap away */}
       {role && (
-        <div className="lv-ps-blk">
-          <div className="over">Role</div>
-          <Chips
-            label={`Role for ${name}`}
-            value={role}
-            onChange={(r: OffRole) => apply((t) => void (t.offense.roles[pid] = r))}
-            options={(Object.keys(ROLE_META) as OffRole[]).map((r) => ({ id: r, label: ROLE_META[r].label }))}
-          />
-          <div className="tiny dim">{ROLE_META[role].help}</div>
-        </div>
+        <More
+          label={
+            <>
+              Role <span className="lv-ps-role">{ROLE_META[role].label}</span>
+            </>
+          }
+        >
+          <div className="lv-ps-blk lv-ps-more">
+            <Chips
+              label={`Role for ${name}`}
+              value={role}
+              onChange={(r: OffRole) => apply((t) => void (t.offense.roles[pid] = r))}
+              options={(Object.keys(ROLE_META) as OffRole[]).map((r) => ({ id: r, label: ROLE_META[r].label }))}
+            />
+            <div className="tiny dim">{ROLE_META[role].help}</div>
+          </div>
+        </More>
       )}
 
       <Toggle
