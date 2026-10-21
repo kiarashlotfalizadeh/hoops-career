@@ -241,6 +241,10 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   under the content (`::before`; `.no-court` drops them). Your team by default; another with
   `slabVars(colors)`. Inside it the ink inverts: white text, white rings, a white primary, white OVR
   badges. Its one big figure is `--display` black, as large as fits.
+- `Poster` and `PosterSlab` (`league/shared.tsx`): a screen's hero as a mono kicker, a black
+  headline and a giant figure over a 2px ink rule on the paper, or the same on a team's slab. A
+  game's board (`FinalSlab`'s `GameBoard`): two team blocks side by side with a full court across
+  them, the giant figures (scores, chances to win) and a white pill on the seam.
 - Lists: `.card.flush` > `.list` > rows. `.listrow` (`--row-min`, 54px), `.lr-name`, `.lr-meta`
   (one line). Your own rows: a 10% wash of `--team`, no edge stripe.
 - **A list of players with figures is a row grid** (`team/RosterViews`): the jersey, the name over

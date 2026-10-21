@@ -13,7 +13,7 @@ import { Avatar, CountUp, Statline } from './ui';
 import { madeAtt } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
-import { matchupLooks } from '../teamColors';
+import { matchupColors, matchupLooks } from '../teamColors';
 import { finalLabel } from '../stats';
 import { TeamLogo } from './TeamLogo';
 import { QuarterTable } from './gameBlocks';
@@ -44,8 +44,7 @@ export function gameTypeLabel(league: League, g: GameResult): string {
  * has, deep enough to read on paper.
  */
 export function boardColors(league: League, g: { home: { tid: number }; away: { tid: number } }): [string, string] {
-  const [h, a] = matchupLooks(league.teams[g.home.tid].colors, league.teams[g.away.tid].colors);
-  return [h.slab, a.slab];
+  return matchupColors(league.teams[g.home.tid].colors, league.teams[g.away.tid].colors);
 }
 
 /** One side of a game board: the team, its big figure (points, a chance to win, a record) and a line under its name. */

@@ -60,11 +60,10 @@ export function colorDistance(a: string, b: string): number {
 }
 const CLASH = 90;
 
-/** One readable colour per team for two-team charts, with the away side switching when they clash. */
+/** One readable colour per team for two-team charts, [home, away]: the colour each half of a game's board wears (deep enough to read on paper; `nightFill` it for ink), the away side switching when they clash. */
 export function matchupColors(home: [string, string, string], away: [string, string, string]): [string, string] {
-  const h = teamAccent(home);
-  const a = [teamAccent(away), ...away, '#57534b'].find((c) => luminance(c) < 0.6 && colorDistance(c, h) >= CLASH) ?? '#57534b';
-  return [h, a];
+  const [h, a] = matchupLooks(home, away);
+  return [h.slab, a.slab];
 }
 
 /** Jerseys on the live court, [home, away] as [fill, trim] (a trim matching its fill takes the third colour); on a clash the away side wears white. */
