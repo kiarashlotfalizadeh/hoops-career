@@ -17,7 +17,7 @@ import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 import { gameStoryFor } from '../../core/analysis/gameStory';
-import { GameTop, useBillings } from './occasion';
+import { GameTop, nightTitle, useBillings } from './occasion';
 import { Empty, Help, PageHeader } from '../components/ui';
 import { GameBoard, type BoardSide } from '../components/FinalSlab';
 import { ordinal } from '../stats';
@@ -200,17 +200,19 @@ function Hero({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
           </div>
         )}
       </GameBoard>
-      {bill && (
+      {/* the poster's headline: what the night is billed as, or on an ordinary night who and where */}
+      {g && (
         <div className="mu-hero-bill">
-          <div className={`mu-hero-h w${bill.weight}`}>{bill.tag}</div>
-          <div className="mu-hero-l">{bill.line}</div>
+          <h2 className={`mu-hero-h w${bill ? bill.weight : 1}`}>{bill ? bill.tag : nightTitle(league, g, neutralSite(g))}</h2>
+          {bill && <div className="mu-hero-l">{bill.line}</div>}
         </div>
       )}
       {(h2h.total > 0 || (g && onPlan)) && (
         <div className="mu-hero-foot">
           {h2h.total > 0 && (
             <span className="mu-hero-ss">
-              Season <span className="num">{sp.record}</span>
+              {h2h.won + h2h.lost ? 'Season ' : ''}
+              <span className="num">{sp.record}</span>
               {sp.left && ` · ${sp.left}`}
               {h2h.last && (
                 <>

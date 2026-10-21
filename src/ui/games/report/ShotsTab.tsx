@@ -6,7 +6,7 @@ import { madeAtt } from '../../../core/format';
 import { Section, Statline } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { ShotChart, ShotKey } from '../../components/charts';
-import { matchupColors } from '../../teamColors';
+import { boardColors } from '../../components/FinalSlab';
 import { p1 } from '../../stats';
 
 const ZONES = [
@@ -18,7 +18,8 @@ const ZONES = [
 export function ShotsTab({ g, league }: { g: GameResult; league: League }) {
   const shots = g.shots ?? [];
   const [home, away] = [league.teams[g.home.tid], league.teams[g.away.tid]];
-  const kits = matchupColors(home.colors, away.colors);
+  // (each team in its colour on the board above)
+  const kits = boardColors(league, g);
   return (
     <>
       <ShotKey

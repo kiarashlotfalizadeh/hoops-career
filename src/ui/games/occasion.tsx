@@ -98,6 +98,16 @@ export function BillingLine({ billings, className = '' }: { billings: Billing[];
   );
 }
 
+/**
+ * An ordinary night's headline, where a billing would stand: "The Los Angeles Clippers in town", "At
+ * the Denver Nuggets", "Against the Boston Celtics" (a neutral floor).
+ */
+export function nightTitle(league: League, g: ScheduledGame, neutral: boolean): string {
+  const me = league.userTid;
+  const t = league.teams[g.home === me ? g.away : g.home];
+  return neutral ? `Against the ${t.region} ${t.name}` : g.home === me ? `The ${t.region} ${t.name} in town` : `At the ${t.region} ${t.name}`;
+}
+
 const SEEN_KEY = 'hc-results-seen';
 
 /**

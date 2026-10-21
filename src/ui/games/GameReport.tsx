@@ -12,9 +12,8 @@ import { gameStoryFor } from '../../core/analysis/gameStory';
 import { GameTop, useFirstShowing } from './occasion';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { Empty, PageHeader } from '../components/ui';
-import { matchupColors } from '../teamColors';
 import { GameRecap } from '../components/GameRecap';
-import { FinalSlab } from '../components/FinalSlab';
+import { boardColors, FinalSlab } from '../components/FinalSlab';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { TabBar, useQueryParam } from '../league/shared';
 import { WhyTab } from './report/WhyTab';
@@ -46,8 +45,6 @@ export default function GameReport() {
       </main>
     );
   }
-  const home = league.teams[g.home.tid];
-  const away = league.teams[g.away.tid];
   const tabs: { id: Tab; label: string }[] = [
     ...(userGame ? [{ id: 'recap' as Tab, label: 'Debrief' }] : []),
     ...(report ? [{ id: 'report' as Tab, label: 'Why' }] : []),
@@ -88,7 +85,7 @@ export default function GameReport() {
       {tab === 'report' && report && <WhyTab g={g} league={league} report={report} />}
       {tab === 'box' && <BoxTab g={g} league={league} userGame={userGame} colors={colors} />}
       {tab === 'shots' && g.shots && <ShotsTab g={g} league={league} />}
-      {tab === 'flow' && <FlowTab g={g} league={league} side={userGame ? accentSide : 0} kits={matchupColors(home.colors, away.colors)} />}
+      {tab === 'flow' && <FlowTab g={g} league={league} side={userGame ? accentSide : 0} kits={boardColors(league, g)} />}
     </main>
   );
 }

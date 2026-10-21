@@ -4,39 +4,39 @@
 .mu-hero {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 /* a record as the board's figure, when there's no meeting left to project */
 .mu-rec {
   font-size: 0.56em;
 }
-.mu-hero .gd-bd-foot .help-btn {
-  color: rgba(255, 255, 255, 0.8);
-}
+/* the night it's billed as, printed on the paper under the board: the poster's headline */
 .mu-hero-bill {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 .mu-hero-h {
+  margin: 0;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 23px;
-  line-height: 1.08;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
 .mu-hero-h.w3 {
-  font-size: 26px;
+  font-size: clamp(31px, 8.8vw, 36px);
 }
 .mu-hero-h.w1 {
-  font-size: 20px;
+  font-size: 26px;
 }
 .mu-hero-l {
-  font-size: 15px;
+  font-size: 15.5px;
   line-height: 1.42;
   color: var(--text-2);
+  text-wrap: pretty;
 }
 .mu-hero-foot {
   display: flex;
@@ -44,7 +44,9 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 6px 14px;
-  font-size: 13.5px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
 }
 .mu-hero-ss a {
@@ -89,60 +91,6 @@
   color: var(--text-dim);
 }
 
-/* the projection: who's favoured, by how much, and the win bar */
-.mu-proj {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.mu-proj-top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-}
-/* the favourite and the margin, and the chance to win: scoreboard figures with words beside them */
-.mu-big {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 40px;
-  line-height: 0.95;
-  letter-spacing: -0.01em;
-}
-.mu-big .mu-by {
-  margin: 0 4px;
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 19px;
-  font-weight: 560;
-  letter-spacing: 0;
-  color: var(--text-2);
-}
-.mu-toss {
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 26px;
-  line-height: 1;
-  letter-spacing: -0.028em;
-}
-.mu-proj-k {
-  margin-top: 4px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-.mu-winbar {
-  display: flex;
-  height: 4px;
-  border-radius: 1px;
-  overflow: hidden;
-  gap: 2px;
-}
-.mu-winbar span {
-  display: block;
-}
 .mu-stakes {
   font-size: 13.5px;
   color: var(--text-2);
@@ -159,10 +107,10 @@
 .mu-key-n {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 24px;
-  line-height: 1;
-  color: var(--text-dim);
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.9;
+  color: var(--text);
 }
 .mu-key-t {
   display: block;
@@ -194,7 +142,7 @@
   }
 }
 .mu-keyd[open] > summary .mu-key-n {
-  color: var(--text);
+  color: var(--accent-text);
 }
 .mu-key-why {
   padding: 0 var(--row-px) 12px calc(var(--row-px) + 30px);
@@ -208,13 +156,13 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px var(--row-px) 4px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
+  padding: 12px var(--row-px) 4px;
+  font-family: var(--head);
+  font-stretch: 108%;
   font-size: 14px;
-  font-weight: 720;
-  letter-spacing: 0.02em;
-  color: var(--text-2);
+  font-weight: 860;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 .mu-inj-h + * {
   border-top: none !important;
@@ -252,13 +200,18 @@
 .mu-fives-h {
   display: flex;
   justify-content: space-between;
-  padding: 10px var(--row-px) 8px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 14px;
-  font-weight: 720;
-  letter-spacing: 0.02em;
-  color: var(--text-2);
+  margin: 0 var(--row-px);
+  padding: 14px 0 9px;
+  border-bottom: 2px solid var(--text);
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 15px;
+  font-weight: 880;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.mu-fives-h + .mu-five {
+  border-top: none;
 }
 .mu-fives-h span {
   display: inline-flex;
@@ -340,8 +293,8 @@
   line-height: 1.35;
 }
 .mu-ev b {
-  color: var(--info);
-  font-weight: 650;
+  color: var(--text);
+  font-weight: 680;
 }
 .mu-group {
   display: flex;
@@ -417,15 +370,15 @@
   place-items: center;
 }
 .mu-hack.on .mu-check {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--on);
+  border-color: var(--on);
+  color: var(--on-ink);
 }
 .mu-ft {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
 .mu-note-input {
@@ -434,8 +387,9 @@
   resize: vertical;
   padding: 10px var(--row-px);
   border-radius: var(--radius);
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   color: var(--text);
   font: inherit;
   font-stretch: var(--text-w);
@@ -476,8 +430,10 @@
   align-items: center;
   gap: 2px;
   min-height: 32px;
-  font-size: 14px;
-  font-weight: 640;
+  font-family: var(--font);
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--accent-text);
 }
 .mu-planlink::after {
@@ -575,6 +531,7 @@
   padding: 12px var(--pad-card);
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   color: inherit;
   transition: background var(--dur-fast) ease;
 }
@@ -585,17 +542,17 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 26px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: -0.05em;
   line-height: 1;
 }
 .mu-last-wl {
   color: var(--good);
 }
 .mu-last.l .mu-last-wl {
-  color: color-mix(in srgb, var(--bad) 85%, white);
+  color: var(--bad);
 }
 .mu-last-t {
   display: flex;
@@ -604,32 +561,23 @@
   min-width: 0;
 }
 .mu-last-k {
-  font-size: 12.5px;
-  font-weight: 620;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .mu-last-h {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 740;
+  font-weight: 860;
   font-size: 17px;
   line-height: 1.15;
   letter-spacing: -0.026em;
   text-wrap: balance;
 }
 
-/* the preview's occasion: what tonight is billed as, a headline on the page, the others under it */
-.mu-occ {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
+/* the other billings in What it's worth */
 
-.mu-occ-line {
-  font-size: 15px;
-  line-height: 1.42;
-  color: var(--text-2);
-}
 .mu-occ-more {
   display: flex;
   flex-direction: column;
@@ -648,30 +596,28 @@
   color: var(--text);
   font-weight: 660;
 }
-/* both teams' last five, under the win bar */
-.mu-proj-form {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
+/* both teams' last five, in Form */
 .mu-proj-fs {
   display: inline-flex;
   align-items: center;
   gap: 7px;
 }
 .mu-proj-fs > .mu-proj-ab {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--text-2);
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 14px;
+  font-weight: 860;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 /* a part inside a section (Scout's Where to attack under How they play) */
 .mu-sub-h {
-  margin-top: 8px;
-  font-size: 15px;
-  font-weight: 680;
+  margin-top: 10px;
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 16px;
+  font-weight: 860;
+  letter-spacing: -0.02em;
 }
 /* Scout's form line under the ranks: the last five as letters, then the record in words */
 .mu-form {

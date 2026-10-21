@@ -1,101 +1,94 @@
-/* The Games hub's next game: a ticket (the two teams' board, then the night, the series and the plan
-   on a group's ground under it); the whole ticket opens the matchup page. */
+/* The Games hub's next game: a poster (the two teams' board), then the night it's billed as in the
+   black expanded cut on the paper, the plan and the series, and Matchup; the whole ticket opens the
+   matchup page. */
 .gs-next {
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: var(--radius-lg);
-  background: var(--raised);
+  gap: 18px;
   transition: transform var(--dur-fast) var(--ease-out);
 }
 .gs-next:has(.gs-next-go:active) {
   transform: scale(0.99);
 }
-.gs-next .gd-board {
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-}
 .gs-next-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px var(--pad-card) 14px;
+  gap: 16px;
 }
 .gs-next-bill {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 .gs-next-h {
+  margin: 0;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 21px;
-  line-height: 1.1;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
   text-wrap: balance;
 }
 .gs-next-h.w3 {
-  font-size: 24px;
+  font-size: clamp(31px, 8.8vw, 36px);
 }
 .gs-next-h.w1 {
-  font-size: 19px;
+  font-size: 26px;
 }
 .gs-next-l {
-  font-size: 14.5px;
-  line-height: 1.4;
+  font-size: 15.5px;
+  line-height: 1.42;
   color: var(--text-2);
+  text-wrap: pretty;
 }
+/* the plan and the series over a 2px ink rule, Matchup on the right */
 .gs-next-foot {
   display: flex;
   align-items: center;
   gap: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--line);
+  border-top: 2px solid var(--text);
 }
 .gs-next-facts {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
-  font-size: 13px;
-  color: var(--text-dim);
 }
 .gs-next-plan {
-  font-size: 14px;
-  font-weight: 640;
+  font-size: 15px;
+  font-weight: 700;
   color: var(--text);
 }
 .gs-next-plan.set {
   color: var(--info);
 }
+.gs-next-ss {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-dim);
+}
 /* the ticket's link: its tap area is the whole ticket */
 .gs-next-go {
   flex: none;
-  display: inline-flex;
-  align-items: center;
   gap: 2px;
-  min-height: 44px;
-  font-size: 14.5px;
-  font-weight: 660;
-  color: var(--accent-text);
 }
 .gs-next-go::after {
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  border-radius: var(--radius-lg);
 }
 .gs-next-go:focus-visible {
   outline: none;
 }
 .gs-next-go:focus-visible::after {
   outline: 2px solid var(--accent-text);
-  outline-offset: 2px;
-}
-@media (hover: hover) and (pointer: fine) {
-  .gs-next:has(.gs-next-go:hover) {
-    background: color-mix(in srgb, var(--raised) 80%, var(--surface));
-  }
+  outline-offset: 4px;
 }
 /* a playoff series on the ticket: the score in scoreboard figures, a chip a game played (a tap to its report, over the ticket's link) */
 .gn-series-strip {
@@ -109,16 +102,19 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 880;
   font-size: 17px;
+  letter-spacing: -0.03em;
   line-height: 1;
 }
 .gn-ss-score b {
-  font-size: 38px;
-  font-weight: 760;
-  letter-spacing: -0.01em;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 46px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
 }
 .gn-ss-dash {
   color: var(--text-dim);
@@ -136,22 +132,21 @@
   min-width: 56px;
   padding: 5px 7px 6px;
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
   color: var(--text-2);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.1;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
 }
 .gn-ss-g.w .num {
   color: var(--good);
 }
 .gn-ss-n {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .gn-ss-g::after {
@@ -160,7 +155,7 @@
   inset: -4px -2px;
 }
 .gn-ss-g:active {
-  background: var(--surface-2);
+  background: var(--surface);
 }
 
 /* the schedule's filter: one small control on the first section's head, the views in a sheet */
@@ -192,8 +187,8 @@
 
 /* the season series by opponent: the record leads the row */
 .gs-opp-rec {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.04em;
 }

@@ -10,12 +10,12 @@
   gap: 10px;
 }
 .gs-month .num {
-  font-weight: 680;
-  color: var(--text-2);
+  font-weight: 600;
+  color: var(--text);
 }
 .gs-row {
   display: grid;
-  grid-template-columns: 44px 28px minmax(0, 1fr) auto;
+  grid-template-columns: 50px 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 0 10px;
   padding: var(--row-py) var(--row-px);
@@ -44,7 +44,7 @@
 }
 .gs-row.today .wd {
   color: var(--brand);
-  font-weight: 700;
+  font-weight: 600;
 }
 /* games against your team on another club's page: your team's wash */
 .gs-row.h2h {
@@ -55,14 +55,18 @@
   flex-direction: column;
   line-height: 1.15;
 }
+.gs-date {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+}
 .gs-date .wd {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .gs-date .d {
-  font-size: 13.5px;
-  font-weight: 660;
+  font-size: 13px;
+  font-weight: 600;
 }
 .gs-opp {
   display: flex;
@@ -70,8 +74,9 @@
   min-width: 0;
 }
 .gs-name {
-  font-weight: 660;
-  font-size: 15px;
+  font-weight: 680;
+  font-size: 15.5px;
+  letter-spacing: -0.012em;
 }
 .gs-at {
   margin-right: 5px;
@@ -82,8 +87,8 @@
 .gs-sub {
   display: flex;
   gap: 4px;
-  margin-top: 1px;
-  font-size: 12px;
+  margin-top: 2px;
+  font-size: 12.5px;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -95,6 +100,9 @@
 }
 .gs-sub > .num {
   flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: -0.02em;
 }
 .gs-tag {
   font-weight: 650;
@@ -110,19 +118,19 @@
   flex-direction: column;
   align-items: flex-end;
   /* room for "130-102", so the W/L badges line up down the list */
-  min-width: 56px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
-  line-height: 1.02;
+  min-width: 62px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15.5px;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
 }
 .gs-ot {
-  margin-top: 2px;
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 11.5px;
-  font-weight: 600;
+  margin-top: 1px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
 }
 /* the result: its letter in its signal, before the score */
@@ -131,24 +139,23 @@
   align-self: flex-start;
   width: 12px;
   text-align: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
-  line-height: 1.02;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15.5px;
+  line-height: 1.15;
 }
 .gs-wl.w {
   color: var(--good);
 }
 .gs-wl.l {
-  color: color-mix(in srgb, var(--bad) 85%, white);
+  color: var(--bad);
 }
 .gs-more {
   width: 100%;
   min-height: 44px;
   padding: 0 12px;
-  font-size: 13.5px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 680;
   color: var(--accent-text);
   display: flex;
   align-items: center;

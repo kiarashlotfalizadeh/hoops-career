@@ -18,6 +18,8 @@ export function BoxTab({ g, league, userGame, colors }: { g: GameResult; league:
       <Section title="By period">
         <div className="card gv-ls">
           <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+          {/* (the board over the report names the night's occasion; the crowd is here) */}
+          {g.att ? <div className="gv-att">Attendance {g.att.toLocaleString()}</div> : null}
         </div>
       </Section>
       {[g.away, g.home].map((box) => {

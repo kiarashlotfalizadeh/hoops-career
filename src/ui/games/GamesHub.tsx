@@ -18,7 +18,7 @@ import { useQueryParam } from '../league/shared';
 import { TeamScheduleList, type ScheduleFilter } from './ScheduleList';
 import { gameTag, liveSeries, planStatus } from './data';
 import { seasonSeries, seriesParts, seriesText } from './series';
-import { FormPills, useBillings } from './occasion';
+import { FormPills, nightTitle, useBillings } from './occasion';
 import './games.css';
 
 const FILTERS: (ScheduleFilter | 'opp')[] = ['all', 'upcoming', 'results', 'home', 'away', 'cup', 'post', 'opp'];
@@ -137,7 +137,8 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
         return w + l === 0 ? '' : w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
     : ss && ss.total > 0
-      ? `Season ${seriesText(ss)}`
+      ? // ("Season 1-0 · 3 left"; before the first meeting, "No meetings yet · 4 left")
+        `${ss.won + ss.lost ? 'Season ' : ''}${seriesText(ss)}`
       : '';
   const rec = (tid: number) => {
     const ts = curTeamSeason(league, tid);
@@ -160,20 +161,19 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
         mid={<span className="gd-bd-k">To win</span>}
       />
       <div className="gs-next-body">
-        {bill && (
-          <div className="gs-next-bill">
-            <div className={`gs-next-h w${bill.weight}`}>{bill.tag}</div>
-            <div className="gs-next-l">{bill.line}</div>
-          </div>
-        )}
+        {/* the poster's headline: what the night is billed as, or on an ordinary night who's next */}
+        <div className="gs-next-bill">
+          <h2 className={`gs-next-h w${bill ? bill.weight : 1}`}>{bill ? bill.tag : nightTitle(league, g, neutral)}</h2>
+          {bill && <div className="gs-next-l">{bill.line}</div>}
+        </div>
         {series && <SeriesStrip league={league} seriesId={series.id} />}
         <div className="gs-next-foot">
           <span className="grow gs-next-facts">
             <span className={plan.set ? 'gs-next-plan set' : 'gs-next-plan'}>{plan.text}</span>
-            {seriesLine && <span className="num">{seriesLine}</span>}
+            {seriesLine && <span className="gs-next-ss">{seriesLine}</span>}
           </span>
-          <Link to={`/games/${opp}`} className="gs-next-go" aria-label={`Matchup: the ${t.name}`}>
-            Matchup <ChevronRight size={16} aria-hidden="true" />
+          <Link to={`/games/${opp}`} className="btn sm gs-next-go" aria-label={`Matchup: the ${t.name}`}>
+            Matchup <ChevronRight size={15} aria-hidden="true" />
           </Link>
         </div>
       </div>

@@ -9,7 +9,8 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameStory } from '../../core/analysis/gameStory';
-import { Avatar, CountUp } from './ui';
+import { Avatar, CountUp, Statline } from './ui';
+import { madeAtt } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
 import { matchupLooks } from '../teamColors';
@@ -37,6 +38,16 @@ export function gameTypeLabel(league: League, g: GameResult): string {
   return g.type === 'playin' ? 'Play-In' : 'Regular season';
 }
 
+/**
+ * The two teams' colours as the board wears them, [home, away]: for a game's charts on the paper (the
+ * shot charts, win probability, the margin), so each team reads in the colour its half of the poster
+ * has, deep enough to read on paper.
+ */
+export function boardColors(league: League, g: { home: { tid: number }; away: { tid: number } }): [string, string] {
+  const [h, a] = matchupLooks(league.teams[g.home.tid].colors, league.teams[g.away.tid].colors);
+  return [h.slab, a.slab];
+}
+
 /** One side of a game board: the team, its big figure (points, a chance to win, a record) and a line under its name. */
 export interface BoardSide {
   tid: number;
@@ -48,9 +59,11 @@ export interface BoardSide {
 }
 
 /**
- * A game's two teams side by side, away on the left and home on the right, each on a flat field of
- * its own colour: the scoreboard every game screen opens with (the next game's chances, the final's
- * points). `mid` names the figures ("Final", "To win"); `links` makes each side a tap to its team.
+ * A game's two teams side by side, away on the left and home on the right: the poster every game
+ * screen opens with (the next game's chances, the final's points). Each team is one solid block of its
+ * colour, a full court's white lines across both (the half line on the seam), the figures in the
+ * condensed black cut as big as they fit, each team's mark and name under its figure. `mid` is the
+ * pill on the seam under the figures ("Won by 18", "To win"); `links` makes each side a tap to its team.
  */
 export function GameBoard({
   league,
@@ -66,7 +79,7 @@ export function GameBoard({
   away: BoardSide;
   home: BoardSide;
   over: [ReactNode, ReactNode?];
-  mid: ReactNode;
+  mid?: ReactNode;
   links?: boolean;
   className?: string;
   children?: ReactNode;
@@ -76,25 +89,34 @@ export function GameBoard({
   const [lh, la] = matchupLooks(h.colors, a.colors);
   const side = (s: BoardSide, isHome: boolean) => {
     const t = league.teams[s.tid];
-    const body = (
+    const cls = `gd-bd-team${isHome ? ' home' : ''}${s.lost ? ' lost' : ''}`;
+    const id = (
       <>
-        <span className="gd-bd-id">
-          <TeamLogo tid={t.tid} size={34} decorative />
-          <span className="gd-bd-ab">{t.abbrev}</span>
+        <TeamLogo tid={t.tid} size={24} decorative />
+        <span className="gd-bd-who">
+          {/* (a long name gives way to its abbreviation on a phone) */}
+          <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : ''}`}>{t.name}</span>
+          {t.name.length > 9 && <span className="gd-bd-nm short">{t.abbrev}</span>}
           {s.sub && <span className="gd-bd-sub num">{s.sub}</span>}
         </span>
-        <span className="gd-bd-fig num">{s.fig}</span>
       </>
     );
-    const cls = `gd-bd-team${isHome ? ' home' : ''}${s.lost ? ' lost' : ''}`;
-    return links ? (
-      <Link to={t.tid === league.userTid ? '/team' : `/teams/${t.tid}`} className={cls}>
-        {body}
-      </Link>
-    ) : (
-      <span className={cls}>{body}</span>
-    );
+    return {
+      fig: (
+        <span className={`${cls} gd-bd-figc`}>
+          <span className="gd-bd-fig num">{s.fig}</span>
+        </span>
+      ),
+      id: links ? (
+        <Link to={t.tid === league.userTid ? '/team' : `/teams/${t.tid}`} className={`${cls} gd-bd-id`}>
+          {id}
+        </Link>
+      ) : (
+        <span className={`${cls} gd-bd-id`}>{id}</span>
+      ),
+    };
   };
+  const [sa, sh] = [side(away, false), side(home, true)];
   return (
     <div className={`gd-board ${className}`} style={{ '--fa': la.slab, '--fh': lh.slab } as CSSProperties}>
       <div className="gd-bd-over">
@@ -102,9 +124,13 @@ export function GameBoard({
         {over[1] && <span>{over[1]}</span>}
       </div>
       <div className="gd-bd-row">
-        {side(away, false)}
-        <div className="gd-bd-mid">{mid}</div>
-        {side(home, true)}
+        {sa.fig}
+        {sh.fig}
+      </div>
+      <div className="gd-bd-ids">
+        {sa.id}
+        <span className="gd-bd-mid">{mid}</span>
+        {sh.id}
       </div>
       {children}
     </div>
@@ -138,7 +164,11 @@ export function FinalSlab({
   const away = league.teams[res.away.tid];
   const us = res.home.tid === league.userTid ? res.home : res.away.tid === league.userTid ? res.away : null;
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
+  const by = Math.abs(res.home.pts - res.away.pts);
   const fig = (pts: number) => (moment ? <CountUp value={String(pts)} ms={800} /> : pts);
+  // the occasion over the board: a regular-season night's own (opening night, a rivalry) or the attendance; a series, the play-in and the Cup say theirs
+  const kind = gameTypeLabel(league, res);
+  const occasion = story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : kind !== 'Regular season' ? kind : res.att ? `Att ${res.att.toLocaleString()}` : '';
   return (
     <section
       className={`gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}
@@ -148,43 +178,62 @@ export function FinalSlab({
         league={league}
         away={{ tid: away.tid, fig: fig(res.away.pts), lost: res.away.pts < res.home.pts }}
         home={{ tid: home.tid, fig: fig(res.home.pts), lost: res.home.pts < res.away.pts }}
-        over={[
-          // (a regular-season night's occasion in place of "Regular season": a series, the play-in and the Cup say theirs)
-          story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : gameTypeLabel(league, res),
-          `${fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}${res.att ? ` · Att ${res.att.toLocaleString()}` : ''}`,
-        ]}
+        over={[`${res.ot ? finalLabel(res.ot) : 'Final'} · ${fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}`, occasion]}
         mid={
-          <>
-            <span className="gd-bd-k">{res.ot ? finalLabel(res.ot) : 'Final'}</span>
-            {us && <span className={`gd-bd-wl ${won ? 'w' : 'l'}`}>{won ? 'Win' : 'Loss'}</span>}
-          </>
+          us ? (
+            <span className={`gd-bd-pill ${won ? 'w' : 'l'}`}>
+              {won ? 'Won' : 'Lost'} by {by}
+            </span>
+          ) : (
+            <span className="gd-bd-pill">
+              {(res.home.pts > res.away.pts ? home : away).abbrev} by {by}
+            </span>
+          )
         }
       />
-      {story && <StoryBlock league={league} story={story} moment={moment} />}
+      {story && <StoryBlock league={league} res={res} story={story} moment={moment} />}
       {linescore && <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />}
       {children && <div className="gd-fs-actions">{children}</div>}
     </section>
   );
 }
 
-/** The result as the night's story: the headline and its dek, the hero's jersey and line, and what it means (the full story a tap away in the news). */
-function StoryBlock({ league, story, moment }: { league: League; story: GameStory; moment?: boolean }) {
+/**
+ * The result as the night's story, printed under the board: the headline and its dek, the player of
+ * the game with his line as a box score's figures, and what it means (the full story a tap away in
+ * the news).
+ */
+function StoryBlock({ league, res, story, moment }: { league: League; res: GameResult; story: GameStory; moment?: boolean }) {
   const hero = story.hero !== undefined ? league.players[story.hero] : undefined;
+  const line = hero ? [...res.home.players, ...res.away.players].find((b) => b.pid === hero.pid) : undefined;
+  const figs = line
+    ? [
+        { k: 'PTS', v: String(line.pts) },
+        { k: 'REB', v: String(line.orb + line.drb) },
+        { k: 'AST', v: String(line.ast) },
+        ...(line.stl >= 4 ? [{ k: 'STL', v: String(line.stl) }] : []),
+        ...(line.blk >= 4 ? [{ k: 'BLK', v: String(line.blk) }] : []),
+        { k: 'FG', v: madeAtt(line.fgm, line.fga) },
+      ]
+    : [];
   return (
     <div className="gd-sb">
       <h2 className={`gd-sb-head${moment ? ' rise' : ''}`}>{story.head}</h2>
       {story.dek && <p className="gd-sb-dek">{story.dek}</p>}
-      {hero && story.heroLine && (
-        <Link to={`/player/${hero.pid}`} className="gd-sb-hero">
-          <Avatar p={hero} size="lg" />
-          <span className="gd-sb-who">
-            <span className="gd-sb-k">{story.won ? 'Player of the game' : 'Best of the night'}</span>
-            <span className="gd-sb-name ellipsis">
-              {hero.firstName} {hero.lastName}
+      {hero && (line || story.heroLine) && (
+        <div className="gd-sb-pog">
+          <Link to={`/player/${hero.pid}`} className="gd-sb-hero">
+            <Avatar p={hero} />
+            <span className="gd-sb-who">
+              <span className="over">{story.won ? 'Player of the game' : 'Best of the night'}</span>
+              <span className="gd-sb-name ellipsis">
+                {hero.firstName} {hero.lastName}
+              </span>
             </span>
-            <span className="gd-sb-line num">{story.heroLine}</span>
-          </span>
-        </Link>
+            <ChevronRight size={16} className="gd-sb-chev" aria-hidden="true" />
+          </Link>
+          {line ? <Statline items={figs} /> : <span className="gd-sb-line num">{story.heroLine}</span>}
+        </div>
       )}
       {story.means.length > 0 && (
         <ul className="gd-sb-means" aria-label="What it means">
