@@ -46,9 +46,9 @@
   color: var(--brand);
   font-weight: 700;
 }
-/* games against your team on another club's page: your team's edge */
+/* games against your team on another club's page: your team's wash */
 .gs-row.h2h {
-  box-shadow: inset 2px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .gs-date {
   display: flex;
@@ -117,32 +117,12 @@
   font-size: 19px;
   line-height: 1.02;
 }
-.gs-under {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 3px;
-}
-/* the keys to the game under a result: a dot each, filled when met */
-.gs-keys {
-  display: inline-flex;
-  gap: 3px;
-}
-.gs-keys > i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1.5px var(--line-3);
-}
-.gs-keys > i.met {
-  background: var(--good);
-  box-shadow: none;
-}
 .gs-ot {
+  margin-top: 2px;
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 11.5px;
-  font-weight: 620;
+  font-weight: 600;
   color: var(--text-dim);
 }
 /* the result: its letter in its signal, before the score */
@@ -183,70 +163,19 @@
 .gs-more:active {
   background: var(--surface);
 }
-/* the filters: one row that scrolls sideways, its edges fading where more chips wait */
-.gs-filters {
-  position: relative;
-}
-.gs-filters::before,
-.gs-filters::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 32px;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease-out;
-  z-index: 1;
-}
-.gs-filters::before {
-  left: calc(-1 * var(--gut-l));
-  background: linear-gradient(90deg, var(--bg) 20%, transparent);
-}
-.gs-filters::after {
-  right: calc(-1 * var(--gut-r));
-  background: linear-gradient(270deg, var(--bg) 20%, transparent);
-}
-.gs-filters.fl::before,
-.gs-filters.fr::after {
-  opacity: 1;
-}
-.gs-filters .chips {
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
-  padding: 2px var(--gut-r) 2px var(--gut-l);
-}
-.gs-filters .chips::-webkit-scrollbar {
-  display: none;
-}
-.gs-filters .chip {
-  flex: none;
-}
 .gs-sub > .gs-tag {
   flex: none;
 }
-/* the user's big nights: an upcoming game's billing, a result's headline (the front page's in the serif) */
+/* the user's big nights: an upcoming game's billing, a front-page result's headline */
 .gs-bill {
   flex: none;
-  font-weight: 680;
-  color: var(--text);
+  font-weight: 620;
+  color: var(--text-2);
 }
 .gs-bill.w3 {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-style: italic;
-  font-size: 13.5px;
-  font-weight: 600;
+  color: var(--text);
+  font-weight: 680;
 }
 .gs-head {
   color: var(--text-2);
-}
-.gs-head.big {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-size: 13.5px;
-  font-weight: 560;
-  color: var(--text);
 }

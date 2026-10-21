@@ -1,72 +1,57 @@
 /* ------------------------------------------------------------ gameday: the final, the recap, the report, the charts
-   A game's result reads like a newspaper's game story: the scoreboard in both teams' colours, then
-   the headline in the serif, the dek, the player of the game, and the linescore and box score as
-   printed tables. */
+   A game reads like a scoreboard and then a game story: the two teams side by side in their own
+   colours (GameBoard), then the headline in the expanded cut, the dek, the player of the game, and
+   the box score as printed tables. */
 
-/* ------------------------------------------------------------ the final (FinalSlab)
-   The scoreboard: two flat team fields side by side, each lit from the top with its trim along the
-   top edge, the winner's score bright and the loser's back. The story and the linescore sit under
-   it on the page's ground. */
+/* ------------------------------------------------------------ the board (GameBoard)
+   Two flat team fields side by side, deepening toward the foot as a slab does; each team's mark and
+   abbreviation, then its big condensed figure facing the middle, where a small pill names the
+   figures ("Final", "To win"). The side that lost steps back. */
 .gd-final {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
   min-width: 0;
 }
-.gd-fs-board {
+.gd-board {
   position: relative;
   isolation: isolate;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 15px 14px 16px;
-  border-radius: var(--radius);
+  gap: 12px;
+  padding: 14px 14px 16px;
+  border-radius: var(--radius-lg);
   color: #fff;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 60%), linear-gradient(90deg, var(--fa) 50%, var(--fh) 50%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.2)), linear-gradient(90deg, var(--fa) 50%, var(--fh) 50%);
   --text: #fff;
-  --text-2: rgba(255, 255, 255, 0.84);
-  --text-dim: rgba(255, 255, 255, 0.74);
+  --text-2: rgba(255, 255, 255, 0.86);
+  --text-dim: rgba(255, 255, 255, 0.76);
 }
-/* each team's trim along the top, over its own half */
-.gd-fs-board::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: linear-gradient(90deg, var(--ta) 50%, var(--th) 50%);
-}
-/* (a hairline where the two fields meet) */
-.gd-fs-board::after {
-  content: '';
-  position: absolute;
-  top: 3px;
-  bottom: 0;
-  left: 50%;
-  width: 1px;
-  background: rgba(0, 0, 0, 0.22);
-}
-.gd-fs-over {
+.gd-bd-over {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 600;
   color: var(--text-2);
   white-space: nowrap;
 }
-.gd-fs-over > span:first-child {
+.gd-bd-over > span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.gd-fs-row {
+.gd-bd-over > span + span {
+  text-align: right;
+}
+.gd-bd-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
-.gd-fs-team {
+.gd-bd-team {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -74,25 +59,34 @@
   min-width: 0;
   color: inherit;
 }
-.gd-fs-team.home {
+.gd-bd-team.home {
   flex-direction: row-reverse;
 }
-.gd-fs-id {
+.gd-bd-id {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   flex: none;
+  min-width: 44px;
 }
-.gd-fs-ab {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 15px;
+.gd-bd-ab {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 14px;
   line-height: 1;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
 }
-.gd-fs-pts {
+.gd-bd-sub {
+  margin-top: -1px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-dim);
+}
+.gd-bd-fig {
+  min-width: 0;
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 760;
@@ -100,41 +94,67 @@
   line-height: 0.88;
   letter-spacing: -0.012em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.gd-fs-team.lost .gd-fs-pts {
-  color: rgba(255, 255, 255, 0.5);
+/* a percentage's sign rides small beside its figure */
+.gd-bd-fig small {
+  margin-left: 2px;
+  font-size: 0.34em;
+  font-weight: 720;
+  letter-spacing: 0;
+  vertical-align: 1.45em;
 }
-.gd-fs-mid {
+.gd-bd-team.lost .gd-bd-fig {
+  color: rgba(255, 255, 255, 0.52);
+}
+.gd-bd-mid {
   position: relative;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 5px;
-  min-width: 44px;
+  min-width: 46px;
   padding: 6px 7px;
   border-radius: var(--radius-sm);
-  background: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.34);
 }
-.gd-fs-final {
-  font-size: 13px;
-  font-weight: 680;
+.gd-bd-k {
+  font-size: 12.5px;
+  font-weight: 660;
   line-height: 1;
   white-space: nowrap;
 }
-.gd-fs-wl {
+.gd-bd-wl {
   padding: 3px 7px;
   border-radius: var(--radius-xs);
   font-size: 11.5px;
   font-weight: 680;
   line-height: 1.1;
 }
-.gd-fs-wl.w {
-  background: var(--accent);
-  color: var(--accent-ink);
+.gd-bd-wl.w {
+  background: #fff;
+  color: #0a0a0c;
 }
-.gd-fs-wl.l {
+.gd-bd-wl.l {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+/* a line across the foot of the board (the projection, the series) */
+.gd-bd-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: center;
+}
+.gd-bd-foot b {
+  color: #fff;
+  font-weight: 700;
 }
 .gd-fs-actions {
   display: flex;
@@ -142,13 +162,23 @@
   gap: 8px;
 }
 @media (hover: hover) and (pointer: fine) {
-  .gd-fs-team:hover .gd-fs-ab {
+  a.gd-bd-team:hover .gd-bd-ab {
     text-decoration: underline;
     text-underline-offset: 3px;
   }
 }
 
-/* ------------------------------------------------------------ the linescore: a printed table */
+/* ------------------------------------------------------------ the linescore: a printed table
+   In a scroller of its own, so a card's corner or padding never clips the total: in a flush group
+   its ends take the row's padding. */
+.gd-ls-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.gd-ls-wrap::-webkit-scrollbar {
+  display: none;
+}
 .gd-ls {
   width: 100%;
   border-collapse: collapse;
@@ -157,9 +187,20 @@
 }
 .gd-ls th,
 .gd-ls td {
-  padding: 7px 8px;
+  padding: 7px 6px;
   text-align: right;
   white-space: nowrap;
+}
+.card.flush .gd-ls th:first-child,
+.card.flush .gd-ls td:first-child {
+  padding-left: var(--row-px);
+}
+.card.flush .gd-ls th:last-child,
+.card.flush .gd-ls td:last-child {
+  padding-right: var(--row-px);
+}
+.card.flush .gd-ls thead th {
+  padding-top: 10px;
 }
 .gd-ls th:first-child,
 .gd-ls td:first-child {
@@ -204,8 +245,8 @@
 }
 
 /* ------------------------------------------------------------ the result as a story (FinalSlab's StoryBlock)
-   The headline in the serif, its dek, the player of the game, what it means as a line of meta. A
-   front-page night gets a bigger headline; a brief stays calm. */
+   The headline in the expanded cut, its dek, the player of the game, what it means as a line of
+   meta. A front-page night gets a bigger headline; a brief stays calm. */
 .gd-sb {
   display: flex;
   flex-direction: column;
@@ -214,21 +255,21 @@
 }
 .gd-sb-head {
   margin: 0;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 29px;
-  line-height: 1.06;
-  letter-spacing: -0.018em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 25px;
+  line-height: 1.08;
+  letter-spacing: -0.028em;
   text-wrap: balance;
 }
 .gd-story.w3 .gd-sb-head {
-  font-size: clamp(32px, 9.4vw, 40px);
-  line-height: 1.02;
-  letter-spacing: -0.022em;
+  font-size: clamp(27px, 7.6vw, 30px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
 }
 .gd-story.w1 .gd-sb-head {
-  font-size: 24px;
+  font-size: 21px;
 }
 .gd-sb-dek {
   margin: -4px 0 0;
@@ -242,11 +283,9 @@
   align-items: center;
   gap: 12px;
   min-width: 0;
-  margin: 0 -8px;
-  padding: 10px 8px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
+  padding: 12px var(--pad-card);
+  border-radius: var(--radius);
+  background: var(--raised);
   color: inherit;
   transition: background var(--dur-fast) ease;
 }
@@ -259,8 +298,8 @@
   }
 }
 .gd-sb-hero .avatar.lg {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
 }
 .gd-sb-who {
   display: flex;
@@ -288,7 +327,7 @@
   padding: 0;
   list-style: none;
   font-size: 13.5px;
-  font-weight: 560;
+  font-weight: 520;
   line-height: 1.5;
   color: var(--text-2);
   text-wrap: pretty;
@@ -338,13 +377,13 @@
 /* (wide screens: the scoreboard's two sides close in around the middle, the headline grows, the
    linescore keeps a printed table's width) */
 @media (min-width: 600px) {
-  .gd-fs-row {
+  .gd-bd-row {
     width: 100%;
     max-width: 600px;
     margin: 0 auto;
     gap: 18px;
   }
-  .gd-fs-pts {
+  .gd-bd-fig {
     font-size: 76px;
   }
   .gd-sb-head {
@@ -353,7 +392,7 @@
   .gd-story.w3 .gd-sb-head {
     font-size: 42px;
   }
-  .gd-final .gd-ls {
+  .gd-final .gd-ls-wrap {
     max-width: 560px;
   }
 }
@@ -386,7 +425,7 @@
 }
 /* (your own: your team's edge, as your rows have everywhere) */
 .gd-star.mine {
-  box-shadow: inset 2px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .gd-star-n {
   flex: none;
@@ -534,7 +573,7 @@
   font-size: 12px;
   color: var(--text-dim);
 }
-/* what was said: pull quotes in the serif */
+/* what was said: the words, then who said them */
 .gd-quotes {
   display: flex;
   flex-direction: column;
@@ -545,13 +584,9 @@
 }
 .gd-quote p {
   margin: 0;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-style: italic;
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 460;
-  line-height: 1.38;
-  letter-spacing: -0.005em;
+  line-height: 1.45;
   text-wrap: pretty;
 }
 .gd-quote footer {
@@ -980,36 +1015,35 @@ table.stats .bx-team td {
 }
 
 /* ------------------------------------------------------------ the form guide: the last five, oldest first
-   A letter each: a win filled in its signal, a loss an outline */
+   A letter each in its signal: no boxes */
 .gd-form {
   display: inline-flex;
-  gap: 3px;
-}
-.gd-form i {
-  display: inline-grid;
-  place-items: center;
-  width: 17px;
-  height: 18px;
-  border-radius: var(--radius-xs);
-  font-style: normal;
+  gap: 4px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 11.5px;
-  font-weight: 740;
+  font-size: 14px;
+  font-weight: 760;
   line-height: 1;
 }
+.gd-form i {
+  font-style: normal;
+  width: 0.62em;
+  text-align: center;
+}
 .gd-form i.w {
-  background: var(--good);
-  color: var(--accent-ink);
+  color: var(--good);
 }
 .gd-form i.l {
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
-  color: rgba(255, 255, 255, 0.84);
+  color: color-mix(in srgb, var(--bad) 80%, white);
 }
-/* (on a page ground rather than a slab) */
-.gd-form.on-page i.l {
-  box-shadow: inset 0 0 0 1px var(--line-3);
-  color: var(--text-2);
+/* (on a team's colours: white wins, dimmed losses, so the signal never fights the slab) */
+.slab .gd-form i.w,
+.gd-board .gd-form i.w {
+  color: #fff;
+}
+.slab .gd-form i.l,
+.gd-board .gd-form i.l {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* ------------------------------------------------------------ a game's billing on a slab: the occasion as a headline, then why */
@@ -1020,20 +1054,20 @@ table.stats .bx-team td {
   min-width: 0;
 }
 .gd-bill-tag {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 23px;
-  line-height: 1.08;
-  letter-spacing: -0.016em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 21px;
+  line-height: 1.1;
+  letter-spacing: -0.028em;
   text-wrap: balance;
 }
 .gd-bill.w3 .gd-bill-tag {
-  font-size: 28px;
-  letter-spacing: -0.02em;
+  font-size: 25px;
+  letter-spacing: -0.03em;
 }
 .gd-bill.w1 .gd-bill-tag {
-  font-size: 19px;
+  font-size: 18px;
 }
 .gd-bill-line {
   font-size: 13.5px;
@@ -1053,12 +1087,12 @@ table.stats .bx-team td {
 
 /* ------------------------------------------------------------ the live intro's opening graphic: the night's billing */
 .gd-intro-bill {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: clamp(22px, 6.4vw, 30px);
-  line-height: 1.06;
-  letter-spacing: -0.018em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: clamp(21px, 6vw, 28px);
+  line-height: 1.08;
+  letter-spacing: -0.028em;
   text-wrap: balance;
   animation: gd-rise 420ms var(--ease-out) both;
 }
@@ -1148,4 +1182,97 @@ table.stats .bx-team td {
   display: block;
   width: 100%;
   margin: 0 auto;
+}
+
+/* ------------------------------------------------------------ the top of a game screen (GameTop): Back, its name in small, a link */
+.gd-top {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin: -6px 0 -14px -10px;
+}
+.gd-top-t {
+  margin: 0;
+  font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 15px;
+  font-weight: 640;
+  letter-spacing: 0;
+  color: var(--text-2);
+}
+.gd-top .card-link {
+  flex: none;
+}
+/* the linescore in a group (the report's Box) */
+.gv-ls {
+  padding-top: 12px;
+  padding-bottom: 8px;
+}
+
+/* ------------------------------------------------------------ After the game: a row each, opening on the rest */
+.gd-fold + .gd-fold {
+  border-top: 1px solid var(--line);
+}
+.gd-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  list-style: none;
+  cursor: pointer;
+  transition: background var(--dur-fast) ease;
+}
+.gd-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.gd-fold > summary:active {
+  background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .gd-fold > summary:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
+.gd-fold-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.gd-fold-c {
+  flex: none;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) ease;
+}
+.gd-fold[open] > summary .gd-fold-c {
+  transform: rotate(180deg);
+}
+.gd-fold[open] > summary .lr-meta {
+  visibility: hidden;
+}
+.gd-fold-b {
+  border-top: 1px solid var(--line);
+}
+.gd-fold-b > .gd-facts,
+.gd-fold-b > .gd-quotes {
+  padding: 14px var(--row-px) 16px;
+}
+.gd-fold-b > .list > * + * {
+  border-top: 1px solid var(--line);
+}
+/* a fold's explanation: its "?" at the top right of what it opens on */
+.gd-fold-help {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 8px 0;
+  margin-bottom: -22px;
+  position: relative;
+  z-index: 1;
+}
+.gd-fold-help + .mu-fold {
+  padding-right: 44px;
+}
+.gd-fold-b > .mu-note {
+  padding: 14px 44px 14px var(--row-px);
 }

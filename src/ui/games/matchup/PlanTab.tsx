@@ -1,7 +1,7 @@
 // The matchup page's Plan: your plan against this team first (each item with exactly what it
-// changes, and how long it lasts), what the team knows of the tactics it plays them with (and the
-// practice focus), then the staff's counters, a star plan, a junk
-// defense and who it chases, a defender to attack, players to hack, and a note. Every change is the
+// changes, and how long it lasts), then the staff's counters, the special plans (a star plan, a junk
+// defense and who it chases, a defender to attack, players to hack: a row each that opens), what the
+// team knows of the tactics it plays them with (and the practice focus), and a note. Every change is the
 // user's tactics against this team only, on top of his playbook (see core/league/gamePlans.ts).
 import { useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
@@ -23,6 +23,7 @@ import { teamPlayers } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
+import { Fold } from '../occasion';
 import { ftChance } from '../../../core/sim/engine';
 import { nextUserGame } from '../../../core/analysis/preview';
 import { FamBrief } from '../../today/Practice';
@@ -91,12 +92,16 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
         </div>
       </Section>
 
-      <FamiliarityCard league={league} opp={opp} />
       <CountersCard league={league} opp={opp} />
-      <StarPlanCard league={league} opp={opp} />
-      <JunkCard league={league} opp={opp} />
-      <AttackCard league={league} opp={opp} />
-      <HackCard league={league} opp={opp} />
+      <Section title="Special plans">
+        <div className="card flush list">
+          <StarPlanCard league={league} opp={opp} />
+          <JunkCard league={league} opp={opp} fold />
+          <AttackCard league={league} opp={opp} fold />
+          <HackCard league={league} opp={opp} />
+        </div>
+      </Section>
+      <FamiliarityCard league={league} opp={opp} />
       <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </>
   );
@@ -181,43 +186,43 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
       const label = plan === 'none' ? 'Play their stars straight' : plan === 'double' ? `Double-team ${who}` : `Deny ${who}`;
       setPlanItem(l, opp, { id: `star-${plan}`, label, group: 'star', patch: { defense: { starPlan: plan, starTarget: plan === 'none' ? null : tgt } } });
     });
+  const who = target !== null ? names(target) || league.players[target]?.lastName : 'their top creator';
   return (
-    <Section
-      title={
-        <h3>
-          <Term id="starplan">Star plan</Term>
-        </h3>
-      }
-      right={
+    <Fold
+      title="Star plan"
+      peek={sp === 'none' ? STAR_PLAN_META.none.label : `${STAR_PLAN_META[sp].label} · ${who}`}
+      help={
         <Help title="Star plan">
           Deny keeps the ball out of one player&apos;s hands; a double team sends a second defender when he attacks. Without a target it goes after their primary creator. ★ is the
           player their offense runs through by the numbers, or their best shot creator by the scouts.
         </Help>
       }
     >
-      <div className="mu-group">
-        <Chips
-          label="Star plan"
-          value={sp}
-          disabled={simming}
-          // from no star plan it goes after the suggested star; between deny and double the target picked (Top creator too) stays
-          onChange={(x: StarPlan) => set(x, x === 'none' ? null : sp === 'none' ? suggested : target)}
-          options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
-        />
-        {sp !== 'none' && theirs.length > 0 && (
-          <div className="mu-sub">
-            <div className="over">On</div>
-            <Chips
-              label="Star plan target"
-              value={target ?? -1}
-              disabled={simming}
-              onChange={(pid: number) => set(sp, pid < 0 ? null : pid)}
-              options={[{ id: -1, label: 'Top creator' }, ...theirs.map((p) => ({ id: p.pid, label: `${names(p.pid)}${p.pid === suggested ? ' ★' : ''}` }))]}
-            />
-          </div>
-        )}
+      <div className="mu-fold">
+        <div className="mu-group">
+          <Chips
+            label="Star plan"
+            value={sp}
+            disabled={simming}
+            // from no star plan it goes after the suggested star; between deny and double the target picked (Top creator too) stays
+            onChange={(x: StarPlan) => set(x, x === 'none' ? null : sp === 'none' ? suggested : target)}
+            options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
+          />
+          {sp !== 'none' && theirs.length > 0 && (
+            <div className="mu-sub">
+              <div className="over">On</div>
+              <Chips
+                label="Star plan target"
+                value={target ?? -1}
+                disabled={simming}
+                onChange={(pid: number) => set(sp, pid < 0 ? null : pid)}
+                options={[{ id: -1, label: 'Top creator' }, ...theirs.map((p) => ({ id: p.pid, label: `${names(p.pid)}${p.pid === suggested ? ' ★' : ''}` }))]}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </Section>
+    </Fold>
   );
 }
 
@@ -268,9 +273,10 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
       setPlanItem(l, opp, { id: 'hack', label: `Hack-a-${who}${q > 1 ? ` from Q${q}` : ''}`, group: 'hack', patch: { manage: { hackTargets: pids, hackFromQ: q } } });
     });
   return (
-    <Section
+    <Fold
       title="Hack-a-player"
-      right={
+      peek={targets.length ? targets.map((pid) => names(pid)).join(', ') + (fromQ > 1 ? ` from Q${fromQ}` : '') : 'Nobody'}
+      help={
         <Help title="Hack-a-player">
           <p>
             Foul a poor free-throw shooter on purpose whenever he&apos;s on the floor, from the quarter you pick: two free throws for him instead of a normal possession
@@ -292,7 +298,7 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
           Nobody in their rotation is a poor free-throw shooter: the worst, {names(sorted[0].pid)}, makes {Math.round(ftPct(sorted[0].ratings.ft) * 100)}%.
         </div>
       )}
-      <div className="card flush list" hidden={!rows.length}>
+      <div className="list mu-hack-list" hidden={!rows.length}>
         {breakEven !== null && (
           <div className="list-divider list-h" aria-hidden="true">
             <span>Pays under {breakEven}% from the line</span>
@@ -334,7 +340,7 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
           </div>
         )}
       </div>
-    </Section>
+    </Fold>
   );
 }
 

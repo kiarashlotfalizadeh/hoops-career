@@ -52,10 +52,29 @@ export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[];
   );
 }
 
-/** How the keys went, from the result. */
-export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
+/** "2 of 3 met": how the keys went, in a line. */
+export function keysMetText(keys: KeyGrade[]): string {
+  const counted = keys.filter((k) => k.met !== null);
+  return `${counted.filter((k) => k.met).length} of ${counted.length} met`;
+}
+
+/** How the keys went, from the result (`bare`: the rows alone, for a group that already names them). */
+export function KeysGraded({ keys, bare }: { keys: KeyGrade[]; bare?: boolean }) {
   const counted = keys.filter((k) => k.met !== null);
   const met = counted.filter((k) => k.met).length;
+  const rows = keys.map((k) => (
+    <div key={k.id} className="gd-key">
+      <span className={`gd-key-mark ${k.met === null ? 'void' : k.met ? 'met' : 'missed'}`} role="img" aria-label={k.met === null ? 'Did not apply' : k.met ? 'Met' : 'Missed'}>
+        {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
+      </span>
+      <div className="grow">
+        <div className="gd-key-t">{k.title}</div>
+        <div className="gd-key-g">{k.goal}</div>
+      </div>
+      <span className="gd-key-v num">{k.value === null ? 'Sat out' : `${k.value}${k.pct ? '%' : ''}`}</span>
+    </div>
+  ));
+  if (bare) return <div className="list">{rows}</div>;
   return (
     <section className="sec">
       <div className="sec-h">
@@ -64,24 +83,7 @@ export function KeysGraded({ keys }: { keys: KeyGrade[] }) {
           {met} of {counted.length}
         </span>
       </div>
-      <div className="card flush list">
-        {keys.map((k) => (
-          <div key={k.id} className="gd-key">
-            <span
-              className={`gd-key-mark ${k.met === null ? 'void' : k.met ? 'met' : 'missed'}`}
-              role="img"
-              aria-label={k.met === null ? 'Did not apply' : k.met ? 'Met' : 'Missed'}
-            >
-              {k.met === null ? '—' : k.met ? <Check size={15} /> : <X size={15} />}
-            </span>
-            <div className="grow">
-              <div className="gd-key-t">{k.title}</div>
-              <div className="gd-key-g">{k.goal}</div>
-            </div>
-            <span className="gd-key-v num">{k.value === null ? 'Sat out' : `${k.value}${k.pct ? '%' : ''}`}</span>
-          </div>
-        ))}
-      </div>
+      <div className="card flush list">{rows}</div>
     </section>
   );
 }

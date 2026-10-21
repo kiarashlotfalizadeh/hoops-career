@@ -114,8 +114,8 @@ export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense:
     <>
       <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />
       <div className="tiny dim">
-        {defense ? 'Faced' : 'Freq'}: share of {defense ? 'opponent' : 'their'} possessions, then its rank in the league. PPP in <span className="good">green</span>:{' '}
-        {defense ? 'allows less' : 'scores more'} than the league, in <span className="bad">red</span>: {defense ? 'more' : 'less'}, where the gap is more than chance.
+        {defense ? 'Faced' : 'Freq'}: share, then league rank · PPP <span className="good">{defense ? 'allows less' : 'scores more'}</span> or{' '}
+        <span className="bad">{defense ? 'more' : 'less'}</span> than the league
       </div>
     </>
   );

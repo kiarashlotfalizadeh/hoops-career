@@ -1,9 +1,10 @@
 // One team's schedule and results, grouped by month. The Games hub shows the user's split in two
 // (what's coming, soonest first, and the results, latest first, each collapsed past its first few);
 // a team's page shows its season in order. A result opens its report; an upcoming game of the user's
-// opens its matchup page, another team's game that team's page. On the user's own schedule the big
-// nights are marked: an upcoming game by its billing (a rivalry, Christmas Day, Game 7), a result
-// the press made a story of by its headline.
+// opens its matchup page, another team's game that team's page. A row is the date, the opponent and
+// one fact: an upcoming game's billing on the user's own schedule (a rivalry, Christmas Day, Game 7)
+// or the opponent's standing; a result's W or L and score, with its top scorer (or, for a front-page
+// night, its headline).
 import { Fragment, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -42,6 +43,9 @@ interface Row {
 /** Games further off than this are marked only for what can't change (a rivalry, Christmas Day): see billingsFor's `light`. */
 const NEAR_DAYS = 7;
 
+/** Billings about the team's run rather than the game: every game ahead shares them. */
+const TEAM_STATE = new Set(['Streak on the line', 'Snap the skid']);
+
 const monthOf = (season: number, day: number) => dayToDate(season, day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 const keep = (f: ScheduleFilter, r: Row) =>
@@ -74,6 +78,7 @@ export function TeamScheduleList({
   filter = cupOnly ? 'cup' : 'all',
   split = false,
   skip,
+  headRight,
 }: {
   league: League;
   tid: number;
@@ -83,6 +88,8 @@ export function TeamScheduleList({
   filter?: ScheduleFilter;
   split?: boolean;
   skip?: number;
+  /** A control on the right of the first section's head (the hub's filter). */
+  headRight?: ReactNode;
 }) {
   const byGid = useGamesByGid(league);
   const ranks = useLeagueMemo(() => new Map(standings(league).map((r) => [r.tid, r])), [league]);
@@ -97,7 +104,9 @@ export function TeamScheduleList({
       const opp = home ? g.away : g.home;
       const res = g.played ? byGid.get(g.gid) : undefined;
       if (!res) {
-        const bill = user && !g.played && g.type !== 'allstar' ? billingsFor(league, g, tid, { light: g.day - league.day > NEAR_DAYS })[0] : undefined;
+        // (a streak is the team's, the same on every game ahead: a row marks what's about its own game)
+        const bill =
+          user && !g.played && g.type !== 'allstar' ? billingsFor(league, g, tid, { light: g.day - league.day > NEAR_DAYS }).find((b) => !TEAM_STATE.has(b.tag)) : undefined;
         // (a Cup or play-in game's tag already says what its billing would)
         return { g, opp, home, ...(bill && bill.weight >= 2 && !/^(NBA Cup|Cup |Play-In)/.test(bill.tag) ? { bill } : {}) };
       }
@@ -117,21 +126,52 @@ export function TeamScheduleList({
   // (no list carries the team's running record: a row's line is about its game, its top scorer or
   // the opponent's record, the same on every team's schedule; a month's record is in its divider)
   const rowProps = { league, tid, h2hTid, ranks };
-  if (!list.length)
-    return (
+  if (!list.length) {
+    const empty = (
       <div className="empty">
         {filter === 'cup' ? 'No NBA Cup games on the schedule.' : filter === 'post' ? 'No postseason games yet.' : rows.length ? 'No games here.' : 'No games on the schedule yet.'}
       </div>
     );
+    return headRight ? (
+      <section className="sec">
+        <div className="sec-h">
+          <h3>Schedule</h3>
+          {headRight}
+        </div>
+        {empty}
+      </section>
+    ) : (
+      empty
+    );
+  }
   if (!split) return <Chronological list={list} all={rows} collapse={collapse} {...rowProps} />;
   const upcoming = list.filter((r) => !r.g.played);
   const results = list.filter((r) => r.g.played).reverse();
   return (
     <>
       {upcoming.length > 0 && (
-        <Months title="Upcoming" rows={upcoming} all={rows} first={collapse ? 5 : Infinity} {...rowProps} records={false} more={(n) => `Show ${plural(n, 'more game')}`} />
+        <Months
+          title="Upcoming"
+          right={headRight}
+          rows={upcoming}
+          all={rows}
+          first={collapse ? 5 : Infinity}
+          {...rowProps}
+          records={false}
+          more={(n) => `Show ${plural(n, 'more game')}`}
+        />
       )}
-      {results.length > 0 && <Months title="Results" rows={results} all={rows} first={collapse ? 8 : Infinity} {...rowProps} more={(n) => `Show ${plural(n, 'earlier result')}`} />}
+      {results.length > 0 && (
+        <Months
+          title="Results"
+          right={upcoming.length ? undefined : headRight}
+          rows={results}
+          all={rows}
+          first={collapse ? 8 : Infinity}
+          {...rowProps}
+          more={(n) => `Show ${plural(n, 'earlier result')}`}
+        />
+      )}
     </>
   );
 }
@@ -151,8 +191,9 @@ function Months({
   first,
   more,
   records = true,
+  right,
   ...p
-}: RowProps & { title: string; rows: Row[]; all: Row[]; first: number; more: (n: number) => string; records?: boolean }) {
+}: RowProps & { title: string; right?: ReactNode; rows: Row[]; all: Row[]; first: number; more: (n: number) => string; records?: boolean }) {
   const [open, setOpen] = useState(false);
   const shown = open ? rows : rows.slice(0, first);
   const hidden = rows.length - shown.length;
@@ -160,6 +201,7 @@ function Months({
     <section className="sec" aria-label={title}>
       <div className="sec-h">
         <h3>{title}</h3>
+        {right}
       </div>
       <div className="card flush gs-list">
         <MonthRows rows={shown} all={all} records={records} {...p} />
@@ -234,30 +276,22 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
     // the top scorer's points stay in view when a long name is cut short (the player's own last
     // name while he's in the league: a box-score name can end in "Jr."; a teammate's namesake told apart)
     // a big night reads as its headline (the top scorer is in it, or in the report)
-    sub = r.story?.head ? (
-      <span className={`gs-head${(r.story.weight ?? 1) >= 3 ? ' big' : ''}`}>{r.story.head}</span>
-    ) : top ? (
-      <>
-        <span className="gs-lead">{boxNames(league, side)(top.pid) || top.name}</span>
-        <span className="num">{top.pts}</span>
-      </>
-    ) : (
-      r.rec
-    );
+    // (a front-page night only: the rest are a tap away in the report)
+    sub =
+      r.story?.head && (r.story.weight ?? 1) >= 3 ? (
+        <span className="gs-head">{r.story.head}</span>
+      ) : top ? (
+        <>
+          <span className="gs-lead">{boxNames(league, side)(top.pid) || top.name}</span>
+          <span className="num">{top.pts}</span>
+        </>
+      ) : (
+        r.rec
+      );
   } else {
-    const line = oppLine(league, r.opp, ranks);
-    sub = r.bill ? (
-      <>
-        <b className={`gs-bill w${r.bill.weight}`}>{r.bill.tag}</b>
-        {line && <span>· {line}</span>}
-      </>
-    ) : (
-      line
-    );
+    // one fact: what the night is billed as, else how they stand
+    sub = r.bill ? <b className={`gs-bill w${r.bill.weight}`}>{r.bill.tag}</b> : oppLine(league, r.opp, ranks);
   }
-  // the keys to the game met, under the score of the user's results
-  const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];
-  const met = keys.filter((k) => k.met).length;
   const ot = r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '';
   return (
     <Link to={to} className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}`}>
@@ -290,19 +324,7 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
             <span className={`gs-wl ${r.won ? 'w' : 'l'}`}>{r.won ? 'W' : 'L'}</span>
             <span className="num gs-score">
               {r.us}-{r.them}
-              {(ot || keys.length > 0) && (
-                <span className="gs-under">
-                  {ot && <span className="gs-ot">{ot}</span>}
-                  {/* the keys to the game, a dot each, the ones met filled first */}
-                  {keys.length > 0 && (
-                    <span className="gs-keys" role="img" aria-label={`Keys to the game: ${met} of ${keys.length} met`}>
-                      {Array.from({ length: keys.length }, (_, i) => (
-                        <i key={i} className={i < met ? 'met' : undefined} />
-                      ))}
-                    </span>
-                  )}
-                </span>
-              )}
+              {ot && <span className="gs-ot">{ot}</span>}
             </span>
           </>
         ) : r.g.played ? (

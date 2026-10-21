@@ -1,5 +1,5 @@
-// The matchup page's Scout: their league ranks, how they play, where to attack them, their play
-// types at both ends, their key players and the user's meetings with them.
+// The matchup page's Scout: their league ranks and form, how they play and where to attack them,
+// their play types at both ends, their key players and the user's meetings with them.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { League } from '../../../core/types';
@@ -11,6 +11,9 @@ import { Avatar, Help, More, Ovr, Section, Segmented } from '../../components/ui
 import { Term } from '../../components/Glossary';
 import { plural } from '../../../core/format';
 import { HeadToHead, KeyPlayers, PlayTypeTable, RankStrip, scoutSource } from '../../components/scouting';
+import { curTeamSeason } from '../../../core/league/helpers';
+import { TeamForm } from '../occasion';
+import { lastTenText, streakText } from '../series';
 
 function Bullets({ items, tone }: { items: string[]; tone?: 'good' | 'info' }) {
   return (
@@ -30,12 +33,21 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
   const how = [...(data.enough ? data.tendencies.slice(0, 2) : []), rep.offense[0], rep.defense[0]].filter(Boolean);
   const howMore = [...(data.enough ? data.tendencies.slice(2) : []), ...rep.offense.slice(1), ...rep.defense.slice(1)];
   const attack = rep.weaknesses.slice(0, 3);
+  const ts = curTeamSeason(league, opp);
+  const form = ts.won + ts.lost > 0 ? [lastTenText(ts.lastTen ?? []), streakText(ts.streak)].filter(Boolean).join(' · ') : '';
   return (
     <>
       <Section title="By the numbers" right={data.enough ? <span className="tiny dim">{scoutSource(data)}</span> : undefined}>
         {data.enough ? (
           <>
             <RankStrip d={data} part="main" />
+            {form && (
+              <div className="mu-form">
+                <span className="over">Form</span>
+                <TeamForm league={league} tid={opp} />
+                <span className="num">{form}</span>
+              </div>
+            )}
             <More label="Four factors and shot mix">
               <div style={{ marginTop: 10 }}>
                 <RankStrip d={data} part="rest" />
@@ -54,9 +66,8 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
             <Bullets items={howMore} tone="info" />
           </More>
         )}
-      </Section>
 
-      <Section title="Where to attack">
+        <div className="mu-sub-h">Where to attack</div>
         {attack.length ? <Bullets items={attack} tone="good" /> : <div className="mu-note">No obvious weakness: win the possession battle.</div>}
         {rep.weaknesses.length > 3 && (
           <More label="More">

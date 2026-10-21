@@ -1,11 +1,12 @@
 // The post-game recap for one of the user's games, most telling first: the staff's debrief (its
-// verdict, what decided it, your moves and what to do next time), the three stars (the player of the
-// game first), the keys to the game graded, the night (how win probability turned, what the
-// result did to the standings or the series, milestones and records), the highlights, what was
-// said after the game and the rest of the night's results that matter to him (the Continue bar, or
-// the final card's Next game, names the next game). Takes a stored result, so the report and the
-// Live screen's final card can both show it, under the result itself (FinalSlab.tsx).
-import { KeysGraded } from './GameKeys';
+// verdict, what decided it, your moves and what to do next time) and the highlights; then After the
+// game, a row each that opens: the keys to the game graded, the three stars (the player of the
+// game first), the night (how win probability turned, what the result did to the standings or the
+// series, milestones and records), what was said after the game and the rest of the night's results
+// that matter to him (the Continue bar, or the final card's Next game, names the next game). Takes a
+// stored result, so the report and the Live screen's final card can both show it, under the result
+// itself (FinalSlab.tsx).
+import { KeysGraded, keysMetText } from './GameKeys';
 import { useMemo, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { GameResult, League, ScheduledGame, StandingLine } from '../../core/types';
@@ -19,6 +20,7 @@ import { confStandings } from '../../core/league/standings';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { finalLabel, ordinal } from '../stats';
 import { streakText } from '../games/series';
+import { Fold } from '../games/occasion';
 import { gameTime, madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
 import { Debrief } from './Debrief';
@@ -134,179 +136,202 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
     )
     .slice(0, 4);
 
+  const keys = res.keys?.length ? res.keys : null;
   const facts = !!(stakes || newly || Math.abs(streak) >= 2 || series || turnText || swing || marks.length || records.length || playIn);
+  // what The night holds, by its labels
+  const nightPeek = [
+    turnText && 'Turning point',
+    swing?.label,
+    stakes ? `${ordinal(stakes.after.rank)} in the ${confWord(team.conf)}` : newly && 'Clinched',
+    Math.abs(streak) >= 2 && streakText(streak),
+    series && 'Series',
+    playIn && 'Play-in',
+    marks.length > 0 && 'Milestone',
+    records.length > 0 && 'Record',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="gd-recap">
       {rep && <Debrief res={res} league={league} report={rep} />}
 
-      {stars.length > 0 && (
-        <Section title="Three stars">
-          <div className="card flush list">
-            {stars.map(({ line, tid: st }, k) => {
-              const p = league.players[line.pid];
-              const mine = st === tid;
-              const pog = k === 0 && line.pid === res.pog;
-              return (
-                // named by what it shows: "1 Player of the game Shai Gilgeous-Alexander 42 pts · …"
-                <Link key={line.pid} to={`/player/${line.pid}`} className={`gd-star${pog ? ' pog' : ''}${mine ? ' mine' : ''}`}>
-                  <span className="gd-star-n num">{k + 1}</span>
-                  {p ? <Avatar p={p} /> : <TeamLogo tid={st} size={36} decorative />}
-                  <span className="grow gd-star-who">
-                    {pog && <span className="gd-star-k">Player of the game</span>}
-                    <span className="gd-star-name ellipsis">{nameOf(line.pid, line.name)}</span>
-                    <span className="gd-star-line num">
-                      {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${madeAtt(line.fgm, line.fga)} FG` : ''}
-                    </span>
-                  </span>
-                  {/* (your own carry your team's edge) */}
-                  {!mine && <span className="gd-star-team">{league.teams[st]?.abbrev}</span>}
-                </Link>
-              );
-            })}
-          </div>
-        </Section>
-      )}
-
-      {res.keys && res.keys.length > 0 && <KeysGraded keys={res.keys} />}
-
-      {facts && (
-        <Section title="The night">
-          <dl className="gd-facts">
-            {turnText && <Fact k="Turning point">{turnText}</Fact>}
-            {swing && (
-              <Fact k={swing.label}>
-                <span className={won ? 'good' : 'bad'}>{swing.text}</span>
-              </Fact>
-            )}
-            {stakes && (
-              <Fact k={confWord(team.conf)}>
-                {/* (a place held reads as one: "1st · no change", the live final's shape) */}
-                {stakes.after.rank === stakes.before.rank ? (
-                  <span className="num">
-                    <b>{ordinal(stakes.after.rank)}</b> <span className="dim">· no change</span>
-                  </span>
-                ) : (
-                  <>
-                    <span className="num">
-                      {ordinal(stakes.before.rank)} → <b>{ordinal(stakes.after.rank)}</b>
-                    </span>{' '}
-                    <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : 'bad'}`}>{stakes.after.rank < stakes.before.rank ? '▲' : '▼'}</span>
-                  </>
-                )}
-                {gbText(stakes.after) && <span className="dim num"> · {gbText(stakes.after)}</span>}
-                {newly && (
-                  <>
-                    {' '}
-                    <Tag tone={newly.tone}>{newly.text}</Tag>
-                  </>
-                )}
-              </Fact>
-            )}
-            {!stakes && newly && (
-              <Fact k="Clinched">
-                <Tag tone={newly.tone}>{newly.text}</Tag>
-              </Fact>
-            )}
-            {Math.abs(streak) >= 2 && (
-              <Fact k="Streak">
-                <span className={`num bold ${streak > 0 ? 'good' : 'bad'}`}>{streakText(streak)}</span>
-              </Fact>
-            )}
-            {series && (
-              <Fact k="Series">
-                <span className="dim2">{series.label}: </span>
-                {series.won === 4 || series.lost === 4 ? (
-                  <span className={series.won === 4 ? 'good' : 'bad'}>
-                    {series.won === 4 ? 'Won' : 'Lost'} the series {series.won}-{series.lost}
-                  </span>
-                ) : (
-                  <span className="num">
-                    {series.won}-{series.lost}
-                    {series.next ? ` · Game ${series.game} ${fmtDate(league.season, series.next.day, { weekday: 'short' })}` : ''}
-                  </span>
-                )}
-              </Fact>
-            )}
-            {playIn && (
-              <Fact k="Play-in">
-                <span className={won ? 'good' : playIn.endsWith('-78') ? 'warn' : 'bad'}>
-                  {won
-                    ? playIn.endsWith('-910')
-                      ? 'Through to the game for the 8th seed'
-                      : `In the playoffs as the ${playIn.endsWith('-78') ? '7th' : '8th'} seed`
-                    : playIn.endsWith('-78')
-                      ? 'One more chance: the game for the 8th seed'
-                      : 'Season over'}
-                </span>
-              </Fact>
-            )}
-            {marks.length > 0 && (
-              <Fact k="Milestone">
-                {marks
-                  .slice(0, 2)
-                  .map((m) => `${nameOf(m.pid, '')}'s ${markText(m.stat, m.mark)}`)
-                  .join('; ')}
-              </Fact>
-            )}
-            {records.length > 0 && (
-              <Fact k="Record">
-                {records
-                  .slice(0, 2)
-                  .map((r) => {
-                    const who = r.pid !== undefined ? `${nameOf(r.pid, '')}'s` : `${league.teams[r.tid]?.abbrev ?? '?'}'s`;
-                    const whose = r.scope === 'league' ? 'league' : `${league.teams[r.tid]?.name ?? 'franchise'}`;
-                    const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
-                    return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
-                  })
-                  .join('; ')}
-              </Fact>
-            )}
-          </dl>
-        </Section>
-      )}
-
       {highlights}
 
-      {quotes.length > 0 && (
-        <Section title="Postgame">
-          <div className="gd-quotes">
-            {quotes.map((q, i) => (
-              <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
-                <p>“{q.text}”</p>
-                <footer>
-                  {q.who}, {q.role}
-                </footer>
-              </blockquote>
-            ))}
-          </div>
-        </Section>
-      )}
-
-      {elsewhere.length > 0 && (
-        <Section title={`Elsewhere ${res.day === league.day - 1 || res.day === league.day ? 'tonight' : 'that night'}`}>
-          <div className="card flush list">
-            {elsewhere.map((g) => {
-              const hw = g.home.pts > g.away.pts;
-              return (
-                // named by what it shows: "MIA 120 @ DET 117 FINAL"
-                <Link key={g.gid} to={`/game/${g.gid}`} className="gd-other">
-                  <span className={`gd-other-t${hw ? '' : ' won'}`}>
-                    <TeamLogo tid={g.away.tid} size={20} decorative />
-                    <span>{league.teams[g.away.tid].abbrev}</span>
-                    <span className="num">{g.away.pts}</span>
-                  </span>
-                  <span className="dim">@</span>
-                  <span className={`gd-other-t${hw ? ' won' : ''}`}>
-                    <TeamLogo tid={g.home.tid} size={20} decorative />
-                    <span>{league.teams[g.home.tid].abbrev}</span>
-                    <span className="num">{g.home.pts}</span>
-                  </span>
-                  <span className="grow" />
-                  <span className="gd-other-f">{g.ot ? finalLabel(g.ot) : 'Final'}</span>
-                </Link>
-              );
-            })}
+      {(keys || stars.length > 0 || facts || quotes.length > 0 || elsewhere.length > 0) && (
+        <Section title="After the game">
+          <div className="card flush list gd-after">
+            {keys && (
+              <Fold title="Keys to the game" peek={keysMetText(keys)}>
+                <KeysGraded keys={keys} bare />
+              </Fold>
+            )}
+            {stars.length > 0 && (
+              <Fold title="Three stars" peek={stars.map(({ line }) => `${league.players[line.pid]?.lastName ?? line.name} ${line.pts}`).join(' · ')}>
+                <div className="list">
+                  {stars.map(({ line, tid: st }, k) => {
+                    const p = league.players[line.pid];
+                    const mine = st === tid;
+                    const pog = k === 0 && line.pid === res.pog;
+                    return (
+                      // named by what it shows: "1 Player of the game Shai Gilgeous-Alexander 42 pts · …"
+                      <Link key={line.pid} to={`/player/${line.pid}`} className={`gd-star${pog ? ' pog' : ''}${mine ? ' mine' : ''}`}>
+                        <span className="gd-star-n num">{k + 1}</span>
+                        {p ? <Avatar p={p} /> : <TeamLogo tid={st} size={36} decorative />}
+                        <span className="grow gd-star-who">
+                          {pog && <span className="gd-star-k">Player of the game</span>}
+                          <span className="gd-star-name ellipsis">{nameOf(line.pid, line.name)}</span>
+                          <span className="gd-star-line num">
+                            {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${madeAtt(line.fgm, line.fga)} FG` : ''}
+                          </span>
+                        </span>
+                        {/* (your own carry your team's wash) */}
+                        {!mine && <span className="gd-star-team">{league.teams[st]?.abbrev}</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </Fold>
+            )}
+            {facts && (
+              <Fold title="The night" peek={nightPeek}>
+                <dl className="gd-facts">
+                  {turnText && <Fact k="Turning point">{turnText}</Fact>}
+                  {swing && (
+                    <Fact k={swing.label}>
+                      <span className={won ? 'good' : 'bad'}>{swing.text}</span>
+                    </Fact>
+                  )}
+                  {stakes && (
+                    <Fact k={confWord(team.conf)}>
+                      {/* (a place held reads as one: "1st · no change", the live final's shape) */}
+                      {stakes.after.rank === stakes.before.rank ? (
+                        <span className="num">
+                          <b>{ordinal(stakes.after.rank)}</b> <span className="dim">· no change</span>
+                        </span>
+                      ) : (
+                        <>
+                          <span className="num">
+                            {ordinal(stakes.before.rank)} → <b>{ordinal(stakes.after.rank)}</b>
+                          </span>{' '}
+                          <span className={`num ${stakes.after.rank < stakes.before.rank ? 'good' : 'bad'}`}>{stakes.after.rank < stakes.before.rank ? '▲' : '▼'}</span>
+                        </>
+                      )}
+                      {gbText(stakes.after) && <span className="dim num"> · {gbText(stakes.after)}</span>}
+                      {newly && (
+                        <>
+                          {' '}
+                          <Tag tone={newly.tone}>{newly.text}</Tag>
+                        </>
+                      )}
+                    </Fact>
+                  )}
+                  {!stakes && newly && (
+                    <Fact k="Clinched">
+                      <Tag tone={newly.tone}>{newly.text}</Tag>
+                    </Fact>
+                  )}
+                  {Math.abs(streak) >= 2 && (
+                    <Fact k="Streak">
+                      <span className={`num bold ${streak > 0 ? 'good' : 'bad'}`}>{streakText(streak)}</span>
+                    </Fact>
+                  )}
+                  {series && (
+                    <Fact k="Series">
+                      <span className="dim2">{series.label}: </span>
+                      {series.won === 4 || series.lost === 4 ? (
+                        <span className={series.won === 4 ? 'good' : 'bad'}>
+                          {series.won === 4 ? 'Won' : 'Lost'} the series {series.won}-{series.lost}
+                        </span>
+                      ) : (
+                        <span className="num">
+                          {series.won}-{series.lost}
+                          {series.next ? ` · Game ${series.game} ${fmtDate(league.season, series.next.day, { weekday: 'short' })}` : ''}
+                        </span>
+                      )}
+                    </Fact>
+                  )}
+                  {playIn && (
+                    <Fact k="Play-in">
+                      <span className={won ? 'good' : playIn.endsWith('-78') ? 'warn' : 'bad'}>
+                        {won
+                          ? playIn.endsWith('-910')
+                            ? 'Through to the game for the 8th seed'
+                            : `In the playoffs as the ${playIn.endsWith('-78') ? '7th' : '8th'} seed`
+                          : playIn.endsWith('-78')
+                            ? 'One more chance: the game for the 8th seed'
+                            : 'Season over'}
+                      </span>
+                    </Fact>
+                  )}
+                  {marks.length > 0 && (
+                    <Fact k="Milestone">
+                      {marks
+                        .slice(0, 2)
+                        .map((m) => `${nameOf(m.pid, '')}'s ${markText(m.stat, m.mark)}`)
+                        .join('; ')}
+                    </Fact>
+                  )}
+                  {records.length > 0 && (
+                    <Fact k="Record">
+                      {records
+                        .slice(0, 2)
+                        .map((r) => {
+                          const who = r.pid !== undefined ? `${nameOf(r.pid, '')}'s` : `${league.teams[r.tid]?.abbrev ?? '?'}'s`;
+                          const whose = r.scope === 'league' ? 'league' : `${league.teams[r.tid]?.name ?? 'franchise'}`;
+                          const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
+                          return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
+                        })
+                        .join('; ')}
+                    </Fact>
+                  )}
+                </dl>
+              </Fold>
+            )}
+            {quotes.length > 0 && (
+              <Fold title="Postgame" peek={quotes.map((q) => q.who).join(' · ')}>
+                <div className="gd-quotes">
+                  {quotes.map((q, i) => (
+                    <blockquote key={i} className={`gd-quote ${q.tid === tid ? 'mine' : ''}`}>
+                      <p>“{q.text}”</p>
+                      <footer>
+                        {q.who}, {q.role}
+                      </footer>
+                    </blockquote>
+                  ))}
+                </div>
+              </Fold>
+            )}
+            {elsewhere.length > 0 && (
+              <Fold
+                title={`Elsewhere ${res.day === league.day - 1 || res.day === league.day ? 'tonight' : 'that night'}`}
+                peek={elsewhere.map((g) => `${league.teams[g.away.tid].abbrev} ${g.away.pts}-${g.home.pts} ${league.teams[g.home.tid].abbrev}`).join(' · ')}
+              >
+                <div className="list">
+                  {elsewhere.map((g) => {
+                    const hw = g.home.pts > g.away.pts;
+                    return (
+                      // named by what it shows: "MIA 120 @ DET 117 FINAL"
+                      <Link key={g.gid} to={`/game/${g.gid}`} className="gd-other">
+                        <span className={`gd-other-t${hw ? '' : ' won'}`}>
+                          <TeamLogo tid={g.away.tid} size={20} decorative />
+                          <span>{league.teams[g.away.tid].abbrev}</span>
+                          <span className="num">{g.away.pts}</span>
+                        </span>
+                        <span className="dim">@</span>
+                        <span className={`gd-other-t${hw ? ' won' : ''}`}>
+                          <TeamLogo tid={g.home.tid} size={20} decorative />
+                          <span>{league.teams[g.home.tid].abbrev}</span>
+                          <span className="num">{g.home.pts}</span>
+                        </span>
+                        <span className="grow" />
+                        <span className="gd-other-f">{g.ot ? finalLabel(g.ot) : 'Final'}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </Fold>
+            )}
           </div>
         </Section>
       )}

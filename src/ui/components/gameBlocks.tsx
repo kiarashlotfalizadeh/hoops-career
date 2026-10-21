@@ -51,32 +51,35 @@ export function TeamComparison({ g, colors, only }: { g: Pick<GameResult, 'home'
 export function QuarterTable({ g, abbrevs }: { g: Pick<GameResult, 'home' | 'away'>; abbrevs: Record<number, string> }) {
   const n = Math.max(g.home.quarters.length, g.away.quarters.length);
   const label = (i: number) => (i < 4 ? `${i + 1}` : periodLabel(i + 1));
+  // (in a scroller of its own: overtimes widen it past a phone, and the total stays in reach)
   return (
-    <table className="gd-ls num">
-      <thead>
-        <tr>
-          <th className="l">
-            <span className="sr-only">Team</span>
-          </th>
-          {Array.from({ length: n }, (_, i) => (
-            <th key={i}>{label(i)}</th>
-          ))}
-          <th>T</th>
-        </tr>
-      </thead>
-      <tbody>
-        {[g.away, g.home].map((t) => (
-          <tr key={t.tid}>
-            <th className="l" scope="row">
-              {abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}
+    <div className="gd-ls-wrap">
+      <table className="gd-ls num">
+        <thead>
+          <tr>
+            <th className="l">
+              <span className="sr-only">Team</span>
             </th>
             {Array.from({ length: n }, (_, i) => (
-              <td key={i}>{t.quarters[i] ?? '—'}</td>
+              <th key={i}>{label(i)}</th>
             ))}
-            <td className="gd-ls-t">{t.pts}</td>
+            <th>T</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {[g.away, g.home].map((t) => (
+            <tr key={t.tid}>
+              <th className="l" scope="row">
+                {abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}
+              </th>
+              {Array.from({ length: n }, (_, i) => (
+                <td key={i}>{t.quarters[i] ?? '—'}</td>
+              ))}
+              <td className="gd-ls-t">{t.pts}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

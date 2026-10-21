@@ -1,8 +1,8 @@
-// The matchup page's Preview, for the user's next game against them: what the night is billed as (a
-// rivalry, a revenge game, Christmas Day, Game 7: see billingsFor), the staff's briefing and its
-// plan for tonight, the projection, both teams' form and what the game is worth, the keys to the game, the injury report with the game-time decisions on his
-// questionable players, the starting fives, what their coach has planned for tonight, and the
-// storylines a broadcast would lead with.
+// The matchup page's Preview, for the user's next game against them: what you act on before the tip,
+// in order (the hero above it holds the two teams, the chances and the billing): the staff's plan for
+// tonight, the keys to the game, and the starting fives with who's out and the game-time decisions on
+// his questionable players. More about tonight holds the rest a tap each: what the game is worth,
+// both teams' form, what their coach has planned and the storylines a broadcast would lead with.
 import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, ScheduledGame } from '../../../core/types';
@@ -13,6 +13,7 @@ import { ensureRotation } from '../../../core/league/games';
 import { matchupPreview, type MatchupPreview, type SidePreview } from '../../../core/analysis/preview';
 import { gameKeys } from '../../../core/analysis/keys';
 import { storylines } from '../../../core/analysis/storylines';
+import { formGuide } from '../../../core/analysis/gameStory';
 import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
 import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
 import { injuryName, plural } from '../../../core/format';
@@ -20,11 +21,10 @@ import { K } from '../../../core/sim/engine';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { OppPlanNote } from '../../components/scouting';
-import { matchupColors } from '../../teamColors';
 import { p0, rosterNames } from '../../stats';
 import { teamPlayers } from '../../../core/league/helpers';
 import { Briefing } from './Briefing';
-import { TeamForm, useBillings } from '../occasion';
+import { Fold, TeamForm, useBillings } from '../occasion';
 
 export function PreviewTab({ league, game, onPlan }: { league: League; game: ScheduledGame; onPlan: () => void }) {
   // the rotations as the game will start them (injuries since a team's last game): the starters shown are the real ones
@@ -43,122 +43,116 @@ export function PreviewTab({ league, game, onPlan }: { league: League; game: Sch
   const locked = live?.gid === game.gid;
   return (
     <>
-      <Occasion league={league} game={game} />
       <Briefing league={league} opp={pv.them.tid} onPlan={onPlan} />
-      <Projection league={league} game={game} pv={pv} />
       <Keys league={league} game={game} />
-      <InjuryReport league={league} pv={pv} game={game} locked={locked} />
-      <StartingFives league={league} away={away} home={home} />
-      <TheirNight league={league} pv={pv} />
-      <Storylines league={league} game={game} pv={pv} />
+      <StartingFives league={league} away={away} home={home} pv={pv} game={game} locked={locked} />
+      <Tonight league={league} game={game} pv={pv} />
     </>
   );
 }
 
-/** What the night is billed as: the biggest occasion first, in display type, the others under it. */
-function Occasion({ league, game }: { league: League; game: ScheduledGame }) {
-  const bills = useBillings(league, game);
-  if (!bills.length) return null;
-  const [top, ...rest] = bills;
-  return (
-    <section className={`mu-occ w${top.weight}`} aria-label="The occasion">
-      <div className="mu-occ-tag">{top.tag}</div>
-      <div className="mu-occ-line">{top.line}</div>
-      {rest.length > 0 && (
-        <ul className="mu-occ-more">
-          {rest.slice(0, 3).map((b) => (
-            <li key={b.tag}>
-              <b>{b.tag}</b> {b.line}
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/** Who's favoured and by how much, the win chance, the two teams' last five, and what tonight is worth in the playoff race. */
-function Projection({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
-  const { margin, win } = pv.projection;
-  const me = league.teams[pv.us.tid];
-  const them = league.teams[pv.them.tid];
-  const fav = margin >= 0 ? me : them;
-  const [cUs, cThem] = matchupColors(me.colors, them.colors);
+/** The rest of tonight, a row each that opens: what it's worth, both teams' form, their coach's plan, the storylines. */
+function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
+  const stakes = useLeagueMemo(() => gameStakes(league, game.gid, pv.us.tid), [league, game.gid, pv.us.tid]);
+  // a game that changes nothing either way isn't worth the line
+  const odds = stakes && Math.abs(stakes.win - stakes.loss) >= 0.01 ? stakes : null;
+  const [, ...more] = useBillings(league, game);
   const tags = [
-    pv.playoff && <Tag key="po">{pv.playoff.tag}</Tag>,
-    (pv.playoff?.elimination || pv.playIn?.elimination) && (
-      <Tag key="el" tone="bad">
-        Elimination game
-      </Tag>
-    ),
-    pv.playoff?.clinch && (
-      <Tag key="cl" tone="good">
-        A win takes the series
-      </Tag>
-    ),
-    ...[pv.us, pv.them].map((s) => s.b2b && <Tag key={s.tid}>{`${league.teams[s.tid].abbrev} back-to-back`}</Tag>),
-  ].filter(Boolean);
+    pv.playoff?.tag,
+    (pv.playoff?.elimination || pv.playIn?.elimination) && 'Elimination game',
+    pv.playoff?.clinch && 'A win takes the series',
+    ...[pv.us, pv.them].map((s) => s.b2b && `${league.teams[s.tid].abbrev} back-to-back`),
+  ].filter((x): x is string => !!x);
+  const stake = !!(odds || pv.playIn || tags.length || more.length);
+  const c = pv.them.coach;
+  const coach = !!(pv.oppPlan?.length || c.adjusts);
+  const stories = useLeagueMemo(() => {
+    const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
+    return storylines(league, game, out).slice(0, 3);
+  }, [league, game, pv]);
+  const forms = [pv.us.tid, pv.them.tid].map((tid) => {
+    const f = formGuide(league, tid, 5);
+    return { tid, f, text: `${league.teams[tid].abbrev} ${f.filter(Boolean).length}-${f.filter((w) => !w).length}` };
+  });
+  const form = forms.some((x) => x.f.length > 0);
+  if (!stake && !coach && !stories.length && !form) return null;
   return (
-    <Section
-      title={pv.days <= 0 ? 'Tonight' : pv.days === 1 ? 'Tomorrow' : `In ${pv.days} days`}
-      right={
-        <Help title="Projection">
-          <p>
-            An estimate, not a simulation: each team&apos;s net rating this season, weighted toward what its rotation for the game is worth until enough games are in, at the two
-            teams&apos; pace, {pv.neutral ? 'with no home court on the neutral floor' : `plus home court (about ${Math.abs(pv.projection.edge).toFixed(1)} points)`}. One
-            game&apos;s margin swings well either side of it.
-          </p>
-        </Help>
-      }
-    >
-      <div className="mu-proj">
-        <div className="mu-proj-top">
-          {Math.abs(margin) < 0.5 ? (
-            <div className="mu-toss">A toss-up</div>
-          ) : (
-            <div>
-              <div className="mu-big num">
-                {fav.abbrev}
-                <span className="mu-by">by</span>
-                {Math.abs(margin).toFixed(1)}
-              </div>
-              <div className="mu-proj-k">Projected margin</div>
+    <Section title="More about tonight">
+      <div className="card flush list">
+        {stake && (
+          <Fold
+            title="What it's worth"
+            peek={odds ? `Playoff odds ${oddsPct(odds.win)} with a win, ${oddsPct(odds.loss)} with a loss` : (tags[0] ?? more[0]?.tag ?? pv.playIn?.note ?? '')}
+          >
+            <div className="mu-fold">
+              {odds && (
+                <div className="mu-stakes">
+                  Playoff odds with a win <b className="good num">{oddsPct(odds.win)}</b> · with a loss <b className="bad num">{oddsPct(odds.loss)}</b>
+                </div>
+              )}
+              {pv.playIn && <div className="mu-stakes">{pv.playIn.note}</div>}
+              {tags.length > 0 && (
+                <div className="chips">
+                  {tags.map((t) => (
+                    <Tag key={t} tone={t === 'Elimination game' ? 'bad' : t === 'A win takes the series' ? 'good' : undefined}>
+                      {t}
+                    </Tag>
+                  ))}
+                </div>
+              )}
+              {more.length > 0 && (
+                <ul className="mu-occ-more">
+                  {more.slice(0, 3).map((b) => (
+                    <li key={b.tag}>
+                      <b>{b.tag}</b> {b.line}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
-          <div className="right">
-            <div className="mu-big num">{p0(win)}</div>
-            <div className="mu-proj-k">{me.abbrev} to win</div>
-          </div>
-        </div>
-        <div className="mu-winbar" aria-hidden="true">
-          <span style={{ flexGrow: win, background: cUs }} />
-          <span style={{ flexGrow: 1 - win, background: cThem }} />
-        </div>
-        <div className="mu-proj-form">
-          {[pv.us.tid, pv.them.tid].map((tid) => (
-            <span key={tid} className="mu-proj-fs">
-              <span className="mu-proj-ab">{league.teams[tid].abbrev}</span>
-              <TeamForm league={league} tid={tid} page />
-            </span>
-          ))}
-        </div>
-        <Stakes league={league} game={game} tid={pv.us.tid} />
-        {pv.playIn && <div className="mu-stakes">{pv.playIn.note}</div>}
-        {tags.length > 0 && <div className="chips">{tags}</div>}
+          </Fold>
+        )}
+        {form && (
+          <Fold title="Form" peek={`Last five: ${forms.map((x) => x.text).join(' · ')}`}>
+            <div className="mu-fold mu-forms">
+              {forms.map(({ tid }) => (
+                <span key={tid} className="mu-proj-fs">
+                  <span className="mu-proj-ab">{league.teams[tid].abbrev}</span>
+                  <TeamForm league={league} tid={tid} page />
+                </span>
+              ))}
+            </div>
+          </Fold>
+        )}
+        {coach && (
+          <Fold title="Their coach" peek={c.adjusts ? `${c.name} adjusts ${c.adjusts}` : c.name}>
+            <div className="mu-fold">
+              {pv.oppPlan && pv.oppPlan.length > 0 && <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />}
+              {c.adjusts && (
+                <div className="small dim2">
+                  {c.name} adjusts {c.adjusts} ({p0(c.chance)} at each break).
+                </div>
+              )}
+            </div>
+          </Fold>
+        )}
+        {stories.length > 0 && (
+          <Fold title="Storylines" peek={stories[0].text}>
+            <div className="list">
+              {stories.map((st) => {
+                const p = st.pids.length ? league.players[st.pids[0]] : undefined;
+                return (
+                  <div key={st.id} className="mu-story">
+                    {p ? <Avatar p={p} /> : st.tids.length ? <TeamLogo tid={st.tids[0]} size={34} decorative /> : null}
+                    <span className="grow">{st.text}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Fold>
+        )}
       </div>
     </Section>
-  );
-}
-
-/** What tonight is worth in the playoff race: the season forecast with the game won, and lost. */
-function Stakes({ league, game, tid }: { league: League; game: ScheduledGame; tid: number }) {
-  const s = useLeagueMemo(() => gameStakes(league, game.gid, tid), [league, game.gid, tid]);
-  // a game that changes nothing either way isn't worth the line
-  if (!s || Math.abs(s.win - s.loss) < 0.01) return null;
-  return (
-    <div className="mu-stakes">
-      Playoff odds with a win <b className="good num">{oddsPct(s.win)}</b> · with a loss <b className="bad num">{oddsPct(s.loss)}</b>
-    </div>
   );
 }
 
@@ -199,17 +193,19 @@ function Keys({ league, game }: { league: League; game: ScheduledGame }) {
   );
 }
 
-function InjuryReport({ league, pv, game, locked }: { league: League; pv: MatchupPreview; game: ScheduledGame; locked: boolean }) {
+/** His questionable players (sit or clear each) and both teams' out, resting and worn, as rows under the starting fives. */
+function Availability({ league, pv, game, locked }: { league: League; pv: MatchupPreview; game: ScheduledGame; locked: boolean }) {
   const simming = useStore((s) => !!s.sim);
   const q = pv.us.questionable;
   const rot = league.teams[pv.us.tid].rotation;
   const sides = [pv.us, pv.them];
   const clean = sides.every((s) => !s.out.length && !s.resting.length && !s.worn.length) && !q.length;
+  if (clean) return <div className="mu-five-foot">Everyone is available on both sides.</div>;
   return (
-    <Section
-      title="Injury report"
-      right={
-        q.length > 0 ? (
+    <>
+      {q.length > 0 && (
+        <div className="list-divider mu-avail-h">
+          <span>Game-time decisions</span>
           <Help title="Game-time decisions">
             <p>
               A player one game from returning from a minor or moderate injury (not a concussion) is questionable: he sits unless you clear him to play. The game counts as the one
@@ -220,48 +216,41 @@ function InjuryReport({ league, pv, game, locked }: { league: League; pv: Matchu
               sit theirs.
             </p>
           </Help>
-        ) : undefined
-      }
-    >
-      {clean ? (
-        <div className="mu-note">Everyone is available on both sides.</div>
-      ) : (
-        <div className="card flush list">
-          {q.map((p) => (
-            <div key={p.pid} className="mu-q">
-              <div className="mu-q-row">
-                <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Game-time'}</Tag>
-                {/* (wraps beside the button rather than cutting the injury short) */}
-                <Link to={`/player/${p.pid}`} className="grow mu-q-who">
-                  <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
-                </Link>
-                <button
-                  className={`btn xs ${p.cleared ? '' : 'primary'}`}
-                  disabled={locked || simming}
-                  // (named by what a tap does, so no pressed state: "Sit him, pressed" would read backwards)
-                  aria-label={p.cleared ? `Sit ${p.name}` : `Clear ${p.name} to play`}
-                  onClick={() => edit((l) => setGameTime(l, game.gid, p.pid, !p.cleared))}
-                >
-                  {p.cleared ? 'Sit him' : 'Clear to play'}
-                </button>
-              </div>
-              <div className="mu-note">
-                {locked
-                  ? 'Settled at tip-off.'
-                  : p.cleared
-                    ? `About ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× the injury risk${
-                        rot.manual ? (rot.minutes[p.pid] ? ` · ${rot.minutes[p.pid]} min in your rotation` : ' · no minutes in your rotation') : ''
-                      }.`
-                    : 'Sits unless you clear him.'}
-              </div>
-            </div>
-          ))}
-          {sides.map((s) => (
-            <SideInjuries key={s.tid} league={league} s={s} />
-          ))}
         </div>
       )}
-    </Section>
+      {q.map((p) => (
+        <div key={p.pid} className="mu-q">
+          <div className="mu-q-row">
+            <Tag tone={p.cleared ? 'good' : 'warn'}>{p.cleared ? 'Playing' : 'Game-time'}</Tag>
+            {/* (wraps beside the button rather than cutting the injury short) */}
+            <Link to={`/player/${p.pid}`} className="grow mu-q-who">
+              <b>{p.name}</b> <span className="dim">{injuryName(p.injury)}</span>
+            </Link>
+            <button
+              className={`btn xs ${p.cleared ? '' : 'primary'}`}
+              disabled={locked || simming}
+              // (named by what a tap does, so no pressed state: "Sit him, pressed" would read backwards)
+              aria-label={p.cleared ? `Sit ${p.name}` : `Clear ${p.name} to play`}
+              onClick={() => edit((l) => setGameTime(l, game.gid, p.pid, !p.cleared))}
+            >
+              {p.cleared ? 'Sit him' : 'Clear to play'}
+            </button>
+          </div>
+          <div className="mu-note">
+            {locked
+              ? 'Settled at tip-off.'
+              : p.cleared
+                ? `About ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× the injury risk${
+                    rot.manual ? (rot.minutes[p.pid] ? ` · ${rot.minutes[p.pid]} min in your rotation` : ' · no minutes in your rotation') : ''
+                  }.`
+                : 'Sits unless you clear him.'}
+          </div>
+        </div>
+      ))}
+      {sides.map((s) => (
+        <SideInjuries key={s.tid} league={league} s={s} />
+      ))}
+    </>
   );
 }
 
@@ -304,7 +293,21 @@ function SideInjuries({ league, s }: { league: League; s: SidePreview }) {
 }
 
 /** The two starting fives side by side, away on the left: jerseys facing each other. */
-function StartingFives({ league, away, home }: { league: League; away: SidePreview; home: SidePreview }) {
+function StartingFives({
+  league,
+  away,
+  home,
+  pv,
+  game,
+  locked,
+}: {
+  league: League;
+  away: SidePreview;
+  home: SidePreview;
+  pv: MatchupPreview;
+  game: ScheduledGame;
+  locked: boolean;
+}) {
   const rows = Array.from({ length: Math.max(away.starters.length, home.starters.length) }, (_, i) => [away.starters[i], home.starters[i]] as const);
   // teammates who share a last name told apart ("Jal. Williams", "Jay. Williams"), the usual starter one stands in for too
   const [aTid, hTid] = [away.tid, home.tid];
@@ -330,7 +333,11 @@ function StartingFives({ league, away, home }: { league: League; away: SidePrevi
   return (
     <Section
       title="Starting fives"
-      right={<Help title="Starting fives">The five each coach starts, from the depth charts, injuries and rest. A player in for a usual starter says for whom.</Help>}
+      right={
+        <Help title="Starting fives">
+          The five each coach starts, from the depth charts, injuries and rest. A player in for a usual starter says for whom; who&apos;s out, resting or worn is under them.
+        </Help>
+      }
     >
       <div className="card flush">
         <div className="mu-fives-h">
@@ -347,48 +354,7 @@ function StartingFives({ league, away, home }: { league: League; away: SidePrevi
             {cell(h, true)}
           </div>
         ))}
-      </div>
-    </Section>
-  );
-}
-
-/** What their coach has planned for this game, and how often he changes things in one. */
-function TheirNight({ league, pv }: { league: League; pv: MatchupPreview }) {
-  const c = pv.them.coach;
-  if (!pv.oppPlan?.length && !c.adjusts) return null;
-  return (
-    <Section title="Their coach">
-      <div className="mu-group">
-        {pv.oppPlan && pv.oppPlan.length > 0 && <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />}
-        {c.adjusts && (
-          <div className="small dim2">
-            {c.name} adjusts {c.adjusts} ({p0(c.chance)} at each break).
-          </div>
-        )}
-      </div>
-    </Section>
-  );
-}
-
-/** What a broadcast would lead with (see storylines.ts): the top three, each with the jersey of the player it's about. */
-function Storylines({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
-  const stories = useLeagueMemo(() => {
-    const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
-    return storylines(league, game, out).slice(0, 3);
-  }, [league, game, pv]);
-  if (!stories.length) return null;
-  return (
-    <Section title="Storylines">
-      <div className="card flush list">
-        {stories.map((st) => {
-          const p = st.pids.length ? league.players[st.pids[0]] : undefined;
-          return (
-            <div key={st.id} className="mu-story">
-              {p ? <Avatar p={p} /> : st.tids.length ? <TeamLogo tid={st.tids[0]} size={34} decorative /> : null}
-              <span className="grow">{st.text}</span>
-            </div>
-          );
-        })}
+        <Availability league={league} pv={pv} game={game} locked={locked} />
       </div>
     </Section>
   );

@@ -1,8 +1,8 @@
-// The staff's briefing at the top of the matchup page's Preview: the lead assistant's read of them
-// (what they run, who to watch, where they can be beaten), what the team knows of tonight's tactics
-// (a gap flagged, with the practice focus that closes it), and his plan for tonight (the counters the
-// numbers back first, one per kind), each a tap into your game plan or all of them at once. The full
-// counters, the star plan, matchups and the rest are on the Plan and Matchups tabs.
+// The staff's plan at the top of the matchup page's Preview: the lead assistant's read of them (who to
+// watch) and his plan for tonight (the counters the numbers back first, one per kind), each a tap into
+// your game plan or all of them at once. What they run and where to hit them are on Scout; what the
+// team knows of the tactics (and the practice focus) on Plan, with the full counters, the star plan and
+// the rest; who guards whom on Matchups.
 import { useMemo } from 'react';
 import { Check } from 'lucide-react';
 import type { League } from '../../../core/types';
@@ -14,7 +14,6 @@ import { act } from '../../../state/actions';
 import { Section, Tag } from '../../components/ui';
 import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
-import { FamBrief } from '../../today/Practice';
 
 /** Counters the briefing proposes: the ones the numbers back first, one per game-plan group. */
 const PLAN_MAX = 3;
@@ -42,35 +41,17 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
   const threat = scout.threats[0];
   const read = threat ? `Watch ${threat.name}. ${threat.why}` : scout.summary;
   return (
-    <Section title="From your staff">
+    <Section title="The staff's plan">
       <div className="mu-brief">
         <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
-        <dl className="mu-brief-facts">
-          <div>
-            <dt>They run</dt>
-            <dd>{scout.offense.slice(0, 2).join(' ')}</dd>
-          </div>
-          <div>
-            <dt>Their defense</dt>
-            <dd>{scout.defense.slice(0, 2).join(' ')}</dd>
-          </div>
-          {scout.weaknesses.length > 0 && (
-            <div>
-              <dt>Where to hit them</dt>
-              {/* the first, best-backed one: the rest are on Scout */}
-              <dd>{scout.weaknesses[0]}</dd>
-            </div>
-          )}
-        </dl>
-        <FamBrief league={league} opp={opp} tonight />
         {picks.length > 0 ? (
-          <div className="mu-brief-plan">
-            <div className="over">{more ? 'The staff would also add' : <>The staff&apos;s plan for tonight</>}</div>
+          <div className="card flush list mu-brief-plan">
+            {more && <div className="list-divider">The staff would also add</div>}
             {picks.map((c) => (
               <div key={c.id} className="mu-brief-item">
                 <div className="grow">
-                  <div className="bold small">{c.label}</div>
-                  <div className="tiny dim2">{c.evidence ?? c.why}</div>
+                  <div className="lr-name">{c.label}</div>
+                  <div className="lr-meta mu-brief-why">{c.evidence ?? c.why}</div>
                 </div>
                 <button className="btn xs" disabled={simming} onClick={() => add([c])} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
                   Add
@@ -80,11 +61,11 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
             <div className="mu-brief-go">
               {/* (one extra counter has its own Add) */}
               {(!more || picks.length > 1) && (
-                <button className="btn sm primary" disabled={simming} onClick={() => add(picks)}>
+                <button className="btn sm" disabled={simming} onClick={() => add(picks)}>
                   <Check size={15} aria-hidden="true" /> {more ? 'Add all' : <>Use the staff&apos;s plan</>}
                 </button>
               )}
-              <button className="btn sm ghost" onClick={onPlan}>
+              <button className="btn sm text" onClick={onPlan}>
                 Open the plan
               </button>
             </div>

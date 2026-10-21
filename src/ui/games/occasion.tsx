@@ -1,11 +1,52 @@
 // Game day as an occasion, the pieces every screen around a game shares: a team's form guide (its
 // last five as W/L pills), a game's billing as a line ("Rivalry · An old division rivalry; 1-0 this
 // season"), and whether a result is being shown for the first time (its score counts up once).
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronLeft } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
 import { billingsFor, formGuide, type Billing } from '../../core/analysis/gameStory';
 import { useLeagueMemo } from '../../state/store';
+import { useBack } from '../nav';
 import '../components/gameday.css';
+
+/**
+ * A row in a group that opens on the rest (a game's After the game, the Preview's More about
+ * tonight): its name and a one-line peek at what it holds.
+ */
+export function Fold({ title, peek, help, children }: { title: ReactNode; peek?: string; help?: ReactNode; children: ReactNode }) {
+  return (
+    <details className="gd-fold">
+      <summary>
+        <span className="grow gd-fold-t">
+          <span className="lr-name">{title}</span>
+          {peek && <span className="lr-meta ellipsis">{peek}</span>}
+        </span>
+        <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
+      </summary>
+      <div className="gd-fold-b">
+        {help && <div className="gd-fold-help">{help}</div>}
+        {children}
+      </div>
+    </details>
+  );
+}
+
+/**
+ * The top of a game screen whose board names it (a matchup, a report): Back, the screen's name in
+ * small (its h1 for screen readers too), and a link on the right.
+ */
+export function GameTop({ title, backTo, right }: { title: string; backTo: string; right?: ReactNode }) {
+  const goBack = useBack(backTo);
+  return (
+    <div className="gd-top">
+      <button className="iconbtn" onClick={goBack} aria-label="Back">
+        <ChevronLeft size={24} />
+      </button>
+      <h1 className="gd-top-t grow">{title}</h1>
+      {right}
+    </div>
+  );
+}
 
 /**
  * The last results, oldest first, as W/L pills (`label`: whose they are, for screen readers).

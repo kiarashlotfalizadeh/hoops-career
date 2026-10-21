@@ -1,11 +1,12 @@
-// The matchup page: everything about one opponent in one place. Their slab (record, form, rank, the
-// next meeting, the season series, your plan against them), then the sections: Preview (when the
-// next game against them is the user's next game), Scout, Plan (with the staff's counters) and
+// The matchup page: everything about one opponent in one place. The hero is the next meeting as a
+// board (the two teams in their colours, each one's chance to win, the projected margin), what the
+// night is billed as, the season series and your plan against them; then the sections: Preview (when
+// the next game against them is the user's next game), Scout, Plan (with the staff's counters) and
 // Matchups. On game day a dock tips the game off or sims it, and a sim lands on the result: the game's
 // report, which opens on the night's story. The night after a meeting, its result leads the page.
-import { useEffect, type CSSProperties, type ReactNode } from 'react';
+import { useEffect } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { ChevronRight, Eye } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { touch } from '../../state/actions';
@@ -14,17 +15,15 @@ import { guideVisit } from '../../core/league/agenda';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
-import { nextUserGame } from '../../core/analysis/preview';
+import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 import { gameStoryFor } from '../../core/analysis/gameStory';
-import { TeamForm } from './occasion';
-import { Empty, PageHeader } from '../components/ui';
-import { TeamLogo } from '../components/TeamLogo';
-import { slabVars } from '../teamColors';
+import { GameTop, useBillings } from './occasion';
+import { Empty, Help, PageHeader } from '../components/ui';
+import { GameBoard, type BoardSide } from '../components/FinalSlab';
 import { ordinal } from '../stats';
-import { useBack } from '../nav';
 import { TabBar, useQueryParam } from '../league/shared';
-import { liveSeries, meetings, planStatus } from './data';
-import { lastTenText, seasonSeries, seriesParts, streakText } from './series';
+import { gameTag, liveSeries, meetings, planStatus } from './data';
+import { seasonSeries, seriesParts } from './series';
 import { PreviewTab } from './matchup/PreviewTab';
 import { ScoutTab } from './matchup/ScoutTab';
 import { PlanTab } from './matchup/PlanTab';
@@ -66,7 +65,16 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   const today = !!preview && preview.day === league.day;
   return (
     <main className="page">
-      <Slab league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
+      <GameTop
+        title="Matchup"
+        backTo="/games"
+        right={
+          <Link to={`/teams/${opp}`} className="card-link">
+            Team page <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        }
+      />
+      <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
       <JustPlayed league={league} opp={opp} />
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
@@ -108,110 +116,120 @@ function TipOff({ league, gid, name }: { league: League; gid: number; name: stri
   );
 }
 
-function Fact({ k, children }: { k: string; children: ReactNode }) {
-  return (
-    <>
-      <dt>{k}</dt>
-      <dd>{children}</dd>
-    </>
-  );
-}
-
-/** Their slab: who they are, how they stand, the next meeting, how the season series stands and your plan for them (`onPlan`: a tap to it; none on the Plan tab). */
-function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: () => void }) {
-  const goBack = useBack('/games');
+/**
+ * The hero: the next meeting as a board (away on the left, each team's chance to win, the projected
+ * margin under it; with no meeting left, the two records), what the night is billed as, the season
+ * series and your plan for them (`onPlan`: a tap to it; none on the Plan tab).
+ */
+function Hero({ league, opp, onPlan }: { league: League; opp: number; onPlan?: () => void }) {
   const me = league.userTid;
   const t = league.teams[opp];
-  const ts = curTeamSeason(league, opp);
-  const played = ts.won + ts.lost > 0;
-  const rank = useLeagueMemo(() => confStandings(league, t.conf).find((r) => r.tid === opp)?.confRank ?? 0, [league, t.conf, opp]);
   const next = meetings(league, opp);
+  const g = next[0];
   const series = liveSeries(league, opp);
   const h2h = useLeagueMemo(() => seasonSeries(league, opp), [league, opp]);
-  const form = played ? [lastTenText(ts.lastTen ?? []), streakText(ts.streak)].filter(Boolean).join(' · ') : '';
-  const where = (g: (typeof next)[number]) => (neutralSite(g) ? 'neutral floor' : g.home === me ? 'home' : 'away');
+  const ranks = useLeagueMemo(() => new Map([...confStandings(league, 'E'), ...confStandings(league, 'W')].map((r) => [r.tid, r.confRank])), [league]);
+  // the preview's chance to win, from the home side (the same number the Preview and the game use)
+  const proj = useLeagueMemo(() => (g ? gameProjection(league, g) : null), [league, g]);
+  const [bill] = useBillings(league, g);
   // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
   const pre = league.phase === 'preseason';
   const day = (d: number) =>
     !pre && d === league.day ? 'Today' : !pre && d === league.day + 1 ? 'Tomorrow' : fmtDate(league.season, d, { weekday: 'short', month: 'short', day: 'numeric' });
   const sp = seriesParts(h2h);
-  const plan = planStatus(league, opp, next[0]);
+  const plan = planStatus(league, opp, g);
+  const [awayTid, homeTid] = g ? [g.away, g.home] : [opp, me];
+  const rec = (tid: number) => {
+    const ts = curTeamSeason(league, tid);
+    return `${ts.won}-${ts.lost}`;
+  };
+  const rank = (tid: number) => {
+    const ts = curTeamSeason(league, tid);
+    const r = ranks.get(tid);
+    // no rank before anyone has played
+    return r && ts.won + ts.lost > 0 ? `${ordinal(r)} ${league.teams[tid].conf === 'E' ? 'East' : 'West'}` : undefined;
+  };
+  const side = (tid: number): BoardSide => {
+    if (!proj) return { tid, fig: <span className="mu-rec">{rec(tid)}</span>, sub: rank(tid) };
+    const win = tid === homeTid ? proj.win : 1 - proj.win;
+    return {
+      tid,
+      fig: (
+        <>
+          {Math.round(win * 100)}
+          <small>%</small>
+        </>
+      ),
+      sub: rec(tid),
+      lost: win < 0.5,
+    };
+  };
+  const where = g ? (neutralSite(g) ? 'Neutral floor' : g.home === me ? 'Home' : 'Away') : '';
+  const tag = g ? gameTag(league, g) : '';
+  const seriesNow = series ? `${league.teams[series.high].abbrev} ${series.highWins}-${series.lowWins} ${league.teams[series.low].abbrev}` : '';
+  // the projected margin, from the favourite's side
+  const margin = proj ? proj.margin : 0;
+  const fav = league.teams[margin >= 0 ? homeTid : awayTid];
   return (
-    <section className="slab mu-slab" style={slabVars(t.colors) as CSSProperties} aria-label={`Matchup: the ${t.region} ${t.name}`}>
-      <div className="mu-top">
-        <button className="iconbtn" onClick={goBack} aria-label="Back">
-          <ChevronLeft size={24} />
-        </button>
-        <span className="mu-over grow">Matchup</span>
-        <Link to={`/teams/${opp}`} className="card-link">
-          Team page <ChevronRight size={14} />
-        </Link>
-      </div>
-      <div className="mu-id">
-        <TeamLogo tid={opp} size={52} decorative />
-        <div className="mu-who">
-          <div className="mu-region">{t.region}</div>
-          <h1 className="mu-name ellipsis">{t.name}</h1>
-        </div>
-        <div className="mu-rec">
-          <div className="v num">
-            {ts.won}-{ts.lost}
+    <section className="mu-hero" aria-label={`Matchup: the ${t.region} ${t.name}`}>
+      <GameBoard
+        league={league}
+        away={side(awayTid)}
+        home={side(homeTid)}
+        over={g ? [`${day(g.day)} · ${where}`, [tag, seriesNow && `Series ${seriesNow}`].filter(Boolean).join(' · ')] : ['No games left against them']}
+        mid={<span className="gd-bd-k">{proj ? 'To win' : 'Record'}</span>}
+      >
+        {proj && (
+          <div className="gd-bd-foot">
+            {Math.abs(margin) < 0.5 ? (
+              <span>A toss-up</span>
+            ) : (
+              <span>
+                <b className="num">
+                  {fav.abbrev} by {Math.abs(margin).toFixed(1)}
+                </b>{' '}
+                projected
+              </span>
+            )}
+            <Help title="Projection">
+              <p>
+                An estimate, not a simulation: each team&apos;s net rating this season, weighted toward what its rotation for the game is worth until enough games are in, at the
+                two teams&apos; pace, plus home court unless it&apos;s on a neutral floor. One game&apos;s margin swings well either side of it.
+              </p>
+            </Help>
           </div>
-          {/* no rank before anyone has played */}
-          {rank > 0 && played && (
-            <div className="s">
-              {ordinal(rank)} {t.conf === 'E' ? 'East' : 'West'}
-            </div>
+        )}
+      </GameBoard>
+      {bill && (
+        <div className="mu-hero-bill">
+          <div className={`mu-hero-h w${bill.weight}`}>{bill.tag}</div>
+          <div className="mu-hero-l">{bill.line}</div>
+        </div>
+      )}
+      {(h2h.total > 0 || (g && onPlan)) && (
+        <div className="mu-hero-foot">
+          {h2h.total > 0 && (
+            <span className="mu-hero-ss">
+              Season <span className="num">{sp.record}</span>
+              {sp.left && ` · ${sp.left}`}
+              {h2h.last && (
+                <>
+                  {' · last '}
+                  <Link to={`/game/${h2h.last.gid}`} className="num">
+                    {sp.last}
+                  </Link>
+                </>
+              )}
+            </span>
+          )}
+          {/* (the Plan tab shows the plan itself) */}
+          {g && onPlan && (
+            <button className={`mu-planlink${plan.set ? ' set' : ''}`} onClick={onPlan}>
+              {plan.text} <ChevronRight size={15} aria-hidden="true" />
+            </button>
           )}
         </div>
-      </div>
-      <dl className="mu-facts">
-        {form && (
-          <Fact k="Form">
-            <span className="mu-form">
-              <TeamForm league={league} tid={opp} />
-              <span>{form}</span>
-            </span>
-          </Fact>
-        )}
-        <Fact k="Next">
-          {next.length
-            ? `${day(next[0].day)}, ${where(next[0])}${
-                next.length > 1
-                  ? ` · then ${next
-                      .slice(1, 3)
-                      .map((g) => fmtDate(league.season, g.day))
-                      .join(', ')}`
-                  : ''
-              }`
-            : 'No games left against them'}
-        </Fact>
-        {series && (
-          <Fact k="Series">
-            {league.teams[series.high].abbrev} {series.highWins}-{series.lowWins} {league.teams[series.low].abbrev}
-          </Fact>
-        )}
-        {h2h.total > 0 && (
-          <Fact k="Season">
-            <span className="num">{sp.record}</span>
-            {sp.left && ` · ${sp.left}`}
-            {h2h.last && (
-              <>
-                {' · last '}
-                <Link to={`/game/${h2h.last.gid}`}>{sp.last}</Link>
-              </>
-            )}
-          </Fact>
-        )}
-        {/* (the Plan tab shows the plan itself) */}
-        {next.length > 0 && onPlan && (
-          <Fact k="Plan">
-            <button className={`mu-planlink${plan.set ? ' set' : ''}`} onClick={onPlan}>
-              {plan.detail} <ChevronRight size={14} aria-hidden="true" />
-            </button>
-          </Fact>
-        )}
-      </dl>
+      )}
     </section>
   );
 }

@@ -16,7 +16,7 @@ import { periodLabel, signed, wholeMinutes } from '../../stats';
 import { boxNames } from './names';
 
 /** Factors shown before "more". */
-const FACTORS_SHOWN = 4;
+const FACTORS_SHOWN = 3;
 
 export function WhyTab({ g, league, report }: { g: GameResult; league: League; report: GameReport }) {
   // your side of the game (0 home, 1 away)

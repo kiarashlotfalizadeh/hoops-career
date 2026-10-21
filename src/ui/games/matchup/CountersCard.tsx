@@ -1,6 +1,6 @@
 // The Plan's counters: what the staff would change against this team, each with exactly what it
-// changes in the Tactics screen's words, why, and the numbers behind it. Add puts one in the plan,
-// Always in your tactics for every game.
+// changes in the Tactics screen's words, why, and the numbers behind it (the ones the numbers back
+// first). Add puts one in the plan, Always in your tactics for every game.
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
@@ -58,7 +58,20 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             <div key={c.id} className="mu-cand">
               <div className="mu-cand-top">
                 <span className="grow lr-name">{c.label}</span>
-                {c.evidence && <Tag tone="info">Backed by their numbers</Tag>}
+                {added ? (
+                  <Tag tone="good">In plan</Tag>
+                ) : (
+                  <>
+                    {always && (
+                      <button className="btn xs text" disabled={simming} onClick={() => apply(c, 'always')} aria-label={`${c.label}: into your tactics for every game`}>
+                        Always
+                      </button>
+                    )}
+                    <button className="btn xs" disabled={simming} onClick={() => apply(c, 'game')} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
+                      Add
+                    </button>
+                  </>
+                )}
               </div>
               <CounterChanges league={league} opp={opp} c={c} />
               <div className="mu-note">{c.why}</div>
@@ -67,23 +80,6 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
                   <b>By the numbers:</b> {c.evidence}
                 </div>
               )}
-              <div className="mu-cand-foot">
-                <span className="grow" />
-                {added ? (
-                  <Tag tone="good">In plan</Tag>
-                ) : (
-                  <>
-                    {always && (
-                      <button className="btn xs ghost" disabled={simming} onClick={() => apply(c, 'always')} aria-label={`${c.label}: into your tactics for every game`}>
-                        Always
-                      </button>
-                    )}
-                    <button className="btn xs primary" disabled={simming} onClick={() => apply(c, 'game')} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
-                      Add
-                    </button>
-                  </>
-                )}
-              </div>
             </div>
           );
         })}

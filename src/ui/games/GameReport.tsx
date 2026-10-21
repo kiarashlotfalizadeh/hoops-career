@@ -1,13 +1,15 @@
-// A game's report: the final with, for your games, the night's story on it (the headline, the player
-// of the game, what it means; the first showing counts the score up), then Debrief (your games: the
-// staff's verdict, your moves and what to do next time, the stars, the keys, the night, what was
-// said), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
-// play-by-play). Each tab is its own module under report/.
+// A game's report: the final score is the hero (the board; the first showing counts it up), then for
+// your games the night's story (the headline, the player of the game, what it means), then the tabs:
+// Debrief (your games: the staff's verdict, your moves and what to do next time, the keys, then the
+// stars, the night, what was said and the other scores a tap each), Why (what decided it), Box (the
+// linescore and both box scores), Shots and Flow (win probability, the margin and the play-by-play).
+// Each tab is its own module under report/.
 import { useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { gameStoryFor } from '../../core/analysis/gameStory';
-import { useFirstShowing } from './occasion';
+import { GameTop, useFirstShowing } from './occasion';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { Empty, PageHeader } from '../components/ui';
 import { matchupColors } from '../teamColors';
@@ -64,9 +66,20 @@ export default function GameReport() {
     : accentSide === 0
       ? ['var(--text-dim)', 'var(--accent)']
       : ['var(--accent)', 'var(--text-dim)'];
+  const opp = userGame ? (g.home.tid === league.userTid ? g.away.tid : g.home.tid) : undefined;
   return (
     <main className="page gv">
-      <PageHeader title="Game report" back backTo="/games" />
+      <GameTop
+        title="Game report"
+        backTo="/games"
+        right={
+          opp !== undefined && (
+            <Link to={`/games/${opp}`} className="card-link">
+              Matchup <ChevronRight size={14} aria-hidden="true" />
+            </Link>
+          )
+        }
+      />
       <FinalSlab res={g} league={league} story={story} moment={moment} />
       {tabs.length > 1 && <TabBar value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
       {tab === 'recap' && userGame && (

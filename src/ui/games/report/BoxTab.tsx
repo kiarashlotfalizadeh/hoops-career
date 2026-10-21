@@ -1,12 +1,13 @@
-// The game report's Box: both teams' box scores, away first as the final reads, then the teams side
-// by side. A game between two other teams opens with its three stars (yours have them in the recap).
+// The game report's Box: the points by period, both teams' box scores, away first as the final
+// reads, then the teams side by side. A game between two other teams opens with its three stars
+// (yours have them in the recap).
 import { Link } from 'react-router-dom';
 import type { GameResult, League } from '../../../core/types';
 import { threeStars } from '../../../core/analysis/quotes';
 import { Section } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { BoxScore } from '../../components/BoxScore';
-import { TeamComparison } from '../../components/gameBlocks';
+import { QuarterTable, TeamComparison } from '../../components/gameBlocks';
 import { boxNames } from './names';
 
 export function BoxTab({ g, league, userGame, colors }: { g: GameResult; league: League; userGame: boolean; colors: [string, string] }) {
@@ -14,6 +15,11 @@ export function BoxTab({ g, league, userGame, colors }: { g: GameResult; league:
   return (
     <>
       {!userGame && <StarsCard g={g} league={league} />}
+      <Section title="By period">
+        <div className="card gv-ls">
+          <QuarterTable g={g} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
+        </div>
+      </Section>
       {[g.away, g.home].map((box) => {
         const t = league.teams[box.tid];
         return (

@@ -1,36 +1,35 @@
-// The Games hub, the season's spine: the next game (who, when, what it's billed as, the series as
-// it stands, whether a plan is set, and its matchup page a tap away), then the schedule: what's
-// coming (the big nights marked) and the results (the big ones by their headline), with filters,
-// and the season series against every opponent. On game day the Continue bar carries Watch & coach:
-// the card doesn't repeat it.
-import { useEffect, useRef, type CSSProperties } from 'react';
+// The Games hub, the season's spine: the next game as a ticket (the two teams in their colours with
+// each one's chance to win, what the night is billed as, the series and the plan; a tap opens its
+// matchup page), then the schedule: what's coming and the results, a W or L and the score each.
+// One Filter opens every other view (home, away, the Cup, the playoffs, the season series by
+// opponent). On game day the Continue bar carries Watch & coach: the ticket doesn't repeat it.
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, ListFilter } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { neutralSite } from '../../core/league/games';
-import { confStandings } from '../../core/league/standings';
-import { Chips, PageHeader } from '../components/ui';
+import { gameProjection } from '../../core/analysis/preview';
+import { Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
-import { slabVars } from '../teamColors';
-import { ordinal } from '../stats';
+import { GameBoard } from '../components/FinalSlab';
 import { useQueryParam } from '../league/shared';
 import { TeamScheduleList, type ScheduleFilter } from './ScheduleList';
 import { gameTag, liveSeries, planStatus } from './data';
 import { seasonSeries, seriesParts, seriesText } from './series';
-import { BillingLine, FormPills, useBillings } from './occasion';
+import { FormPills, useBillings } from './occasion';
 import './games.css';
 
-const FILTERS: (ScheduleFilter | 'opp')[] = ['all', 'upcoming', 'results', 'opp', 'home', 'away', 'cup', 'post'];
+const FILTERS: (ScheduleFilter | 'opp')[] = ['all', 'upcoming', 'results', 'home', 'away', 'cup', 'post', 'opp'];
 const FILTER_LABEL: Record<ScheduleFilter | 'opp', string> = {
-  all: 'All',
+  all: 'All games',
   upcoming: 'Upcoming',
   results: 'Results',
   opp: 'By opponent',
-  home: 'Home',
-  away: 'Away',
-  cup: 'Cup',
+  home: 'Home games',
+  away: 'Away games',
+  cup: 'NBA Cup',
   post: 'Playoffs',
 };
 
@@ -65,53 +64,59 @@ export default function GamesHub() {
               : true,
   );
   const on = shown.includes(filter) ? filter : 'all';
-  const chips = useScrollEdges(shown.length);
+  const pick = <FilterPick value={on} options={shown} onChange={setFilter} />;
   return (
     <main className="page">
-      <PageHeader title="Games" />
+      <h1 className="sr-only">Games</h1>
       {next && <NextGame league={league} g={next} />}
-      <div className="gs-filters" ref={chips}>
-        <Chips label="Show games" value={on} onChange={setFilter} options={shown.map((id) => ({ id, label: FILTER_LABEL[id] }))} />
-      </div>
-      {on === 'opp' ? <ByOpponent league={league} /> : <TeamScheduleList league={league} tid={me} filter={on} split skip={next?.gid} />}
+      {on === 'opp' ? (
+        <ByOpponent league={league} right={pick} />
+      ) : (
+        <TeamScheduleList league={league} tid={me} filter={on} split skip={next?.gid} headRight={pick} collapse={on !== 'upcoming' && on !== 'results'} />
+      )}
     </main>
   );
 }
 
-/**
- * The filters' row scrolls sideways on a phone: its edges fade where chips wait past them (`fl`,
- * `fr`), and the chip that's on is scrolled into view when the screen opens.
- */
-function useScrollEdges(count: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const box = ref.current;
-    const row = box?.querySelector<HTMLElement>('.chips');
-    if (!box || !row) return;
-    const on = row.querySelector<HTMLElement>('.chip.on');
-    if (on && on.offsetLeft + on.offsetWidth > row.clientWidth) row.scrollLeft = on.offsetLeft - 16;
-    const edges = () => {
-      box.classList.toggle('fl', row.scrollLeft > 4);
-      box.classList.toggle('fr', row.scrollLeft + row.clientWidth < row.scrollWidth - 4);
-    };
-    edges();
-    row.addEventListener('scroll', edges, { passive: true });
-    window.addEventListener('resize', edges);
-    return () => {
-      row.removeEventListener('scroll', edges);
-      window.removeEventListener('resize', edges);
-    };
-  }, [count]);
-  return ref;
+/** The schedule's one control: which games it shows, a sheet of every view a tap away. */
+function FilterPick({ value, options, onChange }: { value: ScheduleFilter | 'opp'; options: (ScheduleFilter | 'opp')[]; onChange: (v: ScheduleFilter | 'opp') => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className={`btn xs gs-filter${value !== 'all' ? ' on' : ''}`} onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={`Show: ${FILTER_LABEL[value]}`}>
+        <ListFilter size={14} aria-hidden="true" /> {FILTER_LABEL[value]}
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title="Show">
+        <div className="card flush list" role="radiogroup" aria-label="Show games">
+          {options.map((id) => (
+            <button
+              key={id}
+              className="gs-pick"
+              role="radio"
+              aria-checked={id === value}
+              onClick={() => {
+                onChange(id);
+                setOpen(false);
+              }}
+            >
+              <span className="grow">{FILTER_LABEL[id]}</span>
+              {id === value && <Check size={18} aria-hidden="true" />}
+            </button>
+          ))}
+        </div>
+      </Sheet>
+    </>
+  );
 }
 
-/** The next game on a slab in the opponent's colours: when, who, how they stand, the series and the plan. */
+/**
+ * The next game as a ticket: the two teams on their colours with each one's chance to win, then what
+ * the night is billed as, the series and the plan. The whole ticket opens its matchup page.
+ */
 function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const me = league.userTid;
   const opp = g.home === me ? g.away : g.home;
   const t = league.teams[opp];
-  const ts = curTeamSeason(league, opp);
-  const rank = useLeagueMemo(() => confStandings(league, t.conf).find((r) => r.tid === opp)?.confRank ?? 0, [league, t.conf, opp]);
   // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
   const pre = league.phase === 'preseason';
   const days = pre ? Infinity : g.day - league.day;
@@ -122,57 +127,55 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const series = g.type === 'playoffs' ? liveSeries(league, opp) : undefined;
   const ss = g.type === 'regular' ? seasonSeries(league, opp) : null;
   const plan = planStatus(league, opp, g);
-  const bills = useBillings(league, g);
+  const [bill] = useBillings(league, g);
+  // the preview's chance to win, from the home side
+  const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
   const seriesLine = series
     ? (() => {
         const [w, l] = series.high === me ? [series.highWins, series.lowWins] : [series.lowWins, series.highWins];
         // (before game 1 the tag above says it all)
         return w + l === 0 ? '' : w === l ? `Series tied ${w}-${l}` : `${w > l ? league.teams[me].abbrev : t.abbrev} leads ${Math.max(w, l)}-${Math.min(w, l)}`;
       })()
-    : ss
-      ? seriesText(ss)
+    : ss && ss.total > 0
+      ? `Season ${seriesText(ss)}`
       : '';
+  const rec = (tid: number) => {
+    const ts = curTeamSeason(league, tid);
+    return `${ts.won}-${ts.lost}`;
+  };
+  const chance = (v: number) => (
+    <>
+      {Math.round(v * 100)}
+      <small>%</small>
+    </>
+  );
   return (
-    <section className="slab gn" style={slabVars(t.colors) as CSSProperties} aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
-      <div className="gn-over">
-        <span className={days <= 0 ? 'today' : undefined}>
-          {when} · {where}
-        </span>
-        {tag && <span>{tag}</span>}
-      </div>
-      <BillingLine billings={bills} />
-      {series && <SeriesStrip league={league} seriesId={series.id} />}
-      <div className="gn-id">
-        <TeamLogo tid={opp} size={48} decorative />
-        <div className="gn-who">
-          <div className="gn-region">{t.region}</div>
-          <div className="gn-name ellipsis">
-            <span className="gn-at">{g.home === me || neutral ? 'vs' : '@'}</span>
-            {t.name}
+    <section className="gs-next" aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
+      <GameBoard
+        league={league}
+        links={false}
+        away={{ tid: g.away, fig: chance(1 - proj.win), sub: rec(g.away), lost: proj.win > 0.5 }}
+        home={{ tid: g.home, fig: chance(proj.win), sub: rec(g.home), lost: proj.win < 0.5 }}
+        over={[`${when} · ${where}`, tag]}
+        mid={<span className="gd-bd-k">To win</span>}
+      />
+      <div className="gs-next-body">
+        {bill && (
+          <div className="gs-next-bill">
+            <div className={`gs-next-h w${bill.weight}`}>{bill.tag}</div>
+            <div className="gs-next-l">{bill.line}</div>
           </div>
-        </div>
-        <div className="gn-rec">
-          <div className="v num">
-            {ts.won}-{ts.lost}
-          </div>
-          {/* no rank before anyone has played */}
-          {rank > 0 && ts.won + ts.lost > 0 && (
-            <div className="s">
-              {ordinal(rank)} {t.conf === 'E' ? 'East' : 'West'}
-            </div>
-          )}
-        </div>
-      </div>
-      <div className="gn-foot">
-        <span className="grow">
-          {seriesLine && !series && <span className="num gn-series">{seriesLine}</span>}
-          <Link to={`/games/${opp}?tab=plan`} className={`gn-plan${plan.set ? ' set' : ''}`}>
-            {plan.text}
+        )}
+        {series && <SeriesStrip league={league} seriesId={series.id} />}
+        <div className="gs-next-foot">
+          <span className="grow gs-next-facts">
+            <span className={plan.set ? 'gs-next-plan set' : 'gs-next-plan'}>{plan.text}</span>
+            {seriesLine && <span className="num">{seriesLine}</span>}
+          </span>
+          <Link to={`/games/${opp}`} className="gs-next-go" aria-label={`Matchup: the ${t.name}`}>
+            Matchup <ChevronRight size={16} aria-hidden="true" />
           </Link>
-        </span>
-        <Link to={`/games/${opp}`} className="btn sm" aria-label={`Matchup: the ${t.name}`}>
-          Matchup <ChevronRight size={15} />
-        </Link>
+        </div>
       </div>
     </section>
   );
@@ -212,7 +215,7 @@ function SeriesStrip({ league, seriesId }: { league: League; seriesId: string })
 }
 
 /** The season series against every opponent: the record, what's left, the last result and the next meeting, a row each (a tap to its matchup page). */
-function ByOpponent({ league }: { league: League }) {
+function ByOpponent({ league, right }: { league: League; right?: ReactNode }) {
   const me = league.userTid;
   const rows = useLeagueMemo(
     () =>
@@ -233,11 +236,21 @@ function ByOpponent({ league }: { league: League }) {
         .sort((a, b) => b.ss.won - b.ss.lost - (a.ss.won - a.ss.lost) || b.ss.won + b.ss.lost - (a.ss.won + a.ss.lost) || a.t.name.localeCompare(b.t.name)),
     [league, me],
   );
-  if (!rows.length) return <div className="empty">No regular-season games on the schedule yet.</div>;
+  if (!rows.length)
+    return (
+      <section className="sec" aria-label="Season series">
+        <div className="sec-h">
+          <h3>Season series</h3>
+          {right}
+        </div>
+        <div className="empty">No regular-season games on the schedule yet.</div>
+      </section>
+    );
   return (
     <section className="sec" aria-label="Season series">
       <div className="sec-h">
         <h3>Season series</h3>
+        {right}
       </div>
       <div className="card flush gs-list">
         {rows.map(({ t, ss, next, form }) => {
