@@ -1,13 +1,18 @@
-// Your picks in this draft (and yours that other teams hold), and after the draft its results.
+// Your picks in this draft (and yours that other teams hold), and after the draft its results: the
+// class in review (your haul graded, the best value and the biggest reach), then every pick by round.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import type { League } from '../../core/types';
+import type { League, Player } from '../../core/types';
+import { playerName } from '../../core/league/helpers';
+import { ordinal, plural } from '../../core/format';
+import { TeamLogo } from '../components/TeamLogo';
+import { OvrPot } from '../office/common';
 import { useLeagueMemo } from '../../state/store';
 import { Empty, Section, Segmented } from '../components/ui';
 import { PROJECTION_NOTE, pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
-import { draftedThisYear, pickOrder } from './common';
+import { draftedThisYear, gradeTone, pickGrade, pickOrder, type PickGrade } from './common';
 import { SelectionRow } from './rows';
 
 export function MyPicks({ league }: { league: League }) {
@@ -64,12 +69,70 @@ export function MyPicks({ league }: { league: League }) {
 
 // ------------------------------------------------------------------ results (after the draft)
 
+/**
+ * The class in review, by the big board: your haul with each pick's grade and a verdict on the
+ * night, the best value and the biggest reach around the league, and the No. 1 pick.
+ */
+function DraftRecap({ league, list }: { league: League; list: Player[] }) {
+  const graded = list.map((p) => ({ p, g: pickGrade(league, p) })).filter((x): x is { p: Player; g: PickGrade } => !!x.g);
+  const mine = graded.filter((x) => x.p.draft.tid === league.userTid);
+  const others = graded.filter((x) => x.p.draft.round === 1 || x.g.overall <= 45);
+  const value = [...others].sort((a, b) => b.g.by - a.g.by)[0];
+  const reach = [...others].filter((x) => x.p.draft.round === 1).sort((a, b) => a.g.by - b.g.by)[0];
+  const steals = mine.filter((x) => x.g.label === 'Steal' || x.g.label === 'Value').length;
+  const reaches = mine.filter((x) => x.g.label === 'Reach' || x.g.label === 'Big reach').length;
+  const verdict = !mine.length
+    ? 'No picks for us this year.'
+    : reaches === 0 && steals
+      ? `${plural(steals, 'pick')} went well after where the board had ${steals > 1 ? 'them' : 'him'}: a night the scouts will like.`
+      : reaches > steals
+        ? `We went off the board ${reaches > 1 ? `${reaches} times` : 'once'}: our scouts saw something the consensus didn't. Time will tell.`
+        : 'A night that went to the board, more or less.';
+  const first = list.find((p) => p.draft.round === 1 && p.draft.pick === 1);
+  const row = (label: string, x: { p: Player; g: PickGrade }) => (
+    <Link key={label} to={`/player/${x.p.pid}`} className="listrow fo-sel">
+      <span className="fo-rank">{x.g.overall}</span>
+      <TeamLogo tid={x.p.draft.tid ?? 0} size={28} decorative />
+      <div className="grow">
+        <div className="fo-meta">{label}</div>
+        <div className="fo-name">{playerName(x.p)}</div>
+        <div className="dn-grade">
+          <span className={`tag ${gradeTone(x.g)}`}>
+            {x.g.label} · ranked {ordinal(x.g.rank)}
+          </span>
+        </div>
+      </div>
+      <OvrPot p={x.p} />
+    </Link>
+  );
+  return (
+    <>
+      <Section title="Your haul">
+        <div className="card flush list">
+          {mine.map((x) => (
+            <SelectionRow key={x.p.pid} league={league} p={x.p} />
+          ))}
+          <div className="dn-verdict">{verdict}</div>
+        </div>
+      </Section>
+      <Section title="Around the league">
+        <div className="card flush list">
+          {first && row('The No. 1 pick', { p: first, g: pickGrade(league, first) ?? { label: 'Fair', by: 0, rank: 1, overall: 1 } })}
+          {value && value.g.by > 0 && row('Best value', value)}
+          {reach && reach.g.by < 0 && row('Biggest reach', reach)}
+        </div>
+      </Section>
+    </>
+  );
+}
+
 export function Results({ league }: { league: League }) {
   const list = useLeagueMemo(() => draftedThisYear(league), [league]);
   const [round, setRound] = useState<1 | 2>(1);
   if (!list.length) return <Empty>No draft results yet.</Empty>;
   return (
     <>
+      <DraftRecap league={league} list={list} />
       <Segmented
         label="Round"
         value={String(round) as '1' | '2'}

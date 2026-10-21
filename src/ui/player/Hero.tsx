@@ -1,6 +1,7 @@
 // A player's slab, in his team's colours (a neutral kit without one): number, position and status
-// over the mark, the jersey and the name, OVR over POT, his particulars, his tags (archetype, tier,
-// injury, the award races he's in) and his per-game line.
+// over the mark, the jersey and the name, OVR over POT with his change this season, his
+// particulars, where his career stands, his tags (development, archetype, tier, injury, the award
+// races he's in) and his per-game line.
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -16,6 +17,8 @@ import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
 import { injuryName, outFor } from '../../core/format';
+import { baseLabel, devBase, devTag, growthStory, ovrChange } from '../../core/league/devWatch';
+import { DevDelta, DevTagChip } from './dev';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -63,6 +66,9 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
   // before his first game this season, show his most recent season instead
   const lastSeason = cur ? null : Math.max(0, ...p.stats.filter((s) => !s.playoffs && s.gp > 0).map((s) => s.season));
   const line = cur ?? (lastSeason ? playerSeason(p, lastSeason) : null);
+  // where his career stands, and the development tag his roster row carries
+  const story = p.tid >= -1 ? growthStory(league, p) : '';
+  const dev = p.tid >= 0 ? devTag(league, p) : null;
   const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
   const inRaces = races
     ? RACES.flatMap(([k, label]) => {
@@ -86,8 +92,11 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
             {p.lastName}
           </h1>
         </div>
-        {/* a tap: the OVR ladder, his band marked */}
-        <OvrBadge ovr={p.ovr} pot={p.pot} size="lg" />
+        {/* a tap: the OVR ladder, his band marked; under it, his change this season */}
+        <div className="dv-badge">
+          <OvrBadge ovr={p.ovr} pot={p.pot} size="lg" />
+          <DevDelta d={ovrChange(league, p)} since={baseLabel(devBase(league, p))} size="md" />
+        </div>
       </div>
       {/* each particular whole on its line, the dots only between two on the same line */}
       <div className="tm-meta">
@@ -107,7 +116,9 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
             ))}
         </span>
       </div>
+      {story && <div className="dv-story">{story}</div>}
       <div className="tm-tags">
+        {dev && <DevTagChip tag={dev} />}
         <Tag>{p.archetype}</Tag>
         {/* his tier in its badge's colour, so it doesn't read as an award race */}
         <span className="tag tm-tier">

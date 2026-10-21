@@ -81,6 +81,8 @@ import { recordTrail } from '../analysis/odds';
 import { realCareerOnRecord } from '../analysis/milestones';
 import { money } from '../format';
 import { worldDay, worldGame, worldSeasonEnd, worldSeasonStart } from './world';
+import { devCheckIn, devSummer } from './devWatch';
+import { HONOR_AWARDS } from './media/honors';
 
 /**
  * AI-to-AI deals expected off the regular season (see aiOffseasonTrades): on draft night before
@@ -149,16 +151,9 @@ function periodic(league: League, rng: Rng) {
     }
   }
   if (d === 45 || d === 90 || d === 135) {
-    const changes = inSeasonProgression(league, rng).filter((c) => league.players[c.pid].tid === league.userTid && c.delta !== 0);
-    if (changes.length) {
-      addInbox(league, {
-        from: 'Player Development',
-        subject: 'Development check-in',
-        body: changes.map((c) => `${playerName(league.players[c.pid])}: ${c.delta > 0 ? '+' : ''}${c.delta} OVR`).join('\n'),
-        tone: changes.reduce((a, c) => a + c.delta, 0) >= 0 ? 'good' : 'bad',
-        link: '/team',
-      });
-    }
+    // the development check-in: the staff's snapshot, the season's breakouts and slumps, and the
+    // user's development report (devWatch.ts; it draws nothing from the league's stream)
+    devCheckIn(league, inSeasonProgression(league, rng));
   }
   // (the deadline has one mail, its deadline-day briefing (deadline.ts); the Office counts the days down)
   if (d % 7 === 3) {
@@ -710,24 +705,9 @@ export function newSeason(league: League): boolean {
       if (p.talks && p.talks.season < league.season) delete p.talks;
       if (p.tenDays && p.tenDays.season < league.season) delete p.tenDays;
     }
-    const prog = annualProgression(league, rng);
-    const mine = prog.filter((x) => league.players[x.pid]?.tid === league.userTid).sort((a, b) => b.delta - a.delta);
-    const up = mine.filter((x) => x.delta > 0).slice(0, 3);
-    const down = mine
-      .filter((x) => x.delta < 0)
-      .slice(-3)
-      .reverse();
-    if (up.length || down.length) {
-      const fmt = (x: { pid: number; delta: number }) => `${playerName(league.players[x.pid])} ${x.delta > 0 ? '+' : ''}${x.delta} (now ${league.players[x.pid].ovr})`;
-      const line = (label: string, xs: typeof mine) => (xs.length ? `${label}${xs.length > 1 ? 's' : ''}: ${xs.map(fmt).join(', ')}.` : '');
-      addInbox(league, {
-        from: 'Player Development',
-        subject: 'Training camp report',
-        body: [line('Biggest riser', up), line('Biggest drop', down)].filter(Boolean).join('\n'),
-        tone: 'neutral',
-        link: '/team',
-      });
-    }
+    annualProgression(league, rng);
+    // the summer's development, told by the staff (and the league's summer breakouts in the news)
+    devSummer(league);
     ensureFuturePicks(league, league.season + 4);
     generateDraftClass(league, league.season, rng);
     fillRosters(league, rng);
@@ -797,7 +777,11 @@ function compactRetired(league: League) {
     if (p.tid !== RETIRED || p.retiredSeason === undefined || league.season - p.retiredSeason <= 2) continue;
     const games = p.stats.reduce((a, s) => a + (s.playoffs ? 0 : s.gp), 0);
     // (a season that can stand in the single-season record lists keeps him: they're read from the players kept)
-    if (!p.awards.length && (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5 && !holdsSeasonRecord(league, p)))) {
+    // (the press's weekly and monthly honors don't keep a name: see HONOR_AWARDS)
+    if (
+      !p.awards.some((a) => !HONOR_AWARDS.has(a.type)) &&
+      (!p.stats.some((s) => s.gp > 0) || (games < 100 && league.season - p.retiredSeason >= 5 && !holdsSeasonRecord(league, p)))
+    ) {
       // a night of his in the record book keeps his name
       freezeRecordNames(league, p);
       delete league.players[p.pid];

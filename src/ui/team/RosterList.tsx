@@ -1,7 +1,8 @@
 // A roster as rows, the same for your team (Team → Roster) and any other (/teams/:tid): tonight's
 // five, the bench, then the two-way deals. A row is the jersey, the name with what's wrong (out,
 // a 10-day deal: dropping under a long name rather than cutting it), position and age, then aligned
-// columns under one header per group: minutes, points, rebounds and assists a game, OVR and POT.
+// columns under one header per group: minutes, points, rebounds and assists a game, OVR (with its
+// change this season, and a development tag by the name: Breakout, Rising, Prospect, Declining) and POT.
 // Before anyone plays, each player's latest season stands in for this one's, and the line under the
 // list says so.
 import { Fragment, type ReactNode } from 'react';
@@ -13,6 +14,8 @@ import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
 import { tenDayLabel } from '../office/TenDayPanel';
 import { injuryName, plural } from '../../core/format';
+import { devTag, ovrChange } from '../../core/league/devWatch';
+import { DevDelta, DevTagChip } from '../player/dev';
 // its rows' styles, wherever a roster shows (another team's page, not only the Team tab)
 import '../screens/team.css';
 
@@ -53,6 +56,9 @@ function GroupHead({ label }: { label: string }) {
 /** One player's row: a link to his page. */
 export function RosterRow({ league, p, line, mine }: { league: League; p: Player; line: PerGame | null; mine: boolean }) {
   const ten = mine ? tenDayLabel(league, p) : null;
+  // the development watch: his change this season under the badge, and a tag for the young core and the fading
+  const dev = devTag(league, p);
+  const change = ovrChange(league, p);
   return (
     <Link to={`/player/${p.pid}`} className="tm-rl tm-rl-row">
       <Avatar p={p} />
@@ -66,6 +72,7 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
           </span>
         )}
         {ten && <span className="tag warn">{ten}</span>}
+        {dev && <DevTagChip tag={dev} />}
       </span>
       <span className="tm-rl-meta">
         {p.pos} · {playerAge(p, league.season)}
@@ -81,6 +88,7 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
       <span className="tm-rl-ovr">
         <span className="sr-only">OVR </span>
         <Ovr v={p.ovr} size="sm" />
+        <DevDelta d={change} since="this season" />
       </span>
       <span className={`tm-rl-pot num ${p.pot > p.ovr ? '' : 'dim'}`}>
         <span className="sr-only">potential </span>
@@ -131,7 +139,7 @@ export function RosterList({ league, roster }: { league: League; roster: Player[
         )}
       </div>
       <div className="tm-foot row between wrap">
-        <span>{current ? 'Per game this season.' : any ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'}</span>
+        <span>{current ? 'Per game this season.' : any ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'} Arrows: OVR change this season.</span>
         <OvrKey />
       </div>
     </>

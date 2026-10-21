@@ -1,6 +1,7 @@
 // The Team hub: your team in one place. One compact header (the team, its roster spots and payroll,
 // who runs the rotation and tactics), then its sections as sticky page tabs with their own paths
-// (/team, /team/rotation, /team/tactics, /team/lineups), each the screen it names.
+// (/team, /team/rotation, /team/tactics, /team/lineups, /team/growth: the development report), each
+// the screen it names.
 import { Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Bot, UserRound } from 'lucide-react';
@@ -19,13 +20,15 @@ const Roster = lazyRetry(() => import('../screens/Roster'));
 const Rotation = lazyRetry(() => import('../screens/Rotation'));
 const Tactics = lazyRetry(() => import('../screens/Tactics'));
 const Lineups = lazyRetry(() => import('../screens/Lineups'));
+const Growth = lazyRetry(() => import('./GrowthView'));
 
-type Section = 'roster' | 'rotation' | 'tactics' | 'lineups';
+type Section = 'roster' | 'rotation' | 'tactics' | 'lineups' | 'growth';
 const SECTIONS: { id: Section; label: string }[] = [
   { id: 'roster', label: 'Roster' },
   { id: 'rotation', label: 'Rotation' },
   { id: 'tactics', label: 'Tactics' },
   { id: 'lineups', label: 'Lineups' },
+  { id: 'growth', label: 'Growth' },
 ];
 
 /** Who runs the rotation and the tactics: the assistant, the coach, or one each. */
@@ -84,6 +87,7 @@ export default function TeamHub() {
         {section === 'rotation' && <Rotation />}
         {section === 'tactics' && <Tactics />}
         {section === 'lineups' && <Lineups />}
+        {section === 'growth' && <Growth />}
       </Suspense>
     </main>
   );

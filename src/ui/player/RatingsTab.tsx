@@ -1,6 +1,7 @@
 // A player's page, Ratings: why his OVR is what it is (the attributes that lift it and hold it
-// back), then every rating on the 40-99 scale by group, with last season's change; a tap opens what
-// a rating does.
+// back), then every rating on the 40-99 scale by group with an arrow for its change this season; a
+// tap opens what a rating does. The changes are the development watch's: since he ended last season
+// (the summer included), or since opening night in a league's first season.
 import { Fragment, useState } from 'react';
 import type { League, Player, RatingKey } from '../../core/types';
 import { RATING_META, attrDisplay, ovrWeights } from '../../core/ratings';
@@ -8,6 +9,8 @@ import { ratingMeans } from '../../core/league/progression';
 import { Bar, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { RATING_COLOR, RatingBands, ratingTone } from '../ratingCols';
+import { baseLabel, devBase, ratingDeltas } from '../../core/league/devWatch';
+import { DevDelta } from './dev';
 
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
@@ -37,7 +40,9 @@ function ovrContributions(league: League, p: Player) {
 
 export function RatingsTab({ p, league }: { p: Player; league: League }) {
   const [open, setOpen] = useState<string | null>(null);
-  const was = p.ratingsHistory.length > 1 ? p.ratingsHistory[p.ratingsHistory.length - 2].r : undefined;
+  // each rating's change this season, from where he ended last season (devWatch's snapshot)
+  const deltas = ratingDeltas(league, p);
+  const since = baseLabel(devBase(league, p));
   const contribs = ovrContributions(league, p);
   const pluses = contribs.parts.filter((x) => x.delta > 0).slice(0, 4);
   const minuses = contribs.parts
@@ -81,8 +86,6 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
               <div className="tm-rt-grid">
                 {RATING_META.filter((m) => m.group === g).map((m) => {
                   const val = attrDisplay(p.ratings[m.key as RatingKey]);
-                  const before = was?.[m.key as RatingKey];
-                  const prev = before === undefined ? null : attrDisplay(before);
                   const on = open === m.key;
                   return (
                     <div key={m.key} className="tm-rt">
@@ -90,8 +93,8 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
                         <span className="tm-rt-l">{m.label}</span>
                         <Bar value={((val - 40) / 59) * 100} color={RATING_COLOR[ratingTone(val)]} height={3} />
                         <span className="tm-rt-v num">{val}</span>
-                        <span className={`tm-rt-d num ${prev !== null && val !== prev ? (val > prev ? 'good' : 'bad') : ''}`}>
-                          {prev !== null && val !== prev ? `${val > prev ? '+' : ''}${val - prev}` : ''}
+                        <span className="tm-rt-d num">
+                          <DevDelta d={deltas[m.key as RatingKey] ?? 0} since={since} />
                         </span>
                       </button>
                       {on && <div className="tm-rt-help fade-in">{m.help}</div>}
@@ -104,7 +107,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
         </div>
       </div>
       <div className="tm-foot">
-        <RatingBands named />. Changes are since last season; tap a rating for what it does.
+        <RatingBands named />. Arrows: the change {since}. Tap a rating for what it does.
       </div>
     </>
   );

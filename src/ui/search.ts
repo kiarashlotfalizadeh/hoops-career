@@ -45,6 +45,7 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Inbox', to: '/inbox', meta: 'Mail and decisions', also: 'messages mail' },
   { title: 'Settings', to: '/settings', meta: 'Difficulty, live games, saves', also: 'options preferences backup export' },
   { title: 'Roster', to: '/team', meta: 'Team · players, ratings, stats, contracts', also: 'players team' },
+  { title: 'Growth', to: '/team/growth', meta: 'Team · development, breakouts, rookies', also: 'development progress breakouts improving rookies young' },
   { title: 'Rotation', to: '/team/rotation', meta: 'Team · starters, minutes, closers', also: 'depth chart minutes starters' },
   {
     title: 'Tactics',

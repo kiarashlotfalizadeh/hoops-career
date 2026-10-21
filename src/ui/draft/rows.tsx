@@ -1,5 +1,5 @@
 // The draft's two kinds of rows: a prospect on the board (with his projection and, on the clock, a
-// Draft button) and a pick that was made.
+// Draft button) and a pick that was made, with its grade against the big board.
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
@@ -10,9 +10,22 @@ import { playerAge } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
-import { projText } from './common';
+import { gradeTone, pickGrade, projText } from './common';
+import { ordinal } from '../../core/format';
+import './draft-night.css';
 import { overallPick } from '../league/shared';
 import { OvrKey } from '../components/OvrKey';
+
+/** A pick's grade against the big board, as a quiet tag: "Steal · ranked 4th". */
+export function GradeTag({ league, p }: { league: League; p: Player }) {
+  const g = pickGrade(league, p);
+  if (!g) return null;
+  return (
+    <span className={`tag ${gradeTone(g)}`} title={`Went #${g.overall}, ranked ${ordinal(g.rank)} on the big board`}>
+      {g.label} · ranked {ordinal(g.rank)}
+    </span>
+  );
+}
 
 export function SelectionRow({ league, p }: { league: League; p: Player }) {
   const mine = p.draft.tid === league.userTid;
@@ -24,6 +37,9 @@ export function SelectionRow({ league, p }: { league: League; p: Player }) {
         <div className="fo-name">{playerName(p)}</div>
         <div className="fo-meta">
           {league.teams[p.draft.tid ?? 0]?.abbrev} · {p.pos} · {fmtHeight(p.heightIn)} · {p.college || p.country}
+        </div>
+        <div className="dn-grade">
+          <GradeTag league={league} p={p} />
         </div>
       </div>
       <OvrPot p={p} />

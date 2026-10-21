@@ -1,0 +1,206 @@
+/* Draft night as an occasion: the lottery's reveal and its moment, the announcer, your pick, the
+   grades and the class in review. Prefixed `dn-` (the draft's rows are office/styles/draft.css's `fo-`). */
+
+/* ------------------------------------------------------------ grades */
+.dn-grade {
+  margin-top: 3px;
+}
+.dn-grade .tag,
+.dn-stage-meta .tag,
+.dn-yours-meta .tag {
+  height: 20px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+
+/* ------------------------------------------------------------ the lottery */
+.dn-start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dn-hidden .fo-rank {
+  color: var(--text-dim);
+}
+.dn-q {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-weight: 800;
+}
+.dn-hidden.next .dn-q {
+  animation: dn-pulse 0.9s var(--ease-out) infinite alternate;
+}
+@keyframes dn-pulse {
+  from {
+    background: var(--surface-2);
+  }
+  to {
+    background: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
+  }
+}
+.dn-in {
+  animation: dn-rise var(--dur) var(--ease-out) both;
+}
+@keyframes dn-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.dn-moment {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px var(--pad-card);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--team) 26%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--team-text);
+  animation: dn-rise var(--dur) var(--ease-out) both;
+}
+.dn-moment-h {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.dn-moment.up .dn-moment-h {
+  color: var(--text);
+}
+.dn-moment-s {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.dn-line {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------ the announcer */
+.dn-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-height: 112px;
+  padding: 14px 16px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  border: 0;
+  cursor: pointer;
+}
+.dn-stage .slab-mark {
+  opacity: 0.14;
+}
+.dn-stage-over {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-2);
+}
+.dn-stage-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.dn-stage-n {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+.dn-stage-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.dn-stage .tag.good,
+.dn-stage .tag.warn,
+.dn-stage .tag {
+  background: rgba(0, 0, 0, 0.4);
+}
+.dn-stage-skip {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.dn-wait {
+  flex-direction: row;
+  gap: 6px;
+  height: 30px;
+  align-items: center;
+}
+.dn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-2);
+  animation: dn-blink 0.9s ease-in-out infinite;
+}
+.dn-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dn-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes dn-blink {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ------------------------------------------------------------ your pick and the review */
+.dn-yours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: inherit;
+  text-decoration: none;
+}
+.dn-yours-over {
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.dn-yours-n {
+  display: block;
+  font-weight: 800;
+  font-size: 18px;
+}
+.dn-yours-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.dn-verdict {
+  padding: 10px var(--row-px) 12px;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.4;
+}

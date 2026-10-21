@@ -1,0 +1,323 @@
+/* The development watch's marks (player/dev.tsx), the player page's growth pieces and Team → Growth.
+   Prefixed `dv-`. */
+
+/* ------------------------------------------------------------ a change: arrow and size */
+.dv-d {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-weight: 800;
+  font-size: 11px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dv-d.md {
+  font-size: 13px;
+  gap: 2px;
+}
+.dv-d.up {
+  color: var(--good);
+}
+.dv-d.down {
+  color: var(--bad);
+}
+.dv-tag {
+  font-weight: 700;
+}
+
+/* ------------------------------------------------------------ roster rows: the change under the badge */
+.tm-rl-row .tm-rl-ovr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tm-rl-row .tm-rl-ovr .dv-d {
+  font-size: 10px;
+}
+
+/* ------------------------------------------------------------ the slab */
+.dv-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.dv-badge .dv-d {
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.36);
+}
+.dv-badge .dv-d.up {
+  color: #7ee2a8;
+}
+.dv-badge .dv-d.down {
+  color: #ffa3ad;
+}
+.dv-story {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.35;
+  margin-top: -4px;
+}
+
+/* ------------------------------------------------------------ growth tab */
+.dv-arc {
+  padding-bottom: 8px;
+}
+.dv-arc svg {
+  display: block;
+  overflow: visible;
+}
+.dv-arc-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding-top: 4px;
+}
+.dv-arc-key i {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-top: 2.5px solid var(--accent);
+}
+.dv-arc-key i.pot {
+  border-top: 2px dashed var(--tier-star);
+}
+.dv-arc-key i.now {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg);
+}
+.dv-pot {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dv-pot-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dv-pot-fig {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 40px;
+  line-height: 0.9;
+}
+.dv-pot-l {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dv-pot-k {
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.dv-pot-tier {
+  font-weight: 750;
+  font-size: 15px;
+}
+.dv-pot-text {
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.45;
+  margin: 0;
+}
+/* the climb to his ceiling: where he is, where he could get */
+.dv-climb {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.dv-climb > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 4px;
+}
+.dv-climb .room {
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tier-star) 45%, transparent) 0 4px, transparent 4px 8px);
+}
+.dv-climb .now {
+  background: var(--accent);
+}
+.dv-climb-key {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.dv-moves {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.dv-moves .tag {
+  gap: 5px;
+}
+
+/* ------------------------------------------------------------ highlights and rookie watch */
+.dv-hl {
+  display: flex;
+  flex-direction: column;
+}
+.dv-hl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  border-bottom: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.dv-hl-row:last-child {
+  border-bottom: none;
+}
+a.dv-hl-row:active {
+  background: var(--surface);
+}
+.dv-hl-fig {
+  flex: none;
+  width: 44px;
+  text-align: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+}
+.dv-hl-fig small {
+  display: block;
+  font-stretch: 100%;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+.dv-hl-t {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.35;
+}
+.dv-hl-t .dim {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------ Team → Growth */
+.dv-coach {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dv-coach-h {
+  font-weight: 750;
+  font-size: 16px;
+}
+.dv-coach p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-2);
+  line-height: 1.45;
+}
+.dv-watch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+.dv-watch-t {
+  flex: 1;
+  min-width: 0;
+}
+.dv-watch-n {
+  font-weight: 800;
+  font-size: 17px;
+}
+.dv-watch-why {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+.dv-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  align-items: center;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.dv-row:last-child {
+  border-bottom: none;
+}
+.dv-row:active {
+  background: var(--surface);
+}
+.dv-row > .avatar {
+  width: 34px;
+  height: 34px;
+  align-self: start;
+  margin-top: 2px;
+}
+.dv-row-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px 6px;
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.dv-row-meta {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.dv-row-why {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+.dv-row-ovr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  align-self: start;
+  margin-top: 2px;
+}
+.dv-vets {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  padding: 2px 2px 0;
+}
+.dv-vets a {
+  color: var(--text-2);
+}

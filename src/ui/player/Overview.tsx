@@ -1,5 +1,6 @@
 // A player's page, Overview: his scouting profile as percentiles among every rostered player, his
-// role and how he's used, his contract with the desk's actions, his honors and his moves.
+// role and how he's used, his contract with the desk's actions, a rookie's watch and the season's
+// highlights, his honors and his moves.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
@@ -12,6 +13,7 @@ import { SKILLS, skillColor, useSkillPercentiles } from '../playerSkills';
 import { PlayerMoves } from '../league/MovesTab';
 import { accolades } from '../league/shared';
 import { ContractSection, deskBlocks } from './Contract';
+import { RookieWatch, SeasonHighlights } from './Highlights';
 
 export function Overview({ league, p, onRole, onExtend, onRelease }: { league: League; p: Player; onRole: () => void; onExtend: () => void; onRelease: () => void }) {
   const pctile = useSkillPercentiles(league);
@@ -96,6 +98,10 @@ export function Overview({ league, p, onRole, onExtend, onRelease }: { league: L
 
         <ContractSection league={league} p={p} onExtend={onExtend} onRelease={onRelease} />
       </div>
+
+      {/* his season so far: a rookie's line and race, then the season's highlights */}
+      <RookieWatch league={league} p={p} />
+      <SeasonHighlights league={league} p={p} />
 
       {/* the same honors, names and order as the league history (the Hall of Fame has its own tag above) */}
       {honors.length > 0 && (

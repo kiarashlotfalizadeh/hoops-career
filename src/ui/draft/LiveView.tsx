@@ -1,6 +1,8 @@
-// Draft night: the team on the clock (your pick's buttons, or the next pick's), the picks coming up,
-// the best available and the selections so far.
-import { useState } from 'react';
+// Draft night: the team on the clock (your pick's buttons, or the next pick's), the announcer for
+// the picks as they're made, your latest pick, the picks coming up, the best available and the
+// selections so far (each graded against the big board).
+import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowLeftRight, Bot, FastForward, Play, SkipForward } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { draftOrder, nextPick } from '../../core/league/draft';
@@ -11,8 +13,109 @@ import { Section } from '../components/ui';
 import { slabVars } from '../teamColors';
 import { blockOffers } from '../office/tradeBlock';
 import { overallPick } from '../league/shared';
-import { draftedThisYear } from './common';
-import { BoardList, SelectionRow } from './rows';
+import { draftedThisYear, pickWords } from './common';
+import { BoardList, GradeTag, SelectionRow } from './rows';
+import { playerName } from '../../core/league/helpers';
+import { OvrPot } from '../office/common';
+import './draft-night.css';
+
+/** How long each pick holds the stage, and the beat before the name. */
+const PICK_MS = 1300;
+const NAME_MS = 420;
+/** A run of picks made at once (a sim to the user's pick) announces only its last few. */
+const ANNOUNCE_MAX = 4;
+
+/**
+ * Draft night's announcer: each pick made since the screen opened takes the stage in turn, "With
+ * the 5th pick, the Charlotte Hornets select..." and, a beat later, the name, with his grade
+ * against the big board. A tap skips the rest; the picks already on the board when the screen
+ * opened aren't announced again.
+ */
+function Announcer({ league, picks }: { league: League; picks: Player[] }) {
+  const seen = useRef(picks.length);
+  const [queue, setQueue] = useState<number[]>([]);
+  const [named, setNamed] = useState(false);
+  useEffect(() => {
+    if (picks.length < seen.current) seen.current = picks.length;
+    if (picks.length === seen.current) return;
+    const fresh = picks.slice(seen.current).map((p) => p.pid);
+    seen.current = picks.length;
+    setQueue((q) => [...q, ...fresh].slice(-ANNOUNCE_MAX));
+  }, [picks]);
+  const cur = queue[0];
+  useEffect(() => {
+    if (cur === undefined) return;
+    setNamed(false);
+    const a = window.setTimeout(() => setNamed(true), NAME_MS);
+    // the user's own pick holds the stage longer
+    const mine = league.players[cur]?.draft.tid === league.userTid;
+    const b = window.setTimeout(() => setQueue((q) => q.slice(1)), mine ? PICK_MS * 2 : PICK_MS);
+    return () => {
+      window.clearTimeout(a);
+      window.clearTimeout(b);
+    };
+  }, [cur]); // eslint-disable-line react-hooks/exhaustive-deps
+  const p = cur !== undefined ? league.players[cur] : undefined;
+  if (!p || p.draft.tid === null) return null;
+  const t = league.teams[p.draft.tid];
+  const n = overallPick(league, p.draft.round, p.draft.pick);
+  const mine = t.tid === league.userTid;
+  return (
+    <button
+      type="button"
+      className={`slab dn-stage ${mine ? 'mine' : ''}`}
+      style={slabVars(t.colors)}
+      onClick={() => setQueue([])}
+      aria-live="polite"
+      aria-label="Skip the announcements"
+    >
+      <span className="slab-mark">
+        <TeamLogo tid={t.tid} size={150} decorative />
+      </span>
+      <span className="dn-stage-over">
+        With the {pickWords(n)} in the {league.season} draft, {mine ? 'you select' : `the ${t.region} ${t.name} select`}
+        {named ? '' : '…'}
+      </span>
+      {named ? (
+        <span className="dn-stage-name fade-in">
+          <span className="dn-stage-n">{playerName(p)}</span>
+          <span className="dn-stage-meta">
+            {p.pos} · {p.college || p.country} <GradeTag league={league} p={p} />
+          </span>
+        </span>
+      ) : (
+        <span className="dn-stage-name dn-wait" aria-hidden="true">
+          <span className="dn-dot" />
+          <span className="dn-dot" />
+          <span className="dn-dot" />
+        </span>
+      )}
+      {queue.length > 1 && <span className="dn-stage-skip">Tap to skip · {queue.length - 1} more</span>}
+    </button>
+  );
+}
+
+/** The user's latest pick in this draft, as its moment: the pick, the player, the grade, his page. */
+function YourPick({ league, picks }: { league: League; picks: Player[] }) {
+  const mine = picks.filter((p) => p.draft.tid === league.userTid);
+  const p = mine[mine.length - 1];
+  if (!p) return null;
+  const n = overallPick(league, p.draft.round, p.draft.pick);
+  return (
+    <Link to={`/player/${p.pid}`} className="card accent dn-yours">
+      <span className="dn-yours-over">Your pick · #{n}</span>
+      <span className="row" style={{ gap: 12, alignItems: 'center' }}>
+        <span className="grow" style={{ minWidth: 0 }}>
+          <span className="dn-yours-n">{playerName(p)}</span>
+          <span className="dn-yours-meta">
+            {p.pos} · {p.archetype} <GradeTag league={league} p={p} />
+          </span>
+        </span>
+        <OvrPot p={p} />
+      </span>
+    </Link>
+  );
+}
 
 export function OnTheClock({
   league,
@@ -143,8 +246,11 @@ export function LiveView({
   const [all, setAll] = useState(false);
   const order = draftOrder(league);
   const picks = useLeagueMemo(() => draftedThisYear(league).reverse(), [league]);
+  const inOrder = useLeagueMemo(() => draftedThisYear(league), [league]);
   return (
     <>
+      <Announcer league={league} picks={inOrder} />
+      <YourPick league={league} picks={inOrder} />
       {order.length > 1 && (
         <Section title="Up next" right={onTrade ? <span className="tiny dim">Tap a pick to trade for it</span> : undefined}>
           <div className="hscroll">
