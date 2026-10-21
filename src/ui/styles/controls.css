@@ -5,15 +5,15 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 44px;
-  padding: 0 16px;
+  height: 46px;
+  padding: 0 18px;
   border-radius: var(--radius-md);
   background: var(--surface-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   color: var(--text);
-  font-weight: 640;
-  font-size: 14.5px;
-  letter-spacing: -0.003em;
+  font-weight: 620;
+  font-size: 15px;
+  letter-spacing: -0.01em;
   white-space: nowrap;
   transition:
     transform 0.08s ease,
@@ -34,39 +34,45 @@
   color: var(--accent-ink);
 }
 .btn.primary {
-  font-weight: 700;
+  font-weight: 680;
 }
 .btn.primary:active {
-  background: color-mix(in srgb, var(--accent) 86%, #000);
+  background: color-mix(in srgb, var(--accent) 84%, #000);
 }
 .btn.ghost {
   background: transparent;
   border-color: var(--line-2);
+}
+/* a link-like action: no fill, the accent's text */
+.btn.text {
+  background: transparent;
+  color: var(--accent-text);
+  padding: 0 6px;
 }
 .btn.ghost:active {
   background: var(--surface);
 }
 .btn.danger {
   background: transparent;
-  border-color: color-mix(in srgb, var(--bad) 50%, transparent);
-  color: color-mix(in srgb, var(--bad) 55%, white);
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  color: color-mix(in srgb, var(--bad) 60%, white);
 }
 .btn.good {
   background: transparent;
-  border-color: color-mix(in srgb, var(--good) 50%, transparent);
-  color: color-mix(in srgb, var(--good) 55%, white);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  color: color-mix(in srgb, var(--good) 60%, white);
 }
 .btn.sm {
   height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
+  padding: 0 13px;
+  font-size: 13.5px;
   border-radius: var(--radius-sm);
 }
 .btn.xs {
   position: relative;
   height: 28px;
   padding: 0 10px;
-  font-size: 12px;
+  font-size: 12.5px;
   border-radius: var(--radius-xs);
 }
 .btn.xs::after {
@@ -81,16 +87,16 @@
 .btn.big {
   height: 54px;
   font-size: 16.5px;
-  font-weight: 720;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  letter-spacing: -0.015em;
   border-radius: var(--radius);
 }
 
 /* ------------------------------------------------------------------ segmented, tabs & chips */
 .seg {
   display: flex;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
+  background: var(--raised);
+  border: 1px solid transparent;
   /* concentric with its options: their corner plus the 3px inset */
   border-radius: calc(var(--radius-sm) + 3px);
   padding: 3px;
@@ -106,8 +112,8 @@
   height: 34px;
   padding: 0 12px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 620;
+  font-size: 13.5px;
+  font-weight: 580;
   color: var(--text-dim);
   white-space: nowrap;
   transition:
@@ -121,7 +127,8 @@
 .seg button.on {
   background: var(--surface-3);
   color: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  font-weight: 660;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
 /* a screen's own sections: underlined tabs on the page, not another box */
 .seg.tabs {
@@ -130,16 +137,16 @@
   border-bottom: 1px solid var(--line);
   border-radius: 0;
   padding: 0;
-  gap: 4px;
+  gap: 2px;
 }
 .seg.tabs button {
   flex: 0 0 auto;
-  height: 42px;
+  height: 44px;
   padding: 0 11px;
   border-radius: 0;
-  font-size: 14.5px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
+  font-size: 15px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
   position: relative;
 }
 .seg.tabs button.on {
@@ -152,7 +159,7 @@
   color: var(--text);
 }
 .seg.tabs button.on {
-  font-weight: 720;
+  font-weight: 700;
 }
 .seg.tabs button.on::before {
   content: '';
@@ -161,7 +168,8 @@
   right: 11px;
   bottom: -1px;
   height: 2px;
-  background: var(--text);
+  border-radius: 2px 2px 0 0;
+  background: var(--accent);
 }
 .chips {
   display: flex;
@@ -170,12 +178,12 @@
 }
 .chip {
   height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
-  background: transparent;
-  font-size: 13px;
-  font-weight: 600;
+  padding: 0 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--surface);
+  font-size: 13.5px;
+  font-weight: 560;
   color: var(--text-2);
   display: inline-flex;
   align-items: center;
@@ -190,11 +198,12 @@
   background: var(--surface);
   color: var(--text);
 }
-/* a chosen chip is filled paper, like every control that's on */
+/* a chosen chip is white on graphite, like every option that's chosen */
 .chip.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
+  border-color: var(--on);
+  background: var(--on);
+  color: var(--on-ink);
+  font-weight: 640;
 }
 .chip:disabled,
 .seg button:disabled {
@@ -221,19 +230,19 @@
   position: absolute;
   inset: -3px;
 }
-/* a status in a few words: a quiet outlined label in sentence case; a tone colours its dot and word */
+/* a status in a few words: a soft filled label in sentence case; a tone colours its word and wash */
 .tag {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 22px;
-  padding: 0 7px;
+  padding: 0 8px;
   border-radius: var(--radius-xs);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
-  background: transparent;
-  border: 1px solid var(--line-2);
+  background: var(--surface-2);
+  border: 1px solid transparent;
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -242,19 +251,7 @@
 .tag.warn,
 .tag.info,
 .tag.brand {
-  border-color: color-mix(in srgb, currentColor 34%, transparent);
-}
-.tag.good::before,
-.tag.bad::before,
-.tag.warn::before,
-.tag.info::before,
-.tag.brand::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: none;
+  background: color-mix(in srgb, currentColor 13%, transparent);
 }
 .tag.good {
   color: var(--good);
@@ -274,9 +271,6 @@
 
 /* a mouse or trackpad: controls answer the pointer before the press */
 @media (hover: hover) and (pointer: fine) {
-  .btn:not(:disabled):hover {
-    border-color: var(--line-3);
-  }
   .btn:not(.primary, .danger, .good):not(:disabled):hover {
     background: var(--surface-3);
   }
@@ -284,14 +278,14 @@
     background: var(--surface);
   }
   .btn.primary:not(:disabled):hover {
-    background: #fff;
+    background: color-mix(in srgb, var(--accent) 88%, #fff);
   }
   .seg button:not(.on):not(:disabled):hover,
   .chip:not(.on):not(:disabled):hover {
     color: var(--text);
   }
   .chip:not(.on):not(:disabled):hover {
-    border-color: var(--line-3);
+    background: var(--surface-2);
   }
   .btn.danger:not(:disabled):hover,
   .btn.good:not(:disabled):hover {

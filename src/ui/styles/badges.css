@@ -1,18 +1,21 @@
 /* OVR badges and jerseys. */
 /* ------------------------------------------------------------------ ovr badge */
+/* the figure in its tier's colour on a faint wash of it (Ovr sets --tier) */
 .ovr {
+  --tier: var(--tier-low);
   display: inline-grid;
   place-items: center;
   min-width: 32px;
   height: 28px;
   padding: 0 4px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-xs);
   font-family: var(--display);
-  font-stretch: 78%;
+  font-stretch: 76%;
   font-weight: 760;
   font-size: 18.5px;
   font-variant-numeric: tabular-nums;
-  color: var(--bg-2);
+  color: var(--tier);
+  background: color-mix(in srgb, var(--tier) 14%, transparent);
   line-height: 1;
 }
 .ovr.sm {
@@ -25,7 +28,7 @@
   min-width: 56px;
   height: 52px;
   font-size: 34px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 .pot {
   font-size: 11.5px;

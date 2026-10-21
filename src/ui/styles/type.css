@@ -1,4 +1,4 @@
-/* Type: scoreboard figures, serif headlines, section labels, the kicker and text utilities. */
+/* Type: headlines (expanded), figures (condensed), section heads, the kicker and text utilities. */
 /* ------------------------------------------------------------------ type */
 .num {
   font-variant-numeric: tabular-nums;
@@ -9,14 +9,16 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 760;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
-/* headlines: the serif, set tight */
+/* headlines: the expanded cut, heavy and tight (`.serif` is its old name) */
+.head,
 .serif {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  letter-spacing: -0.012em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  letter-spacing: -0.028em;
 }
 
 h1,
@@ -24,42 +26,42 @@ h2,
 h3,
 h4 {
   margin: 0;
-  line-height: 1.08;
+  line-height: 1.1;
   text-wrap: balance;
 }
-/* a page's title and a sheet's: serif, sentence case */
+/* a page's title and a sheet's: the headline cut, sentence case */
 h1,
 h2 {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  letter-spacing: -0.018em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 780;
+  letter-spacing: -0.03em;
 }
 h1 {
-  font-size: 34px;
-  line-height: 1.02;
+  font-size: 28px;
+  line-height: 1.04;
 }
 h2 {
-  font-size: 25px;
+  font-size: 22px;
 }
-/* a card's or a block's own heading: the interface face, bold, sentence case */
+/* a group's or a block's own heading: the reading cut, bold, sentence case */
 h3,
 h4 {
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-weight: 720;
+  font-weight: 700;
   font-size: 16px;
-  letter-spacing: -0.005em;
+  letter-spacing: -0.012em;
 }
 
-/* a section's label: sentence case, bold, under a hairline that opens the section (see .sec) */
+/* a section's head: a size up from the text, bold, no rule above it (space opens a section) */
 .card-h h3,
 .sec-h h3 {
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 14px;
+  font-size: 17px;
   font-weight: 720;
-  letter-spacing: 0;
+  letter-spacing: -0.015em;
   color: var(--text);
   line-height: 1.2;
 }
@@ -68,7 +70,7 @@ h4 {
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 12.5px;
-  font-weight: 620;
+  font-weight: 560;
   letter-spacing: 0;
   color: var(--text-dim);
   line-height: 1.25;
@@ -93,10 +95,10 @@ h4 {
   color: var(--accent-text);
 }
 .small {
-  font-size: 13px;
+  font-size: 13.5px;
 }
 .tiny {
-  font-size: 11.5px;
+  font-size: 12px;
 }
 /* (kept for abbreviations that are capitals anyway; text is never set in capitals) */
 .upper {

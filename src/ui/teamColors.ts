@@ -1,10 +1,12 @@
-// Team colours for identity surfaces (slabs, jerseys, floors, your rows): readable variants of a
-// team's colours on the dark theme. The app's controls keep the brand accent whatever the team.
+// Team colours: readable variants of a team's colours on the dark theme, for identity surfaces
+// (slabs, jerseys, floors, your rows) and, for your own team, the app's controls.
 
 const DEFAULT_ACCENT = '#3b82f6';
 /** --surface-2, the lightest neutral surface team-coloured text sits on. */
-const SURFACE_2 = '#262420';
-const INK = '#12110e';
+const SURFACE_2 = '#24262b';
+const INK = '#0a0a0c';
+/** --bg, the ground an accent button sits on. */
+const BG = '#0a0a0c';
 
 function rgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -81,7 +83,7 @@ export interface TeamLook {
 }
 
 /** --surface-2 and --raised: the grounds team-coloured text sits on (a row of yours is tinted toward --raised). */
-const RAISED = '#171613';
+const RAISED = '#151619';
 
 export function teamLook(colors: [string, string, string]): TeamLook {
   const [p, ...rest] = colors;
@@ -131,11 +133,11 @@ export function jerseyKit(colors: [string, string, string]): { fill: string; tri
   return { fill, trim, num: contrast(trim, fill) >= 3 ? trim : inkOn(fill) };
 }
 
-/** Your team's identity tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text and --team-ink. The brand accent stays put. */
+/** Your team's tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text, --team-ink, and --team-fill / --team-fill-ink (the app's controls). */
 export function applyAccent(colors: [string, string, string] | null) {
   const root = document.documentElement.style;
   if (!colors) {
-    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab']) root.removeProperty(k);
+    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab', '--team-fill', '--team-fill-ink']) root.removeProperty(k);
     return;
   }
   const l = teamLook(colors);
@@ -145,4 +147,14 @@ export function applyAccent(colors: [string, string, string] | null) {
   root.setProperty('--team-ink', inkOn(team));
   root.setProperty('--team-text', l.text);
   root.setProperty('--team-slab', l.slab);
+  const fill = accentFill(team);
+  root.setProperty('--team-fill', fill);
+  root.setProperty('--team-fill-ink', inkOn(fill));
+}
+
+/** A team colour as a control's fill (a primary button, the play button): lightened until it stands out from the page (3:1). */
+export function accentFill(color: string): string {
+  let fill = color;
+  for (let t = 0.08; contrast(fill, BG) < 3 && t <= 1; t += 0.08) fill = mix(color, '#ffffff', t);
+  return fill;
 }

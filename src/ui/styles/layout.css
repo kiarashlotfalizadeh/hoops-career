@@ -11,7 +11,7 @@
   width: 100%;
   max-width: 820px;
   margin: 0 auto;
-  padding: 18px var(--gut-r) calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 36px) var(--gut-l);
+  padding: 20px var(--gut-r) calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 40px) var(--gut-l);
   display: flex;
   flex-direction: column;
   gap: var(--gap-page);
@@ -49,7 +49,7 @@
 .grid2 {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 .grid2 > .btn {
   white-space: normal;
@@ -77,21 +77,21 @@
   }
 }
 
-/* a page's title block: the serif title, one quiet line under it, a control on the right */
+/* a page's title block: the headline-cut title, one quiet line under it, a control on the right */
 .ph {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
+  gap: 10px;
   min-height: 44px;
-  padding-top: 4px;
+  padding-top: 6px;
 }
 .ph h1 {
-  font-size: 36px;
+  font-size: 30px;
   line-height: 1;
 }
 .ph .ph-sub {
-  margin-top: 7px;
-  font-size: 13.5px;
+  margin-top: 8px;
+  font-size: 14px;
   color: var(--text-dim);
 }
 .ph .back {
@@ -102,11 +102,11 @@
   align-items: center;
 }
 .ph:has(.back) h1 {
-  font-size: 30px;
+  font-size: 24px;
 }
 
-/* a section without a box: a hairline opens it, its label sits under the rule (with an optional
-   link on the right), then its content. The rhythm of a printed page, not a stack of cards */
+/* a section: its head (with an optional link or control on the right), then its content. Space
+   opens it, not a rule: the page reads as a few calm blocks, not a stack of stripes */
 .sec {
   display: flex;
   flex-direction: column;
@@ -117,25 +117,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  min-height: 22px;
-  padding-top: 11px;
-  border-top: 1px solid var(--line-2);
+  min-height: 24px;
 }
 .sec-h h3 {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-/* the first section in its container (under a page's tabs, at the top of a card or a sheet) needs
-   no rule: what's above it already closes the space */
-.sec:first-child > .sec-h {
-  border-top: none;
-  padding-top: 0;
-}
-/* (sections side by side keep their rules: each opens its own column) */
-.md-grid2 > .sec:first-child > .sec-h {
-  border-top: 1px solid var(--line-2);
-  padding-top: 11px;
 }
 
 /* a screen still loading: blank for a beat, then a spinner fades in where the screen will be */

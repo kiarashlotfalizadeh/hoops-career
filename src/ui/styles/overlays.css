@@ -3,7 +3,7 @@
 .sheet-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(5, 4, 3, 0.66);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(3px) saturate(80%);
   -webkit-backdrop-filter: blur(3px) saturate(80%);
   z-index: 80;
@@ -30,8 +30,8 @@
   max-height: 88dvh;
   overflow-y: auto;
   overscroll-behavior: contain;
-  background: var(--bg-2);
-  border-top: 1px solid var(--line-2);
+  background: var(--raised);
+  border-top: 1px solid var(--line);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 6px var(--gut-r) calc(22px + var(--safe-b)) var(--gut-l);
   animation: sheet-up 0.26s var(--ease-out);
@@ -52,7 +52,7 @@
   margin-bottom: 14px;
 }
 .sheet-head h2 {
-  font-size: 26px;
+  font-size: 22px;
 }
 .sheet-close {
   margin-right: -8px;
@@ -130,7 +130,7 @@
 .toasts {
   /* toasts rise above the Continue bar, beside the button that made them, and never cover the
      screen's top (its slab). Where the bar isn't (a dock, the main menu, a sheet) they move with it */
-  --toast-b: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 18px);
+  --toast-b: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 12px);
   position: fixed;
   left: 0;
   right: 0;
@@ -138,8 +138,8 @@
   z-index: 90;
   display: flex;
   flex-direction: column;
-  /* over the Continue bar, lined up with it: on a wide screen it sits at the page column's right edge */
-  align-items: flex-end;
+  /* over the dock, centred */
+  align-items: center;
   gap: 8px;
   pointer-events: none;
   padding: 0 max(var(--gut-r), calc((100% - 788px) / 2)) 0 var(--gut-l);
@@ -168,13 +168,13 @@ body.sheet-open .toasts {
   gap: 10px;
   min-height: 44px;
   padding: 10px 14px 10px 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius);
   background: var(--surface-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   box-shadow: var(--shadow);
   color: var(--text);
   font-size: 14px;
-  font-weight: 560;
+  font-weight: 540;
   line-height: 1.3;
   text-align: left;
   animation: toast-in 0.24s var(--ease-out);
@@ -232,9 +232,9 @@ body.sheet-open .toast {
   max-width: 560px;
   margin: 0 auto;
   background: var(--surface-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 10px 10px 10px 14px;
+  padding: 10px 10px 10px 16px;
   box-shadow: var(--shadow);
   display: flex;
   align-items: center;

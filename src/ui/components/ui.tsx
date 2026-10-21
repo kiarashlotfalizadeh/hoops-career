@@ -57,7 +57,7 @@ export function activateOnKey(fn: () => void) {
 export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
   return (
     // the colour of the figure it shows: an 88.6 average reads 89, an elite gold
-    <span className={`ovr ${size}`} style={{ background: ovrColor(Math.round(v)) }}>
+    <span className={`ovr ${size}`} style={{ ['--tier' as string]: ovrColor(Math.round(v)) }}>
       {Math.round(v)}
     </span>
   );

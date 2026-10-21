@@ -1,8 +1,8 @@
 /* The fonts, the colour and size tokens, and the reset under everything. */
-/* Two families. Archivo (variable width) runs the interface and every figure: semi-condensed (90%)
-   for text, condensed (62-75%) for scoreboard numbers. Newsreader, a serif cut for reading on
-   screens, sets the headlines: page titles, sheet titles, stories, a game's result. Latin + Latin
-   Extended cover every player name (Dončić, Şengün, Valančiūnas). */
+/* One family, three widths. Archivo (variable width and weight) runs everything: its normal width
+   for reading, expanded and heavy for headlines (a team's name, a page's title, a story), condensed
+   for scoreboard figures. Latin + Latin Extended cover every player name (Dončić, Şengün,
+   Valančiūnas). */
 @font-face {
   font-family: 'Archivo Variable';
   font-style: normal;
@@ -24,86 +24,62 @@
   unicode-range:
     U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
-@font-face {
-  font-family: 'Newsreader Variable';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 200 800;
-  src: url('../../../node_modules/@fontsource-variable/newsreader/files/newsreader-latin-ext-standard-normal.woff2') format('woff2-variations');
-  unicode-range:
-    U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
-    U+2C60-2C7F, U+A720-A7FF;
-}
-@font-face {
-  font-family: 'Newsreader Variable';
-  font-style: normal;
-  font-display: swap;
-  font-weight: 200 800;
-  src: url('../../../node_modules/@fontsource-variable/newsreader/files/newsreader-latin-standard-normal.woff2') format('woff2-variations');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Newsreader Variable';
-  font-style: italic;
-  font-display: swap;
-  font-weight: 200 800;
-  src: url('../../../node_modules/@fontsource-variable/newsreader/files/newsreader-latin-standard-italic.woff2') format('woff2-variations');
-  unicode-range:
-    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-
 :root {
-  /* grounds: warm ink, darkest to lightest (a night game's printed program, not a blue screen) */
-  --bg: #0d0c0a;
-  --bg-2: #12110e;
-  --raised: #171613;
-  --surface: #1e1c18;
-  --surface-2: #262420;
-  --surface-3: #302d28;
-  --line: rgba(244, 236, 222, 0.075);
-  --line-2: rgba(244, 236, 222, 0.13);
-  --line-3: rgba(244, 236, 222, 0.24);
+  /* grounds: graphite, darkest to lightest. Neutral, so the one colour on screen is a team's */
+  --bg: #0a0a0c;
+  --bg-2: #0f1012;
+  --raised: #151619;
+  --surface: #1c1d21;
+  --surface-2: #24262b;
+  --surface-3: #2e3036;
+  --line: rgba(255, 255, 255, 0.065);
+  --line-2: rgba(255, 255, 255, 0.11);
+  --line-3: rgba(255, 255, 255, 0.2);
   /* ink: every one keeps 4.5:1 on every ground above */
-  --text: #f4efe6;
-  --text-2: #c9c1b3;
-  --text-dim: #a1998b;
-  /* the controls are monochrome: a filled control is paper on ink (primary buttons, the Continue
-     bar, a chosen chip, a switch that's on). Colour is kept for what it means: teams and signals */
-  --accent: #f1eadd;
-  --accent-ink: #12110e;
-  /* links and "go there" text: the one warm colour in the chrome */
-  --accent-text: #ff9a62;
-  /* the brand's orange, for a mark that needs you (the inbox's count, a live game, a sim's edge) */
-  --brand: #ff6a2b;
+  --text: #f5f6f8;
+  --text-2: #bfc2c9;
+  --text-dim: #8e929b;
+  /* your team runs the controls: a primary button, the play button, a switch that's on, a link.
+     applyAccent sets the --team tokens from its colours; these follow them */
+  --accent: var(--team-fill);
+  --accent-ink: var(--team-fill-ink);
+  --accent-text: var(--team-text);
+  /* a chosen option (a chip, a segment, a level): white on graphite, whatever the team */
+  --on: #f5f6f8;
+  --on-ink: #0a0a0c;
+  /* a mark that needs you (the inbox's count, a live game) */
+  --brand: #ff5b3a;
   --accent-2: #f2c14e;
   /* signals */
-  --good: #55d08b;
-  --bad: #ff6b5e;
-  --warn: #f2c14e;
-  --info: #7cb7f2;
-  /* rating tiers (OVR badges), gold > purple > blue > green > light grey > grey */
-  --tier-elite: #f0c766;
-  --tier-star: #b9a0f5;
-  --tier-good: #69bdf0;
-  --tier-avg: #7fd49b;
-  --tier-low: #d3ccbf;
-  --tier-bad: #978f82;
-  /* your team: set by applyAccent from its colours (identity surfaces only) */
-  --team: #1d428a;
+  --good: #4fd18b;
+  --bad: #ff6464;
+  --warn: #f5c451;
+  --info: #72b8ff;
+  /* rating tiers (OVR), gold > violet > blue > green > grey > dark grey: the figure is set in its
+     tier's colour on a faint wash of it, never a solid block */
+  --tier-elite: #f5c451;
+  --tier-star: #c2a5ff;
+  --tier-good: #6fc0ff;
+  --tier-avg: #79dba0;
+  --tier-low: #c6c9cf;
+  --tier-bad: #8e929b;
+  /* your team: set by applyAccent from its colours */
+  --team: #2f6fde;
   --team-2: #ffc72c;
   --team-ink: #ffffff;
   --team-text: #8fb1ff;
   --team-slab: #18366f;
-  /* corners, one scale, kept small: tags (xs), small controls and rows (sm), buttons and inputs
-     (md), cards and panels (--radius), floating bars (lg), sheets (xl) */
-  --radius-xs: 3px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 18px;
-  /* depth: a panel over the page (toasts, docks), a bar floating over the tab bar */
+  --team-fill: #2f6fde;
+  --team-fill-ink: #ffffff;
+  /* corners: soft and consistent. Tags (xs), small controls (sm), buttons and inputs (md),
+     groups and panels (--radius), heroes (lg), sheets (xl) */
+  --radius-xs: 5px;
+  --radius-sm: 8px;
+  --radius-md: 11px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  /* depth: a panel over the page (toasts, docks, sheets) */
   --shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.7), 0 2px 6px rgba(0, 0, 0, 0.35);
   --shadow-float: 0 16px 36px -10px rgba(0, 0, 0, 0.75), 0 2px 8px rgba(0, 0, 0, 0.4);
   /* motion: quick and deliberate, easing out */
@@ -111,17 +87,19 @@
   --dur-fast: 0.15s;
   --dur: 0.22s;
   --font: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* figures: the condensed cut of the same family */
+  /* figures: the condensed cut */
   --display: 'Archivo Variable', system-ui, sans-serif;
-  /* headlines */
-  --serif: 'Newsreader Variable', 'Iowan Old Style', Georgia, serif;
-  /* widths of the one family: text, labels, display */
-  --text-w: 90%;
-  --display-w: 72%;
-  --nav-h: 60px;
-  --top-h: 56px;
-  /* the Continue bar over the tab bar: its height and the gap above the nav */
-  --cont-h: 52px;
+  /* headlines: the expanded cut, heavy (--serif is its old name, kept so every headline follows) */
+  --head: 'Archivo Variable', system-ui, sans-serif;
+  --serif: var(--head);
+  /* widths of the one family: text, figures, headlines */
+  --text-w: 100%;
+  --display-w: 70%;
+  --head-w: 112%;
+  --nav-h: 58px;
+  --top-h: 54px;
+  /* the play row on top of the tab bar (the dock): its height */
+  --cont-h: 56px;
   --safe-b: env(safe-area-inset-bottom, 0px);
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-l: env(safe-area-inset-left, 0px);
@@ -129,16 +107,15 @@
   /* the page's side gutter */
   --gut-l: max(16px, var(--safe-l));
   --gut-r: max(16px, var(--safe-r));
-  /* density: built for players who want the whole sim on one screen. Rows stay at least 44px for a
-     finger; screens use these instead of their own paddings so they tighten (or loosen) together */
-  --gap-page: 22px; /* between a page's sections */
-  --gap-sec: 10px; /* between a section's heading and its content */
-  --pad-card: 14px; /* inside a card */
-  --row-min: 50px; /* a list row */
-  --row-py: 7px;
-  --row-px: 14px;
-  --cell-py: 8px; /* a stat table's cell */
-  --cell-px: 7px;
+  /* rhythm. Space, not rules, separates a page's sections; rows stay at least 44px for a finger */
+  --gap-page: 30px; /* between a page's sections */
+  --gap-sec: 12px; /* between a section's heading and its content */
+  --pad-card: 16px; /* inside a group */
+  --row-min: 52px; /* a list row */
+  --row-py: 8px;
+  --row-px: 16px;
+  --cell-py: 9px; /* a stat table's cell */
+  --cell-px: 8px;
   color-scheme: dark;
 }
 
@@ -156,7 +133,8 @@ body,
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 15px;
-  line-height: 1.42;
+  font-weight: 420;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   font-kerning: normal;

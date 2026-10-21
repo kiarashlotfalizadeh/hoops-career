@@ -14,10 +14,10 @@
   min-height: 44px;
   padding: 4px 2px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line-2);
-  background: var(--bg-2);
-  font-size: 11.5px;
-  font-weight: 600;
+  border: 1px solid transparent;
+  background: var(--surface);
+  font-size: 12px;
+  font-weight: 580;
   line-height: 1.15;
   color: var(--text-2);
   text-align: center;
@@ -34,19 +34,18 @@
 .levels-row button:not(.on):active {
   background: var(--surface-2);
 }
-/* the scale fills up to the chosen level: below it a faint paper wash, the level itself paper */
+/* the scale fills up to the chosen level: below it a faint wash, the level itself white */
 .levels-row button.below {
-  border-color: var(--line-2);
-  background: color-mix(in srgb, var(--accent) 9%, var(--bg-2));
+  background: color-mix(in srgb, var(--on) 10%, var(--surface));
 }
 .levels-row button.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 720;
+  border-color: var(--on);
+  background: var(--on);
+  color: var(--on-ink);
+  font-weight: 700;
 }
 .levels-row button.on.mark::before {
-  background: var(--accent-ink);
+  background: var(--on-ink);
 }
 /* a reference setting (the playbook's own): a dot in the corner */
 .levels-row button.mark {
@@ -120,18 +119,16 @@ input[type='range']::-webkit-slider-thumb {
   height: 22px;
   margin-top: -9px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg);
-  box-shadow:
-    0 0 0 1px var(--line-3),
-    0 2px 8px rgba(0, 0, 0, 0.5);
+  background: #fff;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 input[type='range']::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg);
+  background: #fff;
+  border: none;
 }
 input[type='range']:focus-visible::-webkit-slider-thumb {
   box-shadow:
@@ -148,24 +145,24 @@ input[type='range']:focus-visible::-moz-range-thumb {
   height: 46px;
   width: 100%;
   border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
-  background: var(--bg-2);
-  padding: 0 13px;
+  border: 1px solid transparent;
+  background: var(--surface);
+  padding: 0 14px;
   font-size: 16px;
   transition: border-color var(--dur-fast) ease;
 }
 .input:focus {
   border-color: var(--line-3);
-  background: var(--raised);
+  background: var(--surface-2);
   outline: none;
 }
 .toggle {
   position: relative;
-  width: 46px;
+  width: 48px;
   height: 28px;
   border-radius: 14px;
   background: var(--surface-3);
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   flex: none;
   transition: background 0.15s;
 }
@@ -177,7 +174,8 @@ input[type='range']:focus-visible::-moz-range-thumb {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--text-2);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   transition:
     transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.2),
     width 0.15s ease,
@@ -188,15 +186,14 @@ input[type='range']:focus-visible::-moz-range-thumb {
   width: 24px;
 }
 .toggle.on:not(:disabled):active::after {
-  transform: translateX(14px);
+  transform: translateX(16px);
 }
 .toggle.on {
   background: var(--accent);
   border-color: transparent;
 }
 .toggle.on::after {
-  transform: translateX(18px);
-  background: var(--accent-ink);
+  transform: translateX(20px);
 }
 /* a search box's clear button: a thin cross like every other icon, not the browser's bold one */
 .input[type='search']::-webkit-search-cancel-button {

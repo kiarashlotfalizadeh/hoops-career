@@ -228,7 +228,7 @@ function TopBar() {
       <div className="topbar-inner">
         {/* named by what it shows ("OKC 47-13 Feb 27 · 1st West"), then the team and where it goes */}
         <button className="tb-team" onClick={() => nav('/')}>
-          <TeamLogo tid={t.tid} size={34} decorative />
+          <TeamLogo tid={t.tid} size={30} decorative />
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
               {t.abbrev}{' '}
@@ -288,7 +288,7 @@ function BottomNav() {
           const Icon = TAB_ICON[it.id];
           return (
             <Link key={it.id} to={it.to} className={`navitem ${active ? 'active' : ''}`} aria-current={active ? 'page' : undefined} aria-label={it.label}>
-              <Icon size={21} />
+              <Icon size={22} strokeWidth={active ? 2.2 : 1.8} />
               <span className="nav-label">{it.label}</span>
             </Link>
           );
@@ -379,11 +379,13 @@ function ContinueBar() {
       ) : (
         !onLive &&
         primary && (
-          <div className="continue">
+          <div className={`continue ${here ? 'is-compact' : ''}`}>
             <div className={`continue-inner ${here ? 'compact' : ''}`}>
               {!here && (
                 <button className="continue-go" disabled={!!primary.disabled} onClick={() => go(primary, true)}>
-                  <Play size={18} fill="currentColor" aria-hidden="true" />
+                  <span className="cg-disc" aria-hidden="true">
+                    <Play size={16} fill="currentColor" />
+                  </span>
                   <span className="grow">
                     <span className="cg-label ellipsis">{label}</span>
                     {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
@@ -391,7 +393,7 @@ function ContinueBar() {
                 </button>
               )}
               <button className="continue-more" onClick={() => setOpen(true)} aria-label="Play options">
-                <ChevronUp size={22} />
+                <ChevronUp size={20} />
               </button>
             </div>
           </div>
