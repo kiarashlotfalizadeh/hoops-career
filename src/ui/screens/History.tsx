@@ -10,7 +10,8 @@ import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Ovr, Section, Segmented } from '../components/ui';
+import { Avatar, Ovr, Section } from '../components/ui';
+import { ViewChips } from '../league/Views';
 import { AccoladeChips, accoladeScore, careerTotals, shortName, useQueryParam, useSetParams } from '../league/shared';
 import { RecordBook } from '../league/RecordBook';
 import { CoachesView } from '../league/Coaches';
@@ -38,7 +39,7 @@ export default function History() {
   const view: View = raw === 'league' ? 'seasons' : VIEWS.some((v) => v.id === raw) ? (raw as View) : tidStr ? 'franchise' : coach ? 'coaches' : 'seasons';
   return (
     <>
-      <Segmented label="History" value={view} onChange={(v) => setParams({ view: v === 'seasons' ? null : v, tid: null, coach: null, rec: null, book: null })} options={VIEWS} />
+      <ViewChips label="History" value={view} onChange={(v) => setParams({ view: v === 'seasons' ? null : v, tid: null, coach: null, rec: null, book: null })} options={VIEWS} />
       {view === 'seasons' && <Seasons league={league} />}
       {view === 'franchise' && <Franchise league={league} />}
       {view === 'records' && <RecordBook league={league} />}
@@ -201,7 +202,7 @@ function HallOfFame({ league }: { league: League }) {
           </>
         )}
       </Section>
-      {hof.length + retired.length > 0 && <div className="lg-note">Regular-season careers, figures per game; the badge is his peak OVR.</div>}
+      {hof.length + retired.length > 0 && <div className="lg-note">Regular-season careers, figures per game; the badge is his peak OVR; every honour on his page.</div>}
     </>
   );
 }
@@ -232,7 +233,8 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
         </span>
         <span className="sub">
           {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp.toLocaleString('en-US')} game{c.gp === 1 ? '' : 's'}
-          {tracked > from ? ` since ${seasonLabel(tracked)}` : ''} · {Math.round(c.pts).toLocaleString('en-US')} points
+          {tracked > from ? ` since ${seasonLabel(tracked)}` : ''}
+          <span className="sr-only">, {Math.round(c.pts).toLocaleString('en-US')} points</span>
         </span>
         <span className="line num">
           {(
@@ -247,7 +249,7 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
             </span>
           ))}
         </span>
-        <AccoladeChips p={p} max={4} />
+        <AccoladeChips p={p} max={2} />
       </span>
       <span className="lg-legend-r">
         <Ovr v={peak} size="sm" />

@@ -1,6 +1,6 @@
-// Another team's slab, in its colours (who they are and where they stand), and the two things to do
-// with them under it: their Matchup page and a trade.
-import type { CSSProperties } from 'react';
+// Another team's slab, in its colours: who they are, where they stand, and at its foot the two things
+// to do with them (their Matchup page and a trade).
+import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeftRight, ChevronLeft, ClipboardList, Pencil } from 'lucide-react';
 import type { League } from '../../../core/types';
@@ -18,8 +18,8 @@ import { slabVars } from '../../teamColors';
 // the Team tab loads: a team's page opened straight from the League tab needs it too
 import '../../screens/team.css';
 
-/** The team's slab, in its colours: who they are and where they stand. */
-export function TeamHero({ league, tid, onEdit }: { league: League; tid: number; onEdit?: () => void }) {
+/** The team's slab, in its colours: who they are and where they stand, its actions (`children`) at its foot. */
+export function TeamHero({ league, tid, onEdit, children }: { league: League; tid: number; onEdit?: () => void; children?: ReactNode }) {
   const goBack = useBack('/league');
   const team = league.teams[tid];
   const ts = curTeamSeason(league, tid);
@@ -35,7 +35,7 @@ export function TeamHero({ league, tid, onEdit }: { league: League; tid: number;
           <ChevronLeft size={24} />
         </button>
         <span className="lg-team-over">
-          {confWord}ern Conference · {team.div}
+          {confWord} · {team.div}
         </span>
         {onEdit && (
           <button className="btn xs" aria-haspopup="dialog" onClick={onEdit}>
@@ -44,14 +44,14 @@ export function TeamHero({ league, tid, onEdit }: { league: League; tid: number;
         )}
       </div>
       <div className="lg-team-id">
-        <TeamLogo tid={tid} size={58} decorative />
         <div className="grow">
           <div className="lg-team-region">
             {team.region}
-            {arena ? ` · ${arena}` : ''}
+            {arena ? <span className="lg-team-arena"> · {arena}</span> : ''}
           </div>
           <h1 className="lg-team-name">{team.name}</h1>
         </div>
+        <TeamLogo tid={tid} size={64} decorative />
       </div>
       <div className="lg-team-rec">
         <div className="lg-team-wl num">
@@ -64,6 +64,7 @@ export function TeamHero({ league, tid, onEdit }: { league: League; tid: number;
           </span>
         )}
       </div>
+      {children}
     </section>
   );
 }

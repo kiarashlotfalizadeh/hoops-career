@@ -8,9 +8,10 @@ import { seriesLabel } from '../../core/league/playoffs';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Section, Segmented, Sheet } from '../components/ui';
+import { Section, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { TitleSlab, Toolbar, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
+import { ViewChips } from './Views';
+import { TitleSlab, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -98,14 +99,7 @@ export function PlayoffsTab({ league }: { league: League }) {
     );
   }
 
-  const status =
-    phase === 'projected'
-      ? 'If the season ended today'
-      : phase === 'playin'
-        ? 'Play-in: seeds 7 and 8 on the line'
-        : phase === 'live'
-          ? `${seasonLabel(league.season)} playoffs in progress`
-          : `${seasonLabel(league.season)} playoffs complete`;
+  const status = phase === 'projected' ? 'If the season ended today' : phase === 'playin' ? 'Seeds 7 and 8 on the line' : phase === 'live' ? 'In progress' : 'Complete';
 
   return (
     <>
@@ -119,9 +113,8 @@ export function PlayoffsTab({ league }: { league: League }) {
           fmvp={league.awards.find((a) => a.season === league.season)?.finalsMvp}
         />
       )}
-      {phase !== 'done' && <Toolbar right={phase === 'projected' ? <span className="tag info">Projected</span> : undefined}>{status}</Toolbar>}
       <div className="bk-only-narrow">
-        <Segmented
+        <ViewChips
           label="Conference"
           value={conf}
           onChange={setConf}
@@ -134,7 +127,8 @@ export function PlayoffsTab({ league }: { league: League }) {
       <div className="bk-panel-wrap">
         {confOrder(conf).map((c) => (
           <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
-            <Section title={`${confName(c)}ern Conference`}>
+            {/* (where the bracket stands, on its head: "If the season ended today") */}
+            <Section title={`${confName(c)}ern Conference`} right={phase !== 'done' ? <span className="lg-sec-meta">{status}</span> : undefined}>
               <div className="card bk-card">
                 <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
               </div>

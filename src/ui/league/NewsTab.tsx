@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ListChecks } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { aboutUser } from '../../core/league/media/voice';
 import { useLeagueMemo } from '../../state/store';
@@ -85,34 +85,31 @@ export function NewsTab({ league }: { league: League }) {
 
   return (
     <>
-      <div className="lg-hscroll" role="group" aria-label="Filter news">
-        <button className={`chip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
-          <TeamLogo tid={league.userTid} size={16} /> My team
-        </button>
-        <span className="lg-vsep" />
-        <button className={`chip ${kind === 'all' ? 'on' : ''}`} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
-          All
-        </button>
-        <button className={`chip ${kind === 'moves' ? 'on' : ''}`} aria-pressed={kind === 'moves'} onClick={() => setKind('moves')}>
-          <ListChecks size={14} className="lg-kind" aria-hidden="true" />
-          Transactions
-        </button>
-        {ORDER.filter((k) => counts[k]).map((k) => {
-          const M = NEWS_KIND[k];
-          return (
+      <div className="lg-views">
+        <div className="lg-views-row" role="group" aria-label="Filter news">
+          <button className={`chip lg-minechip ${mine === '1' ? 'on' : ''}`} aria-pressed={mine === '1'} onClick={() => setMine(mine === '1' ? '0' : '1')}>
+            <TeamLogo tid={league.userTid} size={16} decorative /> My team
+          </button>
+          <span className="lg-vsep" />
+          <button className={`chip ${kind === 'all' ? 'on' : ''}`} aria-pressed={kind === 'all'} onClick={() => setKind('all')}>
+            All
+          </button>
+          <button className={`chip ${kind === 'moves' ? 'on' : ''}`} aria-pressed={kind === 'moves'} onClick={() => setKind('moves')}>
+            Transactions
+          </button>
+          {ORDER.filter((k) => counts[k]).map((k) => (
             <button key={k} className={`chip ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>
-              <M.icon size={14} className="lg-kind" aria-hidden="true" />
-              {M.label}
+              {NEWS_KIND[k].label}
             </button>
-          );
-        })}
+          ))}
+        </div>
       </div>
       {kind === 'moves' ? (
         <LeagueMoves league={league} mine={mine === '1'} />
       ) : front ? (
         <>
           <FrontPage league={league} mine={mine === '1'} />
-          {sorted.length > 0 ? <Section title="The wire">{wire}</Section> : wire}
+          {sorted.length > 0 ? <Section title="Latest">{wire}</Section> : wire}
         </>
       ) : (
         wire
@@ -124,7 +121,7 @@ export function NewsTab({ league }: { league: League }) {
 
 /**
  * One item on the wire: its sentence with the players and teams it names as links (any it doesn't
- * name follow as chips). A story leads with its serif headline, which opens it.
+ * name follow as chips). A story leads with its headline, which opens it.
  */
 export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
   const href = useStoryHref();

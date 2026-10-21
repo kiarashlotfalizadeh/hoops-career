@@ -54,11 +54,9 @@ a.bk-s:hover {
   line-height: 1.25;
 }
 .lg-pi-game .lbl b {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-size: 18px;
-  font-weight: 560;
-  line-height: 1.1;
+  font-size: 16px;
+  font-weight: 640;
+  line-height: 1.15;
   letter-spacing: -0.01em;
 }
 .lg-pi-game .lbl span {

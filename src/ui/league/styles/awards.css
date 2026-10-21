@@ -27,14 +27,14 @@ a.lg-award:active {
   font-weight: 620;
   color: var(--tier-elite);
 }
-/* the winner: a serif name, as a headline under its award */
+/* the winner: his name in the headline cut, under its award */
 .lg-award .nm {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 740;
   font-size: 19px;
-  line-height: 1.15;
-  letter-spacing: -0.012em;
+  line-height: 1.14;
+  letter-spacing: -0.026em;
   margin-top: 2px;
 }
 .lg-award .sub {
@@ -69,8 +69,7 @@ a.lg-award:active {
   background: var(--surface);
 }
 .lg-five-row.me {
-  background: color-mix(in srgb, var(--team-text) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-mvp {
   margin-left: 6px;
@@ -173,8 +172,7 @@ a.lg-award:active {
   background: var(--surface);
 }
 .lg-race-row.me {
-  background: color-mix(in srgb, var(--team-text) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-race-row .rank {
   font-family: var(--display);
@@ -226,5 +224,12 @@ a.lg-award:active {
 }
 .lg-race-row > .avatar {
   width: 34px;
+  height: 34px;
+}
+/* the views and the season: one row, the page's one control under the tabs */
+.lg-tabs + .lg-awards-top {
+  margin-top: calc(14px - var(--gap-page));
+}
+.lg-awards-top .lg-select {
   height: 34px;
 }

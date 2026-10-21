@@ -8,6 +8,7 @@ import { Avatar } from '../../components/ui';
 import { f1 } from '../../stats';
 import { shortName, teamAbbrev } from '../shared';
 import { qualifier, type StatRow } from './rows';
+import { Foot } from '../Views';
 
 interface Cat {
   key: string;
@@ -15,8 +16,8 @@ interface Cat {
   unit: string;
   get: (r: StatRow) => number;
   fmt: (v: number) => string;
+  /** Who it ranks beyond the qualifiers (the foot says so). */
   min?: (r: StatRow) => boolean;
-  minNote?: string;
 }
 
 /** Leaders in the all-in-one numbers: regular seasons only (a season played here has none in the playoffs). */
@@ -39,7 +40,6 @@ const CATS: Cat[] = [
     get: (r) => r.pg.tsPct,
     fmt: (v) => (v * 100).toFixed(1),
     min: (r) => r.pg.fga + 0.44 * r.pg.fta >= 9,
-    minNote: 'Min. 9 shot attempts per game',
   },
 ];
 
@@ -67,9 +67,9 @@ export function Leaders({ league, rows, season, playoffs }: { league: League; ro
           return <LeaderBlock key={c.key} league={league} cat={c} top={top} all={allHref(c.key)} />;
         })}
       </div>
-      <div className="lg-note">
-        Per game. Qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game.
-      </div>
+      <Foot>
+        Per game · qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game · true shooting: 9+ shot attempts a game
+      </Foot>
     </>
   );
 }
@@ -80,7 +80,6 @@ function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top:
     <section className="lg-lead">
       <div className="lg-lead-h">
         <h3>{cat.label}</h3>
-        {cat.minNote && <span>{cat.minNote}</span>}
         <Link to={all} className="card-link lg-lead-all" aria-label={`All players by ${cat.label.toLowerCase()}`}>
           All <ChevronRight size={14} aria-hidden="true" />
         </Link>

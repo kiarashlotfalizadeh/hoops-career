@@ -32,7 +32,8 @@ import {
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Sheet } from '../components/ui';
 import { f1, p1, rosterNames, signed } from '../stats';
-import { teamPath, useQueryParam } from './shared';
+import { FilterField, teamPath, useQueryParam } from './shared';
+import { PickerLine } from './Views';
 import { plural } from '../../core/format';
 
 const SEASON_STATS: SeasonStat[] = ['ppg', 'rpg', 'apg', 'spg', 'bpg', 'pts', 'tpm', 'fg', 'tp', 'ft'];
@@ -203,22 +204,30 @@ export function RecordBook({ league }: { league: League }) {
   const bare = sections.every(([, recs]) => recs.every((r) => !r.lines.length));
   return (
     <>
-      <div className="lg-sub lg-nowrap lg-book-sub">
-        <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
-          <option value="league">League records</option>
-          {[...league.teams]
-            .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
-            .map((t) => (
-              <option key={t.tid} value={t.tid}>
-                {t.region} {t.name}
-              </option>
-            ))}
-        </select>
-        <select className="lg-select" value={post} onChange={(e) => setPost(e.target.value as 'reg' | 'post')} aria-label="Season type">
-          <option value="reg">Regular season</option>
-          <option value="post">Playoffs</option>
-        </select>
-      </div>
+      <PickerLine
+        parts={[tid !== undefined ? league.teams[tid].name : 'League records', post === 'post' ? 'Playoffs' : 'Regular season']}
+        title="Record book"
+        label={`Record book: ${tid !== undefined ? league.teams[tid].name : 'league records'}, ${post === 'post' ? 'playoffs' : 'regular season'}. Change`}
+      >
+        <FilterField label="Records">
+          <select className="lg-select" value={tid ?? 'league'} onChange={(e) => setScope(e.target.value)} aria-label="Record book">
+            <option value="league">League records</option>
+            {[...league.teams]
+              .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
+              .map((t) => (
+                <option key={t.tid} value={t.tid}>
+                  {t.region} {t.name}
+                </option>
+              ))}
+          </select>
+        </FilterField>
+        <FilterField label="Games">
+          <select className="lg-select" value={post} onChange={(e) => setPost(e.target.value as 'reg' | 'post')} aria-label="Season type">
+            <option value="reg">Regular season</option>
+            <option value="post">Playoffs</option>
+          </select>
+        </FilterField>
+      </PickerLine>
       {/* a book with nothing in it yet is one line, not four empty sections */}
       {bare && <div className="card empty">{post === 'post' ? 'No playoff games in the book yet.' : 'No games in the book yet: records land here as they are set.'}</div>}
       {sections.map(([title, recs, empty], i) =>

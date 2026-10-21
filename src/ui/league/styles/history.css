@@ -74,12 +74,12 @@
   padding-right: 8px;
 }
 .lg-fr-name {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 34px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 780;
+  font-size: 30px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 .lg-fr .lg-select {
   flex: none;
@@ -185,12 +185,10 @@ a.lg-book-row:active {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 19px;
-  line-height: 1.15;
-  letter-spacing: -0.012em;
+  font-size: 16px;
+  font-weight: 640;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 .lg-crown {
   flex: none;
@@ -314,8 +312,7 @@ a.lg-book-row:active {
   background: var(--surface);
 }
 .lg-coach-row.me {
-  background: color-mix(in srgb, var(--team-text) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-coach-t {
   display: flex;
@@ -394,8 +391,7 @@ a.lg-book-row:active {
   background: var(--surface);
 }
 .lg-yr-row.me {
-  background: color-mix(in srgb, var(--team-text) 9%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-yr-row .yr {
   font-family: var(--display);
@@ -414,11 +410,9 @@ a.lg-book-row:active {
   min-width: 0;
 }
 .lg-yr-t .nm {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 18px;
-  line-height: 1.15;
+  font-size: 16px;
+  font-weight: 640;
+  line-height: 1.25;
   letter-spacing: -0.01em;
 }
 .lg-yr-t .sub {

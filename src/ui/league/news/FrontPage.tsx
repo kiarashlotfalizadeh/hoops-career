@@ -1,6 +1,7 @@
-// The News tab's front page: the lead story (the biggest recent one, your team's first), the next
-// headlines, the latest power rankings (the top five and your team) and the latest honors. The wire
-// (every item, by day) follows it on the News tab.
+// The News tab's front page: the lead story (the biggest recent one, your team's first), the top
+// stories (the first three in the headline cut, the rest as plain lines), the latest power rankings
+// (the top five and your team) and the latest honors. The wire (every item, by day, as a plain list)
+// follows it on the News tab.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, NewsItem } from '../../../core/types';
@@ -26,10 +27,10 @@ export function FrontPage({ league, mine }: { league: League; mine: boolean }) {
     <>
       {lead && <Lead league={league} n={lead} to={href(lead.id)} />}
       {headlines.length > 0 && (
-        <Section title="Headlines">
+        <Section title="Top stories">
           <div className="lg-fp-hls">
-            {headlines.map((n) => (
-              <Headline key={n.id} league={league} n={n} to={href(n.id)} />
+            {headlines.map((n, i) => (
+              <Headline key={n.id} league={league} n={n} to={href(n.id)} strong={i < 3} />
             ))}
           </div>
         </Section>
@@ -46,7 +47,7 @@ export function FrontPage({ league, mine }: { league: League; mine: boolean }) {
         >
           <div className="card flush list">
             {honors.map((h) => (
-              <HonorRow key={`${h.kind}-${h.conf}`} league={league} h={h} />
+              <HonorRow key={`${h.kind}-${h.conf}`} league={league} h={h} brief />
             ))}
           </div>
         </Section>
@@ -55,7 +56,7 @@ export function FrontPage({ league, mine }: { league: League; mine: boolean }) {
   );
 }
 
-/** The lead: its kind and date (with the team it's about), a big serif headline, the dek. */
+/** The lead: its kind and date (with the team it's about), the big headline, the dek. */
 function Lead({ league, n, to }: { league: League; n: NewsItem; to: string }) {
   const tid = n.tids.find((t) => t === league.userTid) ?? n.tids[0];
   return (
@@ -73,11 +74,11 @@ function Lead({ league, n, to }: { league: League; n: NewsItem; to: string }) {
   );
 }
 
-/** A secondary story: its serif headline over its kind, date and team. */
-function Headline({ league, n, to }: { league: League; n: NewsItem; to: string }) {
+/** A secondary story: its headline (the first few in the headline cut) over its kind, date and team. */
+function Headline({ league, n, to, strong }: { league: League; n: NewsItem; to: string; strong: boolean }) {
   const tid = n.tids.find((t) => t === league.userTid) ?? n.tids[0];
   return (
-    <Link to={to} className="lg-fp-hl">
+    <Link to={to} className={`lg-fp-hl ${strong ? 'strong' : ''}`}>
       <span className="lg-fp-hl-head">{n.head}</span>
       <span className="lg-fp-hl-meta">
         {tid !== undefined && league.teams[tid] && <TeamLogo tid={tid} size={16} decorative />}
@@ -87,20 +88,20 @@ function Headline({ league, n, to }: { league: League; n: NewsItem; to: string }
   );
 }
 
-/** The top five and your team, your row's line in full; the whole list is on Standings → Power. */
+/** The top five and your team, your row's line in full; the whole list, every line, is on Standings → Power. */
 function PowerSection({ league }: { league: League }) {
   const p = league.media!.power!;
   const rows = p.rows.filter((r) => r.rank <= 5 || r.tid === league.userTid);
   return (
     <Section
-      title={`Power rankings · week ${Math.max(1, Math.round(p.day / 7))}`}
+      title="Power rankings"
       right={
         <Link to="/league/standings?view=power" className="card-link">
-          All 30 <ChevronRight size={14} aria-hidden="true" />
+          Week {Math.max(1, Math.round(p.day / 7))} · all 30 <ChevronRight size={14} aria-hidden="true" />
         </Link>
       }
     >
-      <PowerList league={league} rows={rows} blurbs={(r) => r.tid === league.userTid || r.rank === 1} />
+      <PowerList league={league} rows={rows} blurbs={(r) => r.tid === league.userTid} />
     </Section>
   );
 }

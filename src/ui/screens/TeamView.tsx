@@ -1,6 +1,7 @@
-// Another team's page (/teams/:tid; the user's own team lives in the Team tab): its slab, the two
-// things to do with it (its Matchup page, a trade), then Overview, Roster, Schedule, Picks, Moves
-// and History (the sections live in src/ui/league/team). Scouting them lives on the Matchup page.
+// Another team's page (/teams/:tid; the user's own team lives in the Team tab): its slab with the two
+// things to do with it at its foot (its Matchup page, a trade), then Overview, Roster, Schedule,
+// Picks, Moves and History (the sections live in src/ui/league/team). Scouting them lives on the
+// Matchup page.
 import { useState } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 import { useLeague } from '../../state/store';
@@ -41,8 +42,9 @@ export default function TeamView() {
   return (
     <main className="page lg-page">
       {editing && league.settings.godMode && <LazyTeamEditor tid={tid} onClose={() => setEditing(false)} />}
-      <TeamHero league={league} tid={tid} onEdit={league.settings.godMode ? () => setEditing(true) : undefined} />
-      <TeamActions league={league} tid={tid} />
+      <TeamHero league={league} tid={tid} onEdit={league.settings.godMode ? () => setEditing(true) : undefined}>
+        <TeamActions league={league} tid={tid} />
+      </TeamHero>
       <TabBar value={tab} onChange={setTab} options={TABS.map((id) => ({ id, label: LABEL[id] }))} label="Team sections" />
       {tab === 'overview' && <TeamOverview league={league} tid={tid} onContracts={() => setParams({ tab: 'roster', rv: 'contracts' })} />}
       {tab === 'roster' && <RosterViews league={league} tid={tid} param="rv" />}

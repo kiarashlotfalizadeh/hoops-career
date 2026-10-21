@@ -10,19 +10,22 @@
   text-align: center;
 }
 .lg-day .iconbtn {
-  border: 1px solid var(--line-2);
+  background: var(--raised);
+}
+.lg-day .iconbtn:not(:disabled):active {
+  background: var(--surface);
 }
 .lg-day .iconbtn:disabled {
   opacity: 0.35;
 }
 /* the day as a headline, its games counted under it */
 .lg-day-d {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 25px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 770;
+  font-size: 23px;
   line-height: 1.05;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.03em;
 }
 .lg-day-s {
   margin-top: 4px;
@@ -77,8 +80,7 @@ a.lg-sb:active {
   }
 }
 .lg-sb.me {
-  background: color-mix(in srgb, var(--team-text) 9%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-sb-st {
   display: flex;

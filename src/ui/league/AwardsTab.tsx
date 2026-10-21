@@ -6,12 +6,20 @@ import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Avatar, Help, Section, Segmented } from '../components/ui';
+import { Avatar, Help, Section } from '../components/ui';
+import { ViewChips } from './Views';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
 import { seasonHonors } from '../../core/league/media';
 import { HonorsList } from './news/Honors';
 import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
+
+/** A ladder's one figure or two: points, or steals and blocks. */
+function raceLine(p: Player, season: number, kind: 'off' | 'def') {
+  const pg = playerSeason(p, season, false);
+  if (!pg) return '';
+  return kind === 'def' ? `${f1(pg.stl)}\u00a0STL · ${f1(pg.blk)}\u00a0BLK` : `${f1(pg.pts)}\u00a0PTS`;
+}
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
   const pg = playerSeason(p, season, playoffs);
@@ -45,20 +53,22 @@ export function AwardsTab({ league }: { league: League }) {
   ];
   const [raw, setView] = useQueryParam<AwardsView>('av', 'awards', ['awards', 'honors', 'teams', 'allstar']);
   const view = views.some((v) => v.id === raw) ? raw : 'awards';
+  const seasonSel = (
+    <select className="lg-select" value={season} onChange={(e) => setSeasonStr(e.target.value)} aria-label="Season">
+      {seasons.map((s) => (
+        <option key={s} value={s}>
+          {seasonLabel(s)}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
     <>
-      <div className="lg-sub">
-        <select className="lg-select" value={season} onChange={(e) => setSeasonStr(e.target.value)} aria-label="Season">
-          {seasons.map((s) => (
-            <option key={s} value={s}>
-              {seasonLabel(s)}
-            </option>
-          ))}
-        </select>
-        <span className="lg-bar-l">{status}</span>
+      {/* the views, and the season they read on their right */}
+      <div className="lg-awards-top">
+        {views.length > 1 ? <ViewChips label="Awards view" value={view} onChange={setView} options={views} right={seasonSel} /> : <div className="lg-views">{seasonSel}</div>}
       </div>
-      {views.length > 1 && <Segmented label="Awards view" value={view} onChange={setView} options={views} />}
 
       {view === 'awards' && (
         <>
@@ -68,7 +78,8 @@ export function AwardsTab({ league }: { league: League }) {
           {decided && aw && <MajorAwards league={league} aw={aw} />}
           {(decided || (isCurrent && started)) && (
             <div className="lg-note">
-              Figures per game{decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}
+              {status ? `${status} · figures per game` : 'Figures per game'}
+              {decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}
               {decided && aw?.allStarGame?.mvp ? '; the All-Star MVP’s in the game' : ''}.
             </div>
           )}
@@ -405,10 +416,10 @@ function RaceCard({ league, title, list, kind = 'off', right }: { league: League
                   <span className="nm ellipsis">
                     {c.p.firstName} {c.p.lastName}
                   </span>
-                  {/* (wraps: on a narrow phone the last number was cut off) */}
-                  <span className="sub">
+                  {/* one line: the team, its record (for the MVP's team success) or his defence, and his scoring; the rest on his page */}
+                  <span className="sub ellipsis">
                     {teamAbbrev(league, c.tid)}
-                    {ts ? `\u00a0${ts.won}-${ts.lost}` : ''} · {statLine(c.p, league.season, kind)}
+                    {kind === 'off' && ts ? `\u00a0${ts.won}-${ts.lost}` : ''} · {raceLine(c.p, league.season, kind)}
                   </span>
                 </span>
                 <span className="lg-race-v num">

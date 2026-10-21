@@ -26,12 +26,12 @@
   color: var(--text-2);
 }
 .lg-title-name {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 34px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 780;
+  font-size: 32px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.032em;
 }
 .lg-title-sub {
   font-size: 13.5px;

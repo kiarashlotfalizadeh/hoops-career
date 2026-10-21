@@ -3,10 +3,11 @@ import type { League } from '../../core/types';
 import { standings, type StandingRow } from '../../core/league/standings';
 import { curTeamSeason, teamPlayers } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
-import { Help, Segmented } from '../components/ui';
+import { Help } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { f0, f1, signed, teamRatings } from '../stats';
-import { Toolbar, confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
+import { confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
+import { Foot, ViewChips } from './Views';
 import { OddsView, LotteryView } from './OddsView';
 import { TableCut, TeamRow, TeamTable } from './Table';
 import { plural } from '../../core/format';
@@ -25,7 +26,7 @@ export function StandingsTab({ league }: { league: League }) {
   const view: View = raw === 'odds' && omode === 'lottery' ? 'lottery' : raw;
   return (
     <>
-      <Segmented
+      <ViewChips
         label="Standings view"
         value={view}
         onChange={setView}
@@ -52,17 +53,23 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
   // before a game is played there's no order to show: the teams A to Z, and the line says so
   const rows = started ? all : [...all].sort((a, b) => league.teams[a.tid].name.localeCompare(league.teams[b.tid].name));
   return (
-    <>
-      <Toolbar right={<StandingsHelp />}>
-        {!started ? 'Season not started · teams A to Z' : view === 'league' ? 'By win %' : `${confName(view)}ern Conference`}
-        {view !== 'league' && started && (
-          <span className="lg-keys" aria-hidden="true">
-            <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
-          </span>
-        )}
-      </Toolbar>
+    <div className="lg-block">
       <StandingsTable league={league} rows={view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} />
-    </>
+      <Foot help={<StandingsHelp />}>
+        {!started ? (
+          'Season not started · teams A to Z'
+        ) : view === 'league' ? (
+          'All 30 by win % · swipe for splits'
+        ) : (
+          <>
+            <span className="lg-keys" aria-hidden="true">
+              <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
+            </span>
+            <span className="lg-foot-sep">swipe for splits</span>
+          </>
+        )}
+      </Foot>
+    </div>
   );
 }
 
@@ -114,9 +121,9 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
   // the play-in and lottery lines mean nothing before a game is played
   const cuts = conf && rows.some((r) => r.won + r.lost > 0);
   return (
-    // (the streak before the last ten, and the first four columns sized to sit whole beside the team on a
-    // phone, so it shows them without a swipe; "Last 10" so "L10" can't read as a streak)
-    <TeamTable cols={[42, 32, 34, 50, 44, 44, 44, 44]} head={['W-L', 'GB', 'Strk', 'Last 10', 'Home', 'Away', 'Conf', 'Diff']}>
+    // (a phone shows the record, games back and the streak beside the team; the splits wait a swipe
+    // away. "Last 10" so "L10" can't read as a streak)
+    <TeamTable cols={[50, 38, 48, 50, 46, 46, 46, 46]} head={['W-L', 'GB', 'Streak', 'Last 10', 'Home', 'Away', 'Conf', 'Diff']}>
       {rows.map((r, i) => {
         const t = league.teams[r.tid];
         const played = r.won + r.lost > 0;
@@ -171,49 +178,46 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
 
 /**
  * Power: the press's weekly rankings once the season has had a week (each team's move and the
- * press's line on it), with the numbers behind an order (net rating, roster strength) one switch away.
+ * press's line on it), with the numbers behind an order (net rating, roster strength) a tap away.
  */
 function Power({ league }: { league: League }) {
   const rows = latestPower(league);
   const [mode, setMode] = useQueryParam<'press' | 'net'>('pw', 'press', ['press', 'net']);
   if (!rows) return <PowerRankings league={league} />;
   const p = league.media!.power!;
-  return (
-    <>
-      <Segmented
-        label="Power rankings"
-        value={mode}
-        onChange={setMode}
-        options={[
-          { id: 'press', label: `Week ${Math.max(1, Math.round(p.day / 7))}` },
-          { id: 'net', label: 'By net rating' },
-        ]}
-      />
-      {mode === 'net' ? (
-        <PowerRankings league={league} />
-      ) : (
-        <>
-          <Toolbar
-            right={
-              <Help title="Power rankings">
-                <p className="lg-p">
-                  The press ranks all 30 teams once a week: how good each team is now (its net rating this season, weighed against what its healthy roster is worth, so an injury to
-                  a star shows), its record and its last ten games.
-                </p>
-                <p className="lg-p">The arrows show the move since last week. By net rating orders the teams by the numbers alone, today.</p>
-              </Help>
-            }
-          >
-            Published {newsDate(league, p)}
-          </Toolbar>
-          <PowerList league={league} rows={rows} />
-        </>
-      )}
-    </>
+  const week = `Week ${Math.max(1, Math.round(p.day / 7))}`;
+  return mode === 'net' ? (
+    <PowerRankings league={league} back={() => setMode('press')} week={week} />
+  ) : (
+    <div className="lg-block">
+      <div className="lg-line">
+        <span className="lg-line-t">
+          {week} · {newsDate(league, p, false)}
+        </span>
+        <button type="button" className="btn text sm" onClick={() => setMode('net')}>
+          By net rating
+        </button>
+      </div>
+      <PowerList league={league} rows={rows} />
+      <Foot
+        help={
+          <Help title="Power rankings">
+            <p className="lg-p">
+              The press ranks all 30 teams once a week: how good each team is now (its net rating this season, weighed against what its healthy roster is worth, so an injury to a
+              star shows), its record and its last ten games.
+            </p>
+            <p className="lg-p">The arrows show the move since last week. By net rating orders the teams by the numbers alone, today.</p>
+          </Help>
+        }
+      >
+        The press&apos;s weekly order, its move since last week
+      </Foot>
+    </div>
   );
 }
 
-function PowerRankings({ league }: { league: League }) {
+/** The order by the numbers alone; `back` returns to the press's week when there is one. */
+function PowerRankings({ league, back, week }: { league: League; back?: () => void; week?: string }) {
   const list = useLeagueMemo(() => {
     const base = league.teams.map((t) => {
       const ts = curTeamSeason(league, t.tid);
@@ -236,31 +240,27 @@ function PowerRankings({ league }: { league: League }) {
       .sort((a, b) => b.score - a.score);
   }, [league]);
 
-  return (
+  const early = list.every((x) => x.gp === 0) ? (
+    'By roster strength until games are played'
+  ) : (
     <>
-      <Toolbar
-        right={
-          <Help title="Power rankings">
-            <p className="lg-p">Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
-            <p className="lg-p">
-              Net rating predicts future results better than win-loss record. Early in the season, roster strength (Top 8: the average OVR of the eight best players) is blended in
-              until about ten games are played.
-            </p>
-          </Help>
-        }
-      >
-        {list.every((x) => x.gp === 0) ? (
-          'By roster strength until games are played'
-        ) : (
-          <>
-            By <Term id="ortg">net rating</Term>
-            {list.some((x) => x.gp < 10) ? ', with roster strength early on' : ''}
-          </>
-        )}
-      </Toolbar>
+      By <Term id="ortg">net rating</Term>
+      {list.some((x) => x.gp < 10) ? ', with roster strength early on' : ''}
+    </>
+  );
+  return (
+    <div className="lg-block">
+      {back && (
+        <div className="lg-line">
+          <span className="lg-line-t">{early}</span>
+          <button type="button" className="btn text sm" onClick={back}>
+            {week} ranking
+          </button>
+        </div>
+      )}
       <TeamTable
         // (roster strength third, in a phone's view without a swipe: it orders the table until games are played)
-        cols={[48, 50, 52, 52, 48]}
+        cols={[48, 50, 48, 52, 52]}
         head={[
           <span key="n" className="as-is">
             Net
@@ -297,6 +297,19 @@ function PowerRankings({ league }: { league: League }) {
           </TeamRow>
         ))}
       </TeamTable>
-    </>
+      <Foot
+        help={
+          <Help title="Power rankings">
+            <p className="lg-p">Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
+            <p className="lg-p">
+              Net rating predicts future results better than win-loss record. Early in the season, roster strength (Top 8: the average OVR of the eight best players) is blended in
+              until about ten games are played.
+            </p>
+          </Help>
+        }
+      >
+        {back ? 'Net per 100 possessions · Top 8 is the eight best OVRs' : early}
+      </Foot>
+    </div>
   );
 }

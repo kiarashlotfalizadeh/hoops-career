@@ -4,7 +4,6 @@ import { Suspense } from 'react';
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import type { League } from '../../core/types';
 import { useLeague } from '../../state/store';
-import { PHASE_LABEL, seasonLabel } from '../../core/constants';
 import { lazyRetry } from '../lazyRetry';
 import { PageHeader, Spinner } from '../components/ui';
 import { TabBar } from '../league/shared';
@@ -50,7 +49,7 @@ export default function LeagueHub() {
   const tabs = TABS.filter((t) => t !== 'cup' || tab === 'cup' || cupShown(league));
   return (
     <main className="page lg-page">
-      <PageHeader title="League" sub={`${seasonLabel(league.season)} · ${PHASE_LABEL[league.phase]}`} />
+      <PageHeader title="League" />
       <TabBar value={tab} onChange={(t) => nav(`/league/${t}`, { replace: true })} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="League sections" />
       {tab === 'standings' && <StandingsTab league={league} />}
       {tab === 'playoffs' && <PlayoffsTab league={league} />}

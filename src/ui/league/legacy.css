@@ -2,8 +2,7 @@
    and his titles, on his team's tint as his rows are everywhere. */
 
 .lg-season.lg-mine {
-  background: color-mix(in srgb, var(--team-text) 7%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
   --text-dim: var(--text-2);
 }
 

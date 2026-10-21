@@ -2,8 +2,9 @@
 // and the regular season or the playoffs.
 import type { League } from '../../../core/types';
 import { seasonLabel } from '../../../core/constants';
+import { PickerLine } from '../Views';
 import { useLeagueMemo } from '../../../state/store';
-import { statSeasons, useQueryParam } from '../shared';
+import { FilterField, statSeasons, useQueryParam } from '../shared';
 
 /** The season a stats view reads (the current one once it has games, else the last) and whether it's the playoffs'. */
 export function useStatSeason(league: League) {
@@ -41,5 +42,23 @@ export function TypeSelect({ s }: { s: StatSeason }) {
       <option value="reg">Regular season</option>
       <option value="po">Playoffs</option>
     </select>
+  );
+}
+
+/** The season a view reads, as one quiet line over it ("2026-27 · Regular season ⌄") that opens the season and its type in a sheet. `types` false for a view kept for the regular season only. */
+export function SeasonPicker({ s, types = true }: { s: StatSeason; types?: boolean }) {
+  const po = types && s.po === 'po' && !s.real;
+  const parts = [seasonLabel(s.season), ...(types ? [po ? 'Playoffs' : 'Regular season'] : []), ...(s.real ? ['Real'] : [])];
+  return (
+    <PickerLine parts={parts} title="Season" label={`Season: ${parts.join(', ')}. Change`}>
+      <FilterField label="Season">
+        <SeasonSelect s={s} />
+      </FilterField>
+      {types && (
+        <FilterField label="Games">
+          <TypeSelect s={s} />
+        </FilterField>
+      )}
+    </PickerLine>
   );
 }

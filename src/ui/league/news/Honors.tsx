@@ -20,20 +20,20 @@ export const HONOR_LABEL: Record<Honor['kind'], string> = {
 
 const confWord = (c?: 'E' | 'W') => (c === 'E' ? 'East' : c === 'W' ? 'West' : '');
 
-/** One honor: the jersey (a coach: his team's mark), who, what for, and the line why. */
-export function HonorRow({ league, h }: { league: League; h: Honor }) {
+/** One honor: the jersey (a coach: his team's mark), who, what for, and the line why (`brief`: the line waits in Awards → Honors). */
+export function HonorRow({ league, h, brief }: { league: League; h: Honor; brief?: boolean }) {
   const p = h.pid !== undefined ? league.players[h.pid] : undefined;
   const coach = h.pid === undefined ? (activeCoach(league, h.tid)?.name ?? league.teams[h.tid]?.coach.name) : undefined;
   const to = p ? `/player/${p.pid}` : teamPath(h.tid);
   return (
-    <Link to={to} className={`listrow clickable lg-hon ${h.tid === league.userTid ? 'me' : ''}`}>
+    <Link to={to} className={`listrow clickable lg-hon ${brief ? 'brief' : ''} ${h.tid === league.userTid ? 'me' : ''}`}>
       {p ? <Avatar p={p} /> : <TeamLogo tid={h.tid} size={36} decorative />}
       <span className="lg-hon-t">
         <span className="lr-name ellipsis">{p ? playerName(p) : coach}</span>
         <span className="lg-hon-what">
           {confWord(h.conf)} {HONOR_LABEL[h.kind].toLowerCase()} · {newsDate(league, h, false)}
         </span>
-        <span className="lr-meta">{h.line.charAt(0).toUpperCase() + h.line.slice(1)}</span>
+        {!brief && <span className="lr-meta lg-hon-line">{h.line.charAt(0).toUpperCase() + h.line.slice(1)}</span>}
       </span>
     </Link>
   );

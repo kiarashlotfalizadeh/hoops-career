@@ -6,8 +6,9 @@ import { dayToDate, fmtDate, playerName } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Help, Section, Segmented } from '../components/ui';
-import { TitleSlab, Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
+import { Help, Section } from '../components/ui';
+import { Foot, ViewChips } from './Views';
+import { TitleSlab, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { plural } from '../../core/format';
 import { signed } from '../stats';
 
@@ -78,10 +79,8 @@ export function CupTab({ league }: { league: League }) {
       {!projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season && (
         <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
       )}
-      {/* the knockouts' dates: on the bracket's heads once it's drawn, on the line under the switch until then */}
-      <Toolbar right={<CupHelp league={league} />}>{status}</Toolbar>
       <div className="bk-only-narrow">
-        <Segmented
+        <ViewChips
           label="Conference"
           value={conf}
           onChange={setConf}
@@ -97,7 +96,7 @@ export function CupTab({ league }: { league: League }) {
           <div className="bk-panel-wrap">
             {confOrder(conf).map((c) => (
               <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
-                <Section title={`${confName(c)} knockouts`} right={projected ? <span className="tag info">Projected</span> : undefined}>
+                <Section title={`${confName(c)} knockouts`} right={<span className="lg-sec-meta">{status}</span>}>
                   <div className="card bk-card">
                     <KnockoutBracket league={league} conf={c} projected={projected} />
                   </div>
@@ -118,17 +117,17 @@ export function CupTab({ league }: { league: League }) {
       <div className="bk-panel-wrap">
         {confOrder(conf).map((c) => (
           <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
-            <Section title={`${confName(c)} groups`}>
+            <Section title={`${confName(c)} groups`} right={seeds ? undefined : <span className="lg-sec-meta">{status}</span>}>
               <GroupTables league={league} tables={tables.filter((t) => t.group.conf === c)} seeds={seeds} decided={!!cup.seeds} />
             </Section>
           </div>
         ))}
       </div>
-      {seeds && (
-        <div className="lg-note">
-          {cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.
-        </div>
-      )}
+      <Foot help={<CupHelp league={league} />}>
+        {seeds
+          ? `${cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.`
+          : 'How the Cup works'}
+      </Foot>
     </>
   );
 }

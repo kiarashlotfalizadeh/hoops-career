@@ -3,7 +3,8 @@ import { FORECAST_SIMS, pct, type Forecast, type TeamOdds } from '../../core/ana
 import { fmtDate } from '../../core/league/helpers';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
-import { Toolbar, confName, confOrder, teamPath, useQueryParam } from './shared';
+import { confName, confOrder, teamPath, useQueryParam } from './shared';
+import { Foot } from './Views';
 import { TeamRow, TeamTable } from './Table';
 import { useForecast } from '../useForecast';
 
@@ -42,14 +43,14 @@ export function LotteryView({ league }: { league: League }) {
   if (!f) return <NoForecast />;
   const rows = f.teams.filter((t) => !t.clinched).sort((a, b) => a.w - b.w || b.pick1 - a.pick1);
   return (
-    <>
-      <Toolbar right={<OddsHelp />}>Each team&apos;s own first-round pick</Toolbar>
+    <div className="lg-block">
       <TeamTable cols={[54, 46, 50, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
         {rows.map((t, i) => (
           <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />
         ))}
       </TeamTable>
-    </>
+      <Foot help={<OddsHelp />}>Each team&apos;s own first-round pick · → its owner now</Foot>
+    </div>
   );
 }
 

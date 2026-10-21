@@ -84,7 +84,6 @@ a.bk-s:active {
 /* your series: your team's edge */
 .bk-s.me {
   border-color: var(--team-text);
-  box-shadow: inset 3px 0 0 var(--team-text);
 }
 .bk-s.tbd {
   background: transparent;
@@ -246,12 +245,12 @@ a.bk-fcard:active {
   font-variant-numeric: tabular-nums;
 }
 .bk-fname {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 19px;
-  line-height: 1.15;
-  letter-spacing: -0.012em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 750;
+  font-size: 18px;
+  line-height: 1.12;
+  letter-spacing: -0.026em;
   max-width: 100%;
 }
 .bk-fconf {
@@ -259,11 +258,8 @@ a.bk-fcard:active {
   color: var(--text-dim);
 }
 .bk-vs {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-style: italic;
-  font-weight: 460;
-  font-size: 19px;
+  font-size: 14px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .bk-ghost {
@@ -343,4 +339,8 @@ a.lg-sr-lead:active {
 }
 .lg-sr-head > :first-child {
   width: 20px;
+}
+/* the conference chips right under the tabs, as every section's one control */
+.lg-tabs + .bk-only-narrow {
+  margin-top: calc(14px - var(--gap-page));
 }

@@ -5,8 +5,14 @@ import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { TeamLogo } from '../components/TeamLogo';
 
-/** A table: `cols` are the figure columns' widths, `head` their labels after the team's. */
-export function TeamTable({ cols, head, children, className = '' }: { cols: number[]; head: ReactNode[]; children: ReactNode; className?: string }) {
+/**
+ * A table: `cols` are the figure columns' widths, `head` their labels after the team's. On a phone
+ * the team's column takes the room left by the first `show` figures, so those sit whole beside it and
+ * the rest wait a swipe away (a tablet shows them all).
+ */
+export function TeamTable({ cols, head, children, show = 3, className = '' }: { cols: number[]; head: ReactNode[]; children: ReactNode; show?: number; className?: string }) {
+  // the visible figures' widths, their gaps and the row's right padding
+  const vis = cols.slice(0, show).reduce((a, w) => a + w + 4, 0) + 12;
   const ref = useRef<HTMLDivElement>(null);
   // a shadow under the team column once the figures have moved under it, a fade where more are to come
   useEffect(() => {
@@ -27,7 +33,7 @@ export function TeamTable({ cols, head, children, className = '' }: { cols: numb
   }, []);
   return (
     <div className="lg-tbl-wrap">
-      <div ref={ref} className={`card flush lg-tbl ${className}`} style={{ '--cols': cols.map((w) => `${w}px`).join(' ') } as CSSProperties}>
+      <div ref={ref} className={`card flush lg-tbl ${className}`} style={{ '--cols': cols.map((w) => `${w}px`).join(' '), '--vis': `${vis}px` } as CSSProperties}>
         <div className="lg-tbl-in">
           <div className="lg-tbl-row head" aria-hidden="true">
             <span className="lead">Team</span>
@@ -68,7 +74,7 @@ export function TeamRow({
     <Link to={to} className={`lg-tbl-row ${me ? 'me' : ''} ${className}`}>
       <span className="lead">
         <span className="rk">{rank}</span>
-        <TeamLogo tid={tid} size={24} decorative />
+        <TeamLogo tid={tid} size={26} decorative />
         <span className="nm">{name}</span>
         {after}
         <span className="sr-only">{spoken}</span>

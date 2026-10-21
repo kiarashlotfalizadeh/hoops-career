@@ -6,7 +6,7 @@
   grid-template-columns: minmax(0, 1fr);
 }
 .lg-lead + .lg-lead {
-  border-top: 1px solid var(--line-2);
+  border-top: 1px solid var(--line);
 }
 @media (min-width: 600px) {
   .lg-leaders {
@@ -16,7 +16,7 @@
     border-top: none;
   }
   .lg-lead:nth-child(n + 3) {
-    border-top: 1px solid var(--line-2);
+    border-top: 1px solid var(--line);
   }
   .lg-lead:nth-child(2n) {
     border-left: 1px solid var(--line);
@@ -31,29 +31,29 @@
     border-top: none;
   }
   .lg-lead:nth-child(n + 4) {
-    border-top: 1px solid var(--line-2);
+    border-top: 1px solid var(--line);
   }
   .lg-lead:not(:nth-child(3n + 1)) {
     border-left: 1px solid var(--line);
   }
 }
 .lg-lead {
-  padding: 12px 0 6px;
+  padding: 14px 0 8px;
   min-width: 0;
 }
 .lg-lead-h {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 14px 6px;
+  padding: 0 16px 4px;
 }
 .lg-lead-h h3 {
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 14px;
-  font-weight: 720;
-  letter-spacing: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text);
 }
 .lg-lead-h h3 {
@@ -68,10 +68,10 @@
 .lg-lead-all {
   flex: none;
   align-self: center;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .lg-lead-none {
-  padding: 4px 14px 8px;
+  padding: 4px 16px 8px;
   font-size: 13px;
   color: var(--text-dim);
 }
@@ -79,8 +79,8 @@
   display: grid;
   grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 14px 8px;
+  gap: 12px;
+  padding: 6px 16px 10px;
 }
 .lg-lead-who {
   display: flex;
@@ -88,8 +88,9 @@
   min-width: 0;
 }
 .lg-lead-who .nm {
-  font-weight: 680;
+  font-weight: 640;
   font-size: 16px;
+  letter-spacing: -0.01em;
 }
 .lg-lead-meta {
   display: flex;
@@ -103,7 +104,7 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 760;
-  font-size: 38px;
+  font-size: 40px;
   line-height: 0.95;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
@@ -113,8 +114,8 @@
   display: block;
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 11.5px;
-  font-weight: 620;
+  font-size: 12px;
+  font-weight: 560;
   letter-spacing: 0;
   color: var(--text-dim);
   margin-top: 4px;
@@ -123,12 +124,11 @@
   display: grid;
   grid-template-columns: 16px 20px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding: 0 14px;
-  font-size: 13.5px;
+  gap: 10px;
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
   color: var(--text-2);
-  border-top: 1px solid var(--line);
 }
 .lg-lead-row .r {
   color: var(--text-dim);
@@ -156,15 +156,14 @@
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 }
-/* your players: your team's edge */
+/* your players: a wash of your team's colour */
 .lg-lead-row.me,
 .lg-lead-top.me {
-  box-shadow: inset 3px 0 0 var(--team-text);
-  background: color-mix(in srgb, var(--team-text) 7%, transparent);
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-lead-row.me .nm {
   color: var(--text);
-  font-weight: 680;
+  font-weight: 640;
 }
 
 /* StatTable name cell */

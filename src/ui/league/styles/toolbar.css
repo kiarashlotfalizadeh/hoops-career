@@ -54,10 +54,10 @@
 .lg-select {
   height: 34px;
   max-width: 100%;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1998b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a3a3ab' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding: 0 30px 0 12px;
@@ -88,8 +88,8 @@
 .lg-search input {
   height: 34px;
   width: 100%;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
   background: var(--surface);
   padding: 0 10px 0 32px;
   font-size: 13px;
@@ -133,7 +133,8 @@
   text-transform: none;
 }
 .lg-note {
-  font-size: 12px;
+  padding: 0 2px;
+  font-size: 12.5px;
   color: var(--text-dim);
   line-height: 1.45;
 }
@@ -256,5 +257,169 @@
   }
   .lg-name-link:hover {
     color: var(--accent-text);
+  }
+}
+
+/* ------------------------------------------------------------------ a section's views (Views.tsx) */
+/* the one control under the tabs: chips edge to edge, scrolling sideways past a phone's edge */
+.lg-tabs + .lg-views {
+  margin-top: calc(14px - var(--gap-page));
+}
+.lg-views {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: calc(var(--gap-sec) + 2px - var(--gap-page));
+}
+.lg-views-row {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  margin: -4px 0 -4px calc(-1 * var(--gut-l));
+  padding: 4px var(--gut-r) 4px var(--gut-l);
+  scroll-padding: 0 var(--gut-l);
+}
+/* nothing on the right: the row runs to the screen's right edge too */
+.lg-views-row:only-child {
+  margin-right: calc(-1 * var(--gut-r));
+}
+.lg-views-row::-webkit-scrollbar {
+  display: none;
+}
+.lg-views-row > .chip {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+/* more chips past an edge: that edge fades out */
+.lg-views-row.fr {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent);
+}
+.lg-views-row.fl {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px);
+  mask-image: linear-gradient(90deg, transparent, #000 40px);
+}
+.lg-views-row.fl.fr {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+/* a select beside the chips: the chips' height and type */
+.lg-views-r .lg-select {
+  height: 34px;
+  font-size: 14px;
+  font-weight: 600;
+  border-color: transparent;
+  background-color: var(--surface);
+}
+/* phones: a touch tighter, so a section's views fit whole more often */
+@media (max-width: 419px) {
+  .lg-views-row {
+    gap: 5px;
+  }
+  .lg-views-row > .chip {
+    padding: 0 11px;
+    font-size: 13.5px;
+  }
+}
+.lg-views-r {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* a block: its content and the quiet line under it */
+.lg-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* what a list shows (left) and its one switch (right), over the list */
+.lg-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  margin-top: -6px;
+}
+.lg-line-t {
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 560;
+  color: var(--text-2);
+}
+.lg-line .btn.text {
+  flex: none;
+  color: var(--accent-text);
+}
+/* the line under a table: its key, then Help */
+.lg-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 2px;
+}
+.lg-foot-t {
+  min-width: 0;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.lg-foot-sep::before {
+  content: ' · ';
+}
+.lg-views-row > .lg-vsep {
+  margin: 6px 2px;
+}
+.lg-views-row > .chip.lg-minechip {
+  padding-left: 9px;
+}
+/* what a view reads: a quiet line over it that opens its switches (PickerLine) */
+.lg-pickline {
+  align-self: flex-start;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  margin: calc(-1 * var(--gap-sec)) 0 calc(var(--gap-sec) - var(--gap-page) - 2px);
+  padding: 0 2px;
+  font-size: 14px;
+  font-weight: 620;
+  color: var(--text);
+  border-radius: var(--radius-xs);
+}
+/* a 44px target */
+.lg-pickline::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+.lg-pickline > span + span::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-dim);
+}
+.lg-pickline > span + span {
+  color: var(--text-2);
+  font-weight: 520;
+}
+.lg-pickline svg {
+  color: var(--text-dim);
+}
+.lg-pickline:active {
+  color: var(--text-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-pickline:hover svg {
+    color: var(--text);
   }
 }
