@@ -1,9 +1,9 @@
-/* The live game, broadcast first: the scorebug and the court own the top of the screen, the bench bar
-   sits in the tab bar's place, and the console under the court holds the staff's bench, the game
-   plan, the lineup and the stats (beside the court, held sideways); at a break or in your timeout the
-   court steps aside for the report. Team colours only where a team is the subject (the bug's blocks,
-   the floor, the lineups, the graphics); the brand runs the controls. Text over the court is white
-   whatever the theme: it sits on the floor's colours and dark plates. */
+/* The live game, broadcast first: the ink scorebug and the maple court own the top of the screen, the
+   bench bar sits in the tab bar's place, and the console under the court (paper and card stock, like
+   every other screen) holds the staff's bench, the game plan, the lineup and the stats (beside the
+   court, held sideways); at a break or in your timeout the court steps aside for the report. Team
+   colours only where a team is the subject (the bug's blocks, the paint, the lineups, the graphics);
+   the ink runs the controls. Text over the court is white: it sits on the broadcast's ink plates. */
 
 /* One partial per part of the screen, in cascade order (held sideways last: it overrides the rest). */
 @import './styles/page.css';

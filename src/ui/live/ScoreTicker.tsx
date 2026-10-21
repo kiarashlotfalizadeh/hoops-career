@@ -87,8 +87,8 @@ export function ScoresSheet({ league, games, elapsed, done }: { league: League; 
   ].filter((g) => g.rows.length);
   return (
     <div className="col" style={{ gap: 16 }}>
-      {groups.map((g) => (
-        <Section key={g.title} title={g.title}>
+      {groups.map((g) => {
+        const card = (
           <div className="card flush list">
             {g.rows.map(({ o, s }) => {
               const [h, a] = [league.teams[o.res.home.tid], league.teams[o.res.away.tid]];
@@ -119,8 +119,16 @@ export function ScoresSheet({ league, games, elapsed, done }: { league: League; 
               );
             })}
           </div>
-        </Section>
-      ))}
+        );
+        // (the sheet's own title says "Around the league": a lone group of those goes without saying it again)
+        return groups.length === 1 && g.title === 'Around the league' ? (
+          <div key={g.title}>{card}</div>
+        ) : (
+          <Section key={g.title} title={g.title}>
+            {card}
+          </Section>
+        );
+      })}
       <More label="How the clock runs">
         <div className="small dim">
           Games tip at the home team&apos;s local 7:00 or 7:30 and run on your game&apos;s clock, so the late ones out West are still to come when an early one ends. Final scores

@@ -1,5 +1,12 @@
 /* Over the court: the play's call, the broadcast graphics and the one banner; the playback controls a
-   tap brings up; the starting lineups before the tip. */
+   tap brings up; the starting lineups before the tip. All of it is the broadcast's graphics package:
+   ink plates with white type, a team's colour where a team is the subject, no glows. Inside it the
+   signals lift to read on ink, as on the dock. */
+.lv-stage {
+  --good: #7fe3a8;
+  --bad: #ff9a8f;
+  --warn: #ffc65c;
+}
 /* the play's call, the graphics and the banner: over the backcourt, clear of the basket the play goes to */
 .lv-lower {
   position: absolute;
@@ -18,8 +25,8 @@
   align-items: center;
   gap: 8px;
   max-width: 100%;
-  padding: 6px 11px 6px 9px;
-  border-radius: var(--radius-sm);
+  padding: 6px 13px 6px 11px;
+  border-radius: var(--radius-md);
   background: var(--lv-plate);
 }
 /* the offense's colour, a small square before the call: who has the ball */
@@ -28,8 +35,9 @@
   flex: none;
   width: 8px;
   height: 8px;
-  border-radius: 2px;
+  border-radius: 50%;
   background: var(--cap-c, rgba(255, 255, 255, 0.5));
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
 }
 /* the running call of the play: two lines at most, so a long make-and-assist still reads whole */
 .lv-cap-t {
@@ -56,20 +64,20 @@
   animation: l3-in 0.3s var(--ease-out);
 }
 .live-l3-tag {
-  padding: 3px 9px 3px;
-  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
-  background: var(--l3-c, var(--surface-3));
-  font-size: 11.5px;
-  font-weight: 640;
+  padding: 4px 11px 3px;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: var(--l3-c, var(--ink-2));
+  font-size: 12px;
+  font-weight: 720;
   line-height: 1.25;
 }
 .live-l3-text {
   max-width: 100%;
-  padding: 7px 12px 8px 9px;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) var(--radius-sm);
+  padding: 8px 14px 9px 11px;
+  border-radius: 0 var(--radius-md) var(--radius-md) var(--radius-md);
   background: var(--lv-plate-hi);
   font-size: 14.5px;
-  font-weight: 620;
+  font-weight: 640;
   line-height: 1.25;
 }
 @keyframes l3-in {
@@ -87,7 +95,7 @@
 
 /* the one banner: a flat plate, its tone in the icon and the kicker word */
 .lv-banner {
-  --tone: var(--text);
+  --tone: #fff;
   pointer-events: auto;
   align-self: stretch;
   display: flex;
@@ -105,7 +113,7 @@
   --tone: var(--warn);
 }
 .lv-banner.tone-info {
-  --tone: var(--accent-text);
+  --tone: var(--team-night);
 }
 .lv-banner-ic {
   flex: none;
@@ -148,7 +156,7 @@
   inset: -7px -6px;
 }
 .lv-banner-x:active {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* ------------------------------------------------------------------ playback: tap the court, like a video player */
@@ -161,7 +169,7 @@
 .lv-pb-scrim {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(18, 18, 18, 0.4);
   opacity: 0;
   transition: opacity var(--dur) ease;
 }
@@ -209,12 +217,13 @@
   background: var(--lv-plate-hi);
   transition: transform var(--dur-fast) ease;
 }
+/* pause and play: your team's colour, as the dock's play button */
 .lv-pb-btn.big {
   width: 68px;
   height: 68px;
-  background: var(--accent);
+  background: var(--team-night);
   border: none;
-  color: var(--accent-ink);
+  color: var(--team-night-ink);
 }
 .lv-pb-btn:active {
   transform: scale(0.94);
@@ -222,8 +231,8 @@
 .lv-pb-chip {
   position: relative;
   height: 34px;
-  padding: 0 11px;
-  border-radius: var(--radius-md);
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -235,19 +244,20 @@
 .lv-pb-chip.num {
   min-width: 46px;
   justify-content: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 16px;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-weight: 600;
+  font-size: 14px;
 }
 .lv-pb-chip::after {
   content: '';
   position: absolute;
   inset: -5px -2px;
 }
+/* on, over the ink: the chip turns white */
 .lv-pb-chip.on {
-  background: var(--on);
-  color: var(--on-ink);
+  background: #fff;
+  color: var(--ink);
 }
 
 /* ------------------------------------------------------------------ the starting lineups, before the tip */
@@ -261,7 +271,7 @@
   justify-content: center;
   gap: 12px;
   padding: 12px 14px 16px;
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  background: rgba(18, 18, 18, 0.9);
   overflow: hidden;
 }
 .lv-li-head {
@@ -279,14 +289,16 @@
   font-family: var(--head);
   font-stretch: var(--head-w);
   font-style: normal;
-  font-weight: 760;
-  font-size: clamp(21px, 6vw, 28px);
-  line-height: 1.05;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: clamp(22px, 6.4vw, 30px);
+  line-height: 1;
+  letter-spacing: -0.035em;
   text-transform: none;
   text-wrap: balance;
+  color: #fff;
 }
 .live-intro .gd-intro-line {
+  max-width: 100%;
   margin-top: 2px;
   font-size: 13.5px;
   font-style: normal;
@@ -296,24 +308,26 @@
 .lv-li-kicker {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 24px;
-  line-height: 1.1;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
 }
 .gd-intro-bill ~ .lv-li-kicker,
 .gd-intro-line ~ .lv-li-kicker {
   margin-top: 10px;
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 12.5px;
-  font-weight: 560;
-  letter-spacing: 0;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: rgba(255, 255, 255, 0.72);
 }
 .lv-li-where {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.72);
 }
 .lv-li-grid {
   display: grid;
@@ -331,15 +345,15 @@
 /* each five under its team's colour: a flat block, its trim along the foot */
 .lv-li-team {
   margin-bottom: 3px;
-  padding: 5px 10px 6px;
-  border-radius: var(--radius-xs);
+  padding: 5px 12px 7px;
+  border-radius: var(--radius-sm);
   background: var(--lb-c);
-  box-shadow: inset 0 -2px 0 var(--lb-t);
+  box-shadow: inset 0 -3px 0 var(--lb-t);
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-size: 14px;
-  font-weight: 760;
-  letter-spacing: -0.02em;
+  font-size: 14.5px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -388,14 +402,17 @@
   overflow-wrap: anywhere;
 }
 .lv-li-pos {
-  font-size: 11px;
-  font-weight: 520;
-  color: rgba(255, 255, 255, 0.7);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
 }
 .lv-li-line {
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.72);
 }
 .live-intro-whole {
   display: none;
@@ -437,8 +454,15 @@
     font-size: 10.5px;
   }
 }
-.lv-li-tip {
+/* Tip off: over the ink, the primary turns white (as on a slab) */
+.live-intro .lv-li-tip {
   margin-top: 2px;
+  background: #fff;
+  border-color: #fff;
+  color: var(--ink);
+}
+.live-intro .lv-li-tip:active {
+  background: rgba(255, 255, 255, 0.86);
 }
 .lv-li-bar {
   position: absolute;
@@ -451,7 +475,7 @@
 .lv-li-bar > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--team-night);
   transition: width 0.25s linear;
 }
 @keyframes intro-in {

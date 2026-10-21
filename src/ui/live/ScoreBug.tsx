@@ -3,7 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { fmtClock, periodLabel } from '../stats';
-import { matchupColors, matchupLooks } from '../teamColors';
+import { matchupColors, matchupLooks, nightFill } from '../teamColors';
 import { wpText } from '../../core/analysis/winProb';
 import type { Drawn } from './drawn';
 import type { Ticker } from './ticker';
@@ -31,10 +31,10 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
 }
 
 /**
- * The live scorebug, slim, as a broadcast has it over the court: each team's colour block (its name,
+ * The live scorebug, slim, the broadcast's ink bar over the court: each team's colour block (its name,
  * timeouts left and team fouls, both labelled), the scores, the period and the clock as the court animates them
  * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) with
- * the momentum glowing on it, and the night's other scores under it; everything but the clock and
+ * the momentum standing thicker on it, and the night's other scores under it; everything but the clock and
  * score as of the possession the court last finished drawing (`view`). In clutch time it says so.
  * The final is the final card's (FinalSlab).
  */
@@ -65,7 +65,7 @@ export function ScoreBug({
   wpHome?: number;
   /** The run on now ("BOS 14-2"), as the night reads it; without it, the points unanswered. */
   run?: { abbrev: string; a: number; b: number } | null;
-  /** Who's on top lately, −1 (away) .. 1 (home): it glows on the win-probability line. */
+  /** Who's on top lately, −1 (away) .. 1 (home): its side of the win-probability line stands thicker. */
   momentum?: number;
   /** Clutch time: the last five minutes within five. */
   clutch?: boolean;
@@ -90,7 +90,8 @@ export function ScoreBug({
       : `end of ${qLabel}`
     : `${qLabel} ${fmtClock(clock)}${clutch ? ', clutch time' : ''}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.a}-${run.b} run` : ''}${mo ? `, momentum ${moSide === 'home' ? home.abbrev : away.abbrev}` : ''}`;
   const wp = wpHome !== undefined ? wpHome : null;
-  const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
+  // (the sliver sits on the bug's ink: each colour lifted until it reads there)
+  const [homeKit, awayKit] = matchupColors(home.colors, away.colors).map(nightFill);
   // the two colour blocks never read as one: on a clash the away side wears its second colour
   const looks = matchupLooks(home.colors, away.colors);
   const pct = wpText;

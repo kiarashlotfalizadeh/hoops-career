@@ -44,21 +44,20 @@
   }
   .lv .lv-lb {
     width: auto;
-    border: 1px solid var(--line-2);
     border-radius: var(--radius);
   }
   .lv-stage .court-cv,
   .lv-stage > .live-intro {
     border-radius: var(--radius);
   }
+  /* the bench bar under the scorebug: a strip of card stock of its own */
   .lv-bar {
     grid-area: bar;
     position: static;
-    padding: 6px 0 2px;
-    background: none;
-    border: none;
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
+    margin: 8px 0 4px;
+    padding: 0 6px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
   }
   .lv-con {
     grid-area: con;

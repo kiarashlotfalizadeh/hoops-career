@@ -31,10 +31,11 @@
 .lv-stage > :not(canvas) {
   color: #fff;
 }
-/* the plates text sits on over the court: warm ink, see-through enough to keep the floor under them */
+/* the plates text sits on over the court: the broadcast's ink (the running call a touch see-through,
+   so the floor stays under it; the graphics, the banner and the callouts solid) */
 .lv {
-  --lv-plate: color-mix(in srgb, var(--bg) 86%, transparent);
-  --lv-plate-hi: color-mix(in srgb, var(--bg) 94%, transparent);
+  --lv-plate: rgba(18, 18, 18, 0.88);
+  --lv-plate-hi: var(--ink);
 }
 /* phones: the scorebug and the court edge to edge, like a broadcast */
 @media (max-width: 599px) {

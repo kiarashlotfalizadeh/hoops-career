@@ -56,8 +56,9 @@
 }
 
 /* ------------------------------------------------------------------ the bench bar
-   In the tab bar's place, on the tab bar's glass: the moment's one action on the left (Timeout, or at a
-   stop the way on in your colour), then the console's views as the tab bar draws its tabs */
+   In the tab bar's place, on white card stock: the moment's one action on the left (Timeout, an ink
+   ring; at a stop the way on, a solid ink pill), then the console's views, the one that's on in a
+   solid ink pill as a chosen chip is */
 .lv-bar {
   position: fixed;
   left: 0;
@@ -65,18 +66,18 @@
   bottom: 0;
   z-index: 40;
   padding: 0 max(8px, var(--safe-r)) var(--safe-b) max(8px, var(--safe-l));
-  background: rgba(15, 16, 18, 0.97);
-  background: color-mix(in srgb, var(--bg-2) 96%, transparent);
-  backdrop-filter: blur(24px) saturate(150%);
-  -webkit-backdrop-filter: blur(24px) saturate(150%);
-  border-top: 1px solid var(--line);
+  background: var(--raised);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow:
+    0 -1px 0 var(--line),
+    0 -12px 28px -18px rgba(60, 40, 10, 0.4);
 }
 .lv-bb {
   max-width: 640px;
   height: var(--lq-h);
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 4fr);
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 4fr);
   align-items: center;
   gap: 6px;
 }
@@ -90,16 +91,16 @@
 }
 .lv-bb-btn {
   position: relative;
-  height: 50px;
+  height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   border-radius: var(--radius-md);
   color: var(--text-dim);
   font-size: 11px;
-  font-weight: 560;
+  font-weight: 600;
   transition:
     color var(--dur-fast) ease,
     background var(--dur-fast) ease;
@@ -110,13 +111,22 @@
 .lv-bb-btn:active:not(:disabled) svg {
   transform: scale(0.9);
 }
-/* the view that's on: as the tab bar has it, white words and the icon in your colour */
+/* the view that's on: its icon in a solid ink pill, its word in ink */
+.lv-bb-views .lv-bb-ic {
+  width: 44px;
+  height: 26px;
+  border-radius: var(--radius-pill);
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
 .lv-bb-btn.on {
   color: var(--text);
-  font-weight: 680;
+  font-weight: 720;
 }
 .lv-bb-views .lv-bb-btn.on .lv-bb-ic {
-  color: var(--accent-text);
+  background: var(--on);
+  color: var(--on-ink);
 }
 @media (hover: hover) and (pointer: fine) {
   .lv-bb-btn:hover:not(:disabled):not(.on) {
@@ -135,19 +145,20 @@
   display: grid;
   place-items: center;
 }
-/* the timeout: a filled block, the ones left on it */
+/* the timeout: an ink ring, the ones left beside its icon; called, it fills with ink */
 .lv-bb-to {
-  height: 46px;
-  background: var(--surface);
+  height: 50px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-lg);
   color: var(--text);
-  font-weight: 620;
+  font-weight: 680;
 }
 .lv-bb-to:active:not(:disabled) {
   background: var(--surface-2);
 }
 .lv-bb-to.on {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink);
+  color: var(--paper-ink);
 }
 .lv-bb-to.on:disabled {
   opacity: 1;
@@ -155,61 +166,66 @@
 .lv-bb-n {
   position: absolute;
   top: -5px;
-  right: -14px;
+  right: -15px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
-  border-radius: var(--radius-xs);
-  background: var(--surface-3);
-  color: var(--text);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 11.5px;
-  font-weight: 720;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--paper-ink);
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 10.5px;
+  font-weight: 600;
   line-height: 16px;
+  text-align: center;
 }
 .lv-bb-to.on .lv-bb-n {
-  background: var(--accent-ink);
-  color: var(--accent);
+  background: var(--paper-ink);
+  color: var(--ink);
 }
 /* the staff's calls waiting on you: the brand's count, as the bell has it */
 .lv-bb-badge {
   position: absolute;
   top: -6px;
-  right: -11px;
+  right: -4px;
   min-width: 16px;
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
   background: var(--brand);
   color: #fff;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 11px;
-  font-weight: 720;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 10.5px;
+  font-weight: 600;
   line-height: 16px;
-  box-shadow: 0 0 0 2px var(--bg-2);
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--raised);
   animation: lv-up 0.3s var(--ease-out);
 }
-/* at a stop: the way on, in your colour */
+/* at a stop: the way on, the screen's one primary (a solid ink pill) */
 .lv-bb-go {
   height: 46px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: var(--accent-ink);
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--paper-ink);
   font-size: 15px;
-  font-weight: 680;
+  font-weight: 720;
   white-space: nowrap;
   animation: lv-up 0.3s var(--ease-out);
-  transition: transform var(--dur-fast) ease;
+  transition:
+    transform var(--dur-fast) ease,
+    background var(--dur-fast) ease;
 }
 .lv-bb-go:active {
   transform: scale(0.97);
+  background: var(--ink-2);
 }
 
 /* ------------------------------------------------------------------ the bench */
@@ -233,6 +249,7 @@
   padding: 8px var(--row-px);
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   text-align: left;
   transition: background var(--dur-fast) ease;
 }
@@ -253,10 +270,11 @@
   line-height: 1;
 }
 .lv-watch-pts .num {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 26px;
-  font-weight: 760;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.06em;
 }
 .lv-watch-t {
   min-width: 0;
@@ -325,10 +343,11 @@
   font-weight: 600;
 }
 .lv-pr-ppp {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 21px;
-  font-weight: 740;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.05em;
 }
 .lv-pr-ppp.good {
   color: var(--good);
@@ -369,10 +388,11 @@
 .lv-sc-pts {
   flex: none;
   width: 30px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 23px;
-  font-weight: 740;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.06em;
   text-align: center;
 }
 .lv-sc-t {
@@ -404,8 +424,9 @@
   padding: 0 var(--row-px);
   border-radius: var(--radius);
   background: var(--raised);
+  box-shadow: var(--shadow-card);
   font-size: 15px;
-  font-weight: 620;
+  font-weight: 680;
   color: var(--text);
   text-align: left;
   transition: background var(--dur-fast) ease;
@@ -431,10 +452,11 @@
 .lv-rep-head {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 18px;
+  gap: 10px;
+  padding: 22px 0 18px;
+  border-bottom: 2px solid var(--ink);
 }
-/* the stop's headline: the expanded cut, a few words */
+/* the stop's headline, the screen's poster while the court is away: the black expanded cut, a few words */
 .lv-rep-kicker {
   display: flex;
   align-items: baseline;
@@ -442,29 +464,37 @@
   gap: 12px;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-size: 28px;
-  font-weight: 780;
-  letter-spacing: -0.03em;
-  line-height: 1.05;
+  font-size: clamp(30px, 8.6vw, 36px);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
   text-wrap: balance;
 }
 .lv-rep-skip {
   position: relative;
   flex: none;
+  align-self: center;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 14px;
-  font-weight: 620;
+  font-size: 13.5px;
+  font-weight: 680;
   letter-spacing: 0;
-  color: var(--accent-text);
+  color: var(--text);
+}
+.lv-rep-skip:active {
+  background: var(--surface-2);
 }
 .lv-rep-skip::after {
   content: '';
   position: absolute;
-  inset: -12px -8px;
+  inset: -6px -4px;
 }
 .lv-bk-row {
   display: flex;
@@ -505,7 +535,7 @@
 }
 .lv-bt-col > .over {
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 2px solid var(--ink);
 }
 .lv-bt-row {
   display: flex;
@@ -517,10 +547,11 @@
   border-top: 1px solid var(--line);
 }
 .lv-bt-row .num.bold {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 18px;
-  font-weight: 740;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
 .lv-bt-row .num.good {
   color: var(--good);

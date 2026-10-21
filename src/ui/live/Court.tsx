@@ -5,8 +5,8 @@ import { FRANCHISES, type FranchiseDef } from '../../core/teams';
 import { inkOn, teamLook } from '../teamColors';
 
 /**
- * The floor the game is played on: the home team's (its colours in the paint and the apron, its mark
- * at center court, its name behind the basket), or a neutral one (the Cup final).
+ * The floor the game is played on: maple, with the home team's colours painted in the key and the
+ * center circle (its mark there, its name behind the basket), or a neutral one (the Cup final).
  */
 export type CourtFloor = { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; mark: FranchiseDef['mark'] } | { kind: 'neutral'; name: string };
 
@@ -314,69 +314,76 @@ const grain = (n: number) => {
   return x - Math.floor(x);
 };
 
-/** The colours a floor is painted in: the wood, the paint and apron, the pinstripe, and the lines. */
+/**
+ * The maple floor every game is played on, flat as a broadcast graphic draws it (no lighting, no gloss):
+ * the boards, their joints, the darker stain of the apron around the court. The Hardwood look's floor;
+ * the tactics board's half court paints the same colours.
+ */
+export const MAPLE = { wood: '#dcae76', light: 'rgba(255,246,228,', dark: 'rgba(122,72,24,', joint: 'rgba(122,72,24,0.2)', apron: '#b07a46' } as const;
+
+/** The colours a floor is painted in: the paint (the key and the center circle), the pinstripe, the lines. */
 function palette(floor: CourtFloor | undefined) {
-  if (floor?.kind !== 'home') return { wood: '#98693f', paint: '#26272b', apron: '#151619', trim: '#c9a24a', mark: null };
+  // a neutral floor (the Cup final): the paint in ink, a gold pinstripe
+  if (floor?.kind !== 'home') return { paint: '#1c1b19', trim: '#c9a24a', mark: null };
   const look = teamLook(floor.colors);
-  // a darker stain under the team's colours, so the paint and the jerseys stand out from the wood
-  return { wood: '#6f4729', paint: look.slab, apron: look.slab, trim: look.trim, mark: floor };
+  return { paint: look.slab, trim: look.trim, mark: floor };
 }
 
 function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: number, floor: CourtFloor | undefined) {
   const pal = palette(floor);
-  // the wood, flat (TV graphics: no lighting, no gloss), its planks a shade apart
-  ctx.fillStyle = pal.wood;
+  ctx.fillStyle = MAPLE.wood;
   ctx.fillRect(0, 0, w, h);
-  // planks along the court's length, each a shade apart, with their joints staggered
-  const plank = k * 1.9;
+  // boards along the court's length, each a shade apart, their joints staggered
+  const plank = k * 1.15;
   for (let i = 0, x = 0; x < w; i++, x += plank) {
     const r = grain(i);
-    ctx.fillStyle = r > 0.5 ? `rgba(255,236,210,${(r - 0.5) * 0.09})` : `rgba(30,12,0,${(0.5 - r) * 0.12})`;
+    ctx.fillStyle = r > 0.5 ? `${MAPLE.light}${((r - 0.5) * 0.34).toFixed(3)})` : `${MAPLE.dark}${((0.5 - r) * 0.16).toFixed(3)})`;
     ctx.fillRect(x, 0, plank, h);
-    ctx.fillStyle = 'rgba(30,12,0,0.22)';
+    ctx.fillStyle = MAPLE.joint;
     ctx.fillRect(x, 0, 1, h);
-    for (let y = -grain(i + 99) * 14 * k; y < h; y += 14 * k) ctx.fillRect(x, y, plank, 1);
+    for (let y = -grain(i + 99) * 11 * k; y < h; y += 11 * k) ctx.fillRect(x, y, plank, 1);
   }
   const X = (x: number) => (x + W_FT / 2 + SIDE) * k;
   const Y = (y: number) => (y + TOP) * k;
-  // the apron: the sidelines' bands and the deeper one behind the baseline, a pinstripe where it meets the court
-  ctx.fillStyle = pal.apron;
-  ctx.globalAlpha = 0.94;
+  // the apron: the sidelines' bands and the deeper one behind the baseline, stained darker, a pinstripe
+  // in the home team's trim where it meets the court
+  ctx.fillStyle = MAPLE.apron;
+  ctx.globalAlpha = 0.9;
   ctx.fillRect(0, 0, w, Y(0));
   ctx.fillRect(0, Y(0), X(-25), h - Y(0));
   ctx.fillRect(X(25), Y(0), w - X(25), h - Y(0));
   ctx.globalAlpha = 1;
-  ctx.strokeStyle = pal.trim;
-  ctx.lineWidth = Math.max(1, k * 0.12);
-  ctx.beginPath();
   const pin = 0.35 * k;
+  ctx.strokeStyle = pal.paint;
+  ctx.lineWidth = Math.max(1.5, k * 0.2);
+  ctx.beginPath();
   ctx.moveTo(X(-25) - pin, h);
   ctx.lineTo(X(-25) - pin, Y(0) - pin);
   ctx.lineTo(X(25) + pin, Y(0) - pin);
   ctx.lineTo(X(25) + pin, h);
   ctx.stroke();
-  // the home team's name behind the basket, between the scoreboards
+  // the home team's name behind the basket, between the scoreboards, painted in its colour
   if (floor?.name) {
-    setFont(ctx, 760, Math.max(9, TOP * k * 0.5));
+    setFont(ctx, 860, Math.max(9, TOP * k * 0.52));
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.globalAlpha = 0.72;
     ctx.fillText(floor.name.toUpperCase(), X(0), Y(0) / 2 - pin / 2 + 0.5);
-    ctx.globalAlpha = 1;
   }
-  // the paint
+  // the paint, solid in the home team's colour
   ctx.fillStyle = pal.paint;
-  ctx.globalAlpha = 0.92;
   ctx.fillRect(X(-8), Y(0), 16 * k, 19 * k);
-  ctx.globalAlpha = 1;
-  // center court: the mark in the half of the circle this end shows
+  // center court: the circle painted in the team's colour, its mark in the half this end shows
+  ctx.beginPath();
+  ctx.arc(X(0), Y(47), 6 * k, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
   const markR = 2.9;
   if (pal.mark) drawMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * 2 * k, pal.mark);
   else drawNeutralMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * k, pal.trim, pal.paint);
-  // the lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.lineWidth = Math.max(1.5, k * 0.17);
+  // the lines, white
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.5, k * 0.19);
   ctx.lineJoin = 'miter';
   // baseline and sidelines
   ctx.beginPath();
@@ -415,14 +422,14 @@ function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: numbe
     }
   }
   ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
+  ctx.fillStyle = '#ffffff';
   for (const side of [-1, 1]) ctx.fillRect(Math.min(X(side * 8), X(side * 8.7)), Y(7.6), 0.7 * k, 1 * k);
   ctx.setLineDash([k * 0.9, k * 0.9]);
   ctx.beginPath();
   ctx.arc(X(0), Y(19), 6 * k, Math.PI, Math.PI * 2);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.lineWidth = Math.max(1.5, k * 0.17);
+  ctx.lineWidth = Math.max(1.5, k * 0.19);
   // half court
   ctx.beginPath();
   ctx.moveTo(X(-25), Y(46.8));
@@ -516,12 +523,17 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   const x = (p.x + W_FT / 2) * k;
   const y = p.y * k;
   const r = 1.45 * k;
-  // a hot shooter wears a steady ring in the warning colour (the scorebug's run and the feed's flame are its words)
+  // a hot shooter wears a steady ring in the warning colour, edged in ink so it reads on the maple and the
+  // paint alike (the scorebug's run and the feed's flame are its words)
   if (hot) {
-    ctx.strokeStyle = '#f5c451';
-    ctx.lineWidth = Math.max(2, k * 0.26);
+    const hr = r + Math.max(3.5, k * 0.55);
+    ctx.strokeStyle = '#121212';
+    ctx.lineWidth = Math.max(3.5, k * 0.42);
     ctx.beginPath();
-    ctx.arc(x, y, r + Math.max(3.5, k * 0.55), 0, Math.PI * 2);
+    ctx.arc(x, y, hr, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#ffb21e';
+    ctx.lineWidth = Math.max(2, k * 0.26);
     ctx.stroke();
   }
   // the jersey, flat in its colours
@@ -532,14 +544,15 @@ function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [st
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   ctx.stroke();
-  // a dark hairline around the trim: a dark jersey still reads on the stained wood
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+  // an ink hairline around the trim: a light jersey still reads on the maple
+  ctx.strokeStyle = 'rgba(18,18,18,0.7)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(x, y, r + Math.max(1, k * 0.14), 0, Math.PI * 2);
   ctx.stroke();
+  // the defense: a faint ink ring a step out
   if (!offense) {
-    ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+    ctx.strokeStyle = 'rgba(18,18,18,0.32)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.arc(x, y, r + 3, 0, Math.PI * 2);
@@ -594,7 +607,7 @@ function drawNet(ctx: CanvasRenderingContext2D, k: number, sway: number) {
   const t = sway > 0 ? Math.sin(Math.min(1, sway / 2) * Math.PI) : 0;
   const bottom = top * (0.55 + 0.3 * t);
   const drop = len * (1 + 0.5 * t);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
   ctx.lineWidth = Math.max(0.8, k * 0.08);
   ctx.beginPath();
   for (let i = 0; i <= 6; i++) {
@@ -613,7 +626,7 @@ function drawNet(ctx: CanvasRenderingContext2D, k: number, sway: number) {
 
 /** The team with the ball, in its colours, on the boards behind the baseline it attacks (both sides of the basket). */
 function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, colors: [string, string]) {
-  // dark boards, lit in the team's jersey colour along the bottom: they read on any apron
+  // ink boards, lit in the team's jersey colour along the bottom: the broadcast's graphics on the apron
   const h = (TOP - 0.6) * k;
   const w = 7 * k;
   const bar = Math.max(2, 0.28 * k);
@@ -623,7 +636,7 @@ function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, 
   for (const cx of [-14.5, 14.5]) {
     const x = (cx + W_FT / 2) * k - w / 2;
     const y = -TOP * k + 0.2 * k;
-    ctx.fillStyle = 'rgba(13,12,10,0.88)';
+    ctx.fillStyle = '#121212';
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = colors[0];
     ctx.fillRect(x, y + h - bar, w, bar);
@@ -656,13 +669,13 @@ function drawRim(ctx: CanvasRenderingContext2D, k: number, kind: 'make' | 'miss'
 
 /** The ball's arc so far on a shot (u: how far along). */
 function drawTrail(ctx: CanvasRenderingContext2D, k: number, from: Pt, to: Pt, u: number) {
-  ctx.fillStyle = '#ffd2a6';
+  ctx.fillStyle = '#c4531a';
   const n = 9;
   for (let i = 1; i <= n; i++) {
     const v = (u * i) / (n + 1);
     const p = lerpPt(from, to, v);
     const z = Math.sin(Math.PI * v) * 7;
-    ctx.globalAlpha = 0.12 + (0.3 * i) / n;
+    ctx.globalAlpha = 0.1 + (0.4 * i) / n;
     ctx.beginPath();
     ctx.arc((p.x + W_FT / 2) * k, (p.y - z) * k, 0.16 * k + 0.6, 0, Math.PI * 2);
     ctx.fill();
@@ -680,30 +693,35 @@ function drawTag(ctx: CanvasRenderingContext2D, k: number, p: Pt, name: string) 
   ctx.textBaseline = 'middle';
   const w = ctx.measureText(name).width + 10;
   const h = Math.max(15, k * 1.85);
-  ctx.fillStyle = 'rgba(13,12,10,0.86)';
+  ctx.fillStyle = '#121212';
   ctx.beginPath();
-  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, 3);
+  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
   if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
   ctx.fill();
   ctx.fillStyle = '#ffffff';
   ctx.fillText(name, x, y + 0.5);
 }
 
+/** A play's call on the floor ("+3", "Block", "Foul"): an ink pill with the word in its signal's colour, as the broadcast's graphics have it. */
 function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind: string, fx: number, fy: number, alpha: number) {
   // (kept off the sidelines: a ball thrown out of bounds would put it under the playback buttons)
   const x = (clamp(fx, -13, 13) + W_FT / 2) * k;
   const y = fy * k;
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  setFont(ctx, 760, Math.max(17, k * 2.8));
+  const px = Math.max(15, k * 2.3);
+  setFont(ctx, 860, px);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  // (the app's signal colours: --good, --bad, --warn, and paper for the rest)
-  const color = kind === 'make' ? '#55d08b' : kind === 'miss' ? '#ffffff' : kind === 'block' || kind === 'to' ? '#ff6b5e' : kind === 'foul' ? '#f2c14e' : '#f4efe6';
-  ctx.lineWidth = 4;
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = 'rgba(0,0,0,0.75)';
-  ctx.strokeText(text, x, y);
+  // (the app's signals, lifted to read on ink: a make green, a block or turnover red, a foul amber)
+  const color = kind === 'make' ? '#7fe3a8' : kind === 'block' || kind === 'to' ? '#ff9a8f' : kind === 'foul' ? '#ffd27a' : '#ffffff';
+  const w = ctx.measureText(text).width + px * 0.9;
+  const h = px * 1.35;
+  ctx.fillStyle = '#121212';
+  ctx.beginPath();
+  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
+  if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
+  ctx.fill();
   ctx.fillStyle = color;
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, x, y + 0.5);
   ctx.globalAlpha = 1;
 }
