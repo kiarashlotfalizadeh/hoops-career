@@ -37,7 +37,7 @@ describe('tactical leverage', () => {
     // the zones and a box-and-one, a star plan with switching, the pressure tools with crashing and running,
     // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
     // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
-    // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them): what this pins is that 1x leverage plays
+    // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
     // every tactical edge at its 1x size, game after game)
     const expected: Record<string, number[][]> = {
       default: [
@@ -51,13 +51,13 @@ describe('tactical leverage', () => {
         [115, 114, 98, 33, 11, 12, 12, 0],
       ],
       zone32: [
-        [105, 108, 75, 44, 12, 22, 14, 0],
+        [117, 119, 84, 47, 15, 30, 17, 1],
         [121, 112, 95, 25, 17, 26, 11, 0],
         [127, 118, 87, 31, 9, 20, 12, 0],
       ],
       box1: [
-        [109, 108, 77, 42, 10, 25, 17, 0],
-        [134, 127, 98, 28, 17, 42, 18, 1],
+        [111, 108, 77, 43, 10, 27, 17, 0],
+        [117, 119, 91, 27, 15, 42, 16, 0],
         [129, 116, 87, 36, 11, 18, 14, 0],
       ],
       double: [

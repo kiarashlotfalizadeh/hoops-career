@@ -132,6 +132,8 @@ export const shotsMethods = {
     p += this.env.shoot + this.scoreEffect(off, def);
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;
+    // a trip begun with the period nearly over gets a scrambled look (see halfCourt)
+    p *= this.scramble;
     p = clamp(p, 0.04, 0.93);
 
     // impact accounting: each tag's openness contribution in expected points

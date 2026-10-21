@@ -34,6 +34,22 @@ export const K = {
    * fourth quarter or overtime: it plays without fouling (a reach-in there was a free tie or lead).
    */
   lateLeadFoul: 0.3,
+  /**
+   * Seconds left on the game clock when a team holding for the last shot starts its action: a range,
+   * drawn each time, tied in the fourth quarter or overtime and behind by one or two there; at the end
+   * of the other quarters, always the same. Started at 6.5 seconds every time, a game's last shot
+   * nearly always went up at the horn: four games in a hundred were won at the buzzer, and almost no
+   * late winner came earlier.
+   */
+  holdStart: { tied: [7.5, 10.5] as [number, number], behind: [9.5, 13.5] as [number, number], quarter: 6.5 },
+  /** Seconds a game's last shot goes up with (a range, drawn each time), from a play started in time for it. */
+  lastShotSpare: [1.5, 4.5] as [number, number],
+  /**
+   * A trip begun with under `sec` seconds left in the fourth quarter or overtime: its shots go in less often, by up to `cut`
+   * of their chance (all of it from a standing start, none at `sec`). Without it a defensive board
+   * with a second and a half left became a layup at the other end as often as any rushed shot went in.
+   */
+  scramble: { sec: 3.5, cut: 0.55 },
   /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
   teamReb: { orb: 0.02, drb: 0.09 },
   transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,

@@ -116,6 +116,10 @@ export class GameSim {
   inbound = false;
   /** Openness this trip's first half-court action starts with (a defense set because it didn't crash the glass). */
   firstOpen = 0;
+  /** Game-clock seconds left when this trip began: one begun with the period nearly over gets a scrambled look (see halfCourt). */
+  tripClock = Infinity;
+  /** This trip's make-probability factor for a scrambled look (1: none; see halfCourt). */
+  scramble = 1;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
   /** The tag the last sagHelp's openness goes under ('pd_sag', or 'role_roam' for a roamer's). */

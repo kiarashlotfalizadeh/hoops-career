@@ -32,6 +32,8 @@ export const possessionMethods = {
     this.possSet = null;
     this.possCtxForTOPts = ctx;
     const clockStart = this.clock;
+    this.tripClock = clockStart;
+    this.scramble = 1;
     // a timeout stops play: the trip out of it starts with an inbound, whatever the ball was doing
     // before (a steal or a defensive board still counts as what the trip came from)
     const outOfTimeout = this.timeoutStep;
@@ -150,8 +152,12 @@ export const possessionMethods = {
     if (pressed) setup = Math.max(2, setup - pressed);
     if (late.milk) setup += 6;
     if (late.hold) {
-      // run the clock down for a last shot
-      setup = Math.max(setup, this.clock - 6.5);
+      // run the clock down for a last shot. At the end of a game, start the action with time for it to
+      // work: tied, with eight to ten seconds left (the shot goes up with a few to spare, a miss can
+      // still be put back); behind, a little sooner, leaving time to foul or get it back. The other
+      // quarters' last shots are played as they always were
+      const start = this.q < 4 ? null : off.score < def.score ? K.holdStart.behind : K.holdStart.tied;
+      setup = Math.max(setup, this.clock - (start ? this.rng.uniform(start[0], start[1]) : K.holdStart.quarter));
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
@@ -207,7 +213,11 @@ export const possessionMethods = {
         return;
       }
       const left = Math.min(shotClock, this.clock);
-      forced = left <= 4.5 || n === 5 + stops;
+      // the last shot of a game (the game clock runs out before the shot clock): a team holding for it
+      // runs its play and shoots with a second or few to spare, time for a miss to be put back,
+      // instead of letting the horn decide when it goes up
+      const lastShot = late.hold && this.q >= 4 && this.clock < shotClock && left > 3;
+      forced = left <= 4.5 || n === 5 + stops || lastShot;
       // the trip opens with its set: after a timeout, or now and then one of the package's when it's a
       // fresh trip with the time to run it and nothing else to do (no late-game situation)
       let play: SetPlay | null = null;
@@ -219,7 +229,11 @@ export const possessionMethods = {
         if (want) play = this.setPlay(off, def, want.id, want.pid);
       }
       const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off, late);
-      let dt = forced ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5)) : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
+      let dt = lastShot
+        ? Math.max(0.5, Math.min(left - this.rng.uniform(K.lastShotSpare[0], K.lastShotSpare[1]), K.actionTime * paceF * this.rng.uniform(0.6, 1)))
+        : forced
+          ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5))
+          : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
       // a set takes longer to run than whatever the team would do: with too little clock it's rushed
@@ -231,6 +245,10 @@ export const possessionMethods = {
       }
       this.tick(dt);
       shotClock -= dt;
+      // a trip begun with the game nearly over (a rebound, a steal or an inbound with a second or two
+      // left in the fourth quarter or overtime) gets what it can: a heave or a scrambled catch, rarely
+      // a good look (the other quarters' last trips are left as they were calibrated)
+      this.scramble = this.q >= 4 && this.tripClock < K.scramble.sec ? 1 - K.scramble.cut * (1 - this.tripClock / K.scramble.sec) : 1;
       const urgency = buzzer || forced ? -0.45 : 0;
       const ctxOpen = carryOpen + urgency;
       if (n === 0 && isoFor) {

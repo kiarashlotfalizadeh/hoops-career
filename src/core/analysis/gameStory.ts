@@ -188,6 +188,9 @@ function seasonPass(league: League, res: GameResult, tid: number, opp: number, h
   return { rec, k, reg, homeReg, streak, theirStreak, heroBest, heroGp };
 }
 
+/** A buzzer-beater: the go-ahead basket with half a second or less left (about one game in a hundred in the NBA). */
+const BUZZER = 0.5;
+
 /** The shot that put the winner ahead for good, when it came in the last 24 seconds of the last period. */
 function deciderOf(res: GameResult, usSide: 0 | 1): Decider | undefined {
   const winSide: 0 | 1 = res.home.pts > res.away.pts ? 0 : 1;
@@ -206,7 +209,7 @@ function deciderOf(res: GameResult, usSide: 0 | 1): Decider | undefined {
     const box = winSide === 0 ? res.home : res.away;
     // the play-by-play names the shooter by his last name
     const who = box.players.filter((b) => b.min > 0 && at.text.startsWith(`${b.name.split(' ').slice(-1)[0]} `)).sort((a, b) => b.pts - a.pts || b.name.length - a.name.length)[0];
-    return { ours, secs: at.clock, buzzer: at.clock <= 1, who, ft: at.kind === 'ft', three: /\bthree\b|3-pt|3PT|three-pointer/i.test(at.text) };
+    return { ours, secs: at.clock, buzzer: at.clock <= BUZZER, who, ft: at.kind === 'ft', three: /\bthree\b|3-pt|3PT|three-pointer/i.test(at.text) };
   }
   // without the play-by-play (pruned from older games): the margin's flow and its clock
   const { flow, flowT } = res;
@@ -231,7 +234,8 @@ function deciderOf(res: GameResult, usSide: 0 | 1): Decider | undefined {
   const value = shot ? (shot.zone === 'c3' || shot.zone === 'ab3' ? 3 : 2) : 0;
   const box = winSide === 0 ? res.home : res.away;
   const who = shot && value <= gain && gain - value <= 1 ? box.players.find((b) => b.pid === shot.pid) : undefined;
-  return { ours, secs, buzzer: secs <= 1, who, ft: !who && gain <= 2 && !shot, three: !!who && value === 3 };
+  // (the flow's clock is whole seconds: 0 is the last half second)
+  return { ours, secs, buzzer: secs < 1, who, ft: !who && gain <= 2 && !shot, three: !!who && value === 3 };
 }
 
 /** Each side's longest run of unanswered points, from the play-by-play. */
@@ -545,7 +549,7 @@ function dekOf(league: League, f: Facts, cat: string): string {
   const d = f.decider;
   const s = f.series;
   if (d && d.who && d.secs <= 12)
-    out.push(`${f.name(d.who)} put ${d.ours ? 'them' : 'the ' + f.foe.name} ahead with ${d.secs < 1 ? 'no time' : plural(Math.round(d.secs), 'second')} left.`);
+    out.push(`${f.name(d.who)} put ${d.ours ? 'them' : 'the ' + f.foe.name} ahead with ${d.buzzer ? 'no time' : plural(Math.max(1, Math.round(d.secs)), 'second')} left.`);
   else if (f.won && f.comeback >= 12) out.push(`The ${f.team.name} trailed by ${f.comeback} ${venue(f)}.`);
   else if (!f.won && f.blown >= 12) out.push(`They led by ${f.blown}.`);
   else if (s)
@@ -663,7 +667,7 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
   if (d) {
     const who = d.who ? f.full(d.who) : d.ours ? `The ${T}` : `The ${f.foe.name}`;
     const what = d.ft ? 'free throws' : d.three ? 'a three' : 'a basket';
-    turn.push(`${who} won it with ${what} ${d.secs < 1 ? 'at the buzzer' : `with ${plural(Math.round(d.secs), 'second')} left`}.`);
+    turn.push(`${who} won it with ${what} ${d.buzzer ? 'at the buzzer' : `with ${plural(Math.max(1, Math.round(d.secs)), 'second')} left`}.`);
   }
   if (f.won && f.comeback >= 10) turn.push(`The ${T} came back from ${f.comeback} points down.`);
   if (!f.won && f.blown >= 10) turn.push(`The ${T} had led by ${f.blown}.`);
