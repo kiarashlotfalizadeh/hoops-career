@@ -8,10 +8,10 @@
 .tx-imp-v {
   flex: none;
   width: 44px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 22px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 19px;
   line-height: 1;
 }
 .tx-imp-t {

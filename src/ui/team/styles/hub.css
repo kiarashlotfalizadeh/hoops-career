@@ -1,51 +1,139 @@
-/* Team's header: one line over the page tabs. The name in the headline cut, then the roster count
-   and the payroll as two small figures (the record is in the top bar, the city in its badge). */
+/* Team's poster: your team's slab over the page tabs. The city and season as a mono kicker, the name
+   in the headline cut with the record as the one big condensed figure beside it, then the roster
+   spots and the payroll in mono under a 2px white rule, as a printed box score's foot. */
 .tm-hh {
   display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 16px;
+}
+.tm-hh-over {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-2);
+}
+.tm-hh-over > :first-child {
+  flex: none;
+}
+.tm-hh-main {
+  display: flex;
   align-items: flex-end;
-  gap: 18px;
-  margin-top: -2px;
+  gap: 12px;
 }
 .tm-hh-name {
   flex: 1;
   min-width: 0;
-  font-size: 26px;
-  line-height: 1;
   margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 34px;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
 }
-.tm-hh-fig {
+.tm-hh-rec {
   flex: none;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
-  min-width: 0;
-  max-width: 46%;
+  gap: 4px;
 }
-.tm-hh-v {
+/* the record: the condensed black cut, as big as the slab lets it be */
+.tm-hh-wl {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 740;
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 0.8;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.tm-hh-rank {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.tm-hh-figs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 2px solid var(--text);
+}
+.tm-hh-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.tm-hh-fig + .tm-hh-fig {
+  align-items: flex-end;
+  text-align: right;
+}
+.tm-hh-v {
+  font-family: var(--mono);
+  font-weight: 600;
   font-size: 21px;
   line-height: 1;
-  color: var(--text);
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
 }
 .tm-hh-k {
-  font-size: 11.5px;
-  font-weight: 540;
+  font-size: 12px;
+  font-weight: 560;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
 }
-/* the header, its tabs and the first control under them read as one block */
+/* the poster, its tabs and the first block under them read as one group */
 .tm-hub > .tm-hh + .lg-tabs {
-  margin-top: -16px;
+  margin-top: -12px;
 }
 .tm-hub > .lg-tabs + * {
   margin-top: -8px;
+}
+/* five sections fit a phone's width without paging: a step tighter between tabs than other hubs' */
+@media (max-width: 440px) {
+  .tm-hub > .lg-tabs .seg.tabs {
+    gap: 0;
+  }
+  .tm-hub > .lg-tabs .seg.tabs button {
+    padding: 0 7px;
+  }
+  .tm-hub > .lg-tabs .seg.tabs button:first-child {
+    padding-left: 12px;
+  }
+  .tm-hub > .lg-tabs .seg.tabs button.on::before {
+    left: 7px;
+    right: 7px;
+  }
+  .tm-hub > .lg-tabs .seg.tabs button.on:first-child::before {
+    left: 12px;
+  }
+}
+/* the slim band over the other sections: the mark, the name and the record on one line */
+.tm-hh.slim {
+  padding: 12px 18px 12px 14px;
+  border-radius: var(--radius);
+}
+.tm-hh.slim .tm-hh-main {
+  align-items: center;
+}
+.tm-hh.slim .tm-hh-main > :first-child {
+  flex: none;
+}
+.tm-hh.slim .tm-hh-name {
+  font-size: 26px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-hh.slim .tm-hh-wl {
+  font-size: 40px;
 }

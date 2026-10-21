@@ -1,5 +1,5 @@
-// Tactics → Instructions, the offense's controls by phase of play. In possession: tempo, how often
-// each action is run, the shot profile (threes, the rim, hunting mismatches, the hot hand) and the
+// Tactics → Instructions, the offense's controls by phase of play. In possession: the pace and how
+// often each action is run, the shot profile (threes, the rim, hunting mismatches, the hot hand) and the
 // set package. In transition: pushing after stops and the offensive glass (with the players' own
 // glass duties). Each control marks the playbook's own setting, and says when it sits off what the
 // team has drilled.
@@ -19,35 +19,17 @@ import { Lv } from './Lv';
 
 type Props = { t: Tactics; fam: Familiarity };
 
-/** In possession: the pace of the half court. */
-export function TempoSection({ t, fam }: Props) {
-  const pv = offPresetOf(t).values;
-  return (
-    <Section
-      title="Tempo"
-      right={
-        <Help title="Tempo">
-          <p>
-            <b>Pace:</b> seconds you take per half-court possession. Faster means more possessions, slightly more turnovers and more fatigue.
-          </p>
-        </Help>
-      }
-    >
-      <div className="card col tx-group">
-        <Lv label="Pace" k="pace" level="pace" t={t} fam={fam} mark={pv.pace} set={(tt, x) => void (tt.offense.pace = x)} />
-      </div>
-    </Section>
-  );
-}
-
-/** In possession: how often each action is run. */
+/** In possession: the pace of the half court, and how often each action is run (one card: one block, not two). */
 export function ActionsSection({ t, fam }: Props) {
   const pv = offPresetOf(t).values;
   return (
     <Section
-      title="Actions"
+      title="Pace and actions"
       right={
-        <Help title="How actions are chosen">
+        <Help title="Pace and actions">
+          <p>
+            <b>Pace:</b> seconds you take per half-court possession. Faster means more possessions, slightly more turnovers and more fatigue.
+          </p>
           <p>
             Each half-court trip, the offense picks an action weighted by these settings and by how well the players on the floor can run it. A pick-and-roll-heavy plan with no
             ball handler on the floor will naturally drift to other actions.
@@ -61,6 +43,7 @@ export function ActionsSection({ t, fam }: Props) {
       }
     >
       <div className="card col tx-group">
+        <Lv label="Pace" k="pace" level="pace" t={t} fam={fam} mark={pv.pace} set={(tt, x) => void (tt.offense.pace = x)} />
         {(Object.keys(ACTION_META) as ActionType[]).map((a) => (
           <Lv key={a} label={ACTION_META[a].label} k={`a_${a}`} level="action" t={t} fam={fam} mark={pv.actions[a]} set={(tt, x) => void (tt.offense.actions[a] = x)} />
         ))}
@@ -121,11 +104,10 @@ export function ShotProfile({ t, fam }: Props) {
   );
 }
 
-/** In possession, all of it: tempo, actions, the shot profile and the set package. */
+/** In possession, all of it: pace and actions, the shot profile and the set package. */
 export function InPossession({ t, fam, players }: Props & { players: Player[] }) {
   return (
     <>
-      <TempoSection t={t} fam={fam} />
       <ActionsSection t={t} fam={fam} />
       <ShotProfile t={t} fam={fam} />
       <SetPackageCard t={t} edit={tweak} players={players} />

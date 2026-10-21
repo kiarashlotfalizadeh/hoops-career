@@ -23,10 +23,10 @@
 }
 .tm-skill-v {
   text-align: right;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 17px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 14.5px;
 }
 .tm-sfx {
   font-family: var(--font);
@@ -81,10 +81,10 @@
   font-size: 13.5px;
 }
 .tm-why-row .num {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* role & usage */
@@ -100,9 +100,9 @@
 .tm-role-name {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 880;
   font-size: 20px;
-  letter-spacing: -0.028em;
+  letter-spacing: -0.035em;
   line-height: 1.1;
 }
 
@@ -230,10 +230,10 @@
 }
 .tm-rt-v {
   text-align: right;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 21px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 18px;
   line-height: 1;
 }
 .tm-rt-d {
@@ -268,10 +268,10 @@ a.tm-hi:active {
   background: var(--surface);
 }
 .tm-hi-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 26px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 22.5px;
   line-height: 1;
 }
 .tm-hi-k {
@@ -293,16 +293,16 @@ a.tm-hi:active {
 .tm-wl {
   width: 12px;
   display: inline-block;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 14px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 12px;
 }
 .tm-wl.w {
   color: var(--good);
 }
 .tm-wl.l {
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: var(--bad);
 }
 
 /* growth */
@@ -324,4 +324,45 @@ a.tm-hi:active {
   font-size: 12.5px;
   color: var(--text-dim);
   white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ card stock */
+/* lists and sheets of figures sit on white card stock, as every list does: the skills, the ratings
+   spec sheet, this season's highs (a statline stays printed on the paper) */
+.tm-skills,
+.tm-rt-sheet,
+.tm-hi-list {
+  background: var(--raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.tm-skills {
+  padding: 6px var(--pad-card);
+}
+.tm-skill {
+  min-height: 40px;
+}
+.tm-rt-sheet {
+  padding: 16px 14px;
+}
+/* a group's name: the headline cut a card's head uses, over a 2px ink rule */
+.tm-rt-gh {
+  margin: 0;
+  font-family: var(--head);
+  font-stretch: 114%;
+  font-size: 15px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
+  border-bottom: 2px solid var(--text);
+}
+.tm-hi-list {
+  padding: 0 var(--row-px);
+}
+a.tm-hi:active {
+  background: none;
+}
+.tm-hi-when {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: -0.02em;
 }

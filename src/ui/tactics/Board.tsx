@@ -143,122 +143,147 @@ export function Board({
           { id: 'out', label: 'Out of possession' },
         ]}
       />
-      <div className="card flush tx-formation">
-        {inPoss ? (
-          <PickRow<OffShape>
-            label="Shape"
-            value={shape}
-            onChange={(s) =>
-              tweak((tt) => {
-                if (s === 'fourOut') delete tt.offense.shape;
-                else tt.offense.shape = s;
-              })
-            }
-            help={
-              <>
-                Where your five stand in the half court. The figure is what the shape should be worth for this roster against 4-out, 1-in, in points per 100 possessions; the % is
-                how well your team knows it.
-              </>
-            }
-            options={[...OFF_SHAPES]
-              .sort((a, b) => fits[b] - fits[a])
-              .map((s) => ({
-                id: s,
-                label: SHAPE_META[s].label,
-                sub: (
-                  <>
-                    <b className={fitClass(fits[s])}>{fitPts(fits[s])} per 100</b> · {famSub(`shape:${s}`, first(SHAPE_META[s].help))}
-                    <span className="tx-shape-gb">
-                      <span>
-                        <b className="good">+</b> {SHAPE_META[s].good}
-                      </span>
-                      <span>
-                        <b className="bad">−</b> {SHAPE_META[s].bad}
-                      </span>
-                    </span>
-                  </>
-                ),
-              }))}
-            note={
-              shape === 'fourOut' ? (
-                <>The baseline shape · {famSub('shape:fourOut')}</>
-              ) : (
+      {/* the board as one printed object: the formation's pickers, the floor, the row to the bench */}
+      <div className="card flush tx-boardcard">
+        <div className="tx-formation">
+          {inPoss ? (
+            <PickRow<OffShape>
+              label="Shape"
+              value={shape}
+              onChange={(s) =>
+                tweak((tt) => {
+                  if (s === 'fourOut') delete tt.offense.shape;
+                  else tt.offense.shape = s;
+                })
+              }
+              help={
                 <>
-                  <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> per 100 vs 4-out · {famSub(`shape:${shape}`)}
+                  Where your five stand in the half court. The figure is what the shape should be worth for this roster against 4-out, 1-in, in points per 100 possessions; the % is
+                  how well your team knows it.
                 </>
-              )
-            }
-          />
-        ) : (
-          <>
-            <PickRow<DefScheme>
-              label="Scheme"
-              value={t.defense.scheme}
-              onChange={(x) => tweak((tt) => void (tt.defense.scheme = x))}
-              help="Your base defense. The % is how well your team knows each."
-              options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label, sub: famSub(`scheme:${k}`, first(SCHEME_META[k].help)) }))}
-              note={famSub(`scheme:${t.defense.scheme}`)}
+              }
+              options={[...OFF_SHAPES]
+                .sort((a, b) => fits[b] - fits[a])
+                .map((s) => ({
+                  id: s,
+                  label: SHAPE_META[s].label,
+                  sub: (
+                    <>
+                      <b className={fitClass(fits[s])}>{fitPts(fits[s])} per 100</b> · {famSub(`shape:${s}`, first(SHAPE_META[s].help))}
+                      <span className="tx-shape-gb">
+                        <span>
+                          <b className="good">+</b> {SHAPE_META[s].good}
+                        </span>
+                        <span>
+                          <b className="bad">−</b> {SHAPE_META[s].bad}
+                        </span>
+                      </span>
+                    </>
+                  ),
+                }))}
+              note={
+                shape === 'fourOut' ? (
+                  <>The baseline shape · {famSub('shape:fourOut')}</>
+                ) : (
+                  <>
+                    <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> per 100 vs 4-out · {famSub(`shape:${shape}`)}
+                  </>
+                )
+              }
             />
-            <PickRow<PnrCoverage>
-              label="Ball screens"
-              value={t.defense.pnr}
-              onChange={(x) => tweak((tt) => void (tt.defense.pnr = x))}
-              help="How you guard the pick-and-roll. The % is how well your team knows each."
-              options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label, sub: famSub(`pnr:${k}`, first(COVERAGE_META[k].help)) }))}
-              note={famSub(`pnr:${t.defense.pnr}`)}
-            />
-          </>
+          ) : (
+            <>
+              <PickRow<DefScheme>
+                label="Scheme"
+                value={t.defense.scheme}
+                onChange={(x) => tweak((tt) => void (tt.defense.scheme = x))}
+                help="Your base defense. The % is how well your team knows each."
+                options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label, sub: famSub(`scheme:${k}`, first(SCHEME_META[k].help)) }))}
+                note={famSub(`scheme:${t.defense.scheme}`)}
+              />
+              <PickRow<PnrCoverage>
+                label="Ball screens"
+                value={t.defense.pnr}
+                onChange={(x) => tweak((tt) => void (tt.defense.pnr = x))}
+                help="How you guard the pick-and-roll. The % is how well your team knows each."
+                options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({
+                  id: k,
+                  label: COVERAGE_META[k].label,
+                  sub: famSub(`pnr:${k}`, first(COVERAGE_META[k].help)),
+                }))}
+                note={famSub(`pnr:${t.defense.pnr}`)}
+              />
+            </>
+          )}
+        </div>
+
+        <div className={`tx-floor tx-board ${inPoss ? 'in' : 'out'}`} role="list" aria-label={inPoss ? 'Your five in possession' : 'Your five out of possession'}>
+          {/* a maple half court: the boards running baseline to half court, your colour in the key and
+            the centre circle, the lines in white */}
+          <svg className="tx-floor-court" viewBox={`0 0 100 ${BOARD_H}`} preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <pattern id="tx-planks" width="7" height={BOARD_H} patternUnits="userSpaceOnUse">
+                <rect width="7" height={BOARD_H} className="tx-floor-wood" />
+                <rect x="3.5" width="3.5" height={BOARD_H} className="tx-floor-wood2" />
+                <path d="M 3.5 0 V 84 M 7 0 V 84 M 0 31 H 3.5 M 3.5 62 H 7 M 0 76 H 3.5 M 3.5 18 H 7" className="tx-floor-seam" />
+              </pattern>
+            </defs>
+            <rect x="0" y="0" width="100" height={BOARD_H} fill="url(#tx-planks)" />
+            <rect x="33" y="0" width="34" height="27" className="tx-floor-paint" />
+            <circle cx="50" cy="94" r="12" className="tx-floor-paint" />
+            <g className="tx-floor-line" fill="none">
+              <rect x="33" y="0" width="34" height="27" />
+              <path d="M 6 0 L 6 14 A 44 44 0 0 0 94 14 L 94 0" />
+              <path d="M 41 27 A 9 9 0 0 0 59 27" />
+              <path d="M 41 27 A 9 9 0 0 1 59 27" strokeDasharray="1.6 1.4" />
+              <path d="M 45 5 A 5 5 0 0 0 55 5" />
+              <circle cx="50" cy="94" r="12" />
+              <path d="M 0 84 H 100" />
+            </g>
+            <path d="M 44 2.6 H 56" className="tx-floor-board" />
+            <circle cx="50" cy="4.6" r="1.6" className="tx-floor-rim" fill="none" />
+          </svg>
+          {rows.map((r) => {
+            const spot = placed.get(r.p.pid);
+            if (!spot) return null;
+            const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].short;
+            const fit = inPoss ? r.offFit : r.defFit;
+            const better = inPoss ? r.offBetter : r.defBetter;
+            const off = !!better;
+            const bestName = !better ? '' : inPoss ? ROLE_META[better as keyof typeof ROLE_META].label : DEF_ROLE_META[better as (typeof DEF_ROLES)[number]].label;
+            return (
+              <button
+                key={r.p.pid}
+                role="listitem"
+                className={`tx-floor-p${off ? ' off' : ''}`}
+                style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
+                onClick={() => setPick(r.p.pid)}
+                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}; knows his roles ${Math.round(r.pair)}%`}
+              >
+                <span className="tx-floor-n">
+                  <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
+                  <span className="ellipsis">{nameOf(r.p.pid)}</span>
+                </span>
+                <span className="tx-floor-r">{role}</span>
+                <span className="tx-floor-s" aria-hidden="true">
+                  {stars(fit)}
+                </span>
+                {r.p.injury && <span className="tx-floor-best">Injured</span>}
+              </button>
+            );
+          })}
+        </div>
+        {/* the bench's roles at both ends are on Players, with everyone's: one row here, not the list twice */}
+        {bench.length > 0 && onPlayers && (
+          <button className="tx-benchlink" onClick={onPlayers}>
+            <span className="grow">
+              <span className="tx-benchlink-n">The bench</span>
+              <span className="tx-benchlink-m">{miscastBench ? `${miscastBench} would suit another role better` : `${bench.length} players: their roles are on Players`}</span>
+            </span>
+            <ChevronRight size={18} className="dim" aria-hidden="true" />
+          </button>
         )}
       </div>
-
-      <div className={`tx-floor tx-board ${inPoss ? 'in' : 'out'}`} role="list" aria-label={inPoss ? 'Your five in possession' : 'Your five out of possession'}>
-        <svg className="tx-floor-court" viewBox={`0 0 100 ${BOARD_H}`} preserveAspectRatio="none" aria-hidden="true">
-          <rect x="0" y="0" width="100" height={BOARD_H} className="tx-floor-wood" />
-          <rect x="33" y="0" width="34" height="27" className="tx-floor-paint" />
-          <path d="M 6 0 L 6 14 A 44 44 0 0 0 94 14 L 94 0" className="tx-floor-line" fill="none" />
-          <circle cx="50" cy="27" r="9" className="tx-floor-line" fill="none" />
-          <circle cx="50" cy="5" r="1.6" className="tx-floor-rim" fill="none" />
-        </svg>
-        {rows.map((r) => {
-          const spot = placed.get(r.p.pid);
-          if (!spot) return null;
-          const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].short;
-          const fit = inPoss ? r.offFit : r.defFit;
-          const better = inPoss ? r.offBetter : r.defBetter;
-          const off = !!better;
-          const bestName = !better ? '' : inPoss ? ROLE_META[better as keyof typeof ROLE_META].label : DEF_ROLE_META[better as (typeof DEF_ROLES)[number]].label;
-          return (
-            <button
-              key={r.p.pid}
-              role="listitem"
-              className={`tx-floor-p${off ? ' off' : ''}`}
-              style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
-              onClick={() => setPick(r.p.pid)}
-              aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}; knows his roles ${Math.round(r.pair)}%`}
-            >
-              <span className="tx-floor-n">
-                <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
-                <span className="ellipsis">{nameOf(r.p.pid)}</span>
-              </span>
-              <span className="tx-floor-r">{role}</span>
-              <span className="tx-floor-s" aria-hidden="true">
-                {stars(fit)}
-              </span>
-              {r.p.injury && <span className="tx-floor-best">Injured</span>}
-            </button>
-          );
-        })}
-      </div>
-      {/* the bench's roles at both ends are on Players, with everyone's: one row here, not the list twice */}
-      {bench.length > 0 && onPlayers && (
-        <button className="card tx-benchlink" onClick={onPlayers}>
-          <span className="grow">
-            <span className="tx-benchlink-n">The bench</span>
-            <span className="tx-benchlink-m">{miscastBench ? `${miscastBench} would suit another role better` : `${bench.length} players: their roles are on Players`}</span>
-          </span>
-          <ChevronRight size={18} className="dim" aria-hidden="true" />
-        </button>
-      )}
 
       <Sheet open={!!picked} onClose={() => setPick(null)} title={picked ? `${picked.firstName} ${picked.lastName}` : 'Player'}>
         {picked && <RoleEditor key={`${picked.pid}${side}`} p={picked} side={inPoss ? 'off' : 'def'} onDone={() => setPick(null)} />}

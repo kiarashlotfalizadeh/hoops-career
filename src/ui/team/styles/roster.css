@@ -1,14 +1,18 @@
 /* A roster's rows (yours and other teams'), and the page tabs and switches the Team screens use. */
 /* ------------------------------------------------------------ roster rows */
-/* a printed roster: flat on the page, each group opened by its name over a strong rule with the
-   columns' names beside it, then the players on hairlines. A row and its group's header share one
-   grid: the jersey, the name over position and age, four figures a game, OVR and POT, so every
-   column lines up under its name */
+/* a printed roster on card stock: each group opened by its name over a 2px ink rule with the
+   columns' names beside it in mono, then the players on hairlines. A row and its group's header
+   share one grid: the jersey, the name over position and age, four figures a game in mono, OVR and
+   POT, so every column lines up under its name */
 .tm-rl-list {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
   isolation: isolate;
+  padding: 16px var(--row-px) 6px;
+  background: var(--raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
 }
 .tm-rl {
   display: grid;
@@ -30,17 +34,21 @@
 .tm-rl-head {
   align-items: end;
   padding-bottom: 7px;
-  border-bottom: 1px solid var(--line-2);
-  font-size: 11.5px;
-  font-weight: 640;
+  border-bottom: 2px solid var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
 }
-/* the group's name: a section's head, bold in the text cut */
+/* the group's name: the headline cut, as a section's head */
 .tm-rl-glabel {
   grid-column: 1 / 3;
+  font-family: var(--head);
+  font-stretch: 114%;
   font-size: 17px;
-  font-weight: 720;
-  letter-spacing: -0.015em;
+  font-weight: 880;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--text);
 }
@@ -118,13 +126,13 @@
   font-size: 12.5px;
   color: var(--text-dim);
 }
-/* the figures: the condensed cut, tabular, a step quieter than the name */
+/* the figures: the box score's mono, tabular, a step quieter than the name */
 .tm-rl-row .tm-rl-fig {
   grid-row: 2;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 640;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.04em;
   line-height: 1.1;
   color: var(--text-2);
 }
@@ -133,10 +141,10 @@
   grid-row: 1 / 3;
 }
 .tm-rl-row .tm-rl-pot {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16.5px;
-  font-weight: 700;
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
   color: var(--text);
 }
 .tm-rl-row .tm-rl-pot.dim {
@@ -214,7 +222,7 @@
   gap: 4px;
   font-size: 11.5px;
   font-weight: 620;
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: var(--bad);
 }
 .tm-ncell-out::before {
   content: '';

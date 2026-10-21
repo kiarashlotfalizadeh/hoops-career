@@ -95,10 +95,11 @@
   align-items: center;
   gap: 7px;
   min-width: 0;
-  height: 36px;
-  padding: 0 10px 0 6px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  height: 38px;
+  padding: 0 12px 0 6px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-3);
   color: var(--text-2);
   text-align: left;
   transition:
@@ -111,16 +112,17 @@
   inset: -4px -3px;
 }
 .tx-slot:not(.on):active {
-  background: var(--surface-2);
+  background: var(--surface);
 }
 @media (hover: hover) and (pointer: fine) {
   .tx-slot:not(.on):hover {
-    background: var(--surface-2);
+    background: var(--surface);
   }
 }
 .tx-slot.on {
   flex: 1 1 auto;
   background: var(--on);
+  box-shadow: none;
   color: var(--on-ink);
 }
 .tx-slot:not(.on) .tx-slot-n {
@@ -131,15 +133,15 @@
 }
 .tx-slot-l {
   flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: var(--radius-xs);
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 14px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 12px;
   background: var(--surface-3);
   color: var(--text);
 }
@@ -155,10 +157,10 @@
 }
 .tx-slot-f {
   flex: none;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 740;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1;
 }
 /* on the white pill, the familiarity reads in ink: its tone is for the dark grounds */
@@ -194,10 +196,10 @@
 .tx-hero-off {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 900;
   font-size: 23px;
-  letter-spacing: -0.028em;
-  line-height: 1.05;
+  letter-spacing: -0.04em;
+  line-height: 1;
   text-wrap: balance;
 }
 .tx-hero-def {
@@ -289,9 +291,26 @@
     gap: var(--gap-page) 20px;
   }
 }
-/* the formation's pickers over the court */
+/* the board: one card, the formation's pickers over the floor and the row to the bench under it.
+   The floor runs edge to edge in it */
+.tx-boardcard .tx-floor {
+  max-width: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.tx-formation + .tx-floor {
+  margin-top: 2px;
+}
 .tx-formation .tx-pickrow-v {
   font-weight: 680;
+}
+/* a tablet: a full-width court would push the bench off the screen, so the card keeps a court's width */
+@media (min-width: 640px) {
+  .tx-boardcard {
+    max-width: 600px;
+    width: 100%;
+    margin-inline: auto;
+  }
 }
 .tx-shape-gb {
   display: flex;
@@ -306,12 +325,6 @@
 }
 /* the court: the five's plates, a dot for each one's familiarity (as wide as .tx-floor lets it: on a
    tablet a full-width court would push the bench and the style off the screen) */
-.tx-board.out .tx-floor-p {
-  border-color: color-mix(in srgb, var(--info) 45%, transparent);
-}
-.tx-board.out .tx-floor-p.off {
-  border-color: var(--warn);
-}
 .tx-board .tx-floor-n {
   display: flex;
   align-items: center;
@@ -324,11 +337,14 @@
 }
 /* the row to the bench's roles, on Players */
 .tx-benchlink {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: var(--row-min);
-  padding: 10px 12px 10px var(--pad-card);
+  padding: 10px 12px 10px var(--row-px);
+  text-align: left;
+  transition: background var(--dur-fast) ease;
 }
 .tx-benchlink > .grow {
   min-width: 0;
@@ -371,9 +387,10 @@
   gap: 8px;
   min-width: 0;
   height: 40px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--line-3);
   text-align: left;
   transition: background var(--dur-fast) ease;
 }
@@ -383,10 +400,11 @@
   inset: -3px;
 }
 .tx-phase:not(.on):active {
-  background: var(--surface-2);
+  background: var(--surface);
 }
 .tx-phase.on {
   background: var(--on);
+  box-shadow: none;
   color: var(--on-ink);
 }
 .tx-phase-n {
@@ -402,10 +420,10 @@
   color: var(--on-ink);
 }
 .tx-phase-v .num {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 740;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 14px;
+  font-weight: 600;
   line-height: 1;
 }
 .tx-phase.on .tx-phase-v .num {
@@ -477,10 +495,10 @@
   flex: none;
   min-width: 38px;
   text-align: right;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 /* ------------------------------------------------------------ the Familiarity tab */
@@ -577,10 +595,10 @@
   font-size: 14.5px;
 }
 .tx-famrow-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 17px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 14.5px;
   line-height: 1;
 }
 .tx-famrow-s {
@@ -623,10 +641,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 720;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 14px;
+  font-weight: 600;
 }
 .tx-famp-c .tx-fambar {
   width: 100%;

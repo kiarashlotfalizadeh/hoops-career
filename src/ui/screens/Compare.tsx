@@ -2,23 +2,23 @@
 // then the rows a GM weighs one against the other on, each with its better side lit, in three views:
 // Profile (the overview, the scouting profile, honors), Ratings, and Stats (this season, career totals
 // and highs). Either side can be changed through the player picker, and the two can swap sides.
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight, UserPlus } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT } from '../../core/types';
-import { fmtHeight } from '../../core/ratings';
+import { fmtHeight, ovrColor } from '../../core/ratings';
 import { playerName } from '../../core/league/helpers';
 import { askingContract, waiverSalary } from '../../core/league/contracts';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Avatar, Bar, Empty, Help, Ovr, PageHeader, Section, Segmented } from '../components/ui';
+import { Avatar, Bar, Empty, Help, PageHeader, Section, Segmented } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { capSeason, contractEnd, forYears } from '../office/common';
 import { skillColor, useSkillPercentiles } from '../playerSkills';
-import { identityColor } from '../teamColors';
+import { identityColor, matchupLooks, type TeamLook } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
 import { injuryName, money, outFor } from '../../core/format';
@@ -50,6 +50,15 @@ function longestRun(name: string): number {
   return Math.max(1, ...(name.match(/[^\s-]+-?/g) ?? [name]).map((w) => w.length));
 }
 
+/** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
+const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
+
+/** A side's kit: his team's colours, or the neutral kit. */
+function kitOf(league: League, p: Player | undefined): [string, string, string] {
+  if (!p || p.tid < 0) return NO_TEAM;
+  return league.teams[p.tid]?.colors ?? FRANCHISES[p.tid]?.colors ?? NO_TEAM;
+}
+
 /** The colour a side is known by: his team's, or a neutral one for a player without a team. */
 function sideColor(league: League, p: Player | undefined): string | undefined {
   if (!p || p.tid < 0) return undefined;
@@ -57,7 +66,7 @@ function sideColor(league: League, p: Player | undefined): string | undefined {
   return colors ? identityColor(colors) : undefined;
 }
 
-function Head({ league, p, pid, onPick, side }: { league: League; p: Player | undefined; pid: number | null; onPick: () => void; side: Side }) {
+function Head({ league, p, pid, onPick, side, look }: { league: League; p: Player | undefined; pid: number | null; onPick: () => void; side: Side; look: TeamLook }) {
   if (!p) {
     return (
       <div className={`card cmp-head cmp-empty ${side}`}>
@@ -74,11 +83,16 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
   const deal = contractOf(league, p);
   const status = p.tid === FREE_AGENT ? (p.rfa ? 'Restricted FA' : 'Free agent') : p.tid === DRAFT_PROSPECT ? 'Prospect' : 'Retired';
   return (
-    <div className={`card cmp-head ${side}`}>
+    <div className={`slab no-court cmp-head ${side}`} style={{ '--slab': look.slab, '--slab-2': look.trim } as CSSProperties}>
       <div className="cmp-top">
         <Avatar p={p} />
+        {/* his OVR as his half's big figure, his tier's colour as a rule under it */}
         <div className="cmp-ovr">
-          <Ovr v={p.ovr} />
+          <span className="cmp-ovr-v num">
+            <span className="sr-only">OVR </span>
+            {Math.round(p.ovr)}
+          </span>
+          <span className="cmp-ovr-rule" style={{ background: ovrColor(p.ovr) }} aria-hidden="true" />
           <span className="pot">POT {p.pot}</span>
         </div>
       </div>
@@ -248,6 +262,8 @@ export default function Compare() {
   const names: [string, string] = [pa ? playerName(pa) : 'No player', pb ? playerName(pb) : 'No player'];
   const other = picking === 'a' ? pb : picking === 'b' ? pa : undefined;
   const edges = [sideColor(league, pa), sideColor(league, pb)];
+  // the two halves of the poster, each in his team's colour (the right side steps to its second colour on a clash)
+  const [lookA, lookB] = matchupLooks(kitOf(league, pa), kitOf(league, pb));
 
   return (
     <main className="page cmp-page">
@@ -264,11 +280,11 @@ export default function Compare() {
         }
       />
       <div className="cmp-heads">
-        <Head league={league} p={pa} pid={ids.a} side="a" onPick={() => setPicking('a')} />
+        <Head league={league} p={pa} pid={ids.a} side="a" look={lookA} onPick={() => setPicking('a')} />
         <span className="cmp-vs-badge" aria-hidden="true">
           vs
         </span>
-        <Head league={league} p={pb} pid={ids.b} side="b" onPick={() => setPicking('b')} />
+        <Head league={league} p={pb} pid={ids.b} side="b" look={lookB} onPick={() => setPicking('b')} />
       </div>
       {pa || pb ? (
         <>

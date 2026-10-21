@@ -100,10 +100,10 @@
   align-items: stretch;
   gap: 3px;
   width: 32px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 19px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 16.5px;
   line-height: 1;
   text-align: center;
   color: var(--text);
@@ -127,7 +127,7 @@
   background: var(--good);
 }
 .tx-fitv.bad {
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: var(--bad);
 }
 .tx-fitv.bad i {
   background: var(--bad);
@@ -167,10 +167,10 @@
 .tx-term-v {
   flex: none;
   width: 40px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 20px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 17px;
   line-height: 1.05;
   text-align: right;
 }

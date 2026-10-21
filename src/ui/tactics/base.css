@@ -60,10 +60,10 @@
   margin: 0;
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 880;
   font-size: 21px;
   line-height: 1.1;
-  letter-spacing: -0.028em;
+  letter-spacing: -0.035em;
   text-wrap: balance;
   color: var(--text);
 }

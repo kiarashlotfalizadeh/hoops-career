@@ -40,6 +40,13 @@
 }
 /* the depth chart: printed flat on the page like the roster, each group under its name and a strong
    rule, the players on hairlines */
+/* the depth chart on card stock */
+.tm-rlist {
+  padding: 14px var(--row-px) 4px;
+  background: var(--raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
 .tm-rlist .list > * + * {
   border-top: none;
 }
@@ -89,9 +96,11 @@
 .tm-rhead {
   align-items: end;
   padding-bottom: 7px;
-  border-bottom: 1px solid var(--line-2);
-  font-size: 11.5px;
-  font-weight: 640;
+  border-bottom: 2px solid var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
   color: var(--text-dim);
 }
 /* the group's name as a section's head, its Help beside it */
@@ -102,9 +111,11 @@
   min-width: 0;
 }
 .tm-rhead-l h3 {
+  font-family: var(--head);
+  font-stretch: 114%;
   font-size: 17px;
-  font-weight: 720;
-  letter-spacing: -0.015em;
+  font-weight: 880;
+  letter-spacing: -0.03em;
   line-height: 1;
   color: var(--text);
 }
@@ -161,10 +172,10 @@
 .tm-rfig {
   grid-row: 2;
   text-align: right;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 640;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 18px;
   color: var(--text-2);
 }
@@ -190,10 +201,10 @@
   grid-row: 1 / -1;
   text-align: center;
   line-height: 1;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 27px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 23px;
 }
 .tm-rrow.out .tm-rmin {
   color: var(--text-dim);
@@ -262,10 +273,10 @@
 }
 .tm-plan-m {
   text-align: right;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 700;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 /* the edit sheet */
@@ -309,5 +320,5 @@
 .tm-swap-out {
   font-size: 11.5px;
   font-weight: 620;
-  color: color-mix(in srgb, var(--bad) 80%, white);
+  color: var(--bad);
 }

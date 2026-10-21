@@ -38,17 +38,16 @@
 }
 
 /* ------------------------------------------------------------ the hero */
-/* his change this season, under his OVR on the slab: a dark chip so the signal reads on any colour */
+/* his change this season, on his OVR's white card: the signals as they print on paper */
 .tm-hovr .dv-d {
-  padding: 2px 5px;
-  border-radius: var(--radius-xs);
-  background: rgba(0, 0, 0, 0.32);
+  font-family: var(--mono);
+  font-weight: 600;
 }
 .tm-hovr .dv-d.up {
-  color: color-mix(in srgb, var(--good) 70%, white);
+  color: var(--tm-good);
 }
 .tm-hovr .dv-d.down {
-  color: color-mix(in srgb, var(--bad) 60%, white);
+  color: var(--tm-bad);
 }
 /* where his career stands: one plain sentence under his particulars */
 .dv-story {
@@ -103,10 +102,10 @@
   gap: 14px;
 }
 .dv-pot-fig {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 54px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 46.5px;
   line-height: 0.85;
 }
 .dv-pot-l {
@@ -123,9 +122,9 @@
 .dv-pot-tier {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 880;
   font-size: 21px;
-  letter-spacing: -0.028em;
+  letter-spacing: -0.035em;
   line-height: 1.1;
 }
 .dv-pot-text {
@@ -173,10 +172,10 @@
   gap: 8px;
 }
 .dv-moved-ovr b {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 22px;
-  font-weight: 740;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 19px;
+  font-weight: 600;
 }
 .dv-moves {
   display: flex;
@@ -219,10 +218,10 @@ a.dv-hl-row:active {
   flex: none;
   width: 46px;
   text-align: center;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 26px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 22.5px;
   line-height: 1;
 }
 .dv-hl-fig small {
@@ -266,9 +265,9 @@ a.dv-hl-row:active {
 .dv-coach-h {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
+  font-weight: 880;
   font-size: 21px;
-  letter-spacing: -0.028em;
+  letter-spacing: -0.035em;
   line-height: 1.1;
 }
 .dv-setup {
@@ -301,9 +300,9 @@ a.dv-hl-row:active {
 .dv-watch-n {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 760;
-  font-size: 22px;
-  letter-spacing: -0.028em;
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: -0.04em;
   line-height: 1.05;
 }
 .dv-watch-why {
@@ -311,9 +310,12 @@ a.dv-hl-row:active {
   color: var(--text-2);
   line-height: 1.4;
 }
-/* the report's players: flat on the page, on hairlines, as the roster is */
+/* the report's players: on card stock, on hairlines, as the roster is */
 .dv-list {
-  border-top: 1px solid var(--line-2);
+  padding: 0 var(--row-px);
+  background: var(--raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
 }
 .dv-row {
   display: grid;
@@ -330,7 +332,7 @@ a.dv-hl-row:active {
   border-bottom: none;
 }
 .dv-row:active {
-  background: var(--surface);
+  box-shadow: 0 0 0 100vmax var(--surface) inset;
 }
 .dv-row-t {
   display: flex;
@@ -357,16 +359,15 @@ a.dv-hl-row:active {
   font-size: 12.5px;
   color: var(--text-dim);
 }
-/* his age and the short reason: one line, two at most */
+/* his age and the short reason: one line (the whole of it is on his Growth tab) */
 .dv-row-why {
   font-size: 13px;
   color: var(--text-dim);
   line-height: 1.4;
   margin-top: 1px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 .dv-row-ovr {
   display: flex;

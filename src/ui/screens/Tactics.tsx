@@ -10,7 +10,7 @@
 // what it costs. Edits save as they're
 // made; while this visit has any, a compact dock says what they did to the grades and offers Undo
 // and Done (which hands the Continue bar back).
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { touch } from '../../state/actions';
@@ -72,6 +72,16 @@ export default function Tactics() {
   const sys = useLeagueMemo(() => systemFamiliarity(league, league.userTid), [league]);
   // the guided first week's "pick a playbook" is done once it's been looked at
   useEffect(() => void touch((l) => void guideVisit(l, 'playbook')), []);
+  // the open section's chip in view (a link straight to Game Mgmt or the Report lands past the row's edge)
+  const chips = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = chips.current;
+    const on = row?.querySelector<HTMLElement>('.chip.on');
+    if (!row || !on) return;
+    const r = row.getBoundingClientRect();
+    const c = on.getBoundingClientRect();
+    if (c.right > r.right || c.left < r.left) row.scrollLeft += c.left - r.left - 16;
+  }, [tab]);
 
   // the system report now and as this visit found it (the other teams' systems worked out once)
   const base = useLeagueMemo(() => systemReport(league, league.userTid, start.tactics), [league, start]);
@@ -89,7 +99,7 @@ export default function Tactics() {
       </fieldset>
       <AssistantCards league={league} areas={['tactics']} max={2} />
       {/* the sections: one row of chips that scrolls, not a grid of tabs */}
-      <div className="tx-tabs" role="group" aria-label="Tactics sections">
+      <div className="tx-tabs" role="group" aria-label="Tactics sections" ref={chips}>
         {TABS.map((x) => (
           <button key={x.id} className={`chip ${tab === x.id ? 'on' : ''}`} aria-pressed={tab === x.id} onClick={() => setTab(x.id)}>
             {x.label}

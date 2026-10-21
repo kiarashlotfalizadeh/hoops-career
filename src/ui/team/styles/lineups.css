@@ -28,12 +28,18 @@
   color: var(--text-dim);
   text-align: right;
 }
-/* the units, flat on the page under a rule, on hairlines */
+/* the units on card stock, on hairlines */
 .tm-lulist {
-  border-top: 1px solid var(--line-2);
+  padding: 0 var(--row-px);
+  background: var(--raised);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
 }
 .tm-lulist .list > * {
   border-bottom: 1px solid var(--line);
+}
+.tm-lulist .list > :last-child {
+  border-bottom: none;
 }
 .tm-lulist .list > * + * {
   border-top: none;
@@ -61,10 +67,10 @@
 }
 .tm-net {
   flex: none;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 26px;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-weight: 600;
+  font-size: 22.5px;
   line-height: 1;
   min-width: 58px; /* "+35.7" and "-8.2" alike, so the names line up */
   text-align: right;
@@ -77,6 +83,7 @@
 .tm-net small {
   font-family: var(--font);
   font-stretch: var(--text-w);
+  letter-spacing: 0;
   font-size: 11px;
   font-weight: 620;
   color: var(--text-dim);
@@ -86,7 +93,7 @@
   margin: 0 -4px 0 -6px;
 }
 .tm-lu-more {
-  padding: 12px 0 0;
+  padding: 12px 0 14px;
 }
 .tm-unit-p {
   min-height: 52px;
