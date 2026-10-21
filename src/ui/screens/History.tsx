@@ -117,9 +117,6 @@ function Franchise({ league }: { league: League }) {
   return (
     <>
       <section className="slab lg-fr" style={slabVars(team.colors) as CSSProperties}>
-        <span className="slab-mark">
-          <TeamLogo tid={tid} size={190} decorative />
-        </span>
         <div className="lg-fr-top">
           <TeamLogo tid={tid} size={48} decorative />
           <div className="grow">
@@ -175,14 +172,7 @@ function HallOfFame({ league }: { league: League }) {
   }, [league]);
   return (
     <>
-      <Section
-        title={
-          <h3>
-            <Crown size={13} aria-hidden="true" /> Hall of Fame
-          </h3>
-        }
-        right={<span className="lg-sec-meta">{hof.length} inducted</span>}
-      >
+      <Section title="Hall of Fame" right={<span className="lg-sec-meta">{hof.length} inducted</span>}>
         {hof.length === 0 ? (
           <div className="card empty">No one yet: legends go in when they retire.</div>
         ) : (

@@ -9,7 +9,7 @@ import { useLeagueMemo } from '../../../state/store';
 import { Section } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { aboutUser } from '../../../core/league/media/voice';
-import { KIND_ONE, NEWS_KIND } from './kinds';
+import { KIND_ONE } from './kinds';
 import { HonorRow, latestHonors } from './Honors';
 import { newsDate } from './Linked';
 import { PowerList } from './PowerList';
@@ -27,7 +27,7 @@ export function FrontPage({ league, mine }: { league: League; mine: boolean }) {
       {lead && <Lead league={league} n={lead} to={href(lead.id)} />}
       {headlines.length > 0 && (
         <Section title="Headlines">
-          <div className="card flush list">
+          <div className="lg-fp-hls">
             {headlines.map((n) => (
               <Headline key={n.id} league={league} n={n} to={href(n.id)} />
             ))}
@@ -55,19 +55,16 @@ export function FrontPage({ league, mine }: { league: League; mine: boolean }) {
   );
 }
 
-/** The lead: its kind and date, a display headline, the dek, and the team it's about. */
+/** The lead: its kind and date (with the team it's about), a big serif headline, the dek. */
 function Lead({ league, n, to }: { league: League; n: NewsItem; to: string }) {
-  const M = NEWS_KIND[n.kind] ?? NEWS_KIND.general;
   const tid = n.tids.find((t) => t === league.userTid) ?? n.tids[0];
   return (
-    <Link to={to} className={`card lg-fp-lead w${n.weight ?? 1}`}>
+    <Link to={to} className={`lg-fp-lead w${n.weight ?? 1}`}>
       <span className="lg-fp-over over">
-        <M.icon size={13} aria-hidden="true" style={{ color: M.color }} /> {KIND_ONE[n.kind]} · {newsDate(league, n)}
+        {tid !== undefined && league.teams[tid] && <TeamLogo tid={tid} size={20} decorative />}
+        {KIND_ONE[n.kind]} · {newsDate(league, n)}
       </span>
-      <span className="lg-fp-main">
-        <span className="lg-fp-head">{n.head}</span>
-        {tid !== undefined && league.teams[tid] && <TeamLogo tid={tid} size={44} decorative />}
-      </span>
+      <span className="lg-fp-head">{n.head}</span>
       <span className="lg-fp-dek">{n.text}</span>
       <span className="lg-fp-read">
         Read <ChevronRight size={14} aria-hidden="true" />
@@ -76,17 +73,15 @@ function Lead({ league, n, to }: { league: League; n: NewsItem; to: string }) {
   );
 }
 
+/** A secondary story: its serif headline over its kind, date and team. */
 function Headline({ league, n, to }: { league: League; n: NewsItem; to: string }) {
-  const M = NEWS_KIND[n.kind] ?? NEWS_KIND.general;
   const tid = n.tids.find((t) => t === league.userTid) ?? n.tids[0];
   return (
-    <Link to={to} className="listrow clickable lg-fp-hl">
-      {tid !== undefined && league.teams[tid] ? <TeamLogo tid={tid} size={30} decorative /> : <M.icon size={18} aria-hidden="true" />}
-      <span className="lg-fp-hl-t">
-        <span className="lg-fp-hl-head">{n.head}</span>
-        <span className="lr-meta">
-          {KIND_ONE[n.kind]} · {newsDate(league, n)}
-        </span>
+    <Link to={to} className="lg-fp-hl">
+      <span className="lg-fp-hl-head">{n.head}</span>
+      <span className="lg-fp-hl-meta">
+        {tid !== undefined && league.teams[tid] && <TeamLogo tid={tid} size={16} decorative />}
+        {KIND_ONE[n.kind]} · {newsDate(league, n)}
       </span>
     </Link>
   );

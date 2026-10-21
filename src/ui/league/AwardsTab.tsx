@@ -1,6 +1,5 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, Crown, Medal, Shield, Sparkles, Star, TrendingUp, Trophy, Users } from 'lucide-react';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, playerName } from '../../core/league/helpers';
 import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
@@ -116,9 +115,6 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
       <div className="card flush list">
         {aw.champion !== undefined && (
           <Link to={teamPath(aw.champion)} className="lg-award">
-            <span className="ic">
-              <Trophy size={18} />
-            </span>
             <TeamLogo tid={aw.champion} size={40} decorative />
             <span className="lg-award-t">
               <span className="lg-award-lb">Champions</span>
@@ -136,9 +132,6 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
         )}
         {aw.cupWinner !== undefined && (
           <div className="lg-award">
-            <span className="ic">
-              <Trophy size={18} />
-            </span>
             <TeamLogo tid={aw.cupWinner} size={40} decorative />
             <span className="lg-award-t">
               <span className="lg-award-lb">NBA Cup</span>
@@ -173,19 +166,13 @@ function Champions({ league, aw }: { league: League; aw: SeasonAwards }) {
   );
 }
 
-function AwardRow({ icon, children, to }: { icon: ReactNode; children: ReactNode; to?: string }) {
-  const inner = (
-    <>
-      <span className="ic">{icon}</span>
-      {children}
-    </>
-  );
+function AwardRow({ children, to }: { children: ReactNode; to?: string }) {
   return to ? (
     <Link to={to} className="lg-award">
-      {inner}
+      {children}
     </Link>
   ) : (
-    <div className="lg-award">{inner}</div>
+    <div className="lg-award">{children}</div>
   );
 }
 
@@ -193,7 +180,6 @@ function PlayerAward({
   league,
   pid,
   season,
-  icon,
   label,
   kind = 'off',
   playoffs = false,
@@ -202,7 +188,6 @@ function PlayerAward({
   league: League;
   pid?: number;
   season: number;
-  icon: ReactNode;
   label: string;
   kind?: 'off' | 'def';
   playoffs?: boolean;
@@ -213,7 +198,7 @@ function PlayerAward({
   if (!p) return null;
   const tid = seasonTeam(league, p, season);
   return (
-    <AwardRow icon={icon} to={`/player/${p.pid}`}>
+    <AwardRow to={`/player/${p.pid}`}>
       <Avatar p={{ ...p, tid: tid ?? -1 }} />
       <span className="lg-award-t">
         <span className="lg-award-lb">{label}</span>
@@ -237,14 +222,14 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
   return (
     <Section title="Season awards">
       <div className="card flush list">
-        <PlayerAward league={league} pid={aw.mvp} season={s} icon={<Crown size={18} />} label="Most Valuable Player" />
-        <PlayerAward league={league} pid={aw.finalsMvp} season={s} icon={<Trophy size={18} />} label="Finals MVP" playoffs />
-        <PlayerAward league={league} pid={aw.dpoy} season={s} icon={<Shield size={18} />} label="Defensive Player of the Year" kind="def" />
-        <PlayerAward league={league} pid={aw.roy} season={s} icon={<Sparkles size={18} />} label="Rookie of the Year" />
-        <PlayerAward league={league} pid={aw.smoy} season={s} icon={<Users size={18} />} label="Sixth Man of the Year" />
-        <PlayerAward league={league} pid={aw.mip} season={s} icon={<TrendingUp size={18} />} label="Most Improved Player" />
+        <PlayerAward league={league} pid={aw.mvp} season={s} label="Most Valuable Player" />
+        <PlayerAward league={league} pid={aw.finalsMvp} season={s} label="Finals MVP" playoffs />
+        <PlayerAward league={league} pid={aw.dpoy} season={s} label="Defensive Player of the Year" kind="def" />
+        <PlayerAward league={league} pid={aw.roy} season={s} label="Rookie of the Year" />
+        <PlayerAward league={league} pid={aw.smoy} season={s} label="Sixth Man of the Year" />
+        <PlayerAward league={league} pid={aw.mip} season={s} label="Most Improved Player" />
         {coyTeam && (
-          <AwardRow icon={<Award size={18} />} to={teamPath(coyTeam.tid)}>
+          <AwardRow to={teamPath(coyTeam.tid)}>
             <TeamLogo tid={coyTeam.tid} size={40} decorative />
             <span className="lg-award-t">
               <span className="lg-award-lb">Coach of the Year</span>
@@ -261,7 +246,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
           league={league}
           pid={aw.allStarMvp}
           season={s}
-          icon={<Star size={18} />}
+
           label="All-Star Game MVP"
           // his night, not his season: the game's figures and its final
           line={
@@ -336,13 +321,7 @@ function Teams({ league, aw }: { league: League; aw: SeasonAwards }) {
 
 function AllStars({ league, aw }: { league: League; aw: SeasonAwards }) {
   return (
-    <Section
-      title={
-        <h3>
-          <Medal size={13} aria-hidden="true" /> All-Stars
-        </h3>
-      }
-    >
+    <Section title="All-Stars">
       <div className="card flush lg-allstars">
         {(['E', 'W'] as const).map((c) => (
           <div key={c}>
@@ -380,7 +359,6 @@ function AwardRace({ league }: { league: League }) {
       <RaceCard
         league={league}
         title="MVP ladder"
-        icon={<Crown size={13} />}
         list={race.mvp}
         right={
           <Help title="Award races">
@@ -391,28 +369,14 @@ function AwardRace({ league }: { league: League }) {
           </Help>
         }
       />
-      <RaceCard league={league} title="Defensive Player of the Year" icon={<Shield size={13} />} list={race.dpoy} kind="def" />
-      <RaceCard league={league} title="Rookie of the Year" icon={<Sparkles size={13} />} list={race.roy} />
-      <RaceCard league={league} title="Sixth Man of the Year" icon={<Users size={13} />} list={race.smoy} />
+      <RaceCard league={league} title="Defensive Player of the Year" list={race.dpoy} kind="def" />
+      <RaceCard league={league} title="Rookie of the Year" list={race.roy} />
+      <RaceCard league={league} title="Sixth Man of the Year" list={race.smoy} />
     </div>
   );
 }
 
-function RaceCard({
-  league,
-  title,
-  icon,
-  list,
-  kind = 'off',
-  right,
-}: {
-  league: League;
-  title: string;
-  icon: ReactNode;
-  list: { c: Cand; score: number }[];
-  kind?: 'off' | 'def';
-  right?: ReactNode;
-}) {
+function RaceCard({ league, title, list, kind = 'off', right }: { league: League; title: string; list: { c: Cand; score: number }[]; kind?: 'off' | 'def'; right?: ReactNode }) {
   const top = list[0]?.score ?? 1;
   const low = Math.min(0, ...list.map((x) => x.score));
   // the voters' score on a scale where the leader is 100: how close the race is, in one figure
@@ -423,11 +387,7 @@ function RaceCard({
   };
   return (
     <Section
-      title={
-        <h3>
-          {icon} {title}
-        </h3>
-      }
+      title={title}
       // the scale is named once, on the first ladder, with its Help
       right={right ? <span className="lg-race-key">Score, #1 = 100{right}</span> : undefined}
     >

@@ -50,18 +50,17 @@
 }
 .lg-lead-h h3 {
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 11.5px;
-  font-weight: 750;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-stretch: var(--text-w);
+  font-size: 14px;
+  font-weight: 720;
+  letter-spacing: 0;
+  color: var(--text);
 }
 .lg-lead-h h3 {
   margin-right: auto;
 }
 .lg-lead-h > span {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-dim);
   text-align: right;
 }
@@ -89,8 +88,8 @@
   min-width: 0;
 }
 .lg-lead-who .nm {
-  font-weight: 750;
-  font-size: 15.5px;
+  font-weight: 680;
+  font-size: 16px;
 }
 .lg-lead-meta {
   display: flex;
@@ -103,21 +102,22 @@
 .lg-lead-val {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 34px;
-  line-height: 1;
+  font-weight: 760;
+  font-size: 38px;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 .lg-lead-val small {
   display: block;
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
+  font-stretch: var(--text-w);
+  font-size: 11.5px;
+  font-weight: 620;
+  letter-spacing: 0;
   color: var(--text-dim);
-  margin-top: 3px;
+  margin-top: 4px;
 }
 .lg-lead-row {
   display: grid;
@@ -134,18 +134,27 @@
   color: var(--text-dim);
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 14px;
+  font-weight: 660;
+  font-size: 15px;
   text-align: right;
 }
 .lg-lead-row .v {
-  font-weight: 750;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 700;
+  font-size: 16px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 .lg-lead-row:active,
 .lg-lead-top:active {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-lead-row:hover,
+  .lg-lead-top:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 /* your players: your team's edge */
 .lg-lead-row.me,
@@ -155,7 +164,7 @@
 }
 .lg-lead-row.me .nm {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 680;
 }
 
 /* StatTable name cell */
@@ -170,13 +179,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 700;
+  font-weight: 640;
+  font-size: 13.5px;
+  color: var(--text);
 }
 .lg-tcell {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 700;
+  font-weight: 640;
+  font-size: 13.5px;
+  color: var(--text);
 }
 .lg-showmore {
   align-self: center;

@@ -12,7 +12,6 @@ import { plural } from '../../core/format';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Card, Help } from '../components/ui';
-import { NEWS_KIND } from './NewsTab';
 import { teamPath, useQueryParam } from './shared';
 
 type Group = 'trade' | 'signing' | 'release' | 'draft' | 'other';
@@ -46,11 +45,8 @@ const GROUP: Record<TxnKind, Group> = {
 const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : t.kind === 'tenDay' && t.note === 'ended' ? 'release' : GROUP[t.kind]);
 const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'draft', 'other'];
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', draft: 'Draft', other: 'Other' };
-/** The news log's icon and colour for each kind of move. */
-const kindMeta = (t: Txn) => {
-  const g = groupOf(t);
-  return NEWS_KIND[g === 'other' ? 'general' : g];
-};
+/** A move's kind in a word, on its date line ("Trade · Feb 9"); an option or a qualifying offer goes without. */
+const GROUP_ONE: Record<Group, string> = { trade: 'Trade', signing: 'Signing', release: 'Release', draft: 'Draft', other: '' };
 
 const OFFSEASON: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
 const PAGE = 40;
@@ -121,19 +117,19 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
             const key = `${t.season}:${summer}`;
             const header = key !== lastKey;
             lastKey = key;
-            const M = kindMeta(t);
+            const kind = GROUP_ONE[groupOf(t)];
             return (
               <Fragment key={t.id}>
                 {header && <div className="list-divider">{summer ? `${t.season} offseason` : `${seasonLabel(t.season)} season`}</div>}
-                <div className="lg-news">
-                  <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
-                    <M.icon size={15} />
-                  </span>
+                <div className="lg-news lg-txn">
                   <div className="lg-news-body">
                     <div className="lg-news-text">
                       <TxnText league={league} parts={txnLine(t, { tid })} />
                     </div>
-                    <div className="lg-news-date">{fmtDate(t.season, t.day)}</div>
+                    <div className="lg-news-date">
+                      {kind ? `${kind} · ` : ''}
+                      {fmtDate(t.season, t.day)}
+                    </div>
                   </div>
                 </div>
               </Fragment>
@@ -166,7 +162,6 @@ export function LeagueMoves({ league, mine }: { league: League; mine: boolean })
         const key = `${t.season}:${t.day}`;
         const header = key !== lastKey;
         lastKey = key;
-        const M = kindMeta(t);
         const tid = t.tids[0];
         return (
           <Fragment key={t.id}>
@@ -176,10 +171,7 @@ export function LeagueMoves({ league, mine }: { league: League; mine: boolean })
                 {t.season !== league.season ? ` · ${seasonLabel(t.season)}` : ''}
               </div>
             )}
-            <div className="lg-news">
-              <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
-                <M.icon size={15} />
-              </span>
+            <div className="lg-news lg-txn">
               <div className="lg-news-body">
                 <div className="lg-news-text">
                   {league.teams[tid] && (

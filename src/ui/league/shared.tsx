@@ -1,7 +1,7 @@
 // Shared helpers for the league hub, team pages, history and inbox screens.
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, SlidersHorizontal, Trophy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import type { DraftPick, GameResult, League, Player, PlayerStats, Team, TeamSeason } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
@@ -362,12 +362,7 @@ export function TitleSlab({ league, tid, over, children }: { league: League; tid
   const t = league.teams[tid];
   return (
     <section className="slab lg-title" style={slabVars(t.colors) as CSSProperties}>
-      <span className="slab-mark">
-        <TeamLogo tid={tid} size={170} decorative />
-      </span>
-      <div className="lg-title-over">
-        <Trophy size={13} aria-hidden="true" /> {over}
-      </div>
+      <div className="lg-title-over">{over}</div>
       <div className="lg-title-team">
         <TeamLogo tid={tid} size={52} decorative />
         <div className="grow">

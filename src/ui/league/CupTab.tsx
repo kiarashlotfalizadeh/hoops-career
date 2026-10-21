@@ -1,6 +1,5 @@
 import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy } from 'lucide-react';
 import type { CupTie, League } from '../../core/types';
 import { cupSeeds, cupTables, type CupGroupTable } from '../../core/league/cup';
 import { dayToDate, fmtDate, playerName } from '../../core/league/helpers';
@@ -305,14 +304,7 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
     </div>
   );
   return (
-    <Section
-      title={
-        <h3>
-          <Trophy size={13} aria-hidden="true" /> Championship
-        </h3>
-      }
-      right={<span className="lg-sec-meta">{final?.winner !== undefined ? 'Final' : `${fmtDate(league.season, cup.finalDay)} · neutral floor`}</span>}
-    >
+    <Section title="Championship" right={<span className="lg-sec-meta">{final?.winner !== undefined ? 'Final' : `${fmtDate(league.season, cup.finalDay)} · neutral floor`}</span>}>
       {final?.winner !== undefined ? (
         <Link to={`/game/${final.gid}`} className="card bk-fcard">
           {body}

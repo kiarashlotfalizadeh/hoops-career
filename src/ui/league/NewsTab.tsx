@@ -62,7 +62,7 @@ export function NewsTab({ league }: { league: League }) {
     shown.length === 0 ? (
       <div className="card empty">{sorted.length ? 'No stories match this filter.' : 'No news yet: trades, signings, injuries and big games land here.'}</div>
     ) : (
-      <div className="card flush">
+      <div className="lg-wire">
         {shown.map((n) => {
           const key = `${n.season}:${n.day}`;
           const header = key !== lastKey;
@@ -70,7 +70,7 @@ export function NewsTab({ league }: { league: League }) {
           return (
             <Fragment key={n.id}>
               {/* a date outside this season carries its year (last summer's "Jul 29" is 2038's, not 2037-38's) */}
-              {header && <div className="list-divider">{newsDate(league, n)}</div>}
+              {header && <div className="lg-wire-day">{newsDate(league, n)}</div>}
               <NewsRow league={league} n={n} />
             </Fragment>
           );
@@ -94,14 +94,14 @@ export function NewsTab({ league }: { league: League }) {
           All
         </button>
         <button className={`chip ${kind === 'moves' ? 'on' : ''}`} aria-pressed={kind === 'moves'} onClick={() => setKind('moves')}>
-          <ListChecks size={14} className="lg-kind" style={{ ['--k' as string]: 'var(--text-2)' }} />
+          <ListChecks size={14} className="lg-kind" aria-hidden="true" />
           Transactions
         </button>
         {ORDER.filter((k) => counts[k]).map((k) => {
           const M = NEWS_KIND[k];
           return (
             <button key={k} className={`chip ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>
-              <M.icon size={14} className="lg-kind" style={{ ['--k' as string]: M.color }} />
+              <M.icon size={14} className="lg-kind" aria-hidden="true" />
               {M.label}
             </button>
           );
@@ -123,12 +123,11 @@ export function NewsTab({ league }: { league: League }) {
 }
 
 /**
- * One item on the wire: its kind's icon, then its sentence with the players and teams it names as
- * links (any it doesn't name follow as chips). A story leads with its headline, which opens it.
+ * One item on the wire: its sentence with the players and teams it names as links (any it doesn't
+ * name follow as chips). A story leads with its serif headline, which opens it.
  */
 export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
   const href = useStoryHref();
-  const M = NEWS_KIND[n.kind] ?? NEWS_KIND.general;
   const tids = [...new Set(n.tids)].filter((t) => league.teams[t]);
   const pids = [...new Set(n.pids)].filter((p) => league.players[p]);
   const ms = mentions(league, n.text, pids, tids);
@@ -138,9 +137,6 @@ export function NewsRow({ league, n }: { league: League; n: NewsItem }) {
   const showP = restP.slice(0, 3);
   return (
     <div className={`lg-news ${n.head ? 'story' : ''} ${(n.weight ?? 1) >= 3 ? 'big' : ''}`}>
-      <span className="lg-ic" style={{ ['--k' as string]: M.color }} aria-hidden="true">
-        <M.icon size={15} />
-      </span>
       <div className="lg-news-body">
         {n.head && (
           <Link to={href(n.id)} className="lg-news-head">

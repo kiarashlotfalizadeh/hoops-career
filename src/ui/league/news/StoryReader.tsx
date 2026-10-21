@@ -8,7 +8,7 @@ import { storyById } from '../../../core/league/media';
 import { Sheet } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { shortName, teamPath, useSetParams } from '../shared';
-import { KIND_ONE, NEWS_KIND } from './kinds';
+import { KIND_ONE } from './kinds';
 import { linkedText, mentions, newsDate } from './Linked';
 import './news.css';
 
@@ -39,7 +39,6 @@ export function StoryReader({ league }: { league: League }) {
 }
 
 function Story({ league, n }: { league: League; n: NewsItem }) {
-  const M = NEWS_KIND[n.kind] ?? NEWS_KIND.general;
   const tids = [...new Set(n.tids)].filter((t) => league.teams[t]);
   const pids = [...new Set(n.pids)].filter((p) => league.players[p]);
   // each player and team is linked once, at its first mention in the story
@@ -49,7 +48,7 @@ function Story({ league, n }: { league: League; n: NewsItem }) {
   return (
     <article className="lg-story">
       <div className="lg-story-over over">
-        <M.icon size={13} aria-hidden="true" style={{ color: M.color }} /> {KIND_ONE[n.kind]} · {newsDate(league, n)}
+        {KIND_ONE[n.kind]} · {newsDate(league, n)}
       </div>
       <p className="lg-story-dek">{dek}</p>
       {paras.map((p, i) => (

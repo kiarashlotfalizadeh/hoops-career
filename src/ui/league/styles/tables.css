@@ -42,13 +42,22 @@
   column-gap: 4px;
   min-height: 46px;
   padding-right: 12px;
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
+  transition: background var(--dur-fast) ease;
 }
 .lg-tbl-row > :not(.lead) {
   text-align: right;
   white-space: nowrap;
+}
+/* the figures in the condensed face, a size up from text: a printed table's agate */
+:where(.lg-tbl-row:not(.head)) > :not(.lead) {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 15.5px;
+  font-weight: 560;
+  letter-spacing: 0.01em;
 }
 .lg-tbl-row + .lg-tbl-row {
   border-top: 1px solid var(--line);
@@ -67,25 +76,21 @@
   transition: box-shadow 0.15s;
 }
 .lg-tbl.scrolled .lg-tbl-row .lead {
-  box-shadow: 8px 0 10px -8px rgba(0, 0, 0, 0.75);
+  box-shadow: 1px 0 0 var(--line-2);
 }
 .lg-tbl-row.head {
-  min-height: 34px;
-  background: var(--bg-2);
+  min-height: 36px;
+  padding-top: 2px;
   color: var(--text-dim);
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  border-bottom: 1px solid var(--line-2);
+  font-size: 12px;
+  font-weight: 620;
+  border-bottom: 1px solid var(--line-3);
   /* words: a tabular hyphen would space out "W-L" */
   font-variant-numeric: normal;
 }
 .lg-tbl-row.head .lead {
-  background: var(--bg-2);
   /* the label starts over the team marks */
-  padding-left: 32px;
+  padding-left: 38px;
 }
 .lg-tbl-row.head + .lg-tbl-row {
   border-top: none;
@@ -93,19 +98,21 @@
 .lg-tbl-row .rk {
   flex: none;
   width: 18px;
+  margin-right: 2px;
   text-align: right;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 680;
   font-size: 16px;
+  font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
 .lg-tbl-row .nm {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-weight: 650;
-  font-size: 14px;
+  font-weight: 640;
+  font-size: 14.5px;
   color: var(--text);
   white-space: nowrap;
 }
@@ -131,8 +138,9 @@
 .lg-tbl-row .wl {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 17px;
+  font-weight: 740;
+  font-size: 18px;
+  letter-spacing: 0.005em;
   color: var(--text);
 }
 .lg-tbl-row .wl.good,
@@ -143,10 +151,10 @@
   color: var(--bad);
 }
 .lg-tbl-row .strk {
-  font-weight: 700;
+  font-weight: 660;
 }
 .lg-tbl-row .hi {
-  font-weight: 750;
+  font-weight: 700;
   color: var(--text);
 }
 .lg-tbl-row .lg-proj {
@@ -157,8 +165,8 @@
 }
 .lg-tbl-row .odds-range {
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 10.5px;
+  font-stretch: var(--text-w);
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
 }
@@ -172,14 +180,23 @@
 .lg-tbl.scrolled .lg-tbl-row.me .lead {
   box-shadow:
     inset 3px 0 0 var(--team-text),
-    8px 0 10px -8px rgba(0, 0, 0, 0.75);
+    1px 0 0 var(--line-2);
+}
+.lg-tbl-row.me {
+  --text-dim: var(--text-2);
 }
 .lg-tbl-row.me .nm {
-  font-weight: 800;
+  font-weight: 720;
 }
 a.lg-tbl-row:active,
 a.lg-tbl-row:active .lead {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  a.lg-tbl-row:hover,
+  a.lg-tbl-row:hover .lead {
+    background: color-mix(in srgb, var(--surface) 70%, var(--raised));
+  }
 }
 /* the play-in and lottery lines: a dashed rule of their own between two places, named at the left
    over the team marks (and staying there while the figures scroll) */
@@ -187,7 +204,7 @@ a.lg-tbl-row:active .lead {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 20px;
+  height: 22px;
   padding-right: 12px;
 }
 .lg-tbl-cut::after {
@@ -199,21 +216,21 @@ a.lg-tbl-row:active .lead {
   position: sticky;
   left: 0;
   z-index: 2;
-  padding: 0 2px 0 32px;
+  padding: 0 4px 0 38px;
   background: var(--raised);
-  font-size: 9.5px;
-  line-height: 20px;
-  font-weight: 800;
+  font-size: 11.5px;
+  line-height: 22px;
+  font-weight: 620;
+  font-style: italic;
+  font-family: var(--serif);
   font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--text-dim);
 }
 /* the clinch marks' key, on the toolbar line */
 .lg-keys {
-  margin-left: 8px;
-  font-size: 11.5px;
-  font-weight: 600;
+  margin-left: 10px;
+  font-size: 12px;
+  font-weight: 560;
   white-space: nowrap;
 }
 .lg-keys b {

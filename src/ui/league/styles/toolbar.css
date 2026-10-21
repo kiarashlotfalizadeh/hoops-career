@@ -54,15 +54,15 @@
 .lg-select {
   height: 34px;
   max-width: 100%;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1998b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding: 0 30px 0 12px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--text);
   appearance: none;
   -webkit-appearance: none;
@@ -88,7 +88,7 @@
 .lg-search input {
   height: 34px;
   width: 100%;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background: var(--surface);
   padding: 0 10px 0 32px;
@@ -109,12 +109,9 @@
 
 /* an overline over a block (the Section heading's look, for spots that aren't a Section) */
 .lg-section-label {
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -145,7 +142,7 @@
 }
 
 .lg-name-link {
-  font-weight: 700;
+  font-weight: 640;
 }
 .lg-name-link:active {
   color: var(--accent-text);
@@ -156,7 +153,7 @@
   min-height: 44px;
   padding: 0 12px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 640;
   color: var(--accent-text);
   display: flex;
   align-items: center;
@@ -208,13 +205,13 @@
   gap: 6px;
 }
 .lg-filters.on {
-  border-color: var(--accent-text);
+  border-color: var(--line-3);
 }
 .lg-filters .lg-count {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: var(--radius-xs);
   background: var(--accent);
   color: var(--accent-ink);
   font-size: 11px;
@@ -239,4 +236,25 @@
   align-items: center;
   gap: 4px;
   vertical-align: -3px;
+}
+
+/* a mouse: the league's rows that go somewhere light up before the press (touch never needs it) */
+@media (hover: hover) and (pointer: fine) {
+  a.lg-kvl:hover,
+  button.lg-kvl:hover,
+  a.lg-book-row:hover,
+  button.lg-rec:hover,
+  .lg-coach-row:hover,
+  .lg-yr-row:hover,
+  .lg-five-row:hover,
+  .lg-race-row:hover,
+  .lg-legend-row:hover,
+  a.lg-pick:hover,
+  a.lg-sr-row:hover,
+  a.lg-h2h:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+  .lg-name-link:hover {
+    color: var(--accent-text);
+  }
 }

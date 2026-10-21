@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Trophy } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { GameResult, League, PlayInGame, PlayoffSeries } from '../../core/types';
 import { confStandings } from '../../core/league/standings';
 import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
@@ -300,11 +300,7 @@ function FinalsCard({ league, finals, onOpen }: { league: League; finals?: Playo
   );
   return (
     <Section
-      title={
-        <h3>
-          <Trophy size={13} aria-hidden="true" /> NBA Finals
-        </h3>
-      }
+      title="NBA Finals"
       right={
         <span className="lg-sec-meta">
           {finals ? (finals.winner !== undefined ? 'Final' : finals.highWins + finals.lowWins ? `Game ${finals.highWins + finals.lowWins + 1} next` : 'Best of 7') : 'Best of 7'}

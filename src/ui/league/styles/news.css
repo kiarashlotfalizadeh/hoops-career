@@ -1,51 +1,73 @@
-/* News and moves: the league's feed and the transactions list. */
-/* ------------------------------------------------------------------ news & moves */
-.lg-news {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  gap: 10px;
-  padding: 9px var(--row-px) 8px;
+/* News and moves: the league's wire and the transactions logs. */
+/* ------------------------------------------------------------------ the wire */
+/* flat on the page, a printed column: each day under a rule of its own, hairlines between items */
+.lg-wire {
+  display: flex;
+  flex-direction: column;
 }
-.lg-news + .lg-news,
+.lg-wire-day {
+  padding: 18px 0 7px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 12.5px;
+  font-weight: 680;
+  color: var(--text-2);
+}
+.lg-wire-day:first-child {
+  padding-top: 2px;
+}
+.lg-wire .lg-news {
+  padding: 11px 0 12px;
+}
+.lg-wire .lg-news + .lg-news {
+  border-top: 1px solid var(--line);
+}
+.lg-wire .lg-more {
+  margin-top: 4px;
+  border-top: 1px solid var(--line-2);
+}
+/* a log's line in a card (Transactions, a team's Moves) */
+.lg-news {
+  padding: 10px var(--row-px) 11px;
+}
+.card .lg-news + .lg-news,
 .lg-news + .list-divider {
   border-top: 1px solid var(--line);
 }
+.lg-kind {
+  flex: none;
+  color: inherit;
+  opacity: 0.85;
+}
 .lg-news-body {
   min-width: 0;
-}
-/* a kind's icon in its colour (--k), on a faint wash of it */
-.lg-ic {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  flex: none;
-  color: var(--k, var(--text-2));
-  background: color-mix(in srgb, var(--k, var(--text-2)) 15%, transparent);
-}
-.lg-kind {
-  color: var(--k);
-}
-.lg-news-body {
   font-size: 14px;
-  line-height: 1.35;
+  line-height: 1.42;
   color: var(--text);
+}
+.lg-news-text {
+  text-wrap: pretty;
 }
 /* the players and teams a story names are its links */
 .lg-news-link {
   color: inherit;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: underline;
   text-decoration-color: var(--line-3);
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-news-link:hover {
+    text-decoration-color: currentColor;
+  }
 }
 .lg-news-link:active {
   color: var(--accent-text);
 }
 .lg-news-date {
-  margin-top: 2px;
-  font-size: 11.5px;
+  margin-top: 3px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 /* (rare) players and teams the sentence doesn't name: chips after it, on its line when they fit */
@@ -66,17 +88,17 @@
   align-items: center;
   gap: 5px;
   height: 24px;
-  padding: 0 9px;
-  border-radius: 12px;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
   border: 1px solid var(--line-2);
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-2);
   max-width: 100%;
   position: relative;
 }
 .lg-pchip.team {
-  padding-left: 3px;
+  padding-left: 4px;
 }
 /* compact chips that still give fingers a 40px target */
 .lg-pchip::after {
@@ -95,7 +117,7 @@
 /* a count in a chip ("Trades 4") */
 .lg-count {
   color: var(--text-dim);
-  font-weight: 650;
+  font-weight: 600;
 }
 .chip.on .lg-count {
   color: var(--text-2);
@@ -132,11 +154,8 @@
 }
 .lg-deals-h {
   margin-bottom: 4px;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .lg-deals-list {

@@ -30,9 +30,6 @@ export function TeamHero({ league, tid, onEdit }: { league: League; tid: number;
   const gp = ts.won + ts.lost;
   return (
     <section className="slab lg-team" style={slabVars(team.colors) as CSSProperties}>
-      <span className="slab-mark">
-        <TeamLogo tid={tid} size={220} decorative />
-      </span>
       <div className="lg-team-top">
         <button className="iconbtn lg-team-back" onClick={goBack} aria-label="Back">
           <ChevronLeft size={24} />

@@ -1,37 +1,4 @@
-/* A team's schedule list and the day's scoreboard. */
-/* ------------------------------------------------------------------ schedule list */
-
-.lg-g-row {
-  display: grid;
-  grid-template-columns: 44px 28px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0 10px;
-  padding: 8px 12px 8px 14px;
-  min-height: 58px;
-}
-.lg-g-row + .lg-g-row,
-.lg-g-row + .list-divider,
-.lg-more + .list-divider {
-  border-top: 1px solid var(--line);
-}
-.lg-g-row:active {
-  background: var(--surface);
-}
-/* the next game, today: a brand edge, as the Continue bar that plays it */
-.lg-g-row.today {
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
-}
-.lg-g-row.today .wd {
-  color: var(--accent-text);
-}
-/* games against your team on another club's page: your team's edge */
-.lg-g-row.h2h {
-  box-shadow: inset 3px 0 0 var(--team-text);
-}
-
-/* a result: W or L in a small square, in the display face */
-
+/* The day's scoreboard. */
 /* ------------------------------------------------------------------ scoreboard */
 .lg-day {
   display: grid;
@@ -44,24 +11,23 @@
 }
 .lg-day .iconbtn {
   border: 1px solid var(--line-2);
-  background: var(--surface);
 }
+.lg-day .iconbtn:disabled {
+  opacity: 0.35;
+}
+/* the day as a headline, its games counted under it */
 .lg-day-d {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 25px;
   line-height: 1.05;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.015em;
 }
 .lg-day-s {
-  margin-top: 3px;
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .lg-jump {
@@ -98,11 +64,17 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 9px 12px 10px;
+  padding: 10px 12px 11px;
   min-width: 0;
+  transition: background var(--dur-fast) ease;
 }
 a.lg-sb:active {
   background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  a.lg-sb:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 .lg-sb.me {
   background: color-mix(in srgb, var(--team-text) 9%, transparent);
@@ -112,13 +84,10 @@ a.lg-sb:active {
   display: flex;
   justify-content: space-between;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text-dim);
-  margin-bottom: 3px;
+  margin-bottom: 4px;
   white-space: nowrap;
 }
 /* one line: the status ("Final/2OT") stays whole, the round tag on the right gives way if it must */
@@ -130,12 +99,13 @@ a.lg-sb:active {
 /* phones: tighter type, so "Final/OT · Conf. Finals G4" fits from 360px (and "Final/2OT" from 375px) */
 @media (max-width: 419px) {
   .lg-sb-st {
-    font-size: 9.5px;
-    letter-spacing: 0.03em;
+    font-size: 11px;
   }
 }
+/* your game, still to play */
 .lg-sb-st .live {
-  color: var(--accent-text);
+  color: var(--text);
+  font-weight: 680;
 }
 .lg-sb-t {
   display: grid;
@@ -145,7 +115,7 @@ a.lg-sb:active {
   height: 27px;
 }
 .lg-sb-t .ab {
-  font-weight: 750;
+  font-weight: 680;
   font-size: 14px;
   display: flex;
   align-items: baseline;
@@ -153,9 +123,9 @@ a.lg-sb:active {
   min-width: 0;
 }
 .lg-sb-t .rec {
-  font-size: 10.5px;
+  font-size: 11.5px;
   color: var(--text-dim);
-  font-weight: 600;
+  font-weight: 540;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -168,15 +138,15 @@ a.lg-sb:active {
 .lg-sb-t .sc {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-weight: 740;
+  font-size: 22px;
   font-variant-numeric: tabular-nums;
 }
 .lg-sb-t.lose {
   color: var(--text-dim);
 }
 .lg-sb-t.lose .sc {
-  font-weight: 600;
+  font-weight: 560;
 }
 .lg-sb-t.lose svg {
   opacity: 0.6;

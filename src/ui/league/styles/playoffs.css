@@ -16,11 +16,8 @@
 }
 .bk-head span {
   text-align: center;
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -48,9 +45,9 @@
   top: 25%;
   bottom: 25%;
   width: 7px;
-  border: 1.5px solid var(--line-3);
+  border: 1px solid var(--line-3);
   border-left: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
 .bk-slot {
   flex: 1;
@@ -66,11 +63,11 @@
   left: -7px;
   top: 50%;
   width: 7px;
-  border-top: 1.5px solid var(--line-3);
+  border-top: 1px solid var(--line-3);
 }
 .bk-s {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   border: 1px solid var(--line-2);
   overflow: hidden;
@@ -82,7 +79,7 @@ a.bk-s:active {
   background: var(--surface-2);
 }
 .bk-s.live {
-  border-color: color-mix(in srgb, var(--info) 50%, var(--line-2));
+  border-color: var(--line-3);
 }
 /* your series: your team's edge */
 .bk-s.me {
@@ -99,9 +96,9 @@ a.bk-s:active {
   align-items: center;
   gap: 5px;
   padding: 0 6px;
-  height: 27px;
-  font-size: 12.5px;
-  font-weight: 750;
+  height: 28px;
+  font-size: 13px;
+  font-weight: 660;
 }
 .bk-t + .bk-t {
   border-top: 1px solid var(--line);
@@ -111,16 +108,18 @@ a.bk-s:active {
   height: 30px;
 }
 .bk-t .sd {
-  font-size: 10px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 12px;
   color: var(--text-dim);
   text-align: right;
-  font-weight: 750;
+  font-weight: 600;
 }
 .bk-t .w {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 16px;
+  font-weight: 740;
+  font-size: 17px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -136,16 +135,16 @@ a.bk-s:active {
 }
 .bk-t .tb {
   color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 540;
 }
 /* no mark yet: "Play-in" takes the mark's room too, so it fits a phone-width bracket */
 .bk-t .bk-wide {
   grid-column: span 2;
 }
 .bk-rec {
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 11.5px;
+  font-weight: 540;
   color: var(--text-dim);
 }
 .bk-link {
@@ -241,25 +240,30 @@ a.bk-fcard:active {
 .bk-finals .score {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 40px;
+  font-weight: 760;
+  font-size: 44px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .bk-fname {
-  font-weight: 750;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
   max-width: 100%;
 }
 .bk-fconf {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 .bk-vs {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 18px;
-  text-transform: uppercase;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-style: italic;
+  font-weight: 460;
+  font-size: 19px;
   color: var(--text-dim);
 }
 .bk-ghost {
@@ -267,7 +271,7 @@ a.bk-fcard:active {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  border: 1.5px dashed var(--line-3);
+  border: 1px dashed var(--line-3);
 }
 .bk-sscore {
   grid-column: 2;
@@ -281,8 +285,8 @@ a.bk-fcard:active {
 .bk-sscore .num {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 36px;
+  font-weight: 760;
+  font-size: 40px;
   line-height: 1;
 }
 .lg-sheet {
@@ -307,13 +311,13 @@ a.lg-sr-lead:active {
 .lg-sr-row .g {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 680;
   font-size: 15px;
   color: var(--text-dim);
 }
 .lg-next {
   color: var(--accent-text);
-  font-weight: 700;
+  font-weight: 640;
 }
 .lg-sr-lead {
   display: flex;

@@ -2,23 +2,20 @@
 /* ------------------------------------------------------------------ awards */
 .lg-award {
   display: grid;
-  grid-template-columns: 34px 40px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  min-height: 64px;
+  padding: 11px 14px;
+  min-height: 66px;
+  transition: background var(--dur-fast) ease;
 }
 a.lg-award:active {
   background: var(--surface);
 }
-.lg-award .ic {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: color-mix(in srgb, var(--tier-elite) 14%, transparent);
-  color: var(--tier-elite);
+@media (hover: hover) and (pointer: fine) {
+  a.lg-award:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 .lg-award-t {
   display: flex;
@@ -26,22 +23,24 @@ a.lg-award:active {
   min-width: 0;
 }
 .lg-award-lb {
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--tier-elite);
 }
+/* the winner: a serif name, as a headline under its award */
 .lg-award .nm {
-  font-weight: 750;
-  font-size: 15px;
-  margin-top: 1px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 19px;
+  line-height: 1.15;
+  letter-spacing: -0.012em;
+  margin-top: 2px;
 }
 .lg-award .sub {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-dim);
-  margin-top: 1px;
+  margin-top: 2px;
 }
 .lg-stack {
   gap: 16px;
@@ -56,9 +55,12 @@ a.lg-award:active {
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 4px 14px;
-  font-size: 13.5px;
+  font-size: 14px;
+}
+.lg-five-row .bold {
+  font-weight: 650;
 }
 .lg-five-row + .lg-five-row {
   border-top: 1px solid var(--line);
@@ -94,12 +96,9 @@ a.lg-award:active {
   border-top: 1px solid var(--line);
 }
 .lg-sat-row.head {
-  min-height: 22px;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  min-height: 24px;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .lg-sat-row.head + .lg-sat-dunker {
@@ -108,7 +107,7 @@ a.lg-award:active {
 .lg-sat-rk {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 15px;
   color: var(--text-dim);
 }
@@ -142,10 +141,8 @@ a.lg-award:active {
   font-size: 12px;
 }
 .lg-sat-lb {
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .lg-sat-miss {
@@ -182,8 +179,8 @@ a.lg-award:active {
 .lg-race-row .rank {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 19px;
+  font-weight: 720;
+  font-size: 20px;
   color: var(--text-dim);
   text-align: center;
 }
@@ -197,18 +194,19 @@ a.lg-award:active {
   min-width: 0;
 }
 .lg-race-t .nm {
-  font-weight: 750;
+  font-weight: 660;
+  font-size: 15px;
 }
 .lg-race-t .sub {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-dim);
 }
 /* the voters' score with the leader at 100, and its key in the section's heading */
 .lg-race-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-weight: 740;
+  font-size: 22px;
   color: var(--text-2);
   min-width: 34px;
   text-align: right;
