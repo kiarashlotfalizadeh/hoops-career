@@ -1,24 +1,240 @@
-/* Today and the inbox. Scoped with the `td-` prefix. */
+/* Today and the inbox. Scoped with the `td-` prefix (practice `pr-`, the digest `dg-`).
+   Today is a front page: one lead (a serif headline over a scoreboard figure), the one slab (the next
+   game), then quiet sections opened by hairlines, flat on the ground. */
 
-/* ------------------------------------------------------------ the slab: next game or the phase */
+/* ------------------------------------------------------------ the front page's top: the way back to the digest */
+.td-away {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 0 0 13px;
+  border-bottom: 1px solid var(--line-2);
+  color: inherit;
+  text-align: left;
+}
+.td-away-t {
+  display: block;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-style: italic;
+  font-size: 19px;
+  font-weight: 520;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.td-away-l {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.td-away:active .td-away-t {
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------ the lead: a result or the top story */
+.td-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  color: inherit;
+}
+.td-lead-over {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--text-dim);
+}
+.td-lead-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  font-size: 13px;
+  font-weight: 620;
+  color: var(--accent-text);
+}
+/* the score: the scoreboard's figure, big, with who and how beside it */
+.td-lead-score {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.td-lead-pts {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 66px;
+  line-height: 0.84;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.td-lead-lose {
+  color: var(--text-dim);
+}
+.td-lead-dash {
+  margin: 0 0.05em;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.td-lead-pts small {
+  margin-left: 6px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--text-2);
+}
+.td-lead-vs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding-bottom: 2px;
+}
+.td-lead-wl {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.td-lead-opp {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--text-2);
+}
+.td-lead-opp svg {
+  flex: none;
+}
+/* the headline: the serif, set big and balanced */
+.td-lead-head {
+  display: block;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 31px;
+  line-height: 1.07;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-wrap: balance;
+}
+.td-lead.result .td-lead-head {
+  margin-top: 4px;
+}
+/* a brief about the team is a smaller headline than a front page */
+.td-lead.w1 .td-lead-head,
+.td-lead.w2 .td-lead-head {
+  font-size: 27px;
+}
+.td-lead-by {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+}
+.td-lead-by .avatar {
+  width: 36px;
+  height: 36px;
+  margin-top: 1px;
+}
+.td-lead-dek {
+  display: block;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+.td-lead-means {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+/* a tablet: the lead grows with the page, the dek keeps a reading measure */
+@media (min-width: 640px) {
+  .td-lead-pts {
+    font-size: 84px;
+  }
+  .td-lead-head {
+    font-size: 40px;
+  }
+  .td-lead.w1 .td-lead-head,
+  .td-lead.w2 .td-lead-head {
+    font-size: 32px;
+  }
+  .td-lead-head,
+  .td-lead-by {
+    max-width: 30em;
+  }
+  .td-lead-dek {
+    max-width: 60ch;
+  }
+}
+.td-lead:active .td-lead-head {
+  color: var(--text-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .td-lead:hover .td-lead-head {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--line-3);
+    text-underline-offset: 5px;
+  }
+}
+
+/* ------------------------------------------------------------ the slab: the next game, or the phase */
 .td-slab {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px 16px 16px;
+  gap: 14px;
+  padding: 16px 16px 16px;
 }
 .td-over {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   min-height: 20px;
-  padding-right: 14px;
-  font-size: 11.5px;
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--text-2);
+}
+.td-over .card-link {
+  flex: none;
+}
+/* the billing: the night's name as a headline, why under it */
+.td-slab .gd-bill {
+  gap: 4px;
+  margin-top: -2px;
+}
+.td-slab .gd-bill-tag {
+  font-family: var(--serif);
   font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-weight: 560;
+  font-size: 29px;
+  line-height: 1.04;
+  letter-spacing: -0.018em;
+  text-transform: none;
+  text-wrap: balance;
+}
+.td-slab .gd-bill.w3 .gd-bill-tag {
+  font-size: 33px;
+}
+.td-slab .gd-bill.w1 .gd-bill-tag {
+  font-size: 24px;
+}
+.td-slab .gd-bill-line {
+  font-size: 14px;
+  line-height: 1.38;
   color: var(--text-2);
 }
 /* away on the left, home on the right, "@" or "vs" between */
@@ -27,6 +243,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+  padding: 2px 0;
 }
 .td-side {
   grid-row: 1;
@@ -49,18 +266,37 @@
 .td-ab {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 740;
   font-size: 34px;
-  line-height: 0.95;
-  letter-spacing: 0.02em;
+  line-height: 0.92;
+  letter-spacing: -0.005em;
 }
 .td-rec {
+  margin-top: 3px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 18px;
-  line-height: 1.1;
+  line-height: 1.05;
   color: var(--text-2);
+}
+.td-at {
+  grid-row: 1;
+  grid-column: 2;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-style: italic;
+  font-weight: 480;
+  font-size: 20px;
+  color: var(--text-dim);
+}
+/* the last five under each record */
+.td-side-t .gd-form {
+  gap: 4px;
+  margin-top: 6px;
+}
+.td-side.home .gd-form {
+  align-self: flex-end;
 }
 /* a narrow phone: smaller marks and letters, so the two sides keep apart */
 @media (max-width: 374px) {
@@ -78,30 +314,15 @@
     font-size: 16px;
   }
 }
-.td-at {
-  grid-row: 1;
-  grid-column: 2;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-}
-/* who's out, a line a side: the team's abbreviation in a key column, the names beside it */
-.td-outs {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-}
-.td-outs dd {
-  margin: 0;
-  min-width: 0;
+/* the tags, who's out and the staff's line: under one hairline, the slab's small print */
+.td-tags {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 .td-slab .tag.td-stake {
   background: #fff;
-  color: #0b0f15;
+  border-color: transparent;
+  color: rgba(0, 0, 0, 0.86);
 }
 /* a tag with something to do (no game plan yet): a link, with room for a finger around it */
 .td-slab .tag.td-tag-link {
@@ -116,129 +337,349 @@
   position: absolute;
   inset: -10px -4px;
 }
+.td-outs {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+}
+.td-tags + .td-outs {
+  margin-top: -4px;
+}
+.td-match + .td-outs {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.td-outs dd {
+  margin: 0;
+  min-width: 0;
+}
 .td-out {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
+  line-height: 1.38;
   color: var(--text-2);
-  line-height: 1.35;
 }
 .td-out-k {
   flex: none;
-  width: 36px;
-  white-space: nowrap;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  width: 32px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 13.5px;
+  font-weight: 720;
+  color: var(--text);
 }
-/* the slab's link: in the overline's place on the right, as a section's is */
-.td-over .card-link {
-  flex: none;
-  letter-spacing: 0;
-  text-transform: none;
-  font-stretch: var(--text-w);
+/* the staff's one line on the next opponent, the assistant's name leading it */
+.td-staff {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  line-height: 1.42;
+  color: var(--text-2);
+  text-wrap: pretty;
 }
-/* outside the season's games: the phase in display type */
+.td-staff-who {
+  font-weight: 680;
+  color: var(--text);
+}
+/* outside the season's games: the phase as the slab's headline */
 .td-phase-t {
-  font-size: 36px;
-  line-height: 0.95;
-  margin-top: -4px;
+  font-size: 34px;
+  line-height: 1;
 }
 .td-phase-l {
   margin: -4px 0 0;
-  font-size: 14px;
+  font-size: 14.5px;
+  line-height: 1.4;
   color: var(--text-2);
-  max-width: 36ch;
+  max-width: 38ch;
 }
 
 /* ------------------------------------------------------------ sections */
 .td-none {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-dim);
 }
 .td-page .sec-h .card-link {
-  background: none;
-  border: none;
   padding: 0;
+  border: none;
+  background: none;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--accent-text);
 }
 .td-page .sec-h .card-link:disabled {
   opacity: 0.42;
 }
-.td-odds {
-  margin-left: 8px;
-  padding-left: 8px;
-  border-left: 1px solid var(--line-2);
-  color: var(--text-2);
+/* lists on the front page sit flat on the ground, a hairline between rows, aligned to the gutter
+   (the decisions and the staff's advice included: a card stays for them elsewhere) */
+.td-page .ag-list,
+.td-rows {
+  margin-top: -4px;
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+}
+.td-page .ag-row {
+  padding-left: 0;
+  padding-right: 0;
+}
+.td-page .sec > .ag-list > :first-child .ag-row {
+  padding-top: 4px;
 }
 
-/* information lists sit flat on the page, hairlines between rows; decisions and advice keep their cards */
-.td-flat {
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+/* ------------------------------------------------------------ practice */
+.pr-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
-.td-flat > * {
-  padding-left: var(--gut-l) !important;
-  padding-right: var(--gut-r) !important;
+/* the four focuses in an even grid: two by two on a phone, a row of four wider */
+.td-prac .chips {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.td-prac .chip {
+  justify-content: center;
+  height: 38px;
+}
+@media (min-width: 560px) {
+  .td-prac .chips {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.pr-help {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.42;
+  color: var(--text-dim);
+}
+.pr-fam,
+.pr-brief {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pr-fam {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.pr-meter {
+  display: grid;
+  grid-template-columns: auto minmax(40px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+.pr-meter-k {
+  font-size: 12.5px;
+  font-weight: 620;
+  color: var(--text-dim);
+}
+.pr-meter-v {
+  font-size: 12.5px;
+  font-weight: 680;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.pr-risk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.pr-risk > .btn {
+  flex: none;
+}
+.pr-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------ your season: where you stand, the form, the pulse */
+.td-stand {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+.td-fig {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.td-fig.end {
+  align-items: flex-end;
+  text-align: right;
+}
+.td-fig-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 46px;
+  line-height: 0.86;
+  letter-spacing: -0.015em;
+  color: var(--text);
+}
+.td-fig-v small {
+  margin-left: 1px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--text-2);
+}
+.td-fig-word {
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 34px;
+  letter-spacing: -0.015em;
+}
+.td-fig-k {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+.td-form {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+.td-stand + .td-form {
+  margin-top: 6px;
+}
+.td-form-l {
+  display: flex;
+  gap: 2px;
+  margin: 0 0 0 -6px;
+  padding: 0;
+  list-style: none;
+}
+.td-form-g {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 44px;
+  min-height: 48px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+}
+.td-form-g:active {
+  background: var(--surface);
+}
+.td-form-o {
+  font-size: 11px;
+  font-weight: 600;
+}
+.td-run {
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+/* a result's letter: W in green, L in red, set as a figure (no box) */
+.td-wl {
+  flex: none;
+  display: inline-block;
+  min-width: 14px;
+  text-align: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 16px;
+  line-height: 1;
+}
+.td-form-g .td-wl {
+  font-size: 22px;
+}
+.td-wl.w {
+  color: var(--good);
+}
+.td-wl.l {
+  color: var(--bad);
+}
+/* the owner's and fans' pulse, flat under a hairline (Office → Owner has it in full) */
+.td-season .fo-pulse {
+  min-height: 48px;
+  margin-top: -4px;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.td-season .fo-pulse-k {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.td-season .fo-pulse-v {
+  font-size: 15px;
+  font-weight: 680;
 }
 
 /* ------------------------------------------------------------ job security */
 .td-seat {
+  --heat: var(--warn);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
+  gap: 10px;
   color: inherit;
-  --heat: var(--warn);
-  box-shadow: inset 3px 0 0 var(--heat);
 }
 .td-seat.hot {
   --heat: var(--bad);
 }
-.td-seat:active {
-  background: var(--surface);
-}
 .td-seat-top {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 10px;
 }
-.td-seat-v {
-  flex: 1;
-  text-align: right;
+.td-seat-n {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
-  line-height: 1;
-  text-transform: uppercase;
+  font-weight: 760;
+  font-size: 40px;
+  line-height: 0.86;
   color: var(--heat);
+}
+.td-seat-w {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 680;
+  color: var(--heat);
+}
+.td-seat:active .td-seat-w {
+  opacity: 0.75;
 }
 /* Office → Owner's meter, compact: the four bands, the firing line and where he stands */
 .td-meter {
   position: relative;
   display: block;
-  padding-top: 13px;
+  padding-top: 16px;
 }
 .td-meter-track {
   display: flex;
   gap: 2px;
-  height: 6px;
-  border-radius: 3px;
+  height: 5px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
 }
 .td-meter-track > i {
   display: block;
   height: 100%;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .td-meter-track > .hot {
   background: var(--bad);
@@ -254,195 +695,135 @@
 }
 .td-meter-line {
   position: absolute;
-  top: 10px;
-  width: 2px;
-  height: 12px;
-  margin-left: -1px;
+  top: 12px;
+  width: 1px;
+  height: 13px;
   background: var(--text);
 }
 .td-meter-line > span {
   position: absolute;
-  top: -11px;
+  top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 9.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .td-meter-pin {
   position: absolute;
-  top: 8px;
-  width: 14px;
-  height: 14px;
-  margin-left: -7px;
+  top: 11px;
+  width: 15px;
+  height: 15px;
+  margin-left: -7.5px;
   border-radius: 50%;
   background: var(--heat);
-  border: 3px solid var(--raised);
-  box-shadow: 0 0 0 1px var(--line-3);
+  border: 3px solid var(--bg);
 }
 .td-seat-l {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 
-/* ------------------------------------------------------------ standings */
-.td-st {
+/* ------------------------------------------------------------ around the league: headlines in the serif */
+.td-hl {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   min-height: var(--row-min);
-  padding: 0 14px;
+  padding: 12px 0;
+  color: inherit;
+}
+.td-rows > .td-hl:first-child {
+  padding-top: 4px;
+}
+.td-hl-over {
+  font-size: 12px;
+  font-weight: 620;
+  color: var(--text-dim);
+}
+.td-hl-head {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 540;
+  font-size: 19.5px;
+  line-height: 1.2;
+  letter-spacing: -0.012em;
+  color: var(--text);
+  text-wrap: balance;
+}
+.td-hl:active .td-hl-head {
   color: var(--text-2);
 }
-.td-st:active,
-.td-game:active,
+@media (hover: hover) and (pointer: fine) {
+  .td-hl:hover .td-hl-head {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--line-3);
+    text-underline-offset: 4px;
+  }
+}
+
+/* ------------------------------------------------------------ messages: the inbox and Today's unread */
+/* a list of mail flat on the page: the unread dot hangs in the gutter, the subjects align to it */
+.td-mail {
+  margin-top: -4px;
+}
+.td-msg {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 11px 0;
+  color: inherit;
+  text-align: left;
+  transition: background var(--dur-fast) ease;
+}
+.td-mail > .td-msg:first-child {
+  padding-top: 4px;
+}
 .td-msg:active {
   background: var(--surface);
 }
-.td-st.me {
-  color: var(--text);
-  font-weight: 750;
-  background: color-mix(in srgb, var(--team-text) 9%, transparent);
-  box-shadow: inset 3px 0 0 var(--team-text);
-}
-.td-st-rank {
-  width: 18px;
-  color: var(--text-dim);
-  font-size: 13px;
-}
-.td-st-rec {
-  font-weight: 700;
-}
-.td-st-gb {
-  width: 58px;
-  text-align: right;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.td-st-gb small {
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-}
-
-/* ------------------------------------------------------------ last games */
-.td-game {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: var(--row-min);
-  padding: 0 12px 0 14px;
-  color: var(--text-2);
-}
-.td-wl {
-  flex: none;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
-  display: grid;
-  place-items: center;
-  font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 14px;
-}
-.td-wl.w {
-  background: color-mix(in srgb, var(--good) 18%, transparent);
-  color: var(--good);
-}
-.td-wl.l {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
-  color: color-mix(in srgb, var(--bad) 80%, white);
-}
-.td-score {
-  min-width: 64px;
-  white-space: nowrap;
-  font-weight: 750;
-  color: var(--text);
-}
-.td-ha {
-  width: 18px;
-  font-size: 13px;
-}
-
-/* ------------------------------------------------------------ messages */
-.td-msg {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  width: 100%;
-  min-height: var(--row-min);
-  padding: 7px var(--row-px) 7px 12px;
-  background: none;
-  border: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-/* who it's from: his initials in his folder's colour, the unread dot on its corner */
-.td-msg-who {
-  position: relative;
-  flex: none;
-  width: 32px;
-  height: 32px;
-  margin-top: 2px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: var(--text-2);
-  background: var(--surface-2);
-  --who: var(--text-dim);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--who) 55%, transparent);
-}
-.td-msg-who.owner {
-  --who: var(--warn);
-}
-.td-msg-who.staff {
-  --who: var(--good);
-}
-.td-msg-who.office {
-  --who: var(--info);
-}
-.td-msg-who.league {
-  --who: var(--text-2);
-}
 .td-msg-dot {
   position: absolute;
-  top: -1px;
-  right: -1px;
-  width: 10px;
-  height: 10px;
+  left: -11px;
+  top: 18px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
+}
+.td-mail > .td-msg:first-child .td-msg-dot {
+  top: 11px;
 }
 .td-msg.unread .td-msg-dot {
   background: var(--accent);
-  box-shadow: 0 0 0 2px var(--raised);
 }
-/* important mail carries an edge in the warning colour while it's unread */
-.td-msg.important.unread {
-  box-shadow: inset 3px 0 0 var(--bad);
+/* important mail that's still unread needs you: the brand's dot */
+.td-msg.important.unread .td-msg-dot {
+  background: var(--brand);
 }
 .td-msg-subj {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 14.5px;
-  font-weight: 650;
-  color: var(--text-2);
+  font-size: 15px;
+  font-weight: 560;
   line-height: 1.3;
+  color: var(--text-2);
 }
 .td-msg.unread .td-msg-subj {
-  font-weight: 750;
+  font-weight: 680;
   color: var(--text);
 }
 .td-msg-subj .tag {
   flex: none;
+  align-self: center;
 }
 /* a subject wraps to a second line before it's cut */
 .td-msg-s {
@@ -457,36 +838,44 @@
 .td-msg-date {
   flex: none;
   margin-left: auto;
+  padding-left: 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 560;
+  font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
 .td-msg-prev {
   display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
+  margin-top: 3px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .td-msg-from {
   color: var(--text-2);
 }
+@media (hover: hover) and (pointer: fine) {
+  .td-msg:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
 
 /* a message in full */
 .td-sheet {
-  gap: 12px;
+  gap: 14px;
 }
 .td-sheet-meta {
-  margin-top: -4px;
-  font-size: 12.5px;
+  margin-top: -6px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .td-sheet-body {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  font-size: 14.5px;
-  line-height: 1.45;
+  gap: 10px;
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--text-2);
+  text-wrap: pretty;
 }
 .td-sheet-body p {
   margin: 0;
@@ -514,12 +903,32 @@
   overflow-x: auto;
   scrollbar-width: none;
 }
+.td-ibar::-webkit-scrollbar {
+  display: none;
+}
 .td-ibar .chips {
   flex-wrap: nowrap;
 }
 .td-ibar .chip {
   flex: none;
   white-space: nowrap;
+}
+.td-inbox .td-mail {
+  margin-top: -6px;
+  border-top: 1px solid var(--line-2);
+}
+.td-inbox .td-mail > .td-msg:first-child {
+  padding-top: 11px;
+}
+.td-inbox .td-mail > .td-msg:first-child .td-msg-dot {
+  top: 18px;
+}
+/* an older season's mail under its own label */
+.td-inbox .list-divider {
+  padding: 22px 0 8px;
+  background: none;
+  font-size: 12.5px;
+  font-weight: 620;
 }
 .td-more {
   align-self: center;
@@ -531,301 +940,13 @@
   justify-content: center;
 }
 
-/* the staff's one line on the next opponent, under a hairline, the assistant's name leading it */
-.td-staff {
-  margin: 0;
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in srgb, #fff 16%, transparent);
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-2);
-  text-wrap: pretty;
-}
-.td-staff-who {
-  margin-right: 2px;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-
-/* ------------------------------------------------------------ practice: the focus and what the team knows */
-.pr-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.pr-fam,
-.pr-brief {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.pr-fam {
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
-}
-.pr-meter {
-  display: grid;
-  grid-template-columns: auto minmax(40px, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-.pr-meter-k {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.pr-meter-v {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-.pr-risk {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  line-height: 1.4;
-  color: var(--text-2);
-}
-.pr-risk > .btn {
-  flex: none;
-}
-.pr-chips {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-/* ------------------------------------------------------------ the front page */
-/* the way back to the latest "While you were away" */
-.td-away {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--row-min);
-  padding: 10px 12px 10px 14px;
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line-2));
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--accent) 9%, var(--raised));
-  color: var(--accent-text);
-  font: inherit;
-  text-align: left;
-}
-.td-away:active {
-  background: color-mix(in srgb, var(--accent) 16%, var(--raised));
-}
-.td-away-t {
-  display: block;
-  font-size: 14.5px;
-  font-weight: 750;
-  color: var(--text);
-}
-.td-away-l {
-  display: block;
-  margin-top: 1px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-
-/* the lead: a headline set in the display face, flat on the page under a team-coloured rule */
-.td-lead {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 0 2px;
-  border-top: 3px solid var(--team-text);
-  color: inherit;
-}
-.td-lead:active .td-lead-head {
-  color: var(--text-2);
-}
-.td-lead-over {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.td-lead-go {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: 13px;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--accent-text);
-}
-.td-lead-score {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 650;
-  color: var(--text-2);
-}
-.td-lead-pts {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 22px;
-  color: var(--text);
-}
-.td-lead-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.td-lead-head {
-  display: block;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 25px;
-  line-height: 1.02;
-  letter-spacing: 0.005em;
-  text-transform: uppercase;
-  color: var(--text);
-  text-wrap: balance;
-}
-/* a brief about the team is a smaller headline than a front page */
-.td-lead.w1 .td-lead-head,
-.td-lead.w2 .td-lead-head {
-  font-size: 22px;
-}
-.td-lead-dek {
-  display: block;
-  margin-top: 5px;
-  font-size: 13.5px;
-  line-height: 1.4;
-  color: var(--text-2);
-  text-wrap: pretty;
-}
-.td-lead-means {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-/* your season: the form guide, where you stand, the pulse */
-.td-form {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.td-form-l {
-  display: flex;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.td-form-g {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  min-width: 40px;
-  min-height: 44px;
-  justify-content: center;
-  color: var(--text-dim);
-}
-.td-form-g .td-wl {
-  width: 30px;
-  height: 26px;
-  font-size: 15px;
-}
-.td-form-o {
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-.td-run {
-  font-size: 13px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-.td-stand {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  font-size: 14px;
-  color: var(--text-2);
-}
-.td-stand-rank {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 24px;
-  line-height: 1;
-  color: var(--text);
-}
-.td-stand-rank small {
-  font-size: 13px;
-  margin-left: 1px;
-}
-.td-stand-odds {
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-
-/* around the league: headlines, two lines at most */
-.td-hl {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-height: var(--row-min);
-  padding-top: 9px !important;
-  padding-bottom: 9px !important;
-  color: inherit;
-}
-.td-hl:active {
-  background: var(--surface);
-}
-.td-hl-over {
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
-}
-.td-hl-head {
-  font-size: 14.5px;
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-}
-
 /* ------------------------------------------------------------ while you were away (a sheet; `dg-`) */
 .dg {
-  gap: 16px;
+  gap: 18px;
 }
 .dg-span {
-  margin-top: -6px;
-  font-size: 12.5px;
+  margin-top: -8px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .dg-top {
@@ -833,18 +954,20 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px 20px;
+  gap: 12px 22px;
 }
 .dg-rec {
   display: flex;
   flex-direction: column;
+  gap: 5px;
 }
 .dg-rec-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 44px;
-  line-height: 0.95;
+  font-weight: 760;
+  font-size: 52px;
+  line-height: 0.86;
+  letter-spacing: -0.015em;
 }
 .dg-rec-k {
   font-size: 12.5px;
@@ -852,47 +975,52 @@
 }
 .dg-moves {
   display: flex;
-  gap: 18px;
+  gap: 20px;
 }
 .dg-move {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  gap: 3px;
 }
 .dg-move-k {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .dg-move-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-weight: 740;
+  font-size: 22px;
+  line-height: 1;
 }
 .dg-sec {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .dg-sec-h {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line-2);
 }
 .dg-sec-h .over {
   margin: 0;
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--text);
 }
 .dg-sec-h .card-link {
-  background: none;
-  border: none;
   padding: 0;
+  border: none;
+  background: none;
   font: inherit;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--accent-text);
   display: inline-flex;
   align-items: center;
@@ -900,7 +1028,6 @@
 .dg-list {
   display: flex;
   flex-direction: column;
-  border-top: 1px solid var(--line);
 }
 .dg-res,
 .dg-story,
@@ -910,13 +1037,15 @@
   gap: 10px;
   width: 100%;
   min-height: var(--row-min);
-  padding: 8px 0;
+  padding: 9px 0;
   border: none;
-  border-bottom: 1px solid var(--line);
   background: none;
   color: inherit;
   font: inherit;
   text-align: left;
+}
+.dg-list > * + * {
+  border-top: 1px solid var(--line);
 }
 .dg-res:active,
 .dg-story:active,
@@ -931,42 +1060,53 @@
   flex-direction: column;
   gap: 2px;
 }
+.dg-res > .td-wl {
+  min-width: 18px;
+  font-size: 19px;
+}
 .dg-res-s {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 650;
+}
+.dg-res-s .num {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 17px;
+  font-weight: 720;
 }
 .dg-res-h,
 .dg-story-d {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-2);
-  line-height: 1.35;
+  line-height: 1.38;
 }
 .dg-story-h {
-  font-size: 14.5px;
-  font-weight: 700;
-  line-height: 1.3;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 540;
+  font-size: 17.5px;
+  line-height: 1.22;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
 .dg-story.w3 .dg-story-h {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 18px;
-  line-height: 1.05;
-  text-transform: uppercase;
+  font-size: 21px;
+  font-weight: 560;
+  line-height: 1.12;
 }
 .dg-mail-s {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-size: 14px;
-  font-weight: 650;
+  font-size: 14.5px;
+  font-weight: 560;
   color: var(--text-2);
 }
 .dg-mail.unread .dg-mail-s {
-  font-weight: 750;
+  font-weight: 680;
   color: var(--text);
 }
 .dg-mail-s .tag {
@@ -977,8 +1117,7 @@
   color: var(--text-dim);
 }
 .dg-line {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
   font-size: 13.5px;
   color: var(--text-2);
 }

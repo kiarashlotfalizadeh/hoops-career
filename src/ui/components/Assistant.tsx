@@ -1,7 +1,7 @@
 // The assistant's cards (see core/ai/assistant.ts): one voice for the staff's advice on every screen.
 // A screen shows the cards for its own area; Today shows the most urgent of all of them.
 import { Link } from 'react-router-dom';
-import { ChevronRight, Lightbulb, AlertTriangle, ThumbsUp } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { applyFix, assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
 import { act } from '../../state/actions';
@@ -9,18 +9,16 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { haptic } from '../../native';
 import './agenda.css';
 
-const ICON = { issue: AlertTriangle, tip: Lightbulb, good: ThumbsUp };
 const TONE = { issue: 'warn', tip: 'info', good: 'good' } as const;
 
 export function AssistantRow({ card }: { card: AssistantCard }) {
-  const Icon = ICON[card.tone];
   const fix = card.fix;
   const head = (
     <>
       <div className="grow">
+        {/* an issue or a good sign leads with a dot in its colour; a tip is plain */}
         <div className="ag-title">
-          <Icon size={15} aria-hidden="true" className={card.tone === 'issue' ? 'warn' : card.tone === 'good' ? 'good' : 'accent-text'} />
-          {card.title}
+          {card.tone !== 'tip' && <span className="ag-dot" aria-hidden="true" />} {card.title}
         </div>
         <div className="ag-line">{card.line}</div>
       </div>

@@ -83,10 +83,10 @@ export function PracticeCard({ league }: { league: League }) {
   const lines = gaps(league, r);
   const low = r.overall < LOW || lines.length > 0;
   return (
-    <Section title="Practice" right={<PrepHelp />}>
-      <div className="card pr-card">
+    <Section title="Practice" right={<PrepHelp />} className="td-prac">
+      <div className="pr-card">
         <PrepChips league={league} />
-        <div className="tiny dim2">{PREP_META[r.prep].help}</div>
+        <p className="pr-help">{PREP_META[r.prep].help}</p>
         {low && (
           <div className="pr-fam">
             <FamMeter v={r.overall} />

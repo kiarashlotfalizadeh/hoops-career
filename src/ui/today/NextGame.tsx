@@ -131,9 +131,6 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   }, [league, opp]);
   return (
     <section className="slab td-slab" aria-label="Next game">
-      <span className="slab-mark">
-        <TeamLogo tid={me} size={180} decorative />
-      </span>
       <div className="td-over">
         <span>
           {kind} · {whenLabel(league, g.day)}
@@ -191,7 +188,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
       {/* the staff's one line, under a hairline: the assistant's name leads it */}
       {staff.text && (
         <p className="td-staff">
-          <span className="td-staff-who">{staff.who}</span> {staff.text}
+          <span className="td-staff-who">{staff.who}:</span> {staff.text}
         </p>
       )}
     </section>
@@ -284,9 +281,6 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
   const link = c.link && !taken.has(path(c.link.to)) ? c.link : undefined;
   return (
     <section className="slab td-slab td-phase" aria-label={c.title}>
-      <span className="slab-mark">
-        <TeamLogo tid={league.userTid} size={180} decorative />
-      </span>
       <div className="td-over">
         <span>{c.over}</span>
         {link && (

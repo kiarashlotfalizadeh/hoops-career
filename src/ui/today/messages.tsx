@@ -66,9 +66,9 @@ const shortDate = (m: InboxMessage) => fmtDate(m.season, m.day, { month: 'short'
 export const isImportant = (m: InboxMessage) => !!m.important || m.tone === 'alert';
 
 /**
- * One message in a list, as mail apps show it: who it's from (a badge with his initials, in his
- * folder's colour), the unread dot, subject (two lines at most: a headline like "BKN want Williams +
- * McCain + 1 pick" is read whole) and date, then his name and the first words. Important mail is
+ * One message in a list, as mail apps show it: the unread dot (hanging in the margin), subject (two
+ * lines at most: a headline like "BKN want Williams + McCain + 1 pick" is read whole) and date, then
+ * his name and the first words. Important mail is
  * flagged; `open`: its decision is still on the agenda.
  */
 export function MessageRow({ league, m, open, onOpen }: { league: League; m: InboxMessage; open?: boolean; onOpen: () => void }) {
@@ -76,10 +76,8 @@ export function MessageRow({ league, m, open, onOpen }: { league: League; m: Inb
   const important = isImportant(m);
   return (
     <button type="button" className={`td-msg ${m.read ? '' : 'unread'} ${important ? 'important' : ''}`} aria-haspopup="dialog" onClick={onOpen}>
-      <span className={`td-msg-who ${who.group}`} aria-hidden="true">
-        {who.initials}
-        <span className="td-msg-dot" />
-      </span>
+      {/* the unread dot hangs in the margin, so every subject starts on one line */}
+      <span className="td-msg-dot" aria-hidden="true" />
       <span className="grow">
         <span className="td-msg-subj">
           {!m.read && <span className="sr-only">Unread: </span>}

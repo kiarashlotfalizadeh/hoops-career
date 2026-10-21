@@ -90,7 +90,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [m, onDone]);
-  // confetti in the team's colours and the brand's, scattered the same way each time a moment shows
+  // confetti in the team's colours and white, scattered the same way each time a moment shows
   const confetti = useMemo(
     () =>
       m.big
@@ -98,7 +98,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
             const r = (n: number) => (((Math.sin((i + 1) * n) * 10000) % 1) + 1) % 1;
             return {
               left: `${r(12.9898) * 100}%`,
-              background: [colors[0], colors[1], '#ff7a1a', '#ffffff'][i % 4],
+              background: [colors[0], colors[1], '#ffffff'][i % 3],
               animationDelay: `${(r(78.233) * 1.2).toFixed(2)}s`,
               animationDuration: `${(2.4 + r(37.719) * 1.8).toFixed(2)}s`,
               ['--drift' as string]: `${(r(4.1414) * 120 - 60).toFixed(0)}px`,
@@ -119,15 +119,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
         </div>
       )}
       <div className="moment-body">
-        {/* three slabs sweep in behind the mark, clear of the words under it on any screen */}
-        <div className="moment-hero">
-          <div className="moment-stripes" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-          </div>
-          <div className="moment-mark">{p ? <Avatar p={p} size="lg" /> : <TeamLogo tid={tid} size={132} decorative />}</div>
-        </div>
+        <div className="moment-mark">{p ? <Avatar p={p} size="lg" /> : <TeamLogo tid={tid} size={112} decorative />}</div>
         <div className="moment-over">{m.over}</div>
         <h2 id="moment-title" className="moment-title">
           {m.title}

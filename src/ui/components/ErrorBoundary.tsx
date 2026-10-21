@@ -1,5 +1,4 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { setLastLeagueId } from '../../state/persistence';
 import { useStore } from '../../state/store';
 import { canGoBack } from '../nav';
@@ -44,10 +43,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
     const offline = notLoaded(error);
     return (
       <main className="page" role="alert" style={{ paddingTop: screen ? 24 : 'max(48px, calc(var(--safe-t) + 8px))' }}>
-        <div className="card col" style={{ gap: 10, alignItems: 'flex-start' }}>
-          <AlertTriangle className="warn" size={28} />
+        <div className="col" style={{ gap: 12, alignItems: 'flex-start', maxWidth: '46ch' }}>
           <h2>{offline ? 'This screen could not be loaded' : screen ? 'This screen hit a problem' : 'Something went wrong'}</h2>
-          <div className="small dim2">
+          <div className="dim2">
             {offline
               ? `${screen ? 'Your league is safe.' : 'Your saved leagues are kept on this device.'} Check your connection, then reload.`
               : screen
@@ -57,7 +55,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode; scope?: 'app
           <div className="tiny dim" style={{ wordBreak: 'break-word' }}>
             {error.message}
           </div>
-          <div className="row wrap" style={{ marginTop: 4 }}>
+          <div className="row wrap" style={{ marginTop: 6 }}>
             {screen && (
               <button
                 className="btn"

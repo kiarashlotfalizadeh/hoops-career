@@ -2,7 +2,7 @@
 // file and god mode. Your career and job offers live in Office → Career; this links there.
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Briefcase, ChevronRight, Download, ListChecks, LogOut, Save, Trash2, Wand2 } from 'lucide-react';
+import { ChevronRight, Download, LogOut, Save, Trash2 } from 'lucide-react';
 import { exportLeague } from '../../state/backup';
 import { ImportButton } from '../components/ImportButton';
 import type { Settings as GameSettings } from '../../core/types';
@@ -145,7 +145,6 @@ export default function Settings() {
             />
           </label>
           <Link to="/office/career" className="set-link">
-            <Briefcase size={18} className={league.fired ? 'bad' : 'dim'} aria-hidden="true" />
             <span className="grow">
               <span className="set-link-t">Career and job offers</span>
               <span className={`set-link-m ${league.fired ? 'bad' : ''}`}>{career}</span>
@@ -263,7 +262,6 @@ export default function Settings() {
         <div className="card flush set-list">
           <Toggle on={st.teaching !== false} onChange={setTeaching} disabled={simming} label="Teaching" help={TEACHING_HELP} />
           <button type="button" className="set-link" aria-haspopup="dialog" onClick={() => setSheet('glossary')}>
-            <BookOpen size={18} className="dim" aria-hidden="true" />
             <span className="grow">
               <span className="set-link-t">Glossary</span>
               <span className="set-link-m">{GLOSSARY.length} terms, from drop coverage to the MLE</span>
@@ -272,7 +270,6 @@ export default function Settings() {
           </button>
           {guideOn ? (
             <Link to="/" className="set-link">
-              <ListChecks size={18} className="dim" aria-hidden="true" />
               <span className="grow">
                 <span className="set-link-t">First-week guide</span>
                 <span className="set-link-m">On Today now</span>
@@ -281,7 +278,6 @@ export default function Settings() {
             </Link>
           ) : guideBack ? (
             <button type="button" className="set-link" disabled={simming} onClick={bringGuideBack}>
-              <ListChecks size={18} className="dim" aria-hidden="true" />
               <span className="grow">
                 <span className="set-link-t">Show the first-week guide again</span>
                 <span className="set-link-m">Through your first three weeks</span>
@@ -289,9 +285,11 @@ export default function Settings() {
             </button>
           ) : null}
           <div className="set-about">
-            <BrandMark size={20} />
+            <BrandMark size={22} className="set-mark" />
             <div className="grow">
-              <div className="set-link-t">Hoops Career</div>
+              <div className="set-word">
+                Hoops <em>Career</em>
+              </div>
               {/* a build hash keeps its own case */}
               <div className="set-link-m num">
                 v{__APP_VERSION__} · {__APP_BUILD__} · save format {league.version}
@@ -350,7 +348,6 @@ export default function Settings() {
           />
           {st.godMode ? (
             <Link to="/god" className="set-link">
-              <Wand2 size={18} className="warn" aria-hidden="true" />
               <span className="grow">
                 <span className="set-link-t">Open the editor</span>
                 <span className="set-link-m">{edits ? `${plural(edits, 'edit')} in this league` : 'No edits yet'}</span>

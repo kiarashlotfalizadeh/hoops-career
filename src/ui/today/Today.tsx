@@ -108,7 +108,7 @@ export default function Today() {
             )
           }
         >
-          <div className="card flush ag-list" role="list" aria-label="From your staff">
+          <div className="ag-list td-rows" role="list" aria-label="From your staff">
             {feed.slice(0, STAFF_SHOWN).map((c) => (
               <div role="listitem" key={c.id}>
                 <AssistantRow card={c} />
@@ -170,27 +170,27 @@ const SEAT_BANDS = [
 function JobSecurityLine({ js }: { js: JobSecurity }) {
   const line = Math.round(50 + 50 * FIRING_LINE);
   return (
-    <Link to="/office/owner" className={`card td-seat ${js.heat}`} aria-label={`Job security: ${js.label}, ${js.score} of 100. ${js.line}`}>
-      <span className="td-seat-top">
-        <span className="over">Job security</span>
-        <span className="td-seat-v">
-          <span className="num">{js.score}</span> {js.label}
+    <Section title="Job security">
+      <Link to="/office/owner" className={`td-seat ${js.heat}`} aria-label={`Job security: ${js.label}, ${js.score} of 100. ${js.line}`}>
+        <span className="td-seat-top">
+          <span className="num td-seat-n">{js.score}</span>
+          <span className="td-seat-w">{js.label}</span>
+          <ChevronRight size={16} className="dim" aria-hidden="true" />
         </span>
-        <ChevronRight size={16} className="dim" aria-hidden="true" />
-      </span>
-      <span className="td-meter" aria-hidden="true">
-        <span className="td-meter-track">
-          {SEAT_BANDS.map(([z, w]) => (
-            <i key={z} className={z} style={{ width: `${w}%` }} />
-          ))}
+        <span className="td-meter" aria-hidden="true">
+          <span className="td-meter-track">
+            {SEAT_BANDS.map(([z, w]) => (
+              <i key={z} className={z} style={{ width: `${w}%` }} />
+            ))}
+          </span>
+          <span className="td-meter-line" style={{ left: `${line}%` }}>
+            <span>Fired</span>
+          </span>
+          <span className="td-meter-pin" style={{ left: `${Math.max(1, Math.min(99, js.score))}%` }} />
         </span>
-        <span className="td-meter-line" style={{ left: `${line}%` }}>
-          <span>Fired</span>
-        </span>
-        <span className="td-meter-pin" style={{ left: `${Math.max(1, Math.min(99, js.score))}%` }} />
-      </span>
-      <span className="td-seat-l">{js.line}</span>
-    </Link>
+        <span className="td-seat-l">{js.line}</span>
+      </Link>
+    </Section>
   );
 }
 
@@ -218,7 +218,7 @@ function UnreadMail({ league, agendaIds, onOpen }: { league: League; agendaIds: 
         </Link>
       }
     >
-      <div className="list td-flat">
+      <div className="list td-mail">
         {shown.map((m) => (
           <MessageRow
             key={m.id}

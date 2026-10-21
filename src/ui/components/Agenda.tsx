@@ -34,7 +34,8 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
     <>
       <div className="grow">
         <div className="ag-title">
-          {item.required && <span className="tag bad">Needs you</span>} {item.title}
+          {item.required ? <span className="tag bad">Needs you</span> : (item.tone === 'bad' || item.tone === 'warn') && <span className="ag-dot" aria-hidden="true" />}{' '}
+          {item.title}
         </div>
         <div className="ag-line">
           {item.line}

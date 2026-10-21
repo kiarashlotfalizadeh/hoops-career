@@ -23,7 +23,7 @@
   padding: 12px 6px 8px;
 }
 .set-label {
-  font-weight: 650;
+  font-weight: 640;
   gap: 6px;
 }
 /* a name and its field on one line */
@@ -52,13 +52,14 @@
 .set-inline .seg button {
   padding: 0 10px;
 }
-/* a row that goes somewhere (or opens something): icon, name and line, chevron */
+/* a row that goes somewhere (or opens something): name and line, chevron */
 .set-link {
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
   min-height: 58px;
+  transition: background var(--dur-fast) ease;
   text-align: left;
   color: inherit;
   text-decoration: none;
@@ -74,7 +75,7 @@
 }
 .set-link-t {
   display: block;
-  font-weight: 650;
+  font-weight: 640;
   line-height: 1.25;
 }
 .set-link-m {
@@ -95,21 +96,37 @@
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  padding-top: 14px;
 }
-.set-about > svg,
-.set-about > :first-child {
-  flex: none;
-}
-/* the mark sits in the rows' 18px icon column, so every row's text starts on one line */
-.set-about > :first-child {
-  width: 18px;
-  display: flex;
-  justify-content: center;
+.set-mark {
   margin-top: 1px;
+  color: var(--text-2);
+}
+/* the wordmark, small: as on the main menu */
+.set-word {
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+.set-word em {
+  font-weight: 480;
+  color: var(--text-2);
+}
+.set-word + .set-link-m {
+  margin-top: 3px;
 }
 .set-about .more {
   margin-top: 4px;
 }
 .set-p {
   margin: 0;
+}
+@media (hover: hover) and (pointer: fine) {
+  a.set-link:hover,
+  button.set-link:not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }

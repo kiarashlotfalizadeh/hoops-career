@@ -1,90 +1,112 @@
-/* The start screen and New League: outside a league, so the brand leads. Scoped with the `st-` prefix. */
+/* The start screen and New League: outside a league, so the wordmark leads. Scoped with the `st-`
+   and `nl-` prefixes. */
 
 .st-page {
   gap: 18px;
   max-width: 560px;
-  /* the hero's court reaches past the column: never far enough to scroll the page sideways */
-  overflow-x: clip;
 }
-/* the hero: the mark and the wordmark over a faint half court */
+
+/* ------------------------------------------------------------ the masthead */
 .st-hero {
-  position: relative;
-  isolation: isolate;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 28px 8px 8px;
+  padding: 24px 0 18px;
 }
-.st-hero::before {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  inset: -40px -60px 0;
-  background:
-    radial-gradient(260px 200px at 50% 38%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' fill='none' stroke='white' stroke-opacity='0.07' stroke-width='3'%3E%3Cpath d='M140 300V170h120v130'/%3E%3Cpath d='M140 170a60 60 0 0 1 120 0'/%3E%3Cpath d='M30 300v-60a170 170 0 0 1 340 0v60'/%3E%3C/svg%3E")
-      center bottom / 420px auto no-repeat;
-  /* faded at both ends: centred on a tall screen, its top edge would otherwise show */
-  mask-image: linear-gradient(180deg, transparent, #000 22%, #000 55%, transparent);
-  -webkit-mask-image: linear-gradient(180deg, transparent, #000 22%, #000 55%, transparent);
+.st-mark {
+  color: var(--text-2);
 }
 .st-word {
-  margin-top: 14px;
-  font-size: 54px;
-  line-height: 0.92;
-  letter-spacing: 0.01em;
+  margin-top: 18px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 540;
+  font-size: clamp(54px, 18vw, 76px);
+  line-height: 0.9;
+  letter-spacing: -0.035em;
+  color: var(--text);
 }
+/* "Career" in the serif's italic, on its own line: a title, not a logo lockup */
+.st-word em {
+  display: block;
+  font-style: italic;
+  font-weight: 480;
+  letter-spacing: -0.03em;
+  color: var(--text-2);
+}
+/* a short rule under the title, then the line */
 .st-tag {
-  margin: 10px 0 0;
-  max-width: 44ch;
+  position: relative;
+  margin: 18px 0 0;
+  padding-top: 16px;
+  max-width: 34ch;
   text-wrap: balance;
   font-size: 15px;
+  line-height: 1.45;
   color: var(--text-2);
+}
+.st-tag::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 36px;
+  height: 1px;
+  margin-left: -18px;
+  background: var(--line-3);
 }
 
 /* continue: the latest league as a slab in its team's colours */
 .st-continue {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
+  padding: 15px 16px 16px;
   text-align: left;
-  padding: 14px 16px 16px;
+  transition: transform 0.08s ease;
 }
 .st-continue:active {
   transform: scale(0.99);
 }
 .st-c-over {
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-2);
 }
 .st-c-main {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 13px;
 }
 .st-c-team {
   display: block;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 30px;
-  line-height: 1;
-  text-transform: uppercase;
-}
-.st-c-team .num {
-  color: var(--text-2);
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 25px;
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
 }
 .st-c-name {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 13px;
   color: var(--text-2);
+}
+.st-c-rec {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 34px;
+  line-height: 1;
 }
 .st-actions {
   gap: 10px;
@@ -126,22 +148,28 @@
   color: var(--text-2);
 }
 
+/* the main menu: centred on the screen while it's short (a first run), from the top once it's long */
+.st-menu {
+  min-height: 100vh;
+  min-height: 100dvh;
+  justify-content: center;
+}
+
 /* ------------------------------------------------------------ New League */
 .nl-steps {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: -6px;
+  gap: 4px;
+  margin-top: -4px;
 }
 .nl-steps span {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--surface-3);
+  height: 2px;
+  background: var(--line-2);
 }
 .nl-steps span.on {
   background: var(--accent);
 }
-/* the league's kind: two big choices */
+/* the league's kind: two choices, the chosen one in paper's outline */
 .nl-choice {
   display: flex;
   align-items: flex-start;
@@ -151,35 +179,29 @@
   text-align: left;
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
+  transition:
+    transform 0.08s ease,
+    border-color var(--dur-fast) ease,
+    background var(--dur-fast) ease;
 }
 .nl-choice.on {
   border-color: var(--accent);
-  background: linear-gradient(170deg, color-mix(in srgb, var(--accent) 10%, var(--raised)), var(--raised) 70%);
+  background: var(--surface);
 }
 .nl-choice:disabled {
   opacity: 0.6;
 }
 .nl-choice h3 {
-  font-size: 22px;
-}
-.nl-ic {
-  flex: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: var(--surface-2);
-  color: var(--text-2);
-}
-.nl-choice.on .nl-ic {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  color: var(--accent-text);
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 23px;
+  letter-spacing: -0.015em;
 }
 .nl-body {
   display: block;
-  margin-top: 4px;
+  margin-top: 5px;
   font-size: 13.5px;
   color: var(--text-2);
 }
@@ -189,19 +211,20 @@
 }
 .nl-check {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 2px solid var(--line-3);
+  border: 1.5px solid var(--line-3);
 }
 .nl-choice.on .nl-check {
   border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
 }
-/* the team grid: the chosen one wears its colours */
+/* the team grid: the chosen one wears its colours, flat, its trim along the top */
 .nl-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -212,64 +235,68 @@
   flex-direction: column;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   padding: 12px 6px 10px;
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line);
-  min-width: 0;
+  border: 1px solid transparent;
+  transition:
+    transform 0.08s ease,
+    border-color var(--dur-fast) ease;
 }
 .nl-team.on {
-  border-color: var(--slab-2);
-  background: linear-gradient(160deg, color-mix(in srgb, var(--slab) 85%, #fff 6%), color-mix(in srgb, var(--slab) 60%, #000));
+  --text-dim: rgba(255, 255, 255, 0.78);
+  background: var(--slab);
+  border-color: transparent;
+  box-shadow: inset 0 3px 0 var(--slab-2);
   color: #fff;
-  box-shadow: 0 0 0 1px var(--slab-2);
 }
 .nl-team-name {
-  font-weight: 750;
-  font-size: 13.5px;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13.5px;
+  font-weight: 680;
 }
 .nl-team-sub {
   font-size: 11.5px;
   color: var(--text-dim);
 }
-.nl-team.on .nl-team-sub {
-  color: rgba(255, 255, 255, 0.78);
-}
-/* the team you picked, as a slab */
+/* the team you picked, as a slab: its name as the headline */
 .nl-pick {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 .nl-pick-over {
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-2);
-  padding-right: 18px;
+}
+.nl-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 .nl-pick-name {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
   font-size: 38px;
-  line-height: 0.95;
-  text-transform: uppercase;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
 }
 .nl-pick-region {
   display: block;
-  font-size: 15px;
-  font-stretch: 90%;
-  font-weight: 650;
-  text-transform: none;
-  color: var(--text-2);
+  margin-bottom: 4px;
   font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-2);
 }
 .nl-pick-sub {
   font-size: 13px;
@@ -279,10 +306,10 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-top: 6px;
-  padding-top: 10px;
+  margin-top: 4px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-weight: 650;
+  font-weight: 620;
 }
 .nl-chosen {
   gap: 12px;
@@ -302,7 +329,7 @@
   height: 42px;
 }
 .nl-label {
-  font-weight: 650;
+  font-weight: 620;
 }
 /* the game's settings: the difficulty rows, then the switches, a hairline between each */
 .nl-game {
@@ -317,13 +344,6 @@
 }
 .nl-game > .dif {
   padding: 12px 6px 8px;
-}
-
-/* the main menu: centred on the screen while it's short (a first run), from the top once it's long */
-.st-menu {
-  min-height: 100vh;
-  min-height: 100dvh;
-  justify-content: center;
 }
 
 /* a step's call to action stays in thumb reach while the step scrolls under it */
@@ -342,19 +362,9 @@
 .st-page:has(.nl-cta) {
   padding-bottom: 0;
 }
-.nl-team {
-  transition:
-    transform 0.08s ease,
-    border-color var(--dur-fast) ease;
-}
 .nl-team:active,
 .nl-choice:active:not(:disabled) {
   transform: scale(0.97);
-}
-.nl-choice {
-  transition:
-    transform 0.08s ease,
-    border-color var(--dur-fast) ease;
 }
 @media (hover: hover) and (pointer: fine) {
   .nl-team:not(.on):hover,

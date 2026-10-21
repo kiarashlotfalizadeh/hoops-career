@@ -86,36 +86,37 @@ export default function Start() {
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
     <main className="page standalone st-page st-menu">
+      {/* the masthead: the wordmark set in the serif, the mark as its ornament */}
       <header className="st-hero">
-        <BrandMark size={104} />
-        <h1 className="st-word">Hoops Career</h1>
+        <BrandMark size={34} className="st-mark" />
+        <h1 className="st-word">
+          Hoops <em>Career</em>
+        </h1>
         <p className="st-tag">GM and head coach of a real 2026-27 roster.</p>
       </header>
       {latest && (
         // the league played last, one tap from where you left it
         <button className="slab st-continue" style={slabVars(latest.colors)} onClick={() => void open(latest.id)}>
-          <span className="slab-mark">
-            <TeamLogo tid={Math.max(0, tidOf(latest))} size={150} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
-          </span>
           <span className="st-c-over">
-            Continue · {seasonLabel(latest.season)} · {PHASE_LABEL[latest.phase]}
+            <span>
+              Continue · {seasonLabel(latest.season)} · {PHASE_LABEL[latest.phase]}
+            </span>
+            <ChevronRight size={20} aria-hidden="true" />
           </span>
           <span className="st-c-main">
-            <TeamLogo tid={Math.max(0, tidOf(latest))} size={44} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
+            <TeamLogo tid={Math.max(0, tidOf(latest))} size={48} abbrev={latest.teamAbbrev} colors={latest.colors} decorative />
             <span className="grow">
-              <span className="st-c-team">
-                {latest.teamAbbrev} <span className="num">{latest.record}</span>
-              </span>
+              <span className="st-c-team">{latest.teamName}</span>
               <span className="st-c-name ellipsis">{latest.name}</span>
             </span>
-            <ChevronRight size={22} />
+            <span className="num st-c-rec">{latest.record}</span>
           </span>
         </button>
       )}
       <div className="col st-actions">
         {/* (with a league to continue, that card leads: a new one is the second choice) */}
         <button className={`btn ${latest ? '' : 'primary'} big block`} onClick={() => nav('/new')}>
-          <Plus size={20} /> New league
+          <Plus size={18} aria-hidden="true" /> New league
         </button>
         <ImportButton block ghost />
       </div>

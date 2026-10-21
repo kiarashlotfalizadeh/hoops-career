@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, ChevronLeft, Database, Shuffle } from 'lucide-react';
+import { Check, ChevronLeft } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
@@ -139,7 +139,7 @@ export default function NewLeague() {
           <ChevronLeft size={24} />
         </button>
         <div className="grow">
-          <h1>New League</h1>
+          <h1>New league</h1>
           <div className="ph-sub">
             Step {stepNo} of 3 · {step === 'type' ? 'The league' : step === 'team' ? 'Your team' : 'Your career'}
           </div>
@@ -154,9 +154,6 @@ export default function NewLeague() {
       {step === 'type' && (
         <>
           <button type="button" className={`nl-choice ${kind === 'real' ? 'on' : ''}`} aria-pressed={kind === 'real'} disabled={!seed} onClick={() => setKind('real')}>
-            <span className="nl-ic">
-              <Database size={22} />
-            </span>
             <span className="grow">
               <h3>Real 2026-27 NBA</h3>
               {seed && <span className="nl-body">{seed.players.length} real players and their contracts</span>}
@@ -178,11 +175,8 @@ export default function NewLeague() {
             </span>
           </button>
           <button type="button" className={`nl-choice ${kind === 'fictional' ? 'on' : ''}`} aria-pressed={kind === 'fictional'} onClick={() => setKind('fictional')}>
-            <span className="nl-ic">
-              <Shuffle size={22} />
-            </span>
             <span className="grow">
-              <h3>Fictional League</h3>
+              <h3>Fictional league</h3>
               <span className="nl-body">Real franchises, generated players</span>
             </span>
             <span className="nl-check" aria-hidden="true">
@@ -238,15 +232,15 @@ export default function NewLeague() {
           </div>
           {f && tid !== null && (
             <section className="slab nl-pick" style={slabVars(f.colors)} aria-label={`${f.region} ${f.name}`}>
-              <span className="slab-mark">
-                <TeamLogo tid={tid} size={170} decorative />
-              </span>
               <span className="nl-pick-over">
                 {f.div} · {market(f.pop)} market
               </span>
-              <span className="nl-pick-name">
-                <span className="nl-pick-region">{f.region}</span>
-                {f.name}
+              <span className="nl-pick-head">
+                <span className="nl-pick-name">
+                  <span className="nl-pick-region">{f.region}</span>
+                  {f.name}
+                </span>
+                <TeamLogo tid={tid} size={56} decorative />
               </span>
               <span className="nl-pick-sub">{kind === 'fictional' ? 'New players, generated at the start' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
               {teamInfo?.[tid] && (

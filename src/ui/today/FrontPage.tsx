@@ -3,7 +3,7 @@
 // league's top headlines, and the way back to "While you were away". The story is on top; the
 // numbers behind it are one tap down (the report, the standings, the story's page).
 import { Link } from 'react-router-dom';
-import { ChevronRight, Newspaper } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
@@ -77,21 +77,24 @@ export function LeadStory({ league }: { league: League }) {
           <span>
             {NEWS_LABEL[n.kind] ?? 'Your team'} · {fmtDate(n.season, n.day)}
           </span>
-          <ChevronRight size={16} aria-hidden="true" />
-        </span>
-        <span className="td-lead-main">
-          {p && <Avatar p={p} />}
-          <span className="grow">
-            <span className="td-lead-head">{headOf(n)}</span>
-            {n.head && <span className="td-lead-dek">{n.text}</span>}
+          <span className="td-lead-go">
+            Story <ChevronRight size={14} aria-hidden="true" />
           </span>
         </span>
+        <span className="td-lead-head">{headOf(n)}</span>
+        {n.head && (
+          <span className="td-lead-by">
+            {p && <Avatar p={p} />}
+            <span className="td-lead-dek">{n.text}</span>
+          </span>
+        )}
       </Link>
     );
   }
   const { r, story, pog } = lead;
   const hero = story?.hero !== undefined ? league.players[story.hero] : pog ? league.players[pog.pid] : undefined;
   const opp = league.teams[r.opp];
+  const dek = story?.dek ?? pog?.text;
   return (
     <Link
       to={`/game/${r.gid}`}
@@ -104,22 +107,28 @@ export function LeadStory({ league }: { league: League }) {
           Report <ChevronRight size={14} aria-hidden="true" />
         </span>
       </span>
+      {/* the score as the scoreboard has it: ours first, the winning side's figure in full ink */}
       <span className="td-lead-score">
-        <span className={`td-wl ${r.won ? 'w' : 'l'}`} aria-hidden="true">
-          {r.won ? 'W' : 'L'}
+        <span className="num td-lead-pts">
+          <span className={r.won ? '' : 'td-lead-lose'}>{r.us}</span>
+          <span className="td-lead-dash">-</span>
+          <span className={r.won ? 'td-lead-lose' : ''}>{r.them}</span>
+          {r.ot > 0 && <small>{r.ot > 1 ? r.ot : ''}OT</small>}
         </span>
-        <span className="num td-lead-pts">{scoreText(r)}</span>
-        <span className="dim">{r.home ? 'vs' : '@'}</span>
-        <TeamLogo tid={r.opp} size={24} decorative />
-        <span className="ellipsis">{opp.name}</span>
-      </span>
-      <span className="td-lead-main">
-        {hero && <Avatar p={hero} />}
-        <span className="grow">
-          <span className="td-lead-head">{story?.head ?? plainHead(league, r)}</span>
-          {(story?.dek || pog) && <span className="td-lead-dek">{story?.dek ?? pog?.text}</span>}
+        <span className="td-lead-vs">
+          <span className={`td-lead-wl ${r.won ? 'good' : 'bad'}`}>{r.won ? 'Won' : 'Lost'}</span>
+          <span className="td-lead-opp">
+            {r.home ? 'vs' : 'at'} <TeamLogo tid={r.opp} size={18} decorative /> <span className="ellipsis">{opp.name}</span>
+          </span>
         </span>
       </span>
+      <span className="td-lead-head">{story?.head ?? plainHead(league, r)}</span>
+      {dek && (
+        <span className="td-lead-by">
+          {hero && <Avatar p={hero} />}
+          <span className="td-lead-dek">{dek}</span>
+        </span>
+      )}
       {!!story?.means.length && (
         <span className="td-lead-means">
           {story.means.slice(0, 3).map((m) => (
@@ -151,12 +160,39 @@ export function YourSeason({ league }: { league: League }) {
   return (
     <Section
       title="Your season"
+      className="td-season"
       right={
         <Link className="card-link" to={league.phase === 'regular' ? '/league' : '/games'}>
           {league.phase === 'regular' ? 'Standings' : 'Schedule'} <ChevronRight size={14} aria-hidden="true" />
         </Link>
       }
     >
+      {played && row && (
+        <div className="td-stand">
+          <span className="td-fig">
+            <span className="num td-fig-v">
+              {row.confRank}
+              <small>{ordinalSuffix(row.confRank)}</small>
+            </span>
+            <span className="td-fig-k">
+              in the {confName}
+              {row.gb > 0 && <> · {row.gb.toFixed(1)} GB</>}
+            </span>
+          </span>
+          {odds &&
+            (odds.out ? (
+              <span className="td-fig end">
+                <span className="td-fig-v td-fig-word">Out</span>
+                <span className="td-fig-k">of the playoffs</span>
+              </span>
+            ) : (
+              <span className="td-fig end">
+                <span className="num td-fig-v">{pct(odds.reach[0], odds.clinched)}</span>
+                <span className="td-fig-k">playoff odds</span>
+              </span>
+            ))}
+        </div>
+      )}
       {results.length > 0 && (
         <div className="td-form">
           <ol className="td-form-l" aria-label="Last results, oldest first">
@@ -185,19 +221,6 @@ export function YourSeason({ league }: { league: League }) {
           )}
         </div>
       )}
-      {played && row && (
-        <div className="td-stand">
-          <span className="num td-stand-rank">
-            {row.confRank}
-            <small>{ordinalSuffix(row.confRank)}</small>
-          </span>
-          <span className="grow">
-            in the {confName}
-            {row.gb > 0 && <span className="dim"> · {row.gb.toFixed(1)} GB</span>}
-          </span>
-          {odds && <span className="td-stand-odds">{odds.out ? 'Out of the playoffs' : `Playoff odds ${pct(odds.reach[0], odds.clinched)}`}</span>}
-        </div>
-      )}
       <CoachPulse league={league} />
     </Section>
   );
@@ -216,7 +239,7 @@ export function Headlines({ league }: { league: League }) {
         </Link>
       }
     >
-      <div className="list td-flat">
+      <div className="list td-rows">
         {items.map((n) => (
           <Link key={n.id} to={storyLink(n.id)} className="td-hl">
             <span className="td-hl-over">
@@ -237,7 +260,6 @@ export function DigestLink() {
   if (!digest) return null;
   return (
     <button type="button" className="td-away" aria-haspopup="dialog" onClick={() => open(true)}>
-      <Newspaper size={18} aria-hidden="true" />
       <span className="grow">
         <span className="td-away-t">While you were away</span>
         <span className="td-away-l">

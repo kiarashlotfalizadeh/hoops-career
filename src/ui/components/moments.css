@@ -1,132 +1,92 @@
-/* Big moments: a full-screen card in the team's colours (see Moments.tsx). Reduced motion keeps the
-   card and drops the movement (theme.css zeroes every animation). */
+/* Big moments: a full-screen card in the team's colours (see Moments.tsx), set like a slab: the
+   team's colour as a flat field lit from the top, its trim as a rule along the top edge, the moment
+   as a serif headline. Reduced motion keeps the card and drops the movement (theme.css zeroes every
+   animation). */
 
 .moment {
   position: fixed;
   inset: 0;
   z-index: 95;
-  display: grid;
-  place-items: center;
-  padding: calc(var(--safe-t) + 24px) var(--gut-r) calc(var(--safe-b) + 24px) var(--gut-l);
-  overflow: hidden;
+  /* centred while it fits; taller than the screen (a long headline, a phone held sideways), it
+     scrolls from its top instead of losing its buttons off both ends */
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--safe-t) + 28px) var(--gut-r) calc(var(--safe-b) + 28px) var(--gut-l);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   color: #fff;
   text-align: center;
   animation: fade 0.25s ease;
   --text-dim: rgba(255, 255, 255, 0.78);
 }
-/* the team's colour, from a floodlight above to near-black */
+/* the team's colour, flat, lit softly from the top and deepening to the foot, the trim along the top */
 .moment-bg {
-  position: absolute;
+  position: fixed;
   inset: 0;
-  background:
-    radial-gradient(70% 50% at 50% 30%, color-mix(in srgb, var(--slab) 85%, #fff 15%), transparent 70%),
-    linear-gradient(180deg, color-mix(in srgb, var(--slab) 80%, #000), #050608 85%);
-}
-/* three slabs sweep across behind the mark, in the trim and the brand: anchored to the mark (not the
-   screen), so on no phone do they run through the overline under it */
-.moment-hero {
-  position: relative;
-  display: grid;
-  place-items: center;
-  margin-bottom: 8px;
-}
-.moment-stripes {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  width: 170vw;
-  height: 0;
-  transform: translateX(-50%) rotate(-12deg);
-  pointer-events: none;
-}
-.moment-stripes span {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 54px;
-  top: -27px;
-  transform: translateX(-110%);
-  animation: moment-sweep 0.7s var(--ease-out) forwards;
-}
-.moment-stripes span:nth-child(1) {
-  background: var(--slab-2);
-  opacity: 0.85;
-}
-.moment-stripes span:nth-child(2) {
-  top: 35px;
-  height: 14px;
-  background: var(--accent);
-  animation-delay: 0.08s;
-}
-.moment-stripes span:nth-child(3) {
-  top: -47px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.5);
-  animation-delay: 0.14s;
-}
-@keyframes moment-sweep {
-  to {
-    transform: translateX(0);
-  }
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 45%), linear-gradient(0deg, color-mix(in srgb, var(--slab) 62%, #000), var(--slab) 70%);
+  box-shadow: inset 0 calc(var(--safe-t) + 4px) 0 var(--slab-2);
 }
 .moment-body {
   position: relative;
+  margin: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  max-width: 420px;
+  max-width: 440px;
   width: 100%;
 }
 .moment-mark {
   position: relative;
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.5));
-  animation: moment-pop 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) 0.15s both;
+  margin-bottom: 26px;
+  animation: moment-in 0.5s var(--ease-out) 0.1s both;
 }
 .moment-mark .avatar.lg {
-  width: 132px;
-  height: 132px;
+  width: 112px;
+  height: 112px;
 }
-@keyframes moment-pop {
-  from {
-    transform: scale(0.4);
-    opacity: 0;
-  }
-}
+/* the kicker, then a short rule, then the headline */
 .moment-over {
-  font-size: 12px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.85);
-  animation: fade 0.4s ease 0.3s both;
+  font-size: 13px;
+  font-weight: 620;
+  color: rgba(255, 255, 255, 0.82);
+  animation: fade 0.4s ease 0.25s both;
 }
 .moment-title {
-  font-family: var(--display);
-  font-stretch: 64%;
-  font-weight: 900;
-  font-size: clamp(56px, 19vw, 96px);
-  line-height: 0.88;
-  letter-spacing: 0.01em;
-  text-transform: uppercase;
-  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.45);
+  position: relative;
+  margin-top: 30px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 540;
+  font-size: clamp(50px, 16vw, 86px);
+  line-height: 0.96;
+  letter-spacing: -0.03em;
   text-wrap: balance;
-  animation: moment-title 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s both;
+  animation: moment-in 0.6s var(--ease-out) 0.2s both;
 }
-@keyframes moment-title {
+.moment-title::before {
+  content: '';
+  position: absolute;
+  top: -16px;
+  left: 50%;
+  width: 36px;
+  height: 1px;
+  margin-left: -18px;
+  background: rgba(255, 255, 255, 0.5);
+}
+@keyframes moment-in {
   from {
-    transform: scale(1.25);
-    letter-spacing: 0.12em;
+    transform: translateY(12px);
     opacity: 0;
   }
 }
 .moment-sub {
-  margin: 4px 0 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  margin: 16px 0 0;
   max-width: 32ch;
+  font-size: 16px;
+  font-weight: 520;
+  line-height: 1.42;
+  color: rgba(255, 255, 255, 0.88);
   text-wrap: balance;
   animation: fade 0.4s ease 0.45s both;
 }
@@ -134,48 +94,48 @@
 .moment-acts {
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
-  margin-top: 22px;
+  width: min(100%, 280px);
+  margin-top: 34px;
 }
 .moment-go {
-  min-width: 220px;
   background: #fff;
-  color: #0b0f15;
   border-color: transparent;
+  color: rgba(0, 0, 0, 0.88);
   animation: fade 0.4s ease 0.6s both;
 }
 .moment-read {
-  min-width: 220px;
   background: transparent;
-  color: #fff;
   border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
   animation: fade 0.4s ease 0.7s both;
 }
-/* a story's headline is a sentence, not a word: set smaller so it fits in three lines on a phone */
+/* a story's headline is a sentence, not a word: set smaller so it fits in three or four lines on a phone */
 .moment.story .moment-title {
-  font-size: clamp(32px, 9.5vw, 52px);
-  line-height: 0.96;
-  max-width: 16ch;
+  max-width: 18ch;
+  font-size: clamp(34px, 10vw, 54px);
+  line-height: 1.04;
+  letter-spacing: -0.022em;
 }
 /* confetti for a title or the Cup */
 .moment-confetti {
-  position: absolute;
+  position: fixed;
   inset: 0;
   pointer-events: none;
 }
 .moment-confetti span {
   position: absolute;
   top: -20px;
-  width: 9px;
-  height: 14px;
-  border-radius: 2px;
-  opacity: 0.95;
+  width: 8px;
+  height: 13px;
+  border-radius: 1px;
+  opacity: 0.9;
   animation: moment-fall linear infinite;
 }
 .moment-confetti span:nth-child(3n) {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
 @keyframes moment-fall {
@@ -184,8 +144,26 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .moment-confetti,
-  .moment-stripes {
+  .moment-confetti {
     display: none;
+  }
+}
+/* a short screen (a phone held sideways): the mark and the headline step down */
+@media (max-height: 560px) {
+  .moment-mark {
+    margin-bottom: 14px;
+  }
+  .moment-mark .avatar.lg {
+    width: 72px;
+    height: 72px;
+  }
+  .moment-mark svg {
+    max-width: 72px;
+    max-height: 72px;
+  }
+  .moment-title,
+  .moment.story .moment-title {
+    margin-top: 22px;
+    font-size: clamp(28px, 7vh, 44px);
   }
 }
