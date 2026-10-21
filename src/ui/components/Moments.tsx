@@ -20,7 +20,8 @@ function momentsKey(l: NonNullable<ReturnType<typeof useStore.getState>['league'
  * true when a league opens (or the user takes over another team) counts as seen. They wait for a sim
  * to finish and for the live game to be left, and Settings → Big moments turns them off. Of the
  * front-page stories that come out together, only the biggest shows (pickMoments); the story of a
- * game the user has just watched live is his already.
+ * game the user has just watched live is his already, and on a game report (where a quick sim lands,
+ * on the result) game stories are dropped.
  */
 export function Moments() {
   const league = useStore((s) => s.league);
@@ -49,14 +50,22 @@ export function Moments() {
     const onLive = window.location.hash.startsWith('#/live');
     setQueue((q) => pickMoments([...q, ...fresh].filter((m) => !(onLive && m.news === 'game'))));
   }, [league, v]);
-  const showing = !simming && pathname !== '/live' && league ? queue[0] : undefined;
+  // a game's story doesn't take the screen on a game report, which opens on the result already (a
+  // quick sim lands there): it's dropped
+  const onReport = pathname.startsWith('/game/');
+  useEffect(() => {
+    if (onReport && queue.some((m) => m.news === 'game')) setQueue((q) => q.filter((m) => m.news !== 'game'));
+  }, [onReport, queue]);
+  const showing = !simming && pathname !== '/live' && league ? queue.find((m) => !(onReport && m.news === 'game')) : undefined;
   // the digest waits while a moment has the screen
   const up = !!showing;
   useEffect(() => {
     if (useStore.getState().momentUp !== up) useStore.setState({ momentUp: up });
   }, [up]);
   if (!showing || !league) return null;
-  return <MomentCard key={showing.key} m={showing} tid={league.userTid} colors={league.teams[league.userTid].colors} onDone={() => setQueue((q) => q.slice(1))} />;
+  return (
+    <MomentCard key={showing.key} m={showing} tid={league.userTid} colors={league.teams[league.userTid].colors} onDone={() => setQueue((q) => q.filter((m) => m !== showing))} />
+  );
 }
 
 const PIECES = 46;

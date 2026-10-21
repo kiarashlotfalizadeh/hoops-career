@@ -16,13 +16,22 @@ export const weightOf = (n: NewsItem) => n.weight ?? 1;
 /** A news item's headline: the press's own, or its one line. */
 export const headOf = (n: NewsItem) => n.head ?? n.text;
 
-/** A story about the user's team worth a place on Today or in the digest: one that names it and is a story (or an honor, a milestone, a record). */
+/**
+ * Whether a news item is about the user's team: it names it, and for the power rankings (which name
+ * every week's leader and the user's team) its headline does too ("the Thunder lead again" isn't his).
+ */
+function names(l: League, n: NewsItem): boolean {
+  if (!n.tids.includes(l.userTid)) return false;
+  return n.kind !== 'power' || headOf(n).includes(l.teams[l.userTid].name);
+}
+
+/** A story about the user's team worth a place on Today or in the digest: one about it that is a story (or an honor, a milestone, a record). */
 export function isHisStory(l: League, n: NewsItem): boolean {
-  return n.tids.includes(l.userTid) && (weightOf(n) >= 2 || ALWAYS_HIS.has(n.kind));
+  return names(l, n) && (weightOf(n) >= 2 || ALWAYS_HIS.has(n.kind));
 }
 
 /** A story around the league: another team's, weight 2 or more. */
-export const isLeagueStory = (l: League, n: NewsItem) => !n.tids.includes(l.userTid) && weightOf(n) >= 2;
+export const isLeagueStory = (l: League, n: NewsItem) => !names(l, n) && weightOf(n) >= 2;
 
 /** Bigger first, then newer. */
 export const byWeight = (a: NewsItem, b: NewsItem) => weightOf(b) - weightOf(a) || b.id - a.id;

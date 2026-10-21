@@ -417,6 +417,9 @@ export function keyValue(key: Pick<GameKey, 'side' | 'stat' | 'pid'>, res: Pick<
 
 export type KeyState = 'met' | 'missed' | 'on' | 'behind' | 'void';
 
+/** The part of a game (about five minutes) before a rate key can read as behind. */
+const RATE_SETTLES = 0.1;
+
 /**
  * Where a key stands: finished (`met`, `missed`; `void` when the player it was about didn't play),
  * or while the game goes on, decided already (a max key gone past, a min key reached) or on pace
@@ -424,10 +427,11 @@ export type KeyState = 'met' | 'missed' | 'on' | 'behind' | 'void';
  */
 export function keyState(key: Pick<GameKey, 'dir' | 'target'> & { stat?: KeyStat }, value: number | null, share: number, final: boolean): KeyState {
   if (value === null) return final ? 'void' : 'on';
-  // a share of the misses is never decided before the end: on track while it's on the right side
+  // a share of the misses is never decided before the end: on track while it's on the right side,
+  // and in the first minutes (a handful of misses: 0% at tip-off isn't behind)
   if (key.stat && isRate(key.stat)) {
     const ok = key.dir === 'max' ? value <= key.target : value >= key.target;
-    return final ? (ok ? 'met' : 'missed') : ok ? 'on' : 'behind';
+    return final ? (ok ? 'met' : 'missed') : ok || share < RATE_SETTLES ? 'on' : 'behind';
   }
   if (key.dir === 'max') {
     if (value > key.target) return 'missed';
