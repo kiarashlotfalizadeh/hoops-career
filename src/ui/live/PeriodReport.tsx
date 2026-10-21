@@ -1,5 +1,6 @@
 // The breaks, on the live screen itself (the court steps aside for them): a period's end and your
-// timeout. The period report reads the game so far as the staff does (its read, the moves it would
+// timeout. The period report opens on the story so far in a line (the score, the run that made the
+// period, who's carrying you: see atmosphere.ts breakStory), then reads the game as the staff does (its read, the moves it would
 // make for the next period, who's tired or in foul trouble going into it, the keys, the score by
 // quarter, the battle of play types, the teams side by side, the scorers, their coach's plan and
 // adjustments, and your moves so far with what each did). The huddle is the short version for a
@@ -195,9 +196,11 @@ export function PeriodReport(
     adjustments: GameAdjustment[];
     /** Skip ahead from here. */
     onSkip?: () => void;
+    /** The story so far, in a line. */
+    story?: string;
   },
 ) {
-  const { view, side, teams, names, keys, assistant, read, moves, colors, oppPlan, adjustments, onSkip } = props;
+  const { view, side, teams, names, keys, assistant, read, moves, colors, oppPlan, adjustments, onSkip, story } = props;
   const [home, away] = teams;
   const me = view.sides[side];
   const them = view.sides[1 - side];
@@ -231,6 +234,7 @@ export function PeriodReport(
             </button>
           )}
         </div>
+        {story && <p className="lv-rep-story">{story}</p>}
         {sub.length > 0 && <div className="small dim2">{sub.join(' ')}</div>}
       </div>
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />

@@ -1,0 +1,428 @@
+/* The night's atmosphere (Atmos.tsx): the crowd's glow around the floor, clutch time's frame, the
+   callout for a big moment, the crowd's line, the offer to watch the finish at 1×; and what it adds
+   to the scorebug (clutch time, the momentum on the win-probability line), the play-by-play's voice
+   and the break's story. Only opacity and transform move, so a phone keeps its frame rate; reduced
+   motion holds everything still. Text over the court is white whatever the theme. */
+
+/* ------------------------------------------------------------------ the crowd around the floor */
+.lv-crowd {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+  --crowd-o: 0.14;
+}
+/* the stands' glow along the floor's edges, in the home team's colour: louder, brighter */
+.lv-crowd::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  /* (the home colour lit up: on its own it would vanish into the home team's apron) */
+  box-shadow:
+    inset 0 0 22px 3px color-mix(in srgb, color-mix(in srgb, var(--crowd-c) 55%, #fff) 80%, transparent),
+    inset 0 0 70px 8px color-mix(in srgb, var(--crowd-c) 35%, transparent);
+  opacity: var(--crowd-o);
+  transition: opacity 0.9s ease;
+}
+.lv-crowd.lvl-0 {
+  --crowd-o: 0;
+}
+.lv-crowd.lvl-1 {
+  --crowd-o: 0.06;
+}
+.lv-crowd.lvl-3 {
+  --crowd-o: 0.32;
+}
+.lv-crowd.lvl-4 {
+  --crowd-o: 0.55;
+}
+.lv-crowd.lvl-3::before {
+  animation: lv-crowd-pulse 1.5s ease-in-out infinite alternate;
+}
+.lv-crowd.lvl-4::before {
+  animation: lv-crowd-pulse 0.85s ease-in-out infinite alternate;
+}
+@keyframes lv-crowd-pulse {
+  from {
+    opacity: calc(var(--crowd-o) * 0.5);
+  }
+  to {
+    opacity: var(--crowd-o);
+  }
+}
+/* hushed: the building's lights seem to dim at the edges */
+.lv-crowd::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  box-shadow: inset 0 0 60px 14px rgba(0, 0, 0, 0.55);
+  transition: opacity 0.9s ease;
+}
+.lv-crowd.lvl-0::after {
+  opacity: 1;
+}
+/* clutch time: the frame tightens, a warm edge around the floor */
+.lv-crowd.clutch::after {
+  opacity: 1;
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--warn) 75%, transparent),
+    inset 0 0 46px 10px rgba(0, 0, 0, 0.42);
+}
+
+/* ------------------------------------------------------------------ a big moment, called over the court */
+.lv-call-wrap {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 30%;
+  z-index: 3;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.lv-call {
+  --call-c: var(--surface-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 100%;
+  text-align: center;
+  filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.5));
+  animation: lv-call 2.6s var(--ease-out) both;
+}
+.lv-call-k {
+  padding: 3px 14px;
+  background: var(--call-c);
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  font-size: 10.5px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.lv-call.neutral .lv-call-k {
+  background: var(--warn);
+  color: var(--accent-ink);
+}
+.lv-call-t {
+  max-width: 100%;
+  padding: 6px 14px 5px;
+  background: rgba(6, 8, 12, 0.93);
+  box-shadow: inset 0 -2px 0 var(--call-c);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+.lv-call.neutral .lv-call-t {
+  box-shadow: inset 0 -2px 0 var(--warn);
+}
+.lv-call.w-3 .lv-call-t {
+  font-size: 28px;
+  padding: 8px 16px 6px;
+}
+.lv-call-l {
+  max-width: 100%;
+  padding: 3px 12px 5px;
+  background: rgba(6, 8, 12, 0.86);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.3;
+  color: #d6dbe3;
+}
+@keyframes lv-call {
+  0% {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  9% {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+  14% {
+    transform: scale(1);
+  }
+  86% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* a big court (a tablet, a desktop): a callout to its scale */
+@media (min-width: 760px) and (min-height: 521px) {
+  .lv-call-k {
+    font-size: 13px;
+  }
+  .lv-call-t {
+    font-size: 34px;
+    padding: 8px 20px 6px;
+  }
+  .lv-call.w-3 .lv-call-t {
+    font-size: 42px;
+  }
+  .lv-call-l {
+    font-size: 15px;
+  }
+  .lv-crowd-line {
+    font-size: 13.5px;
+  }
+}
+@media (max-width: 399px) {
+  .lv-call-t {
+    font-size: 19px;
+  }
+  .lv-call.w-3 .lv-call-t {
+    font-size: 24px;
+  }
+}
+
+/* ------------------------------------------------------------------ the crowd's line, at the top of the floor */
+.lv-crowd-line {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  max-width: calc(100% - 16px);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 4px;
+  background: rgba(6, 8, 12, 0.84);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+  animation: lv-crowd-line 3.8s ease both;
+}
+.lv-crowd-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+}
+.lv-crowd-meter i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.25);
+}
+.lv-crowd-meter i:nth-child(1) {
+  height: 4px;
+}
+.lv-crowd-meter i:nth-child(2) {
+  height: 6px;
+}
+.lv-crowd-meter i:nth-child(3) {
+  height: 9px;
+}
+.lv-crowd-meter i:nth-child(4) {
+  height: 11px;
+}
+.lv-crowd-meter i.on {
+  background: var(--warn);
+}
+.lv-crowd-line.hush .lv-crowd-meter i.on {
+  background: #9aa5b5;
+}
+@keyframes lv-crowd-line {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  8%,
+  88% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ clutch time at speed: watch the finish at 1× */
+.lv-slow {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 3;
+  max-width: calc(100% - 16px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 9px;
+  border-radius: 18px;
+  background: rgba(6, 8, 12, 0.9);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warn) 60%, transparent);
+  animation: lv-up 0.28s ease;
+  transition: top 0.2s ease;
+}
+/* (the playback controls up: it steps down under their chips) */
+.lv-pb.up ~ .lv-slow {
+  top: 52px;
+}
+.lv-slow-ic {
+  flex: none;
+  color: var(--warn);
+}
+.lv-slow-t {
+  font-size: 11px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lv-slow-b {
+  position: relative;
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 12.5px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.lv-slow-b.ghost {
+  background: transparent;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+}
+.lv-slow-b::after,
+.lv-slow-x::after {
+  content: '';
+  position: absolute;
+  inset: -8px -3px;
+}
+.lv-slow-x {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #c9d1dc;
+}
+
+/* ------------------------------------------------------------------ the scorebug: clutch time, the momentum */
+.lv-lb.clutch .lv-lb-mid {
+  background: color-mix(in srgb, var(--warn) 14%, var(--bg));
+}
+.lv-lb.clutch .lv-lb-q {
+  color: var(--warn);
+}
+.lv-lb.clutch::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--warn);
+  animation: lv-clutch-edge 1.6s ease-in-out infinite alternate;
+}
+@keyframes lv-clutch-edge {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* the side with the momentum glows on the win-probability line */
+.lv-lb-wp-bar > span {
+  position: relative;
+}
+.lv-lb-wp-bar > span::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0;
+  border-radius: 3px;
+  box-shadow: 0 0 8px 1px var(--mo-c);
+  opacity: 0;
+  transition: opacity 0.5s ease;
+}
+.lv-lb-wp-bar.mo-away > span:first-child::after,
+.lv-lb-wp-bar.mo-home > span:last-child::after {
+  opacity: 0.55;
+}
+.lv-lb-wp-bar.mo-2.mo-away > span:first-child::after,
+.lv-lb-wp-bar.mo-2.mo-home > span:last-child::after {
+  animation: lv-crowd-pulse 1.1s ease-in-out infinite alternate;
+  --crowd-o: 1;
+}
+
+/* ------------------------------------------------------------------ the play-by-play's voice */
+.lv-fd-row.tier-1 {
+  color: var(--text);
+  font-weight: 650;
+}
+.lv-fd-row.tier-2,
+.lv-fd-row.tier-3 {
+  color: var(--text);
+  font-weight: 750;
+}
+.lv-fd-row.tier-3 .grow {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 15.5px;
+  line-height: 1.2;
+}
+/* a moment the night called: its kicker, on the row's own ground */
+.lv-fd-row.beat {
+  background: var(--bg-2);
+  color: var(--text);
+}
+.lv-fd-k {
+  margin-right: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  font-stretch: 100%;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.lv-fd-row.beat-clutch .lv-fd-k,
+.lv-fd-row.beat-run .lv-fd-k {
+  color: var(--warn);
+}
+.lv-fd-row.beat-crowd .lv-fd-k {
+  color: var(--text-dim);
+}
+/* clutch time's lines carry its edge, and read a touch bigger */
+.lv-fd-row.clutch {
+  box-shadow: inset 2px 0 0 var(--warn);
+  font-size: 13.5px;
+}
+
+/* ------------------------------------------------------------------ the break's story so far */
+.lv-rep-story {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--text);
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-crowd::before,
+  .lv-crowd::after,
+  .lv-call,
+  .lv-crowd-line,
+  .lv-slow,
+  .lv-lb.clutch::after,
+  .lv-lb-wp-bar > span::after {
+    animation: none !important;
+    transition: none;
+  }
+}

@@ -5,6 +5,7 @@
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { madeAtt } from '../../core/format';
 import { SETS } from '../../core/sim/sets';
+import type { LogVoice } from './atmosphere';
 
 export interface Pt {
   x: number;
@@ -146,7 +147,18 @@ const FT_DEF: Pt[] = [
  * staying on), so working back from those is only right when no technical was made. `teams` are the
  * [home, away] abbreviations, to say whose timeout it is.
  */
-export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?: [number, number], teams?: [string, string], name?: (pid: number) => string): Script {
+/**
+ * `voice`: the night's calls for the possession's steps (see atmosphere.ts): a made basket, a block or a
+ * steal is captioned in its words, the same the play-by-play gets.
+ */
+export function buildScript(
+  log: PossLog,
+  info: (pid: number) => PInfo,
+  before?: [number, number],
+  teams?: [string, string],
+  name?: (pid: number) => string,
+  voice?: LogVoice,
+): Script {
   const off = log.off;
   const oPids = log.on[off];
   const dPids = log.on[1 - off];
@@ -233,9 +245,16 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
   let moment: Script['moment'];
   let prev: PossStep | undefined;
 
+  // the step being drawn, for its call
+  let at = 0;
   for (const st of steps) {
     stepFrames(st);
     prev = st;
+    at++;
+  }
+  /** The night's caption for the step being drawn, if it has one (and the court names players). */
+  function voiced(): string | undefined {
+    return name ? voice?.[at]?.cap : undefined;
   }
   // a made technical free throw has no step of its own: the court ends on the scoreboard's score anyway
   if (score[0] !== log.score[0] || score[1] !== log.score[1]) snap(600, { flash: { text: 'TECH FT', kind: 'make', x: 0, y: 9 }, score: [...log.score] });
@@ -468,14 +487,14 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
           fx: made ? 'make' : 'miss',
           flash: made ? { text: flashText, kind: 'make', x: 0, y: 9 } : { text: 'MISS', kind: 'miss', x: 0, y: 9 },
           score: [...score] as [number, number],
-          ...cap(made ? `${N(pid)} ${what}: good!${st.pid2 !== undefined ? ` (${N(st.pid2)} assist)` : ''}${swing}` : `${N(pid)} misses the ${what}`),
+          ...cap(made ? (voiced() ?? `${N(pid)} ${what}: good!${st.pid2 !== undefined ? ` (${N(st.pid2)} assist)` : ''}${swing}`) : `${N(pid)} misses the ${what}`),
         });
         // at the buzzer, the court lingers on it
         if (atBuzzer) snap(900);
         break;
       }
       case 'block': {
-        snap(260, { flash: { text: 'BLOCKED', kind: 'block', x: 0, y: 11 }, ...cap(`Blocked by ${N(st.pid)}!`) });
+        snap(260, { flash: { text: 'BLOCKED', kind: 'block', x: 0, y: 11 }, ...cap(voiced() ?? `Blocked by ${N(st.pid)}!`) });
         break;
       }
       case 'reb': {
@@ -502,7 +521,7 @@ export function buildScript(log: PossLog, info: (pid: number) => PInfo, before?:
         } else ball = { x: 25, y: ball.y };
         snap(420, {
           flash: { text: st.k === 'steal' ? 'STEAL' : 'TURNOVER', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
-          ...cap(st.k === 'steal' && stl !== undefined ? `${N(stl)} steals it from ${N(st.pid)}!` : `Turnover, ${N(st.pid ?? holder)}`),
+          ...cap(st.k === 'steal' && stl !== undefined ? (voiced() ?? `${N(stl)} steals it from ${N(st.pid)}!`) : `Turnover, ${N(st.pid ?? holder)}`),
         });
         break;
       }

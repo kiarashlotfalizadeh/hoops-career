@@ -13,8 +13,8 @@ export const GRAPHIC_MS = 4500;
 
 /**
  * What the graphics know about every player in the game before tip-off: his most points in a game
- * this season (a rookie's season is his career), his career totals when the game has his whole
- * career, and the scoring records in tonight's book. Read from the stored results, stats and record
+ * this season (a rookie's season is his career), his career totals and highs when the game has his
+ * whole career, and the scoring records in tonight's book. Read from the stored results, stats and record
  * book, which don't include tonight's game yet.
  */
 export function playersBefore(league: League, sim: GameSim, type: GameType = 'regular'): Map<number, PlayerBefore> {
@@ -46,10 +46,13 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
       const whole = careerOnRecord(league, p);
       const h = high.get(pid);
       const c = whole ? careerTotals(p) : null;
+      // (his highs are the league's unless his whole career is on record: only then are they his career's)
+      const best = whole && p.highs ? { pts: p.highs.pts?.[0], reb: p.highs.reb?.[0], ast: p.highs.ast?.[0] } : null;
       const franchise = lists && team ? book!.teams[tid]?.[lists.kind].players.pts?.[0]?.[0] : undefined;
       out.set(pid, {
         ...(h ? { high: { ...h, career: whole && p.experience === 0 } } : {}),
         ...(c ? { career: { pts: c.pts, reb: c.reb, ast: c.ast } } : {}),
+        ...(best ? { best } : {}),
         ...(lists && team ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post' } } : {}),
       });
     }

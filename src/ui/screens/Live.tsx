@@ -3,10 +3,12 @@
 // with what each has done), the game plan (each of tonight's numbers beside the lever that moves it),
 // the lineup and the stats; the bench bar in the tab bar's place has the timeout and the views. At a
 // period's end or in your timeout the court steps aside for the report or the huddle, on this screen.
-// Playback is a tap on the court. The broadcast itself runs in useLiveGame (live/useLiveGame.ts);
+// Playback is a tap on the court. Around it, the night: the crowd's glow and its lines, the callouts
+// for a run or a big play, clutch time on the scorebug and the court (live/atmosphere.ts, Atmos.tsx).
+// The broadcast itself runs in useLiveGame (live/useLiveGame.ts);
 // this screen draws it and makes the coaching moves (live/coaching.ts). The game is a journal
 // (state/live.ts): every move goes into it, so the game picks up where it was after the app is closed.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { neutralSite, userGameOnDay } from '../../core/league/games';
@@ -17,7 +19,7 @@ import { coachMoves } from '../../core/analysis/moves';
 import { winProb } from '../../core/analysis/winProb';
 import { Empty, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { matchupColors, teamLook } from '../teamColors';
+import { identityColor, matchupColors, matchupLooks, teamLook } from '../teamColors';
 import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
 import { skipChoices } from '../live/skip';
@@ -52,6 +54,8 @@ import type { Tactics } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
+import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
+import { CallOut, ClutchOffer, Crowd, CrowdLine, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import '../live/live.css';
 
 export default function Live() {
@@ -92,6 +96,22 @@ export default function Live() {
     [game, view, s.tick, nameOf, slotName],
   );
   const assistant = useMemo(() => leadAssistant(league), [league]);
+
+  // clutch time, as the court has drawn the game: at speed, the finish is offered at 1× (once a game)
+  const clutch = !!view && !over && isClutch(view.q, view.clock, view.sides[0].score - view.sides[1].score);
+  const [offer, setOffer] = useState(false);
+  const offered = useRef<number | null>(null);
+  const { speed, watchAt } = s;
+  useEffect(() => {
+    if (!clutch || !game || s.atBreak || offered.current === game.game.gid) return;
+    offered.current = game.game.gid;
+    if (speed <= 1) return;
+    if (clutchSlowAlways()) {
+      watchAt(1);
+      useStore.getState().toast('Clutch time: down to 1× for the finish.');
+    } else setOffer(true);
+  }, [clutch, game, speed, watchAt, s.atBreak]);
+  const closeOffer = useCallback(() => setOffer(false), []);
 
   const gameNo = useMemo(() => {
     const ser = game?.game.seriesId ? league.playoffs.find((x) => x.id === game.game.seriesId) : undefined;
@@ -202,6 +222,15 @@ export default function Live() {
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];
   const read = staffRead({ view, side: userSide, teams });
+  // the night: the run on now, the crowd, the story so far at a break
+  const night = s.night;
+  const nightRun = night ? ([0, 1] as const).map((sd) => currentRun(night.plays, sd)).find((r) => r && r.a - r.b >= RUN_MIN) : undefined;
+  const actx = s.atmoCtx.current;
+  const top = (sd: 0 | 1) => [...view.sides[sd].players].sort((a, b) => b.pts - a.pts).slice(0, 1);
+  const story = atBreak && night && actx ? breakStory(night, actx, view.q, [top(0), top(1)]) : undefined;
+  const crowd = night ? crowdLevel(night.crowd) : 2;
+  // (a team's callout wears its block's colour on the scorebug)
+  const callKit = s.call && s.call.side !== -1 ? matchupLooks(home.colors, away.colors)[s.call.side].slab : undefined;
   const notes = s.notes;
   const calls = notes.filter((n) => n.kind === 'decision').length;
   const moreBench = league.settings.liveView === 'bench';
@@ -295,6 +324,7 @@ export default function Live() {
             oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items}
             adjustments={sim.adjustments}
             onSkip={() => setPanel('skip')}
+            story={story}
           />
         );
       if (huddling) return <Huddle {...common} />;
@@ -401,7 +431,20 @@ export default function Live() {
       </div>
 
       <div className="lv-bug" ref={setBugEl}>
-        <ScoreBug ticker={s.ticker} view={view} home={home} away={away} quarter={quarter} atBreak={atBreak} context={context} wpHome={wpHome} onLeave={over ? undefined : leave}>
+        <ScoreBug
+          ticker={s.ticker}
+          view={view}
+          home={home}
+          away={away}
+          quarter={quarter}
+          atBreak={atBreak}
+          context={context}
+          wpHome={wpHome}
+          run={nightRun ? { abbrev: nightRun.side === 0 ? home.abbrev : away.abbrev, a: nightRun.a, b: nightRun.b } : undefined}
+          momentum={night?.momentum}
+          clutch={clutch}
+          onLeave={over ? undefined : leave}
+        >
           {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
         </ScoreBug>
       </div>
@@ -435,13 +478,33 @@ export default function Live() {
             onSkip={() => setPanel('skip')}
           />
         )}
+        {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side); after
+            the playback controls, so clutch time's offer can step down under them */}
+        {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? '#e8edf5' : identityColor(home.colors)} clutch={clutch} />}
+        {!s.intro && !atBreak && s.call && <CallOut ev={s.call} kit={callKit} />}
+        {!s.intro && !atBreak && s.crowdLine && !offer && <CrowdLine ev={s.crowdLine} level={crowd} />}
+        {offer && !atBreak && (
+          <ClutchOffer
+            onSlow={() => {
+              watchAt(1);
+              setOffer(false);
+            }}
+            onAlways={() => {
+              setClutchSlowAlways(true);
+              watchAt(1);
+              setOffer(false);
+            }}
+            onClose={closeOffer}
+          />
+        )}
         {!atBreak && (script || ffing || s.graphic || s.banner) && (
           <CourtLower
             drawing={script}
             ffing={ffing}
             beat={s.beat}
             capColor={script ? colors[script.off][0] : undefined}
-            graphic={s.graphic}
+            // (a callout up over the court has the moment: the graphic waits under it, one thing at a time)
+            graphic={s.call ? null : s.graphic}
             kit={teamLook((s.graphic?.side === 0 ? home : away).colors).slab}
             banner={s.intro ? undefined : s.banner}
             onDropBanner={s.dropBanner}

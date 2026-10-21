@@ -33,9 +33,10 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
 /**
  * The live scorebug, slim, as a broadcast has it over the court: each team's colour block (its name,
  * timeouts left and team fouls, both labelled), the scores, the period and the clock as the court animates them
- * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) and the
- * night's other scores under it; everything but the clock and score as of the possession the court
- * last finished drawing (`view`). The final is the final card's (FinalSlab).
+ * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) with
+ * the momentum glowing on it, and the night's other scores under it; everything but the clock and
+ * score as of the possession the court last finished drawing (`view`). In clutch time it says so.
+ * The final is the final card's (FinalSlab).
  */
 export function ScoreBug({
   ticker,
@@ -46,6 +47,9 @@ export function ScoreBug({
   atBreak,
   context,
   wpHome,
+  run: night,
+  momentum = 0,
+  clutch,
   onLeave,
   children,
 }: {
@@ -59,6 +63,12 @@ export function ScoreBug({
   context?: string;
   /** The home team's win probability, from the drawn game (undefined: not shown). */
   wpHome?: number;
+  /** The run on now ("BOS 14-2"), as the night reads it; without it, the points unanswered. */
+  run?: { abbrev: string; a: number; b: number } | null;
+  /** Who's on top lately, −1 (away) .. 1 (home): it glows on the win-probability line. */
+  momentum?: number;
+  /** Clutch time: the last five minutes within five. */
+  clutch?: boolean;
   /** A bottom line under it (the night's other scores). */
   children?: ReactNode;
   /** The way out: the game waits where it is, to be resumed from the Continue bar or its Matchup page. */
@@ -70,12 +80,15 @@ export function ScoreBug({
   const [h, a] = view.sides;
   // "in the bonus": the team that shoots free throws on every foul
   const bonus = [a.bonus ? away.abbrev : '', h.bonus ? home.abbrev : ''].filter(Boolean);
-  const run = h.run >= RUN_CHIP ? { abbrev: home.abbrev, n: h.run } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, n: a.run } : null;
+  const run = night ?? (h.run >= RUN_CHIP ? { abbrev: home.abbrev, a: h.run, b: 0 } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, a: a.run, b: 0 } : null);
+  // the side with the momentum, and how strongly (0 none, 1, 2 surging)
+  const mo = Math.abs(momentum) >= 0.55 ? 2 : Math.abs(momentum) >= 0.3 ? 1 : 0;
+  const moSide = momentum > 0 ? 'home' : 'away';
   const state = brk
     ? quarter === 2
       ? 'halftime'
       : `end of ${qLabel}`
-    : `${qLabel} ${fmtClock(clock)}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.n}-0 run` : ''}`;
+    : `${qLabel} ${fmtClock(clock)}${clutch ? ', clutch time' : ''}${bonus.length ? `, ${bonus.join(' and ')} in the bonus` : ''}${run ? `, ${run.abbrev} on a ${run.a}-${run.b} run` : ''}${mo ? `, momentum ${moSide === 'home' ? home.abbrev : away.abbrev}` : ''}`;
   const wp = wpHome !== undefined ? wpHome : null;
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors);
   // the two colour blocks never read as one: on a clash the away side wears its second colour
@@ -105,7 +118,7 @@ export function ScoreBug({
     );
   };
   return (
-    <div className="lv-lb">
+    <div className={`lv-lb${clutch && !brk ? ' clutch' : ''}`}>
       {/* its top line: the way out on the left, what's at stake (or that it's live) in the middle */}
       {onLeave ? (
         <div className="lv-lb-ctx has-leave">
@@ -124,11 +137,11 @@ export function ScoreBug({
       >
         {side(away, a, score[1], h.bonus, false)}
         <div className="lv-lb-mid" aria-hidden="true">
-          <span className="lv-lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : qLabel}</span>
+          <span className="lv-lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : clutch ? `${qLabel} · Clutch` : qLabel}</span>
           {!brk && <span className="lv-lb-clock num">{fmtClock(clock)}</span>}
           {run && (
-            <span className="lv-lb-run num">
-              {run.abbrev} {run.n}-0
+            <span key={`${run.abbrev}-${run.a}`} className="lv-lb-run num">
+              {run.abbrev} {run.a}-{run.b}
             </span>
           )}
         </div>
@@ -140,9 +153,9 @@ export function ScoreBug({
           <span className="num">
             {away.abbrev} <b>{pct(1 - wp)}</b>
           </span>
-          <span className="lv-lb-wp-bar">
-            <span style={{ width: `${(1 - wp) * 100}%`, background: awayKit }} />
-            <span style={{ width: `${wp * 100}%`, background: homeKit }} />
+          <span className={`lv-lb-wp-bar${mo ? ` mo-${mo} mo-${moSide}` : ''}`}>
+            <span style={{ width: `${(1 - wp) * 100}%`, background: awayKit, '--mo-c': awayKit } as CSSProperties} />
+            <span style={{ width: `${wp * 100}%`, background: homeKit, '--mo-c': homeKit } as CSSProperties} />
           </span>
           <span className="num">
             <b>{pct(wp)}</b> {home.abbrev}

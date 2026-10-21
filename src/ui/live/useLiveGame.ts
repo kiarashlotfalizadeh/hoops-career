@@ -1,8 +1,9 @@
 // The live game's broadcast, as a hook: it sets up (or picks up) today's game, runs the possession
 // loop that hands the court one possession at a time (key plays, the breaks, your timeouts),
 // keeps the drawn view the rest of the screen reads, tells useOverCourt what to put up over the court,
-// and finishes the game. The Live screen (screens/Live.tsx) draws what it returns and adds the
-// coaching moves; every move goes through `coach`, so the game's journal keeps it.
+// and finishes the game. The night's atmosphere (the runs, the crowd, the calls: useAtmosphere) is
+// folded as the court draws each possession. The Live screen (screens/Live.tsx) draws what it returns
+// and adds the coaching moves; every move goes through `coach`, so the game's journal keeps it.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { haptic } from '../../native';
@@ -12,6 +13,9 @@ import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type Li
 import { composites } from '../../core/ratings';
 import { gameTime } from '../../core/format';
 import type { League, PbpEntry } from '../../core/types';
+import type { GameSim } from '../../core/sim/engine';
+import { neutralSite } from '../../core/league/games';
+import { FRANCHISES } from '../../core/teams';
 import type { PossLog } from '../../core/sim/log';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
 import { gameKeys } from '../../core/analysis/keys';
@@ -29,6 +33,34 @@ import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
 import type { SkipTo } from './skip';
 import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Status } from './session';
+import { stakesOf, useAtmosphere } from './useAtmosphere';
+import type { AtmoCtx } from './atmosphere';
+import type { FeedRow } from './Feed';
+
+/** Teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on every other screen. */
+function simNames(league: League, sim: GameSim): (pid: number) => string {
+  const side = new Map<number, number>();
+  const per = sim.T.map((t, i) => {
+    for (const sp of t.players) side.set(sp.pid, i);
+    return rosterNames(t.players.map((sp) => league.players[sp.pid] ?? { pid: sp.pid, firstName: '', lastName: sp.name }));
+  });
+  return (pid: number) => per[side.get(pid) ?? 0](pid);
+}
+
+/** What the night's atmosphere knows of a live game: who's playing where, and how much it means. */
+function atmoCtx(league: League, lg: LiveGame): AtmoCtx {
+  const g = lg.game;
+  const [h, a] = [league.teams[g.home], league.teams[g.away]];
+  return {
+    gid: g.gid,
+    user: lg.userSide,
+    teams: [h.name, a.name],
+    abbrevs: [h.abbrev, a.abbrev],
+    arena: neutralSite(g) ? undefined : FRANCHISES[g.home]?.arena,
+    name: simNames(league, lg.sim),
+    stakes: stakesOf(league, g),
+  };
+}
 
 export function useLiveGame() {
   const league = useLeague();
@@ -82,7 +114,10 @@ export function useLiveGame() {
   // the banners and the broadcast graphics over the court
   const oc = useOverCourt({ paused, atBreak });
   const { gfx, queueBanner, markSaid, seedGraphics, showGraphic, sayStaff, reset: resetOverCourt } = oc;
-  const [feed, setFeed] = useState<{ i: number; e: PbpEntry }[]>([]);
+  // the night's atmosphere: the runs, the crowd, clutch time, the calls
+  const atmo = useAtmosphere({ paused, held: !!oc.banner });
+  const atmoApi = atmo.api;
+  const [feed, setFeed] = useState<FeedRow[]>([]);
   const [panel, setPanel] = useState<Panel>('none');
   /** Your timeout, while it's taken: the game waits in the huddle (on the screen, under any sheet opened from it). */
   const [huddle, setHuddle] = useState(false);
@@ -120,16 +155,7 @@ export function useLiveGame() {
   const away = game ? league.teams[game.game.away] : null;
   const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
 
-  // teammates who share a last name read "Jal. Williams" / "Jay. Williams", as on every other screen
-  const nameOf = useMemo(() => {
-    if (!game) return () => '';
-    const side = new Map<number, number>();
-    const per = game.sim.T.map((t, i) => {
-      for (const sp of t.players) side.set(sp.pid, i);
-      return rosterNames(t.players.map((sp) => league.players[sp.pid] ?? { pid: sp.pid, firstName: '', lastName: sp.name }));
-    });
-    return (pid: number) => per[side.get(pid) ?? 0](pid);
-  }, [game, league]);
+  const nameOf = useMemo(() => (game ? simNames(league, game.sim) : () => ''), [game, league]);
 
   /** Who the staff would send in for one of your players: a rested bench player, the same size if possible. */
   const subFor = useCallback(
@@ -209,20 +235,26 @@ export function useLiveGame() {
   const loopHelpers = useRef({ alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue });
   loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
 
-  /** Append play-by-play the sim has written since the last read (timeouts, subs and period ends included); returns the new lines, newest first. */
-  const flushFeed = useCallback((): PbpEntry[] => {
-    const lg = liveRef.current;
-    if (!lg) return [];
-    const pbp = lg.sim.pbp;
-    if (pbp.length <= pbpRead.current) return [];
-    const fresh = pbp
-      .slice(pbpRead.current)
-      .map((e, j) => ({ i: pbpRead.current + j, e }))
-      .reverse();
-    pbpRead.current = pbp.length;
-    setFeed((f) => [...fresh, ...f].slice(0, FEED_MAX));
-    return fresh.map((x) => x.e);
-  }, []);
+  /**
+   * Append play-by-play the sim has written since the last read (timeouts, subs and period ends
+   * included), in the night's voice with the moments it called: the atmosphere folds the possessions
+   * first (`loud`: its biggest moment goes up over the court). Returns the sim's new lines, newest first.
+   */
+  const flushFeed = useCallback(
+    (loud = true): PbpEntry[] => {
+      const lg = liveRef.current;
+      if (!lg) return [];
+      const logFrom = atmoApi.catchUp(lg, loud);
+      const pbp = lg.sim.pbp;
+      if (pbp.length <= pbpRead.current) return [];
+      const rows = atmoApi.rows(pbp, pbpRead.current, lg.logs, logFrom).reverse();
+      const fresh = pbp.slice(pbpRead.current).reverse();
+      pbpRead.current = pbp.length;
+      setFeed((f) => [...rows, ...f].slice(0, FEED_MAX));
+      return fresh;
+    },
+    [atmoApi],
+  );
 
   /** The court has caught up with the sim: show the game as it stands, and what happened since the last look. */
   const takeView = useCallback(
@@ -244,12 +276,13 @@ export function useLiveGame() {
       }
       // a game picked up part-way: only what happens from here gets a graphic (see seedGraphics)
       if (prev) seedGraphics(() => loopHelpers.current.graphicsDue(prev, lg));
-      // a broadcast graphic, now and then (not along a skip: that would be a string of them)
-      const g = banner ? loopHelpers.current.graphicFor(next, lg) : null;
+      // a broadcast graphic, now and then (not along a skip: that would be a string of them; and not
+      // with a callout just up over the court: one thing at a time, the graphic comes next)
+      const g = banner && !atmoApi.calledNow() ? loopHelpers.current.graphicFor(next, lg) : null;
       if (g) showGraphic(g, next.elapsed);
       return next;
     },
-    [queueBanner, markSaid, seedGraphics, showGraphic],
+    [queueBanner, markSaid, seedGraphics, showGraphic, atmoApi],
   );
 
   const clearFF = () => {
@@ -267,6 +300,8 @@ export function useLiveGame() {
       setView(viewRef.current);
       setEvents([]);
       resetOverCourt(!!lg && lg.steps > 0);
+      const lgNow = useStore.getState().league;
+      atmoApi.reset(lg, lg && lgNow ? atmoCtx(lgNow, lg) : null);
       // a game picked up with your timeout called and not yet shown (the screen was left right after
       // calling it): the huddle still comes, as the court gets to it
       const called = !!lg && lg.steps > 0 && !lg.over && (lg.timeoutWaiting || lg.sim.timeoutOpens() === lg.userSide);
@@ -289,20 +324,16 @@ export function useLiveGame() {
         setStatus('none');
         return;
       }
+      // the play-by-play so far, in the voice it had as it was played (it's the same game, so the same words)
       const pbp = lg.sim.pbp;
       pbpRead.current = pbp.length;
-      setFeed(
-        pbp
-          .slice(-FEED_MAX)
-          .map((e, j) => ({ i: pbp.length - Math.min(FEED_MAX, pbp.length) + j, e }))
-          .reverse(),
-      );
+      setFeed(atmoApi.rows(pbp, 0, lg.logs, 0).slice(-FEED_MAX).reverse());
       const score: [number, number] = [lg.sim.T[0].score, lg.sim.T[1].score];
       announced.current = score.join('-');
       setTicker(createTicker(lg.sim.clock, score));
       setStatus('live');
     },
-    [resetOverCourt],
+    [resetOverCourt, atmoApi],
   );
 
   /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
@@ -450,6 +481,8 @@ export function useLiveGame() {
       // a break is a good moment to save where the game is (the app may be closed next)
       edit(() => void lg.checkpoint());
       setScript(null);
+      // (the court steps aside: its callout goes with it, the period report tells the story)
+      atmoApi.clear();
       setAtBreak(true);
       setPaused(true);
       setClipOpen(false);
@@ -457,23 +490,27 @@ export function useLiveGame() {
       ticker.set(lg.sim.clock, [h.score, a.score], true);
       setAnnounce(`${lg.sim.q === 2 ? 'Halftime' : `End of ${periodLabel(lg.sim.q)}`}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     },
-    [ticker],
+    [ticker, atmoApi],
   );
 
-  /** Something in the sim's last possession the assistant would bring up: worth drawing in key plays mode. */
-  const eventAhead = useCallback((lg: LiveGame, before: Drawn) => {
-    const s = lg.sim;
-    if (s.injuries.length > before.injuries || s.adjustments.length > before.adjustments) return true;
-    if (s.T.some((t) => t.players.some((p) => p.out === 1 && drawnPlayer(before, p.pid)?.out !== 1))) return true;
-    const ahead = snapshot(s);
-    // a play that puts up a graphic is worth seeing
-    const g = loopHelpers.current.graphicFor(ahead, lg);
-    if (g && g.kind !== 'team') return true;
-    const inputs = [before, ahead].map((d) => loopHelpers.current.alertInput(d));
-    if (!inputs[0] || !inputs[1]) return false;
-    const was = new Set(liveAlerts(inputs[0]).map((x) => x.id));
-    return liveAlerts(inputs[1]).some((x) => !was.has(x.id) && !opts.current.dismissed.includes(x.id));
-  }, []);
+  /** Something in the sim's last possession the assistant would bring up, or the night would call: worth drawing in key plays mode. */
+  const eventAhead = useCallback(
+    (lg: LiveGame, before: Drawn) => {
+      const s = lg.sim;
+      if (atmoApi.bigAhead(lg)) return true;
+      if (s.injuries.length > before.injuries || s.adjustments.length > before.adjustments) return true;
+      if (s.T.some((t) => t.players.some((p) => p.out === 1 && drawnPlayer(before, p.pid)?.out !== 1))) return true;
+      const ahead = snapshot(s);
+      // a play that puts up a graphic is worth seeing
+      const g = loopHelpers.current.graphicFor(ahead, lg);
+      if (g && g.kind !== 'team') return true;
+      const inputs = [before, ahead].map((d) => loopHelpers.current.alertInput(d));
+      if (!inputs[0] || !inputs[1]) return false;
+      const was = new Set(liveAlerts(inputs[0]).map((x) => x.id));
+      return liveAlerts(inputs[1]).some((x) => !was.has(x.id) && !opts.current.dismissed.includes(x.id));
+    },
+    [atmoApi],
+  );
 
   const nextRef = useRef<() => void>(() => {});
   const nextPossession = useCallback(() => {
@@ -544,9 +581,11 @@ export function useLiveGame() {
       return;
     }
     beat.set(0);
-    setScript(buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev], loopHelpers.current.nameOf));
+    setScript(
+      buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev], loopHelpers.current.nameOf, atmoApi.voiceAhead(lg)),
+    );
     setTick((t) => t + 1);
-  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead]);
+  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi]);
   nextRef.current = nextPossession;
 
   /** The court finished drawing: on to the next possession. */
@@ -580,7 +619,9 @@ export function useLiveGame() {
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     const s = lg.sim;
     if (!lg.over && s.clock <= 0.05 && s.q >= 4 && s.T[0].score !== s.T[1].score) lg.step();
-    flushFeed();
+    // (along a skip the night's moments go in the play-by-play, not over the court)
+    flushFeed(false);
+    atmoApi.clear();
     // what happened along the way waits in the alerts: no string of banners
     takeView(lg, false);
     oc.afterSkip();
@@ -612,6 +653,8 @@ export function useLiveGame() {
     if (!paused && lg) edit(() => void lg.checkpoint());
     setPaused((p) => !p);
   };
+  /** Watch at another speed for now (clutch time at 1×): the Settings default stays as it was. */
+  const watchAt = (to: number) => setSpeed(to);
   const pickSpeed = (to: number) => {
     setSpeed(to);
     // the next game starts at the speed you left this one at (it's the Settings default too)
@@ -714,6 +757,12 @@ export function useLiveGame() {
     atBreak,
     feed,
     graphic: oc.graphic,
+    // the atmosphere: the night as drawn, the callout and the crowd's line up now, what it knows of the game
+    night: atmo.tally,
+    call: atmo.call,
+    crowdLine: atmo.crowdLine,
+    atmoCtx: atmo.ctx,
+    watchAt,
     banner: oc.banner,
     dropBanner: oc.dropBanner,
     courtDone,

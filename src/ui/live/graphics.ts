@@ -1,6 +1,7 @@
 // Broadcast graphics for the live game: now and then a lower-third about a player or a team ("Brunson:
-// 14 points in the 4th", "5 of 5 from three", a new season high, a career milestone, "BOS 18-4 on
-// fast-break points" at a break, "OKC on a 12-0 run"). Pure: it reads the game as the court has drawn it (the snapshot and
+// 14 points in the 4th", "5 of 5 from three", a new season or career high, a career milestone, a
+// triple-double watch, "BOS 18-4 on fast-break points" at a break). Runs are the night's callouts and
+// the scorebug's (atmosphere.ts). Pure: it reads the game as the court has drawn it (the snapshot and
 // the possession logs drawn so far) and what was known before tip-off, and says only what those
 // show. The Live screen shows at most one every two minutes of game time, each once.
 
@@ -10,7 +11,7 @@ import { STAT_WORD, type MilestoneStat } from '../../core/analysis/milestones';
 import { periodLabel } from '../stats';
 import type { Drawn } from './drawn';
 
-export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team' | 'run';
+export type GraphicKind = 'milestone' | 'record' | 'high' | 'triple' | 'big' | 'perfect' | 'solo' | 'quarter' | 'watch' | 'streak' | 'double' | 'team';
 
 export interface Graphic {
   id: string;
@@ -29,6 +30,8 @@ export interface PlayerBefore {
   high?: { pts: number; games: number; career: boolean };
   /** Career regular-season totals, when his whole career is on record (see careerOnRecord). */
   career?: Record<MilestoneStat, number>;
+  /** His career highs (Player.highs), when his whole career is on record: points, rebounds, assists. */
+  best?: Partial<Record<MilestoneStat, number>>;
   /**
    * The points records he's playing for tonight (see records.ts), once the book has a season behind
    * it: his franchise's (named by its team name) and the league's, in tonight's book (regular season
@@ -153,8 +156,27 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
             priority: 57,
           });
       }
-      // a high: a new one any time, one within reach in the fourth quarter or overtime
-      const high = before?.high;
+      // a career high (his whole career on record): a new one any time, one within reach late
+      const best = before?.best;
+      const career = best?.pts !== undefined && best.pts >= HIGH_MIN && b.pts > best.pts;
+      if (career) add({ id: `ch-${b.pid}-pts`, kind: 'high', tag: 'New career high', text: `${name}: ${b.pts} points, past his career high of ${best.pts}`, side, priority: 94 });
+      else if (best?.pts !== undefined && best.pts >= 30 && q >= 4 && b.pts >= best.pts - 4)
+        add({
+          id: `chw-${b.pid}`,
+          kind: 'watch',
+          tag: 'Career high watch',
+          text: b.pts === best.pts ? `${name}: ${b.pts} points, matching his career high` : `${name}: ${b.pts} points, ${best.pts - b.pts} off his career high (${best.pts})`,
+          side,
+          priority: 59,
+        });
+      for (const stat of ['reb', 'ast'] as const) {
+        const was = best?.[stat];
+        const tonight = stat === 'reb' ? reb(b) : b.ast;
+        if (was !== undefined && was >= 10 && tonight > was)
+          add({ id: `ch-${b.pid}-${stat}`, kind: 'high', tag: 'New career high', text: `${name}: ${tonight} ${STAT_WORD[stat][1]}, a career high`, side, priority: 80 });
+      }
+      // a season high: a new one any time (past a career high, that one says it), one within reach in the fourth quarter or overtime
+      const high = career ? undefined : before?.high;
       if (high && high.games >= HIGH_GAMES && high.pts >= HIGH_MIN) {
         const which = high.career ? 'career' : 'season';
         if (b.pts > high.pts)
@@ -191,7 +213,12 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
         });
       else if (tens === 2) {
         const parts = [`${b.pts} pts`, `${reb(b)} reb`, `${b.ast} ast`, `${b.stl} stl`, `${b.blk} blk`].filter((_, i) => [b.pts, reb(b), b.ast, b.stl, b.blk][i] >= 10);
-        add({ id: `dd-${b.pid}`, kind: 'double', tag: 'Double-double', text: `${name}: ${parts.join(', ')}${q <= 2 && !ended ? ' in the first half' : ''}`, side, priority: 40 });
+        // a third within three of ten in the second half: the triple-double watch
+        const third = [b.pts, reb(b), b.ast].filter((x) => x < 10).sort((x, y) => y - x)[0];
+        if (q >= 3 && third !== undefined && third >= 7)
+          add({ id: `tdw-${b.pid}`, kind: 'watch', tag: 'Triple-double watch', text: `${name}: ${b.pts} pts, ${reb(b)} reb, ${b.ast} ast`, side, priority: 58 });
+        else
+          add({ id: `dd-${b.pid}`, kind: 'double', tag: 'Double-double', text: `${name}: ${parts.join(', ')}${q <= 2 && !ended ? ' in the first half' : ''}`, side, priority: 40 });
       }
       // shooting: perfect from three (four or more), perfect from the field (six or more), or six straight makes
       if (b.tpa >= 4 && b.tpm === b.tpa) add({ id: `p3-${b.pid}`, kind: 'perfect', tag: 'Shooting', text: `${name}: ${b.tpm} of ${b.tpa} from three`, side, priority: 70 });
@@ -241,22 +268,6 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
         add({ id: `solo-${pid}-${startScore}`, kind: 'solo', tag: 'Scoring', text: `${names(pid)} has scored ${a.abbrevs[side]}'s last ${run} points`, side, priority: 65 });
       }
     }
-  }
-
-  // a team on a 10-0 run or more (once a run: its id is the score it started from), bigger in a close game late
-  for (const side of [0, 1] as const) {
-    const run = view.sides[side].run;
-    if (run < 10 || ended || !exact[side]) continue;
-    const from = view.sides[side].score - run;
-    const close = Math.abs(view.sides[0].score - view.sides[1].score) <= 8;
-    add({
-      id: `run-${side}-${from}-${view.sides[1 - side].score}`,
-      kind: 'run',
-      tag: 'Run',
-      text: `${a.abbrevs[side]} on a ${run}-0 run`,
-      side,
-      priority: q >= 4 && close ? 84 : 58,
-    });
   }
 
   // at a break: the most lopsided team number (8 points or more apart) not shown yet
