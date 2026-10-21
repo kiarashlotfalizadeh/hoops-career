@@ -232,6 +232,11 @@ body.sheet-open .toast {
   --ink-2: #e9e5dc;
   --paper-ink: #121212;
   --accent-text: var(--team-night);
+  --good: #6fdc9c;
+  --bad: #ff8f80;
+  --warn: #ffc864;
+  --info: #8cbcff;
+  --tier-elite: #f2c54b;
   position: fixed;
   left: var(--gut-l);
   right: var(--gut-r);

@@ -317,7 +317,7 @@ const grain = (n: number) => {
 /**
  * The maple floor every game is played on, flat as a broadcast graphic draws it (no lighting, no gloss):
  * the boards, their joints, the darker stain of the apron around the court. The Hardwood look's floor;
- * the tactics board's half court paints the same colours.
+ * the tactics board's half court paints the same colours (from the --maple tokens in tokens.css).
  */
 export const MAPLE = { wood: '#dcae76', light: 'rgba(255,246,228,', dark: 'rgba(122,72,24,', joint: 'rgba(122,72,24,0.2)', apron: '#b07a46' } as const;
 

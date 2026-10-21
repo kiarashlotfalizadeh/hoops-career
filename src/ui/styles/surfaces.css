@@ -134,6 +134,10 @@ button.card:disabled {
 .slab.no-court::before {
   display: none;
 }
+/* a figure that steps back on a slab (the loser's score): lighter, still 3:1 for large type */
+.slab .lo {
+  color: color-mix(in srgb, #fff 66%, var(--slab));
+}
 .slab.plain {
   box-shadow: none;
 }

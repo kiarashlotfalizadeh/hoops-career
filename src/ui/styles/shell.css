@@ -150,6 +150,11 @@
   --accent: var(--team-night);
   --accent-ink: var(--team-night-ink);
   --accent-text: var(--team-night);
+  /* signals lifted to read on ink */
+  --good: #6fdc9c;
+  --bad: #ff8f80;
+  --warn: #ffc864;
+  --info: #8cbcff;
   color: var(--text);
 }
 .bottomnav {

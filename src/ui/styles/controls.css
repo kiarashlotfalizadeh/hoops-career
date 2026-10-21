@@ -183,6 +183,13 @@
 .seg.tabs button.on:first-child::before {
   left: 0;
 }
+/* (the sticky page tabs pad their own row to the gutter: their first tab keeps its padding) */
+.lg-tabs .seg.tabs > button:first-child {
+  padding-left: 12px;
+}
+.lg-tabs .seg.tabs > button.on:first-child::before {
+  left: 12px;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;

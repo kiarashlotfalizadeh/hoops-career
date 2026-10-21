@@ -124,6 +124,11 @@
   --tier-avg: #19804a;
   --tier-low: #57534b;
   --tier-bad: #7d786e;
+  /* the floor: maple boards, a second board tone and the seams between them (the live court's
+     floor in live/Court.tsx MAPLE, the tactics board) */
+  --maple: #dcae76;
+  --maple-2: #d4a46b;
+  --maple-seam: rgba(122, 72, 24, 0.2);
   /* your team: set by applyAccent from its colours */
   --team: #2f6fde;
   --team-2: #ffc72c;

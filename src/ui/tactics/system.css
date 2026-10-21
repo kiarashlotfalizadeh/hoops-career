@@ -257,11 +257,11 @@
 
 /* your five on the floor: a maple half court (the live game's floor, from the bench), the boards in
    two honey tones with their seams, your colour painted in the key and the centre circle, the lines
-   in white. The maple tones are the board's own: no token holds a wood colour */
+   in white */
 .tx-floor {
-  --tx-maple: #dfb57e;
-  --tx-maple-2: #d8ab72;
-  --tx-seam: rgba(120, 72, 24, 0.22);
+  --tx-maple: var(--maple);
+  --tx-maple-2: var(--maple-2);
+  --tx-seam: var(--maple-seam);
   --tx-court-line: var(--paper-ink);
   position: relative;
   container-type: inline-size;
