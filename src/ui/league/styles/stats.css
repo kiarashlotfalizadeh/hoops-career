@@ -49,11 +49,11 @@
   padding: 0 16px 4px;
 }
 .lg-lead-h h3 {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-family: var(--head);
+  font-stretch: 108%;
+  font-size: 16.5px;
+  font-weight: 880;
+  letter-spacing: -0.03em;
   color: var(--text);
 }
 .lg-lead-h h3 {
@@ -97,25 +97,24 @@
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  font-size: 12.5px;
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
+  font-size: 11.5px;
   color: var(--text-dim);
 }
 .lg-lead-val {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 40px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 28px;
   line-height: 0.95;
-  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   text-align: right;
+  letter-spacing: -0.04em;
 }
 .lg-lead-val small {
   display: block;
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  font-size: 12px;
-  font-weight: 560;
+  font-size: 11.5px;
+  font-weight: 500;
   letter-spacing: 0;
   color: var(--text-dim);
   margin-top: 4px;
@@ -132,19 +131,19 @@
 }
 .lg-lead-row .r {
   color: var(--text-dim);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 660;
-  font-size: 15px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 12.5px;
   text-align: right;
+  letter-spacing: -0.04em;
 }
 .lg-lead-row .v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 16px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 13px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 .lg-lead-row:active,
 .lg-lead-top:active {

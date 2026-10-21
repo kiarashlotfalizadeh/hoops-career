@@ -23,8 +23,10 @@
 .lg-team-over {
   flex: 1;
   min-width: 0;
-  font-size: 13px;
-  font-weight: 560;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -50,8 +52,13 @@
   margin-top: 4px;
   font-size: 40px;
   line-height: 0.95;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.04em;
   overflow-wrap: anywhere;
+}
+@media (min-width: 640px) {
+  .lg-team-name {
+    font-size: 48px;
+  }
 }
 .lg-team-tags {
   display: flex;
@@ -70,37 +77,25 @@
 .lg-team-wl {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 52px;
-  line-height: 0.9;
-  letter-spacing: -0.01em;
+  font-weight: 900;
+  font-size: 84px;
+  line-height: 0.8;
+  letter-spacing: -0.035em;
 }
 .lg-team-rank {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-2);
+  font-size: 14.5px;
+  font-weight: 660;
+  color: var(--text);
 }
 .lg-team-rec > :first-child {
   flex: none;
 }
 
-/* tags on the team's colours: a dark ground under each, so a tag keeps its tone and reads as it does
-   in Season by season (not the team's colour through a glass) */
-.lg-team-tags .tag {
-  color: #fff;
-  background: color-mix(in srgb, var(--bg) 80%, transparent);
-}
-.lg-team-tags .tag.good {
-  color: var(--good);
-}
-.lg-team-tags .tag.warn {
-  color: var(--warn);
-}
-.lg-team-tags .tag.info {
-  color: var(--info);
-}
+/* a tag on the team's colours: white on a white wash whatever its tone (a paper tone would sink into the colour) */
+.lg-team-tags .tag,
 .lg-team-tags .tag.lg-gold {
-  color: var(--tier-elite);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
 }
 
 /* the slab's foot: their Matchup page and a trade */
@@ -127,17 +122,18 @@
   justify-content: space-between;
 }
 .lg-pay-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 24px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 19.5px;
   line-height: 1;
+  letter-spacing: -0.04em;
 }
 .lg-pay-foot {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11.5px;
+  font-family: var(--mono);
+  font-size: 11px;
   color: var(--text-dim);
 }
 
@@ -164,7 +160,7 @@
   flex: none;
   padding: 3px 8px;
   border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--team-text) 14%, transparent);
+  background: color-mix(in srgb, var(--team) 12%, transparent);
   font-size: 12px;
   font-weight: 600;
   color: var(--text-2);

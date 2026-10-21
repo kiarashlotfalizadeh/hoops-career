@@ -18,7 +18,7 @@ import './legacy.css';
 import { plural } from '../../core/format';
 
 /** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
-export function FranchiseFigures({ league, tid }: { league: League; tid: number }) {
+export function FranchiseFigures({ league, tid, onSlab }: { league: League; tid: number; onSlab?: boolean }) {
   // (a season not yet begun isn't one of its seasons yet)
   const seasons = league.teams[tid].seasons.filter((s) => s.season < league.season || s.won + s.lost > 0 || league.phase !== 'preseason');
   const finished = seasons.filter((s) => s.season < league.season || !['preseason', 'regular'].includes(league.phase));
@@ -33,7 +33,8 @@ export function FranchiseFigures({ league, tid }: { league: League; tid: number 
           { k: 'Seasons', v: seasons.length, s: 'in this save' },
           { k: 'Record', v: `${w}-${l}`, s: w + l ? winPctLabel(w, l) : undefined },
           { k: 'Playoffs', v: finished.filter((s) => s.playoffRound >= 1).length },
-          { k: 'Titles', v: titles, color: titles ? 'var(--tier-elite)' : undefined },
+          // (gold on paper; on a team's slab every figure is white)
+          { k: 'Titles', v: titles, color: titles && !onSlab ? 'var(--tier-elite)' : undefined },
         ]}
       />
     </div>

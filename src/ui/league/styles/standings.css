@@ -22,8 +22,8 @@
   min-height: 36px;
   color: var(--text-dim);
   font-size: 12px;
-  font-weight: 620;
-  border-bottom: 1px solid var(--line-3);
+  font-weight: 640;
+  border-bottom: 2px solid var(--ink);
   /* words: a tabular hyphen would space out "W-L" */
   font-variant-numeric: normal;
 }
@@ -34,12 +34,12 @@
   text-align: right;
 }
 .lg-st-row .rk {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 680;
-  font-size: 16px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
   color: var(--text-dim);
   text-align: right;
+  letter-spacing: -0.04em;
 }
 .lg-st-head .rk,
 .lg-st-head > span {
@@ -61,11 +61,11 @@
 }
 
 .lg-st-row .wl {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 18px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
   color: var(--text);
+  letter-spacing: -0.04em;
 }
 .lg-st-row .wl.good {
   color: var(--good);
@@ -74,10 +74,10 @@
   color: var(--bad);
 }
 .lg-st-row .strk {
-  font-weight: 660;
+  font-weight: 600;
 }
 .lg-st-row .hi {
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text);
 }
 .lg-st-row .hi.good {
@@ -96,14 +96,16 @@
   display: none;
 }
 .lg-conf {
+  font-family: var(--mono);
   font-size: 11px;
-  font-weight: 650;
+  font-weight: 500;
   color: var(--text-dim);
 }
 
 .lg-clinch {
+  font-family: var(--mono);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .lg-clinch.x {
@@ -125,6 +127,15 @@
 
 .lg-st-row > span {
   white-space: nowrap;
+}
+/* the figures in the box score's mono */
+.lg-st-row:not(.lg-st-head) > :nth-child(n + 4) {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  letter-spacing: -0.03em;
+}
+.lg-st-row:not(.lg-st-head) > .wl {
+  font-size: 14.5px;
 }
 
 /* phones: tighter columns leave room for a name (or an abbreviation) and its clinch mark */

@@ -85,21 +85,24 @@ export function DayScoreboard({ league }: { league: League }) {
 
   return (
     <>
+      {/* the day is the poster: its date as the headline, its games counted over it, the stepper beside */}
       <div className="lg-day">
-        <button className="iconbtn" disabled={prev === undefined} onClick={() => go(prev)} aria-label="Previous day">
-          <ChevronLeft size={20} />
-        </button>
         <div className="mid">
-          <div className="lg-day-d">{fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}</div>
-          <div className="lg-day-s">
+          <p className="over">
             {isToday ? 'Today · ' : ''}
             {plural(games.length, 'game')}
-            {played && played < games.length ? ` · ${played} final` : played ? ' · final' : ''}
-          </div>
+            {played && played < games.length ? ` · ${played} final` : played ? ' · all final' : ''}
+          </p>
+          <h2 className="lg-day-d">{fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}</h2>
         </div>
-        <button className="iconbtn" disabled={next === undefined} onClick={() => go(next)} aria-label="Next day">
-          <ChevronRight size={20} />
-        </button>
+        <div className="lg-day-nav">
+          <button className="iconbtn" disabled={prev === undefined} onClick={() => go(prev)} aria-label="Previous day">
+            <ChevronLeft size={20} />
+          </button>
+          <button className="iconbtn" disabled={next === undefined} onClick={() => go(next)} aria-label="Next day">
+            <ChevronRight size={20} />
+          </button>
+        </div>
       </div>
       {day !== fallback && (
         <button className="btn xs ghost lg-jump" onClick={() => setDayStr('')}>

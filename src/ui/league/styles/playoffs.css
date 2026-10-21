@@ -16,8 +16,9 @@
 }
 .bk-head span {
   text-align: center;
-  font-size: 12px;
-  font-weight: 620;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -68,26 +69,31 @@
 .bk-s {
   width: 100%;
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 1px solid var(--line-2);
+  background: var(--raised);
+  border: 1.25px solid var(--line-3);
   overflow: hidden;
   text-align: left;
   display: block;
 }
 button.bk-s:active,
 a.bk-s:active {
-  background: var(--surface-2);
+  background: var(--surface);
 }
+/* a series under way: printed heavier */
 .bk-s.live {
-  border-color: var(--line-3);
+  border-width: 2px;
+  border-color: var(--ink);
 }
-/* your series: your team's edge */
+/* your series: your colour's wash, ringed in it */
 .bk-s.me {
   border-color: var(--team-text);
+  background: color-mix(in srgb, var(--team) 10%, var(--raised));
+  --text-dim: var(--text-2);
 }
 .bk-s.tbd {
   background: transparent;
   border-style: dashed;
+  border-color: var(--line-2);
 }
 .bk-t {
   display: grid;
@@ -107,20 +113,20 @@ a.bk-s:active {
   height: 30px;
 }
 .bk-t .sd {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 10px;
   color: var(--text-dim);
   text-align: right;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.04em;
 }
 .bk-t .w {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 17px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 .bk-t.win .w {
   color: var(--good);
@@ -134,16 +140,18 @@ a.bk-s:active {
 }
 .bk-t .tb {
   color: var(--text-dim);
-  font-size: 12px;
-  font-weight: 540;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
 }
 /* no mark yet: "Play-in" takes the mark's room too, so it fits a phone-width bracket */
 .bk-t .bk-wide {
   grid-column: span 2;
 }
 .bk-rec {
-  font-size: 11.5px;
-  font-weight: 540;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .bk-link {
@@ -237,24 +245,25 @@ a.bk-fcard:active {
   opacity: 0.55;
 }
 .bk-finals .score {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 44px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 36px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
 }
 .bk-fname {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 750;
+  font-weight: 880;
   font-size: 18px;
   line-height: 1.12;
   letter-spacing: -0.026em;
   max-width: 100%;
 }
 .bk-fconf {
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
   color: var(--text-dim);
 }
 .bk-vs {
@@ -305,11 +314,11 @@ a.lg-sr-lead:active {
   background: var(--surface);
 }
 .lg-sr-row .g {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 680;
-  font-size: 15px;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 12.5px;
   color: var(--text-dim);
+  letter-spacing: -0.04em;
 }
 .lg-next {
   color: var(--accent-text);
@@ -343,4 +352,21 @@ a.lg-sr-lead:active {
 /* the conference chips right under the tabs, as every section's one control */
 .lg-tabs + .bk-only-narrow {
   margin-top: calc(14px - var(--gap-page));
+}
+/* a series' games and leaders: the box score's mono */
+.lg-sr-row > .small,
+.lg-sr-row > .tiny,
+.lg-sr-lead > .num,
+.lg-sr-head > span {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+}
+.lg-sr-row > .small {
+  font-size: 13px;
+}
+.lg-sr-lead > .num {
+  font-size: 13px;
+}
+.lg-sr-head > span {
+  font-size: 11.5px;
 }

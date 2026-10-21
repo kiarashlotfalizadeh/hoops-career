@@ -11,7 +11,7 @@ import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
-import { OutcomeTag, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
+import { OutcomeTag, PosterSlab, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
 import { plural } from '../../core/format';
 
 interface Row {
@@ -70,11 +70,19 @@ export function CoachesView({ league }: { league: League }) {
   return (
     <>
       {me && (
-        <Section title="Your career" right={<span className="lg-sec-meta">{plural(me.k.stints.length, 'job')}</span>}>
+        <PosterSlab
+          colors={league.teams[league.userTid].colors}
+          over={`Your career · ${plural(me.k.stints.length, 'job')}`}
+          mark={<TeamLogo tid={league.userTid} size={44} decorative />}
+          region={`${league.teams[league.userTid].region} ${league.teams[league.userTid].name}`}
+          name={league.coachName}
+          fig={`${me.k.won}-${me.k.lost}`}
+          figLabel={`${winPctLabel(me.k.won, me.k.lost)} · ${plural(me.k.seasons, 'season')} · ${plural(me.k.playoffs, 'playoff run')} · ${plural(me.k.titles, 'title')}`}
+        />
+      )}
+      {me && (
+        <Section title="Your jobs">
           <div className="card flush">
-            <div className="lg-strip lg-coach-line">
-              <CareerLine k={me.k} />
-            </div>
             <div className="list lg-jobs">
               {[...me.k.stints].reverse().map((j, i) => (
                 <JobRow key={i} league={league} j={j} />

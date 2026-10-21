@@ -3,7 +3,6 @@
 // as they were that day; a player still in the save links to his page.
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Target, Zap } from 'lucide-react';
 import type { Dunk, Dunker, League, SeasonAwards, ThreeShooter } from '../../core/types';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section } from '../components/ui';
@@ -59,11 +58,7 @@ function ThreeCard({ league, three }: { league: League; three: ThreeShooter[] })
   const finalOff = tiebreak(three, (e) => e.finalOff);
   return (
     <Section
-      title={
-        <h3>
-          <Target size={13} aria-hidden="true" /> Three-Point Contest
-        </h3>
-      }
+      title="Three-Point Contest"
       right={
         <Help title="Three-Point Contest">
           <p className="lg-p">27 balls a round, 40 points at most: four racks of four plus a money ball, a rack of money balls, two deep threes. The top three go to the final.</p>
@@ -114,11 +109,7 @@ function DunkList({ label, dunks }: { label: string; dunks?: Dunk[] }) {
 function DunkCard({ league, dunk }: { league: League; dunk: Dunker[] }) {
   return (
     <Section
-      title={
-        <h3>
-          <Zap size={13} aria-hidden="true" /> Slam Dunk Contest
-        </h3>
-      }
+      title="Slam Dunk Contest"
       right={
         <Help title="Slam Dunk Contest">
           <p className="lg-p">Five judges give each dunk 6-10. Two dunks a round, the top two to the final; ties go to a dunk-off.</p>

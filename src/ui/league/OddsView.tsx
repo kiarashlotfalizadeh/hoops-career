@@ -3,7 +3,7 @@ import { FORECAST_SIMS, pct, type Forecast, type TeamOdds } from '../../core/ana
 import { fmtDate } from '../../core/league/helpers';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
-import { confName, confOrder, teamPath, useQueryParam } from './shared';
+import { Poster, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { Foot } from './Views';
 import { TeamRow, TeamTable } from './Table';
 import { useForecast } from '../useForecast';
@@ -18,8 +18,18 @@ export function OddsView({ league }: { league: League }) {
   const [first] = useQueryParam<'E' | 'W'>('oconf', userConf, ['E', 'W']);
   const f = useForecast(league);
   if (!f) return <NoForecast />;
+  const fav = [...f.teams].sort((a, b) => b.reach[4] - a.reach[4])[0];
+  const me = f.teams[league.userTid];
   return (
     <>
+      {fav && (
+        <Poster
+          over={f.preseason ? 'Preseason forecast' : `Forecast · ${fmtDate(league.season, league.day)}`}
+          head={`${league.teams[fav.tid].name} favoured to win it all`}
+          dek={me && me.tid !== fav.tid ? `${league.teams[me.tid].name}: playoffs ${pct(me.reach[0], me.clinched || me.out)} · title ${pct(me.reach[4], me.out)}` : undefined}
+          fig={{ v: pct(fav.reach[4]), k: 'title chance' }}
+        />
+      )}
       <Trail league={league} />
       {confOrder(first).map((c, i) => (
         <Section key={c} title={`${confName(c)}${f.preseason ? ' · preseason forecast' : ''}`} right={i === 0 ? <OddsHelp /> : undefined}>
@@ -42,8 +52,16 @@ export function LotteryView({ league }: { league: League }) {
   const f = useForecast(league);
   if (!f) return <NoForecast />;
   const rows = f.teams.filter((t) => !t.clinched).sort((a, b) => a.w - b.w || b.pick1 - a.pick1);
+  const best = [...rows].sort((a, b) => b.pick1 - a.pick1)[0];
   return (
     <div className="lg-block">
+      {best && (
+        <Poster
+          over={`Draft lottery · ${fmtDate(league.season, league.day)}`}
+          head={`${league.teams[best.tid].name} have the best shot at No. 1`}
+          fig={{ v: pct(best.pick1, best.clinched), k: 'chance at No. 1' }}
+        />
+      )}
       <TeamTable cols={[54, 46, 50, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
         {rows.map((t, i) => (
           <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />

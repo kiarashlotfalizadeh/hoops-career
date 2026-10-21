@@ -1,6 +1,8 @@
-/* League hub, other teams' pages and history. Scoped with the `lg-` / `bk-` prefixes. Tables and
-   lists read like a broadcast's: overline heads, hairlines between rows, figures in the display
-   face; your own rows carry your team's edge (--team-text), the controls the brand.
+/* League hub, other teams' pages and history. Scoped with the `lg-` / `bk-` prefixes. The most printed
+   part of the app: each section opens on a poster (a black expanded headline on the paper, or a slab
+   in a team's colours with one giant figure), standings and stat tables read like a paper's agate page
+   (mono figures under a heavy ink rule), the news like a sports front page; your own rows carry a wash
+   of your colour.
 
    The partials, in cascade order: one section of the League tab (or another team's page) each. */
 @import './styles/tabs.css';

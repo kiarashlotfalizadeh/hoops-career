@@ -11,7 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
 import { ViewChips } from './Views';
-import { TitleSlab, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
+import { Poster, TitleSlab, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
 interface Slot {
@@ -99,7 +99,8 @@ export function PlayoffsTab({ league }: { league: League }) {
     );
   }
 
-  const status = phase === 'projected' ? 'If the season ended today' : phase === 'playin' ? 'Seeds 7 and 8 on the line' : phase === 'live' ? 'In progress' : 'Complete';
+  // (the poster says a projection is one)
+  const status = phase === 'projected' || phase === 'playin' ? '' : phase === 'live' ? 'In progress' : 'Complete';
 
   return (
     <>
@@ -124,11 +125,12 @@ export function PlayoffsTab({ league }: { league: League }) {
           ]}
         />
       </div>
+      {champ === undefined && <PlayoffsPoster league={league} phase={phase} />}
       <div className="bk-panel-wrap">
         {confOrder(conf).map((c) => (
           <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
             {/* (where the bracket stands, on its head: "If the season ended today") */}
-            <Section title={`${confName(c)}ern Conference`} right={phase !== 'done' ? <span className="lg-sec-meta">{status}</span> : undefined}>
+            <Section title={`${confName(c)}ern Conference`} right={phase !== 'done' && status ? <span className="lg-sec-meta">{status}</span> : undefined}>
               <div className="card bk-card">
                 <Bracket league={league} slots={slots[c]} onOpen={setOpen} />
               </div>
@@ -153,19 +155,58 @@ export function PlayoffsTab({ league }: { league: League }) {
   );
 }
 
+/**
+ * The bracket's poster while there's no champion: your series (or the deepest one still going once
+ * you're out) with its score as the figure, else where you'd stand if the season ended today.
+ */
+function PlayoffsPoster({ league, phase }: { league: League; phase: Phase }) {
+  const me = league.userTid;
+  const name = (tid: number) => league.teams[tid].name;
+  if (phase === 'live') {
+    const mine = league.playoffs.filter((s) => s.high === me || s.low === me).sort((a, b) => b.round - a.round)[0];
+    const out = mine && mine.winner !== undefined && mine.winner !== me;
+    const open = league.playoffs.filter((s) => s.winner === undefined).sort((a, b) => b.round - a.round || b.highWins + b.lowWins - (a.highWins + a.lowWins))[0];
+    const s = mine && !out ? mine : (open ?? mine);
+    if (!s) return null;
+    const [hw, lw] = [s.highWins, s.lowWins];
+    const lead = hw >= lw ? s.high : s.low;
+    const trail = lead === s.high ? s.low : s.high;
+    const head =
+      s.winner !== undefined
+        ? `${name(s.winner)} beat the ${name(s.winner === s.high ? s.low : s.high)}`
+        : hw === lw
+          ? hw === 0
+            ? `${name(s.high)} vs ${name(s.low)}`
+            : `${name(s.high)} and ${name(s.low)} tied`
+          : `${name(lead)} lead the ${name(trail)}`;
+    const dek = out ? `${league.teams[me].region} ${name(me)}: out in the ${roundName(mine.round)}` : s.winner === undefined && hw + lw === 0 ? 'Game 1 next' : undefined;
+    return <Poster over={`${seasonLabel(league.season)} playoffs`} head={head} dek={dek} fig={{ v: `${Math.max(hw, lw)}-${Math.min(hw, lw)}`, k: seriesLabel(s) }} />;
+  }
+  const conf = league.teams[me].conf;
+  if (phase === 'playin') {
+    const seed = curTeamSeason(league, me).seed;
+    const dek = seed && seed <= 6 ? `${name(me)} wait as the ${ordinal(seed)} seed` : undefined;
+    return <Poster over={`${confName(conf)} play-in`} head="Seeds 7 and 8 on the line" dek={dek} />;
+  }
+  // projected: where you'd open if it ended today
+  const st = confStandings(league, conf);
+  const i = st.findIndex((r) => r.tid === me);
+  const seed = i + 1;
+  const pair = R1_PAIRS.find(([h, l]) => h === seed || l === seed);
+  const opp = pair && seed <= 6 ? st[(pair[0] === seed ? pair[1] : pair[0]) - 1] : undefined;
+  const head = opp ? `${name(me)} would open with the ${name(opp.tid)}` : seed <= 10 ? `${name(me)} would be in the play-in` : `${name(me)} would miss the playoffs`;
+  return <Poster over="If the season ended today" head={head} fig={{ v: ordinal(seed), k: `seed in the ${confName(conf)}` }} />;
+}
+
 function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league: League; season: number; tid: number; runnerUp?: number; result?: string; fmvp?: number }) {
   const p = fmvp !== undefined ? league.players[fmvp] : undefined;
+  const beat = runnerUp !== undefined ? `def. ${league.teams[runnerUp].name}` : undefined;
   return (
-    <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} champions`}>
-      {runnerUp !== undefined && (
-        <span className="nowrap">
-          def. {league.teams[runnerUp].name}
-          {result ? ` ${result}` : ''}
-        </span>
-      )}
+    <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} champions`} fig={result} figLabel={result ? `${beat ?? 'Won'} in the Finals` : undefined}>
+      {!result && beat}
       {p && (
         <>
-          {runnerUp !== undefined ? ' · ' : ''}
+          {!result && beat ? ' · ' : ''}
           <span className="nowrap">
             Finals MVP{' '}
             <Link to={`/player/${p.pid}`} className="lg-slab-link">

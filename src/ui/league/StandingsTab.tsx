@@ -1,12 +1,12 @@
 import { Fragment } from 'react';
 import type { League } from '../../core/types';
 import { standings, type StandingRow } from '../../core/league/standings';
-import { curTeamSeason, teamPlayers } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { Help } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { f0, f1, signed, teamRatings } from '../stats';
-import { confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
+import { Poster, confName, ordinal, streakLabel, teamPath, useQueryParam } from './shared';
 import { Foot, ViewChips } from './Views';
 import { OddsView, LotteryView } from './OddsView';
 import { TableCut, TeamRow, TeamTable } from './Table';
@@ -52,9 +52,11 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
   const started = all.some((r) => r.won + r.lost > 0);
   // before a game is played there's no order to show: the teams A to Z, and the line says so
   const rows = started ? all : [...all].sort((a, b) => league.teams[a.tid].name.localeCompare(league.teams[b.tid].name));
+  const shown = view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view);
   return (
     <div className="lg-block">
-      <StandingsTable league={league} rows={view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view)} conf={view !== 'league'} />
+      <StandingsPoster league={league} rows={shown} view={view} started={started} />
+      <StandingsTable league={league} rows={shown} conf={view !== 'league'} />
       <Foot help={<StandingsHelp />}>
         {!started ? (
           'Season not started · teams A to Z'
@@ -70,6 +72,34 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
         )}
       </Foot>
     </div>
+  );
+}
+
+/** "11", "15.5": games back as the table prints them. */
+const gbText = (gb: number) => (gb % 1 ? gb.toFixed(1) : gb.toFixed(0));
+
+/** The table's headline: who leads it and by how much (the figure), and where you stand when it isn't you. */
+function StandingsPoster({ league, rows, view, started }: { league: League; rows: StandingRow[]; view: 'E' | 'W' | 'league'; started: boolean }) {
+  const conf = view !== 'league';
+  const over = `${conf ? `${confName(view)} standings` : 'League standings'} · ${fmtDate(league.season, league.day)}`;
+  const nm = (r: StandingRow) => league.teams[r.tid].name;
+  if (!started || rows.length < 2) return <Poster over={over} head="Everyone starts at 0-0" />;
+  const [a, b] = rows;
+  const gap = b.gb - a.gb;
+  const meIdx = rows.findIndex((r) => r.tid === league.userTid);
+  const me = rows[meIdx];
+  const dek =
+    me && meIdx > 0 && (gap > 0 || meIdx > 1)
+      ? `${nm(me)}: ${ordinal(conf ? me.confRank : me.leagueRank)}, ${me.gb - a.gb ? `${gbText(me.gb - a.gb)} back` : 'level with the lead'}`
+      : undefined;
+  if (gap <= 0) return <Poster over={over} head={`${nm(a)} and ${nm(b)} tied ${conf ? `for the ${confName(view)} lead` : 'for the best record'}`} dek={dek} />;
+  return (
+    <Poster
+      over={over}
+      head={conf ? `${nm(a)} lead the ${confName(view)}` : `${nm(a)} have the league's best record`}
+      dek={dek}
+      fig={{ v: gbText(gap), k: gap === 1 ? 'game clear' : 'games clear' }}
+    />
   );
 }
 
@@ -186,18 +216,27 @@ function Power({ league }: { league: League }) {
   if (!rows) return <PowerRankings league={league} />;
   const p = league.media!.power!;
   const week = `Week ${Math.max(1, Math.round(p.day / 7))}`;
+  const top = rows.find((r) => r.rank === 1) ?? rows[0];
+  const mine = rows.find((r) => r.tid === league.userTid);
+  const topName = league.teams[top.tid].name;
+  const head = top.prev === 1 ? `${topName} stay No. 1` : top.prev !== undefined ? `${topName} up to No. 1` : `${topName} start at No. 1`;
   return mode === 'net' ? (
     <PowerRankings league={league} back={() => setMode('press')} week={week} />
   ) : (
     <div className="lg-block">
-      <div className="lg-line">
-        <span className="lg-line-t">
-          {week} · {newsDate(league, p, false)}
-        </span>
-        <button type="button" className="btn text sm" onClick={() => setMode('net')}>
+      <Poster
+        over={`Power rankings · ${week} · ${newsDate(league, p, false)}`}
+        head={head}
+        dek={
+          mine && mine.rank !== 1
+            ? `${league.teams[mine.tid].name}: No. ${mine.rank}${mine.prev !== undefined && mine.prev !== mine.rank ? `, ${mine.prev > mine.rank ? 'up' : 'down'} from ${mine.prev}` : ''}`
+            : undefined
+        }
+      >
+        <button type="button" className="btn text sm lg-poster-act" onClick={() => setMode('net')}>
           By net rating
         </button>
-      </div>
+      </Poster>
       <PowerList league={league} rows={rows} />
       <Foot
         help={
@@ -250,13 +289,20 @@ function PowerRankings({ league, back, week }: { league: League; back?: () => vo
   );
   return (
     <div className="lg-block">
-      {back && (
-        <div className="lg-line">
-          <span className="lg-line-t">{early}</span>
-          <button type="button" className="btn text sm" onClick={back}>
-            {week} ranking
-          </button>
-        </div>
+      {list[0] && (
+        <Poster
+          over={`Power rankings · ${fmtDate(league.season, league.day)}`}
+          head={`${league.teams[list[0].tid].name} on top`}
+          dek={early}
+          // the figure that orders the table: the net rating once teams have played enough, roster strength before
+          fig={list[0].gp >= 10 ? { v: signed(list[0].tr.net), k: 'net per 100' } : { v: f0(list[0].talent), k: 'top 8 OVR' }}
+        >
+          {back && (
+            <button type="button" className="btn text sm lg-poster-act" onClick={back}>
+              {week} ranking
+            </button>
+          )}
+        </Poster>
       )}
       <TeamTable
         // (roster strength third, in a phone's view without a swipe: it orders the table until games are played)
@@ -308,7 +354,7 @@ function PowerRankings({ league, back, week }: { league: League; back?: () => vo
           </Help>
         }
       >
-        {back ? 'Net per 100 possessions · Top 8 is the eight best OVRs' : early}
+        Net per 100 possessions · Top 8 is the eight best OVRs
       </Foot>
     </div>
   );

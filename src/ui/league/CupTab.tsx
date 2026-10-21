@@ -8,7 +8,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section } from '../components/ui';
 import { Foot, ViewChips } from './Views';
-import { TitleSlab, confName, confOrder, teamPath, useQueryParam } from './shared';
+import { Poster, TitleSlab, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { plural } from '../../core/format';
 import { signed } from '../stats';
 
@@ -63,6 +63,7 @@ export function CupTab({ league }: { league: League }) {
           ? `Group stage · ${plural(groupGamesLeft, 'game')} left`
           : `Groups start ${fmtDate(league.season, cup.nights[0])}`;
 
+  const holder = !projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season;
   return (
     <>
       {cup.champion !== undefined && (
@@ -76,9 +77,8 @@ export function CupTab({ league }: { league: League }) {
         />
       )}
       {/* until the new groups tip off, last season's winner holds the Cup */}
-      {!projected && !cup.seeds && lastWinner?.cupWinner !== undefined && lastWinner.season < cup.season && (
-        <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
-      )}
+      {holder && <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner!} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />}
+      {cup.champion === undefined && !holder && <CupPoster league={league} seeds={seeds} decided={!!cup.seeds} koRound={koRound} status={status} />}
       <div className="bk-only-narrow">
         <ViewChips
           label="Conference"
@@ -117,7 +117,7 @@ export function CupTab({ league }: { league: League }) {
       <div className="bk-panel-wrap">
         {confOrder(conf).map((c) => (
           <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
-            <Section title={`${confName(c)} groups`} right={seeds ? undefined : <span className="lg-sec-meta">{status}</span>}>
+            <Section title={`${confName(c)} groups`} right={seeds || !holder ? undefined : <span className="lg-sec-meta">{status}</span>}>
               <GroupTables league={league} tables={tables.filter((t) => t.group.conf === c)} seeds={seeds} decided={!!cup.seeds} />
             </Section>
           </div>
@@ -129,6 +129,28 @@ export function CupTab({ league }: { league: League }) {
           : 'How the Cup works'}
       </Foot>
     </>
+  );
+}
+
+/** The Cup's poster before it's decided: where you stand (through, or out) in the group stage or the knockouts. */
+function CupPoster({ league, seeds, decided, koRound, status }: { league: League; seeds?: Seeds; decided: boolean; koRound: string; status: string }) {
+  const me = league.userTid;
+  const name = league.teams[me].name;
+  const conf = league.teams[me].conf;
+  const over = `NBA Cup · ${seasonLabel(league.cup!.season)}`;
+  if (!seeds) return <Poster over={over} head={status} />;
+  const through = seeds[conf].includes(me);
+  if (!decided) return <Poster over={`${over} · if the groups ended today`} head={through ? `${name} would go through` : `${name} would miss the knockouts`} dek={status} />;
+  // in the knockouts: still alive unless a tie went the other way
+  const lost = league.cup!.bracket.some((t) => t.winner !== undefined && t.winner !== me && (t.high === me || t.low === me));
+  const alive = koRound === 'Championship' ? 2 : koRound === 'Semifinals' ? 4 : 8;
+  return (
+    <Poster
+      over={`${over} · knockouts`}
+      head={through && !lost ? `${name} still in it` : `${alive} teams left`}
+      dek={through ? (lost ? `${name}: out in the knockouts` : undefined) : `${name}: out in the group stage`}
+      fig={{ v: alive, k: koRound === 'Championship' ? 'in the final' : `in the ${koRound.toLowerCase()}` }}
+    />
   );
 }
 
@@ -319,18 +341,21 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
 
 export function CupBanner({ league, season, tid, runnerUp, mvp, final }: { league: League; season: number; tid: number; runnerUp?: number; mvp?: number; final?: CupTie }) {
   const p = mvp !== undefined ? league.players[mvp] : undefined;
-  const score = final?.highPts !== undefined && final.lowPts !== undefined ? ` ${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : '';
+  const score = final?.highPts !== undefined && final.lowPts !== undefined ? `${Math.max(final.highPts, final.lowPts)}-${Math.min(final.highPts, final.lowPts)}` : undefined;
+  const beat = runnerUp !== undefined ? `def. ${league.teams[runnerUp].name}` : undefined;
   return (
-    <TitleSlab league={league} tid={tid} over={`${seasonLabel(season)} NBA Cup`}>
-      {runnerUp !== undefined && (
-        <>
-          def. {league.teams[runnerUp].name}
-          {score}
-        </>
-      )}
+    <TitleSlab
+      league={league}
+      tid={tid}
+      over={`NBA Cup · ${seasonLabel(season)}`}
+      // the final's score is the giant figure; without it (an earlier season's), whom they beat leads the line
+      fig={score}
+      figLabel={score ? `${beat ?? 'Won the final'} in the final` : undefined}
+    >
+      {!score && beat}
       {p && (
         <>
-          {runnerUp !== undefined ? ' · ' : ''}Cup MVP{' '}
+          {!score && beat ? ' · ' : ''}Cup MVP{' '}
           <Link to={`/player/${p.pid}`} className="lg-slab-link">
             {playerName(p)}
           </Link>

@@ -23,22 +23,26 @@ a.lg-award:active {
   min-width: 0;
 }
 .lg-award-lb {
-  font-size: 12.5px;
-  font-weight: 620;
-  color: var(--tier-elite);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-dim);
 }
 /* the winner: his name in the headline cut, under its award */
 .lg-award .nm {
   font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 740;
+  font-stretch: 112%;
+  font-weight: 860;
   font-size: 19px;
   line-height: 1.14;
   letter-spacing: -0.026em;
   margin-top: 2px;
 }
 .lg-award .sub {
-  font-size: 12.5px;
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
+  font-size: 12px;
   color: var(--text-dim);
   margin-top: 2px;
 }
@@ -97,18 +101,18 @@ a.lg-award:active {
 .lg-sat-row.head {
   min-height: 24px;
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 640;
   color: var(--text-dim);
 }
 .lg-sat-row.head + .lg-sat-dunker {
   border-top: 1px solid var(--line);
 }
 .lg-sat-rk {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 15px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12.5px;
   color: var(--text-dim);
+  letter-spacing: -0.04em;
 }
 .lg-sat-win,
 .lg-sat-rk.lg-sat-win {
@@ -140,8 +144,9 @@ a.lg-award:active {
   font-size: 12px;
 }
 .lg-sat-lb {
-  font-size: 12px;
-  font-weight: 620;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--text-dim);
 }
 .lg-sat-miss {
@@ -175,12 +180,12 @@ a.lg-award:active {
   background: color-mix(in srgb, var(--team-text) 11%, transparent);
 }
 .lg-race-row .rank {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 720;
-  font-size: 20px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 16.5px;
   color: var(--text-dim);
   text-align: center;
+  letter-spacing: -0.04em;
 }
 .lg-race-row.first .rank {
   color: var(--tier-elite);
@@ -196,18 +201,20 @@ a.lg-award:active {
   font-size: 15px;
 }
 .lg-race-t .sub {
-  font-size: 12.5px;
+  font-family: var(--mono);
+  letter-spacing: -0.02em;
+  font-size: 12px;
   color: var(--text-dim);
 }
 /* the voters' score with the leader at 100, and its key in the section's heading */
 .lg-race-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 22px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 18px;
   color: var(--text-2);
   min-width: 34px;
   text-align: right;
+  letter-spacing: -0.04em;
 }
 .lg-race-row.first .lg-race-v {
   color: var(--tier-elite);
@@ -216,8 +223,9 @@ a.lg-award:active {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   color: var(--text-dim);
   letter-spacing: 0;
   text-transform: none;
@@ -232,4 +240,31 @@ a.lg-award:active {
 }
 .lg-awards-top .lg-select {
   height: 34px;
+}
+/* a five's row: his name and position over his line, in the box score's mono */
+.lg-five-row {
+  grid-template-columns: 22px minmax(0, 1fr);
+  padding-block: 7px;
+}
+.lg-five-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.lg-five-line {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  letter-spacing: -0.03em;
+  color: var(--text-dim);
+}
+/* the contests' scores */
+.lg-sat-row > .num {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: -0.03em;
+}
+.lg-sat-dunks > .num {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
 }

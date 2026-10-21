@@ -1,48 +1,275 @@
-/* A title slab: the Cup or a season's champion in its colours. */
-/* ------------------------------------------------------------------ title slab */
+/* A League section's hero: a poster printed on the paper (Poster), or a slab in a team's colours
+   (PosterSlab, TitleSlab: the Cup, a season's champion, the MVP, a franchise, your career). */
+/* ------------------------------------------------------------------ the poster (on the paper) */
+/* the figure sits beside the headline while the headline keeps room to read; a long one (a final's
+   score) drops under it, to the right */
+.lg-poster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px 16px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--ink);
+}
+.lg-poster-t {
+  flex: 1 1 13.5em;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.lg-poster-t > .over {
+  margin: 0;
+}
+.lg-poster-h {
+  margin: 0;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 29px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+.lg-poster-dek {
+  margin: 2px 0 0;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+/* the one figure the headline is about: the condensed black cut, its label under it in mono */
+.lg-poster-fig {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+.lg-poster-fig .v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 0.86;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  white-space: nowrap;
+}
+.lg-poster-fig .k {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+@media (min-width: 640px) {
+  .lg-poster-h {
+    font-size: 34px;
+  }
+  .lg-poster-fig .v {
+    font-size: 76px;
+  }
+}
+/* under the section's chips: its hero sits close, the rest of the page a section away */
+.lg-views + .lg-poster,
+.lg-pickline + .lg-poster {
+  margin-top: 4px;
+}
+
+/* ------------------------------------------------------------------ the slab (a team's colours) */
 .lg-title {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px 16px;
+  gap: 12px;
+  padding: 18px 20px 20px;
+}
+.lg-title-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 24px;
 }
 .lg-title-over {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  font-weight: 620;
+  margin: 0;
+  padding-top: 2px;
   color: var(--text-2);
-  padding-right: 18px;
 }
-.lg-title-team {
+.lg-title-top > :not(.lg-title-over) {
+  flex: none;
+}
+.lg-title-id {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: -6px;
 }
 .lg-title-region {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 640;
   color: var(--text-2);
 }
 .lg-title-name {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 780;
-  font-size: 32px;
-  line-height: 1;
-  letter-spacing: -0.032em;
+  font-weight: 900;
+  font-size: 36px;
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+/* the giant figure (a series, a final's score, a scoring average) with what it was beside it */
+.lg-title-figrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 14px;
+  min-width: 0;
+}
+.lg-title-fig {
+  flex: none;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: 80px;
+  line-height: 0.8;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.lg-title-figl {
+  flex: 1 1 8em;
+  min-width: 0;
+  padding-bottom: 2px;
+  font-size: 14.5px;
+  font-weight: 640;
+  line-height: 1.3;
+  color: var(--text);
+  text-wrap: balance;
 }
 .lg-title-sub {
-  font-size: 13.5px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
   color: var(--text-2);
-  line-height: 1.4;
+}
+.lg-title-sub .lg-slab-link {
+  font-family: var(--font);
+  font-size: 13.5px;
+}
+@media (min-width: 640px) {
+  .lg-title {
+    padding: 22px 26px 24px;
+  }
+  .lg-title-name {
+    font-size: 44px;
+  }
+  .lg-title-fig {
+    font-size: 104px;
+  }
 }
 /* a link on a slab: white, underlined */
 .lg-slab-link {
   color: #fff;
-  font-weight: 640;
+  font-weight: 680;
   text-decoration: underline;
-  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-decoration-color: rgba(255, 255, 255, 0.5);
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
+}
+/* figures on a slab: the box score's mono in white, ruled in white */
+.lg-title .statline {
+  border-top-color: rgba(255, 255, 255, 0.85);
+}
+/* a short ranked list on a slab (the scoring leaders' next four) */
+.lg-title-list {
+  display: flex;
+  flex-direction: column;
+  border-top: 2px solid rgba(255, 255, 255, 0.85);
+}
+.lg-title-list > a {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-family: var(--font);
+  letter-spacing: -0.01em;
+  font-size: 14.5px;
+  font-weight: 620;
+  color: #fff;
+}
+.lg-title-list > a + a {
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+.lg-title-list .r,
+.lg-title-list .v {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13.5px;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+.lg-title-list .r {
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-title-list .v {
+  font-weight: 600;
+  font-size: 15px;
+}
+.lg-title-list > a:active {
+  background: rgba(0, 0, 0, 0.14);
+}
+.lg-title-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -4px;
+}
+/* a poster over a table in the same block: a little more air before the table */
+.lg-block > .lg-poster {
+  margin-bottom: 10px;
+}
+/* the poster's one switch (Power: by net rating / the week's ranking), a link under its line */
+.lg-poster .lg-poster-act {
+  align-self: flex-start;
+  margin: 0 0 -8px -6px;
+  padding: 0 6px;
+}
+.lg-title-ab {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+/* a name on a slab that opens his page: white, the headline's own */
+.lg-title-link {
+  color: inherit;
+}
+.lg-title-link:active {
+  opacity: 0.8;
+}
+.lg-title-sub:has(.lg-title-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* a view's switches under its poster's headline (the record book's): a link in your colour */
+.lg-poster .lg-pickline {
+  margin: 0 0 -6px;
+  color: var(--accent-text);
+  font-size: 14px;
+}
+.lg-poster .lg-pickline svg {
+  color: inherit;
 }

@@ -1,7 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player, SeasonAwards } from '../../core/types';
-import { curTeamSeason, playerName } from '../../core/league/helpers';
+import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
 import { awardRaces, type Cand as AwardCand } from '../../core/league/awards';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
@@ -12,7 +12,7 @@ import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
 import { seasonHonors } from '../../core/league/media';
 import { HonorsList } from './news/Honors';
-import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
+import { Poster, PosterSlab, seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
 
 /** A ladder's one figure or two: points, or steals and blocks. */
 function raceLine(p: Player, season: number, kind: 'off' | 'def') {
@@ -72,7 +72,11 @@ export function AwardsTab({ league }: { league: League }) {
 
       {view === 'awards' && (
         <>
-          {aw && (aw.champion !== undefined || aw.cupWinner !== undefined) && <Champions league={league} aw={aw} />}
+          {decided && aw?.mvp !== undefined && league.players[aw.mvp] && (
+            <MvpSlab league={league} p={league.players[aw.mvp]} season={season} over={`Most Valuable Player · ${seasonLabel(season)}`} />
+          )}
+          {/* (mid-season the race is the story: a Cup won so far has its own tab until the season's awards are in) */}
+          {decided && aw && (aw.champion !== undefined || aw.cupWinner !== undefined) && <Champions league={league} aw={aw} />}
           {!decided && isCurrent && <AwardRace league={league} />}
           {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
           {decided && aw && <MajorAwards league={league} aw={aw} />}
@@ -99,6 +103,14 @@ export function AwardsTab({ league }: { league: League }) {
       )}
       {view === 'allstar' && aw && (
         <>
+          {aw.allStarGame && (
+            <Poster
+              over={`All-Star Game · ${seasonLabel(aw.season)}`}
+              head={`The ${aw.allStarGame.east > aw.allStarGame.west ? 'East' : 'West'} win the All-Star Game`}
+              dek={aw.allStarMvp !== undefined && league.players[aw.allStarMvp] ? `MVP ${playerName(league.players[aw.allStarMvp])}` : undefined}
+              fig={{ v: `${Math.max(aw.allStarGame.east, aw.allStarGame.west)}-${Math.min(aw.allStarGame.east, aw.allStarGame.west)}`, k: 'final' }}
+            />
+          )}
           {aw.allStars.E.length > 0 && (
             <>
               <AllStars league={league} aw={aw} />
@@ -233,7 +245,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
   return (
     <Section title="Season awards">
       <div className="card flush list">
-        <PlayerAward league={league} pid={aw.mvp} season={s} label="Most Valuable Player" />
+        {/* (the MVP is the tab's poster, over this list) */}
         <PlayerAward league={league} pid={aw.finalsMvp} season={s} label="Finals MVP" playoffs />
         <PlayerAward league={league} pid={aw.dpoy} season={s} label="Defensive Player of the Year" kind="def" />
         <PlayerAward league={league} pid={aw.roy} season={s} label="Rookie of the Year" />
@@ -300,12 +312,14 @@ function FiveRow({ league, p, tid, line, mvp }: { league: League; p: Player; tid
   return (
     <Link to={`/player/${p.pid}`} className={`lg-five-row ${tid === league.userTid ? 'me' : ''}`}>
       {tid !== null ? <TeamLogo tid={tid} size={22} /> : <span />}
-      {/* (a long name wraps rather than lose its end and the position) */}
-      <span>
-        <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
-        {mvp && <span className="tag lg-gold lg-mvp">MVP</span>}
+      {/* his name and position, his line under them (a long name wraps rather than lose its end) */}
+      <span className="lg-five-t">
+        <span>
+          <span className="bold">{shortName(p)}</span> <span className="tiny dim">{p.pos}</span>
+          {mvp && <span className="tag lg-gold lg-mvp">MVP</span>}
+        </span>
+        <span className="lg-five-line">{line}</span>
       </span>
-      <span className="tiny dim num">{line}</span>
     </Link>
   );
 }
@@ -365,25 +379,51 @@ function AwardRace({ league }: { league: League }) {
   }, [league]);
 
   if (race.played === 0) return <div className="card empty">The award races start once games are played.</div>;
+  const lead = race.mvp[0]?.c;
   return (
-    <div className="md-grid2">
-      <RaceCard
-        league={league}
-        title="MVP ladder"
-        list={race.mvp}
-        right={
-          <Help title="Award races">
-            <p className="lg-p">
-              The ladders update daily and use the same formulas as the voters: production, availability and team success, with the same eligibility rules. Winners are announced at
-              the end of the regular season.
-            </p>
-          </Help>
-        }
-      />
-      <RaceCard league={league} title="Defensive Player of the Year" list={race.dpoy} kind="def" />
-      <RaceCard league={league} title="Rookie of the Year" list={race.roy} />
-      <RaceCard league={league} title="Sixth Man of the Year" list={race.smoy} />
-    </div>
+    <>
+      {lead && <MvpSlab league={league} p={lead.p} season={league.season} tid={lead.tid} over={`MVP race · leader on ${fmtDate(league.season, league.day)}`} />}
+      <div className="md-grid2">
+        <RaceCard
+          league={league}
+          title="MVP ladder"
+          list={race.mvp}
+          right={
+            <Help title="Award races">
+              <p className="lg-p">
+                The ladders update daily and use the same formulas as the voters: production, availability and team success, with the same eligibility rules. Winners are announced
+                at the end of the regular season.
+              </p>
+            </Help>
+          }
+        />
+        <RaceCard league={league} title="Defensive Player of the Year" list={race.dpoy} kind="def" />
+        <RaceCard league={league} title="Rookie of the Year" list={race.roy} />
+        <RaceCard league={league} title="Sixth Man of the Year" list={race.smoy} />
+      </div>
+    </>
+  );
+}
+
+/** The MVP (or the race's leader) as the tab's poster: in his team's colours, his scoring the giant figure. */
+function MvpSlab({ league, p, season, over, tid: given }: { league: League; p: Player; season: number; over: string; tid?: number | null }) {
+  const tid = given ?? seasonTeam(league, p, season);
+  const pg = playerSeason(p, season, false);
+  const t = tid !== null && tid !== undefined ? league.teams[tid] : undefined;
+  return (
+    <PosterSlab
+      colors={(t ?? league.teams[league.userTid]).colors}
+      over={over}
+      mark={t ? <TeamLogo tid={t.tid} size={44} decorative /> : undefined}
+      region={`${t ? `${t.region} ${t.name}` : 'Free agent'} · ${p.pos}`}
+      name={
+        <Link to={`/player/${p.pid}`} className="lg-title-link">
+          {p.firstName} {p.lastName}
+        </Link>
+      }
+      fig={pg ? f1(pg.pts) : undefined}
+      figLabel={pg ? `PTS a game · ${f1(pg.reb)} REB · ${f1(pg.ast)} AST` : undefined}
+    />
   );
 }
 

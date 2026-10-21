@@ -6,7 +6,8 @@ import type { League } from '../../../core/types';
 import { TeamLogo } from '../../components/TeamLogo';
 import { Avatar } from '../../components/ui';
 import { f1 } from '../../stats';
-import { shortName, teamAbbrev } from '../shared';
+import { PosterSlab, shortName, teamAbbrev } from '../shared';
+import { seasonLabel } from '../../../core/constants';
 import { qualifier, type StatRow } from './rows';
 import { Foot } from '../Views';
 
@@ -55,22 +56,74 @@ export function Leaders({ league, rows, season, playoffs }: { league: League; ro
     sp.set('sort', key);
     return `/league/stats?${sp}`;
   };
+  const boards = [...CATS, ...(rows.some((r) => r.adv) ? ADV_CATS : [])].map((c) => ({
+    c,
+    top: qualified
+      .filter((r) => (!c.min || c.min(r)) && Number.isFinite(c.get(r)))
+      .sort((a, b) => c.get(b) - c.get(a))
+      .slice(0, 5),
+  }));
+  // the scoring race is the poster, in its leader's colours; the other boards share one panel under it
+  const [lead, ...others] = boards;
   return (
     <>
-      {/* every category in one panel: the leader, then the next four */}
+      {lead.top[0] ? (
+        <LeadSlab league={league} cat={lead.c} top={lead.top} all={allHref(lead.c.key)} season={season} playoffs={playoffs} />
+      ) : (
+        <div className="card flush lg-leaders">
+          <LeaderBlock league={league} cat={lead.c} top={lead.top} all={allHref(lead.c.key)} />
+        </div>
+      )}
       <div className="card flush lg-leaders">
-        {[...CATS, ...(rows.some((r) => r.adv) ? ADV_CATS : [])].map((c) => {
-          const top = qualified
-            .filter((r) => (!c.min || c.min(r)) && Number.isFinite(c.get(r)))
-            .sort((a, b) => c.get(b) - c.get(a))
-            .slice(0, 5);
-          return <LeaderBlock key={c.key} league={league} cat={c} top={top} all={allHref(c.key)} />;
-        })}
+        {others.map(({ c, top }) => (
+          <LeaderBlock key={c.key} league={league} cat={c} top={top} all={allHref(c.key)} />
+        ))}
       </div>
       <Foot>
         Per game · qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game · true shooting: 9+ shot attempts a game
       </Foot>
     </>
+  );
+}
+
+/** The scoring race as the poster: the leader in his team's colours with his figure, the next four under him. */
+function LeadSlab({ league, cat, top, all, season, playoffs }: { league: League; cat: Cat; top: StatRow[]; all: string; season: number; playoffs: boolean }) {
+  const [first, ...rest] = top;
+  const tid = first.tid ?? -1;
+  const colors = league.teams[tid >= 0 ? tid : league.userTid].colors;
+  return (
+    <PosterSlab
+      colors={colors}
+      over={`${cat.label} per game · ${seasonLabel(season)}${playoffs ? ' playoffs' : ''}`}
+      mark={tid >= 0 ? <TeamLogo tid={tid} size={44} decorative /> : undefined}
+      region={`${teamAbbrev(league, first.tid)} · ${first.p.pos}`}
+      name={
+        <Link to={`/player/${first.p.pid}`} className="lg-title-link">
+          {first.p.firstName} {first.p.lastName}
+        </Link>
+      }
+      fig={cat.fmt(cat.get(first))}
+      figLabel={`${cat.unit}, the league's best`}
+    >
+      {rest.length > 0 && (
+        <div className="lg-title-list">
+          {rest.map((r, i) => (
+            <Link key={r.p.pid} to={`/player/${r.p.pid}`}>
+              <span className="r">{i + 2}</span>
+              <span className="ellipsis">
+                {shortName(r.p)} <span className="lg-title-ab">{teamAbbrev(league, r.tid)}</span>
+              </span>
+              <span className="v">{cat.fmt(cat.get(r))}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      <div className="lg-title-foot">
+        <Link to={all} className="card-link" aria-label={`All players by ${cat.label.toLowerCase()}`}>
+          All players <ChevronRight size={14} aria-hidden="true" />
+        </Link>
+      </div>
+    </PosterSlab>
   );
 }
 

@@ -39,6 +39,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--ink);
   color: var(--text);
 }
 .lg-fp-over {
@@ -49,17 +51,17 @@
 .lg-fp-head {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-weight: 770;
-  font-size: 27px;
-  line-height: 1.06;
-  letter-spacing: -0.032em;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.04em;
   text-wrap: balance;
   overflow-wrap: break-word;
   transition: color var(--dur-fast) ease;
 }
 .lg-fp-lead.w3 .lg-fp-head {
-  font-size: 30px;
-  line-height: 1.04;
+  font-size: 34px;
+  line-height: 0.98;
 }
 .lg-fp-dek {
   max-width: 34em;
@@ -72,8 +74,8 @@
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  font-size: 13.5px;
-  font-weight: 620;
+  font-size: 14px;
+  font-weight: 680;
   color: var(--accent-text);
 }
 .lg-fp-lead:active .lg-fp-head {
@@ -86,10 +88,10 @@
 }
 @media (min-width: 640px) {
   .lg-fp-head {
-    font-size: 32px;
+    font-size: 36px;
   }
   .lg-fp-lead.w3 .lg-fp-head {
-    font-size: 36px;
+    font-size: 42px;
   }
 }
 
@@ -123,18 +125,20 @@
 }
 .lg-fp-hl.strong .lg-fp-hl-head {
   font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 750;
-  font-size: 19px;
-  line-height: 1.14;
-  letter-spacing: -0.026em;
+  font-stretch: 112%;
+  font-weight: 860;
+  font-size: 20px;
+  line-height: 1.08;
+  letter-spacing: -0.032em;
 }
 .lg-fp-hl-meta {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
-  font-weight: 520;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
   color: var(--text-dim);
 }
 .lg-fp-hl:active .lg-fp-hl-head {
@@ -170,19 +174,20 @@
   border-top: 1px solid var(--line-3);
 }
 .lg-pw-rank {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 21px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 17px;
   line-height: 1;
   text-align: right;
+  letter-spacing: -0.04em;
 }
 .lg-pw-mv {
   display: inline-flex;
   align-items: center;
   gap: 1px;
-  font-size: 12px;
-  font-weight: 650;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 .lg-pw-t {
@@ -209,11 +214,11 @@
 .lg-pw-rec {
   margin-left: auto;
   flex: none;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 17px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 14px;
   color: var(--text);
+  letter-spacing: -0.04em;
 }
 .lg-pw-blurb {
   font-size: 13px;
@@ -322,4 +327,12 @@
 /* the lead under the news's chips: a little more air, it's the page's hero */
 .lg-views + .lg-fp-lead {
   margin-top: 10px;
+}
+
+/* the reader's title is the story's headline: the front page's cut, a size down */
+.sheet:has(.lg-story) .sheet-head h2 {
+  font-size: 27px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
 }

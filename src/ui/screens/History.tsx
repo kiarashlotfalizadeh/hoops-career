@@ -12,7 +12,7 @@ import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Ovr, Section } from '../components/ui';
 import { ViewChips } from '../league/Views';
-import { AccoladeChips, accoladeScore, careerTotals, shortName, useQueryParam, useSetParams } from '../league/shared';
+import { AccoladeChips, Poster, TitleSlab, accoladeScore, careerTotals, shortName, useQueryParam, useSetParams } from '../league/shared';
 import { RecordBook } from '../league/RecordBook';
 import { CoachesView } from '../league/Coaches';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
@@ -66,46 +66,64 @@ function Seasons({ league }: { league: League }) {
     );
   }, [league]);
   if (!list.length) {
-    return <div className="card empty">No seasons finished yet: each season&apos;s champion and MVPs land here.</div>;
+    return <Poster over="Seasons" head="No champions yet" dek="Each season's champion and MVPs land here." />;
   }
   const name = (pid?: number) => (pid !== undefined && league.players[pid] ? shortName(league.players[pid]) : undefined);
+  // the poster: the last champions, in their colours (the season's whole story is a tap away, on Awards)
+  const last = list.find((a) => a.champion !== undefined);
+  const titles = last ? list.filter((a) => a.champion === last.champion).length : 0;
   return (
-    <div className="card flush list">
-      {list.map((a) => {
-        const champ = a.champion !== undefined ? league.teams[a.champion] : undefined;
-        const winners = [
-          name(a.mvp) && `MVP ${name(a.mvp)}`,
-          name(a.finalsMvp) && `Finals MVP ${name(a.finalsMvp)}`,
-          a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
-        ].filter(Boolean);
-        return (
-          <Link key={a.season} to={`/league/awards?aseason=${a.season}`} className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}>
-            <span className="yr">{seasonLabel(a.season)}</span>
-            {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
-            <span className="lg-yr-t">
-              <span className="nm ellipsis">
-                {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
-                {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
-                {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
-              </span>
-              {/* each award whole, wrapping between them rather than cutting a name short */}
-              {winners.length > 0 && (
-                <span className="sub">
-                  {/* (the separator outside the unbreakable award: a line can break after it) */}
-                  {winners.map((w, i) => (
-                    <Fragment key={i}>
-                      {i > 0 ? ' · ' : ''}
-                      <span className="nowrap">{w}</span>
-                    </Fragment>
-                  ))}
+    <>
+      {last?.champion !== undefined && (
+        <TitleSlab
+          league={league}
+          tid={last.champion}
+          over={`${seasonLabel(last.season)} champions${mine.has(last.season) ? ' · your title' : ''}`}
+          // (their count of titles here, once there's more than the one this slab is about)
+          fig={titles > 1 ? titles : undefined}
+          figLabel={titles > 1 ? 'titles in this league' : undefined}
+        >
+          {last.runnerUp !== undefined ? `def. ${league.teams[last.runnerUp].name}` : ''}
+          {name(last.finalsMvp) ? `${last.runnerUp !== undefined ? ' · ' : ''}Finals MVP ${name(last.finalsMvp)}` : ''}
+        </TitleSlab>
+      )}
+      <div className="card flush list">
+        {list.map((a) => {
+          const champ = a.champion !== undefined ? league.teams[a.champion] : undefined;
+          const winners = [
+            name(a.mvp) && `MVP ${name(a.mvp)}`,
+            name(a.finalsMvp) && `Finals MVP ${name(a.finalsMvp)}`,
+            a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
+          ].filter(Boolean);
+          return (
+            <Link key={a.season} to={`/league/awards?aseason=${a.season}`} className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}>
+              <span className="yr">{seasonLabel(a.season)}</span>
+              {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
+              <span className="lg-yr-t">
+                <span className="nm ellipsis">
+                  {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
+                  {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
+                  {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
                 </span>
-              )}
-            </span>
-            <ChevronRight size={16} className="dim" aria-hidden="true" />
-          </Link>
-        );
-      })}
-    </div>
+                {/* each award whole, wrapping between them rather than cutting a name short */}
+                {winners.length > 0 && (
+                  <span className="sub">
+                    {/* (the separator outside the unbreakable award: a line can break after it) */}
+                    {winners.map((w, i) => (
+                      <Fragment key={i}>
+                        {i > 0 ? ' · ' : ''}
+                        <span className="nowrap">{w}</span>
+                      </Fragment>
+                    ))}
+                  </span>
+                )}
+              </span>
+              <ChevronRight size={16} className="dim" aria-hidden="true" />
+            </Link>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -119,11 +137,7 @@ function Franchise({ league }: { league: League }) {
     <>
       <section className="slab lg-fr" style={slabVars(team.colors) as CSSProperties}>
         <div className="lg-fr-top">
-          <TeamLogo tid={tid} size={48} decorative />
-          <div className="grow">
-            <div className="lg-team-region">{team.region}</div>
-            <div className="lg-fr-name">{team.name}</div>
-          </div>
+          <p className="over lg-title-over">Franchise history</p>
           <select className="lg-select" value={tid} onChange={(e) => setTidStr(e.target.value)} aria-label="Team">
             {[...league.teams]
               .sort((a, b) => a.abbrev.localeCompare(b.abbrev))
@@ -134,8 +148,15 @@ function Franchise({ league }: { league: League }) {
               ))}
           </select>
         </div>
+        <div className="lg-fr-id">
+          <TeamLogo tid={tid} size={52} decorative />
+          <div className="grow">
+            <div className="lg-team-region">{team.region}</div>
+            <div className="lg-fr-name">{team.name}</div>
+          </div>
+        </div>
         <div className="lg-fr-figs">
-          <FranchiseFigures league={league} tid={tid} />
+          <FranchiseFigures league={league} tid={tid} onSlab />
         </div>
       </section>
       <FranchiseHistory league={league} tid={tid} />
@@ -171,19 +192,22 @@ function HallOfFame({ league }: { league: League }) {
       .map(([p]) => p);
     return { hof, retired };
   }, [league]);
+  const latest = hof[0];
   return (
     <>
-      <Section title="Hall of Fame" right={<span className="lg-sec-meta">{hof.length} inducted</span>}>
-        {hof.length === 0 ? (
-          <div className="card empty">No one yet: legends go in when they retire.</div>
-        ) : (
-          <div className="card flush list wide2">
-            {hof.map((p) => (
-              <LegendRow key={p.pid} league={league} p={p} hof />
-            ))}
-          </div>
-        )}
-      </Section>
+      <Poster
+        over={`Hall of Fame · ${league.startSeason < league.season ? `since ${seasonLabel(league.startSeason)}` : 'this league'}`}
+        head={latest ? `Latest in: ${latest.firstName} ${latest.lastName}` : 'Nobody inducted yet'}
+        dek={latest ? undefined : 'Legends go in when they retire.'}
+        fig={{ v: hof.length, k: 'inducted' }}
+      />
+      {hof.length > 0 && (
+        <div className="card flush list wide2">
+          {hof.map((p) => (
+            <LegendRow key={p.pid} league={league} p={p} hof />
+          ))}
+        </div>
+      )}
       <Section title="Notable retirements" right={<span className="lg-sec-meta">{retired.length}</span>}>
         {retired.length === 0 ? (
           <div className="card empty">None yet.</div>

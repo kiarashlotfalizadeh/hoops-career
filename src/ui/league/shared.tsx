@@ -346,23 +346,100 @@ export function AccoladeChips({ p, max = 6 }: { p: Player; max?: number }) {
 }
 
 /**
- * A title won, in the winner's colours: the season's champions (Playoffs), the NBA Cup's winners
- * (NBA Cup) or a franchise's banners. The screen's one slab, at its top.
+ * A section's poster: a mono kicker, the black expanded headline and at most one line under it, with
+ * one big figure on its right when the headline is about a number. Printed on the paper: the hero of
+ * a League section that isn't about one team.
  */
-export function TitleSlab({ league, tid, over, children }: { league: League; tid: number; over: ReactNode; children?: ReactNode }) {
-  const t = league.teams[tid];
+export function Poster({ over, head, dek, fig, children }: { over: ReactNode; head: ReactNode; dek?: ReactNode; fig?: { v: ReactNode; k: ReactNode }; children?: ReactNode }) {
   return (
-    <section className="slab lg-title" style={slabVars(t.colors) as CSSProperties}>
-      <div className="lg-title-over">{over}</div>
-      <div className="lg-title-team">
-        <TeamLogo tid={tid} size={52} decorative />
-        <div className="grow">
-          <div className="lg-title-region">{t.region}</div>
-          <div className="lg-title-name">{t.name}</div>
-        </div>
+    <header className={`lg-poster ${fig ? 'has-fig' : ''}`}>
+      <div className="lg-poster-t">
+        <p className="over">{over}</p>
+        <h2 className="lg-poster-h">{head}</h2>
+        {dek && <p className="lg-poster-dek">{dek}</p>}
+        {children}
       </div>
+      {fig && (
+        <div className="lg-poster-fig">
+          <span className="v">{fig.v}</span>
+          <span className="k">{fig.k}</span>
+        </div>
+      )}
+    </header>
+  );
+}
+
+/**
+ * A slab in a team's colours (the court's lines under it): a mono kicker with the mark on its right,
+ * a name in the headline cut, then one giant figure with its label beside it. The screen's one slab.
+ */
+export function PosterSlab({
+  colors,
+  over,
+  mark,
+  region,
+  name,
+  fig,
+  figLabel,
+  children,
+  className = '',
+}: {
+  colors: [string, string, string];
+  over: ReactNode;
+  mark?: ReactNode;
+  region?: ReactNode;
+  name: ReactNode;
+  fig?: ReactNode;
+  figLabel?: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`slab lg-title ${className}`} style={slabVars(colors) as CSSProperties}>
+      <div className="lg-title-top">
+        <p className="over lg-title-over">{over}</p>
+        {mark}
+      </div>
+      <div className="lg-title-id">
+        {region && <div className="lg-title-region">{region}</div>}
+        <div className="lg-title-name">{name}</div>
+      </div>
+      {fig !== undefined && (
+        <div className="lg-title-figrow">
+          <span className="lg-title-fig">{fig}</span>
+          {figLabel && <span className="lg-title-figl">{figLabel}</span>}
+        </div>
+      )}
       {children && <div className="lg-title-sub">{children}</div>}
     </section>
+  );
+}
+
+/**
+ * A title won, in the winner's colours: the season's champions (Playoffs), the NBA Cup's winners
+ * (NBA Cup) or a franchise's banners. The screen's one slab, at its top; `fig` is the final's score
+ * or the series ("4-2"), `figLabel` what it was.
+ */
+export function TitleSlab({
+  league,
+  tid,
+  over,
+  fig,
+  figLabel,
+  children,
+}: {
+  league: League;
+  tid: number;
+  over: ReactNode;
+  fig?: ReactNode;
+  figLabel?: ReactNode;
+  children?: ReactNode;
+}) {
+  const t = league.teams[tid];
+  return (
+    <PosterSlab colors={t.colors} over={over} mark={<TeamLogo tid={tid} size={48} decorative />} region={t.region} name={t.name} fig={fig} figLabel={figLabel}>
+      {children}
+    </PosterSlab>
   );
 }
 
