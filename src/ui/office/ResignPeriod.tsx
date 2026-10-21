@@ -124,7 +124,7 @@ export function ResignPeriod() {
           </span>
         }
       >
-        <div className="card fo-capsheet">
+        <div className="fo-capsheet fo-statement">
           <div className="fo-pay">
             <div className="grow">
               <div className="over">Committed</div>
@@ -226,7 +226,7 @@ export function ResignPeriod() {
                     <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
                       Renounce
                     </button>
-                    <button className="btn sm primary" aria-label={`Negotiate with ${playerName(p)}`} onClick={() => setSel(p.pid)}>
+                    <button className="btn sm" aria-label={`Negotiate with ${playerName(p)}`} onClick={() => setSel(p.pid)}>
                       <PenLine size={15} /> Negotiate
                     </button>
                   </div>

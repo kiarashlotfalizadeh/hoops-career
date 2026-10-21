@@ -35,9 +35,10 @@
 .fo-lc-job-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 34px;
+  font-weight: 760;
+  font-size: 38px;
   line-height: 1;
+  letter-spacing: -0.01em;
   color: var(--heat);
 }
 
@@ -54,31 +55,29 @@
   flex-wrap: wrap;
 }
 
-/* the latest season's review: a card in that team's colours */
+/* the latest season's review: its kicker, the season told in a serif headline, the record and grade */
 .fo-lc-review {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-right: 40px;
-  color: #fff;
+  gap: 4px;
+  padding-right: 44px;
+  color: var(--text);
   text-decoration: none;
-  background: linear-gradient(150deg, color-mix(in srgb, var(--slab) 88%, #fff 6%), color-mix(in srgb, var(--slab) 70%, #000) 80%);
-  border-color: transparent;
-  --text-dim: rgba(255, 255, 255, 0.78);
 }
 
-.fo-lc-review .over {
-  color: rgba(255, 255, 255, 0.82);
+.fo-lc-review > .small {
+  color: var(--text-2);
 }
 
 .fo-lc-review-h {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 24px;
-  line-height: 1.05;
-  text-transform: uppercase;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 25px;
+  line-height: 1.08;
+  letter-spacing: -0.016em;
+  text-wrap: balance;
 }
 
 .fo-lc-review-go {
@@ -86,6 +85,7 @@
   right: 14px;
   top: 50%;
   margin-top: -9px;
+  color: var(--text-dim);
 }
 
 .fo-lc-review:active {
@@ -111,19 +111,18 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  padding: 12px 6px 10px;
+  padding: 14px 6px 12px;
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line);
   text-align: center;
   --tone: var(--tier-avg);
   color: var(--tone);
 }
 
+/* a title: the cabinet's one gold piece, set apart by a gold hairline round it */
 .fo-cab-t.gold {
   --tone: var(--tier-elite);
-  background: color-mix(in srgb, var(--tier-elite) 10%, var(--raised));
-  border-color: color-mix(in srgb, var(--tier-elite) 40%, var(--line));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier-elite) 45%, transparent);
 }
 
 .fo-cab-t.coy {
@@ -136,14 +135,15 @@
 }
 
 .fo-cab-n {
-  font-size: 12.5px;
-  font-weight: 750;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 660;
   line-height: 1.15;
   color: var(--text);
 }
 
 .fo-cab-s {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -196,7 +196,8 @@
   left: 19px;
   top: 0;
   bottom: 0;
-  width: 2px;
+  width: 1px;
+  margin-left: 0.5px;
   background: var(--line-2);
 }
 
@@ -216,7 +217,7 @@
   height: 12px;
   border-radius: 50%;
   background: var(--raised);
-  border: 2px solid var(--text-dim);
+  border: 1.5px solid var(--text-dim);
 }
 
 .fo-tl-row.big .fo-tl-dot {
@@ -225,18 +226,20 @@
 }
 
 .fo-tl-head {
-  font-weight: 750;
+  font-weight: 660;
   font-size: 15px;
   line-height: 1.25;
 }
 
+/* a front-page milestone: a serif headline */
 .fo-tl-row.big .fo-tl-head {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 19px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 21px;
   line-height: 1.1;
-  text-transform: uppercase;
+  letter-spacing: -0.014em;
+  margin: 1px 0 2px;
 }
 
 /* ------------------------------------------------------------------ the review */
@@ -264,29 +267,27 @@
 
 .fo-rv-head {
   margin: 0;
-  font-size: 30px;
-  line-height: 1;
+  font-size: 32px;
+  line-height: 1.02;
 }
 
 .fo-rv-crown {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 800;
+  font-weight: 680;
   color: var(--tier-elite);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .fo-rv-slab .statline .v {
-  font-size: 26px;
+  font-size: 28px;
   white-space: nowrap;
 }
 
 .fo-rv-grade {
-  font-size: 12.5px;
-  font-weight: 750;
+  font-size: 13px;
+  font-weight: 660;
 }
 
 .fo-rv-grade.good,
@@ -371,9 +372,9 @@ a.fo-rv-row:active {
 
 .fo-rv-key {
   display: inline-block;
-  width: 10px;
-  height: 3px;
-  border-radius: 2px;
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
   vertical-align: middle;
   background: var(--accent);
 }
@@ -391,13 +392,14 @@ a.fo-rv-row:active {
 .fo-rv-next-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 44px;
+  font-weight: 760;
+  font-size: 48px;
   line-height: 0.9;
-  color: var(--accent-text);
+  letter-spacing: -0.01em;
+  color: var(--text);
 }
 
 /* four figures across a phone on the career's slab: a little smaller, so "Playoffs" fits its column */
 .fo-career-slab .statline .v {
-  font-size: 22px;
+  font-size: 26px;
 }

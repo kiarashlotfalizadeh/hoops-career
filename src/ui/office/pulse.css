@@ -31,16 +31,14 @@
 }
 
 .fo-pulse-k {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
 .fo-pulse-v {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 660;
 }
 
 .fo-pulse .tone-good,
@@ -106,11 +104,11 @@
 /* the series' swatch beside its name, as the chart draws it */
 .fo-pulse-fig .over i {
   display: inline-block;
-  width: 10px;
-  height: 3px;
-  margin-right: 2px;
+  width: 12px;
+  height: 2px;
+  margin-right: 5px;
   vertical-align: middle;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--accent);
 }
 
@@ -118,16 +116,20 @@
   background: var(--tier-good);
 }
 
+/* the mood as a word: a serif headline in its tone */
 .fo-pulse-word {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 22px;
+  margin-top: 2px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 27px;
   line-height: 1.05;
-  text-transform: uppercase;
+  letter-spacing: -0.016em;
+  /* (the word is lower case for the sentences it also sits in: here it leads, so its first letter is a capital) */
+  text-transform: capitalize;
 }
 
 .fo-pulse-chart svg {

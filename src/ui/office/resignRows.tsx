@@ -91,7 +91,7 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
             )}
           </div>
         </div>
-        <button className="btn sm primary" aria-label={`Extend ${playerName(p)}`} onClick={() => onExtend(p.pid)}>
+        <button className="btn sm" aria-label={`Extend ${playerName(p)}`} onClick={() => onExtend(p.pid)}>
           <PenLine size={15} /> Extend
         </button>
       </div>

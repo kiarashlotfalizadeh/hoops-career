@@ -67,7 +67,6 @@ export function TalkPanel({
   return (
     <section className="fo-talk" aria-label="Talks with his agent">
       <div className="fo-talk-h">
-        <MessagesSquare size={15} className="dim" />
         <span className="over grow">Talks with his agent</span>
         <span className={`fo-patience ${tone}`} role="img" aria-label={patienceText(st.patience)}>
           {Array.from({ length: Math.max(st.patience, 0) }, (_, i) => (

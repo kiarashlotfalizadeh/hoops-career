@@ -270,7 +270,7 @@ function BioTab({ f, set }: TabProps) {
         </Field>
       </div>
       <div className="col" style={{ gap: 6 }}>
-        <span className="tiny dim upper bold">Position</span>
+        <span className="over">Position</span>
         <Chips label="Position" value={f.pos} options={POSITIONS.map((id) => ({ id, label: id }))} onChange={(pos) => set({ pos })} />
       </div>
       <div className="tiny dim">A new height moves his size rating with it.</div>
@@ -346,7 +346,7 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
         <input className="input" inputMode="decimal" value={amount} onChange={(e) => touch('amount', { amount: e.target.value })} />
       </Field>
       <div className="col" style={{ gap: 6 }}>
-        <span className="tiny dim upper bold">Seasons</span>
+        <span className="over">Seasons</span>
         {/* a one-season deal can't carry an option: it goes, and stays gone if the deal is made longer again */}
         <Chips
           label="Seasons"
@@ -356,7 +356,7 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
         />
       </div>
       <div className="col" style={{ gap: 6 }}>
-        <span className="tiny dim upper bold">Option on the last season</span>
+        <span className="over">Option on the last season</span>
         <Chips
           label="Option on the last season"
           disabled={f.years < 2}

@@ -12,7 +12,7 @@
 
 .fo-statline b {
   color: var(--text);
-  font-weight: 750;
+  font-weight: 680;
 }
 
 /* ------------------------------------------------------------ re-sign */
@@ -23,8 +23,8 @@
 .fo-pay-v2 {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 28px;
+  font-weight: 740;
+  font-size: 30px;
   line-height: 1;
   margin-top: 3px;
 }
@@ -77,8 +77,8 @@
 
 .fo-rs-ask b {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
+  font-stretch: var(--display-w);
+  font-weight: 740;
   font-size: 19px;
 }
 

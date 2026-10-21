@@ -1,7 +1,7 @@
 import { currentGoals } from '../../core/league/ownerGoals';
 import { seasonOutcome, useQueryParam } from '../league/shared';
 import { Link } from 'react-router-dom';
-import { Building2, Dumbbell, GraduationCap, HeartPulse, Ticket, TriangleAlert } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
 import type { Team } from '../../core/types';
 import { CAP, TAX_BRACKET_PCT } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, payroll, revenueScale, twoWayRoster } from '../../core/league/helpers';
@@ -90,7 +90,7 @@ function Overview({ team }: { team: Team }) {
   const full = Math.round((attShown / seats) * 100);
   return (
     <>
-      <div className="card fo-capsheet">
+      <div className="fo-capsheet fo-statement">
         <div className="fo-pay">
           <div className="grow">
             <div className="over">Cash</div>
@@ -126,7 +126,7 @@ function Overview({ team }: { team: Team }) {
           </HelpSheet>
         }
       >
-        <div className="card fo-att">
+        <div className="fo-att">
           <Statline
             items={[
               {
@@ -142,7 +142,7 @@ function Overview({ team }: { team: Team }) {
       </Section>
 
       <Section title={`${shortSeason(s)} costs`} right={<span className="tiny dim">{s > league.season ? 'projected' : 'full season, projected'}</span>}>
-        <div className="card">
+        <div className="fo-ledger">
           <div className="fo-stack" role="img" aria-label={expenses.map((e) => `${e.k} ${money(e.v)}`).join(', ')}>
             {expenses.map((e) => (
               <div key={e.k} style={{ width: `${(e.v / totalExp) * 100}%`, background: e.c }} />
@@ -232,11 +232,10 @@ function BudgetTab({ team }: { team: Team }) {
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
   // fan demand on a temporary copy of the team, through the real attendance model
   const withBudget = (b: Partial<Team['budget']>): Team => ({ ...team, budget: { ...team.budget, ...b } });
-  const items: { k: BudgetKey; label: string; icon: JSX.Element; effect: (lvl: number) => string; help: string }[] = [
+  const items: { k: BudgetKey; label: string; effect: (lvl: number) => string; help: string }[] = [
     {
       k: 'coaching',
       label: 'Coaching staff',
-      icon: <GraduationCap size={18} />,
       effect: (lvl) => {
         const d = ((lvl - 50) / 50) * 0.5;
         if (Math.abs(d) < 0.005) return 'League-average player development';
@@ -247,7 +246,6 @@ function BudgetTab({ team }: { team: Team }) {
     {
       k: 'health',
       label: 'Medical & health',
-      icon: <HeartPulse size={18} />,
       effect: (lvl) => {
         const f = (1.12 - 0.25 * (lvl / 100)) / (1.12 - 0.25 * 0.5) - 1;
         if (Math.round(f * 100) === 0) return 'League-average injury recovery';
@@ -258,7 +256,6 @@ function BudgetTab({ team }: { team: Team }) {
     {
       k: 'facilities',
       label: 'Facilities',
-      icon: <Building2 size={18} />,
       effect: (lvl) => {
         const fans = attendanceFor(league, withBudget({ facilities: lvl })) - attendanceFor(league, withBudget({ facilities: 50 }));
         if (fans !== 0) return `${fans > 0 ? '+' : ''}${fans.toLocaleString()} fans a home game vs average, at your price`;
@@ -309,9 +306,6 @@ function BudgetTab({ team }: { team: Team }) {
             return (
               <div key={it.k} className="fo-budget">
                 <div className="fo-budget-h">
-                  <span className="fo-dept-ic" aria-hidden="true">
-                    {it.icon}
-                  </span>
                   <h3 className="grow">{it.label}</h3>
                   <HelpSheet title={it.label}>
                     <p>{it.help}</p>
@@ -345,13 +339,7 @@ function BudgetTab({ team }: { team: Team }) {
         </div>
       </Section>
 
-      <Section
-        title={
-          <h3>
-            <Ticket size={13} /> Ticket price
-          </h3>
-        }
-      >
+      <Section title="Ticket price">
         <div className="card fo-ticket">
           <Slider
             label="Average ticket"
@@ -389,13 +377,7 @@ function BudgetTab({ team }: { team: Team }) {
         </div>
       </Section>
 
-      <Section
-        title={
-          <h3>
-            <Dumbbell size={13} /> Practice intensity
-          </h3>
-        }
-      >
+      <Section title="Practice intensity">
         <div className="card fo-ticket">
           <Segmented
             value={team.practice}

@@ -12,10 +12,10 @@
 .fo-stack {
   display: flex;
   gap: 2px;
-  height: 12px;
-  border-radius: var(--radius-xs);
+  height: 10px;
+  border-radius: 2px;
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .fo-stack > div {
@@ -24,15 +24,43 @@
 
 .fo-swatch {
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
   margin-right: 8px;
   vertical-align: 0;
 }
 
 .fo-legend-lines {
   margin-bottom: 4px;
+}
+
+/* a statement on the page: the costs line by line, the money in the condensed face down the right,
+   the total under a firmer rule */
+.fo-ledger .fo-lines {
+  border-top: none;
+}
+
+.fo-ledger .fo-line-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.fo-ledger .fo-line:last-child {
+  border-top: 1px solid var(--line-3);
+  margin-top: -1px;
+  border-bottom: none;
+}
+
+.fo-ledger .fo-line:last-child .fo-line-v {
+  font-size: 19px;
+  font-weight: 760;
+}
+
+.fo-ledger .more {
+  margin-top: 6px;
 }
 
 .fo-dead-row {
@@ -50,7 +78,7 @@
 .fo-dead-s {
   flex: none;
   width: 44px;
-  font-weight: 700;
+  font-weight: 640;
   color: var(--text-2);
 }
 
@@ -72,9 +100,8 @@
   font-family: var(--font);
   font-stretch: var(--text-w);
   font-size: 15px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0;
-  text-transform: none;
 }
 
 .fo-line-txt {
@@ -90,7 +117,11 @@
 }
 
 .fo-ticket .statline .v {
-  font-size: 22px;
+  font-size: 24px;
+}
+
+.fo-att .statline .v {
+  font-size: 30px;
 }
 
 /* profit by season: a bar up for a profit, a muted one for the season still running */
@@ -136,26 +167,32 @@
 .fo-minichart .b {
   width: 100%;
   max-width: 30px;
-  border-radius: 4px 4px 1px 1px;
+  border-radius: 2px 2px 0 0;
   background: var(--good);
 }
 
 .fo-minichart .down .b {
-  border-radius: 1px 1px 4px 4px;
+  border-radius: 0 0 2px 2px;
   background: var(--bad);
 }
 
+/* the season still running: an outline of what it's made so far */
 .fo-minichart .live .b {
-  opacity: 0.5;
-  background-image: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.25) 0 4px, transparent 4px 8px);
+  background: color-mix(in srgb, var(--good) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--good);
+}
+
+.fo-minichart .live.down .b {
+  background: color-mix(in srgb, var(--bad) 22%, transparent);
+  box-shadow: inset 0 0 0 1px var(--bad);
 }
 
 /* to the $0.1M like every money figure: the condensed face keeps ten seasons from touching */
 .fo-minichart .v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 11.5px;
-  font-weight: 800;
+  font-size: 12px;
+  font-weight: 720;
   color: var(--good);
   white-space: nowrap;
 }
@@ -165,7 +202,7 @@
 }
 
 .fo-minichart .s {
-  font-size: 10.5px;
-  font-weight: 650;
+  font-size: 11.5px;
+  font-weight: 600;
   color: var(--text-dim);
 }

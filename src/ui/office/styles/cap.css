@@ -5,7 +5,7 @@
 .fo-capsheet {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .fo-pay {
@@ -16,28 +16,30 @@
 }
 
 .fo-pay .tag {
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
+/* the payroll: the sheet's one big figure */
 .fo-pay-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 38px;
-  line-height: 0.95;
-  margin-top: 2px;
-  letter-spacing: 0.005em;
+  font-weight: 760;
+  font-size: 46px;
+  line-height: 0.92;
+  margin-top: 4px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .fo-cap {
   position: relative;
-  padding-top: 16px;
+  padding-top: 17px;
 }
 
 .fo-cap-track {
   position: relative;
-  height: 12px;
-  border-radius: var(--radius-xs);
+  height: 10px;
+  border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -54,14 +56,19 @@
     left var(--dur) var(--ease-out);
 }
 
+/* (each zone past the first starts after a hairline of the track: the zones read as steps) */
+.fo-cap-fill.over,
+.fo-cap-fill.tax {
+  border-left: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 .fo-cap-fill.over {
-  background: var(--warn);
-  box-shadow: inset 2px 0 0 var(--raised);
+  background-color: var(--warn);
 }
 
 .fo-cap-fill.tax {
-  background: var(--bad);
-  box-shadow: inset 2px 0 0 var(--raised);
+  background-color: var(--bad);
 }
 
 .fo-cap-add {
@@ -94,13 +101,12 @@
 /* the cap and the tax line: ticks through the bar, labelled over it */
 .fo-cap-mark {
   position: absolute;
-  top: 12px;
+  top: 13px;
   width: 2px;
-  height: 20px;
+  height: 18px;
   margin-left: -1px;
   background: var(--text);
   border-radius: 1px;
-  box-shadow: 0 0 0 1.5px var(--raised);
 }
 
 .fo-cap-mark.tax {
@@ -109,15 +115,12 @@
 
 .fo-cap-mark span {
   position: absolute;
-  top: -14px;
+  top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 12px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-weight: 650;
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -129,13 +132,16 @@
 .fo-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-top: 8px;
-  font-size: 11.5px;
+  gap: 4px 16px;
+  margin-top: 9px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 
 .fo-legend b {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 13.5px;
   color: var(--text);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -198,7 +204,7 @@
   border-top: 1px solid var(--line);
 }
 
-/* three figures across a phone: a size that fits "-$51.2M" */
+/* three figures across a phone: a size that fits "$251.2M" */
 .fo-capsheet .statline .v {
-  font-size: 24px;
+  font-size: 27px;
 }

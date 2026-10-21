@@ -8,12 +8,14 @@
 }
 
 .fo-owner-row .over {
-  font-size: 10.5px;
+  font-size: 12.5px;
 }
 
 .fo-owner-row .num {
-  font-size: 12.5px;
-  font-weight: 750;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 15px;
+  font-weight: 720;
   text-align: right;
   color: var(--text-2);
 }
@@ -21,8 +23,8 @@
 /* a -1..1 value growing from the centre */
 .fo-cbar {
   position: relative;
-  height: 6px;
-  border-radius: 3px;
+  height: 5px;
+  border-radius: 2px;
   background: var(--surface-3);
 }
 
@@ -41,7 +43,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  border-radius: 3px;
+  border-radius: 2px;
 }
 
 .fo-owner-parts {
@@ -70,16 +72,17 @@
 
 .fo-goal-v {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 20px;
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 21px;
 }
 
 /* the owner's meter: the score, the heat, a track from the hot seat to secure with the firing line */
+/* the screen's hero, flat on the page: the score in big figures, the heat as a serif word */
 .fo-seat {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   --seat: var(--info);
 }
 
@@ -97,43 +100,51 @@
 
 .fo-seat-top {
   display: flex;
-  align-items: center;
-  gap: 14px;
+  align-items: flex-end;
+  gap: 16px;
 }
 
 .fo-seat-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 56px;
-  line-height: 0.9;
+  font-weight: 760;
+  font-size: 76px;
+  line-height: 0.8;
+  letter-spacing: -0.02em;
   color: var(--seat);
+  font-variant-numeric: tabular-nums;
+}
+
+.fo-seat-top .grow {
+  padding-bottom: 2px;
 }
 
 .fo-seat-l {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 24px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 30px;
   line-height: 1;
-  text-transform: uppercase;
+  letter-spacing: -0.018em;
+  margin-bottom: 4px;
 }
 
 .fo-seat-line {
   margin: 0;
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.4;
   color: var(--text-2);
 }
 
 .fo-meterbar {
   position: relative;
-  padding: 16px 0 18px;
+  padding: 18px 0 20px;
 }
 
 .fo-meterbar-track {
   display: flex;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 1px;
   overflow: hidden;
   gap: 2px;
 }
@@ -142,15 +153,15 @@
   display: block;
   flex: 1 1 0;
   height: 100%;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 /* goals met exactly: a short tick under the track, labelled */
 .fo-meterbar-mid {
   position: absolute;
   left: 50%;
-  top: 24px;
-  width: 2px;
+  top: 25px;
+  width: 1px;
   height: 6px;
   margin-left: -1px;
   background: var(--text-dim);
@@ -161,7 +172,7 @@
   top: 7px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10.5px;
+  font-size: 11.5px;
   line-height: 12px;
   color: var(--text-dim);
   white-space: nowrap;
@@ -185,37 +196,34 @@
 
 .fo-meterbar-line {
   position: absolute;
-  top: 12px;
+  top: 14px;
   width: 2px;
-  height: 16px;
+  height: 14px;
   margin-left: -1px;
   background: var(--text);
 }
 
 .fo-meterbar-line span {
   position: absolute;
-  top: -13px;
+  top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--text-2);
   white-space: nowrap;
 }
 
+/* where he stands: a pin in the heat's colour, cut out of the ground */
 .fo-meterbar-pin {
   position: absolute;
-  top: 10px;
+  top: 12px;
   width: 18px;
   height: 18px;
   margin-left: -9px;
   border-radius: 50%;
   background: var(--seat);
-  border: 3px solid var(--raised);
-  box-shadow: 0 0 0 1px var(--line-3);
+  border: 3px solid var(--bg);
   transition: left var(--dur) var(--ease-out);
 }
 

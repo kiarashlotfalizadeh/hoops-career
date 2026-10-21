@@ -1,7 +1,7 @@
 // Free agency's market, on the Free Agents screen while it runs: your offer sheets and
 // pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
 // on its last day, starts the new season).
-import { FastForward, Gavel, Play, SkipForward } from 'lucide-react';
+import { FastForward, Play, SkipForward } from 'lucide-react';
 import { seasonLabel } from '../../core/constants';
 import { freeAgents, playerName, shortName } from '../../core/league/helpers';
 import { withdrawBid } from '../../core/league/freeAgency';
@@ -45,9 +45,7 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
         <MySheets onOpen={onOpen} />
         {bids.length > 0 && (
           <div className="fo-pending">
-            <div className="over">
-              <Gavel size={12} /> Your pending offers
-            </div>
+            <div className="over">Your pending offers</div>
             {bids.map((b) => {
               const bp = league.players[b.pid];
               return (

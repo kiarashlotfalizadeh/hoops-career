@@ -211,7 +211,7 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
       ? 'Your tenure starts next season'
       : `Season ${seasonsIn} ${done ? 'done' : 'in charge'}${!js.off && !graceSaid ? graceText : ''}`;
   return (
-    <section className={`card fo-seat tone-${tone}`} aria-label={`Job security: ${js.label}, ${js.score} of 100`}>
+    <section className={`fo-seat tone-${tone}`} aria-label={`Job security: ${js.label}, ${js.score} of 100`}>
       <div className="fo-seat-top">
         {!league.fired && <span className="fo-seat-v num">{js.score}</span>}
         <div className="grow">

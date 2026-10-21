@@ -26,21 +26,20 @@
   padding: 0 8px;
 }
 
-/* a pulsing dot before an overline: something is happening now (the draft clock) */
+/* a pulsing dot before a kicker: something is happening now (the draft clock), in the brand's live orange */
 .fo-live {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  color: var(--bad);
+  color: var(--accent-text);
 }
 
 .fo-live::before {
   content: '';
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--bad);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--bad) 25%, transparent);
+  background: var(--brand);
   animation: pulse 1.4s ease-in-out infinite;
 }
 
@@ -49,36 +48,37 @@
   position: relative;
 }
 
-/* a tiny flag after a name: rookie scale, two-way, 10-day, injured */
+/* a tiny flag after a name: rookie scale, two-way, 10-day, injured. An outlined label in sentence
+   case, a tone colouring its word */
 .fo-flag {
   flex: none;
   display: inline-grid;
   place-items: center;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 4px;
-  font-size: 9.5px;
-  font-weight: 800;
-  font-stretch: 100%;
-  letter-spacing: 0.04em;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line-2);
+  font-size: 11px;
+  font-weight: 620;
+  line-height: 1;
   font-style: normal;
-  background: var(--surface-3);
+  background: transparent;
   color: var(--text-2);
 }
 
 .fo-flag.info {
-  background: color-mix(in srgb, var(--info) 18%, transparent);
   color: var(--info);
+  border-color: color-mix(in srgb, var(--info) 36%, transparent);
 }
 
 .fo-flag.warn {
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 36%, transparent);
 }
 
 .fo-flag.bad {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: color-mix(in srgb, var(--bad) 80%, white);
+  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
 }
 
 /* ------------------------------------------------------------ sheets */
@@ -128,7 +128,7 @@
 }
 
 .fo-line-v {
-  font-weight: 750;
+  font-weight: 680;
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
@@ -158,60 +158,61 @@
 }
 
 .fo-dead .num {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
   font-weight: 700;
 }
 
+/* the total under a firmer rule, as a statement sets it */
 .fo-dead-t {
-  font-weight: 750;
-  padding-top: 5px;
-  border-top: 1px solid var(--line);
+  font-weight: 700;
+  padding-top: 6px;
+  border-top: 1px solid var(--line-3);
 }
 
 .fo-buyout {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
+  padding: var(--pad-card);
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line);
 }
 
 /* ------------------------------------------------------------ notes */
-/* a note with a tone: an edge and an icon on the page's ground, not a tinted box */
+/* a note with a tone: its icon carries the colour, on a quiet panel; no stripe, no tint */
 .fo-callout {
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  padding: 10px 12px;
+  padding: 11px 13px;
   border-radius: var(--radius-md);
   font-size: 13.5px;
   line-height: 1.4;
   color: var(--text-2);
   background: var(--raised);
-  border: 1px solid var(--line);
-  box-shadow: inset 3px 0 0 var(--line-3);
 }
 
 .fo-callout b {
   color: var(--text);
 }
 
-.fo-callout.bad {
-  box-shadow: inset 3px 0 0 var(--bad);
-}
-
-.fo-callout.good {
-  box-shadow: inset 3px 0 0 var(--good);
-}
-
-.fo-callout.warn {
-  box-shadow: inset 3px 0 0 var(--warn);
-}
-
 .fo-callout > svg {
   flex: none;
   margin-top: 1px;
+}
+
+.fo-callout.bad > svg {
+  color: var(--bad);
+}
+
+.fo-callout.good > svg {
+  color: var(--good);
+}
+
+.fo-callout.warn > svg {
+  color: var(--warn);
 }
 
 /* ------------------------------------------------------------ player rows */
@@ -251,22 +252,23 @@
 .fo-ovrstack .pot {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 11px;
+  font-weight: 720;
+  font-size: 12px;
   line-height: 1;
   white-space: nowrap;
+  color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
 
 .fo-ovrstack .pot-k {
-  font-size: 9px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
 .fo-name {
   display: block;
-  font-weight: 700;
+  font-weight: 660;
   font-size: 15px;
   line-height: 1.2;
   white-space: nowrap;
@@ -291,10 +293,11 @@
 .fo-money .a,
 .fo-money-a {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 18px;
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 19px;
   line-height: 1.05;
+  letter-spacing: -0.003em;
 }
 
 .fo-money .b {
@@ -310,12 +313,12 @@
   border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background-color: var(--surface);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a94a4' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1998b' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding: 0 28px 0 11px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--text);
   text-overflow: ellipsis;
   appearance: none;
@@ -373,9 +376,9 @@
   box-shadow: none;
 }
 
-/* the button's number-plate cut clips a box shadow: the shadow follows its shape instead */
+/* a lone call to action floating over the tab bar */
 .fo-dock-go .btn.big {
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6));
+  box-shadow: var(--shadow-float);
 }
 
 /* a glossary word as a figure's label keeps the label's caps */
@@ -387,15 +390,8 @@
   color: inherit;
 }
 
-/* a glossary word in an overline or a list divider keeps its caps */
-.fo-page .term {
-  text-transform: inherit;
-  letter-spacing: inherit;
-}
-
 /* ------------------------------------------------------------ press and hover on the desks' rows */
 .fo-prow,
-.fo-dept,
 .fo-team {
   transition:
     background var(--dur-fast) var(--ease-out),
@@ -409,7 +405,6 @@
 
 @media (hover: hover) {
   .fo-prow:hover,
-  .fo-dept:hover,
   .fo-asset:not(.on):hover,
   .fo-team:not(.on):hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
@@ -429,4 +424,12 @@
 .fo-page .statline .k .term,
 .fo-sheet .statline .k .term {
   text-align: left;
+}
+
+/* a page's tabs already rule off what's under them: the first section after them doesn't draw
+   a second line */
+.fo-page > .seg.tabs + .sec > .sec-h,
+.fo-page > .lg-tabs + .sec > .sec-h {
+  border-top: none;
+  padding-top: 2px;
 }

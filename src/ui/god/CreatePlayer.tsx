@@ -54,7 +54,7 @@ function Form({ onClose }: { onClose: () => void }) {
         <Select label="Height" value={heightIn} options={HEIGHTS} onChange={setHeight} />
       </div>
       <div className="col" style={{ gap: 6 }}>
-        <span className="tiny dim upper bold">Position</span>
+        <span className="over">Position</span>
         <Chips label="Position" value={pos} options={[{ id: 'auto' as const, label: 'From his skills' }, ...POSITIONS.map((id) => ({ id, label: id }))]} onChange={setPos} />
       </div>
       <Slider label="OVR" min={40} max={99} value={ovr} onChange={setOvr} />

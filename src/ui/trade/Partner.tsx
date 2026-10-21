@@ -43,9 +43,6 @@ export function PartnerSlab({ league, tid, season }: { league: League; tid: numb
   const st = STRATEGY_META[t.strategy];
   return (
     <section className="slab fo-partner" style={slabVars(t.colors)} aria-label={`Trade partner: ${t.region} ${t.name}`}>
-      <span className="slab-mark">
-        <TeamLogo tid={tid} size={150} decorative />
-      </span>
       <div className="fo-partner-top">
         <TeamLogo tid={tid} size={46} decorative />
         <div className="grow">

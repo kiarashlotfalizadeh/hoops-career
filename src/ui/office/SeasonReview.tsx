@@ -6,7 +6,7 @@
 // season reads the same. The sections come in one after another, quickly; reduced motion shows them.
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Award, Crown, Flame, Medal, Sparkles, Star, Trophy } from 'lucide-react';
+import { Award, Crown, Flame, Medal, Star, Trophy } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { fmtDate } from '../../core/league/helpers';
@@ -15,7 +15,6 @@ import { endText, vsPress, type SeasonReview } from '../../core/league/legacyRev
 import { ownerWord } from '../../core/league/legacyPulse';
 import { resultText } from '../../core/league/ownerGoals';
 import { ordinal, plural } from '../../core/format';
-import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, PageHeader, Section, Statline } from '../components/ui';
 import { slabVars } from '../teamColors';
 import { CenterBar, fmtGrade } from './common';
@@ -49,9 +48,6 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
       <PageHeader title={`${seasonLabel(r.season)} review`} sub={`${t.region} ${t.name}`} back backTo="/office/career" />
 
       <section className="slab fo-rv-slab fo-rv-in" style={{ ...slabVars(t.colors), ...step() } as CSSProperties} aria-label="The season">
-        <span className="slab-mark">
-          <TeamLogo tid={r.tid} size={170} decorative />
-        </span>
         <span className="over">
           {seasonLabel(r.season)} · {t.name}
         </span>
@@ -156,7 +152,6 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
           <div className="card flush list fo-rv-in" style={step()}>
             {milestones.map((m) => (
               <div key={m.key} className={`listrow fo-ms ${m.big ? 'big' : ''}`}>
-                <Sparkles size={16} className="fo-ms-i" aria-hidden="true" />
                 <div className="grow fo-min0">
                   <div className="lr-name">{m.head}</div>
                   <div className="lr-meta">

@@ -31,7 +31,6 @@
   padding: 10px 12px;
   border-radius: var(--radius-md);
   background: var(--raised);
-  border: 1px solid var(--line);
 }
 /* Save and Cancel stay in reach at the bottom of a long sheet (the sheet's own padding is 20px + the safe area) */
 .god-foot {
@@ -92,16 +91,22 @@
   padding: 10px 2px 8px;
   border-radius: var(--radius-md);
   background: var(--raised);
-  border: 1px solid var(--line);
+  transition:
+    background var(--dur-fast) ease,
+    transform 0.08s ease;
 }
 .god-team:active {
   background: var(--surface);
+  transform: scale(0.97);
+}
+@media (hover: hover) and (pointer: fine) {
+  .god-team:hover {
+    background: var(--surface);
+  }
 }
 .god-team-ab {
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.06em;
+  font-size: 12px;
+  font-weight: 640;
   color: var(--text-2);
 }
 /* a group's heading inside an editor sheet */

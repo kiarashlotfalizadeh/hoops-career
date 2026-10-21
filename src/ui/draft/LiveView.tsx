@@ -69,9 +69,6 @@ function Announcer({ league, picks }: { league: League; picks: Player[] }) {
       aria-live="polite"
       aria-label="Skip the announcements"
     >
-      <span className="slab-mark">
-        <TeamLogo tid={t.tid} size={150} decorative />
-      </span>
       <span className="dn-stage-over">
         With the {pickWords(n)} in the {league.season} draft, {mine ? 'you select' : `the ${t.region} ${t.name} select`}
         {named ? '' : '…'}
@@ -102,7 +99,7 @@ function YourPick({ league, picks }: { league: League; picks: Player[] }) {
   if (!p) return null;
   const n = overallPick(league, p.draft.round, p.draft.pick);
   return (
-    <Link to={`/player/${p.pid}`} className="card accent dn-yours">
+    <Link to={`/player/${p.pid}`} className="card dn-yours">
       <span className="dn-yours-over">Your pick · #{n}</span>
       <span className="row" style={{ gap: 12, alignItems: 'center' }}>
         <span className="grow" style={{ minWidth: 0 }}>
@@ -167,9 +164,6 @@ export function OnTheClock({
   return (
     // the team on the clock, in its colours
     <section className="slab fo-clock" style={slabVars(t.colors)} aria-label={`On the clock: pick ${n}`}>
-      <span className="slab-mark">
-        <TeamLogo tid={np.tid} size={170} decorative />
-      </span>
       <div className="fo-clock-over">
         <span className="fo-live">On the clock</span>
         <span>

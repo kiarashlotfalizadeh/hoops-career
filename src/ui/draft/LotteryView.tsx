@@ -3,7 +3,7 @@
 // and the user's slot gets its moment; a tap skips to the whole order. (Whether it has been seen is
 // remembered in this browser only: the league is the same either way.)
 import { useEffect, useRef, useState } from 'react';
-import { ArrowDown, ArrowUp, FastForward, Sparkles } from 'lucide-react';
+import { ArrowDown, ArrowUp, FastForward } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { curTeamSeason } from '../../core/league/helpers';
 import { draftOrder, lotteryOdds } from '../../core/league/draft';
@@ -57,13 +57,13 @@ export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dp
   return (
     <>
       {shown < 0 && (
-        <section className="card accent dn-start" aria-label="The lottery">
+        <section className="card dn-start" aria-label="The lottery">
           <div className="fo-now-over">Draft lottery</div>
           <h2 className="fo-now-t">The balls have been drawn</h2>
           <p className="fo-now-s">Fourteen teams, four drawn picks. The order is revealed from the 14th pick up.</p>
           <div className="row" style={{ gap: 8 }}>
             <button className="btn primary grow" onClick={() => setShown(0)}>
-              <Sparkles size={16} aria-hidden="true" /> Reveal the order
+              Reveal the order
             </button>
             <button className="btn grow" onClick={() => setShown(n)}>
               Skip to the order

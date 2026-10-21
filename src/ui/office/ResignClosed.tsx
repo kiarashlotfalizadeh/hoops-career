@@ -50,7 +50,7 @@ export function ResignClosed({ league }: { league: League }) {
   return (
     <main className="page fo-page">
       <PageHeader title="Re-sign" sub={`Contracts up after ${shortSeason(s)}`} back />
-      <section className="card fo-capsheet" aria-label="Re-sign period">
+      <section className="fo-capsheet fo-statement" aria-label="Re-sign period">
         <div className="small dim2">
           <b className="fo-closed-t">The re-sign period {title.charAt(0).toLowerCase() + title.slice(1)}.</b> {when}
         </div>

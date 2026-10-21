@@ -21,7 +21,6 @@
   padding: 12px 14px;
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line);
 }
 
 .fo-ask > .help-btn {
@@ -31,7 +30,7 @@
 }
 
 .fo-ask .statline .v {
-  font-size: 24px;
+  font-size: 26px;
 }
 
 .fo-ask-word {
@@ -61,19 +60,22 @@
   gap: 10px;
 }
 
+/* your offer: the sheet's big figure */
 .fo-offer-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 42px;
-  line-height: 0.95;
-  margin-top: 3px;
+  font-weight: 760;
+  font-size: 46px;
+  line-height: 0.92;
+  margin-top: 4px;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .fo-offer-t {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 720;
   font-size: 24px;
   line-height: 1;
   margin-top: 3px;
@@ -140,32 +142,46 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
+  gap: 2px;
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 20px;
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 21px;
   line-height: 1;
   position: relative;
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    color var(--dur-fast) ease;
 }
 
 .fo-yr small {
   font-family: var(--font);
-  font-stretch: 100%;
-  font-size: 9.5px;
-  font-weight: 750;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  font-stretch: var(--text-w);
+  font-size: 11px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
+/* the length chosen: paper, like every control that's on */
 .fo-yr.on {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .fo-yr.on small {
-  color: var(--text-2);
+  color: color-mix(in srgb, var(--accent-ink) 72%, transparent);
+}
+
+.fo-yr:not(.on):active {
+  background: var(--surface-2);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fo-yr:not(.on):not(:disabled):hover {
+    border-color: var(--line-3);
+  }
 }
 
 /* a length the offer can't run (an offer sheet's single season) */
@@ -186,7 +202,6 @@
   padding: 12px 14px;
   border-radius: var(--radius);
   background: var(--raised);
-  border: 1px solid var(--line);
 }
 
 .fo-talk-h {
@@ -201,10 +216,9 @@
 }
 
 .fo-patience i {
-  width: 9px;
-  height: 9px;
-  border-radius: 2px;
-  transform: skewX(-12deg);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
   background: var(--good);
 }
 
@@ -304,7 +318,7 @@
 }
 
 .fo-capimpact .statline .v {
-  font-size: 24px;
+  font-size: 26px;
 }
 
 /* the sheet's action stays in thumb reach while its terms scroll */

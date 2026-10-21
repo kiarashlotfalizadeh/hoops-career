@@ -13,12 +13,8 @@
   display: flex;
   justify-content: space-between;
   gap: 10px;
-  padding-right: 14px;
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-2);
 }
 
@@ -39,26 +35,27 @@
 .fo-clock-n {
   font-family: var(--display);
   font-stretch: 70%;
-  font-weight: 800;
-  font-size: 64px;
+  font-weight: 760;
+  font-size: 66px;
   line-height: 0.85;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
+/* the team (or "You're up"): the slab's serif headline */
 .fo-clock-team {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 28px;
-  line-height: 0.95;
-  text-transform: uppercase;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.018em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .fo-clock-sub {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-2);
@@ -87,8 +84,8 @@
   text-align: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-weight: 740;
+  font-size: 21px;
   color: var(--text-2);
   font-variant-numeric: tabular-nums;
 }
@@ -101,32 +98,31 @@
   gap: 4px;
   width: 58px;
   padding: 8px 0 7px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--raised);
-  border: 1px solid var(--line);
 }
 
 .fo-pickchip:active {
   background: var(--surface);
 }
 
+/* yours: your colour's rule along its foot (identity) */
 .fo-pickchip.me {
-  border-color: color-mix(in srgb, var(--team-text) 60%, var(--line));
-  box-shadow: inset 0 -3px 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 9%, var(--raised));
+  box-shadow: inset 0 -2px 0 var(--team-text);
 }
 
 .fo-pickchip .n {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 17px;
+  font-weight: 740;
+  font-size: 18px;
   line-height: 1;
 }
 
 .fo-pickchip .ab {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
+  font-size: 11.5px;
+  font-weight: 640;
   color: var(--text-2);
 }
 
@@ -135,7 +131,7 @@
   align-items: center;
   gap: 2px;
   font-size: 12.5px;
-  font-weight: 750;
+  font-weight: 680;
   font-variant-numeric: tabular-nums;
 }
 
@@ -169,13 +165,10 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 6px var(--row-px) 5px 10px;
-  border-bottom: 1px solid var(--line);
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  padding: 9px var(--row-px) 7px 10px;
+  border-bottom: 1px solid var(--line-2);
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 
@@ -237,13 +230,13 @@ button.listrow {
 .fo-prospect-first {
   margin-top: 4px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 620;
   color: var(--text-2);
 }
 
 .fo-prospect-last {
   font-size: 32px;
-  line-height: 0.95;
+  line-height: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -274,18 +267,15 @@ button.listrow {
 }
 
 .fo-combine .k {
-  font-size: 10px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 
 .fo-combine .v {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 20px;
+  font-stretch: var(--display-w);
+  font-weight: 740;
+  font-size: 21px;
   line-height: 1.1;
 }

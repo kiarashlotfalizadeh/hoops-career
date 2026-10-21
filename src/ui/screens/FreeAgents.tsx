@@ -136,7 +136,7 @@ export default function FreeAgents() {
         </Callout>
       )}
 
-      <div className="card fo-figs-card">
+      <div className="fo-figs-card">
         <Statline
           items={[
             {

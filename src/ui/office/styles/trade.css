@@ -15,12 +15,10 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  padding: 5px 0 6px;
-  border-radius: var(--radius-md);
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.05em;
+  padding: 6px 0 7px;
+  border-radius: var(--radius-sm);
+  font-size: 11.5px;
+  font-weight: 650;
   color: var(--text-dim);
   scroll-snap-align: start;
 }
@@ -29,19 +27,19 @@
   background: var(--surface);
 }
 
+/* the partner: a step up, with the paper rule under it that marks a tab that's on */
 .fo-team.on {
   color: var(--text);
+  font-weight: 720;
   background: var(--surface-2);
-  box-shadow:
-    inset 0 0 0 1px var(--line-2),
-    inset 0 -3px 0 var(--accent);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .fo-partner {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 14px 16px;
+  gap: 12px;
+  padding: 18px 16px 16px;
 }
 
 .fo-partner-top {
@@ -57,18 +55,19 @@
 
 .fo-partner-region {
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 620;
   color: var(--text-2);
 }
 
+/* the team's name: a serif headline, as on every slab */
 .fo-partner-name {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
+  margin-top: 2px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
   font-size: 30px;
-  line-height: 0.95;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
+  line-height: 1;
+  letter-spacing: -0.018em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -81,15 +80,17 @@
 
 .fo-partner-cap .v {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 24px;
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 28px;
   line-height: 1;
+  letter-spacing: -0.005em;
 }
 
 .fo-partner-cap .k {
-  font-size: 11px;
-  font-weight: 650;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-2);
 }
 
@@ -99,13 +100,13 @@
   align-items: center;
   gap: 4px 6px;
   font-size: 12.5px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
 }
 
 /* ------------------------------------------------------------ trade: the deal */
 .fo-deal {
-  padding: 12px;
+  padding: var(--pad-card);
 }
 
 .fo-deal-cols {
@@ -117,12 +118,9 @@
 
 .fo-deal-swap {
   align-self: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
+  width: 20px;
   display: grid;
   place-items: center;
-  background: var(--surface-2);
   color: var(--text-dim);
 }
 
@@ -158,13 +156,13 @@
   align-items: center;
   gap: 6px;
   max-width: 100%;
-  min-height: 32px;
+  min-height: 34px;
   padding: 3px 3px 3px 4px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   border: 1px solid var(--line-2);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 640;
 }
 
 /* a player's name wraps rather than cut off in a narrow column ("Jay. / Williams") */
@@ -229,7 +227,7 @@
 
 .fo-notes li.warn {
   color: var(--warn);
-  font-weight: 700;
+  font-weight: 640;
 }
 
 .fo-terms {
@@ -261,7 +259,7 @@
 
 /* neutral text: trade value is its own scale, not the OVR badge's */
 .fo-tier-v {
-  font-weight: 700;
+  font-weight: 640;
   color: var(--text-2);
 }
 
@@ -270,11 +268,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 11px 14px 9px;
+  padding: 12px var(--row-px) 10px;
 }
 
 .fo-assets-h h3 {
-  font-size: 17px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -296,10 +294,9 @@
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: var(--row-py) var(--row-px) var(--row-py) 11px;
+  padding: var(--row-py) var(--row-px) var(--row-py) 12px;
   min-height: var(--row-min);
   text-align: left;
-  box-shadow: inset 3px 0 0 transparent;
   transition: background var(--dur-fast) var(--ease-out);
 }
 
@@ -320,9 +317,9 @@
   background: var(--surface);
 }
 
+/* in the deal: the row steps up a ground and its check fills with paper */
 .fo-asset.on {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-2);
 }
 
 .fo-asset-name {
@@ -350,7 +347,7 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  border: 2px solid var(--line-3);
+  border: 1.5px solid var(--line-3);
   display: grid;
   place-items: center;
   flex: none;
@@ -397,16 +394,14 @@
   flex-direction: column;
   gap: 6px;
   /* solid fallback first: iOS before 16.2 has no color-mix */
-  background: rgba(19, 25, 33, 0.97);
+  background: var(--surface);
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid var(--line-2);
   border-radius: var(--radius-lg);
-  padding: 8px 12px 10px;
-  box-shadow:
-    0 -8px 30px rgba(0, 0, 0, 0.5),
-    inset 0 3px 0 var(--react, var(--line-2));
+  padding: 9px 12px 10px;
+  box-shadow: var(--shadow-float);
 }
 
 .fo-dock.idle {
@@ -454,8 +449,8 @@
 .fo-dock-says {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
-  font-weight: 750;
+  font-size: 14.5px;
+  font-weight: 680;
   line-height: 1.25;
   color: var(--react);
 }
@@ -463,16 +458,16 @@
 .fo-dock-pct {
   flex: none;
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 18px;
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 20px;
   color: var(--react);
 }
 
 .fo-meter {
   position: relative;
-  height: 6px;
-  border-radius: 4px;
+  height: 5px;
+  border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -482,7 +477,7 @@
   left: 0;
   top: 0;
   bottom: 0;
-  border-radius: 4px;
+  border-radius: 2px;
   background: var(--react, var(--accent));
   transform-origin: left;
   transition:
@@ -509,13 +504,12 @@
 }
 
 .fo-dock-figs .v {
-  font-size: 16px;
+  font-size: 18px;
   white-space: nowrap;
 }
 
 .fo-dock-figs .k {
-  font-size: 9.5px;
-  letter-spacing: 0.07em;
+  font-size: 11.5px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -728,14 +722,14 @@ body:has(.simbar) .fo-dock {
   line-height: 1.3;
 }
 
+/* the kind of counter: a small icon in its signal's colour, no box */
 .fo-counter-ic {
   flex: none;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
+  width: 18px;
+  height: 20px;
   display: grid;
   place-items: center;
-  background: var(--surface-2);
+  color: var(--text-dim);
 }
 
 .fo-counter-ic.info {
@@ -766,8 +760,8 @@ body:has(.simbar) .fo-dock {
 .fo-counter-side .over {
   flex: none;
   width: 72px;
-  margin-top: 3px;
-  font-size: 10.5px;
+  margin-top: 1px;
+  font-size: 12px;
 }
 
 .fo-pkg-flat {

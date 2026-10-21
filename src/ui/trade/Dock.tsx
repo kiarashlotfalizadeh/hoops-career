@@ -97,7 +97,6 @@ export function Dock({
   if (empty || !ev) {
     return (
       <div className="fo-dock idle">
-        <Handshake size={18} className="dim" />
         <span className="small dim2">Tap players or picks to build a deal: their GM reacts as you go.</span>
       </div>
     );

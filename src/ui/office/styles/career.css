@@ -7,7 +7,7 @@
 }
 
 .fo-career-slab .statline .v {
-  font-size: 24px;
+  font-size: 28px;
   white-space: nowrap;
 }
 
@@ -39,8 +39,4 @@
 
 .fo-career-slab .statline > :first-child {
   padding-left: 0;
-}
-
-.fo-career-slab .statline .k {
-  letter-spacing: 0.06em;
 }

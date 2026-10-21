@@ -6,7 +6,7 @@
 // → Contracts; the owner on his own desk.
 import { createContext, useContext, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { type LucideIcon, ArrowLeftRight, ChevronRight, ClipboardList, Crown, ListOrdered, PenLine, PiggyBank, Ticket, UserPlus } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP, TAX_BRACKET_PCT, TAX_RATES } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers } from '../../core/league/helpers';
@@ -105,7 +105,7 @@ function Now({
   );
   const single = !!action && !second;
   return (
-    <section className={`card fo-now ${action && !quiet ? 'accent' : ''}`} aria-label="Now">
+    <section className={`fo-now fo-now-lead ${action && !quiet ? 'on' : ''}`} aria-label="Now">
       <div className="fo-now-main">
         <div className="grow">
           <div className="fo-now-over">
@@ -302,7 +302,7 @@ function CapSheet({ league }: { league: League }) {
         </span>
       }
     >
-      <div className="card fo-capsheet">
+      <div className="fo-capsheet fo-statement">
         <div className="fo-pay">
           <div className="grow">
             <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
@@ -516,7 +516,6 @@ function CapHelp({ league, season }: { league: League; season: number }) {
 
 interface Desk {
   to: string;
-  icon: LucideIcon;
   title: string;
   sub: string;
   /** The work is here right now. */
@@ -559,7 +558,6 @@ function Desks({ league }: { league: League }) {
   const desks: Desk[] = [
     {
       to: '/office/trade',
-      icon: ArrowLeftRight,
       title: 'Trade',
       // the offers themselves are the decisions above: this line points at them
       sub: inPost ? 'Frozen in the postseason' : pastDeadline ? 'Locked until the lottery' : offers ? `${plural(offers, 'offer')} above` : 'No offers waiting',
@@ -567,7 +565,6 @@ function Desks({ league }: { league: League }) {
     },
     {
       to: '/office/free-agents',
-      icon: UserPlus,
       title: 'Free agents',
       sub: `${market.length} on the market${market.length ? `, best ${best} OVR` : ''}${signingClosed ? ' · signings closed' : ''}`,
       hot: league.phase === 'freeAgency',
@@ -575,7 +572,6 @@ function Desks({ league }: { league: League }) {
     },
     {
       to: '/office/resign',
-      icon: PenLine,
       title: 'Re-sign',
       sub:
         league.phase === 'resign'
@@ -588,7 +584,6 @@ function Desks({ league }: { league: League }) {
     },
     {
       to: '/office/draft',
-      icon: ListOrdered,
       title: 'Draft',
       sub: after
         ? drafted.length
@@ -610,7 +605,6 @@ function Desks({ league }: { league: League }) {
     },
     {
       to: '/office/assets',
-      icon: Ticket,
       title: 'Picks & moves',
       sub: [
         `${plural(myPicks.length, 'pick')} owned, ${firsts} in the 1st round`,
@@ -621,20 +615,17 @@ function Desks({ league }: { league: League }) {
     },
     {
       to: '/office/finances',
-      icon: PiggyBank,
       title: 'Finances',
       sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${pr >= 0 ? 'profit' : 'loss'} of ${money(Math.abs(pr))} ${isOffseason(league) ? `in ${shortSeason(league.season)}` : 'so far'}` : ''}`,
     },
     {
       to: '/office/owner',
-      icon: Crown,
       title: 'Owner',
       sub: js.off ? 'Job security off' : js.ultimatum ? `Ultimatum: ${js.ultimatum.text.toLowerCase()}` : `Job security ${js.score}/100 · ${js.label.toLowerCase()}`,
       tone: js.off ? undefined : js.ultimatum || js.heat === 'hot' ? 'bad' : js.heat === 'warm' ? 'warn' : undefined,
     },
     {
       to: '/office/career',
-      icon: ClipboardList,
       title: 'Career',
       sub: jobOffers
         ? `${plural(jobOffers, 'job offer')} · lapse${jobOffers === 1 ? 's' : ''} at the draft`
@@ -647,21 +638,18 @@ function Desks({ league }: { league: League }) {
   ];
 
   return (
-    <nav className="card flush" aria-label="Desks">
-      <div className="list">
+    <Section title="Desks">
+      <nav className="fo-desks" aria-label="Desks">
         {desks.map((d) => (
           <Link key={d.to} to={d.to} className={`fo-dept ${d.hot ? 'hot' : ''} ${d.muted ? 'muted' : ''}`}>
-            <span className="fo-dept-ic" aria-hidden="true">
-              <d.icon size={17} />
-            </span>
             <span className="grow">
               <span className="fo-dept-t">{d.title}</span>
               <span className={`fo-dept-s ${d.tone ?? ''}`}>{d.sub}</span>
             </span>
-            <ChevronRight size={16} className="dim" aria-hidden="true" />
+            <ChevronRight size={16} className="fo-dept-go" aria-hidden="true" />
           </Link>
         ))}
-      </div>
-    </nav>
+      </nav>
+    </Section>
   );
 }

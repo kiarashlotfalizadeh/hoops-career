@@ -265,9 +265,7 @@ export function MySheets({ onOpen }: { onOpen: (pid: number) => void }) {
   if (!mine.length) return null;
   return (
     <div className="fo-pending">
-      <div className="over">
-        <FileSignature size={12} /> Your offer sheets
-      </div>
+      <div className="over">Your offer sheets</div>
       {mine.map((p) => (
         <button key={p.pid} className="fo-pending-row" aria-haspopup="dialog" onClick={() => onOpen(p.pid)}>
           <b>{playerName(p)}</b> · {sheetTerms(league, p)}

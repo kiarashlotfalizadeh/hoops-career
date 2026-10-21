@@ -111,7 +111,7 @@ function Editor({ league, t, onClose }: { league: League; t: Team; onClose: () =
           <input className="input" value={f.abbrev} maxLength={4} autoCapitalize="characters" onChange={(e) => set({ abbrev: e.target.value.toUpperCase() })} />
         </Field>
         <div className="god-field">
-          <span className="tiny dim upper bold">Colors</span>
+          <span className="over">Colors</span>
           <div className="god-colors">
             {f.colors.map((c, i) => (
               <input
@@ -126,7 +126,7 @@ function Editor({ league, t, onClose }: { league: League; t: Team; onClose: () =
         </div>
       </div>
       <div className="col" style={{ gap: 6 }}>
-        <span className="tiny dim upper bold">Front office</span>
+        <span className="over">Front office</span>
         <Chips
           label="Front office"
           value={f.strategy}

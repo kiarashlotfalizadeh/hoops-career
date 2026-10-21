@@ -1,7 +1,10 @@
-/* The Office hub: the phase card (what the desk is doing now), the exceptions line, the seasons
-   ahead, and the desks with their status lines. */
+/* The Office hub: the lead (what the desk is doing now), the cap sheet set as a statement (its
+   exceptions line and the seasons ahead), and the desks: an index of the GM's rooms, each with a
+   line of live status. */
 
-/* ------------------------------------------------------------ the phase card ("what to do now") */
+/* ------------------------------------------------------------ the lead ("what to do now") */
+/* a kicker, a serif headline and its action beside it: the front of the section, flat on the page
+   (inside a card on the draft's views, where it heads a block) */
 .fo-now {
   display: flex;
   flex-direction: column;
@@ -11,8 +14,8 @@
 /* the headline and, when there's one action, its button beside it */
 .fo-now-main {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  align-items: flex-end;
+  gap: 14px;
 }
 
 .fo-now-main > .grow {
@@ -28,77 +31,101 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--accent-text);
-}
-
-.fo-now:not(.accent) .fo-now-over {
+  font-size: 12.5px;
+  font-weight: 620;
+  line-height: 1.25;
   color: var(--text-dim);
 }
 
 .fo-now-t {
-  margin-top: 3px;
-  font-size: 24px;
-  line-height: 1;
+  margin-top: 5px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-size: 28px;
+  font-weight: 560;
+  line-height: 1.04;
+  letter-spacing: -0.018em;
+  text-wrap: balance;
 }
 
 .fo-now-s {
-  margin: 4px 0 0;
-  font-size: 13px;
-  line-height: 1.35;
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 1.38;
   color: var(--text-2);
+  text-wrap: pretty;
 }
 
 .fo-now-acts {
   gap: 8px;
 }
 
-/* ------------------------------------------------------------ the cap sheet's lines under its figures */
-.fo-exc {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-top: var(--gap-sec);
+/* the hub's lead sits on the page under its title, a little apart from what follows */
+.fo-now-lead {
+  padding-bottom: 2px;
+}
+
+/* ------------------------------------------------------------ the cap sheet as a statement */
+/* flat on the page: the payroll leads, then each block opened by a hairline, figures in the
+   condensed face and right-aligned like a printed statement's */
+.fo-statement {
+  gap: 14px;
+}
+
+.fo-statement > .statline {
+  padding-top: 13px;
   border-top: 1px solid var(--line);
 }
 
-.fo-exc .over {
-  color: var(--text-dim);
+/* the exceptions open now, and in a line why the others aren't */
+.fo-exc {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
 .fo-exc-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: 12px;
   min-height: 22px;
   font-size: 14px;
+}
+
+.fo-exc-row > .over {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.fo-exc-row > .num {
+  text-align: right;
+  font-weight: 650;
 }
 
 .fo-sec-links {
   gap: 14px;
 }
 
-/* the seasons ahead: committed payroll and the room it leaves, a row each, figures right-aligned */
+/* the seasons ahead: committed payroll and the room it leaves, ruled like a statement */
 .fo-next {
   display: flex;
   flex-direction: column;
-  padding-top: var(--gap-sec);
+  padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
 .fo-next-row {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.3fr);
   align-items: baseline;
   gap: 10px;
-  min-height: 26px;
-  padding: 3px 0;
+  min-height: 34px;
+  padding: 6px 0;
 }
 
 .fo-next-row + .fo-next-row:not(.fo-next-h) {
@@ -110,68 +137,93 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* the money: condensed figures, as on a statement's right-hand column */
+.fo-next-row:not(.fo-next-h) > .num,
 .fo-next-row b {
-  font-weight: 750;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 720;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+.fo-next-row:not(.fo-next-h) > :first-child {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .fo-next-k {
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-dim);
 }
 
+/* the column heads: quiet labels over a firmer rule */
 .fo-next-h {
   min-height: 0;
-  padding-bottom: 4px;
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line-2);
 }
 
 .fo-next-h .over {
-  font-size: 10.5px;
+  font-size: 12px;
 }
 
 /* ------------------------------------------------------------ the desks */
+/* an index of the desk's rooms: serif names over a line of status, hairlines between */
+.fo-desks {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 28px;
+}
+
 .fo-dept {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: var(--row-min);
-  padding: var(--row-py) var(--row-px);
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 0;
   min-width: 0;
+  border-bottom: 1px solid var(--line);
+  transition: opacity var(--dur-fast) ease;
+}
+
+.fo-desks > .fo-dept:last-child {
+  border-bottom: none;
 }
 
 .fo-dept:active {
-  background: var(--surface);
+  opacity: 0.7;
 }
 
-.fo-dept-ic {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: var(--surface-2);
-  color: var(--text-2);
-}
-
-.fo-dept.hot .fo-dept-ic {
-  background: color-mix(in srgb, var(--accent) 20%, transparent);
-  color: var(--accent-text);
+.fo-dept .grow {
+  min-width: 0;
 }
 
 .fo-dept-t {
-  display: block;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 17px;
-  line-height: 1.05;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--serif);
+  font-stretch: 100%;
+  font-weight: 560;
+  font-size: 20px;
+  line-height: 1.1;
+  letter-spacing: -0.014em;
+}
+
+/* the work is here now: a brand dot after the name */
+.fo-dept.hot .fo-dept-t::after {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand);
 }
 
 .fo-dept-s {
   display: block;
-  margin-top: 1px;
+  margin-top: 3px;
   font-size: 12.5px;
   color: var(--text-dim);
   white-space: nowrap;
@@ -179,13 +231,17 @@
   text-overflow: ellipsis;
 }
 
-.fo-dept .grow {
-  min-width: 0;
+.fo-dept-go {
+  flex: none;
+  color: var(--text-dim);
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) ease;
 }
 
-.fo-dept.muted .fo-dept-t,
-.fo-dept.muted .fo-dept-ic {
-  opacity: 0.6;
+/* closed for now: the name steps back */
+.fo-dept.muted .fo-dept-t {
+  color: var(--text-dim);
 }
 
 .fo-dept-s.good {
@@ -197,5 +253,28 @@
 }
 
 .fo-dept-s.bad {
-  color: var(--bad);
+  color: color-mix(in srgb, var(--bad) 85%, white);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .fo-dept:hover .fo-dept-go {
+    color: var(--text);
+    transform: translateX(2px);
+  }
+  .fo-dept:hover .fo-dept-t {
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-decoration-color: var(--line-3);
+    text-underline-offset: 4px;
+  }
+}
+
+/* a tablet: two columns of desks, as a paper's index runs */
+@media (min-width: 760px) {
+  .fo-desks {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .fo-desks > .fo-dept:nth-last-child(2):nth-child(odd) {
+    border-bottom: none;
+  }
 }

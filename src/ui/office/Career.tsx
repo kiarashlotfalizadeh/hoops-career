@@ -73,9 +73,6 @@ function Profile({ league }: { league: League }) {
       )}
 
       <section className="slab fo-career-slab" aria-label="Your record">
-        <span className="slab-mark">
-          <TeamLogo tid={team.tid} size={150} decorative />
-        </span>
         <div className="row between">
           <span className="over">{league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`}</span>
           {me && k && k.seasons > 0 && (
@@ -159,7 +156,7 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
   return (
     <>
       {latest && (
-        <Link to={reviewPath(latest.season)} className="card fo-lc-review" style={slabVars(league.teams[latest.tid].colors)}>
+        <Link to={reviewPath(latest.season)} className="card clickable fo-lc-review">
           <span className="over">{seasonLabel(latest.season)} in review</span>
           <span className="fo-lc-review-h">{latest.fired ? 'Fired' : endText(latest)}</span>
           <span className="small">
