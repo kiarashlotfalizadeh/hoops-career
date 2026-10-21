@@ -1,5 +1,5 @@
 // The deal so far: what each side sends, with a protection on each own first going out, and the
-// terms in words. Nothing while the deal is empty (the dock says to tap players or picks).
+// terms in words. Empty, it says how to start one.
 import { ArrowLeftRight, Banknote, Repeat, RotateCcw, Ticket, X } from 'lucide-react';
 import type { League } from '../../core/types';
 import { pickLabel, type TradeOffer } from '../../core/league/trades';
@@ -98,14 +98,15 @@ export function DealCard({
       )}
     </div>
   );
-  if (!any) return null;
   return (
     <Section
       title="The deal"
       right={
-        <button className="btn xs ghost" onClick={onReset}>
-          <RotateCcw size={13} /> Clear
-        </button>
+        any ? (
+          <button className="btn xs text" onClick={onReset}>
+            <RotateCcw size={13} /> Clear
+          </button>
+        ) : undefined
       }
     >
       <div className="card fo-deal">
@@ -116,6 +117,8 @@ export function DealCard({
           </span>
           {col('You get', partner, get, onGet)}
         </div>
+        {/* (empty, the deal says how to start one: their GM's reaction arrives in the dock as it fills) */}
+        {!any && <p className="fo-deal-hint">Tap players or picks below: their GM reacts as you go.</p>}
         <TermsList league={league} offer={offer} />
       </div>
     </Section>

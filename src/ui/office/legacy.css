@@ -55,7 +55,7 @@
   flex-wrap: wrap;
 }
 
-/* the latest season's review: its kicker, the season told in a serif headline, the record and grade */
+/* the latest season's review: its kicker, the season told in a headline, the record and grade */
 .fo-lc-review {
   position: relative;
   display: flex;
@@ -71,12 +71,12 @@
 }
 
 .fo-lc-review-h {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 25px;
   line-height: 1.08;
-  letter-spacing: -0.016em;
+  letter-spacing: -0.028em;
   text-wrap: balance;
 }
 
@@ -231,14 +231,14 @@
   line-height: 1.25;
 }
 
-/* a front-page milestone: a serif headline */
+/* a front-page milestone: a headline */
 .fo-tl-row.big .fo-tl-head {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 21px;
   line-height: 1.1;
-  letter-spacing: -0.014em;
+  letter-spacing: -0.028em;
   margin: 1px 0 2px;
 }
 

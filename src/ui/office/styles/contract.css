@@ -106,7 +106,7 @@
   display: grid;
   place-items: center;
   background: var(--surface-2);
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   flex: none;
 }
 
@@ -136,7 +136,7 @@
   flex: 1;
   height: 48px;
   border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
+  border: 1px solid transparent;
   background: var(--surface);
   display: flex;
   flex-direction: column;
@@ -163,15 +163,14 @@
   color: var(--text-dim);
 }
 
-/* the length chosen: paper, like every control that's on */
+/* the length chosen: white on graphite, like every option that's on */
 .fo-yr.on {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--on);
+  color: var(--on-ink);
 }
 
 .fo-yr.on small {
-  color: color-mix(in srgb, var(--accent-ink) 72%, transparent);
+  color: color-mix(in srgb, var(--on-ink) 70%, transparent);
 }
 
 .fo-yr:not(.on):active {
@@ -180,7 +179,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .fo-yr:not(.on):not(:disabled):hover {
-    border-color: var(--line-3);
+    background: var(--surface-2);
   }
 }
 

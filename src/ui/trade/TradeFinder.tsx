@@ -2,7 +2,7 @@
 // salary you can take back, with each player's value tier and whether his team looks ready to
 // move him. Tapping one opens the builder with that team and asks what they'd want for him.
 import { useState } from 'react';
-import { MessageSquare, X } from 'lucide-react';
+import { MessageSquare, SlidersHorizontal, X } from 'lucide-react';
 import type { League, Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
@@ -12,9 +12,9 @@ import { filterTargets, maxTakeBack, tradeTargets } from '../../core/league/trad
 import { type WorkResult } from '../../core/league/tradeHelp';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Chips, Empty, Section } from '../components/ui';
+import { Chips, Empty, Section, Sheet } from '../components/ui';
 import { Callout, HelpSheet, OvrPot, capSeason, contractEnd, isOffseason, outTag, salaryText } from '../office/common';
-import { TierLine } from './common';
+import { AvailFlag, TierLine } from './common';
 import { money } from '../../core/format';
 
 export interface FinderState {
@@ -65,6 +65,14 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
   );
   const maxSalary = state.salary === 'match' ? data.match : state.salary;
   const rows = filterTargets(data.rows, { pos: state.pos, minOvr: state.minOvr, maxAge: state.maxAge, maxSalary, available: state.available, sort: state.sort });
+  // the filters past position live in a sheet: its button counts the ones changed from the default
+  const [sheet, setSheet] = useState(false);
+  const active = [state.minOvr !== 0, state.maxAge !== 99, state.salary !== 'match', state.available, state.sort !== 'value'].filter(Boolean).length;
+  const filterBtn = (
+    <button className={`btn sm ${active ? 'fo-filter-on' : ''}`} onClick={() => setSheet(true)} aria-haspopup="dialog">
+      <SlidersHorizontal size={15} aria-hidden="true" /> Filters{active ? ` · ${active}` : ''}
+    </button>
+  );
 
   return (
     <>
@@ -98,6 +106,56 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               options={[{ id: 'all' as const, label: 'All' }, ...POSITIONS.map((p) => ({ id: p, label: p }))]}
             />
           </div>
+        </div>
+      </Section>
+
+      {rows.length === 0 ? (
+        <>
+          {data.rows.length > 0 && <div className="row between">{filterBtn}</div>}
+          <Empty>{data.rows.length === 0 ? 'Nobody can be traded right now.' : 'No players match these filters.'}</Empty>
+        </>
+      ) : (
+        <Section title={`${rows.length} player${rows.length === 1 ? '' : 's'}`} right={filterBtn}>
+          <div className="card flush">
+            <div className="list wide2">
+              {rows.slice(0, limit).map(({ p, age, tier, avail, salary }) => (
+                <button key={p.pid} className="fo-prow" onClick={() => onPick(p.pid)}>
+                  <OvrPot p={p} />
+                  <div className="grow">
+                    <div className="fo-prow-name">
+                      <TeamLogo tid={p.tid} size={16} decorative />
+                      <span className="fo-name">{playerName(p)}</span>
+                      <AvailFlag avail={avail} />
+                    </div>
+                    <div className="fo-meta">
+                      <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
+                      {/* (the name line keeps its room for the full name: an injury leads the details) */}
+                      {p.injury && <span className="bad bold">{outTag(p)} · </span>}
+                      {p.pos} · {age} · <TierLine inline tier={tier} />
+                    </div>
+                  </div>
+                  <div className="fo-money">
+                    <div className="a">{p.contract.twoWay ? 'Two-way' : salaryText(league, salary)}</div>
+                    <div className="b">{contractEnd(league, p, s)}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+            {rows.length > limit && (
+              <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + PAGE)}>
+                Show more ({rows.length - limit} left)
+              </button>
+            )}
+          </div>
+          {data.locked > 0 && (
+            <div className="tiny dim">
+              {data.locked} more can't be traded now ({isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}).
+            </div>
+          )}
+        </Section>
+      )}
+      <Sheet open={sheet} onClose={() => setSheet(false)} title="Filters">
+        <div className="col fo-filter-sheet">
           <div className="fo-selects">
             <FilterSelect
               label="Minimum OVR"
@@ -149,50 +207,16 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
               On the block
             </button>
           </div>
-        </div>
-      </Section>
-
-      {rows.length === 0 ? (
-        <Empty>{data.rows.length === 0 ? 'Nobody can be traded right now.' : 'No players match these filters.'}</Empty>
-      ) : (
-        <Section title={`${rows.length} player${rows.length === 1 ? '' : 's'}`} right={<span className="tiny dim">Tap one to hear their ask</span>}>
-          <div className="card flush">
-            <div className="list wide2">
-              {rows.slice(0, limit).map(({ p, age, tier, avail, salary }) => (
-                <button key={p.pid} className="fo-prow" onClick={() => onPick(p.pid)}>
-                  <OvrPot p={p} />
-                  <div className="grow">
-                    <div className="fo-prow-name">
-                      <TeamLogo tid={p.tid} size={16} decorative />
-                      <span className="fo-name">{playerName(p)}</span>
-                    </div>
-                    <div className="fo-meta fo-wrap">
-                      <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
-                      {/* (the name line keeps its room for the full name: an injury leads the details) */}
-                      {p.injury && <span className="bad bold">{outTag(p)} · </span>}
-                      {p.pos} · {age} · <TierLine inline tier={tier} avail={avail} />
-                    </div>
-                  </div>
-                  <div className="fo-money">
-                    <div className="a">{p.contract.twoWay ? 'Two-way' : salaryText(league, salary)}</div>
-                    <div className="b">{contractEnd(league, p, s)}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {rows.length > limit && (
-              <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + PAGE)}>
-                Show more ({rows.length - limit} left)
-              </button>
-            )}
+          <div className="row fo-filter-foot">
+            <button className="btn text" disabled={!active} onClick={() => set({ minOvr: 0, maxAge: 99, salary: 'match', available: false, sort: 'value' })}>
+              Reset
+            </button>
+            <button className="btn primary grow" onClick={() => setSheet(false)}>
+              Show {rows.length} player{rows.length === 1 ? '' : 's'}
+            </button>
           </div>
-          {data.locked > 0 && (
-            <div className="tiny dim">
-              {data.locked} more can't be traded now ({isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}).
-            </div>
-          )}
-        </Section>
-      )}
+        </div>
+      </Sheet>
     </>
   );
 }

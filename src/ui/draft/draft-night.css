@@ -66,14 +66,14 @@
   background: var(--raised);
   animation: dn-rise var(--dur) var(--ease-out) both;
 }
-/* your lottery result: a serif headline beside your mark */
+/* your lottery result: a headline beside your mark */
 .dn-moment-h {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 24px;
   line-height: 1.05;
-  letter-spacing: -0.016em;
+  letter-spacing: -0.028em;
   text-wrap: balance;
 }
 .dn-moment.up .dn-moment-h {
@@ -114,14 +114,14 @@
   flex-direction: column;
   gap: 4px;
 }
-/* the name, read out: the slab's serif headline */
+/* the name, read out: the slab's headline */
 .dn-stage-n {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 32px;
   line-height: 1;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.028em;
 }
 .dn-stage-meta {
   display: flex;
@@ -179,12 +179,12 @@
 }
 .dn-yours-n {
   display: block;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 24px;
   line-height: 1.05;
-  letter-spacing: -0.016em;
+  letter-spacing: -0.028em;
 }
 .dn-yours-meta {
   display: flex;

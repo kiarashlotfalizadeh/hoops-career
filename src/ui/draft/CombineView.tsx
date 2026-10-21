@@ -25,9 +25,9 @@ export function CombineView({ league, list, onOpen }: { league: League; list: Pl
   ];
   if (!list.length) return <Empty>No combine results for this class.</Empty>;
   return (
-    <Section title={`${league.season} combine · ${list.length} invitees`} right={<span className="tiny dim">Lane, sprint: lower is better</span>}>
+    <Section title={`${league.season} combine`} right={<span className="tiny dim">{list.length} invitees</span>}>
       <StatTable rows={list} cols={cols} rowKey={(p) => p.pid} onRow={(p) => onOpen(p.pid)} maxHeight={560} />
-      <div className="tiny dim">Tap a column to sort, a row for his scouting report.</div>
+      <div className="tiny dim">Lane and sprint: lower is better. Tap a column to sort, a row for his report.</div>
     </Section>
   );
 }

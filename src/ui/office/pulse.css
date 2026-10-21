@@ -116,18 +116,18 @@
   background: var(--tier-good);
 }
 
-/* the mood as a word: a serif headline in its tone */
+/* the mood as a word: a headline in its tone */
 .fo-pulse-word {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin-top: 2px;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 27px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
+  font-size: 22px;
   line-height: 1.05;
-  letter-spacing: -0.016em;
+  letter-spacing: -0.028em;
   /* (the word is lower case for the sentences it also sits in: here it leads, so its first letter is a capital) */
   text-transform: capitalize;
 }

@@ -78,7 +78,7 @@
 }
 
 /* the owner's meter: the score, the heat, a track from the hot seat to secure with the firing line */
-/* the screen's hero, flat on the page: the score in big figures, the heat as a serif word */
+/* the screen's hero, flat on the page: the score in big figures, the heat as a headline word */
 .fo-seat {
   display: flex;
   flex-direction: column;
@@ -120,12 +120,12 @@
 }
 
 .fo-seat-l {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 760;
   font-size: 30px;
   line-height: 1;
-  letter-spacing: -0.018em;
+  letter-spacing: -0.028em;
   margin-bottom: 4px;
 }
 

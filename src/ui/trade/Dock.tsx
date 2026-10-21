@@ -35,7 +35,7 @@ function reaction(ev: TradeEval): { pct: number; label: string; color: string; f
   return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: `${Math.round(pct)}% of ask` };
 }
 
-/** Whether the dock's details are folded away (kept for the session, across deals and partners); until it's tapped, folded on a short screen (a phone held sideways). */
+/** Whether the dock's details are folded away (kept for the session, across deals and partners); folded until it's first tapped: the verdict and the buttons are what it's for. */
 let folded: boolean | null = null;
 
 export function Dock({
@@ -89,18 +89,13 @@ export function Dock({
   const rosterAfter = tradeRoster(league, user).length - std(offer.a.pids) + std(offer.b.pids);
   const theirAfter = tradeRoster(league, offer.b.tid).length - std(offer.b.pids) + std(offer.a.pids);
   const maxSize = rosterMaxNow(league);
-  const [fold, setFold] = useState(() => folded ?? window.innerHeight < 560);
+  const [fold, setFold] = useState(() => folded ?? true);
   const [ruleOpen, setRuleOpen] = useState(false);
   // the dock's height, for toasts to rise above it rather than cover its verdict
   const ref = useDockHeight<HTMLDivElement>(!empty && !!ev);
   const waives = inSeason(league) && theirAfter - maxSize <= TRADE_WAIVE_MAX;
-  if (empty || !ev) {
-    return (
-      <div className="fo-dock idle">
-        <span className="small dim2">Tap players or picks to build a deal: their GM reacts as you go.</span>
-      </div>
-    );
-  }
+  // (an empty deal says how to start one itself: the dock arrives with the first asset)
+  if (empty || !ev) return null;
   const r = reaction(ev);
   const ruleErrors = ev.errors.filter((e) => !/empty/i.test(e));
   // the helper can fix either side's salary matching, a full roster and the value, nothing else

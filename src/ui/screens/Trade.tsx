@@ -25,7 +25,7 @@ import { continueDraft } from '../../core/league/season';
 import { money, moneyExact } from '../../core/format';
 import { EMPTY, selOf, type Sel } from '../trade/sel';
 import { TradeHelp } from '../trade/TradeHelp';
-import { PartnerSlab, TeamPicker } from '../trade/Partner';
+import { PartnerSlab } from '../trade/Partner';
 import { DealCard } from '../trade/DealCard';
 import { AssetList } from '../trade/AssetList';
 import { Dock } from '../trade/Dock';
@@ -300,8 +300,7 @@ export default function Trade() {
 
       {tab === 'offers' ? null : tab === 'build' ? (
         <>
-          <TeamPicker league={league} partner={partner} onPick={pickPartner} />
-          <PartnerSlab league={league} tid={partner} season={s} />
+          <PartnerSlab league={league} tid={partner} season={s} onPick={pickPartner} />
           {ask && ask.tid === partner && <AskCallout league={league} ask={ask} onClose={() => setAsk(null)} />}
           <DealCard league={league} partner={partner} offer={offer} give={cleanGive} get={cleanGet} onGive={setGive} onGet={setGet} onReset={reset} />
           <div className="fo-only-sm">

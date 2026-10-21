@@ -38,8 +38,8 @@
 
 .fo-cap-track {
   position: relative;
-  height: 10px;
-  border-radius: 2px;
+  height: 8px;
+  border-radius: 4px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -103,7 +103,7 @@
   position: absolute;
   top: 13px;
   width: 2px;
-  height: 18px;
+  height: 16px;
   margin-left: -1px;
   background: var(--text);
   border-radius: 1px;

@@ -5,7 +5,8 @@ import type { League, Player, SigningRoute } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
 import { EXCEPTIONS, isException, twoWaySalary, twoWayYears, waiverSalary, type Ask } from '../../core/league/contracts';
 import { tenDayPay, tenDayUntil } from '../../core/league/tenDay';
-import { OvrPot, appealInfo, contractEnd, forYears, outTag, playerMeta, salaryText } from './common';
+import { playerAge } from '../../core/playerGen';
+import { OvrPot, appealInfo, contractEnd, forYears, outTag, salaryText } from './common';
 import { rfaTag } from './RfaPanel';
 import { moneyExact } from '../../core/format';
 
@@ -45,78 +46,89 @@ export function FaRow({
   const wDays = w ? w.until - league.day : 0;
   const rfa = rfaTag(league, p);
   const own = p.rfa?.tid === tid;
+  const tag: { label: string; tone: string } | null = w
+    ? w.claim
+      ? { label: 'Your claim is in', tone: 'good' }
+      : { label: `On waivers · clears ${wDays > 1 ? `in ${wDays} days` : wDays === 1 ? 'tomorrow' : 'today'}`, tone: 'warn' }
+    : bid
+      ? { label: `Bidding · ${bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}`, tone: 'info' }
+      : rfa
+        ? { label: rfa.label, tone: rfa.tone }
+        : p.injury
+          ? { label: outTag(p)!, tone: 'bad' }
+          : null;
+  const route_ = w ? (
+    <span className="dim">Claim his contract</span>
+  ) : rfa?.wait ? (
+    <span className="warn">{rfa.wait}</span>
+  ) : own ? (
+    <span className="good">Bird rights</span>
+  ) : twoWayMode ? (
+    <span className="good">Two-way</span>
+  ) : tenDays ? (
+    <span className="good">10-day</span>
+  ) : route === 'min' ? (
+    <span className="good">Min deal</span>
+  ) : route === 'space' ? (
+    <span className="good">Fits your space</span>
+  ) : isException(route) ? (
+    <span className="good">{EXCEPTIONS[route].short}</span>
+  ) : space > 0 ? (
+    <span className="warn">More than your space</span>
+  ) : (
+    <span className="dim">Needs cap space</span>
+  );
   return (
     <button className="fo-prow" onClick={onOpen}>
       <OvrPot p={p} />
       <div className="grow">
         <div className="fo-prow-name">
           <span className="fo-name">{playerName(p)}</span>
+          {/* one tag, the one that changes what you can do: waivers, your bid, his restricted status, an injury */}
+          {tag && <span className={`fo-flag ${tag.tone}`}>{tag.label}</span>}
         </div>
-        {(bid || w || rfa || p.injury) && (
-          <div className="fo-prow-tags">
-            {p.injury && <span className="tag bad">{outTag(p)}</span>}
-            {rfa && <span className={`tag ${rfa.tone}`}>{rfa.label}</span>}
-            {bid && <span className="tag info">Bidding · {bid.decideDay > league.faDay ? `decides day ${bid.decideDay + 1}` : 'decides at the close'}</span>}
-            {w && <span className="tag warn">On waivers · clears {wDays > 1 ? `in ${wDays} days` : wDays === 1 ? 'tomorrow' : 'today'}</span>}
-            {w?.claim && <span className="tag good">Your claim is in</span>}
-          </div>
-        )}
-        <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
-        <div className="fo-prow-status">
+        <div className="fo-meta">
+          {p.pos} · {playerAge(p, league.season)}
           {/* (a claim takes over his contract: what he thinks of your team doesn't matter) */}
           {!w && (
-            <span className="fo-interest" style={{ ['--note' as string]: ai.color }}>
-              {ai.label}
-            </span>
-          )}
-          {w ? (
-            <span className="dim">Claim his contract</span>
-          ) : rfa?.wait ? (
-            <span className="warn">{rfa.wait}</span>
-          ) : own ? (
-            <span className="good">Bird rights</span>
-          ) : twoWayMode ? (
-            <span className="good">Two-way</span>
-          ) : tenDays ? (
-            <span className="good">10-day</span>
-          ) : route === 'min' ? (
-            <span className="good">Min deal</span>
-          ) : route === 'space' ? (
-            <span className="good">Fits your space</span>
-          ) : isException(route) ? (
-            <span className="good">{EXCEPTIONS[route].short}</span>
-          ) : space > 0 ? (
-            <span className="warn">More than your space</span>
-          ) : (
-            <span className="dim">Needs cap space</span>
+            <>
+              {' · '}
+              <span className="fo-interest" style={{ ['--note' as string]: ai.color }}>
+                {ai.label}
+              </span>
+            </>
           )}
         </div>
       </div>
-      {w ? (
-        <div className="fo-money">
-          <div className="a">{salaryText(league, waiverSalary(league, p))}</div>
-          <div className="b">{contractEnd(league, { contract: w.contract }, league.season)}</div>
-        </div>
-      ) : twoWayMode ? (
-        <div className="fo-money">
-          <div className="a">{moneyExact(twoWaySalary(league, s))}</div>
-          <div className="b">
-            two-way · {twoWayYears(p)} yr{twoWayYears(p) > 1 ? 's' : ''}
+      <div className="fo-fa-end">
+        {w ? (
+          <div className="fo-money">
+            <div className="a">{salaryText(league, waiverSalary(league, p))}</div>
+            <div className="b">{contractEnd(league, { contract: w.contract }, league.season)}</div>
           </div>
-        </div>
-      ) : tenDays ? (
-        <div className="fo-money">
-          <div className="a">{moneyExact(tenDayPay(league, p, tenDayUntil(league) - league.day))}</div>
-          <div className="b">
-            {tenDayUntil(league) - league.day} day{tenDayUntil(league) - league.day === 1 ? '' : 's'}
+        ) : twoWayMode ? (
+          <div className="fo-money">
+            <div className="a">{moneyExact(twoWaySalary(league, s))}</div>
+            <div className="b">
+              two-way · {twoWayYears(p)} yr{twoWayYears(p) > 1 ? 's' : ''}
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="fo-money">
-          <div className="a">{salaryText(league, ask.amount)}</div>
-          <div className="b">{forYears(ask.years)}</div>
-        </div>
-      )}
+        ) : tenDays ? (
+          <div className="fo-money">
+            <div className="a">{moneyExact(tenDayPay(league, p, tenDayUntil(league) - league.day))}</div>
+            <div className="b">
+              {tenDayUntil(league) - league.day} day{tenDayUntil(league) - league.day === 1 ? '' : 's'}
+            </div>
+          </div>
+        ) : (
+          <div className="fo-money">
+            <div className="a">{salaryText(league, ask.amount)}</div>
+            <div className="b">{forYears(ask.years)}</div>
+          </div>
+        )}
+        {/* how you'd pay him (or why you can't), under his terms */}
+        <div className="fo-route">{route_}</div>
+      </div>
     </button>
   );
 }

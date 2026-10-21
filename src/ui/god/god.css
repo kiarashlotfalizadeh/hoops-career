@@ -64,50 +64,18 @@
   background: var(--surface);
   cursor: pointer;
 }
-/* the hub: the switch wears a warning edge while the editor is on */
+/* the hub: the switch, a warning wash while the editor is on */
 .god-switch {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 .god-switch.on {
-  border-color: color-mix(in srgb, var(--warn) 45%, var(--line));
+  background: color-mix(in srgb, var(--warn) 8%, var(--raised));
 }
 .god-block {
   gap: 10px;
-  border-color: color-mix(in srgb, var(--warn) 40%, var(--line));
-}
-/* every team's mark, five abreast */
-.god-teams {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-}
-.god-team {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 2px 8px;
-  border-radius: var(--radius-md);
-  background: var(--raised);
-  transition:
-    background var(--dur-fast) ease,
-    transform 0.08s ease;
-}
-.god-team:active {
-  background: var(--surface);
-  transform: scale(0.97);
-}
-@media (hover: hover) and (pointer: fine) {
-  .god-team:hover {
-    background: var(--surface);
-  }
-}
-.god-team-ab {
-  font-size: 12px;
-  font-weight: 640;
-  color: var(--text-2);
+  background: color-mix(in srgb, var(--warn) 8%, var(--raised));
 }
 /* a group's heading inside an editor sheet */
 .god-sec {
@@ -151,4 +119,26 @@
 }
 .god-sliders:has(.god-rating) {
   gap: 4px 20px;
+}
+/* the editor's ways in: one list, an icon naming each action in the text's colour */
+.god-way {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+  gap: 12px;
+}
+.god-way > svg:first-child {
+  flex: none;
+  color: var(--text-2);
+}
+.god-way .grow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.god-owner {
+  gap: 10px;
+}
+.god-save {
+  align-self: flex-start;
 }

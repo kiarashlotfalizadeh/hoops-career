@@ -12,7 +12,7 @@ const NOTE_COLOR: Record<TradeNote['tone'], string> = { good: 'var(--good)', bad
  * at the end of a row's details. Plain text: trade value is its own scale, so it doesn't borrow the
  * OVR badge's colours (only a contract worth less than nothing reads in the bad colour).
  */
-export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; avail: Availability; inline?: boolean }) {
+export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; avail?: Availability; inline?: boolean }) {
   const Tag = inline ? 'span' : 'div';
   return (
     <Tag className={inline ? 'fo-tier inline' : 'fo-tier'}>
@@ -21,6 +21,13 @@ export function TierLine({ tier, avail, inline = false }: { tier: ValueTier; ava
       {avail === 'franchise' && <span className="dim2"> · Cornerstone</span>}
     </Tag>
   );
+}
+
+/** Whether his team looks ready to move him, or builds around him, as a flag after his name (nothing for anyone else). */
+export function AvailFlag({ avail }: { avail: Availability }) {
+  if (avail === 'block') return <span className="fo-flag good">On the block</span>;
+  if (avail === 'franchise') return <span className="fo-flag">Cornerstone</span>;
+  return null;
 }
 
 /** The AI's reasons, a colored dot for each: a warning for you reads in the warning color. */

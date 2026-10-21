@@ -92,12 +92,9 @@ export function BoardList({
                 </span>
                 <div className="grow">
                   <div className="fo-name">{playerName(p)}</div>
-                  <div className="fo-meta">
-                    {p.pos} · {playerAge(p, league.season)} · {fmtHeight(p.heightIn)} · {p.college || p.country}
-                  </div>
-                  {/* wraps on a phone rather than cut off the chance he's gone before your pick */}
+                  {/* one line: who he is and where the mocks have him (his school, size and type are on his sheet); the chance he's gone before your pick wraps under it */}
                   <div className="fo-board-proj">
-                    {p.archetype}
+                    {p.pos} · {playerAge(p, league.season)}
                     {pr ? <span className="fo-proj"> · {pr.where}</span> : null}
                     {pr?.gone ? <span className="warn"> · {pr.gone}</span> : null}
                   </div>

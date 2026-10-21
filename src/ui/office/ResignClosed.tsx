@@ -10,7 +10,7 @@ import { capHolds } from '../../core/league/freeAgency';
 import { extensionStart, playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { PageHeader, Section, Statline } from '../components/ui';
-import { Callout, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, playerMeta, salaryText, shortSeason } from './common';
+import { Callout, HelpSheet, OvrPot, capRoomFig, contractEnd, contractsUp, forYears, salaryText, shortSeason } from './common';
 import { ContractSheet } from './ContractSheet';
 import { restrictedFreeAgents } from '../../core/league/rfa';
 import { money } from '../../core/format';
@@ -49,11 +49,24 @@ export function ResignClosed({ league }: { league: League }) {
           : ['Opens after the draft', 'Until then, review who is up.'];
   return (
     <main className="page fo-page">
-      <PageHeader title="Re-sign" sub={`Contracts up after ${shortSeason(s)}`} back />
+      <PageHeader
+        title="Re-sign"
+        sub={title}
+        back
+        backTo="/office"
+        right={
+          <HelpSheet title="The re-sign period">
+            <p>
+              <b>{title}.</b> {when}
+            </p>
+            <p>
+              Asks use today's ratings, which change by the summer.
+              {canExtend.size > 0 ? ` An extension's ask is from ${shortSeason(s + 1)}, the season after his deal ends.` : ''}
+            </p>
+          </HelpSheet>
+        }
+      />
       <section className="fo-capsheet fo-statement" aria-label="Re-sign period">
-        <div className="small dim2">
-          <b className="fo-closed-t">The re-sign period {title.charAt(0).toLowerCase() + title.slice(1)}.</b> {when}
-        </div>
         <Statline
           items={[
             // (the same cap figure as the Office's cap sheet, holds said; the season they're about once)
@@ -90,7 +103,9 @@ export function ResignClosed({ league }: { league: League }) {
                   <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
-                    <div className="fo-meta">{playerMeta(league, p, p.archetype)}</div>
+                    <div className="fo-meta">
+                      {p.pos} · {playerAge(p, league.season)}
+                    </div>
                     {own && <div className="tiny dim fo-why">{own}</div>}
                   </div>
                   <div className="fo-money">
@@ -104,10 +119,6 @@ export function ResignClosed({ league }: { league: League }) {
             })}
           </div>
         )}
-        <div className="tiny dim">
-          Asks use today's ratings, which change by the summer.
-          {canExtend.size > 0 ? ` An extension's ask is from ${shortSeason(s + 1)}, the season after his deal ends.` : ''}
-        </div>
       </Section>
 
       {extended.length > 0 && (

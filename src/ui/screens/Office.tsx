@@ -1,10 +1,10 @@
 // The Office hub: the GM's desk. What the desk is doing now (the phase card and its action), the
-// decisions waiting on it, the cap sheet in one block (the payroll against the cap, the tax line and
-// the aprons, the room or how far over, the roster, the exceptions open and why the others aren't,
-// a hard cap, the traded player exceptions, the seasons ahead), and the desks, each with a line of
-// live status. The contracts table lives on Team → Roster
-// → Contracts; the owner on his own desk.
-import { createContext, useContext, type ReactNode } from 'react';
+// decisions waiting on it, the cap position (the payroll as one figure over its bar against the cap
+// and the tax line, the room in a line) that opens the full cap sheet (the aprons, the roster, the
+// exceptions open and why the others aren't, a hard cap, the traded player exceptions, the seasons
+// ahead, the rules), and the desks as one list, each with a line of live status. The contracts
+// table lives on Team → Roster → Contracts; the owner on his own desk.
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -20,10 +20,9 @@ import { openTpes } from '../../core/league/trades';
 import { openProposals } from '../../core/league/proposals';
 import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
-import { teamTxns } from '../../core/league/transactions';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { useBusy } from '../../state/actions/office';
-import { Bar, PageHeader, Section, Statline } from '../components/ui';
+import { Bar, Section, Sheet, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
@@ -41,8 +40,9 @@ export default function Office() {
   const league = useLeague();
   const items = useLeagueMemo(() => agenda(league).filter((i) => OFFICE_AGENDA.includes(i.kind)), [league]);
   return (
-    <main className="page fo-page">
-      <PageHeader title="Office" />
+    <main className="page fo-page fo-hub">
+      {/* (the tab bar names the screen: the desk's state is its title) */}
+      <h1 className="sr-only">Office</h1>
       {/* a decision the league waits on comes first, and so do offers to settle: the phase card's action steps down */}
       <Quiet.Provider value={items.some((i) => i.required || i.kind === 'tradeOffer')}>
         <PhaseCard league={league} />
@@ -56,7 +56,7 @@ export default function Office() {
           ))}
         </div>
       )}
-      <CapSheet league={league} />
+      <CapCard league={league} />
       <Desks league={league} />
       <AssistantCards league={league} areas={['office']} />
     </main>
@@ -164,7 +164,7 @@ function PhaseCard({ league }: { league: League }) {
         );
       return (
         <Now
-          over={`Trade deadline · ${fmtDate(league.season, league.tradeDeadlineDay)}`}
+          over={d === 0 ? 'Trade deadline' : `Trade deadline · ${fmtDate(league.season, league.tradeDeadlineDay)}`}
           title={d === 0 ? 'Last day to trade' : `${plural(d, 'day')} left`}
           action={{ label: 'Make a trade', to: '/office/trade' }}
         />
@@ -276,9 +276,9 @@ function PhaseCard({ league }: { league: League }) {
 
 // ------------------------------------------------------------------ the cap sheet
 
-function CapSheet({ league }: { league: League }) {
+/** Where the payroll stands for the season new deals count against: the cap, the tax line, the holds. */
+function capPosition(league: League) {
   const tid = league.userTid;
-  const team = league.teams[tid];
   const s0 = capSeason(league);
   const cap = CAP_FOR(league, s0);
   const pay = payroll(league, tid, s0);
@@ -287,60 +287,109 @@ function CapSheet({ league }: { league: League }) {
   const space = cap.salaryCap - pay - holds;
   // (cap holds count against the cap, not toward the tax or the aprons)
   const status = pay + holds > cap.salaryCap && pay <= cap.salaryCap ? { label: 'Over the cap', tone: 'warn' as const } : payStatus(pay, cap);
+  return { s0, cap, pay, holds, space, status };
+}
+
+/**
+ * The cap position at a glance: the payroll as the desk's one big figure, the bar against the cap
+ * and the tax line, and the room in a line. The whole sheet (figures, exceptions, the seasons
+ * ahead, the rules) is one tap down.
+ */
+function CapCard({ league }: { league: League }) {
+  const [open, setOpen] = useState(false);
+  const { s0, cap, pay, holds, space, status } = capPosition(league);
+  const bill = teamTaxBill(league, league.userTid, pay, s0);
+  return (
+    <>
+      <button className="card fo-capcard" onClick={() => setOpen(true)} aria-haspopup="dialog">
+        <span className="fo-capcard-top">
+          <span className="grow">
+            <span className="over">{shortSeason(s0)} payroll</span>
+            <span className="fo-pay-v num">{money(pay)}</span>
+          </span>
+          <span className={`tag ${status.tone}`}>{status.label}</span>
+        </span>
+        <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
+        <span className="fo-capcard-line">
+          <span>
+            <b className={`num ${space >= 0 ? 'good' : 'warn'}`}>{money(Math.abs(space))}</b> {space >= 0 ? 'cap space' : 'over the cap'}
+          </span>
+          {pay > cap.luxuryTax ? (
+            <span>
+              <b className="num bad">{money(bill)}</b> tax bill
+            </span>
+          ) : (
+            <span>
+              <b className="num">{money(cap.luxuryTax - pay)}</b> under the tax
+            </span>
+          )}
+          <span className="fo-capcard-go">
+            Cap sheet <ChevronRight size={15} aria-hidden="true" />
+          </span>
+        </span>
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={`${shortSeason(s0)} cap sheet`}>
+        <CapSheet league={league} />
+      </Sheet>
+    </>
+  );
+}
+
+/** The cap sheet in full: the bar with its lines named, the room, the tax and the roster, the exceptions, a hard cap and traded player exceptions, the seasons ahead. */
+function CapSheet({ league }: { league: League }) {
+  const tid = league.userTid;
+  const team = league.teams[tid];
+  const { s0, cap, pay, holds, space, status } = capPosition(league);
   const dead = team.deadMoney.filter((d) => d.season === s0).reduce((a, d) => a + d.amount, 0);
   const hard = hardCapLine(league, tid, s0);
   const tpes = openTpes(league, tid);
   return (
-    <Section
-      title={`${shortSeason(s0)} cap sheet`}
-      right={
-        <span className="row fo-sec-links">
-          <Link to="/team?view=contracts" className="card-link">
-            Contracts <ChevronRight size={14} />
-          </Link>
-          <CapHelp league={league} season={s0} />
-        </span>
-      }
-    >
-      <div className="fo-capsheet fo-statement">
-        <div className="fo-pay">
-          <div className="grow">
-            <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
-            <div className="fo-pay-v num">{money(pay)}</div>
-          </div>
-          {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
-          <span className={`tag ${status.tone}`}>{status.label}</span>
+    <div className="fo-capsheet fo-statement">
+      <div className="fo-pay">
+        <div className="grow">
+          <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
+          <div className="fo-pay-v num">{money(pay)}</div>
         </div>
-        <CapBar
-          pay={pay}
-          cap={cap.salaryCap}
-          tax={cap.luxuryTax}
-          aprons={{ first: cap.firstApron, second: cap.secondApron }}
-          add={holds}
-          addLabel={<Term id="hold">Cap holds</Term>}
-          legend="lines"
-        />
-        <Statline
-          items={[
-            { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
-            taxFig(pay, cap.luxuryTax, teamTaxBill(league, tid, pay, s0)),
-            // on the season the money is about: signed for it, the expiring deals beside them
-            rosterFig(league),
-          ]}
-        />
-        <Exceptions league={league} season={s0} />
-        {(hard || tpes.length > 0) && (
-          <div className="tiny dim">
-            {hard ? `Hard-capped at the ${hard.name} (${money(hard.amount)}) for ${shortSeason(s0)}: you used the ${hard.what}.` : ''}
-            {hard && tpes.length ? ' ' : ''}
-            {tpes.length
-              ? `${tpes.length > 1 ? 'Traded player exceptions' : 'Traded player exception'}: ${tpes.map((x) => `${money(x.amount)} until ${fmtDate(x.season + 1, x.day)}`).join(', ')}.`
-              : ''}
-          </div>
-        )}
-        <SeasonsAhead league={league} from={s0 + 1} />
+        {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
+        <span className={`tag ${status.tone}`}>{status.label}</span>
       </div>
-    </Section>
+      <CapBar
+        pay={pay}
+        cap={cap.salaryCap}
+        tax={cap.luxuryTax}
+        aprons={{ first: cap.firstApron, second: cap.secondApron }}
+        add={holds}
+        addLabel={<Term id="hold">Cap holds</Term>}
+        legend="lines"
+      />
+      <Statline
+        items={[
+          { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+          taxFig(pay, cap.luxuryTax, teamTaxBill(league, tid, pay, s0)),
+          // on the season the money is about: signed for it, the expiring deals beside them
+          rosterFig(league),
+        ]}
+      />
+      <Exceptions league={league} season={s0} />
+      {(hard || tpes.length > 0) && (
+        <div className="tiny dim">
+          {hard ? `Hard-capped at the ${hard.name} (${money(hard.amount)}) for ${shortSeason(s0)}: you used the ${hard.what}.` : ''}
+          {hard && tpes.length ? ' ' : ''}
+          {tpes.length
+            ? `${tpes.length > 1 ? 'Traded player exceptions' : 'Traded player exception'}: ${tpes.map((x) => `${money(x.amount)} until ${fmtDate(x.season + 1, x.day)}`).join(', ')}.`
+            : ''}
+        </div>
+      )}
+      <SeasonsAhead league={league} from={s0 + 1} />
+      <div className="fo-capsheet-foot">
+        <Link to="/team?view=contracts" className="card-link">
+          Contracts <ChevronRight size={14} />
+        </Link>
+        <span className="row fo-capsheet-help">
+          How the cap works <CapHelp league={league} season={s0} />
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -535,7 +584,6 @@ function Desks({ league }: { league: League }) {
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
   const prospectsN = useLeagueMemo(() => prospects(league, league.season).length, [league]);
   const js = useLeagueMemo(() => seatOf(league), [league]);
-  const lastMove = useLeagueMemo(() => teamTxns(league, tid)[0], [league, tid]);
   const offers = openProposals(league).length;
   const inPost = league.phase === 'playin' || league.phase === 'playoffs';
   const pastDeadline = league.phase === 'regular' && league.day > league.tradeDeadlineDay;
@@ -560,13 +608,13 @@ function Desks({ league }: { league: League }) {
       to: '/office/trade',
       title: 'Trade',
       // the offers themselves are the decisions above: this line points at them
-      sub: inPost ? 'Frozen in the postseason' : pastDeadline ? 'Locked until the lottery' : offers ? `${plural(offers, 'offer')} above` : 'No offers waiting',
+      sub: inPost ? 'Frozen in the postseason' : pastDeadline ? 'Locked until the lottery' : offers ? `${plural(offers, 'offer')} waiting` : 'No offers waiting',
       muted: inPost || pastDeadline,
     },
     {
       to: '/office/free-agents',
       title: 'Free agents',
-      sub: `${market.length} on the market${market.length ? `, best ${best} OVR` : ''}${signingClosed ? ' · signings closed' : ''}`,
+      sub: signingClosed ? `${market.length} on the market · signings closed` : `${market.length} on the market${market.length ? ` · best ${best} OVR` : ''}`,
       hot: league.phase === 'freeAgency',
       muted: signingClosed,
     },
@@ -606,17 +654,13 @@ function Desks({ league }: { league: League }) {
     {
       to: '/office/assets',
       title: 'Picks & moves',
-      sub: [
-        `${plural(myPicks.length, 'pick')} owned, ${firsts} in the 1st round`,
-        lastMove ? `last move ${fmtDate(lastMove.season, lastMove.day, { month: 'short', day: 'numeric' })}` : '',
-      ]
-        .filter(Boolean)
-        .join(' · '),
+      // (the moves themselves are its second tab)
+      sub: `${plural(myPicks.length, 'pick')} · ${firsts} in the 1st round`,
     },
     {
       to: '/office/finances',
       title: 'Finances',
-      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${pr >= 0 ? 'profit' : 'loss'} of ${money(Math.abs(pr))} ${isOffseason(league) ? `in ${shortSeason(league.season)}` : 'so far'}` : ''}`,
+      sub: `Cash ${money(team.cash)}${pr !== null ? ` · ${pr >= 0 ? 'profit' : 'loss'} ${money(Math.abs(pr))}${isOffseason(league) ? ` in ${shortSeason(league.season)}` : ' so far'}` : ''}`,
     },
     {
       to: '/office/owner',
@@ -639,14 +683,14 @@ function Desks({ league }: { league: League }) {
 
   return (
     <Section title="Desks">
-      <nav className="fo-desks" aria-label="Desks">
+      <nav className="card flush fo-desks" aria-label="Desks">
         {desks.map((d) => (
           <Link key={d.to} to={d.to} className={`fo-dept ${d.hot ? 'hot' : ''} ${d.muted ? 'muted' : ''}`}>
             <span className="grow">
               <span className="fo-dept-t">{d.title}</span>
               <span className={`fo-dept-s ${d.tone ?? ''}`}>{d.sub}</span>
             </span>
-            <ChevronRight size={16} className="fo-dept-go" aria-hidden="true" />
+            <ChevronRight size={18} className="fo-dept-go" aria-hidden="true" />
           </Link>
         ))}
       </nav>

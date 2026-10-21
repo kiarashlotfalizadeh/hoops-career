@@ -61,14 +61,12 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
       <span className="fo-rank">{s.overall}</span>
       <TeamLogo tid={s.tid} size={28} decorative />
       <div className="grow">
-        <div className="fo-name">
-          <span className="dim2">{league.teams[s.tid].abbrev}</span> {playerName(p)}
+        <div className="fo-name">{playerName(p)}</div>
+        {/* how often he was the pick, then the next likeliest, wrapping rather than cut off */}
+        <div className="fo-board-proj">
+          {p.pos} · {Math.round(top.p * 100)}%{via}
+          {alts.length > 0 && <span className="dim"> · or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}</span>}
         </div>
-        <div className="fo-meta">
-          {p.pos} · {Math.round(top.p * 100)}% of mocks{via}
-        </div>
-        {/* the other names on a line of their own, wrapping: at the end of the line above they were cut off */}
-        {alts.length > 0 && <div className="fo-board-proj">or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}</div>}
       </div>
       <OvrPot p={p} />
     </button>

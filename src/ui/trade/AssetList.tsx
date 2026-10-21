@@ -1,6 +1,7 @@
 // One team's side of the builder: its players and picks to tap into the deal, then the swap rights
 // and cash it can add.
-import { Check } from 'lucide-react';
+import { useState } from 'react';
+import { Check, ChevronDown } from 'lucide-react';
 import type { DraftPick, League, Player } from '../../core/types';
 import { teamPlayers } from '../../core/league/helpers';
 import { pickLabel, untradeable, type TradeOffer } from '../../core/league/trades';
@@ -14,7 +15,7 @@ import { Term } from '../components/Glossary';
 import { contractEnd, outTag, rosterLine, salaryText } from '../office/common';
 import { pickOrder, projText } from '../draft/common';
 import { rosterNames } from '../stats';
-import { TierLine } from './common';
+import { AvailFlag, TierLine } from './common';
 import { CashControl, SwapChips } from './Terms';
 import { toggle, type Sel } from './sel';
 
@@ -52,6 +53,8 @@ export function AssetList({
   const proj = useLeagueMemo(() => pickProjection(league), [league]);
   // in the order every pick list uses: by draft, then where each lands
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort(pickOrder(league, proj));
+  // the swap rights and cash fold away until wanted (open from the start while the deal has some)
+  const [more, setMore] = useState(() => (sel.swaps?.length ?? 0) > 0 || (sel.cash ?? 0) > 0);
   return (
     <section className="card flush fo-assets" aria-label={title}>
       <div className="fo-assets-h">
@@ -91,12 +94,19 @@ export function AssetList({
           ))}
         </div>
       )}
-      <div className="list-divider">
-        <Term id="swap">Swap rights</Term>
-      </div>
-      <SwapChips league={league} giver={tid} taker={other.tid} value={sel.swaps ?? []} taken={taken} onChange={(swaps) => onChange({ ...sel, swaps })} />
-      <div className="list-divider">Cash</div>
-      <CashControl league={league} from={tid} to={other.tid} value={sel.cash ?? 0} blocked={(other.cash ?? 0) > 0} onChange={(cash) => onChange({ ...sel, cash })} />
+      {/* the rarer terms, one tap down (open by itself while one is in the deal) */}
+      <details className="fo-assets-more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+        <summary>
+          <span className="grow">Swap rights and cash</span>
+          <ChevronDown size={16} aria-hidden="true" />
+        </summary>
+        <div className="list-divider">
+          <Term id="swap">Swap rights</Term>
+        </div>
+        <SwapChips league={league} giver={tid} taker={other.tid} value={sel.swaps ?? []} taken={taken} onChange={(swaps) => onChange({ ...sel, swaps })} />
+        <div className="list-divider">Cash</div>
+        <CashControl league={league} from={tid} to={other.tid} value={sel.cash ?? 0} blocked={(other.cash ?? 0) > 0} onChange={(cash) => onChange({ ...sel, cash })} />
+      </details>
     </section>
   );
 }
@@ -104,6 +114,14 @@ export function AssetList({
 /** A player to tap into the deal: two lines (his name and flags; position, age, potential, his trade value and whether he's on the block, wrapping rather than cut off), his rating, this season's salary and when his deal ends. */
 function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League; p: Player; name: string; season: number; on: boolean; onToggle: () => void }) {
   const locked = untradeable(league, p);
+  const avail = availability(league, p);
+  const flag = locked ? (
+    <span className="fo-flag bad">{p.contract.tenDay ? '10-day' : { expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>
+  ) : p.injury ? (
+    <span className="fo-flag bad">{outTag(p)}</span>
+  ) : p.contract.twoWay ? (
+    <span className="fo-flag">2W</span>
+  ) : null;
   return (
     <button className={`fo-asset ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check" aria-hidden="true">
@@ -113,13 +131,11 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
       <div className="grow">
         <div className="fo-asset-name">
           <span className="fo-name">{name}</span>
-          {p.injury && <span className="fo-flag bad">{outTag(p)}</span>}
-          {p.contract.twoWay && <span className="fo-flag">2W</span>}
-          {locked && <span className="fo-flag bad">{p.contract.tenDay ? '10-day' : { expiring: 'Expiring', option: 'Option', signed: 'Signed' }[locked.kind]}</span>}
+          {/* one flag, so his name keeps its room: why he can't be traded, else his injury, else a two-way deal, else whether his team would move him (in the details otherwise) */}
+          {flag ?? <AvailFlag avail={avail} />}
         </div>
         <div className="fo-meta fo-wrap">
-          {p.pos} · {playerAge(p, league.season)}
-          {p.pot > p.ovr + 2 ? ` · POT ${p.pot}` : ''} · <TierLine inline tier={valueTier(league, p)} avail={availability(league, p)} />
+          {p.pos} · {playerAge(p, league.season)} · <TierLine inline tier={valueTier(league, p)} avail={flag ? avail : undefined} />
         </div>
       </div>
       <div className="fo-money">

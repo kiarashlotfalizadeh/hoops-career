@@ -2,75 +2,59 @@
    trading block's packages, AI teams' offers, the finder and the counters. */
 
 /* ------------------------------------------------------------ trade: the partner */
-.fo-teams {
-  gap: 4px;
-  scroll-snap-type: x proximity;
-}
-
-.fo-team {
-  position: relative;
-  flex: none;
-  width: 50px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 3px;
-  padding: 6px 0 7px;
-  border-radius: var(--radius-sm);
-  font-size: 11.5px;
-  font-weight: 650;
-  color: var(--text-dim);
-  scroll-snap-align: start;
-}
-
-.fo-team:active {
-  background: var(--surface);
-}
-
-/* the partner: a step up, with the paper rule under it that marks a tab that's on */
-.fo-team.on {
-  color: var(--text);
-  font-weight: 720;
-  background: var(--surface-2);
-  box-shadow: inset 0 -2px 0 var(--accent);
-}
-
 .fo-partner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 16px 16px;
+  gap: 14px;
+  padding: 16px 16px 16px;
 }
 
 .fo-partner-top {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-right: 10px;
 }
 
-.fo-partner-top .grow {
+/* the name is the switch: a target as tall as the name block, a chevron after it */
+.fo-partner-pick {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-height: 44px;
+  text-align: left;
+  color: inherit;
+  border-radius: var(--radius-sm);
+}
+
+.fo-partner-pick:active {
+  opacity: 0.8;
 }
 
 .fo-partner-region {
-  font-size: 12.5px;
-  font-weight: 620;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-2);
 }
 
-/* the team's name: a serif headline, as on every slab */
+/* the team's name: the headline cut, as on every slab */
 .fo-partner-name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
   margin-top: 2px;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 30px;
-  line-height: 1;
-  letter-spacing: -0.018em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 780;
+  font-size: 26px;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+}
+
+.fo-partner-name svg {
+  flex: none;
+  opacity: 0.8;
 }
 
 .fo-partner-cap {
@@ -84,13 +68,12 @@
   font-weight: 760;
   font-size: 28px;
   line-height: 1;
-  letter-spacing: -0.005em;
 }
 
 .fo-partner-cap .k {
-  margin-top: 2px;
-  font-size: 12px;
-  font-weight: 600;
+  margin-top: 3px;
+  font-size: 12.5px;
+  font-weight: 560;
   color: var(--text-2);
 }
 
@@ -98,10 +81,33 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
-  font-size: 12.5px;
-  font-weight: 600;
+  gap: 4px 7px;
+  font-size: 13px;
+  font-weight: 560;
   color: var(--text-2);
+}
+
+/* the league's teams in the partner sheet: the one you're dealing with is marked */
+.fo-pteam {
+  width: 100%;
+  text-align: left;
+  color: var(--text);
+}
+
+.fo-pteam .grow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fo-pteam.on {
+  background: color-mix(in srgb, var(--on) 8%, transparent);
+}
+
+.fo-pteam.on .lr-name::after {
+  content: ' · now';
+  font-weight: 500;
+  color: var(--text-dim);
 }
 
 /* ------------------------------------------------------------ trade: the deal */
@@ -139,9 +145,17 @@
 }
 
 .fo-deal-none {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-dim);
-  padding: 4px 0;
+  padding: 6px 0;
+}
+
+.fo-deal-hint {
+  margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13.5px;
+  color: var(--text-2);
 }
 
 .fo-deal-pick {
@@ -160,9 +174,8 @@
   padding: 3px 3px 3px 4px;
   border-radius: var(--radius-md);
   background: var(--surface);
-  border: 1px solid var(--line-2);
-  font-size: 13px;
-  font-weight: 640;
+  font-size: 13.5px;
+  font-weight: 620;
 }
 
 /* a player's name wraps rather than cut off in a narrow column ("Jay. / Williams") */
@@ -283,6 +296,40 @@
   border-top: 1px solid var(--line);
 }
 
+/* swap rights and cash, folded under the picks */
+.fo-assets-more {
+  border-top: 1px solid var(--line);
+}
+
+.fo-assets-more > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 var(--row-px);
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--accent-text);
+  list-style: none;
+  cursor: pointer;
+}
+
+.fo-assets-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.fo-assets-more > summary svg {
+  transition: transform var(--dur) var(--ease-out);
+}
+
+.fo-assets-more[open] > summary svg {
+  transform: rotate(180deg);
+}
+
+.fo-assets-more > summary:active {
+  background: var(--surface);
+}
+
 .fo-assets-empty {
   padding: 12px 14px;
   font-size: 13px;
@@ -398,9 +445,10 @@
   background: color-mix(in srgb, var(--surface) 96%, transparent);
   backdrop-filter: blur(14px) saturate(140%);
   -webkit-backdrop-filter: blur(14px) saturate(140%);
-  border: 1px solid var(--line-2);
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 9px 12px 10px;
+  padding: 10px 12px 12px;
+  gap: 8px;
   box-shadow: var(--shadow-float);
 }
 
@@ -812,4 +860,24 @@ body:has(.simbar) .fo-dock {
 
 .fo-offer-foot {
   gap: 10px;
+}
+
+/* ------------------------------------------------------------ trade finder: the filters' sheet */
+.fo-filter-sheet {
+  gap: 14px;
+}
+
+.fo-filter-sheet .fo-selects {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.fo-filter-foot {
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* a filters button with some set: the chosen-option look */
+.btn.fo-filter-on {
+  background: var(--on);
+  color: var(--on-ink);
 }
