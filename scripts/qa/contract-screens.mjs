@@ -204,7 +204,7 @@ await mutate((l) => {
   for (const p of Object.values(l.players)) if (p.tid === -1 && !p.waivers && !p.rfa) p.asking = { amount: 2400, years: 1 };
 });
 await go('/office/free-agents');
-await page.getByRole('button', { name: '10-day contracts' }).click();
+await page.getByRole('radio', { name: /^10-day/ }).click();
 await page.waitForTimeout(300);
 await shot('e17-fa-ten-day-list');
 await page.locator('.fo-prow').first().click();
@@ -222,8 +222,8 @@ const hard = await mutate((l) => {
 console.log('roster', hard.n, 'ten-day', hard.ten?.name);
 await go('/office/free-agents');
 // (the screen keeps its mode between visits)
-const chip = page.getByRole('button', { name: '10-day contracts' });
-if ((await chip.getAttribute('aria-pressed')) !== 'true') await chip.click();
+const chip = page.getByRole('radio', { name: /^10-day/ });
+if ((await chip.getAttribute('aria-checked')) !== 'true') await chip.click();
 await page.waitForTimeout(300);
 await page.locator('.fo-prow').first().click();
 await page.waitForTimeout(400);

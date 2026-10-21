@@ -345,15 +345,6 @@ export function AccoladeChips({ p, max = 6 }: { p: Player; max?: number }) {
   );
 }
 
-export function SectionLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
-  return (
-    <div className="lg-section-label">
-      <span>{children}</span>
-      {right}
-    </div>
-  );
-}
-
 /**
  * A title won, in the winner's colours: the season's champions (Playoffs), the NBA Cup's winners
  * (NBA Cup) or a franchise's banners. The screen's one slab, at its top.
@@ -403,16 +394,6 @@ export function FilterField({ label, children }: { label: string; children: Reac
     <div className="lg-filter">
       <span className="over">{label}</span>
       {children}
-    </div>
-  );
-}
-
-/** A toolbar line over a list or a table: what it shows on the left, its switches (and Help) on the right. */
-export function Toolbar({ children, right }: { children?: ReactNode; right?: ReactNode }) {
-  return (
-    <div className="lg-bar">
-      <span className="lg-bar-l">{children}</span>
-      {right && <span className="lg-bar-r">{right}</span>}
     </div>
   );
 }

@@ -131,29 +131,29 @@ world (no people layer: no morale, personalities or player conversations, by the
 
 ## Tokens (theme.css `:root`)
 
-| Token                                           | Use                                                                                                                                                             |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--bg` `--bg-2`                                 | page ground (graphite); the dock                                                                                                                                |
-| `--raised`                                      | groups (cards), tables, list grounds, sheets                                                                                                                    |
-| `--surface` `--surface-2` `--surface-3`         | pressed rows, buttons, tracks, a segment that's on                                                                                                              |
-| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a table's head, an outlined control / strong                                                                                          |
-| `--text` `--text-2` `--text-dim`                | primary / secondary / labels and meta (all 4.5:1 on every ground)                                                                                               |
-| `--accent` `--accent-ink`                       | your team's colour as a control's fill (primary, play, switch on, active tab) / ink on it                                                                       |
-| `--accent-text`                                 | links and "go there" text: your team's colour, readable as text                                                                                                 |
-| `--on` `--on-ink`                               | a chosen option: a chip, a segment's pill, a level (white on graphite)                                                                                           |
-| `--brand`                                       | the brand orange, only for what needs you: the inbox count, a sim's progress edge, live                                                                         |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips)                                                                                                                       |
-| `--tier-*`                                      | OVR badge tiers (via `ovrColor`)                                                                                                                                |
-| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                     |
-| `--font` `--display` `--head`                   | text / figures (with `font-stretch: var(--display-w)`) / headlines (with `--head-w`); `--serif` is `--head`'s old name                                          |
-| `--display-w` `--text-w` `--head-w`             | the width axis for figures (70%), text (100%) and headlines (112%)                                                                                              |
-| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                               |
-| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (30), head to content (12), in a group (16)                                                                                            |
-| `--row-min` `--row-py` `--row-px`               | a list row: 52px tall at least, its padding                                                                                                                     |
-| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                     |
-| `--radius-xs` … `--radius-xl`                   | corners: xs 5 tags and badges, sm 8 small controls and chips, md 11 buttons and inputs, `--radius` 14 groups, lg 18 slabs and heroes, xl 24 sheets              |
-| `--shadow` `--shadow-float`                     | a panel over the page (toasts, docks); a bar floating over the tab bar                                                                                          |
-| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                            |
+| Token                                           | Use                                                                                                                                                |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bg` `--bg-2`                                 | page ground (graphite); the dock                                                                                                                   |
+| `--raised`                                      | groups (cards), tables, list grounds, sheets                                                                                                       |
+| `--surface` `--surface-2` `--surface-3`         | pressed rows, buttons, tracks, a segment that's on                                                                                                 |
+| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a table's head, an outlined control / strong                                                                             |
+| `--text` `--text-2` `--text-dim`                | primary / secondary / labels and meta (all 4.5:1 on every ground)                                                                                  |
+| `--accent` `--accent-ink`                       | your team's colour as a control's fill (primary, play, switch on, active tab) / ink on it                                                          |
+| `--accent-text`                                 | links and "go there" text: your team's colour, readable as text                                                                                    |
+| `--on` `--on-ink`                               | a chosen option: a chip, a segment's pill, a level (white on graphite)                                                                             |
+| `--brand`                                       | the brand orange, only for what needs you: the inbox count, a sim's progress edge, live                                                            |
+| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips)                                                                                                          |
+| `--tier-*`                                      | OVR badge tiers (via `ovrColor`)                                                                                                                   |
+| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                        |
+| `--font` `--display` `--head`                   | text / figures (with `font-stretch: var(--display-w)`) / headlines (with `--head-w`); `--serif` is `--head`'s old name                             |
+| `--display-w` `--text-w` `--head-w`             | the width axis for figures (70%), text (100%) and headlines (112%)                                                                                 |
+| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                  |
+| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (30), head to content (12), in a group (16)                                                                               |
+| `--row-min` `--row-py` `--row-px`               | a list row: 52px tall at least, its padding                                                                                                        |
+| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                        |
+| `--radius-xs` … `--radius-xl`                   | corners: xs 5 tags and badges, sm 8 small controls and chips, md 11 buttons and inputs, `--radius` 14 groups, lg 18 slabs and heroes, xl 24 sheets |
+| `--shadow` `--shadow-float`                     | a panel over the page (toasts, docks); a bar floating over the tab bar                                                                             |
+| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                               |
 
 Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
 tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the

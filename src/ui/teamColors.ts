@@ -92,6 +92,11 @@ export function teamLook(colors: [string, string, string]): TeamLook {
   let slab = base;
   // white text on the slab's lightest corner (the base with 8% white mixed in) keeps 4.5:1
   for (let t = 0.08; contrast('#ffffff', mix(slab, '#ffffff', 0.08)) < 4.5 && t <= 1; t += 0.08) slab = mix(base, '#000000', t);
+  // a near-black slab (the Spurs', the Nets') would vanish into the graphite page: lift it toward the team's lightest colour
+  if (luminance(slab) < 0.02) {
+    const light = [...colors].sort((a, b) => luminance(b) - luminance(a))[0];
+    slab = mix(slab, light, 0.3);
+  }
   const trim = [...colors, '#ffffff'].find((c) => c.toLowerCase() !== base.toLowerCase() && colorDistance(c, slab) >= CLASH) ?? '#ffffff';
   // the primary, unless it's near-black or near-white (the Nets' black, the Spurs' silver): then the most vivid other
   const accent = identityColor(colors);
