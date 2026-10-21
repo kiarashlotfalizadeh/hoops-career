@@ -69,6 +69,29 @@ Rules that follow from it:
 - Read the league with `useLeague()` / `useLeagueMemo()`. A sim hands back a new league object:
   never hold on to one across a sim.
 
+## The world around the user
+
+The analysis is the depth; the world is the reason to press Continue. Every Continue should land on
+something new **about the user's team**, and the user's choices should come back to him through the
+world (no people layer: no morale, personalities or player conversations, by the user's choice).
+
+- **The press** (`core/league/media.ts`, `media/*`) writes stories with a headline (`head`), a dek
+  (`text`) and a body, weighted 3 (front page), 2 (story) or 1 (brief). Front pages about the user's
+  team stop long sims and can take the screen, so they're rare: a handful a season. Story links go
+  to `/league/news?story=<id>` (`storyPath`).
+- **Game day is an occasion** (`core/analysis/gameStory.ts`): a game ahead has a billing
+  (`billingFor`), a game played has a story (`gameStoryFor`: headline, hero, what it means). The
+  result leads; the analysis sits under it.
+- **Development shows** (`core/league/devWatch.ts`): arrows from where a player ended last season,
+  quiet tags, the monthly report, Team → Growth.
+- **The career builds** (`core/league/legacy*.ts`): milestones, signature wins, the cabinet, the
+  owner's and fans' pulse, the season review.
+- **Today is the front page** (`ui/today/FrontPage.tsx`, `front.ts`): the user's last result or top
+  story, the next game's billing, form and pulse, the league's headlines; after a long sim, "While you
+  were away" (`digest.ts`).
+- All of it reads the league and writes news, mail and its own state from `core/league/world.ts`,
+  never from the league's random stream: the games play out the same with or without it.
+
 ## Principles
 
 1. **One brand, team identity where a team is the subject.** Controls (primary buttons, the active
@@ -300,7 +323,11 @@ Broadcast first: the court is always the biggest thing on screen.
   "Day n of N"; a one-shot job (a new season, free agency) shows a sweeping glow instead.
 - Figures in a `Statline` count up when a screen opens (`CountUp`), once.
 - Big moments get a full-screen card in your colours (`moments.ts`, `components/Moments.tsx`), once,
-  after a sim and outside the live game.
+  after a sim and outside the live game: career moments, or else the one biggest front-page story.
+  A game's own report opens on its result moment (score counts up once, under a second), so a game's
+  story never takes the screen there.
+- The live game's atmosphere (`live/atmosphere.ts`): runs, the crowd's glow by the arena's name, one
+  big-play callout at a time (rate-limited), and a clutch state in the last five minutes within five.
 - Everything respects `prefers-reduced-motion` (theme.css zeroes animations).
 
 ## Accessibility (unchanged bar)
