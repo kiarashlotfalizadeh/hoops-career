@@ -10,6 +10,9 @@ import { Toolbar, confName, ordinal, streakLabel, teamPath, useQueryParam } from
 import { OddsView, LotteryView } from './OddsView';
 import { TableCut, TeamRow, TeamTable } from './Table';
 import { plural } from '../../core/format';
+import { latestPower } from '../../core/league/media';
+import { PowerList } from './news/PowerList';
+import { newsDate } from './news/Linked';
 
 type View = 'E' | 'W' | 'league' | 'power' | 'odds' | 'lottery';
 
@@ -37,7 +40,7 @@ export function StandingsTab({ league }: { league: League }) {
       />
       {view === 'odds' && <OddsView league={league} />}
       {view === 'lottery' && <LotteryView league={league} />}
-      {view === 'power' && <PowerRankings league={league} />}
+      {view === 'power' && <Power league={league} />}
       {(view === 'E' || view === 'W' || view === 'league') && <Standings league={league} view={view} />}
     </>
   );
@@ -163,6 +166,50 @@ function StandingsTable({ league, rows, conf }: { league: League; rows: Standing
         );
       })}
     </TeamTable>
+  );
+}
+
+/**
+ * Power: the press's weekly rankings once the season has had a week (each team's move and the
+ * press's line on it), with the numbers behind an order (net rating, roster strength) one switch away.
+ */
+function Power({ league }: { league: League }) {
+  const rows = latestPower(league);
+  const [mode, setMode] = useQueryParam<'press' | 'net'>('pw', 'press', ['press', 'net']);
+  if (!rows) return <PowerRankings league={league} />;
+  const p = league.media!.power!;
+  return (
+    <>
+      <Segmented
+        label="Power rankings"
+        value={mode}
+        onChange={setMode}
+        options={[
+          { id: 'press', label: `Week ${Math.max(1, Math.round(p.day / 7))}` },
+          { id: 'net', label: 'By net rating' },
+        ]}
+      />
+      {mode === 'net' ? (
+        <PowerRankings league={league} />
+      ) : (
+        <>
+          <Toolbar
+            right={
+              <Help title="Power rankings">
+                <p className="lg-p">
+                  The press ranks all 30 teams once a week: how good each team is now (its net rating this season, weighed against what its healthy roster is worth, so an injury to
+                  a star shows), its record and its last ten games.
+                </p>
+                <p className="lg-p">The arrows show the move since last week. By net rating orders the teams by the numbers alone, today.</p>
+              </Help>
+            }
+          >
+            Published {newsDate(league, p)}
+          </Toolbar>
+          <PowerList league={league} rows={rows} />
+        </>
+      )}
+    </>
   );
 }
 

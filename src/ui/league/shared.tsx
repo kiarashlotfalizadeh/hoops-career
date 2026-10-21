@@ -10,6 +10,7 @@ import { RATED_SEASONS } from '../../core/constants';
 import { Segmented, Sheet, scrollBehavior } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
+import { HONOR_AWARDS } from '../../core/league/media/honors';
 import './league.css';
 
 /** A string state value persisted in the URL query (replace, so tabs don't pile up history). */
@@ -292,6 +293,9 @@ export function accolades(p: Pick<Player, 'awards'>): { label: string; n: number
     { label: '6MOY', n: count((t) => t === 'Sixth Man of the Year') },
     { label: 'MIP', n: count((t) => t === 'Most Improved Player') },
     { label: 'All-Rookie', n: count((t) => t.startsWith('All-Rookie')) },
+    { label: 'Player of the Month', n: count((t) => t === 'Player of the Month') },
+    { label: 'Rookie of the Month', n: count((t) => t === 'Rookie of the Month') },
+    { label: 'Player of the Week', n: count((t) => t === 'Player of the Week') },
   ];
   return out.filter((x) => x.n > 0);
 }
@@ -317,7 +321,7 @@ export function accoladeScore(p: Player) {
                   ? 1.5
                   : a.type === 'NBA Cup MVP'
                     ? 1
-                    : a.type === 'Hall of Fame'
+                    : a.type === 'Hall of Fame' || HONOR_AWARDS.has(a.type)
                       ? 0
                       : CONTEST_AWARDS.has(a.type)
                         ? 0.25

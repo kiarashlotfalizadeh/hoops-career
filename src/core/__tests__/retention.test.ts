@@ -104,18 +104,25 @@ describe('news', () => {
     const l = { news: [], nextMsgId: 1, season: 2027, day: 0 } as unknown as League;
     const add = (kind: 'award' | 'injury' | 'milestone' | 'signing', text: string) => addNews(l, { kind, text, tids: [], pids: [] });
     add('award', 'The Cup');
-    for (let i = 0; i < 600; i++) add(i % 3 ? 'injury' : 'milestone', `knock ${i}`);
-    expect(l.news).toHaveLength(400);
+    for (let i = 0; i < 900; i++) add(i % 3 ? 'injury' : 'milestone', `knock ${i}`);
+    expect(l.news).toHaveLength(600);
     expect(l.news[0].text).toBe('The Cup');
     // a summer of signings: the oldest injuries and big games still go first
-    for (let i = 0; i < 250; i++) add('signing', `signing ${i}`);
+    for (let i = 0; i < 400; i++) add('signing', `signing ${i}`);
     expect(l.news[0].text).toBe('The Cup');
-    // ...but the latest 100 always stay
-    for (let i = 250; i < 850; i++) add('signing', `signing ${i}`);
-    expect(l.news).toHaveLength(400);
-    expect(l.news.filter((n) => n.kind === 'injury' || n.kind === 'milestone')).toHaveLength(100);
-    expect(l.news.some((n) => n.text === 'knock 599')).toBe(true);
-    expect(l.news.some((n) => n.text === 'signing 849')).toBe(true);
+    // ...but the latest 150 always stay
+    for (let i = 400; i < 1300; i++) add('signing', `signing ${i}`);
+    expect(l.news).toHaveLength(600);
+    expect(l.news.filter((n) => n.kind === 'injury' || n.kind === 'milestone')).toHaveLength(150);
+    expect(l.news.some((n) => n.text === 'knock 899')).toBe(true);
+    expect(l.news.some((n) => n.text === 'signing 1299')).toBe(true);
+  });
+
+  it('a story (weight 2 or more) is never routine, whatever its kind', () => {
+    const l = { news: [], nextMsgId: 1, season: 2027, day: 0 } as unknown as League;
+    addNews(l, { kind: 'game', text: 'Buzzer-beater at the Garden', head: 'Brunson at the buzzer', weight: 3, tids: [], pids: [] });
+    for (let i = 0; i < 700; i++) addNews(l, { kind: 'game', text: `brief ${i}`, tids: [], pids: [] });
+    expect(l.news[0].head).toBe('Brunson at the buzzer');
   });
 });
 

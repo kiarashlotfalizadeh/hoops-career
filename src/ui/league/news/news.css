@@ -1,0 +1,255 @@
+/* The press on the News tab: the front page (the lead, headlines), the power rankings, honors and the story reader. */
+
+/* ------------------------------------------------------------------ the wire's stories */
+.lg-news-head {
+  display: block;
+  font-weight: 750;
+  font-size: 15px;
+  line-height: 1.25;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.lg-news.big .lg-news-head {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1.15;
+}
+.lg-news-head:active {
+  color: var(--accent-text);
+}
+.lg-news-dek {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--text-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-news-head:hover {
+    color: var(--accent-text);
+  }
+}
+
+/* ------------------------------------------------------------------ the lead */
+.lg-fp-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: var(--pad-card);
+  margin-bottom: var(--gap-page);
+  color: var(--text);
+}
+.lg-fp-lead:active {
+  background: var(--surface);
+}
+.lg-fp-over {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lg-fp-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+.lg-fp-head {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 24px;
+  line-height: 1.08;
+  letter-spacing: 0.005em;
+  overflow-wrap: anywhere;
+}
+.lg-fp-lead.w3 .lg-fp-head {
+  font-size: 28px;
+}
+.lg-fp-dek {
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.lg-fp-read {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-text);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-fp-lead:hover {
+    border-color: var(--line-2);
+  }
+}
+
+/* ------------------------------------------------------------------ headlines */
+.lg-fp-hl {
+  color: var(--text);
+  align-items: flex-start;
+}
+.lg-fp-hl > svg {
+  flex: none;
+  margin: 6px;
+  color: var(--text-dim);
+}
+.lg-fp-hl-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lg-fp-hl-head {
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ power rankings */
+.lg-pw-row {
+  display: grid;
+  grid-template-columns: 24px 30px 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: var(--row-py) var(--row-px);
+  min-height: var(--row-min);
+  color: var(--text);
+}
+.lg-pw-row:active {
+  background: var(--surface);
+}
+.lg-pw-row.me {
+  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+}
+/* a row that doesn't follow the one above it (your team, after the top five) */
+.lg-pw-row.gap {
+  border-top: 1px dashed var(--line-2);
+}
+.lg-pw-rank {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  text-align: right;
+}
+.lg-pw-mv {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 12px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.lg-pw-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lg-pw-name {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 15px;
+  min-width: 0;
+}
+.lg-pw-name .ellipsis {
+  min-width: 0;
+}
+.lg-pw-rec {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--text-2);
+  flex: none;
+}
+.lg-pw-blurb {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-dim);
+}
+.lg-pw-row.me .lg-pw-blurb {
+  color: var(--text-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lg-pw-row:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ honors */
+.lg-hon {
+  color: var(--text);
+  align-items: flex-start;
+}
+.lg-hon.me {
+  box-shadow: inset 3px 0 0 var(--team-text);
+  background: color-mix(in srgb, var(--team-text) 9%, transparent);
+}
+.lg-hon-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lg-hon-what {
+  margin-top: 1px;
+  font-size: 11.5px;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tier-elite);
+}
+
+/* ------------------------------------------------------------------ the reader */
+.lg-story {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+.lg-story-over {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lg-story-dek {
+  margin: 0;
+  font-size: 16.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--text);
+}
+.lg-story-p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-2);
+}
+/* a ranked list or a set of lines inside a paragraph: one per line */
+.lg-story-line {
+  display: block;
+}
+.lg-story-line + .lg-story-line {
+  margin-top: 6px;
+}
+.lg-story-more {
+  align-self: flex-start;
+}
+.lg-story-about {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.lg-story-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

@@ -10,6 +10,8 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Help, Section, Segmented } from '../components/ui';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
+import { seasonHonors } from '../../core/league/media';
+import { HonorsList } from './news/Honors';
 import { seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
 
 function statLine(p: Player, season: number, kind: 'off' | 'def' = 'off', playoffs = false) {
@@ -33,13 +35,16 @@ export function AwardsTab({ league }: { league: League }) {
   let status = '';
   if (decided) status = isCurrent && (league.phase === 'playin' || league.phase === 'playoffs') ? 'Finals MVP to come' : 'Final';
   else if (isCurrent) status = started ? 'Award races so far' : 'Season not started';
+  // the season's weekly and monthly honors (this season's and last, as the press keeps them)
+  const honors = useLeagueMemo(() => seasonHonors(league, season), [league, season]);
   // the season's awards, its All-NBA (and Defense, Rookie) teams once named, its All-Star weekend once picked
   const views: { id: AwardsView; label: string }[] = [
     { id: 'awards', label: 'Awards' },
+    ...(honors.length ? [{ id: 'honors' as const, label: 'Honors' }] : []),
     ...(decided && aw ? [{ id: 'teams' as const, label: 'All-NBA' }] : []),
     ...(aw && (aw.allStars.E.length > 0 || aw.saturday) ? [{ id: 'allstar' as const, label: 'All-Star' }] : []),
   ];
-  const [raw, setView] = useQueryParam<AwardsView>('av', 'awards', ['awards', 'teams', 'allstar']);
+  const [raw, setView] = useQueryParam<AwardsView>('av', 'awards', ['awards', 'honors', 'teams', 'allstar']);
   const view = views.some((v) => v.id === raw) ? raw : 'awards';
 
   return (
@@ -70,6 +75,12 @@ export function AwardsTab({ league }: { league: League }) {
           )}
         </>
       )}
+      {view === 'honors' && (
+        <>
+          <HonorsList league={league} honors={honors} />
+          <div className="lg-note">By conference; figures per game over the week or month.</div>
+        </>
+      )}
       {view === 'teams' && aw && (
         <>
           <Teams league={league} aw={aw} />
@@ -91,7 +102,7 @@ export function AwardsTab({ league }: { league: League }) {
   );
 }
 
-type AwardsView = 'awards' | 'teams' | 'allstar';
+type AwardsView = 'awards' | 'honors' | 'teams' | 'allstar';
 
 // ---------------------------------------------------------------- winners
 

@@ -1,13 +1,18 @@
 // The trade deadline as an event: a rumor a week over the last three weeks (who is listening on
 // whom, and which contenders have called), a deadline-day briefing in the inbox and, the day
 // after, a recap of the season's trades. Rumors draw on their own random stream, so the league's
-// stream never moves for them.
+// stream never moves for them; the rumor mill's phrasing draws on the world's (see world.ts).
 
-import type { League, NewsItem } from '../types';
+import type { League, NewsItem, Player } from '../types';
 import { Rng, hashString } from '../random';
-import { addInbox, addNews, andList, playerName } from './helpers';
+import { addInbox, addNews, andList, contractSeason, curTeamSeason, playerName } from './helpers';
 import { onTheBlock } from './aiTrades';
 import { openProposals } from './proposals';
+import { money } from '../format';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
+import { seasonLabel } from '../constants';
+import { worldRng } from './world';
+import { Voice, last, list, perGame, f1 } from './media/voice';
 
 /** Days before the deadline a rumor goes out. */
 const RUMOR_DAYS = [21, 14, 7];
@@ -17,12 +22,55 @@ export function seasonTrades(league: League): NewsItem[] {
   return league.news.filter((n) => n.kind === 'trade' && n.season === league.season && n.text.startsWith('Trade: '));
 }
 
-/** "CHA are listening on Miles Bridges; BOS and MIA have called." */
+/** "The Hornets are listening on Miles Bridges; the Celtics and the Heat have called." (the story's dek) */
 function rumorText(league: League, r: ReturnType<typeof onTheBlock>[number]): string {
   const p = league.players[r.pid];
-  const callers = r.suitors.map((t) => league.teams[t].abbrev);
-  const listening = `${league.teams[r.tid].abbrev} are listening on ${playerName(p)}`;
+  const callers = r.suitors.map((t) => `the ${league.teams[t].name}`);
+  const listening = `The ${league.teams[r.tid].name} are listening on ${playerName(p)}`;
   return callers.length ? `${listening}; ${andList(callers)} have called.` : `${listening}.`;
+}
+
+/** "$24.1M through 2028-29", "an expiring $12.0M": what a team takes on with him. */
+function dealText(league: League, p: Player): string {
+  const s = contractSeason(league);
+  const exp = contractExp(p.contract);
+  const pay = money(salaryFor(p, s));
+  return exp <= s ? `an expiring ${pay}` : `${pay} a year through ${seasonLabel(exp)}`;
+}
+
+/** The rumor mill's paragraph on one player: who is selling, what he is and costs, and who has called. Many ways to say it. */
+function rumorParagraph(league: League, v: Voice, r: ReturnType<typeof onTheBlock>[number]): string {
+  const p = league.players[r.pid];
+  const t = league.teams[r.tid];
+  const L = last(league, p);
+  const ts = curTeamSeason(league, r.tid);
+  const callers = r.suitors.map((x) => `the ${league.teams[x].name}`);
+  const pg = perGame(p, league.season);
+  const who = `${playerName(p)} (${playerAge(p, league.season)}, ${p.pos})`;
+  const line = pg && pg.gp >= 5 ? `${f1(pg.pts)} points a game` : `${p.ovr} OVR`;
+  const open = v.say('rumor-open', [
+    `The ${t.name} (${ts.won}-${ts.lost}) are taking calls on ${who}.`,
+    `${who} is available, and the ${t.name} aren't hiding it.`,
+    `Word around the league: the ${t.name} would move ${who} for the right price.`,
+    `At ${ts.won}-${ts.lost}, the ${t.name} have made ${who} available.`,
+    `The ${t.name} have started listening on ${who}.`,
+  ]);
+  const what = v.say('rumor-what', [
+    `He's putting up ${line} on ${dealText(league, p)}.`,
+    `${L}: ${line}, ${dealText(league, p)}.`,
+    `Whoever gets him takes on ${dealText(league, p)} for ${line}.`,
+  ]);
+  const calls = callers.length
+    ? v
+        .say('rumor-calls', [
+          `${list(callers)} ${callers.length > 1 ? 'have' : 'has'} called.`,
+          `${list(callers)} ${callers.length > 1 ? 'are' : 'is'} among the teams to check in.`,
+          `Expect ${list(callers)} to keep calling.`,
+          `The interest so far: ${list(callers)}.`,
+        ])
+        .replace(/^the /, 'The ')
+    : v.say('rumor-none', [`Nobody has bitten yet.`, `No serious offers so far.`, `The phones have been quiet.`]);
+  return `${open} ${what} ${calls}`;
 }
 
 /** Called each regular-season day, once the date has moved on. */
@@ -49,11 +97,26 @@ function postRumors(league: League) {
     .shuffle(fresh.length ? fresh : block)
     .sort((a, b) => Number(b.suitors.length > 0) - Number(a.suitors.length > 0))
     .slice(0, 2);
+  // the press's telling, on a stream of its own (the choice above is the rumors' own, as it always was)
+  const v = new Voice(worldRng(league, 'rumors', league.season, league.day), (league.media ??= {}));
+  const lead = told[0];
+  const L = last(league, league.players[lead.pid]);
+  const left = league.tradeDeadlineDay - league.day;
+  const head = v.say('rumor-head', [
+    `Rumor mill: ${L} on the block`,
+    `The ${league.teams[lead.tid].name} are shopping ${L}`,
+    `${left} days to the deadline, and ${L} is available`,
+    `Deadline watch: who wants ${L}?`,
+    `${L}'s name is out there`,
+  ]);
   addNews(league, {
     kind: 'rumor',
-    text: `Rumors: ${told.map((r) => rumorText(league, r)).join(' ')}`,
+    head,
+    text: told.map((r) => rumorText(league, r)).join(' '),
+    body: [...told.map((r) => rumorParagraph(league, v, r)), `The deadline is ${left === 7 ? 'a week' : `${left} days`} away.`].join('\n\n'),
     tids: [...new Set(told.flatMap((r) => [r.tid, ...r.suitors]))],
     pids: told.map((r) => r.pid),
+    weight: told.some((r) => r.suitors.includes(league.userTid)) || told.some((r) => league.players[r.pid].ovr >= 80) ? 2 : 1,
   });
 }
 
@@ -87,7 +150,14 @@ function deadlineRecap(league: League) {
   const biggest = [...trades].sort((a, b) => best(b) - best(a) || a.id - b.id)[0];
   const count = trades.length === 0 ? 'no trades' : trades.length === 1 ? 'one trade' : `${trades.length} trades`;
   const text = `Trade deadline recap: ${count} this season.${biggest && trades.length > 1 ? ` The biggest: ${biggest.text.replace(/^Trade: /, '')}` : ''}`;
-  addNews(league, { kind: 'trade', text, tids: biggest?.tids ?? [], pids: biggest?.pids ?? [] });
+  const mineN = trades.filter((n) => n.tids.includes(league.userTid)).length;
+  const head =
+    trades.length === 0
+      ? 'A quiet deadline: no trades this season'
+      : mineN
+        ? `The deadline passes: ${count} around the league, ${mineN === 1 ? 'one' : mineN} by the ${league.teams[league.userTid].name}`
+        : `The deadline passes with ${count}`;
+  addNews(league, { kind: 'trade', head, text, tids: biggest?.tids ?? [], pids: biggest?.pids ?? [], weight: mineN ? 2 : 1 });
   const mine = trades.filter((n) => n.tids.includes(league.userTid)).length;
   addInbox(league, {
     from: 'Assistant GM',

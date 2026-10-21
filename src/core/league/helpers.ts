@@ -171,15 +171,16 @@ export function seasonTid(p: Player, season: number, playoffs = false): number |
   return null;
 }
 
-/** News items the save keeps, and how many of the latest injuries and big games always stay. */
-const NEWS_MAX = 400;
-const ROUTINE_KEEP = 100;
-const routineNews = (n: NewsItem) => n.kind === 'injury' || n.kind === 'milestone' || n.kind === 'record';
+/** News items the save keeps, and how many of the latest routine ones always stay. */
+const NEWS_MAX = 600;
+const ROUTINE_KEEP = 150;
+/** Routine: injuries, big games, records and briefs on games; a story (weight 2 or more) never is. */
+const routineNews = (n: NewsItem) => (n.weight ?? 1) < 2 && (n.kind === 'injury' || n.kind === 'milestone' || n.kind === 'record' || n.kind === 'game');
 
 /**
- * Add a news item. Over the limit the oldest injury or big game goes first (there are hundreds a
- * season), so trades, signings and the season's results stay a year; the latest of them always
- * show too.
+ * Add a news item. Over the limit the oldest routine item goes first (injuries, big games and game
+ * briefs: there are hundreds a season), so stories, trades, signings and the season's results stay
+ * a year; the latest routine ones always show too.
  */
 export function addNews(league: League, n: Omit<NewsItem, 'id' | 'season' | 'day'>) {
   league.news.push({ id: league.nextMsgId++, season: league.season, day: league.day, ...n });
