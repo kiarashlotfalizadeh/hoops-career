@@ -39,6 +39,11 @@ export const NEWS_KIND: Record<Kind, { label: string; icon: LucideIcon; color: s
   coach: { label: 'Coaches', icon: ClipboardList, color: 'var(--info)' },
   retire: { label: 'Retirements', icon: Hourglass, color: 'var(--text-2)' },
   general: { label: 'General', icon: Newspaper, color: 'var(--text-2)' },
+  game: { label: 'Games', icon: Newspaper, color: 'var(--accent)' },
+  power: { label: 'Power rankings', icon: ListOrdered, color: 'var(--info)' },
+  honor: { label: 'Honors', icon: Trophy, color: 'var(--tier-elite)' },
+  column: { label: 'Columns', icon: PenLine, color: 'var(--text-2)' },
+  preview: { label: 'Previews', icon: Newspaper, color: 'var(--info)' },
 };
 
 const ORDER: Kind[] = ['trade', 'rumor', 'signing', 'injury', 'award', 'draft', 'milestone', 'record', 'coach', 'release', 'retire', 'general'];

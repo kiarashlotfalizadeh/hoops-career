@@ -80,6 +80,7 @@ import { retireNumbers } from './jerseys';
 import { recordTrail } from '../analysis/odds';
 import { realCareerOnRecord } from '../analysis/milestones';
 import { money } from '../format';
+import { worldDay, worldGame, worldSeasonEnd, worldSeasonStart } from './world';
 
 /**
  * AI-to-AI deals expected off the regular season (see aiOffseasonTrades): on draft night before
@@ -129,6 +130,7 @@ export function startRegularSeason(league: League): string[] {
   setOwnerGoals(league);
   cleanProposals(league);
   openingProposal(league);
+  worldSeasonStart(league);
   return [];
 }
 
@@ -254,6 +256,7 @@ function healIdle(league: League, rng: Rng) {
 export function postGame(league: League, g: ScheduledGame, homeWon: boolean) {
   if (g.type === 'playin') processPlayInResult(league, g, homeWon);
   if (g.type === 'playoffs') processPlayoffResult(league, g, homeWon);
+  worldGame(league, g);
 }
 
 export function advanceDay(league: League) {
@@ -294,6 +297,7 @@ export function advanceDay(league: League) {
   // trade offers that expired or stopped being valid go, then the deadline's rumors, briefing and recap
   cleanProposals(league);
   deadlineDay(league);
+  worldDay(league);
 }
 
 function endRegularSeason(league: League) {
@@ -464,6 +468,7 @@ function endPlayoffs(league: League) {
   ownerEvaluation(league);
   // AI owners review their coaches too (on a random stream of their own), and the teams that changed look at the user
   makeJobOffers(league, coachingCarousel(league));
+  worldSeasonEnd(league);
   withRng(league, (rng) => {
     retirements(league, rng);
     league.phase = 'draftLottery';
@@ -636,6 +641,7 @@ export function faAdvance(league: League, days = 1) {
       // taxpayers out of contention first (see aiTaxDumps)
       if (league.faDay === 3) aiTaxDumps(league, rng);
       if (league.faDay >= 3) aiOffseasonTrades(league, rng, SUMMER_DEALS);
+      worldDay(league);
     }
   });
   cleanProposals(league);

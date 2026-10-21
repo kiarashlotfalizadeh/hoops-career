@@ -2,6 +2,9 @@
 // the whole league can be persisted to IndexedDB and shipped to web workers.
 import type { OppPlan } from './ai/opponentPlan';
 import type { CoachRecord } from './league/coaches';
+import type { DevWatchState } from './league/devWatch';
+import type { LegacyState } from './league/legacy';
+import type { MediaState } from './league/media';
 import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
@@ -1073,11 +1076,39 @@ export interface NewsItem {
   id: number;
   season: number;
   day: number;
-  /** 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts). */
-  kind: 'trade' | 'signing' | 'injury' | 'award' | 'draft' | 'release' | 'milestone' | 'retire' | 'general' | 'rumor' | 'record' | 'coach';
+  /**
+   * 'rumor': who is listening on a player before the trade deadline, and who has called. 'coach': a head coach fired or hired (see coaches.ts).
+   * The press (media.ts, gameStory.ts): 'game' a game's story, 'power' the power rankings, 'honor' a weekly or monthly honor,
+   * 'column' a columnist's take (a trade graded, a team's start), 'preview' a preview (the season's predictions, a big night ahead).
+   */
+  kind:
+    | 'trade'
+    | 'signing'
+    | 'injury'
+    | 'award'
+    | 'draft'
+    | 'release'
+    | 'milestone'
+    | 'retire'
+    | 'general'
+    | 'rumor'
+    | 'record'
+    | 'coach'
+    | 'game'
+    | 'power'
+    | 'honor'
+    | 'column'
+    | 'preview';
+  /** The one-line news, or for a story the press wrote (one with `head`), its dek: the line under the headline. */
   text: string;
   tids: number[];
   pids: number[];
+  /** A story's headline. */
+  head?: string;
+  /** A story's body: short paragraphs, a blank line between them. */
+  body?: string;
+  /** How big it is: 3 the front page, 2 a story, 1 or absent a brief. */
+  weight?: 1 | 2 | 3;
 }
 
 /**
@@ -1399,6 +1430,12 @@ export interface League {
   onboarding?: { done: GuideStep[]; hidden?: boolean };
   /** Changes made in god mode (see godMode.ts), counted so the league says it has been edited. */
   godEdits?: number;
+  /** The press (see league/media.ts): power rankings, weekly and monthly honors, the season's predictions, columns. */
+  media?: MediaState;
+  /** Development as the staff tracks it (see league/devWatch.ts): the snapshots behind the rating arrows, breakouts reported. */
+  devWatch?: DevWatchState;
+  /** The user's coaching legacy (see league/legacy.ts): milestones, honors, signature wins, season reviews. */
+  legacy?: LegacyState;
 }
 
 /**
