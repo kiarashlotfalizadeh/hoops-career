@@ -5,7 +5,7 @@
 // change this season, and a development tag by the name: Breakout, Rising, Prospect, Declining) and POT.
 // Before anyone plays, each player's latest season stands in for this one's, and the line under the
 // list says so.
-import { Fragment, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { playerAge } from '../../core/playerGen';
@@ -36,7 +36,7 @@ export function rosterLines(league: League, roster: Player[]): { lines: Map<numb
 /** A group's divider, with the columns' names over its rows. */
 function GroupHead({ label }: { label: string }) {
   return (
-    <div className="list-divider tm-rl tm-rl-head">
+    <div className="tm-rl tm-rl-head">
       <span className="tm-rl-glabel">{label}</span>
       {FIGS.map(([k, short]) => (
         <span key={k} className="tm-rl-fig" aria-hidden="true">
@@ -102,7 +102,7 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
 export function RosterRows({ league, label, players, foot }: { league: League; label: string; players: Player[]; foot?: ReactNode }) {
   const { lines } = rosterLines(league, players);
   return (
-    <div className="card flush list">
+    <div className="tm-rl-list">
       <GroupHead label={label} />
       {players.map((p) => (
         <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={p.tid === league.userTid} />
@@ -126,15 +126,15 @@ export function RosterList({ league, roster }: { league: League; roster: Player[
   const { lines, current, any } = rosterLines(league, roster);
   return (
     <>
-      <div className="card flush list">
+      <div className="tm-rl-list">
         {groups.map(([label, list]) =>
           list.length ? (
-            <Fragment key={label}>
+            <div key={label} className="tm-rl-group">
               <GroupHead label={label} />
               {list.map((p) => (
                 <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={mine} />
               ))}
-            </Fragment>
+            </div>
           ) : null,
         )}
       </div>

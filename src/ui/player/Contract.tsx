@@ -52,7 +52,7 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
   };
   return (
     <Section title="Contract">
-      <div className="card tm-deal">
+      <div className="tm-deal">
         {p.tid >= 0 ? (
           <>
             <Statline

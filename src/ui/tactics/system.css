@@ -9,16 +9,16 @@
   border-radius: var(--radius-xs);
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 760;
   line-height: 1;
   color: var(--accent-ink);
 }
 .tx-grade.sm {
   min-width: 24px;
   height: 20px;
-  font-size: 13px;
-  border-radius: 5px;
+  font-size: 14px;
+  border-radius: var(--radius-xs);
 }
 /* grades in the "how good" order (DESIGN.md), as the live game's player grades: A purple, B blue,
    C light grey, D-F grey. A weak area is a grey, not a red: red is for losses and warnings */
@@ -66,12 +66,12 @@
   background: var(--surface);
 }
 .tx-q-n {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 14.5px;
+  font-weight: 640;
 }
 .tx-q-was {
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 720;
 }
 .tx-q-was.good {
   color: var(--good);
@@ -84,9 +84,9 @@
   text-align: right;
 }
 .tx-q-bar {
-  height: 4px;
-  margin: 0 var(--row-px) 8px;
-  border-radius: 2px;
+  height: 3px;
+  margin: 0 var(--row-px) 9px;
+  border-radius: 1px;
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -134,7 +134,7 @@
   top: calc(var(--top-h) + var(--safe-t) + 45px);
   z-index: 5;
   display: flex;
-  gap: 6px;
+  gap: 0;
   overflow-x: auto;
   scrollbar-width: none;
   margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
@@ -147,34 +147,39 @@
 .tx-strip::-webkit-scrollbar {
   display: none;
 }
+/* each grade a column, hairlines between them, as a statline's figures are */
 .tx-strip-q {
   flex: none;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 4px;
-  min-width: 88px;
-  padding: 5px 8px 6px;
+  gap: 5px;
+  min-width: 92px;
+  padding: 2px 12px 3px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--raised);
-  transition: border-color 0.2s ease;
+  transition: background-color 0.2s ease;
 }
-.tx-strip-q.up {
-  border-color: var(--good);
-  background: color-mix(in srgb, var(--good) 8%, var(--raised));
-  animation: tx-flash 0.35s ease-out;
+.tx-strip-q:first-child {
+  padding-left: 0;
 }
+.tx-strip-q + .tx-strip-q {
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+}
+/* a grade that moved this visit: its name in the signal's colour, a short pulse */
+.tx-strip-q.up,
 .tx-strip-q.down {
-  border-color: var(--bad);
-  background: color-mix(in srgb, var(--bad) 8%, var(--raised));
   animation: tx-flash 0.35s ease-out;
+}
+.tx-strip-q.up .tx-strip-n {
+  color: var(--good);
+}
+.tx-strip-q.down .tx-strip-n {
+  color: color-mix(in srgb, var(--bad) 80%, white);
 }
 .tx-strip-n {
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 620;
   color: var(--text-dim);
   white-space: nowrap;
 }
@@ -184,20 +189,20 @@
   gap: 4px;
 }
 .tx-strip-was {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 11.5px;
+  font-weight: 700;
   color: var(--text-dim);
 }
 .tx-strip-rank {
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 /* where it ranks: slides as a setting moves it, even when the grade holds */
 .tx-strip-bar {
   align-self: stretch;
-  height: 3px;
-  border-radius: 2px;
+  height: 2px;
+  border-radius: 1px;
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -221,7 +226,7 @@
 }
 @keyframes tx-flash {
   40% {
-    transform: scale(1.05);
+    transform: scale(1.04);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -233,7 +238,7 @@
 .tx-dock-m {
   margin-right: 8px;
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 680;
 }
 .tx-dock-m.good {
   color: var(--good);
@@ -246,7 +251,7 @@
   align-items: center;
   gap: 2px;
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 640;
   color: var(--accent-text);
 }
 
@@ -261,6 +266,7 @@
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--line-2);
+  background: var(--raised);
 }
 .tx-floor-court {
   position: absolute;
@@ -268,15 +274,16 @@
   width: 100%;
   height: 100%;
 }
+/* a printed diagram of the half court: ink, the paint in your colour, the lines in paper */
 .tx-floor-wood {
-  fill: #6b4a2c;
+  fill: var(--raised);
 }
 .tx-floor-paint {
-  fill: color-mix(in srgb, var(--team, #1b2b44) 70%, #000);
+  fill: color-mix(in srgb, var(--team) 34%, var(--raised));
 }
 .tx-floor-line {
-  stroke: rgba(255, 255, 255, 0.75);
-  stroke-width: 0.5;
+  stroke: var(--line-3);
+  stroke-width: 0.45;
 }
 .tx-floor-rim {
   stroke: var(--accent);
@@ -297,12 +304,12 @@
   gap: 1px;
   width: max-content;
   max-width: 33%;
-  padding: 0.3em 0.55em 0.38em;
+  padding: 0.32em 0.6em 0.4em;
   border-radius: var(--radius-sm);
-  background: rgba(8, 10, 14, 0.84);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  color: #fff;
+  background: var(--surface-2);
+  border: 1px solid var(--line-2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  color: var(--text);
   text-align: center;
   transition:
     transform 0.15s ease-out,
@@ -320,9 +327,9 @@
   outline: 2px solid var(--accent-text);
   outline-offset: 2px;
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .tx-floor-p:hover {
-    border-color: rgba(255, 255, 255, 0.4);
+    border-color: var(--line-3);
   }
   .tx-floor-p.off:hover {
     border-color: var(--warn);
@@ -331,8 +338,8 @@
 /* the name in the narrow cut, so a long one fits the plate whole */
 .tx-floor-n {
   font-size: 1em;
-  font-weight: 750;
-  font-stretch: 72%;
+  font-weight: 680;
+  font-stretch: 74%;
   line-height: 1.25;
   white-space: nowrap;
   overflow: hidden;
@@ -340,12 +347,10 @@
   max-width: 100%;
 }
 .tx-floor-r {
-  font-size: 0.73em;
-  font-weight: 750;
+  font-size: 0.8em;
+  font-weight: 560;
   font-stretch: 82%;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: #cfd6e0;
+  color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -355,14 +360,14 @@
   font-size: 0.77em;
   line-height: 1.2;
   letter-spacing: 1px;
-  color: #ffc23d;
+  color: var(--tier-elite);
 }
 .tx-floor-s .dim {
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--line-3);
 }
 .tx-floor-best {
-  font-size: 0.73em;
-  color: #ffd68a;
+  font-size: 0.75em;
+  color: var(--warn);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

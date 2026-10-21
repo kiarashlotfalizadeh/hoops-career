@@ -6,15 +6,15 @@
 /* ------------------------------------------------------------ familiarity, wherever it shows */
 .tx-fambar {
   display: block;
-  height: 4px;
-  border-radius: 2px;
+  height: 3px;
+  border-radius: 1px;
   background: var(--line-2);
   overflow: hidden;
 }
 .tx-fambar i {
   display: block;
   height: 100%;
-  border-radius: 2px;
+  border-radius: 1px;
   background: var(--text-dim);
   transition: width var(--dur) var(--ease-out);
 }
@@ -50,7 +50,7 @@
 .tx-optfam {
   margin-left: 6px;
   font-size: 11.5px;
-  font-weight: 750;
+  font-weight: 680;
   font-variant-numeric: tabular-nums;
 }
 .chip.on .tx-optfam.good {
@@ -73,29 +73,37 @@
 }
 
 /* ------------------------------------------------------------ the tactic slots */
+/* the three slots as one switch, the way a segmented control is drawn: a sunk track, the slot
+   that's on raised out of it */
 .tx-slots {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: calc(var(--radius-sm) + 3px);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
 }
 .tx-slot {
   position: relative;
   display: flex;
   min-width: 0;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
-  background: var(--raised);
-  transition:
-    border-color var(--dur-fast) ease,
-    background var(--dur-fast) ease;
+  border-radius: var(--radius-sm);
+  transition: background var(--dur-fast) ease;
 }
 .tx-slot.on {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
-.tx-slot.vacant {
-  border-style: dashed;
-  background: transparent;
+/* an empty slot between two: a hairline, so the three read as three */
+.tx-slot:not(.on) + .tx-slot:not(.on)::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 10px;
+  bottom: 10px;
+  width: 1px;
+  background: var(--line-2);
 }
 .tx-slot-b {
   flex: 1;
@@ -104,8 +112,8 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: flex-start;
-  gap: 4px;
-  padding: 8px 10px 9px;
+  gap: 5px;
+  padding: 8px 10px 11px;
   text-align: left;
   border-radius: inherit;
 }
@@ -127,10 +135,11 @@
   position: absolute;
   left: 10px;
   right: 10px;
-  bottom: 0;
-  height: 3px;
-  border-radius: 2px 2px 0 0;
+  bottom: 5px;
+  height: 2px;
+  border-radius: 1px;
   overflow: hidden;
+  background: var(--line);
 }
 .tx-slot-bar i {
   display: block;
@@ -148,27 +157,31 @@
 }
 .tx-slot-l {
   flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+  width: 19px;
+  height: 19px;
+  border-radius: var(--radius-xs);
   display: grid;
   place-items: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 14px;
-  background: var(--surface-3);
+  font-weight: 740;
+  font-size: 13.5px;
+  border: 1px solid var(--line-3);
   color: var(--text-2);
 }
 .tx-slot.on .tx-slot-l {
+  border-color: var(--accent);
   background: var(--accent);
   color: var(--accent-ink);
 }
 .tx-slot-n {
   min-width: 0;
-  font-weight: 700;
-  font-size: 13px;
-  font-stretch: 88%;
+  font-weight: 640;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.tx-slot.on .tx-slot-n {
+  color: var(--text);
 }
 .tx-slot-f {
   display: flex;
@@ -179,8 +192,11 @@
   font-weight: 650;
 }
 .tx-slot-f .num {
-  font-size: 15px;
-  font-weight: 800;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 18px;
+  font-weight: 740;
+  line-height: 1;
 }
 .tx-slot-fl {
   color: var(--text-dim);
@@ -191,7 +207,7 @@
 .tx-slot-f.dim {
   align-items: center;
   gap: 3px;
-  min-height: 22px;
+  min-height: 18px;
 }
 .tx-slot-m {
   position: absolute;
@@ -244,7 +260,7 @@
 }
 /* the formation's pickers over the court */
 .tx-formation .tx-pickrow-v {
-  font-weight: 750;
+  font-weight: 680;
 }
 .tx-shape-gb {
   display: flex;
@@ -255,12 +271,11 @@
 .tx-shape-gb b {
   display: inline-block;
   width: 10px;
-  font-weight: 800;
+  font-weight: 720;
 }
 /* the court: the five's plates, a dot for each one's familiarity (as wide as .tx-floor lets it: on a
    tablet a full-width court would push the bench and the style off the screen) */
 .tx-board.out .tx-floor-p {
-  background: rgba(10, 18, 34, 0.88);
   border-color: color-mix(in srgb, var(--info) 45%, transparent);
 }
 .tx-board.out .tx-floor-p.off {
@@ -276,18 +291,18 @@
   width: 0.5em;
   height: 0.5em;
 }
+/* what the board shows, in the court's corner: a quiet label */
 .tx-board-tag {
   position: absolute;
   right: 8px;
-  bottom: 6px;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: rgba(8, 10, 14, 0.6);
-  color: #dfe5ee;
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  bottom: 8px;
+  padding: 3px 7px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 620;
   pointer-events: none;
 }
 .tx-legend {
@@ -336,8 +351,13 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-weight: 750;
-  font-size: 14.5px;
+  font-family: var(--serif);
+  font-weight: 560;
+  font-size: 18px;
+  letter-spacing: -0.01em;
+}
+.tx-style-row .over {
+  font-family: var(--font);
 }
 .tx-style-row .over {
   min-width: 70px;
@@ -355,7 +375,11 @@
 .tx-phases {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
+  padding: 3px;
+  border-radius: calc(var(--radius-sm) + 3px);
+  border: 1px solid var(--line);
+  background: var(--bg-2);
 }
 @media (min-width: 640px) {
   .tx-phases {
@@ -368,26 +392,20 @@
   gap: 4px;
   min-width: 0;
   padding: 8px 10px 9px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--line-2);
-  background: var(--raised);
+  border-radius: var(--radius-sm);
   text-align: left;
-  transition:
-    border-color var(--dur-fast) ease,
-    background var(--dur-fast) ease;
+  transition: background var(--dur-fast) ease;
 }
 .tx-phase:not(.on):active {
   background: var(--surface);
 }
 .tx-phase.on {
-  border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+  background: var(--surface-3);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 .tx-phase-n {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-dim);
   white-space: nowrap;
   overflow: hidden;
@@ -402,12 +420,15 @@
   gap: 6px;
 }
 .tx-phase-v .num {
-  font-size: 17px;
-  font-weight: 800;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 20px;
+  font-weight: 740;
+  line-height: 1;
 }
 .tx-phase-l {
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .tx-phase-dims {
@@ -419,7 +440,7 @@
   color: var(--text-dim);
 }
 .tx-phase-dims b {
-  font-weight: 800;
+  font-weight: 720;
 }
 
 /* ------------------------------------------------------------ Players: both roles on each row */
@@ -441,8 +462,8 @@
 .tx-prow-top .tag {
   flex: none;
   height: 18px;
-  padding: 0 6px;
-  font-size: 9.5px;
+  padding: 0 5px;
+  font-size: 11px;
 }
 .tx-prow-roles {
   display: flex;
@@ -464,28 +485,22 @@
   flex: none;
   font-size: 10px;
 }
+/* which end a role line is for: its letter, quiet, in a column of its own */
 .tx-prow-k {
   flex: none;
-  width: 15px;
-  height: 15px;
-  border-radius: 4px;
-  display: grid;
-  place-items: center;
-  font-size: 9.5px;
-  font-weight: 800;
-  background: color-mix(in srgb, var(--accent) 22%, transparent);
-  color: var(--accent-text);
-}
-.tx-prow-k.def {
-  background: color-mix(in srgb, var(--info) 22%, transparent);
-  color: var(--info);
+  width: 13px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-dim);
 }
 .tx-prow-fam {
   flex: none;
-  min-width: 36px;
+  min-width: 38px;
   text-align: right;
-  font-size: 13px;
-  font-weight: 800;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
+  font-weight: 720;
 }
 
 /* ------------------------------------------------------------ the Familiarity tab */
@@ -524,8 +539,8 @@
 .tx-ring-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 24px;
+  font-weight: 760;
+  font-size: 26px;
   line-height: 1;
 }
 .tx-ring-v small {
@@ -553,7 +568,7 @@
   color: var(--text-dim);
 }
 .tx-famends b {
-  font-weight: 800;
+  font-weight: 720;
 }
 .tx-fam-ends {
   display: grid;
@@ -578,12 +593,15 @@
   gap: 8px;
 }
 .tx-famrow-n {
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: 640;
+  font-size: 14.5px;
 }
 .tx-famrow-v {
-  font-weight: 800;
-  font-size: 14px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 720;
+  font-size: 17px;
+  line-height: 1;
 }
 .tx-famrow-s {
   display: flex;
@@ -615,8 +633,8 @@
 .tx-famp .tag {
   flex: none;
   height: 18px;
-  padding: 0 6px;
-  font-size: 9.5px;
+  padding: 0 5px;
+  font-size: 11px;
 }
 .tx-famp-c {
   flex: none;
@@ -625,8 +643,10 @@
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
-  font-size: 13px;
-  font-weight: 800;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
+  font-weight: 720;
 }
 .tx-famp-c .tx-fambar {
   width: 100%;

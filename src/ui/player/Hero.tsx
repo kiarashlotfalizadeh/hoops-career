@@ -1,7 +1,8 @@
-// A player's slab, in his team's colours (a neutral kit without one): number, position and status
-// over the mark, the jersey and the name, OVR over POT with his change this season, his
-// particulars, where his career stands, his tags (development, archetype, tier, injury, the award
-// races he's in) and his per-game line.
+// A player's hero: a slab in his team's colours (a neutral kit without one) with his number,
+// position and status, the jersey, the name and his OVR as a big figure (POT beside its label, his
+// change this season under it); then, on the page, his particulars, where his career stands, his
+// tags (development, archetype, tier, injury, the award races he's in) and his per-game line.
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../../core/types';
@@ -12,7 +13,7 @@ import { awardRaces } from '../../core/league/awards';
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { Avatar, Statline, Tag, pct } from '../components/ui';
-import { OvrBadge } from '../components/OvrKey';
+import { OvrSheet } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
 import { slabVars } from '../teamColors';
@@ -77,25 +78,23 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
       })
     : [];
   return (
-    <section className="slab tm-hero" style={slabVars(colors)} aria-label={`${p.firstName} ${p.lastName}`}>
-      {team && (
-        <span className="slab-mark">
-          <TeamLogo tid={team.tid} size={190} decorative />
-        </span>
-      )}
-      <div className="tm-over">{[p.jersey ? `#${p.jersey}` : '', p.pos, statusLine(league, p)].filter(Boolean).join(' · ')}</div>
-      <div className="tm-id">
-        <Avatar p={p} size="lg" />
-        <div className="tm-names">
-          <span className="tm-first">{p.firstName}</span>
-          <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
-            {p.lastName}
-          </h1>
+    <section className="tm-hero" aria-label={`${p.firstName} ${p.lastName}`}>
+      {/* his identity in his team's colours: who he plays for, the jersey, the name, the figure */}
+      <div className="slab tm-hero-slab" style={slabVars(colors)}>
+        <div className="tm-over">
+          {team && <TeamLogo tid={team.tid} size={18} decorative />}
+          <span>{[p.jersey ? `#${p.jersey}` : '', p.pos, statusLine(league, p)].filter(Boolean).join(' · ')}</span>
         </div>
-        {/* a tap: the OVR ladder, his band marked; under it, his change this season */}
-        <div className="dv-badge">
-          <OvrBadge ovr={p.ovr} pot={p.pot} size="lg" />
-          <DevDelta d={ovrChange(league, p)} since={baseLabel(devBase(league, p))} size="md" />
+        <div className="tm-id">
+          <Avatar p={p} size="lg" />
+          <div className="tm-names">
+            <span className="tm-first">{p.firstName}</span>
+            <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+              {p.lastName}
+            </h1>
+          </div>
+          {/* a tap: the OVR ladder, his band marked; under it, his change this season */}
+          <HeroOvr league={league} p={p} />
         </div>
       </div>
       {/* each particular whole on its line, the dots only between two on the same line */}
@@ -138,21 +137,44 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
           </Link>
         ))}
       </div>
-      <Statline
-        items={[
-          { k: 'PTS', v: line ? f1(line.pts) : '—' },
-          { k: 'REB', v: line ? f1(line.reb) : '—' },
-          { k: 'AST', v: line ? f1(line.ast) : '—' },
-          // no shots, no percentage: "—", not 0.0
-          { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
-        ]}
-      />
-      {/* what the figures are, always: this season's, or his last one's before he plays */}
-      {line ? (
-        <div className="tm-hero-note">
-          {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
-        </div>
-      ) : null}
+      <div className="tm-hero-figs">
+        <Statline
+          items={[
+            { k: 'PTS', v: line ? f1(line.pts) : '—' },
+            { k: 'REB', v: line ? f1(line.reb) : '—' },
+            { k: 'AST', v: line ? f1(line.ast) : '—' },
+            // no shots, no percentage: "—", not 0.0
+            { k: 'TS%', v: line && (line.fga || line.fta) ? pct(line.tsPct) : '—' },
+          ]}
+        />
+        {/* what the figures are, always: this season's, or his last one's before he plays */}
+        {line ? (
+          <div className="tm-hero-note">
+            {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+          </div>
+        ) : null}
+      </div>
     </section>
+  );
+}
+
+/** His OVR as the slab's big figure, a rule in his tier's colour under it, POT beside its label and his change this season; a tap opens the ladder. */
+function HeroOvr({ league, p }: { league: League; p: Player }) {
+  const [open, setOpen] = useState(false);
+  const ovr = Math.round(p.ovr);
+  return (
+    <div className="tm-hovr">
+      <button type="button" className="tm-hovr-b" aria-haspopup="dialog" onClick={() => setOpen(true)} aria-label={`OVR ${ovr}, ${tierLabel(ovr)}; potential ${p.pot}`}>
+        <span className="tm-hovr-v num" aria-hidden="true">
+          {ovr}
+        </span>
+        <span className="tm-hovr-rule" style={{ background: ovrColor(ovr) }} aria-hidden="true" />
+        <span className="tm-hovr-k" aria-hidden="true">
+          OVR · POT <b className="num">{p.pot}</b>
+        </span>
+      </button>
+      <DevDelta d={ovrChange(league, p)} since={baseLabel(devBase(league, p))} size="md" />
+      <OvrSheet open={open} onClose={() => setOpen(false)} ovr={p.ovr} pot={p.pot} />
+    </div>
   );
 }

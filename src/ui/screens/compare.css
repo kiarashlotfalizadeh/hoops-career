@@ -25,15 +25,17 @@
   column-gap: 10px;
   row-gap: 6px;
 }
-/* a side's team colour: a thin edge along the top of its head (none for a player without a team) */
+/* a side's team colour: its trim as a rule along the top of its head (a hairline for a player
+   without a team) */
 .cmp-head {
-  --cmp-edge: var(--line-2);
+  --cmp-edge: var(--line-3);
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 7px;
   min-width: 0;
-  padding: 12px;
-  border-top: 3px solid var(--cmp-edge);
+  padding: 12px 12px 12px;
+  box-shadow: inset 0 3px 0 var(--cmp-edge);
+  padding-top: 15px;
 }
 .cmp-head.a {
   grid-column: 1;
@@ -75,26 +77,21 @@
   gap: 3px;
 }
 .cmp-ovr .pot {
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1;
 }
+/* "vs" between the jerseys, in the serif's italic */
 .cmp-vs-badge {
   position: absolute;
-  top: 22px;
+  top: 28px;
   left: 50%;
   z-index: 1;
   transform: translateX(-50%);
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: var(--bg);
-  border: 1px solid var(--line-2);
-  font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 13px;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1;
   color: var(--text-dim);
 }
 .cmp-name {
@@ -110,18 +107,19 @@
   font-weight: 600;
   color: var(--text-2);
 }
-/* 22px, or smaller until the name's longest run (--run letters) fits the column */
+/* the serif, 25px, or smaller until the name's longest run (--run letters) fits the column */
 .cmp-last {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 20px;
-  font-size: clamp(15px, 100cqi / (var(--run, 8) * 0.62), 22px);
-  font-weight: 800;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
+  font-family: var(--serif);
+  font-size: 22px;
+  font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.5), 25px);
+  font-weight: 560;
+  line-height: 1.02;
+  letter-spacing: -0.015em;
   /* a long one wraps (at its hyphen if it has one) rather than lose its end */
   overflow-wrap: anywhere;
+}
+.cmp-name {
+  color: var(--text);
 }
 .cmp-team {
   display: flex;
@@ -154,8 +152,11 @@
   border-top: 1px solid var(--line);
 }
 .cmp-deal-m {
-  font-weight: 750;
-  font-size: 14px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 720;
+  font-size: 18px;
+  line-height: 1.1;
 }
 .cmp-deal-s {
   font-size: 11.5px;
@@ -185,20 +186,17 @@
   grid-template-columns: minmax(0, 1fr) var(--cmp-l) minmax(0, 1fr);
   align-items: center;
   /* the cards' border and padding, so its columns line up with the tables' */
-  padding: 6px 14px;
-  border: 1px solid var(--line-2);
-  border-radius: var(--radius-md);
+  padding: 8px 15px 7px;
+  border-bottom: 1px solid var(--line-2);
   /* solid fallback first, as the top bar does */
-  background: rgba(22, 29, 40, 0.96);
-  background: color-mix(in srgb, var(--surface-2) 96%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 16px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 560;
+  letter-spacing: -0.01em;
   text-align: center;
 }
 /* a long name wraps (at its hyphen if it has one), and steps down until its longest run fits; its
@@ -209,15 +207,18 @@
   container-type: inline-size;
   overflow-wrap: anywhere;
   line-height: 1.15;
-  padding-bottom: 3px;
-  background: linear-gradient(var(--cmp-edge), var(--cmp-edge)) center bottom / 28px 2px no-repeat;
 }
+/* the name, its team colour as a short rule under it */
 .cmp-side > span {
-  font-size: clamp(11px, 100cqi / (var(--run, 8) * 0.62), 16px);
+  display: inline-block;
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--cmp-edge);
+  font-size: clamp(12px, 100cqi / (var(--run, 8) * 0.5), 17px);
 }
 .cmp-vs {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 450;
   color: var(--text-dim);
 }
 
@@ -257,10 +258,12 @@
   color: var(--text-dim);
   text-align: center;
 }
-.cmp-v {
+.cmp-val {
   text-align: center;
-  font-size: 14.5px;
-  font-weight: 650;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 17px;
+  font-weight: 640;
   color: var(--text-2);
   white-space: nowrap;
   overflow: hidden;
@@ -268,26 +271,24 @@
 }
 .cmp-n {
   display: inline-block;
-  padding: 1px 8px;
-  border-radius: 7px;
+  padding: 1px 7px;
+  border-radius: var(--radius-xs);
 }
-/* the better side: the good colour in a pill (ties and rows with no better way stay plain) */
+/* the better side: its figure in the good colour on a faint wash (ties and rows with no better way
+   stay plain) */
 .cmp-t .win .cmp-n {
   color: var(--good);
-  background: color-mix(in srgb, var(--good) 15%, transparent);
-  font-weight: 800;
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+  font-weight: 740;
 }
 .cmp-t .none {
   color: var(--text-dim);
 }
 .cmp-group th {
-  padding: 12px 0 5px;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-2);
+  padding: 14px 0 6px;
+  font-size: 12.5px;
+  font-weight: 680;
+  color: var(--text);
   text-align: center;
 }
 .cmp-t tbody tr.cmp-group:first-child th {
@@ -328,8 +329,10 @@
 .cmp-bar .cmp-n {
   flex: none;
   min-width: 46px;
-  font-size: 13.5px;
-  font-weight: 650;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
+  font-weight: 640;
   text-align: center;
 }
 .cmp-track {
@@ -353,10 +356,10 @@
     height: 56px;
   }
   .cmp-last {
-    font-size: clamp(15px, 100cqi / (var(--run, 8) * 0.62), 26px);
+    font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.5), 30px);
   }
-  .cmp-v {
-    font-size: 15px;
+  .cmp-val {
+    font-size: 18px;
   }
   .cmp-l {
     font-size: 13px;

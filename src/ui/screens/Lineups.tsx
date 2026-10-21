@@ -186,7 +186,7 @@ export default function Lineups() {
             <Empty>Nothing with {minMin}+ minutes. Lower the minimum in the filters.</Empty>
           </div>
         ) : (
-          <div className="card flush">
+          <div className="tm-lulist">
             <div className="list">
               {view === 'onoff'
                 ? shownSplits.slice(0, limit).map((r) => {

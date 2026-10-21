@@ -1,4 +1,4 @@
-/* The keys to what colours mean: the OVR tiers (OvrKey, its sheet, OvrBadge) and a ratings
+/* The keys to what colours mean: the OVR tiers (OvrKey and its sheet) and a ratings
    table's bands (RatingKey). */
 .ok-key {
   position: relative;
@@ -20,10 +20,8 @@
 }
 .ok-key-k {
   margin-right: 3px;
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: 620;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
@@ -33,10 +31,10 @@
   min-width: 25px;
   height: 18px;
   padding: 0 3px;
-  border-radius: 4px;
+  border-radius: var(--radius-xs);
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
+  font-weight: 740;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -72,10 +70,14 @@
 .ok-sw {
   width: 30px;
   height: 22px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
 }
 .ok-span {
-  font-weight: 700;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 16px;
+  font-weight: 720;
+  font-variant-numeric: tabular-nums;
 }
 .ok-names {
   font-size: 14px;
@@ -87,14 +89,6 @@
 }
 
 /* a badge that opens the ladder: a plain button around OVR over POT */
-.ok-badge {
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-}
-
 /* a ratings table's key (RatingKey): the colour bands, the column names behind its "?" */
 .ok-rkey {
   display: inline-flex;

@@ -1,15 +1,21 @@
 /* Offense, Defense and Game Mgmt's own controls: the hunt and big-man notes, the set package's
    checkbox rows, and picker rows that open a sheet of choices. */
+/* a line that goes somewhere (the next game's plan, Players): quiet text on a step-up ground */
 .tx-hunt {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-top: -6px;
-  padding: 8px 10px;
+  padding: 9px 10px 9px 12px;
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--info) 10%, transparent);
+  background: var(--surface);
   font-size: 12.5px;
+  line-height: 1.4;
   color: var(--text-2);
+  transition: background var(--dur-fast) ease;
+}
+.tx-hunt:active {
+  background: var(--surface-2);
 }
 .tx-hunt svg {
   flex: none;
@@ -52,8 +58,7 @@
 }
 /* a set in the package: its row lit as a chosen playbook's is */
 .tx-set.on {
-  background: color-mix(in srgb, var(--accent) 9%, var(--raised));
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-2);
 }
 .tx-set-pick .lr-name,
 .tx-set-pick .lr-meta {
@@ -96,14 +101,14 @@
 }
 .tx-pickrow-l {
   flex: none;
-  font-weight: 650;
+  font-weight: 620;
   font-size: 14.5px;
 }
 .tx-pickrow-v {
   flex: 1;
   min-width: 0;
   text-align: right;
-  font-weight: 700;
+  font-weight: 640;
   font-size: 14px;
   color: var(--accent-text);
 }
@@ -131,13 +136,13 @@
 .tx-opt:active {
   background: var(--surface);
 }
+/* the chosen option: a step up from the ground, its check in the row's end */
 .tx-opt.on {
-  background: color-mix(in srgb, var(--accent) 12%, var(--raised));
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-2);
 }
 .tx-opt-l {
   display: block;
-  font-weight: 700;
+  font-weight: 640;
   font-size: 14.5px;
 }
 .tx-opt-s {
@@ -151,5 +156,5 @@
 }
 .tx-opt-c {
   flex: none;
-  color: var(--accent-text);
+  color: var(--text);
 }

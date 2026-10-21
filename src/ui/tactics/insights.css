@@ -7,11 +7,11 @@
 }
 .tx-imp-v {
   flex: none;
-  width: 40px;
+  width: 44px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 20px;
+  font-weight: 740;
+  font-size: 22px;
   line-height: 1;
 }
 .tx-imp-t {

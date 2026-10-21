@@ -11,72 +11,127 @@
 .tm-bar .back {
   margin-left: -10px;
 }
+/* the hero: the slab carries who he is; his particulars, tags and line sit under it on the page */
 .tm-hero {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px 16px;
 }
-/* the faded mark sits behind the badge, clear of the figures */
-.tm-hero .slab-mark {
-  top: 18px;
-  bottom: auto;
-  right: -44px;
-  opacity: 0.13;
+.tm-hero-slab {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 15px 16px 18px;
 }
 .tm-over {
-  font-size: 11.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-2);
-  padding-right: 18px;
+}
+.tm-over > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-over > :first-child:not(span) {
+  flex: none;
 }
 .tm-id {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 12px;
 }
 .tm-id .avatar.lg {
-  width: 68px;
-  height: 68px;
-  margin: -4px 0 -4px -6px;
+  align-self: center;
+  width: 64px;
+  height: 64px;
+  margin: -2px 0 -2px -4px;
 }
 .tm-names {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 3px;
   container-type: inline-size;
 }
 .tm-first {
   font-size: 15px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
   line-height: 1.15;
 }
-/* 34px, or smaller until the name's longest run (--run letters, at most about 0.74em each in capitals) fits the column */
+/* the serif, 40px, or smaller until the name's longest run (--run letters, about 0.5em each) fits
+   the column whole */
 .tm-last {
-  font-size: 28px;
-  font-size: clamp(18px, 100cqi / (var(--run, 8) * 0.74), 34px);
-  line-height: 0.95;
-  letter-spacing: 0.01em;
+  font-family: var(--serif);
+  font-size: 32px;
+  font-size: clamp(22px, 100cqi / (var(--run, 8) * 0.5), 40px);
+  font-weight: 560;
+  line-height: 0.98;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
-.tm-hero .tm-ovr {
-  gap: 4px;
+/* his OVR: a big condensed figure in paper, his tier's colour as a rule under it */
+.tm-hovr {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
 }
-.tm-hero .tm-ovr .pot {
-  font-size: 11px;
-  color: var(--text-2);
+.tm-hovr-b {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 56px;
+  text-align: right;
+  color: inherit;
+}
+.tm-hovr-b::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.tm-hovr-v {
+  font-family: var(--display);
+  font-stretch: 68%;
+  font-weight: 760;
+  font-size: 62px;
+  line-height: 0.8;
+  letter-spacing: -0.02em;
+}
+.tm-hovr-rule {
+  display: block;
+  height: 4px;
+  border-radius: 1px;
+}
+.tm-hovr-k {
+  font-size: 11.5px;
+  font-weight: 620;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.tm-hovr-k b {
+  font-weight: 720;
+  color: var(--text);
+}
+.tm-hovr-b:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 4px;
+  border-radius: var(--radius-xs);
 }
 .tm-meta {
-  font-size: 13px;
+  font-size: 13.5px;
   color: var(--text-2);
-  line-height: 1.35;
-  margin-top: -2px;
+  line-height: 1.4;
   overflow: hidden;
 }
 /* a dot before each particular, pulled into the gap: the one that starts a line hangs past the
@@ -94,6 +149,7 @@
   display: inline-block;
   width: 14px;
   text-align: center;
+  color: var(--text-dim);
 }
 .tm-tags {
   display: flex;
@@ -102,20 +158,9 @@
 }
 /* his tier, with its badge's colour as a dot */
 .tm-tier i {
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-}
-/* signal tags on a team's colours: a dark ground, so the colour reads whatever the slab */
-.tm-hero .tag.bad,
-.tm-hero .tag.warn {
-  background: rgba(0, 0, 0, 0.42);
-}
-.tm-hero .tag.bad {
-  color: #ffa3ad;
-}
-.tm-hero .tag.warn {
-  color: var(--tier-elite);
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 a.tag {
   position: relative;
@@ -125,12 +170,18 @@ a.tag::after {
   position: absolute;
   inset: -12px -2px;
 }
-.tm-hero .statline {
+/* his line a game: big figures under a hairline, what they are under them */
+.tm-hero-figs {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding-top: 12px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-2);
+}
+.tm-hero-figs .statline .v {
+  font-size: 34px;
 }
 .tm-hero-note {
-  margin-top: -6px;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--text-dim);
 }

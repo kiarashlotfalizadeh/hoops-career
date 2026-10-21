@@ -18,7 +18,7 @@ function DevRow({ league, p, why }: { league: League; p: Player; why: string }) 
   return (
     <Link to={`/player/${p.pid}?tab=dev`} className="dv-row">
       <Avatar p={p} />
-      <span className="col" style={{ gap: 1, minWidth: 0 }}>
+      <span className="dv-row-t">
         <span className="dv-row-name">
           <span className="ellipsis">{playerName(p)}</span>
           {tag && <DevTagChip tag={tag} />}
@@ -71,7 +71,7 @@ export default function GrowthView() {
           </Help>
         }
       >
-        <div className="card dv-coach">
+        <div className="dv-coach">
           <div className="dv-coach-h">{r.check ? `After the ${nth} check-in` : league.phase === 'preseason' ? 'The summer’s work is in' : 'Between check-ins'}</div>
           <p>
             {r.setup}
@@ -82,13 +82,11 @@ export default function GrowthView() {
 
       {r.watch && (
         <Section title="The one to watch">
-          <Link to={`/player/${r.watch.pid}?tab=dev`} className="card dv-watch">
+          <Link to={`/player/${r.watch.pid}?tab=dev`} className="dv-watch">
             <Avatar p={league.players[r.watch.pid]} size="lg" />
             <span className="dv-watch-t">
               <span className="dv-watch-n">{playerName(league.players[r.watch.pid])}</span>
-              <span className="dv-watch-why" style={{ display: 'block' }}>
-                {r.watch.why[0].toUpperCase() + r.watch.why.slice(1)}.
-              </span>
+              <span className="dv-watch-why">{r.watch.why[0].toUpperCase() + r.watch.why.slice(1)}.</span>
             </span>
             <Ovr v={league.players[r.watch.pid].ovr} />
           </Link>
@@ -97,13 +95,13 @@ export default function GrowthView() {
 
       {groups.map((g) => (
         <Section key={g} title={`${GROUP_LABEL[g]} · ${r[g].length}`}>
-          <div className="card flush">{r[g].map(row)}</div>
+          <div className="dv-list">{r[g].map(row)}</div>
         </Section>
       ))}
 
       {r.rookies.length > 0 && (
         <Section title="Rookie watch">
-          <div className="card flush">
+          <div className="dv-list">
             {r.rookies.map((x) => (
               <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={`${rookieText(x.line)[0].toUpperCase()}${rookieText(x.line).slice(1)}. ${x.dev.reason}`} />
             ))}
@@ -126,7 +124,7 @@ export default function GrowthView() {
 
       {around.length > 0 && (
         <Section title="Breakouts around the league">
-          <div className="card flush">
+          <div className="dv-list">
             {around.map((p) => (
               <DevRow key={p.pid} league={league} p={p} why={`${league.teams[p.tid].region} ${league.teams[p.tid].name}`} />
             ))}

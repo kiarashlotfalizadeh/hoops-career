@@ -16,7 +16,7 @@ import { DevDelta, signedInt } from './dev';
 
 const LABEL = new Map(RATING_META.map((m) => [m.key as RatingKey, m.label]));
 
-/** Where he is against the ceiling scouts see: a bar of what he has, the striped rest of the way. */
+/** Where he is against the ceiling scouts see: a bar of what he has, the rest of the way in a quieter tone. */
 function Climb({ p }: { p: Player }) {
   // the scale runs from 40 (the bottom of the display scale) to 99
   const at = (v: number) => `${((v - 40) / 59) * 100}%`;
@@ -48,7 +48,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
   return (
     <>
       <Section title="Career arc">
-        <div className="card">
+        <div className="dv-arc-wrap">
           {hist.length > 1 || (hist.length === 1 && change) ? (
             <ArcChart league={league} p={p} />
           ) : (
@@ -71,7 +71,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
             </Help>
           }
         >
-          <div className="card dv-pot">
+          <div className="dv-pot">
             <div className="dv-pot-top">
               <span className="dv-pot-fig num" style={{ color: ovrColor(p.pot) }}>
                 {p.pot}
@@ -89,8 +89,8 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
 
       {(ups.length > 0 || downs.length > 0) && (
         <Section title={`What moved ${since}`}>
-          <div className="card col" style={{ gap: 10 }}>
-            <div className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+          <div className="dv-moved">
+            <div className="dv-moved-ovr">
               <span className="small dim">OVR</span>
               <b className="num">{p.ovr}</b>
               {change ? <DevDelta d={change} since={since} size="md" /> : <span className="small dim">no change</span>}
@@ -128,7 +128,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
           </Help>
         }
       >
-        <div className="card tm-outlook">
+        <div className="tm-outlook">
           <div className="tm-outlook-l">
             {p.tid === RETIRED
               ? `Retired${p.retiredSeason ? ` after the ${seasonLabel(p.retiredSeason)} season` : ''}.`
@@ -156,7 +156,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
       </Section>
       {mine && (
         <Section title="Training focus">
-          <div className="card tm-train">
+          <div className="tm-train">
             <Chips
               label="Training focus"
               value={p.training}

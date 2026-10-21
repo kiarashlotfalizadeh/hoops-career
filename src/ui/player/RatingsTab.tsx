@@ -2,7 +2,7 @@
 // back), then every rating on the 40-99 scale by group with an arrow for its change this season; a
 // tap opens what a rating does. The changes are the development watch's: since he ended last season
 // (the summer included), or since opening night in a league's first season.
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import type { League, Player, RatingKey } from '../../core/types';
 import { RATING_META, attrDisplay, ovrWeights } from '../../core/ratings';
 import { ratingMeans } from '../../core/league/progression';
@@ -52,7 +52,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
   return (
     <>
       <Section title={`Why he's a ${p.ovr}`}>
-        <div className="card tm-why">
+        <div className="tm-why">
           <div className="tm-why-sum">
             {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} ${contribs.gap > 0 ? 'above' : 'below'}`} an average player ({AVERAGE_OVR} <Term id="ovr">OVR</Term>)
           </div>
@@ -78,33 +78,31 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
           </div>
         </div>
       </Section>
-      <div className="card flush">
-        <div className="list">
-          {RATING_GROUPS.map((g) => (
-            <Fragment key={g}>
-              <div className="list-divider">{g}</div>
-              <div className="tm-rt-grid">
-                {RATING_META.filter((m) => m.group === g).map((m) => {
-                  const val = attrDisplay(p.ratings[m.key as RatingKey]);
-                  const on = open === m.key;
-                  return (
-                    <div key={m.key} className="tm-rt">
-                      <button className="tm-rt-row" onClick={() => setOpen(on ? null : m.key)} aria-expanded={on}>
-                        <span className="tm-rt-l">{m.label}</span>
-                        <Bar value={((val - 40) / 59) * 100} color={RATING_COLOR[ratingTone(val)]} height={3} />
-                        <span className="tm-rt-v num">{val}</span>
-                        <span className="tm-rt-d num">
-                          <DevDelta d={deltas[m.key as RatingKey] ?? 0} since={since} />
-                        </span>
-                      </button>
-                      {on && <div className="tm-rt-help fade-in">{m.help}</div>}
-                    </div>
-                  );
-                })}
-              </div>
-            </Fragment>
-          ))}
-        </div>
+      <div className="tm-rt-sheet">
+        {RATING_GROUPS.map((g) => (
+          <section key={g} className="tm-rt-g" aria-label={g}>
+            <h4 className="tm-rt-gh">{g}</h4>
+            <div className="tm-rt-grid">
+              {RATING_META.filter((m) => m.group === g).map((m) => {
+                const val = attrDisplay(p.ratings[m.key as RatingKey]);
+                const on = open === m.key;
+                return (
+                  <div key={m.key} className="tm-rt">
+                    <button className="tm-rt-row" onClick={() => setOpen(on ? null : m.key)} aria-expanded={on}>
+                      <span className="tm-rt-l">{m.label}</span>
+                      <Bar value={((val - 40) / 59) * 100} color={RATING_COLOR[ratingTone(val)]} height={3} />
+                      <span className="tm-rt-v num">{val}</span>
+                      <span className="tm-rt-d num">
+                        <DevDelta d={deltas[m.key as RatingKey] ?? 0} since={since} />
+                      </span>
+                    </button>
+                    {on && <div className="tm-rt-help fade-in">{m.help}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
       <div className="tm-foot">
         <RatingBands named />. Arrows: the change {since}. Tap a rating for what it does.

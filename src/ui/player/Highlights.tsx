@@ -101,7 +101,7 @@ export function SeasonHighlights({ league, p }: { league: League; p: Player }) {
   if (!list.length) return null;
   return (
     <Section title="This season’s highlights">
-      <div className="card flush dv-hl">
+      <div className="dv-hl">
         {list.map((h) => (
           <Row key={h.key} h={h} />
         ))}
@@ -127,7 +127,7 @@ export function RookieWatch({ league, p }: { league: League; p: Player }) {
         </Link>
       }
     >
-      <div className="card">
+      <div>
         {/* (his points and rebounds are on the slab: here what a rookie's season is measured by) */}
         <Statline
           items={[

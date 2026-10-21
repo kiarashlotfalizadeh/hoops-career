@@ -6,7 +6,7 @@
   display: inline-flex;
   align-items: center;
   gap: 1px;
-  font-weight: 800;
+  font-weight: 720;
   font-size: 11px;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -23,7 +23,7 @@
   color: var(--bad);
 }
 .dv-tag {
-  font-weight: 700;
+  font-weight: 620;
 }
 
 /* ------------------------------------------------------------ roster rows: the change under the badge */
@@ -37,30 +37,28 @@
   font-size: 10px;
 }
 
-/* ------------------------------------------------------------ the slab */
-.dv-badge {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.dv-badge .dv-d {
-  padding: 2px 6px;
+/* ------------------------------------------------------------ the hero */
+/* his change this season, under his OVR on the slab: a dark chip so the signal reads on any colour */
+.tm-hovr .dv-d {
+  padding: 2px 5px;
   border-radius: var(--radius-xs);
-  background: rgba(0, 0, 0, 0.36);
+  background: rgba(0, 0, 0, 0.32);
 }
-.dv-badge .dv-d.up {
-  color: #7ee2a8;
+.tm-hovr .dv-d.up {
+  color: color-mix(in srgb, var(--good) 70%, white);
 }
-.dv-badge .dv-d.down {
-  color: #ffa3ad;
+.tm-hovr .dv-d.down {
+  color: color-mix(in srgb, var(--bad) 60%, white);
 }
+/* where his career stands: a line in the serif, under his particulars */
 .dv-story {
-  font-size: 13px;
-  font-weight: 650;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 17px;
+  font-weight: 480;
   color: var(--text);
-  line-height: 1.35;
-  margin-top: -4px;
+  line-height: 1.3;
+  margin-top: -2px;
 }
 
 /* ------------------------------------------------------------ growth tab */
@@ -110,9 +108,9 @@
 .dv-pot-fig {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 40px;
-  line-height: 0.9;
+  font-weight: 760;
+  font-size: 54px;
+  line-height: 0.85;
 }
 .dv-pot-l {
   display: flex;
@@ -121,15 +119,16 @@
   min-width: 0;
 }
 .dv-pot-k {
-  font-size: 11.5px;
-  font-weight: 750;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12.5px;
+  font-weight: 620;
   color: var(--text-dim);
 }
 .dv-pot-tier {
-  font-weight: 750;
-  font-size: 15px;
+  font-family: var(--serif);
+  font-weight: 560;
+  font-size: 22px;
+  letter-spacing: -0.012em;
+  line-height: 1.1;
 }
 .dv-pot-text {
   font-size: 13.5px;
@@ -140,8 +139,8 @@
 /* the climb to his ceiling: where he is, where he could get */
 .dv-climb {
   position: relative;
-  height: 8px;
-  border-radius: 4px;
+  height: 6px;
+  border-radius: 2px;
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -150,10 +149,11 @@
   top: 0;
   bottom: 0;
   left: 0;
-  border-radius: 4px;
+  border-radius: 2px;
 }
+/* the room to his ceiling: his potential's tier colour, quiet */
 .dv-climb .room {
-  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--tier-star) 45%, transparent) 0 4px, transparent 4px 8px);
+  background: color-mix(in srgb, var(--tier-star) 38%, transparent);
 }
 .dv-climb .now {
   background: var(--accent);
@@ -163,6 +163,22 @@
   justify-content: space-between;
   font-size: 11.5px;
   color: var(--text-dim);
+}
+.dv-moved {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dv-moved-ovr {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.dv-moved-ovr b {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 22px;
+  font-weight: 740;
 }
 .dv-moves {
   display: flex;
@@ -181,9 +197,9 @@
 .dv-hl-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: var(--row-min);
-  padding: var(--row-py) var(--row-px);
+  padding: 9px 0;
   border-bottom: 1px solid var(--line);
   color: inherit;
   text-decoration: none;
@@ -191,38 +207,43 @@
 .dv-hl-row:last-child {
   border-bottom: none;
 }
+a.dv-hl-row {
+  border-radius: var(--radius-xs);
+}
 a.dv-hl-row:active {
   background: var(--surface);
 }
 .dv-hl-fig {
   flex: none;
-  width: 44px;
+  width: 46px;
   text-align: center;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 22px;
+  font-weight: 740;
+  font-size: 26px;
   line-height: 1;
 }
 .dv-hl-fig small {
   display: block;
-  font-stretch: 100%;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-family: var(--font);
+  font-stretch: var(--text-w);
+  font-size: 11px;
+  font-weight: 620;
   color: var(--text-dim);
-  text-transform: uppercase;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .dv-hl-t {
   flex: 1;
   min-width: 0;
-  font-size: 14px;
+  font-size: 14.5px;
+  font-weight: 600;
   line-height: 1.35;
 }
 .dv-hl-t .dim {
   display: block;
+  margin-top: 1px;
   font-size: 12.5px;
+  font-weight: 400;
   color: var(--text-dim);
 }
 
@@ -233,8 +254,11 @@ a.dv-hl-row:active {
   gap: 6px;
 }
 .dv-coach-h {
-  font-weight: 750;
-  font-size: 16px;
+  font-family: var(--serif);
+  font-weight: 560;
+  font-size: 21px;
+  letter-spacing: -0.012em;
+  line-height: 1.15;
 }
 .dv-coach p {
   margin: 0;
@@ -242,33 +266,48 @@ a.dv-hl-row:active {
   color: var(--text-2);
   line-height: 1.45;
 }
+/* the one to watch: a feature, flat on the page: the big jersey, his name in the serif, the why */
 .dv-watch {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
+  padding: 4px 0;
   color: inherit;
   text-decoration: none;
+  border-radius: var(--radius-sm);
+}
+.dv-watch:active {
+  background: var(--surface);
 }
 .dv-watch-t {
   flex: 1;
   min-width: 0;
 }
 .dv-watch-n {
-  font-weight: 800;
-  font-size: 17px;
+  font-family: var(--serif);
+  font-weight: 560;
+  font-size: 21px;
+  letter-spacing: -0.012em;
+  line-height: 1.1;
 }
 .dv-watch-why {
+  display: block;
+  margin-top: 3px;
   font-size: 13px;
   color: var(--text-2);
   line-height: 1.4;
 }
+/* the report's players: flat on the page, on hairlines, as the roster is */
+.dv-list {
+  border-top: 1px solid var(--line-3);
+}
 .dv-row {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto;
-  column-gap: 10px;
+  column-gap: 12px;
   align-items: center;
   min-height: var(--row-min);
-  padding: var(--row-py) var(--row-px);
+  padding: 10px 0;
   color: inherit;
   text-decoration: none;
   border-bottom: 1px solid var(--line);
@@ -278,6 +317,12 @@ a.dv-hl-row:active {
 }
 .dv-row:active {
   background: var(--surface);
+}
+.dv-row-t {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 .dv-row > .avatar {
   width: 34px;
@@ -290,7 +335,7 @@ a.dv-hl-row:active {
   flex-wrap: wrap;
   align-items: center;
   gap: 3px 6px;
-  font-weight: 700;
+  font-weight: 660;
   font-size: 15px;
   line-height: 1.2;
 }

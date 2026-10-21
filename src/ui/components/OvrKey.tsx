@@ -3,7 +3,7 @@
 // what OVR and POT are. OvrBadge is a badge that opens the same sheet (a player's slab).
 import { useState } from 'react';
 import { OVR_TIERS, ovrTier, tierLabel } from '../../core/ratings';
-import { Ovr, Sheet } from './ui';
+import { Sheet } from './ui';
 import './ovrKey.css';
 
 /** "89+", "82-88" ... "66 or less": a band's span on the ladder. */
@@ -64,26 +64,6 @@ export function OvrKey() {
         ))}
       </button>
       <OvrSheet open={open} onClose={() => setOpen(false)} />
-    </>
-  );
-}
-
-/** An OVR badge (with its POT under it) that opens the ladder at his band. */
-export function OvrBadge({ ovr, pot, size }: { ovr: number; pot: number; size?: 'sm' | 'lg' }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        className="tm-ovr ok-badge"
-        aria-haspopup="dialog"
-        onClick={() => setOpen(true)}
-        aria-label={`OVR ${Math.round(ovr)}, ${tierLabel(Math.round(ovr))}; potential ${pot}`}
-      >
-        <Ovr v={ovr} size={size} />
-        <span className="pot">POT {pot}</span>
-      </button>
-      <OvrSheet open={open} onClose={() => setOpen(false)} ovr={ovr} pot={pot} />
     </>
   );
 }

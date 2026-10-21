@@ -45,7 +45,7 @@ export function Overview({ league, p, onRole, onExtend, onRelease }: { league: L
           </Help>
         }
       >
-        <div className="card tm-skills">
+        <div className="tm-skills">
           {SKILLS.map((s) => {
             const pc = pctile(s.key, s.get(c, p));
             return (
@@ -83,7 +83,7 @@ export function Overview({ league, p, onRole, onExtend, onRelease }: { league: L
             )
           }
         >
-          <div className="card tm-role">
+          <div className="tm-role">
             <div className="row between top">
               <div className="grow">
                 <div className="tm-role-name">{ROLE_META[role].label}</div>

@@ -161,7 +161,7 @@ export default function Rotation() {
           </Help>
         }
       >
-        <div className="card flush">
+        <div className="tm-rlist">
           <div className="list">
             {order.map((pid, i) => {
               const p = byId.get(pid)!;
@@ -299,8 +299,8 @@ export default function Rotation() {
 /** A depth-chart group's divider, with the columns' names over its rows. */
 function RotationHead({ label }: { label: string }) {
   return (
-    <div className="list-divider tm-rhead">
-      <span>{label}</span>
+    <div className="tm-rhead">
+      <span className="tm-rhead-l">{label}</span>
       <span aria-hidden="true">MIN</span>
       <span aria-hidden="true">STA</span>
       <span aria-hidden="true">Target</span>

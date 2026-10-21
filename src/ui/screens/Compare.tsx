@@ -128,7 +128,7 @@ function Head({ league, p, pid, onPick, side }: { league: League; p: Player | un
 /** One value: the better side's in a pill, with the verdict spelled out for screen readers. */
 function Val({ text, win }: { text: string; win: boolean }) {
   return (
-    <td className={`cmp-v ${win ? 'win' : ''} ${text === '—' ? 'none' : ''}`}>
+    <td className={`cmp-val ${win ? 'win' : ''} ${text === '—' ? 'none' : ''}`}>
       <span className="cmp-n">{text}</span>
       {win && <span className="sr-only"> (better)</span>}
     </td>
@@ -266,7 +266,7 @@ export default function Compare() {
       <div className="cmp-heads">
         <Head league={league} p={pa} pid={ids.a} side="a" onPick={() => setPicking('a')} />
         <span className="cmp-vs-badge" aria-hidden="true">
-          VS
+          vs
         </span>
         <Head league={league} p={pb} pid={ids.b} side="b" onPick={() => setPicking('b')} />
       </div>

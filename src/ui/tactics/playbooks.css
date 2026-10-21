@@ -15,9 +15,9 @@
   padding-right: 2px;
   position: relative;
 }
+/* the chosen playbook: a step up from the list's ground, its radio filled paper */
 .tx-preset.on {
-  background: color-mix(in srgb, var(--accent) 9%, var(--raised));
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-2);
   --text-dim: var(--text-2);
 }
 .tx-preset-pick {
@@ -59,7 +59,7 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  font-weight: 700;
+  font-weight: 640;
   font-size: 14.5px;
   line-height: 1.2;
 }
@@ -102,16 +102,16 @@
   width: 32px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 18px;
+  font-weight: 740;
+  font-size: 19px;
   line-height: 1;
   text-align: center;
   color: var(--text);
 }
 .tx-fitbar {
   display: block;
-  height: 3px;
-  border-radius: 2px;
+  height: 2px;
+  border-radius: 1px;
   background: var(--surface-3);
   overflow: hidden;
 }
@@ -150,7 +150,7 @@
 }
 .tx-why-rank {
   display: block;
-  font-weight: 700;
+  font-weight: 640;
   color: var(--text);
 }
 .tx-terms {
@@ -169,14 +169,14 @@
   width: 40px;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 800;
-  font-size: 19px;
+  font-weight: 740;
+  font-size: 20px;
   line-height: 1.05;
   text-align: right;
 }
 .tx-term-l {
   display: block;
-  font-weight: 650;
+  font-weight: 620;
   color: var(--text);
 }
 .tx-term-s {
@@ -213,7 +213,7 @@
   font-size: 13.5px;
 }
 .tx-change-l {
-  font-weight: 650;
+  font-weight: 620;
   color: var(--text);
 }
 .tx-change-v {

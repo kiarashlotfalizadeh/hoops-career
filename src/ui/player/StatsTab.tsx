@@ -138,7 +138,7 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
   const stored = new Set(league.games.map((g) => g.gid));
   return (
     <Section title={whole ? 'Career highs' : since >= league.season ? 'Highs this season' : `Highs since ${seasonLabel(since)}`}>
-      <div className="card flush list">
+      <div className="list tm-hi-list">
         {REC_STATS.filter((k) => highs[k]).map((k) => {
           const h = careerHighOf(p, k)!;
           // a year only outside this season

@@ -21,15 +21,14 @@
   }
 }
 .tm-role-opt.on {
-  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
-  box-shadow: inset 3px 0 0 var(--accent);
+  background: var(--surface-2);
   --text-dim: var(--text-2);
 }
 .tm-role-opt-l {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
+  font-weight: 640;
   font-size: 14.5px;
 }
 .tm-role-opt-h {
@@ -59,7 +58,7 @@
   margin-left: auto;
   font-size: 11px;
   letter-spacing: 1px;
-  color: var(--warn);
+  color: var(--tier-elite);
   white-space: nowrap;
 }
 .tm-role-stars .dim {
@@ -71,8 +70,8 @@
 .tm-role-opt-l .tag {
   flex: none;
   height: 18px;
-  padding: 0 6px;
-  font-size: 9.5px;
+  padding: 0 5px;
+  font-size: 11px;
 }
 /* how well he'd know the pair this role makes */
 .tm-role-fam {
@@ -80,7 +79,7 @@
   width: 38px;
   text-align: right;
   font-size: 12.5px;
-  font-weight: 750;
+  font-weight: 680;
 }
 /* his pair and his familiarity, over the pickers */
 .tm-ed-sum {
@@ -101,7 +100,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 2px 8px;
-  font-weight: 750;
+  font-weight: 660;
   font-size: 14.5px;
 }
 .tm-ed-role .tm-role-stars {
@@ -117,5 +116,5 @@
   color: var(--text-dim);
 }
 .tm-ed-fam b {
-  font-weight: 800;
+  font-weight: 720;
 }

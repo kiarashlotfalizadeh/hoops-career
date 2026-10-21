@@ -62,7 +62,7 @@ export default function PlayerView() {
   const { mine, releaseWhy } = deskBlocks(league, p);
 
   return (
-    <main className="page">
+    <main className="page tm-pv">
       <div className="tm-bar">
         <button className="iconbtn back" onClick={goBack} aria-label="Back">
           <ChevronLeft size={24} />
