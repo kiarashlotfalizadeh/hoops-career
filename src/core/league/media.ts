@@ -33,6 +33,8 @@ export interface MediaState {
   honors?: Honor[];
   /** The latest power rankings. */
   power?: { season: number; day: number; rows: PowerRow[] };
+  /** What the press predicted on opening night: each team's projected wins and conference rank, the pick to win it all. */
+  preseason?: { season: number; rows: { tid: number; wins: number; confRank: number }[]; champ?: number };
 }
 
 /** The latest power rankings, if this season has had any. */
