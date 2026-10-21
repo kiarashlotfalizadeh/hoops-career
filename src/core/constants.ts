@@ -114,13 +114,13 @@ export const TARGETS = {
 
 export const PHASE_LABEL: Record<string, string> = {
   preseason: 'Preseason',
-  regular: 'Regular Season',
-  playin: 'Play-In Tournament',
+  regular: 'Regular season',
+  playin: 'Play-in tournament',
   playoffs: 'Playoffs',
-  draftLottery: 'Draft Lottery',
-  draft: 'NBA Draft',
-  resign: 'Re-sign Period',
-  freeAgency: 'Free Agency',
+  draftLottery: 'Draft lottery',
+  draft: 'NBA draft',
+  resign: 'Re-sign period',
+  freeAgency: 'Free agency',
 };
 
 export const seasonLabel = (season: number) => `${season - 1}-${String(season % 100).padStart(2, '0')}`;

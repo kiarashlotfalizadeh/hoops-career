@@ -190,8 +190,8 @@ export function startingFive(players: { pid: number; injury: unknown }[]): Set<n
   );
 }
 
-/** A finished game's scorebug: FINAL, F/OT, F/2OT. */
-export const finalLabel = (ot: number) => (ot > 0 ? `F/${periodLabel(4 + ot)}` : 'FINAL');
+/** A finished game's scorebug: Final, F/OT, F/2OT. */
+export const finalLabel = (ot: number) => (ot > 0 ? `F/${periodLabel(4 + ot)}` : 'Final');
 
 /**
  * Last names for a roster, with as much of the first name as it takes to tell teammates apart:

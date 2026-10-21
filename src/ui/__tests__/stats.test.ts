@@ -50,7 +50,7 @@ describe('number formats', () => {
 
 describe('finalLabel', () => {
   it('marks overtime finals as the game report does', () => {
-    expect(finalLabel(0)).toBe('FINAL');
+    expect(finalLabel(0)).toBe('Final');
     expect(finalLabel(1)).toBe('F/OT');
     expect(finalLabel(2)).toBe('F/2OT');
   });

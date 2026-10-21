@@ -11,8 +11,9 @@
   background: var(--surface-2);
   border: 1px solid var(--line-2);
   color: var(--text);
-  font-weight: 700;
+  font-weight: 640;
   font-size: 14.5px;
+  letter-spacing: -0.003em;
   white-space: nowrap;
   transition:
     transform 0.08s ease,
@@ -32,8 +33,11 @@
   border-color: transparent;
   color: var(--accent-ink);
 }
+.btn.primary {
+  font-weight: 700;
+}
 .btn.primary:active {
-  background: color-mix(in srgb, var(--accent) 88%, #000);
+  background: color-mix(in srgb, var(--accent) 86%, #000);
 }
 .btn.ghost {
   background: transparent;
@@ -43,13 +47,14 @@
   background: var(--surface);
 }
 .btn.danger {
-  background: color-mix(in srgb, var(--bad) 12%, var(--surface));
-  border-color: color-mix(in srgb, var(--bad) 42%, transparent);
-  color: color-mix(in srgb, var(--bad) 30%, white);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+  color: color-mix(in srgb, var(--bad) 55%, white);
 }
 .btn.good {
-  background: color-mix(in srgb, var(--good) 16%, var(--surface));
-  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--good) 50%, transparent);
+  color: color-mix(in srgb, var(--good) 55%, white);
 }
 .btn.sm {
   height: 34px;
@@ -72,17 +77,13 @@
 .btn.block {
   width: 100%;
 }
-/* the big call to action: display capitals, the number-plate cut */
+/* the big call to action: taller, a size up, sentence case like every other button */
 .btn.big {
   height: 54px;
-  font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
-  border-radius: 4px;
+  font-size: 16.5px;
+  font-weight: 720;
+  letter-spacing: -0.01em;
+  border-radius: var(--radius);
 }
 
 /* ------------------------------------------------------------------ segmented, tabs & chips */
@@ -106,7 +107,7 @@
   padding: 0 12px;
   border-radius: var(--radius-sm);
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--text-dim);
   white-space: nowrap;
   transition:
@@ -120,7 +121,7 @@
 .seg button.on {
   background: var(--surface-3);
   color: var(--text);
-  box-shadow: inset 0 0 0 1px var(--line-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 /* a screen's own sections: underlined tabs on the page, not another box */
 .seg.tabs {
@@ -134,13 +135,11 @@
 .seg.tabs button {
   flex: 0 0 auto;
   height: 42px;
-  padding: 0 12px;
+  padding: 0 11px;
   border-radius: 0;
-  font-size: 13px;
-  font-weight: 750;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-stretch: 100%;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
   position: relative;
 }
 .seg.tabs button.on {
@@ -152,15 +151,17 @@
   background: none;
   color: var(--text);
 }
+.seg.tabs button.on {
+  font-weight: 720;
+}
 .seg.tabs button.on::before {
   content: '';
   position: absolute;
-  left: 10px;
-  right: 10px;
+  left: 11px;
+  right: 11px;
   bottom: -1px;
-  height: 3px;
-  border-radius: 3px 3px 0 0;
-  background: var(--accent);
+  height: 2px;
+  background: var(--text);
 }
 .chips {
   display: flex;
@@ -170,11 +171,11 @@
 .chip {
   height: 32px;
   padding: 0 12px;
-  border-radius: 16px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--line-2);
   background: transparent;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text-2);
   display: inline-flex;
   align-items: center;
@@ -189,10 +190,11 @@
   background: var(--surface);
   color: var(--text);
 }
+/* a chosen chip is filled paper, like every control that's on */
 .chip.on {
   border-color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 16%, var(--raised));
-  color: var(--text);
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 .chip:disabled,
 .seg button:disabled {
@@ -219,40 +221,54 @@
   position: absolute;
   inset: -3px;
 }
+/* a status in a few words: a quiet outlined label in sentence case; a tone colours its dot and word */
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 20px;
+  gap: 5px;
+  height: 22px;
   padding: 0 7px;
-  border-radius: 5px;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: var(--surface-3);
+  border-radius: var(--radius-xs);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  background: transparent;
+  border: 1px solid var(--line-2);
   color: var(--text-2);
   white-space: nowrap;
 }
+.tag.good,
+.tag.bad,
+.tag.warn,
+.tag.info,
+.tag.brand {
+  border-color: color-mix(in srgb, currentColor 34%, transparent);
+}
+.tag.good::before,
+.tag.bad::before,
+.tag.warn::before,
+.tag.info::before,
+.tag.brand::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
 .tag.good {
-  background: color-mix(in srgb, var(--good) 16%, transparent);
   color: var(--good);
 }
 .tag.bad {
-  background: color-mix(in srgb, var(--bad) 16%, transparent);
   color: color-mix(in srgb, var(--bad) 80%, white);
 }
 .tag.warn {
-  background: color-mix(in srgb, var(--warn) 16%, transparent);
   color: var(--warn);
 }
 .tag.info {
-  background: color-mix(in srgb, var(--info) 16%, transparent);
   color: var(--info);
 }
 .tag.brand {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent-text);
 }
 
@@ -268,7 +284,7 @@
     background: var(--surface);
   }
   .btn.primary:not(:disabled):hover {
-    background: color-mix(in srgb, var(--accent) 92%, #fff);
+    background: #fff;
   }
   .seg button:not(.on):not(:disabled):hover,
   .chip:not(.on):not(:disabled):hover {
@@ -276,5 +292,9 @@
   }
   .chip:not(.on):not(:disabled):hover {
     border-color: var(--line-3);
+  }
+  .btn.danger:not(:disabled):hover,
+  .btn.good:not(:disabled):hover {
+    background: color-mix(in srgb, currentColor 8%, transparent);
   }
 }

@@ -186,7 +186,7 @@ if (stage === 'all') {
   // the rest of the draft from its own screen: the staff's pick whenever you're on the clock, else
   // "Auto-draft the rest" (confirmed while you hold a pick), until it's over and re-signing opens
   const button = (name) => page.getByRole('button', { name }).first();
-  const inDraft = (phase) => /NBA Draft/.test(phase ?? '');
+  const inDraft = (phase) => /NBA draft/i.test(phase ?? '');
   for (let i = 0; i < 12 && inDraft(await page.locator('.topbar').first().getAttribute('data-phase')); i++) {
     await go('/office/draft');
     await waitSim();

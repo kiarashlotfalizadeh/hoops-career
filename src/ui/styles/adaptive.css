@@ -109,18 +109,3 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   opacity: 0.45;
   cursor: not-allowed;
 }
-
-/* a cut corner (clip-path) clips an outline: the big buttons and slabs ring themselves inside */
-.btn.big:focus-visible,
-button.slab:focus-visible,
-a.slab:focus-visible {
-  outline: none;
-  box-shadow:
-    inset 0 0 0 2px var(--accent-ink),
-    inset 0 0 0 4px var(--accent-text);
-}
-.btn.big:not(.primary):focus-visible,
-button.slab:focus-visible,
-a.slab:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--accent-text);
-}

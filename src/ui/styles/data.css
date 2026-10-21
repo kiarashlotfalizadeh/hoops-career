@@ -2,13 +2,13 @@
 /* ------------------------------------------------------------------ bars */
 .bar {
   height: 6px;
-  border-radius: 3px;
+  border-radius: 1px;
   background: var(--surface-3);
   overflow: hidden;
 }
 .bar > div {
   height: 100%;
-  border-radius: 3px;
+  border-radius: 1px;
   background: var(--accent);
 }
 
@@ -17,7 +17,7 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   background: var(--raised);
 }
 /* more columns to the right (StatTable sets .fr): the edge fades out, as the league's team tables do */
@@ -51,17 +51,15 @@ table.stats {
 table.stats th {
   position: sticky;
   top: 0;
-  background: var(--bg-2);
+  background: var(--raised);
   color: var(--text-dim);
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  font-size: 11.5px;
+  font-weight: 620;
+  letter-spacing: 0.01em;
   padding: var(--cell-py) var(--cell-px);
   text-align: right;
   white-space: nowrap;
-  border-bottom: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-3);
   user-select: none;
 }
 table.stats th.as-is {
@@ -95,7 +93,7 @@ table.stats .sticky {
   box-shadow: 1px 0 0 var(--line);
 }
 table.stats th.sticky {
-  background: var(--bg-2);
+  background: var(--raised);
   z-index: 2;
 }
 /* your rows: a team-coloured edge and a faint tint */
@@ -106,7 +104,8 @@ table.stats tr.me td:first-child {
   box-shadow: inset 3px 0 0 var(--team-text);
 }
 table.stats th.sorted {
-  color: var(--accent-text);
+  color: var(--text);
+  font-weight: 720;
 }
 /* a row that opens something (a player): pressed, it darkens like a list row (sticky cells too) */
 table.stats tr[tabindex]:active > td {
@@ -120,7 +119,7 @@ table.stats tr[tabindex]:active > td {
     color: var(--text-2);
   }
   table.stats th.sorted:hover {
-    color: var(--accent-text);
+    color: var(--text);
   }
 }
 table.stats tr[tabindex]:focus-visible {

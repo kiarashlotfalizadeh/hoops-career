@@ -3,8 +3,8 @@
 
 const DEFAULT_ACCENT = '#3b82f6';
 /** --surface-2, the lightest neutral surface team-coloured text sits on. */
-const SURFACE_2 = '#1a212b';
-const INK = '#0b0f15';
+const SURFACE_2 = '#262420';
+const INK = '#12110e';
 
 function rgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '');
@@ -81,7 +81,7 @@ export interface TeamLook {
 }
 
 /** --surface-2 and --raised: the grounds team-coloured text sits on (a row of yours is tinted toward --raised). */
-const RAISED = '#0e1218';
+const RAISED = '#171613';
 
 export function teamLook(colors: [string, string, string]): TeamLook {
   const [p, ...rest] = colors;

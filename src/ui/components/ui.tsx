@@ -88,7 +88,7 @@ export function Avatar({ p, size = '' }: { p: Pick<Player, 'firstName' | 'lastNa
           y="30"
           textAnchor="middle"
           fontFamily="Archivo Variable, sans-serif"
-          fontWeight="800"
+          fontWeight="760"
           fontSize={p.jersey ? (label.length > 1 ? 15 : 16) : 12}
           fill={kit.num}
           style={{ fontStretch: long ? '62%' : '70%' }}
@@ -201,7 +201,7 @@ export function Toggle({ on, onChange, label, help, disabled }: { on: boolean; o
   return (
     <label className="row between" style={{ gap: 12, cursor: 'pointer' }}>
       <div className="grow row" style={{ gap: 6 }}>
-        <div id={`${id}l`} style={{ fontWeight: 650 }}>
+        <div id={`${id}l`} style={{ fontWeight: 640 }}>
           {label}
         </div>
         {help && (

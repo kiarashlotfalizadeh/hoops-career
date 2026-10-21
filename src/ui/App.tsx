@@ -188,7 +188,7 @@ function statusLine(league: League): string {
     case 'draftLottery':
       return `Draft lottery · ${league.season}`;
     case 'draft':
-      return `${league.season} NBA Draft`;
+      return `${league.season} NBA draft`;
     case 'resign':
       return `Re-signing · ${league.season}`;
     case 'freeAgency':

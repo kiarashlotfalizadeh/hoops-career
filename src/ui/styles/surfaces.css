@@ -1,8 +1,9 @@
 /* Cards, team slabs and lists. */
 /* ------------------------------------------------------------------ cards */
+/* a panel: a step up from the ground, no outline. Most content is not in one (see .sec) */
 .card {
   background: var(--raised);
-  border: 1px solid var(--line);
+  border: 1px solid transparent;
   border-radius: var(--radius);
   padding: var(--pad-card);
 }
@@ -32,11 +33,11 @@
 .card-h h3 svg {
   color: var(--text-dim);
 }
-/* "All" / "Full" style links in a card or section header: small, brand, a 40px+ target */
+/* "All" / "Full" style links in a card or section header: small, warm, a 40px+ target */
 .card-link {
   position: relative;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--accent-text);
   display: inline-flex;
   align-items: center;
@@ -47,17 +48,16 @@
   position: absolute;
   inset: -12px;
 }
-/* a highlighted card: a thin brand edge, nothing loud */
+/* a highlighted card: a paper hairline around it, nothing loud */
 .card.accent {
-  border-color: color-mix(in srgb, var(--accent) 38%, var(--line));
-  background: linear-gradient(170deg, color-mix(in srgb, var(--accent) 7%, var(--raised)), var(--raised) 60%);
+  border-color: var(--line-3);
+  background: var(--surface);
 }
 /* tinted surfaces (your row, the chosen chip, the picked playbook...): dim text and red figures lighter,
    so they keep 4.5:1 on any tint */
 .chip.on,
 table.stats tr.me,
 .lg-st-row.me,
-.lg-g-row.today,
 .bk-s.me,
 .fo-asset.on,
 .card.accent,
@@ -86,9 +86,9 @@ button.card:disabled {
 }
 
 /* ------------------------------------------------------------------ team slabs
-   Identity surfaces: a team's colour as a panel, cut at a corner like a jersey's number plate, a
-   faint diagonal weave and its trim along the bottom. Set --slab (and --slab-2 for the trim) inline
-   for another team; your own team's are the defaults */
+   Identity surfaces: a team's colour as a flat field, lit softly from the top, its trim as a rule
+   along the top edge. Set --slab (and --slab-2 for the trim) inline for another team; your own
+   team's are the defaults */
 .slab {
   --slab: var(--team-slab);
   --slab-2: var(--team-2);
@@ -96,46 +96,41 @@ button.card:disabled {
   isolation: isolate;
   overflow: hidden;
   border-radius: var(--radius);
-  padding: 16px;
+  padding: 18px 16px 16px;
   color: #fff;
-  background:
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 9px),
-    linear-gradient(150deg, color-mix(in srgb, var(--slab) 92%, #fff 8%), color-mix(in srgb, var(--slab) 70%, #000) 70%);
-  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
-  box-shadow: inset 0 -3px 0 var(--slab-2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 55%), linear-gradient(0deg, color-mix(in srgb, var(--slab) 82%, #000), var(--slab));
+  box-shadow: inset 0 3px 0 var(--slab-2);
   --text: #ffffff;
-  --text-2: rgba(255, 255, 255, 0.82);
-  --text-dim: rgba(255, 255, 255, 0.72);
-  --line: rgba(255, 255, 255, 0.14);
-  --line-2: rgba(255, 255, 255, 0.24);
+  --text-2: rgba(255, 255, 255, 0.84);
+  --text-dim: rgba(255, 255, 255, 0.74);
+  --line: rgba(255, 255, 255, 0.16);
+  --line-2: rgba(255, 255, 255, 0.26);
+  --line-3: rgba(255, 255, 255, 0.4);
+  --accent-text: #fff;
 }
 .slab.plain {
-  clip-path: none;
+  box-shadow: none;
 }
-/* a big faded mark behind the slab's content */
+/* the old faded mark behind a slab's content: retired (the team's own mark sits in the content) */
 .slab-mark {
-  position: absolute;
-  right: -26px;
-  bottom: -30px;
-  z-index: -1;
-  opacity: 0.16;
-  pointer-events: none;
-  filter: saturate(0.6);
+  display: none;
 }
-/* controls on a slab: glassy, so the team colour shows through */
+/* controls on a slab: dark glass, so the team colour shows through */
 .slab .btn:not(.primary) {
-  background: rgba(0, 0, 0, 0.26);
-  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.24);
+  border-color: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
 .slab .tag {
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(0, 0, 0, 0.22);
+  border-color: rgba(255, 255, 255, 0.22);
   color: #fff;
 }
 .slab .card-link {
   color: #fff;
   text-decoration: underline;
-  text-decoration-color: rgba(255, 255, 255, 0.4);
+  text-decoration-color: rgba(255, 255, 255, 0.45);
+  text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
 
@@ -151,12 +146,9 @@ button.card:disabled {
   min-height: var(--row-min);
 }
 .list-divider {
-  padding: 7px var(--row-px) 5px;
-  font-size: 11px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  padding: 9px var(--row-px) 6px;
+  font-size: 12px;
+  font-weight: 640;
   color: var(--text-dim);
   background: var(--bg-2);
 }
@@ -179,9 +171,9 @@ button.card:disabled {
 }
 /* a row's name line and its line of detail */
 .lr-name {
-  font-weight: 700;
+  font-weight: 660;
   font-size: 15px;
-  line-height: 1.2;
+  line-height: 1.22;
 }
 .lr-meta {
   font-size: 12.5px;

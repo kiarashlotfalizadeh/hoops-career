@@ -5,27 +5,23 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 10px 12px 11px;
+  border-radius: var(--radius-md);
   background: var(--raised);
-  border: 1px solid var(--line);
   min-width: 0;
 }
 
 .kpi .k {
-  font-size: 10.5px;
+  font-size: 12px;
   color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 750;
-  font-stretch: 100%;
+  font-weight: 600;
   white-space: nowrap;
 }
 .kpi .v {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-size: 26px;
-  font-weight: 800;
+  font-stretch: var(--display-w);
+  font-size: 27px;
+  font-weight: 760;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
@@ -40,18 +36,15 @@
   min-width: 0;
 }
 .statline > * + * {
-  border-left: 1px solid var(--line-2);
+  border-left: 1px solid var(--line);
 }
 .statline > :first-child {
   padding-left: 0;
 }
 .statline .k {
   max-width: 100%;
-  font-size: 10.5px;
-  font-weight: 750;
-  font-stretch: 100%;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--text-dim);
   white-space: nowrap;
   /* a long label ("Owed to others") ends in an ellipsis inside its column, never past it */
@@ -60,9 +53,10 @@
 }
 .statline .v {
   font-family: var(--display);
-  font-stretch: 72%;
-  font-weight: 800;
-  font-size: 28px;
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 30px;
+  margin-top: 1px;
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
 }
@@ -83,10 +77,10 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 999px;
-  background: var(--surface-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 620;
 }
 .help-btn {
   position: relative;
@@ -121,7 +115,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-weight: 700;
+  font-weight: 620;
   color: var(--accent-text);
   min-height: 28px;
 }
@@ -158,7 +152,7 @@
   height: 18px;
   border-radius: 50%;
   border: 2.5px solid var(--line-2);
-  border-top-color: var(--accent);
+  border-top-color: var(--text);
   animation: spin 0.8s linear infinite;
   flex: none;
 }
@@ -179,10 +173,10 @@
 /* a two-team comparison's figures (CompareBar): the side that wins it in a pill of its colour */
 .cmp-v {
   padding: 0 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-xs);
 }
 .cmp-v.win {
-  font-weight: 800;
+  font-weight: 740;
   color: var(--text);
   background: color-mix(in srgb, var(--cmp-c) 26%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--cmp-c) 70%, transparent);

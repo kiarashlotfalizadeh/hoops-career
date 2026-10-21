@@ -28,34 +28,33 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
   let body: JSX.Element;
   switch (shape) {
     case 'shield':
-      body = <path d="M50 4 L92 16 L88 58 Q84 82 50 96 Q16 82 12 58 L8 16 Z" fill={c1} stroke={ring} strokeWidth="6" />;
+      body = <path d="M50 5 L90 15.5 L87 57 Q83.5 81 50 95 Q16.5 81 13 57 L10 15.5 Z" fill={c1} stroke={ring} strokeWidth="4.5" strokeLinejoin="round" />;
       break;
     case 'hex':
-      body = <polygon points="50,4 91,27 91,73 50,96 9,73 9,27" fill={c1} stroke={ring} strokeWidth="6" />;
+      body = <polygon points="50,5 89,27.5 89,72.5 50,95 11,72.5 11,27.5" fill={c1} stroke={ring} strokeWidth="4.5" strokeLinejoin="round" />;
       break;
     case 'diamond':
-      body = <rect x="17" y="17" width="66" height="66" rx="10" transform="rotate(45 50 50)" fill={c1} stroke={ring} strokeWidth="6" />;
+      body = <rect x="18" y="18" width="64" height="64" rx="6" transform="rotate(45 50 50)" fill={c1} stroke={ring} strokeWidth="4.5" />;
       break;
     case 'round-square':
-      body = <rect x="7" y="7" width="86" height="86" rx="24" fill={c1} stroke={ring} strokeWidth="6" />;
+      body = <rect x="8" y="8" width="84" height="84" rx="16" fill={c1} stroke={ring} strokeWidth="4.5" />;
       break;
     default:
-      body = <circle cx="50" cy="50" r="44" fill={c1} stroke={ring} strokeWidth="6" />;
+      body = <circle cx="50" cy="50" r="44" fill={c1} stroke={ring} strokeWidth="4.5" />;
   }
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': ab })} style={{ flex: 'none' }}>
       {body}
-      <path d="M22 62 Q50 40 78 62" fill="none" stroke={ring} strokeOpacity="0.35" strokeWidth="3" />
       <text
         x="50"
-        y="58"
+        y="61"
         textAnchor="middle"
         fontFamily="Archivo Variable, sans-serif"
-        fontWeight="800"
-        style={{ fontStretch: '68%' }}
-        fontSize={text.length === 3 ? 30 : 36}
+        fontWeight="760"
+        style={{ fontStretch: '74%' }}
+        fontSize={text.length === 3 ? 31 : 37}
         fill={ink}
-        letterSpacing="1"
+        letterSpacing="0.5"
       >
         {text}
       </text>
