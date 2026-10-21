@@ -1,17 +1,17 @@
-// Tactics → Instructions, the defense's controls by phase of play. Out of possession: the base
-// scheme, pick-and-roll coverage (with how your starting big suits it), switching off the ball, help,
-// pressure, physicality and the star plan. Defensive transition: getting back and the full-court
-// press. Each control marks the identity's own setting, and every scheme, coverage and press shows
-// how well the team knows it, so the cost of a switch is in view before you make it.
+// Tactics → Instructions, out of possession: three headline decisions (the base scheme, the
+// ball-screen coverage with how your starting big suits it, and help), then Fine-tune (ball pressure,
+// physicality, switching off the ball, the star plan). Each control marks the identity's own setting,
+// and every scheme and coverage shows how well the team knows it, so the cost of a switch is in view
+// before you make it.
 import type { ReactNode } from 'react';
 import { useLeague } from '../../state/store';
-import type { DefScheme, Familiarity, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
-import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
+import type { DefScheme, Familiarity, PnrCoverage, StarPlan, Tactics } from '../../core/types';
+import { ALL_SCHEMES, COVERAGE_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { optValue } from '../../core/sim/familiarity';
 import { composites } from '../../core/ratings';
 import { shortName } from '../../core/league/helpers';
 import { ratingText } from '../../core/analysis/guarding';
-import { Chips, Help, Section, Tag, Toggle } from '../components/ui';
+import { Chips, Help, Tag, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { tweak } from './edit';
 import { defPresetOf } from './PlaybookLine';
@@ -30,7 +30,7 @@ export const optLabel = (label: string, mine: boolean, fam?: Familiarity, key?: 
       {mine && (
         <>
           <i className="tx-dot" aria-hidden="true" />
-          <span className="sr-only"> (the identity&apos;s own)</span>
+          <span className="sr-only"> (the style&apos;s own)</span>
         </>
       )}
       {v !== null && (
@@ -45,7 +45,7 @@ export const optLabel = (label: string, mine: boolean, fam?: Familiarity, key?: 
 
 type Props = { t: Tactics; fam: Familiarity };
 
-/** Out of possession: scheme, coverage, help and pressure, the star plan. */
+/** Out of possession's headline decisions: the base scheme, the ball-screen coverage, help. */
 export function OutOfPossession({ t, fam }: Props) {
   const league = useLeague();
   const team = league.teams[league.userTid];
@@ -59,99 +59,65 @@ export function OutOfPossession({ t, fam }: Props) {
   const fit = (good: boolean, yes: string, no: string) => <Tag tone={good ? 'good' : 'warn'}>{good ? yes : no}</Tag>;
   const pv = defPresetOf(t).values;
   return (
-    <>
-      <Section
-        title="Base scheme"
-        right={
-          <Help title="Schemes">
-            {ALL_SCHEMES.map((k) => (
-              <p key={k}>
-                <b>{SCHEME_META[k].label}:</b> {SCHEME_META[k].help}
-              </p>
-            ))}
-            <p>
-              A box-and-one or triangle-and-two as your base scheme sends its chasers at their main creators on the floor, every game. To name who, and play it only while
-              they&apos;re on the floor, use a game plan (Junk defense) or the live Adjust sheet.
-            </p>
-            <p>
-              The % on each is how well your team knows it (<Term id="familiarity">familiarity</Term>): below 95 they play it a step slow.
-            </p>
-          </Help>
-        }
-      >
-        <div className="card col tx-group tight">
-          <Chips
-            label="Base scheme"
-            value={t.defense.scheme}
-            onChange={(x: DefScheme) => tweak((tt) => void (tt.defense.scheme = x))}
-            options={ALL_SCHEMES.map((k) => ({ id: k, label: optLabel(SCHEME_META[k].label, k === pv.scheme, fam, `scheme:${k}`) }))}
-          />
+    <div className="card col tx-group">
+      <div className="tx-lv">
+        <div className="slider-label tx-label">
+          <Term id="zone">Scheme</Term>
         </div>
-      </Section>
-      <Section
-        title="Pick-and-roll coverage"
-        right={
-          <Help title="Coverages explained">
-            {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => (
-              <p key={k}>
-                <b>{COVERAGE_META[k].label}:</b> {COVERAGE_META[k].help}
-              </p>
-            ))}
-            <p>Drop needs a big who protects the rim; switching and hedging need one who moves. Blitzing needs length and quick hands behind it; ice needs disciplined guards.</p>
-            <p>
-              <b>Switch off-ball screens:</b> neutralizes handoffs and movement shooters, but a big switched onto a guard gets attacked off the dribble, and a guard switched onto a
-              big gets posted up (and fouls).
-            </p>
-          </Help>
-        }
-      >
-        <div className="card col tx-group tight">
-          <Chips
-            label="Pick-and-roll coverage"
-            value={t.defense.pnr}
-            onChange={(x: PnrCoverage) => tweak((tt) => void (tt.defense.pnr = x))}
-            options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: optLabel(COVERAGE_META[k].label, k === pv.pnr, fam, `pnr:${k}`) }))}
-          />
-          {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
-            <div className="tx-bigfit">
-              <span className="grow">
-                <b>{shortName(league, big)}</b>: {ratingText(big, 'blk')} · {ratingText(big, 'spd')}
-              </span>
-              {t.defense.pnr === 'drop' && fit(bigC.rimProt >= 60, 'Built for drop', 'Weak rim deterrent')}
-              {t.defense.pnr === 'switch' && fit(big.ratings.spd >= 45, 'Mobile enough', 'Guards will hunt him')}
-              {t.defense.pnr === 'hedge' && fit(big.ratings.spd >= 45, 'Can show and recover', 'Slow to recover')}
-            </div>
-          )}
-          <div className="tx-toggles">
-            <Toggle on={t.defense.switchOffBall} onChange={(x) => tweak((tt) => void (tt.defense.switchOffBall = x))} label="Switch off-ball screens" />
+        <Chips
+          label="Scheme"
+          value={t.defense.scheme}
+          onChange={(x: DefScheme) => tweak((tt) => void (tt.defense.scheme = x))}
+          options={ALL_SCHEMES.map((k) => ({ id: k, label: optLabel(SCHEME_META[k].label, k === pv.scheme, fam, `scheme:${k}`) }))}
+        />
+      </div>
+      <div className="tx-lv">
+        <div className="slider-label tx-label">
+          <Term id="pnr">Ball-screen coverage</Term>
+        </div>
+        <Chips
+          label="Ball-screen coverage"
+          value={t.defense.pnr}
+          onChange={(x: PnrCoverage) => tweak((tt) => void (tt.defense.pnr = x))}
+          options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: optLabel(COVERAGE_META[k].label, k === pv.pnr, fam, `pnr:${k}`) }))}
+        />
+        {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
+          <div className="tx-bigfit">
+            <span className="grow">
+              <b>{shortName(league, big)}</b>: {ratingText(big, 'blk')} · {ratingText(big, 'spd')}
+            </span>
+            {t.defense.pnr === 'drop' && fit(bigC.rimProt >= 60, 'Built for drop', 'Weak rim deterrent')}
+            {t.defense.pnr === 'switch' && fit(big.ratings.spd >= 45, 'Mobile enough', 'Guards will hunt him')}
+            {t.defense.pnr === 'hedge' && fit(big.ratings.spd >= 45, 'Can show and recover', 'Slow to recover')}
           </div>
-        </div>
-      </Section>
-      <Section
-        title="Help & pressure"
-        right={
-          <Help title="Help & pressure">
-            <p>
-              <b>Help defense:</b> packing the paint walls off drives and post-ups but gives up kick-out threes. Stay home against good shooting teams.
-            </p>
-            <p>
-              <b>Ball pressure:</b> more steals and turnovers, but quick creators blow by and backdoor cuts open up. Also more fouls.
-            </p>
-            <p>
-              <b>Physicality:</b> tighter contests vs more free throws for the opponent.
-            </p>
-          </Help>
-        }
-      >
-        <div className="card col tx-group">
-          <Lv label="Help defense" k="help" level="help" t={t} fam={fam} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
-          <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
-          <Lv label="Physicality" k="physicality" level="physicality" t={t} fam={fam} mark={pv.physicality} set={(tt, x) => void (tt.defense.physicality = x)} />
-        </div>
-      </Section>
-      <Section
-        title="Star plan"
-        right={
+        )}
+      </div>
+      <Lv label="Help" k="help" level="help" t={t} fam={fam} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
+    </div>
+  );
+}
+
+/** What's in Out of possession's Fine-tune, in a few words. */
+export const OUT_POSS_FINE = 'Ball pressure, physicality, off-ball switches, star plan';
+
+/** Out of possession's fine-tuning: ball pressure, physicality, switching off the ball, the star plan. */
+export function OutOfPossessionFine({ t, fam }: Props) {
+  const pv = defPresetOf(t).values;
+  return (
+    <>
+      <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
+      <Lv label="Physicality" k="physicality" level="physicality" t={t} fam={fam} mark={pv.physicality} set={(tt, x) => void (tt.defense.physicality = x)} />
+      <div className="tx-toggles">
+        <Toggle
+          on={t.defense.switchOffBall}
+          onChange={(x) => tweak((tt) => void (tt.defense.switchOffBall = x))}
+          label="Switch off-ball screens"
+          help="Neutralizes handoffs and movement shooters, but a big switched onto a guard gets attacked off the dribble, and a guard switched onto a big gets posted up (and fouls)."
+        />
+      </div>
+      <div className="tx-lv tx-toggles">
+        <div className="slider-label tx-label">
+          Star plan
           <Help title="Star plan">
             {(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => (
               <p key={k}>
@@ -163,65 +129,47 @@ export function OutOfPossession({ t, fam }: Props) {
               or change it during a live game.
             </p>
           </Help>
-        }
-      >
-        <div className="card col tx-group tight">
-          <Chips
-            label="Star plan"
-            value={t.defense.starPlan}
-            onChange={(x: StarPlan) => tweak((tt) => void (tt.defense.starPlan = x))}
-            options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
-          />
         </div>
-      </Section>
+        <Chips
+          label="Star plan"
+          value={t.defense.starPlan}
+          onChange={(x: StarPlan) => tweak((tt) => void (tt.defense.starPlan = x))}
+          options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
+        />
+      </div>
     </>
   );
 }
 
-/** Defensive transition: getting back after your own shots, and the full-court press. */
-export function DefTransition({ t, fam }: Props) {
-  const pv = defPresetOf(t).values;
+/** Out of possession's Help: what each of its headline decisions does. */
+export function OutOfPossessionHelp() {
   return (
-    <>
-      <Section
-        title="Getting back"
-        right={
-          <Help title="Transition defense">
-            <p>
-              How hard you sprint back after your own shots. Sprinting back limits fast breaks but gives up some offensive rebounds; Crash the offensive glass (In transition) sets
-              how many players go after them.
-            </p>
-          </Help>
-        }
-      >
-        <div className="card col tx-group">
-          <Lv label="Transition defense" k="getBack" level="getBack" t={t} fam={fam} mark={pv.getBack} set={(tt, x) => void (tt.defense.getBack = x)} />
-        </div>
-      </Section>
-      <Section
-        title="Full-court press"
-        right={
-          <Help title="Full-court press">
-            {(Object.keys(PRESS_META) as PressMode[]).map((k) => (
-              <p key={k}>
-                <b>{PRESS_META[k].label}:</b> {PRESS_META[k].help}
-              </p>
-            ))}
-          </Help>
-        }
-      >
-        <div className="card col tx-group tight">
-          <Chips
-            label="Full-court press"
-            value={t.defense.press}
-            onChange={(x: PressMode) => tweak((tt) => void (tt.defense.press = x))}
-            options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({
-              id: k,
-              label: optLabel(PRESS_META[k].label, k === pv.press, fam, k === 'none' ? null : `press:${k}`),
-            }))}
-          />
-        </div>
-      </Section>
-    </>
+    <Help title="Out of possession">
+      {ALL_SCHEMES.map((k) => (
+        <p key={k}>
+          <b>{SCHEME_META[k].label}:</b> {SCHEME_META[k].help}
+        </p>
+      ))}
+      <p>
+        A box-and-one or triangle-and-two as your scheme sends its chasers at their main creators on the floor, every game. To name who, and play it only while they&apos;re on the
+        floor, use a game plan (Junk defense) or the live game&apos;s tactics.
+      </p>
+      {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => (
+        <p key={k}>
+          <b>{COVERAGE_META[k].label}:</b> {COVERAGE_META[k].help}
+        </p>
+      ))}
+      <p>Drop needs a big who protects the rim; switching and hedging need one who moves. Blitzing needs length and quick hands behind it; ice needs disciplined guards.</p>
+      <p>
+        <b>Help:</b> packing the paint walls off drives and post-ups but gives up kick-out threes. Stay home against good shooting teams.
+      </p>
+      <p>
+        <b>Ball pressure</b> (Fine-tune): more steals and turnovers, but quick creators blow by and backdoor cuts open up. Also more fouls. <b>Physicality:</b> tighter contests
+        against more free throws for the opponent.
+      </p>
+      <p>
+        The % on a scheme or coverage is how well your team knows it (<Term id="familiarity">familiarity</Term>): below 95 they play it a step slow.
+      </p>
+    </Help>
   );
 }

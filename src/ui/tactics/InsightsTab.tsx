@@ -1,6 +1,6 @@
-// Tactics → Insights: what your tactics have won and given up this season (each effect in points a
-// game, with the fix for what hurts), and how teams see you: your scouting report as an opponent
-// reads it.
+// Tactics → Analysis → Season: what your tactics have won and given up this season (each effect in
+// points a game, with the fix for what hurts) in one list, and how teams see you: your scouting
+// report as an opponent reads it.
 import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
@@ -46,19 +46,23 @@ export function InsightsTab() {
   return (
     <>
       {games > 0 ? (
-        <>
-          <Section title="What's working" right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}>
-            <div className="card flush list">{helping.length ? helping.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
-          </Section>
-          <Section title="What's hurting you" right={<span className="tiny dim">pts a game</span>}>
-            <div className="card flush list">{hurting.length ? hurting.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}</div>
-            {hidden > 0 && (
-              <button className="btn sm tx-imp-more" onClick={() => setMore(true)}>
-                {hidden} more
-              </button>
-            )}
-          </Section>
-        </>
+        <Section title="What your tactics did" right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}>
+          <div className="card flush list">
+            <div className="list-divider list-h" aria-hidden="true">
+              <span>Working</span>
+            </div>
+            {helping.length ? helping.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
+            <div className="list-divider list-h" aria-hidden="true">
+              <span>Hurting you</span>
+            </div>
+            {hurting.length ? hurting.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
+          </div>
+          {hidden > 0 && (
+            <button className="btn sm tx-imp-more" onClick={() => setMore(true)}>
+              {hidden} more
+            </button>
+          )}
+        </Section>
       ) : (
         <div className="tx-empty">What your tactics win and give up comes in after your first games.</div>
       )}

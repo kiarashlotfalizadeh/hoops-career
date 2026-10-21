@@ -1,7 +1,7 @@
-/* The Football Manager layer of Team → Tactics (`tx-`): the tactic slots and the mentality dial over
-   the tabs, the tactics board with its formation picker and bench, familiarity everywhere (bars,
-   dots, the ring, each option's %), the phases of play on Instructions, the Players rows with both
-   roles, and the Familiarity tab. */
+/* The Football Manager layer of Team → Tactics (`tx-`): the hero (the tactic slots, one familiarity
+   figure, the strengths and weaknesses), the mentality dial, the tactics board with its formation
+   picker and its partnership lines, familiarity everywhere (bars, dots, each option's %), the phases
+   of play on Instructions, and Analysis → Familiarity. */
 
 /* ------------------------------------------------------------ familiarity, wherever it shows */
 .tx-fambar {
@@ -83,7 +83,7 @@
   overflow: hidden;
 }
 /* the three tactics as one row of pills: the active one white, as a chosen option is */
-/* (the active one takes the room for its name; the others show their letter and figure) */
+/* (the active one takes the room for its name; the others show their letter) */
 .tx-slots {
   display: flex;
   gap: 6px;
@@ -155,18 +155,6 @@
   font-weight: 620;
   font-size: 13.5px;
 }
-.tx-slot-f {
-  flex: none;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1;
-}
-/* on the white pill, the familiarity reads in ink: its tone is for the dark grounds */
-.tx-slot.on .tx-slot-f {
-  color: var(--on-ink);
-}
 .tx-slot-plus {
   flex: none;
   color: var(--text-dim);
@@ -220,38 +208,82 @@
   flex: none;
   display: flex;
 }
-/* the grades, edge to edge across the group */
-/* (relative: the sr-only text in it is clipped by the strip, not placed past the page's edge) */
-.tx-hero .tx-strip {
-  position: relative;
-  top: auto;
-  margin: 0 calc(-1 * var(--pad-card));
-  padding: 2px var(--pad-card) 0;
-  background: none;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-bottom: none;
-  /* four grades share the width on a phone; more scroll */
+/* one familiarity figure: a label, its bar, the figure and its word (a tap: Analysis → Familiarity) */
+.tx-hero-fam {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--radius-sm);
+}
+.tx-hero-k {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-dim);
+}
+.tx-hero-fam .tx-fambar {
+  height: 4px;
+  min-width: 40px;
+}
+.tx-hero-fv {
+  flex: none;
+  font-family: var(--mono);
+  letter-spacing: -0.04em;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.tx-hero-fl {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-2);
+}
+/* the two strengths and two weaknesses, side by side over a hairline (a tap: Analysis → Report) */
+.tx-sw {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(68px, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  margin: 0 calc(-1 * var(--pad-card));
+  padding: 12px var(--pad-card) 2px;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-align: left;
 }
-.tx-hero .tx-strip-q {
+.tx-sw-col {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
   min-width: 0;
-  padding: 2px 8px 3px;
 }
-.tx-hero .tx-strip-q:first-child {
-  padding-left: 0;
+.tx-sw-q {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 620;
 }
-.tx-hero .tx-strip-n {
-  white-space: normal;
-  line-height: 1.2;
+.tx-sw-n {
+  min-width: 0;
 }
-/* (a phone: names wrap, so every grade sits on the same line) */
-@media (max-width: 479px) {
-  .tx-hero .tx-strip-n {
-    min-height: 2.4em;
-  }
+/* a grade that moved this visit: its name in the signal's colour, a short pulse */
+.tx-sw-q.up,
+.tx-sw-q.down {
+  animation: tx-flash 0.35s ease-out;
+}
+.tx-sw-q.up .tx-sw-n {
+  color: var(--good);
+}
+.tx-sw-q.down .tx-sw-n {
+  color: var(--bad);
+}
+.tx-hero-fam:active,
+.tx-sw:active {
+  background: var(--surface);
 }
 /* the assistant's switch, the group's foot */
 .tx-hero-auto {
@@ -335,250 +367,54 @@
   width: 0.5em;
   height: 0.5em;
 }
-/* the row to the bench's roles, on Players */
-.tx-benchlink {
+/* the partnerships on the court: lines under the plates (their weight and ink set inline by strength),
+   the clash a red dash, a picked link named at its middle */
+.tx-floor-links {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--row-min);
-  padding: 10px 12px 10px var(--row-px);
-  text-align: left;
-  transition: background var(--dur-fast) ease;
+  height: 100%;
+  pointer-events: none;
 }
-.tx-benchlink > .grow {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.tx-link-l {
+  stroke: var(--ink);
+  stroke-linecap: round;
+  transition:
+    stroke-opacity var(--dur-fast) ease,
+    stroke-width var(--dur-fast) ease;
 }
-.tx-benchlink-n {
-  font-weight: 640;
-  font-size: 15px;
+.tx-link-l.off {
+  stroke-opacity: 0.16;
 }
-.tx-benchlink-m {
-  font-size: 13px;
-  color: var(--text-dim);
+.tx-clash-l {
+  stroke: var(--bad);
+  stroke-width: 1.1;
+  stroke-dasharray: 2 1.6;
+  stroke-linecap: round;
 }
-.tx-benchlink:active {
-  background: var(--surface);
+.tx-floor-p.clash {
+  border-color: var(--bad);
+}
+.tx-link-tag {
+  position: absolute;
+  z-index: 1;
+  left: var(--x);
+  top: var(--y);
+  transform: translate(-50%, -50%);
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--paper-ink);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  pointer-events: none;
 }
 .tx-style {
   gap: 16px;
 }
 
-/* ------------------------------------------------------------ Instructions: the phases of play */
-/* four pills, two by two: each phase and how well the team knows it; the chosen one white */
-.tx-phases {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-}
-@media (min-width: 640px) {
-  .tx-phases {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-.tx-phase {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-width: 0;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line-3);
-  text-align: left;
-  transition: background var(--dur-fast) ease;
-}
-.tx-phase::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-}
-.tx-phase:not(.on):active {
-  background: var(--surface);
-}
-.tx-phase.on {
-  background: var(--on);
-  box-shadow: none;
-  color: var(--on-ink);
-}
-.tx-phase-n {
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.tx-phase.on .tx-phase-n {
-  color: var(--on-ink);
-}
-.tx-phase-v .num {
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-}
-.tx-phase.on .tx-phase-v .num {
-  color: var(--on-ink);
-}
-.tx-phase-dims {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-.tx-phase-dims b {
-  font-weight: 720;
-}
-
-/* ------------------------------------------------------------ Players: both roles on each row */
-.tx-prow-m {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.tx-prow-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.tx-prow-top .lr-name {
-  min-width: 0;
-}
-.tx-prow-top .tag {
-  flex: none;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 11px;
-}
-.tx-prow-roles {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  font-size: 12.5px;
-  color: var(--text-2);
-}
-.tx-prow-r {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.tx-prow-r .ellipsis {
-  min-width: 0;
-}
-.tx-prow-r .tx-floor-s {
-  flex: none;
-  font-size: 10px;
-}
-/* which end a role line is for: its letter, quiet, in a column of its own */
-.tx-prow-k {
-  flex: none;
-  width: 13px;
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-dim);
-}
-.tx-prow-fam {
-  flex: none;
-  min-width: 38px;
-  text-align: right;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-size: 14px;
-  font-weight: 600;
-}
-
 /* ------------------------------------------------------------ the Familiarity tab */
-.tx-ring {
-  position: relative;
-  flex: none;
-  display: inline-grid;
-  place-items: center;
-}
-.tx-ring svg {
-  position: absolute;
-  inset: 0;
-  transform: rotate(-90deg);
-}
-.tx-ring-bg {
-  fill: none;
-  stroke: var(--line-2);
-  stroke-width: 3.2;
-}
-.tx-ring-fg {
-  fill: none;
-  stroke: var(--text-dim);
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  transition: stroke-dasharray var(--dur) var(--ease-out);
-}
-.tx-ring.good .tx-ring-fg {
-  stroke: var(--good);
-}
-.tx-ring.warn .tx-ring-fg {
-  stroke: var(--warn);
-}
-.tx-ring.bad .tx-ring-fg {
-  stroke: var(--bad);
-}
-.tx-ring-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 26px;
-  line-height: 1;
-}
-.tx-ring-v small {
-  font-size: 0.55em;
-  margin-left: 1px;
-}
-.tx-famtop {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-.tx-famtop-r {
-  gap: 6px;
-  min-width: 0;
-}
-.tx-famtop-h {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.tx-famends {
-  display: flex;
-  gap: 14px;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-.tx-famends b {
-  font-weight: 720;
-}
-.tx-fam-ends {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 10px;
-}
-@media (min-width: 760px) {
-  .tx-fam-ends {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: start;
-  }
-}
 .tx-famrow {
   display: flex;
   flex-direction: column;
@@ -594,6 +430,10 @@
   font-weight: 640;
   font-size: 14.5px;
 }
+.tx-famrow-w {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
 .tx-famrow-v {
   font-family: var(--mono);
   letter-spacing: -0.04em;
@@ -607,6 +447,12 @@
   gap: 8px;
   font-size: 12px;
   color: var(--text-dim);
+}
+.tx-famrow-s .ellipsis {
+  min-width: 0;
+}
+.tx-famrow-eta {
+  flex: none;
 }
 .tx-prep .tx-preset-t {
   white-space: normal;

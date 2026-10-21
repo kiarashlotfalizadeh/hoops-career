@@ -1,61 +1,63 @@
-// Tactics → Instructions: every team instruction, by phase of play as Football Manager groups them
-// (in possession, in transition, out of possession, defensive transition). Each phase is a pill with
-// how well the team knows that part of the system; under the chosen one, the playbook or identity
-// its settings start from, then its controls, each saying what it costs against what's drilled.
+// Tactics → Instructions, as Football Manager 26 groups them: the mentality, then the three phases of
+// play (in possession, in transition, out of possession) as one switch, each with how well the team
+// knows it. Under the chosen phase, the style it starts from, its three headline decisions, and
+// Fine-tune with the rest; in possession, the set package as its own card. Each control says what it
+// costs against what's drilled.
 import type { Player, Tactics } from '../../core/types';
-import { FAM_DIMS, famLabel } from '../../core/sim/familiarity';
+import { famLabel } from '../../core/sim/familiarity';
 import type { SystemFamiliarity } from '../../core/league/practice';
-import { Help } from '../components/ui';
-import { Term } from '../components/Glossary';
+import { Segmented } from '../components/ui';
+import { MentalityDial } from './SlotBar';
 import { PlaybookLine } from './PlaybookLine';
-import { InPossession, InTransition } from './OffenseTab';
-import { DefTransition, OutOfPossession } from './DefenseTab';
+import { IN_POSS_FINE, IN_TRANS_FINE, InPossession, InPossessionFine, InPossessionHelp, InTransition, InTransitionFine, InTransitionHelp } from './OffenseTab';
+import { OUT_POSS_FINE, OutOfPossession, OutOfPossessionFine, OutOfPossessionHelp } from './DefenseTab';
+import { SetPackageCard } from './SetPackageCard';
+import { Disclosure } from './Disclosure';
 import { famTone } from './formation';
 import { PHASES, phaseFam, type Phase } from './fam';
+import { tweak } from './edit';
 import { useFam } from './useFam';
 
 export function InstructionsTab({ t, players, sys, phase, setPhase }: { t: Tactics; players: Player[]; sys: SystemFamiliarity; phase: Phase; setPhase: (p: Phase) => void }) {
   const fam = useFam();
-  const cur = PHASES.find((p) => p.id === phase)!;
   return (
     <>
-      <div className="tx-phases" role="radiogroup" aria-label="Phase of play">
-        {PHASES.map((p) => {
-          const v = phaseFam(sys.dims, p.id);
-          const on = p.id === phase;
-          return (
-            <button key={p.id} role="radio" aria-checked={on} className={`tx-phase ${on ? 'on' : ''}`} onClick={() => setPhase(p.id)}>
-              <span className="tx-phase-n">{p.short}</span>
-              <span className="tx-phase-v">
-                <span className={`num ${famTone(v)}`}>{Math.round(v)}%</span>
-                <span className="sr-only"> {famLabel(v)}</span>
-              </span>
-            </button>
-          );
-        })}
+      <MentalityDial t={t} />
+      <div className="col tx-phasebody">
+        <div className="tx-phaseseg">
+          <Segmented
+            label="Phase of play"
+            value={phase}
+            onChange={setPhase}
+            options={PHASES.map((p) => {
+              const v = phaseFam(sys.dims, p.id);
+              return {
+                id: p.id,
+                label: (
+                  <>
+                    <span className="tx-phaseseg-n">{p.short}</span>
+                    <span className={`tx-phaseseg-v num ${famTone(v)}`}>
+                      {Math.round(v)}%<span className="sr-only"> familiar, {famLabel(v)}</span>
+                    </span>
+                  </>
+                ),
+              };
+            })}
+          />
+        </div>
+        <PlaybookLine phase={phase} help={phase === 'inPoss' ? <InPossessionHelp /> : phase === 'inTrans' ? <InTransitionHelp /> : <OutOfPossessionHelp />} />
+        {phase === 'inPoss' && <InPossession t={t} fam={fam} />}
+        {phase === 'inTrans' && <InTransition t={t} fam={fam} />}
+        {phase === 'outPoss' && <OutOfPossession t={t} fam={fam} />}
+        <Disclosure key={phase} label="Fine-tune" meta={phase === 'inPoss' ? IN_POSS_FINE : phase === 'inTrans' ? IN_TRANS_FINE : OUT_POSS_FINE}>
+          <div className="col tx-group tx-fine-pad">
+            {phase === 'inPoss' && <InPossessionFine t={t} fam={fam} />}
+            {phase === 'inTrans' && <InTransitionFine t={t} fam={fam} players={players} />}
+            {phase === 'outPoss' && <OutOfPossessionFine t={t} fam={fam} />}
+          </div>
+        </Disclosure>
       </div>
-      <div className="tx-phase-dims">
-        {cur.dims.map((d) => (
-          <span key={d}>
-            {FAM_DIMS.find((x) => x.id === d)!.label} <b className={famTone(sys.dims[d])}>{Math.round(sys.dims[d])}%</b>
-          </span>
-        ))}
-        <Help title="Familiarity by phase">
-          <p>
-            How well your team knows this phase of the system (<Term id="familiarity">familiarity</Term>). Below 95 it&apos;s played a step slow: worse shots and more turnovers on
-            offense, more open shots given up on defense.
-          </p>
-          <p>
-            A setting moved off what the team has drilled costs familiarity until practice and games drill it again, and every scheme, coverage and press shows how well they know
-            it: the cost of a switch, before you switch.
-          </p>
-        </Help>
-      </div>
-      <PlaybookLine kind={cur.end} />
-      {phase === 'inPoss' && <InPossession t={t} fam={fam} players={players} />}
-      {phase === 'inTrans' && <InTransition t={t} fam={fam} players={players} />}
-      {phase === 'outPoss' && <OutOfPossession t={t} fam={fam} />}
-      {phase === 'defTrans' && <DefTransition t={t} fam={fam} />}
+      {phase === 'inPoss' && <SetPackageCard t={t} edit={tweak} players={players} />}
     </>
   );
 }

@@ -7,7 +7,7 @@ import { rosterNames } from '../stats';
 import { PickRow } from './Pick';
 
 /**
- * Game Mgmt's crunch time: who takes over in crunch time, the play after your timeouts (an action, or
+ * Match's crunch time: who takes over in crunch time, the play after your timeouts (an action, or
  * one of the sets for a player you name or the best fit on the floor), and whether your assistant
  * adjusts at breaks in the games you don't coach live.
  */

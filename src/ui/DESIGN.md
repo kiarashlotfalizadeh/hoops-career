@@ -360,8 +360,15 @@ graphics package); the console under it is paper and card stock like every other
   less than pressure would have made them"), never as a count the box score's factors could
   contradict.
 - Keep explanations that teach the game, but behind `Help`/`More`/`Term`.
-- Names of controls in advice must match the controls on screen (Team → Tactics tabs: Tactic,
-  Instructions, Players, Familiarity, Game Mgmt, Report).
+- Names of controls in advice must match the controls on screen (Team → Tactics sections: Tactic,
+  Instructions, Match, Analysis; Instructions' phases: In possession, Transition, Out of possession,
+  each with its headline decisions and a Fine-tune; a player's roles and instructions are on his sheet
+  from the board).
+- **Tactics: big decisions on the surface, the rest one tap down.** Each phase of Instructions shows
+  at most three headline decisions (one control may move several settings: Play through sets the five
+  action weights, When a shot goes up the glass and getting back) and a Fine-tune with every setting
+  apart; partnerships have no control of their own: roles, the shape and the rotation make them, and
+  the board draws them.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

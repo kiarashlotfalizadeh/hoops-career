@@ -1,4 +1,4 @@
-// Game Mgmt's situational plans: each changes the tactics while its situation lasts (a quarter, the
+// Match's situational plans: each changes the tactics while its situation lasts (a quarter, the
 // time left, the score, the second unit), the first enabled match applying, top to bottom. A plan
 // either changes settings and the mentality on top of the tactic, or switches to another of your
 // tactics (B or C) as it is. A row per plan with what it does; its sheet edits the trigger and the
@@ -46,7 +46,7 @@ export function planText(team: Team, s: SituationalPlan): string {
   return `Switch to ${slotName(team, s.slot)}${ready ? '' : ' (nothing to switch to)'}`;
 }
 
-/** Game Mgmt's situational plans, with their triggers and what each one changes. */
+/** Match's situational plans, with their triggers and what each one changes. */
 export function SituationsCard({ t, edit }: { t: Tactics; edit: Edit }) {
   const league = useLeague();
   const team = league.teams[league.userTid];

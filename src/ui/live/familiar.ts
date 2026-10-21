@@ -11,6 +11,7 @@ import { famDims, famOverall, optValue, rotationWeights } from '../../core/sim/f
 import { effectiveTactics } from '../../core/league/gamePlans';
 import { slotMatcher } from '../../core/analysis/moves';
 import { teamPlayers } from '../../core/league/helpers';
+import { linksAmong, type Clash, type Link } from '../../core/sim/links';
 import { resetToPlan } from './pills';
 
 /** At or above this a figure needs no warning beside an option (the screens' "Fluid"). */
@@ -132,3 +133,16 @@ export function withShapeOf(x: Tactics, s: Tactics['offense']['shape'], planned:
 
 /** Tactics replaced whole (a field the new ones don't have goes: a mentality, a set package). */
 export const replaceWith = resetToPlan;
+
+/**
+ * The partnerships and clashes of the user's five on the floor, as the engine plays them now (their
+ * roles as played, the shape, the understanding the team keeps).
+ */
+export function floorLinks(lg: LiveGame): { links: Link[]; clashes: Clash[] } {
+  const T = lg.sim.T[lg.userSide];
+  return linksAmong(
+    T.on.map((p) => ({ pid: p.pid, off: p.role, def: p.drole, c: p.c })),
+    shapeOf(T.base.offense),
+    T.fam,
+  );
+}

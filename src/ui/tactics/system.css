@@ -1,4 +1,4 @@
-/* The system report (System tab), its strip over the Offense and Defense tabs, and your five on the floor. */
+/* The system report (Analysis), the changes dock's grades, and your five on the floor. */
 .tx-grade {
   flex: none;
   display: inline-grid;
@@ -127,111 +127,14 @@
   color: var(--bad);
 }
 
-/* the strip over the Offense and Defense tabs: the grades their settings move, lit as they change */
-.tx-strip {
-  position: sticky;
-  /* under the Team page's own sticky tabs */
-  top: calc(var(--top-h) + var(--safe-t) + 45px);
-  z-index: 5;
-  display: flex;
-  gap: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
-  padding: 8px var(--gut-r) 8px var(--gut-l);
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line);
-}
-.tx-strip::-webkit-scrollbar {
-  display: none;
-}
-/* each grade a column, hairlines between them, as a statline's figures are */
-.tx-strip-q {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  min-width: 92px;
-  padding: 2px 12px 3px;
-  border-radius: var(--radius-sm);
-  transition: background-color 0.2s ease;
-}
-.tx-strip-q:first-child {
-  padding-left: 0;
-}
-.tx-strip-q + .tx-strip-q {
-  border-left: 1px solid var(--line);
-  border-radius: 0;
-}
-/* a grade that moved this visit: its name in the signal's colour, a short pulse */
-.tx-strip-q.up,
-.tx-strip-q.down {
-  animation: tx-flash 0.35s ease-out;
-}
-.tx-strip-q.up .tx-strip-n {
-  color: var(--good);
-}
-.tx-strip-q.down .tx-strip-n {
-  color: var(--bad);
-}
-.tx-strip-n {
-  font-size: 12px;
-  font-weight: 620;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-.tx-strip-g {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.tx-strip-was {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-dim);
-}
-.tx-strip-rank {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-/* where it ranks: slides as a setting moves it, even when the grade holds */
-.tx-strip-bar {
-  align-self: stretch;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-.tx-strip-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.25s ease-out;
-}
-.tx-strip-bar > .good {
-  background: var(--tier-star);
-}
-.tx-strip-bar > .ok {
-  background: var(--tier-good);
-}
-.tx-strip-bar > .meh {
-  background: var(--tier-low);
-}
-.tx-strip-bar > .bad {
-  background: var(--tier-bad);
-}
 @keyframes tx-flash {
   40% {
     transform: scale(1.04);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .tx-strip-q.up,
-  .tx-strip-q.down {
+  .tx-sw-q.up,
+  .tx-sw-q.down {
     animation: none;
   }
 }
@@ -396,10 +299,19 @@
   max-width: 100%;
 }
 /* ranks are box-score figures */
-.tx-strip-rank,
 .tx-q-rank,
-.tx-strip-was,
 .tx-q-was {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+}
+/* the report's strengths and weaknesses: the grade, its name over who carries it, the rank */
+.tx-swrow-m {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tx-swrow .num {
+  flex: none;
   font-family: var(--mono);
   letter-spacing: -0.03em;
 }

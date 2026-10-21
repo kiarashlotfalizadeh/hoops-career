@@ -319,7 +319,7 @@ export function Huddle(props: Common) {
               Your after-timeout play: <b>{atoText}</b>
             </>
           ) : (
-            <span className="dim">No play set: the team runs its offense. Set one in Tactics → Game Mgmt.</span>
+            <span className="dim">No play set: the team runs its offense. Set one in Tactics → Match.</span>
           )}
         </div>
       </Section>

@@ -159,7 +159,7 @@
   transform: scale(0.97);
   background: var(--surface);
 }
-/* the six sections as one row of chips that scrolls past the gutter */
+/* the four sections as one row of chips (it scrolls past the gutter if it must) */
 .tx-tabs {
   display: flex;
   gap: 6px;

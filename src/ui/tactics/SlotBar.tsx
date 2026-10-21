@@ -1,5 +1,5 @@
 // The Tactics hero's tactic switch, as Football Manager keeps it: your three tactics (A, B and C) as
-// one row of pills, each with how well the team knows it. A tap opens its sheet: make it the active
+// one row of pills (how well the team knows each is in its sheet). A tap opens its sheet: make it the active
 // one (what every game plays), rename it, overwrite or clear it; an empty one offers a copy of the
 // current tactic or a fresh style. Then the mentality: a dial from very cautious to very aggressive, played on top of every
 // setting.
@@ -50,7 +50,7 @@ export function SlotBar() {
   const open = menu !== null ? slots[menu] : null;
   return (
     <>
-      {/* the three as one row of pills, each with how well the team knows it; a tap opens its sheet
+      {/* the three as one row of pills; a tap opens its sheet (with how well the team knows it)
           (make it the active one, start, overwrite, rename or clear it) */}
       <div className="tx-slots" role="group" aria-label="Your tactics">
         {slots.map((s) => {
@@ -70,13 +70,7 @@ export function SlotBar() {
               <span className="tx-slot-n ellipsis" aria-hidden="true">
                 {s.t ? s.name : 'Set up'}
               </span>
-              {s.t && s.fam !== null ? (
-                <span className={`tx-slot-f num ${famTone(s.fam)}`} aria-hidden="true">
-                  {Math.round(s.fam)}%
-                </span>
-              ) : (
-                <Plus size={14} className="tx-slot-plus" aria-hidden="true" />
-              )}
+              {!s.t && <Plus size={14} className="tx-slot-plus" aria-hidden="true" />}
             </button>
           );
         })}
@@ -130,7 +124,7 @@ function SlotMenu({ s, active, onClose, onStyle }: { s: SlotInfo; active: boolea
         </div>
       ) : (
         <div className="tx-note">
-          Empty. Start it from your current tactic, or from a style; then switch to it here or in a situational plan (Game Mgmt). See <Term id="slots">tactic slots</Term>.
+          Empty. Start it from your current tactic, or from a style; then switch to it here or in a situational plan (Match). See <Term id="slots">tactic slots</Term>.
         </div>
       )}
       <div className="col tx-btns">
@@ -246,7 +240,7 @@ export function MentalityDial({ t }: { t: Tactics }) {
           How much risk your team plays with, on top of every setting: aggressive pushes the pace, crashes the glass and gets into the ball; cautious takes care of the ball and
           gets back. It costs no <Term id="familiarity">familiarity</Term>: your settings stay as drilled.
         </p>
-        <p>Situational plans (Game Mgmt) can change it for a situation: very aggressive when chasing a game late, cautious protecting a lead.</p>
+        <p>Situational plans (Match) can change it for a situation: very aggressive when chasing a game late, cautious protecting a lead.</p>
       </Help>
     </div>
   );

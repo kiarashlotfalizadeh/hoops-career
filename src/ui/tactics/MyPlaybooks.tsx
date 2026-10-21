@@ -1,6 +1,6 @@
-// The coach's saved playbooks on Team → Tactics: the "My playbooks" card (load, overwrite, rename,
-// delete, save the current tactics as a new one), the one in use marked, and "Edited" once the
-// tactics have moved from it.
+// The coach's saved playbooks on Team → Tactics: one "My playbooks" row (how many, the one in use)
+// that opens them all in a sheet (load, overwrite, rename, delete, save the current tactics as a new
+// one), the one in use marked, and "Edited" once the tactics have moved from it.
 import { useMemo, useState, type FormEvent } from 'react';
 import { ChevronRight, Save } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -24,7 +24,7 @@ import {
 import { fmtDate, rosterSorted } from '../../core/league/helpers';
 import type { League, SavedPlaybook } from '../../core/types';
 import { rosterNames } from '../stats';
-import { Help, Section, Sheet, Tag, activateOnKey } from '../components/ui';
+import { Help, Sheet, Tag, activateOnKey } from '../components/ui';
 import '../screens/tactics.css';
 
 /** The user's roster and how its players are named in the changes lists. */
@@ -206,7 +206,33 @@ function PlaybookSheet({ pb, close }: { pb: SavedPlaybook; close: () => void }) 
   );
 }
 
-export function MyPlaybooksCard() {
+/** My playbooks as one row: how many and the one in use; a tap opens the list. */
+export function MyPlaybooksRow() {
+  const league = useLeague();
+  const lib = playbookLibrary(league);
+  const cur = useCurrent(league);
+  const [list, setList] = useState(false);
+  return (
+    <div className="card flush">
+      <button className="listrow clickable tx-pbrow" aria-haspopup="dialog" onClick={() => setList(true)}>
+        <span className="grow">
+          <span className="lr-name">My playbooks</span>
+          <span className="lr-meta ellipsis">
+            {lib.length ? `${lib.length} saved` : 'None saved yet'}
+            {cur ? ` · in use: ${cur.pb.name}${cur.changes.length ? ', edited' : ''}` : ''}
+          </span>
+        </span>
+        <ChevronRight size={16} className="dim tx-chev" aria-hidden="true" />
+      </button>
+      <Sheet open={list} onClose={() => setList(false)} title="My playbooks">
+        <MyPlaybooks />
+      </Sheet>
+    </div>
+  );
+}
+
+/** The saved playbooks: each a tap from its sheet, and the way to save the current tactics as one. */
+function MyPlaybooks() {
   const league = useLeague();
   const lib = playbookLibrary(league);
   const cur = useCurrent(league);
@@ -216,25 +242,21 @@ export function MyPlaybooksCard() {
   const pb = lib.find((p) => p.id === open);
   const full = lib.length >= MAX_PLAYBOOKS;
   return (
-    <Section
-      title="My playbooks"
-      right={
-        <div className="row tx-sec-r">
-          <span className="tiny dim num">
-            {lib.length}/{MAX_PLAYBOOKS}
-          </span>
-          <Help title="My playbooks">
-            <p>Save your tactics as a playbook to come back to them: a playbook for the regular season, one for the playoffs, a small-ball set for when your center is hurt.</p>
-            <p>
-              A playbook keeps the schemes, every setting and your game management. Roles, shot freedom and screeners are saved by player and only load for players still on your
-              roster. Matchups and star targets are game by game, so they aren&apos;t saved.
-            </p>
-            <p>Your playbooks are yours: they come with you if you take over another team.</p>
-            <p>Each one lists what loading it would change.</p>
-          </Help>
-        </div>
-      }
-    >
+    <div className="col tx-pbs">
+      <div className="row tx-pbs-h">
+        <span className="tx-sheet-lead grow">Save your tactics to come back to them: one for the playoffs, a small-ball set for when your center is hurt.</span>
+        <span className="tiny dim num">
+          {lib.length}/{MAX_PLAYBOOKS}
+        </span>
+        <Help title="My playbooks">
+          <p>
+            A playbook keeps the schemes, every setting and your game management. Roles, shot freedom and screeners are saved by player and only load for players still on your
+            roster. Matchups and star targets are game by game, so they aren&apos;t saved.
+          </p>
+          <p>Your playbooks are yours: they come with you if you take over another team.</p>
+          <p>Each one lists what loading it would change.</p>
+        </Help>
+      </div>
       <div className="card flush">
         {lib.length === 0 ? (
           // nothing saved: one row, the empty line and the way to start
@@ -300,6 +322,6 @@ export function MyPlaybooksCard() {
       <Sheet open={!!pb} onClose={() => setOpen(null)} title={pb?.name}>
         {pb && <PlaybookSheet key={pb.id} pb={pb} close={() => setOpen(null)} />}
       </Sheet>
-    </Section>
+    </div>
   );
 }

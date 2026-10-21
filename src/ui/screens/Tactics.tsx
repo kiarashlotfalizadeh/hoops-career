@@ -1,16 +1,15 @@
 // Team → Tactics, Football Manager's way. One hero holds the plan in use (tactics/Hero: your three
-// tactics A, B and C with how well the team knows each, the style the active one runs, the grades the
-// open section's levers move, the assistant's switch), then six sections as one row of chips, each
-// its own module in src/ui/tactics: Tactic (the board: your five where the shape and the scheme put
-// them; your saved playbooks), the Instructions by phase of play (with the mentality), Players (roles
-// at both ends), Familiarity (what the team knows and the practice that builds it), Game Mgmt and the
-// Report (the system report and the season's insights). Advice in core links here by the old section
-// ids (playbook, offense, defense, roles, manage, insights), which open the section that now holds
-// them. The grades in the hero move as you change a setting, so every lever shows what it buys and
-// what it costs. Edits save as they're
-// made; while this visit has any, a compact dock says what they did to the grades and offers Undo
-// and Done (which hands the Continue bar back).
-import { useEffect, useMemo, useRef, useState } from 'react';
+// tactics A, B and C, the style the active one runs, how well the team knows it, its strengths and
+// weaknesses from the system report, the assistant's switch), then four sections as one row of chips,
+// each its own module in src/ui/tactics: Tactic (the board with your five, their partnerships and the
+// bench; your saved playbooks), Instructions (the mentality and the three phases of play), Match
+// (crunch time, situations and the late-game rules) and Analysis (the system report, familiarity and
+// the season). Advice in core links here by the old section ids (playbook, roles, players, offense,
+// defense, manage, insights, report, familiarity), which open the section that now holds them. The
+// hero's strengths and weaknesses move as you change a setting, so every lever shows what it buys and
+// what it costs. Edits save as they're made; while this visit has any, a compact dock says what they
+// did to the grades and offers Undo and Done (which hands the Continue bar back).
+import { useEffect, useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { touch } from '../../state/actions';
@@ -19,46 +18,51 @@ import { rosterSorted } from '../../core/league/helpers';
 import { systemFamiliarity } from '../../core/league/practice';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { AssistantCards } from '../components/Assistant';
-import { useQueryParam } from '../league/shared';
+import { useQueryParam, useSetParams } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
 import { TacticsHero } from '../tactics/Hero';
 import { TacticTab } from '../tactics/TacticTab';
 import { InstructionsTab } from '../tactics/InstructionsTab';
-import { RolesTab } from '../tactics/RolesTab';
-import { FamiliarityTab } from '../tactics/FamiliarityTab';
-import { ManageTab } from '../tactics/ManageTab';
-import { ReportTab } from '../tactics/ReportTab';
-import { MentalityDial } from '../tactics/SlotBar';
-import { PHASES, type Phase } from '../tactics/fam';
+import { MatchTab } from '../tactics/MatchTab';
+import { ANALYSIS_VIEWS, AnalysisTab, type AnalysisView } from '../tactics/AnalysisTab';
+import { phaseId, type Phase } from '../tactics/fam';
 import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
 
-type Tab = 'tactic' | 'instructions' | 'players' | 'familiarity' | 'manage' | 'report';
+type Tab = 'tactic' | 'instructions' | 'match' | 'analysis';
 /** The sections' old ids, which advice and search still link to. */
-type OldTab = 'playbook' | 'offense' | 'defense' | 'roles' | 'insights';
+type OldTab = 'playbook' | 'roles' | 'players' | 'offense' | 'defense' | 'manage' | 'insights' | 'report' | 'familiarity';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'tactic', label: 'Tactic' },
   { id: 'instructions', label: 'Instructions' },
-  { id: 'players', label: 'Players' },
-  { id: 'familiarity', label: 'Familiarity' },
-  { id: 'manage', label: 'Game Mgmt' },
-  { id: 'report', label: 'Report' },
+  { id: 'match', label: 'Match' },
+  { id: 'analysis', label: 'Analysis' },
 ];
 
-const OLD: Record<OldTab, Tab> = { playbook: 'tactic', offense: 'instructions', defense: 'instructions', roles: 'players', insights: 'report' };
+const OLD: Record<OldTab, Tab> = {
+  playbook: 'tactic',
+  roles: 'tactic',
+  players: 'tactic',
+  offense: 'instructions',
+  defense: 'instructions',
+  manage: 'match',
+  insights: 'analysis',
+  report: 'analysis',
+  familiarity: 'analysis',
+};
 const ALL_IDS = [...TABS.map((x) => x.id), ...(Object.keys(OLD) as OldTab[])];
 
 export default function Tactics() {
   const league = useLeague();
   const [raw, setTab] = useQueryParam<Tab | OldTab>('tab', 'tactic', ALL_IDS);
   const tab: Tab = (OLD as Record<string, Tab>)[raw] ?? (raw as Tab);
-  // a link to the old Defense section opens Instructions out of possession
-  const [phase, setPhase] = useQueryParam<Phase>(
-    'phase',
-    raw === 'defense' ? 'outPoss' : 'inPoss',
-    PHASES.map((p) => p.id),
-  );
+  // a link to the old Defense section opens Instructions out of possession (and an old phase reads as its new one)
+  const [rawPhase, setPhase] = useQueryParam<string>('phase', raw === 'defense' ? 'outPoss' : 'inPoss');
+  const phase: Phase = phaseId(rawPhase);
+  // an old Familiarity or Insights link opens Analysis at that view
+  const [view, setView] = useQueryParam<AnalysisView>('view', raw === 'familiarity' ? 'familiarity' : raw === 'insights' ? 'season' : 'report', ANALYSIS_VIEWS);
+  const setParams = useSetParams();
   const [side, setSide] = useQueryParam<BoardSide>('side', 'in', ['in', 'out']);
   const team = league.teams[league.userTid];
   const t = team.tactics;
@@ -72,34 +76,22 @@ export default function Tactics() {
   const sys = useLeagueMemo(() => systemFamiliarity(league, league.userTid), [league]);
   // the guided first week's "pick a playbook" is done once it's been looked at
   useEffect(() => void touch((l) => void guideVisit(l, 'playbook')), []);
-  // the open section's chip in view (a link straight to Game Mgmt or the Report lands past the row's edge)
-  const chips = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const row = chips.current;
-    const on = row?.querySelector<HTMLElement>('.chip.on');
-    if (!row || !on) return;
-    const r = row.getBoundingClientRect();
-    const c = on.getBoundingClientRect();
-    if (c.right > r.right || c.left < r.left) row.scrollLeft += c.left - r.left - 16;
-  }, [tab]);
 
   // the system report now and as this visit found it (the other teams' systems worked out once)
   const base = useLeagueMemo(() => systemReport(league, league.userTid, start.tactics), [league, start]);
   const sig = tacticsSig(t);
   const report = useMemo(() => (changed ? systemReport(league, league.userTid, t, base.others) : base), [changed, sig, base, league]); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = changed ? gradeChanges(base, report) : [];
-  // the grades the open section's levers move
-  const end = tab === 'tactic' ? (side === 'in' ? 'off' : 'def') : tab === 'instructions' ? PHASES.find((p) => p.id === phase)!.end : tab === 'players' ? 'both' : null;
 
   return (
     <>
-      {/* the hero: the plan in use (its slot, its style, the grades the open tab moves, who runs it) */}
+      {/* the hero: the plan in use (its slot, its style, how well it's known, its strengths and weaknesses, who runs it) */}
       <fieldset className="tx-fieldset" disabled={simming}>
-        <TacticsHero report={report} was={base} end={end} />
+        <TacticsHero report={report} was={base} fam={sys.overall} onAnalysis={(v) => setParams({ tab: 'analysis', view: v === 'report' ? null : v })} />
       </fieldset>
       <AssistantCards league={league} areas={['tactics']} max={2} />
-      {/* the sections: one row of chips that scrolls, not a grid of tabs */}
-      <div className="tx-tabs" role="group" aria-label="Tactics sections" ref={chips}>
+      {/* the sections: one row of chips */}
+      <div className="tx-tabs" role="group" aria-label="Tactics sections">
         {TABS.map((x) => (
           <button key={x.id} className={`chip ${tab === x.id ? 'on' : ''}`} aria-pressed={tab === x.id} onClick={() => setTab(x.id)}>
             {x.label}
@@ -108,13 +100,10 @@ export default function Tactics() {
       </div>
 
       <fieldset className="tx-fieldset" disabled={simming}>
-        {tab === 'instructions' && <MentalityDial t={t} />}
-        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} onPlayers={() => setTab('players')} />}
+        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} />}
         {tab === 'instructions' && <InstructionsTab t={t} players={players} sys={sys} phase={phase} setPhase={setPhase} />}
-        {tab === 'players' && <RolesTab players={players} />}
-        {tab === 'familiarity' && <FamiliarityTab sys={sys} players={players} />}
-        {tab === 'manage' && <ManageTab t={t} players={players} />}
-        {tab === 'report' && <ReportTab report={report} was={changed ? base : undefined} />}
+        {tab === 'match' && <MatchTab t={t} players={players} />}
+        {tab === 'analysis' && <AnalysisTab view={view} setView={setView} report={report} was={changed ? base : undefined} sys={sys} players={players} />}
       </fieldset>
 
       {changed && !simming && (

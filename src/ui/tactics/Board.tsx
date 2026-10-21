@@ -1,11 +1,11 @@
 // The tactics board, Football Manager's way with a basketball court: the starting five (the rotation's
 // first five) where the formation puts them, in possession by the offensive shape, out of possession
 // by the defensive scheme. Each plate is a player with his role at that end, how well he suits it (★)
-// and a dot for how well he knows his role pair; a tap opens his role sheet. Over the court, the
-// formation's picker (the shape, or the scheme and coverage) with each choice's fit for this roster
-// and how well the team knows it; under it, a row to the bench's roles (on Players).
-import { useMemo, useState, type CSSProperties } from 'react';
-import { ChevronRight } from 'lucide-react';
+// and a dot for how well he knows his role pair; a tap opens his player sheet. Lines join the
+// partners whose roles link at that end (heavier the more of it the engine plays), a red dashed one
+// the bigs who crowd the paint. Over the court, the formation's picker (the shape, or the scheme and
+// coverage) with each choice's fit for this roster and how well the team knows it.
+import { useMemo, type CSSProperties } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { DefScheme, Familiarity, OffShape, Player, PnrCoverage, Tactics } from '../../core/types';
 import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
@@ -16,12 +16,13 @@ import { defRoleFits, fitStars, miscast, roleFits } from '../../core/analysis/sy
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
-import { Help, Section, Segmented, Sheet } from '../components/ui';
-import { RoleEditor } from '../components/RoleEditor';
+import { LINK_META, type Clash, type Link } from '../../core/sim/links';
+import { Help, Section, Segmented } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
 import { tweak } from './edit';
-import { BOARD_H, DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer } from './formation';
+import { BOARD_H, DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from './formation';
+import { linkKey, linkLine, linksOnSide, plateAt } from './partners';
 
 export type BoardSide = 'in' | 'out';
 
@@ -64,34 +65,35 @@ const stars = (v: number) => (
 export function Board({
   t,
   players,
+  five,
   fam,
   side,
   setSide,
-  onPlayers,
+  links,
+  clashes,
+  focus,
+  onPick,
 }: {
   t: Tactics;
+  /** The whole roster (the shapes' fits), and the five on the board. */
   players: Player[];
+  five: Player[];
   fam: Familiarity;
   side: BoardSide;
   setSide: (s: BoardSide) => void;
-  /** Opens Players, where the bench's roles are set. */
-  onPlayers?: () => void;
+  /** The five's partnerships and clashes (lineupLinks). */
+  links: Link[];
+  clashes: Clash[];
+  /** A link picked in the Partnerships card (linkKey): its line stands out and is named. */
+  focus?: string | null;
+  /** Opens a player's sheet. */
+  onPick: (pid: number) => void;
 }) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   const nameOf = useMemo(() => rosterNames(players), [players]);
-  const [pick, setPick] = useState<number | null>(null);
   const order = team.rotation?.order ?? NO_ORDER;
-  const byId = new Map(players.map((p) => [p.pid, p]));
-  const inOrder = [...order.map((pid) => byId.get(pid)).filter((p): p is Player => !!p), ...players.filter((p) => !order.includes(p.pid))];
-  const five = inOrder.slice(0, 5);
-  const bench = inOrder.slice(5);
   const rows = five.map((p) => rowOf(t, fam, p));
-  // bench players another role suits clearly better (at this end), for the row to Players
-  const miscastBench = bench.filter((p) => {
-    const r = rowOf(t, fam, p);
-    return side === 'in' ? r.offBetter : r.defBetter;
-  }).length;
   const inPoss = side === 'in';
   const shape = shapeOf(t.offense);
   const spots = inPoss ? OFF_SPOTS[shape] : DEF_SPOTS[t.defense.scheme];
@@ -103,7 +105,15 @@ export function Board({
     }),
   );
   const fits = useLeagueMemo(() => shapeFits(fitRoster(players), t, order), [players, t, order]);
-  const picked = pick !== null ? byId.get(pick) : undefined;
+  // the lines: this end's links, and in possession the bigs who crowd the paint
+  const shown = linksOnSide(links, side);
+  const crowd = inPoss ? clashes.filter((c) => c.id === 'crowd') : [];
+  const clashed = new Set(crowd.flatMap((c) => c.pids));
+  const at = (pid: number) => {
+    const sp = placed.get(pid);
+    return sp ? plateAt(sp) : null;
+  };
+  const named = shown.find((l) => linkKey(l) === focus);
   const famOf = (key: string) => optValue(fam, key);
   const famSub = (key: string, extra?: string) => {
     const v = famOf(key);
@@ -130,7 +140,11 @@ export function Board({
             ★ is how well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he
             knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
           </p>
-          <p>Tap a player to change his roles, shot freedom and glass duty. The bench&apos;s roles are on Players.</p>
+          <p>
+            A line joins two players whose roles make a <Term id="partnership">partnership</Term> at that end: the heavier and darker, the more of it they play (it grows with their{' '}
+            <Term id="understanding">understanding</Term>). A red dashed line is two bigs crowding the paint.
+          </p>
+          <p>Tap a player for his roles, shot freedom, glass duty and screens.</p>
         </Help>
       }
     >
@@ -243,6 +257,37 @@ export function Board({
             <path d="M 44 2.6 H 56" className="tx-floor-board" />
             <circle cx="50" cy="4.6" r="1.6" className="tx-floor-rim" fill="none" />
           </svg>
+          {/* the partnerships and the clash, under the plates */}
+          <svg className="tx-floor-links" viewBox={`0 0 100 ${BOARD_H}`} preserveAspectRatio="none" aria-hidden="true">
+            {crowd.map((c) =>
+              c.pids.slice(1).map((pid, i) => {
+                const a = at(c.pids[i]);
+                const b = at(pid);
+                return a && b ? <line key={`crowd${pid}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tx-clash-l" /> : null;
+              }),
+            )}
+            {shown.map((l) => {
+              const a = at(l.a);
+              const b = at(l.b);
+              if (!a || !b) return null;
+              const st = linkLine(l.strength);
+              const k = linkKey(l);
+              return (
+                <line
+                  key={k}
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  className={`tx-link-l${focus ? (k === focus ? ' on' : ' off') : ''}`}
+                  strokeWidth={k === focus ? Math.max(1.4, st.width) : st.width}
+                  strokeOpacity={k === focus ? 1 : st.opacity}
+                  strokeDasharray={st.dashed ? '1.4 1.2' : undefined}
+                />
+              );
+            })}
+          </svg>
+          {named && <LinkTag spot={mid(at(named.a), at(named.b))} label={LINK_META[named.id].label} />}
           {rows.map((r) => {
             const spot = placed.get(r.p.pid);
             if (!spot) return null;
@@ -255,10 +300,10 @@ export function Board({
               <button
                 key={r.p.pid}
                 role="listitem"
-                className={`tx-floor-p${off ? ' off' : ''}`}
+                className={`tx-floor-p${off ? ' off' : ''}${clashed.has(r.p.pid) ? ' clash' : ''}`}
                 style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
-                onClick={() => setPick(r.p.pid)}
-                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}; knows his roles ${Math.round(r.pair)}%`}
+                onClick={() => onPick(r.p.pid)}
+                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}${clashed.has(r.p.pid) ? '; crowds the paint' : ''}; knows his roles ${Math.round(r.pair)}%`}
               >
                 <span className="tx-floor-n">
                   <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
@@ -273,21 +318,20 @@ export function Board({
             );
           })}
         </div>
-        {/* the bench's roles at both ends are on Players, with everyone's: one row here, not the list twice */}
-        {bench.length > 0 && onPlayers && (
-          <button className="tx-benchlink" onClick={onPlayers}>
-            <span className="grow">
-              <span className="tx-benchlink-n">The bench</span>
-              <span className="tx-benchlink-m">{miscastBench ? `${miscastBench} would suit another role better` : `${bench.length} players: their roles are on Players`}</span>
-            </span>
-            <ChevronRight size={18} className="dim" aria-hidden="true" />
-          </button>
-        )}
       </div>
-
-      <Sheet open={!!picked} onClose={() => setPick(null)} title={picked ? `${picked.firstName} ${picked.lastName}` : 'Player'}>
-        {picked && <RoleEditor key={`${picked.pid}${side}`} p={picked} side={inPoss ? 'off' : 'def'} onDone={() => setPick(null)} />}
-      </Sheet>
     </Section>
+  );
+}
+
+/** The middle of two plates, where a picked link is named. */
+const mid = (a: { x: number; y: number } | null, b: { x: number; y: number } | null) => (a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null);
+
+/** A picked link's name on the court, at the middle of its line. */
+function LinkTag({ spot, label }: { spot: Pick<Spot, 'x' | 'y'> | null; label: string }) {
+  if (!spot) return null;
+  return (
+    <span className="tx-link-tag" style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}>
+      {label}
+    </span>
   );
 }

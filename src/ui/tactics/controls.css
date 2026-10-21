@@ -1,5 +1,106 @@
-/* Offense, Defense and Game Mgmt's own controls: the hunt and big-man notes, the set package's
+/* Instructions' and Match's own controls: the phase switch, a control's label with its ⓘ, the
+   cards that open (Fine-tune, More rules), the hunt and big-man notes, the set package's row and its
    checkbox rows, and picker rows that open a sheet of choices. */
+/* the three phases: one switch, each phase's name over how well the team knows it */
+.tx-phaseseg .seg button {
+  flex: 1 1 auto;
+  height: 48px;
+  padding: 0 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+}
+.tx-phaseseg-n {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  line-height: 1.1;
+}
+.tx-phaseseg-v {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.tx-phasebody {
+  gap: 10px;
+}
+/* a control's name with its ⓘ beside it */
+.tx-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+/* a card that opens: its name and what's in it, a chevron that turns */
+.tx-fine > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--row-min);
+  padding: var(--row-py) 14px var(--row-py) var(--row-px);
+  cursor: pointer;
+}
+.tx-fine > summary::-webkit-details-marker {
+  display: none;
+}
+.tx-fine > summary:active {
+  background: var(--surface);
+}
+.tx-fine-l {
+  display: block;
+  font-weight: 680;
+  font-size: 15px;
+}
+.tx-fine-m {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.tx-fine-c {
+  flex: none;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.tx-fine[open] .tx-fine-c {
+  transform: rotate(180deg);
+}
+.tx-fine-body {
+  border-top: 1px solid var(--line);
+}
+.tx-fine-pad {
+  padding: var(--pad-card);
+}
+/* a heading inside an open card: its words and its ⓘ */
+.tx-fine-h {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tx-fine-h > span:first-child {
+  flex: 0 1 auto;
+}
+/* the set package on the page: one row, the sets and who they're for */
+.tx-pkg {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: var(--row-py) 14px var(--row-py) var(--row-px);
+  min-height: var(--row-min);
+}
+.tx-pkg:active {
+  background: var(--surface);
+}
+.tx-pkg .lr-name,
+.tx-pkg .lr-meta {
+  display: block;
+}
 /* a line that goes somewhere (the next game's plan, Players): quiet text on a step-up ground */
 .tx-hunt {
   display: flex;

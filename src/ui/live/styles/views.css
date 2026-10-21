@@ -317,6 +317,64 @@
   align-items: center;
   gap: 4px;
 }
+/* the floor's partnerships, in a line over the phases */
+.lv-floor {
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.lv-floor .over {
+  margin-right: 4px;
+}
+.lv-floor b {
+  font-weight: 700;
+}
+.lv-floor-more {
+  font-weight: 650;
+  color: var(--accent-text);
+}
+/* the three phases: one switch that fits a phone */
+.lv-phases .seg button {
+  flex: 1 1 auto;
+  padding: 0 8px;
+  min-width: 0;
+}
+/* a part of the sheet one tap down: a ruled row that opens */
+.lv-fine {
+  border-top: 1px solid var(--line);
+}
+.lv-fine > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.lv-fine > summary::-webkit-details-marker {
+  display: none;
+}
+.lv-fine-l {
+  display: block;
+  font-weight: 680;
+  font-size: 15px;
+}
+.lv-fine-m {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+.lv-fine-c {
+  flex: none;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.lv-fine[open] .lv-fine-c {
+  transform: rotate(180deg);
+}
+.lv-fine-body {
+  padding: 4px 0 8px;
+}
 
 /* the touchline: the three tactics, the mentality, the shape */
 .lv-touch {

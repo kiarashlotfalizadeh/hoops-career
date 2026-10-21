@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from '../tactics/formation';
-import { PHASES, offHabit, phaseFam } from '../tactics/fam';
+import { PHASES, offHabit, phaseFam, phaseId } from '../tactics/fam';
+import { linkLine, plateAt, startersOf, strengthsOf } from '../tactics/partners';
+import type { Quality, SystemReport } from '../../core/analysis/system';
 import { defaultTactics } from '../../core/sim/tactics';
 import type { Familiarity } from '../../core/types';
 
@@ -60,12 +62,16 @@ describe('the tactics board', () => {
 
 describe('familiarity on the Tactics screen', () => {
   const dims = { shape: 90, actions: 60, tempo: 30, roles: 80, scheme: 100, coverage: 40, pressure: 70 };
-  it('reads each phase from its parts', () => {
+  it('reads each of the three phases from its parts, and an old link’s phase as its new one', () => {
     expect(phaseFam(dims, 'inPoss')).toBe(60);
-    expect(phaseFam(dims, 'inTrans')).toBe(30);
+    // transition, both ways: tempo and pressure
+    expect(phaseFam(dims, 'inTrans')).toBe(50);
     expect(phaseFam(dims, 'outPoss')).toBe(70);
-    expect(phaseFam(dims, 'defTrans')).toBe(70);
-    expect(PHASES.map((p) => p.end)).toEqual(['off', 'off', 'def', 'def']);
+    expect(PHASES.map((p) => p.end)).toEqual(['off', 'both', 'def']);
+    expect(phaseId('defTrans')).toBe('inTrans');
+    expect(phaseId('outPoss')).toBe('outPoss');
+    expect(phaseId(null)).toBe('inPoss');
+    expect(phaseId('nonsense')).toBe('inPoss');
   });
 
   it('says where a setting was drilled and what moving it costs', () => {
@@ -86,5 +92,41 @@ describe('familiarity on the Tactics screen', () => {
     expect(d.cost).toBeLessThan(off!.cost);
     // a setting never drilled (no habit kept) costs nothing to show
     expect(offHabit(fam, fast, 'a_pnr', 'action')).toBeNull();
+  });
+});
+
+describe('partnerships and grades on the Tactics screen', () => {
+  it('starts the rotation’s first five and benches the rest, anyone it leaves out last', () => {
+    const ps = [1, 2, 3, 4, 5, 6, 7].map((pid) => ({ pid }));
+    const { five, bench } = startersOf([7, 6, 5, 4, 3], ps);
+    expect(five.map((p) => p.pid)).toEqual([7, 6, 5, 4, 3]);
+    expect(bench.map((p) => p.pid)).toEqual([1, 2]);
+    expect(startersOf([], ps.slice(0, 3)).bench).toEqual([]);
+  });
+
+  it('names the two best and two worst grades, never one as both', () => {
+    const q = (id: string, rank: number) => ({ id, rank, of: 30, raw: 0, grade: 'B', parts: [] }) as unknown as Quality;
+    const r: SystemReport = { off: [q('creation', 3), q('spacing', 1), q('rim', 20)], def: [q('rimD', 28), q('perimD', 2)] };
+    const { strengths, weaknesses } = strengthsOf(r);
+    expect(strengths.map((x) => x.id)).toEqual(['spacing', 'perimD']);
+    expect(weaknesses.map((x) => x.id)).toEqual(['rimD', 'rim']);
+    // three grades: two strengths leave one weakness
+    const small: SystemReport = { off: [q('creation', 1), q('spacing', 2)], def: [q('rimD', 3)] };
+    expect(strengthsOf(small).weaknesses.map((x) => x.id)).toEqual(['rimD']);
+  });
+
+  it('draws a link heavier the more of it plays, a dashed hairline when it plays at little', () => {
+    const weak = linkLine(0.1);
+    const full = linkLine(1.2);
+    expect(weak.dashed).toBe(true);
+    expect(full.dashed).toBe(false);
+    expect(full.width).toBeGreaterThan(weak.width);
+    expect(full.opacity).toBeGreaterThan(weak.opacity);
+    expect(full).toEqual(linkLine(1));
+  });
+
+  it('keeps a line’s ends where the plates sit, a half plate in from the court’s edges', () => {
+    expect(plateAt({ x: 5, y: 2 })).toEqual({ x: 16.5, y: 8.5 });
+    expect(plateAt({ x: 50, y: 40 })).toEqual({ x: 50, y: 40 });
   });
 });

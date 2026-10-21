@@ -1,4 +1,4 @@
-/* Game Mgmt's situational plans: a plan per row (tap to edit), its switch at the right, the add
+/* Match's situational plans: a plan per row (tap to edit), its switch at the right, the add
    chips and the editor sheet. */
 .tx-sit {
   display: flex;
