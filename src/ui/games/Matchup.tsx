@@ -1,12 +1,12 @@
 // The matchup page: everything about one opponent in one place. Their slab (record, form, rank, the
 // next meeting, the season series, your plan against them), then the sections: Preview (when the
 // next game against them is the user's next game), Scout, Plan (with the staff's counters) and
-// Matchups. On game day a dock tips the game off; quick sim stays in the Continue bar's options.
+// Matchups. On game day a dock tips the game off or sims it, and a sim lands on the result: the game's
+// report, which opens on the night's story. The night after a meeting, its result leads the page.
 import { useEffect, type CSSProperties, type ReactNode } from 'react';
-import { useFlowRunner } from '../useFlow';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
-import type { League } from '../../core/types';
+import type { GameResult, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { touch } from '../../state/actions';
 import { liveInProgress } from '../../state/live';
@@ -15,6 +15,8 @@ import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
 import { nextUserGame } from '../../core/analysis/preview';
+import { gameStoryFor } from '../../core/analysis/gameStory';
+import { TeamForm } from './occasion';
 import { Empty, PageHeader } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
@@ -65,6 +67,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
   return (
     <main className="page">
       <Slab league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
+      <JustPlayed league={league} opp={opp} />
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
@@ -78,8 +81,14 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
 /** Game day: tip off (or get back to the game under way), or sim it from here (this dock stands in for the Continue bar). */
 function TipOff({ league, gid, name }: { league: League; gid: number; name: string }) {
   const nav = useNavigate();
-  const run = useFlowRunner();
   const simming = useStore((s) => !!s.sim);
+  // (also finishes the game under way, from its current score) the result is the moment: its report
+  const quick = async () => {
+    const st = useStore.getState();
+    if (st.sim) return;
+    await st.simulate({ kind: 'days', n: 1 });
+    if (useStore.getState().league?.games.some((g) => g.gid === gid)) nav(`/game/${gid}`);
+  };
   const live = liveInProgress(league);
   const resume = live?.gid === gid;
   return (
@@ -92,7 +101,7 @@ function TipOff({ league, gid, name }: { league: League; gid: number; name: stri
       >
         <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
       </button>
-      <button className="btn" disabled={simming} onClick={() => void run({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' })}>
+      <button className="btn" disabled={simming} onClick={() => void quick()}>
         {resume ? 'Finish it' : 'Quick sim'}
       </button>
     </div>
@@ -160,7 +169,14 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         </div>
       </div>
       <dl className="mu-facts">
-        {form && <Fact k="Form">{form}</Fact>}
+        {form && (
+          <Fact k="Form">
+            <span className="mu-form">
+              <TeamForm league={league} tid={opp} />
+              <span>{form}</span>
+            </span>
+          </Fact>
+        )}
         <Fact k="Next">
           {next.length
             ? `${day(next[0].day)}, ${where(next[0])}${
@@ -200,5 +216,36 @@ function Slab({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
         )}
       </dl>
     </section>
+  );
+}
+
+/** The day after a meeting with them: its result and headline lead the page, a tap from the report. */
+function JustPlayed({ league, opp }: { league: League; opp: number }) {
+  const me = league.userTid;
+  const last = useLeagueMemo(() => {
+    let r: GameResult | undefined;
+    for (let i = league.games.length - 1; i >= 0 && !r; i--) {
+      const g = league.games[i];
+      if (g.home.tid === me || g.away.tid === me) r = g;
+    }
+    return r && r.season === league.season && r.day >= league.day - 1 && [r.home.tid, r.away.tid].includes(opp) ? r : undefined;
+  }, [league, me, opp]);
+  const story = useLeagueMemo(() => (last ? gameStoryFor(league, last.gid) : null), [league, last]);
+  if (!last || !story) return null;
+  const [us, them] = last.home.tid === me ? [last.home.pts, last.away.pts] : [last.away.pts, last.home.pts];
+  return (
+    <Link to={`/game/${last.gid}`} className={`mu-last ${story.won ? 'w' : 'l'}`} aria-label={`Final, ${story.won ? 'won' : 'lost'} ${us}-${them}: ${story.head}. Game report`}>
+      <span className="mu-last-score">
+        <span className="mu-last-wl">{story.won ? 'W' : 'L'}</span>
+        <span className="num">
+          {us}-{them}
+        </span>
+      </span>
+      <span className="mu-last-t">
+        <span className="mu-last-k">Final{last.ot ? ` · ${last.ot > 1 ? `${last.ot}OT` : 'OT'}` : ''}</span>
+        <span className="mu-last-h">{story.head}</span>
+      </span>
+      <ChevronRight size={16} aria-hidden="true" />
+    </Link>
   );
 }

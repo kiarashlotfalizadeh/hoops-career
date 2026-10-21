@@ -1,5 +1,6 @@
 // The live screen with no game on: no game for your team today (and the way to the next one), or the
-// final card (the result with Game report and Next game, which names it) over the night's recap.
+// final card (the result as an event: the score counting up, the night's headline, the player of the
+// game and what it means, with Game report and Next game, which names it) over the night's recap.
 import { Activity, ChevronsRight } from 'lucide-react';
 import type { GameResult, League, Team } from '../../core/types';
 import { Empty, PageHeader } from '../components/ui';
@@ -7,6 +8,9 @@ import { GameRecap } from '../components/GameRecap';
 import { FinalSlab } from '../components/FinalSlab';
 import { HighlightsCard } from '../components/HighlightsCard';
 import { stillAlive } from '../flow';
+import { useLeagueMemo } from '../../state/store';
+import { gameStoryFor } from '../../core/analysis/gameStory';
+import { useFirstShowing } from '../games/occasion';
 
 /** No game for your team today: why, and Sim to next game (named: `next`) when there is one to sim to. */
 export function NoGame({ league, canSim, next, busy, onNext }: { league: League; canSim: boolean; next?: string; busy: boolean; onNext: () => void }) {
@@ -63,6 +67,8 @@ export function LiveFinal({
   busy: boolean;
   onNext: () => void;
 }) {
+  const story = useLeagueMemo(() => (result ? gameStoryFor(league, result.gid) : null), [league, result]);
+  const moment = useFirstShowing(result ? `${league.id}:${result.gid}` : undefined);
   return (
     <main className="page lv-final">
       <h1 className="sr-only">
@@ -74,7 +80,7 @@ export function LiveFinal({
         {announce}
       </div>
       {result ? (
-        <FinalSlab res={result} league={league}>
+        <FinalSlab res={result} league={league} story={story} moment={moment}>
           {!final && <div className="lv-simmed small">Played out from the Play menu: the result stands.</div>}
           <div className="lv-final-go">
             <button className="btn primary" onClick={() => onReport(result.gid)}>

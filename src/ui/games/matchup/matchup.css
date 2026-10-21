@@ -538,3 +538,119 @@
   gap: 8px;
   margin-top: 8px;
 }
+
+/* the slab's form: the last five as pills, then the record in words */
+.mu-form {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+/* the night after a meeting: its result and headline, a tap to the report */
+.mu-last {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px var(--pad-card);
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: inset 3px 0 0 var(--good);
+}
+.mu-last.l {
+  box-shadow: inset 3px 0 0 var(--bad);
+}
+.mu-last:active {
+  background: var(--surface);
+}
+.mu-last-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+}
+.mu-last-wl {
+  font-size: 12px;
+  color: var(--good);
+}
+.mu-last.l .mu-last-wl {
+  color: var(--bad);
+}
+.mu-last-t {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mu-last-k {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.mu-last-h {
+  font-weight: 700;
+  font-size: 14.5px;
+  line-height: 1.25;
+}
+
+/* the preview's occasion: what tonight is billed as, the biggest first in display type */
+.mu-occ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px var(--pad-card);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 10%, var(--raised));
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.mu-occ.w1 {
+  background: var(--raised);
+  box-shadow: inset 3px 0 0 var(--line-3);
+}
+.mu-occ-tag {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.mu-occ.w3 .mu-occ-tag {
+  font-size: 28px;
+}
+.mu-occ-line {
+  font-size: 14px;
+  color: var(--text-2);
+}
+.mu-occ-more {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  list-style: none;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-2);
+}
+.mu-occ-more b {
+  color: var(--text);
+  font-weight: 700;
+}
+/* both teams' last five, under the win bar */
+.mu-proj-form {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.mu-proj-fs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

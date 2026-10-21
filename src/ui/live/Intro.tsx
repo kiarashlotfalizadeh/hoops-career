@@ -1,12 +1,17 @@
 // Before the opening tip of a live game: the starting lineups on the court, as a broadcast
-// introduces them (the arena, what's at stake, both fives with their numbers, positions and season
-// lines), until the user tips it off or a few seconds pass.
+// introduces them (the night's billing as its opening graphic, "Rivalry night at Madison Square
+// Garden", the arena, what's at stake, both fives with their numbers, positions and season lines),
+// until the user tips it off or a few seconds pass.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { Play } from 'lucide-react';
 import type { League, Team } from '../../core/types';
 import { FRANCHISES } from '../../core/teams';
 import { seasonTotals } from '../../core/league/helpers';
 import { inkOn, matchupLooks } from '../teamColors';
+import '../components/gameday.css';
+import { useLeagueMemo } from '../../state/store';
+import { arenaOf, billingFor } from '../../core/analysis/gameStory';
+import { billingTitle } from '../games/occasion';
 
 /** How long the lineups stay up before the tip at 1× (faster speeds shorten it). */
 export const INTRO_MS = 9000;
@@ -73,6 +78,12 @@ export function Intro({
     if (left <= 0) onTip();
   }, [left, onTip]);
   const arena = neutral ? undefined : FRANCHISES[home.tid]?.arena;
+  // the night's billing, as the broadcast opens: "Rivalry night at Madison Square Garden"
+  const bill = useLeagueMemo(() => {
+    const g = league.schedule.find((x) => !x.played && x.day === league.day && x.home === home.tid && x.away === away.tid);
+    return g ? billingFor(league, g) : null;
+  }, [league, home.tid, away.tid]);
+  const billAt = neutral ? 'in Las Vegas' : arenaOf(home) ? `at ${arenaOf(home)}` : `in ${home.region}`;
   const lines = new Map([...fives[0], ...fives[1]].map((pid) => [pid, introLine(league, pid)]));
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
@@ -117,8 +128,16 @@ export function Intro({
     // (a region, not a dialog: it doesn't take the focus, and the playback buttons beside it stay in reach)
     <div className="live-intro fade-in" role="region" aria-label="Starting lineups">
       <div className="lv-li-head">
+        {bill && (
+          <>
+            <div className="gd-intro-bill">{billingTitle(bill, billAt)}</div>
+            {/* (its reason, unless that only names the arena again) */}
+            {!(arena && bill.line.includes(arena)) && <div className="gd-intro-line ellipsis">{bill.line}</div>}
+          </>
+        )}
         <div className="lv-li-kicker">Starting lineups</div>
-        <div className="lv-li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>
+        {/* (the billing names the arena) */}
+        {!bill && <div className="lv-li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>}
         {context && <div className="lv-li-where ellipsis live-intro-ctx">{context}</div>}
         {withLines.length > 0 && <div className="lv-li-where ellipsis">Per game, {lastSeason ? 'last' : 'this'} season</div>}
       </div>

@@ -254,3 +254,22 @@ export function storylines(league: League, g: Pick<ScheduledGame, 'gid' | 'home'
 
   return res.sort((a, b) => b.weight - a.weight || a.id.localeCompare(b.id));
 }
+
+/**
+ * The storylines a game's billing reads (see gameStory.ts), without the scans the full list makes:
+ * the revenge games on both sides (the best first) and the career marks within reach of `tid`'s
+ * players. `out`: players who won't play (else the injured).
+ */
+export function billingStorylines(
+  league: League,
+  g: Pick<ScheduledGame, 'home' | 'away' | 'type'>,
+  tid: number,
+  out?: Set<number>,
+): { revenge: Storyline[]; milestone: Storyline[] } {
+  const roster = (t: number) => Object.values(league.players).filter((p) => p.tid === t && (out ? !out.has(p.pid) : !(p.injury && p.injury.gamesRemaining > 0)));
+  const both = [...roster(g.home), ...roster(g.away)];
+  const name = namer(both);
+  const rev = both.flatMap((p) => revenge(league, p, p.tid === g.home ? g.away : g.home, name(p)) ?? []).sort((a, b) => b.weight - a.weight || a.id.localeCompare(b.id));
+  const milestone = g.type === 'regular' ? both.filter((p) => p.tid === tid).flatMap((p) => milestoneWatch(league, p, name(p)) ?? []) : [];
+  return { revenge: rev, milestone: milestone.sort((a, b) => b.weight - a.weight || a.id.localeCompare(b.id)) };
+}

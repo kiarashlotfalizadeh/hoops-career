@@ -1,5 +1,6 @@
-// The matchup page's Preview, for the user's next game against them: the staff's briefing and its
-// plan for tonight, the projection and what the game is worth, the keys to the game, the injury report with the game-time decisions on his
+// The matchup page's Preview, for the user's next game against them: what the night is billed as (a
+// rivalry, a revenge game, Christmas Day, Game 7: see billingsFor), the staff's briefing and its
+// plan for tonight, the projection, both teams' form and what the game is worth, the keys to the game, the injury report with the game-time decisions on his
 // questionable players, the starting fives, what their coach has planned for tonight, and the
 // storylines a broadcast would lead with.
 import { useEffect } from 'react';
@@ -24,6 +25,7 @@ import { matchupColors } from '../../teamColors';
 import { p0, rosterNames } from '../../stats';
 import { teamPlayers } from '../../../core/league/helpers';
 import { Briefing } from './Briefing';
+import { TeamForm, useBillings } from '../occasion';
 
 export function PreviewTab({ league, game, onPlan }: { league: League; game: ScheduledGame; onPlan: () => void }) {
   // the rotations as the game will start them (injuries since a team's last game): the starters shown are the real ones
@@ -42,6 +44,7 @@ export function PreviewTab({ league, game, onPlan }: { league: League; game: Sch
   const locked = live?.gid === game.gid;
   return (
     <>
+      <Occasion league={league} game={game} />
       <Briefing league={league} opp={pv.them.tid} onPlan={onPlan} />
       <Projection league={league} game={game} pv={pv} />
       <Keys league={league} game={game} />
@@ -53,7 +56,29 @@ export function PreviewTab({ league, game, onPlan }: { league: League; game: Sch
   );
 }
 
-/** Who's favoured and by how much, the win chance, and what tonight is worth in the playoff race. */
+/** What the night is billed as: the biggest occasion first, in display type, the others under it. */
+function Occasion({ league, game }: { league: League; game: ScheduledGame }) {
+  const bills = useBillings(league, game);
+  if (!bills.length) return null;
+  const [top, ...rest] = bills;
+  return (
+    <section className={`mu-occ w${top.weight}`} aria-label="The occasion">
+      <div className="mu-occ-tag">{top.tag}</div>
+      <div className="mu-occ-line">{top.line}</div>
+      {rest.length > 0 && (
+        <ul className="mu-occ-more">
+          {rest.slice(0, 3).map((b) => (
+            <li key={b.tag}>
+              <b>{b.tag}</b> {b.line}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** Who's favoured and by how much, the win chance, the two teams' last five, and what tonight is worth in the playoff race. */
 function Projection({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
   const { margin, win } = pv.projection;
   const me = league.teams[pv.us.tid];
@@ -98,6 +123,14 @@ function Projection({ league, game, pv }: { league: League; game: ScheduledGame;
         <div className="mu-winbar" aria-hidden="true">
           <span style={{ flexGrow: win, background: cUs }} />
           <span style={{ flexGrow: 1 - win, background: cThem }} />
+        </div>
+        <div className="mu-proj-form">
+          {[pv.us.tid, pv.them.tid].map((tid) => (
+            <span key={tid} className="mu-proj-fs">
+              <span className="tiny dim">{league.teams[tid].abbrev}</span>
+              <TeamForm league={league} tid={tid} page />
+            </span>
+          ))}
         </div>
         <Stakes league={league} game={game} tid={pv.us.tid} />
         {pv.playIn && <div className="mu-stakes">{pv.playIn.note}</div>}

@@ -1,11 +1,14 @@
 // One team's schedule and results, grouped by month. The Games hub shows the user's split in two
 // (what's coming, soonest first, and the results, latest first, each collapsed past its first few);
 // a team's page shows its season in order. A result opens its report; an upcoming game of the user's
-// opens its matchup page, another team's game that team's page.
+// opens its matchup page, another team's game that team's page. On the user's own schedule the big
+// nights are marked: an upcoming game by its billing (a rivalry, Christmas Day, Game 7), a result
+// the press made a story of by its headline.
 import { Fragment, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { GameResult, League, ScheduledGame } from '../../core/types';
+import type { GameResult, League, NewsItem, ScheduledGame } from '../../core/types';
+import { billingsFor, userGameNews, type Billing } from '../../core/analysis/gameStory';
 import { curTeamSeason, dayToDate, fmtDate } from '../../core/league/helpers';
 import { boxNames } from './report/names';
 import { neutralSite } from '../../core/league/games';
@@ -30,7 +33,14 @@ interface Row {
   them?: number;
   /** The regular-season record after it. */
   rec?: string;
+  /** The user's upcoming game: what it's billed as. */
+  bill?: Billing;
+  /** The user's result: the press's story of it. */
+  story?: NewsItem;
 }
+
+/** Games further off than this are marked only for what can't change (a rivalry, Christmas Day): see billingsFor's `light`. */
+const NEAR_DAYS = 7;
 
 const monthOf = (season: number, day: number) => dayToDate(season, day).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -78,13 +88,20 @@ export function TeamScheduleList({
   const ranks = useLeagueMemo(() => new Map(standings(league).map((r) => [r.tid, r])), [league]);
   const rows = useLeagueMemo(() => {
     const list = league.schedule.filter((g) => g.home === tid || g.away === tid).sort((a, b) => a.day - b.day || a.gid - b.gid);
+    const user = tid === league.userTid;
+    const stories = user ? userGameNews(league) : null;
     let w = 0;
     let l = 0;
     return list.map((g): Row => {
       const home = g.home === tid;
       const opp = home ? g.away : g.home;
       const res = g.played ? byGid.get(g.gid) : undefined;
-      if (!res) return { g, opp, home };
+      if (!res) {
+        const bill = user && !g.played && g.type !== 'allstar' ? billingsFor(league, g, tid, { light: g.day - league.day > NEAR_DAYS })[0] : undefined;
+        // (a Cup or play-in game's tag already says what its billing would)
+        return { g, opp, home, ...(bill && bill.weight >= 2 && !/^(NBA Cup|Cup |Play-In)/.test(bill.tag) ? { bill } : {}) };
+      }
+      const story = stories?.get(`${res.season}-${res.day}`);
       const us = home ? res.home.pts : res.away.pts;
       const them = home ? res.away.pts : res.home.pts;
       const won = us > them;
@@ -92,7 +109,7 @@ export function TeamScheduleList({
         if (won) w++;
         else l++;
       }
-      return { g, res, opp, home, won, us, them, rec: `${w}-${l}` };
+      return { g, res, opp, home, won, us, them, rec: `${w}-${l}`, ...(story && (story.weight ?? 1) >= 2 ? { story } : {}) };
     });
   }, [league, tid, byGid]);
 
@@ -216,7 +233,10 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
     const top = [...side.players].sort((a, b) => b.pts - a.pts)[0];
     // the top scorer's points stay in view when a long name is cut short (the player's own last
     // name while he's in the league: a box-score name can end in "Jr."; a teammate's namesake told apart)
-    sub = top ? (
+    // a big night reads as its headline (the top scorer is in it, or in the report)
+    sub = r.story?.head ? (
+      <span className={`gs-head${(r.story.weight ?? 1) >= 3 ? ' big' : ''}`}>{r.story.head}</span>
+    ) : top ? (
       <>
         <span className="gs-lead">{boxNames(league, side)(top.pid) || top.name}</span>
         <span className="num">{top.pts}</span>
@@ -224,7 +244,17 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
     ) : (
       r.rec
     );
-  } else sub = oppLine(league, r.opp, ranks);
+  } else {
+    const line = oppLine(league, r.opp, ranks);
+    sub = r.bill ? (
+      <>
+        <b className={`gs-bill w${r.bill.weight}`}>{r.bill.tag}</b>
+        {line && <span>· {line}</span>}
+      </>
+    ) : (
+      line
+    );
+  }
   // the keys to the game met, under the score of the user's results
   const keys = r.res && tid === user && r.res.keys?.length ? r.res.keys.filter((k) => k.met !== null) : [];
   const met = keys.filter((k) => k.met).length;

@@ -730,3 +730,209 @@
   gap: 6px;
   margin-top: 6px;
 }
+
+/* ------------------------------------------------------------ the result as an event (FinalSlab's story)
+   The headline under the score, its dek, the hero's jersey and line, what it means as chips. A
+   front-page night gets a bigger headline; a brief stays calm. */
+.gd-sb {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.gd-sb-head {
+  margin: 0;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 22px;
+  line-height: 1.02;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.gd-story.w3 .gd-sb-head {
+  font-size: clamp(26px, 8vw, 34px);
+}
+.gd-story.w1 .gd-sb-head {
+  font-size: 19px;
+}
+.gd-sb-dek {
+  margin: -4px 0 0;
+  font-size: 14px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.86);
+}
+.gd-sb-hero {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.28);
+  color: inherit;
+}
+.gd-sb-hero:active {
+  background: rgba(0, 0, 0, 0.4);
+}
+.gd-sb-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+.gd-sb-k {
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+.gd-sb-name {
+  font-weight: 750;
+  font-size: 15.5px;
+}
+.gd-sb-line {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.86);
+}
+.gd-sb-means {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.gd-sb-means li {
+  padding: 3px 9px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.gd-sb-read {
+  position: relative;
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+.gd-sb-read::after {
+  content: '';
+  position: absolute;
+  inset: -12px -8px;
+}
+/* the first showing: the headline rises in as the score counts up */
+.gd-sb-head.rise {
+  animation: gd-rise 420ms var(--ease-out) both;
+}
+.gd-moment .gd-sb-dek,
+.gd-moment .gd-sb-hero,
+.gd-moment .gd-sb-means {
+  animation: gd-rise 420ms var(--ease-out) 160ms both;
+}
+@keyframes gd-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------ the form guide: the last five, oldest first */
+.gd-form {
+  display: inline-flex;
+  gap: 3px;
+}
+.gd-form i {
+  display: inline-grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 800;
+  font-stretch: 100%;
+  line-height: 1;
+}
+.gd-form i.w {
+  background: var(--good);
+  color: var(--accent-ink);
+}
+.gd-form i.l {
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.86);
+}
+/* (on a page ground rather than a slab) */
+.gd-form.on-page i.l {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+/* ------------------------------------------------------------ a game's billing on a slab: the occasion, then why */
+.gd-bill {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.gd-bill-tag {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 19px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+.gd-bill.w3 .gd-bill-tag {
+  font-size: 24px;
+}
+.gd-bill.w1 .gd-bill-tag {
+  font-size: 15px;
+}
+.gd-bill-line {
+  font-size: 13px;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.86);
+}
+/* (Today's slab: the billing over the two teams, the last five under each record) */
+.td-bill {
+  margin-top: -2px;
+}
+.td-side-t .gd-form {
+  margin-top: 4px;
+}
+.td-side.home .gd-form {
+  align-self: flex-end;
+}
+
+/* ------------------------------------------------------------ the live intro's opening graphic: the night's billing */
+.gd-intro-bill {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: clamp(20px, 6vw, 28px);
+  line-height: 1;
+  text-transform: uppercase;
+  text-wrap: balance;
+  animation: gd-rise 420ms var(--ease-out) both;
+}
+.gd-intro-line {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.82);
+}
+/* (wide screens: the hero's card sits at his line's width, not the slab's) */
+@media (min-width: 600px) {
+  .gd-sb-hero {
+    align-self: flex-start;
+    padding-right: 28px;
+  }
+}

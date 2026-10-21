@@ -1,9 +1,13 @@
-// A game's report: the final, then Debrief (your games: the staff's verdict, your moves and what to
-// do next time, the stars, the keys, the night, what was said), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
+// A game's report: the final with, for your games, the night's story on it (the headline, the player
+// of the game, what it means; the first showing counts the score up), then Debrief (your games: the
+// staff's verdict, your moves and what to do next time, the stars, the keys, the night, what was
+// said), Why (what decided it), Box, Shots and Flow (win probability, the margin and the
 // play-by-play). Each tab is its own module under report/.
 import { useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { useLeague } from '../../state/store';
+import { useLeague, useLeagueMemo } from '../../state/store';
+import { gameStoryFor } from '../../core/analysis/gameStory';
+import { useFirstShowing } from './occasion';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { Empty, PageHeader } from '../components/ui';
 import { matchupColors } from '../teamColors';
@@ -27,6 +31,8 @@ export default function GameReport() {
   const report = useMemo(() => (g && userGame && g.impacts ? buildGameReport(league, g) : null), [g, userGame, league]);
   // your games open on their recap (the result, the stars, the keys); the Why is a tab away
   const [picked, setTab] = useQueryParam<Tab>('tab', userGame ? 'recap' : 'box', ['recap', 'report', 'box', 'shots', 'flow', 'pbp']);
+  const story = useLeagueMemo(() => (g && userGame ? gameStoryFor(league, g.gid) : null), [league, g, userGame]);
+  const moment = useFirstShowing(story ? `${league.id}:${story.gid}` : undefined);
   if (!g) {
     return (
       <main className="page">
@@ -61,7 +67,7 @@ export default function GameReport() {
   return (
     <main className="page gv">
       <PageHeader title="Game report" back backTo="/games" />
-      <FinalSlab res={g} league={league} />
+      <FinalSlab res={g} league={league} story={story} moment={moment} />
       {tabs.length > 1 && <TabBar value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
       {tab === 'recap' && userGame && (
         <GameRecap res={g} league={league} report={report} highlights={league.reel?.gid === g.gid ? <HighlightsCard league={league} res={g} /> : undefined} />

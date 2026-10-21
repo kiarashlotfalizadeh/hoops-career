@@ -222,3 +222,19 @@
 .gs-sub > .gs-tag {
   flex: none;
 }
+/* the user's big nights: an upcoming game's billing, a result's headline */
+.gs-bill {
+  flex: none;
+  font-weight: 750;
+  color: var(--accent-text);
+}
+.gs-bill.w3 {
+  color: var(--warn);
+}
+.gs-head {
+  color: var(--text-2);
+}
+.gs-head.big {
+  color: var(--text);
+  font-weight: 650;
+}

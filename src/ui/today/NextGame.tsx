@@ -1,5 +1,6 @@
-// Today's slab: the next game at a glance (who, both records, when, what's at stake, who's out, the
-// staff's one line on them, and the way to its Matchup page), or outside the season's games a phase card (where the season stands,
+// Today's slab: the next game at a glance (who, both records and their last five, when, what the
+// night is billed as and what's at stake, who's out, the staff's one line on them, and the way to its
+// Matchup page), or outside the season's games a phase card (where the season stands,
 // one line, and the one screen worth opening). The Continue bar carries Watch & coach and the
 // phase's next step, so neither is repeated here.
 import { Link } from 'react-router-dom';
@@ -21,6 +22,7 @@ import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
 import { scoutTeam } from '../../core/ai/advisor';
 import { leadAssistant } from '../../core/ai/assistant';
+import { BillingLine, TeamForm, useBillings } from '../games/occasion';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -30,6 +32,12 @@ export function nextGame(league: League): ScheduledGame | undefined {
     .filter((g) => !g.played && g.day >= league.day && g.type !== 'allstar' && (g.home === me || g.away === me))
     .sort((a, b) => a.day - b.day || a.gid - b.gid)[0];
 }
+
+/**
+ * A team's regular season (schedule.ts plays 82; the last two of the NBA Cup's are set once its
+ * groups are done): a game says of how many, since "Game 7" alone reads like a series' seventh.
+ */
+const SEASON_GAMES = 82;
 
 /** "Today", "Tomorrow", "Sat, Nov 2". */
 const whenLabel = (league: League, day: number) =>
@@ -78,21 +86,35 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const live = liveInProgress(league);
   const cup = cupLabel(league, g);
   const ts = curTeamSeason(league, me);
-  const kind = pv?.playoff ? pv.playoff.tag : g.type === 'playin' ? 'Play-In' : g.cup && g.cup !== 'group' ? cup : `Game ${ts.won + ts.lost + 1}${cup ? ` · ${cup}` : ''}`;
+  const kind = pv?.playoff
+    ? pv.playoff.tag
+    : g.type === 'playin'
+      ? 'Play-In'
+      : g.cup && g.cup !== 'group'
+        ? cup
+        : `Game ${ts.won + ts.lost + 1} of ${SEASON_GAMES}${cup ? ` · ${cup}` : ''}`;
   const series = pv?.playoff;
+  // what the night is billed as: the biggest on its own line, the next as a tag (the series' stakes are in it)
+  const bills = useBillings(league, g);
+  const billed = new Set(bills.map((b) => b.tag));
+  const staked = billed.has('Game 7') || billed.has('Elimination game') || billed.has('Closeout game') || billed.has('Play-In');
   // on the team's colours every tag is the slab's glass; what's at stake is a solid one
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
   if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
-  if (series && series.wins + series.losses > 0)
+  // (a closeout, an elimination game or Game 7 says the series score in its line)
+  if (series && series.wins + series.losses > 0 && !staked)
     tags.push({
       text:
         series.wins === series.losses
           ? `Series tied ${series.wins}-${series.losses}`
           : `${league.teams[series.wins > series.losses ? me : opp].abbrev} leads ${Math.max(series.wins, series.losses)}-${Math.min(series.wins, series.losses)}`,
     });
-  if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
+  if (staked) {
+    // (the billing says it)
+  } else if (series?.elimination || pv?.playIn?.elimination) tags.push({ text: 'Elimination game', stake: true });
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
+  for (const b of bills.slice(1, 3)) if (b.weight >= 2) tags.push({ text: b.tag });
   // (the missing plan is a link to the Plan tab: the one tag here with something to do)
   if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   // the trade deadline's last week: deals close at the end of its day
@@ -120,6 +142,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           Matchup <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>
+      <BillingLine billings={bills} className="td-bill" />
       <div className="td-match">
         {[g.away, g.home].map((tid, i) => {
           const r = curTeamSeason(league, tid);
@@ -131,6 +154,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
                 <span className="td-rec num">
                   {r.won}-{r.lost}
                 </span>
+                <TeamForm league={league} tid={tid} />
               </span>
             </div>
           );

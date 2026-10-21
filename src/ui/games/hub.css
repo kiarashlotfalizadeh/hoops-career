@@ -91,3 +91,60 @@
 .gn-plan.set {
   color: #fff;
 }
+/* a playoff series on the next game's slab: the score in display type, a pill a game played */
+.gn-series-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.gn-ss-score {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+  line-height: 1;
+}
+.gn-ss-score b {
+  font-size: 40px;
+  font-weight: 800;
+}
+.gn-ss-dash {
+  color: var(--text-2);
+}
+.gn-ss-games {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.gn-ss-g {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 52px;
+  padding: 3px 6px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.14);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+.gn-ss-g.w {
+  background: var(--good);
+  color: var(--accent-ink);
+}
+.gn-ss-g::after {
+  content: '';
+  position: absolute;
+  inset: -4px -2px;
+}
+/* the season series by opponent: the record leads the row */
+.gs-opp-rec {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 800;
+  font-size: 18px;
+}
