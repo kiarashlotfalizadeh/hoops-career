@@ -13,13 +13,16 @@
 }
 .dif-head {
   align-items: end;
-  padding-bottom: 2px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .dif-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-weight: 640;
+  min-height: 28px;
+  padding: 0 8px;
+  font-weight: 620;
 }
 .dif-col {
   font-size: 11.5px;
@@ -49,7 +52,6 @@
   --text-dim: var(--text-2);
   color: var(--text);
   background: var(--surface-2);
-  box-shadow: inset 0 0 0 1px var(--line-3);
 }
 .dif-opt:disabled {
   opacity: 0.5;
@@ -58,7 +60,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 660;
+  font-weight: 620;
   min-width: 0;
 }
 .dif-dot {
@@ -68,11 +70,16 @@
   border-radius: 50%;
   border: 1.5px solid var(--line-3);
 }
-/* the chosen one: a paper ring around a paper dot */
+/* the chosen one: a white dot in a white ring, as every chosen option is */
 .dif-opt.on .dif-dot {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 3px var(--surface-2);
-  background: var(--accent);
+  border-color: var(--on);
+  box-shadow: inset 0 0 0 3.5px var(--surface-2);
+  background: var(--on);
+}
+@media (hover: hover) and (pointer: fine) {
+  .dif-opt:not(.on):not(:disabled):hover {
+    background: var(--surface);
+  }
 }
 .dif-v {
   text-align: center;

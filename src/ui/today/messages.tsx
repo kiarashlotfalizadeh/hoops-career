@@ -68,8 +68,8 @@ export const isImportant = (m: InboxMessage) => !!m.important || m.tone === 'ale
 /**
  * One message in a list, as mail apps show it: the unread dot (hanging in the margin), subject (two
  * lines at most: a headline like "BKN want Williams + McCain + 1 pick" is read whole) and date, then
- * his name and the first words. Important mail is
- * flagged; `open`: its decision is still on the agenda.
+ * his name and the first words. Important mail that's unread has the brand's dot; `open`: its
+ * decision is still on the agenda (a Decide tag).
  */
 export function MessageRow({ league, m, open, onOpen }: { league: League; m: InboxMessage; open?: boolean; onOpen: () => void }) {
   const who = senderOf(league, m);
@@ -80,9 +80,10 @@ export function MessageRow({ league, m, open, onOpen }: { league: League; m: Inb
       <span className="td-msg-dot" aria-hidden="true" />
       <span className="grow">
         <span className="td-msg-subj">
-          {!m.read && <span className="sr-only">Unread: </span>}
+          {!m.read && <span className="sr-only">{important ? 'Unread, important: ' : 'Unread: '}</span>}
           <span className="td-msg-s">{m.subject}</span>
-          {open ? <span className="tag warn">Decide</span> : important && !m.read && <span className="tag bad">Important</span>}
+          {/* (important mail that's unread has the brand's dot, as the bell has) */}
+          {open && <span className="tag warn">Decide</span>}
           <span className="td-msg-date">{shortDate(m)}</span>
         </span>
         <span className="td-msg-prev ellipsis">
@@ -175,7 +176,7 @@ export function MessageSheet({ league, m, onClose }: { league: League; m?: Inbox
             </Link>
           )}
           <button
-            className="btn sm ghost"
+            className="btn sm"
             disabled={simming}
             onClick={() => {
               if (

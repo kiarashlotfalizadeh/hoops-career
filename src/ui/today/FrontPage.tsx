@@ -1,7 +1,8 @@
-// Today's front page: the lead (the user's last result while it's fresh, or the top story about his
-// team), his season at a glance (the form guide, where he stands, the owner's and fans' pulse), the
-// league's top headlines, and the way back to "While you were away". The story is on top; the
-// numbers behind it are one tap down (the report, the standings, the story's page).
+// Today's front page pieces: the lead (the user's last result while it's fresh, or the top story
+// about his team), the hero when there's no game today; his season as one strip of figures (the
+// playoff odds, the last five, the owner's and the fans' pulse); the news in two headlines; and the
+// way back to "While you were away". The numbers behind each are one tap down (the report, the
+// standings, the story's page, Office → Owner).
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, NewsItem } from '../../core/types';
@@ -9,10 +10,9 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate } from '../../core/league/helpers';
 import { pct } from '../../core/analysis/odds';
-import { ordinalSuffix } from '../../core/format';
 import { Avatar, Section } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
-import { CoachPulse } from '../office/Pulse';
+import { TrendMark, usePulse } from '../office/Pulse';
 import { useForecast } from '../useForecast';
 import { freshResult, headOf, lastResults, leagueHeadlines, runOf, scoreText, storyLink, topStory, type Result } from './front';
 import { digestLine } from './digest';
@@ -59,14 +59,17 @@ function pogLine(league: League, gid: number): { pid: number; text: string } | n
  * The lead: the last game while it's the news (the press's story of it, or the score and the player
  * of the game), otherwise the top story about the user's team from the last two weeks.
  */
-export function LeadStory({ league }: { league: League }) {
-  const lead = useLeagueMemo(() => {
+export function useLead(league: League) {
+  return useLeagueMemo(() => {
     const fresh = freshResult(league);
     if (fresh) return { kind: 'result' as const, ...fresh, pog: fresh.story ? null : pogLine(league, fresh.r.gid) };
     const n = topStory(league);
     return n ? { kind: 'story' as const, n } : null;
   }, [league]);
-  if (!lead) return null;
+}
+export type Lead = NonNullable<ReturnType<typeof useLead>>;
+
+export function LeadStory({ league, lead }: { league: League; lead: Lead }) {
   if (lead.kind === 'story') {
     const n = lead.n;
     const pid = n.pids.find((p) => league.players[p]?.tid === league.userTid);
@@ -131,7 +134,7 @@ export function LeadStory({ league }: { league: League }) {
       )}
       {!!story?.means.length && (
         <span className="td-lead-means">
-          {story.means.slice(0, 3).map((m) => (
+          {story.means.slice(0, 2).map((m) => (
             <span key={m} className="tag">
               {m}
             </span>
@@ -142,10 +145,12 @@ export function LeadStory({ league }: { league: League }) {
   );
 }
 
+const MOOD_WORD = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
+
 /**
- * His season at a glance: the last five results (newest on the right, as a form guide reads), the
- * run he's on, where he stands in his conference with the playoff odds, and the owner's and fans'
- * pulse. The standings and the schedule are a tap away.
+ * His season in one strip of figures, each opening where it lives in full: the playoff odds (the
+ * standings), the last five results (the schedule), the owner's and the fans' mood (Office →
+ * Owner). Where he stands and his record are on the top bar.
  */
 export function YourSeason({ league }: { league: League }) {
   const me = league.userTid;
@@ -154,98 +159,105 @@ export function YourSeason({ league }: { league: League }) {
   const row = useLeagueMemo(() => (league.phase === 'regular' ? confStandings(league, conf).find((r) => r.tid === me) : undefined), [league, conf, me]);
   const fc = useForecast(league);
   const odds = fc?.teams[me];
-  const run = runOf(results);
+  const pulse = usePulse(league);
   const played = !!row && row.won + row.lost > 0;
-  const confName = conf === 'E' ? 'East' : 'West';
+  const run = runOf(results);
   return (
-    <Section
-      title="Your season"
-      className="td-season"
-      right={
-        <Link className="card-link" to={league.phase === 'regular' ? '/league' : '/games'}>
-          {league.phase === 'regular' ? 'Standings' : 'Schedule'} <ChevronRight size={14} aria-hidden="true" />
-        </Link>
-      }
-    >
-      {played && row && (
-        <div className="td-stand">
-          <span className="td-fig">
-            <span className="num td-fig-v">
-              {row.confRank}
-              <small>{ordinalSuffix(row.confRank)}</small>
+    <Section title="Your season">
+      <div className="td-strip">
+        {played && odds && (
+          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the playoffs. Standings' : `Playoff odds ${pct(odds.reach[0], odds.clinched)}. Standings`}>
+            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(odds.reach[0], odds.clinched)}</span>
+            <span className="td-cell-k">{odds.out ? 'Of the playoffs' : 'Playoff odds'}</span>
+          </Link>
+        )}
+        {results.length > 0 && (
+          <Link
+            to="/games"
+            className="td-cell"
+            aria-label={`Last ${results.length}, oldest first: ${[...results]
+              .reverse()
+              .map((r) => `${r.won ? 'won' : 'lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${league.teams[r.opp].abbrev}`)
+              .join(', ')}${run && run.n >= 2 ? `. ${run.won ? 'Won' : 'Lost'} ${run.n} straight` : ''}. Schedule`}
+          >
+            <span className="td-cell-v td-form" aria-hidden="true">
+              {[...results].reverse().map((r) => (
+                <span key={r.gid} className={r.won ? 'w' : 'l'}>
+                  {r.won ? 'W' : 'L'}
+                </span>
+              ))}
             </span>
-            <span className="td-fig-k">
-              in the {confName}
-              {row.gb > 0 && <> · {row.gb.toFixed(1)} GB</>}
-            </span>
-          </span>
-          {odds &&
-            (odds.out ? (
-              <span className="td-fig end">
-                <span className="td-fig-v td-fig-word">Out</span>
-                <span className="td-fig-k">of the playoffs</span>
+            <span className="td-cell-k">Last {results.length}</span>
+          </Link>
+        )}
+        {!league.fired && (
+          <>
+            <Link to="/office/owner" className="td-cell" aria-label={`The owner is ${pulse.owner.word}. Owner`}>
+              <span className={`td-cell-v td-word tone-${pulse.owner.tone}`}>{MOOD_WORD(pulse.owner.word)}</span>
+              <span className="td-cell-k">
+                Owner <TrendMark trend={pulse.owner.trend} />
               </span>
-            ) : (
-              <span className="td-fig end">
-                <span className="num td-fig-v">{pct(odds.reach[0], odds.clinched)}</span>
-                <span className="td-fig-k">playoff odds</span>
+            </Link>
+            <Link to="/office/owner" className="td-cell" aria-label={`The fans are ${pulse.fans.word}. Owner`}>
+              <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
+              <span className="td-cell-k">
+                Fans <TrendMark trend={pulse.fans.trend} />
               </span>
-            ))}
-        </div>
-      )}
-      {results.length > 0 && (
-        <div className="td-form">
-          <ol className="td-form-l" aria-label="Last results, oldest first">
-            {[...results].reverse().map((r) => (
-              <li key={r.gid}>
-                <Link
-                  to={`/game/${r.gid}`}
-                  className="td-form-g"
-                  aria-label={`${r.won ? 'Won' : 'Lost'} ${scoreText(r)} ${r.home ? 'versus' : 'at'} ${league.teams[r.opp].abbrev}`}
-                >
-                  <span className={`td-wl ${r.won ? 'w' : 'l'}`} aria-hidden="true">
-                    {r.won ? 'W' : 'L'}
-                  </span>
-                  <span className="td-form-o" aria-hidden="true">
-                    {r.home ? '' : '@'}
-                    {league.teams[r.opp].abbrev}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ol>
-          {run && run.n >= 2 && (
-            <span className={`td-run ${run.won ? 'good' : 'bad'}`}>
-              {run.won ? 'Won' : 'Lost'} {run.n} straight
-            </span>
-          )}
-        </div>
-      )}
-      <CoachPulse league={league} />
+            </Link>
+          </>
+        )}
+      </div>
     </Section>
   );
 }
 
-/** The league's top two or three headlines from the last week (other teams' stories), each opening its page. */
-export function Headlines({ league }: { league: League }) {
-  const items = useLeagueMemo(() => leagueHeadlines(league, 3), [league]);
-  if (!items.length) return null;
+/** The lead as a headline in the news (the game is the hero today): its kind and date, then its headline. */
+function LeadRow({ league, lead }: { league: League; lead: Lead }) {
+  if (lead.kind === 'story') {
+    const n = lead.n;
+    return (
+      <Link to={storyLink(n.id)} className="td-hl">
+        <span className="td-hl-over">
+          {NEWS_LABEL[n.kind] ?? 'Your team'} · {fmtDate(n.season, n.day)}
+        </span>
+        <span className="td-hl-head">{headOf(n)}</span>
+      </Link>
+    );
+  }
+  const { r, story } = lead;
+  return (
+    <Link to={`/game/${r.gid}`} className="td-hl">
+      <span className="td-hl-over">
+        Final · <span className={r.won ? 'good' : 'bad'}>{r.won ? 'Won' : 'Lost'}</span> <span className="num">{scoreText(r)}</span> {r.home ? 'vs' : 'at'}{' '}
+        {league.teams[r.opp].abbrev}
+      </span>
+      <span className="td-hl-head">{story?.head ?? plainHead(league, r)}</span>
+    </Link>
+  );
+}
+
+/** The news in two headlines: the lead about his team when the game has the top of Today, then the league's biggest. */
+export function Headlines({ league, lead }: { league: League; lead?: Lead | null }) {
+  const n = lead ? 1 : 2;
+  const items = useLeagueMemo(() => leagueHeadlines(league, n), [league, n]);
+  if (!items.length && !lead) return null;
   return (
     <Section
-      title="Around the league"
+      title="News"
       right={
         <Link className="card-link" to="/league/news">
-          News <ChevronRight size={14} aria-hidden="true" />
+          All news <ChevronRight size={14} aria-hidden="true" />
         </Link>
       }
     >
       <div className="list td-rows">
-        {items.map((n) => (
-          <Link key={n.id} to={storyLink(n.id)} className="td-hl">
+        {lead && <LeadRow league={league} lead={lead} />}
+        {items.map((x) => (
+          <Link key={x.id} to={storyLink(x.id)} className="td-hl">
             <span className="td-hl-over">
-              {NEWS_LABEL[n.kind] ?? 'News'} · {fmtDate(n.season, n.day)}
+              {NEWS_LABEL[x.kind] ?? 'News'} · {fmtDate(x.season, x.day)}
             </span>
-            <span className="td-hl-head">{headOf(n)}</span>
+            <span className="td-hl-head">{headOf(x)}</span>
           </Link>
         ))}
       </div>
@@ -253,16 +265,16 @@ export function Headlines({ league }: { league: League }) {
   );
 }
 
-/** The way back to the latest "While you were away", until the next sim. */
-export function DigestLink() {
+/** The way back to the latest "While you were away", until the next sim: a row in Today's More. */
+export function DigestRow() {
   const digest = useStore((s) => s.digest);
   const open = useStore((s) => s.showDigest);
   if (!digest) return null;
   return (
-    <button type="button" className="td-away" aria-haspopup="dialog" onClick={() => open(true)}>
+    <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => open(true)}>
       <span className="grow">
-        <span className="td-away-t">While you were away</span>
-        <span className="td-away-l">
+        <span className="td-mrow-k">While you were away</span>
+        <span className="td-mrow-m">
           {digest.span} · {digestLine(digest)}
         </span>
       </span>

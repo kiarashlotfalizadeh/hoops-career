@@ -20,6 +20,10 @@
 .ag-row.tone-good {
   --ag-tone: var(--good);
 }
+/* mail that needs you: the brand's dot, as on the bell */
+.ag-row.tone-brand {
+  --ag-tone: var(--brand);
+}
 .ag-head {
   display: flex;
   align-items: center;
@@ -30,7 +34,7 @@
 }
 .ag-title {
   font-size: 15px;
-  font-weight: 660;
+  font-weight: 640;
   line-height: 1.3;
   letter-spacing: -0.003em;
   text-wrap: pretty;
@@ -42,8 +46,8 @@
 /* the signal's dot, on the title's first line */
 .ag-dot {
   display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   margin-right: 3px;
   border-radius: 50%;
   background: var(--ag-tone);

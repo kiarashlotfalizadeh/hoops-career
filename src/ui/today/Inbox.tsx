@@ -102,7 +102,7 @@ export default function Inbox() {
         sub={need ? `${need} need${need === 1 ? 's' : ''} you` : unread ? undefined : 'All caught up'}
         back
         right={
-          <button className="btn sm ghost" disabled={!unread || simming} onClick={markAll}>
+          <button className="btn sm text td-markall" disabled={!unread || simming} onClick={markAll}>
             <CheckCheck size={16} aria-hidden="true" /> Mark all read
           </button>
         }
@@ -139,7 +139,7 @@ export default function Inbox() {
         </div>
       )}
       {list.length > shown && (
-        <button className="btn sm ghost td-more" onClick={() => setShown((n) => n + PAGE)}>
+        <button className="btn sm td-older" onClick={() => setShown((n) => n + PAGE)}>
           Older messages ({list.length - shown})
         </button>
       )}

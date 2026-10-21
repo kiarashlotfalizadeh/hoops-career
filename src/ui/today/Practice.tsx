@@ -1,15 +1,16 @@
 // Practice between games, as Football Manager's training focus: the focus the days between games are
-// spent on (balanced, tactical drills, opponent prep, recovery), set from Today, and what the team
-// knows of what it plays (the system's familiarity, an option it hasn't drilled, players still
-// learning it), shown when it's short. The matchup page's briefing reads the same for tonight's
-// tactics (its game plan on top) and offers the focus that answers a gap, one tap away.
+// spent on (balanced, tactical drills, opponent prep, recovery), one row on Today that opens its sheet
+// (the four focuses, what each does, and what the team knows of what it plays). The matchup page's
+// briefing reads the same for tonight's tactics (its game plan on top) and offers the focus that
+// answers a gap, one tap away.
 import type { League, PrepFocus } from '../../core/types';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { PREP_META, famLabel } from '../../core/sim/familiarity';
 import { famReadout, type FamReadout } from '../../core/ai/advisor';
 import { andList, shortName } from '../../core/league/helpers';
-import { Bar, Chips, Help, Section } from '../components/ui';
+import { ChevronRight } from 'lucide-react';
+import { Bar, Chips, Sheet } from '../components/ui';
 import './today.css';
 
 const FOCUSES: PrepFocus[] = ['balanced', 'system', 'opponent', 'recovery'];
@@ -22,20 +23,6 @@ const tone = (v: number) => (v >= LOW ? 'var(--good)' : v >= 75 ? 'var(--text-2)
 /** Set the practice focus from the next practice day. */
 export function setPrep(focus: PrepFocus) {
   if (edit((l) => void (l.teams[l.userTid].prep = focus))) useStore.getState().toast(`Practice: ${PREP_META[focus].label}.`, 'good');
-}
-
-/** Every focus explained, behind the "?". */
-function PrepHelp() {
-  return (
-    <Help title="Practice focus">
-      {FOCUSES.map((f) => (
-        <p key={f}>
-          <b>{PREP_META[f].label}.</b> {PREP_META[f].help}
-        </p>
-      ))}
-      <p>Familiarity is how well the team knows what it plays: below 95% it plays a step slow (worse shots and more turnovers on offense, more open looks given up on defense).</p>
-    </Help>
-  );
 }
 
 /** The four focuses as chips. */
@@ -77,28 +64,66 @@ function gaps(league: League, r: FamReadout): string[] {
   return out;
 }
 
-/** Today's practice card: the focus, and the system's familiarity when it's short. */
-export function PracticeCard({ league }: { league: League }) {
+/** Practice as one row on Today: the focus, and the system's familiarity when it's short; a tap opens the sheet. */
+export function PracticeRow({ league, onOpen }: { league: League; onOpen: () => void }) {
+  const r = useLeagueMemo(() => famReadout(league), [league]);
+  const low = r.overall < LOW || gaps(league, r).length > 0;
+  return (
+    <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={onOpen}>
+      <span className="grow td-mrow-k">Practice</span>
+      <span className="td-mrow-v">
+        {PREP_META[r.prep].label}
+        {low && <span className="td-mrow-warn"> · System {Math.round(r.overall)}%</span>}
+      </span>
+      <ChevronRight size={18} className="dim" aria-hidden="true" />
+    </button>
+  );
+}
+
+/**
+ * Practice in full: the four focuses as a list to pick from (what each does under its name), and
+ * what the team knows of its system when it's short.
+ */
+export function PracticeSheet({ league, open, onClose }: { league: League; open: boolean; onClose: () => void }) {
+  const simming = useStore((s) => !!s.sim);
   const r = useLeagueMemo(() => famReadout(league), [league]);
   const lines = gaps(league, r);
-  const low = r.overall < LOW || lines.length > 0;
+  const cur = league.teams[league.userTid].prep ?? 'balanced';
   return (
-    <Section title="Practice" right={<PrepHelp />} className="td-prac">
-      <div className="pr-card">
-        <PrepChips league={league} />
-        <p className="pr-help">{PREP_META[r.prep].help}</p>
-        {low && (
-          <div className="pr-fam">
-            <FamMeter v={r.overall} />
-            {lines.map((l) => (
-              <div key={l} className="small dim2">
-                {l}
-              </div>
-            ))}
-          </div>
-        )}
+    <Sheet open={open} onClose={onClose} title="Practice">
+      <div className="pr-sheet">
+        <div className="pr-opts" role="radiogroup" aria-label="Practice focus">
+          {FOCUSES.map((f) => (
+            <button
+              key={f}
+              type="button"
+              role="radio"
+              aria-checked={cur === f}
+              disabled={simming}
+              className={`pr-opt ${cur === f ? 'on' : ''}`}
+              onClick={() => f !== cur && setPrep(f)}
+            >
+              <span className="pr-opt-dot" aria-hidden="true" />
+              <span className="grow">
+                <span className="pr-opt-t">{PREP_META[f].label}</span>
+                <span className="pr-opt-l">{PREP_META[f].help}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="pr-fam">
+          <FamMeter v={r.overall} />
+          {lines.map((l) => (
+            <div key={l} className="small dim2">
+              {l}
+            </div>
+          ))}
+          <p className="pr-note">
+            Familiarity is how well the team knows what it plays: below 95% it plays a step slow (worse shots and more turnovers on offense, more open looks given up on defense).
+          </p>
+        </div>
       </div>
-    </Section>
+    </Sheet>
   );
 }
 

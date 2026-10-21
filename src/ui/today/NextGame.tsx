@@ -1,8 +1,8 @@
-// Today's slab: the next game at a glance (who, both records and their last five, when, what the
-// night is billed as and what's at stake, who's out, the staff's one line on them, and the way to its
-// Matchup page), or outside the season's games a phase card (where the season stands,
-// one line, and the one screen worth opening). The Continue bar carries Watch & coach and the
-// phase's next step, so neither is repeated here.
+// Today's game pieces: the next game as the hero on game day (the billing, both teams, what's at
+// stake, who's out, and the way to its Matchup page), the next game as one row when it isn't today,
+// and outside the season's games a phase card (where the season stands, one line, and the one
+// screen worth opening). The dock carries Watch & coach and the phase's next step, so neither is
+// repeated here.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League, ScheduledGame } from '../../core/types';
@@ -20,9 +20,7 @@ import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
-import { scoutTeam } from '../../core/ai/advisor';
-import { leadAssistant } from '../../core/ai/assistant';
-import { BillingLine, TeamForm, useBillings } from '../games/occasion';
+import { BillingLine, useBillings } from '../games/occasion';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -59,48 +57,47 @@ function outText(league: League, s: SidePreview): string {
   return all.slice(0, 2).join(', ') + (all.length > 2 ? ` +${all.length - 2} more` : '');
 }
 
-/**
- * A scouting point cut to what to do, for a line on the slab (the numbers behind it are on the
- * matchup page): "They foul: opponents get 0.27 free throws a shot… Attack the rim." → "Attack the
- * rim."; "No real rim protection: attack the basket." → "Attack the basket." A point whose advice
- * leans on what came before it ("…(Smith): hunt that mismatch") stays whole.
- */
-export function gist(text: string): string {
-  // sentences end at a full stop before a capital (a decimal's point doesn't end one)
-  const sentences = text.split(/(?<=\.)\s+(?=[A-Z])/);
-  let last = sentences[sentences.length - 1];
-  const colon = last.indexOf(': ');
-  // "X makes 54% of his free throws: a candidate for…" says who after all: only advice ("…: attack the rim") is cut loose
-  if (colon > 0 && !/^(a|an|the)\s/i.test(last.slice(colon + 2))) last = last.slice(colon + 2);
-  // "…: hunt that mismatch" needs what came before it
-  if (sentences.length === 1 && /\b(that|this|those|him)\b/i.test(last)) return text;
-  return last.charAt(0).toUpperCase() + last.slice(1);
+/** Days to the trade deadline while it's a week or less away (0: today), or null. */
+export function deadlineIn(league: League): number | null {
+  const d = league.phase === 'regular' ? league.tradeDeadlineDay - league.day : -1;
+  return d >= 0 && d <= 7 ? d : null;
 }
 
-/** `noPlan`: the staff would say there's no game plan for this opponent yet (a tag here, not a card below). */
+/** "Trade deadline today", "Trade deadline in 3 days". */
+export const deadlineText = (d: number) => (d === 0 ? 'Trade deadline today' : `Trade deadline in ${d === 1 ? '1 day' : `${d} days`}`);
+
+/** What kind of game it is: "Game 56 of 82", "Play-In", "West Semis · Game 3", the Cup's round. */
+function kindOf(league: League, g: ScheduledGame, playoffTag?: string): string {
+  const cup = cupLabel(league, g);
+  const ts = curTeamSeason(league, league.userTid);
+  if (playoffTag) return playoffTag;
+  if (g.type === 'playin') return 'Play-In';
+  if (g.cup && g.cup !== 'group' && cup) return cup;
+  return `Game ${ts.won + ts.lost + 1} of ${SEASON_GAMES}${cup ? ` · ${cup}` : ''}`;
+}
+
+/**
+ * Today's hero on game day: the night's billing as its headline, the two teams and their records,
+ * at most two tags (what's at stake, the missing plan) and who's out. The form guides, the staff's
+ * scouting and the rest are on the Matchup page, a tap away. `noPlan`: the staff would say there's
+ * no game plan for this opponent yet (a tag here, not a card below).
+ */
 export function NextGameSlab({ league, g, noPlan }: { league: League; g: ScheduledGame; noPlan?: boolean }) {
   const me = league.userTid;
   const opp = g.home === me ? g.away : g.home;
   // who's out and the stakes (the preview sets up a throwaway game: once per league change)
   const pv = useLeagueMemo(() => matchupPreview(league, g.gid), [league, g.gid]);
   const live = liveInProgress(league);
-  const cup = cupLabel(league, g);
-  const ts = curTeamSeason(league, me);
-  const kind = pv?.playoff
-    ? pv.playoff.tag
-    : g.type === 'playin'
-      ? 'Play-In'
-      : g.cup && g.cup !== 'group'
-        ? cup
-        : `Game ${ts.won + ts.lost + 1} of ${SEASON_GAMES}${cup ? ` · ${cup}` : ''}`;
+  const kind = kindOf(league, g, pv?.playoff?.tag);
   const series = pv?.playoff;
-  // what the night is billed as: the biggest on its own line, the next as a tag (the series' stakes are in it)
+  // what the night is billed as: the biggest as the headline, the next as a tag (the series' stakes are in it)
   const bills = useBillings(league, g);
   const billed = new Set(bills.map((b) => b.tag));
   const staked = billed.has('Game 7') || billed.has('Elimination game') || billed.has('Closeout game') || billed.has('Play-In');
-  // on the team's colours every tag is the slab's glass; what's at stake is a solid one
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
   if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
+  // (the missing plan is a link to the Plan tab: the one tag here with something to do)
+  if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   // (a closeout, an elimination game or Game 7 says the series score in its line)
   if (series && series.wins + series.losses > 0 && !staked)
     tags.push({
@@ -115,20 +112,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
   for (const b of bills.slice(1, 3)) if (b.weight >= 2) tags.push({ text: b.tag });
-  // (the missing plan is a link to the Plan tab: the one tag here with something to do)
-  if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
-  // the trade deadline's last week: deals close at the end of its day
-  const toDeadline = league.phase === 'regular' ? league.tradeDeadlineDay - league.day : -1;
-  if (toDeadline >= 0 && toDeadline <= 7)
-    tags.push({ text: toDeadline === 0 ? 'Trade deadline today' : `Trade deadline in ${toDeadline === 1 ? '1 day' : `${toDeadline} days`}`, to: '/office/trade' });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
-  // the staff's one line on them: who to watch, and where to hit them
-  const staff = useLeagueMemo(() => {
-    const sc = scoutTeam(league, opp);
-    const watch = sc.threats[0];
-    const hit = sc.weaknesses[0];
-    return { who: leadAssistant(league).last, text: [watch && `Watch ${watch.name}.`, hit && gist(hit)].filter(Boolean).join(' ') };
-  }, [league, opp]);
   return (
     <section className="slab td-slab" aria-label="Next game">
       <div className="td-over">
@@ -139,19 +123,24 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           Matchup <ChevronRight size={14} aria-hidden="true" />
         </Link>
       </div>
-      <BillingLine billings={bills} className="td-bill" />
+      {bills.length > 0 ? (
+        <BillingLine billings={bills} className="td-bill" />
+      ) : (
+        <h2 className="td-bill-plain">
+          {g.home === me ? 'vs' : 'at'} the {league.teams[opp].name}
+        </h2>
+      )}
       <div className="td-match">
         {[g.away, g.home].map((tid, i) => {
           const r = curTeamSeason(league, tid);
           return (
             <div key={tid} className={`td-side ${i ? 'home' : ''}`}>
-              <TeamLogo tid={tid} size={44} decorative />
+              <TeamLogo tid={tid} size={46} decorative />
               <span className="td-side-t">
                 <span className="td-ab">{league.teams[tid].abbrev}</span>
                 <span className="td-rec num">
                   {r.won}-{r.lost}
                 </span>
-                <TeamForm league={league} tid={tid} />
               </span>
             </div>
           );
@@ -160,38 +149,65 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           {g.home === me ? 'vs' : '@'}
         </span>
       </div>
-      {tags.length > 0 && (
-        <div className="chips td-tags">
-          {tags.map((t) =>
-            t.to ? (
-              <Link key={t.text} to={t.to} className="tag td-tag-link">
-                {t.text} <ChevronRight size={12} aria-hidden="true" />
-              </Link>
-            ) : (
-              <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
-                {t.text}
-              </span>
-            ),
+      {(tags.length > 0 || outs.length > 0) && (
+        <div className="td-foot-s">
+          {tags.length > 0 && (
+            <div className="td-tags">
+              {tags.slice(0, 2).map((t) =>
+                t.to ? (
+                  <Link key={t.text} to={t.to} className="tag td-tag-link">
+                    {t.text} <ChevronRight size={12} aria-hidden="true" />
+                  </Link>
+                ) : (
+                  <span key={t.text} className={`tag ${t.stake ? 'td-stake' : ''}`}>
+                    {t.text}
+                  </span>
+                ),
+              )}
+            </div>
+          )}
+          {outs.length > 0 && (
+            <dl className="td-outs">
+              {outs.map((o) => (
+                <div key={o.tid} className="td-out">
+                  <dt className="td-out-k">{league.teams[o.tid].abbrev}</dt>
+                  <dd>{o.text}</dd>
+                </div>
+              ))}
+            </dl>
           )}
         </div>
       )}
-      {outs.length > 0 && (
-        <dl className="td-outs">
-          {outs.map((o) => (
-            <div key={o.tid} className="td-out">
-              <dt className="td-out-k">{league.teams[o.tid].abbrev}</dt>
-              <dd>{o.text}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {/* the staff's one line, under a hairline: the assistant's name leads it */}
-      {staff.text && (
-        <p className="td-staff">
-          <span className="td-staff-who">{staff.who}:</span> {staff.text}
-        </p>
-      )}
     </section>
+  );
+}
+
+/**
+ * The next game when it isn't today (the lead story has the top of Today): one row, the opponent,
+ * when, the billing, and the way to its Matchup page.
+ */
+export function NextGameRow({ league, g }: { league: League; g: ScheduledGame }) {
+  const me = league.userTid;
+  const opp = g.home === me ? g.away : g.home;
+  const bills = useBillings(league, g);
+  const r = curTeamSeason(league, opp);
+  const t = league.teams[opp];
+  return (
+    <Link to={`/games/${opp}`} className="td-next" aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}. Matchup`}>
+      <TeamLogo tid={opp} size={34} decorative />
+      <span className="grow">
+        <span className="td-next-t">
+          {g.home === me ? 'vs' : 'at'} {t.name}{' '}
+          <span className="num td-next-rec">
+            {r.won}-{r.lost}
+          </span>
+        </span>
+        <span className="td-next-m">
+          {whenLabel(league, g.day)} · {bills[0]?.tag ?? kindOf(league, g)}
+        </span>
+      </span>
+      <ChevronRight size={18} className="dim" aria-hidden="true" />
+    </Link>
   );
 }
 

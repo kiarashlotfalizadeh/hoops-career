@@ -21,24 +21,31 @@
 .ok-key-k {
   margin-right: 3px;
   font-size: 12px;
-  font-weight: 620;
+  font-weight: 600;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
+@media (hover: hover) and (pointer: fine) {
+  .ok-key:hover .ok-key-k {
+    color: var(--text-2);
+  }
+}
+/* each band as its badge is drawn: the figure in the tier's colour on a faint wash of it */
 .ok-chip {
   display: inline-grid;
   place-items: center;
   min-width: 25px;
-  height: 18px;
+  height: 19px;
   padding: 0 3px;
   border-radius: var(--radius-xs);
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 740;
-  font-size: 12.5px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  color: var(--bg-2);
+  color: var(--tier);
+  background: color-mix(in srgb, var(--tier) 14%, transparent);
 }
 
 /* the sheet */
@@ -68,9 +75,17 @@
   background: var(--surface);
 }
 .ok-sw {
+  display: grid;
+  place-items: center;
   width: 30px;
-  height: 22px;
-  border-radius: var(--radius-sm);
+  height: 24px;
+  border-radius: var(--radius-xs);
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 15px;
+  color: var(--tier);
+  background: color-mix(in srgb, var(--tier) 14%, transparent);
 }
 .ok-span {
   font-family: var(--display);

@@ -22,24 +22,26 @@ export function DifficultyPicker({ value, onChange, disabled }: { value: Difficu
   };
   return (
     <div className="dif">
-      <div className="dif-row dif-head">
-        <span className="dif-title">
-          <span id={id}>Difficulty</span>
-          <Help title="Difficulty">
-            {DIFFICULTIES.map((d) => (
-              <p key={d}>
-                <b>{DIFFICULTY[d].label}.</b> {DIFFICULTY[d].line}
-              </p>
-            ))}
-            {DIFFICULTY_COLUMNS.map((c) => (
-              <p key={c.id} className="small">
-                <b>{c.label}:</b> {c.help.charAt(0).toLowerCase() + c.help.slice(1)}
-              </p>
-            ))}
-          </Help>
-        </span>
+      <span className="dif-title">
+        <span id={id}>Difficulty</span>
+        <Help title="Difficulty">
+          {DIFFICULTIES.map((d) => (
+            <p key={d}>
+              <b>{DIFFICULTY[d].label}.</b> {DIFFICULTY[d].line}
+            </p>
+          ))}
+          {DIFFICULTY_COLUMNS.map((c) => (
+            <p key={c.id} className="small">
+              <b>{c.label}:</b> {c.help.charAt(0).toLowerCase() + c.help.slice(1)}
+            </p>
+          ))}
+        </Help>
+      </span>
+      {/* the columns' names, once, over the figures */}
+      <div className="dif-row dif-head" aria-hidden="true">
+        <span />
         {DIFFICULTY_COLUMNS.map((c) => (
-          <span key={c.id} className="dif-col" aria-hidden="true">
+          <span key={c.id} className="dif-col">
             {c.label}
           </span>
         ))}

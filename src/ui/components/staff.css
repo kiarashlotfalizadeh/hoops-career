@@ -15,7 +15,6 @@
   display: grid;
   place-items: center;
   background: var(--surface-2);
-  border: 1px solid var(--line-2);
   color: var(--text);
   font-family: var(--display);
   font-stretch: var(--display-w);
@@ -36,15 +35,13 @@
   font-weight: 560;
   color: var(--text-dim);
 }
-/* what he reads in the game: a line in the serif, as a quote would be set */
+/* what he reads in the game: one sentence, in his voice, a size up from the text */
 .lv-ah-read {
   margin-top: 2px;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-size: 18px;
-  font-weight: 520;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.012em;
   color: var(--text);
   text-wrap: pretty;
 }
@@ -117,7 +114,7 @@
 }
 .lv-note-title {
   font-size: 15px;
-  font-weight: 680;
+  font-weight: 650;
   line-height: 1.25;
 }
 .lv-note-line {
@@ -174,15 +171,15 @@
   font-weight: 620;
   line-height: 1.3;
 }
-/* the staff's own change: an outlined tag */
+/* the staff's own change: a soft filled tag */
 .lv-mv-by {
   display: inline-flex;
   align-items: center;
   gap: 3px;
   height: 19px;
   margin-right: 6px;
-  padding: 0 5px;
-  border: 1px solid var(--line-2);
+  padding: 0 6px;
+  background: var(--surface-2);
   border-radius: var(--radius-xs);
   color: var(--text-2);
   font-size: 11.5px;

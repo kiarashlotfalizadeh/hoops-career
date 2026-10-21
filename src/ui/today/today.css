@@ -1,45 +1,212 @@
 /* Today and the inbox. Scoped with the `td-` prefix (practice `pr-`, the digest `dg-`).
-   Today is a front page: one lead (a serif headline over a scoreboard figure), the one slab (the next
-   game), then quiet sections opened by hairlines, flat on the ground. */
+   Today is a calm front page: one hero (the next game on its team-colour slab, or the lead set in
+   the headline cut over its score), then a few blocks on the ground, space between them. */
 
-/* ------------------------------------------------------------ the front page's top: the way back to the digest */
-.td-away {
+/* ------------------------------------------------------------ the slab: the next game, or the phase */
+.td-slab {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: var(--row-min);
-  padding: 0 0 13px;
-  border-bottom: 1px solid var(--line-2);
-  color: inherit;
-  text-align: left;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 18px 18px;
 }
-.td-away-t {
-  display: block;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-style: italic;
-  font-size: 19px;
-  font-weight: 520;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
+.td-over {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.td-over .card-link {
+  flex: none;
+  font-size: 13.5px;
+}
+/* the billing: the night's name as the headline, why under it */
+.td-slab .gd-bill {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: -4px;
+}
+.td-slab .gd-bill-tag,
+.td-bill-plain {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 780;
+  font-size: 28px;
+  line-height: 1.02;
+  letter-spacing: -0.032em;
+  text-transform: none;
+  text-wrap: balance;
   color: var(--text);
 }
-.td-away-l {
-  display: block;
-  margin-top: 2px;
-  font-size: 12.5px;
+.td-bill-plain {
+  margin-top: -4px;
+}
+.td-slab .gd-bill.w3 .gd-bill-tag {
+  font-size: 31px;
+}
+.td-slab .gd-bill.w1 .gd-bill-tag {
+  font-size: 25px;
+}
+.td-slab .gd-bill-line {
+  font-size: 14.5px;
+  font-weight: 460;
+  line-height: 1.38;
+  color: var(--text-2);
+}
+/* away on the left, home on the right, "@" or "vs" between */
+.td-match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+.td-side {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+.td-side.home {
+  grid-column: 3;
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.td-side > svg {
+  flex: none;
+}
+.td-side-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.td-ab {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 780;
+  font-size: 40px;
+  line-height: 0.88;
+  letter-spacing: -0.005em;
+}
+.td-rec {
+  margin-top: 4px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 680;
+  font-size: 19px;
+  line-height: 1;
+  color: var(--text-2);
+}
+.td-at {
+  grid-row: 1;
+  grid-column: 2;
+  font-size: 14px;
+  font-weight: 560;
   color: var(--text-dim);
 }
-.td-away:active .td-away-t {
+/* a narrow phone: smaller marks and letters, so the two sides keep apart */
+@media (max-width: 374px) {
+  .td-side {
+    gap: 7px;
+  }
+  .td-side > svg {
+    width: 34px;
+    height: 34px;
+  }
+  .td-ab {
+    font-size: 32px;
+  }
+  .td-rec {
+    font-size: 16px;
+  }
+}
+/* the slab's small print: what's at stake, then who's out */
+.td-foot-s {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.td-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.td-slab .tag {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 13px;
+}
+.td-slab .tag.td-stake {
+  background: #fff;
+  color: rgba(0, 0, 0, 0.86);
+}
+/* a tag with something to do (no game plan yet): a link, with room for a finger around it */
+.td-slab .tag.td-tag-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  text-decoration: none;
+}
+.td-slab .tag.td-tag-link::after {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+}
+.td-slab .tag.td-tag-link:active {
+  background: rgba(0, 0, 0, 0.34);
+}
+.td-outs {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+}
+.td-outs dd {
+  margin: 0;
+  min-width: 0;
+}
+.td-out {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.38;
   color: var(--text-2);
+}
+.td-out-k {
+  flex: none;
+  width: 30px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: 14px;
+  font-weight: 720;
+  color: var(--text);
+}
+/* outside the season's games: the phase as the slab's headline */
+.td-phase-t {
+  font-size: 30px;
+  line-height: 1;
+}
+.td-phase-l {
+  margin: -6px 0 0;
+  font-size: 14.5px;
+  line-height: 1.4;
+  color: var(--text-2);
+  max-width: 38ch;
 }
 
 /* ------------------------------------------------------------ the lead: a result or the top story */
 .td-lead {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
   color: inherit;
 }
 .td-lead-over {
@@ -47,8 +214,8 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 10px;
-  font-size: 12.5px;
-  font-weight: 620;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .td-lead-go {
@@ -56,7 +223,7 @@
   align-items: center;
   gap: 2px;
   flex: none;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 620;
   color: var(--accent-text);
 }
@@ -66,15 +233,14 @@
   align-items: flex-end;
   gap: 14px;
   min-width: 0;
-  margin-top: 2px;
 }
 .td-lead-pts {
   flex: none;
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 66px;
-  line-height: 0.84;
+  font-weight: 780;
+  font-size: 76px;
+  line-height: 0.82;
   letter-spacing: -0.02em;
   color: var(--text);
 }
@@ -82,7 +248,7 @@
   color: var(--text-dim);
 }
 .td-lead-dash {
-  margin: 0 0.05em;
+  margin: 0 0.04em;
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -96,12 +262,12 @@
 .td-lead-vs {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   min-width: 0;
   padding-bottom: 2px;
 }
 .td-lead-wl {
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 700;
   line-height: 1.1;
 }
@@ -117,25 +283,25 @@
 .td-lead-opp svg {
   flex: none;
 }
-/* the headline: the serif, set big and balanced */
+/* the headline: the expanded cut, heavy and balanced */
 .td-lead-head {
   display: block;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 31px;
-  line-height: 1.07;
-  letter-spacing: -0.02em;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 770;
+  font-size: 27px;
+  line-height: 1.06;
+  letter-spacing: -0.03em;
   color: var(--text);
   text-wrap: balance;
 }
 .td-lead.result .td-lead-head {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 /* a brief about the team is a smaller headline than a front page */
 .td-lead.w1 .td-lead-head,
 .td-lead.w2 .td-lead-head {
-  font-size: 27px;
+  font-size: 24px;
 }
 .td-lead-by {
   display: flex;
@@ -143,8 +309,8 @@
   gap: 11px;
 }
 .td-lead-by .avatar {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   margin-top: 1px;
 }
 .td-lead-dek {
@@ -162,21 +328,25 @@
 /* a tablet: the lead grows with the page, the dek keeps a reading measure */
 @media (min-width: 640px) {
   .td-lead-pts {
-    font-size: 84px;
+    font-size: 92px;
   }
   .td-lead-head {
-    font-size: 40px;
+    font-size: 34px;
   }
   .td-lead.w1 .td-lead-head,
   .td-lead.w2 .td-lead-head {
-    font-size: 32px;
+    font-size: 29px;
   }
   .td-lead-head,
   .td-lead-by {
-    max-width: 30em;
+    max-width: 24em;
   }
   .td-lead-dek {
     max-width: 60ch;
+  }
+  .td-slab .gd-bill-tag,
+  .td-bill-plain {
+    font-size: 34px;
   }
 }
 .td-lead:active .td-lead-head {
@@ -185,230 +355,19 @@
 @media (hover: hover) and (pointer: fine) {
   .td-lead:hover .td-lead-head {
     text-decoration: underline;
-    text-decoration-thickness: 1px;
+    text-decoration-thickness: 2px;
     text-decoration-color: var(--line-3);
     text-underline-offset: 5px;
   }
 }
 
-/* ------------------------------------------------------------ the slab: the next game, or the phase */
-.td-slab {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 16px 16px;
-}
-.td-over {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 20px;
-  font-size: 12.5px;
-  font-weight: 620;
-  color: var(--text-2);
-}
-.td-over .card-link {
-  flex: none;
-}
-/* the billing: the night's name as a headline, why under it */
-.td-slab .gd-bill {
-  gap: 4px;
-  margin-top: -2px;
-}
-.td-slab .gd-bill-tag {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 29px;
-  line-height: 1.04;
-  letter-spacing: -0.018em;
-  text-transform: none;
-  text-wrap: balance;
-}
-.td-slab .gd-bill.w3 .gd-bill-tag {
-  font-size: 33px;
-}
-.td-slab .gd-bill.w1 .gd-bill-tag {
-  font-size: 24px;
-}
-.td-slab .gd-bill-line {
-  font-size: 14px;
-  line-height: 1.38;
-  color: var(--text-2);
-}
-/* away on the left, home on the right, "@" or "vs" between */
-.td-match {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-  padding: 2px 0;
-}
-.td-side {
-  grid-row: 1;
-  grid-column: 1;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-.td-side.home {
-  grid-column: 3;
-  flex-direction: row-reverse;
-  text-align: right;
-}
-.td-side-t {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.td-ab {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 34px;
-  line-height: 0.92;
-  letter-spacing: -0.005em;
-}
-.td-rec {
-  margin-top: 3px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 700;
-  font-size: 18px;
-  line-height: 1.05;
-  color: var(--text-2);
-}
-.td-at {
-  grid-row: 1;
-  grid-column: 2;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-style: italic;
-  font-weight: 480;
-  font-size: 20px;
-  color: var(--text-dim);
-}
-/* the last five under each record */
-.td-side-t .gd-form {
-  gap: 4px;
-  margin-top: 6px;
-}
-.td-side.home .gd-form {
-  align-self: flex-end;
-}
-/* a narrow phone: smaller marks and letters, so the two sides keep apart */
-@media (max-width: 374px) {
-  .td-side {
-    gap: 6px;
-  }
-  .td-side svg {
-    width: 32px;
-    height: 32px;
-  }
-  .td-ab {
-    font-size: 28px;
-  }
-  .td-rec {
-    font-size: 16px;
-  }
-}
-/* the tags, who's out and the staff's line: under one hairline, the slab's small print */
-.td-tags {
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.td-slab .tag.td-stake {
-  background: #fff;
-  border-color: transparent;
-  color: rgba(0, 0, 0, 0.86);
-}
-/* a tag with something to do (no game plan yet): a link, with room for a finger around it */
-.td-slab .tag.td-tag-link {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  text-decoration: none;
-}
-.td-slab .tag.td-tag-link::after {
-  content: '';
-  position: absolute;
-  inset: -10px -4px;
-}
-.td-outs {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin: 0;
-}
-.td-tags + .td-outs {
-  margin-top: -4px;
-}
-.td-match + .td-outs {
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.td-outs dd {
-  margin: 0;
-  min-width: 0;
-}
-.td-out {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 13px;
-  line-height: 1.38;
-  color: var(--text-2);
-}
-.td-out-k {
-  flex: none;
-  width: 32px;
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-size: 13.5px;
-  font-weight: 720;
-  color: var(--text);
-}
-/* the staff's one line on the next opponent, the assistant's name leading it */
-.td-staff {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
-  font-size: 13.5px;
-  line-height: 1.42;
-  color: var(--text-2);
-  text-wrap: pretty;
-}
-.td-staff-who {
-  font-weight: 680;
-  color: var(--text);
-}
-/* outside the season's games: the phase as the slab's headline */
-.td-phase-t {
-  font-size: 34px;
-  line-height: 1;
-}
-.td-phase-l {
-  margin: -4px 0 0;
-  font-size: 14.5px;
-  line-height: 1.4;
-  color: var(--text-2);
-  max-width: 38ch;
-}
-
 /* ------------------------------------------------------------ sections */
-.td-none {
-  font-size: 13.5px;
-  color: var(--text-dim);
-}
 .td-page .sec-h .card-link {
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 620;
   color: var(--accent-text);
 }
@@ -419,7 +378,7 @@
    (the decisions and the staff's advice included: a card stays for them elsewhere) */
 .td-page .ag-list,
 .td-rows {
-  margin-top: -4px;
+  margin-top: -6px;
   background: none;
   border-radius: 0;
   overflow: visible;
@@ -428,34 +387,339 @@
   padding-left: 0;
   padding-right: 0;
 }
-.td-page .sec > .ag-list > :first-child .ag-row {
-  padding-top: 4px;
+.td-page .ag-list > :first-child .ag-row {
+  padding-top: 6px;
+}
+/* a row's line, two lines at most: the rest is on its screen */
+.td-page .ag-line {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+/* a mail row in Needs you: a button drawn as the agenda's link rows */
+.td-mailrow {
+  width: 100%;
+  text-align: left;
+}
+.td-mailrow .grow {
+  min-width: 0;
 }
 
-/* ------------------------------------------------------------ practice */
-.pr-card {
+/* ------------------------------------------------------------ the next game, as one row */
+.td-next {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  min-height: 64px;
+  padding: 12px 14px 12px 16px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: inherit;
+  transition: background var(--dur-fast) ease;
 }
-/* the four focuses in an even grid: two by two on a phone, a row of four wider */
-.td-prac .chips {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+.td-next:active {
+  background: var(--surface);
 }
-.td-prac .chip {
-  justify-content: center;
-  height: 38px;
+.td-next > svg:first-child {
+  flex: none;
 }
-@media (min-width: 560px) {
-  .td-prac .chips {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+.td-next .grow {
+  min-width: 0;
+}
+.td-next-t {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 640;
+  line-height: 1.25;
+}
+.td-next-rec {
+  margin-left: 2px;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-dim);
+}
+.td-next-m {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+@media (hover: hover) and (pointer: fine) {
+  .td-next:hover {
+    background: color-mix(in srgb, var(--surface) 70%, var(--raised));
   }
 }
-.pr-help {
-  margin: 0;
+
+/* ------------------------------------------------------------ your season: one strip of figures */
+.td-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 2px;
+  padding: 6px 6px;
+  border-radius: var(--radius);
+  background: var(--raised);
+}
+.td-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 44px;
+  min-height: 62px;
+  padding: 10px 8px 9px;
+  border-radius: var(--radius-sm);
+  color: inherit;
+  transition: background var(--dur-fast) ease;
+}
+.td-cell:active {
+  background: var(--surface);
+}
+.td-cell-v {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 760;
+  font-size: 27px;
+  line-height: 0.86;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+/* a mood: a word, set as a figure, in its signal's colour */
+.td-word {
+  font-size: 21px;
+  letter-spacing: 0;
+}
+.td-cell-v.tone-good {
+  color: var(--good);
+}
+.td-cell-v.tone-warn {
+  color: var(--warn);
+}
+.td-cell-v.tone-bad {
+  color: var(--bad);
+}
+/* the last five: small letters in their signal's colour, oldest first */
+.td-form {
+  display: flex;
+  gap: 1px;
+  font-size: 21px;
+}
+.td-form .w {
+  color: var(--good);
+}
+.td-form .l {
+  color: var(--bad);
+}
+.td-cell-k {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 1;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.td-cell-k .fo-trend {
+  display: inline-flex;
+}
+@media (hover: hover) and (pointer: fine) {
+  .td-cell:hover {
+    background: var(--surface);
+  }
+}
+@media (min-width: 640px) {
+  .td-strip {
+    padding: 10px 14px;
+  }
+  .td-cell-v {
+    font-size: 36px;
+  }
+  .td-word,
+  .td-form {
+    font-size: 28px;
+  }
+}
+
+/* ------------------------------------------------------------ the news: headlines in the headline cut */
+.td-hl {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: var(--row-min);
+  padding: 13px 0;
+  color: inherit;
+}
+.td-rows > .td-hl:first-child {
+  padding-top: 6px;
+}
+.td-hl-over {
+  font-size: 12.5px;
+  font-weight: 560;
+  color: var(--text-dim);
+}
+.td-hl-head {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-family: var(--head);
+  font-stretch: 106%;
+  font-weight: 720;
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: -0.022em;
+  color: var(--text);
+  text-wrap: balance;
+}
+.td-hl:active .td-hl-head {
+  color: var(--text-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .td-hl:hover .td-hl-head {
+    text-decoration: underline;
+    text-decoration-thickness: 1.5px;
+    text-decoration-color: var(--line-3);
+    text-underline-offset: 4px;
+  }
+}
+
+/* ------------------------------------------------------------ more: one tap down */
+.td-more {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius);
+  background: var(--raised);
+  overflow: hidden;
+}
+.td-more > * + * {
+  border-top: 1px solid var(--line);
+}
+.td-mrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 10px 12px 10px 16px;
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) ease;
+}
+.td-mrow:active {
+  background: var(--surface);
+}
+.td-mrow:disabled {
+  opacity: 0.5;
+}
+.td-mrow > svg {
+  flex: none;
+}
+.td-mrow .grow {
+  min-width: 0;
+}
+.td-mrow-k {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.td-mrow-m {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
   font-size: 13px;
+  color: var(--text-dim);
+}
+.td-mrow-v {
+  flex: none;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.td-mrow-warn {
+  color: var(--warn);
+}
+@media (hover: hover) and (pointer: fine) {
+  .td-mrow:not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface) 70%, var(--raised));
+  }
+}
+
+/* ------------------------------------------------------------ practice (its sheet, and the matchup page's briefing) */
+.pr-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.pr-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pr-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  text-align: left;
+  color: inherit;
+  transition: background var(--dur-fast) ease;
+}
+.pr-opt:active {
+  background: var(--surface);
+}
+.pr-opt.on {
+  background: var(--surface-2);
+}
+.pr-opt:disabled {
+  opacity: 0.5;
+}
+.pr-opt-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line-3);
+}
+.pr-opt.on .pr-opt-dot {
+  border-color: var(--on);
+  background: var(--on);
+  box-shadow: inset 0 0 0 4px var(--surface-2);
+}
+.pr-opt .grow {
+  min-width: 0;
+}
+.pr-opt-t {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 640;
+  line-height: 1.25;
+}
+.pr-opt-l {
+  display: block;
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+.pr-opt.on .pr-opt-l {
+  color: var(--text-2);
+}
+.pr-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
   line-height: 1.42;
   color: var(--text-dim);
 }
@@ -463,11 +727,7 @@
 .pr-brief {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.pr-fam {
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  gap: 8px;
 }
 .pr-meter {
   display: grid;
@@ -476,13 +736,13 @@
   gap: 10px;
 }
 .pr-meter-k {
-  font-size: 12.5px;
-  font-weight: 620;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-dim);
 }
 .pr-meter-v {
-  font-size: 12.5px;
-  font-weight: 680;
+  font-size: 13px;
+  font-weight: 640;
   color: var(--text-2);
   white-space: nowrap;
 }
@@ -502,93 +762,12 @@
   gap: 6px;
   margin-top: 4px;
 }
+@media (hover: hover) and (pointer: fine) {
+  .pr-opt:not(.on):not(:disabled):hover {
+    background: var(--surface);
+  }
+}
 
-/* ------------------------------------------------------------ your season: where you stand, the form, the pulse */
-.td-stand {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-}
-.td-fig {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-.td-fig.end {
-  align-items: flex-end;
-  text-align: right;
-}
-.td-fig-v {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 46px;
-  line-height: 0.86;
-  letter-spacing: -0.015em;
-  color: var(--text);
-}
-.td-fig-v small {
-  margin-left: 1px;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0;
-  color: var(--text-2);
-}
-.td-fig-word {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 560;
-  font-size: 34px;
-  letter-spacing: -0.015em;
-}
-.td-fig-k {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-.td-form {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
-}
-.td-stand + .td-form {
-  margin-top: 6px;
-}
-.td-form-l {
-  display: flex;
-  gap: 2px;
-  margin: 0 0 0 -6px;
-  padding: 0;
-  list-style: none;
-}
-.td-form-g {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1px;
-  min-width: 44px;
-  min-height: 48px;
-  border-radius: var(--radius-sm);
-  color: var(--text-dim);
-}
-.td-form-g:active {
-  background: var(--surface);
-}
-.td-form-o {
-  font-size: 11px;
-  font-weight: 600;
-}
-.td-run {
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
 /* a result's letter: W in green, L in red, set as a figure (no box) */
 .td-wl {
   flex: none;
@@ -601,208 +780,42 @@
   font-size: 16px;
   line-height: 1;
 }
-.td-form-g .td-wl {
-  font-size: 22px;
-}
 .td-wl.w {
   color: var(--good);
 }
 .td-wl.l {
   color: var(--bad);
 }
-/* the owner's and fans' pulse, flat under a hairline (Office → Owner has it in full) */
-.td-season .fo-pulse {
-  min-height: 48px;
-  margin-top: -4px;
-  padding: 6px 0 0;
-  border-top: 1px solid var(--line);
-  border-radius: 0;
-  background: none;
-}
-.td-season .fo-pulse-k {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.td-season .fo-pulse-v {
-  font-size: 15px;
-  font-weight: 680;
-}
 
-/* ------------------------------------------------------------ job security */
-.td-seat {
-  --heat: var(--warn);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  color: inherit;
-}
-.td-seat.hot {
-  --heat: var(--bad);
-}
-.td-seat-top {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-.td-seat-n {
-  font-family: var(--display);
-  font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 40px;
-  line-height: 0.86;
-  color: var(--heat);
-}
-.td-seat-w {
-  flex: 1;
-  font-size: 15px;
-  font-weight: 680;
-  color: var(--heat);
-}
-.td-seat:active .td-seat-w {
-  opacity: 0.75;
-}
-/* Office → Owner's meter, compact: the four bands, the firing line and where he stands */
-.td-meter {
-  position: relative;
-  display: block;
-  padding-top: 16px;
-}
-.td-meter-track {
-  display: flex;
-  gap: 2px;
-  height: 5px;
-  border-radius: var(--radius-xs);
-  overflow: hidden;
-}
-.td-meter-track > i {
-  display: block;
-  height: 100%;
-  opacity: 0.5;
-}
-.td-meter-track > .hot {
-  background: var(--bad);
-}
-.td-meter-track > .warm {
-  background: var(--warn);
-}
-.td-meter-track > .steady {
-  background: var(--info);
-}
-.td-meter-track > .secure {
-  background: var(--good);
-}
-.td-meter-line {
-  position: absolute;
-  top: 12px;
-  width: 1px;
-  height: 13px;
-  background: var(--text);
-}
-.td-meter-line > span {
-  position: absolute;
-  top: -15px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 620;
-  color: var(--text-dim);
-}
-.td-meter-pin {
-  position: absolute;
-  top: 11px;
-  width: 15px;
-  height: 15px;
-  margin-left: -7.5px;
-  border-radius: 50%;
-  background: var(--heat);
-  border: 3px solid var(--bg);
-}
-.td-seat-l {
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-/* ------------------------------------------------------------ around the league: headlines in the serif */
-.td-hl {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: var(--row-min);
-  padding: 12px 0;
-  color: inherit;
-}
-.td-rows > .td-hl:first-child {
-  padding-top: 4px;
-}
-.td-hl-over {
-  font-size: 12px;
-  font-weight: 620;
-  color: var(--text-dim);
-}
-.td-hl-head {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 540;
-  font-size: 19.5px;
-  line-height: 1.2;
-  letter-spacing: -0.012em;
-  color: var(--text);
-  text-wrap: balance;
-}
-.td-hl:active .td-hl-head {
-  color: var(--text-2);
-}
-@media (hover: hover) and (pointer: fine) {
-  .td-hl:hover .td-hl-head {
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-decoration-color: var(--line-3);
-    text-underline-offset: 4px;
-  }
-}
-
-/* ------------------------------------------------------------ messages: the inbox and Today's unread */
+/* ------------------------------------------------------------ messages: the inbox and its sheet */
 /* a list of mail flat on the page: the unread dot hangs in the gutter, the subjects align to it */
-.td-mail {
-  margin-top: -4px;
-}
 .td-msg {
   position: relative;
   display: flex;
   align-items: flex-start;
   width: 100%;
-  min-height: var(--row-min);
-  padding: 11px 0;
+  min-height: 64px;
+  padding: 13px 0;
   color: inherit;
   text-align: left;
   transition: background var(--dur-fast) ease;
 }
-.td-mail > .td-msg:first-child {
-  padding-top: 4px;
-}
 .td-msg:active {
   background: var(--surface);
+}
+.td-msg > .grow {
+  min-width: 0;
 }
 .td-msg-dot {
   position: absolute;
   left: -11px;
-  top: 18px;
-  width: 7px;
-  height: 7px;
+  top: 21px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
 }
-.td-mail > .td-msg:first-child .td-msg-dot {
-  top: 11px;
-}
 .td-msg.unread .td-msg-dot {
-  background: var(--accent);
+  background: var(--accent-text);
 }
 /* important mail that's still unread needs you: the brand's dot */
 .td-msg.important.unread .td-msg-dot {
@@ -813,12 +826,12 @@
   align-items: baseline;
   gap: 8px;
   font-size: 15px;
-  font-weight: 560;
-  line-height: 1.3;
+  font-weight: 540;
+  line-height: 1.32;
   color: var(--text-2);
 }
 .td-msg.unread .td-msg-subj {
-  font-weight: 680;
+  font-weight: 650;
   color: var(--text);
 }
 .td-msg-subj .tag {
@@ -839,8 +852,8 @@
   flex: none;
   margin-left: auto;
   padding-left: 4px;
-  font-size: 12px;
-  font-weight: 560;
+  font-size: 12.5px;
+  font-weight: 520;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
 }
@@ -861,10 +874,10 @@
 
 /* a message in full */
 .td-sheet {
-  gap: 14px;
+  gap: 16px;
 }
 .td-sheet-meta {
-  margin-top: -6px;
+  margin-top: -8px;
   font-size: 13px;
   color: var(--text-dim);
 }
@@ -873,7 +886,7 @@
   flex-direction: column;
   gap: 10px;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.52;
   color: var(--text-2);
   text-wrap: pretty;
 }
@@ -893,12 +906,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 /* the inbox screen: one row of filters, scrolling sideways on a phone */
 .td-ibar {
-  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  margin: -6px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
   padding: 0 var(--gut-r) 2px var(--gut-l);
   overflow-x: auto;
   scrollbar-width: none;
@@ -914,38 +927,26 @@
   white-space: nowrap;
 }
 .td-inbox .td-mail {
-  margin-top: -6px;
-  border-top: 1px solid var(--line-2);
-}
-.td-inbox .td-mail > .td-msg:first-child {
-  padding-top: 11px;
-}
-.td-inbox .td-mail > .td-msg:first-child .td-msg-dot {
-  top: 18px;
+  margin-top: -14px;
 }
 /* an older season's mail under its own label */
 .td-inbox .list-divider {
-  padding: 22px 0 8px;
+  padding: 26px 0 8px;
   background: none;
-  font-size: 12.5px;
-  font-weight: 620;
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--text-2);
 }
-.td-more {
+.td-older {
   align-self: center;
-}
-
-/* ------------------------------------------------------------ footer */
-.td-foot {
-  display: flex;
-  justify-content: center;
 }
 
 /* ------------------------------------------------------------ while you were away (a sheet; `dg-`) */
 .dg {
-  gap: 18px;
+  gap: 26px;
 }
 .dg-span {
-  margin-top: -8px;
+  margin-top: -10px;
   font-size: 13px;
   color: var(--text-dim);
 }
@@ -955,44 +956,45 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px 22px;
+  margin-top: -6px;
 }
 .dg-rec {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 .dg-rec-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 760;
-  font-size: 52px;
-  line-height: 0.86;
+  font-weight: 780;
+  font-size: 60px;
+  line-height: 0.84;
   letter-spacing: -0.015em;
 }
 .dg-rec-k {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-dim);
 }
 .dg-moves {
   display: flex;
-  gap: 20px;
+  gap: 22px;
 }
 .dg-move {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 3px;
+  gap: 4px;
 }
 .dg-move-k {
-  font-size: 12px;
-  font-weight: 620;
+  font-size: 12.5px;
+  font-weight: 560;
   color: var(--text-dim);
 }
 .dg-move-v {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-weight: 740;
-  font-size: 22px;
+  font-weight: 760;
+  font-size: 26px;
   line-height: 1;
 }
 .dg-sec {
@@ -1005,13 +1007,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding-top: 11px;
-  border-top: 1px solid var(--line-2);
 }
 .dg-sec-h .over {
   margin: 0;
-  font-size: 14px;
-  font-weight: 720;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.012em;
   color: var(--text);
 }
 .dg-sec-h .card-link {
@@ -1019,7 +1020,7 @@
   border: none;
   background: none;
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 620;
   color: var(--accent-text);
   display: inline-flex;
@@ -1034,10 +1035,10 @@
 .dg-mail {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   min-height: var(--row-min);
-  padding: 9px 0;
+  padding: 10px 0;
   border: none;
   background: none;
   color: inherit;
@@ -1052,6 +1053,11 @@
 .dg-mail:active {
   background: var(--surface);
 }
+.dg-res > svg,
+.dg-story > svg,
+.dg-mail > svg {
+  flex: none;
+}
 .dg-res-t,
 .dg-story > .grow,
 .dg-mail > .grow {
@@ -1061,21 +1067,21 @@
   gap: 2px;
 }
 .dg-res > .td-wl {
-  min-width: 18px;
-  font-size: 19px;
+  min-width: 16px;
+  font-size: 20px;
 }
 .dg-res-s {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 620;
 }
 .dg-res-s .num {
   font-family: var(--display);
   font-stretch: var(--display-w);
-  font-size: 17px;
-  font-weight: 720;
+  font-size: 18px;
+  font-weight: 740;
 }
 .dg-res-h,
 .dg-story-d {
@@ -1083,19 +1089,26 @@
   color: var(--text-2);
   line-height: 1.38;
 }
+.dg-story-d {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
 .dg-story-h {
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 540;
-  font-size: 17.5px;
+  font-family: var(--head);
+  font-stretch: 106%;
+  font-weight: 720;
+  font-size: 16.5px;
   line-height: 1.22;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   text-wrap: balance;
 }
 .dg-story.w3 .dg-story-h {
-  font-size: 21px;
-  font-weight: 560;
-  line-height: 1.12;
+  font-size: 19px;
+  font-weight: 760;
+  line-height: 1.14;
 }
 .dg-mail-s {
   display: flex;
@@ -1106,7 +1119,7 @@
   color: var(--text-2);
 }
 .dg-mail.unread .dg-mail-s {
-  font-weight: 680;
+  font-weight: 650;
   color: var(--text);
 }
 .dg-mail-s .tag {
@@ -1117,7 +1130,7 @@
   color: var(--text-dim);
 }
 .dg-line {
-  padding: 9px 0;
+  padding: 10px 0;
   font-size: 13.5px;
   color: var(--text-2);
 }
@@ -1128,5 +1141,22 @@
   color: var(--good);
 }
 .dg-done {
-  margin-top: 4px;
+  margin-top: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .dg-res:hover,
+  .dg-story:hover,
+  .dg-mail:hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
+.td-page .ag-line.td-one {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+/* a tablet: the two teams keep together under the headline */
+@media (min-width: 640px) {
+  .td-match {
+    max-width: 560px;
+  }
 }

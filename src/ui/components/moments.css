@@ -1,6 +1,5 @@
 /* Big moments: a full-screen card in the team's colours (see Moments.tsx), set like a slab: the
-   team's colour as a flat field lit from the top, its trim as a rule along the top edge, the moment
-   as a serif headline. Reduced motion keeps the card and drops the movement (theme.css zeroes every
+   team's colour as a field deepening toward its foot, the moment as a headline in the expanded cut. Reduced motion keeps the card and drops the movement (theme.css zeroes every
    animation). */
 
 .moment {
@@ -20,12 +19,11 @@
   animation: fade 0.25s ease;
   --text-dim: rgba(255, 255, 255, 0.78);
 }
-/* the team's colour, flat, lit softly from the top and deepening to the foot, the trim along the top */
+/* the team's colour as a field, deepening toward the foot (as a slab is) */
 .moment-bg {
   position: fixed;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 45%), linear-gradient(0deg, color-mix(in srgb, var(--slab) 62%, #000), var(--slab) 70%);
-  box-shadow: inset 0 calc(var(--safe-t) + 4px) 0 var(--slab-2);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--slab) 92%, #fff), color-mix(in srgb, var(--slab) 62%, #000));
 }
 .moment-body {
   position: relative;
@@ -45,34 +43,24 @@
   width: 112px;
   height: 112px;
 }
-/* the kicker, then a short rule, then the headline */
+/* the kicker, then the headline */
 .moment-over {
-  font-size: 13px;
-  font-weight: 620;
-  color: rgba(255, 255, 255, 0.82);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.84);
   animation: fade 0.4s ease 0.25s both;
 }
 .moment-title {
   position: relative;
-  margin-top: 30px;
-  font-family: var(--serif);
-  font-stretch: 100%;
-  font-weight: 540;
-  font-size: clamp(50px, 16vw, 86px);
-  line-height: 0.96;
-  letter-spacing: -0.03em;
+  margin-top: 14px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 790;
+  font-size: clamp(44px, 13vw, 72px);
+  line-height: 0.98;
+  letter-spacing: -0.035em;
   text-wrap: balance;
   animation: moment-in 0.6s var(--ease-out) 0.2s both;
-}
-.moment-title::before {
-  content: '';
-  position: absolute;
-  top: -16px;
-  left: 50%;
-  width: 36px;
-  height: 1px;
-  margin-left: -18px;
-  background: rgba(255, 255, 255, 0.5);
 }
 @keyframes moment-in {
   from {
@@ -81,10 +69,10 @@
   }
 }
 .moment-sub {
-  margin: 16px 0 0;
+  margin: 18px 0 0;
   max-width: 32ch;
   font-size: 16px;
-  font-weight: 520;
+  font-weight: 460;
   line-height: 1.42;
   color: rgba(255, 255, 255, 0.88);
   text-wrap: balance;
@@ -102,21 +90,35 @@
 .moment-go {
   background: #fff;
   border-color: transparent;
-  color: rgba(0, 0, 0, 0.88);
+  color: #0a0a0c;
   animation: fade 0.4s ease 0.6s both;
 }
+.moment-go:active {
+  background: rgba(255, 255, 255, 0.86);
+}
 .moment-read {
-  background: transparent;
-  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(0, 0, 0, 0.22);
+  border-color: transparent;
   color: #fff;
   animation: fade 0.4s ease 0.7s both;
 }
+.moment-read:active {
+  background: rgba(0, 0, 0, 0.34);
+}
+@media (hover: hover) and (pointer: fine) {
+  .moment-go:hover {
+    background: rgba(255, 255, 255, 0.9);
+  }
+  .moment-read:hover {
+    background: rgba(0, 0, 0, 0.3);
+  }
+}
 /* a story's headline is a sentence, not a word: set smaller so it fits in three or four lines on a phone */
 .moment.story .moment-title {
-  max-width: 18ch;
-  font-size: clamp(34px, 10vw, 54px);
+  max-width: 14ch;
+  font-size: clamp(32px, 9vw, 48px);
   line-height: 1.04;
-  letter-spacing: -0.022em;
+  letter-spacing: -0.03em;
 }
 /* confetti for a title or the Cup */
 .moment-confetti {
@@ -163,7 +165,11 @@
   }
   .moment-title,
   .moment.story .moment-title {
-    margin-top: 22px;
+    margin-top: 10px;
     font-size: clamp(28px, 7vh, 44px);
   }
+}
+/* the focus ring on the team's colour: white */
+.moment .btn:focus-visible {
+  outline-color: #fff;
 }

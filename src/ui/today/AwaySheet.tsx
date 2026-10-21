@@ -18,7 +18,7 @@ import './today.css';
 import type { Digest, DigestStory } from './digest';
 
 /** The most results listed; the rest are a tap away on the schedule. */
-const RESULTS_SHOWN = 6;
+const RESULTS_SHOWN = 5;
 
 /** Mounted once in the shell: the digest's sheet, opened by the store when a sim ends (or from Today). */
 export function DigestHost() {
@@ -107,7 +107,7 @@ function DigestBody({ d }: { d: Digest }) {
 
       {mail.length > 0 && (
         <DigestSection title="New mail" more={{ label: 'Inbox', to: '/inbox' }} go={go}>
-          {mail.slice(0, 5).map((m) => (
+          {mail.slice(0, 3).map((m) => (
             <button key={m.id} type="button" className={`dg-mail ${m.read ? '' : 'unread'}`} onClick={() => go(`/inbox?m=${m.id}`)}>
               <span className="grow">
                 <span className="dg-mail-s">
@@ -119,7 +119,7 @@ function DigestBody({ d }: { d: Digest }) {
               <ChevronRight size={16} className="dim" aria-hidden="true" />
             </button>
           ))}
-          {mail.length > 5 && <div className="dg-line dim">and {mail.length - 5} more</div>}
+          {mail.length > 3 && <div className="dg-line dim">and {mail.length - 3} more</div>}
         </DigestSection>
       )}
 

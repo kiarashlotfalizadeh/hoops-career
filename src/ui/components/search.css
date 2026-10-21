@@ -4,6 +4,20 @@
   min-height: 72vh;
   min-height: 72dvh;
 }
+/* the box takes the title's place: the close button sits at its right, both pinned while the list scrolls */
+.sheet:has(.qs-box) > .sheet-head.bare {
+  position: sticky;
+  top: -6px;
+  z-index: 3;
+  height: 0;
+  margin: 0;
+  align-items: flex-start;
+  justify-content: flex-end;
+  overflow: visible;
+}
+.sheet:has(.qs-box) > .sheet-head.bare .sheet-close {
+  margin-top: 6px;
+}
 .qs-box {
   position: sticky;
   top: -6px;
@@ -11,29 +25,32 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 0 8px;
-  background: var(--bg-2);
+  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
+  padding: 6px 52px 12px var(--gut-l);
+  background: var(--raised);
 }
 .qs-box > svg {
   position: absolute;
-  left: 12px;
+  left: calc(var(--gut-l) + 13px);
   pointer-events: none;
 }
 .qs-input {
-  padding-left: 38px;
+  padding-left: 40px;
 }
 .qs-over {
-  margin: 6px 0 4px;
+  margin: 10px 0 6px;
 }
 .qs-list {
   display: flex;
   flex-direction: column;
+  gap: 1px;
 }
 .qs-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
+  transition: background var(--dur-fast) ease;
 }
 .qs-row.on {
   background: var(--surface);
@@ -43,10 +60,11 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-height: var(--row-min);
-  padding: var(--row-py) 8px;
+  padding: var(--row-py) 10px var(--row-py) 8px;
   text-align: left;
+  border-radius: var(--radius-md);
 }
 .qs-main .grow {
   display: flex;
@@ -61,22 +79,18 @@
   color: var(--text-dim);
 }
 .qs-t {
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1.2;
+  font-weight: 620;
+  font-size: 15.5px;
+  line-height: 1.22;
 }
 .qs-m {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-dim);
-  margin-top: 1px;
+  margin-top: 2px;
 }
 .qs-alt {
-  margin-right: 6px;
+  margin-right: 8px;
 }
 .qs-main:active {
-  background: var(--surface);
-}
-.qs-row,
-.qs-main {
-  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }

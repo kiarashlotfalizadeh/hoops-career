@@ -86,7 +86,7 @@ export default function Start() {
   const tidOf = (m: LeagueMeta) => m.userTid ?? FRANCHISES.findIndex((f) => f.abbrev === m.teamAbbrev);
   return (
     <main className="page standalone st-page st-menu">
-      {/* the masthead: the wordmark set in the serif, the mark as its ornament */}
+      {/* the masthead: the wordmark in the headline cut, the mark over it */}
       <header className="st-hero">
         <BrandMark size={34} className="st-mark" />
         <h1 className="st-word">
@@ -118,7 +118,7 @@ export default function Start() {
         <button className={`btn ${latest ? '' : 'primary'} big block`} onClick={() => nav('/new')}>
           <Plus size={18} aria-hidden="true" /> New league
         </button>
-        <ImportButton block ghost />
+        <ImportButton block text />
       </div>
       {/* (nothing else saved: the Continue card and New league are all there is to say) */}
       {error ? (
@@ -157,12 +157,9 @@ export default function Start() {
                     {logo}
                     <span className="grow">
                       <span className="lr-name ellipsis">{m.name}</span>
-                      {/* two lines, so the record isn't the part a phone cuts off */}
+                      {/* the team's record first, so it isn't the part a phone cuts off */}
                       <span className="lr-meta ellipsis">
-                        {m.teamName} · <span className="num">{m.record}</span>
-                      </span>
-                      <span className="lr-meta ellipsis">
-                        {seasonLabel(m.season)} · {PHASE_LABEL[m.phase]}
+                        <span className="num">{m.record}</span> · {m.teamName} · {seasonLabel(m.season)}
                       </span>
                     </span>
                   </button>
