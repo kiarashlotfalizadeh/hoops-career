@@ -1,5 +1,5 @@
-/* The live page: no scrolling while the game is on but the console's own. The scorebug and the court
-   edge to edge on a phone, the console under them to the bench bar; on a tablet the court as big as
+/* The live page: no scrolling while the game is on but the console's own, and no top bar or tab bar.
+   The scorebug and the court edge to edge on a phone, the console under them to the bench bar; on a tablet the court as big as
    leaves the console its room. "More bench" makes the court smaller on a phone for more of it. */
 :root {
   /* the bench bar's row */
@@ -17,6 +17,16 @@
   padding: 0 var(--gut-r) calc(var(--lq-h) + var(--safe-b)) var(--gut-l);
   gap: 0;
   overflow: hidden;
+}
+/* the top bar gives way too while a game is on (the scorebug says who's playing, and its top line has
+   the way out): the page starts under the status bar, and the bar's room goes to the console (the
+   court's sums below still take the bar's height off, so the court keeps its size) */
+:root[data-gameday] .topbar {
+  display: none;
+}
+:root[data-gameday] .app main.page.lv {
+  height: calc(100dvh - var(--safe-t));
+  margin-top: var(--safe-t);
 }
 .lv-bug,
 .lv-stage {

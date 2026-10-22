@@ -66,15 +66,12 @@
     display: none;
   }
 }
-/* A phone held sideways: the game takes the whole height (the scorebug's top line has the way out),
+/* A phone held sideways: the game takes the whole height (the top bar is already gone, page.css),
    and at a stop the scorebug and the bench bar stay on the left while the report or the huddle has
    the rest of the screen beside them. */
 @media (orientation: landscape) and (max-height: 520px) {
   :root[data-gameday] {
     --top-h: 0px;
-  }
-  :root[data-gameday] .topbar {
-    display: none;
   }
   .app main.page.lv.stopped {
     grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
