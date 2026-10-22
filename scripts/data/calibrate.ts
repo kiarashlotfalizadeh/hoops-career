@@ -1,10 +1,16 @@
-// Engine-in-the-loop calibration: simulate games with the derived ratings, compare each
-// player's simulated per-36 profile with his real one, and nudge ratings/tendencies.
-// After a few passes, players reproduce their real shot volume, shot mix, efficiency,
-// playmaking, rebounding and defensive event rates inside the game engine.
+// Engine-in-the-loop calibration against two targets at once. Simulate games with the derived
+// ratings, then for each player compare:
+//   1. His style: his simulated per-36 profile with his real one (shot volume, shot mix,
+//      efficiency, playmaking, rebounding and defensive event rates), nudging his shooting ratings
+//      and hidden tendencies.
+//   2. His value: what his team gains with him on the floor in the simulated games (RAPM over the
+//      batch's stints, value.ts) with his projected EPM, nudging only the skills whose evidence is
+//      his impact (valueWeights), with his own scoring held where it was.
+// After a few passes both match: each player reproduces his real line and is worth on the floor
+// what the projection says, its gaps between players included.
 
-import type { League, Player, Tactics, Team } from '../../src/core/types';
-import { GameSim } from '../../src/core/sim/engine';
+import type { League, Player, RatingKey, Ratings, Tactics, Team } from '../../src/core/types';
+import { GameSim, type Stint } from '../../src/core/sim/engine';
 import { Rng, clamp } from '../../src/core/random';
 import { autoRotation, autoTactics, rankedPresets } from '../../src/core/ai/coachAI';
 import { applyDefPreset, applyOffPreset, cloneTactics } from '../../src/core/sim/tactics';
@@ -12,6 +18,7 @@ import { clampRatings } from '../../src/core/ratings';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
 import { teamPlayers } from '../../src/core/league/helpers';
 import type { Agg } from './derive';
+import { rapm, type OnCourt } from './value';
 
 interface SimAcc {
   sec: number;
@@ -128,7 +135,7 @@ function calibSides(league: League): { next: CalibSide[]; real: CalibSide[] } {
   return { next: next.filter((s) => s.players.length >= 5), real: real.filter((s) => s.players.length >= 5) };
 }
 
-export function simulateBatch(league: League, gamesPerTeam: number, seed: number): Map<number, SimAcc> {
+export function simulateBatch(league: League, gamesPerTeam: number, seed: number, stints?: Stint[]): Map<number, SimAcc> {
   const rng = new Rng(seed);
   const acc = new Map<number, SimAcc>();
   const ctxs = calibSides(league);
@@ -147,8 +154,9 @@ export function simulateBatch(league: League, gamesPerTeam: number, seed: number
     for (let g = 0; g < total; g++) {
       const h = g % n;
       const a = (h + 1 + Math.floor(rng.next() * (n - 1))) % n;
-      const sim = new GameSim(lineup(sides[h]), lineup(sides[a]), { rng, type: 'regular', injuries: false });
+      const sim = new GameSim(lineup(sides[h]), lineup(sides[a]), { rng, type: 'regular', injuries: false, stints: !!stints });
       sim.simToEnd();
+      if (stints) stints.push(...sim.stints!.values());
       for (const rb of sim.rawBoxes()) {
         if (rb.b.sec <= 0) continue;
         const e = acc.get(rb.pid) ?? blank();
@@ -190,8 +198,91 @@ export interface CalibReport {
   err: Record<string, number>;
 }
 
-export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: number }>, passes: { games: number; damp: number }[], log = console.log): CalibReport[] {
+/** A player's value target, his projected EPM at each end, and the defensive skills a miss there moves, by how much of it each takes. */
+export interface ValueTarget {
+  off: number;
+  def: number;
+  defW: Partial<Record<RatingKey, number>>;
+  /** His ratings as his evidence derived them: value moves each skill at most VALUE_BAND from there. */
+  from: Ratings;
+}
+
+/**
+ * The skills that carry a player's value: the ones whose evidence is his impact (derive.ts reads
+ * them from box plus-minus, RAPM, matchup and rim defense) and whose part in the engine is what his
+ * teammates get, not his own line. At the offensive end that is feel (offensive IQ, which lifts every
+ * shot the five take); at the defensive end team defense (defensive IQ), then the perimeter or the
+ * interior with rim contests by where he defends, from his derived ratings. Shooting, handling,
+ * passing, free throws, rebounding, steals, size and athleticism never move for value: his real line
+ * pins them.
+ */
+export function valueWeights(r: Ratings): Pick<ValueTarget, 'defW'> {
+  const inside = clamp(0.5 + (r.intD + r.blk + r.hgt - r.perD - r.stl - r.spd) / 120, 0.15, 0.85);
+  return { defW: { diq: 1, perD: 1.4 * (1 - inside), intD: 1.4 * inside, blk: 0.6 * inside } };
+}
+
+/**
+ * Rating points per point per 100 of value missed: about what moves his simulated RAPM by one
+ * (feel is worth about 0.1 a point with his own scoring held still; team, perimeter and interior
+ * defense with rim contests together about 0.11).
+ */
+const VALUE_GAIN = { off: 10, def: 9 };
+/** The most a value step moves a skill in one pass. */
+const VALUE_STEP_MAX = 6;
+/**
+ * The most value moves a skill from where his evidence put it, all passes together: about one
+ * standard deviation of a rating across the league. The engine values some players far from their
+ * projection whatever their skills (a high-usage scorer's efficient volume above it, a non-scoring
+ * role player's below, a rim protector's blocks and boards above, a small guard's defense below),
+ * and closing those gaps entirely would push their feel and defense to the ends of the scale; within
+ * the band they close as far as their evidence allows, and the build reports what is left.
+ */
+export const VALUE_BAND = 15;
+/** Possessions of simulated RAPM at which a value miss counts for half (it is noisy below). */
+const VALUE_POSS = 8000;
+/** How much each older batch of stints counts in the value fit (ratings have moved since). */
+const VALUE_DECAY = 0.5;
+
+/**
+ * Feel also enters a player's own scoring: through the composites his finishing, mid-range and
+ * threes read (ratings.ts), the creation and pick-and-roll handling that open his own shots up, and
+ * the five's feel, which lifts his own makes with everyone's (0.6 of his offensive IQ over five, at
+ * K.feel per 50 points: half a point of make rate per ten points of IQ). What a value step gives his
+ * offensive IQ comes back out of finishing, mid-range, threes and handling in the proportions that
+ * hold each zone's make rate and his creation where they were, so his level never spills into his
+ * scoring (the style targets then hold his line there).
+ */
+export const FEEL_IN_SCORING: Partial<Record<RatingKey, number>> = { ins: 0.61, mid: 0.455, tp: 0.38, hnd: 0.6 };
+
+/** Move his value skills by `moves`, each within the band around his evidence, what his feel gains coming back out of his scoring. */
+function shiftValue(r: Ratings, from: Ratings, moves: Partial<Record<RatingKey, number>>) {
+  const was = r.oiq;
+  for (const [k, x] of Object.entries(moves) as [RatingKey, number][]) r[k] = clamp(r[k] + x, from[k] - VALUE_BAND, from[k] + VALUE_BAND);
+  clampRatings(r);
+  for (const [k, w] of Object.entries(FEEL_IN_SCORING) as [RatingKey, number][]) r[k] -= w * (r.oiq - was);
+  clampRatings(r);
+}
+
+/** Step a player's value skills by his miss at each end (points per 100) times `d`, his scoring held where it was. */
+export function valueStep(r: Ratings, t: Pick<ValueTarget, 'defW' | 'from'>, miss: { off: number; def: number }, d: number) {
+  const dO = clamp(VALUE_GAIN.off * miss.off * d, -VALUE_STEP_MAX, VALUE_STEP_MAX);
+  const dD = clamp(VALUE_GAIN.def * miss.def * d, -VALUE_STEP_MAX, VALUE_STEP_MAX);
+  const moves: Partial<Record<RatingKey, number>> = { oiq: dO };
+  for (const [k, w] of Object.entries(t.defW) as [RatingKey, number][]) moves[k] = w * dD;
+  shiftValue(r, t.from, moves);
+}
+
+const VALUE_SKILLS: RatingKey[] = ['oiq', 'diq', 'perD', 'intD', 'blk'];
+
+export function calibrate(
+  league: League,
+  targets: Map<number, { agg: Agg; rel: number }>,
+  value: Map<number, ValueTarget>,
+  passes: { games: number; damp: number }[],
+  log = console.log,
+): CalibReport[] {
   const reports: CalibReport[] = [];
+  const batches: { stints: Stint[]; w: number }[] = [];
   // Targets blend three seasons, which lags the league's drift toward the three: scale each
   // player's three-point share by how far the latest season ran ahead of the blend.
   let r3a = 0;
@@ -211,7 +302,11 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
   const threeTrend = rfga > 0 && b3a > 0 ? clamp(r3a / rfga / (b3a / bfga), 0.95, 1.08) : 1;
   log(`  three-point trend factor ${threeTrend.toFixed(3)}`);
   passes.forEach((pass, iter) => {
-    const acc = simulateBatch(league, pass.games, 1000 + iter);
+    for (const b of batches) b.w *= VALUE_DECAY;
+    const stints: Stint[] = [];
+    const acc = simulateBatch(league, pass.games, 1000 + iter, value.size ? stints : undefined);
+    batches.push({ stints, w: 1 });
+    while (batches.length && batches[0].w < 0.1) batches.shift();
     const err: Record<string, number> = { use: 0, tpar: 0, fg3: 0, fg2: 0, ftr: 0, ast: 0, tov: 0, orb: 0, drb: 0, stl: 0, blk: 0, pf: 0, rim: 0, mid: 0, unast: 0, rimPct: 0 };
     const zoneCount = { n: 0 };
     let count = 0;
@@ -308,6 +403,7 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
       clampRatings(r);
     }
     for (const key of Object.keys(err)) err[key] = ['rim', 'mid', 'unast', 'rimPct'].includes(key) ? (zoneCount.n ? err[key] / zoneCount.n : 0) : count ? err[key] / count : 0;
+    if (value.size) Object.assign(err, valuePass(league, value, rapm(batches), pass.damp));
     for (const p of Object.values(league.players)) refreshPlayerDerived(p as Player, league.season, league.ovrScale);
     reports.push({ iter, players: count, err });
     log(
@@ -318,4 +414,52 @@ export function calibrate(league: League, targets: Map<number, { agg: Agg; rel: 
     );
   });
   return reports;
+}
+
+/**
+ * One value pass: each player's simulated RAPM against his target, and his value skills stepped by
+ * the miss. RAPM is relative to the league's rate and the projection to its own league, so the
+ * misses are put on one level first, weighted as the steps are (possessions, times how much his
+ * sample counts), and after the steps each value skill's league mean (the rostered players') goes
+ * back to where the evidence put it: value moves players only against each other and leaves the
+ * league's level to the style targets. Returns the mean absolute misses over players with a solid sample, before the step.
+ */
+function valuePass(league: League, value: Map<number, ValueTarget>, sim: Map<number, OnCourt>, damp: number) {
+  const rows = [...value].flatMap(([pid, t]) => {
+    const s = sim.get(pid);
+    const p = league.players[pid];
+    return s && p ? [{ p, t, s, d: damp * (s.poss / (s.poss + VALUE_POSS)) }] : [];
+  });
+  let sw = 0;
+  const level = { off: 0, def: 0 };
+  for (const { t, s, d } of rows) {
+    sw += s.poss * d;
+    level.off += (s.off - t.off) * s.poss * d;
+    level.def += (s.def - t.def) * s.poss * d;
+  }
+  level.off /= sw || 1;
+  level.def /= sw || 1;
+  let n = 0;
+  const err = { valOff: 0, valDef: 0 };
+  for (const { p, t, s, d } of rows) {
+    const miss = { off: t.off + level.off - s.off, def: t.def + level.def - s.def };
+    if (s.poss >= 2 * VALUE_POSS) {
+      n++;
+      err.valOff += Math.abs(miss.off);
+      err.valDef += Math.abs(miss.def);
+    }
+    valueStep(p.ratings, t, miss, d);
+  }
+  // (a step spreads a defensive miss inside or out by where he defends, and the band and the scale's
+  // ends clip some: each value skill's mean over the rostered players' floor time goes back to where
+  // the evidence put it, everyone moving by the same amount)
+  const rostered = rows.filter(({ p }) => p.tid >= 0);
+  const floor = rostered.reduce((a, { s }) => a + s.poss, 0) || 1;
+  for (const k of VALUE_SKILLS) {
+    const drift = rostered.reduce((a, { p, t, s }) => a + s.poss * (p.ratings[k] - t.from[k]), 0) / floor;
+    for (const { p, t } of rows) shiftValue(p.ratings, t.from, { [k]: -drift });
+  }
+  err.valOff /= n || 1;
+  err.valDef /= n || 1;
+  return err;
 }

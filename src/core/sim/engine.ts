@@ -25,4 +25,4 @@
 
 export { GameSim } from './engine/game';
 export { K, engineDiag, ftChance, resetEngineDiag } from './engine/constants';
-export type { InGameInjury, SP, ST, SimOptions, SimTeamInput } from './engine/state';
+export type { InGameInjury, SP, ST, SimOptions, SimTeamInput, Stint } from './engine/state';

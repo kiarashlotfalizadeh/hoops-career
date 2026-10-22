@@ -277,6 +277,16 @@ export interface SimOptions {
   injuries?: boolean;
   /** Keep shot locations even when not recording play-by-play. */
   keepShots?: boolean;
+  /** Tally possessions and points by the two fives on the floor (GameSim.stints), for the seed's on-court value fit. */
+  stints?: boolean;
+}
+
+/** Possessions one five had the ball against another, and the points it scored on them. */
+export interface Stint {
+  off: number[];
+  def: number[];
+  poss: number;
+  pts: number;
 }
 
 export interface InGameInjury {

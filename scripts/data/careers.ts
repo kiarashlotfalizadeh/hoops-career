@@ -1,7 +1,7 @@
 // Real careers in the seed. Each player's real seasons are stored as stat lines (PlayerStats, marked
 // real): the stat seasons' lines, which his ratings are derived from, and the history before them
 // (HISTORY_SEASONS, back to 2003-04), which only completes his career on record, from per-game and
-// advanced tables alone (no NBA.com shot locations or EPM that far back). Also the numbers he wore at
+// advanced tables alone (no NBA.com shot locations that far back). Also the numbers he wore at
 // franchises he gave LEGEND_SEASONS seasons and has since left, so one can retire his number when he
 // retires (jerseys.ts): read from that team's roster page for his last season there.
 import type { PlayerStats } from '../../src/core/types';
@@ -23,7 +23,7 @@ export interface Zones {
 }
 
 /** One team's line in a real season, as the seed stores it (totals from the per-game averages). */
-export function realLine(r: PerGameRow, a: AdvRow | undefined, zones?: Zones, epm?: { oepm: number; depm: number; epm: number }): PlayerStats {
+export function realLine(r: PerGameRow, a: AdvRow | undefined, zones?: Zones): PlayerStats {
   const g = r.g;
   const t = (v: number) => Math.round(v * g);
   return {
@@ -75,7 +75,6 @@ export function realLine(r: PerGameRow, a: AdvRow | undefined, zones?: Zones, ep
           dbpm: a.dbpm,
           bpm: a.bpm,
           vorp: a.vorp,
-          ...epm,
         }
       : undefined,
   };

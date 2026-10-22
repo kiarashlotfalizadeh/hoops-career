@@ -37,7 +37,7 @@ export const reboundsMethods = {
       pOrb *= 1 + lev(zd.glassTag);
       this.impact('zone_glass', off.side, orbRate * lev(zd.glassTag) * K.orbPts);
     }
-    if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts);
+    if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts * K.crashTag.orb);
     // the shape: five-out has nobody near the glass, the double post two bigs under it (as much as they rebound)
     const sg = this.shapeGlass(off) + (offR0 !== offR ? Math.pow(offR / offR0, 1.05) - 1 : 0);
     if (this.shapeGlass(off)) pOrb *= 1 + this.shapeGlass(off);

@@ -63,6 +63,7 @@ export const possessionMethods = {
     for (const p of off.on) p.b.onPoss++;
     const ls = this.lineupStat(off);
     ls.poss++;
+    if (this.stints) this.stint(off, def).poss++;
 
     // ---- end-of-game: intentional fouls by the defense (short of the penalty, a side out)
     const foul = this.intentionalFoul(off, def);
@@ -131,7 +132,7 @@ export const possessionMethods = {
       if (!pressBroken) {
         this.impact('transition', o, (K.runOutPts * (push - 1)) / push);
         this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack + lev((def.t.defense.getBack - 50) / 100) * K.transAdvPts);
-        if (leak !== 1) this.impact('crash_leak', o, (K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts);
+        if (leak !== 1) this.impact('crash_leak', o, ((K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts) * (crashLeak > 0 ? K.crashTag.leak : 1));
       }
       this.transition(off, def, ctx, pressBroken);
       return;

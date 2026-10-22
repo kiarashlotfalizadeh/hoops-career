@@ -4,7 +4,9 @@
 # the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
 # contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only)
 # and then starts the CI and Android APK workflows on it, and stores the Basketball Reference
-# pages as a tarball on the `data-raw` branch (the GitHub datasets re-download fast). With
+# pages and the extras as a tarball on the `data-raw` branch (the GitHub datasets re-download fast;
+# data/seed-inputs.json, committed with the seed, pins every input by content, so a rebuild from
+# that tarball, the same archives and the committed projection reproduces the seed exactly). With
 # `extras_only`, it just refreshes the extras in the current seed. A successful build uploads the
 # seed as an artifact.
 name: Build seed data
@@ -67,7 +69,7 @@ jobs:
       - name: Archive raw pages
         id: archive
         if: ${{ !cancelled() && !inputs.extras_only }}
-        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba --exclude=data/raw/extra data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
       # allowed to fail so the fetched pages still reach data-raw below; the last step fails the run
       - name: Build seed (parse, derive, calibrate)
         id: build
@@ -77,7 +79,8 @@ jobs:
           if [ "${{ inputs.extras_only }}" = "true" ]; then
             npm run data:extras 2>&1 | tee /tmp/build.log
           else
-            npm run data:build 2>&1 | tee /tmp/build.log
+            # the inputs were just fetched on purpose: pin them (data/seed-inputs.json) and build from them
+            npm run data:build -- --update-lock 2>&1 | tee /tmp/build.log
           fi
       - name: Verify app still builds and tests pass with the seed
         if: steps.build.outcome == 'success'
@@ -94,15 +97,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # a rebuild that only moved its timestamps isn't worth a commit
-          strip='del(.generated, .extrasAsOf)'
+          # a rebuild that only moved its dates (and input pins) isn't worth a commit
+          strip='del(.generated, .extrasAsOf, .inputs)'
           if cmp -s <(git show HEAD:src/data/seed.json | jq -c "$strip") <(jq -c "$strip" src/data/seed.json); then
             echo "seed unchanged"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/data/seed.json
+          git add src/data/seed.json data/seed-inputs.json
           git commit -m "Update seed data"
           # only these two commands get the token, in the header actions/checkout itself uses
           auth="http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"

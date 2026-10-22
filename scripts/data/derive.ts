@@ -1,7 +1,8 @@
-// Turn three seasons of per-game + advanced stats (and Dunks & Threes EPM) into internal ratings.
+// Turn three seasons of per-game + advanced stats (and NBA.com play-by-play) into internal ratings.
 // Seasons are weighted by recency and minutes, then regressed toward a size-appropriate
 // mean in proportion to sample size. Ratings are a first guess; calibrate.ts then nudges
-// them until each player reproduces his real per-36 profile in the engine.
+// them until each player reproduces his real per-36 profile in the engine and is worth on the
+// floor what Dunks & Threes' EPM projection says.
 
 import type { Ratings, Tendencies } from '../../src/core/types';
 import { clampRatings, heightToRating } from '../../src/core/ratings';
@@ -9,7 +10,6 @@ import { Rng, clamp, hashString } from '../../src/core/random';
 import { genRatings } from '../../src/core/playerGen';
 import type { AdvRow, PerGameRow } from './parse';
 import type { PbpAgg } from './nba/profile';
-import type { EpmAgg } from './epm';
 import { SEED_SEASON } from './sources';
 
 /** Recency weights for the stat seasons (box scores and play-by-play alike). */
@@ -31,8 +31,6 @@ export interface Agg {
   pos: string;
   /** NBA.com play-by-play profile (shot zones, creation, defense, RAPM), when matched. */
   pbp?: PbpAgg;
-  /** Dunks & Threes EPM, when the player is in the exports. */
-  epm?: EpmAgg;
 }
 
 const STATS = ['fga', 'fg3a', 'fg3', 'fg2a', 'fg2', 'fta', 'ft', 'orb', 'drb', 'ast', 'stl', 'blk', 'tov', 'pf', 'pts'] as const;
@@ -130,9 +128,6 @@ export function features(a: Agg) {
     ast36: p.ast,
     mpg: a.mpg,
     ...pbpFeatures(a.pbp),
-    // NaN without EPM (z-scores treat NaN as 0, and the impact ratings below fall back to box plus-minus)
-    epmO: a.epm ? a.epm.off : NaN,
-    epmD: a.epm ? a.epm.def : NaN,
   };
 }
 
@@ -243,62 +238,8 @@ export const reliability = (wMin: number) => wMin / (wMin + 500);
 /** A feature's z-score against the population, regressed by the sample's reliability and capped at ±3.6 (0 when missing). */
 export const zScore = (x: number, mean: number, sd: number, rel: number) => (Number.isFinite(x) ? clamp(((x - mean) / sd) * rel, -3.6, 3.6) : 0);
 
-/** A number for each impact rating: offensive IQ (which reads offensive EPM) and the three that read defensive EPM. */
-export interface ImpactValues {
-  oiq: number;
-  diq: number;
-  perD: number;
-  intD: number;
-}
-
-/** Where each impact rating starts before its terms (derived ratings sit around it). */
-export const IMPACT_BASE: ImpactValues = { oiq: 50, diq: 50, perD: 50, intD: 46 };
-
-/**
- * How a player's Dunks & Threes EPM enters his impact ratings when he has a play-by-play profile
- * (every player EPM covers in the current seed): `w` is EPM's weight on its regressed z-score (its
- * offensive half in offensive IQ, its defensive half in the rest), and `k` scales every term of a
- * rating EPM is in, so its other terms make room for it and the rating keeps its spread.
- */
-export interface EpmBlend {
-  w: ImpactValues;
-  k: ImpactValues;
-}
-
-/**
- * EPM is box plus-minus done better, a box and tracking prior refined by lineup data, so it is the
- * best public estimate of what a player is worth; it sits beside our own RAPM (6 in offensive IQ,
- * 7 in defensive IQ, 4 and 5 in perimeter and interior defense before `k`).
- *
- * The seed was first built with EPM in box plus-minus's place in each IQ at its weight (5) and in
- * neither perimeter nor interior defense (EPM_BLEND_V1): EPM was 5 of 16 weight points in offensive
- * IQ, and OVR followed three-season EPM at r 0.92 and its defensive half at only r 0.43. Now its
- * weight doubles in each IQ and defensive EPM joins RAPM in perimeter and interior defense at 5,
- * every term then scaled by `k` so each rating keeps the spread it had over the seed's players with
- * EPM (offensive IQ: EPM 7.2, RAPM 4.3, true shooting 2.2, usage 1.4; EPM is about half of each IQ).
- * That takes OVR to r 0.94 with three-season EPM (0.50 with its defensive half), and in 40 simulated
- * seasons (`real-check`, the same rng seeds) teams' net ratings follow their players' real EPM at
- * r 0.86 (0.85 before) and real box plus-minus at r 0.88 (0.87), their spread (net SD 4.9, win SD
- * 11.3) and every league rate within 1% of where they were.
- *
- * Adding the same EPM without making room for it (k of 1) does more: OVR r 0.95 with EPM, team net
- * ratings r 0.90 with real EPM and BPM, net SD 5.9 and win SD 12.7, nearer the NBA's (about 6 and
- * 12-13). But it widens the impact ratings' spread by a third and the real league's raw OVR by a
- * quarter, which a fictional league's spread (REAL_RAW_QUANTILES in create.ts), development and
- * aging (rating points a year, so they would move the real league's OVR a fifth less) and the
- * tactic-balance checks are tuned to; that is a change for the engine, not the seed.
- *
- * A season EPM doesn't cover keeps box plus-minus in each IQ at 5 with nothing scaled, and
- * perimeter and interior defense then read neither.
- */
-export const EPM_BLEND: EpmBlend = { w: { oiq: 10, diq: 10, perD: 5, intD: 5 }, k: { oiq: 0.72, diq: 0.72, perD: 0.8, intD: 0.84 } };
-/** How the seed's ratings were first derived (what `data:epm-reweight` moves a seed from when its source records nothing). */
-export const EPM_BLEND_V1: EpmBlend = { w: { oiq: 5, diq: 5, perD: 0, intD: 0 }, k: { oiq: 1, diq: 1, perD: 1, intD: 1 } };
-/** Box plus-minus's weight in each IQ, with the play-by-play, for a player EPM doesn't cover. */
-const BOX_IMPACT = 5;
-
 /** Derive ratings from stats. `rel` (0..1) is the sample reliability used to regress. */
-export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string, epm: EpmBlend = EPM_BLEND): { r: Ratings; tend: Tendencies; rel: number } {
+export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string): { r: Ratings; tend: Tendencies; rel: number } {
   const f = features(a) as Record<string, number>;
   const rel = reliability(a.wMin);
   const z = (k: string) => zScore(f[k], pop.mean[k], pop.sd[k], rel);
@@ -309,15 +250,8 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string, 
   const wz = ((bio.weightLb || 220) - 220) / 25;
   const rng = new Rng(hashString(seedKey));
   const age = bio.age || a.lastAge || 26;
-  // Impact: Dunks & Threes EPM, when he has it, takes box plus-minus's place in offensive and
-  // defensive IQ at a heavier weight and joins RAPM in perimeter and interior defense (which read no
-  // box plus-minus with the play-by-play), the other terms making room for it (EPM_BLEND). Without
-  // the play-by-play, EPM (or box plus-minus) carries all four impact ratings alone, as before.
-  const ob = Number.isFinite(f.epmO) ? 'epmO' : 'obpm';
-  const db = Number.isFinite(f.epmD) ? 'epmD' : 'dbpm';
-  const withO = ob === 'epmO';
-  const withD = db === 'epmD';
-  const B = IMPACT_BASE;
+  // Impact ratings start from the evidence (box plus-minus, RAPM, matchup and rim defense); the
+  // calibration then moves them until his simulated value matches his projected EPM (calibrate.ts).
   const r: Ratings = {
     hgt: h,
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),
@@ -340,23 +274,16 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string, 
       ? 50 + 6 * z('usg') + 6 * z('unast') + 3 * z('pullupShare') + 4 * z('astPct') - 4 * z('lostBallRate') - 5 * hz
       : 50 + 8 * z('usg') + 8 * z('astPct') - 3 * z('tovPct') - 6 * hz,
     pas: has ? 50 + 12 * z('astPct') + 2 * z('obpm') - 3 * z('badPassRate') : 50 + 13 * z('astPct') + 2 * z('obpm'),
-    oiq: has
-      ? B.oiq + (withO ? epm.k.oiq : 1) * ((withO ? epm.w.oiq : BOX_IMPACT) * z(ob) + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg'))
-      : B.oiq + 8 * z(ob) + 4 * z('ts') + 3 * z('usg'),
+    oiq: has ? 50 + 5 * z('obpm') + 6 * z('rapmO') + 3 * z('ts') + 2 * z('usg') : 50 + 8 * z('obpm') + 4 * z('ts') + 3 * z('usg'),
     drw: has ? 48 + 9 * z('sfdRate') + 5 * z('fta36') : 48 + 11 * z('fta36') + 3 * z('ftr'),
     post: has ? 30 + 8 * hz + 9 * z('postShare') + 4 * z('usg') + 4 * wz : 30 + 9 * hz + 6 * z('usg') + 5 * wz - 4 * z('tpar'),
-    // (z('epmD') is 0 without EPM)
-    perD: has
-      ? B.perD + (withD ? epm.k.perD : 1) * (5 * z('mdSaved') + 4 * z('rapmD') + epm.w.perD * z('epmD') + 4 * z('stlPct') - 3 * hz)
-      : B.perD + 6 * z(db) + 6 * z('stlPct') - 3 * hz,
+    perD: has ? 50 + 5 * z('mdSaved') + 4 * z('rapmD') + 4 * z('stlPct') - 3 * hz : 50 + 6 * z('dbpm') + 6 * z('stlPct') - 3 * hz,
     intD: has
-      ? B.intD + (withD ? epm.k.intD : 1) * (5 * z('rapmD') + epm.w.intD * z('epmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct'))
-      : B.intD + 6 * z(db) + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
+      ? 46 + 5 * z('rapmD') + 5 * z('blkRim') - 4 * z('rimFgAllowed') - 3 * z('rimDeter') + 6 * hz + 2 * z('drbPct')
+      : 46 + 6 * z('dbpm') + 7 * z('blkPct') + 7 * hz + 3 * z('drbPct'),
     stl: 50 + 14 * z('stlPct'),
     blk: 46 + 13 * z('blkPct') + 4 * hz,
-    diq: has
-      ? B.diq + (withD ? epm.k.diq : 1) * ((withD ? epm.w.diq : BOX_IMPACT) * z(db) + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct'))
-      : B.diq + 9 * z(db) + 2 * z('stlPct') + 2 * z('blkPct'),
+    diq: has ? 50 + 5 * z('dbpm') + 7 * z('rapmD') + 2 * z('mdSaved') + z('stlPct') + z('blkPct') : 50 + 9 * z('dbpm') + 2 * z('stlPct') + 2 * z('blkPct'),
     oreb: 48 + 14 * z(has && Number.isFinite(f.orbTrue) ? 'orbTrue' : 'orbPct') + 3 * hz,
     dreb: 48 + 14 * z(has && Number.isFinite(f.drbTrue) ? 'drbTrue' : 'drbPct') + 3 * hz,
   };

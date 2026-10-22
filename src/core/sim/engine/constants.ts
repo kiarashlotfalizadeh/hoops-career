@@ -100,6 +100,17 @@ export const K = {
    */
   crashLow: { orb: 0.1, leak: 0.7, back: 0.6, set: 0.8, setPts: 0.03 },
   /**
+   * What the "why" tags of crashing count of their own estimates: the boards crashing wins or gives up
+   * (both sides of 50), and the run-outs a team that crashed gives up. Over ten seed sets of
+   * engineBalance's crash cases on the real league, taking each effect out of the engine showed the
+   * boards worth about 0.55 of their tagged points (to 0: 1.8 measured, 3.2 tagged; to 100: 1.9, 3.6)
+   * and the run-outs crashing gives up about 0.4 (1.8, 4.7), while the low side's saved run-outs and
+   * set defense measured as tagged (0.8 and 0.9, 1.4 and 1.6). The effects interact, so the factors
+   * fit the whole dial: going to 0 tagged -1.07 where it measured -0.14, and to 100 -0.80 where it
+   * measured +0.05; these bring both within 0.1.
+   */
+  crashTag: { orb: 0.75, leak: 0.6 },
+  /**
    * Switching off-ball screens: the edge it takes off the man coming off a handoff or a screen, and off
    * motion's ball movement; and the offensive boards it gives up (a guard switched onto a big can't
    * keep him off the glass), as a share of the offensive-board rate.

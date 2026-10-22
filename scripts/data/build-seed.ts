@@ -4,8 +4,14 @@
 // back to 2003-04 (careers on record, see careers.ts); the current contracts table (who plays where
 // in 2026-27 and their salaries); team roster pages (height, weight, birth date, jersey, country,
 // college, and the numbers players wore at franchises they've left); draft pages (draft slot);
-// Dunks & Threes EPM exports for the stat seasons (data/epm/, see epm.ts), and its projection for
-// the seed season (data/epm/projection/, see epm-projection.ts).
+// NBA.com play-by-play and college box scores; the opening-night extras; Dunks & Threes' EPM
+// projection for the seed season (data/epm/projection/, see epm-projection.ts), without which the
+// build fails. Every input is pinned by content in data/seed-inputs.json (inputs.ts): a build from
+// other files fails unless run with --update-lock, so a rebuild reproduces the seed exactly.
+//
+// Ratings are derived from the evidence (derive.ts), then calibrated in the engine against two
+// targets together (calibrate.ts): each player's real line (his style) and his projected EPM (his
+// value, what his team gains with him on the floor in simulated games).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SEED_SEASON, STAT_SEASONS, ROSTER_SEASONS, DRAFT_YEARS, TEAM_CODES, FIRST_SEASON, HISTORY_SEASONS } from './sources';
@@ -23,14 +29,14 @@ import {
   type PerGameRow,
   type RosterRow,
 } from './parse';
-import { EPM_BLEND, PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
-import { calibrate } from './calibrate';
+import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
+import { VALUE_BAND, calibrate, valueWeights, type CalibReport, type ValueTarget } from './calibrate';
 import { buildNbaProfile } from './nba/build';
 import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
 import { collegePop, collegeRatings, findCollege, loadCollege } from './nba/college';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
-import type { Pos, Ratings, Tendencies } from '../../src/core/types';
+import type { Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
@@ -38,8 +44,9 @@ import { clamp } from '../../src/core/random';
 import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
-import { aggregateEpm, epmByBbref, epmFields, epmSourceNote, loadEpm, matchEpm, type EpmRow } from './epm';
-import { applyProjection, loadProjection } from './epm-projection';
+import { EXTRA_RAW } from './extra/sources';
+import { PROJ_DIR, loadProjection, projectionByBbref, projectionNote, type EpmProjection } from './epm-projection';
+import { pinInputs } from './inputs';
 import { byId, formerNumbers, historyLines, loadSeasons, realLine, seedIds } from './careers';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
@@ -55,6 +62,16 @@ async function main() {
     console.error(`Missing ${join(RAW, 'contracts.html')}. Run \`npm run data:fetch\` first.`);
     process.exit(1);
   }
+  // the inputs, as pinned (or pinned now, with --update-lock)
+  const update = process.argv.includes('--update-lock');
+  let pins: ReturnType<typeof pinInputs>;
+  try {
+    pins = pinInputs({ raw: RAW, nba: NBA_RAW, extra: EXTRA_RAW, projection: PROJ_DIR }, SEED_SEASON, { update, today: () => new Date().toISOString().slice(0, 10) });
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+  console.log(`inputs: ${Object.keys(pins.files).length} files, ${update ? 'pinned now' : `as pinned on ${pins.pinned}`} (${pins.id})`);
   const contracts = parseContracts(contractsHtml);
   console.log(`contracts: ${contracts.length} players (first column ${contracts[0]?.firstSeasonLabel || '?'})`);
 
@@ -152,19 +169,21 @@ async function main() {
     );
   } else console.log('NBA.com play-by-play not found (npm run data:fetch-nba); using box scores only');
 
-  // Dunks & Threes EPM, matched through the play-by-play crosswalk's NBA.com ids
-  const epmRows = loadEpm();
-  const known = new Map<number, string>([...pbpById].map(([id, b]) => [b.nbaId, id]));
-  const epmById: Map<string, Map<number, EpmRow>> = epmRows.length
-    ? epmByBbref(
-        epmRows,
-        matchEpm(
-          epmRows,
-          perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
-          known,
-        ),
-      )
-    : new Map();
+  // Dunks & Threes' projection for the seed season (the calibration's value target), matched through
+  // the play-by-play crosswalk's NBA.com ids, else by name and team (now, from the contracts, and in
+  // the stat seasons)
+  let projRows: EpmProjection[];
+  try {
+    projRows = loadProjection(SEED_SEASON);
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+  const projById = projectionByBbref(
+    projRows,
+    [...contracts.map((c) => ({ id: c.id, name: c.name, season: SEED_SEASON, team: c.team })), ...perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team }))],
+    new Map<number, string>([...pbpById].map(([id, b]) => [b.nbaId, id])),
+  );
 
   // college production for rookies and recent draftees
   const college = await loadCollege(NBA_RAW);
@@ -193,7 +212,6 @@ async function main() {
     const a = forAgg.length ? aggregate(forAgg, advRows) : null;
     if (a) {
       a.pbp = pbpById.get(id);
-      a.epm = aggregateEpm([...(epmById.get(id)?.values() ?? [])]);
       aggs.set(id, a);
     }
   }
@@ -266,13 +284,10 @@ async function main() {
         const sp = nbaId && prof ? prof.players[prof.seasons.indexOf(r.season)]?.[nbaId] : undefined;
         const share = sp ? (r.fga * r.g) / Math.max(1, seasonFga(r.season)) : 0;
         const zn = (x: number) => Math.round(x * share);
-        // EPM is a season's figure across his teams: each team row carries it
-        const e = epmById.get(id)?.get(r.season);
         return realLine(
           r,
           (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team),
           sp ? { rimM: zn(sp.fgm.rim), rimA: zn(sp.fga.rim), midM: zn(sp.fgm.mid), midA: zn(sp.fga.mid) } : undefined,
-          e ? epmFields(e) : undefined,
         );
       });
     // his career before the stat seasons: on record, not in his ratings
@@ -280,6 +295,7 @@ async function main() {
     const stats = [...historyLines(past, histAdvById.get(id) ?? []), ...recent];
     const jerseys = formerNumbers([...past, ...rows], c?.team ?? null, (team, season) => rosterRow(id, team, season));
     const lastOpt = c?.options[c.options.length - 1];
+    const pr = projById.get(id);
     if (!fivePos) inferredPos.set(players.length, label);
     const sp: SeedPlayer = {
       id,
@@ -300,6 +316,7 @@ async function main() {
       tend,
       stats,
       ...(Object.keys(jerseys).length ? { jerseys } : {}),
+      ...(pr ? { proj: { season: pr.season, mpg: r1(pr.mpg), oepm: r1(pr.off), depm: r1(pr.def), epm: r1(pr.tot) } } : {}),
     };
     if (agg && agg.rawMin >= 300) targets.push({ idx: players.length, agg, rel });
     players.push(sp);
@@ -309,6 +326,10 @@ async function main() {
   );
   console.log(
     `careers: ${players.filter((p) => p.stats.some((s) => s.season < STAT_SEASONS[0])).length} players with seasons before ${seasonLabel(STAT_SEASONS[0])}; numbers at former franchises for ${players.filter((p) => p.jerseys).length}`,
+  );
+  const unlisted = players.filter((p) => p.team && !p.proj);
+  console.log(
+    `EPM projection: ${players.filter((p) => p.proj).length} seed players listed${unlisted.length ? `; under contract but not listed (no value target, leveled by minutes or draft slot): ${unlisted.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}` : ''}`,
   );
   const noBio = players.filter((p) => p.team && !rosterById.has(p.id));
   if (noBio.length) console.warn(`  under contract but on no roster page (size, age and country estimated): ${noBio.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}`);
@@ -336,9 +357,9 @@ async function main() {
   // calibrate in the engine
   const seed: SeedData = {
     version: 1,
-    generated: new Date().toISOString(),
-    // (the EPM note records the blend the impact ratings were derived at, which data:epm-reweight reads)
-    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts${epmById.size ? `; ${epmSourceNote(EPM_BLEND)}` : ''}`,
+    generated: pins.pinned,
+    inputs: pins.id,
+    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts; ${projectionNote(SEED_SEASON)}`,
     season: SEED_SEASON,
     careersFrom: FIRST_SEASON,
     players,
@@ -354,17 +375,15 @@ async function main() {
     const pid = pidByIdx.get(t.idx);
     if (pid !== undefined) tmap.set(pid, { agg: t.agg, rel: t.rel });
   }
-  console.log(`calibrating ${tmap.size} players in the engine…`);
-  calibrate(league, tmap, [
-    { games: 40, damp: 0.75 },
-    { games: 40, damp: 0.7 },
-    { games: 60, damp: 0.65 },
-    { games: 60, damp: 0.6 },
-    { games: 82, damp: 0.55 },
-    { games: 82, damp: 0.5 },
-    { games: 120, damp: 0.45 },
-    { games: 164, damp: 0.4 },
-  ]);
+  // value targets: every listed player's projected EPM, moving the skills his derived ratings say carry it
+  const value = new Map<number, ValueTarget>();
+  for (const [idx, pid] of pidByIdx) {
+    const pr = players[idx].proj;
+    const r = league.players[pid].ratings;
+    if (pr) value.set(pid, { off: pr.oepm, def: pr.depm, from: { ...r }, ...valueWeights(r) });
+  }
+  console.log(`calibrating ${tmap.size} players' style and ${value.size} players' value in the engine…`);
+  calibrate(league, tmap, value, PASSES);
   // copy back
   for (const [idx, pid] of pidByIdx) {
     const lp = league.players[pid];
@@ -376,6 +395,7 @@ async function main() {
     }
   }
 
+  // (players the projection lists have their level from it: only the rest are leveled by minutes)
   levelPlayers(players, aggs, levelTargets, true);
   // leveling moves role players' skills, which shifts usage around them: settle again
   for (const [idx, pid] of pidByIdx) league.players[pid].ratings = { ...players[idx].ratings };
@@ -385,16 +405,23 @@ async function main() {
       .map((p) => ovrRaw(p.ratings)),
   );
   for (const p of Object.values(league.players)) refreshPlayerDerived(p, league.season, league.ovrScale);
-  calibrate(league, tmap, [
-    { games: 82, damp: 0.5 },
-    { games: 120, damp: 0.45 },
-    { games: 164, damp: 0.4 },
-  ]);
+  const settle = calibrate(league, tmap, value, SETTLE);
   for (const [idx, pid] of pidByIdx) {
     const lp = league.players[pid];
     players[idx].ratings = Object.fromEntries(RATING_KEYS.map((k) => [k, Math.round(lp.ratings[k] * 10) / 10])) as unknown as Ratings;
     if (lp.tend) players[idx].tend = Object.fromEntries(Object.entries(lp.tend).map(([k, v]) => [k, r3(v as number)])) as unknown as Tendencies;
   }
+  // how far value moved each skill from the evidence, and how many it took to the edge of the band
+  const projected = [...pidByIdx].filter(([idx, pid]) => value.has(pid) && players[idx].team);
+  const moved = (k: RatingKey) => projected.map(([idx, pid]) => players[idx].ratings[k] - value.get(pid)!.from[k]);
+  console.log(
+    `value moves from the evidence (rostered players): ${(['oiq', 'diq', 'perD', 'intD', 'blk'] as const)
+      .map(
+        (k) =>
+          `${k} ${(moved(k).reduce((a, d) => a + Math.abs(d), 0) / projected.length).toFixed(1)} on average, ${moved(k).filter((d) => Math.abs(d) > VALUE_BAND - 0.5).length} at ±${VALUE_BAND}`,
+      )
+      .join('; ')}`,
+  );
 
   // positions inferred from ratings follow the calibrated ratings
   for (const [idx, label] of inferredPos) players[idx].pos = inferPosition(label, players[idx].heightIn, players[idx].ratings);
@@ -413,13 +440,6 @@ async function main() {
       .join(', ')}`,
   );
 
-  // the season's EPM projection: the seed's last and heaviest word (epm-projection.ts)
-  const projRows = loadProjection(SEED_SEASON);
-  if (projRows.length) {
-    const rep = applyProjection(seed, projRows);
-    console.log(`EPM projection: ${rep.matched} players; OVR vs projected EPM r ${rep.r[0].toFixed(3)} → ${rep.r[1].toFixed(3)}`);
-  }
-
   // sanity report: OVR vs real impact
   const finalScale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
   const rows = players.map((p) => ({ p, a: aggs.get(p.id), ovr: toDisplay(ovrRaw(p.ratings), finalScale) })).filter((x) => x.a && x.a.rawMin >= 1500);
@@ -436,20 +456,23 @@ async function main() {
         rr.map((x) => x.a!.pbp!.rapmO + x.a!.pbp!.rapmD),
       ).toFixed(3)} over ${rr.length} players`,
     );
-  const re = rows.filter((x) => x.a!.epm);
-  if (re.length)
-    console.log(
-      `OVR vs EPM correlation (1500+ min): ${pearson(
-        re.map((x) => x.ovr),
-        re.map((x) => x.a!.epm!.tot),
-      ).toFixed(3)} over ${re.length} players`,
-    );
+  const re = players.filter((p) => p.team && p.proj && p.proj.mpg >= 15);
+  console.log(
+    `OVR vs projected EPM correlation (15+ projected min): ${pearson(
+      re.map((p) => toDisplay(ovrRaw(p.ratings), finalScale)),
+      re.map((p) => p.proj!.epm),
+    ).toFixed(3)} over ${re.length} players`,
+  );
+  const last = settle[settle.length - 1] as CalibReport;
+  if (value.size) console.log(`value: mean miss ${last.err.valOff.toFixed(2)} offense, ${last.err.valDef.toFixed(2)} defense (points per 100, simulated RAPM vs projected EPM)`);
   const top = [...players]
     .map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team }))
     .sort((a, b) => b.ovr - a.ovr)
     .slice(0, 30);
   console.log('Top 30:', top.map((x) => `${x.n} ${x.ovr}`).join(', '));
   if (process.env.HC_REPORT) {
+    // (the ratings his evidence derived, before the value calibration moved his feel and defense)
+    const evidence = new Map([...pidByIdx].flatMap(([idx, pid]) => (value.has(pid) ? [[players[idx].id, value.get(pid)!.from] as const] : [])));
     const report = players.map((p) => {
       const a = aggs.get(p.id);
       return {
@@ -464,14 +487,15 @@ async function main() {
         adv: a?.adv ?? null,
         per36: a?.per36 ?? null,
         rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null,
-        epm: a?.epm ?? null,
+        proj: p.proj ?? null,
+        evidence: evidence.get(p.id) ?? null,
         ratings: p.ratings,
         tend: p.tend,
       };
     });
     writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
   }
-  await applyExtras(seed);
+  await applyExtras(seed, pins.pinned);
   writeFileSync(OUT, JSON.stringify(seed));
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
 }
@@ -496,13 +520,16 @@ function priorOvr(sp: SeedPlayer): number {
  * toward that prior. Otherwise (after calibration only) shrink toward the level typical for
  * the player's minutes per game, with weight minutes / (minutes + 500), so a hot 1,500-minute
  * stretch counts for less than three full seasons. Targets are fixed on first sight; later
- * passes only re-hit them as the display scale moves.
+ * passes only re-hit them as the display scale moves. Before calibration this is where every
+ * small sample starts; after it, a player the projection lists keeps the level his value
+ * calibration gave him.
  */
 function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Map<string, number>, calibrated: boolean) {
   const scaleNow = () => buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
   let scale = scaleNow();
   const disp = (p: SeedPlayer) => toDisplay(ovrRaw(p.ratings), scale);
   if (calibrated) {
+    for (const p of players) if (p.proj) targets.delete(p.id);
     // OVR as a function of minutes per game, fitted on reliable samples
     const fitRows = players.map((p) => ({ a: aggs.get(p.id), o: disp(p) })).filter((x) => x.a && x.a.rawMin >= 2500);
     const mx = fitRows.reduce((s, x) => s + x.a!.mpg, 0) / fitRows.length;
@@ -511,7 +538,7 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
     console.log(`leveling: OVR ≈ ${my.toFixed(1)} + ${slope.toFixed(2)} × (MPG − ${mx.toFixed(1)}) on ${fitRows.length} reliable players`);
     for (const p of players) {
       const a = aggs.get(p.id);
-      if (!a || a.rawMin < 400 || targets.has(p.id)) continue;
+      if (!a || a.rawMin < 400 || targets.has(p.id) || p.proj) continue;
       const rel = a.rawMin / (a.rawMin + 500);
       targets.set(p.id, Math.round(rel * disp(p) + (1 - rel) * (my + slope * (a.mpg - mx))));
     }
@@ -538,6 +565,35 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
   }
   console.log(`leveling: ${targets.size} targets, ${moved} still moving on the last pass`);
 }
+
+/**
+ * The calibration's passes, games per team in each roster context and damping: early ones move far
+ * on small batches, later ones settle on big batches with small steps, so the noise in each batch's
+ * simulated RAPM averages out instead of walking the ratings.
+ */
+const PASSES = [
+  { games: 60, damp: 0.75 },
+  { games: 80, damp: 0.7 },
+  { games: 100, damp: 0.65 },
+  { games: 120, damp: 0.6 },
+  { games: 160, damp: 0.55 },
+  { games: 200, damp: 0.5 },
+  { games: 240, damp: 0.45 },
+  { games: 300, damp: 0.4 },
+  { games: 360, damp: 0.35 },
+  { games: 420, damp: 0.3 },
+  { games: 500, damp: 0.25 },
+  { games: 600, damp: 0.2 },
+];
+/** After the rest are leveled. */
+const SETTLE = [
+  { games: 400, damp: 0.3 },
+  { games: 500, damp: 0.25 },
+  { games: 600, damp: 0.2 },
+  { games: 800, damp: 0.15 },
+];
+
+const r1 = (x: number) => Math.round(x * 10) / 10;
 
 function r3(x: number) {
   return Math.round(x * 1000) / 1000;

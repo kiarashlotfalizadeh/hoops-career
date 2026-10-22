@@ -42,7 +42,8 @@ export function teamStrength(players: SeedPlayer[]): Record<string, number> {
   return out;
 }
 
-export async function applyExtras(seed: SeedData): Promise<void> {
+/** Apply the extras to `seed`, dated `asOf` (today unless the build pins it). */
+export async function applyExtras(seed: SeedData, asOf = new Date().toISOString().slice(0, 10)): Promise<void> {
   const season = seed.season;
   console.log('opening-night extras:');
 
@@ -136,5 +137,5 @@ export async function applyExtras(seed: SeedData): Promise<void> {
     for (let i = 0; i < lines.length; i += 6) console.log(`    ${lines.slice(i, i + 6).join('  ')}`);
     if (ld) console.log(`  vs LD Sport's (older, hand-kept) table: ${mism.length ? `first-round counts differ for ${mism.join(', ')}` : 'first-round counts agree'}`);
   }
-  seed.extrasAsOf = new Date().toISOString().slice(0, 10);
+  seed.extrasAsOf = asOf;
 }

@@ -1,6 +1,6 @@
 // Global search: one box for any player (on a team, a free agent, a prospect or retired), any team,
 // any screen and any glossary word, so nothing is more than a search away. Pure apart from the
-// recent-picks helpers at the end, so the ranking is unit-tested (__tests__/search.test.ts).
+// recent-picks helpers at the end, so the ranking is unit-tested (__tests__/screens.test.ts).
 import type { League, Player } from '../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../core/types';
 import { playerAge } from '../core/playerGen';

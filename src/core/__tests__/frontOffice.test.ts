@@ -1,14 +1,28 @@
 // AI front offices in the market: an old team bringing back its own free agent on his Bird rights,
-// who a team shops, a star's price on the trade market, and the mail a new job starts with.
-// Fictional leagues with hand-shaped teams keep these fast.
-import { describe, expect, it } from 'vitest';
-import { createLeague, defaultSettings } from '../league/create';
-import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers } from '../league/helpers';
-import { askingContract, releasePlayer } from '../league/contracts';
+// who a team shops, a star's price on the trade market, and rebuilding teams' youth movements. And
+// coaches: their names, the owner's review, taking over a team, and the job market (a fired user
+// hears from the openings whose owners would rather have him than the coach they hired, or with no
+// openings from the teams likeliest to make a change; a user with a job is approached only when an
+// opening rates him clearly above its hire; taking a job is a takeover; declining, the draft and
+// saves). Fictional leagues with hand-shaped teams keep most of these fast.
+import 'fake-indexeddb/auto';
+import { beforeAll, describe, expect, it } from 'vitest';
+import seedJson from '../../data/seed.json';
+import { testLeague } from '../../state/__tests__/fixtures';
+import { migrate } from '../../state/persistence';
+import { autoRotation } from '../ai/coachAI';
+import { createLeague, defaultSettings, type SeedData } from '../league/create';
+import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason } from '../league/helpers';
+import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { faDay, marqueeFA } from '../league/freeAgency';
 import { aiPackage, sellable } from '../league/aiTrades';
-import { takeOverTeam } from '../league/owner';
-import { startRegularSeason } from '../league/season';
+import { buildSimInput, restVeterans, youthLean, youthMovement, youthNews } from '../league/games';
+import { ownerEvaluation, takeOverTeam } from '../league/owner';
+import { activeCoach, candidateScore, coachCareer, openStint, profileOf, registryProblems, userCoach, type CarouselMoves } from '../league/coaches';
+import { declineJob, makeJobOffers, takeJob } from '../league/jobs';
+import { simDay, startDraft, startRegularSeason } from '../league/season';
+import { playerAge } from '../playerGen';
+import { CAP } from '../constants';
 import { Rng } from '../random';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
@@ -68,110 +82,379 @@ function ownFreeAgent(l: League, tid: number): Player {
   return p;
 }
 
-describe('the old team on Bird rights in the open market', () => {
-  it('brings back its own role player over the cap at his price, where nobody else could pay him more than the minimum', () => {
-    const { l, cap } = summer();
-    const p = ownFreeAgent(l, R);
-    expect(marqueeFA(l, p)).toBe(false);
-    expect(payroll(l, R, contractSeason(l))).toBeGreaterThan(cap.salaryCap);
-    const ask = askingContract(l, p, R).amount;
-    expect(ask).toBeGreaterThan(cap.vetMin * 2);
-    for (let d = 1; d <= 12 && p.tid === FREE_AGENT; d++) {
-      faDay(l, new Rng(d), 1, d);
-      l.faDay = d;
-    }
-    expect(p.tid).toBe(R);
-    // on his Bird rights: his price (his old team's room holds a cut to 15%), with his Bird clock kept
-    expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(ask * 0.85 - 50);
-    expect(p.birdSince).toBe(l.season - 2);
-  });
-});
-
-describe('who a team shops', () => {
-  function shop(strategy: 'retool' | 'rebuild', won: number, lost: number, star: { ovr: number; age: number }) {
-    const l = league(3);
-    l.phase = 'regular';
-    const t = l.teams[R];
-    t.strategy = strategy;
-    const ts = curTeamSeason(l, R);
-    ts.won = won;
-    ts.lost = lost;
-    const roster = standardRoster(l, R).sort((a, b) => b.ovr - a.ovr);
-    for (const p of roster) {
-      p.tradeLock = undefined;
-      p.contract = { start: l.season, salaries: [10_000, 10_000] };
-    }
-    const best = shape(l, roster[0], star.ovr, star.age);
-    // everyone else younger and worse
-    for (const p of roster.slice(1)) shape(l, p, Math.min(p.ovr, star.ovr - 6), 23);
-    return { l, best };
+/** Team R in the regular season with `star` its best player, everyone else younger and worse. */
+function shop(strategy: 'retool' | 'rebuild', won: number, lost: number, star: { ovr: number; age: number }) {
+  const l = league(3);
+  l.phase = 'regular';
+  const t = l.teams[R];
+  t.strategy = strategy;
+  const ts = curTeamSeason(l, R);
+  ts.won = won;
+  ts.lost = lost;
+  const roster = standardRoster(l, R).sort((a, b) => b.ovr - a.ovr);
+  for (const p of roster) {
+    p.tradeLock = undefined;
+    p.contract = { start: l.season, salaries: [10_000, 10_000] };
   }
+  const best = shape(l, roster[0], star.ovr, star.age);
+  // everyone else younger and worse
+  for (const p of roster.slice(1)) shape(l, p, Math.min(p.ovr, star.ovr - 6), 23);
+  return { l, best };
+}
 
-  it('a retooling team out of it sells its veteran star; one in the race keeps him', () => {
-    const fading = shop('retool', 10, 20, { ovr: 86, age: 31 });
-    expect(sellable(fading.l, R).map((p) => p.pid)).toContain(fading.best.pid);
-    const racing = shop('retool', 20, 10, { ovr: 86, age: 31 });
-    expect(sellable(racing.l, R).map((p) => p.pid)).not.toContain(racing.best.pid);
-  });
+/** A fictional league in the regular season, every team's record set by its tid within its conference (the higher, the worse). */
+function youthLeague(day: number): League {
+  const L = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 9 });
+  startRegularSeason(L);
+  L.day = day;
+  for (const conf of ['E', 'W'] as const)
+    L.teams
+      .filter((t) => t.conf === conf)
+      .forEach((t, i) => {
+        const ts = teamSeason(t, L.season);
+        ts.won = 40 - 2 * i;
+        ts.lost = 12 + 2 * i;
+        t.strategy = i >= 10 ? 'rebuild' : 'retool';
+      });
+  return L;
+}
 
-  it("a rebuilder sells its best player once he's 28, and keeps a 27-year-old franchise player", () => {
-    const old = shop('rebuild', 15, 15, { ovr: 85, age: 28 });
-    expect(sellable(old.l, R).map((p) => p.pid)).toContain(old.best.pid);
-    const young = shop('rebuild', 15, 15, { ovr: 85, age: 27 });
-    expect(sellable(young.l, R).map((p) => p.pid)).not.toContain(young.best.pid);
+const bottom = (L: League, conf: 'E' | 'W', k: number) => L.teams.filter((t) => t.conf === conf && t.tid !== L.userTid).slice(-k);
+
+const seed = seedJson as unknown as SeedData;
+
+/** The real league with the user (team 19) cut to 15 like the AI teams. */
+function realLeague(): League {
+  const l = createLeague({
+    name: 'r',
+    userTid: 19,
+    coachName: 'c',
+    settings: { ...defaultSettings(), stopOnNews: false },
+    seed: seed.players.length > 0 ? seed : null,
+    rngSeed: 7,
   });
+  const std = () => standardRoster(l, 19);
+  while (std().length > CAP.rosterMax) releasePlayer(l, std().sort((a, b) => valueScore(l, a) - valueScore(l, b))[0], { news: false });
+  return l;
+}
+
+const aiTeam = (l: League) => l.teams.find((t) => t.tid !== l.userTid)!.tid;
+
+describe('AI front offices', () => {
+  it("bring back their own on Bird rights, shop by strategy and record, pay a star's price, and turn to youth (L19)", () => {
+    // brings back its own role player over the cap at his price, where nobody else could pay him more than the minimum
+    {
+      const { l, cap } = summer();
+      const p = ownFreeAgent(l, R);
+      expect(marqueeFA(l, p)).toBe(false);
+      expect(payroll(l, R, contractSeason(l))).toBeGreaterThan(cap.salaryCap);
+      const ask = askingContract(l, p, R).amount;
+      expect(ask).toBeGreaterThan(cap.vetMin * 2);
+      for (let d = 1; d <= 12 && p.tid === FREE_AGENT; d++) {
+        faDay(l, new Rng(d), 1, d);
+        l.faDay = d;
+      }
+      expect(p.tid).toBe(R);
+      // on his Bird rights: his price (his old team's room holds a cut to 15%), with his Bird clock kept
+      expect(p.contract.salaries[0]).toBeGreaterThanOrEqual(ask * 0.85 - 50);
+      expect(p.birdSince).toBe(l.season - 2);
+    }
+
+    // a retooling team out of it sells its veteran star; one in the race keeps him
+    {
+      const fading = shop('retool', 10, 20, { ovr: 86, age: 31 });
+      expect(sellable(fading.l, R).map((p) => p.pid)).toContain(fading.best.pid);
+      const racing = shop('retool', 20, 10, { ovr: 86, age: 31 });
+      expect(sellable(racing.l, R).map((p) => p.pid)).not.toContain(racing.best.pid);
+    }
+
+    // a rebuilder sells its best player once he's 28, and keeps a 27-year-old franchise player
+    {
+      const old = shop('rebuild', 15, 15, { ovr: 85, age: 28 });
+      expect(sellable(old.l, R).map((p) => p.pid)).toContain(old.best.pid);
+      const young = shop('rebuild', 15, 15, { ovr: 85, age: 27 });
+      expect(sellable(young.l, R).map((p) => p.pid)).not.toContain(young.best.pid);
+    }
+
+    // a contender sends its third-best player for a star (85+), not for anyone less
+    {
+      const l = league(17);
+      l.phase = 'regular';
+      l.day = 60;
+      const [S, B] = [3, 4];
+      for (const t of l.teams) t.strategy = 'retool';
+      l.teams[S].strategy = 'rebuild';
+      l.teams[B].strategy = 'contend';
+      const cap = CAP_FOR(l);
+      const deal = (ovr: number) => {
+        const x = structuredClone(l);
+        for (const t of [S, B])
+          for (const p of standardRoster(x, t)) {
+            delete p.tradeLock;
+            p.contract = { start: x.season, salaries: [cap.vetMin, cap.vetMin] };
+          }
+        const star = shape(x, standardRoster(x, S)[0], ovr, 30);
+        star.contract = { start: x.season, salaries: [cap.salaryCap * 0.3, cap.salaryCap * 0.3] };
+        for (const p of standardRoster(x, S)) if (p !== star) p.ovr = Math.min(p.ovr, 72);
+        // the buyer: two better stars, then a young starter paid enough to match, the rest on the minimum
+        const roster = standardRoster(x, B);
+        roster.forEach((p, i) => shape(x, p, i < 2 ? 92 : i === 2 ? 83 : 70, i === 2 ? 23 : 27));
+        roster[2].contract = { start: x.season, salaries: [cap.salaryCap * 0.25, cap.salaryCap * 0.25] };
+        roster[2].pot = 90;
+        // (the stars on big deals: over the cap, the buyer has to match salaries)
+        for (const p of roster.slice(0, 2)) p.contract = { start: x.season, salaries: [cap.salaryCap * 0.3, cap.salaryCap * 0.3] };
+        const third = roster[2];
+        return { d: aiPackage(x, B, S, star), third };
+      };
+      const star = deal(88);
+      expect(star.d).not.toBeNull();
+      expect(star.d!.a.pids).toContain(star.third.pid);
+      // a lesser player isn't worth the buyer's third-best: without him the salaries don't match
+      const lesser = deal(84);
+      expect(lesser.d?.a.pids ?? []).not.toContain(lesser.third.pid);
+    }
+
+    // leans to the young and away from the veterans
+    {
+      expect(youthLean(20)).toBeGreaterThan(youthLean(24));
+      expect(youthLean(24)).toBeGreaterThan(0);
+      expect(youthLean(26)).toBe(0);
+      expect(youthLean(30)).toBeLessThan(0);
+      expect(youthLean(34)).toBeLessThan(youthLean(30));
+    }
+
+    // starts with rebuilding teams at the bottom of their conference, and never with the user
+    {
+      const early = youthLeague(20);
+      expect(early.teams.every((t) => youthMovement(early, t.tid) === 0)).toBe(true);
+      const L = youthLeague(50);
+      for (const conf of ['E', 'W'] as const) {
+        // the bottom four rebuild from about 20 games in; the next one up waits for the deadline
+        for (const t of bottom(L, conf, 4)) expect(youthMovement(L, t.tid)).toBe(1);
+        expect(youthMovement(L, bottom(L, conf, 5)[0].tid)).toBe(0);
+      }
+      expect(youthMovement(L, L.userTid)).toBe(0);
+      // after the deadline, every rebuilder out of the race; a contender never
+      const late = youthLeague(0);
+      late.day = late.tradeDeadlineDay + 1;
+      for (const conf of ['E', 'W'] as const) for (const t of bottom(late, conf, 5)) expect(youthMovement(late, t.tid)).toBe(1);
+      const contender = bottom(late, 'W', 1)[0];
+      contender.strategy = 'contend';
+      late.day++;
+      expect(youthMovement(late, contender.tid)).toBe(0);
+    }
+
+    // plays the young more, sits veterans some nights, and says so in the news
+    {
+      const L = youthLeague(0);
+      L.day = L.tradeDeadlineDay + 1;
+      const t = bottom(L, 'E', 1)[0];
+      const ps = teamPlayers(L, t.tid);
+      const age = (pid: number) => playerAge(L.players[pid], L.season);
+      const youngShare = (m: Record<number, number>) => Object.entries(m).reduce((a, [pid, x]) => a + (age(+pid) <= 23 ? x : 0), 0);
+      const plain = autoRotation(ps, t.rotation);
+      const youth = autoRotation(ps, t.rotation, { lean: (p) => youthLean(playerAge(p, L.season)), maxMinutes: 30 });
+      expect(youngShare(youth.minutes)).toBeGreaterThan(youngShare(plain.minutes));
+      expect(Math.max(...Object.values(youth.minutes))).toBeLessThanOrEqual(31);
+      // over a week, each veteran of 30 or more sits about every other night
+      const vets = ps.filter((p) => playerAge(p, L.season) >= 30);
+      const rested = new Map<number, number>();
+      for (let d = 0; d < 6; d++) {
+        const rest: number[] = [];
+        restVeterans(L, ps, L.day + d, rest);
+        for (const pid of rest) rested.set(pid, (rested.get(pid) ?? 0) + 1);
+      }
+      for (const p of vets) expect(rested.get(p.pid)).toBe(3);
+      // the engine gets the rest list on a game night
+      const input = buildSimInput(L, t.tid, L.day, 'regular');
+      const tonight: number[] = [];
+      restVeterans(L, ps, L.day, tonight);
+      for (const pid of tonight) expect(input.rest).toContain(pid);
+      youthNews(L);
+      youthNews(L);
+      expect(L.news.filter((n) => n.tids[0] === t.tid && n.text.includes('young players'))).toHaveLength(1);
+    }
+  }, 180_000);
 });
 
-describe("a star's price", () => {
-  it('a contender sends its third-best player for a star (85+), not for anyone less', () => {
-    const l = league(17);
-    l.phase = 'regular';
-    l.day = 60;
-    const [S, B] = [3, 4];
-    for (const t of l.teams) t.strategy = 'retool';
-    l.teams[S].strategy = 'rebuild';
-    l.teams[B].strategy = 'contend';
-    const cap = CAP_FOR(l);
-    const deal = (ovr: number) => {
+describe('coaches', () => {
+  let l: League;
+  beforeAll(() => {
+    l = testLeague('jobs');
+    l.id = 'lg_jobs';
+    for (let i = 0; i < 400 && l.phase !== 'draftLottery'; i++) simDay(l);
+  }, 180_000);
+
+  /** An AI team and the coach in charge there, as if the carousel had just hired him. */
+  const hire = (x: League, n = 1): CarouselMoves => {
+    const teams = x.teams.filter((t) => t.tid !== x.userTid).slice(0, n);
+    return { fired: [], hired: teams.map((t) => ({ tid: t.tid, coach: activeCoach(x, t.tid)!.id, first: false })) };
+  };
+  const scoreOf = (x: League, tid: number, user: boolean) => {
+    const r = user ? userCoach(x)! : activeCoach(x, tid)!;
+    return candidateScore(x, tid, { profile: profileOf(r), rec: r, career: coachCareer(x, r) }, user && !!x.fired);
+  };
+
+  it("names, the owner's review, taking over a team, and the job market (L11, L19)", () => {
+    // every head coach has his own name, the user included
+    {
+      // these seeds drew two coaches with one name (Quentin Vandermeer twice in seed 7)
+      for (const rngSeed of [2, 3, 7]) {
+        const l = createLeague({ name: 'c', userTid: 19, coachName: 'Quentin Novak', settings: defaultSettings(), seed: null, rngSeed });
+        const names = l.teams.map((t) => (t.tid === l.userTid ? l.coachName : t.coach.name));
+        expect(new Set(names).size).toBe(30);
+      }
+    }
+
+    // the owner fires after the grace period for a bad record, never during it or with job security off
+    {
+      const l = realLeague();
+      const ts = curTeamSeason(l, l.userTid);
+      [ts.won, ts.lost, ts.playoffRound] = [15, 67, -1];
+      const review = (tenureStart: number, jobSecurity: boolean) => {
+        l.fired = false;
+        l.ownerMood = { wins: -0.8, playoffs: -0.25, money: 0, total: -0.6 };
+        l.tenureStart = tenureStart;
+        l.settings.jobSecurity = jobSecurity;
+        ownerEvaluation(l);
+      };
+      // the grace period is the first two seasons in charge
+      review(l.season - 1, true);
+      expect(l.fired).toBeFalsy();
+      review(l.season - 3, false);
+      expect(l.fired).toBeFalsy();
+      review(l.season - 3, true);
+      expect(l.fired).toBe(true);
+      expect(l.inbox[0].subject).toBe("You're fired");
+      // the third season is the first one that counts
+      review(l.season - 2, true);
+      expect(l.fired).toBe(true);
+    }
+
+    // a fired coach is not reviewed by the owner again; taking over a team clears the old plan and board
+    {
+      const l = realLeague();
+      l.fired = true;
+      const mood = { ...l.ownerMood };
+      const inbox = l.inbox.length;
+      ownerEvaluation(l);
+      expect(l.ownerMood).toEqual(mood);
+      expect(l.inbox.length).toBe(inbox);
+      l.gamePlans = { 3: { oppTid: 3, items: [{ id: 'cov-hedge', label: 'Hedge', patch: { defense: { pnr: 'hedge' } } }] } };
+      l.draftBoard = [1, 2, 3];
+      takeOverTeam(l, aiTeam(l));
+      expect(l.fired).toBe(false);
+      expect(l.gamePlans).toBeUndefined();
+      expect(l.draftBoard).toBeUndefined();
+    }
+
+    // a new job leaves the old job's mail behind, read; the new owner's goals come in unread
+    {
+      const l = league(13);
+      while (standardRoster(l, U).length > 15) releasePlayer(l, standardRoster(l, U)[0], { news: false });
+      expect(startRegularSeason(l)).toEqual([]);
+      addInbox(l, { from: 'Assistant GM', subject: 'Extension candidates', body: 'x', tone: 'neutral' });
+      expect(l.inbox.some((m) => !m.read)).toBe(true);
+      takeOverTeam(l, 7);
+      const unread = l.inbox.filter((m) => !m.read);
+      expect(unread.length).toBeGreaterThan(0);
+      expect(unread.every((m) => m.from === 'Owner')).toBe(true);
+      expect(l.inbox.find((m) => m.subject === 'Extension candidates')!.read).toBe(true);
+    }
+
+    // taking over another team leaves no minute caps or back-to-back rests on the old team's AI-run rotation
+    {
+      const l = testLeague('takeover-caps');
+      const old = l.teams[l.userTid];
+      const [a, b] = old.rotation.order;
+      old.rotation.caps = { [a]: 24, [b]: 24 };
+      old.rotation.restB2B = [a, b];
+      takeOverTeam(l, (l.userTid + 1) % l.teams.length);
+      expect(old.rotation.caps).toEqual({});
+      expect(old.rotation.restB2B).toEqual([]);
+      simDay(l);
+      expect(old.rotation.caps).toEqual({});
+    }
+
+    // a fired user always hears from an opening, and from every one that would rather have him
+    {
       const x = structuredClone(l);
-      for (const t of [S, B])
-        for (const p of standardRoster(x, t)) {
-          delete p.tradeLock;
-          p.contract = { start: x.season, salaries: [cap.vetMin, cap.vetMin] };
-        }
-      const star = shape(x, standardRoster(x, S)[0], ovr, 30);
-      star.contract = { start: x.season, salaries: [cap.salaryCap * 0.3, cap.salaryCap * 0.3] };
-      for (const p of standardRoster(x, S)) if (p !== star) p.ovr = Math.min(p.ovr, 72);
-      // the buyer: two better stars, then a young starter paid enough to match, the rest on the minimum
-      const roster = standardRoster(x, B);
-      roster.forEach((p, i) => shape(x, p, i < 2 ? 92 : i === 2 ? 83 : 70, i === 2 ? 23 : 27));
-      roster[2].contract = { start: x.season, salaries: [cap.salaryCap * 0.25, cap.salaryCap * 0.25] };
-      roster[2].pot = 90;
-      // (the stars on big deals: over the cap, the buyer has to match salaries)
-      for (const p of roster.slice(0, 2)) p.contract = { start: x.season, salaries: [cap.salaryCap * 0.3, cap.salaryCap * 0.3] };
-      const third = roster[2];
-      return { d: aiPackage(x, B, S, star), third };
-    };
-    const star = deal(88);
-    expect(star.d).not.toBeNull();
-    expect(star.d!.a.pids).toContain(star.third.pid);
-    // a lesser player isn't worth the buyer's third-best: without him the salaries don't match
-    const lesser = deal(84);
-    expect(lesser.d?.a.pids ?? []).not.toContain(lesser.third.pid);
-  });
-});
+      x.fired = true;
+      const moves = hire(x, 4);
+      makeJobOffers(x, moves);
+      const offers = x.jobOffers!.offers;
+      expect(offers.length).toBeGreaterThanOrEqual(1);
+      expect(offers.every((o) => o.kind === 'opening' && o.tid !== x.userTid)).toBe(true);
+      const wanted = moves.hired.filter((h) => scoreOf(x, h.tid, true) - scoreOf(x, h.tid, false) >= -0.25).map((h) => h.tid);
+      if (wanted.length) expect(offers.map((o) => o.tid).sort()).toEqual(wanted.sort());
+      // the agent says so, and long sims stop for it
+      expect(x.inbox.some((m) => m.from === 'Your agent' && m.important && m.link === '/office/career')).toBe(true);
+    }
 
-describe('a new job', () => {
-  it("leaves the old job's mail behind, read; the new owner's goals come in unread", () => {
-    const l = league(13);
-    while (standardRoster(l, U).length > 15) releasePlayer(l, standardRoster(l, U)[0], { news: false });
-    expect(startRegularSeason(l)).toEqual([]);
-    addInbox(l, { from: 'Assistant GM', subject: 'Extension candidates', body: 'x', tone: 'neutral' });
-    expect(l.inbox.some((m) => !m.read)).toBe(true);
-    takeOverTeam(l, 7);
-    const unread = l.inbox.filter((m) => !m.read);
-    expect(unread.length).toBeGreaterThan(0);
-    expect(unread.every((m) => m.from === 'Owner')).toBe(true);
-    expect(l.inbox.find((m) => m.subject === 'Extension candidates')!.read).toBe(true);
-  });
+    // with no openings, the two teams closest to a change call instead
+    {
+      const x = structuredClone(l);
+      x.fired = true;
+      makeJobOffers(x, { fired: [], hired: [] });
+      const offers = x.jobOffers!.offers;
+      expect(offers).toHaveLength(2);
+      expect(offers.every((o) => o.kind === 'change' && o.tid !== x.userTid)).toBe(true);
+    }
+
+    // a user with a job is approached only after two seasons, by an opening that rates him clearly above its hire
+    {
+      const x = structuredClone(l);
+      makeJobOffers(x, hire(x, 6));
+      // his first season in charge: nobody calls
+      expect(x.jobOffers).toBeUndefined();
+      x.tenureStart = x.season - 2;
+      const moves = hire(x, 6);
+      makeJobOffers(x, moves);
+      const want = moves.hired
+        .map((h) => ({ tid: h.tid, edge: scoreOf(x, h.tid, true) - scoreOf(x, h.tid, false) }))
+        .filter((h) => h.edge >= 0.4)
+        .sort((a, b) => b.edge - a.edge)
+        .map((h) => h.tid);
+      expect((x.jobOffers?.offers ?? []).map((o) => o.tid)).toEqual(want.slice(0, 2));
+      expect((x.jobOffers?.offers ?? []).every((o) => o.kind === 'approach')).toBe(true);
+    }
+
+    // taking a job is a takeover: the other offers go, the news calls it a hiring, the registry stays whole
+    {
+      const x = structuredClone(l);
+      x.fired = true;
+      const old = x.userTid;
+      makeJobOffers(x, hire(x, 3));
+      const offer = x.jobOffers!.offers[0];
+      const displaced = activeCoach(x, offer.tid)!;
+      expect(takeJob(x, offer.tid)).toBeNull();
+      expect(x.userTid).toBe(offer.tid);
+      expect(x.fired).toBe(false);
+      expect(x.jobOffers).toBeUndefined();
+      expect(registryProblems(x)).toEqual([]);
+      // the coach in charge there takes the user's old job
+      expect(openStint(displaced)?.tid).toBe(old);
+      expect(x.news.some((n) => n.kind === 'coach' && n.text.startsWith(`The ${x.teams[offer.tid].name} hired ${x.coachName}`))).toBe(true);
+      // and the season can go on to the draft
+      expect(startDraft(x)).toBe(true);
+    }
+
+    // an offer turned down goes; the draft ends them; saves keep them and drop damaged ones
+    {
+      const x = structuredClone(l);
+      x.fired = true;
+      makeJobOffers(x, hire(x, 4));
+      expect(migrate(structuredClone(x)).jobOffers).toEqual(x.jobOffers);
+      const bad = structuredClone(x) as unknown as { jobOffers: { offers: unknown[] } };
+      bad.jobOffers.offers.push({ tid: x.userTid, kind: 'opening', note: 'x' });
+      expect(migrate(bad).jobOffers).toBeUndefined();
+      for (const o of [...x.jobOffers!.offers]) declineJob(x, o.tid);
+      expect(x.jobOffers).toBeUndefined();
+      // a user with a job and a standing approach: the draft ends it
+      const y = structuredClone(l);
+      y.jobOffers = { season: y.season, offers: [{ tid: (y.userTid + 1) % 30, kind: 'approach', note: 'call' }] };
+      expect(startDraft(y)).toBe(true);
+      expect(y.jobOffers).toBeUndefined();
+    }
+  }, 180_000);
 });

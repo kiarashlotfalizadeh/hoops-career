@@ -11,12 +11,12 @@ import type { Stint } from '../nba/pbp';
 import { Rng } from '../../../src/core/random';
 
 describe('NBA.com data pipeline', () => {
-  it('splits CSV lines with quoted commas and escaped quotes', () => {
+  it('reads CSVs out of .tar.xz archives, recovers RAPM effects, and matches NBA.com names and college seasons to players', async () => {
+    // CSV lines with quoted commas and escaped quotes
     expect(splitCsv('1,"fastbreak, 2ndchance",x')).toEqual(['1', 'fastbreak, 2ndchance', 'x']);
     expect(splitCsv('"say ""hi""",,3')).toEqual(['say "hi"', '', '3']);
-  });
 
-  it('streams rows out of a .tar.xz, and fails on an archive tar cannot read instead of reading no rows', async () => {
+    // rows stream out of a .tar.xz; an archive tar cannot read fails instead of reading no rows
     const dir = mkdtempSync(join(tmpdir(), 'hc-csv-'));
     writeFileSync(join(dir, 'pbp.csv'), 'gameId,desc\n1,"Jump, ball"\n2,Dunk\n');
     execFileSync('tar', ['-cJf', join(dir, 'ok.tar.xz'), '-C', dir, 'pbp.csv']);
@@ -30,9 +30,8 @@ describe('NBA.com data pipeline', () => {
     writeFileSync(join(dir, 'bad.tar.xz'), 'version https://example.com/spec/v1\n');
     await expect(read('bad.tar.xz')).rejects.toThrow(/could not read/);
     await expect(read('missing.tar.xz')).rejects.toThrow(/could not read/);
-  });
 
-  it('RAPM recovers known offensive and defensive effects from simulated stints', () => {
+    // RAPM recovers known effects from simulated stints:
     // 20 players; player 1 adds +6 per 100 on offense, player 2 prevents 5 on defense
     const rng = new Rng(7);
     const truthO: Record<number, number> = { 1: 6 };
@@ -53,9 +52,8 @@ describe('NBA.com data pipeline', () => {
     expect(r.def[2]).toBeGreaterThan(2.5);
     const others = Array.from({ length: 18 }, (_, k) => k + 3).map((p) => Math.abs(r.off[p]));
     expect(Math.max(...others)).toBeLessThan(r.off[1]);
-  });
 
-  it('matches NBA.com names to Basketball Reference ids despite accents, suffixes and nicknames', () => {
+    // NBA.com names find Basketball Reference ids despite accents, suffixes and nicknames
     expect(normName('Nikola Jokić')).toBe('nikola jokic');
     expect(normName('Jimmy Butler III')).toBe('jimmy butler');
     const { map, unmatched } = crosswalk(
@@ -77,23 +75,21 @@ describe('NBA.com data pipeline', () => {
     expect(map.get(2)).toBe('sarral01');
     expect(map.get(3)).toBe('willija06');
     expect(map.get(4)).toBe('willija07');
-  });
 
-  it('lets exact names claim their ids before near-miss spellings, whatever the order', () => {
+    // exact names claim their ids before near-miss spellings, whatever the order:
     // "Jeff Green" has no row of his own; surname + initial on the same team must not hand him Jalen's id
-    const { map, unmatched } = crosswalk(
+    const greens = crosswalk(
       [
         { pid: 1, name: 'Jeff Green', teams: { 2026: 'HOU' } },
         { pid: 2, name: 'Jalen Green', teams: { 2026: 'HOU' } },
       ],
       [{ id: 'greenja05', name: 'Jalen Green', season: 2026, team: 'HOU' }],
     );
-    expect(map.get(2)).toBe('greenja05');
-    expect(map.has(1)).toBe(false);
-    expect(unmatched.map((p) => p.pid)).toEqual([1]);
-  });
+    expect(greens.map.get(2)).toBe('greenja05');
+    expect(greens.map.has(1)).toBe(false);
+    expect(greens.unmatched.map((p) => p.pid)).toEqual([1]);
 
-  it("finds a transfer's latest college season and tells same-name players apart", () => {
+    // a transfer's latest college season, telling same-name players apart
     const season = (athleteId: string, team: string, s: number, min: number) => ({ ...blankCollege, athleteId, name: 'Sam Smith', team, season: s, min });
     const all = new Map([
       [

@@ -6,7 +6,7 @@
 import type { BoxLine, GameResult, LineupStat, PbpEntry, TeamBox } from '../../types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../log';
 import { K } from './constants';
-import type { Box, SP, ST } from './state';
+import type { Box, SP, ST, Stint } from './state';
 import type { GameSim } from './game';
 
 export const recordMethods = {
@@ -20,6 +20,17 @@ export const recordMethods = {
     }
     t.ls = ls;
     return ls;
+  },
+
+  /** The tally of the offense's five against the defense's (opts.stints). */
+  stint(this: GameSim, off: ST, def: ST): Stint {
+    const key = `${off.lineupKey}|${def.lineupKey}`;
+    let s = this.stints!.get(key);
+    if (!s) {
+      s = { off: off.on.map((p) => p.pid), def: def.on.map((p) => p.pid), poss: 0, pts: 0 };
+      this.stints!.set(key, s);
+    }
+    return s;
   },
 
   /**
@@ -96,6 +107,7 @@ export const recordMethods = {
     }
     this.lineupStat(off).ptsFor += pts;
     this.lineupStat(def).ptsAgainst += pts;
+    if (this.stints) this.stint(off, def).pts += pts;
     if (!sh.starter) off.ex.bench += pts;
     if (this.secondChance) off.ex.secondChance += pts;
     if (this.inTransition) off.ex.fastBreak += pts;

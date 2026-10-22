@@ -104,7 +104,10 @@ export interface SeedSchedule {
 
 export interface SeedData {
   version: number;
+  /** When the build's inputs were pinned (scripts/data/inputs.ts). */
   generated: string;
+  /** The pinned inputs' hash: the seed a rebuild from them reproduces. */
+  inputs?: string;
   source: string;
   season: number;
   /**

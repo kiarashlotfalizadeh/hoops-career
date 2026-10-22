@@ -5,9 +5,9 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { GameSim, type SimTeamInput } from '../sim/engine';
+import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import type { PossLog } from '../sim/log';
-import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
+import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { composites } from '../ratings';
 import { Rng } from '../random';
 import type { Player, PlayerDefense, TacticImpact, Tactics } from '../types';
@@ -77,8 +77,10 @@ describe('engine defense', () => {
   }
   const usage = (b: Box) => (b.fga + 0.44 * b.fta + b.tov) / (b.tFga + 0.44 * b.tFta + b.tTov);
 
-  describe('junk defenses', () => {
-    it('a box-and-one takes the ball out of the chased star’s hands, but the others get more threes and the glass gets softer', () => {
+  it('plays junk defenses, instructions by player, hunting a defender and the foul to give as their help texts say, and games without them as before', () => {
+    // junk defenses
+    // a box-and-one takes the ball out of the chased star’s hands, but the others get more threes and the glass gets softer
+    {
       const helio = shaped(7, 'helio');
       const box1: TacticsPatch = { defense: { scheme: 'box1', chase: [helio.star.pid] } };
       const [base, box] = paired(3, 7, helio, box1, 30, 100, [helio.star.pid]);
@@ -114,9 +116,10 @@ describe('engine defense', () => {
       expect(box.impacts['box_chase:d']).toBeGreaterThan(0);
       expect(box.impacts['box_open:o']).toBeGreaterThan(0);
       expect(base.impacts['box_chase:d']).toBeUndefined();
-    });
+    }
 
-    it('plays man-to-man while the players it is named for sit, chases their main creators when it names nobody, and a triangle chases two', () => {
+    // plays man-to-man while the players it is named for sit, chases their main creators when it names nobody, and a triangle chases two
+    {
       const helio = shaped(7, 'helio');
       const star = helio.star.pid;
       const logs = (patch: TacticsPatch) => {
@@ -157,237 +160,337 @@ describe('engine defense', () => {
         const best = [...def].sort((a, b) => composites(b.ratings).perDef - composites(a.ratings).perDef).slice(0, 2);
         expect(chasers.reduce((a, p) => a + composites(p.ratings).perDef, 0)).toBeGreaterThanOrEqual(best.reduce((a, p) => a + composites(p.ratings).perDef, 0) - 12);
       }
-    });
+    }
+    // instructions by player
+    {
+      /** Their starters with an instruction for each (as `patchFor` picks), and the raw lines of the players named. */
+      const lines = (patchFor: (players: Player[]) => Record<number, PlayerDefense>, games = 20) => {
+        const players = teamPlayers(league, 12);
+        const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
+        const pd = patchFor(players.filter((p) => starters.has(p.pid)));
+        const pids = Object.keys(pd).map(Number);
+        const [base, inst] = paired(11, 12, { players, tactics: league.teams[12].tactics }, { defense: { playerD: pd } }, games, 300, pids);
+        return { base, inst };
+      };
+      const by = (players: Player[], f: (c: ReturnType<typeof composites>) => number) => [...players].sort((a, b) => f(composites(b.ratings)) - f(composites(a.ratings)));
+      // "under" gives his pull-ups room and takes his drives away; "tight" trades his threes for drives
+      {
+        // (the tags are the engine's own accounting: openness his pull-ups gained, his drives and the roll lost)
+        const under = lines((ps) => ({ [by(ps, (c) => c.pnrHandle)[0].pid]: 'under' }));
+        expect(under.inst.impacts['pd_under:o']).toBeGreaterThan(0);
+        expect(under.inst.impacts['pd_under:d']).toBeGreaterThan(0);
+        expect(under.base.impacts['pd_under:o']).toBeUndefined();
+        const tight = lines((ps) => ({ [by(ps, (c) => c.c3)[0].pid]: 'tight' }));
+        expect(tight.inst.tpa).toBeLessThan(tight.base.tpa * 0.92);
+        expect(tight.inst.rimA).toBeGreaterThan(tight.base.rimA);
+        expect(tight.inst.impacts['pd_tight:d']).toBeGreaterThan(0);
+      }
 
-    it('is a weapon against a star with non-shooters around him and a loser against a shooting team', () => {
-      const delta = (kind: 'helio' | 'shooters') => {
+      // "sag" helps at the rim and leaves him open; "body" makes his finishes harder and sends him to the line more
+      {
+        const sag = lines((ps) => ({ [by(ps, (c) => -c.c3)[0].pid]: 'sag' }));
+        expect(sag.inst.impacts['pd_sag:d']).toBeGreaterThan(0);
+        const body = lines((ps) => ({ [by(ps, (c) => c.postScore + c.rim)[0].pid]: 'body' }), 30);
+        expect(body.inst.fta).toBeGreaterThan(body.base.fta);
+        expect(body.inst.impacts['pd_body:d']).toBeGreaterThan(0);
+        expect(body.inst.impacts['pd_body:o']).toBeGreaterThan(0);
+      }
+
+      // fit one player and cost against another: sagging off a shooter gives up the open looks it leaves him
+      {
+        const ps = structuredClone(teamPlayers(league, 12));
+        const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
+        const target = ps.filter((p) => starters.has(p.pid)).sort((a, b) => composites(a.ratings).c3 - composites(b.ratings).c3)[0];
+        // (a shooter's tendencies, or a non-shooter's, come with his rating: none, so only the rating differs)
+        delete target.tend;
+        const run = (tp: number) => {
+          target.ratings.tp = tp;
+          return paired(11, 12, { players: ps, tactics: league.teams[12].tactics }, { defense: { playerD: { [target.pid]: 'sag' } } }, 25, 500, [target.pid])[1].impacts;
+        };
+        const nonShooter = run(15);
+        const shooter = run(90);
+        // the help at the rim is about the same; the open looks it gives up grow with his shooting
+        expect(nonShooter['pd_sag:d']).toBeGreaterThan(nonShooter['pd_sag:o'] ?? 0);
+        expect(Math.abs(shooter['pd_sag:d'] - nonShooter['pd_sag:d'])).toBeLessThan(0.3 * nonShooter['pd_sag:d']);
+        expect(shooter['pd_sag:o']).toBeGreaterThan(3 * (nonShooter['pd_sag:o'] ?? 0) + 2);
+      }
+    }
+    // hunting a defender
+    {
+      type In = {
+        T: {
+          on: { pid: number }[];
+          guardOf: Map<number, { pid: number }>;
+          t: Tactics;
+          base: Tactics;
+          adjust: number;
+          byId: Map<number, { pid: number; name: string; on: boolean }>;
+        }[];
+        q: number;
+        elapsed: number;
+        impacts: Map<string, TacticImpact>;
+        adjust(t: unknown): void;
+        adjustments: { text: string }[];
+      };
+      // runs isolations and ball screens at the man he guards, and costs ball movement
+      {
+        // their starter with the worst perimeter defense
+        const starters = new Set(league.teams[3].rotation.order.slice(0, 5));
+        const target = teamPlayers(league, 3)
+          .filter((p) => starters.has(p.pid))
+          .sort((a, b) => composites(a.ratings).perDef - composites(b.ratings).perDef)[0];
+        let isoAt = [0, 0];
+        let screens = [0, 0];
+        const tags = [0, 0];
+        for (let g = 0; g < 24; g++)
+          for (const i of [0, 1]) {
+            const sim = new GameSim(side(5, i ? { offense: { huntTarget: target.pid } } : undefined), side(3), opts(60 + g, true));
+            const s = sim as unknown as In;
+            while (sim.step()) {
+              for (const l of sim.drainLogs()) {
+                if (l.off !== 0 || !l.on[1].includes(target.pid)) continue;
+                const hunted = Object.entries(l.guards).find(([, d]) => d === target.pid)?.[0];
+                if (hunted === undefined) continue;
+                for (const st of l.steps) if (st.k === 'screen' && st.pid === +hunted) screens = screens.map((x, k) => (k === i ? x + 1 : x));
+                if (l.action === 'iso' && l.label.endsWith(` on ${s.T[1].byId.get(target.pid)!.name}`)) isoAt = isoAt.map((x, k) => (k === i ? x + 1 : x));
+              }
+            }
+            tags[i] += sim.result().impacts?.filter((im) => im.key.startsWith('hunt')).length ?? 0;
+          }
+        expect(isoAt[1]).toBeGreaterThan(isoAt[0] * 1.3);
+        expect(screens[1]).toBeGreaterThan(screens[0] * 2);
+        expect(tags[0]).toBe(0);
+        expect(tags[1]).toBeGreaterThan(0);
+      }
+
+      // an AI coach hides a defender being hunted with success on their weakest scorer, and only then
+      {
+        const sim = new GameSim(side(5), side(3), opts(3)) as unknown as In;
+        const ai = sim.T[1];
+        ai.adjust = 1;
+        sim.q = 2;
+        sim.elapsed = 1000;
+        const target = ai.on[0].pid;
+        sim.T[0].t.offense.huntTarget = target;
+        sim.adjust(ai);
+        // not hunted with success yet: no reason to hide him
+        expect(Object.values(ai.t.defense.matchups)).not.toContain(target);
+        sim.impacts.set('hunt:o|0', { key: 'hunt:o', t: 0, count: 30, pts: 20, players: {} });
+        sim.adjust(ai);
+        expect(sim.adjustments.at(-1)!.text).toMatch(/^hides /);
+        const weak = Number(Object.entries(ai.t.defense.matchups).find(([, d]) => d === target)![0]);
+        expect(ai.guardOf.get(weak)!.pid).toBe(target);
+        expect(ai.base.defense.matchups[weak]).toBe(target);
+      }
+    }
+    // the foul to give
+    {
+      type In = {
+        T: { fouls: number; foulsLast2: number; score: number; t: Tactics; base: Tactics }[];
+        q: number;
+        clock: number;
+        cur: unknown;
+        intentionalFoul(off: unknown, def: unknown): string | null;
+        pbp: { text: string }[];
+      };
+      const at = (q: number, clock: number, lead: number, on = true, fouls = 0, last2 = 0) => {
+        // (the other late-game fouls off, to see this one alone)
+        const sim = new GameSim(side(0), side(1, { manage: { foulToGive: on, foulUp3: false, foulWhenTrailing: false } }), opts(4, true)) as unknown as In;
+        sim.q = q;
+        sim.clock = clock;
+        sim.T[1].score = 50 + lead;
+        sim.T[0].score = 50;
+        sim.T[1].fouls = fouls;
+        sim.T[1].foulsLast2 = last2;
+        // (the trip being logged, as at the start of a possession)
+        sim.cur = { steps: [], lines: [], kind: 'half', label: '' };
+        const res = sim.intentionalFoul(sim.T[0], sim.T[1]);
+        return { res, text: sim.pbp.at(-1)?.text ?? '' };
+      };
+      // fouls at once for the last shot of a period when it is only a side out, and never otherwise
+      {
+        const f = at(4, 6, 2);
+        expect(f.res).toBe('sideout');
+        expect(f.text).toMatch(/a foul to give/);
+        expect(at(2, 7, -9).res).toBe('sideout');
+        expect(at(4, 6, 0).res).toBe('sideout');
+        // off, too early, too late, a lead of four or more (or trailing) in the 4th, or it would put them in the bonus
+        expect(at(4, 6, 2, false).res).toBeNull();
+        expect(at(4, 9, 2).res).toBeNull();
+        expect(at(4, 2, 2).res).toBeNull();
+        expect(at(4, 6, 4).res).toBeNull();
+        expect(at(4, 6, -1).res).toBeNull();
+        expect(at(4, 6, 2, true, 4).res).toBeNull();
+        expect(at(3, 6, 2, true, 2, 1).res).toBeNull();
+        expect(at(3, 6, 2, true, 2, 0).res).toBe('sideout');
+      }
+    }
+    // leaves games that use none of it exactly as they were
+    {
+      // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
+      // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
+      // tactics were made to matter twice as much: the tactical-leverage check below plays these games at 1x leverage and gets
+      // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
+      // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
+      // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred)
+      const expected: Record<string, number[][]> = {
+        default: [
+          [119, 107, 79, 37, 12, 26, 15, 0],
+          [121, 110, 105, 27, 18, 34, 8, 0],
+          [117, 106, 89, 38, 9, 8, 14, 0],
+        ],
+        zone23: [
+          [113, 122, 94, 41, 15, 22, 12, 0],
+          [133, 109, 97, 32, 17, 18, 14, 0],
+          [114, 126, 92, 38, 9, 18, 17, 0],
+        ],
+        zone32: [
+          [105, 113, 79, 48, 11, 21, 21, 0],
+          [120, 109, 97, 24, 13, 26, 8, 0],
+          [104, 119, 98, 21, 15, 29, 14, 0],
+        ],
+        double: [
+          [106, 121, 84, 39, 17, 8, 13, 0],
+          [127, 111, 95, 38, 13, 24, 12, 0],
+          [121, 102, 95, 34, 10, 19, 14, 0],
+        ],
+        // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
+        // the couple of trips the mismatch hunt changes back to the same team lines)
+        hunt: [
+          [119, 107, 79, 37, 12, 26, 15, 0],
+          [123, 133, 118, 28, 18, 25, 9, 1],
+          [117, 106, 90, 38, 9, 8, 14, 0],
+        ],
+      };
+      const patches: Record<string, TacticsPatch | undefined> = {
+        default: undefined,
+        zone23: { defense: { scheme: 'zone23' } },
+        zone32: { defense: { scheme: 'zone32', starPlan: 'deny' } },
+        double: { defense: { starPlan: 'double', pnr: 'switch', switchOffBall: true } },
+        hunt: { offense: { huntMismatch: true }, manage: { hackThreshold: 62 } },
+      };
+      for (const [name, patch] of Object.entries(patches)) {
+        const got: number[][] = [];
+        for (let g = 0; g < 3; g++) {
+          const a = { ...side(10 + g, patch), adjust: true };
+          const b = { ...side(20 + g, g === 1 ? patch : undefined), adjust: true };
+          const res = new GameSim(a, b, { rng: new Rng(800 + g), type: 'regular', injuries: true }).simToEnd();
+          got.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot]);
+        }
+        expect(got, name).toEqual(expected[name]);
+      }
+    }
+  }, 120_000);
+
+  // Tactical leverage (K.tacticEdge): the owner's call to make tactics matter about twice as much as
+  // they did. At 1x the engine plays exactly as it did before the change, and at the game's 2x the edge
+  // a choice gets from fitting the opponent is about twice as big both ways.
+  it('weighs tactics at twice their old size: 1x plays every game as before, and a box-and-one aimed at a star with non-shooters around him is a weapon, one against a shooting team a loser, each about twice as much as at 1x', () => {
+    const EDGE = K.tacticEdge;
+    try {
+      // the game at 2x, and every game played exactly as before at 1x
+      expect(K.tacticEdge).toBe(2);
+      K.tacticEdge = 1;
+      // box-score fingerprints from the engine before the change (with no in-game adjustments, which read the
+      // tags, so the tags can be made more honest without moving them): games using none of the tactical tools,
+      // the zones and a box-and-one, a star plan with switching, the pressure tools with crashing and running,
+      // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
+      // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
+      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
+      // every tactical edge at its 1x size, game after game)
+      const expected: Record<string, number[][]> = {
+        default: [
+          [106, 97, 76, 33, 16, 20, 15, 0],
+          [110, 115, 109, 19, 23, 41, 10, 0],
+          [118, 122, 91, 28, 7, 29, 11, 0],
+        ],
+        zone23: [
+          [133, 121, 76, 41, 11, 19, 13, 0],
+          [127, 106, 97, 39, 17, 27, 11, 0],
+          [115, 114, 98, 33, 11, 12, 12, 0],
+        ],
+        zone32: [
+          [117, 119, 84, 47, 15, 30, 17, 1],
+          [121, 112, 95, 25, 17, 26, 11, 0],
+          [127, 118, 87, 31, 9, 20, 12, 0],
+        ],
+        box1: [
+          [111, 108, 77, 43, 10, 27, 17, 0],
+          [117, 119, 91, 27, 15, 42, 16, 0],
+          [129, 116, 87, 36, 11, 18, 14, 0],
+        ],
+        double: [
+          [118, 115, 78, 33, 14, 25, 11, 0],
+          [123, 109, 98, 36, 20, 21, 13, 0],
+          [116, 107, 94, 23, 9, 15, 9, 0],
+        ],
+        pressure: [
+          [116, 121, 75, 39, 8, 29, 16, 0],
+          [140, 142, 95, 31, 9, 41, 19, 0],
+          [122, 111, 102, 37, 12, 21, 17, 0],
+        ],
+        hunting: [
+          [121, 123, 82, 36, 13, 24, 16, 0],
+          [135, 123, 90, 26, 9, 37, 10, 0],
+          [116, 104, 96, 36, 12, 20, 14, 0],
+        ],
+      };
+      const patches: Record<string, TacticsPatch | undefined> = {
+        default: undefined,
+        zone23: { defense: { scheme: 'zone23' } },
+        zone32: { defense: { scheme: 'zone32', starPlan: 'deny' } },
+        box1: { defense: { scheme: 'box1' } },
+        double: { defense: { starPlan: 'double', pnr: 'switch', switchOffBall: true } },
+        pressure: { defense: { pressure: 90, press: 'afterMade', pnr: 'blitz', physicality: 80 }, offense: { crashBoards: 85, transition: 90 } },
+        hunting: { offense: { huntMismatch: true, sets: ['spain', 'floppy', 'hammer', 'postSplit'] }, defense: { help: 80, getBack: 85 } },
+      };
+      for (const [name, patch] of Object.entries(patches)) {
+        const got: number[][] = [];
+        for (let g = 0; g < 3; g++) {
+          const res = new GameSim(side(10 + g, patch), side(20 + g, g === 1 ? patch : undefined), { rng: new Rng(800 + g), type: 'regular', injuries: true }).simToEnd();
+          got.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot]);
+        }
+        expect(got, name).toEqual(expected[name]);
+      }
+      // the box-and-one in Lab runs, team 4 defending team 9 reshaped
+      const lab = (kind: 'helio' | 'shooters', edge: number, games: number, from = 0): [LabSummary, LabSummary] => {
+        K.tacticEdge = edge;
         const s = shaped(9, kind);
         const off = side(9, undefined, s.players, s.tactics);
         const chase = kind === 'helio' ? [s.star.pid] : undefined;
-        const run = (patch: TacticsPatch) => runLab({ a: side(4, patch), b: off, games: 400, seed: 31 });
-        return pairedDelta(run(man), run({ defense: { ...man.defense, scheme: 'box1', ...(chase && { chase }) } }));
+        // (runLab seeds game g from seed + g * 2654435761: games from `from` on)
+        const run = (patch: TacticsPatch) => runLab({ a: side(4, patch), b: off, games, seed: (31 + Math.imul(from, 2654435761)) >>> 0 });
+        return [run(man), run({ defense: { ...man.defense, scheme: 'box1', ...(chase && { chase }) } })];
       };
-      const helio = delta('helio');
-      const shooters = delta('shooters');
+      // a weapon against a star with non-shooters around him and a loser against a shooting team (400 games)
+      const [h400, s400] = [lab('helio', 2, 400), lab('shooters', 2, 400)];
+      const helio = pairedDelta(...h400);
+      const shooters = pairedDelta(...s400);
       expect(helio.delta).toBeGreaterThan(0);
       expect(shooters.delta).toBeLessThan(0);
       expect(helio.delta - shooters.delta).toBeGreaterThan(2 * Math.hypot(helio.se, shooters.se));
-    });
-  });
-
-  describe('instructions by player', () => {
-    /** Their starters with an instruction for each (as `patchFor` picks), and the raw lines of the players named. */
-    const lines = (patchFor: (players: Player[]) => Record<number, PlayerDefense>, games = 20) => {
-      const players = teamPlayers(league, 12);
-      const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
-      const pd = patchFor(players.filter((p) => starters.has(p.pid)));
-      const pids = Object.keys(pd).map(Number);
-      const [base, inst] = paired(11, 12, { players, tactics: league.teams[12].tactics }, { defense: { playerD: pd } }, games, 300, pids);
-      return { base, inst };
-    };
-    const by = (players: Player[], f: (c: ReturnType<typeof composites>) => number) => [...players].sort((a, b) => f(composites(b.ratings)) - f(composites(a.ratings)));
-
-    it('"under" gives his pull-ups room and takes his drives away; "tight" trades his threes for drives', () => {
-      // (the tags are the engine's own accounting: openness his pull-ups gained, his drives and the roll lost)
-      const under = lines((ps) => ({ [by(ps, (c) => c.pnrHandle)[0].pid]: 'under' }));
-      expect(under.inst.impacts['pd_under:o']).toBeGreaterThan(0);
-      expect(under.inst.impacts['pd_under:d']).toBeGreaterThan(0);
-      expect(under.base.impacts['pd_under:o']).toBeUndefined();
-      const tight = lines((ps) => ({ [by(ps, (c) => c.c3)[0].pid]: 'tight' }));
-      expect(tight.inst.tpa).toBeLessThan(tight.base.tpa * 0.92);
-      expect(tight.inst.rimA).toBeGreaterThan(tight.base.rimA);
-      expect(tight.inst.impacts['pd_tight:d']).toBeGreaterThan(0);
-    });
-
-    it('"sag" helps at the rim and leaves him open; "body" makes his finishes harder and sends him to the line more', () => {
-      const sag = lines((ps) => ({ [by(ps, (c) => -c.c3)[0].pid]: 'sag' }));
-      expect(sag.inst.impacts['pd_sag:d']).toBeGreaterThan(0);
-      const body = lines((ps) => ({ [by(ps, (c) => c.postScore + c.rim)[0].pid]: 'body' }), 30);
-      expect(body.inst.fta).toBeGreaterThan(body.base.fta);
-      expect(body.inst.impacts['pd_body:d']).toBeGreaterThan(0);
-      expect(body.inst.impacts['pd_body:o']).toBeGreaterThan(0);
-    });
-
-    it('fit one player and cost against another: sagging off a shooter gives up the open looks it leaves him', () => {
-      const ps = structuredClone(teamPlayers(league, 12));
-      const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
-      const target = ps.filter((p) => starters.has(p.pid)).sort((a, b) => composites(a.ratings).c3 - composites(b.ratings).c3)[0];
-      // (a shooter's tendencies, or a non-shooter's, come with his rating: none, so only the rating differs)
-      delete target.tend;
-      const run = (tp: number) => {
-        target.ratings.tp = tp;
-        return paired(11, 12, { players: ps, tactics: league.teams[12].tactics }, { defense: { playerD: { [target.pid]: 'sag' } } }, 25, 500, [target.pid])[1].impacts;
+      // about twice as much as at 1x, both ways (500 games: the 400 above and 100 more)
+      const join = (a: LabSummary, b: LabSummary): LabSummary => ({
+        ...a,
+        games: a.games + b.games,
+        margins: [...a.margins, ...b.margins],
+        pace: (a.pace * a.games + b.pace * b.games) / (a.games + b.games),
+      });
+      const at2 = (kind: 'helio' | 'shooters', first: [LabSummary, LabSummary]) => {
+        const more = lab(kind, 2, 100, 400);
+        return pairedDelta(join(first[0], more[0]), join(first[1], more[1]));
       };
-      const nonShooter = run(15);
-      const shooter = run(90);
-      // the help at the rim is about the same; the open looks it gives up grow with his shooting
-      expect(nonShooter['pd_sag:d']).toBeGreaterThan(nonShooter['pd_sag:o'] ?? 0);
-      expect(Math.abs(shooter['pd_sag:d'] - nonShooter['pd_sag:d'])).toBeLessThan(0.3 * nonShooter['pd_sag:d']);
-      expect(shooter['pd_sag:o']).toBeGreaterThan(3 * (nonShooter['pd_sag:o'] ?? 0) + 2);
-    });
-  });
-
-  describe('hunting a defender', () => {
-    type In = {
-      T: {
-        on: { pid: number }[];
-        guardOf: Map<number, { pid: number }>;
-        t: Tactics;
-        base: Tactics;
-        adjust: number;
-        byId: Map<number, { pid: number; name: string; on: boolean }>;
-      }[];
-      q: number;
-      elapsed: number;
-      impacts: Map<string, TacticImpact>;
-      adjust(t: unknown): void;
-      adjustments: { text: string }[];
-    };
-
-    it('runs isolations and ball screens at the man he guards, and costs ball movement', () => {
-      // their starter with the worst perimeter defense
-      const starters = new Set(league.teams[3].rotation.order.slice(0, 5));
-      const target = teamPlayers(league, 3)
-        .filter((p) => starters.has(p.pid))
-        .sort((a, b) => composites(a.ratings).perDef - composites(b.ratings).perDef)[0];
-      let isoAt = [0, 0];
-      let screens = [0, 0];
-      const tags = [0, 0];
-      for (let g = 0; g < 24; g++)
-        for (const i of [0, 1]) {
-          const sim = new GameSim(side(5, i ? { offense: { huntTarget: target.pid } } : undefined), side(3), opts(60 + g, true));
-          const s = sim as unknown as In;
-          while (sim.step()) {
-            for (const l of sim.drainLogs()) {
-              if (l.off !== 0 || !l.on[1].includes(target.pid)) continue;
-              const hunted = Object.entries(l.guards).find(([, d]) => d === target.pid)?.[0];
-              if (hunted === undefined) continue;
-              for (const st of l.steps) if (st.k === 'screen' && st.pid === +hunted) screens = screens.map((x, k) => (k === i ? x + 1 : x));
-              if (l.action === 'iso' && l.label.endsWith(` on ${s.T[1].byId.get(target.pid)!.name}`)) isoAt = isoAt.map((x, k) => (k === i ? x + 1 : x));
-            }
-          }
-          tags[i] += sim.result().impacts?.filter((im) => im.key.startsWith('hunt')).length ?? 0;
-        }
-      expect(isoAt[1]).toBeGreaterThan(isoAt[0] * 1.3);
-      expect(screens[1]).toBeGreaterThan(screens[0] * 2);
-      expect(tags[0]).toBe(0);
-      expect(tags[1]).toBeGreaterThan(0);
-    });
-
-    it('an AI coach hides a defender being hunted with success on their weakest scorer, and only then', () => {
-      const sim = new GameSim(side(5), side(3), opts(3)) as unknown as In;
-      const ai = sim.T[1];
-      ai.adjust = 1;
-      sim.q = 2;
-      sim.elapsed = 1000;
-      const target = ai.on[0].pid;
-      sim.T[0].t.offense.huntTarget = target;
-      sim.adjust(ai);
-      // not hunted with success yet: no reason to hide him
-      expect(Object.values(ai.t.defense.matchups)).not.toContain(target);
-      sim.impacts.set('hunt:o|0', { key: 'hunt:o', t: 0, count: 30, pts: 20, players: {} });
-      sim.adjust(ai);
-      expect(sim.adjustments.at(-1)!.text).toMatch(/^hides /);
-      const weak = Number(Object.entries(ai.t.defense.matchups).find(([, d]) => d === target)![0]);
-      expect(ai.guardOf.get(weak)!.pid).toBe(target);
-      expect(ai.base.defense.matchups[weak]).toBe(target);
-    });
-  });
-
-  describe('foul to give', () => {
-    type In = {
-      T: { fouls: number; foulsLast2: number; score: number; t: Tactics; base: Tactics }[];
-      q: number;
-      clock: number;
-      cur: unknown;
-      intentionalFoul(off: unknown, def: unknown): string | null;
-      pbp: { text: string }[];
-    };
-    const at = (q: number, clock: number, lead: number, on = true, fouls = 0, last2 = 0) => {
-      // (the other late-game fouls off, to see this one alone)
-      const sim = new GameSim(side(0), side(1, { manage: { foulToGive: on, foulUp3: false, foulWhenTrailing: false } }), opts(4, true)) as unknown as In;
-      sim.q = q;
-      sim.clock = clock;
-      sim.T[1].score = 50 + lead;
-      sim.T[0].score = 50;
-      sim.T[1].fouls = fouls;
-      sim.T[1].foulsLast2 = last2;
-      // (the trip being logged, as at the start of a possession)
-      sim.cur = { steps: [], lines: [], kind: 'half', label: '' };
-      const res = sim.intentionalFoul(sim.T[0], sim.T[1]);
-      return { res, text: sim.pbp.at(-1)?.text ?? '' };
-    };
-
-    it('fouls at once for the last shot of a period when it is only a side out, and never otherwise', () => {
-      const f = at(4, 6, 2);
-      expect(f.res).toBe('sideout');
-      expect(f.text).toMatch(/a foul to give/);
-      expect(at(2, 7, -9).res).toBe('sideout');
-      expect(at(4, 6, 0).res).toBe('sideout');
-      // off, too early, too late, a lead of four or more (or trailing) in the 4th, or it would put them in the bonus
-      expect(at(4, 6, 2, false).res).toBeNull();
-      expect(at(4, 9, 2).res).toBeNull();
-      expect(at(4, 2, 2).res).toBeNull();
-      expect(at(4, 6, 4).res).toBeNull();
-      expect(at(4, 6, -1).res).toBeNull();
-      expect(at(4, 6, 2, true, 4).res).toBeNull();
-      expect(at(3, 6, 2, true, 2, 1).res).toBeNull();
-      expect(at(3, 6, 2, true, 2, 0).res).toBe('sideout');
-    });
-  });
-
-  it('leaves games that use none of it exactly as they were', () => {
-    // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
-    // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
-    // tactics were made to matter twice as much: tacticLeverage.test.ts plays these games at 1x leverage and gets
-    // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
-    // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
-    // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred)
-    const expected: Record<string, number[][]> = {
-      default: [
-        [119, 107, 79, 37, 12, 26, 15, 0],
-        [121, 110, 105, 27, 18, 34, 8, 0],
-        [117, 106, 89, 38, 9, 8, 14, 0],
-      ],
-      zone23: [
-        [113, 122, 94, 41, 15, 22, 12, 0],
-        [133, 109, 97, 32, 17, 18, 14, 0],
-        [114, 126, 92, 38, 9, 18, 17, 0],
-      ],
-      zone32: [
-        [105, 113, 79, 48, 11, 21, 21, 0],
-        [120, 109, 97, 24, 13, 26, 8, 0],
-        [104, 119, 98, 21, 15, 29, 14, 0],
-      ],
-      double: [
-        [106, 121, 84, 39, 17, 8, 13, 0],
-        [127, 111, 95, 38, 13, 24, 12, 0],
-        [121, 102, 95, 34, 10, 19, 14, 0],
-      ],
-      // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
-      // the couple of trips the mismatch hunt changes back to the same team lines)
-      hunt: [
-        [119, 107, 79, 37, 12, 26, 15, 0],
-        [123, 133, 118, 28, 18, 25, 9, 1],
-        [117, 106, 90, 38, 9, 8, 14, 0],
-      ],
-    };
-    const patches: Record<string, TacticsPatch | undefined> = {
-      default: undefined,
-      zone23: { defense: { scheme: 'zone23' } },
-      zone32: { defense: { scheme: 'zone32', starPlan: 'deny' } },
-      double: { defense: { starPlan: 'double', pnr: 'switch', switchOffBall: true } },
-      hunt: { offense: { huntMismatch: true }, manage: { hackThreshold: 62 } },
-    };
-    for (const [name, patch] of Object.entries(patches)) {
-      const got: number[][] = [];
-      for (let g = 0; g < 3; g++) {
-        const a = { ...side(10 + g, patch), adjust: true };
-        const b = { ...side(20 + g, g === 1 ? patch : undefined), adjust: true };
-        const res = new GameSim(a, b, { rng: new Rng(800 + g), type: 'regular', injuries: true }).simToEnd();
-        got.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot]);
-      }
-      expect(got, name).toEqual(expected[name]);
+      const [r1, w1, r2, w2] = [pairedDelta(...lab('helio', 1, 500)), pairedDelta(...lab('shooters', 1, 500)), at2('helio', h400), at2('shooters', s400)];
+      // aimed right it gains more and aimed wrong it costs more, and the gap between the two (the part of
+      // its value that comes from the matchup) is about twice what it was
+      // (about +0.7 and -2.6 per 100 at 1x here, +1.2 and -4.8 at 2x: a gap 1.8 times as wide)
+      expect(r2.delta).toBeGreaterThan(r1.delta);
+      expect(w2.delta).toBeLessThan(w1.delta - 1);
+      const ratio = (r2.delta - w2.delta) / (r1.delta - w1.delta);
+      expect(ratio).toBeGreaterThan(1.5);
+      expect(ratio).toBeLessThan(2.6);
+    } finally {
+      K.tacticEdge = EDGE;
     }
-  });
+  }, 180_000);
 });

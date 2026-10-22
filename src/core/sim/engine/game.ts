@@ -16,7 +16,21 @@ import { isSetId, readAfter } from '../sets';
 import { K, ftChance, lev } from './constants';
 import { execution, famPenalty } from '../familiarity';
 import { LINK_META, linksAmong } from '../links';
-import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, newBox, ACTION_LIST, freedomMult, linkKey, mix } from './state';
+import {
+  type SP,
+  type ST,
+  type SetPlay,
+  type SimTeamInput,
+  type SimOptions,
+  type InGameInjury,
+  type Ctx,
+  type Stint,
+  newBox,
+  ACTION_LIST,
+  freedomMult,
+  linkKey,
+  mix,
+} from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
 import { rotationMethods } from './rotation';
@@ -90,6 +104,8 @@ export class GameSim {
   flowPoss: (0 | 1)[] = [];
   impacts = new Map<string, TacticImpact>();
   lineups = new Map<string, LineupStat>();
+  /** Possessions and points by the offense's five and the defense's (only with opts.stints). */
+  stints: Map<string, Stint> | null = null;
   injuries: InGameInjury[] = [];
   /** Coaches' in-game adjustments so far, in order (recorded in every game, play-by-play or not). */
   adjustments: GameAdjustment[] = [];
@@ -150,6 +166,7 @@ export class GameSim {
     };
     this.opts = opts;
     this.record = !!opts.record;
+    if (opts.stints) this.stints = new Map();
     this.T = [this.makeTeam(home, 0), this.makeTeam(away, 1)];
     for (const t of this.T) {
       t.plan = this.makePlan(t);
