@@ -11,6 +11,7 @@ import { contractExp, playerAge } from '../../core/playerGen';
 import { contractSeason, playerName, standardRoster } from '../../core/league/helpers';
 import { WAIVER_DAYS, buyoutTerms, nonGuaranteed, releaseDeadMoney, releaseSchedule, stretchDeadMoney, stretchPhrase, stretchedSeasons } from '../../core/league/contracts';
 import { tradingClosedReason } from '../../core/league/trades';
+import { taxChange } from '../../core/league/finances';
 import { release as releaseAction, useBusy } from '../../state/actions/office';
 import { Avatar, Help, Ovr } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -89,6 +90,25 @@ export function taxFig(pay: number, line: number, bill: number): { k: ReactNode;
   return pay > line
     ? { k: <Term id="tax">Luxury tax</Term>, v: money(bill), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
     : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay), s: `line ${money(line)}` };
+}
+
+/**
+ * What a move does to the user's luxury tax, in a line, wherever money moves (the trade dock, an
+ * offer's card, a signing or re-signing sheet): "26-27 tax +$45.1M ($18.9M → $64.0M) · crosses the
+ * 2nd apron", "saves $10.7M in tax", or null when there's no tax either way and no line crossed.
+ */
+export function taxLine(league: League, before: number, after: number, season: number): { text: string; tone: 'bad' | 'good' | 'dim' } | null {
+  const t = taxChange(league, league.userTid, before, after, season);
+  if (!t.before && !t.after && !t.crosses) return null;
+  const bill = `${money(t.before)} → ${money(t.after)}`;
+  const cross = t.crosses ? ` · crosses the ${t.crosses === 'tax' ? 'tax line' : t.crosses === 'first' ? '1st apron' : '2nd apron'}` : '';
+  const text =
+    t.delta > 0
+      ? `${shortSeason(season)} tax +${money(t.delta)} (${bill})${cross}`
+      : t.delta < 0
+        ? `Saves ${money(-t.delta)} in ${shortSeason(season)} tax (${bill})${cross}`
+        : `${shortSeason(season)} tax bill ${money(t.after)}, unchanged${cross}`;
+  return { text, tone: t.delta > 0 || t.crosses ? 'bad' : t.delta < 0 ? 'good' : 'dim' };
 }
 
 /** Where a payroll stands against the cap's lines, for a status tag: the second apron, the first, the tax line, the cap. */

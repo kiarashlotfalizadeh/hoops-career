@@ -14,7 +14,7 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
-import { useDockHeight } from '../office/common';
+import { taxLine, useDockHeight } from '../office/common';
 import { TermsList } from './Terms';
 import { type EditCheck } from '../../core/league/godMode';
 import { money } from '../../core/format';
@@ -87,6 +87,8 @@ export function Dock({
   // between the season and free agency your payroll counts the cap holds of the players you'd re-sign
   const holds = capView.capPay - payroll(league, user, season);
   const after = capView.capPay - out + inc;
+  // what the deal does to your luxury tax (on the payroll, not the holds)
+  const tax = empty ? null : taxLine(league, payroll(league, user, season), payroll(league, user, season) - out + inc, season);
   // standard roster spots (two-way players don't count)
   const std = (pids: number[]) => pids.filter((pid) => !league.players[pid]?.contract.twoWay).length;
   // after the season, only next season's contracts count (expiring deals are leaving)
@@ -188,6 +190,7 @@ export function Dock({
               <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>
             </div>
           </div>
+          {tax && <div className={`tiny num ${tax.tone}`}>{tax.text}</div>}
         </>
       )}
       {ruleErrors.length > 0 && (

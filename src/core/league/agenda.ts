@@ -211,7 +211,7 @@ export function agenda(league: League): AgendaItem[] {
       kind: 'fired',
       required: true,
       title: 'Find a new job',
-      line: 'The league waits until you take a team.',
+      line: 'Your agent has the offers: the league waits until you take one.',
       tone: 'bad',
       to: '/office/career',
     });

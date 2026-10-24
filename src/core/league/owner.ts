@@ -97,9 +97,10 @@ export function ownerEvaluation(league: League) {
   let goals: OwnerReview['goals'] = [];
   let grade: number;
   let floored = false;
+  let crowned: 'title' | 'run' | undefined;
   if (og) {
     let f: true | undefined;
-    ({ goals, grade, floored: f } = gradeOwnerGoals(league, og));
+    ({ goals, grade, floored: f, crowned } = gradeOwnerGoals(league, og));
     floored = !!f;
     for (const k of ['wins', 'playoffs', 'money', 'youth'] as const) {
       const mine = goals.filter((g) => PART[g.kind] === k);
@@ -131,9 +132,22 @@ export function ownerEvaluation(league: League) {
   const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
   // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze (none for a coach he fires)
   if (!fired) booksReview(league);
-  const review: OwnerReview = { season: league.season, tid, goals, grade: r2(grade), total: league.ownerMood.total, ...(fired ? { fired: true as const } : {}) };
+  const review: OwnerReview = {
+    season: league.season,
+    tid,
+    goals,
+    grade: r2(grade),
+    total: league.ownerMood.total,
+    ...(og ? { games: og.games } : {}),
+    ...(crowned ? { crowned } : {}),
+    ...(fired ? { fired: true as const } : {}),
+  };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
+  if (crowned)
+    lines.push(
+      crowned === 'title' ? 'We won the title. Nothing else this season takes that away.' : 'Two rounds further than I asked for. That is what I will remember about this season.',
+    );
   if (floored && og) {
     const rec = goalsRecord(league, og);
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
@@ -149,7 +163,7 @@ export function ownerEvaluation(league: League) {
           ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
           : 'The results have not been good enough. We are going in a different direction.',
         ...lines,
-        '(Take over another team to keep your career going: the league waits until you do.)',
+        '(Your agent will bring you the offers: take one to keep your career going. The league waits until you do.)',
       ].join('\n'),
       tone: 'bad',
       link: '/office/career',

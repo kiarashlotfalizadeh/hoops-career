@@ -30,7 +30,6 @@ import {
   teamAppeal,
 } from '../../core/league/contracts';
 import { SHEET_MAX_YEARS, SHEET_MIN_YEARS, deadlineLabel, matchDeadline, pendingSheets, sheetBlockedReason } from '../../core/league/rfa';
-import { teamTaxBill } from '../../core/league/finances';
 import {
   FA_YEARS,
   bidFloor,
@@ -51,7 +50,7 @@ import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
-import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason } from './common';
+import { CapBar, Callout, HelpSheet, OvrPot, PlayerHead, appealInfo, capRoomFig, capSeason, forYears, shortSeason, taxLine } from './common';
 import { OfferControls, STEP } from './OfferControls';
 import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
@@ -183,7 +182,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // as signed: each season at least his minimum
   const contract = makeContract(league, amount, years, season, p.experience, { raise, max: maxAmt });
   const total = contract.salaries.reduce((a, b) => a + b, 0);
-  const taxBill = teamTaxBill(league, tid, after, season);
+  // what this deal does to the luxury tax: the bill with him against the bill without
+  const tax = taxLine(league, pay, after, season);
 
   /** Why his counter can't be signed as it stands (the window, the roster, the cap), or null. */
   const counterBlocked = (c: TalkTerms): string | null =>
@@ -423,6 +423,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               ? ` Counts ${money(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`
               : ''}
           </div>
+          {tax && <div className={`tiny num ${tax.tone}`}>{tax.text}</div>}
         </section>
       ) : (
         <section className="fo-capimpact" aria-label={`${shortSeason(season)} payroll`}>
@@ -433,11 +434,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This deal" />
           <div className="tiny dim">
             Over the cap is fine for your own players.{ownRfa && p.rfa ? ` His ${money(p.rfa.hold ?? p.rfa.qo)} cap hold gives way to this deal.` : ''}
-            {taxBill > 0 ? (
-              <span className="bad">
-                {' '}
-                {money(after - cap.luxuryTax)} over the tax line: about {money(taxBill)} in tax.
-              </span>
+            {tax ? (
+              <span className={tax.tone}> {tax.text}.</span>
             ) : after + otherHolds > cap.salaryCap ? (
               ` Over the cap${otherHolds > 0 ? ' with your other holds' : ''}: in free agency, minimum deals or an exception only.`
             ) : (

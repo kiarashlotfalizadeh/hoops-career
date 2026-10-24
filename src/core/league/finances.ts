@@ -239,6 +239,78 @@ export function assessLuxuryTax(league: League): { tid: number; tax: number; sho
   return bills;
 }
 
+/** A tax bill's change from one payroll to another, and the highest line (the tax, the aprons) the new one crosses that the old one was under. */
+export interface TaxChange {
+  before: number;
+  after: number;
+  delta: number;
+  crosses?: 'tax' | 'first' | 'second';
+}
+
+/** What moving team `tid`'s payroll in `season` from `before` to `after` does to its luxury tax (at its repeater rate, if it is one). */
+export function taxChange(league: League, tid: number, before: number, after: number, season = league.season): TaxChange {
+  const cap = CAP_FOR(league, season);
+  const t0 = teamTaxBill(league, tid, before, season);
+  const t1 = teamTaxBill(league, tid, after, season);
+  const line = (x: number) => (x > cap.secondApron ? 3 : x > cap.firstApron ? 2 : x > cap.luxuryTax ? 1 : 0);
+  const crosses = line(after) > line(before) ? (['tax', 'first', 'second'] as const)[line(after) - 1] : undefined;
+  return { before: t0, after: t1, delta: t1 - t0, ...(crosses ? { crosses } : {}) };
+}
+
+/** Home games a team's gate so far is read from before the projection trusts it over the estimate. */
+export const PROJECT_HOME_GAMES = 4;
+
+/**
+ * Where team `tid`'s cash should stand when the season's books close: the cash now, plus what the
+ * regular-season games left should earn over what they cost (each home game left at the local
+ * revenue a home game has brought so far, or before PROJECT_HOME_GAMES of them an estimate of it;
+ * the national money, payroll, budgets and operations every game), plus revenue sharing, less the
+ * luxury tax still to come at the end of the regular season or, under the line, plus a share of the
+ * league's tax pot (every team's tax at today's payrolls). Between seasons it projects next season's
+ * books in full; during the postseason the books are closed (playoff gates aren't counted, so it errs
+ * low). Reads the league only.
+ */
+export function seasonEndCash(league: League, tid: number): { end: number; tax: number; left: number } {
+  const team = league.teams[tid];
+  const inSeason = league.phase === 'preseason' || league.phase === 'regular';
+  const between = ['draftLottery', 'draft', 'resign', 'freeAgency'].includes(league.phase);
+  if (!inSeason && !between) return { end: team.cash, tax: 0, left: 0 };
+  const s = between ? league.season + 1 : league.season;
+  const scale = revenueScale(league, s);
+  const national = (NATIONAL_REVENUE * scale) / 82;
+  // local revenue (gate, merchandise, local TV) a home game: from the home games so far once there are enough, else an estimate
+  const perHome = (t: Team) => {
+    const ts = curTeamSeason(league, t.tid);
+    const home = ts.homeWon + ts.homeLost;
+    if (inSeason && home >= PROJECT_HOME_GAMES) return (ts.revenue - (ts.cashIn ?? 0) - national * (ts.won + ts.lost)) / home;
+    const gate = (attendanceFor(league, t) * t.budget.ticketPrice) / 1000;
+    return gate + MERCH_PER_GAME * scale * (0.5 + t.hype) * (0.7 + t.pop / 15) + LOCAL_TV_PER_GAME * scale * (0.6 + t.pop / 12);
+  };
+  // a team's season of local revenue, as revenue sharing reads it: so far, and its home games left
+  const localSeason = (t: Team) => {
+    const ts = curTeamSeason(league, t.tid);
+    const home = ts.homeWon + ts.homeLost;
+    const sofar = inSeason ? ts.revenue - (ts.cashIn ?? 0) - national * (ts.won + ts.lost) : 0;
+    return sofar + perHome(t) * Math.max(0, 41 - (inSeason ? home : 0));
+  };
+  const ts = curTeamSeason(league, tid);
+  const left = between ? 82 : Math.max(0, 82 - ts.won - ts.lost);
+  const homeLeft = between ? 41 : Math.max(0, 41 - ts.homeWon - ts.homeLost);
+  const pay = payroll(league, tid, s);
+  const twoWay = teamPlayers(league, tid).reduce((a, p) => a + (p.contract.twoWay && !p.contract.tenDay ? salaryFor(p, s) : 0), 0);
+  const budgets = (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + budgetCostPerSeason(league, team.budget[k]), 0) * (scale / revenueScale(league));
+  const costPerGame = (pay + twoWay + budgets + OPERATIONS_PER_SEASON * scale) / 82;
+  // revenue sharing on the season's local revenue: the league average's gap, REVENUE_SHARING of it either way
+  const locals = league.teams.map(localSeason);
+  const sharing = (locals.reduce((a, v) => a + v, 0) / locals.length - locals[tid]) * REVENUE_SHARING;
+  // the tax, or under the line a share of the pot
+  const bills = league.teams.map((t) => teamTaxBill(league, t.tid, payroll(league, t.tid, s), s));
+  const tax = bills[tid];
+  const payers = bills.filter((b) => b > 0).length;
+  const pot = tax > 0 || payers === bills.length ? 0 : (bills.reduce((a, b) => a + b, 0) * TAX_SHARE_TO_NON_TAXPAYERS) / (bills.length - payers);
+  return { end: Math.round(team.cash + homeLeft * perHome(team) + left * (national - costPerGame) + sharing - tax + pot), tax, left };
+}
+
 export function profit(league: League, tid: number, season = league.season) {
   const ts = league.teams[tid].seasons.find((s) => s.season === season);
   return ts ? ts.revenue - ts.expenses : 0;

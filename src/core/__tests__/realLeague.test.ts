@@ -19,11 +19,13 @@ import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
 import {
+  CROWN_GRADE,
   FLOOR_GAMES,
   FLOOR_GRADE,
   FLOOR_SLOPE,
   REVIEWS_KEPT,
   WIN_SCALE,
+  WIN_SLIDE,
   currentGoals,
   floorCap,
   goalResult,
@@ -327,11 +329,15 @@ describe('two seasons of the real league', () => {
         outlook.filter(
           (o) => o.tid !== tid && l.teams[o.tid].conf === l.teams[tid].conf && (o.final > outlook[tid].final || (o.final === outlook[tid].final && o.talent > outlook[tid].talent)),
         ).length;
+      const pays = l.teams.map((x) => payroll(l, x.tid));
+      const payRankOf = (tid: number) => 1 + pays.filter((q, i) => i !== tid && (q > pays[tid] || (q === pays[tid] && i < tid))).length;
       for (const og of all) {
         const t = l.teams[og.tid];
         const post = goal(og, 'postseason');
         const r = rank(og.tid);
-        if (t.strategy === 'rebuild' || r >= 11) {
+        // (a payroll in the league's top half is no rebuild: the play-in at least)
+        const paidToWin = payRankOf(og.tid) <= 15;
+        if ((t.strategy === 'rebuild' || r >= 11) && !paidToWin) {
           expect(post, t.abbrev).toBeUndefined();
           expect(goal(og, 'youth'), t.abbrev).toBeDefined();
         } else if (r <= 4 || t.strategy === 'contend') expect(post!.target, t.abbrev).toBeGreaterThanOrEqual(3);
@@ -413,6 +419,38 @@ describe('two seasons of the real league', () => {
       // a near miss costs little
       results(l, strong, { wins: hi - 2 });
       expect(gradeOwnerGoals(l, strong).grade).toBeGreaterThan(-0.15);
+      // a title is what the season is remembered for: Excellent at least, whatever the wins and the money did
+      results(l, strong, { wins: hi - 8, postseason: 6, payroll: CAP_FOR(l).luxuryTax * 2, profit: -500_000 });
+      expect(gradeOwnerGoals(l, strong)).toMatchObject({ grade: CROWN_GRADE.title, crowned: 'title' });
+      // and so is a run two rounds past the goal
+      if (post + 2 <= 5) {
+        results(l, strong, { wins: hi - 8, postseason: post + 2 });
+        expect(gradeOwnerGoals(l, strong).crowned).toBe('run');
+        expect(gradeOwnerGoals(l, strong).grade).toBeGreaterThanOrEqual(CROWN_GRADE.run);
+      }
+    }
+
+    // outside a rebuild, the bar falls at most WIN_SLIDE a season under the same coach: a roster run down doesn't lower it
+    {
+      const l = structuredClone(pre);
+      const outlook = leagueOutlook(l);
+      const tid = [...outlook].sort((a, b) => b.talent - a.talent)[0].tid;
+      const base = goal(planOwnerGoals(l, tid, outlook)!, 'wins')!.target;
+      const last = (games?: number): OwnerReview => ({
+        season: l.season - 1,
+        tid,
+        goals: [{ kind: 'wins', title: '', target: base + 12, weight: 1, result: 0, grade: 0 }],
+        grade: 0,
+        total: 0,
+        ...(games ? { games } : {}),
+      });
+      l.ownerReviews = [last(82)];
+      const held = planOwnerGoals(l, tid, outlook)!;
+      expect(goal(held, 'wins')).toMatchObject({ target: Math.min(base + 12 - WIN_SLIDE, Math.round(82 * 0.88)), held: base + 12 });
+      expect(goalsWhy(held).some((x) => x.startsWith(`Last season I asked for ${base + 12} wins.`))).toBe(true);
+      // a mid-season start's prorated target doesn't hold up a full season's
+      l.ownerReviews = [last()];
+      expect(goal(planOwnerGoals(l, tid, outlook)!, 'wins')!.target).toBe(base);
     }
 
     // the floor: a season under it grades Poor or worse whatever else went right (a 5-77 season with

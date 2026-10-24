@@ -16,6 +16,7 @@ import {
   attendanceFor,
   budgetCostPerSeason,
   profit,
+  seasonEndCash,
   referencePrice,
   taxRepeater,
   teamTaxBill,
@@ -61,6 +62,7 @@ function Overview({ team }: { team: Team }) {
   const league = useLeague();
   const ts = curTeamSeason(league, team.tid);
   const pr = profit(league, team.tid);
+  const end = seasonEndCash(league, team.tid);
   const games = ts.won + ts.lost;
   const homeGames = ts.homeWon + ts.homeLost;
   const attAvg = homeGames ? ts.attendance / homeGames : 0;
@@ -99,6 +101,16 @@ function Overview({ team }: { team: Team }) {
               {money(team.cash)}
             </div>
           </div>
+          {/* where the books close: what the owner's review reads */}
+          {end.left > 0 && (
+            <div className="right">
+              <div className="over">{isOffseason(league) ? `End of ${shortSeason(league.season + 1)}` : "Season's end"}</div>
+              <div className="fo-pay-v2" style={{ color: end.end < 0 ? 'var(--bad)' : undefined }}>
+                {money(end.end)}
+              </div>
+              <div className="tiny dim">projected{end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}</div>
+            </div>
+          )}
         </div>
         {(games > 0 || ts.revenue > 0) && (
           <Statline

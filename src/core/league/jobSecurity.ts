@@ -87,7 +87,7 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const h = HEAT.find((x) => score >= x.min)!;
   const ultimatum = og?.ultimatum;
   let line: string;
-  if (league.fired) line = 'You were fired. Take over another team.';
+  if (league.fired) line = 'You were fired. Take a job offer from Career.';
   else if (off) line = 'Job security is off: the owner never fires you.';
   else if (ultimatum) line = `Ultimatum: ${ultimatum.text.toLowerCase()}, or you're fired.`;
   else if (grade === null) line = h.heat === 'secure' || h.heat === 'steady' ? 'The owner is happy with the direction.' : 'The owner wants a better season than the last.';
@@ -114,8 +114,9 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
 /**
  * At the All-Star break: a coach the review could fire whose season projects near or under the
  * firing line gets an ultimatum, once. It asks for what the season can still deliver: a few wins
- * over his projection (never more than the owner's target), or the next postseason level up from
- * where the team projects (never past his goal). Money and youth goals don't make ultimatums.
+ * over his projection (never more than the owner's target, never less than his floor), or the next
+ * postseason level up from where the team projects (never past his goal). Money and youth goals
+ * don't make ultimatums.
  */
 export function maybeUltimatum(league: League, fc?: Forecast | null): Ultimatum | null {
   const og = currentGoals(league);
@@ -130,7 +131,9 @@ export function maybeUltimatum(league: League, fc?: Forecast | null): Ultimatum 
     const target = Math.min(post.goal.target, Math.max(1, Math.round(post.projected) + 1));
     u = { kind: 'postseason', target, text: POSTSEASON[target].goal };
   } else if (wins && wins.projected < wins.goal.target) {
-    const target = Math.min(wins.goal.target, Math.round(wins.projected) + 3);
+    // a few wins over the projection, and never under the floor: "win 10 games" is no ultimatum
+    const floorWins = og.floor !== undefined ? Math.ceil(og.floor * og.games) : 0;
+    const target = Math.min(wins.goal.target, Math.max(Math.round(wins.projected) + 3, floorWins));
     u = { kind: 'wins', target, text: `Win ${target} games${og.from ? ' from here' : ''}` };
   }
   if (!u) return null;

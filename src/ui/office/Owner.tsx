@@ -11,7 +11,8 @@ import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers'
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
 import { GRACE, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
-import { RED_FREEZE, booksOf } from '../../core/league/books';
+import { booksOf } from '../../core/league/books';
+import { seasonEndCash } from '../../core/league/finances';
 import {
   ON_TRACK,
   PAYROLL_SCALE,
@@ -320,10 +321,15 @@ function UltimatumCard({ league, js }: { league: League; js: JobSecurity }) {
 
 const BOOKS_LABEL = { warning: 'Warning', ultimatum: 'Ultimatum', freeze: 'Budget frozen' } as const;
 
-/** The books in the red: the step he has taken, and what it means. */
+/** The books in the red: the step he has taken, what it means, and where the season's books project. */
 function BooksCard({ league }: { league: League }) {
   const b = booksOf(league)!;
   const cash = league.teams[league.userTid].cash;
+  const p = seasonEndCash(league, league.userTid);
+  const proj =
+    p.left > 0
+      ? `Projected at the season's end: ${p.end < 0 ? `${money(-p.end)} in the red` : `${money(p.end)} in the black`}${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : ''}.`
+      : '';
   return (
     <section className="card fo-ultimatum" aria-label="The books">
       <div className="row">
@@ -331,13 +337,18 @@ function BooksCard({ league }: { league: League }) {
         <span className="over grow">The books</span>
         <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
       </div>
-      <h2>{money(-cash)} in the red</h2>
+      <h2>
+        {b.stage === 'warning' && p.left > 0
+          ? `${money(-Math.min(0, p.end))} in the red at the season's end`
+          : `${money(Math.abs(cash))} ${cash < 0 ? 'in the red' : 'in the black'}`}
+      </h2>
       <div className="small dim2">
         {b.stage === 'warning'
-          ? "Get back in the black. Still in the red at the season's review, and he gives you an ultimatum."
+          ? "Where the books are heading. Still in the red at the season's review, and he gives you an ultimatum."
           : b.stage === 'ultimatum'
-            ? `Back in the black by the next review, or he freezes the budget (at once at ${money(RED_FREEZE * revenueScale(league))} in the red).`
-            : 'Minimum deals only, no raises when you re-sign, no trade that takes on salary, and the staff budgets at the league standard, until the books are back in the black.'}
+            ? 'Back in the black at the next review, or he freezes the budget.'
+            : 'Minimum deals only, no raises when you re-sign, no trade that takes on salary, and the staff budgets at the league standard, until a review finds the books back in the black.'}{' '}
+        {b.stage !== 'warning' && proj}
       </div>
       <Link to="/office/finances" className="card-link">
         Finances

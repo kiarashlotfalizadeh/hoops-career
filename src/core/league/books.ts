@@ -1,14 +1,18 @@
 // The owner and the books: the user's cash (Team.cash, every season's profit and loss since the
-// league began, the luxury tax included) has consequences once it's in the red, in three steps. The
-// day it goes under zero the owner warns him; a review in the red (or a hole as deep as RED_ULTIMATUM)
-// turns that into an ultimatum, back in the black by the next review; and a review still in the red
-// after it (or a hole as deep as RED_FREEZE) freezes the budget: the staff and facilities budgets are
-// cut to the league's standard and can't go up, and the payroll can't grow (minimum deals only, no
-// raises on re-signing, no trade that takes back more salary than it sends). Back in the black, any
-// day, it all lifts. Each step is a staff call on Today (see calls.ts), which stops a long sim; the
-// owner's mail says it in his words. Nothing here draws from the league's random stream.
+// league began, the luxury tax included) has consequences once it's in the red, in three steps, and
+// they move only at the owner's season review, on the cash the season closed with (the luxury tax
+// paid): a review in the red turns no word or a warning into an ultimatum, back in the black by the
+// next review; a review still in the red after it freezes the budget (the staff and facilities
+// budgets cut to the league's standard and held there, and the payroll can't grow: minimum deals
+// only, no raises on re-signing, no trade that takes back more salary than it sends); and a review
+// in the black lifts it all. In season, the day the books project into the red at the season's end
+// (seasonEndCash: the tax bill still to come included), the owner warns him, once a season, while
+// there's time to do something about it. Cash that dips under zero and back between paydays moves
+// nothing. Each step is a staff call on Today (see calls.ts), which stops a long sim; the owner's
+// mail says it in his words. Nothing here draws from the league's random stream.
 import type { League } from '../types';
-import { addInbox, revenueScale } from './helpers';
+import { addInbox, curTeamSeason, revenueScale } from './helpers';
+import { PROJECT_HOME_GAMES, seasonEndCash } from './finances';
 import { money } from '../format';
 
 export type BooksStage = 'warning' | 'ultimatum' | 'freeze';
@@ -21,9 +25,8 @@ export interface Books {
   day: number;
 }
 
-/** A hole this deep (first-season $K) turns a warning into an ultimatum at once, and this deep a freeze. */
-export const RED_ULTIMATUM = 25_000;
-export const RED_FREEZE = 50_000;
+/** How far into the red (first-season $K) the season's end must project for the owner's warning. */
+export const WARN_RED = 5_000;
 /** The staff and facilities budgets a freeze cuts to (the league's standard: 50). */
 export const FROZEN_BUDGET = 50;
 
@@ -36,26 +39,24 @@ export function booksOf(league: League): Books | undefined {
 /** The budget is frozen. */
 export const frozen = (league: League) => booksOf(league)?.stage === 'freeze';
 
-/** The cash a hole of `k` first-season $K is now. */
-const scaled = (league: League, k: number) => k * revenueScale(league);
-
 function step(league: League, stage: BooksStage) {
   league.books = { stage, tid: league.userTid, season: league.season, day: league.day };
   const team = league.teams[league.userTid];
   const cash = money(-team.cash);
-  if (stage === 'warning')
+  if (stage === 'warning') {
+    const p = seasonEndCash(league, league.userTid);
     addInbox(league, {
       from: 'Owner',
-      subject: "We're in the red",
-      body: `The franchise is ${cash} in the red. That comes out of my pocket. Get the books back in the black: payroll, the luxury tax and the budgets are where the money goes. If we're still in the red at the season's review, we'll have a harder conversation.`,
+      subject: 'The books are heading into the red',
+      body: `At this rate we finish the season ${money(-p.end)} in the red${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax bill` : ''}. That comes out of my pocket. Payroll, the tax and the budgets are where the money goes: fix it before the season's review, or we'll have a harder conversation.`,
       tone: 'bad',
       link: '/office/finances',
     });
-  else if (stage === 'ultimatum')
+  } else if (stage === 'ultimatum')
     addInbox(league, {
       from: 'Owner',
       subject: 'The books: an ultimatum',
-      body: `We're ${cash} in the red. Back in the black by next season's review, or I freeze the budget: minimum deals only, no raises, no taking on salary, and the staff budgets cut to the league standard.`,
+      body: `We closed the season ${cash} in the red. Back in the black by next season's review, or I freeze the budget: minimum deals only, no raises, no taking on salary, and the staff budgets cut to the league standard.`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -65,45 +66,47 @@ function step(league: League, stage: BooksStage) {
     addInbox(league, {
       from: 'Owner',
       subject: 'The budget is frozen',
-      body: `${cash} in the red, and I warned you. The budget is frozen until we're back in the black: minimum deals only, no raises when you re-sign anyone, no trade that takes on more salary than it sends out, and the staff and facilities budgets are cut to the league standard.`,
+      body: `${cash} in the red at a second review, and I warned you. The budget is frozen until a review finds us back in the black: minimum deals only, no raises when you re-sign anyone, no trade that takes on more salary than it sends out, and the staff and facilities budgets cut to the league standard.`,
       tone: 'bad',
       link: '/office/finances',
     });
   }
 }
 
-/** Every day: a hole that opens gets the warning, one that deepens past the lines steps up at once, and the black lifts it all. */
+/**
+ * Every day of the regular season: books that project WARN_RED or more into the red at the season's
+ * end get the owner's warning, once a season, once the home games so far say what a home game
+ * brings (an early season projects within about $6M; less than that in the red is noise).
+ */
 export function booksDaily(league: League) {
+  // (one warning a season: settled or not, it stands until the review, which steps it up or lifts it)
+  if (league.fired || league.phase !== 'regular' || booksOf(league)) return;
+  const ts = curTeamSeason(league, league.userTid);
+  if (ts.homeWon + ts.homeLost < PROJECT_HOME_GAMES) return;
+  if (seasonEndCash(league, league.userTid).end < -WARN_RED * revenueScale(league)) step(league, 'warning');
+}
+
+/** At the season's review, on the cash the season closed with: in the red, a step up (an ultimatum from an earlier season becomes a freeze); in the black, it all lifts. */
+export function booksReview(league: League) {
   if (league.fired) return;
-  const cash = league.teams[league.userTid].cash;
   const b = booksOf(league);
-  if (cash >= 0) {
+  if (league.teams[league.userTid].cash >= 0) {
     if (!league.books) return;
-    const was = league.books.stage;
     delete league.books;
-    if (b && was !== 'warning')
+    if (b && b.stage !== 'warning')
       addInbox(league, {
         from: 'Owner',
         subject: 'Back in the black',
         body:
-          was === 'freeze' ? 'The books are back in the black, so the freeze is over. Let us keep them there.' : "We're back in the black. The ultimatum is off. Keep it that way.",
+          b.stage === 'freeze'
+            ? 'The books are back in the black, so the freeze is over. Let us keep them there.'
+            : "We're back in the black. The ultimatum is off. Keep it that way.",
         tone: 'good',
         link: '/office/finances',
       });
     return;
   }
-  // (another team's books from before a takeover don't follow him)
-  if (!b) return step(league, cash <= -scaled(league, RED_ULTIMATUM) ? 'ultimatum' : 'warning');
-  if (b.stage === 'warning' && cash <= -scaled(league, RED_ULTIMATUM)) step(league, 'ultimatum');
-  else if (b.stage === 'ultimatum' && cash <= -scaled(league, RED_FREEZE)) step(league, 'freeze');
-}
-
-/** At the season's review: in the red, a warning becomes an ultimatum, and an ultimatum from an earlier season a freeze. */
-export function booksReview(league: League) {
-  if (league.fired || league.teams[league.userTid].cash >= 0) return booksDaily(league);
-  const b = booksOf(league);
-  if (!b) step(league, 'ultimatum');
-  else if (b.stage === 'warning') step(league, 'ultimatum');
+  if (!b || b.stage === 'warning') step(league, 'ultimatum');
   else if (b.stage === 'ultimatum' && b.season < league.season) step(league, 'freeze');
 }
 

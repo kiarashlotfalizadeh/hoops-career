@@ -12,7 +12,7 @@ import { testLeague } from '../../state/__tests__/fixtures';
 import { migrate } from '../../state/persistence';
 import { autoRotation } from '../ai/coachAI';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason } from '../league/helpers';
+import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason, winPct } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { faDay, marqueeFA } from '../league/freeAgency';
 import { aiPackage, sellable } from '../league/aiTrades';
@@ -376,7 +376,13 @@ describe('coaches', () => {
       expect(old.rotation.caps).toEqual({});
     }
 
-    // a fired user always hears from an opening, and from every one that would rather have him
+    // a fired user hears from every opening that would rather have him; when none would, the league's two worst records take a chance on him
+    const worstTwo = (x: typeof l) =>
+      x.teams
+        .filter((t) => t.tid !== x.userTid)
+        .sort((a, b) => winPct(curTeamSeason(x, a.tid)) - winPct(curTeamSeason(x, b.tid)) || a.tid - b.tid)
+        .slice(0, 2)
+        .map((t) => t.tid);
     {
       const x = structuredClone(l);
       x.fired = true;
@@ -384,21 +390,24 @@ describe('coaches', () => {
       makeJobOffers(x, moves);
       const offers = x.jobOffers!.offers;
       expect(offers.length).toBeGreaterThanOrEqual(1);
-      expect(offers.every((o) => o.kind === 'opening' && o.tid !== x.userTid)).toBe(true);
+      expect(offers.every((o) => o.tid !== x.userTid)).toBe(true);
       const wanted = moves.hired.filter((h) => scoreOf(x, h.tid, true) - scoreOf(x, h.tid, false) >= -0.25).map((h) => h.tid);
-      if (wanted.length) expect(offers.map((o) => o.tid).sort()).toEqual(wanted.sort());
+      if (wanted.length) {
+        expect(offers.map((o) => o.tid).sort()).toEqual(wanted.sort());
+        expect(offers.every((o) => o.kind === 'opening')).toBe(true);
+      } else expect(offers.map((o) => o.tid)).toEqual(worstTwo(x));
       // the agent says so, and long sims stop for it
       expect(x.inbox.some((m) => m.from === 'Your agent' && m.important && m.link === '/office/career')).toBe(true);
     }
 
-    // with no openings, the two teams closest to a change call instead
+    // with no openings, the league's two worst records take a chance on him, not its best teams
     {
       const x = structuredClone(l);
       x.fired = true;
       makeJobOffers(x, { fired: [], hired: [] });
       const offers = x.jobOffers!.offers;
-      expect(offers).toHaveLength(2);
-      expect(offers.every((o) => o.kind === 'change' && o.tid !== x.userTid)).toBe(true);
+      expect(offers.map((o) => o.tid)).toEqual(worstTwo(x));
+      expect(offers.every((o) => o.kind === 'change')).toBe(true);
     }
 
     // a user with a job is approached only after two seasons, by an opening that rates him clearly above its hire
@@ -427,7 +436,14 @@ describe('coaches', () => {
       makeJobOffers(x, hire(x, 3));
       const offer = x.jobOffers!.offers[0];
       const displaced = activeCoach(x, offer.tid)!;
+      // only an offer is a way in (god mode can put him anywhere)
+      const other = x.teams.find((t) => t.tid !== x.userTid && !x.jobOffers!.offers.some((o) => o.tid === t.tid))!.tid;
+      expect(takeJob(x, other)).toMatch(/haven't offered you the job/);
+      expect(x.userTid).toBe(old);
+      // his reputation comes with him: part of the standing that got him fired
+      x.ownerMood.total = -0.8;
       expect(takeJob(x, offer.tid)).toBeNull();
+      expect(x.ownerMood.total).toBe(-0.3);
       expect(x.userTid).toBe(offer.tid);
       expect(x.fired).toBe(false);
       expect(x.jobOffers).toBeUndefined();

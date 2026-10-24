@@ -54,6 +54,8 @@ export interface OwnerGoal {
   rank?: number;
   /** Wins: the league rank of the team's payroll when it was set (1: the highest), when that raised the target. */
   payRank?: number;
+  /** Wins: last season's target with this team, when it held this one up (see WIN_SLIDE). */
+  held?: number;
 }
 
 /** The owner's goals for the user's season (League.ownerGoals), set on opening night or when he took over mid-season. */
@@ -94,6 +96,10 @@ export interface OwnerReview {
   grade: number;
   /** The overall standing after the review (League.ownerMood.total). */
   total: number;
+  /** Regular-season games the goals covered (all 82 unless they were set mid-season); absent in reviews from before it was kept. */
+  games?: number;
+  /** A championship (or a postseason two rounds past the goal) that lifted the season's grade (see CROWN_GRADE). */
+  crowned?: 'title' | 'run';
   fired?: true;
 }
 
@@ -327,6 +333,15 @@ export function rebuildRun(league: League, tid: number): number {
   }
 }
 
+/** Wins a season's target can fall under last season's with the same team, outside a rebuild season. */
+export const WIN_SLIDE = 3;
+
+/** Last season's full-season wins target for the user with team `tid` (none after a mid-season start, a takeover, or a save from before reviews kept it). */
+export function lastWinsTarget(league: League, tid: number): number | undefined {
+  const r = (league.ownerReviews ?? []).find((x) => x.tid === tid && x.season === league.season - 1);
+  return r?.games === SEASON_GAMES ? r.goals.find((g) => g.kind === 'wins')?.target : undefined;
+}
+
 /** The grade a season with this regular-season record can have at most: under the floor, FLOOR_GRADE and lower (none above it: 1). */
 export function floorCap(og: Pick<OwnerGoals, 'floor'>, won: number, games: number): number {
   if (og.floor === undefined || games < FLOOR_GAMES) return 1;
@@ -415,26 +430,13 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   const patienceOut = run >= diff.rebuildSeasons;
   const floor = diff.winFloor + (patienceOut ? REBUILD_OVER_FLOOR : 0);
   base.floor = floor;
-  // wins: what the roster should win, raised half-way to what a team paid like it should win (a
-  // payroll in the league's top half: the league's expectations sorted, the payroll's rank among
-  // them), nudged by the owner's personality, never under the floor
-  const payRank = payrollRanks(league)[tid];
-  const byRank = payRank <= outlook.length / 2 ? (outlook.map((x) => x.pct).sort((a, b) => b - a)[payRank - 1] ?? o.pct) : o.pct;
-  const pct = o.pct + 0.5 * Math.max(0, byRank - o.pct);
-  const expected = o.pct * o.left;
-  const wins = clamp(Math.round(pct * o.left + WIN_NUDGE[who] * share), Math.max(1, Math.round(o.left * floor)), Math.round(o.left * 0.88));
-  goals.push({
-    kind: 'wins',
-    title: opening ? `Win ${wins} games` : `Win ${wins} of the last ${o.left} games`,
-    target: wins,
-    weight: lean('wins'),
-    perGame: o.pct,
-    ...(byRank - o.pct >= 0.02 ? { payRank } : {}),
-  });
   // the postseason, from the projected conference rank and the front office's strategy (and the
-  // rebuild clock: once it has run out, the play-in at least)
+  // rebuild clock: once it has run out, the play-in at least). A payroll in the league's top half
+  // isn't a rebuild, whatever the front office calls it: the play-in at least.
+  const payRank = payrollRanks(league)[tid];
+  const paidToWin = payRank <= outlook.length / 2;
   const rank = projectedRank(league, outlook, tid);
-  const rebuild = team.strategy === 'rebuild' && !patienceOut;
+  const rebuild = team.strategy === 'rebuild' && !patienceOut && !paidToWin;
   let level = 0;
   if (!rebuild && (rank <= 4 || team.strategy === 'contend')) {
     level = 3;
@@ -446,7 +448,30 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     else if (clear >= 4) level = 4;
   } else if (!rebuild && rank <= 8) level = 2;
   else if (!rebuild && rank <= 10) level = 1;
-  if (patienceOut) level = Math.max(level, 1);
+  if (patienceOut || paidToWin) level = Math.max(level, 1);
+  // wins: what the roster should win, raised half-way to what a team paid like it should win (a
+  // payroll in the league's top half: the league's expectations sorted, the payroll's rank among
+  // them), nudged by the owner's personality, never under the floor; and outside a rebuild season
+  // never more than WIN_SLIDE under last season's full-season target with this team (a roster run
+  // down doesn't lower the bar for the coach who ran it down)
+  const byRank = paidToWin ? (outlook.map((x) => x.pct).sort((a, b) => b - a)[payRank - 1] ?? o.pct) : o.pct;
+  const pct = o.pct + 0.5 * Math.max(0, byRank - o.pct);
+  const expected = o.pct * o.left;
+  const last = level && opening ? lastWinsTarget(league, tid) : undefined;
+  const wins = clamp(
+    Math.max(Math.round(pct * o.left + WIN_NUDGE[who] * share), last !== undefined ? last - WIN_SLIDE : 0),
+    Math.max(1, Math.round(o.left * floor)),
+    Math.round(o.left * 0.88),
+  );
+  goals.push({
+    kind: 'wins',
+    title: opening ? `Win ${wins} games` : `Win ${wins} of the last ${o.left} games`,
+    target: wins,
+    weight: lean('wins'),
+    perGame: o.pct,
+    ...(byRank - o.pct >= 0.02 ? { payRank } : {}),
+    ...(last !== undefined && wins > Math.round(pct * o.left + WIN_NUDGE[who] * share) ? { held: last } : {}),
+  });
   // a season without a postseason goal is a rebuild season, one of the allowance
   if (!level) base.rebuild = { year: run + 1, of: diff.rebuildSeasons };
   else if (patienceOut && run > 0) base.rebuild = { year: run + 1, of: diff.rebuildSeasons, over: true };
@@ -543,6 +568,7 @@ export function goalsWhy(og: OwnerGoals): string[] {
   const out: string[] = [];
   const wins = og.goals.find((g) => g.kind === 'wins');
   if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. I expect a record to match it.`);
+  if (wins?.held) out.push(`Last season I asked for ${wins.held} wins. A roster that got worse on your watch doesn't lower the bar by more than ${WIN_SLIDE}.`);
   if (og.rebuild?.over) out.push(`${og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`} of rebuilding is all I'll take. This season we compete.`);
   else if (og.rebuild) out.push(`Rebuilding: season ${og.rebuild.year} of the ${og.rebuild.of} I'll give it. After that I want the play-in.`);
   // (the floor is said when it's near: a rebuild, or a win goal within ten wins of it)
@@ -800,11 +826,16 @@ export function goalsRecord(league: League, og: OwnerGoals): { won: number; game
   return { won, games: won + (ts?.lost ?? 0) - (og.from?.lost ?? 0) };
 }
 
+/** The least a season's grade can be with a championship ('title'), or a postseason two rounds past the goal ('run'): Excellent either way. */
+export const CROWN_GRADE: Record<'title' | 'run', number> = { title: 0.5, run: 0.4 };
+
 /**
  * The season's goals graded: each one's result and grade, and the season's grade by weight, held
- * under the floor's cap when the record fell under it (`floored`: it did, and the cap bit).
+ * under the floor's cap when the record fell under it (`floored`: it did, and the cap bit), and lifted
+ * to CROWN_GRADE by a title or a postseason two rounds past the goal (`crowned`): what a season is
+ * remembered for, whatever the money goals did.
  */
-export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerReview['goals']; grade: number; floored?: true } {
+export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerReview['goals']; grade: number; floored?: true; crowned?: 'title' | 'run' } {
   const goals = og.goals.map((g) => {
     const result = goalResult(league, og, g);
     // (the plan's per-game numbers were for the in-season projection only)
@@ -813,8 +844,11 @@ export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerR
   const sum = goals.reduce((a, g) => a + g.weight * g.grade, 0);
   const rec = goalsRecord(league, og);
   const cap = floorCap(og, rec.won, rec.games);
-  const grade = Math.round(Math.min(sum, cap) * 100) / 100;
-  return { goals, grade, ...(cap < sum ? { floored: true as const } : {}) };
+  const level = postseasonLevel(thisSeason(league, og.tid));
+  const post = og.goals.find((g) => g.kind === 'postseason');
+  const crowned = level >= 6 ? 'title' : post && level - post.target >= 2 ? 'run' : undefined;
+  const grade = Math.round(Math.max(Math.min(sum, cap), crowned ? CROWN_GRADE[crowned] : -1) * 100) / 100;
+  return { goals, grade, ...(cap < sum && !crowned ? { floored: true as const } : {}), ...(crowned ? { crowned } : {}) };
 }
 
 // ---------------------------------------------------------------- check-ins

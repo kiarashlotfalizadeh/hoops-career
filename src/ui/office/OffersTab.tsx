@@ -5,7 +5,7 @@ import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { PencilLine, Ticket } from 'lucide-react';
 import type { League, Proposal } from '../../core/types';
-import { CAP_FOR, playerName } from '../../core/league/helpers';
+import { CAP_FOR, payroll, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { declineProposal, openProposals, proposalError } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
@@ -17,7 +17,7 @@ import { act } from '../../state/actions';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, More, Ovr } from '../components/ui';
-import { capSeason, contractEnd, salaryText } from './common';
+import { capSeason, contractEnd, salaryText, taxLine } from './common';
 import { useBusy } from '../../state/actions/office';
 import { money } from '../../core/format';
 
@@ -77,6 +77,8 @@ function OfferCard({
   const out = p.offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const inc = p.offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
   const after = capPayroll(league, league.userTid, s) - out + inc;
+  const pay = payroll(league, league.userTid, s);
+  const tax = taxLine(league, pay, pay - out + inc, s);
   // in neutral (league) value: every offer is at worst slightly against the user
   const { net, out: worth } = neutralBalance(league, p.offer);
   const share = worth > 0 ? net / worth : net >= 0 ? 1 : -1;
@@ -110,7 +112,7 @@ function OfferCard({
           <span className={`tag ${verdict.c}`}>{verdict.l}</span>
           <span className="tiny dim num grow">
             Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
-            {after > cap.luxuryTax ? ', over the tax' : after > cap.salaryCap ? ', over the cap' : ''}
+            {tax ? <span className={tax.tone}> · {tax.text}</span> : after > cap.salaryCap ? ', over the cap' : ''}
           </span>
           <button className="btn xs ghost" disabled={!!error} onClick={() => onReview(p.offer)}>
             <PencilLine size={14} /> Review

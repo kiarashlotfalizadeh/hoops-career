@@ -3,8 +3,9 @@
 // star goes down for ten games or more (the call: a 10-day for cover, or the staff's rotation); the
 // playoff odds collapse under 5% for a team the owner expects in the postseason (the call: tell him
 // it's a rebuild, before the deadline); the deadline's last five days (the call: the staff's best
-// deal, buying or selling as the odds say, or standing pat); and the books in the red (the call: the
-// budgets down to the league standard). A long sim stops the day a new one opens (see runSim), and
+// deal, buying or selling as the odds say, or standing pat); and the books heading into the red at
+// the season's end, or the owner's ultimatum or freeze on them (the call: the budgets down to the
+// league standard). A long sim stops the day a new one opens (see runSim), and
 // for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
 // remembered (League.callsDone) so it doesn't come back. Nothing here draws from the league's
 // random stream.
@@ -14,8 +15,8 @@ import { playerName, standardRoster } from './helpers';
 import { money, plural } from '../format';
 import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST } from './ownerGoals';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
-import { booksOf, FROZEN_BUDGET, RED_FREEZE } from './books';
-import { budgetCostPerSeason } from './finances';
+import { booksOf, FROZEN_BUDGET } from './books';
+import { budgetCostPerSeason, seasonEndCash } from './finances';
 import { tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
 import { packageFor } from './tradePackages';
@@ -309,22 +310,25 @@ export function staffCalls(league: League): CallCard[] {
       0,
     );
     const red = money(-team.cash);
+    const p = seasonEndCash(league, league.userTid);
+    const heading =
+      p.left > 0 ? `${money(Math.abs(p.end))} ${p.end < 0 ? 'in the red' : 'in the black'} at the season's end${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : ''}` : '';
     const cut: CallChoice | null =
       b.stage !== 'freeze' && overStandard(league)
         ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` }
         : null;
     const noted: CallChoice = { label: cut ? 'Not now' : 'Understood', action: { kind: 'settle', id } };
-    const call = cut ? `cut the staff budgets to the league standard (saves ${money(save)} a season)` : 'shed salary (the budgets are at the standard already)';
+    const call = cut ? `cut the staff budgets to the league standard (saves ${money(save)} a season)` : 'shed salary before the deadline (the budgets are at the standard already)';
     cards.push({
       id,
       kind: 'books',
-      title: b.stage === 'warning' ? `In the red: ${red}` : b.stage === 'ultimatum' ? "The owner's ultimatum: the books" : 'The budget is frozen',
+      title: b.stage === 'warning' ? 'The books are heading into the red' : b.stage === 'ultimatum' ? "The owner's ultimatum: the books" : 'The budget is frozen',
       line:
         b.stage === 'warning'
-          ? `The owner wants the books back in the black. The staff's call: ${call}.`
+          ? `Projected ${heading}. Still in the red at the review, and the owner gives you an ultimatum. The staff's call: ${call}.`
           : b.stage === 'ultimatum'
-            ? `${red} in the red. Back in the black by the next review, or he freezes the budget (at once at ${money(RED_FREEZE)} in the red). The staff's call: ${call}.`
-            : `${red} in the red: minimum deals only, no raises, no trade that takes on salary, until the books are back in the black.`,
+            ? `${team.cash < 0 ? `${red} in the red` : 'Back in the black for now'}${heading ? `; projected ${heading}` : ''}. Still in the red at the next review, and he freezes the budget. The staff's call: ${call}.`
+            : `Minimum deals only, no raises, no trade that takes on salary, until a review finds the books back in the black${heading ? ` (projected ${heading})` : ''}.`,
       tone: 'bad',
       to: '/office/finances',
       ...(cut ? { suggestion: cut, choices: [noted] } : { suggestion: noted }),

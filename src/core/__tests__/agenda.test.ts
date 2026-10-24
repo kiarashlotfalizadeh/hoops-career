@@ -7,14 +7,15 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { revenueScale, standardRoster } from '../league/helpers';
+import { curTeamSeason, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerEvaluation } from '../league/owner';
 import { CONCEDE_COST, currentGoals, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
 import { DEADLINE_DAYS, callsDaily } from '../league/calls';
-import { FROZEN_BUDGET, RED_ULTIMATUM, booksDaily, booksReview, freezeResignReason, freezeSigningReason, freezeTradeReason } from '../league/books';
+import { FROZEN_BUDGET, WARN_RED, booksDaily, booksReview, freezeResignReason, freezeSigningReason, freezeTradeReason } from '../league/books';
+import { PROJECT_HOME_GAMES, seasonEndCash } from '../league/finances';
 import { tenDayOpenDay } from '../league/tenDay';
 import { flowActions } from '../../ui/flow';
 import type { League } from '../types';
@@ -152,6 +153,9 @@ describe('the agenda', () => {
       ts.lost = 38;
       const u = maybeUltimatum(l);
       expect(u).not.toBeNull();
+      // never less than his floor: "win 10 games" is no ultimatum
+      const og = currentGoals(l)!;
+      if (u!.kind === 'wins') expect(u!.target).toBeGreaterThanOrEqual(Math.ceil(og.floor! * og.games));
       expect(currentGoals(l)!.ultimatum).toEqual(u);
       expect(jobSecurity(l).heat).toBe('hot');
       expect(agenda(l).find((i) => i.kind === 'ultimatum')?.title).toBe(`Owner: ${u!.text}`);
@@ -290,20 +294,40 @@ describe('the agenda', () => {
       expect(agenda(l).some((i) => i.kind === 'deadline')).toBe(false);
     }
 
-    // the books in the red: a warning, an ultimatum at the review (or a deep hole), then a freeze that blocks new money; the black lifts it
+    // the books: a warning when they project into the red, steps only at reviews (an ultimatum, then a freeze that blocks new money), and a review in the black lifts it
     {
       const l = inCharge(1);
       const team = l.teams[l.userTid];
       team.budget.coaching = 90;
-      team.cash = -1_000;
+      // projected a little short of the black: within the projection's noise, no word; well into the red
+      // (the season's costs and any tax to come), the warning, once the home games so far say what one brings
+      const ts = curTeamSeason(l, l.userTid);
+      ts.homeWon = PROJECT_HOME_GAMES;
+      team.cash = -1_000 - (seasonEndCash(l, l.userTid).end - team.cash);
+      expect(seasonEndCash(l, l.userTid).end).toBe(-1_000);
+      booksDaily(l);
+      expect(l.books).toBeUndefined();
+      team.cash -= WARN_RED * revenueScale(l);
+      ts.homeWon = PROJECT_HOME_GAMES - 1;
+      booksDaily(l);
+      expect(l.books).toBeUndefined();
+      ts.homeWon = PROJECT_HOME_GAMES;
       booksDaily(l);
       expect(l.books).toMatchObject({ stage: 'warning', tid: l.userTid });
-      expect(l.inbox[0].subject).toBe("We're in the red");
+      expect(l.inbox[0].subject).toBe('The books are heading into the red');
       const card = agenda(l).find((i) => i.kind === 'books')!;
       expect(card.suggestion!.label).toBe('Cut the budgets');
-      // a hole this deep is an ultimatum at once, and a review in the red keeps it one that season
-      team.cash = -RED_ULTIMATUM * revenueScale(l) - 1;
+      expect(card.line).toMatch(/^Projected .+ in the red at the season's end/);
+      // cash crossing zero day to day moves nothing: no second warning, no lift, no step up
+      const mail = l.inbox.length;
+      team.cash = 50_000;
       booksDaily(l);
+      team.cash = -200_000;
+      booksDaily(l);
+      expect(l.books!.stage).toBe('warning');
+      expect(l.inbox.length).toBe(mail);
+      // a review in the red: an ultimatum, held there for the season
+      booksReview(l);
       expect(l.books!.stage).toBe('ultimatum');
       booksReview(l);
       expect(l.books!.stage).toBe('ultimatum');
@@ -319,9 +343,11 @@ describe('the agenda', () => {
       expect(freezeResignReason(l, 10_000, 9_000)).toMatch(/no raises/);
       expect(freezeTradeReason(l, 10_000, 9_000)).toMatch(/can't take on more salary/);
       expect(freezeTradeReason(l, 9_000, 10_000)).toBeNull();
-      // back in the black: lifted
+      // back in the black between reviews: still frozen; a review in the black lifts it
       team.cash = 1;
       booksDaily(l);
+      expect(l.books!.stage).toBe('freeze');
+      booksReview(l);
       expect(l.books).toBeUndefined();
       expect(l.inbox[0].subject).toBe('Back in the black');
       expect(freezeSigningReason(l, 5_000, 2_000)).toBeNull();

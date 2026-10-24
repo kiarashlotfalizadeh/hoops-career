@@ -116,7 +116,17 @@ function Profile({ league }: { league: League }) {
 
       {tab === 'profile' && k && <ProfileTab league={league} k={k} />}
       {tab === 'milestones' && <Milestones league={league} />}
-      {tab === 'jobs' && <TakeOver league={league} onTaken={() => nav('/')} />}
+      {tab === 'jobs' &&
+        (league.settings.godMode || (league.fired && !offers.length) ? (
+          <TakeOver league={league} onTaken={() => nav('/')} />
+        ) : (
+          <div className="card empty">
+            {offers.length
+              ? `${offers.length > 1 ? 'Those offers are' : 'That offer is'} your way to another job.`
+              : 'Jobs come to you: after the playoffs, teams that change coaches call when they rate you above their hire.'}{' '}
+            Your reputation comes with you: part of where you stand with this owner. God mode (Settings) can put you anywhere.
+          </div>
+        ))}
     </main>
   );
 }
@@ -410,13 +420,13 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
   const t = pick !== null && pick !== league.userTid ? league.teams[pick] : null;
   const books = capSeason(league);
   return (
-    <Section title={league.fired ? 'Take over a team' : 'Take over another team'}>
+    <Section title={league.settings.godMode ? 'Take over any team (god mode)' : 'Take over a team'}>
       <div className="small dim2">
-        {league.fired ? 'Any team will have you.' : `The ${cur.name} go back to the AI staff.`}{' '}
+        {league.fired ? (league.settings.godMode ? 'God mode puts you anywhere.' : 'No offers on file: pick a team.') : `The ${cur.name} go back to the AI staff.`}{' '}
         <More label="What carries over">
           <div className="small dim2">
-            Your owner standing resets and the new owner sets his goals: in season from that day (in the playoffs, the next round), otherwise on opening night. Your coaching
-            ratings come with you; the season, finances and league history carry on.
+            Part of your standing with this owner comes with you, and the new owner sets his goals: in season from that day (in the playoffs, the next round), otherwise on opening
+            night. Your coaching ratings come with you; the season, finances and league history carry on.
           </div>
         </More>
       </div>
