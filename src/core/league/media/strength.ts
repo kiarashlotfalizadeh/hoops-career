@@ -2,7 +2,8 @@
 // healthy roster is worth (the game projection's own blend, see analysis/projection.ts), so a team
 // that lost its star last night reads weaker today. A pure read of the league.
 import type { League, Player } from '../../types';
-import { HOME_EDGE, blendNet, winChance } from '../../analysis/projection';
+import { HOME_EDGE, blendNet } from '../../analysis/projection';
+import { winChance } from '../../analysis/winProb';
 import { ROSTER_NET } from '../../analysis/odds';
 import { netOf, tsOf } from './voice';
 

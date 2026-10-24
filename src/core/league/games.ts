@@ -539,6 +539,7 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   const userGame = g.home === league.userTid || g.away === league.userTid;
   if (!userGame) {
     delete res.shots;
+    delete res.xShots;
     delete res.impacts;
     delete res.lineups;
     delete res.flow;

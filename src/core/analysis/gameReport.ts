@@ -28,6 +28,8 @@ export interface Factor {
   won?: string;
   /** A cost of one of the user's settings that the same setting won back that night (the setting): its row carries both numbers. */
   paid?: string;
+  /** Shots falling more or less than their looks were worth: the night's luck, with nothing to change for it. */
+  luck?: true;
 }
 
 interface Tpl {
@@ -654,8 +656,42 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   // four factors
   const fu = fourFactors(u, o);
   const fo = fourFactors(o, u);
-  const efgSwing = (((fu.efg - fo.efg) * (u.t.fga + o.t.fga)) / 2) * 2;
-  if (Math.abs(efgSwing) >= 3) {
+  // the eFG gap in points, at the two teams' average attempts
+  const swing = (a: number, b: number) => (((a - b) * (u.t.fga + o.t.fga)) / 2) * 2;
+  const efgSwing = swing(fu.efg, fo.efg);
+  const pct = (x: number) => `${(x * 100).toFixed(1)}%`;
+  if (res.xShots) {
+    // the looks each side got (what its attempts were worth as taken: the shooter, the look, the
+    // contest) and how they fell against that, told apart: the second is the night's luck
+    const [xu, xo] = userSide === 0 ? res.xShots : [res.xShots[1], res.xShots[0]];
+    const xefg = (x: { pts: number }, fga: number) => x.pts / 2 / Math.max(1, fga);
+    const looks = swing(xefg(xu, u.t.fga), xefg(xo, o.t.fga));
+    const fell = efgSwing - looks;
+    if (Math.abs(looks) >= 3) {
+      const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
+      factors.push({
+        title: `The ${looks > 0 ? ut.name : ot.name} got the better looks: worth ${pct(hi)} eFG vs ${pct(lo)}.`,
+        detail: 'What the shots were worth as they were taken (the shooter, how open, the contest), before any of them fell.',
+        pts: looks,
+        category: 'shooting',
+        topic: 'shooting',
+      });
+    }
+    if (Math.abs(fell) >= 3) {
+      // told by the side whose shooting strayed further from its looks: a cold night isn't the other team's hot one
+      const du = fu.efg - xefg(xu, u.t.fga);
+      const dv = fo.efg - xefg(xo, o.t.fga);
+      const [who, d] = Math.abs(du) >= Math.abs(dv) ? [ut.name, du] : [ot.name, dv];
+      factors.push({
+        title: `${possessive(`The ${who}`)} shots ${d > 0 ? 'fell' : "didn't fall"}: ${ut.abbrev} ${pct(fu.efg)} eFG on looks worth ${pct(xefg(xu, u.t.fga))}, ${ot.abbrev} ${pct(fo.efg)} on ${pct(xefg(xo, o.t.fga))}.`,
+        detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)} (${madeAtt(u.t.tpm, u.t.tpa)} 3P) · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)} (${madeAtt(o.t.tpm, o.t.tpa)} 3P). Shots falling above or below what they were worth is luck: nothing to change for it.`,
+        pts: fell,
+        category: 'shooting',
+        topic: 'shotmaking',
+        luck: true,
+      });
+    }
+  } else if (Math.abs(efgSwing) >= 3) {
     const better = efgSwing > 0 ? ut.name : ot.name;
     factors.push({
       title: `The ${better} shot it better: eFG ${(Math.max(fu.efg, fo.efg) * 100).toFixed(1)}% vs ${(Math.min(fu.efg, fo.efg) * 100).toFixed(1)}%.`,
@@ -700,6 +736,14 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       pts: ftSwing,
       category: 'fouls',
       topic: 'fouls',
+      // a physical defense's lever, one tap away (as its own effect's is); played clean already, it came from who fouled whom
+      ...(ftSwing < 0 &&
+        (impactAdvice('physicality:o', tactics)
+          ? { key: 'physicality:o', advice: 'Play cleaner: lower Physicality (Instructions). It gives up a little on contests and sends them to the line less.' }
+          : {
+              advice:
+                'Not from how physical you played: check who fouled in the box score, keep a foul-prone defender off their best driver (Matchups), or sit him in foul trouble.',
+            })),
     });
   }
 

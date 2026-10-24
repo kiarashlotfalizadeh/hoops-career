@@ -5,7 +5,7 @@
 // defense, possession, transition, setPlays, the actions (pnr, isolation, postUp, handoff, motion),
 // shots, rebounds, fouls and record.
 
-import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact } from '../../types';
+import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact, XShots } from '../../types';
 import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
@@ -95,6 +95,11 @@ export class GameSim {
   logs: PossLog[] = [];
   pbp: PbpEntry[] = [];
   shots: ShotRecord[] = [];
+  /** Each side's attempts as expected to fall (see GameResult.xShots). */
+  xShots: [XShots, XShots] = [
+    { pts: 0, tpm: 0 },
+    { pts: 0, tpm: 0 },
+  ];
   flow: number[] = [];
   /** Index into flow where each period starts. */
   flowPeriods: number[] = [0];

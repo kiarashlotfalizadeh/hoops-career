@@ -17,7 +17,7 @@ import { madeAtt, ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
 import { careerTotals, markText, milestonesIn, newsworthy, type MilestoneStat } from './milestones';
 import { recordsHeld, recordWhat } from '../league/records';
-import { winChance } from './projection';
+import { winChance } from './winProb';
 import { billingStorylines } from './storylines';
 
 /** A finished game told as a story, from one team's side. */

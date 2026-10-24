@@ -24,6 +24,7 @@ import { isLatestUserGame, postGameQuotes, recapFacts, streakAfter, threeStars }
 import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
 import { billingsFor, christmasDay, gameStoryFor, rivalryOf, RIVALRY, storyGame } from '../analysis/gameStory';
 import { runLab } from '../ai/lab';
+import { wpSeries } from '../analysis/winProb';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
 import { seasonLabel } from '../constants';
@@ -996,6 +997,8 @@ describe('game day', () => {
       expect(winChance(0)).toBeCloseTo(0.5, 6);
       expect(winChance(5) + winChance(-5)).toBeCloseTo(1, 6);
       expect(winChance(5)).toBeGreaterThan(winChance(2));
+      // the pre-game chance is where the live game's win probability starts: one number, before the tip and at it
+      expect(winChance(6)).toBeCloseTo(wpSeries({ flow: [0], flowPeriods: [0], edge: 6, type: 'regular' })![0].wp, 9);
       // the same game with the floors swapped: the edge moves with home court and nothing else does
       const l = snap(opener);
       const g = nextGame(l);

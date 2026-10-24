@@ -139,6 +139,12 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
     if (slow.length) weaknesses.push(`Switching with a slow big (${shortName(league, slow[0].p)}): hunt that mismatch.`);
   }
   if (man && t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
+  // the weak link the staff's plan attacks (its "Attack" counter reads the same pick), so the two never disagree
+  const hunt = huntPick(league, tid);
+  if (hunt?.worth) {
+    const who = league.players[hunt.pid];
+    if (who) weaknesses.push(`${shortName(league, who)} is their weakest perimeter defender (${hunt.perDef}, their rotation ${hunt.teamPerDef}): attack the man he guards.`);
+  }
   const threats: Threat[] = [];
   if (creators[0]) {
     const role = t.offense.roles[creators[0].p.pid] ?? 'creator';

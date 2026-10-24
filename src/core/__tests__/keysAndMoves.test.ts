@@ -220,6 +220,14 @@ describe('keys to the game and coach moves', () => {
         expect(moveVerdict(m).verdict).toBe('early');
         m.after.us = { poss: 30, pts: 34 };
         expect(moveVerdict(m).verdict).toBe('same');
+        // a baseline of a few trips isn't one: 3.00 a trip over 3 trips, then 0.56 over 30, is still early
+        m.before.us = { poss: 3, pts: 9 };
+        m.after.us = { poss: 30, pts: 17 };
+        expect(moveVerdict(m).verdict).toBe('early');
+        // a swing one standard error wide reads as no change, not as working: 1.10 over 20 trips, then 1.40 over 30
+        m.before.us = { poss: 20, pts: 22 };
+        m.after.us = { poss: 30, pts: 42 };
+        expect(moveVerdict(m).verdict).toBe('same');
       }
 
       // name game-specific orders: a matchup, an instruction, a hunt

@@ -17,6 +17,7 @@ import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { leadAssistant } from '../../core/ai/assistant';
 import { coachMoves } from '../../core/analysis/moves';
 import { winProb } from '../../core/analysis/winProb';
+import { GAME } from '../../core/constants';
 import { Empty, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
 import { identityColor, matchupColors, matchupLooks, teamLook } from '../teamColors';
@@ -122,8 +123,12 @@ export default function Live() {
   const context = game ? gameContext(league, game.game, gameNo) : undefined;
   // the home team's chance to win as the court has drawn the game (Settings can switch it off)
   const showWp = league.settings.liveWinProb !== false;
+  // (before the clock starts, the jump ball isn't counted: tip-off reads the pre-game screens' number)
+  const tipped = view && (view.q > 1 || view.clock < GAME.quarterSec);
   const wpHome =
-    game && view && showWp ? winProb({ margin: view.sides[0].score - view.sides[1].score, q: view.q, clock: view.clock, ball: view.ball, edge: game.edge }) : undefined;
+    game && view && showWp
+      ? winProb({ margin: view.sides[0].score - view.sides[1].score, q: view.q, clock: view.clock, ball: tipped ? view.ball : null, edge: game.edge })
+      : undefined;
 
   const huddling = s.huddling;
   const stop: 'break' | 'huddle' | null = s.atBreak ? 'break' : huddling ? 'huddle' : null;

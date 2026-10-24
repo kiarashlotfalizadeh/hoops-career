@@ -25,8 +25,15 @@ export interface MoveMark {
 
 /** Trips either side of a timeout that measure it. */
 const TIMEOUT_TRIPS = 8;
-/** Trips at a rate before a move's effect reads as anything but early. */
-export const MOVE_MIN_TRIPS = 8;
+/** Trips at a rate since a move before its effect reads as anything but early. */
+export const MOVE_MIN_TRIPS = 15;
+/** Trips at the rate before a move it needs to be judged against (a rate over two or three trips is noise, not a baseline). */
+export const MOVE_MIN_BEFORE = 8;
+/**
+ * Standard errors the rate has to move, the stretch before's noise counted too, to read as working
+ * or not: at one, a move that changed nothing read one way or the other about a third of the time.
+ */
+const MOVE_Z = 2;
 /** Trips each side the stretch before a timeout needs for its margin a trip to be quoted. */
 const MARGIN_MIN_BEFORE = 4;
 
@@ -226,7 +233,7 @@ export function moveVerdict(m: CoachMove): { now: number | null; was: number | n
     // (a margin a trip over a trip or two before isn't a rate: a timeout a minute in has none to compare)
     const was = Math.min(m.before.us.poss, m.before.them.poss) >= MARGIN_MIN_BEFORE ? per(m.before) : null;
     const trips = Math.min(m.after.us.poss, m.after.them.poss);
-    return { now, was, trips, what, verdict: judge(now, was, trips, 1, 1.5) };
+    return { now, was, trips, what, verdict: judge(now, was, trips, Math.min(m.before.us.poss, m.before.them.poss), 1, 1.5) };
   }
   const pick = (t: MoveTally) => (what === 'focus' ? t.focus : what === 'them' ? t.them : t.us);
   const now = ppp(pick(m.after));
@@ -234,13 +241,17 @@ export function moveVerdict(m: CoachMove): { now: number | null; was: number | n
   const trips = pick(m.after)?.poss ?? 0;
   // fewer points is better on defense (their trips, or their player's), more on offense
   const better = what === 'us' || (what === 'focus' && m.end === 'off') ? 1 : -1;
-  return { now, was, trips, what, verdict: judge(now, was, trips, better, 1.1) };
+  return { now, was, trips, what, verdict: judge(now, was, trips, pick(m.before)?.poss ?? 0, better, 1.1) };
 }
 
-/** A trip's points spread about 1.1 either way (a margin per trip about 1.5): a move reads as more than noise once its rate has moved about one standard error. */
-function judge(now: number | null, was: number | null, trips: number, better: 1 | -1, spread: number): MoveVerdict {
-  if (now === null || was === null || trips < MOVE_MIN_TRIPS) return 'early';
-  const se = spread / Math.sqrt(trips);
+/**
+ * A trip's points spread about 1.1 either way (a margin per trip about 1.5): a move reads as more
+ * than noise once the two rates are MOVE_Z standard errors of their difference apart, which counts
+ * the trips on both sides of it (a hot stretch before a move flatters or damns it as much as one after).
+ */
+function judge(now: number | null, was: number | null, trips: number, wasTrips: number, better: 1 | -1, spread: number): MoveVerdict {
+  if (now === null || was === null || trips < MOVE_MIN_TRIPS || wasTrips < MOVE_MIN_BEFORE) return 'early';
+  const se = spread * Math.sqrt(1 / trips + 1 / wasTrips);
   const d = (now - was) * better;
-  return d > se ? 'better' : d < -se ? 'worse' : 'same';
+  return d > MOVE_Z * se ? 'better' : d < -MOVE_Z * se ? 'worse' : 'same';
 }

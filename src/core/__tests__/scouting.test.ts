@@ -9,17 +9,18 @@ import { scoutData, SCOUT_MIN_GAMES, type Ranked, type ScoutData } from '../anal
 import { counterCandidates, scoutTeam, tacticsWithCounter } from '../ai/advisor';
 import { effectiveTactics, ensurePlan, setPlanItem } from '../league/gamePlans';
 import { buildSimInput, ensureRotation, playGame } from '../league/games';
-import { teamSeason } from '../league/helpers';
+import { shortName, teamSeason } from '../league/helpers';
+import { huntPick } from '../analysis/guarding';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { buildGameReport, decidingFactors } from '../analysis/gameReport';
-import { debrief } from '../analysis/debrief';
+import { debrief, keyAdvice } from '../analysis/debrief';
 import { createLeague, defaultSettings } from '../league/create';
 import { takeOverTeam } from '../league/owner';
 import { rankedPresets } from '../ai/coachAI';
 import { applyPatch, defaultManagement } from '../sim/tactics';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
-import type { League } from '../types';
+import type { GameResult, League } from '../types';
 
 /** The first team after `from` (not the user's) with enough games to scout. */
 function scoutable(l: League, from: number) {
@@ -221,6 +222,15 @@ describe('scouting and the staff', () => {
       const idx = lines.findIndex((w) => /^Their defense gives up/.test(w));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(idx).toBeLessThan(d.exploits.length);
+      // its weak link is the one the plan's "Attack" counter goes after: Scout and Plan name the same man
+      const hp = huntPick(m, tid);
+      const weakLine = lines.find((w) => w.includes('weakest perimeter defender'));
+      expect(!!weakLine).toBe(!!hp?.worth);
+      if (hp?.worth) {
+        expect(weakLine).toContain(shortName(m, m.players[hp.pid]));
+        const attack = cands.find((c) => c.id === 'hunt');
+        if (attack) expect(attack.label).toBe(`Attack ${m.players[hp.pid].lastName}`);
+      }
     }
 
     // counters for a game plan
@@ -415,6 +425,61 @@ describe('scouting and the staff', () => {
       if (battle && battle.pts > 0) expect(decidingFactors(f, f.length).filter((x) => x.topic === 'turnovers')).toHaveLength(1);
       // the debrief's edges are the deciding ones
       expect(debrief(league, res, buildGameReport(league, res)!).decided).toEqual(decidingFactors(buildGameReport(league, res)!.factors));
+    }
+    // tells the looks from the luck: the shots each side got, and how they fell against what they were worth
+    {
+      const league = structuredClone(night);
+      const res = structuredClone(nightRes);
+      const me: 0 | 1 = res.home.tid === 0 ? 0 : 1;
+      const [us, them] = me === 0 ? [res.home, res.away] : [res.away, res.home];
+      expect(res.xShots).toHaveLength(2);
+      const side = (u: { pts: number; tpm: number }, o: { pts: number; tpm: number }) => (me === 0 ? [u, o] : [o, u]) as GameResult['xShots'];
+      const fgPts = (b: typeof us) => 2 * b.t.fgm + b.t.tpm;
+      // looks worth the same eFG to both: whatever the shooting decided was luck, told with nothing to change
+      res.xShots = side({ pts: 2 * 0.53 * us.t.fga, tpm: us.t.tpm }, { pts: 2 * 0.53 * them.t.fga, tpm: them.t.tpm });
+      let rep = buildGameReport(league, res)!;
+      const ff = rep.fourFactors;
+      const efgSwing = (ff.user.efg - ff.opp.efg) * (us.t.fga + them.t.fga);
+      expect(rep.factors.some((f) => f.category === 'shooting' && !f.luck)).toBe(false);
+      const luck = rep.factors.find((f) => f.luck);
+      expect(!!luck).toBe(Math.abs(efgSwing) >= 3);
+      if (luck) {
+        expect(luck.pts).toBeCloseTo(efgSwing, 6);
+        expect(luck.key).toBeUndefined();
+        expect(luck.advice).toBeUndefined();
+      }
+      // shots that fell exactly as their looks: the gap was the looks, and luck says nothing
+      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
+      rep = buildGameReport(league, res)!;
+      expect(rep.factors.some((f) => f.luck)).toBe(false);
+      const looks = rep.factors.find((f) => f.category === 'shooting');
+      expect(!!looks).toBe(Math.abs(efgSwing) >= 3);
+      if (looks) expect(looks.title).toMatch(/got the better looks: worth/);
+      // a threes key missed with the looks there reads as shots that didn't fall, missed without them as threes not taken
+      const fly = { id: 'fly', title: 'Let it fly', goal: '', dir: 'min' as const, target: us.t.tpm + 3, value: us.t.tpm, met: false };
+      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm + 3 }, { pts: fgPts(them), tpm: them.t.tpm });
+      expect(keyAdvice(league, fly, res, me)).toMatch(/^The threes were there and you took them/);
+      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
+      expect(keyAdvice(league, fly, res, me)).toMatch(/you didn't take them/);
+      // and a team that made more threes than its looks were worth beat the arc key on luck, not on the plan
+      const arc = { id: 'arc', title: 'Run them off the line', goal: '', dir: 'max' as const, target: them.t.tpm - 3, value: them.t.tpm, met: false };
+      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm - 4 });
+      expect(keyAdvice(league, arc, res, me)).toMatch(/that part was luck/);
+    }
+    // a free-throw gap against a physical defense comes with its lever; played clean, it says where it came from
+    {
+      const league = structuredClone(night);
+      const res = structuredClone(nightRes);
+      const me: 0 | 1 = res.home.tid === 0 ? 0 : 1;
+      const opp = me === 0 ? 'away' : 'home';
+      res[opp] = { ...res[opp], t: { ...res[opp].t, ftm: res[opp].t.ftm + 15, fta: res[opp].t.fta + 18 } };
+      const fouls = () => buildGameReport(league, res)!.factors.find((f) => f.category === 'fouls' && f.title.startsWith('Free throws'))!;
+      league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { physicality: 65 } });
+      expect(fouls()).toMatchObject({ key: 'physicality:o' });
+      expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.label === 'Less physical')).toBe(true);
+      league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { physicality: 40 } });
+      expect(fouls().key).toBeUndefined();
+      expect(fouls().advice).toMatch(/^Not from how physical you played/);
     }
   }, 180_000);
 });

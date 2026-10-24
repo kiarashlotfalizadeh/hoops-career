@@ -894,6 +894,12 @@ export interface ShotRecord {
 
 export type ShotZone = 'rim' | 'paint' | 'mid' | 'c3' | 'ab3';
 
+/** A side's field-goal attempts, as expected to fall: points (without free throws) and threes made. */
+export interface XShots {
+  pts: number;
+  tpm: number;
+}
+
 export interface TacticImpact {
   /** Impact key, e.g. 'drop_pullup'. */
   key: string;
@@ -926,6 +932,12 @@ export interface GameResult {
   away: TeamBox;
   ot: number;
   shots?: ShotRecord[];
+  /**
+   * What each side's shots were worth as they were taken (0 home, 1 away): each attempt's chance to
+   * go in (the shooter, the look, the contest), added up, against what fell in the box score. The
+   * user's games only; absent in older saves.
+   */
+  xShots?: [XShots, XShots];
   impacts?: TacticImpact[];
   lineups?: LineupStat[];
   /** Score margin flow (home - away) sampled per possession, for charts. */

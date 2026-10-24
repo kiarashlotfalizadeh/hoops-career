@@ -215,8 +215,10 @@ export const shotsMethods = {
       this.impact(s.foulTag[0], off.side, (pFoul - pFoul / s.foulTag[1]) * foulGain * (s.foulTag[2] ?? 1), sh.pid);
     }
     const fouled = this.rng.chance(pFoul);
+    // (fouled, it goes in less often: an and-one)
+    const pMake = fouled ? p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25) : p;
     let made: boolean;
-    if (fouled) made = this.rng.chance(p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25));
+    if (fouled) made = this.rng.chance(pMake);
     else {
       made = this.rng.chance(p);
       if (!made && c && this.rng.chance(clamp(pBlk, 0, 0.6))) blocker = c;
@@ -242,6 +244,10 @@ export const shotsMethods = {
       if (zone === 'rim') sh.b.rimA++;
       if (zone === 'mid') sh.b.midA++;
       if (zone === 'c3') sh.b.c3A++;
+      // what the look was worth before it fell or didn't (an attempt a foul wiped out isn't one)
+      const xs = this.xShots[off.side];
+      xs.pts += pMake * value;
+      if (three) xs.tpm += pMake;
       if (xy) {
         this.shots.push({ t: off.side, pid: sh.pid, x: Math.round(xy.x * 10) / 10, y: Math.round(xy.y * 10) / 10, made, zone, q: this.q });
       }

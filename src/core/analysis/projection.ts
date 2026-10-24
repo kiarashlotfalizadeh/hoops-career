@@ -29,9 +29,6 @@ export function phi(x: number) {
   return x >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
 }
 
-/** Chance of winning a game projected at `margin` points. */
-export const winChance = (margin: number) => phi(margin / MARGIN_SD);
-
 /**
  * A team's net rating estimate: this season's per-100 net, weighted by games played against a
  * prior from tonight's rotation talent (`talent`: its minutes-weighted OVR above the league's), at

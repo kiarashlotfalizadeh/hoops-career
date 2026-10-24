@@ -85,6 +85,13 @@ export function winProb(s: WpState, k: WpParams = WP): number {
   return clamp(1 - notWin + (notWin - lose) * ot, UNDECIDED, 1 - UNDECIDED);
 }
 
+/**
+ * The chance of winning a game projected at `margin` points, before tip-off: where its win
+ * probability starts (a tie to start, the projection's whole edge to come), so a pre-game screen and
+ * the live game's first number are the same one.
+ */
+export const winChance = (margin: number, k: WpParams = WP) => winProb({ q: 1, clock: GAME.quarterSec, margin: 0, ball: null, edge: margin }, k);
+
 /** One point of a game's win-probability line. */
 export interface WpPoint {
   /** Index into the game's flow (-1: tip-off). */

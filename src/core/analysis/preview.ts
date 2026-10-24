@@ -21,13 +21,15 @@ import { COVERAGE_META, DEF_PRESETS, OFF_PRESETS, PRESS_META, SCHEME_META } from
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { LINK_NAMED, lineupLinks, linkState, type LinkId } from '../sim/links';
 import { playTypeBaselines, seasonPlayTypes, zScore } from './playTypes';
-import { leagueRatings, projectGame, winChance } from './projection';
+import { leagueRatings, projectGame } from './projection';
+import { winChance } from './winProb';
 
 // (the projection lives in ./projection, which the game pipeline uses too)
 
 /** A playoff round as the schedule's tags name it ("1st Round G4"). */
 const ROUND_TAG = ['Play-In', '1st Round', '2nd Round', 'Conf. Finals', 'Finals'];
-export { blendNet, HOME_EDGE, MARGIN_SD, PRIOR_GAMES, projectGame, projectMargin, TALENT_NET, winChance, type Ranked } from './projection';
+export { blendNet, HOME_EDGE, MARGIN_SD, PRIOR_GAMES, projectGame, projectMargin, TALENT_NET, type Ranked } from './projection';
+export { winChance } from './winProb';
 
 export interface PreviewPlayer {
   pid: number;

@@ -164,8 +164,12 @@ export const K = {
   blitz4v3: 0.39,
   /** Field-goal percentage a fully physical defense takes off every shot. */
   physContest: 0.01,
-  /** Points per switched pick-and-roll the switch takes away (the screen's advantage). */
-  switchScreen: 0.04,
+  /**
+   * Points per switched pick-and-roll the switch takes away (the screen's advantage), for its tag only:
+   * fitted so a switch to Switch is tagged about what paired games measure it at (6 real-league pairs,
+   * 2026-10: tags within 0.35 a game of it; at 0.04 the tags called a switch that cost 1.1 a game a gain).
+   */
+  switchScreen: 0.02,
   /**
    * Handler's blow-by edge per unit of ball pressure, and the extra edge at full pressure; and the
    * edge at which its tag counts a unit of it at half of K.advPts (see blowByTag).

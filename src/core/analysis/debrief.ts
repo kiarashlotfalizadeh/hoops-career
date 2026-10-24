@@ -5,7 +5,9 @@
 // tactics the team hasn't drilled cost points, and a word on each key to the game he missed.
 // Pure: it reads the stored result and the report built from it.
 
-import type { GameResult, League, PrepFocus, TacticsPatch } from '../types';
+import type { GameResult, KeyGrade, League, PrepFocus, TacticsPatch } from '../types';
+import { madeAtt } from '../format';
+import { leagueThreePct } from '../ai/opponentPlan';
 import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
 import { buildGameReport, decidingFactors, type GameReport, type Factor } from './gameReport';
 import { moveVerdict } from './moves';
@@ -70,6 +72,23 @@ const KEY_ADVICE: Record<string, string> = {
   star: 'Their scorer got his: deny him the ball (Star plan), or put your best defender on him (Matchups).',
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
+
+/**
+ * A missed key's word for next time. A threes key counts makes, so it can be missed on the looks
+ * (we didn't take them, they got open ones) or on the night's shooting: the second is luck, and is
+ * told that way. The looks are what the attempts were worth as taken (GameResult.xShots), or in an
+ * older result the attempts at the league's three-point percentage.
+ */
+export function keyAdvice(league: League, k: KeyGrade, res: GameResult, side: 0 | 1): string {
+  const [us, them] = side === 0 ? [res.home, res.away] : [res.away, res.home];
+  const x = res.xShots && (side === 0 ? res.xShots : [res.xShots[1], res.xShots[0]]);
+  const lg = leagueThreePct(league);
+  if (k.id === 'fly' && (x ? x[0].tpm : us.t.tpa * lg) >= k.target - 0.5)
+    return `The threes were there and you took them (${madeAtt(us.t.tpm, us.t.tpa)}): they didn't fall. Keep taking them.`;
+  if (k.id === 'arc' && (x ? x[1].tpm : them.t.tpa * lg) <= k.target + 0.5)
+    return `They made ${madeAtt(them.t.tpm, them.t.tpa)} from three, more than their looks were worth on a normal night: that part was luck, not your plan.`;
+  return KEY_ADVICE[k.id] ?? '';
+}
 
 /** What a missed key is about, so advice on the same thing isn't given twice (a factor's category, or a tactical effect's topic). */
 const KEY_TOPIC: Record<string, string> = { glass: 'rebounding', ball: 'turnovers', line: 'fouls', crash: 'rebounding', star: 'stars' };
@@ -169,6 +188,10 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
     pace: won ? ['Our pace wore them down.'] : ['Their pace hurt us.'],
     fatigue: won ? ['Their legs went before ours.'] : ['Our legs went before theirs.'],
   };
+  // shots falling above or below their looks is told as the luck it was, not as something to fix
+  if (top?.luck) why.shooting = won ? ["Our shots fell and theirs didn't: the luck went our way."] : ["Their shots fell and ours didn't: that part was luck, not the plan."];
+  else if (res.xShots)
+    why.shooting = won ? ['We got the better looks.', 'Our offense found the better shots.'] : ['They got the better looks.', 'Their offense found the better shots.'];
   const second = top && why[top.category] ? say(`why-${top.category}`, why[top.category]!) : undefined;
   return second ? `${how} ${second}` : how;
 }
@@ -238,7 +261,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   if (famAdvice && !advice.includes(famAdvice)) advice.splice(Math.min(advice.length, 3), 0, famAdvice);
   for (const k of res.keys ?? []) {
     if (k.met !== false || advice.length >= 5) continue;
-    const text = KEY_ADVICE[k.id] ?? '';
+    const text = keyAdvice(league, k, res, side);
     if (!text || (KEY_TOPIC[k.id] && topics.has(KEY_TOPIC[k.id]))) continue;
     // (the keys' own list has its number against the goal)
     advice.push({ id: `key-${k.id}`, title: `Missed key: ${k.title}`, text });
