@@ -25,6 +25,7 @@ import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
 import { money, moneySigned, moneyExact, plural } from '../../core/format';
+import { FROZEN_BUDGET, booksOf } from '../../core/league/books';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -227,6 +228,9 @@ function BudgetTab({ team }: { team: Team }) {
   // a fired coach's old team isn't his to run
   const fired = !!league.fired;
   const set = (fn: (t: Team) => void) => !fired && edit((l) => fn(l.teams[l.userTid]));
+  // the books in the red: the owner's step, and under a freeze the budgets go no higher than the standard
+  const books = booksOf(league);
+  const frozen = books?.stage === 'freeze';
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
@@ -296,6 +300,19 @@ function BudgetTab({ team }: { team: Team }) {
           </Link>
         </Callout>
       )}
+      {books && (
+        <Callout tone="bad" icon={<TriangleAlert size={18} className="bad" />}>
+          <b>{frozen ? 'The budget is frozen.' : books.stage === 'ultimatum' ? "The owner's ultimatum." : "You're in the red."}</b> {money(-team.cash)} in the red.{' '}
+          {frozen
+            ? `The staff and facilities budgets stay at the league standard (${FROZEN_BUDGET}) or under, until the books are back in the black.`
+            : books.stage === 'ultimatum'
+              ? 'Back in the black by the next review, or he freezes the budget.'
+              : "Still in the red at the season's review, and he gives you an ultimatum."}{' '}
+          <Link to="/office/owner" className="bold accent-text">
+            Owner
+          </Link>
+        </Callout>
+      )}
       <Section title="Staff & facilities" right={<span className="fo-faday num">{money(totalBudget)}/season</span>}>
         <div className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</div>
         <div className="card flush list">
@@ -327,8 +344,8 @@ function BudgetTab({ team }: { team: Team }) {
                   name={`${it.label} level`}
                   value={lvl}
                   min={1}
-                  max={100}
-                  onChange={(x) => set((t) => (t.budget[it.k] = x))}
+                  max={frozen ? Math.max(lvl, FROZEN_BUDGET) : 100}
+                  onChange={(x) => set((t) => (t.budget[it.k] = frozen ? Math.min(x, Math.max(t.budget[it.k], FROZEN_BUDGET)) : x))}
                   format={(x) => `${money(cost(x))}/season`}
                   disabled={fired}
                 />

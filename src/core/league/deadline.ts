@@ -132,8 +132,7 @@ function deadlineBriefing(league: League) {
     `${trades === 0 ? 'No trades' : trades === 1 ? 'One trade' : `${trades} trades`} so far this season.`,
   ];
   addInbox(league, {
-    // (with offers waiting, a long sim stops on deadline day: after it they're gone)
-    important: offers > 0,
+    // (the deadline's last days are a staff call, which stops a long sim: see calls.ts)
     from: 'Assistant GM',
     subject: 'Deadline day',
     body: lines.filter(Boolean).join('\n'),

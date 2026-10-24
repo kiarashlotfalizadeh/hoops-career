@@ -8,6 +8,8 @@ import type { MediaState } from './league/media';
 import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
+import type { Books } from './league/books';
+import type { DeadlineCall } from './league/calls';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PossLog } from './sim/log';
 
@@ -1313,10 +1315,8 @@ export interface Settings {
   liveBreaks?: 'quarters' | 'half' | 'off';
   /** Live games only draw the key plays, fast-forwarding the rest (default off). */
   liveKeyPlays?: boolean;
-  /** Pause long sims for big news (default on). */
+  /** Pause long sims for what needs an answer (default on: see runSim). */
   stopOnNews?: boolean;
-  /** A long sim also stops for a front-page story (weight 3) about the user's team (default on; under stopOnNews). */
-  stopOnFrontPage?: boolean;
   /** A long sim also stops on the morning of one of the user's biggest games, a billing of weight 3 (default on; under stopOnNews). */
   stopForBigGames?: boolean;
   /** After a sim of more than a day, the "While you were away" digest opens first (default on; off: it waits on Today). */
@@ -1394,6 +1394,12 @@ export interface League {
   ownerGoals?: OwnerGoals;
   /** The owner's reviews of the user's last seasons, oldest first (at most REVIEWS_KEPT). */
   ownerReviews?: OwnerReview[];
+  /** The owner's word on the user's books once they're in the red (see books.ts): a warning, an ultimatum, a freeze. */
+  books?: Books;
+  /** The staff's calls the user has settled (see calls.ts), newest last. */
+  callsDone?: string[];
+  /** The staff's call at this season's trade deadline, worked out the day its card opened (see calls.ts). */
+  deadlineCall?: DeadlineCall;
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;

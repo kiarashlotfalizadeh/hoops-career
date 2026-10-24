@@ -78,9 +78,9 @@ export default function Today() {
     .filter((m) => needsYou(m, open, league) && !decisionId(m) && m.link !== '/')
     .sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id)
     .slice(0, MAIL_SHOWN);
-  // the deadline's last week, unless its mail is in the list already
+  // the deadline's last week, unless its mail or the staff's deadline call is in the list already
   const deadline = deadlineIn(league);
-  const showDeadline = deadline !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade'));
+  const showDeadline = deadline !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline');
   const before = items.length + mail.length + (showDeadline ? 1 : 0) + (seat ? 1 : 0);
   const advice = feed.slice(0, before >= 3 ? 1 : STAFF_SHOWN);
   const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);

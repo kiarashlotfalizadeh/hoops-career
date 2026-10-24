@@ -1,12 +1,13 @@
-// The Continue loop: sims that stop for the right things (a front-page story about the user's team,
-// the morning of one of his biggest games), "Sim to the next big night" from a game's billing, the
+// The Continue loop: sims that stop for the right things (a new staff call, the morning of one of
+// his biggest games, never a story), "Sim to the next big night" from a game's billing, the
 // Continue bar naming tonight's stakes, and big moments that end a sim on one story, the biggest.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { League, ScheduledGame } from '../../core/types';
 import { billingFor, type Billing } from '../../core/analysis/gameStory';
-import { addNews } from '../../core/league/helpers';
+import { addNews, standardRoster } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
+import { openCallIds, settleCall } from '../../core/league/calls';
 import { flowActions, nextBigNight } from '../flow';
 import { currentMoments, pickMoments, type Moment } from '../moments';
 import { testLeague } from '../../state/__tests__/fixtures';
@@ -44,6 +45,14 @@ const story = (l: League, mine: Set<number>, n: Parameters<typeof addNews>[1]) =
   addNews(l, n);
 };
 
+/** The user's best player. */
+const best = (l: League) => standardRoster(l, l.userTid).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
+/** Hurt him for `games` games, a new injury. */
+const hurt = (p: ReturnType<typeof best>, games: number) => {
+  p.injury = { type: 'Sprained ankle', gamesRemaining: games, gamesTotal: games, severity: 'moderate' };
+  p.injuryCount++;
+};
+
 /** The user's games still to play, in order. */
 const ahead = (l: League): ScheduledGame[] =>
   l.schedule.filter((g) => !g.played && g.day > l.day && (g.home === l.userTid || g.away === l.userTid)).sort((a, b) => a.day - b.day || a.gid - b.gid);
@@ -53,9 +62,10 @@ afterEach(() => vi.mocked(billingFor).mockReset());
 
 describe('the Continue loop', () => {
   it('stops sims for the right things, sims to the next big night, names tonight on the Continue bar, and ends a sim on its biggest moment', async () => {
-    // a front-page story about his team stops a long sim the day it comes out
+    // a front-page story about his team never stops a long sim (the digest leads with it); a new
+    // staff call does, the day it opens: here his best player out for 20 games
     {
-      const l = stopping('front');
+      const l = stopping('call');
       const day0 = l.day;
       const mine = new Set<number>();
       const hush = quiet(l, mine);
@@ -66,26 +76,23 @@ describe('the Continue loop', () => {
         {
           progress: () => {
             hush();
-            // day 3: a milestone for the user's team (and on day 2 a front page about someone else, and
-            // the power rankings about him, which don't stop it)
-            if (++n === 2) {
-              story(l, mine, { kind: 'milestone', head: 'Not yours', text: '.', tids: [(l.userTid + 1) % 30], pids: [], weight: 3 });
-              story(l, mine, { kind: 'power', head: 'Power rankings', text: '.', tids: [l.userTid], pids: [], weight: 3 });
-            }
-            if (n === 3) story(l, mine, { kind: 'milestone', head: 'Yours', text: '.', tids: [l.userTid], pids: [], weight: 3 });
+            if (++n === 2) story(l, mine, { kind: 'milestone', head: 'Yours', text: '.', tids: [l.userTid], pids: [], weight: 3 });
+            if (n === 3) hurt(best(l), 20);
           },
         },
       );
-      expect(out).toEqual({ days: 3, stop: 'frontPage' });
+      expect(out).toEqual({ days: 3, stop: 'call' });
       expect(l.day).toBe(day0 + 3);
+      expect(openCallIds(l)).toEqual([`injury:${best(l).pid}:${best(l).injuryCount}`]);
     }
 
-    // a story of weight 2, or the setting off, or no stops at all, plays on
-    for (const set of [{ weight: 2 as const }, { off: 'stopOnFrontPage' }, { off: 'stopOnNews' }]) {
-      const l = stopping(`front-${JSON.stringify(set)}`);
-      if ('off' in set) (l.settings as unknown as Record<string, boolean>)[set.off!] = false;
-      const mine = new Set<number>();
-      const hush = quiet(l, mine);
+    // a call that was open when the sim started, or that he settled, or a short absence, or no stops at all, plays on
+    for (const set of ['open', 'settled', 'short', 'off'] as const) {
+      const l = stopping(`call-${set}`);
+      if (set === 'off') l.settings.stopOnNews = false;
+      const star = best(l);
+      if (set === 'open') hurt(star, 40);
+      const hush = quiet(l);
       let n = 0;
       const out = await runSim(
         l,
@@ -93,11 +100,13 @@ describe('the Continue loop', () => {
         {
           progress: () => {
             hush();
-            if (++n === 2) story(l, mine, { kind: 'honor', head: 'Yours', text: '.', tids: [l.userTid], pids: [], weight: 'weight' in set ? set.weight : 3 });
+            if (++n !== 2 || set === 'open') return;
+            hurt(star, set === 'short' ? 6 : 20);
+            if (set === 'settled') settleCall(l, `injury:${star.pid}:${star.injuryCount}`);
           },
         },
       );
-      expect(out.stop, JSON.stringify(set)).toBe('target');
+      expect(out.stop, set).toBe('target');
     }
 
     // a sim of a set number of days never stops for it
@@ -175,6 +184,10 @@ describe('the Continue loop', () => {
       const series: Moment = { key: 's', kind: 'series', over: '', title: '', sub: '' };
       const title: Moment = { key: 't', kind: 'title', over: '', title: '', sub: '', big: true };
       expect(pickMoments([series, title]).map((m) => m.key)).toEqual(['t']);
+      // one card, the biggest: the rest wait in the digest
+      const award: Moment = { key: 'aw', kind: 'award', over: '', title: '', sub: '' };
+      const cup: Moment = { key: 'cup', kind: 'cup', over: '', title: '', sub: '' };
+      expect(pickMoments([award, clinch, cup, story('a', 9)]).map((m) => m.key)).toEqual(['cup']);
     }
 
     // this season's front-page stories about his team read as moments, a milestone above a game

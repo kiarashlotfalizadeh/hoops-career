@@ -10,6 +10,7 @@
 
 import type { League, Player } from '../types';
 import { Rng, clamp, hashString, mix32 } from '../random';
+import { preset } from '../league/difficulty';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
@@ -172,7 +173,9 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   const net = league.teams.map((t) => {
     const r = ratings.rows[t.tid];
-    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET);
+    // the user's prior carries the difficulty's edge on the court (his games so far already do)
+    const court = t.tid === league.userTid ? (preset(league).court * PRIOR_GAMES) / (r.gp + PRIOR_GAMES) : 0;
+    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET) + court;
   });
   const sd = ratings.rows.map((r) => spread * Math.sqrt(PRIOR_GAMES / (r.gp + PRIOR_GAMES)));
   const paces = ratings.rows.filter((r) => r.gp > 0).map((r) => r.pace);

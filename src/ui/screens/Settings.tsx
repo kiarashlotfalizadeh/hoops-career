@@ -166,7 +166,7 @@ export default function Settings() {
                 on={st.moments !== false}
                 onChange={(v) => set('moments', v)}
                 label="Big moments"
-                help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment. A long sim ends on one story at most, the biggest."
+                help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment: one at most when they come out together, the biggest. After a long sim the stories are in While you were away instead."
               />
             </fieldset>
           </Section>
@@ -176,15 +176,8 @@ export default function Settings() {
               <Toggle
                 on={st.stopOnNews !== false}
                 onChange={(v) => set('stopOnNews', v)}
-                label="Pause sims for big news"
-                help="A trade request, a month-long injury to a top-six player or an owner verdict stops a long sim (any sim but one of a set number of days). Off, the two below are off too."
-              />
-              <Toggle
-                on={st.stopOnNews !== false && loopSetting(league, 'stopOnFrontPage')}
-                onChange={(v) => setLoop('stopOnFrontPage', v)}
-                disabled={st.stopOnNews === false}
-                label="Pause for front-page news"
-                help="A front-page story about your team (a milestone, an honor, a career night, a long streak) stops a long sim."
+                label="Pause sims for what needs you"
+                help="A long sim (any but one of a set number of days) stops only for what needs your answer: a star out ten games or more, your playoff odds collapsing, the trade deadline's last five days, the books in the red, an owner's verdict, a job offer or an offer sheet. Each opens with the staff's call, one tap away. Milestones, streaks and stories wait in the digest. Off, the one below is off too."
               />
               <Toggle
                 on={st.stopOnNews !== false && loopSetting(league, 'stopForBigGames')}

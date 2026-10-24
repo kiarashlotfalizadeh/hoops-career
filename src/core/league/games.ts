@@ -24,6 +24,7 @@ import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
 import { plural } from '../format';
+import { courtEdge } from './difficulty';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -400,6 +401,7 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
       keepShots: userGame,
       injuries: league.settings.injuries,
       neutral: neutralSite(g),
+      edge: courtEdge(league, g.home, g.away),
     });
     // (read before the game is played: the projection counts the players the plan has on the floor)
     if (userGame) edge = tipoffEdge(league, g, sim);

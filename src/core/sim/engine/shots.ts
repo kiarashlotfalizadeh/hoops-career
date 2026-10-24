@@ -169,6 +169,7 @@ export const shotsMethods = {
     p -= phys * K.physContest;
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
+    if (this.opts.edge) p += this.opts.edge[off.side];
     p += this.env.shoot + this.scoreEffect(off, def);
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;

@@ -16,6 +16,7 @@ import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
 import { reelOf } from '../core/analysis/highlights';
 import { coachMoves, slotMatcher, slotMoveName } from '../core/analysis/moves';
 import { shortName } from '../core/league/helpers';
+import { courtEdge } from '../core/league/difficulty';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -108,7 +109,15 @@ export class LiveGame {
     const sides = [input(game.home, game.away), input(game.away, game.home)];
     // (as the engine reads it: on unless switched off)
     const injuries = from ? from.injuries : league.settings.injuries !== false;
-    this.sim = new GameSim(sides[0], sides[1], { rng: new Rng(seed), type: game.type, record: true, keepShots: true, injuries, neutral: neutralSite(game) });
+    this.sim = new GameSim(sides[0], sides[1], {
+      rng: new Rng(seed),
+      type: game.type,
+      record: true,
+      keepShots: true,
+      injuries,
+      neutral: neutralSite(game),
+      edge: courtEdge(league, game.home, game.away),
+    });
     this.planned = this.sim.baseTactics(this.userSide);
     // (a journal from before win probability has none: the projection is worked out again from the tip)
     this.edge = from?.edge ?? tipoffEdge(league, game, this.sim);

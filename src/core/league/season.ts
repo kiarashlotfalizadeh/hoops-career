@@ -70,6 +70,8 @@ import { aiDraftTrade, aiOffseasonTrades, aiTaxDumps, aiToAiTrade, teamStrategyU
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
+import { booksDaily } from './books';
+import { callsDaily } from './calls';
 import { ownerEvaluation } from './owner';
 import { ownerCheckIn, setOwnerGoals } from './ownerGoals';
 import { coachingCarousel } from './coaches';
@@ -292,6 +294,10 @@ export function advanceDay(league: League) {
   // trade offers that expired or stopped being valid go, then the deadline's rumors, briefing and recap
   cleanProposals(league);
   deadlineDay(league);
+  // the staff's deadline call, worked out the day its card opens
+  callsDaily(league);
+  // the owner's word on the books, the day they go into the red (or out of it)
+  booksDaily(league);
   worldDay(league);
 }
 

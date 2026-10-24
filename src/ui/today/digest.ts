@@ -81,6 +81,8 @@ export interface Digest {
   mail: number[];
   /** The rest of the league's biggest stories. */
   around: DigestStory[];
+  /** Why the sim stopped short, when it did: the digest says it first, instead of a toast (see the store's simulate). */
+  stop?: { text: string; tone: 'good' | 'bad' | 'neutral'; to: string; call?: true };
 }
 
 /** The newest results that carry the press's headline. */

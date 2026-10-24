@@ -100,8 +100,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   const rank = byMinutes.indexOf(p.pid);
   if (rank >= 0 && inj.gamesRemaining >= (rank < 8 ? MAIL_MIN_GAMES : RETURN_MAIL_GAMES)) {
     addInbox(league, {
-      // a month-long absence for one of the six core players is worth pausing a long sim for
-      important: inj.gamesRemaining >= 15 && rank < 6,
+      // (a star's long absence is a staff call that stops a long sim: see calls.ts)
       from: 'Medical Staff',
       // what happened in the subject: who, for how long, with what
       subject: `${playerName(p)}: ${injuryName(inj.type)} · ${outFor(inj.gamesRemaining)}`,

@@ -10,7 +10,7 @@ import type { League } from '../types';
 import { clamp } from '../random';
 import { preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
-import { POSTSEASON, currentGoals, gradeGoal, ownerProgress, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
+import { POSTSEASON, currentGoals, floorCap, gradeGoal, ownerProgress, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
 import { addInbox, andList, curTeamSeason } from './helpers';
 import type { Forecast } from '../analysis/odds';
 
@@ -69,7 +69,10 @@ const HEAT: { min: number; heat: SeatHeat; label: string }[] = [
 function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): number | null {
   const prog = ownerProgress(league, og, fc);
   if (!prog.length) return null;
-  return prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected), 0);
+  const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected), 0);
+  // a record projected under his floor caps it, as the review will
+  const wins = prog.find((p) => p.goal.kind === 'wins');
+  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1);
 }
 
 export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
@@ -95,7 +98,7 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
     // a goal the season can no longer meet is missed, not behind; on track with a cool seat: what's left of a poor standing from before
     line =
       missed || behind
-        ? `${[missed && `Missed: ${missed}`, behind && `${missed ? 'behind' : 'Behind'} on ${behind}`].filter(Boolean).join('; ')}.`
+        ? `${[missed && `Missed: ${missed}`, behind && `${missed ? 'behind' : 'Behind'}: ${behind}`].filter(Boolean).join('; ')}.`
         : h.heat === 'warm' || h.heat === 'hot'
           ? 'On track with his goals, but your standing from before still weighs on it.'
           : 'On track with his goals.';

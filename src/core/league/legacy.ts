@@ -194,7 +194,7 @@ const where = (league: League, side: { home: boolean; tid: number; opp: number }
 /** A milestone reached: in the legacy, the news (a story at `weight`) and a short mail. */
 function reach(
   league: League,
-  m: Omit<Milestone, 'season' | 'day' | 'tid'> & { body?: string; pids?: number[]; mail: { from: string; subject?: string; body: string; important?: boolean } },
+  m: Omit<Milestone, 'season' | 'day' | 'tid'> & { body?: string; pids?: number[]; mail: { from: string; subject?: string; body: string } },
   weight: 2 | 3,
   news = true,
 ) {
@@ -229,7 +229,6 @@ function reach(
     body: m.mail.body,
     tone: 'good',
     link: '/office/career?tab=milestones',
-    ...(m.mail.important ? { important: true } : {}),
   });
   return true;
 }
@@ -270,7 +269,6 @@ function winsMilestone(league: League, k: CoachCareer, n: number, side: NonNulla
       mail: {
         from: 'Media Relations',
         body: `${n} career wins, the latest ${side.us}-${side.them} over the ${nick(league, side.opp)}. You're ${k.won}-${k.lost} (${pct}).`,
-        important: n % 500 === 0,
       },
     },
     big ? 3 : 2,
@@ -462,7 +460,6 @@ function playoffMilestones(league: League, g: ScheduledGame, side: NonNullable<R
           from: 'Media Relations',
           subject: first ? 'Your first title' : `Title No. ${titles}`,
           body: `Champions, ${games} over the ${nick(league, side.opp)}.${first ? ' The first of your career.' : ''}`,
-          important: first,
         },
       },
       3,

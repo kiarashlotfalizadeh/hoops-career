@@ -6,7 +6,7 @@
 }
 .dif-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1.2fr) repeat(5, minmax(0, 1fr));
   align-items: center;
   gap: 2px;
   padding: 0 8px;
@@ -90,4 +90,18 @@
   letter-spacing: -0.05em;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* a phone: five figures beside the name, so everything a little tighter */
+@media (max-width: 440px) {
+  .dif-row {
+    grid-template-columns: minmax(0, 1.5fr) repeat(5, minmax(0, 1fr));
+    padding: 0 6px;
+  }
+  .dif-name {
+    gap: 6px;
+    font-size: 14px;
+  }
+  .dif-v {
+    font-size: 13px;
+  }
 }

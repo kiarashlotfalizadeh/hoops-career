@@ -5,13 +5,15 @@
 // the same plan for a game whatever is asked when (preview, Lab, live or simmed game, other games that
 // day); items that answer the user's measured strengths (a box-and-one on a one-man offense, a hunt, a
 // coverage change, how to guard a regular, never one who rests tonight); and the plan kept with the
-// user's game results only.
+// user's game results only. And the difficulty's edge on the court: Hard's opponents play about two
+// points a game better against him, Easy gives him about one and a half.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { testLeague, toGameDay, userGames } from '../../state/__tests__/fixtures';
 import { prepareLive } from '../../state/live';
 import { aiGamePlan, nextMeeting, oppPlanChance, oppPlanIn, preparesPlan, withOppPlan } from '../ai/opponentPlan';
 import { counterCandidates, impactCounter } from '../ai/advisor';
-import { buildSimInput, ensureRotation, playGame, userGameOnDay } from '../league/games';
+import { buildSimInput, ensureRotation, playGame, tipoffEdge, userGameOnDay } from '../league/games';
+import { courtEdge } from '../league/difficulty';
 import { matchupPreview } from '../analysis/preview';
 import { simDay } from '../league/season';
 import { shortName, teamPlayers } from '../league/helpers';
@@ -483,6 +485,55 @@ describe('planning for an opponent', () => {
       const plan = aiGamePlan(l, oppOf(l, g), l.userTid, g)!;
       const res = playGame(l, g);
       expect(res.oppPlan).toEqual(plan.items.map((x) => x.text));
+    }
+    {
+      // the difficulty's edge on the court, in his games only: on Hard his opponents play about 2
+      // points a game better, on Easy he gets about 1.5 (the same games, measured)
+      const l = leagueAt('normal', 12);
+      const me = l.userTid;
+      const [a, b] = aiTeams(l);
+      for (const d of ['easy', 'hard'] as const) {
+        l.settings.difficulty = d;
+        expect(courtEdge(l, a, b)).toBeUndefined();
+        expect(courtEdge(l, me, a)![0]).toBe(-courtEdge(l, me, a)![1]);
+        expect(courtEdge(l, a, me)).toEqual([...courtEdge(l, me, a)!].reverse());
+      }
+      l.settings.difficulty = 'normal';
+      expect(courtEdge(l, me, a)).toBeUndefined();
+      for (const t of l.teams) ensureRotation(l, t.tid);
+      const N = 600;
+      const margin = (d: League['settings']['difficulty']) => {
+        l.settings.difficulty = d;
+        let m = 0;
+        for (let i = 0; i < N; i++) {
+          const opp = aiTeams(l)[i % 29];
+          const [home, away] = i % 2 ? [me, opp] : [opp, me];
+          const sim = new GameSim(buildSimInput(l, home, l.day, 'regular', away), buildSimInput(l, away, l.day, 'regular', home), {
+            rng: new Rng(500 + i),
+            type: 'regular',
+            injuries: false,
+            edge: courtEdge(l, home, away),
+          });
+          sim.simToEnd();
+          const r = sim.result(1, l.season, l.day);
+          m += r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts;
+        }
+        return m / N;
+      };
+      const [easy, normal, hard] = (['easy', 'normal', 'hard'] as const).map(margin);
+      expect(hard - normal).toBeLessThan(-1);
+      expect(hard - normal).toBeGreaterThan(-3.5);
+      expect(easy - normal).toBeGreaterThan(0.5);
+      expect(easy - normal).toBeLessThan(2.8);
+      // the pre-game projection carries it, and the live game plays it
+      toGameDay(l);
+      const g = userGameOnDay(l, l.day)!;
+      l.settings.difficulty = 'normal';
+      const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), { rng: new Rng(1), type: g.type });
+      const base = tipoffEdge(l, g, sim);
+      l.settings.difficulty = 'hard';
+      expect(tipoffEdge(l, g, sim)).toBeCloseTo(base + (g.home === me ? -2 : 2), 1);
+      expect(prepareLive(l)!.sim.opts.edge).toEqual(courtEdge(l, g.home, g.away));
     }
   }, 180_000);
 });

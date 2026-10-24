@@ -1025,6 +1025,26 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+/* why the sim stopped short (mail that needs you, a big night): the sheet's first line, instead of a toast */
+.dg-stop {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: var(--row-min);
+  padding: 11px var(--row-px);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius-sm);
+  background: var(--raised);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+}
+.dg-stop.bad {
+  border-left-color: var(--bad);
+}
 /* the stretch's record as the sheet's poster figure, where you stand beside it */
 .dg-top {
   display: flex;

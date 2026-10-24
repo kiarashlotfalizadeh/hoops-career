@@ -126,8 +126,8 @@ function fair(league: League, offer: TradeOffer, slack = USER_SLACK): boolean {
   return net >= -slack * Math.max(0, out);
 }
 
-/** "Name (78)" or a pick's label. */
-const assetText = (league: League, side: TradeOffer['a']) =>
+/** "Name (78)" or a pick's label, for each asset on one side of a deal, in a list. */
+export const assetText = (league: League, side: TradeOffer['a']) =>
   andList([
     ...side.pids.map((pid) => `${playerName(league.players[pid])} (${league.players[pid].ovr})`),
     ...side.dpids.flatMap((d) => {

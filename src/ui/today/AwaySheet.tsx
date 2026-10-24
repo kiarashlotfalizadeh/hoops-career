@@ -6,7 +6,9 @@
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import { useLeague, useStore } from '../../state/store';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { agenda, type AgendaKind } from '../../core/league/agenda';
+import { AgendaRow } from '../components/Agenda';
 import { ordinal } from '../../core/format';
 import { Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
@@ -16,6 +18,9 @@ import { senderOf } from './senders';
 import { isImportant } from './messages';
 import './today.css';
 import type { Digest, DigestStory } from './digest';
+
+/** The agenda's kinds that are staff calls (see calls.ts). */
+const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['injury', 'odds', 'deadline', 'books']);
 
 /** The most results listed; the rest are a tap away on the schedule. */
 const RESULTS_SHOWN = 5;
@@ -45,9 +50,31 @@ function DigestBody({ d }: { d: Digest }) {
   };
   const ts = curTeamSeason(league, league.userTid);
   const mail = d.mail.map((id) => league.inbox.find((m) => m.id === id)).filter((m) => !!m);
+  // the staff's calls open now, each with its one-tap answer: what a sim stops for is answered here
+  const calls = useLeagueMemo(() => agenda(league).filter((i) => CALL_KINDS.has(i.kind)), [league]);
   return (
     <div className="dg col">
       <div className="dg-span">{d.span}</div>
+      {d.stop && !(d.stop.call && calls.length) && (
+        <button type="button" className={`dg-stop ${d.stop.tone}`} onClick={() => go(d.stop!.to)}>
+          <span className="grow">{d.stop.text}</span>
+          <ChevronRight size={16} aria-hidden="true" />
+        </button>
+      )}
+      {calls.length > 0 && (
+        <section className="dg-sec">
+          <div className="dg-sec-h">
+            <h3 className="dg-h">Needs you</h3>
+          </div>
+          <div className="card flush ag-list" role="list" aria-label="Needs you">
+            {calls.map((i) => (
+              <div role="listitem" key={i.id}>
+                <AgendaRow item={i} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {(d.record || d.seed || d.power) && (
         <div className="dg-top">
           {d.record && (

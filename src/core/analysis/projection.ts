@@ -5,6 +5,7 @@
 
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
+import { courtPoints } from '../league/difficulty';
 
 /** Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated seasons, r ≈ 0.8). */
 export const TALENT_NET = 1.7;
@@ -88,7 +89,8 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   const netAway = est(1);
   const paces = [row(0), row(1)].filter((r) => r.gp > 0).map((r) => r.pace);
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
-  const edge = neutral ? 0 : HOME_EDGE;
+  // home court, and the difficulty's edge in a game of the user's (see courtPoints)
+  const edge = (neutral ? 0 : HOME_EDGE) + courtPoints(league, sim.T[0].tid, sim.T[1].tid);
   return { margin: projectMargin(netHome, netAway, pace, edge), netHome, netAway, edge };
 }
 

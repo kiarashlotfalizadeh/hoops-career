@@ -61,9 +61,15 @@ export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficu
   },
   { id: 'plans', label: 'Opponent plans', value: (d) => PLANS[DIFFICULTY[d].opponentPlans], help: 'How many opposing coaches come in with a game plan against you.' },
   {
+    id: 'court',
+    label: 'On court',
+    value: (d) => (DIFFICULTY[d].court ? `${DIFFICULTY[d].court > 0 ? '+' : '−'}${Math.abs(DIFFICULTY[d].court)}` : 'Even'),
+    help: 'Points a game your team gets (+) or your opponents get (−) over what the rosters and tactics are worth, the way home court works.',
+  },
+  {
     id: 'owner',
     label: 'Owner waits',
     value: (d) => `${GRACE[d]} yr${GRACE[d] === 1 ? '' : 's'}`,
-    help: 'Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season.',
+    help: `Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season, accepts fewer rebuilding seasons in a row (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} ${DIFFICULTY[d].rebuildSeasons}`).join(', ')}) and a higher floor under his win goal (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} .${Math.round(DIFFICULTY[d].winFloor * 1000)}`).join(', ')}).`,
   },
 ];

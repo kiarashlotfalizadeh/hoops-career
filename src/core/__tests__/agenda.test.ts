@@ -1,17 +1,21 @@
 // The agenda: required decisions hold the league (and the Continue bar) until they're settled, each
-// with the staff's call one tap away; optional ones never block. The guided first week runs as one
+// with the staff's call one tap away; optional ones never block, the staff's calls (a star hurt,
+// the odds gone, the deadline, the books) among them. The guided first week runs as one
 // agenda item at a time. Job security: the meter, the grace period by difficulty, the ultimatum.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { standardRoster } from '../league/helpers';
+import { revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerEvaluation } from '../league/owner';
-import { currentGoals, setOwnerGoals } from '../league/ownerGoals';
+import { CONCEDE_COST, currentGoals, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
+import { DEADLINE_DAYS, callsDaily } from '../league/calls';
+import { FROZEN_BUDGET, RED_ULTIMATUM, booksDaily, booksReview, freezeResignReason, freezeSigningReason, freezeTradeReason } from '../league/books';
+import { tenDayOpenDay } from '../league/tenDay';
 import { flowActions } from '../../ui/flow';
 import type { League } from '../types';
 
@@ -171,6 +175,156 @@ describe('the agenda', () => {
       m.ownerMood.total = -0.9;
       m.settings.jobSecurity = false;
       expect(maybeUltimatum(m)).toBeNull();
+    }
+
+    // the staff's calls: a star out ten games or more is a card with the staff's call one tap away
+    {
+      const l = inCharge(1);
+      const me = l.userTid;
+      const best = () => standardRoster(l, me).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
+      const hurt = (games: number) => {
+        const p = best();
+        p.injury = { type: 'Sprained ankle', gamesRemaining: games, gamesTotal: games, severity: 'moderate' };
+        p.injuryCount++;
+        return p;
+      };
+      const star = hurt(20);
+      const card = () => agenda(l).find((i) => i.kind === 'injury');
+      expect(card()).toMatchObject({ required: false, tone: 'bad', title: `${star.firstName} ${star.lastName} is out 20 games`, pids: [star.pid] });
+      // before 10-day contracts open, with the staff on the rotation: ride it out
+      expect(card()!.suggestion!.label).toBe('Ride it out');
+      // a rotation set by hand: the staff takes it back
+      l.teams[me].rotation.manual = true;
+      expect(card()!.suggestion!.label).toBe('Let the staff redo the rotation');
+      expect(resolveAgenda(l, card()!.suggestion!.action).ok).toBe(true);
+      expect(l.teams[me].rotation.manual).toBe(false);
+      expect(card()).toBeUndefined();
+      // in January with a spot open: a 10-day for cover, signed in one tap
+      star.injury = null;
+      l.day = tenDayOpenDay(l);
+      while (standardRoster(l, me).length >= CAP.rosterMax) releasePlayer(l, standardRoster(l, me).sort((a, b) => a.ovr - b.ovr)[0], { news: false });
+      hurt(12);
+      const c = card()!;
+      expect(c.suggestion!.label).toMatch(/^Sign .+ to a 10-day$/);
+      const n = standardRoster(l, me).length;
+      expect(resolveAgenda(l, c.suggestion!.action).ok).toBe(true);
+      expect(standardRoster(l, me).length).toBe(n + 1);
+      expect(standardRoster(l, me).some((p) => p.contract.tenDay)).toBe(true);
+      // a short absence, or someone outside the top three, is no call
+      best().injury = null;
+      hurt(6);
+      expect(card()).toBeUndefined();
+    }
+
+    // the playoff odds gone for a team the owner expects in the postseason: tell him it's a rebuild, or keep pushing
+    {
+      const l = inCharge(1);
+      const og = currentGoals(l)!;
+      if (!og.goals.some((g) => g.kind === 'postseason')) og.goals.push({ kind: 'postseason', title: 'Make the playoffs', target: 2, weight: 0 });
+      l.oddsTrail = { season: l.season, tid: l.userTid, pts: [[6, 400, 10]] };
+      expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      l.oddsTrail.pts.push([13, 30, 0]);
+      const card = agenda(l).find((i) => i.kind === 'odds')!;
+      expect(card.title).toBe('Playoff odds down to 3%');
+      expect(card.suggestion!.label).toBe("Tell the owner it's a rebuild");
+      const total = l.ownerMood.total;
+      const weights = og.goals.reduce((a, g) => a + g.weight, 0);
+      expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
+      const after = currentGoals(l)!;
+      expect(after.goals.some((g) => g.kind === 'postseason')).toBe(false);
+      expect(after.goals.some((g) => g.kind === 'youth')).toBe(true);
+      expect(after.goals.reduce((a, g) => a + g.weight, 0)).toBeCloseTo(weights, 2);
+      expect(after.rebuild).toEqual({ year: 1, of: 2 });
+      expect(l.ownerMood.total).toBeCloseTo(total - CONCEDE_COST, 2);
+      expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      // with his patience for rebuilds used up, he won't hear it: the call is to keep pushing
+      const m = inCharge(3);
+      const reviewed = (season: number): OwnerReview => ({
+        season,
+        tid: m.userTid,
+        goals: [{ kind: 'youth', title: '', target: 1, weight: 1, result: 0, grade: 0 }],
+        grade: 0,
+        total: 0,
+      });
+      m.ownerReviews = [reviewed(m.season - 2), reviewed(m.season - 1)];
+      setOwnerGoals(m, true);
+      expect(currentGoals(m)!.goals.some((g) => g.kind === 'postseason')).toBe(true);
+      m.oddsTrail = { season: m.season, tid: m.userTid, pts: [[6, 20, 0]] };
+      const no = agenda(m).find((i) => i.kind === 'odds')!;
+      expect(no.suggestion!.label).toBe('Keep pushing');
+      expect(no.line).toMatch(/he wants the play-in/);
+      // and after the deadline there is nothing to call
+      m.day = m.tradeDeadlineDay + 1;
+      expect(agenda(m).some((i) => i.kind === 'odds')).toBe(false);
+    }
+
+    // the deadline's last five days: the staff's deal, bought or sold as the odds say, made in one tap
+    // (the Hawks: a deal both ways; the Cavaliers: none that works, so the call is to stand pat)
+    for (const [tid, odds] of [
+      [0, 900],
+      [0, 20],
+      [5, 900],
+    ]) {
+      const l = camp(tid);
+      while (standardRoster(l, tid).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, tid))[0], { news: false });
+      startRegularSeason(l);
+      setOwnerGoals(l, true);
+      l.day = l.tradeDeadlineDay - DEADLINE_DAYS;
+      l.oddsTrail = { season: l.season, tid, pts: [[l.day - 1, odds, 0]] };
+      callsDaily(l);
+      const call = l.deadlineCall!;
+      expect(call).toMatchObject({ season: l.season, mode: odds > 500 ? 'buy' : 'sell', odds });
+      const card = agenda(l).find((i) => i.kind === 'deadline')!;
+      expect(card.title).toBe(`Trade deadline in ${DEADLINE_DAYS} days`);
+      if (tid === 0) {
+        const theirs = call.offer!.b.pids;
+        expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
+        expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);
+        expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
+        for (const pid of theirs) expect(l.players[pid].tid).toBe(tid);
+      } else {
+        expect(call.offer).toBeUndefined();
+        expect(card.suggestion!.label).toBe('Stand pat');
+        expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
+      }
+      expect(agenda(l).some((i) => i.kind === 'deadline')).toBe(false);
+    }
+
+    // the books in the red: a warning, an ultimatum at the review (or a deep hole), then a freeze that blocks new money; the black lifts it
+    {
+      const l = inCharge(1);
+      const team = l.teams[l.userTid];
+      team.budget.coaching = 90;
+      team.cash = -1_000;
+      booksDaily(l);
+      expect(l.books).toMatchObject({ stage: 'warning', tid: l.userTid });
+      expect(l.inbox[0].subject).toBe("We're in the red");
+      const card = agenda(l).find((i) => i.kind === 'books')!;
+      expect(card.suggestion!.label).toBe('Cut the budgets');
+      // a hole this deep is an ultimatum at once, and a review in the red keeps it one that season
+      team.cash = -RED_ULTIMATUM * revenueScale(l) - 1;
+      booksDaily(l);
+      expect(l.books!.stage).toBe('ultimatum');
+      booksReview(l);
+      expect(l.books!.stage).toBe('ultimatum');
+      // still in the red at the next season's review: frozen, the budgets cut to the standard
+      l.books!.season--;
+      booksReview(l);
+      expect(l.books!.stage).toBe('freeze');
+      expect(team.budget.coaching).toBe(FROZEN_BUDGET);
+      expect(l.inbox[0].subject).toBe('The budget is frozen');
+      // minimum deals only, no raises, no trade that takes on salary
+      expect(freezeSigningReason(l, 5_000, 2_000)).toMatch(/minimum deals only/);
+      expect(freezeSigningReason(l, 2_000, 2_000)).toBeNull();
+      expect(freezeResignReason(l, 10_000, 9_000)).toMatch(/no raises/);
+      expect(freezeTradeReason(l, 10_000, 9_000)).toMatch(/can't take on more salary/);
+      expect(freezeTradeReason(l, 9_000, 10_000)).toBeNull();
+      // back in the black: lifted
+      team.cash = 1;
+      booksDaily(l);
+      expect(l.books).toBeUndefined();
+      expect(l.inbox[0].subject).toBe('Back in the black');
+      expect(freezeSigningReason(l, 5_000, 2_000)).toBeNull();
     }
 
     // the assistant speaks with one voice: every card has an area, and a fix it offers is one the staff can make

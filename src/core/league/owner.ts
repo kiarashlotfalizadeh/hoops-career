@@ -6,7 +6,8 @@ import { clearAllPlans } from './gamePlans';
 import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
-import { REVIEWS_KEPT, currentGoals, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
+import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
+import { booksReview } from './books';
 import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
@@ -49,6 +50,8 @@ export function takeOverTeam(league: League, tid: number) {
   // the old job's mail (its extension candidates, camp report, offers) is read: what's unread is the new job's
   for (const m of league.inbox) m.read = true;
   league.ownerMood = { wins: 0, playoffs: 0, money: 0, total: 0 };
+  // and the old owner's word on the old team's books
+  delete league.books;
   league.tenureStart = contractSeason(league);
   // the new owner's goals: from today in season; before opening night, or once the team's season is over, none yet
   if (league.phase === 'preseason') delete league.ownerGoals;
@@ -93,8 +96,11 @@ export function ownerEvaluation(league: League) {
   const parts: Partial<Record<'wins' | 'playoffs' | 'money' | 'youth', number>> = {};
   let goals: OwnerReview['goals'] = [];
   let grade: number;
+  let floored = false;
   if (og) {
-    ({ goals, grade } = gradeOwnerGoals(league, og));
+    let f: true | undefined;
+    ({ goals, grade, floored: f } = gradeOwnerGoals(league, og));
+    floored = !!f;
     for (const k of ['wins', 'playoffs', 'money', 'youth'] as const) {
       const mine = goals.filter((g) => PART[g.kind] === k);
       const w = mine.reduce((a, g) => a + g.weight, 0);
@@ -123,9 +129,15 @@ export function ownerEvaluation(league: League) {
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);
   const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
+  // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze (none for a coach he fires)
+  if (!fired) booksReview(league);
   const review: OwnerReview = { season: league.season, tid, goals, grade: r2(grade), total: league.ownerMood.total, ...(fired ? { fired: true as const } : {}) };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
+  if (floored && og) {
+    const rec = goalsRecord(league, og);
+    lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
+  }
   if (fired) {
     league.fired = true;
     addInbox(league, {

@@ -93,15 +93,17 @@ function storyMoments(league: League): Moment[] {
   return out;
 }
 
+/** Career moments by size, the biggest first: one that comes out with a bigger one waits in the digest. */
+const CAREER_ORDER: MomentKind[] = ['title', 'cup', 'series', 'clinch', 'award', 'signing', 'draft'];
+
 /**
- * The moments to show from those new at once: every career moment (but the title alone, not the
- * series on the way to it), or else the single biggest front-page story, so a long sim ends on
- * one card, not a stack of headlines.
+ * The moment to show from those new at once: the biggest career moment, or else the biggest
+ * front-page story, so whatever ends a sim takes the screen once, not as a stack of cards (the rest
+ * are in the digest).
  */
 export function pickMoments(fresh: Moment[]): Moment[] {
-  const title = fresh.some((m) => m.kind === 'title');
-  const career = fresh.filter((m) => m.kind !== 'story' && (!title || m.kind !== 'series'));
-  if (career.length) return career;
+  const career = fresh.filter((m) => m.kind !== 'story').sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind));
+  if (career.length) return career.slice(0, 1);
   const stories = fresh.filter((m) => m.kind === 'story').sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
   return stories.slice(0, 1);
 }

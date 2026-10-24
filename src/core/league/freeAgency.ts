@@ -3,6 +3,7 @@ import { FREE_AGENT } from '../types';
 import { Rng, hashString } from '../random';
 import { CAP } from '../constants';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
+import { freezeResignReason, freezeSigningReason } from './books';
 import {
   CAP_FOR,
   OFFSEASON_ROSTER_MAX,
@@ -698,6 +699,9 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
     return pending
       ? `Your roster is full (${max}) counting your ${pending} pending offer${pending > 1 ? 's' : ''}. Release or trade someone, or withdraw an offer.`
       : `Your roster is full (${max}). Release or trade someone first.`;
+  const cap0 = CAP_FOR(league, season);
+  const frozen = freezeSigningReason(league, amount, p.experience >= 3 ? cap0.vetMin : cap0.minContract);
+  if (frozen) return frozen;
   if (offerRoute(league, p, amount, season, years, via)) return null;
   // an exception covers the money, not the length
   const covering = EXCEPTION_ORDER.filter((k) => amount <= userExceptionRoom(league, k, season, p.pid)).sort((a, b) => EXCEPTIONS[b].years - EXCEPTIONS[a].years)[0];
@@ -1254,6 +1258,8 @@ export function userResign(league: League, pid: number, amount: number, years: n
     return { ok: false, reason: most === 5 ? 'Contracts must be 1 to 5 years.' : `Without full Bird rights (three seasons with you) he re-signs for 4 years at most.` };
   if (extras.option && years < 2) return { ok: false, reason: 'An option needs a deal of two years or more.' };
   const limit = resignLimit(league, p, league.userTid);
+  const frozen = freezeResignReason(league, amount, salaryFor(p, league.season));
+  if (frozen) return { ok: false, reason: frozen };
   // a player worth more than his Bird rights allow goes to the market
   if (amount > limit || askingContract(league, p, league.userTid).amount > limit) return { ok: false, reason: resignLimitReason(league, p, limit) };
   const h = hearOffer(league, p, 'resign', { amount, years, option: extras.option }, { min: 1, max: most });

@@ -3,10 +3,10 @@ import { create } from 'zustand';
 import type { InboxMessage, League } from '../core/types';
 import { adoptSync, isQuotaError, onDevice, SaveConflictError, saveLeague, setLastLeagueId } from './persistence';
 import { checkpointLive, dropLive, liveInProgress, resumeLive } from './live';
-import { estimateTotal, isFrontPage, loopSetting, targetDone, type SimProgress, type SimStop, type SimTarget, type TaskOp, type TaskResult } from './simCore';
+import { estimateTotal, loopSetting, targetDone, type SimProgress, type SimStop, type SimTarget, type TaskOp, type TaskResult } from './simCore';
 import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
 import { buildDigest, digestMark, type Digest, type DigestMark } from '../ui/today/digest';
-import { storyLink } from '../ui/today/front';
+import { openCallIds, staffCalls } from '../core/league/calls';
 import { userGameOnDay } from '../core/league/games';
 import { billingFor } from '../core/analysis/gameStory';
 
@@ -97,12 +97,15 @@ function newsStop(l: League): [string, Toast['tone'], string] {
   ];
 }
 
-/** What a sim that stopped short says, and opens: big news, a front-page story, or a big night ahead. */
-function stopToast(l: League, stop: SimStop, newsFrom: number): [string, Toast['tone'], string] | undefined {
+/**
+ * What a sim that stopped short says, and opens: mail that needs an answer, a staff call (the first
+ * that wasn't open when it started: `callsFrom`), or a big night ahead.
+ */
+function stopToast(l: League, stop: SimStop, callsFrom: ReadonlySet<string>): [string, Toast['tone'], string] | undefined {
   if (stop === 'news') return newsStop(l);
-  if (stop === 'frontPage') {
-    const n = [...l.news].reverse().find((x) => x.id >= newsFrom && isFrontPage(l, x));
-    return [n ? `Front page: ${n.head ?? n.text}` : 'Stopped for a story about your team.', 'neutral', n ? storyLink(n.id) : '/league/news'];
+  if (stop === 'call') {
+    const c = staffCalls(l).find((x) => !callsFrom.has(x.id));
+    return [c ? `Needs you: ${c.title}` : 'Stopped: something needs you.', c?.tone === 'bad' ? 'bad' : 'neutral', '/'];
   }
   if (stop === 'bigGame') {
     const g = userGameOnDay(l, l.day);
@@ -292,16 +295,21 @@ export const useStore = create<AppState>((set, get) => ({
     const l = get().league;
     if (!l || get().sim || stale()) return;
     const token = ++runToken;
-    // where the league stands, for the digest once it's done (a new sim retires the last one)
+    // where the league stands, for the digest once it's done (a new sim retires the last one), and the calls open now
     const mark = digestMark(l);
+    const callsFrom = new Set(openCallIds(l));
     set({ sim: { label: 'Simulating', done: 0, total: estimateTotal(l, target) }, stopRequested: false, digest: null, digestOpen: false });
     // what the sim starts from is on the device first
     await get().flush();
     if (runToken !== token) return;
-    const done = (toast?: [string, Toast['tone'], string?]) => {
+    // why it stopped: one screen says it. The digest when it opens (its first line), a toast otherwise
+    const done = (toast?: [string, Toast['tone'], string?], stop?: SimStop) => {
       if (runToken !== token) return;
-      set({ sim: null, stopRequested: false, v: get().v + 1, ...digestFor(mark) });
-      if (toast) get().toast(...toast);
+      const d = digestFor(mark);
+      if (stop && toast && d.digest && d.digestOpen)
+        d.digest = { ...d.digest, stop: { text: toast[0], tone: toast[1], to: toast[2] ?? '/', ...(stop === 'call' ? { call: true } : {}) } };
+      set({ sim: null, stopRequested: false, v: get().v + 1, ...d });
+      if (toast && !(stop && d.digest && d.digestOpen)) get().toast(...toast);
       void get().save();
     };
     // a live game left mid-way finishes from its current score here first (picked up from its journal
@@ -339,7 +347,7 @@ export const useStore = create<AppState>((set, get) => ({
       });
       if (runToken !== token) return;
       replaceLeague(shown, out.league);
-      done(stopToast(out.league, out.stop, mark.msgId));
+      done(stopToast(out.league, out.stop, callsFrom), out.stop);
     } catch (e) {
       console.error('sim failed', e);
       // the league on screen is the last good one: before the sim, or its latest checkpoint

@@ -11,15 +11,18 @@ import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers'
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
 import { GRACE, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
+import { RED_FREEZE, booksOf } from '../../core/league/books';
 import {
   ON_TRACK,
   PAYROLL_SCALE,
   PERSONALITY,
   POSTSEASON,
   PROFIT_SCALE,
+  REBUILD_OVER_FLOOR,
   WIN_SCALE,
   YOUNG_AGE,
   currentGoals,
+  goalsWhy,
   ownerPersonality,
   ownerProgress,
   planOwnerGoals,
@@ -60,6 +63,8 @@ export default function Owner() {
       <Seat league={league} js={js} seasonsIn={seasonsIn} />
 
       {js.ultimatum && og && !review && <UltimatumCard league={league} js={js} />}
+
+      {booksOf(league) && <BooksCard league={league} />}
 
       <PulseSection league={league} />
 
@@ -127,6 +132,13 @@ export default function Owner() {
               Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
             </div>
           )}
+          {/* his reasons: what he pays for, the rebuild clock, the floor */}
+          {!review &&
+            goalsWhy(shown).map((line) => (
+              <div key={line} className="tiny dim">
+                {line}
+              </div>
+            ))}
         </Section>
       )}
       {!shown && !league.fired && (
@@ -306,6 +318,34 @@ function UltimatumCard({ league, js }: { league: League; js: JobSecurity }) {
   );
 }
 
+const BOOKS_LABEL = { warning: 'Warning', ultimatum: 'Ultimatum', freeze: 'Budget frozen' } as const;
+
+/** The books in the red: the step he has taken, and what it means. */
+function BooksCard({ league }: { league: League }) {
+  const b = booksOf(league)!;
+  const cash = league.teams[league.userTid].cash;
+  return (
+    <section className="card fo-ultimatum" aria-label="The books">
+      <div className="row">
+        <TriangleAlert size={18} className="bad" aria-hidden="true" />
+        <span className="over grow">The books</span>
+        <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
+      </div>
+      <h2>{money(-cash)} in the red</h2>
+      <div className="small dim2">
+        {b.stage === 'warning'
+          ? "Get back in the black. Still in the red at the season's review, and he gives you an ultimatum."
+          : b.stage === 'ultimatum'
+            ? `Back in the black by the next review, or he freezes the budget (at once at ${money(RED_FREEZE * revenueScale(league))} in the red).`
+            : 'Minimum deals only, no raises when you re-sign, no trade that takes on salary, and the staff budgets at the league standard, until the books are back in the black.'}
+      </div>
+      <Link to="/office/finances" className="card-link">
+        Finances
+      </Link>
+    </section>
+  );
+}
+
 /** How the owner grades the season and decides, in full. */
 function GradingHelp({ league }: { league: League }) {
   const scale = revenueScale(league);
@@ -348,7 +388,22 @@ function GradingHelp({ league }: { league: League }) {
         <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver. Meet it and you win back some standing; miss it and you&apos;re
         fired.
       </p>
-      <p>A win-now owner weighs the playoffs more; a builder cares about the young players; a frugal one wants more profit.</p>
+      <p>
+        <b>Payroll and the floor.</b> A payroll in the league&apos;s top half raises the win target half-way to what a team paid like it should win. Whatever the plan, under a .
+        {Math.round(preset(league).winFloor * 1000)} pace is a failed season: it grades Poor or worse, whatever else went right.
+      </p>
+      <p>
+        <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} rebuilding season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row (no postseason
+        goal). After that he wants the play-in at least, and the floor rises to .{Math.round((preset(league).winFloor + REBUILD_OVER_FLOOR) * 1000)}. With the playoffs gone before
+        the deadline, you can tell him it&apos;s a rebuild: it costs you some standing and counts as one.
+      </p>
+      <p>
+        <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash. In the red he warns you; still in the red at the review, an ultimatum; at the next,
+        he freezes the budget: minimum deals only, no raises, no trade that takes on salary, the staff budgets at the league standard.
+      </p>
+      <p>
+        A win-now owner weighs the playoffs more and lets a contender pay some tax (up to the first apron); a builder cares about the young players; a frugal one wants more profit.
+      </p>
     </HelpSheet>
   );
 }

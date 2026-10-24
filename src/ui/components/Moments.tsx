@@ -19,7 +19,8 @@ function momentsKey(l: NonNullable<ReturnType<typeof useStore.getState>['league'
  * Watches the open league for big moments and shows each new one full-screen, once: what's already
  * true when a league opens (or the user takes over another team) counts as seen. They wait for a sim
  * to finish and for the live game to be left, and Settings → Big moments turns them off. Of the
- * front-page stories that come out together, only the biggest shows (pickMoments); the story of a
+ * moments that come out together, only the biggest shows (pickMoments), and a front-page story not
+ * at all when the digest opens with it after a long sim; the story of a
  * game the user has just watched live is his already, and on a game report (where a quick sim lands,
  * on the result) game stories are dropped.
  */
@@ -48,8 +49,15 @@ export function Moments() {
     for (const m of fresh) seen.current.keys.add(m.key);
     if (league.settings.moments === false) return;
     const onLive = window.location.hash.startsWith('#/live');
-    setQueue((q) => pickMoments([...q, ...fresh].filter((m) => !(onLive && m.news === 'game'))));
+    // after a long sim the digest opens and leads with the stories: they don't take the screen as well
+    const digest = useStore.getState().digestOpen;
+    setQueue((q) => pickMoments([...q, ...fresh].filter((m) => !(onLive && m.news === 'game') && !(digest && m.kind === 'story'))));
   }, [league, v]);
+  // a new digest leads with the stories queued while its sim ran: they're dropped here
+  const digest = useStore((s) => s.digest);
+  useEffect(() => {
+    if (digest) setQueue((q) => (q.some((m) => m.kind === 'story') ? q.filter((m) => m.kind !== 'story') : q));
+  }, [digest]);
   // a game's story doesn't take the screen on a game report, which opens on the result already (a
   // quick sim lands there): it's dropped
   const onReport = pathname.startsWith('/game/');

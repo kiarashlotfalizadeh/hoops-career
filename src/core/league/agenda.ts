@@ -2,8 +2,9 @@
 // are the ones the league won't move on without (the same checks the season loop makes: a roster
 // over or under its limits on opening night, an offer sheet on one of his restricted free agents,
 // a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
-// Optional items (offers, 10-day contracts running out, job offers, the guided first week) never
-// block. Each item can be settled where it stands: the staff's suggestion and any quick choices are
+// Optional items (the staff's calls, see calls.ts: a star hurt, the playoff odds gone, the trade
+// deadline, the books in the red; offers, 10-day contracts running out, job offers, the guided
+// first week) never block. Each item can be settled where it stands: the staff's suggestion and any quick choices are
 // AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
 // decision. Nothing here is stored except the guided week's progress (League.onboarding).
 import type { League, Player } from '../types';
@@ -18,8 +19,9 @@ import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
 import { money, plural } from '../format';
+import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind } from './calls';
 
-export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide';
+export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
 
 /** A step of the guided first week. */
 export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
@@ -33,7 +35,9 @@ export type AgendaAction =
   | { kind: 'tenDay'; pid: number; choice: 'again' | 'rest' | 'end' }
   | { kind: 'proposal'; id: number; accept: boolean }
   | { kind: 'guide'; step: GuideStep }
-  | { kind: 'hideGuide' };
+  | { kind: 'hideGuide' }
+  /** A staff call's choice (see calls.ts). */
+  | { kind: 'call'; call: CallAction };
 
 export interface AgendaChoice {
   label: string;
@@ -376,6 +380,12 @@ export function agenda(league: League): AgendaItem[] {
       to: '/office/owner',
     });
 
+  // the staff's calls: what the season needs an answer to now
+  for (const c of staffCalls(league)) {
+    const wrap = (x: CallChoice): AgendaChoice => ({ ...x, action: { kind: 'call', call: x.action } });
+    items.push({ ...c, required: false, suggestion: c.suggestion && wrap(c.suggestion), choices: c.choices?.map(wrap) });
+  }
+
   items.push(...guideItems(league));
   return items;
 }
@@ -443,6 +453,9 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       league.onboarding = { done: league.onboarding?.done ?? [], hidden: true };
       return { ok: true, text: 'Guide hidden. Bring it back from Today.' };
     }
+    case 'call':
+      if (league.fired) return { ok: false, text: FIRED_REASON };
+      return resolveCall(league, a.call);
   }
 }
 

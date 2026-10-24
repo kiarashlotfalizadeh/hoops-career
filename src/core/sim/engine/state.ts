@@ -275,6 +275,8 @@ export interface SimOptions {
   record?: boolean;
   neutral?: boolean;
   injuries?: boolean;
+  /** Field-goal percentage added to each side's shots (home first): the difficulty's edge (see courtEdge). */
+  edge?: [number, number];
   /** Keep shot locations even when not recording play-by-play. */
   keepShots?: boolean;
   /** Tally possessions and points by the two fives on the floor (GameSim.stints), for the seed's on-court value fit. */

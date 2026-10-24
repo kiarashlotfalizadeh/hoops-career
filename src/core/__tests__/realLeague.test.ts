@@ -19,11 +19,18 @@ import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
 import {
+  FLOOR_GAMES,
+  FLOOR_GRADE,
+  FLOOR_SLOPE,
   REVIEWS_KEPT,
   WIN_SCALE,
   currentGoals,
+  floorCap,
   goalResult,
+  goalsRecord,
+  goalsWhy,
   gradeOwnerGoals,
+  rebuildRun,
   leagueOutlook,
   ownerCheckIn,
   ownerPersonality,
@@ -248,7 +255,9 @@ describe('two seasons of the real league', () => {
     reviews.forEach((r, s) => {
       expect(r.tid).toBe(U);
       expect(r.goals.map((g) => g.title)).toEqual(mine[s].goals.map((g) => g.title));
-      expect(r.grade).toBeCloseTo(sum(r.goals.map((g) => g.weight * g.grade)), 1);
+      // (a record under his floor caps the grade)
+      const rec = goalsRecord(ends[s], mine[s]);
+      expect(r.grade).toBeCloseTo(Math.min(sum(r.goals.map((g) => g.weight * g.grade)), floorCap(mine[s], rec.won, rec.games)), 1);
       for (const g of r.goals) expect(Math.abs(g.grade)).toBeLessThanOrEqual(1);
       const mail = ends[s].inbox.find((m) => m.season === r.season && m.subject === 'Season review')!;
       for (const g of r.goals) expect(mail.body).toContain(`${g.title} — `);
@@ -329,10 +338,25 @@ describe('two seasons of the real league', () => {
         else expect(post!.target, t.abbrev).toBe(r <= 8 ? 2 : 1);
         const pay = payroll(l, og.tid);
         if (pay <= line * 0.94) expect(goal(og, 'profit'), t.abbrev).toBeDefined();
-        else expect(goal(og, 'payroll')!.title, t.abbrev).toMatch(pay <= line ? /^Stay under the luxury tax$/ : /^(Get under the luxury tax|Keep the payroll under .*)$/);
-        // the expectation and the target agree, but for the owner's nudge of a win or two
-        expect(Math.abs(goal(og, 'wins')!.target - outlook[og.tid].pct * 82), t.abbrev).toBeLessThanOrEqual(2.5);
+        // the tax line is his limit (a win-now owner's the first apron)
+        else if (ownerPersonality(l, og.tid) === 'win-now' && pay > line) expect(goal(og, 'payroll')!.target, t.abbrev).toBe(CAP_FOR(l).firstApron);
+        else expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({ target: line, title: pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax' });
+        // the expectation and the target agree, but for the owner's nudge of a win or two, the floor
+        // (normal: a .300 pace), and a payroll in the league's top half that raises the bar half-way
+        // to what a team paid like it should win
+        const wins = goal(og, 'wins')!;
+        const exp = outlook[og.tid].pct * 82;
+        expect(og.floor, t.abbrev).toBe(0.3);
+        expect(wins.target, t.abbrev).toBeGreaterThanOrEqual(Math.round(82 * 0.3));
+        if (wins.payRank) {
+          const pays = l.teams.map((x) => payroll(l, x.tid));
+          expect(wins.payRank, t.abbrev).toBe(1 + pays.filter((q, i) => i !== og.tid && (q > pay || (q === pay && i < og.tid))).length);
+          expect(wins.payRank, t.abbrev).toBeLessThanOrEqual(15);
+          const byRank = outlook.map((o) => o.pct).sort((a, b) => b - a)[wins.payRank - 1] * 82;
+          expect(Math.abs(wins.target - (exp + byRank) / 2), t.abbrev).toBeLessThanOrEqual(2.5);
+        } else expect(Math.abs(wins.target - Math.max(exp, 82 * 0.3)), t.abbrev).toBeLessThanOrEqual(2.5);
       }
+      expect(all.some((og) => goal(og, 'wins')!.payRank)).toBe(true);
       // the stronger the roster, the higher the bar: targets follow the talent
       const byTalent = [...all].sort((a, b) => outlook[a.tid].talent - outlook[b.tid].talent);
       expect(goal(byTalent[29], 'wins')!.target).toBeGreaterThan(goal(byTalent[0], 'wins')!.target + 15);
@@ -389,6 +413,50 @@ describe('two seasons of the real league', () => {
       // a near miss costs little
       results(l, strong, { wins: hi - 2 });
       expect(gradeOwnerGoals(l, strong).grade).toBeGreaterThan(-0.15);
+    }
+
+    // the floor: a season under it grades Poor or worse whatever else went right (a 5-77 season with
+    // every other goal met is the worst grade there is), and at the floor the cap is off
+    {
+      const l = structuredClone(pre);
+      const outlook = leagueOutlook(l);
+      const weak = planOwnerGoals(l, [...outlook].sort((a, b) => a.talent - b.talent)[0].tid, outlook)!;
+      results(l, weak, { wins: 5 });
+      const g = gradeOwnerGoals(l, weak);
+      expect(g.goals.filter((x) => x.kind !== 'wins').every((x) => x.grade >= 0)).toBe(true);
+      expect(g).toMatchObject({ grade: -1, floored: true });
+      expect(floorCap(weak, 20, 82)).toBeCloseTo(FLOOR_GRADE - FLOOR_SLOPE * (0.3 - 20 / 82), 5);
+      results(l, weak, { wins: 25 });
+      expect(gradeOwnerGoals(l, weak).floored).toBeUndefined();
+      // (a short stretch after a late takeover doesn't count)
+      expect(floorCap(weak, 0, FLOOR_GAMES - 1)).toBe(1);
+
+      // the rebuild clock: Normal gives two seasons in a row without a postseason goal; in the third
+      // he wants the play-in at least, and the floor rises
+      const tid = weak.tid;
+      expect(goal(weak, 'postseason')).toBeUndefined();
+      expect(weak.rebuild).toEqual({ year: 1, of: 2 });
+      const reviewed = (season: number, post: boolean): OwnerReview => ({
+        season,
+        tid,
+        goals: [{ kind: post ? 'postseason' : 'youth', title: '', target: 1, weight: 1, result: 0, grade: 0 }],
+        grade: 0,
+        total: 0,
+      });
+      l.ownerReviews = [reviewed(l.season - 1, false)];
+      expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 2, of: 2 }, floor: 0.3 });
+      expect(goalsWhy(planOwnerGoals(l, tid, outlook)!)).toContain("Rebuilding: season 2 of the 2 I'll give it. After that I want the play-in.");
+      l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
+      const out = planOwnerGoals(l, tid, outlook)!;
+      expect(out).toMatchObject({ rebuild: { year: 3, of: 2, over: true }, floor: 0.4 });
+      expect(goal(out, 'postseason')!.target).toBeGreaterThanOrEqual(1);
+      expect(goal(out, 'wins')!.target).toBeGreaterThanOrEqual(Math.round(82 * 0.4));
+      // a season with a postseason goal in between starts the count again; Easy gives three
+      l.ownerReviews = [reviewed(l.season - 3, false), reviewed(l.season - 2, true), reviewed(l.season - 1, false)];
+      expect(rebuildRun(l, tid)).toBe(1);
+      l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
+      l.settings.difficulty = 'easy';
+      expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 3, of: 3 }, floor: 0.25 });
     }
 
     // in season he reads the progress, warns once when the team falls off pace, and checks in once at the All-Star break
