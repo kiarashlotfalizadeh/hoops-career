@@ -332,34 +332,34 @@ describe('engine defense', () => {
       // tactics were made to matter twice as much: the tactical-leverage check below plays these games at 1x leverage and gets
       // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
       // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
-      // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred)
+      // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%)
       const expected: Record<string, number[][]> = {
         default: [
-          [119, 107, 79, 37, 12, 26, 15, 0],
-          [121, 110, 105, 27, 18, 34, 8, 0],
-          [117, 106, 89, 38, 9, 8, 14, 0],
+          [116, 103, 78, 37, 13, 21, 14, 0],
+          [125, 119, 101, 29, 18, 29, 13, 0],
+          [112, 110, 90, 37, 7, 13, 12, 0],
         ],
         zone23: [
           [113, 122, 94, 41, 15, 22, 12, 0],
           [133, 109, 97, 32, 17, 18, 14, 0],
-          [114, 126, 92, 38, 9, 18, 17, 0],
+          [115, 112, 109, 32, 10, 28, 15, 1],
         ],
         zone32: [
-          [105, 113, 79, 48, 11, 21, 21, 0],
+          [109, 123, 82, 39, 9, 25, 17, 0],
           [120, 109, 97, 24, 13, 26, 8, 0],
-          [104, 119, 98, 21, 15, 29, 14, 0],
+          [103, 108, 99, 19, 15, 24, 15, 0],
         ],
         double: [
-          [106, 121, 84, 39, 17, 8, 13, 0],
-          [127, 111, 95, 38, 13, 24, 12, 0],
-          [121, 102, 95, 34, 10, 19, 14, 0],
+          [104, 119, 83, 38, 17, 8, 13, 0],
+          [144, 115, 98, 35, 14, 28, 11, 0],
+          [120, 103, 94, 36, 9, 19, 14, 0],
         ],
         // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
         // the couple of trips the mismatch hunt changes back to the same team lines)
         hunt: [
-          [119, 107, 79, 37, 12, 26, 15, 0],
-          [123, 133, 118, 28, 18, 25, 9, 1],
-          [117, 106, 90, 38, 9, 8, 14, 0],
+          [113, 104, 76, 38, 13, 21, 16, 0],
+          [128, 130, 102, 27, 16, 33, 11, 0],
+          [112, 110, 90, 37, 7, 13, 12, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -397,42 +397,42 @@ describe('engine defense', () => {
       // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
       // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
-      // every tactical edge at its 1x size, game after game)
+      // every tactical edge at its 1x size, game after game; all of them again when a player's share of his team's possessions was made to level off past 32%)
       const expected: Record<string, number[][]> = {
         default: [
-          [106, 97, 76, 33, 16, 20, 15, 0],
-          [110, 115, 109, 19, 23, 41, 10, 0],
-          [118, 122, 91, 28, 7, 29, 11, 0],
+          [122, 115, 72, 38, 16, 15, 16, 0],
+          [117, 119, 110, 19, 23, 45, 10, 0],
+          [121, 119, 95, 31, 7, 25, 9, 0],
         ],
         zone23: [
-          [133, 121, 76, 41, 11, 19, 13, 0],
-          [127, 106, 97, 39, 17, 27, 11, 0],
-          [115, 114, 98, 33, 11, 12, 12, 0],
+          [125, 120, 71, 49, 14, 12, 17, 0],
+          [121, 115, 95, 36, 22, 34, 15, 0],
+          [117, 114, 98, 33, 10, 12, 12, 0],
         ],
         zone32: [
-          [117, 119, 84, 47, 15, 30, 17, 1],
+          [111, 117, 73, 40, 12, 20, 14, 0],
           [121, 112, 95, 25, 17, 26, 11, 0],
-          [127, 118, 87, 31, 9, 20, 12, 0],
+          [111, 108, 85, 38, 11, 19, 16, 0],
         ],
         box1: [
-          [111, 108, 77, 43, 10, 27, 17, 0],
-          [117, 119, 91, 27, 15, 42, 16, 0],
-          [129, 116, 87, 36, 11, 18, 14, 0],
+          [107, 105, 81, 42, 13, 19, 13, 0],
+          [119, 127, 90, 28, 13, 44, 16, 0],
+          [128, 122, 97, 39, 11, 18, 15, 1],
         ],
         double: [
-          [118, 115, 78, 33, 14, 25, 11, 0],
-          [123, 109, 98, 36, 20, 21, 13, 0],
-          [116, 107, 94, 23, 9, 15, 9, 0],
+          [122, 126, 84, 37, 11, 22, 18, 1],
+          [122, 116, 90, 36, 14, 30, 19, 0],
+          [119, 110, 94, 23, 9, 15, 9, 0],
         ],
         pressure: [
-          [116, 121, 75, 39, 8, 29, 16, 0],
-          [140, 142, 95, 31, 9, 41, 19, 0],
-          [122, 111, 102, 37, 12, 21, 17, 0],
+          [126, 118, 82, 41, 14, 25, 18, 0],
+          [131, 133, 83, 33, 9, 37, 26, 0],
+          [112, 101, 92, 28, 7, 25, 22, 0],
         ],
         hunting: [
-          [121, 123, 82, 36, 13, 24, 16, 0],
-          [135, 123, 90, 26, 9, 37, 10, 0],
-          [116, 104, 96, 36, 12, 20, 14, 0],
+          [122, 115, 81, 37, 12, 24, 16, 0],
+          [128, 117, 88, 20, 8, 37, 13, 0],
+          [114, 108, 96, 36, 13, 18, 14, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -483,7 +483,7 @@ describe('engine defense', () => {
       const [r1, w1, r2, w2] = [pairedDelta(...lab('helio', 1, 500)), pairedDelta(...lab('shooters', 1, 500)), at2('helio', h400), at2('shooters', s400)];
       // aimed right it gains more and aimed wrong it costs more, and the gap between the two (the part of
       // its value that comes from the matchup) is about twice what it was
-      // (about +0.7 and -2.6 per 100 at 1x here, +1.2 and -4.8 at 2x: a gap 1.8 times as wide)
+      // (about +2.1 and -0.9 per 100 at 1x here, +2.3 and -4.2 at 2x: a gap 2.2 times as wide)
       expect(r2.delta).toBeGreaterThan(r1.delta);
       expect(w2.delta).toBeLessThan(w1.delta - 1);
       const ratio = (r2.delta - w2.delta) / (r1.delta - w1.delta);

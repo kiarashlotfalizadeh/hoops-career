@@ -44,6 +44,7 @@ import { clamp } from '../../src/core/random';
 import { CAP, seasonLabel } from '../../src/core/constants';
 import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
+import { tuneStarUsage } from './starUsage';
 import { EXTRA_RAW } from './extra/sources';
 import { PROJ_DIR, loadProjection, projectionByBbref, projectionNote, type EpmProjection } from './epm-projection';
 import { pinInputs } from './inputs';
@@ -496,6 +497,9 @@ async function main() {
     writeFileSync(process.env.HC_REPORT, JSON.stringify({ ovrScale: finalScale, players: report }));
   }
   await applyExtras(seed, pins.pinned);
+  // last, on the opening-night seed (injuries and two-way deals in): scoring over whole simulated seasons
+  console.log('fitting usage to real scoring over simulated seasons…');
+  tuneStarUsage(seed);
   writeFileSync(OUT, JSON.stringify(seed));
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
 }

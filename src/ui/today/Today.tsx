@@ -2,7 +2,7 @@
 // next game, otherwise the lead (your last result while it's fresh, or the top story about your team)
 // or, outside the season's games, where the season stands. Then a few blocks in order of use: what
 // needs you (the decisions waiting, the trade deadline, mail that needs you, the owner when the seat
-// is warm, the staff's top advice) in one list; the next game when it isn't today; your season as a
+// is warm, once a season a backup, the staff's top advice) in one list; the next game when it isn't today; your season as a
 // strip of figures; the news in two headlines; and More (practice, the way back to "While you were
 // away", the glossary, the guide). Anything with more to it is one tap away; nothing here repeats
 // something else here or on the top bar.
@@ -17,6 +17,8 @@ import { assistantFeed, type AssistantArea, type AssistantCard } from '../../cor
 import { jobSecurity } from '../../core/league/jobSecurity';
 import { fmtDate } from '../../core/league/helpers';
 import { AgendaRow } from '../components/Agenda';
+import { BackupRow } from '../components/Backup';
+import { backupDue } from '../../state/backup';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
@@ -81,7 +83,9 @@ export default function Today() {
   // the deadline's last week, unless its mail or the staff's deadline call is in the list already
   const deadline = deadlineIn(league);
   const showDeadline = deadline !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline');
-  const before = items.length + mail.length + (showDeadline ? 1 : 0) + (seat ? 1 : 0);
+  // once a season, a backup (a row, never a stop: sims run past it)
+  const askBackup = backupDue(league);
+  const before = items.length + mail.length + (showDeadline ? 1 : 0) + (seat ? 1 : 0) + (askBackup ? 1 : 0);
   const advice = feed.slice(0, before >= 3 ? 1 : STAFF_SHOWN);
   const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
   const moreAdvice = full.filter((c) => !onToday.has(c.id)).length;
@@ -97,7 +101,7 @@ export default function Today() {
     <NextGameSlab league={league} g={g} noPlan={noPlan} />
   );
   const needs = before + advice.length > 0;
-  // every row of Needs you, in order: the decisions (required first), the deadline, mail, the owner, the staff
+  // every row of Needs you, in order: the decisions (required first), the deadline, mail, the owner, a backup, the staff
   const needRows = [
     ...[...items]
       .sort((a, b) => Number(b.required) - Number(a.required))
@@ -134,6 +138,13 @@ export default function Today() {
       ? [
           <div role="listitem" className="td-need" key="owner">
             <NeedRow to="/office/owner" tone={js.heat === 'hot' ? 'bad' : 'warn'} title={`Job security ${js.score} · ${js.label}`} line={js.line} />
+          </div>,
+        ]
+      : []),
+    ...(askBackup
+      ? [
+          <div role="listitem" className="td-need" key="backup">
+            <BackupRow league={league} />
           </div>,
         ]
       : []),

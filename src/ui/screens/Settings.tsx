@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Download, LogOut, Save, Trash2 } from 'lucide-react';
-import { exportLeague } from '../../state/backup';
+import { lastBackupText, offerBackup, SnapshotActions, snapshotText, useSnapshot } from '../components/Backup';
 import { ImportButton } from '../components/ImportButton';
 import type { Settings as GameSettings } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
@@ -99,11 +99,9 @@ export default function Settings() {
     else setSheet('unsaved');
   };
 
-  const backup = () =>
-    void exportLeague(league).catch((e) => {
-      console.error(e);
-      useStore.getState().toast('Export failed.', 'bad');
-    });
+  const backup = () => offerBackup(league);
+  // the copy of the league as it started the season (see persistence.ts), taken by the season's first save
+  const snap = useSnapshot(league.id);
 
   const remove = async () => {
     const id = league.id;
@@ -327,11 +325,16 @@ export default function Settings() {
                 League file
                 <Help title="League file">
                   <p>Saved on this device after every change, and nowhere else: clearing site data or uninstalling deletes it.</p>
-                  <p>Export a backup to keep a copy or move the league to another device.</p>
+                  <p>Export a backup to keep a copy or move the league to another device. Today asks for one once a season.</p>
+                  <p>
+                    The device also keeps a snapshot of the league as it started this season, a way back if the save is ever damaged. It goes if the device's storage is cleared, so
+                    it is no backup.
+                  </p>
                 </Help>
               </h3>
             }
           >
+            <div className="set-facts">{lastBackupText(league)}</div>
             <div className="grid2">
               <button className="btn" disabled={busy} onClick={backup}>
                 <Download size={17} /> Export backup
@@ -347,6 +350,14 @@ export default function Settings() {
             <button className="btn danger block" disabled={simming} onClick={() => setSheet('delete')}>
               <Trash2 size={17} /> Delete league
             </button>
+            {snap && (
+              <More label="Season snapshot">
+                <div className="col" style={{ gap: 10 }}>
+                  <p className="set-p small dim2">Kept on this device: {snapshotText(snap)}. Restoring adds it as a league of its own, beside this one.</p>
+                  <SnapshotActions id={league.id} snap={snap} />
+                </div>
+              </More>
+            )}
           </Section>
 
           <Section title="God mode">
@@ -405,8 +416,13 @@ export default function Settings() {
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete league?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            “{league.name}” and its {plural(seasonsPlayed, 'season')} of history leave this device for good. This can't be undone.
+            “{league.name}” and its {plural(seasonsPlayed, 'season')} of history leave this device for good, its season snapshot with them. This can't be undone.
           </div>
+          {/* the last chance to keep it: a file first */}
+          <div className="set-facts">{lastBackupText(league)}</div>
+          <button className="btn primary block" onClick={backup}>
+            <Download size={16} /> Export a backup first
+          </button>
           <div className="row">
             <button className="btn grow" onClick={() => setSheet(null)}>
               Cancel

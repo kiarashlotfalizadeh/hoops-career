@@ -1466,6 +1466,13 @@ export interface League {
   devWatch?: DevWatchState;
   /** The user's coaching legacy (see league/legacy.ts): milestones, honors, signature wins, season reviews. */
   legacy?: LegacyState;
+  /**
+   * When the league was last exported to a file the user kept (see state/backup.ts), and its season
+   * then; absent until the first one. A backup file carries its own, so an imported league has one.
+   */
+  lastBackup?: { at: number; season: number };
+  /** The season Today last asked for a backup (it asks once a season: see backupDue). */
+  backupAsked?: number;
 }
 
 /**

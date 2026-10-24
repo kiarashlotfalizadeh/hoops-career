@@ -64,8 +64,15 @@ export const K = {
   /** Home court: field-goal percentage the home side gains (the away side loses 0.3 of it): about 2 points a game, 54% home wins. */
   home: 0.009,
   usageExp: 2.0,
-  /** Usage damping counts free-throw attempts (0.44 each); fitted when it counted trips, hence the odd values. */
-  usageDamp: 5.2,
+  /**
+   * A player's share of his team's possessions while he's on the floor levels off past useLevel: his
+   * usage weight falls by exp(-usageDamp) per unit of share above it, so as the game goes on the ball
+   * finds his teammates. The real league's top scorers use 30-34% (Dončić 38%); at 36.5% and 5.2 a
+   * star's share kept climbing with his ratings, and leaders used 40-43% and scored 38-43 a game
+   * within a few simulated seasons.
+   */
+  useLevel: 0.32,
+  usageDamp: 9,
   freedomGreen: 1.25,
   freedomLimited: 0.55,
   /** How strongly usage tendency tilts an actor's shoot-vs-pass choice. */
@@ -81,8 +88,13 @@ export const K = {
   /** A junk defense's chaser, with a zone behind him, denies harder than a man-to-man deny: his man's share of actions, and the advantage he loses on the catch. */
   chaseTouch: 0.4,
   chaseCatch: 0.45,
-  /** ...and the usage share past which the defense loads up on him comes this much sooner (see usageWeight). */
-  chaseCap: 0.14,
+  /**
+   * ...and the usage share past which the defense loads up on him comes this much sooner (see
+   * usageWeight): 0.14 when the damping past it was 5.2. With the steeper damping past useLevel a box-and-one
+   * aimed at a heliocentric star gains about 2 points per 100 at 1x leverage and a little more at 2x, its
+   * gap from one aimed at a shooting team twice as wide (engineDefense's leverage test).
+   */
+  chaseCap: 0.11,
   /** Run-outs against a team that crashed the glass: chance multiplier per unit of crash above 50, and the runners' edge. */
   crashLeak: 1.5,
   crashRunOut: 0.5,

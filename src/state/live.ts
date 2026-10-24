@@ -70,6 +70,14 @@ export class LiveGame {
    * so once (and clears it).
    */
   resumed?: 'journal' | 'restarted';
+  /**
+   * Picked up from the journal behind where the game had got to on this device (the app was closed
+   * or reloaded between saves): how many possessions it went back, which play again from the save.
+   * The Live screen says so with `resumed` (and clears it).
+   */
+  rewound?: number;
+  /** Possessions are being played back or skipped through: where the game has got to is noted once, after (see reach). */
+  private quiet = false;
 
   /** A new game from tip-off, or (with `from`) the game a journal describes, at tip-off: replay() plays it back. */
   constructor(league: League, game: ScheduledGame, from?: LiveJournal) {
@@ -157,6 +165,7 @@ export class LiveGame {
     if (this.sim.over) return [];
     this.sim.step();
     this.steps++;
+    if (!this.quiet) reach(this);
     const l = this.sim.drainLogs();
     this.logs.push(...l);
     return l;
@@ -174,10 +183,16 @@ export class LiveGame {
     // stop at the buzzer: the next step() rolls straight into the next period and skips the break
     const done = () => (cond === 'quarter' ? s.clock <= 0.05 : cond === 'half' ? s.q === 2 && s.clock <= 0.05 : cond === 'clutch' ? s.q >= 4 && s.clock <= CLUTCH_SEC : false);
     let guard = 0;
+    this.quiet = true;
     // from a break, the skip covers the next period
-    do {
-      out.push(...this.step());
-    } while (!s.over && guard++ < 1000 && !done());
+    try {
+      do {
+        out.push(...this.step());
+      } while (!s.over && guard++ < 1000 && !done());
+    } finally {
+      this.quiet = false;
+    }
+    reach(this);
     return out;
   }
 
@@ -304,6 +319,8 @@ export class LiveGame {
         this.step();
       }
     };
+    // (where the game had got to before is what the replay is compared with: see fromJournal)
+    this.quiet = true;
     let last = 0;
     for (const op of j.ops) {
       if (!Number.isInteger(op.at) || op.at < last || op.at > to) throw new Error('The journal is out of order.');
@@ -312,6 +329,7 @@ export class LiveGame {
       last = op.at;
     }
     playTo(to);
+    this.quiet = false;
     const s = this.sim;
     if (s.q !== j.q || Math.abs(s.clock - j.clock) > 1e-6 || s.T[0].score !== j.score[0] || s.T[1].score !== j.score[1])
       throw new Error(`The replay doesn't match the journal (${s.T[0].score}-${s.T[1].score} in Q${s.q}, not ${j.score.join('-')} in Q${j.q}).`);
@@ -373,10 +391,15 @@ export class LiveGame {
       delete league.live;
       return null;
     }
+    // how far this device had seen the game get: further than the save means the last few possessions are lost
+    const seen = reached(league, j.gid);
     try {
       const lg = new LiveGame(league, g, j);
       lg.replay();
       lg.resumed = 'journal';
+      if (seen > lg.steps) lg.rewound = seen - lg.steps;
+      // from here on, the game has got as far as the save
+      reach(lg);
       return lg;
     } catch (e) {
       console.warn('The live game in progress could not be picked up:', e);
@@ -387,6 +410,31 @@ export class LiveGame {
 }
 
 let current: LiveGame | null = null;
+
+/**
+ * Where the live game has got to on this device, noted with every possession (outside the save:
+ * saving the league that often would be too heavy, and a few bytes in local storage aren't). A
+ * reload that picks the game up from an earlier checkpoint compares the two, to say it went back.
+ */
+const REACHED_KEY = 'hc:live-reached';
+
+function reach(lg: LiveGame) {
+  try {
+    globalThis.localStorage?.setItem(REACHED_KEY, JSON.stringify([lg.league.id, lg.game.gid, lg.steps]));
+  } catch {
+    /* (private mode, storage full: a rewind just goes unsaid) */
+  }
+}
+
+/** How many possessions this device had seen the league's game `gid` reach (0 if none noted). */
+function reached(league: League, gid: number): number {
+  try {
+    const [id, g, steps] = JSON.parse(globalThis.localStorage?.getItem(REACHED_KEY) ?? '[]') as unknown[];
+    return id === league.id && g === gid && Number.isInteger(steps) ? (steps as number) : 0;
+  } catch {
+    return 0;
+  }
+}
 
 /** Today's game of the user's team, if the league's journal is for it (it may be unplayable still: see fromJournal). */
 function journaledGame(league: League): ScheduledGame | undefined {

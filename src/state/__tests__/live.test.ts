@@ -615,6 +615,30 @@ describe('live game', () => {
       fresh();
     }
 
+    // closed between saves: picked up from the last one, saying how many possessions it went back; a clean pick-up says nothing of the kind
+    {
+      const kept = new Map<string, string>();
+      vi.stubGlobal('localStorage', { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
+      const l = testLeague('rewind');
+      toGameDay(l);
+      const lg = goLive(l);
+      // saved at the end of the first quarter (as the Live screen saves every period's end), then played on
+      lg.simTo('quarter');
+      await useStore.getState().flush();
+      const at = lg.steps;
+      for (let i = 0; i < 9; i++) lg.step();
+      const back = (await loadLeague(l.id))!;
+      useStore.getState().setLeague(back);
+      const again = prepareLive(back)!;
+      expect([again.resumed, again.steps, again.sim.q, again.rewound]).toEqual(['journal', at, 1, 9]);
+      // opened again with nothing played since: where it left off, nothing lost
+      const third = (await loadLeague(l.id))!;
+      useStore.getState().setLeague(third);
+      expect([prepareLive(third)!.resumed, prepareLive(third)!.rewound]).toEqual(['journal', undefined]);
+      vi.unstubAllGlobals();
+      fresh();
+    }
+
     // takes a timeout asked for in their live ball at the next dead ball, and plays it back from the journal
     {
       const l = testLeague('waitTO');

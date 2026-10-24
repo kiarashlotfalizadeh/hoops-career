@@ -1,11 +1,11 @@
 // The main menu (/start): the league played last one tap away, a new league, a backup to import, and
 // the other saved leagues. Saves from before the redesign can't be opened: they're listed to keep (as a
-// file) or delete.
+// file) or delete. Deleting offers a backup first; a save that won't open offers its season snapshot.
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Download, Plus, Trash2 } from 'lucide-react';
 import { deleteLeague, listLeagues, loadLeague, openable, type LeagueMeta } from '../../state/persistence';
-import { exportRawSave } from '../../state/backup';
+import { exportLeague, exportRawSave } from '../../state/backup';
 import { useStore } from '../../state/store';
 import { PHASE_LABEL, START_SEASON, seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
@@ -16,6 +16,8 @@ import { slabVars } from '../teamColors';
 import './start.css';
 import { ImportButton } from '../components/ImportButton';
 import { UnsavedSheet } from '../components/UnsavedSheet';
+import { SnapshotActions, snapshotText, useSnapshot } from '../components/Backup';
+import type { League } from '../../core/types';
 
 export default function Start() {
   const nav = useNavigate();
@@ -25,6 +27,9 @@ export default function Start() {
   // the league to open once the user decides about the open one's unsaved changes
   const [unsaved, setUnsaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // a save that couldn't be opened, and why: its season snapshot is offered, if it has one
+  const [broken, setBroken] = useState<{ m: LeagueMeta; why: string } | null>(null);
+  const snap = useSnapshot(broken?.m.id);
   const refresh = () =>
     listLeagues()
       .then((all) => {
@@ -59,8 +64,18 @@ export default function Start() {
       nav('/');
     } catch (e) {
       console.error(e);
-      useStore.getState().toast(`That save could not be opened. ${e instanceof Error ? e.message : ''}`, 'bad');
+      const why = e instanceof Error ? e.message : '';
+      const m = leagues?.find((x) => x.id === id);
+      // with a season snapshot, the sheet offers it; without, the toast is all there is
+      if (m?.snap) setBroken({ m, why });
+      else useStore.getState().toast(`That save could not be opened. ${why}`, 'bad');
     }
+  };
+  /** The season snapshot of a save that wouldn't open, restored as a league of its own: opened right away. */
+  const restored = (l: League) => {
+    setBroken(null);
+    setLeague(l);
+    nav('/');
   };
   const remove = async (m: LeagueMeta) => {
     setConfirm(null);
@@ -80,6 +95,18 @@ export default function Start() {
       console.error(e);
       useStore.getState().toast('Export failed.', 'bad');
     });
+  // a backup before a delete: the league as this build reads it (the open one as it stands), or the
+  // save as it's stored when it can't be read
+  const backupFirst = async (m: LeagueMeta) => {
+    try {
+      const open = useStore.getState().league;
+      const l = !openable(m) ? null : open?.id === m.id ? open : await loadLeague(m.id).catch(() => null);
+      await (l ? exportLeague(l) : exportRawSave(m.id));
+    } catch (e) {
+      console.error(e);
+      useStore.getState().toast('Export failed.', 'bad');
+    }
+  };
   // the league played last that this version can open, and the rest (its Delete is in Settings)
   const latest = leagues?.find(openable);
   const others = leagues?.filter((m) => m !== latest) ?? [];
@@ -194,15 +221,28 @@ export default function Start() {
       />
       <Sheet open={!!confirm} onClose={() => setConfirm(null)} title="Delete league?">
         <p className="dim2" style={{ marginTop: 0 }}>
-          “{confirm?.name}” will be removed from this device for good.
-          {confirm && !openable(confirm) ? ' Export its save file first to keep a copy.' : ''}
+          “{confirm?.name}” will be removed from this device for good, its season snapshot with it.
         </p>
-        <div className="row" style={{ marginTop: 16 }}>
+        <button className="btn primary block" onClick={() => confirm && void backupFirst(confirm)}>
+          <Download size={16} /> {confirm && !openable(confirm) ? 'Export its save file first' : 'Export a backup first'}
+        </button>
+        <div className="row" style={{ marginTop: 12 }}>
           <button className="btn grow" onClick={() => setConfirm(null)}>
             Cancel
           </button>
           <button className="btn danger grow" onClick={() => confirm && void remove(confirm)}>
             Delete
+          </button>
+        </div>
+      </Sheet>
+      <Sheet open={!!broken} onClose={() => setBroken(null)} title="That save won't open">
+        <div className="col" style={{ gap: 12 }}>
+          <div className="dim2">
+            “{broken?.m.name}” could not be read. {broken?.why} {snap ? `The device kept a snapshot of it: ${snapshotText(snap)}.` : ''}
+          </div>
+          {broken && snap && <SnapshotActions id={broken.m.id} snap={snap} onRestored={restored} />}
+          <button className="btn block" onClick={() => setBroken(null)}>
+            Close
           </button>
         </div>
       </Sheet>

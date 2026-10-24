@@ -1,8 +1,9 @@
 // League backups: saves live only on this device, so let players export a file they can keep
 // (and move between devices) and import it again. A backup is the whole league, results included.
+// The league remembers its last one (League.lastBackup), and Today asks for one once a season (backupDue).
 import { Capacitor } from '@capacitor/core';
 import type { League } from '../core/types';
-import { isQuotaError, listLeagues, loadRawLeague, migrate, SAVE_VERSION, saveLeague } from './persistence';
+import { isQuotaError, listLeagues, loadRawLeague, loadRawSnapshot, migrate, onDevice, SAVE_VERSION, saveLeague } from './persistence';
 import { useStore } from './store';
 import { checkpointLive } from './live';
 
@@ -53,15 +54,45 @@ async function deliver(json: string, name: string): Promise<boolean> {
   return true;
 }
 
-/** Hand the league to the user as a JSON file. Resolves false if they cancelled the share sheet. */
-export function exportLeague(league: League): Promise<boolean> {
+/**
+ * Hand the league to the user as a JSON file. Resolves false if they cancelled the share sheet;
+ * otherwise the league notes the backup (League.lastBackup), saved with it.
+ */
+export async function exportLeague(league: League): Promise<boolean> {
   // a live game in progress goes in as far as it has got, to be picked up there after an import; for
   // the open league, a save follows (see flush), so the device isn't left further back than the file
   const st = useStore.getState();
   if (st.league === league) void st.flush();
   else checkpointLive(league);
-  // stamped with this build's format, so an older build refuses it rather than drop what it can't read
-  return deliver(JSON.stringify({ ...league, version: SAVE_VERSION }), fileName(league.name, league.season));
+  const stamp = { at: Date.now(), season: league.season };
+  // stamped with this build's format, so an older build refuses it rather than drop what it can't
+  // read, and with the backup it is (a league imported from it was backed up then)
+  const ok = await deliver(JSON.stringify({ ...league, version: SAVE_VERSION, lastBackup: stamp }), fileName(league.name, league.season));
+  if (ok) noteBackup(league, stamp);
+  return ok;
+}
+
+/** The league was backed up: it says so from now on (Settings, and Today stops asking this season). */
+function noteBackup(league: League, stamp: NonNullable<League['lastBackup']>) {
+  const st = useStore.getState();
+  // the open league: a change like any other, saved with it (during a sim the worker's copy replaces
+  // this one without it: the backup is made all the same, only not noted)
+  if (st.league === league) {
+    st.mutate((l) => void (l.lastBackup = stamp));
+    return;
+  }
+  // one that isn't open (exported from the main menu, before a delete): saved as it is, if it came from the device
+  league.lastBackup = stamp;
+  if (onDevice(league)) void saveLeague(league).catch((e) => console.warn('The backup could not be noted in the save:', e));
+}
+
+/**
+ * Whether Today asks for a backup: once a season, from the league's second season on (one season is
+ * quick to play again, ten aren't), unless one was made this season or the user said not now this
+ * season. It's a row of Needs you, never a stop: sims run past it.
+ */
+export function backupDue(league: League): boolean {
+  return league.season > league.startSeason && league.backupAsked !== league.season && (league.lastBackup?.season ?? -Infinity) < league.season;
 }
 
 /** Export a stored league as it is, for a save this version can't open (damaged, or from a newer app). */
@@ -69,6 +100,13 @@ export async function exportRawSave(id: string): Promise<boolean> {
   const raw = (await loadRawLeague(id)) as { name?: unknown; season?: unknown } | undefined;
   if (!raw) throw new Error('That save is no longer on this device.');
   return deliver(JSON.stringify(raw), fileName(typeof raw.name === 'string' ? raw.name : 'league', raw.season ?? 'save'));
+}
+
+/** Export a league's season snapshot (see persistence.ts) as it is: for when its own record can't be opened. */
+export async function exportSnapshot(id: string): Promise<boolean> {
+  const raw = (await loadRawSnapshot(id)) as { name?: unknown; season?: unknown } | undefined;
+  if (!raw) throw new Error('There is no season snapshot of that league on this device.');
+  return deliver(JSON.stringify(raw), fileName(`${typeof raw.name === 'string' ? raw.name : 'league'} start`, raw.season ?? 'save'));
 }
 
 /** The open league couldn't be saved before an import would replace it: offer an export of it first. */

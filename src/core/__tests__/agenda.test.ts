@@ -259,10 +259,10 @@ describe('the agenda', () => {
     }
 
     // the deadline's last five days: the staff's deal, bought or sold as the odds say, made in one tap
-    // (the Hawks: a deal both ways; the Cavaliers: none that works, so the call is to stand pat)
+    // (the Hornets: a deal both ways; the Cavaliers: none that works, so the call is to stand pat)
     for (const [tid, odds] of [
-      [0, 900],
-      [0, 20],
+      [3, 900],
+      [3, 20],
       [5, 900],
     ]) {
       const l = camp(tid);
@@ -276,7 +276,7 @@ describe('the agenda', () => {
       expect(call).toMatchObject({ season: l.season, mode: odds > 500 ? 'buy' : 'sell', odds });
       const card = agenda(l).find((i) => i.kind === 'deadline')!;
       expect(card.title).toBe(`Trade deadline in ${DEADLINE_DAYS} days`);
-      if (tid === 0) {
+      if (tid === 3) {
         const theirs = call.offer!.b.pids;
         expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
         expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);

@@ -4,7 +4,7 @@
 import type { League, Player, RatingKey, TrainingFocus } from '../types';
 import { FREE_AGENT, RETIRED } from '../types';
 import { Rng, clamp, hashString } from '../random';
-import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, toDisplay } from '../ratings';
+import { OVR_ANCHORS, RATING_KEYS, ovrRaw, ovrWeights, shiftToOvr, toDisplay } from '../ratings';
 import { followTendencies, playerAge, refreshPlayerDerived } from '../playerGen';
 import { seasonTotals } from './helpers';
 
@@ -150,6 +150,29 @@ export const trajectory = (league: Pick<League, 'id'>, pid: number) => new Rng(h
 const fadeScale = (rating: number, mean?: number) => (mean && mean > 0 ? clamp(Math.pow(rating / mean, 0.7), 0.6, 1.6) : 1);
 
 /**
+ * Stars fade harder from 33: every attribute's decline is this much steeper for a player rated 90
+ * or more (ramping in from 87), and the summer can't lift him back. With the league's decline alone,
+ * the display scale's top is so stretched that a 98 lost a point a year at 33-35 and the anchors
+ * gave it back: Gilgeous-Alexander was still 96 at 37 and the opening night's top five held the
+ * top for a decade. Each year past 33 adds STAR_FADE_STEP, up to STAR_FADE_MAX.
+ */
+const STAR_FADE_FROM = 33;
+const STAR_FADE = 0.8;
+const STAR_FADE_STEP = 0.2;
+const STAR_FADE_MAX = 1.6;
+const starFade = (ovr: number, a: number) => (a < STAR_FADE_FROM ? 0 : clamp((ovr - 87) / 3, 0, 1) * Math.min(STAR_FADE_MAX, STAR_FADE + STAR_FADE_STEP * (a - STAR_FADE_FROM)));
+/**
+ * ...and the least OVR such a star gives up in a summer at 33, 34, 35, 36 and 37+ (give or take a
+ * point): the display scale tops out at 99, so ratings that ran past it could fall for years
+ * without a 99 moving. A 97 at 32 is about 95 at 33, 90 at 35 and 83 at 37.
+ */
+const STAR_DROP = [2, 2.5, 3, 3.5, 4];
+function starDrop(ovr: number, a: number, rng: Rng) {
+  const star = a < STAR_FADE_FROM ? 0 : clamp((ovr - 87) / 3, 0, 1);
+  return star && star * Math.max(1, STAR_DROP[Math.min(a - STAR_FADE_FROM, 4)] + rng.normal(0, 0.7));
+}
+
+/**
  * Share of a year's gain an attribute still takes near the top of the scale: all of it up to
  * CEILING_FROM, then less the closer it is to 100 (a fifth at most from 96 up).
  */
@@ -161,9 +184,11 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   const a = playerAge(p, season);
   const before = scale ? toDisplay(ovrRaw(p.ratings), scale) : 0;
   const young = a <= 25;
-  // a good or bad summer moves all skills together
+  const fade = starFade(p.ovr, a);
+  // a good or bad summer moves all skills together (an aging star's only down)
   const arc = young ? (ctx.trajectory ?? 0) * TRAJECTORY[clamp(a - 19, 0, 6)] : 0;
-  const summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? SUMMER_SD.young : SUMMER_SD.prime);
+  let summer = rng.normal(young ? p.growth * 1.1 + arc : p.growth * 0.4, young ? SUMMER_SD.young : SUMMER_SD.prime);
+  if (fade > 0) summer = Math.min(0, summer);
   const coaching = ((ctx.coachDev - 50) / 50) * 0.7 + ((ctx.coachingBudget - 50) / 50) * 0.5;
   const practice = ctx.practice === 'intense' ? 0.45 : ctx.practice === 'light' ? -0.35 : 0;
   const minutes = young ? (ctx.mpg >= 25 ? 0.6 : ctx.mpg >= 15 ? 0.25 : ctx.mpg <= 6 ? -0.3 : 0) : 0;
@@ -178,7 +203,7 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   for (const k of RATING_KEYS) {
     const g = GROUP_OF[k];
     let d = curve(g, a);
-    if (d < 0) d *= fadeScale(p.ratings[k], ctx.means?.[k]);
+    if (d < 0) d *= fadeScale(p.ratings[k], ctx.means?.[k]) * (1 + fade);
     if (g !== 'hgt') {
       const isSkill = g !== 'athletic' && g !== 'end' && g !== 'str';
       d += summer * (isSkill ? SUMMER_SKILLS : SUMMER_BODY) + rng.normal(0, OWN_NOISE);
@@ -340,6 +365,10 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
   anchorRatings(league);
   for (const p of Object.values(league.players)) {
     if (p.tid < 0 && p.tid !== FREE_AGENT) continue;
+    // an aging star's decline shows on his OVR, however far past the top of the scale his ratings ran
+    const was = before.get(p.pid) ?? p.ovr;
+    const drop = starDrop(was, playerAge(p, league.season), rng);
+    if (drop > 0 && toDisplay(ovrRaw(p.ratings), league.ovrScale) > was - drop) p.ratings = shiftToOvr(p.ratings, Math.round(was - drop), league.ovrScale);
     refreshDerived(league, p);
     // tendencies follow the year's change in level: from the OVR of his latest snapshot, which they
     // were set for (in-season development and injuries since count too), or for a draftee without

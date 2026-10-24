@@ -4,7 +4,22 @@
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { deleteLeague, isLeague, listLeagues, loadLeague, metaFor, migrate, OldSaveError, onRemoteChange, SAVE_VERSION, saveLeague } from '../persistence';
+import {
+  deleteLeague,
+  isLeague,
+  listLeagues,
+  loadLeague,
+  loadRawSnapshot,
+  metaFor,
+  migrate,
+  OldSaveError,
+  onRemoteChange,
+  restoreSnapshot,
+  SAVE_VERSION,
+  saveLeague,
+  snapshotOf,
+} from '../persistence';
+import { seasonLabel } from '../../core/constants';
 import { simDay } from '../../core/league/season';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { FRANCHISES } from '../../core/teams';
@@ -149,6 +164,44 @@ describe('saves', () => {
       expect((await loadLeague(l.id))!.games).toEqual([]);
     }
 
+    // the season's first save keeps a snapshot of the league, without play-by-play, replaced by the next
+    // season's; one that can't be written leaves the save whole; restored, it's a league of its own; a delete takes it
+    {
+      const l = await saved('snapshot', 3);
+      const first = (await listLeagues()).find((m) => m.id === l.id)!.snap!;
+      expect(first.season).toBe(l.season);
+      expect(await snapshotOf(l.id)).toEqual(first);
+      expect(((await loadRawSnapshot(l.id)) as League).games.map((g) => g.gid)).toEqual(l.games.map((g) => g.gid));
+      // later saves of the season leave it be
+      userGames(l)[0].pbp = [{ q: 1, clock: 720, t: -1, text: 'Start of 1st quarter.', hs: 0, as: 0 }];
+      simDay(l);
+      const n = countWrites();
+      await saveLeague(l);
+      expect(n['put snapshots']).toBeUndefined();
+      vi.restoreAllMocks();
+      // the next season's first save takes a new one; storage too full for it, the save goes in all the same
+      l.season++;
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['put']>) {
+        if (this.name === 'snapshots') throw new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+        return put.apply(this, args);
+      });
+      await saveLeague(l);
+      expect([(await loadLeague(l.id))!.season, (await snapshotOf(l.id))!.season]).toEqual([l.season, l.season - 1]);
+      vi.restoreAllMocks();
+      await saveLeague(l);
+      expect((await snapshotOf(l.id))!.season).toBe(l.season);
+      const snap = (await loadRawSnapshot(l.id)) as League;
+      expect([snap.day, snap.games.some((g) => g.pbp)]).toEqual([l.day, false]);
+      const copy = await restoreSnapshot(l.id);
+      expect([copy.id === l.id, copy.name, copy.day]).toEqual([false, `snapshot (${seasonLabel(l.season)} start)`, l.day]);
+      expect((await loadLeague(copy.id))!.games.map((g) => g.gid)).toEqual(l.games.map((g) => g.gid));
+      expect((await loadLeague(l.id))!.name).toBe('snapshot');
+      await deleteLeague(l.id);
+      expect([await loadRawSnapshot(l.id), await snapshotOf(l.id)]).toEqual([undefined, undefined]);
+      await expect(restoreSnapshot(l.id)).rejects.toThrow('no season snapshot');
+    }
+
     // a connection the browser dropped is opened again for the saved-leagues list, loading, saving and deleting
     {
       const l = await saved('dropped');
@@ -223,12 +276,14 @@ describe('saves', () => {
       expect((await fresh.listLeagues()).map((m) => m.id)).toEqual([l.id]);
       // the record itself no longer carries them, and the league saves as before
       const v2 = await req(indexedDB.open('hoops-career'));
-      expect(v2.version).toBe(2);
+      // (and on to version 3, with its snapshots, the first of them taken by the first save)
+      expect([v2.version, v2.objectStoreNames.contains('snapshots')]).toEqual([3, true]);
       expect((await req(v2.transaction('leagues').objectStore('leagues').get(l.id))).games).toEqual([]);
       v2.close();
       simDay(back);
       await fresh.saveLeague(back);
       expect((await fresh.loadLeague(l.id))!.games).toEqual(back.games);
+      expect((await fresh.snapshotOf(l.id))!.season).toBe(back.season);
     }
   });
 });

@@ -409,18 +409,18 @@ describe('sets in the engine', () => {
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred
+      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%
       const expected = {
         ai: [
-          [119, 107, 79, 37, 12, 26, 15, 0],
-          [121, 110, 105, 27, 18, 34, 8, 0],
-          [117, 106, 89, 38, 9, 8, 14, 0],
+          [116, 103, 78, 37, 13, 21, 14, 0],
+          [125, 119, 101, 29, 18, 29, 13, 0],
+          [112, 110, 90, 37, 7, 13, 12, 0],
         ],
         // (taken again when play calls from the bench were retired)
         coached: [
-          [136, 125, 93, 31, 15, 23, 10, 0],
+          [133, 121, 91, 30, 13, 23, 9, 0],
           [117, 118, 93, 33, 14, 23, 19, 0],
-          [107, 119, 77, 44, 4, 26, 20, 0],
+          [104, 117, 79, 40, 7, 26, 18, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

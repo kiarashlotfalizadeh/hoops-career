@@ -336,6 +336,9 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the latest live game's highlights: a damaged reel goes (its report then has none)
   if (x.reel !== undefined && !reelIntact(x.reel)) delete x.reel;
   migrateDealTerms(x);
+  // when it was last backed up, and the season Today last asked: out of shape, as if never (Today asks again)
+  if (x.lastBackup !== undefined && !(obj(x.lastBackup) && num(x.lastBackup.at) && int(x.lastBackup.season))) delete x.lastBackup;
+  if (x.backupAsked !== undefined && !int(x.backupAsked)) delete x.backupAsked;
   // game-time decisions in shape (whom they clear is checked again when the game is set up)
   if (x.gameTime !== undefined && !(obj(x.gameTime) && int(x.gameTime.gid) && nums(x.gameTime.play))) delete x.gameTime;
   // win-probability data of the user's games: a damaged list goes (the charts fall back as for older games)

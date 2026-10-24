@@ -23,6 +23,7 @@ import {
 import { problemOf, useLeague, useStore } from '../state/store';
 import { lastLeagueId, loadLeague, onBlocked, onRemoteChange, SaveConflictError, setLastLeagueId } from '../state/persistence';
 import { exportLeague, exportRawSave } from '../state/backup';
+import { SnapshotActions, snapshotText, useSnapshot } from './components/Backup';
 import { liveInProgress } from '../state/live';
 import { PHASE_LABEL, seasonLabel } from '../core/constants';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
@@ -73,6 +74,8 @@ function Boot({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
   const [blocked, setBlocked] = useState(false);
+  // the season snapshot of a league that won't open (see persistence.ts): offered as the way back
+  const snap = useSnapshot(failed?.id);
   const nav = useNavigate();
   const open = useCallback(async () => {
     const id = lastLeagueId();
@@ -126,6 +129,21 @@ function Boot({ children }: { children: ReactNode }) {
           <div className="tiny dim" style={{ wordBreak: 'break-word' }}>
             {failed.message}
           </div>
+          {snap && (
+            <>
+              <div className="small dim2">The device kept a snapshot of it: {snapshotText(snap)}. Restoring adds it as a league of its own.</div>
+              <SnapshotActions
+                id={failed.id}
+                snap={snap}
+                onRestored={(l) => {
+                  setLeague(l);
+                  setFailed(null);
+                  setReady(true);
+                  nav('/', { replace: true });
+                }}
+              />
+            </>
+          )}
           <div className="row wrap" style={{ marginTop: 4 }}>
             <button className="btn primary" onClick={() => void open()}>
               Try again

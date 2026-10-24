@@ -2,7 +2,7 @@
 // (A backup made mid-draft or in free agency is in flow.test.ts, on the season played there.)
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { exportLeague, importLeague, UnsavedLeagueError } from '../backup';
+import { backupDue, exportLeague, importLeague, UnsavedLeagueError } from '../backup';
 import { loadLeague, SAVE_VERSION } from '../persistence';
 import { useStore } from '../store';
 import { simDay } from '../../core/league/season';
@@ -157,8 +157,34 @@ describe('backups', () => {
 
       // export writes a league that was never saved in the current format, so an older build refuses it
       const unsaved = testLeague('fresh');
-      expect(await exported(unsaved)).toMatchObject({ id: unsaved.id, version: SAVE_VERSION });
+      expect(await exported(unsaved)).toMatchObject({ id: unsaved.id, version: SAVE_VERSION, lastBackup: { season: unsaved.season } });
+      // the file says it's a backup, and so does the league from then on (an import of the file too)
+      expect(unsaved.lastBackup).toEqual({ at: expect.any(Number), season: unsaved.season });
       fresh();
+
+      // a cancelled share sheet is no backup
+      {
+        const l = testLeague('cancelled');
+        vi.stubGlobal('matchMedia', () => ({ matches: true }));
+        vi.stubGlobal('navigator', { canShare: () => true, share: () => Promise.reject(new DOMException('Share canceled', 'AbortError')) });
+        expect(await exportLeague(l)).toBe(false);
+        expect(l.lastBackup).toBeUndefined();
+        fresh();
+      }
+
+      // Today asks once a season, from the league's second on, until a backup or a "not now" that season
+      {
+        const l = testLeague('ask');
+        expect(backupDue(l)).toBe(false);
+        l.season++;
+        expect(backupDue(l)).toBe(true);
+        l.backupAsked = l.season;
+        expect(backupDue(l)).toBe(false);
+        l.season++;
+        expect(backupDue(l)).toBe(true);
+        l.lastBackup = { at: Date.now(), season: l.season };
+        expect(backupDue(l)).toBe(false);
+      }
 
       // exporting the open league mid-game brings its save on the device as far as the file
       const mid = testLeague('export live');
@@ -170,9 +196,10 @@ describe('backups', () => {
       // played on, with no break, pause or move to bring the journal up to date
       for (let i = 0; i < 25; i++) game!.step();
       expect(((await exported(mid)) as League).live?.steps).toBe(game!.steps);
-      // the app is then closed: what it saves on the way has the game where the file has it
+      // the app is then closed: what it saves on the way has the game where the file has it, and the backup noted
       await useStore.getState().flush();
-      expect((await loadLeague(mid.id))!.live?.steps).toBe(game!.steps);
+      const disk = (await loadLeague(mid.id))!;
+      expect([disk.live?.steps, disk.lastBackup?.season]).toEqual([game!.steps, mid.season]);
     },
   );
 });

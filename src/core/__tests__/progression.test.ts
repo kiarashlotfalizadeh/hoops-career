@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { anchorRatings, develop, ratingMeans, trajectory } from '../league/progression';
+import { anchorRatings, annualProgression, develop, ratingMeans, trajectory } from '../league/progression';
 import { OVR_ANCHORS, RATING_KEYS, ovrRaw } from '../ratings';
 import { Rng } from '../random';
 import { standardRoster } from '../league/helpers';
@@ -56,7 +56,8 @@ describe('player development', () => {
       const means = ratingMeans(l);
       // the same players at 33, the summer's draws the same: athleticism lost against how much he had
       const lost = (withMeans: boolean, strong: boolean) => {
-        const sel = ps.filter((p) => (strong ? p.ratings.ath > (means.ath ?? 0) + 10 : p.ratings.ath < (means.ath ?? 0) - 10));
+        // (below the stars, whose own fade from 33 is the next block's)
+        const sel = ps.filter((p) => p.ovr < 87 && (strong ? p.ratings.ath > (means.ath ?? 0) + 10 : p.ratings.ath < (means.ath ?? 0) - 10));
         return (
           sel.reduce((sum, p) => {
             const c = structuredClone(p);
@@ -68,6 +69,30 @@ describe('player development', () => {
       };
       expect(lost(true, true)).toBeGreaterThan(lost(false, true) + 0.2);
       expect(lost(true, false)).toBeLessThan(lost(true, true) - 0.4);
+    }
+
+    // stars fade harder from 33: the same ratings lose more as a 92 than as an 84, and a summer takes 90+ players at 34 down 2+ OVR on average, 1 at least
+    {
+      const means = ratingMeans(l);
+      const stars = ps.filter((p) => p.ovr >= 90);
+      expect(stars.length).toBeGreaterThan(3);
+      const raw = (ovr: number, age: number) =>
+        stars.reduce((sum, p) => {
+          const c = structuredClone(p);
+          c.bornYear = l.season - age;
+          c.ovr = ovr;
+          develop(c, l.season, { ...ctx, means }, new Rng(700 + p.pid), 0.8);
+          return sum + ovrRaw(p.ratings) - ovrRaw(c.ratings);
+        }, 0) / stars.length;
+      expect(raw(92, 34)).toBeGreaterThan(raw(84, 34) + 0.5);
+      // (not yet at 32)
+      expect(Math.abs(raw(92, 32) - raw(84, 32))).toBeLessThan(0.05);
+      const c = structuredClone(l);
+      for (const p of stars) c.players[p.pid].bornYear = c.season - 34;
+      annualProgression(c, new Rng(9));
+      const drops = stars.map((p) => p.ovr - c.players[p.pid].ovr);
+      expect(drops.reduce((a, d) => a + d, 0) / drops.length).toBeGreaterThanOrEqual(2);
+      expect(Math.min(...drops)).toBeGreaterThanOrEqual(1);
     }
 
     // the hidden development arc is the same every summer for a player in a league, differs between leagues, and moves a young player's course

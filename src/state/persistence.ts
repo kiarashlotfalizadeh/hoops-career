@@ -2,9 +2,11 @@
 // their own store keyed by [league id, gid]: a result doesn't change once played, so a save writes
 // only the new ones instead of structured-cloning a season of box scores every time. A small
 // index lists the leagues and carries the revision that keeps two windows from overwriting each other.
+// Each league also keeps one snapshot: a copy of itself as it started the season (see snapshot), the
+// way back when its record is damaged or a season went wrong.
 import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
-import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
+import { MIN_SAVE_VERSION, SAVE_VERSION, seasonLabel } from '../core/constants';
 import { migrate, obj } from './saveCheck';
 
 // what a loaded save must look like lives in saveCheck.ts; screens and the backup import it from here
@@ -26,6 +28,8 @@ export interface LeagueMeta {
   rev?: number;
   /** The save format (absent before format 4): older ones can't be opened (see `openable`). */
   version?: number;
+  /** The league's snapshot (see snapshot): the season it started and when it was taken. Absent until the first. */
+  snap?: { season: number; at: number };
 }
 
 /** Whether this build can open a saved league (the start screen offers older ones for deletion only). */
@@ -86,7 +90,7 @@ export function onBlocked(fn: (() => void) | null) {
 
 function db() {
   if (!dbp) {
-    dbp = openDB('hoops-career', 2, {
+    dbp = openDB('hoops-career', 3, {
       async upgrade(d, from, _to, tx) {
         if (from < 1) {
           d.createObjectStore('leagues');
@@ -101,6 +105,8 @@ function db() {
             await Promise.all([...(l.games ?? []).map((g) => games.put(g, [id, g.gid])), c.update({ ...l, games: [] })]);
           }
         }
+        // one snapshot per league, keyed by its id (a league's first save on version 3 takes it)
+        if (from < 3) d.createObjectStore('snapshots');
       },
       blocked: () => blockedListener?.(),
       // a newer version wants to upgrade (another tab updated the app): let it, and reopen next time
@@ -176,7 +182,8 @@ export function metaFor(league: League): LeagueMeta {
   };
 }
 
-async function write(d: IDBPDatabase, league: League) {
+/** Write the league; resolves whether its snapshot is due (none yet of this season: see snapshot). */
+async function write(d: IDBPDatabase, league: League): Promise<boolean> {
   const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
   // a failed write rejects through the awaited requests below
   tx.done.catch(() => {});
@@ -200,7 +207,8 @@ async function write(d: IDBPDatabase, league: League) {
       next.set(g.gid, !!g.pbp);
     }
     for (const gid of prev?.games.keys() ?? []) if (!next.has(gid)) ops.push(games.delete([league.id, gid]));
-    ops.push(metas.put({ ...metaFor(league), rev }, league.id));
+    // (the snapshot's entry stays as it was: only a snapshot writes it)
+    ops.push(metas.put({ ...metaFor(league), rev, ...(cur?.snap && { snap: cur.snap }) }, league.id));
   } catch (e) {
     // a value IndexedDB can't store: write nothing rather than half a league
     void Promise.allSettled(ops);
@@ -210,10 +218,84 @@ async function write(d: IDBPDatabase, league: League) {
   await Promise.all([...ops, tx.done]);
   synced.set(league, { rev, games: next });
   broadcast()?.postMessage(league.id);
+  return cur?.snap?.season !== league.season;
 }
 
 export async function saveLeague(league: League) {
-  await withDb((d) => write(d, league));
+  const due = await withDb((d) => write(d, league));
+  // the season's first save keeps a copy of the league as it starts it. The save itself is done
+  // either way: a snapshot that can't be written (the device short of space) is tried again next save
+  if (due)
+    await snapshot(league).catch((e) => {
+      if (!isQuotaError(e)) console.warn('The season snapshot could not be saved:', e);
+    });
+}
+
+/**
+ * Keep a copy of the league as it stands, replacing its last one: taken by the first save of each
+ * season, so a new season (its preseason, as the rollover saves it) starts with one. It shares the
+ * device with the save, so it's no help when the browser clears the whole site, but it is when the
+ * league's own record is damaged or a season went wrong: the main menu and Settings restore it as a
+ * copy (see restoreSnapshot), or export it. Kept small: results without their play-by-play, shot
+ * charts and flow, and no highlights reel (a new season has dropped them anyway).
+ */
+async function snapshot(league: League) {
+  // built now, as the league stands: the put clones it before anything can change it
+  const copy: Partial<League> = {
+    ...league,
+    games: league.games.map((g) => ({ ...g, pbp: undefined, shots: undefined, flow: undefined, flowPeriods: undefined, flowT: undefined, flowPoss: undefined })),
+  };
+  delete copy.reel;
+  const snap = { season: league.season, at: Date.now() };
+  await withDb(async (d) => {
+    const tx = d.transaction(['snapshots', 'meta'], 'readwrite');
+    tx.done.catch(() => {});
+    const meta = (await tx.objectStore('meta').get(league.id)) as LeagueMeta | undefined;
+    // deleted meanwhile (in another window): nothing to keep a copy of
+    if (!meta) return;
+    await Promise.all([tx.objectStore('snapshots').put(copy, league.id), tx.objectStore('meta').put({ ...meta, snap }, league.id), tx.done]);
+  });
+  // a career a season or more along is worth asking the browser to keep through a storage squeeze
+  // (Safari and Chrome may otherwise clear a site's storage; Firefox asks the player, once)
+  if (league.season > league.startSeason) keepStorage();
+}
+
+let askedToKeep = false;
+/** Ask the browser, once a session, not to clear this site's storage when the device runs short. */
+function keepStorage() {
+  if (askedToKeep) return;
+  askedToKeep = true;
+  try {
+    void globalThis.navigator?.storage?.persist?.().catch(() => {});
+  } catch {
+    /* (no storage manager: nothing to ask) */
+  }
+}
+
+/** The league's snapshot as stored, unchecked (to export it as it is). */
+export async function loadRawSnapshot(id: string): Promise<unknown> {
+  return withDb((d) => d.get('snapshots', id));
+}
+
+/** When the league's snapshot was taken and the season it starts, if it has one. */
+export async function snapshotOf(id: string): Promise<LeagueMeta['snap']> {
+  const meta = (await withDb((d) => d.get('meta', id))) as LeagueMeta | undefined;
+  return meta?.snap;
+}
+
+/**
+ * Store the league's snapshot as a league of its own, beside the league (which may be the damaged
+ * one, or simply further on): named for the season it starts, under an id of its own, so restoring
+ * never overwrites anything. Resolves to the new league.
+ */
+export async function restoreSnapshot(id: string): Promise<League> {
+  const raw = await loadRawSnapshot(id);
+  if (raw === undefined) throw new Error('There is no season snapshot of that league on this device.');
+  const league = migrate(raw, 'The season snapshot is damaged.');
+  league.id = `${id}-${Date.now().toString(36)}`;
+  league.name = `${league.name} (${seasonLabel(league.season)} start)`;
+  await saveLeague(league);
+  return league;
 }
 
 function readAll(id: string) {
@@ -250,8 +332,15 @@ export async function listLeagues(): Promise<LeagueMeta[]> {
 
 export async function deleteLeague(id: string) {
   await withDb(async (d) => {
-    const tx = d.transaction(['leagues', 'meta', 'games'], 'readwrite');
-    await Promise.all([tx.objectStore('leagues').delete(id), tx.objectStore('meta').delete(id), tx.objectStore('games').delete(gamesOf(id)), tx.done]);
+    const tx = d.transaction(['leagues', 'meta', 'games', 'snapshots'], 'readwrite');
+    // (its snapshot goes with it)
+    await Promise.all([
+      tx.objectStore('leagues').delete(id),
+      tx.objectStore('meta').delete(id),
+      tx.objectStore('games').delete(gamesOf(id)),
+      tx.objectStore('snapshots').delete(id),
+      tx.done,
+    ]);
   });
   broadcast()?.postMessage({ id, deleted: true });
 }

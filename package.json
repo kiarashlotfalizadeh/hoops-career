@@ -29,7 +29,8 @@
     "season-test": "tsx scripts/season-test.ts",
     "real-check": "tsx scripts/real-check.ts",
     "smoke": "node scripts/qa/smoke.mjs",
-    "invariants": "tsx scripts/league-invariants.ts"
+    "invariants": "tsx scripts/league-invariants.ts",
+    "star-check": "tsx scripts/star-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

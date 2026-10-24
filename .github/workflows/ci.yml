@@ -30,6 +30,10 @@ jobs:
       - run: npm test
       - name: League invariants (multi-season run)
         run: npm run invariants
+      - name: Star check (twelve seasons, no scoring leader over 39 a game)
+        run: npm run star-check
+        env:
+          QUIET: '1'
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - name: Browser smoke test (phone + tablet, backup round trip)

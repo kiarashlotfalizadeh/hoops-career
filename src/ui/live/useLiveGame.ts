@@ -11,7 +11,7 @@ import { useLeague, useStore, useVersion } from '../../state/store';
 import { act, edit } from '../../state/actions';
 import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { composites } from '../../core/ratings';
-import { gameTime } from '../../core/format';
+import { gameTime, plural } from '../../core/format';
 import type { League, PbpEntry } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { neutralSite } from '../../core/league/games';
@@ -60,6 +60,15 @@ function atmoCtx(league: League, lg: LiveGame): AtmoCtx {
     name: simNames(league, lg.sim),
     stakes: stakesOf(league, g),
   };
+}
+
+/**
+ * The end of a period (a break or not): the journal is brought up to it and written to the device
+ * now, not after the autosave's pause, so a reload or a closed app picks the game up from here at
+ * worst, and says so when it does (LiveGame.rewound).
+ */
+function saveSpot(lg: LiveGame) {
+  if (edit(() => void lg.checkpoint())) void useStore.getState().save();
 }
 
 export function useLiveGame() {
@@ -382,9 +391,15 @@ export function useLiveGame() {
     if (found?.resumed) {
       const s = found.sim;
       if (found.resumed === 'restarted') useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
-      // (one picked up before its tip has nothing to say: the starting lineups go up as on a fresh one)
-      else if (found.steps > 0) useStore.getState().toast(`Picked up where you left off: ${s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : `${gameTime(s.q, s.clock)}`}.`);
+      else {
+        const at = s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : gameTime(s.q, s.clock);
+        // it went back to the last save (the app closed between saves): the possessions after it play again
+        if (found.rewound) useStore.getState().toast(`Picked up from the last save, ${at}: ${plural(found.rewound, 'possession')} back.`);
+        // (one picked up before its tip has nothing to say: the starting lineups go up as on a fresh one)
+        else if (found.steps > 0) useStore.getState().toast(`Picked up where you left off: ${at}.`);
+      }
       found.resumed = undefined;
+      found.rewound = undefined;
     }
     if (notes.length) useStore.getState().toast(notes.join(' '));
     attach(found);
@@ -479,7 +494,7 @@ export function useLiveGame() {
   const enterBreak = useCallback(
     (lg: LiveGame) => {
       // a break is a good moment to save where the game is (the app may be closed next)
-      edit(() => void lg.checkpoint());
+      saveSpot(lg);
       setScript(null);
       // (the court steps aside: its callout goes with it, the period report tells the story)
       atmoApi.clear();
@@ -555,6 +570,8 @@ export function useLiveGame() {
         brokeAt.current = s.q;
         return enterBreak(lg);
       }
+      // no break here (Settings → Live games → Breaks): the period's end is saved all the same, once
+      if (lg.journal.steps !== lg.steps) saveSpot(lg);
     }
     let logs: PossLog[] = [];
     let guard = 0;
