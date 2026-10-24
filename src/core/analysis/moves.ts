@@ -1,7 +1,8 @@
 // The coach's moves in a live game, and what each did: every tactics change, substitution and
 // timeout the user made (or let the staff make), in the Tactics screen's words, with the scoring
-// while it was in effect next to the stretch before it. A change of tactics is measured until the
-// next change; a substitution over the stint it started; a timeout over the trips either side of it.
+// while it was in effect next to the stretch before it (at least MOVE_BASE_TRIPS of it). A change of
+// tactics is measured until the next change; a substitution while the players it brought in were on
+// the floor; a timeout over the trips either side of it.
 // Read by the live game's bench as the night goes, and kept with the result for the post-game
 // report. Pure: it reads the possession logs the game already keeps.
 
@@ -36,6 +37,12 @@ export const MOVE_MIN_TRIPS = 15;
 export const MOVE_CLOSED_TRIPS = 4;
 /** Trips at the rate before a move it needs to be judged against (a rate over two or three trips is noise, not a baseline). */
 export const MOVE_MIN_BEFORE = 8;
+/**
+ * Trips (each way) the stretch before a move reaches back at least, past the last move of its kind
+ * when that came only a few trips earlier: two changes a few trips apart otherwise left the second
+ * a baseline too short to judge it against for the rest of the night ("Too early" after 26 trips).
+ */
+export const MOVE_BASE_TRIPS = 20;
 /**
  * Standard errors the rate has to move, the stretch before's noise counted too, to read as working
  * or not: at one, a move that changed nothing read one way or the other about a third of the time.
@@ -196,11 +203,15 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
   const tip = first?.before && slotName ? slotName(first.before) : null;
   // each batch is measured from its last move to the next batch of its kind, against the stretch from the one before
   const nextOf = (i: number, kind: LiveOp['op']) => batches.slice(i + 1).find((b) => b[0].op.op === kind)?.[0].log ?? logs.length;
-  const prevOf = (i: number, kind: LiveOp['op']) =>
-    batches
-      .slice(0, i)
-      .reverse()
-      .find((b) => b[1].op.op === kind)?.[1].log ?? 0;
+  // (from the last move of its kind, or MOVE_BASE_TRIPS back when that was only a few trips ago: two logs a trip each way)
+  const prevOf = (i: number, kind: LiveOp['op'], at: number) =>
+    Math.min(
+      batches
+        .slice(0, i)
+        .reverse()
+        .find((b) => b[1].op.op === kind)?.[1].log ?? 0,
+      Math.max(0, at - 2 * MOVE_BASE_TRIPS),
+    );
   /** Its stretch is over (the next move of its kind came, or the final buzzer) short of the trips a move in effect waits for. */
   const closed = (to: number, t: MoveTally) => (to < logs.length || over) && Math.min(t.us.poss, t.them.poss) < MOVE_MIN_TRIPS;
   batches.forEach(([m, last], i) => {
@@ -224,19 +235,30 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
         ...(all.every((x) => x.op.op === 'tactics' && x.op.args.staff) ? { by: 'staff' as const } : {}),
         ...(aim.pid !== undefined ? { pid: aim.pid } : {}),
         ...(aim.types ? { aim: aimLabel(aim.types) } : {}),
-        before: tally(logs, side, prevOf(i, 'tactics'), m.log, aim),
+        before: tally(logs, side, prevOf(i, 'tactics', m.log), m.log, aim),
         after: tAfter,
         ...(closed(end, tAfter) ? { closed: true as const } : {}),
       });
     } else if (m.op.op === 'sub') {
-      const end = nextOf(i, 'sub');
-      const tAfter = tally(logs, side, last.log, end);
+      // the stretch the players it brought in were on the floor: from the trip the first of them
+      // checked in (a sub waits for a dead ball) until the last of them went off, or the next of the
+      // user's substitutions (the staff's later changes ended the margin's link to his)
+      const ins = all.flatMap((x) => (x.op.op === 'sub' ? [x.op.args.in] : []));
+      const next = nextOf(i, 'sub');
+      // (logs without the five on the floor, a game from before they were kept: the stretch to the next substitution)
+      const known = logs.slice(last.log, next).some((l) => l.on?.[side]?.length);
+      const playing = (k: number) => !known || ins.some((pid) => logs[k]?.on?.[side]?.includes(pid));
+      let from = last.log;
+      while (from < next && !playing(from)) from++;
+      let end = from;
+      while (end < next && playing(end)) end++;
+      const tAfter = tally(logs, side, from, end);
       out.push({
         kind: 'sub',
         ...at,
         text: all.map((x) => (x.op.op === 'sub' ? `${nameOf(x.op.args.in)} in for ${nameOf(x.op.args.out)}` : '')).join(' · '),
         end: 'both',
-        before: tally(logs, side, prevOf(i, 'sub'), m.log),
+        before: tally(logs, side, prevOf(i, 'sub', m.log), m.log),
         after: tAfter,
         ...(closed(end, tAfter) ? { closed: true as const } : {}),
       });

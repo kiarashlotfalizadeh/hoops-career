@@ -1,7 +1,8 @@
 // What the staff's counters against one opponent are worth, measured in the sim worker (see
 // core/ai/counterWorth.ts) for the user's next game against them: a few seconds of games, once for
-// each state of the plan and the tactics (a counter added changes what the others are worth). Kept
-// for the session, so the matchup page's tabs and a return to it read the same numbers.
+// each state of the plan, the tactics and who's fit to play on either side (a counter added changes
+// what the others are worth), not again each day. Kept for the session, so the matchup page's tabs
+// and a return to it read the same numbers.
 import { useEffect, useState } from 'react';
 import type { League } from '../../../core/types';
 import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
@@ -25,10 +26,14 @@ let running: string | null = null;
 
 const tell = () => listeners.forEach((f) => f());
 
-/** What the measurement depends on: the league, the day, the opponent, and the user's tactics and rotation for that game. */
-function keyOf(league: League, opp: number): string {
+/** What the measurement depends on: the league, the meeting, the user's tactics and rotation for it, and who's out on either side. */
+function keyOf(league: League, opp: number, gid: number): string {
   const me = league.teams[league.userTid];
-  return `${league.id}:${league.season}:${league.day}:${opp}:${hashString(JSON.stringify(effectiveTactics(league, opp)) + JSON.stringify(me.rotation))}`;
+  const out = Object.values(league.players)
+    .filter((p) => (p.tid === opp || p.tid === league.userTid) && p.injury)
+    .map((p) => p.pid)
+    .sort((a, b) => a - b);
+  return `${league.id}:${league.season}:${gid}:${opp}:${hashString(JSON.stringify(effectiveTactics(league, opp)) + JSON.stringify(me.rotation) + out.join(','))}`;
 }
 
 /** The user's next game against `opp` this season, if any. */
@@ -80,7 +85,8 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   const [, bump] = useState(0);
   const simming = useStore((s) => !!s.sim);
   const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
-  const key = inSeason && nextMeeting(league, opp) ? keyOf(league, opp) : null;
+  const next = inSeason ? nextMeeting(league, opp) : undefined;
+  const key = next ? keyOf(league, opp, next.gid) : null;
   useEffect(() => {
     const f = () => bump((x) => x + 1);
     listeners.add(f);
@@ -92,11 +98,11 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   return key ? (measured.get(key) ?? { progress: 0 }) : null;
 }
 
-/** "+1.2 a game", "Even", "−0.8 a game": a measured counter in a few words, with its tone. */
+/** "About +0.6 a game", "Even", "About −0.5 a game": a measured counter in a few words (its shrunk worth), with its tone. */
 export function worthText(w: CounterWorth): { text: string; tone: 'good' | 'bad' | undefined } {
   const call = worthCall(w);
   const n = Math.abs(w.pts).toFixed(1);
-  return call === 'gain' ? { text: `+${n} a game`, tone: 'good' } : call === 'cost' ? { text: `−${n} a game`, tone: 'bad' } : { text: 'Even', tone: undefined };
+  return call === 'gain' ? { text: `About +${n} a game`, tone: 'good' } : call === 'cost' ? { text: `About −${n} a game`, tone: 'bad' } : { text: 'Even', tone: undefined };
 }
 
 /** Counters by what they measured: gains first (the biggest first), then the ones too close to call, then the costs, the ones the staff didn't measure last. */

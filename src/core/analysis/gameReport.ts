@@ -747,7 +747,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     });
   }
 
-  // star performances
+  // star performances (and whether the user's team played a Star plan tonight, whatever its saved tactics say)
+  const starPlanPlayed = (res.impacts ?? []).some((im) => im.t === userSide && (im.key === 'star_deny:d' || im.key === 'star_double:d'));
   for (const [side, box, sign] of [
     [ut, u, 1],
     [ot, o, -1],
@@ -767,11 +768,12 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         topic: `star-${side.tid}`,
-        // (not named: a Star plan goes after their primary creator, who isn't always the scorer)
+        // (not named: a Star plan goes after their primary creator, who isn't always the scorer; none
+        // when one was played tonight, saved, in the plan or called live: the engine tagged it)
         advice:
-          sign < 0 && tactics.defense.starPlan === 'none'
+          sign < 0 && tactics.defense.starPlan === 'none' && !starPlanPlayed
             ? opts.partial
-              ? 'Try a Star plan (Instructions): deny him the ball.'
+              ? 'Try a Star plan (Game plan): deny him the ball.'
               : 'Next time try a Star plan (Instructions): deny him the ball.'
             : undefined,
       });

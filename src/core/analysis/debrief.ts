@@ -13,6 +13,7 @@ import { leagueThreePct } from '../ai/opponentPlan';
 import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
 import { buildGameReport, decidingFactors, type GameReport, type Factor } from './gameReport';
 import { moveVerdict } from './moves';
+import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { famReadout, impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
@@ -36,10 +37,15 @@ export interface PlanGrade {
   label: string;
   /** What it was aimed at tonight against coming in: "SAS post-ups 0.75 a trip on 8 trips, 1.10 coming in". */
   line: string;
-  /** 'better' / 'worse' once the night is more than noise, 'same' when it isn't, 'few' with too few trips to say. */
-  verdict: 'better' | 'worse' | 'same' | 'few';
-  /** What the staff measured it worth over many games, when it went in: "+0.4 a game". */
+  /** Its grade: what the staff measured it worth over many games when it went in (a gain, a cost, or even). */
+  call: 'gain' | 'cost' | 'even';
+  /** What that measure was, in points: "+0.4 a game". */
   worth?: string;
+  /**
+   * Tonight on what it was aimed at, against coming in: 'better' / 'worse' only for a night far
+   * outside a single game's noise (PLAN_Z), 'same' otherwise, 'few' with too few trips to say.
+   */
+  night: 'better' | 'worse' | 'same' | 'few';
 }
 
 export interface Debrief {
@@ -209,19 +215,63 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
     fatigue: won ? ['Their legs went before ours.'] : ['Our legs went before theirs.'],
   };
   // shots falling above or below their looks is told as the luck it was, not as something to fix
-  if (top?.luck) why.shooting = won ? ["Our shots fell and theirs didn't: the luck went our way."] : ["Their shots fell and ours didn't: that part was luck, not the plan."];
+  if (top?.luck) why.shooting = [luckLine(res, side, won)];
   else if (res.xShots)
     why.shooting = won ? ['We got the better looks.', 'Our offense found the better shots.'] : ['They got the better looks.', 'Their offense found the better shots.'];
   const second = top && why[top.category] ? say(`why-${top.category}`, why[top.category]!) : undefined;
   return second ? `${how} ${second}` : how;
 }
 
+/** A side's shooting against its looks (eFG made less eFG the attempts were worth) that reads as more than a rounding. */
+const LUCK_GAP = 0.02;
+
+/**
+ * The luck in a sentence, told from both sides' numbers: whose shots fell above what their looks
+ * were worth and whose fell below (never "ours didn't" when ours fell too).
+ */
+export function luckLine(res: GameResult, side: 0 | 1, won: boolean): string {
+  const gap = (s: 0 | 1) => {
+    const box = s === 0 ? res.home : res.away;
+    const x = res.xShots?.[s];
+    return x && box.t.fga ? (box.t.fgm + 0.5 * box.t.tpm) / box.t.fga - x.pts / 2 / box.t.fga : 0;
+  };
+  const [us, them] = [gap(side), gap((1 - side) as 0 | 1)];
+  const theirsFell = them > LUCK_GAP;
+  const theirsDidnt = them < -LUCK_GAP;
+  const oursFell = us > LUCK_GAP;
+  const oursDidnt = us < -LUCK_GAP;
+  if (won) {
+    const what =
+      oursFell && theirsDidnt
+        ? "Our shots fell and theirs didn't"
+        : oursFell
+          ? 'Our shots fell above what our looks were worth'
+          : theirsDidnt
+            ? "Their shots didn't fall"
+            : 'The shots fell our way';
+    return `${what}: the luck went our way.`;
+  }
+  const what =
+    theirsFell && oursDidnt
+      ? "Their shots fell and ours didn't"
+      : theirsFell
+        ? 'Their shots fell above what their looks were worth'
+        : oursDidnt
+          ? "Our shots didn't fall"
+          : 'The shots fell their way';
+  return `${what}: that part was luck, not the plan.`;
+}
+
 /** Trips on what a counter was aimed at before tonight reads as anything (fewer: "too few to tell"). */
 const PLAN_MIN_TRIPS = 4;
 /** Trips coming in a team's own rate needs to be the baseline (fewer: the league's rate on those plays). */
 const PLAN_MIN_BEFORE = 30;
-/** Standard errors a night has to move from coming in to read as the counter working or not (as a live move's verdict). */
-const PLAN_Z = 2;
+/**
+ * Standard errors a night has to move from coming in before the report says so: a counter worth a
+ * point a game moves a night's rate by far less than one game's noise, so a single night is told
+ * only when it's well outside it, and the grade is the counter's measured worth.
+ */
+const PLAN_Z = 3;
 /** The coach's first games with teaching on: the report says what a single night can and can't show. */
 const FRAME_GAMES = 5;
 
@@ -267,11 +317,12 @@ function typesLabel(types: string[]): string {
 }
 
 /**
- * The game plan's counters, each graded on what it was aimed at: their points a trip on those plays
- * tonight (ours, for a counter on offense) against their rate coming in (the league's, early in the
- * season), or their player's points against his average. A night reads as the counter working or
- * not only when the gap is PLAN_Z standard errors (a trip's points spread about 1.1 either way); a
- * counter with no play of its own to measure is graded on the whole end of the floor it's about.
+ * The game plan's counters, each graded on its measured worth (what the staff's paired games made
+ * of it when it went in: see counterWorth.ts), with tonight on what it was aimed at beside it: their
+ * points a trip on those plays (ours, for a counter on offense) against their rate coming in (the
+ * league's, early in the season), or their player's points against his average. A night reads as
+ * going for or against it only when the gap is PLAN_Z standard errors (a trip's points spread about
+ * 1.1 either way); a counter with no play of its own to measure is told on the whole end of the floor.
  */
 export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGrade[] {
   const me = side === 0 ? res.home.tid : res.away.tid;
@@ -280,6 +331,8 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
   const base = playTypeBaselines(league);
   return (res.plan ?? []).map((u) => {
     const worth = u.pts !== undefined && Math.abs(u.pts) >= 0.05 ? `${u.pts > 0 ? '+' : '−'}${Math.abs(u.pts).toFixed(1)} a game` : undefined;
+    const call = worthCall({ pts: u.pts ?? 0 });
+    const graded = <T extends { night: PlanGrade['night'] }>(x: T & { label: string; line: string }): PlanGrade => ({ ...x, call, ...(worth ? { worth } : {}) });
     // one of theirs: his points tonight against his average coming in
     if (u.pid !== undefined) {
       const p = league.players[u.pid];
@@ -289,11 +342,11 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
         .flatMap((g) => [...g.home.players, ...g.away.players].filter((b) => b.pid === u.pid && b.min > 0));
       const avg = before.length ? before.reduce((a, b) => a + b.pts, 0) / before.length : null;
       const name = p ? playerName(p) : 'Their player';
-      if (!line || line.min <= 0) return { label: u.label, line: `${name} didn't play.`, verdict: 'few' as const, worth };
-      // (a scorer's night spreads about 7 points either way)
+      if (!line || line.min <= 0) return graded({ label: u.label, line: `${name} didn't play.`, night: 'few' });
+      // (a scorer's night spreads about 7 points either way: told past PLAN_Z of it)
       const d = avg === null ? 0 : avg - line.pts;
-      const verdict = avg === null || before.length < 3 ? 'few' : d > 7 ? 'better' : d < -7 ? 'worse' : 'same';
-      return { label: u.label, line: `${name} ${line.pts} points${avg !== null ? `, ${avg.toFixed(1)} a game coming in` : ''}.`, verdict, worth };
+      const night = avg === null || before.length < 3 ? 'few' : d > 7 * PLAN_Z ? 'better' : d < -7 * PLAN_Z ? 'worse' : 'same';
+      return graded({ label: u.label, line: `${name} ${line.pts} points${avg !== null ? `, ${avg.toFixed(1)} a game coming in` : ''}.`, night });
     }
     // play types, or the whole end of the floor
     const off = u.end === 'off';
@@ -301,20 +354,20 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
     const types = u.types?.length ? u.types : null;
     const all = Object.keys(base);
     const t = typeTally(league, res, tid, types ?? all);
-    if (u.end === 'both' && !types) return { label: u.label, line: 'It changes both ends: a stretch of games grades it, not a night.', verdict: 'few' as const, worth };
+    if (u.end === 'both' && !types) return graded({ label: u.label, line: 'It changes both ends: a stretch of games shows it, not a night.', night: 'few' });
     // (with too few trips of their own coming in: the league's rate on those plays)
     const lgRate = types ? types.reduce((a, k) => a + (base[k] ?? 1), 0) / types.length : leaguePpp(league);
     const wasRate = t.before.poss >= PLAN_MIN_BEFORE ? t.before.pts / t.before.poss : lgRate;
     const what = `${abbrev(tid)} ${types ? typesLabel(types) : 'offense'}`;
     if (t.night.poss < PLAN_MIN_TRIPS || wasRate === null)
-      return { label: u.label, line: `${what}: ${plural(t.night.poss, 'trip')} tonight, too few to tell.`, verdict: 'few' as const, worth };
+      return graded({ label: u.label, line: `${what}: ${plural(t.night.poss, 'trip')} tonight, too few to tell.`, night: 'few' });
     const now = t.night.pts / t.night.poss;
     const wasTrips = t.before.poss >= PLAN_MIN_BEFORE ? t.before.poss : 200;
     const se = 1.1 * Math.sqrt(1 / t.night.poss + 1 / wasTrips);
     const d = (now - wasRate) * (off ? 1 : -1);
-    const verdict = d > PLAN_Z * se ? 'better' : d < -PLAN_Z * se ? 'worse' : 'same';
+    const night = d > PLAN_Z * se ? 'better' : d < -PLAN_Z * se ? 'worse' : 'same';
     const was = t.before.poss >= PLAN_MIN_BEFORE ? `${wasRate.toFixed(2)} coming in` : `the league's ${wasRate.toFixed(2)}`;
-    return { label: u.label, line: `${what} ${now.toFixed(2)} a trip on ${plural(t.night.poss, 'trip')}, ${was}.`, verdict, worth };
+    return graded({ label: u.label, line: `Tonight: ${what} ${now.toFixed(2)} a trip on ${plural(t.night.poss, 'trip')}, ${was}.`, night });
   });
 }
 
@@ -389,6 +442,8 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
     if (k.met !== false || advice.length >= 5) continue;
     const text = keyAdvice(league, k, res, side);
     if (!text || (KEY_TOPIC[k.id] && topics.has(KEY_TOPIC[k.id]))) continue;
+    // a key missed on a front the night was won on (the glass as a deciding edge for us) isn't next time's lesson
+    if (KEY_TOPIC[k.id] && decided.some((f) => f.pts > 0 && (f.topic ?? f.category) === KEY_TOPIC[k.id])) continue;
     // (the keys' own list has its number against the goal)
     advice.push({ id: `key-${k.id}`, title: `Missed key: ${k.title}`, text });
   }
@@ -403,8 +458,10 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const plan = planGrades(league, res, side);
   // a coach's first nights: what one game can and can't say, so "luck" doesn't read as "nothing you do matters"
   const first = league.settings.teaching !== false && league.season === league.startSeason && gamesIn(league, res, me) <= FRAME_GAMES;
+  // (the luck half only on a night luck decided)
+  const lucky = decided.some((f) => f.luck);
   const frame = first
-    ? `One night's shooting swings a game either way: the report calls that luck. A plan shows over a stretch of games${plan.length ? ', so yours is graded below on what each counter was aimed at' : ''}, and the report keeps score.`
+    ? `${lucky ? "One night's shooting swings a game either way: the report calls that luck. " : ''}A plan shows over a stretch of games, not one night${plan.length ? ': yours is graded on what the staff measured each counter worth over many games, with tonight beside it' : ''}.`
     : undefined;
   return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, opp, meetAgain };
 }

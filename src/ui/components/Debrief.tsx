@@ -20,12 +20,17 @@ import { AssistantHead, MovesList, NoteCard } from './StaffCards';
 /** What to do next time, shown before "more". */
 const ADVICE_SHOWN = 2;
 
-/** A plan counter's grade, in the words a live move's verdict uses. */
-const PLAN_VERDICT: Record<PlanGrade['verdict'], { label: string; tone: string }> = {
-  better: { label: 'Worked', tone: 'good' },
-  worse: { label: "Didn't work", tone: 'bad' },
-  same: { label: 'No clear difference', tone: 'dim' },
-  few: { label: 'Too few to tell', tone: 'dim' },
+/** A plan counter's grade: its measured worth (a single night is too noisy to grade it on). */
+const PLAN_CALL: Record<PlanGrade['call'], { label: (g: PlanGrade) => string; tone: string }> = {
+  gain: { label: (g) => `Worth ${g.worth ?? 'a little'}`, tone: 'good' },
+  cost: { label: (g) => `Costs ${g.worth?.replace('−', '') ?? 'a little'}`, tone: 'bad' },
+  even: { label: () => 'Even by the numbers', tone: 'dim' },
+};
+
+/** Tonight, when it was far enough outside one game's noise to say. */
+const PLAN_NIGHT: Partial<Record<PlanGrade['night'], string>> = {
+  better: ' A night well beyond its usual: it showed.',
+  worse: ' A night well off its usual: it went against it.',
 };
 
 export function Debrief({ res, league, report }: { res: GameResult; league: League; report: GameReport }) {
@@ -94,12 +99,12 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                   <div className="lv-mv-what">{g.label}</div>
                   <div className="lv-mv-line small dim2">
                     {g.line}
-                    {g.worth && ` The staff measured it at ${g.worth} over many games.`}
+                    {PLAN_NIGHT[g.night] ?? ''}
                   </div>
                 </div>
-                <span className={`lv-mv-v ${PLAN_VERDICT[g.verdict].tone}`}>
-                  {g.verdict === 'better' && <Check size={12} aria-hidden="true" />}
-                  {PLAN_VERDICT[g.verdict].label}
+                <span className={`lv-mv-v ${PLAN_CALL[g.call].tone}`}>
+                  {g.call === 'gain' && <Check size={12} aria-hidden="true" />}
+                  {PLAN_CALL[g.call].label(g)}
                 </span>
               </div>
             ))}

@@ -11,7 +11,7 @@ import { userGameOnDay } from '../league/games';
 import { teamSeason } from '../league/helpers';
 import { simDay } from '../league/season';
 import { gameKeys, gradeKey, keyState, keyValue } from '../analysis/keys';
-import { coachMoves, moveText, moveVerdict, MOVE_MIN_TRIPS } from '../analysis/moves';
+import { coachMoves, moveText, moveVerdict, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from '../analysis/moves';
 import { defaultTactics, cloneTactics } from '../sim/tactics';
 import type { PossLog } from '../sim/log';
 import type { CoachMove, GameResult, LiveOp, ScheduledGame } from '../types';
@@ -211,6 +211,38 @@ describe('keys to the game and coach moves', () => {
         // a timeout reads the eight trips each way either side of it
         expect(moves[1].before.us.poss + moves[1].before.them.poss).toBe(16);
         expect(moves[1].after.us.poss + moves[1].after.them.poss).toBe(16);
+        // with the five on the floor known: only the trips the player brought in was on the floor (he
+        // checks in at the next dead ball, two trips later, and goes off five trips after that)
+        const on = logs.map((l, k) => ({ ...l, on: [k >= 32 && k < 42 ? [2, 3, 4, 5, 6] : [1, 3, 4, 5, 6], [7, 8, 9, 10, 11]] as [number[], number[]] }));
+        const [sub] = coachMoves([{ op: { at: 0, op: 'sub', args: { out: 1, in: 2 } }, log: 30, q: 1, clock: 300 }], on, 0, names);
+        expect(sub.after.us.poss + sub.after.them.poss).toBe(10);
+        expect(sub.closed).toBe(true);
+      }
+
+      // the stretch before a move reaches back at least MOVE_BASE_TRIPS: a change a few trips after
+      // another isn't "too early" for the rest of the night
+      {
+        const before = defaultTactics();
+        const mid = cloneTactics(before);
+        mid.defense.pnr = 'hedge';
+        const after = cloneTactics(mid);
+        after.defense.help = 80;
+        const logs: PossLog[] = [];
+        for (let i = 0; i < 60; i++) logs.push(trip(0, 1), trip(1, i < 30 ? 2 : 0));
+        const moves = coachMoves(
+          [
+            { op: { at: 0, op: 'tactics', args: { tactics: mid } }, log: 50, q: 1, clock: 300, before },
+            { op: { at: 0, op: 'tactics', args: { tactics: after } }, log: 60, q: 1, clock: 200, before: mid },
+          ],
+          logs,
+          0,
+          names,
+          undefined,
+          true,
+        );
+        expect(moves).toHaveLength(2);
+        expect(moves[1].before.them.poss).toBeGreaterThanOrEqual(MOVE_BASE_TRIPS);
+        expect(moveVerdict(moves[1]).verdict).not.toBe('early');
       }
 
       // call a move early until enough trips are in, and the same when the rate barely moved

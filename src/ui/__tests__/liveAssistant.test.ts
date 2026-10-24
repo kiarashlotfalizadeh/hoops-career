@@ -145,6 +145,22 @@ describe('the live assistant and the bench', () => {
       expect(view.sides[0].score + view.sides[1].score).toBeLessThan(g.sim.T[0].score + g.sim.T[1].score);
     }
 
+    // a play type running hot is flagged, unless their shots are falling well above their looks: that heat is luck
+    {
+      const g = game();
+      for (let i = 0; i < 200; i++) g.sim.step();
+      const view = snapshot(g.sim);
+      view.sides[1].pt = { ...view.sides[1].pt, spotup: { poss: 20, pts: 40 } };
+      const them = view.box.away;
+      expect(them.t.fga).toBeGreaterThanOrEqual(20);
+      const made = 2 * them.t.fgm + them.t.tpm;
+      const hot = () => liveAlerts(alertInput(g, view)).some((x) => x.id === 'pt-spotup');
+      view.box.xShots = [view.box.xShots![0], { ...view.box.xShots![1], pts: made }];
+      expect(hot()).toBe(true);
+      view.box.xShots = [view.box.xShots![0], { ...view.box.xShots![1], pts: made - 0.12 * 2 * them.t.fga }];
+      expect(hot()).toBe(false);
+    }
+
     // tired legs flagged only when the staff won't sub them out: manual subs or crunch time
     {
       const g = game();

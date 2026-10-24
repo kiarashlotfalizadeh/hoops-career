@@ -102,6 +102,10 @@ export interface AlertInput {
 }
 
 /** Everything the assistant would say now, most urgent first (the screen shows the first few not dismissed). */
+/** Attempts before a side's shooting against its looks is read, and how far above them (eFG) reads as a hot night. */
+const LUCK_FGA = 20;
+const LIVE_LUCK = 0.05;
+
 export function liveAlerts(a: AlertInput): LiveAlert[] {
   const { view, side, tactics, names } = a;
   const me = view.sides[side];
@@ -175,10 +179,15 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   }
 
   // opponent play types torching us: well above this season's norm for that play, on a real sample
-  // ("Other" is presses, the clock and late fouls: nothing to adjust against)
+  // ("Other" is presses, the clock and late fouls: nothing to adjust against). Not while their shots
+  // fall well above what their looks are worth: that heat is the night's luck, as the report will
+  // call it, and a change made for it answers nothing
+  const theirBox = side === 0 ? view.box.away : view.box.home;
+  const theirLooks = view.box.xShots?.[1 - side];
+  const theirLuck = !!theirLooks && theirBox.t.fga >= LUCK_FGA ? (theirBox.t.fgm + 0.5 * theirBox.t.tpm) / theirBox.t.fga - theirLooks.pts / 2 / theirBox.t.fga > LIVE_LUCK : false;
   for (const [k, v] of Object.entries(them.pt)) {
     const base = a.baselines[k];
-    if (k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
+    if (theirLuck || k === 'misc' || base === undefined || v.poss < 12 || zScore(v, base) <= 2) continue;
     const ft = k as FinishType;
     // only a button that changes something: none once the tactics already do it
     const counter = liveCounter(ft, tactics);

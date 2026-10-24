@@ -43,7 +43,14 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
     const ok = act('Game plan', (l) => {
       for (const c of list) {
         const w = worth?.get(c.id);
-        setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}), ...(w ? { pts: w.pts } : {}) });
+        setPlanItem(l, opp, {
+          id: c.id,
+          label: c.label,
+          group: c.group,
+          patch: c.patch,
+          ...(c.evidence ? { evidence: c.evidence } : {}),
+          ...(w && worthCall(w) !== 'even' ? { pts: w.pts } : {}),
+        });
       }
     });
     if (ok) useStore.getState().toast(list.length > 1 ? `Plan vs ${them.abbrev}: the staff's ${list.length} changes` : `Plan vs ${them.abbrev}: ${list[0].label}`, 'good');

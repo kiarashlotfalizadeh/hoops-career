@@ -13,7 +13,7 @@ import { shortName, teamSeason } from '../league/helpers';
 import { huntPick } from '../analysis/guarding';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { buildGameReport, decidingFactors } from '../analysis/gameReport';
-import { debrief, keyAdvice } from '../analysis/debrief';
+import { debrief, keyAdvice, luckLine } from '../analysis/debrief';
 import { createLeague, defaultSettings } from '../league/create';
 import { takeOverTeam } from '../league/owner';
 import { rankedPresets } from '../ai/coachAI';
@@ -392,9 +392,13 @@ describe('scouting and the staff', () => {
       expect(res.plan).toEqual([{ label: 'Change the coverage', end: 'def', types: ['pnrBH', 'pnrRoll'], pts: 0.4 }]);
       const d = debrief(league, res, buildGameReport(league, res)!);
       expect(d.plan).toHaveLength(1);
-      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.4 a game' });
+      // graded on its measured worth (a gain at +0.4), the night beside it
+      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.4 a game', call: 'gain' });
       expect(d.plan[0].line).toMatch(/pick-and-roll/);
-      expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].verdict);
+      expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].night);
+      // a counter measured even is even, whatever one night did
+      res.plan![0].pts = undefined;
+      expect(debrief(league, res, buildGameReport(league, res)!).plan[0].call).toBe('even');
       // (and used up: a next-game plan is for one game)
       expect(league.gamePlans?.[opp]).toBeUndefined();
     }
@@ -474,6 +478,11 @@ describe('scouting and the staff', () => {
       const looks = rep.factors.find((f) => f.category === 'shooting');
       expect(!!looks).toBe(Math.abs(efgSwing) >= 3);
       if (looks) expect(looks.title).toMatch(/got the better looks: worth/);
+      // the luck in words follows both sides' numbers: never "ours didn't" when ours fell above their looks too
+      res.xShots = side({ pts: fgPts(us) - 6, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
+      expect(luckLine(res, me, false)).toBe('Their shots fell above what their looks were worth: that part was luck, not the plan.');
+      res.xShots = side({ pts: fgPts(us) + 20, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
+      expect(luckLine(res, me, false)).toBe("Their shots fell and ours didn't: that part was luck, not the plan.");
       // a threes key missed with the looks there reads as shots that didn't fall, missed without them as threes not taken
       const fly = { id: 'fly', title: 'Let it fly', goal: '', dir: 'min' as const, target: us.t.tpm + 3, value: us.t.tpm, met: false };
       res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm + 3 }, { pts: fgPts(them), tpm: them.t.tpm });

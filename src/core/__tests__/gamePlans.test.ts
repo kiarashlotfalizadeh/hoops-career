@@ -24,7 +24,7 @@ import { GameSim } from '../sim/engine';
 import { situationFromTemplate } from '../sim/tactics';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
-import { counterWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
+import { counterWorth, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
 import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
@@ -310,8 +310,9 @@ describe('game plans', () => {
       expect(l.teams[tid].tactics.situations).toHaveLength(1);
     }
     {
-      // the staff's counters, each measured in paired games of the next game (the same numbers
-      // every time for the same day), leaving the league as it was; a newer run stops an older one
+      // the staff's counters, each measured in paired games of the next game (the season's seeds for
+      // the opponent: the same numbers every time), shrunk toward even by their noise, leaving the
+      // league as it was; a newer run stops an older one
       const l = fresh();
       toGameDay(l);
       const { g, opp } = opponentOf(l);
@@ -321,13 +322,22 @@ describe('game plans', () => {
       expect(w.length).toBeGreaterThan(0);
       expect(w.length).toBeLessThanOrEqual(WORTH_MAX);
       expect(w.every((x) => Number.isFinite(x.pts) && x.se > 0)).toBe(true);
-      expect(steps).toEqual(Array.from({ length: w.length + 1 }, (_, i) => i + 1));
+      // what's shown is the reading shrunk by its noise, never bigger than the reading
+      for (const x of w) {
+        expect(Math.abs(x.pts)).toBeLessThanOrEqual(Math.abs(x.raw) + 0.05);
+        expect(x.pts).toBeCloseTo(shrinkWorth(x.raw, x.se), 0);
+      }
+      // (a promising reading plays fresh seeds too: more steps than configurations, still one at a time)
+      expect(steps.length).toBeGreaterThanOrEqual(w.length + 1);
+      expect(steps).toEqual(Array.from({ length: steps.length }, (_, i) => i + 1));
       expect(await counterWorth(l, opp, g, { games: 16 })).toEqual(w);
       expect(JSON.stringify(l)).toBe(before);
       expect(await counterWorth(l, opp, g, { games: 16, cancelled: () => true })).toBeNull();
-      expect(worthCall({ pts: 1, se: 0.4 })).toBe('gain');
-      expect(worthCall({ pts: 0.5, se: 0.4 })).toBe('even');
-      expect(worthCall({ pts: -1, se: 0.4 })).toBe('cost');
+      // a reading of +1.0 at ±0.45 is about +0.4 likely real: just a gain; +0.6 at the same noise, even
+      expect(shrinkWorth(1, 0.45)).toBeCloseTo(0.44, 2);
+      expect(worthCall({ pts: shrinkWorth(1, 0.45) })).toBe('gain');
+      expect(worthCall({ pts: shrinkWorth(0.6, 0.45) })).toBe('even');
+      expect(worthCall({ pts: shrinkWorth(-1.2, 0.45) })).toBe('cost');
       // a counter in the plan counts in the projection at its measured worth, for the user's side, capped
       const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), {
         rng: new Rng(1),

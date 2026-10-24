@@ -37,7 +37,14 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
         tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
       } else {
         const w = worth?.get(c.id);
-        setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}), ...(w ? { pts: w.pts } : {}) });
+        setPlanItem(l, opp, {
+          id: c.id,
+          label: c.label,
+          group: c.group,
+          patch: c.patch,
+          ...(c.evidence ? { evidence: c.evidence } : {}),
+          ...(w && worthCall(w) !== 'even' ? { pts: w.pts } : {}),
+        });
       }
     });
     if (ok) useStore.getState().toast(scope === 'game' ? `Plan vs ${them.abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
@@ -127,7 +134,7 @@ export function WorthTag({ w, measuring }: { w?: CounterWorth; measuring: boolea
   if (!w) return measuring ? <span className="mu-worth dim small">Measuring…</span> : null;
   const { text, tone } = worthText(w);
   return (
-    <span className={`mu-worth num ${tone ?? 'dim'}`} title={`${w.pts >= 0 ? '+' : ''}${w.pts.toFixed(1)} points a game, ±${w.se.toFixed(1)}`}>
+    <span className={`mu-worth num ${tone ?? 'dim'}`} title={`Measured ${w.raw >= 0 ? '+' : ''}${w.raw.toFixed(1)} a game, ±${w.se.toFixed(1)}: shown as what's likely real`}>
       {text}
     </span>
   );

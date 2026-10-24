@@ -120,6 +120,9 @@ describe('batch sims & reports', () => {
       league.teams[0].tactics = applyPatch(t, { defense: { starPlan: 'deny' } });
       expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
       league.teams[0].tactics = t;
+      // nor to one that played one tonight (in the plan or called live) whatever its saved tactics say
+      const denied: GameResult = { ...star, impacts: [...(star.impacts ?? []), { key: 'star_deny:d', t: me, count: 12, pts: 0.4, players: {} }] };
+      expect(buildGameReport(league, denied)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
     }
     // only gives advice the team still needs: no "try Hedge" for a team already hedging
     {
