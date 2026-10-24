@@ -10,7 +10,7 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../../core/league/create';
 import { curTeamSeason, standardRoster } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
-import { RETIRED, type League, type PlayoffSeries } from '../../core/types';
+import { RETIRED, type GameResult, type League, type PlayoffSeries } from '../../core/types';
 import { matchScore, normalize, search, searchIndex } from '../search';
 import { rosterLine, seedRosterSizes } from '../newLeague';
 import { seasonOutcome } from '../league/shared';
@@ -76,6 +76,28 @@ describe('screen logic', () => {
       expect(search(index, 'cap')[0]).toMatchObject({ kind: 'screen', to: '/office' });
       expect(search(index, 'depth chart')[0]).toMatchObject({ kind: 'screen', to: '/team/rotation' });
       expect(search(index, 'drop').some((e) => e.kind === 'term' && e.termId === 'drop')).toBe(true);
+      expect(search(index, 'next game')[0]).toMatchObject({ kind: 'screen', to: '/preview' });
+      expect(search(index, 'draft order')[0]).toMatchObject({ kind: 'screen', to: '/league/standings?view=lottery' });
+      expect(search(index, 'injured')[0]).toMatchObject({ kind: 'screen', to: '/league/news?kind=injury' });
+      expect(search(index, 'big moments')[0]).toMatchObject({ kind: 'screen', to: '/settings' });
+      expect(search(index, 'fa')[0]).toMatchObject({ title: 'Free agents' }); // a whole word before "Hall of Fame"
+      // your last game's report, once there is one
+      expect(index.some((e) => e.title === 'Last game')).toBe(false);
+      const played = { ...league, games: [{ gid: 7, season: league.season, home: { tid: 0 }, away: { tid: league.userTid } } as unknown as GameResult] };
+      expect(search(searchIndex(played), 'box score')[0]).toMatchObject({ title: 'Last game', to: '/game/7' });
+
+      // players by their initials and a slip of a letter, below every true match
+      if (seed.players.length) {
+        expect(find('sga')[0]).toBe('Shai Gilgeous-Alexander');
+        expect(find('kat')[0]).toBe('Karl-Anthony Towns');
+        expect(find('holmgrn')[0]).toBe('Chet Holmgren');
+        expect(find('shia')[0]).toBe('Shai Gilgeous-Alexander');
+      }
+      const tatum = { ...index.find((x) => x.kind === 'player')!, words: ['jayson', 'tatum'], full: 'jayson tatum' };
+      expect(matchScore(tatum, 'tatm')).toBe(200);
+      expect(matchScore(tatum, 'tat')).toBeGreaterThan(200);
+      expect(matchScore(tatum, 'tum')).toBe(300);
+      expect(matchScore(tatum, 'tam')).toBe(0); // no slips under four letters
 
       // ties broken toward your players and active ones, and never a match on a stray letter
       const p = named('Jalen', 'Williams');

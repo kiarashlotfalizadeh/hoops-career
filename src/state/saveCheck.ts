@@ -291,7 +291,11 @@ function cleanGamePlans(x: League) {
       if (pd) p.playerD = pd;
       else delete p.playerD;
     }
-    for (const it of p.items as { patch: Record<string, unknown> }[]) cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
+    for (const it of p.items as { patch: Record<string, unknown>; pts?: unknown }[]) {
+      cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
+      // (what the staff measured it worth feeds the win chance: a number that isn't one, or past any a counter measures, goes)
+      if (it.pts !== undefined && !(typeof it.pts === 'number' && Number.isFinite(it.pts) && Math.abs(it.pts) <= 20)) delete it.pts;
+    }
   }
 }
 
@@ -765,9 +769,9 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
       return a.reason === undefined || (str(a.reason) && (a.reason as string).length <= 80);
     case 'manualSubs':
       return typeof a.on === 'boolean';
+    case 'play':
+      return (SET_IDS as unknown[]).includes(a.set) && (a.pid === undefined || int(a.pid));
   }
-  // (play calls from the bench were retired: a journal with one can't play back to its score, so the
-  // game starts over from tip-off)
   return false;
 }
 

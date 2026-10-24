@@ -1,19 +1,23 @@
 // The staff's calls: the moments in a season that need the user's answer, each a Needs-you card on
 // Today with the staff's call one tap away (see agenda.ts for how cards are drawn and settled). A
-// star goes down for ten games or more (the call: a 10-day for cover, or the staff's rotation); the
-// playoff odds collapse under 5% for a team the owner expects in the postseason (the call: tell him
-// it's a rebuild, before the deadline); the deadline's last five days (the call: the staff's best
-// deal, buying or selling as the odds say, or standing pat); and the books heading into the red at
-// the season's end, or the owner's ultimatum or freeze on them (the call: the budgets down to the
-// league standard). A long sim stops the day a new one opens (see runSim), and
-// for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
-// remembered (League.callsDone) so it doesn't come back. Nothing here draws from the league's
-// random stream.
+// star goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
+// trade for a long absence before the deadline); the playoff odds collapse under 5% for a team the
+// owner expects in the postseason (the call: tell him it's a rebuild, before the deadline); a team
+// on pace under the owner's win floor (the call: chase it with a trade, or tell him it's a
+// development year, before the deadline); the deadline's last five days (the call: the staff's best
+// deal, buying or selling as the odds say, a look for one, or standing pat); and the books heading
+// into the red at the season's end, or the owner's ultimatum or freeze on them (the call: the
+// budgets down to the league standard, or salary shed before the deadline). A call is only a call
+// with a real choice in it: one whose only answer is "OK" isn't opened (the digest has the news). A
+// long sim stops the day a new one opens (see runSim), and for nothing else that doesn't need an
+// answer. A card is settled by its call or a choice; it is remembered (League.callsDone) so it
+// doesn't come back. Nothing here draws from the league's random stream.
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 import { playerName, standardRoster } from './helpers';
+import { confStandings } from './standings';
 import { money, plural } from '../format';
-import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST } from './ownerGoals';
+import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST, easeFloor, easeFloorBlockedReason, floorDanger, FLOOR_EASE } from './ownerGoals';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
 import { booksOf, FROZEN_BUDGET } from './books';
 import { budgetCostPerSeason, seasonEndCash } from './finances';
@@ -36,10 +40,12 @@ export const ODDS_LOW = 50;
 export const ODDS_WAS = 250;
 /** Days before the deadline its call opens (and a long sim stops). */
 export const DEADLINE_DAYS = 5;
+/** Games out that make a trade for cover a real answer to a star's injury (before the deadline). */
+export const TRADE_OUT = 20;
 /** Settled calls kept, newest last. */
 const DONE_KEPT = 60;
 
-export type CallKind = 'injury' | 'odds' | 'deadline' | 'books';
+export type CallKind = 'injury' | 'odds' | 'floor' | 'deadline' | 'books';
 
 /** The staff's deadline call, worked out once when its card opens (League.deadlineCall). */
 export interface DeadlineCall {
@@ -68,16 +74,23 @@ function oddsNow(league: League): { now: number; best: number } | null {
   return { now, best: Math.max(...t.pts.slice(0, -1).map((p) => p[1]), 0) };
 }
 
-/** The user's stars out for STAR_OUT games or more, each with the id of his call (one per injury). */
+/**
+ * The user's stars out for STAR_OUT games or more, each with the id of his call (one per injury). Not
+ * one out past the regular season's end once the team's place is settled (clinched or eliminated):
+ * there's nothing left for cover to win.
+ */
 function hurtStars(league: League): { p: Player; id: string }[] {
   const roster = standardRoster(league, league.userTid).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
-  return roster
-    .slice(0, STAR_RANK)
-    .filter((p) => p.injury && p.injury.gamesTotal >= STAR_OUT && p.injury.gamesRemaining > 2)
-    .map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
+  const hurt = roster.slice(0, STAR_RANK).filter((p) => p.injury && p.injury.gamesTotal >= STAR_OUT && p.injury.gamesRemaining > 2);
+  if (!hurt.length || league.phase !== 'regular' || league.day <= league.tradeDeadlineDay) return hurt.map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
+  const me = league.teams[league.userTid];
+  const left = league.schedule.filter((g) => g.type === 'regular' && !g.played && (g.home === me.tid || g.away === me.tid)).length;
+  const settledPlace = !!confStandings(league, me.conf).find((r) => r.tid === me.tid)?.clinched;
+  return hurt.filter((p) => !(settledPlace && p.injury!.gamesRemaining >= left)).map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
 }
 
 const oddsId = (league: League) => `odds:${league.season}`;
+const floorId = (league: League) => `floor:${league.season}`;
 const deadlineId = (league: League) => `deadline:${league.season}`;
 const booksId = (league: League) => `books:${league.books!.season}:${league.books!.day}`;
 
@@ -93,15 +106,27 @@ function oddsCall(league: League): { now: number } | null {
   return expected || o.best >= ODDS_WAS ? { now: o.now } : null;
 }
 
-/** The ids of the calls open now (cheap: what a long sim checks each day). */
-export function openCallIds(league: League): string[] {
+/** Whether the floor call stands: on pace under the owner's floor, before the deadline, for a team the odds call isn't about. */
+function floorCall(league: League): { projected: number; floorWins: number } | null {
+  if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay || oddsCall(league)) return null;
+  return floorDanger(league);
+}
+
+/** The ids of the calls that may be open now, before asking whether each has a real choice in it. */
+function candidateIds(league: League): string[] {
   if (league.fired) return [];
   const ids: string[] = [];
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') for (const s of hurtStars(league)) ids.push(s.id);
   if (oddsCall(league)) ids.push(oddsId(league));
+  if (floorCall(league)) ids.push(floorId(league));
   if (deadlineOpen(league)) ids.push(deadlineId(league));
   if (booksOf(league)) ids.push(booksId(league));
   return ids.filter((id) => !settled(league, id));
+}
+
+/** The ids of the calls open now (what a long sim checks each day: nothing to work out on most days). */
+export function openCallIds(league: League): string[] {
+  return candidateIds(league).length ? staffCalls(league).map((c) => c.id) : [];
 }
 
 /** The user's budgets over the league standard (what a cut would save). */
@@ -192,12 +217,15 @@ export type CallAction =
   | { kind: 'tenDay'; id: string; pid: number }
   | { kind: 'staffRotation'; id: string }
   | { kind: 'concede'; id: string }
+  | { kind: 'easeFloor'; id: string }
   | { kind: 'trade'; id: string; offer: TradeOffer }
   | { kind: 'budgetCut'; id: string };
 
 export interface CallChoice {
   label: string;
   action: CallAction;
+  /** The screen it opens once taken (a look for a trade): the answer is made there. */
+  to?: string;
   blocked?: string;
   tone?: 'good' | 'bad';
   confirm?: string;
@@ -214,7 +242,7 @@ function tenDayCover(league: League, pos: string): Player | null {
 
 /** The staff's calls open now, as cards. */
 export function staffCalls(league: League): CallCard[] {
-  const open = new Set(openCallIds(league));
+  const open = new Set(candidateIds(league));
   if (!open.size) return [];
   const cards: CallCard[] = [];
   const me = league.userTid;
@@ -225,11 +253,15 @@ export function staffCalls(league: League): CallCard[] {
     const cover = tenDayCover(league, p.pos);
     const manual = team.rotation.manual;
     const out = p.injury!.gamesRemaining;
+    // a trade for cover is a real answer to a long absence while deals can still be made
+    const trade = out >= TRADE_OUT && league.phase === 'regular' && league.day <= league.tradeDeadlineDay;
+    const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
+    const look: CallChoice = { label: 'Look for a trade', action: { kind: 'settle', id }, to: '/office/trade' };
     const suggestion: CallChoice = cover
       ? { label: `Sign ${playerName(cover)} to a 10-day`, action: { kind: 'tenDay', id, pid: cover.pid }, confirm: `${cover.pos} · ${cover.ovr} OVR, for ten days at the minimum.` }
       : manual
         ? { label: 'Let the staff redo the rotation', action: { kind: 'staffRotation', id } }
-        : { label: 'Ride it out', action: { kind: 'settle', id } };
+        : ride;
     cards.push({
       id,
       kind: 'injury',
@@ -240,10 +272,10 @@ export function staffCalls(league: League): CallCard[] {
           ? "The staff's call: hand them the rotation while he's out, so his minutes go where they should."
           : "The staff's call: ride it out. His minutes go to the healthy players; a trade is the other way.",
       tone: 'bad',
-      to: league.day <= league.tradeDeadlineDay && league.phase === 'regular' ? '/office/trade' : '/team',
+      to: trade ? '/office/trade' : '/team',
       pids: [p.pid],
       suggestion,
-      choices: suggestion.action.kind === 'settle' ? undefined : [{ label: 'Ride it out', action: { kind: 'settle', id } }],
+      choices: [...(suggestion === ride ? [] : [ride]), ...(trade ? [look] : [])],
     });
   }
 
@@ -258,6 +290,8 @@ export function staffCalls(league: League): CallCard[] {
       confirm: `The postseason goal becomes a development goal, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points.`,
     };
     const push: CallChoice = { label: 'Keep pushing', action: { kind: 'settle', id } };
+    // (with the rebuild off the table, the answer is still buy or sell before the deadline)
+    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: '/office/trade' };
     cards.push({
       id,
       kind: 'odds',
@@ -267,7 +301,34 @@ export function staffCalls(league: League): CallCard[] {
         : "The staff's call: tell the owner now, play the young players and sell veterans before the deadline, rather than miss his playoff goal.",
       tone: 'warn',
       to: '/office/owner',
-      ...(blocked ? { suggestion: push } : { suggestion: concede, choices: [push] }),
+      ...(blocked ? { suggestion: push, choices: [look] } : { suggestion: concede, choices: [push] }),
+    });
+  }
+
+  const floor = floorCall(league);
+  if (floor && open.has(floorId(league))) {
+    const id = floorId(league);
+    const blocked = easeFloorBlockedReason(league);
+    const og = currentGoals(league)!;
+    const chase: CallChoice = { label: 'Chase the floor', action: { kind: 'settle', id }, to: '/office/trade' };
+    const ease: CallChoice = {
+      label: "Tell him it's a development year",
+      action: { kind: 'easeFloor', id },
+      blocked: blocked ?? undefined,
+      confirm: `His floor drops to ${Math.ceil(Math.max(0, og.floor! - FLOOR_EASE) * og.games)} wins, part of the win goal becomes minutes for the young players, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points.`,
+    };
+    cards.push({
+      id,
+      kind: 'floor',
+      title: `On pace for ${floor.projected} wins: under the owner's floor`,
+      line: `Under ${floor.floorWins} wins he calls it a failed season, whatever else goes right. ${
+        blocked
+          ? `The staff's call: chase it before the deadline. ${blocked}`
+          : "The staff's call: decide now. Buy before the deadline to clear it, or tell him it's a development year and play the young players for the lottery."
+      }`,
+      tone: 'warn',
+      to: '/office/owner',
+      ...(blocked ? { suggestion: chase } : { suggestion: chase, choices: [ease] }),
     });
   }
 
@@ -279,6 +340,7 @@ export function staffCalls(league: League): CallCard[] {
     const other = offer ? league.teams[offer.b.tid] : null;
     const pct = call ? `Playoff odds ${Math.round(call.odds / 10)}%. ` : '';
     const stand: CallChoice = { label: 'Stand pat', action: { kind: 'settle', id } };
+    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: '/office/trade' };
     const deal: CallChoice | null =
       offer && other
         ? {
@@ -298,7 +360,7 @@ export function staffCalls(league: League): CallCard[] {
       tone: 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
-      ...(deal ? { suggestion: deal, choices: [stand] } : { suggestion: stand }),
+      ...(deal ? { suggestion: deal, choices: [stand] } : { suggestion: stand, choices: [look] }),
     });
   }
 
@@ -317,7 +379,10 @@ export function staffCalls(league: League): CallCard[] {
       b.stage !== 'freeze' && overStandard(league)
         ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` }
         : null;
-    const noted: CallChoice = { label: cut ? 'Not now' : 'Understood', action: { kind: 'settle', id } };
+    // shedding salary is an answer while deals can still be made (and the freeze still allows them)
+    const shed: CallChoice | null =
+      league.phase === 'regular' && league.day <= league.tradeDeadlineDay ? { label: 'Shed salary', action: { kind: 'settle', id }, to: '/office/trade' } : null;
+    const noted: CallChoice = { label: 'Not now', action: { kind: 'settle', id } };
     const call = cut ? `cut the staff budgets to the league standard (saves ${money(save)} a season)` : 'shed salary before the deadline (the budgets are at the standard already)';
     cards.push({
       id,
@@ -331,10 +396,11 @@ export function staffCalls(league: League): CallCard[] {
             : `Minimum deals only, no raises, no trade that takes on salary, until a review finds the books back in the black${heading ? ` (projected ${heading})` : ''}.`,
       tone: 'bad',
       to: '/office/finances',
-      ...(cut ? { suggestion: cut, choices: [noted] } : { suggestion: noted }),
+      ...(cut ? { suggestion: cut, choices: [...(shed ? [shed] : []), noted] } : shed ? { suggestion: shed, choices: [noted] } : { suggestion: noted }),
     });
   }
-  return cards;
+  // a call is a choice: one whose only answer is to carry on isn't opened
+  return cards.filter((c) => [c.suggestion, ...(c.choices ?? [])].some((x) => x && !x.blocked && (x.action.kind !== 'settle' || x.to)));
 }
 
 /** Carry out a call's choice (resolveAgenda passes it here); the card is settled when it goes through. */
@@ -354,6 +420,12 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       ensureRotation(league, league.userTid);
       r = { ok: true, text: 'The staff has the rotation.' };
       break;
+    case 'easeFloor': {
+      const why = easeFloorBlockedReason(league);
+      if (!why) easeFloor(league);
+      r = why ? { ok: false, text: why } : { ok: true, text: 'The owner knows: a development year.' };
+      break;
+    }
     case 'concede': {
       const why = concedeBlockedReason(league);
       if (!why) concedeSeason(league);

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
-import { autoRotation, roleMemory, rosterSeason, sortByPosition } from '../ai/coachAI';
+import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
 import { Rng } from '../random';
 import type { Player, Rotation } from '../types';
@@ -308,6 +308,20 @@ describe('rotations', () => {
       expect(Math.max(...healthy)).toBeLessThanOrEqual(38);
       // at least nine healthy players get a real look
       expect(healthy.filter((m) => m >= 8).length).toBeGreaterThanOrEqual(9);
+    }
+    {
+      // holds a veteran's minutes down by age, whatever his stamina: 38 for the star at 26, 36 at
+      // 34, 32 at 38; past that his 33-minute role holds a minute under it
+      const ps = roster(9, (_, i) => [33, 34, 33, 31, 29, 25, 22, 18, 14, 11, 9, 6, 4, 3][i]);
+      ps[0].ratings.end = 70;
+      ps[0].ovr = 92;
+      const at = (age: number) => {
+        ps[0].bornYear = SEASON - age;
+        return autoRotation(ps).minutes[0];
+      };
+      expect([26, 34, 38, 41].map(at)).toEqual([38, 36, 32, 32]);
+      expect(Math.abs(total(autoRotation(ps).minutes) - 240)).toBeLessThanOrEqual(3);
+      expect(veteranCeiling(41, null)).toBe(30);
     }
     {
       // keeps the hard caps it carries over, and drops those of players who have left

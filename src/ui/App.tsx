@@ -46,7 +46,7 @@ import { applyAccent } from './teamColors';
 import { haptic } from '../native';
 import { TABS, tabFor, type TabId } from './nav';
 import { AgendaList } from './components/Agenda';
-import { needsYou, useAgendaById } from './today/messages';
+import { useNeedsYou } from './today/needs';
 import { agenda } from '../core/league/agenda';
 import { todayRoutes } from './routes/today';
 import { teamRoutes } from './routes/team';
@@ -222,9 +222,8 @@ function TopBar() {
   const { pathname } = useLocation();
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
-  // the badge counts what needs him; the rest is unread in the list without a number on the bell
-  const decisions = useAgendaById(league);
-  const unread = league.inbox.filter((m) => needsYou(m, decisions, league)).length;
+  // the badge counts what needs him, as Today's Needs you does (see needs.ts); the rest is unread in the list without a number on the bell
+  const unread = useNeedsYou(league).count;
   // the standings scan every game: worked out again when a game is played, not on every edit
   // (fired: the old team's mark stays up there, but it isn't his to run; outside the memo, as a firing plays no game)
   const status = league.fired ? `Between jobs · ${PHASE_LABEL[league.phase] ?? seasonLabel(league.season)}` : gamesMemo(statusLines, league, () => statusLine(league));

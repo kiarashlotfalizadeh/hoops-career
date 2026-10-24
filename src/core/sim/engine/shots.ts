@@ -13,6 +13,14 @@ import type { GameSim } from './game';
 /** Who gets the block on a contested miss: mostly timing and instincts (BLK), some length and pop. */
 const blockSkill = (p: { r: { blk: number; hgt: number; ath: number } }) => 0.7 * p.r.blk + 0.18 * p.r.hgt + 0.12 * p.r.ath;
 
+/**
+ * What the chance a made two off a pass is credited as an assist keeps of its finish's rate (see
+ * assistProb): at the full rates 60% of two-point makes were assisted (55% now), and the league
+ * handed out 28.7 assists a game, 67% of its baskets (now 27.1 and 63%; the NBA's 2025-26: 26.6 and
+ * 64%, on a league field-goal percentage 1.3 points lower).
+ */
+const TWO_ASSIST = 0.91;
+
 /** No partnership effect (shared: never added to). */
 const NONE_TAGS: [string, number][] = [];
 
@@ -382,11 +390,17 @@ export const shotsMethods = {
   /**
    * Chance a made shot off a pass is credited as an assist. A catch-and-shoot three, a lob or a dump-off
    * at the rim nearly always is; a floater, a runner or a pull-up after the catch only when the pass
-   * led straight to it (about half the time), so the NBA's shares hold: about 65% of makes at the rim,
-   * 45% in the paint, 40% from mid-range and 85% from three.
+   * led straight to it (about half the time). With TWO_ASSIST the league's makes are assisted about
+   * 61% of the time at the rim, 44% in the paint, 39% from mid-range and 82% from three: 63% of its
+   * baskets, the NBA's 64% (2025-26: 26.6 assists on 41.8 baskets a game).
    */
   assistProb(this: GameSim, f: FinishType, zone: ShotZone) {
     const three = zone === 'c3' || zone === 'ab3';
+    return three ? this.finishAssist(f, zone, true) : TWO_ASSIST * this.finishAssist(f, zone, false);
+  },
+
+  /** A finish's assist rate before TWO_ASSIST (see assistProb). */
+  finishAssist(this: GameSim, f: FinishType, zone: ShotZone, three: boolean) {
     switch (f) {
       case 'spotup':
         return three ? 0.98 : zone === 'rim' ? 0.7 : zone === 'paint' ? 0.5 : 0.75;

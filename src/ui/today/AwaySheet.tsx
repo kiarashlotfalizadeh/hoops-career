@@ -20,7 +20,7 @@ import './today.css';
 import type { Digest, DigestStory } from './digest';
 
 /** The agenda's kinds that are staff calls (see calls.ts). */
-const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['injury', 'odds', 'deadline', 'books']);
+const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['injury', 'odds', 'floor', 'deadline', 'books']);
 
 /** The most results listed; the rest are a tap away on the schedule. */
 const RESULTS_SHOWN = 5;

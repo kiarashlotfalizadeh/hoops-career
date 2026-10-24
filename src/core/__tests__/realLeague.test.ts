@@ -257,9 +257,10 @@ describe('two seasons of the real league', () => {
     reviews.forEach((r, s) => {
       expect(r.tid).toBe(U);
       expect(r.goals.map((g) => g.title)).toEqual(mine[s].goals.map((g) => g.title));
-      // (a record under his floor caps the grade)
+      // (a record under his floor caps the grade, a title or a deep run lifts it)
       const rec = goalsRecord(ends[s], mine[s]);
-      expect(r.grade).toBeCloseTo(Math.min(sum(r.goals.map((g) => g.weight * g.grade)), floorCap(mine[s], rec.won, rec.games)), 1);
+      const graded = Math.min(sum(r.goals.map((g) => g.weight * g.grade)), floorCap(mine[s], rec.won, rec.games));
+      expect(r.grade).toBeCloseTo(Math.max(graded, r.crowned ? CROWN_GRADE[r.crowned] : -1), 1);
       for (const g of r.goals) expect(Math.abs(g.grade)).toBeLessThanOrEqual(1);
       const mail = ends[s].inbox.find((m) => m.season === r.season && m.subject === 'Season review')!;
       for (const g of r.goals) expect(mail.body).toContain(`${g.title} — `);

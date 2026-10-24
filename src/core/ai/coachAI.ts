@@ -9,6 +9,7 @@ import { defRoleFits, fitStars, miscast, roleFits } from '../analysis/system';
 import { HANDLER_ROLES } from '../sim/links';
 import { defaultMinutesByDepth } from '../sim/rotationPlan';
 import { clamp } from '../random';
+import { playerAge } from '../playerGen';
 
 export interface LineupEval {
   score: number;
@@ -196,6 +197,25 @@ export function roleMemory(p: Player, season: number | null): RoleMemory | null 
 /** Ceiling for planned minutes: real heavy-minute starters top out around 37-38. */
 const MAX_PLAN = 38;
 
+/**
+ * Most minutes a coach plans for a veteran: 36 at 34, a minute less each year after, 30 from 40.
+ * Real stars play fewer minutes every season from their mid-thirties whatever their stamina says
+ * (Curry 32 at 37, Paul 28 at 39, Conley 25 at 37), so at 36-38 the plan is 32-34 and they play
+ * 30-33 (heavy-minute players play a little under their plan). A proven heavier role holds a minute
+ * under what he played last season (Durant's 36 at 37, James's 35 at 39), so it fades a season at a
+ * time rather than all at once.
+ */
+export function veteranCeiling(age: number, role: RoleMemory | null): number {
+  if (age < VETERAN_AGE) return MAX_PLAN;
+  const byAge = Math.max(VETERAN_FLOOR, 36 - (age - VETERAN_AGE));
+  return Math.min(MAX_PLAN, Math.max(byAge, role && role.w >= 0.2 ? role.mpg - 1 : 0));
+}
+
+/** The age a coach starts holding a player's minutes down (see veteranCeiling). */
+const VETERAN_AGE = 34;
+/** The veteran ceiling's lowest step: a 40-year-old who still makes the rotation gets 30. */
+const VETERAN_FLOOR = 30;
+
 /** Incumbent starters keep an edge for the job (worth ~7 OVR for a full-time starter). */
 function startBonus(r: RoleMemory | null): number {
   return r ? (7 * r.w * r.gs) / ROLE_WEIGHT : 0;
@@ -339,7 +359,10 @@ export function autoRotation(players: Player[], prev?: Rotation, opts: { lean?: 
   for (const p of players) if (prev?.caps?.[p.pid]) hardCaps[p.pid] = prev.caps[p.pid];
   // six or fewer healthy can't fill a game at 38 apiece: the ceiling rises to what does (48 at most)
   const most = clamp(240 / Math.max(1, depth.length), Math.min(MAX_PLAN, maxMinutes), 48);
-  const ceiling = depth.map((p) => Math.min(most, hardCaps[p.pid] ?? most));
+  // (and veterans play fewer, unless there aren't the players to give the minutes to)
+  const fill = 240 / Math.max(1, depth.length);
+  const vet = (p: Player) => (season === null ? most : Math.max(fill, veteranCeiling(playerAge(p, season), roles.get(p.pid) ?? null)));
+  const ceiling = depth.map((p) => Math.min(most, vet(p), hardCaps[p.pid] ?? most));
   // stamina sets what a player can sustain; a proven heavy-minute role counts too
   const caps = depth.map((p, i) => {
     const r = roles.get(p.pid);

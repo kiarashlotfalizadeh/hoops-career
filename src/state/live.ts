@@ -4,7 +4,7 @@
 // with the possession it came after), so it survives the app being closed: the engine draws each
 // possession from the game's seed, and playing the journal back rebuilds the same game.
 
-import type { GameResult, League, LiveJournal, LiveOp, ScheduledGame, Tactics } from '../core/types';
+import type { GameResult, League, LiveJournal, LiveOp, ScheduledGame, SetId, Tactics } from '../core/types';
 import { GameSim, type SimTeamInput } from '../core/sim/engine';
 import type { PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
@@ -214,6 +214,17 @@ export class LiveGame {
     return this.record({ op: 'timeout', args: reason ? { reason } : {} });
   }
 
+  /** Call set `set` for the next half-court trip this period (from a huddle), for `pid` or the best fit on the floor: false when it can't be. */
+  callPlay(set: SetId, pid?: number): boolean {
+    return this.record({ op: 'play', args: { set, ...(pid !== undefined && { pid }) } });
+  }
+
+  /** The play called for the next trip, if one is waiting to be run. */
+  get calledPlay(): { set: SetId; pid: number | null } | null {
+    const q = this.sim.T[this.userSide].nextSet;
+    return q ? { set: q.id, pid: q.pid } : null;
+  }
+
   /** The user asked for a timeout while the other side had a live ball: it's taken at the next dead ball (see GameSim.callTimeout). */
   get timeoutWaiting(): boolean {
     return this.sim.timeoutWaiting(this.userSide);
@@ -277,6 +288,8 @@ export class LiveGame {
       case 'manualSubs':
         s.T[side].manualSubs = !!o.args.on;
         return true;
+      case 'play':
+        return mark(s.runSet(side, o.args.set, o.args.pid));
     }
     throw new Error(`Unknown live-game move: ${(o as { op: unknown }).op}`);
   }
@@ -365,7 +378,7 @@ export class LiveGame {
     // (recording it ends its journal)
     const res = playGame(league, g, { sim: this.sim, edge: this.edge });
     // the coach's moves and what each did, for the game's report
-    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), slotName);
+    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), slotName, true);
     if (moves.length) res.moves = moves;
     // its highlights stay with the save for its game report, until the next live game
     const reel = reelOf(g.gid, this.logs, this.userSide);

@@ -5,12 +5,13 @@
 // Read by the live game's bench as the night goes, and kept with the result for the post-game
 // report. Pure: it reads the possession logs the game already keeps.
 
-import type { CoachMove, League, LiveOp, MoveTally, ScheduledGame, Tactics } from '../types';
+import type { CoachMove, League, LiveOp, MoveTally, ScheduledGame, Tactics, TacticsPatch } from '../types';
 import type { FinishType, PossLog } from '../sim/log';
 import { tacticsChanges } from '../sim/playbooks';
-import { PLAYER_D_META, SCHEME_META, emptyPatch, tacticsDiff } from '../sim/tactics';
+import { PLAYER_D_META, SCHEME_META, applyPatch, emptyPatch, tacticsDiff } from '../sim/tactics';
 import { SLOT_COUNT, SLOT_LETTERS, activeSlot, slotTactics } from '../sim/slots';
 import { effectiveTactics } from '../league/gamePlans';
+import { SETS, setLabel } from '../sim/sets';
 
 /** A move as the live game made it (see LiveMark in state/live.ts). */
 export interface MoveMark {
@@ -27,6 +28,12 @@ export interface MoveMark {
 const TIMEOUT_TRIPS = 8;
 /** Trips at a rate since a move before its effect reads as anything but early. */
 export const MOVE_MIN_TRIPS = 15;
+/**
+ * Trips a move whose stretch is over (see CoachMove.closed: the next move of its kind came, or the
+ * game ended) is judged on: it will never have more, and at MOVE_Z a swing that reads over so few is
+ * a big one. A move still in effect waits for MOVE_MIN_TRIPS, so its verdict doesn't flip trip to trip.
+ */
+export const MOVE_CLOSED_TRIPS = 4;
 /** Trips at the rate before a move it needs to be judged against (a rate over two or three trips is noise, not a baseline). */
 export const MOVE_MIN_BEFORE = 8;
 /**
@@ -38,7 +45,7 @@ const MOVE_Z = 2;
 const MARGIN_MIN_BEFORE = 4;
 
 /** What a move is aimed at: the end of the floor, and on it the play types or the one player it's about. */
-interface Aim {
+export interface Aim {
   end: CoachMove['end'];
   /** Finishing play types it's aimed at (theirs for a move on defense, ours on offense). */
   types?: FinishType[];
@@ -109,6 +116,11 @@ function aimOf(a: Tactics, b: Tactics): Aim {
   return { end };
 }
 
+/** What a game plan's counter is aimed at, as a move making the same change would be (the report grades the plan with it). */
+export function planAim(base: Tactics, patch: TacticsPatch): Aim {
+  return aimOf(base, applyPatch(base, patch));
+}
+
 /** A tactics change in a few words, as the Tactics screen names it, game-specific orders included ("Dort guards Fox"). */
 export function moveText(a: Tactics, b: Tactics, nameOf: (pid: number) => string): string {
   const parts = tacticsChanges(a, b, nameOf).map((c) => (c.from || c.to ? `${c.label}: ${c.from} → ${c.to}` : `${c.label} changed`));
@@ -156,49 +168,91 @@ export function slotMoveName(league: League, i: number, tid = league.userTid): s
 }
 
 /**
+ * Moves of one kind made within this many possession logs of each other (a few at a break, or two
+ * changes a trip apart) are one move: no trip was played between them, so nothing could tell what
+ * each did on its own, and measured one by one, each had an empty stretch after it (or before it).
+ */
+const BATCH_LOGS = 4;
+
+/**
  * The night's moves, oldest first: `marks` are the game's, in the order made; `side` is the user's (0
  * home, 1 away). `slotName` names the tactic slot some tactics are, if any (see slotMatcher): a change
- * onto one from anything else reads as the switch it was ("Switched to Tactic B (Plan B)").
+ * onto one from anything else reads as the switch it was ("Switched to Tactic B (Plan B)"). Changes of
+ * tactics made together are one move, and so are substitutions (see BATCH_LOGS). `over`: the game has
+ * ended, so a move whose stretch ran to the final buzzer is over too (see CoachMove.closed).
  */
-export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string, slotName?: (t: Tactics) => string | null): CoachMove[] {
+export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string, slotName?: (t: Tactics) => string | null, over = false): CoachMove[] {
+  // the moves as batches of one kind: [first, last] of each
+  const batches: [MoveMark, MoveMark][] = [];
+  for (const m of marks) {
+    if (m.op.op === 'tactics' && !m.before) continue;
+    const open = m.op.op === 'timeout' || m.op.op === 'play' ? undefined : [...batches].reverse().find((b) => b[1].op.op === m.op.op);
+    if (open && m.log - open[1].log <= BATCH_LOGS) open[1] = m;
+    else batches.push([m, m]);
+  }
   const out: CoachMove[] = [];
   // the slot the game tipped off with: the tactics the first change replaced
   const first = marks.find((m) => m.op.op === 'tactics' && m.before);
   const tip = first?.before && slotName ? slotName(first.before) : null;
-  const nextOf = (i: number, kind: LiveOp['op']) => marks.slice(i + 1).find((m) => m.op.op === kind)?.log ?? logs.length;
+  // each batch is measured from its last move to the next batch of its kind, against the stretch from the one before
+  const nextOf = (i: number, kind: LiveOp['op']) => batches.slice(i + 1).find((b) => b[0].op.op === kind)?.[0].log ?? logs.length;
   const prevOf = (i: number, kind: LiveOp['op']) =>
-    marks
+    batches
       .slice(0, i)
       .reverse()
-      .find((m) => m.op.op === kind)?.log ?? 0;
-  marks.forEach((m, i) => {
+      .find((b) => b[1].op.op === kind)?.[1].log ?? 0;
+  /** Its stretch is over (the next move of its kind came, or the final buzzer) short of the trips a move in effect waits for. */
+  const closed = (to: number, t: MoveTally) => (to < logs.length || over) && Math.min(t.us.poss, t.them.poss) < MOVE_MIN_TRIPS;
+  batches.forEach(([m, last], i) => {
     const at = { q: m.q, clock: Math.round(m.clock) };
-    if (m.op.op === 'tactics' && m.before) {
-      const after = m.op.args.tactics;
+    const all = marks.slice(marks.indexOf(m), marks.indexOf(last) + 1).filter((x) => x.op.op === m.op.op && (x.op.op !== 'tactics' || x.before));
+    if (m.op.op === 'tactics' && last.op.op === 'tactics' && m.before) {
+      const after = last.op.args.tactics;
       const aim = aimOf(m.before, after);
       // (back onto the slot the game tipped off with from changes made on it is "Reset to game plan", not a switch)
       const to = slotName?.(after);
       const from = slotName?.(m.before) ?? null;
       const switched = !!to && to !== from && (from !== null || to !== tip);
+      const end = nextOf(i, 'tactics');
+      const tAfter = tally(logs, side, last.log, end, aim);
       out.push({
         kind: 'tactics',
         ...at,
         text: switched ? `Switched to ${to}` : moveText(m.before, after, nameOf),
         end: aim.end,
-        ...(m.op.args.staff ? { by: 'staff' as const } : {}),
+        // (the staff's only when it made every change in it)
+        ...(all.every((x) => x.op.op === 'tactics' && x.op.args.staff) ? { by: 'staff' as const } : {}),
         ...(aim.pid !== undefined ? { pid: aim.pid } : {}),
         ...(aim.types ? { aim: aimLabel(aim.types) } : {}),
         before: tally(logs, side, prevOf(i, 'tactics'), m.log, aim),
-        after: tally(logs, side, m.log, nextOf(i, 'tactics'), aim),
+        after: tAfter,
+        ...(closed(end, tAfter) ? { closed: true as const } : {}),
       });
     } else if (m.op.op === 'sub') {
+      const end = nextOf(i, 'sub');
+      const tAfter = tally(logs, side, last.log, end);
       out.push({
         kind: 'sub',
         ...at,
-        text: `${nameOf(m.op.args.in)} in for ${nameOf(m.op.args.out)}`,
+        text: all.map((x) => (x.op.op === 'sub' ? `${nameOf(x.op.args.in)} in for ${nameOf(x.op.args.out)}` : '')).join(' · '),
         end: 'both',
         before: tally(logs, side, prevOf(i, 'sub'), m.log),
-        after: tally(logs, side, m.log, nextOf(i, 'sub')),
+        after: tAfter,
+        ...(closed(end, tAfter) ? { closed: true as const } : {}),
+      });
+    } else if (m.op.op === 'play') {
+      // the trip it ran on: the next of ours that ran it (none when the period ran out first)
+      const id = m.op.args.set;
+      const j = logs.findIndex((l, k) => k >= m.log && l.off === side && l.set?.id === id);
+      const ran = j >= 0 ? logs[j] : undefined;
+      const pid = ran?.set?.pid ?? m.op.args.pid;
+      out.push({
+        kind: 'play',
+        ...at,
+        text: pid !== undefined ? setLabel(id, nameOf(pid)) : SETS[id].name,
+        end: 'off',
+        before: tally(logs, side, 0, 0),
+        after: j >= 0 ? tally(logs, side, j, j + 1) : tally(logs, side, 0, 0),
       });
     } else if (m.op.op === 'timeout') {
       out.push({
@@ -226,14 +280,18 @@ export type MoveVerdict = 'better' | 'worse' | 'same' | 'early';
  * moved against the noise of the trips behind it.
  */
 export function moveVerdict(m: CoachMove): { now: number | null; was: number | null; trips: number; what: 'them' | 'us' | 'focus' | 'margin'; verdict: MoveVerdict } {
-  const what = m.after.focus && m.after.focus.poss >= 4 ? 'focus' : m.end === 'def' ? 'them' : m.end === 'off' ? 'us' : 'margin';
+  // (what it's aimed at, when that has the trips a verdict needs, each side of it: a play type is a
+  // few trips a quarter, and judged on them alone a change of coverage stayed early all night)
+  const need = m.closed ? MOVE_CLOSED_TRIPS : MOVE_MIN_TRIPS;
+  const aimed = !!m.after.focus && m.after.focus.poss >= need && (m.before.focus?.poss ?? 0) >= MOVE_MIN_BEFORE;
+  const what = aimed ? 'focus' : m.end === 'def' ? 'them' : m.end === 'off' ? 'us' : 'margin';
   if (what === 'margin') {
     const per = (t: MoveTally) => (t.us.poss + t.them.poss ? (t.us.pts - t.them.pts) / ((t.us.poss + t.them.poss) / 2) : null);
     const now = per(m.after);
     // (a margin a trip over a trip or two before isn't a rate: a timeout a minute in has none to compare)
     const was = Math.min(m.before.us.poss, m.before.them.poss) >= MARGIN_MIN_BEFORE ? per(m.before) : null;
     const trips = Math.min(m.after.us.poss, m.after.them.poss);
-    return { now, was, trips, what, verdict: judge(now, was, trips, Math.min(m.before.us.poss, m.before.them.poss), 1, 1.5) };
+    return { now, was, trips, what, verdict: judge(now, was, trips, Math.min(m.before.us.poss, m.before.them.poss), 1, 1.5, !!m.closed) };
   }
   const pick = (t: MoveTally) => (what === 'focus' ? t.focus : what === 'them' ? t.them : t.us);
   const now = ppp(pick(m.after));
@@ -241,16 +299,18 @@ export function moveVerdict(m: CoachMove): { now: number | null; was: number | n
   const trips = pick(m.after)?.poss ?? 0;
   // fewer points is better on defense (their trips, or their player's), more on offense
   const better = what === 'us' || (what === 'focus' && m.end === 'off') ? 1 : -1;
-  return { now, was, trips, what, verdict: judge(now, was, trips, pick(m.before)?.poss ?? 0, better, 1.1) };
+  return { now, was, trips, what, verdict: judge(now, was, trips, pick(m.before)?.poss ?? 0, better, 1.1, !!m.closed) };
 }
 
 /**
  * A trip's points spread about 1.1 either way (a margin per trip about 1.5): a move reads as more
  * than noise once the two rates are MOVE_Z standard errors of their difference apart, which counts
  * the trips on both sides of it (a hot stretch before a move flatters or damns it as much as one after).
+ * A move whose stretch is over needs only MOVE_CLOSED_TRIPS: the standard error over so few is wide, so
+ * it reads as more than noise only on a big swing.
  */
-function judge(now: number | null, was: number | null, trips: number, wasTrips: number, better: 1 | -1, spread: number): MoveVerdict {
-  if (now === null || was === null || trips < MOVE_MIN_TRIPS || wasTrips < MOVE_MIN_BEFORE) return 'early';
+function judge(now: number | null, was: number | null, trips: number, wasTrips: number, better: 1 | -1, spread: number, closed: boolean): MoveVerdict {
+  if (now === null || was === null || trips < (closed ? MOVE_CLOSED_TRIPS : MOVE_MIN_TRIPS) || wasTrips < MOVE_MIN_BEFORE) return 'early';
   const se = spread * Math.sqrt(1 / trips + 1 / wasTrips);
   const d = (now - was) * better;
   return d > MOVE_Z * se ? 'better' : d < -MOVE_Z * se ? 'worse' : 'same';

@@ -1,5 +1,5 @@
 // The inbox: every message, newest first (older seasons under a divider), each from a person in a
-// role (senders.ts). One row of filters: All, Unread, Needs you (what the bell counts), and a folder
+// role (senders.ts). One row of filters: All, Unread, Important (big news and open decisions: the bell counts them with the rest of Needs you), and a folder
 // for each kind of sender (the owner, the coaching staff, the front office, the league). Mark all
 // read, and a message opens in a sheet (marked read as it opens) with its decision settled in place;
 // `?m=<id>` opens one straight away (the digest links to its mail so).
@@ -42,7 +42,7 @@ export default function Inbox() {
   const sorted = useLeagueMemo(() => [...league.inbox].sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id), [league]);
   const groups = useLeagueMemo(() => new Map(league.inbox.map((m) => [m.id, senderOf(league, m).group])), [league]);
   const unread = sorted.filter((m) => !m.read).length;
-  // what the bell's badge counts: big news and decisions still open
+  // mail that matters: big news and decisions still open (the bell counts these with the rest of Needs you)
   const need = sorted.filter((m) => needsYou(m, byId, league)).length;
   const keep = (id: number) => id === keepId;
   const list = sorted.filter((m) => {
@@ -87,7 +87,7 @@ export default function Inbox() {
   const options: { id: Filter; label: string }[] = [
     { id: 'all', label: 'All' },
     { id: 'unread', label: `Unread${unread ? ` ${unread}` : ''}` },
-    ...(need || filter === 'need' ? [{ id: 'need' as const, label: `Needs you${need ? ` ${need}` : ''}` }] : []),
+    ...(need || filter === 'need' ? [{ id: 'need' as const, label: `Important${need ? ` ${need}` : ''}` }] : []),
     ...(['owner', 'staff', 'office', 'league'] as const)
       .filter((g) => counts.has(g) || filter === g)
       .map((g) => ({ id: g, label: `${GROUP_LABEL[g]}${counts.get(g)?.unread ? ` ${counts.get(g)!.unread}` : ''}` })),
@@ -99,7 +99,7 @@ export default function Inbox() {
       {/* (the unread count is on its filter; the sub names what the bell counts) */}
       <PageHeader
         title="Inbox"
-        sub={need ? `${need} need${need === 1 ? 's' : ''} you` : unread ? undefined : 'All caught up'}
+        sub={need ? `${need} important` : unread ? undefined : 'All caught up'}
         back
         right={
           <button className="btn sm text td-markall" disabled={!unread || simming} onClick={markAll}>

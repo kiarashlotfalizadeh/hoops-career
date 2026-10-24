@@ -1124,6 +1124,12 @@ table.stats .bx-team td {
   display: inline-flex;
   gap: 6px;
 }
+/* the first nights' word on luck against the plan, under the edges that decided it */
+.gd-frame {
+  margin: 0;
+  line-height: 1.45;
+  max-width: 60ch;
+}
 
 /* ------------------------------------------------------------ the form guide: the last five, oldest first
    A letter each in its signal: no boxes */

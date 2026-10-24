@@ -13,7 +13,7 @@ import { prepareLive } from '../../state/live';
 import { aiGamePlan, nextMeeting, oppPlanChance, oppPlanIn, preparesPlan, withOppPlan } from '../ai/opponentPlan';
 import { counterCandidates, impactCounter } from '../ai/advisor';
 import { buildSimInput, ensureRotation, playGame, tipoffEdge, userGameOnDay } from '../league/games';
-import { courtEdge } from '../league/difficulty';
+import { DIFFICULTY, courtEdge, courtPoints, userCourtPoints, userProjectedNet } from '../league/difficulty';
 import { matchupPreview } from '../analysis/preview';
 import { simDay } from '../league/season';
 import { shortName, teamPlayers } from '../league/helpers';
@@ -23,7 +23,7 @@ import { applyPatch, cloneTactics, defaultTactics, hasCoachPlans, withoutCoachPl
 import { persistableTactics } from '../league/gamePlans';
 import { keptTactics } from '../../ui/live/keep';
 import { GameSim } from '../sim/engine';
-import { Rng } from '../random';
+import { Rng, clamp } from '../random';
 import type { PossLog } from '../sim/log';
 import type { League, Player, ScheduledGame } from '../types';
 
@@ -532,8 +532,24 @@ describe('planning for an opponent', () => {
       const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), { rng: new Rng(1), type: g.type });
       const base = tipoffEdge(l, g, sim);
       l.settings.difficulty = 'hard';
-      expect(tipoffEdge(l, g, sim)).toBeCloseTo(base + (g.home === me ? -2 : 2), 1);
+      expect(tipoffEdge(l, g, sim)).toBeCloseTo(base + courtPoints(l, g.home, g.away), 1);
+      expect(courtPoints(l, me, g.home === me ? g.away : g.home)).toBe(userCourtPoints(l));
+      // Hard's edge grows with the user's team: 2 points for an average roster, more for a better
+      // one (up to 5), less for a worse one (down to 1); Easy's stays flat
+      const mine = teamPlayers(l, me);
+      const at = (lift: number) => {
+        for (const p of mine) p.ovr += lift;
+        const pts = userCourtPoints(l);
+        for (const p of mine) p.ovr -= lift;
+        return pts;
+      };
+      expect(at(0)).toBeCloseTo(clamp(-2 * (1 + DIFFICULTY.hard.courtGrowth * userProjectedNet(l)), -5, -1), 5);
+      expect(at(4)).toBeLessThan(at(0));
+      expect(at(30)).toBe(-5);
+      expect(at(-30)).toBe(-1);
       expect(prepareLive(l)!.sim.opts.edge).toEqual(courtEdge(l, g.home, g.away));
+      l.settings.difficulty = 'easy';
+      expect(at(30)).toBe(at(-30));
     }
   }, 180_000);
 });

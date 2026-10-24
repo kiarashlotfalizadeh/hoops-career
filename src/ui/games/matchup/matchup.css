@@ -361,6 +361,13 @@
   gap: 10px;
   min-height: 28px;
 }
+/* a counter's measured worth, after its name: the points a game it adds (or costs) */
+.mu-worth {
+  flex: none;
+  font-size: 13px;
+  font-weight: 680;
+  white-space: nowrap;
+}
 .mu-cand-foot {
   display: flex;
   align-items: center;

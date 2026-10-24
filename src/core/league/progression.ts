@@ -313,8 +313,15 @@ export function anchorRatings(league: League) {
   anchorOverallSpread(league, anchorPopulation(league));
 }
 
-/** Quantiles of the raw-OVR distribution held to the league's creation (see anchorOverallSpread): OVR_ANCHORS' but the ends. */
-const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975];
+/**
+ * Quantiles of the raw-OVR distribution held to the league's creation (see anchorOverallSpread):
+ * OVR_ANCHORS' but the bottom end. The 99.3rd (the league's 3rd or 4th best player) and the best
+ * player hold the stars' band too: with the top held from the 97.5th alone, the ten or so players
+ * past it could run up the scale together (some leagues had six rated 99 by their fifth season), and
+ * with the 99.3rd alone the best one or two could still run away from everyone, their ratings far
+ * past the display's 99: leaders used 43-46% of their teams' possessions and scored 41-49 a game.
+ */
+const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975, 0.993, 1];
 
 /**
  * Good and bad summers move a player's skills together, so over the years good players become
@@ -322,9 +329,9 @@ const SHAPE_QS = [0.05, 0.15, 0.3, 0.5, 0.7, 0.85, 0.93, 0.975];
  * stars and more sub-60 players), while the top can thin out as stars age. Pull each stretch of the
  * raw-OVR distribution between neighbouring SHAPE_QS halfway back to its width when the display
  * scale was built at league creation, around the median: each player moves along all his
- * attributes at once, by where he stands (past the 97.5th percentile, as the stretch below it
- * moves). Held by its two halves alone (median to 97.5th, 5th to median), the shape inside them
- * drifted: the band of 80-84 players filled up while the 85+ stars thinned out.
+ * attributes at once, by where he stands. Held by its two halves alone (median to 97.5th, 5th to
+ * median), the shape inside them drifted: the band of 80-84 players filled up while the 85+ stars
+ * thinned out.
  */
 function anchorOverallSpread(league: League, pop: Player[]) {
   const raws = pop.map((p) => ovrRaw(p.ratings)).sort((a, b) => a - b);

@@ -10,8 +10,11 @@ function liveSeries(league: League, opp: number) {
   return league.playoffs.find((s) => s.winner === undefined && ((s.high === me && s.low === opp) || (s.low === me && s.high === opp)));
 }
 
-/** A plan still has something in it. */
-const hasContent = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0 || Object.keys(p.playerD ?? {}).length > 0 || !!p.note;
+/** Whether a plan asks for anything on the floor: a counter, a matchup or how to guard a player. */
+export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0 || Object.keys(p.playerD ?? {}).length > 0;
+
+/** A plan still has something in it (a note alone counts). */
+const hasContent = (p: GamePlan) => planMade(p) || !!p.note;
 
 /**
  * The plan that applies against `opp` (in `game`, when given): none once a series plan's series is
@@ -141,6 +144,9 @@ export function consumePlans(league: League, g: ScheduledGame) {
   if (g.home === me || g.away === me) {
     const opp = g.home === me ? g.away : g.home;
     const p = plans[opp];
+    // the guided first week's plan step stays done once the plan it was done with is used up
+    const o = league.onboarding;
+    if (p && o && planMade(p) && !o.done.includes('scout')) o.done.push('scout');
     if (p && (p.scope ?? 'next') === 'next') delete plans[opp];
   }
   for (const [k, p] of Object.entries(plans)) {

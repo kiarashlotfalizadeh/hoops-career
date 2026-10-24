@@ -12,7 +12,8 @@
   font-size: 14px;
   font-weight: 600;
   line-height: 1;
-  color: var(--accent-ink);
+  /* white on the tier colours (not your team's ink, which is black for a light team colour) */
+  color: #fff;
 }
 .tx-grade.sm {
   min-width: 24px;

@@ -1,7 +1,7 @@
 // Today's game pieces: the next game as the hero on game day (the billing, both teams, what's at
 // stake, who's out, and the way to its Matchup page), the next game as one row when it isn't today,
 // and outside the season's games a phase card (where the season stands, one line, and the one
-// screen worth opening). The dock carries Watch & coach and the phase's next step, so neither is
+// screen worth opening; in the preseason, the owner's goals too). The dock carries Watch & coach and the phase's next step, so neither is
 // repeated here.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -22,6 +22,7 @@ import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
 import { billingTitle, useBillings } from '../games/occasion';
 import { gameProjection } from '../../core/analysis/preview';
+import { goalsWhy, planOwnerGoals } from '../../core/league/ownerGoals';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -315,6 +316,8 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
   const path = (to?: string) => to?.split('?')[0];
   const taken = new Set([...linked, flowActions(league).find((a) => a.primary)?.to].map(path));
   const link = c.link && !taken.has(path(c.link.to)) ? c.link : undefined;
+  // the preseason: what the owner expects from this roster, the frame for the first week's calls
+  const goals = useLeagueMemo(() => (league.phase === 'preseason' && !league.fired ? planOwnerGoals(league, league.userTid) : null), [league]);
   return (
     <section className="slab td-phase" aria-label={c.title}>
       <div className="td-score-over">
@@ -327,6 +330,22 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
       </div>
       <h2 className="td-phase-t">{c.title}</h2>
       <p className="td-phase-l">{c.line}</p>
+      {goals && (
+        <div className="td-phase-goals">
+          <div className="td-phase-gk">
+            <span className="grow">The owner expects</span>
+            <Link to="/office/owner" className="card-link">
+              Owner <ChevronRight size={14} aria-hidden="true" />
+            </Link>
+          </div>
+          <ul className="td-phase-gl">
+            {goals.goals.map((g) => (
+              <li key={g.kind}>{g.title}</li>
+            ))}
+          </ul>
+          <p className="td-phase-gn">{[...goalsWhy(goals).slice(0, 1), 'He sets them on opening night, from the roster you open with.'].join(' ')}</p>
+        </div>
+      )}
     </section>
   );
 }

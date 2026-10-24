@@ -1,18 +1,18 @@
 // The agenda: required decisions hold the league (and the Continue bar) until they're settled, each
 // with the staff's call one tap away; optional ones never block, the staff's calls (a star hurt,
-// the odds gone, the deadline, the books) among them. The guided first week runs as one
-// agenda item at a time. Job security: the meter, the grace period by difficulty, the ultimatum.
+// the odds gone, the owner's floor in danger, the deadline, the books) among them, each only with a
+// real choice in it. The guided first week is one checklist item. Job security: the meter, the grace period by difficulty, the ultimatum.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, resolveAgenda, showGuide } from '../league/agenda';
+import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, guideStepOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { curTeamSeason, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerEvaluation } from '../league/owner';
-import { CONCEDE_COST, currentGoals, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
+import { CONCEDE_COST, FLOOR_EASE, currentGoals, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
 import { DEADLINE_DAYS, callsDaily } from '../league/calls';
 import { FROZEN_BUDGET, WARN_RED, booksDaily, booksReview, freezeResignReason, freezeSigningReason, freezeTradeReason } from '../league/books';
 import { PROJECT_HOME_GAMES, seasonEndCash } from '../league/finances';
@@ -97,26 +97,52 @@ describe('the agenda', () => {
       }
     }
 
-    // the guided first week runs one step at a time, ticks off steps done anyway, and can be hidden and brought back
+    // the guided first week is one checklist of four steps, each ticked by a choice (a change, or keeping the staff's on its screen), never by a visit; it can be hidden and brought back
     {
       const l = camp(5);
       expect(guideOpen(l)).toBe(true);
-      const step = () => agenda(l).find((i) => i.kind === 'guide');
-      expect(step()).toMatchObject({ required: false, title: `1 of ${GUIDE_STEPS.length} · Check your rotation`, to: '/team/rotation' });
-      resolveAgenda(l, step()!.suggestion!.action);
-      expect(step()?.title).toMatch(/^2 of 4 · Pick a playbook/);
+      const card = () => agenda(l).find((i) => i.kind === 'guide');
+      expect(card()).toMatchObject({ required: false, title: `Your first week · 0 of ${GUIDE_STEPS.length} done`, to: '/team/rotation' });
+      expect(card()!.steps!.map((x) => [x.done, x.next])).toEqual([
+        [false, true],
+        [false, false],
+        [false, false],
+        [false, false],
+      ]);
+      // its one quick choice is putting it away: no button skips a step
+      expect(card()!.suggestion).toBeUndefined();
+      expect(card()!.choices!.map((c) => c.label)).toEqual(['Hide the guide']);
+      expect(guideStepOpen(l, 'rotation')).toBe(true);
+      // keeping the staff's rotation on its screen is a choice
+      resolveAgenda(l, { kind: 'guide', step: 'rotation' });
+      expect(guideStepOpen(l, 'rotation')).toBe(false);
+      expect(card()!.title).toBe('Your first week · 1 of 4 done');
+      expect(card()!.steps![1].next).toBe(true);
       // editing the playbook counts as picking one
       l.teams[l.userTid].tactics.manual = true;
       expect(guideDone(l).has('playbook')).toBe(true);
-      expect(step()?.title).toMatch(/^3 of 4 · Scout your opener/);
+      // a plan with a counter in it does the third; a plan used up on the night keeps it done
+      const opp = card()!.steps![2].to.match(/\/games\/(\d+)/)![1];
+      l.gamePlans = { [+opp]: { oppTid: +opp, items: [{ id: 'x', label: 'Pack the paint', patch: {} }] } };
+      expect(guideDone(l).has('scout')).toBe(true);
+      // the last step goes to game day's preview, where Tip off is
+      expect(card()!.to).toBe(`/games/${opp}`);
       resolveAgenda(l, { kind: 'hideGuide' });
-      expect(step()).toBeUndefined();
+      expect(card()).toBeUndefined();
       showGuide(l);
-      expect(step()?.title).toMatch(/^3 of 4/);
+      expect(card()!.title).toBe('Your first week · 3 of 4 done');
       // it's for the first weeks of the first season only
       startRegularSeason(l);
       l.day = 30;
       expect(guideOpen(l)).toBe(false);
+    }
+
+    // the owner's welcome says what he expects from this roster, before opening night
+    {
+      const welcome = camp(5).inbox.find((m) => m.subject.startsWith('Welcome to the'))!;
+      expect(welcome.body).toMatch(/Here is what I expect from this roster/);
+      expect(welcome.body).toMatch(/^Win \d+ games \(\d+% of my review\)$/m);
+      expect(welcome.link).toBe('/office/owner');
     }
 
     // it stays out of the way with teaching off: no guide, no welcome mail, and turning it back on brings the guide
@@ -218,6 +244,45 @@ describe('the agenda', () => {
       best().injury = null;
       hurt(6);
       expect(card()).toBeUndefined();
+      // nor is one whose only answer is to carry on: 12 games out with no 10-day to be had and the staff on the rotation
+      best().injury = null;
+      l.day = 1;
+      l.teams[me].rotation.manual = false;
+      hurt(12);
+      expect(card()).toBeUndefined();
+      // a long one before the deadline: a trade is the other answer, made on the trade screen
+      best().injury = null;
+      hurt(25);
+      expect(card()!.choices!.find((c) => c.label === 'Look for a trade')).toMatchObject({ to: '/office/trade' });
+    }
+
+    // a team on pace under the owner's win floor, before the deadline: chase it, or tell him it's a development year
+    {
+      const l = inCharge(1);
+      const og = currentGoals(l)!;
+      og.goals = og.goals.filter((g) => g.kind !== 'postseason');
+      const ts = curTeamSeason(l, l.userTid);
+      // (the pace is read against his read of the roster, as the wins goal projects it: 2-28 is well under)
+      ts.won = 2;
+      ts.lost = 28;
+      const card = () => agenda(l).find((i) => i.kind === 'floor');
+      expect(card()!.title).toMatch(/^On pace for \d+ wins: under the owner's floor$/);
+      expect(card()!.suggestion).toMatchObject({ label: 'Chase the floor', to: '/office/trade' });
+      const floor = og.floor!;
+      const total = l.ownerMood.total;
+      expect(resolveAgenda(l, card()!.choices![0].action).ok).toBe(true);
+      expect(currentGoals(l)!.floor).toBeCloseTo(floor - FLOOR_EASE, 3);
+      expect(currentGoals(l)!.goals.some((g) => g.kind === 'youth')).toBe(true);
+      expect(l.ownerMood.total).toBeCloseTo(total - CONCEDE_COST, 2);
+      expect(card()).toBeUndefined();
+      // on pace to clear it, or after the deadline, there's no call
+      const m = inCharge(1);
+      currentGoals(m)!.goals = currentGoals(m)!.goals.filter((g) => g.kind !== 'postseason');
+      Object.assign(curTeamSeason(m, m.userTid), { won: 15, lost: 15 });
+      expect(agenda(m).some((i) => i.kind === 'floor')).toBe(false);
+      Object.assign(curTeamSeason(m, m.userTid), { won: 2, lost: 28 });
+      m.day = m.tradeDeadlineDay + 1;
+      expect(agenda(m).some((i) => i.kind === 'floor')).toBe(false);
     }
 
     // the playoff odds gone for a team the owner expects in the postseason: tell him it's a rebuild, or keep pushing

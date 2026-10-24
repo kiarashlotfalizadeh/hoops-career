@@ -77,7 +77,11 @@ export function ScoreBug({
   const { clock, score } = useSyncExternalStore(ticker.subscribe, ticker.get);
   const qLabel = periodLabel(quarter);
   const brk = !!atBreak;
-  const [h, a] = view.sides;
+  // a period's first possession: the drawn view still holds the period before's team fouls, and they
+  // don't carry over, so the new period starts at none and out of the bonus
+  const fresh = !brk && quarter > view.q;
+  const sideNow = (s: Drawn['sides'][number]) => (fresh ? { ...s, fouls: 0, bonus: false } : s);
+  const [h, a] = [sideNow(view.sides[0]), sideNow(view.sides[1])];
   // "in the bonus": the team that shoots free throws on every foul
   const bonus = [a.bonus ? away.abbrev : '', h.bonus ? home.abbrev : ''].filter(Boolean);
   const run = night ?? (h.run >= RUN_CHIP ? { abbrev: home.abbrev, a: h.run, b: 0 } : a.run >= RUN_CHIP ? { abbrev: away.abbrev, a: a.run, b: 0 } : null);

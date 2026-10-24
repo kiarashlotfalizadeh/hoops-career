@@ -75,6 +75,8 @@ export interface OwnerGoals {
   floor?: number;
   /** A rebuild season: which one in a row, of how many he allows; `over`: he allows no more (the play-in at least). */
   rebuild?: { year: number; of: number; over?: true };
+  /** He lowered the floor this season when told it was a development year (see easeFloor). */
+  eased?: true;
 }
 
 /** "Make the playoffs or you're done": a wins total or a postseason level, graded at the season's review. */
@@ -603,22 +605,7 @@ export function concedeBlockedReason(league: League): string | null {
 export function concedeSeason(league: League) {
   const og = currentGoals(league)!;
   const post = og.goals.find((g) => g.kind === 'postseason')!;
-  const who = ownerPersonality(league, og.tid);
-  const ts = thisSeason(league, og.tid);
-  const left = Math.max(0, SEASON_GAMES - (ts ? ts.won + ts.lost : 0));
-  const youth = og.goals.find((g) => g.kind === 'youth');
-  if (youth) youth.weight = Math.round((youth.weight + post.weight) * 100) / 100;
-  else {
-    const perGame = (0.85 * youngPerGame(league, og.tid) + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1);
-    const target = Math.max(100, round100(youngMinutes(league, og.tid) - (og.from?.youth ?? 0) + perGame * left));
-    og.goals.push({
-      kind: 'youth',
-      title: `Play your young players: ${target.toLocaleString('en-US')} minutes for players ${YOUNG_AGE} or under`,
-      target,
-      weight: post.weight,
-      perGame,
-    });
-  }
+  addYouthWeight(league, og, post.weight);
   og.goals = og.goals.filter((g) => g !== post);
   og.rebuild = { year: rebuildRun(league, og.tid) + 1, of: preset(league).rebuildSeasons };
   league.ownerMood.total = Math.round(clamp(league.ownerMood.total - CONCEDE_COST, -1, 1) * 100) / 100;
@@ -626,6 +613,92 @@ export function concedeSeason(league: League) {
     from: 'Owner',
     subject: 'A rebuilding season',
     body: `If this season is gone, I'd rather hear it from you than read it. Play the young players and sell what we can. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild, and it costs you with me. The win goal stands.`,
+    tone: 'neutral',
+    link: '/office/owner',
+  });
+}
+
+/** A development goal for the games left takes `weight` (added to the one he already has). */
+function addYouthWeight(league: League, og: OwnerGoals, weight: number) {
+  const who = ownerPersonality(league, og.tid);
+  const ts = thisSeason(league, og.tid);
+  const left = Math.max(0, SEASON_GAMES - (ts ? ts.won + ts.lost : 0));
+  const youth = og.goals.find((g) => g.kind === 'youth');
+  if (youth) {
+    youth.weight = Math.round((youth.weight + weight) * 100) / 100;
+    return;
+  }
+  const perGame = (0.85 * youngPerGame(league, og.tid) + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1);
+  const target = Math.max(100, round100(youngMinutes(league, og.tid) - (og.from?.youth ?? 0) + perGame * left));
+  og.goals.push({
+    kind: 'youth',
+    title: `Play your young players: ${target.toLocaleString('en-US')} minutes for players ${YOUNG_AGE} or under`,
+    target,
+    weight,
+    perGame,
+  });
+}
+
+// ---------------------------------------------------------------- the floor in danger
+
+/** How far the owner lowers this season's floor when told it's a development year (once a season). */
+export const FLOOR_EASE = 0.1;
+/** The share of the wins goal's weight a development year moves to playing the young players. */
+const EASE_WEIGHT = 0.4;
+
+/**
+ * The season heading under the owner's floor: the wins the pace so far projects (blended with his
+ * read of the roster, as the wins goal projects them), against the floor's wins. Null when it isn't:
+ * no floor, fewer than FLOOR_GAMES played, or on pace to clear it.
+ */
+export function floorDanger(league: League): { projected: number; floorWins: number } | null {
+  const og = currentGoals(league);
+  if (!og || og.floor === undefined || league.phase !== 'regular') return null;
+  const ts = thisSeason(league, og.tid);
+  const gp = (ts ? ts.won + ts.lost : 0) - (og.from ? og.from.won + og.from.lost : 0);
+  if (gp < FLOOR_GAMES) return null;
+  const won = (ts?.won ?? 0) - (og.from?.won ?? 0);
+  const left = Math.max(0, og.games - gp);
+  const w = gp / (gp + PACE_PRIOR);
+  const read = og.goals.find((g) => g.kind === 'wins')?.perGame ?? won / gp;
+  const projected = Math.round(won + left * (w * (won / gp) + (1 - w) * read));
+  const floorWins = Math.ceil(og.floor * og.games);
+  return projected < floorWins ? { projected, floorWins } : null;
+}
+
+/** Why the user can't tell the owner this is a development year now, or null. */
+export function easeFloorBlockedReason(league: League): string | null {
+  const og = currentGoals(league);
+  if (!og || og.floor === undefined || league.phase !== 'regular') return 'There is no season to give up on.';
+  if (league.day > league.tradeDeadlineDay) return "The deadline has passed: there's nothing left to sell. Play it out.";
+  if (og.eased) return 'He has eased the floor once this season already.';
+  const run = rebuildRun(league, og.tid);
+  if (og.rebuild?.over || run >= preset(league).rebuildSeasons)
+    return `He has given you ${run === 1 ? 'a rebuilding season' : `${run} rebuilding seasons`} already: he wants wins, not patience.`;
+  return null;
+}
+
+/**
+ * The user tells the owner this is a development year (easeFloorBlockedReason has passed): the
+ * floor drops FLOOR_EASE for this season, EASE_WEIGHT of the wins goal goes to playing the young
+ * players, the season counts on the rebuild clock, and the standing takes CONCEDE_COST at once.
+ */
+export function easeFloor(league: League) {
+  const og = currentGoals(league)!;
+  og.floor = Math.max(0, Math.round((og.floor! - FLOOR_EASE) * 1000) / 1000);
+  og.eased = true;
+  const wins = og.goals.find((g) => g.kind === 'wins');
+  if (wins) {
+    const moved = Math.round(wins.weight * EASE_WEIGHT * 100) / 100;
+    wins.weight = Math.round((wins.weight - moved) * 100) / 100;
+    addYouthWeight(league, og, moved);
+  }
+  og.rebuild ??= { year: rebuildRun(league, og.tid) + 1, of: preset(league).rebuildSeasons };
+  league.ownerMood.total = Math.round(clamp(league.ownerMood.total - CONCEDE_COST, -1, 1) * 100) / 100;
+  addInbox(league, {
+    from: 'Owner',
+    subject: 'A development year',
+    body: `Fine: play the kids and take the lottery odds. Under ${Math.ceil(og.floor * og.games)} wins is still a failed season, and it costs you with me. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild.`,
     tone: 'neutral',
     link: '/office/owner',
   });

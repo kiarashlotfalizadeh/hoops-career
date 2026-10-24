@@ -409,12 +409,12 @@ describe('sets in the engine', () => {
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%
+      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate
       const expected = {
         ai: [
           [116, 103, 78, 37, 13, 21, 14, 0],
-          [125, 119, 101, 29, 18, 29, 13, 0],
-          [112, 110, 90, 37, 7, 13, 12, 0],
+          [136, 132, 94, 27, 10, 36, 10, 0],
+          [109, 112, 89, 38, 7, 13, 13, 0],
         ],
         // (taken again when play calls from the bench were retired)
         coached: [

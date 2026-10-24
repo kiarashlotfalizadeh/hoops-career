@@ -52,6 +52,8 @@
   background: transparent;
   border-color: transparent;
   color: var(--accent-text);
+  text-decoration: var(--team-link-line);
+  text-underline-offset: 3px;
   padding: 0 6px;
 }
 .btn.danger {

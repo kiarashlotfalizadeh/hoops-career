@@ -16,7 +16,7 @@ import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, 
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { faDay, marqueeFA } from '../league/freeAgency';
 import { aiPackage, sellable } from '../league/aiTrades';
-import { buildSimInput, restVeterans, youthLean, youthMovement, youthNews } from '../league/games';
+import { buildSimInput, restForPlayoffs, restVeterans, seedLocked, youthLean, youthMovement, youthNews } from '../league/games';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { activeCoach, candidateScore, coachCareer, openStint, profileOf, registryProblems, userCoach, type CarouselMoves } from '../league/coaches';
 import { declineJob, makeJobOffers, takeJob } from '../league/jobs';
@@ -273,6 +273,31 @@ describe('AI front offices', () => {
       youthNews(L);
       youthNews(L);
       expect(L.news.filter((n) => n.tids[0] === t.tid && n.text.includes('young players'))).toHaveLength(1);
+    }
+
+    // a conference leader nobody can catch saves its stars for the playoffs: its three best each sit
+    // every other night
+    {
+      const L = youthLeague(0);
+      const [lead, second] = L.teams.filter((t) => t.conf === 'W' && t.tid !== L.userTid);
+      expect(seedLocked(L, lead.tid)).toBe(false);
+      L.day = Math.max(...L.schedule.filter((g) => g.type === 'regular').map((g) => g.day));
+      teamSeason(lead, L.season).won = 60;
+      expect(seedLocked(L, lead.tid)).toBe(true);
+      expect(seedLocked(L, second.tid)).toBe(false);
+      const ps = teamPlayers(L, lead.tid).filter((p) => !p.contract.twoWay && !p.injury);
+      const best = [...ps].sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
+      const rested = new Map<number, number>();
+      for (let d = 0; d < 6; d++) {
+        const rest: number[] = [];
+        restForPlayoffs(ps, L.day + d, rest);
+        for (const pid of rest) rested.set(pid, (rested.get(pid) ?? 0) + 1);
+      }
+      for (const p of best.slice(0, 3)) expect(rested.get(p.pid)).toBe(3);
+      expect(rested.has(best[3].pid)).toBe(false);
+      const tonight: number[] = [];
+      restForPlayoffs(ps, L.day, tonight);
+      for (const pid of tonight) expect(buildSimInput(L, lead.tid, L.day, 'regular').rest).toContain(pid);
     }
   }, 180_000);
 });

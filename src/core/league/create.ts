@@ -27,6 +27,7 @@ import {
 } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './aiTrades';
+import { goalsWhy, planOwnerGoals } from './ownerGoals';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
 import { injuryName, money } from '../format';
@@ -431,12 +432,24 @@ export function createLeague(opts: CreateOpts): League {
   // two-way contracts don't count toward the 15-man roster
   const standard = roster.filter((p) => !p.contract.twoWay);
   const twoWays = roster.length - standard.length;
+  // the owner's goals as the roster stands (he sets them on opening night): the frame for every call that follows
+  const goals = planOwnerGoals(league, opts.userTid);
   addInbox(league, {
     from: 'Owner',
     subject: `Welcome to the ${user.region} ${user.name}`,
-    body: `Coach ${opts.coachName}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it. Today lists what needs you before opening night.`,
+    body: [
+      `${opts.coachName === 'Coach' ? 'Coach' : `Coach ${opts.coachName}`}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it.`,
+      ...(goals
+        ? [
+            "Here is what I expect from this roster. I'll set the goals on opening night from the roster you open with, and grade the season on them:",
+            ...goals.goals.map((g) => `${g.title} (${Math.round(g.weight * 100)}% of my review)`),
+            ...goalsWhy(goals),
+          ]
+        : []),
+      'Today lists anything that needs you before opening night.',
+    ].join('\n'),
     tone: 'good',
-    link: '/',
+    link: '/office/owner',
   });
   startGuide(league);
   const over = standard.length - CAP.rosterMax;

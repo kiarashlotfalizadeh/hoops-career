@@ -491,6 +491,13 @@
 .lv-rep-skip:active {
   background: var(--surface-2);
 }
+/* the late-game huddle's play calls: a row of buttons, the one called filled */
+.lv-calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
 .lv-rep-skip::after {
   content: '';
   position: absolute;

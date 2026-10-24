@@ -4,14 +4,13 @@
 // the next game against them is the user's next game), Scout, Plan (with the staff's counters) and
 // Matchups. On game day a dock tips the game off or sims it, and a sim lands on the result: the game's
 // report, which opens on the night's story. The night after a meeting, its result leads the page.
-import { useEffect } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronRight, Eye } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { touch } from '../../state/actions';
 import { liveInProgress } from '../../state/live';
-import { guideVisit } from '../../core/league/agenda';
+import { nextOpponent } from '../../core/league/agenda';
+import { GuideStrip } from '../components/GuideStrip';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
 import { neutralSite } from '../../core/league/games';
@@ -54,8 +53,6 @@ export default function Matchup() {
 }
 
 function MatchupScreen({ league, opp }: { league: League; opp: number }) {
-  // the guided first week's "scout your opener" is done once a matchup page is open
-  useEffect(() => void touch((l) => void guideVisit(l, 'scout')), []);
   const next = meetings(league, opp)[0];
   const upNext = useLeagueMemo(() => nextUserGame(league), [league]);
   // the preview is for the user's next game: when that's against them
@@ -76,6 +73,7 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
       />
       <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
       <JustPlayed league={league} opp={opp} />
+      {opp === nextOpponent(league) && <GuideStrip step="scout" keep="No plan this time" />}
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}

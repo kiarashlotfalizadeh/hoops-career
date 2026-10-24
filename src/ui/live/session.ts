@@ -7,7 +7,7 @@ import type { GameSim } from '../../core/sim/engine';
 import { buildSimInput } from '../../core/league/games';
 import { hashString } from '../../core/random';
 import type { LiveGame } from '../../state/live';
-import { eventLines, type LiveEvent } from './alerts';
+import { eventLines, foulLimit, type LiveEvent } from './alerts';
 import type { BannerItem } from './Banner';
 import type { SubOptions } from './MyPlayer';
 import { drawnPlayer, subsLine, type Drawn } from './drawn';
@@ -75,11 +75,21 @@ export function subOptions(view: Drawn, userSide: 0 | 1, me: GameSim['T'][number
   if (l.out) return { on: sp.on, out: l.out, dnp: sp.dnp, options: [] };
   if (sp.on) {
     const staff = staffPick(pid);
+    // (the ones in foul trouble last: the staff's limit for the period, as it sits players at it)
+    const limit = foulLimit(view.q, me.t.manage.foulTrouble);
+    const trouble = (p: (typeof me.players)[number]) => (line(p).fouls >= limit ? 1 : 0);
     const bench = me.players
       .filter((p) => !p.on && line(p).out === 0)
-      .sort((a, b) => (a.pid === staff ? -1 : b.pid === staff ? 1 : b.energy - a.energy))
+      .sort((a, b) => (a.pid === staff ? -1 : b.pid === staff ? 1 : trouble(a) - trouble(b) || b.energy - a.energy))
       .slice(0, 6);
-    return { on: true, out: 0, options: bench.map((p) => ({ pid: p.pid, line: `${line(p).energy}%`, staff: p.pid === staff })) };
+    return {
+      on: true,
+      out: 0,
+      options: bench.map((p) => {
+        const x = line(p);
+        return { pid: p.pid, line: `${x.energy}%${x.fouls ? ` · ${x.fouls} PF` : ''}`, staff: p.pid === staff };
+      }),
+    };
   }
   return {
     on: false,

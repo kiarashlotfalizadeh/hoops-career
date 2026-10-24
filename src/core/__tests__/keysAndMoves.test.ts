@@ -230,6 +230,57 @@ describe('keys to the game and coach moves', () => {
         expect(moveVerdict(m).verdict).toBe('same');
       }
 
+      // moves made together at a break are one move, measured from the break to the next one of
+      // their kind against the stretch before (one by one, each had an empty stretch and stayed early)
+      {
+        const logs: PossLog[] = [];
+        for (let i = 0; i < 40; i++) logs.push(trip(0, i < 20 ? 0 : 2), trip(1, i < 20 ? 2 : 0));
+        const t0 = defaultTactics();
+        const t1 = cloneTactics(t0);
+        t1.defense.pnr = 'hedge';
+        const t2 = cloneTactics(t1);
+        t2.defense.help = 80;
+        const at = (op: LiveOp) => ({ op, log: 40, q: 2, clock: 0 });
+        const moves = coachMoves(
+          [
+            at({ at: 0, op: 'sub', args: { out: 1, in: 2 } }),
+            at({ at: 0, op: 'tactics', args: { tactics: t1 } }),
+            at({ at: 0, op: 'sub', args: { out: 3, in: 4 } }),
+            { ...at({ at: 0, op: 'tactics', args: { tactics: t2 } }), log: 42 },
+          ].map((m, i) => ({ ...m, before: i === 1 ? t0 : i === 3 ? t1 : undefined })),
+          logs,
+          0,
+          names,
+        );
+        expect(moves.map((m) => m.kind)).toEqual(['sub', 'tactics']);
+        expect(moves[0].text).toBe('P2 in for P1 · P4 in for P3');
+        expect(moves[0].before.us.poss).toBe(20);
+        expect(moves[0].after.us.poss).toBe(20);
+        expect(moveVerdict(moves[0]).verdict).toBe('better');
+        // (the two tactics changes two logs apart: one move, from the first's tactics to the last's)
+        expect(moves[1].text).toContain('Hedge');
+        expect(moves[1].after.us.poss + moves[1].after.them.poss).toBe(38);
+      }
+
+      // a late move: its stretch runs to the final buzzer, short of the trips one in effect waits for,
+      // and once the game is over it's judged on what it had; a play called is the trip it ran on
+      {
+        const logs: PossLog[] = [];
+        for (let i = 0; i < 40; i++) logs.push(trip(0, 1), trip(1, 2));
+        for (let i = 0; i < 8; i++) logs.push({ ...trip(0, 1), ...(i === 0 ? { set: { id: 'horns' as const, pid: 5, n: 1 }, pts: 3 } : {}) }, trip(1, 0));
+        const marks = [
+          { op: { at: 0, op: 'sub', args: { out: 1, in: 2 } } as LiveOp, log: 80, q: 4, clock: 120 },
+          { op: { at: 0, op: 'play', args: { set: 'horns' } } as LiveOp, log: 80, q: 4, clock: 120 },
+        ];
+        const [live, play] = coachMoves(marks, logs, 0, names);
+        expect(live.closed).toBeUndefined();
+        expect(moveVerdict(live).verdict).toBe('early');
+        const [late] = coachMoves(marks, logs, 0, names, undefined, true);
+        expect(late.closed).toBe(true);
+        expect(moveVerdict(late).verdict).toBe('better');
+        expect(play).toMatchObject({ kind: 'play', text: 'Horns: P5', after: { us: { poss: 1, pts: 3 } } });
+      }
+
       // name game-specific orders: a matchup, an instruction, a hunt
       {
         const a = defaultTactics();

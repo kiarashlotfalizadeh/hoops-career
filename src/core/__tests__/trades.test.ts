@@ -675,6 +675,22 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(tradeMatchLimit(l, 20_000)).toBe(20_000 + Math.round(cap * 0.0485));
     expect(tradeMatchLimit(l, 40_000)).toBe(50_000 + buf);
     expect(tradeMatchLimit(l, 40_000, l.season, true)).toBe(40_000);
+    // a team under the cap before the deal can absorb up to its space plus the buffer: a dump into room just works
+    const full = CAP_FOR(l);
+    for (const [t, amount] of [
+      [U, full.salaryCap + 20_000],
+      [AI, full.salaryCap - 30_000],
+    ] as const) {
+      l.teams[t].deadMoney = [];
+      l.teams[t].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, t) });
+    }
+    const dumped = shape(l, standardRoster(l, U)[0], 72, 27, 30_000 + buf - 10);
+    expect(validateTrade(l, offer([dumped.pid], [])).filter((e) => /Salary doesn't match/.test(e))).toEqual([]);
+    expect(salaryMatchGap(l, offer([dumped.pid], []), 'b')).toBe(0);
+    // past that, the error names its space, and sending back the rest dollar for dollar fixes it
+    dumped.contract.salaries = [31_000];
+    expect(validateTrade(l, offer([dumped.pid], [])).find((e) => /Salary doesn't match/.test(e))).toMatch(/its \$30\.0M of cap space/);
+    expect(salaryMatchGap(l, offer([dumped.pid], []), 'b')).toBe(1_000 - buf);
   }
 
   // an over-the-cap team's trade that sends out more salary than it takes back leaves a traded player exception for a year, which absorbs a player later

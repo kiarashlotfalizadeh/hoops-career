@@ -372,9 +372,11 @@ graphics package); the console under it is paper and card stock like every other
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.
-- **The bell's badge counts what needs you** (`needsYou`: important mail from the last two weeks of
-  this season, or a decision still open); other mail is unread in the list without feeding the badge
-  or Today's count.
+- **One "Needs you" count** (`today/needs.ts`): the bell's badge and Today's Needs you are the same
+  number: the agenda's decisions, mail that needs you and isn't one of them (`needsYou`: important
+  mail from the last two weeks of this season), the deadline's last week and a backup due. The
+  staff's advice and a warm seat sit beside it on Today, uncounted. The inbox's own filter for big
+  news and open decisions is "Important"; other mail is unread in the list without feeding a count.
 
 ## Motion
 

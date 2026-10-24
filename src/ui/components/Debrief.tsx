@@ -1,12 +1,12 @@
 // The staff's debrief at the top of a game's recap (the live final card and the report's Debrief
-// tab): the lead assistant's verdict, the edges that decided it in points, your moves in a live
-// game and what each did, and what to do next time, the fix one tap away for the plan against this
+// tab): the lead assistant's verdict, the edges that decided it in points, your game plan's counters
+// graded on what each was aimed at, your moves in a live game and what each did, and what to do next time, the fix one tap away for the plan against this
 // opponent or for every game (or, for playing a step slow, the practice focus between games).
 import { useMemo, useState } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameReport } from '../../core/analysis/gameReport';
-import { debrief, type DebriefAdvice } from '../../core/analysis/debrief';
+import { debrief, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
 import { leadAssistant } from '../../core/ai/assistant';
 import { applyPatch } from '../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
@@ -19,6 +19,14 @@ import { AssistantHead, MovesList, NoteCard } from './StaffCards';
 
 /** What to do next time, shown before "more". */
 const ADVICE_SHOWN = 2;
+
+/** A plan counter's grade, in the words a live move's verdict uses. */
+const PLAN_VERDICT: Record<PlanGrade['verdict'], { label: string; tone: string }> = {
+  better: { label: 'Worked', tone: 'good' },
+  worse: { label: "Didn't work", tone: 'bad' },
+  same: { label: 'No clear difference', tone: 'dim' },
+  few: { label: 'Too few to tell', tone: 'dim' },
+};
 
 export function Debrief({ res, league, report }: { res: GameResult; league: League; report: GameReport }) {
   const d = useMemo(() => debrief(league, res, report), [league, res, report]);
@@ -73,6 +81,30 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
             />
           ))}
         </div>
+      )}
+
+      {d.frame && <p className="gd-frame small dim2">{d.frame}</p>}
+
+      {d.plan.length > 0 && (
+        <Section title="Your plan">
+          <div className="lv-mv card flush list">
+            {d.plan.map((g) => (
+              <div key={g.label} className="lv-mv-row">
+                <div className="grow lv-mv-tx">
+                  <div className="lv-mv-what">{g.label}</div>
+                  <div className="lv-mv-line small dim2">
+                    {g.line}
+                    {g.worth && ` The staff measured it at ${g.worth} over many games.`}
+                  </div>
+                </div>
+                <span className={`lv-mv-v ${PLAN_VERDICT[g.verdict].tone}`}>
+                  {g.verdict === 'better' && <Check size={12} aria-hidden="true" />}
+                  {PLAN_VERDICT[g.verdict].label}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
       )}
 
       {res.moves && res.moves.length > 0 && (

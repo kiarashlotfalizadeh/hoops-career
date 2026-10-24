@@ -66,12 +66,22 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
 const VERDICT: Record<MoveVerdict, { label: string; tone: string }> = {
   better: { label: 'Working', tone: 'good' },
   worse: { label: 'Not working', tone: 'bad' },
-  same: { label: 'No change yet', tone: 'dim' },
+  same: { label: 'No clear change', tone: 'dim' },
   early: { label: 'Too early', tone: 'dim' },
 };
 
+/** A move whose stretch ended (the next one of its kind, or the buzzer) before it had a few trips. */
+const CUT_SHORT = { label: 'Too short to tell', tone: 'dim' };
+/** ...and one whose stretch is over with no clear change: there won't be one now. */
+const NO_DIFFERENCE = { label: 'No clear difference', tone: 'dim' };
+
 /** What a move has done since, in a line: "SAS 0.91 a trip since (22 trips), 1.18 before". */
 export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, nameOf: (pid: number) => string): string {
+  // a play called: the one trip it ran on
+  if (m.kind === 'play') {
+    const t = m.after.us;
+    return !t.poss ? 'Not run yet.' : t.pts ? `Ran it: ${plural(t.pts, 'point')}.` : 'Ran it: came up empty.';
+  }
   const v = moveVerdict(m);
   if (v.now === null) return 'Not a trip since yet.';
   if (v.what === 'margin') {
@@ -103,7 +113,9 @@ export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[];
       {list.map((m, i) => {
         const v = moveVerdict(m);
         // (a timeout rests legs and stops the clock: what follows it isn't its verdict)
-        const verdict = m.kind === 'timeout' ? null : VERDICT[v.verdict];
+        // (nor is one trip a play's: it scored or it didn't)
+        const verdict =
+          m.kind === 'timeout' || m.kind === 'play' ? null : m.closed && v.verdict === 'early' ? CUT_SHORT : m.closed && v.verdict === 'same' ? NO_DIFFERENCE : VERDICT[v.verdict];
         return (
           <div key={`${m.q}-${m.clock}-${i}`} className="lv-mv-row">
             <span className="lv-mv-when num">{m.clock <= 0 ? (m.q === 2 ? 'Half' : `End ${periodLabel(m.q)}`) : `${periodLabel(m.q)} ${fmtClock(m.clock)}`}</span>

@@ -23,7 +23,7 @@ import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { jerseyColors } from '../teamColors';
 import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
-import { liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
+import { crunchTime, foulLimit, liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -133,6 +133,10 @@ export function useLiveGame() {
   const [clipOpen, setClipOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
+  /** The last call the game stopped for (a fifth foul, a closer out of legs): the screen opens his sheet. */
+  const [stopCall, setStopCall] = useState<StopCall | null>(null);
+  /** The calls the game has stopped for tonight: each stops it once. */
+  const stoppedFor = useRef(new Set<string>());
   const [resultGid, setResultGid] = useState<number | null>(null);
   const [announce, setAnnounce] = useState('');
   const mounted = useRef(true);
@@ -166,14 +170,20 @@ export function useLiveGame() {
 
   const nameOf = useMemo(() => (game ? simNames(league, game.sim) : () => ''), [game, league]);
 
-  /** Who the staff would send in for one of your players: a rested bench player, the same size if possible. */
+  /**
+   * Who the staff would send in for one of your players: a rested bench player, the same size if
+   * possible, and never one in foul trouble (at the staff's limit for the period, the next one's at a
+   * break): sending him in only brings the next sub, or a foul-out.
+   */
   const subFor = useCallback(
     (pid: number) => {
-      const t = liveRef.current?.sim.T[userSide];
-      if (!t) return undefined;
+      const sim = liveRef.current?.sim;
+      const t = sim?.T[userSide];
+      if (!sim || !t) return undefined;
       const out = t.byId.get(pid);
+      const limit = foulLimit(sim.atBuzzer() ? sim.q + 1 : sim.q, t.t.manage.foulTrouble);
       const score = (p: (typeof t.players)[number]) => (p.big === out?.big ? 100 : 0) + p.c.create + p.c.helpD + p.energy * 40;
-      return t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75).sort((a, b) => score(b) - score(a))[0]?.pid;
+      return t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit).sort((a, b) => score(b) - score(a))[0]?.pid;
     },
     [userSide],
   );
@@ -305,6 +315,8 @@ export function useLiveGame() {
       clearTimeout(ff.current.timer);
       ff.current = { timer: 0, waiting: false };
       brokeAt.current = 0;
+      stoppedFor.current = new Set();
+      setStopCall(null);
       viewRef.current = lg ? snapshot(lg.sim, lg.logs.length) : null;
       setView(viewRef.current);
       setEvents([]);
@@ -573,6 +585,18 @@ export function useLiveGame() {
       // no break here (Settings → Live games → Breaks): the period's end is saved all the same, once
       if (lg.journal.steps !== lg.steps) saveSpot(lg);
     }
+    // a call only you can make now stops the game, once: a fifth foul, a closer out of legs
+    const call = lg.over ? null : stopCallIn(v, lg, loopHelpers.current.nameOf, opts.current.dismissed);
+    if (call && !stoppedFor.current.has(call.id)) {
+      stoppedFor.current.add(call.id);
+      setScript(null);
+      setPaused(true);
+      ff.current.waiting = true;
+      setStopCall(call);
+      setAnnounce(`Paused: ${call.text}`);
+      haptic('warning');
+      return;
+    }
     let logs: PossLog[] = [];
     let guard = 0;
     // the score the drawn possession starts from (its log keeps only the one it ends on)
@@ -798,6 +822,7 @@ export function useLiveGame() {
     notes,
     dismissed,
     setDismissed,
+    stopCall,
     /** Something changed through the game (tactics, subs): the screen reads it again. */
     bump: () => setTick((x) => x + 1),
     tick,
@@ -816,3 +841,41 @@ export function useLiveGame() {
 }
 
 export type LiveSession = ReturnType<typeof useLiveGame>;
+
+/** A call the live game stops for: the player it's about, and what it is in a line. */
+export interface StopCall {
+  id: string;
+  pid: number;
+  text: string;
+}
+
+/**
+ * The call the drawn game `v` stops for, if any: one of your five on five fouls from the fourth quarter
+ * on, or one of your closers below the energy your staff subs at in crunch time. Only when the staff
+ * won't make it for you (in crunch time it stops subbing for fouls and legs, and it never does when
+ * you make the subs), and not once you've dismissed the alert for it.
+ */
+export function stopCallIn(v: Drawn, lg: LiveGame, names: (pid: number) => string, dismissed: string[]): StopCall | null {
+  const t = lg.sim.T[lg.userSide];
+  const crunch = crunchTime(v.q, v.clock);
+  if (!lg.manualSubs && !crunch) return null;
+  const me = v.sides[lg.userSide];
+  // the closing five: the rotation's, else the five the staff plans most minutes for
+  const set = t.team.rotation.closers;
+  const closers = new Set(
+    set.length >= 5
+      ? set
+      : [...t.players]
+          .sort((a, b) => b.planMin - a.planMin)
+          .slice(0, 5)
+          .map((p) => p.pid),
+  );
+  for (const pid of me.on) {
+    const p = me.players.find((x) => x.pid === pid);
+    if (!p || p.out !== 0) continue;
+    if (v.q >= 4 && p.fouls === 5 && !dismissed.includes(`fouls-${pid}-5`)) return { id: `fouls-${pid}`, pid, text: `${names(pid)} has 5 fouls. One more and he's out.` };
+    if (crunch && closers.has(pid) && p.energy < t.t.manage.fatigueSub && !dismissed.some((d) => d.startsWith(`tired-${pid}-`)))
+      return { id: `tired-${pid}-${v.q}`, pid, text: `${names(pid)} is gassed (${Math.round(p.energy * 100)}% energy).` };
+  }
+  return null;
+}

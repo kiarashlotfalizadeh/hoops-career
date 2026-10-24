@@ -110,6 +110,10 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   // re-signing, what his Bird rights allow (and a bigger max he has earned with you); a free agent, his max
   const limit = mode === 'resign' ? resignLimit(league, p, tid) : null;
   const maxAmt = limit ?? playerMax(league, p, season);
+  // he asks more than his Early Bird or non-Bird rights allow: no offer can re-sign him (see userResign),
+  // so the sheet says so and shows his real ask, never one cut down to the limit
+  const wants = mode === 'resign' ? askingContract(league, p, tid).amount : 0;
+  const overRights = limit !== null && wants > limit;
   const yearsMax = mode === 'resign' ? maxYearsWith(league, p, tid) : sheet ? SHEET_MAX_YEARS : FA_YEARS;
   const raise = mode === 'resign' ? raiseWith(league, p, tid) : 0.05;
   // (his minimum exactly when he asks it: a little more would no longer be a minimum deal)
@@ -131,7 +135,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
   const askAt = bidding ? Math.min(maxAmt, Math.ceil((ask.amount * (1 + Math.abs(years - ask.years) * 0.03)) / STEP) * STEP) : askFor(league, p, kind, years, option);
   // his ask on his own terms as it can be signed (in $50K steps): the figure up top and the "His ask" chip agree
-  const askOwn = bidding ? Math.min(maxAmt, Math.ceil(ask.amount / STEP) * STEP) : askFor(league, p, kind, ask.years);
+  const askOwn = overRights ? wants : bidding ? Math.min(maxAmt, Math.ceil(ask.amount / STEP) * STEP) : askFor(league, p, kind, ask.years);
   const talks = bidding ? null : talkState(league, p, kind);
   const appeal = teamAppeal(league, tid, p);
   const ai = appealInfo(appeal);
@@ -178,7 +182,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
     .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room);
   const floor = bidding ? bidFloor(league, p, years) : 0;
   const talksOff = !!talks?.closed;
-  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff;
+  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff || overRights;
   // as signed: each season at least his minimum
   const contract = makeContract(league, amount, years, season, p.experience, { raise, max: maxAmt });
   const total = contract.salaries.reduce((a, b) => a + b, 0);
@@ -253,31 +257,49 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
         </HelpSheet>
       </div>
 
-      <OfferControls
-        amount={amount}
-        total={total}
-        set={set}
-        minAmt={minAmt}
-        maxAmt={maxAmt}
-        askAt={askAt}
-        years={years}
-        setYears={setYears}
-        wants={ask.years}
-        firstSeason={season}
-        yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
-        yearsMax={yearsMax}
-        yearsNote={
-          <>
-            Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants: about 3% on his price.
-            {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.` : ''}
-            {mode === 'resign' && birdTier(league, p) !== 'full'
-              ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
-              : ''}
-          </>
-        }
-      />
+      {!overRights && (
+        <OfferControls
+          amount={amount}
+          total={total}
+          set={set}
+          minAmt={minAmt}
+          maxAmt={maxAmt}
+          askAt={askAt}
+          years={years}
+          setYears={setYears}
+          wants={ask.years}
+          firstSeason={season}
+          yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
+          yearsMax={yearsMax}
+          yearsNote={
+            <>
+              Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants: about 3% on his price.
+              {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.` : ''}
+              {mode === 'resign' && birdTier(league, p) !== 'full'
+                ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
+                : ''}
+            </>
+          }
+        />
+      )}
 
-      {optionsOk && (
+      {overRights && !closed && (
+        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
+          <b>
+            He wants {moneyExact(wants)}; your {birdTier(league, p) === 'early' ? 'Early Bird' : 'non-Bird'} rights allow {moneyExact(maxAmt)}.
+          </b>{' '}
+          {ownRfa
+            ? 'No new deal can pay him that: you can still match an offer sheet he signs elsewhere.'
+            : 'He walks in free agency unless you renounce him and bid with cap space or an exception.'}
+          <div className="tiny dim">
+            {birdTier(league, p) === 'early'
+              ? 'Early Bird rights (two seasons with you) pay up to 175% of his salary or 105% of the league average, whichever is more.'
+              : 'Non-Bird rights (a season with you) pay up to 120% of his salary.'}
+          </div>
+        </Callout>
+      )}
+
+      {optionsOk && !overRights && (
         <div className="fo-years">
           <div className="over">Option on {years >= 2 ? shortSeason(season + years - 1) : 'the last season'}</div>
           <Segmented
@@ -377,7 +399,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
 
       {/* (a player who takes the minimum on these terms has nothing to talk about) */}
-      {!bidding && !closed && (askAt > minAmt + 1 || !!reply || !!talks?.counter || !!talks?.closed) && (
+      {!bidding && !closed && !overRights && (askAt > minAmt + 1 || !!reply || !!talks?.counter || !!talks?.closed) && (
         <TalkPanel p={p} kind={kind} season={season} amount={amount} years={years} option={option} reply={reply} counterBlocked={counterBlocked} onAcceptCounter={acceptCounter} />
       )}
 
@@ -425,7 +447,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           </div>
           {tax && <div className={`tiny num ${tax.tone}`}>{tax.text}</div>}
         </section>
-      ) : (
+      ) : overRights ? null : (
         <section className="fo-capimpact" aria-label={`${shortSeason(season)} payroll`}>
           <div className="fo-capimpact-h">
             <span className="over">{shortSeason(season)} payroll</span>
@@ -450,7 +472,9 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           Profile
         </Link>
         <button className={`btn grow ${!blocked ? 'primary' : ''}`} disabled={blocked || busy} onClick={() => submit()}>
-          {bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · {yrs(years)} · {money(total)}
+          {overRights
+            ? 'No offer can re-sign him'
+            : `${bidding ? (bid ? 'Update offer' : 'Submit offer') : sheet ? 'Offer sheet' : 'Make offer'} · ${yrs(years)} · ${money(total)}`}
         </button>
       </div>
     </div>

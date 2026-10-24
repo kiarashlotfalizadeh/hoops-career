@@ -24,6 +24,8 @@ import { GameSim } from '../sim/engine';
 import { situationFromTemplate } from '../sim/tactics';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
+import { counterWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
+import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
   const g = userGameOnDay(l, l.day)!;
@@ -33,7 +35,7 @@ const baseLeague = testLeague();
 const fresh = () => structuredClone(baseLeague);
 
 describe('game plans', () => {
-  it('plan items, matchups and instructions per opponent on top of the base tactics, last as long as their scope, stay out of the saved tactics, and survive a damaged save; the staff manages simmed games', () => {
+  it('plan items, matchups and instructions per opponent on top of the base tactics, last as long as their scope, stay out of the saved tactics, and survive a damaged save; the staff manages simmed games; the staff measures its counters and the plan counts in the projection', async () => {
     {
       // items in the same group replace each other; action boosts in different items both apply
       const l = fresh();
@@ -306,6 +308,43 @@ describe('game plans', () => {
       expect(input.adjust).toBe(true);
       // the team keeps them, for a coach who comes back to it
       expect(l.teams[tid].tactics.situations).toHaveLength(1);
+    }
+    {
+      // the staff's counters, each measured in paired games of the next game (the same numbers
+      // every time for the same day), leaving the league as it was; a newer run stops an older one
+      const l = fresh();
+      toGameDay(l);
+      const { g, opp } = opponentOf(l);
+      const before = JSON.stringify(l);
+      const steps: number[] = [];
+      const w = (await counterWorth(l, opp, g, { games: 16, onProgress: (d) => steps.push(d) }))!;
+      expect(w.length).toBeGreaterThan(0);
+      expect(w.length).toBeLessThanOrEqual(WORTH_MAX);
+      expect(w.every((x) => Number.isFinite(x.pts) && x.se > 0)).toBe(true);
+      expect(steps).toEqual(Array.from({ length: w.length + 1 }, (_, i) => i + 1));
+      expect(await counterWorth(l, opp, g, { games: 16 })).toEqual(w);
+      expect(JSON.stringify(l)).toBe(before);
+      expect(await counterWorth(l, opp, g, { games: 16, cancelled: () => true })).toBeNull();
+      expect(worthCall({ pts: 1, se: 0.4 })).toBe('gain');
+      expect(worthCall({ pts: 0.5, se: 0.4 })).toBe('even');
+      expect(worthCall({ pts: -1, se: 0.4 })).toBe('cost');
+      // a counter in the plan counts in the projection at its measured worth, for the user's side, capped
+      const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), {
+        rng: new Rng(1),
+        type: g.type,
+        injuries: false,
+      });
+      const was = projectGame(l, sim, false).margin;
+      setPlanItem(l, opp, { id: 'help-high', label: 'Pack the paint', group: 'help', patch: { defense: { help: 78 } }, pts: 1.5 });
+      const sign = g.home === l.userTid ? 1 : -1;
+      expect(projectGame(l, sim, false).margin - was).toBeCloseTo(1.5 * sign, 6);
+      setPlanItem(l, opp, { id: 'crash', label: 'Crash', group: 'crash', patch: { offense: { crashBoards: 78 } }, pts: 9 });
+      expect(planPoints(l, g.home, g.away)).toBe(PLAN_MAX_PTS * sign);
+      // (a damaged number goes with the save check)
+      l.gamePlans![opp].items[0].pts = Number.NaN as number;
+      const m = migrate(JSON.parse(JSON.stringify(l)) as League);
+      expect(m.gamePlans![opp].items[0].pts).toBeUndefined();
+      expect(m.gamePlans![opp].items[1].pts).toBe(9);
     }
   }, 120_000);
 });

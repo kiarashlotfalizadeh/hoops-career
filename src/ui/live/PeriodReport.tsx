@@ -13,7 +13,8 @@ import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport
 import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
-import { atoLabel } from '../../core/sim/sets';
+import { MAX_SETS, SETS, SET_IDS, atoLabel, bestFor, fitPlayer, setFit, setLabel, setPackage, type SetId } from '../../core/sim/sets';
+import { CLUTCH_SEC } from '../../state/live';
 import { zScore } from '../../core/analysis/playTypes';
 import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
@@ -297,12 +298,35 @@ export function PeriodReport(
   );
 }
 
+/** Plays the late-game huddle offers: the set package's, else the sets that fit the five on the floor best. */
+const CALL_MAX = 3;
+
+/**
+ * The plays you can call out of a late-game timeout, each for the one of your five it fits best:
+ * your set package when you have one, else the sets the five on the floor fit best. The call runs
+ * on your next half-court trip (in place of the after-timeout play).
+ */
+function playOptions(league: League, five: number[], tactics: Tactics): { id: SetId; pid: number; fit: number }[] {
+  const fp = five.flatMap((pid) => (league.players[pid] ? [fitPlayer(league.players[pid], tactics)] : []));
+  if (fp.length < 5) return [];
+  const pkg = setPackage(tactics);
+  const rows = (pkg.length ? pkg : SET_IDS).map((id) => {
+    const best = bestFor(id, fp)!;
+    return { id, pid: best.pid, fit: setFit(id, best) };
+  });
+  return rows.sort((a, b) => b.fit - a.fit).slice(0, pkg.length ? MAX_SETS : CALL_MAX);
+}
+
 /** Your timeout: the staff's read and top move, who to sub, the keys and the play out of it (the score and the clock are on the scorebug). Resume is on the bench bar. */
-export function Huddle(props: Common) {
-  const { view, side, teams, tactics, names, keys, assistant, read } = props;
+export function Huddle(props: Common & { called: { set: SetId; pid: number | null } | null; onCall: (set: SetId, pid: number) => void }) {
+  const { view, side, teams, tactics, names, keys, assistant, read, called, onCall } = props;
   const deciding = useDeciding(props.league, view, tactics).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
+  // late in the game the play out of the timeout is yours to call
+  const late = view.q >= 4 && view.clock <= CLUTCH_SEC;
+  const five = view.sides[side].on;
+  const plays = useMemo(() => (late ? playOptions(props.league, five, tactics) : []), [late, props.league, five, tactics]);
   return (
     <div className="lv-rep huddle">
       <div className="lv-rep-head">
@@ -312,17 +336,38 @@ export function Huddle(props: Common) {
       <Decisions {...props} max={2} deciding={deciding} />
       <Trouble {...props} huddle />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} compact />}
-      <Section title="Out of the timeout">
-        <div className="small">
-          {atoText ? (
-            <>
-              Your after-timeout play: <b>{atoText}</b>
-            </>
-          ) : (
-            <span className="dim">No play set: the team runs its offense. Set one in Tactics → Match.</span>
-          )}
-        </div>
-      </Section>
+      {plays.length > 0 && (
+        <Section title="Call the play">
+          <div className="lv-calls" role="group" aria-label="Call a play for the next trip">
+            {plays.map((p) => {
+              const on = called?.set === p.id;
+              return (
+                <button key={p.id} className={`btn sm${on ? ' primary' : ''}`} aria-pressed={on} disabled={props.busy} onClick={() => onCall(p.id, p.pid)}>
+                  {setLabel(p.id, names(p.pid))}
+                </button>
+              );
+            })}
+          </div>
+          <div className="small dim">
+            {called
+              ? `Called: ${called.pid != null ? setLabel(called.set, names(called.pid)) : SETS[called.set].name}, on your next trip up the floor.`
+              : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play (${atoText})` : ''}.`}
+          </div>
+        </Section>
+      )}
+      {plays.length === 0 && (
+        <Section title="Out of the timeout">
+          <div className="small">
+            {atoText ? (
+              <>
+                Your after-timeout play: <b>{atoText}</b>
+              </>
+            ) : (
+              <span className="dim">No play set: the team runs its offense. Set one in Tactics → Match.</span>
+            )}
+          </div>
+        </Section>
+      )}
     </div>
   );
 }

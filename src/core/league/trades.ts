@@ -788,24 +788,32 @@ function matchNeeds(league: League, inSal: number, s: number, apron: boolean): n
   return (inSal - buf) / 1.25;
 }
 
-/** How a side's salary works out in a deal: payroll after it, which apron that leaves it over, and what matching allows (a traded player exception included). */
+/**
+ * How a side's salary works out in a deal: payroll after it, which apron that leaves it over, and
+ * what it may take in. That's the most of matching (a traded player exception included) and, for a
+ * team under the cap before the deal, its room: what it sends plus its cap space plus the buffer
+ * (`room`, 0 for a team already over the cap).
+ */
 export function matchInfo(
   league: League,
   offer: TradeOffer,
   side: 'a' | 'b',
-): { inSal: number; outSal: number; after: number; overCap: boolean; apron1: boolean; apron2: boolean; tpe: number; limit: number } {
+): { inSal: number; outSal: number; after: number; overCap: boolean; apron1: boolean; apron2: boolean; tpe: number; room: number; limit: number } {
   const mine = offer[side];
   const other = offer[side === 'a' ? 'b' : 'a'];
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const outSal = sideSalary(league, mine);
   const inSal = sideSalary(league, other);
-  const after = capPayroll(league, mine.tid, s) - outSal + inSal;
+  const before = capPayroll(league, mine.tid, s);
+  const after = before - outSal + inSal;
   const apron1 = after > cap.firstApron;
   const apron2 = after > cap.secondApron;
   // a traded player exception absorbs salary only for a team that stays under the first apron
   const tpe = apron1 ? 0 : bestTpe(league, mine.tid);
-  return { inSal, outSal, after, overCap: after > cap.salaryCap, apron1, apron2, tpe, limit: tradeMatchLimit(league, outSal, s, apron1) + tpe };
+  // (room never takes a team past the cap by more than the buffer, so never near an apron)
+  const room = before < cap.salaryCap ? outSal + cap.salaryCap - before + matchBuffer(league, s) : 0;
+  return { inSal, outSal, after, overCap: after > cap.salaryCap, apron1, apron2, tpe, room, limit: Math.max(room, tradeMatchLimit(league, outSal, s, apron1) + tpe) };
 }
 
 /** "the 2028 1st" or a player's name, for rule messages. */
@@ -813,13 +821,15 @@ export const assetName = (league: League, a: Player | DraftPick) => ('pid' in a 
 
 /**
  * Extra salary a side must send for its team to pass salary matching (0 when it passes): see
- * tradeMatchLimit, with any traded player exception it can use. Payroll includes cap holds between
+ * tradeMatchLimit, with any traded player exception it can use, or its cap room. Payroll includes cap holds between
  * the season and free agency.
  */
 export function salaryMatchGap(league: League, offer: TradeOffer, side: 'a' | 'b'): number {
   const m = matchInfo(league, offer, side);
   if (!m.overCap || m.inSal <= m.limit) return 0;
-  return Math.max(0, matchNeeds(league, m.inSal - m.tpe, contractSeason(league), m.apron1) - m.outSal);
+  const byMatch = Math.max(0, matchNeeds(league, m.inSal - m.tpe, contractSeason(league), m.apron1) - m.outSal);
+  // (a team with room can instead send the rest dollar for dollar)
+  return m.room > 0 ? Math.min(byMatch, m.inSal - m.room) : byMatch;
 }
 
 /**
@@ -949,16 +959,21 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
 function matchLimitText(league: League, m: ReturnType<typeof matchInfo>): string {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s).salaryCap;
+  const buf = matchBuffer(league, s);
+  if (m.room > 0 && m.room >= m.limit) {
+    const space = m.room - m.outSal - buf;
+    return `${money(m.limit)} limit (${m.outSal > 0 ? `${money(m.outSal)} sent + ` : ''}its ${money(space)} of cap space + ${money(buf)})`;
+  }
   const base = m.limit - m.tpe;
   const rule = m.apron1
     ? `100% of ${money(m.outSal)} sent, over the first apron after it`
     : m.outSal <= 0
       ? 'the buffer alone, with no salary sent'
       : m.outSal <= cap * MATCH_SMALL_PCT
-        ? `200% of ${money(m.outSal)} sent + ${money(matchBuffer(league, s))}`
+        ? `200% of ${money(m.outSal)} sent + ${money(buf)}`
         : m.outSal <= cap * MATCH_MID_PCT
           ? `${money(m.outSal)} sent + ${money(Math.round(cap * MATCH_SMALL_PCT))}`
-          : `125% of ${money(m.outSal)} sent + ${money(matchBuffer(league, s))}`;
+          : `125% of ${money(m.outSal)} sent + ${money(buf)}`;
   return `${money(base)} limit (${rule})${m.tpe ? `, plus its ${money(m.tpe)} traded player exception` : ''}`;
 }
 
@@ -1281,7 +1296,8 @@ function settleTpes(league: League, tid: number, m: ReturnType<typeof matchInfo>
   if (!m.overCap) return;
   const t = league.teams[tid];
   const s = contractSeason(league);
-  const used = m.inSal - tradeMatchLimit(league, m.outSal, s, m.apron1);
+  // (salary its cap room covered uses no exception)
+  const used = m.inSal <= m.room ? 0 : m.inSal - tradeMatchLimit(league, m.outSal, s, m.apron1);
   let list = (t.tpes ?? []).filter((x) => tpeOpen(league, x));
   if (used > 0 && m.tpe > 0) {
     const big = openTpes(league, tid)[0];

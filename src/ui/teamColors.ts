@@ -94,10 +94,14 @@ export function teamLook(colors: [string, string, string]): TeamLook {
   for (let t = 0.08; contrast('#ffffff', mix(slab, '#ffffff', 0.08)) < 4.5 && t <= 1; t += 0.08) slab = mix(base, '#000000', t);
   const trim = [...colors, '#ffffff'].find((c) => c.toLowerCase() !== base.toLowerCase() && colorDistance(c, slab) >= CLASH) ?? '#ffffff';
   // the primary, unless it's near-black or near-white (the Nets' black, the Spurs' silver): then the most vivid other
-  const accent = identityColor(colors);
-  let text = accent;
-  for (let t = 0.1; [SURFACE_2, RAISED, BG].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(accent, '#000000', t);
-  return { slab, trim, text };
+  return { slab, trim, text: onPaper(identityColor(colors)) };
+}
+
+/** A colour as text: darkened until it reads on the paper and its surfaces (4.5:1). */
+function onPaper(color: string): string {
+  let text = color;
+  for (let t = 0.1; [SURFACE_2, RAISED, BG].some((g) => contrast(text, g) < 4.5) && t <= 1; t += 0.1) text = mix(color, '#000000', t);
+  return text;
 }
 
 /** The colour a team is known by: its primary, unless that's too light to read as a colour on the paper (a black primary is printed as black). */
@@ -133,11 +137,21 @@ export function jerseyKit(colors: [string, string, string]): { fill: string; tri
   return { fill, trim, num: contrast(trim, fill) >= 3 ? trim : inkOn(fill) };
 }
 
-/** Your team's tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text, --team-ink, --team-fill / --team-fill-ink (a switch, a fill on the paper) and --team-night / --team-night-ink (the play button on the ink dock). */
+/** How far a colour is from grey (0..1): its brightest channel less its dimmest. */
+function chroma(hex: string): number {
+  const v = rgb(hex);
+  return Math.max(...v) - Math.min(...v);
+}
+/** Under this a colour reads as a grey (black, silver, white): a switch or a play button in it looks switched off. */
+const VIVID = 0.15;
+/** A link this close to the body text (contrast with the ink) reads as plain text: navy on near-black. */
+const APART = 1.5;
+
+/** Your team's tokens: --team (its most vivid colour), --team-2 (the trim), --team-slab, --team-text / --team-link-line (links: the colour, underlined when there is none), --team-ink, --team-fill / --team-fill-ink (a switch, a fill on the paper) and --team-night / --team-night-ink (the play button on the ink dock). */
 export function applyAccent(colors: [string, string, string] | null) {
   const root = document.documentElement.style;
   if (!colors) {
-    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-slab', '--team-fill', '--team-fill-ink', '--team-night', '--team-night-ink'])
+    for (const k of ['--team', '--team-2', '--team-ink', '--team-text', '--team-link-line', '--team-slab', '--team-fill', '--team-fill-ink', '--team-night', '--team-night-ink'])
       root.removeProperty(k);
     return;
   }
@@ -146,13 +160,26 @@ export function applyAccent(colors: [string, string, string] | null) {
   root.setProperty('--team', team);
   root.setProperty('--team-2', l.trim);
   root.setProperty('--team-ink', inkOn(team));
-  root.setProperty('--team-text', l.text);
   root.setProperty('--team-slab', l.slab);
-  const fill = accentFill(team);
+  // links: the team's readable colour, unless it's grey or reads as the body text (navy); then its most
+  // vivid readable colour that stands apart; a team with none (the Nets, the Spurs) gets ink, underlined
+  const reads = (c: string) => chroma(c) >= VIVID && contrast(c, INK) >= APART;
+  const link = reads(l.text)
+    ? l.text
+    : colors
+        .map(onPaper)
+        .filter(reads)
+        .sort((a, b) => chroma(b) - chroma(a))[0];
+  root.setProperty('--team-text', link ?? INK);
+  root.setProperty('--team-link-line', link ? 'none' : 'underline');
+  // a switch that's on: the team colour, or ink when it's a grey (the Spurs' silver would look switched off)
+  const fill = chroma(accentFill(team)) >= VIVID ? accentFill(team) : INK;
   root.setProperty('--team-fill', fill);
   root.setProperty('--team-fill-ink', inkOn(fill));
-  // the play button sits on the ink dock: the team's trim (its second colour), lightened until it stands out there
-  const night = nightFill(l.trim);
+  // the play button sits on the ink dock: the team's most vivid colour, lightened until it stands out there
+  // (the Bulls' red, not their black trim); white when every colour is a grey (the Nets, the Spurs)
+  const lit = colors.map(nightFill).sort((a, b) => chroma(b) - chroma(a))[0];
+  const night = chroma(lit) >= VIVID ? lit : '#ffffff';
   root.setProperty('--team-night', night);
   root.setProperty('--team-night-ink', inkOn(night));
 }

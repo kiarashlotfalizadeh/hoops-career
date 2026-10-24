@@ -51,7 +51,7 @@ import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
 import { liveOpt, liveSlots, tipSlot } from '../live/familiar';
 import { slotMatcher, slotMoveName } from '../../core/analysis/moves';
-import type { Tactics } from '../../core/types';
+import type { SetId, Tactics } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
@@ -91,7 +91,7 @@ export default function Live() {
     };
   }, [league, game]);
   const moves = useMemo(
-    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf, slotName) : []),
+    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf, slotName, game.over && view.logs >= game.logs.length) : []),
     // (the marks grow with every move: tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [game, view, s.tick, nameOf, slotName],
@@ -113,6 +113,15 @@ export default function Live() {
     } else setOffer(true);
   }, [clutch, game, speed, watchAt, s.atBreak]);
   const closeOffer = useCallback(() => setOffer(false), []);
+
+  // the game stopped for a call on one of yours (a fifth foul, a closer out of legs): his sheet, with who can come in
+  const stopCall = s.stopCall;
+  useEffect(() => {
+    if (!stopCall) return;
+    setPicked(stopCall.pid);
+    setPanel('player');
+    useStore.getState().toast(`Paused: ${stopCall.text}`);
+  }, [stopCall, setPanel]);
 
   const gameNo = useMemo(() => {
     const ser = game?.game.seriesId ? league.playoffs.find((x) => x.id === game.game.seriesId) : undefined;
@@ -264,6 +273,11 @@ export default function Live() {
     setPanel('player');
   };
 
+  /** A play called in the huddle, for the next trip up the floor. */
+  const callPlay = (set: SetId, pid: number) => {
+    if (coach((g) => g.callPlay(set, pid))) s.bump();
+  };
+
   /** A substitution from a stop: the court is waiting on the sim, so what it shows is the game as it stands. */
   const subAtStop = (out: number, inn: number) => {
     const ok = substitute(out, inn, true);
@@ -332,7 +346,7 @@ export default function Live() {
             story={story}
           />
         );
-      if (huddling) return <Huddle {...common} />;
+      if (huddling) return <Huddle {...common} called={game.calledPlay} onCall={callPlay} />;
       return (
         <StaffView
           assistant={assistant}

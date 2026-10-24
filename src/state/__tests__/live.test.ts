@@ -84,6 +84,9 @@ function setsGame(l: League): LiveGame {
   expect(lg.callTimeout()).toBe(true);
   play(8);
   lg.callTimeout();
+  // a play called out of the huddle: queued for the next half-court trip, in place of the after-timeout set
+  expect(lg.callPlay('hammer')).toBe(true);
+  expect(lg.calledPlay?.set).toBe('hammer');
   play(6);
   lg.simTo('half');
   play(9);
@@ -713,6 +716,10 @@ describe('live game', () => {
       const lg = setsGame(l);
       // the game ran sets (its package, the after-timeout play)
       expect(lg.logs.filter((x) => x.set && x.off === lg.userSide).length).toBeGreaterThan(1);
+      // the call is journaled, ran on a trip of ours, and is one of the night's moves
+      expect(l.live!.ops.some((o) => o.op === 'play' && o.args.set === 'hammer')).toBe(true);
+      expect(lg.calledPlay).toBeNull();
+      expect(lg.logs.some((x) => x.off === lg.userSide && x.set?.id === 'hammer')).toBe(true);
       await useStore.getState().flush();
       const back = (await loadLeague(l.id))!;
       useStore.getState().setLeague(back);

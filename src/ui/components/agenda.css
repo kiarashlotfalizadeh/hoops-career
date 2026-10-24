@@ -84,3 +84,75 @@ a.ag-head:active {
     color: var(--accent-text);
   }
 }
+
+/* a checklist (the guided first week): every step at once, a tick on the done ones, the next one in the accent */
+.ag-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ag-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  font-size: 14px;
+  color: var(--text-2);
+  text-decoration: none;
+}
+.ag-steps li + li .ag-step {
+  border-top: 1px solid var(--line);
+}
+.ag-step.done {
+  color: var(--text-dim);
+}
+.ag-step.next {
+  font-weight: 640;
+  color: var(--accent-text);
+}
+.ag-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--line-3);
+  border-radius: 50%;
+}
+.ag-step.done .ag-check {
+  border-color: var(--good);
+  background: var(--good);
+  color: var(--paper-ink);
+}
+.ag-step.next .ag-check {
+  border-color: var(--accent-text);
+}
+.ag-step:active {
+  opacity: 0.7;
+}
+
+/* the guide on its step's screen: the step, and the tap that keeps the staff's choice */
+.guide-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.guide-k {
+  font-size: 11.5px;
+  font-weight: 640;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+.guide-t {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 640;
+}
+.guide-l {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.38;
+  color: var(--text-dim);
+}

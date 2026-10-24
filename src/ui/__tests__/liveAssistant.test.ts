@@ -19,6 +19,9 @@ import type { PossLog } from '../../core/sim/log';
 import { snapshot, streaks, type Drawn } from '../live/drawn';
 import { foulLimit, liveAlerts, newEvents, staffCallsTimeout, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
+import { stopCallIn } from '../live/useLiveGame';
+import { subOptions } from '../live/session';
+import type { LiveGame } from '../../state/live';
 import { GRAPHIC_GAP, KEY_PRIORITY, graphicCandidates, nextGraphic, type Graphic, type GraphicInput, type PlayerBefore } from '../live/graphics';
 
 function game(seed = 5) {
@@ -360,6 +363,46 @@ describe('the live assistant and the bench', () => {
     expect(gameDecided(4, 140, -16)).toBe(true);
     expect(gameDecided(4, 600, 30)).toBe(true);
     expect(gameDecided(4, 3, 30)).toBe(false);
+
+    // the game stops for a call only you can make, the staff's pick never one in foul trouble: a fifth
+    // foul from the fourth on, a closer out of legs in crunch time, and only when the staff won't
+    {
+      const g = game();
+      for (let i = 0; i < 30; i++) g.sim.step();
+      const lg = { sim: g.sim, userSide: 0, manualSubs: false } as unknown as LiveGame;
+      const pid = g.sim.T[0].on[0].pid;
+      const at = (q: number, clock: number, p: Parameters<typeof withPlayer>[2]) => ({ ...withPlayer(snapshot(g.sim), 0, p), q, clock });
+      // (the staff sits him at five in the fourth before crunch time)
+      expect(stopCallIn(at(4, 500, { fouls: 5 }), lg, (x) => `P${x}`, [])).toBeNull();
+      expect(stopCallIn(at(4, 200, { fouls: 5 }), lg, (x) => `P${x}`, [])).toMatchObject({ id: `fouls-${pid}`, pid });
+      expect(stopCallIn(at(4, 200, { fouls: 5 }), lg, (x) => `P${x}`, [`fouls-${pid}-5`])).toBeNull();
+      expect(stopCallIn(at(3, 200, { fouls: 5 }), { ...lg, manualSubs: true } as LiveGame, (x) => `P${x}`, [])).toBeNull();
+      const t = g.sim.T[0];
+      t.team = { ...t.team, rotation: { ...t.team.rotation, closers: t.on.map((p) => p.pid) } };
+      expect(stopCallIn(at(4, 200, { energy: 0.3 }), lg, (x) => `P${x}`, [])).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
+      t.team = {
+        ...t.team,
+        rotation: {
+          ...t.team.rotation,
+          closers: t.players
+            .filter((p) => !p.on)
+            .slice(0, 5)
+            .map((p) => p.pid),
+        },
+      };
+      expect(stopCallIn(at(4, 200, { energy: 0.3 }), lg, (x) => `P${x}`, [])).toBeNull();
+      // the bench's sheet puts the ones at the period's foul limit last (past its six, gone), with their fouls
+      const bench = t.players.filter((p) => !p.on && p.out === 0);
+      const sheet = () => subOptions(snapshot(g.sim), 0, t, pid, () => undefined).options;
+      const first = sheet()[0].pid;
+      const pf = bench.find((p) => p.pid === first)!;
+      pf.fouls = 4;
+      const ids = sheet().map((o) => o.pid);
+      expect(ids.indexOf(first)).toBe(bench.length > 6 ? -1 : ids.length - 1);
+      pf.fouls = 1;
+      expect(sheet()[0]).toMatchObject({ pid: first, line: expect.stringContaining('1 PF') });
+      pf.fouls = 0;
+    }
 
     // the edge against you runs on from the one for you, a count keeping its figure
     {

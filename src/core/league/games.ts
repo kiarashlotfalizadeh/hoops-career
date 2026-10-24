@@ -20,6 +20,7 @@ import { learnFromGame } from './practice';
 import { prepared } from '../sim/familiarity';
 import { withSlotPlans } from '../sim/slots';
 import { gameKeys, gradeKey } from '../analysis/keys';
+import { planAim } from '../analysis/moves';
 import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
@@ -103,24 +104,44 @@ export function applyStaffTactics(league: League, tid: number) {
  */
 export function youthMovement(league: League, tid: number): number {
   if (tid === league.userTid || league.phase !== 'regular' || league.day < YOUTH_FROM) return 0;
-  const key = `${league.season}:${league.day}`;
-  let memo = youthMemo.get(league);
-  if (!memo || memo.key !== key) {
-    memo = { key, level: youthLevels(league) };
-    youthMemo.set(league, memo);
-  }
-  return memo.level.get(tid) ?? 0;
+  return dayStandings(league).youth.get(tid) ?? 0;
 }
 
-const youthMemo = new WeakMap<League, { key: string; level: Map<number, number> }>();
+/**
+ * Whether a team has locked up its conference's top seed (as the day began): nobody behind it can
+ * reach its wins with the games they have left. Its staff rests the stars for the playoffs from then
+ * on (restForPlayoffs).
+ */
+export function seedLocked(league: League, tid: number): boolean {
+  return league.phase === 'regular' && dayStandings(league).locked.has(tid);
+}
+
+/** What the day's AI decisions read off the standings, worked out once a day. */
+function dayStandings(league: League) {
+  const key = `${league.season}:${league.day}`;
+  let memo = dayMemo.get(league);
+  if (!memo || memo.key !== key) {
+    const start = dayStart(league);
+    memo = { key, youth: youthLevels(league, start), locked: lockedSeeds(league, start) };
+    dayMemo.set(league, memo);
+  }
+  return memo;
+}
+
+const dayMemo = new WeakMap<League, { key: string; youth: Map<number, number>; locked: Set<number> }>();
 
 /** The day of the season a rebuilding team at the bottom of its conference starts to play its young players (about 20 games in). */
 const YOUTH_FROM = 40;
 
+interface DayStart {
+  /** Regular-season games each team has left from today on. */
+  left: Map<number, number>;
+  /** A team's wins and losses as the day began. */
+  record: (t: Team) => [number, number];
+}
+
 /** Standings as the day began (today's games already played taken off), so every game of a day reads the same. */
-function youthLevels(league: League): Map<number, number> {
-  const out = new Map<number, number>();
-  const after = league.day > league.tradeDeadlineDay;
+function dayStart(league: League): DayStart {
   const left = new Map<number, number>();
   for (const g of league.schedule) if (g.type === 'regular' && g.day >= league.day) for (const tid of [g.home, g.away]) left.set(tid, (left.get(tid) ?? 0) + 1);
   const today = new Map<number, [number, number]>();
@@ -138,11 +159,20 @@ function youthLevels(league: League): Map<number, number> {
       today.set(tid, x);
     }
   }
-  const pct = (t: Team) => {
+  const record = (t: Team): [number, number] => {
     const ts = teamSeason(t, league.season);
     const [w, l] = today.get(t.tid) ?? [0, 0];
-    const gp = ts.won - w + ts.lost - l;
-    return gp ? (ts.won - w) / gp : 0.5;
+    return [ts.won - w, ts.lost - l];
+  };
+  return { left, record };
+}
+
+function youthLevels(league: League, { left, record }: DayStart): Map<number, number> {
+  const out = new Map<number, number>();
+  const after = league.day > league.tradeDeadlineDay;
+  const pct = (t: Team) => {
+    const [w, l] = record(t);
+    return w + l ? w / (w + l) : 0.5;
   };
   for (const conf of ['E', 'W'] as const) {
     const rows = league.teams
@@ -156,6 +186,18 @@ function youthLevels(league: League): Map<number, number> {
       } else if (t.strategy === 'rebuild' && i >= 10) out.set(t.tid, 1);
       else if (t.strategy !== 'contend' && i >= 11 && (left.get(t.tid) ?? 0) <= 15) out.set(t.tid, 0.5);
     });
+  }
+  return out;
+}
+
+/** Each conference's leader when nobody behind it can still reach its wins. */
+function lockedSeeds(league: League, { left, record }: DayStart): Set<number> {
+  const out = new Set<number>();
+  for (const conf of ['E', 'W'] as const) {
+    const rows = league.teams.filter((t) => t.conf === conf).map((t) => ({ t, won: record(t)[0], most: record(t)[0] + (left.get(t.tid) ?? 0) }));
+    if (!rows.length) continue;
+    const top = rows.reduce((a, b) => (b.won > a.won ? b : a));
+    if (rows.every((r) => r === top || r.most < top.won)) out.add(top.t.tid);
   }
   return out;
 }
@@ -188,6 +230,24 @@ export function restVeterans(league: League, players: Player[], day: number, res
     if ((p.pid + day) % (age >= 30 ? 2 : 3) === 0) rest.push(p.pid);
   }
 }
+
+/**
+ * A team that has locked up its conference's top seed saves its stars for the playoffs, as NBA
+ * coaches do once the seeding can't change: its three best players each sit every other night
+ * (staggered, so most nights two of them dress). Without it a deep young core kept together ran
+ * past anything the league has seen: with the Thunder run by the staff, 8 of 48 seasons over 73
+ * wins (77-5 three years running in one league); 1 of 48 with it.
+ */
+export function restForPlayoffs(players: Player[], day: number, rest: number[]) {
+  const best = players
+    .filter((p) => !p.contract.twoWay && !p.injury)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, PLAYOFF_REST);
+  for (const p of best) if (!rest.includes(p.pid) && (p.pid + day) % 2 === 0) rest.push(p.pid);
+}
+
+/** How many of a team's best players restForPlayoffs sits on alternate nights. */
+const PLAYOFF_REST = 3;
 
 /** The day a team turns to its young players, a word in the news (once a season). */
 export function youthNews(league: League) {
@@ -283,6 +343,8 @@ export function buildSimInput(
     }
   }
   if (type === 'regular' && youthMovement(league, tid) >= 1) restVeterans(league, players, day, rest);
+  // (the user's stars only when his staff runs the rotation)
+  if (type === 'regular' && (tid !== league.userTid || !team.rotation.manual) && seedLocked(league, tid)) restForPlayoffs(players, day, rest);
   const perf: Record<number, number> = {};
   for (const p of players) perf[p.pid] = wearPerf(p);
   // practice intensity: intense camps build skills but add wear and injury risk
@@ -436,6 +498,10 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
   if (g.type !== 'allstar' && (g.home === league.userTid || g.away === league.userTid)) {
     const keys = gameKeys(league, g);
     if (keys.length) res.keys = keys.map((k) => gradeKey(k, res, g.home === league.userTid ? 0 : 1));
+    // and the game plan's counters it was played with (used up just below), for the report's grade of the plan
+    const plan = planFor(league, g.home === league.userTid ? g.away : g.home, g);
+    const base = league.teams[league.userTid].tactics;
+    if (plan?.items.length) res.plan = plan.items.map((it) => ({ label: it.label, ...planAim(base, it.patch), ...(it.pts !== undefined ? { pts: it.pts } : {}) }));
     // and what its quotes read that the save doesn't keep for good (who got hurt, the winner's low point)
     Object.assign(
       res,

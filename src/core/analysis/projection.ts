@@ -6,6 +6,7 @@
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
 import { courtPoints } from '../league/difficulty';
+import { planFor } from '../league/gamePlans';
 
 /** Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated seasons, r ≈ 0.8). */
 export const TALENT_NET = 1.7;
@@ -67,9 +68,9 @@ export function leagueRatings(league: League) {
 /**
  * The projection for a game set up in `sim` (both rotations planned for the tip, as the real game
  * will start them): each side's net rating this season regressed toward what its rotation tonight is
- * worth, at the two teams' pace, plus home court. From the home side: `margin` is the projected home
- * margin (what win probability starts from at tip-off, see GameResult.edge), `edge` the home-court
- * points in it. Reads the league only.
+ * worth, at the two teams' pace, plus home court and the user's game plan (see planPoints). From the
+ * home side: `margin` is the projected home margin (what win probability starts from at tip-off, see
+ * GameResult.edge), `edge` the home-court points in it, `plan` the game plan's. Reads the league only.
  */
 export function projectGame(league: League, sim: GameSim, neutral: boolean, ratings = leagueRatings(league)) {
   const avgTalent = league.teams.reduce((a, t) => a + rotationTalent(league, t.tid), 0) / Math.max(1, league.teams.length);
@@ -91,7 +92,27 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
   // home court, and the difficulty's edge in a game of the user's (see courtPoints)
   const edge = (neutral ? 0 : HOME_EDGE) + courtPoints(league, sim.T[0].tid, sim.T[1].tid);
-  return { margin: projectMargin(netHome, netAway, pace, edge), netHome, netAway, edge };
+  // the user's game plan for tonight, at what the staff measured it worth
+  const plan = planPoints(league, sim.T[0].tid, sim.T[1].tid);
+  return { margin: projectMargin(netHome, netAway, pace, edge) + plan, netHome, netAway, edge, plan };
+}
+
+/** Most points a game a plan's measured counters add to a projection: each was measured alone, and together they overlap. */
+export const PLAN_MAX_PTS = 4;
+
+/**
+ * Points a game the user's plan against the other team adds to the home side's projected margin
+ * (under 0 for the user away): its counters' measured worth (GamePlanItem.pts), at most PLAN_MAX_PTS
+ * either way. Nothing in a game the user isn't in.
+ */
+export function planPoints(league: League, home: number, away: number): number {
+  const me = league.userTid;
+  if (home !== me && away !== me) return 0;
+  const opp = home === me ? away : home;
+  const items = planFor(league, opp)?.items ?? [];
+  const pts = items.reduce((a, it) => a + (it.pts ?? 0), 0);
+  const capped = Math.max(-PLAN_MAX_PTS, Math.min(PLAN_MAX_PTS, pts));
+  return home === me ? capped : -capped;
 }
 
 /** Minutes-weighted OVR of every team's healthy rotation, for the league average the talent prior is measured from. */

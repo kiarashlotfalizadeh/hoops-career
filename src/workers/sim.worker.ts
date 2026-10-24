@@ -1,5 +1,6 @@
 import * as Comlink from 'comlink';
 import type { GameResult, League } from '../core/types';
+import { counterWorth } from '../core/ai/counterWorth';
 import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type GamesDelta, type GamesSig, type SimProgress, type SimTarget, type TaskOp } from '../state/simCore';
 
 // The season sim, off the main thread. The worker keeps its own copy of the open league's results
@@ -11,6 +12,8 @@ let cache: { id: string; games: GameResult[] } | null = null;
 let stopFlag = false;
 /** The main thread asked for a checkpoint as soon as it can have one (the app is going to the background). */
 let checkpointAsked = false;
+/** The counter measurement running (counterWorth): a newer one stops it. */
+let worthRun = 0;
 
 /**
  * Between days the sim lets the worker's messages in (a stop). A timer would do, but nested timers
@@ -122,6 +125,30 @@ const api = {
       cache = null;
       throw e;
     }
+  },
+  /**
+   * What the staff's counters against `opp` are worth (see counterWorth.ts), for the user's game
+   * `gid`: a few seconds of games, a configuration at a time, with a pause between them for a sim
+   * asked for meanwhile to get in (it works on a league of its own). A newer measurement, or
+   * cancelWorth, stops this one.
+   */
+  async counterWorth(core: League, delta: GamesDelta, opp: number, gid: number | undefined, progress: (done: number, total: number) => void) {
+    const run = ++worthRun;
+    const l = open(core, delta);
+    cache = { id: l.id, games: l.games };
+    const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
+    try {
+      return await counterWorth(l, opp, game, {
+        onProgress: (d, t) => void progress(d, t),
+        between: () => new Promise<void>((r) => setTimeout(r, 0)),
+        cancelled: () => run !== worthRun,
+      });
+    } finally {
+      (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
+    }
+  },
+  cancelWorth() {
+    worthRun++;
   },
   stop() {
     stopFlag = true;

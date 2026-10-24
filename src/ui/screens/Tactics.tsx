@@ -9,15 +9,14 @@
 // hero's strengths and weaknesses move as you change a setting, so every lever shows what it buys and
 // what it costs. Edits save as they're made; while this visit has any, a compact dock says what they
 // did to the grades and offers Undo and Done (which hands the Continue bar back).
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { touch } from '../../state/actions';
-import { guideVisit } from '../../core/league/agenda';
 import { rosterSorted } from '../../core/league/helpers';
 import { systemFamiliarity } from '../../core/league/practice';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { AssistantCards } from '../components/Assistant';
+import { GuideStrip } from '../components/GuideStrip';
 import { useQueryParam, useSetParams } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
 import { TacticsHero } from '../tactics/Hero';
@@ -74,8 +73,6 @@ export default function Tactics() {
   const simming = useStore((s) => !!s.sim);
   const players = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
   const sys = useLeagueMemo(() => systemFamiliarity(league, league.userTid), [league]);
-  // the guided first week's "pick a playbook" is done once it's been looked at
-  useEffect(() => void touch((l) => void guideVisit(l, 'playbook')), []);
 
   // the system report now and as this visit found it (the other teams' systems worked out once)
   const base = useLeagueMemo(() => systemReport(league, league.userTid, start.tactics), [league, start]);
@@ -89,6 +86,7 @@ export default function Tactics() {
       <fieldset className="tx-fieldset" disabled={simming}>
         <TacticsHero report={report} was={base} fam={sys.overall} onAnalysis={(v) => setParams({ tab: 'analysis', view: v === 'report' ? null : v })} />
       </fieldset>
+      <GuideStrip step="playbook" keep="Keep this playbook" />
       <AssistantCards league={league} areas={['tactics']} max={2} />
       {/* the sections: one row of chips */}
       <div className="tx-tabs" role="group" aria-label="Tactics sections">

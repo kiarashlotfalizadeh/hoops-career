@@ -14,14 +14,21 @@ import { act } from '../../../state/actions';
 import { Section, Tag } from '../../components/ui';
 import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
+import { worthCall } from '../../../core/ai/counterWorth';
+import { byWorth, useCounterWorth } from './useCounterWorth';
+import { WorthTag } from './CountersCard';
 
-/** Counters the briefing proposes: the ones the numbers back first, one per game-plan group. */
+/** Counters the briefing proposes: the ones that measured as gains, the biggest first, one per game-plan group. */
 const PLAN_MAX = 3;
 
 export function Briefing({ league, opp, onPlan }: { league: League; opp: number; onPlan: () => void }) {
   const assistant = useMemo(() => leadAssistant(league), [league]);
   const scout = useLeagueMemo(() => scoutTeam(league, opp), [league, opp]);
-  const cands = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const measuring = useCounterWorth(league, opp);
+  const worth = measuring?.worth;
+  // measured, only the gains (with no game against them to measure, the rules' picks)
+  const cands = worth ? byWorth(drafted, worth).filter((c) => worth.get(c.id) && worthCall(worth.get(c.id)!) === 'gain') : measuring ? [] : drafted;
   const simming = useStore((s) => !!s.sim);
   const them = league.teams[opp];
   const plan = planFor(league, opp);
@@ -34,7 +41,10 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
   const more = (plan?.items.length ?? 0) > 0;
   const add = (list: Candidate[]) => {
     const ok = act('Game plan', (l) => {
-      for (const c of list) setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
+      for (const c of list) {
+        const w = worth?.get(c.id);
+        setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}), ...(w ? { pts: w.pts } : {}) });
+      }
     });
     if (ok) useStore.getState().toast(list.length > 1 ? `Plan vs ${them.abbrev}: the staff's ${list.length} changes` : `Plan vs ${them.abbrev}: ${list[0].label}`, 'good');
   };
@@ -50,7 +60,9 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
             {picks.map((c) => (
               <div key={c.id} className="mu-brief-item">
                 <div className="grow">
-                  <div className="lr-name">{c.label}</div>
+                  <div className="lr-name">
+                    {c.label} <WorthTag w={worth?.get(c.id)} measuring={false} />
+                  </div>
                   <div className="lr-meta mu-brief-why">{c.evidence ?? c.why}</div>
                 </div>
                 <button className="btn xs" disabled={simming} onClick={() => add([c])} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
@@ -70,9 +82,15 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
               </button>
             </div>
           </div>
+        ) : measuring && !worth ? (
+          <div className="small dim" role="status">
+            The staff is playing your game against them out with each counter: {Math.round(measuring.progress * 100)}%.
+          </div>
         ) : (
           <div className="small dim">
-            {plan ? (
+            {worth && drafted.length > 0 ? (
+              "By the staff's numbers, none of its counters beats how you play them now."
+            ) : plan ? (
               <>
                 Your plan covers what the staff sees: <Tag tone="info">{plural(plan.items.length, 'change')}</Tag>
               </>

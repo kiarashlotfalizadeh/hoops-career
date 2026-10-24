@@ -2,16 +2,16 @@
 // staff's advice on the rotation, the depth chart with each player's minute target (wear risks
 // marked on his row), and the stint plan the targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { edit, touch } from '../../state/actions';
+import { edit } from '../../state/actions';
 import { rosterSorted } from '../../core/league/helpers';
 import { ensureRotation } from '../../core/league/games';
-import { guideVisit } from '../../core/league/agenda';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles } from '../../core/sim/rotationPlan';
 import { Avatar, Help, Ovr, Section, Sheet, Slider, Statline, Tag, Toggle, activateOnKey } from '../components/ui';
 import { AssistantCards } from '../components/Assistant';
+import { GuideStrip } from '../components/GuideStrip';
 import { Term } from '../components/Glossary';
 import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
@@ -38,8 +38,6 @@ export default function Rotation() {
   // the rotation the assistant replaced, until the next edit
   const [undo, setUndo] = useState<RotationT | null>(null);
   const simming = useStore((s) => !!s.sim);
-  // the guided first week's "check your rotation" is done once it's been looked at
-  useEffect(() => void touch((l) => void guideVisit(l, 'rotation')), []);
 
   const update = (fn: (r: RotationT) => void) => {
     setUndo(null);
@@ -105,6 +103,7 @@ export default function Rotation() {
 
   return (
     <>
+      <GuideStrip step="rotation" keep="Keep these five" />
       {/* the hero: the minutes the targets add up to, and who runs the rotation */}
       <section className="card tm-rhero" aria-label="Your rotation">
         <Statline

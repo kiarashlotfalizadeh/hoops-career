@@ -108,22 +108,23 @@
   /* a chosen option (a chip, a segment, a level): white on ink */
   --on: #121212;
   --on-ink: #ffffff;
-  /* a mark that needs you (the inbox's count, a live game) */
-  --brand: #e3402a;
+  /* a mark that needs you (the inbox's count, a live game): white on it, and it as text on paper, keep 4.5:1 */
+  --brand: #c33724;
   --accent-2: #b57a00;
-  /* signals, deep enough to read on paper */
-  --good: #13804a;
-  --bad: #c42f25;
-  --warn: #a86400;
-  --info: #1d68bd;
+  /* signals, deep enough to read on paper: 4.5:1 as text on every ground and as a tag (its 12% wash) */
+  --good: #106e40;
+  --bad: #b22b22;
+  --warn: #8b5300;
+  --info: #1b60ae;
   /* rating tiers (OVR), gold > violet > blue > green > grey > light grey: the figure in its tier's
-     colour on a wash of it, like a printed tint */
-  --tier-elite: #9a6b00;
+     colour on a wash of it, like a printed tint. Each keeps 4.5:1 on its wash and every ground, and
+     under a white figure (a tactics grade) */
+  --tier-elite: #835b00;
   --tier-star: #6744cc;
   --tier-good: #1764b8;
-  --tier-avg: #19804a;
+  --tier-avg: #167343;
   --tier-low: #57534b;
-  --tier-bad: #7d786e;
+  --tier-bad: #68645b;
   /* the floor: maple boards, a second board tone and the seams between them (the live court's
      floor in live/Court.tsx MAPLE, the tactics board) */
   --maple: #dcae76;
@@ -134,6 +135,8 @@
   --team-2: #ffc72c;
   --team-ink: #ffffff;
   --team-text: #1f56b8;
+  /* a link's underline: on only when your team's colours are all greys (applyAccent) */
+  --team-link-line: none;
   --team-slab: #1f56b8;
   --team-fill: #2f6fde;
   --team-fill-ink: #ffffff;

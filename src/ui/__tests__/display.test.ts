@@ -1,12 +1,15 @@
-// Display helpers shared by the screens, and the order a tapped column header gives a sortable table.
+// Display helpers shared by the screens, the order a tapped column header gives a sortable table, and
+// every team's play button, switches and links in a colour that reads.
 import { describe, expect, it } from 'vitest';
 import type { League, Player, PlayerStats } from '../../core/types';
 import { blankStats } from '../../core/playerGen';
 import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1, playerSeason, seasonLine, signed, startingFive, wholeMinutes } from '../stats';
 import { compareCells, fmtNum } from '../components/ui';
+import { applyAccent, contrast } from '../teamColors';
+import { FRANCHISES } from '../../core/teams';
 
 describe('display helpers', () => {
-  it('read numbers, clocks and finals, sort table cells, and build box minutes, starters and season lines', () => {
+  it('read numbers, clocks and finals, sort table cells, build box minutes, starters and season lines, and keep colours readable', () => {
     // ordinals: 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")
     const cases: [number, string][] = [
       [1, '1st'],
@@ -157,6 +160,25 @@ describe('display helpers', () => {
       // a one-team season left as it is
       expect(seasonLine({ stats: [p.stats[0]] } as unknown as Player, 2026)).toBe(p.stats[0]);
       expect(seasonLine(p, 2025)).toBeNull();
+    }
+
+    // every team's play button and switches wear a colour, never a switched-off grey (white or ink for one without)
+    {
+      const set: Record<string, string> = {};
+      const was = globalThis.document;
+      globalThis.document = { documentElement: { style: { setProperty: (k: string, v: string) => (set[k] = v), removeProperty: () => {} } } } as unknown as Document;
+      const grey = (h: string) => {
+        const v = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+        return Math.max(...v) - Math.min(...v) < 38; // (under the 0.15 floor)
+      };
+      for (const f of FRANCHISES) {
+        applyAccent(f.colors);
+        for (const k of ['--team-night', '--team-fill']) expect(!grey(set[k]) || ['#ffffff', '#121212'].includes(set[k]), `${f.abbrev} ${k} ${set[k]}`).toBe(true);
+        expect(contrast(set['--team-night'], '#121212'), f.abbrev).toBeGreaterThanOrEqual(3);
+        // a link stands apart from the body text, or is underlined
+        expect(contrast(set['--team-text'], '#121212') >= 1.5 || set['--team-link-line'] === 'underline', f.abbrev).toBe(true);
+      }
+      globalThis.document = was;
     }
   });
 });

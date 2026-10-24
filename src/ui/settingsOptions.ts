@@ -1,7 +1,7 @@
 // Settings choices that are also offered elsewhere (New League, the live game), defined once so the
 // screens always agree.
 import type { Settings } from '../core/types';
-import { DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/league/difficulty';
+import { COURT_RANGE, DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/league/difficulty';
 import { GRACE } from '../core/league/jobSecurity';
 
 /** The help line for teaching, the same in Settings and New League. */
@@ -63,8 +63,14 @@ export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficu
   {
     id: 'court',
     label: 'On court',
-    value: (d) => (DIFFICULTY[d].court ? `${DIFFICULTY[d].court > 0 ? '+' : '−'}${Math.abs(DIFFICULTY[d].court)}` : 'Even'),
-    help: 'Points a game your team gets (+) or your opponents get (−) over what the rosters and tactics are worth, the way home court works.',
+    value: (d) => {
+      const x = DIFFICULTY[d];
+      if (!x.court) return 'Even';
+      const sign = x.court > 0 ? '+' : '−';
+      // (Hard's grows with your team: 1 to 5 points, the better the team, the more)
+      return x.courtGrowth ? `${sign}${Math.abs(x.court) * COURT_RANGE[0]} to ${Math.abs(x.court) * COURT_RANGE[1]}` : `${sign}${Math.abs(x.court)}`;
+    },
+    help: 'Points a game your team gets (+) or your opponents get (−) over what the rosters and tactics are worth, the way home court works. On Hard it grows with your team: the better your roster, the harder they play you.',
   },
   {
     id: 'owner',

@@ -5,6 +5,7 @@
 // on a copy of the league in this thread.
 import * as Comlink from 'comlink';
 import type { League } from '../core/types';
+import { counterWorth, type CounterWorth } from '../core/ai/counterWorth';
 import type { SimWorkerApi } from '../workers/sim.worker';
 import {
   applyGames,
@@ -31,6 +32,8 @@ let held: { id: string; sig: GamesSig } | null = null;
 /** Tests (and a browser that can't start a worker) run the sim here instead. */
 let local = typeof Worker === 'undefined';
 let localStop = false;
+/** The counter measurement running in this thread (no worker): a newer one stops it. */
+let localWorth = 0;
 
 /** Fail calls in flight when the worker dies. */
 const failing = new Set<(e: Error) => void>();
@@ -191,4 +194,33 @@ export function stopSimRun() {
 /** Tests: run the sim in this thread whatever the environment. */
 export function simLocally(on = true) {
   local = on;
+}
+
+/**
+ * What the staff's counters against `opp` are worth for the user's game `gid` (see counterWorth.ts),
+ * measured in the worker (here, without one), `progress` told after each configuration. A newer call
+ * stops this one, which then comes back null, as it does after cancelWorth.
+ */
+export async function measureCounters(l: League, opp: number, gid: number | undefined, progress: (done: number, total: number) => void): Promise<CounterWorth[] | null> {
+  const r = ensure();
+  if (!r) {
+    const run = ++localWorth;
+    const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
+    return counterWorth(l, opp, game, { onProgress: progress, between: () => new Promise<void>((res) => setTimeout(res, 0)), cancelled: () => run !== localWorth });
+  }
+  try {
+    const out = await guarded(() => r.counterWorth(withoutGames(l), deltaFor(l), opp, gid, Comlink.proxy(progress)));
+    held = { id: l.id, sig: gamesSig(l.games) };
+    return out;
+  } catch (e) {
+    held = null;
+    if (e instanceof WorkerUnavailable) return measureCounters(l, opp, gid, progress);
+    throw e;
+  }
+}
+
+/** Stop a counter measurement in flight (its screen closed). */
+export function cancelWorth() {
+  localWorth++;
+  void remote?.cancelWorth();
 }

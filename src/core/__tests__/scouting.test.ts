@@ -376,8 +376,27 @@ describe('scouting and the staff', () => {
         }
         // a simmed game has no live moves
         expect(d.moves).toBeNull();
+        // a new coach's first five nights say what one game can and can't show
+        expect(!!d.frame).toBe(i < 5);
       }
       expect(fixes).toBeGreaterThan(0);
+    }
+    // the game plan it was played with is kept with the result and graded on what each counter was aimed at
+    {
+      const league = structuredClone(fictional);
+      const g = league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!;
+      const opp = g.home === 0 ? g.away : g.home;
+      const pnr = league.teams[0].tactics.defense.pnr === 'hedge' ? 'drop' : 'hedge';
+      setPlanItem(league, opp, { id: 'cov', label: 'Change the coverage', patch: { defense: { pnr } }, pts: 0.4 });
+      const res = playGame(league, g);
+      expect(res.plan).toEqual([{ label: 'Change the coverage', end: 'def', types: ['pnrBH', 'pnrRoll'], pts: 0.4 }]);
+      const d = debrief(league, res, buildGameReport(league, res)!);
+      expect(d.plan).toHaveLength(1);
+      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.4 a game' });
+      expect(d.plan[0].line).toMatch(/pick-and-roll/);
+      expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].verdict);
+      // (and used up: a next-game plan is for one game)
+      expect(league.gamePlans?.[opp]).toBeUndefined();
     }
     // offers no fix for a setting's cost that the same setting won back that night
     const night = structuredClone(fictional);

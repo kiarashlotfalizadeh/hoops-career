@@ -19,6 +19,7 @@ import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
 import { money, plural } from '../format';
+import { planMade } from './gamePlans';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind } from './calls';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
@@ -47,6 +48,8 @@ export interface AgendaChoice {
   tone?: 'good' | 'bad';
   /** It can't be undone and costs something: a second tap confirms it, with this said first. */
   confirm?: string;
+  /** The screen it opens once taken (a look for a trade): the answer is made there. */
+  to?: string;
 }
 
 export interface AgendaItem {
@@ -70,6 +73,8 @@ export interface AgendaItem {
   due?: string;
   /** Pids it's about (for a jersey or a link). */
   pids?: number[];
+  /** A checklist (the guided first week): each step, whether it's done, and its screen. */
+  steps?: { title: string; done: boolean; to: string; next: boolean }[];
 }
 
 /** Releasing a player: free for camp and minimum deals before opening night; anything owed stays on the books, so it's confirmed. */
@@ -115,19 +120,23 @@ export function cutOrder(league: League, players: Player[]): Player[] {
 // ---------------------------------------------------------------- the guided first week
 
 export const GUIDE_STEPS: { step: GuideStep; title: string; line: string }[] = [
-  { step: 'rotation', title: 'Check your rotation', line: 'Starters, minutes and who closes. The staff set it from the roster.' },
-  { step: 'playbook', title: 'Pick a playbook', line: 'Every playbook shows how well it fits this roster.' },
-  { step: 'scout', title: 'Scout your opener', line: 'What they do best, where to attack them, and a plan for the night.' },
-  { step: 'coach', title: 'Coach a game live', line: 'Timeouts, subs and adjustments, then the report says why it went that way.' },
+  { step: 'rotation', title: 'Set your rotation', line: 'Starters, minutes and who closes: change one, or keep the five the staff picked.' },
+  { step: 'playbook', title: 'Pick a playbook', line: "Each one shows how well it fits this roster. Pick one, or keep the staff's." },
+  { step: 'scout', title: 'Plan for your opener', line: 'Add a counter to their best play, or go in with no plan.' },
+  { step: 'coach', title: 'Coach a game live', line: 'Timeouts, subs and adjustments, then the report says what your plan did.' },
 ];
 
-/** The guide's steps done: ticked off on the guided item, or done anyway (the rotation or playbook changed, a plan made, a live game coached). */
+/**
+ * The guide's steps done, each by a real choice: the rotation or playbook changed or kept on its
+ * screen (the guide strip there), a counter added for a game or no plan chosen, a live game coached.
+ * Opening a screen ticks nothing.
+ */
 export function guideDone(league: League): Set<GuideStep> {
   const done = new Set<GuideStep>(league.onboarding?.done ?? []);
   const t = league.teams[league.userTid];
   if (t.rotation.manual) done.add('rotation');
   if (t.tactics.manual) done.add('playbook');
-  if (Object.keys(league.gamePlans ?? {}).length) done.add('scout');
+  if (Object.values(league.gamePlans ?? {}).some(planMade)) done.add('scout');
   // the latest live game's highlights are kept with the save
   if (league.reel) done.add('coach');
   return done;
@@ -147,33 +156,34 @@ export function showGuide(league: League) {
   league.onboarding = { done: league.onboarding?.done ?? [], hidden: false };
 }
 
+/** Whether a step of the guide is open and not done yet (its screen shows the guide strip). */
+export function guideStepOpen(league: League, step: GuideStep): boolean {
+  return guideOpen(league) && !guideDone(league).has(step);
+}
+
+/** Where a guide step is done: its screen (step 4: game day's preview, where Tip off is). */
+export function guideStepTo(league: League, step: GuideStep): string {
+  const opener = nextOpponent(league);
+  if (step === 'rotation') return '/team/rotation';
+  if (step === 'playbook') return '/team/tactics';
+  if (opener === undefined) return '/games';
+  return step === 'scout' ? `/games/${opener}?tab=plan` : `/games/${opener}`;
+}
+
 function guideItems(league: League): AgendaItem[] {
   if (!guideOpen(league)) return [];
   const done = guideDone(league);
-  const step = GUIDE_STEPS.find((s) => !done.has(s.step));
-  if (!step) return [];
-  const opener = nextOpponent(league);
-  const to =
-    step.step === 'rotation'
-      ? '/team/rotation'
-      : step.step === 'playbook'
-        ? '/team/tactics'
-        : step.step === 'scout'
-          ? opener !== undefined
-            ? `/games/${opener}`
-            : '/games'
-          : undefined;
-  const keep = step.step === 'rotation' ? "Keep the staff's rotation" : step.step === 'playbook' ? "Keep the staff's playbook" : step.step === 'scout' ? 'Skip for now' : undefined;
+  const next = GUIDE_STEPS.find((s) => !done.has(s.step))!;
   return [
     {
-      id: `guide:${step.step}`,
+      id: 'guide',
       kind: 'guide',
       required: false,
-      title: `${done.size + 1} of ${GUIDE_STEPS.length} · ${step.title}`,
-      line: step.line,
+      title: `Your first week · ${done.size} of ${GUIDE_STEPS.length} done`,
+      line: `Next: ${next.line}`,
       tone: 'info',
-      to,
-      suggestion: keep ? { label: keep, action: { kind: 'guide', step: step.step } } : undefined,
+      to: guideStepTo(league, next.step),
+      steps: GUIDE_STEPS.map((s) => ({ title: s.title, done: done.has(s.step), to: guideStepTo(league, s.step), next: s === next })),
       choices: [{ label: 'Hide the guide', action: { kind: 'hideGuide' } }],
     },
   ];
@@ -445,6 +455,7 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       return { ok: r.ok, text: r.reason };
     }
     case 'guide': {
+      // (the guide strip's "keep" on its step's screen: keeping the staff's choice is a choice)
       const o = (league.onboarding ??= { done: [] });
       if (!o.done.includes(a.step)) o.done.push(a.step);
       return { ok: true, text: '' };
@@ -459,14 +470,6 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
   }
 }
 
-/** Tick a guide step off as its screen is opened (a no-op once done or with no guide). */
-export function guideVisit(league: League, step: GuideStep) {
-  const o = league.onboarding;
-  if (!o || o.done.includes(step)) return false;
-  o.done.push(step);
-  return true;
-}
-
 /** Start a new league's guide (createLeague), with a welcome from the staff (none with teaching off). */
 export function startGuide(league: League) {
   league.onboarding = { done: [] };
@@ -474,7 +477,7 @@ export function startGuide(league: League) {
   addInbox(league, {
     from: 'Assistant Coach',
     subject: 'Your first week',
-    body: 'Four things before opening night: your rotation, your playbook, a look at your first opponent, and a game coached live. Today lists them one at a time.',
+    body: "Four choices for your first week: your rotation, your playbook, a plan for the opener, and a game coached live. Today keeps the checklist; each one ticks off when you've made the call, not when you've looked.",
     tone: 'good',
     link: '/',
   });

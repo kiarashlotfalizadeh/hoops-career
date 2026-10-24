@@ -12,20 +12,20 @@ import { ChevronRight } from 'lucide-react';
 import type { InboxMessage, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
-import { agenda, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/agenda';
+import { GUIDE_STEPS, guideDone, showGuide, type AgendaItem } from '../../core/league/agenda';
 import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
 import { jobSecurity } from '../../core/league/jobSecurity';
 import { fmtDate } from '../../core/league/helpers';
 import { AgendaRow } from '../components/Agenda';
 import { BackupRow } from '../components/Backup';
-import { backupDue } from '../../state/backup';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
-import { NextGameRow, NextGameSlab, PhaseCard, deadlineIn, deadlineText, nextGame } from './NextGame';
+import { NextGameRow, NextGameSlab, PhaseCard, deadlineText, nextGame } from './NextGame';
 import { DigestRow, Headlines, LeadStory, YourSeason, useLead } from './FrontPage';
 import { PracticeRow, PracticeSheet } from './Practice';
-import { MessageSheet, decisionId, markRead, needsYou, previewText } from './messages';
+import { MessageSheet, markRead, previewText } from './messages';
+import { useNeedsYou } from './needs';
 import { senderOf } from './senders';
 import './today.css';
 import { useForecast } from '../useForecast';
@@ -35,12 +35,13 @@ const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
 
 const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs';
 
+/** Needs you's order: what the league waits on, then the first week's checklist, then the rest. */
+const rank = (i: AgendaItem) => (i.required ? 2 : i.kind === 'guide' ? 1 : 0);
+
 /** The most of the staff's cards in Needs you (the rest are behind All advice): fewer when the list is long already. */
 const STAFF_SHOWN = 2;
-/** The most rows Needs you shows on the page (required decisions always show); the rest are in its sheet. */
+/** The most rows Needs you shows on the page (required decisions always show); the rest, mail included, are in its sheet. */
 const NEEDS_SHOWN = 3;
-/** The most mail in Needs you (the rest is in the inbox, behind the bell). */
-const MAIL_SHOWN = 2;
 
 /** The guide was put away, but its weeks aren't over (Today offers it back). */
 function guideHidden(league: League): boolean {
@@ -54,13 +55,16 @@ type Opened = null | 'advice' | 'glossary' | 'practice' | 'needs';
 export default function Today() {
   const league = useLeague();
   const simming = useStore((s) => !!s.sim);
+  const digest = useStore((s) => !!s.digest);
   const [sheet, setSheet] = useState<Opened>(null);
   const [openMsg, setOpenMsg] = useState<number | null>(null);
 
   const g = nextGame(league);
   const gameDay = !!g && g.day <= league.day;
   const lead = useLead(league);
-  const items = useLeagueMemo(() => agenda(league), [league]);
+  // what needs him (the bell counts the same: see needs.ts)
+  const needs = useNeedsYou(league);
+  const { items, mail, deadline, backup: askBackup } = needs;
   // the whole feed for the sheet. Today's own cards leave the owner to the job-security row, and the
   // next opponent's missing plan to the slab
   const full = useLeagueMemo(() => assistantFeed(league), [league]);
@@ -74,19 +78,7 @@ export default function Today() {
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
 
-  // mail that needs him and isn't a decision (those are agenda rows), newest first
-  const open = new Map(items.map((i) => [i.id, true]));
-  const mail = league.inbox
-    .filter((m) => needsYou(m, open, league) && !decisionId(m) && m.link !== '/')
-    .sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id)
-    .slice(0, MAIL_SHOWN);
-  // the deadline's last week, unless its mail or the staff's deadline call is in the list already
-  const deadline = deadlineIn(league);
-  const showDeadline = deadline !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline');
-  // once a season, a backup (a row, never a stop: sims run past it)
-  const askBackup = backupDue(league);
-  const before = items.length + mail.length + (showDeadline ? 1 : 0) + (seat ? 1 : 0) + (askBackup ? 1 : 0);
-  const advice = feed.slice(0, before >= 3 ? 1 : STAFF_SHOWN);
+  const advice = feed.slice(0, needs.count + (seat ? 1 : 0) >= 3 ? 1 : STAFF_SHOWN);
   const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
   const moreAdvice = full.filter((c) => !onToday.has(c.id)).length;
 
@@ -100,17 +92,16 @@ export default function Today() {
   ) : (
     <NextGameSlab league={league} g={g} noPlan={noPlan} />
   );
-  const needs = before + advice.length > 0;
-  // every row of Needs you, in order: the decisions (required first), the deadline, mail, the owner, a backup, the staff
+  // every row of Needs you, in order: the decisions (required first), the deadline, mail, a backup
   const needRows = [
     ...[...items]
-      .sort((a, b) => Number(b.required) - Number(a.required))
+      .sort((a, b) => rank(b) - rank(a))
       .map((i) => (
         <div role="listitem" className="td-need" key={i.id}>
           <AgendaRow item={i} />
         </div>
       )),
-    ...(showDeadline
+    ...(deadline !== null
       ? [
           <div role="listitem" className="td-need" key="deadline">
             <NeedRow
@@ -134,17 +125,20 @@ export default function Today() {
         />
       </div>
     )),
-    ...(seat
-      ? [
-          <div role="listitem" className="td-need" key="owner">
-            <NeedRow to="/office/owner" tone={js.heat === 'hot' ? 'bad' : 'warn'} title={`Job security ${js.score} · ${js.label}`} line={js.line} />
-          </div>,
-        ]
-      : []),
     ...(askBackup
       ? [
           <div role="listitem" className="td-need" key="backup">
             <BackupRow league={league} />
+          </div>,
+        ]
+      : []),
+  ];
+  // beside it, what doesn't wait on an answer: the owner when the seat is warm, and the staff's top advice
+  const staffRows = [
+    ...(seat
+      ? [
+          <div role="listitem" className="td-need" key="owner">
+            <NeedRow to="/office/owner" tone={js.heat === 'hot' ? 'bad' : 'warn'} title={`Job security ${js.score} · ${js.label}`} line={js.line} />
           </div>,
         ]
       : []),
@@ -162,19 +156,40 @@ export default function Today() {
     <main className="page td-page">
       {hero}
 
-      {needs && (
+      {needs.count > 0 && (
         <Section
           title="Needs you"
           right={
-            hiddenNeeds > 0 && (
+            hiddenNeeds > 0 ? (
               <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('needs')}>
-                All {needRows.length} <ChevronRight size={14} aria-hidden="true" />
+                All {needs.count} <ChevronRight size={14} aria-hidden="true" />
               </button>
+            ) : (
+              <span className="td-count num" aria-hidden="true">
+                {needs.count}
+              </span>
             )
           }
         >
           <div className="td-needs" role="list" aria-label="Needs you">
             {needRows.slice(0, shownNeeds)}
+          </div>
+        </Section>
+      )}
+
+      {staffRows.length > 0 && (
+        <Section
+          title="From your staff"
+          right={
+            moreAdvice > 0 && (
+              <button type="button" className="card-link" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
+                All advice <ChevronRight size={14} aria-hidden="true" />
+              </button>
+            )
+          }
+        >
+          <div className="td-needs" role="list" aria-label="From your staff">
+            {staffRows}
           </div>
         </Section>
       )}
@@ -190,31 +205,33 @@ export default function Today() {
 
       <Headlines league={league} lead={leadIsHero ? null : lead} />
 
-      <Section title="More">
-        <div className="card flush td-more">
-          {g && <PracticeRow league={league} onOpen={() => setSheet('practice')} />}
-          <DigestRow />
-          {moreAdvice > 0 && (
-            <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
-              <span className="grow td-mrow-k">From your staff</span>
-              <span className="td-mrow-v">{moreAdvice}</span>
-              <ChevronRight size={18} className="dim" aria-hidden="true" />
-            </button>
-          )}
-          {hidden && (
-            <button type="button" className="td-mrow" disabled={simming} onClick={() => edit((l) => showGuide(l))}>
-              <span className="grow td-mrow-k">Show the first-week guide</span>
-              <ChevronRight size={18} className="dim" aria-hidden="true" />
-            </button>
-          )}
-          {league.settings.teaching !== false && (
-            <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('glossary')}>
-              <span className="grow td-mrow-k">Glossary</span>
-              <ChevronRight size={18} className="dim" aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </Section>
+      {(g || digest || (moreAdvice > 0 && !staffRows.length) || hidden || league.settings.teaching !== false) && (
+        <Section title="More">
+          <div className="card flush td-more">
+            {g && <PracticeRow league={league} onOpen={() => setSheet('practice')} />}
+            <DigestRow />
+            {moreAdvice > 0 && !staffRows.length && (
+              <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
+                <span className="grow td-mrow-k">From your staff</span>
+                <span className="td-mrow-v">{moreAdvice}</span>
+                <ChevronRight size={18} className="dim" aria-hidden="true" />
+              </button>
+            )}
+            {hidden && (
+              <button type="button" className="td-mrow" disabled={simming} onClick={() => edit((l) => showGuide(l))}>
+                <span className="grow td-mrow-k">Show the first-week guide</span>
+                <ChevronRight size={18} className="dim" aria-hidden="true" />
+              </button>
+            )}
+            {league.settings.teaching !== false && (
+              <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('glossary')}>
+                <span className="grow td-mrow-k">Glossary</span>
+                <ChevronRight size={18} className="dim" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </Section>
+      )}
 
       <Sheet open={sheet === 'needs'} onClose={() => setSheet(null)} title="Needs you">
         <div className="td-needs" role="list" aria-label="Needs you">

@@ -344,6 +344,38 @@
   max-width: 38ch;
 }
 
+/* the preseason's goals on the phase card: a short list under a rule */
+.td-phase-goals {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.td-phase-gk {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 640;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+.td-phase-gl {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 16px;
+  font-weight: 640;
+  line-height: 1.5;
+  color: #fff;
+}
+.td-phase-gn {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.42;
+  color: var(--text-2);
+  max-width: 44ch;
+}
+
 /* a tablet: the poster grows with the page, the dek keeps a reading measure */
 @media (min-width: 640px) {
   .td-score,
@@ -444,6 +476,13 @@
   font-size: 14.5px;
   border-width: 1.5px;
 }
+/* Needs you's count when every row is on the page: the bell's number */
+.td-count {
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--text-dim);
+}
+
 /* a mail row in Needs you: a button drawn as the agenda's link rows */
 .td-mailrow {
   width: 100%;

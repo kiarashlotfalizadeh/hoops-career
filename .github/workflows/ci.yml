@@ -30,11 +30,25 @@ jobs:
       - run: npm test
       - name: League invariants (multi-season run)
         run: npm run invariants
-      - name: Star check (twelve seasons, no scoring leader over 39 a game)
-        run: npm run star-check
-        env:
-          QUIET: '1'
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - name: Browser smoke test (phone + tablet, backup round trip)
         run: npm run smoke
+  # the multi-season star check in a job of its own, beside verify: four leagues of eight seasons,
+  # one per core (about 3 minutes on four cores, 5-6 on two)
+  stars:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Star check (four leagues of eight seasons; no leader over 39 a game or 74-point night, one season at most over 73 wins)
+        run: npm run star-check
+        env:
+          QUIET: '1'

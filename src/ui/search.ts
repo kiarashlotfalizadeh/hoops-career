@@ -1,7 +1,7 @@
 // Global search: one box for any player (on a team, a free agent, a prospect or retired), any team,
 // any screen and any glossary word, so nothing is more than a search away. Pure apart from the
 // recent-picks helpers at the end, so the ranking is unit-tested (__tests__/screens.test.ts).
-import type { League, Player } from '../core/types';
+import type { GameResult, League, Player } from '../core/types';
 import { DRAFT_PROSPECT, FREE_AGENT, RETIRED } from '../core/types';
 import { playerAge } from '../core/playerGen';
 import { GLOSSARY } from './glossary';
@@ -43,15 +43,32 @@ const wordsOf = (s: string) =>
 const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Today', to: '/', meta: 'What needs you now', also: 'home agenda to do' },
   { title: 'Inbox', to: '/inbox', meta: 'Mail and decisions', also: 'messages mail' },
-  { title: 'Settings', to: '/settings', meta: 'Difficulty, live games, saves', also: 'options preferences backup export' },
+  {
+    title: 'Settings',
+    to: '/settings',
+    meta: 'Difficulty, big moments, injuries, when sims stop',
+    also: 'options preferences difficulty big moments injuries job security sims pause away',
+  },
+  {
+    title: 'Live game settings',
+    to: '/settings?tab=live',
+    meta: 'Settings · speed, breaks, what the broadcast shows, staff calls',
+    also: 'speed breaks playback win probability scores staff calls pre-game',
+  },
+  {
+    title: 'League file',
+    to: '/settings?tab=league',
+    meta: 'Settings · save, backup, snapshots, glossary, god mode',
+    also: 'save saves backup export import snapshot delete rename glossary teaching help',
+  },
   { title: 'Roster', to: '/team', meta: 'Team · players, ratings, stats, contracts', also: 'players team' },
   { title: 'Growth', to: '/team/growth', meta: 'Team · development, breakouts, rookies', also: 'development progress breakouts improving rookies young' },
-  { title: 'Rotation', to: '/team/rotation', meta: 'Team · starters, minutes, closers', also: 'depth chart minutes starters' },
+  { title: 'Rotation', to: '/team/rotation', meta: 'Team · starters, minutes, closers', also: 'depth chart minutes starters starting lineup' },
   {
     title: 'Tactics',
     to: '/team/tactics',
     meta: 'Team · your system: its report, offense, defense, players, game management',
-    also: 'playbook offense defense roles sets system report grades',
+    also: 'playbook offense defense coverage roles sets system report grades undo',
   },
   {
     title: 'Player roles',
@@ -62,24 +79,49 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   { title: 'Lineups', to: '/team/lineups', meta: 'Team · five-man units and their ratings', also: 'units five man' },
   { title: 'Compare players', to: '/compare', meta: 'Team · two players side by side', also: 'versus vs' },
   { title: 'Schedule', to: '/games', meta: 'Games · your schedule and results', also: 'games results calendar' },
+  // the next game's matchup page (or its report once it's played)
+  {
+    title: 'Matchup',
+    to: '/preview',
+    meta: 'Games · your next opponent: the preview, scouting, the game plan',
+    also: 'next game preview scout scouting plan game plan opponent',
+  },
   { title: 'Standings', to: '/league/standings', meta: 'League · standings and playoff odds', also: 'odds table' },
+  { title: 'Draft lottery', to: '/league/standings?view=lottery', meta: 'League · the lottery odds and the draft order', also: 'draft order lottery odds picks tank' },
   { title: 'Playoffs', to: '/league/playoffs', meta: 'League · the bracket and the play-in', also: 'bracket play-in postseason' },
   { title: 'NBA Cup', to: '/league/cup', meta: 'League · the in-season tournament', also: 'cup tournament' },
-  { title: 'League stats', to: '/league/stats', meta: 'League · leaders, players, teams, ratings', also: 'leaders statistics ratings' },
+  { title: 'League stats', to: '/league/stats', meta: 'League · leaders, players, teams, ratings', also: 'leaders statistics ratings 3p fg ft three point percentages' },
   { title: 'Scores', to: '/league/schedule', meta: 'League · every game around the league', also: 'scoreboard results' },
   { title: 'Awards', to: '/league/awards', meta: 'League · MVP race and the rest', also: 'mvp races all-nba' },
   { title: 'News', to: '/league/news', meta: 'League · transactions and headlines', also: 'transactions headlines' },
+  { title: 'Injuries', to: '/league/news?kind=injury', meta: 'League · injury news around the league', also: 'injured injury hurt' },
   { title: 'History', to: '/league/history', meta: 'League · seasons, records, Hall of Fame, coaches', also: 'records hall fame champions coaches' },
-  { title: 'Office', to: '/office', meta: 'Office · the phase and the cap sheet', also: 'cap salary payroll exceptions gm' },
-  { title: 'Trade', to: '/office/trade', meta: 'Office · offers, the trading block, trade finder', also: 'trading block offers' },
-  { title: 'Free agents', to: '/office/free-agents', meta: 'Office · sign players', also: 'free agency signings' },
+  { title: 'Office', to: '/office', meta: 'Office · the phase and the cap sheet', also: 'cap space salary payroll exceptions tax gm' },
+  { title: 'Trade', to: '/office/trade', meta: 'Office · offers, the trading block, trade finder', also: 'trading block offers deadline' },
+  { title: 'Free agents', to: '/office/free-agents', meta: 'Office · sign players', also: 'fa free agency signings' },
   { title: 'Re-sign', to: '/office/resign', meta: 'Office · your expiring contracts and extensions', also: 'extensions expiring' },
-  { title: 'Draft', to: '/office/draft', meta: 'Office · the board, the combine, mock drafts', also: 'prospects combine mock lottery' },
+  { title: 'Draft', to: '/office/draft', meta: 'Office · the board, the combine, mock drafts', also: 'prospects combine mock big board' },
   { title: 'Picks & moves', to: '/office/assets', meta: 'Office · your draft picks and transactions', also: 'picks assets' },
   { title: 'Finances', to: '/office/finances', meta: 'Office · revenue, expenses, ticket prices', also: 'money budget tickets revenue' },
   { title: 'Owner', to: '/office/owner', meta: 'Office · job security and his goals', also: 'job security goals' },
   { title: 'Career', to: '/office/career', meta: 'Office · your record and job offers', also: 'jobs offers resume' },
 ];
+
+/** The names a few players go by that their initials don't give ("SGA", "KAT" and "JJJ" come from the name itself). */
+const NICKNAMES: Record<string, string> = {
+  'victor wembanyama': 'wemby',
+  'nikola jokic': 'joker',
+  'kevin durant': 'kd',
+  'anthony davis': 'ad',
+  'chris paul': 'cp3',
+};
+
+/** A player's words: his name's, then his initials when the name runs to three words or more, then a nickname. */
+function playerWords(name: string): string[] {
+  const words = wordsOf(name);
+  const nick = NICKNAMES[words.join(' ')];
+  return [...words, ...(words.length >= 3 ? [words.map((w) => w[0]).join('')] : []), ...(nick ? [nick] : [])];
+}
 
 /** Everything findable in this league. */
 export function searchIndex(league: League): SearchEntry[] {
@@ -93,7 +135,7 @@ export function searchIndex(league: League): SearchEntry[] {
       meta: playerMeta(league, p),
       to: `/player/${p.pid}`,
       ovr: p.tid === RETIRED ? undefined : p.ovr,
-      words: wordsOf(name),
+      words: playerWords(name),
       full: normalize(name),
       boost: (p.tid === league.userTid ? 60 : p.tid >= 0 ? 40 : p.tid === FREE_AGENT ? 25 : p.tid === DRAFT_PROSPECT ? 15 : 0) + p.ovr / 10,
     });
@@ -126,6 +168,26 @@ export function searchIndex(league: League): SearchEntry[] {
       boost: 75,
     });
   }
+  // your last game's report, this season
+  let last: GameResult | undefined;
+  for (let k = league.games.length - 1; k >= 0 && league.games[k].season === league.season; k--) {
+    const g = league.games[k];
+    if (g.home.tid === league.userTid || g.away.tid === league.userTid) {
+      last = g;
+      break;
+    }
+  }
+  if (last)
+    out.push({
+      id: 's:/game/last',
+      kind: 'screen',
+      title: 'Last game',
+      meta: 'Games · the report: box score, shots, flow',
+      to: `/game/${last.gid}`,
+      words: ['last', 'game', 'box', 'score', 'boxscore', 'report', 'recap', 'result'],
+      full: 'last game',
+      boost: 75,
+    });
   if (league.settings.godMode)
     out.push({
       id: 's:/god',
@@ -151,10 +213,20 @@ function playerMeta(league: League, p: Player): string {
   return `Retired · ${p.pos}`;
 }
 
+/** One slip apart: a letter wrong, missing or extra, or two side by side swapped ("holmgrn", "shia"). */
+export function oneEdit(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  if (a.length > b.length) return a.slice(i + 1) === b.slice(i);
+  if (a.length < b.length) return a.slice(i) === b.slice(i + 1);
+  return a.slice(i + 1) === b.slice(i + 1) || (a[i] === b[i + 1] && a[i + 1] === b[i] && a.slice(i + 2) === b.slice(i + 2));
+}
+
 /**
  * How well an entry matches: the whole name > an exact abbreviation > every word of the query
- * starting a word of the entry (any order: "jal wil", "wil jal") > the query inside the name.
- * 0 means no match.
+ * starting a word of the entry (any order: "jal wil", "wil jal"; whole words a little higher) > the
+ * query inside the name > a slip in a word of four letters or more ("gilgeus"). 0 means no match.
  */
 export function matchScore(e: SearchEntry, q: string): number {
   if (!q) return 0;
@@ -163,9 +235,12 @@ export function matchScore(e: SearchEntry, q: string): number {
   const qs = q.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
   if (qs.length && qs.every((w) => e.words.some((x) => x.startsWith(w)))) {
     // the first word typed starting the name scores a little higher ("jalen" over "williams, jalen")
-    return 600 + (e.words[0]?.startsWith(qs[0]) ? 40 : 0) + (e.full.startsWith(q) ? 20 : 0);
+    // whole words beat the start of one ("fa" is Free agents' word, and only the start of "Hall of Fame")
+    return 600 + (e.words[0]?.startsWith(qs[0]) ? 40 : 0) + (e.full.startsWith(q) ? 20 : 0) + (qs.every((w) => e.words.includes(w)) ? 20 : 0);
   }
   if (q.length >= 3 && e.full.includes(q)) return 300;
+  // the typo match: each word a start of one of the entry's or, from four letters, one slip from one
+  if (qs.some((w) => w.length >= 4) && qs.every((w) => e.words.some((x) => x.startsWith(w) || (w.length >= 4 && oneEdit(w, x))))) return 200;
   return 0;
 }
 

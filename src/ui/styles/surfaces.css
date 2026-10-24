@@ -41,6 +41,9 @@
   font-size: 14px;
   font-weight: 680;
   color: var(--accent-text);
+  /* underlined when your team has no colour to mark it with (the Nets, the Spurs) */
+  text-decoration: var(--team-link-line);
+  text-underline-offset: 3px;
   display: inline-flex;
   align-items: center;
   gap: 2px;

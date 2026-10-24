@@ -1,10 +1,13 @@
-// The Plan's counters: what the staff would change against this team, each with exactly what it
-// changes in the Tactics screen's words, why, and the numbers behind it (the ones the numbers back
-// first). Add puts one in the plan, Always in your tactics for every game.
+// The Plan's counters: what the staff would change against this team, each with what it measured
+// worth in tonight's game (see useCounterWorth: the gains first, the costs behind "more"), exactly
+// what it changes in the Tactics screen's words, why, and the numbers behind it. Add puts one in the
+// plan (with its worth, which the win chance counts), Always in your tactics for every game.
 import { useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
 import { counterCandidates, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
+import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
+import { byWorth, useCounterWorth, worthText } from './useCounterWorth';
 import { effectiveTactics, persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
 import type { League } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
@@ -18,7 +21,10 @@ const SHOWN = 4;
 export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const user = league.userTid;
-  const cands = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const measuring = useCounterWorth(league, opp);
+  const worth = measuring?.worth;
+  const cands = byWorth(drafted, worth);
   const inPlan = new Set(planFor(league, opp)?.items.map((it) => it.id));
   const [all, setAll] = useState(false);
   const them = league.teams[opp];
@@ -29,12 +35,25 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
         const tm = l.teams[l.userTid];
         // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
         tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
-      } else setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}) });
+      } else {
+        const w = worth?.get(c.id);
+        setPlanItem(l, opp, { id: c.id, label: c.label, group: c.group, patch: c.patch, ...(c.evidence ? { evidence: c.evidence } : {}), ...(w ? { pts: w.pts } : {}) });
+      }
     });
     if (ok) useStore.getState().toast(scope === 'game' ? `Plan vs ${them.abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
   };
 
-  const visible = all ? cands : cands.slice(0, SHOWN);
+  // the costs and the ones it didn't measure wait behind "more": the staff wouldn't play them
+  const shown = worth
+    ? Math.min(
+        SHOWN,
+        cands.filter((c) => {
+          const w = worth.get(c.id);
+          return !!w && worthCall(w) !== 'cost';
+        }).length,
+      )
+    : SHOWN;
+  const visible = all ? cands : cands.slice(0, shown);
   const mine = league.teams[user].tactics;
   return (
     <Section
@@ -42,14 +61,17 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       right={
         <Help title="Counters">
           <p>
-            The staff drafts these from their roster, their playbook and, once they have played enough games, their numbers (the ones the numbers back come first). Adding one
-            replaces any item of the same kind in your plan; Always puts it in your tactics for every game.
+            The staff drafts these from their roster, their playbook and, once they have played enough games, their numbers. Then it plays your next game against them a few hundred
+            times with and without each one: the number is the points a game it adds (Even: too close to call). Gains come first; a counter in your plan counts in the win chance at
+            its number.
           </p>
+          <p>Adding one replaces any item of the same kind in your plan; Always puts it in your tactics for every game.</p>
         </Help>
       }
     >
       <div className="card flush list">
         {!cands.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}
+        {cands.length > 0 && shown === 0 && !all && <div className="mu-empty">By the staff&apos;s numbers, none of its counters beats how you play them now.</div>}
         {visible.map((c) => {
           const added = inPlan.has(c.id);
           // a counter that only names their players (attacking one defender) has nothing to keep for every game
@@ -58,6 +80,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             <div key={c.id} className="mu-cand">
               <div className="mu-cand-top">
                 <span className="grow lr-name">{c.label}</span>
+                <WorthTag w={worth?.get(c.id)} measuring={!!measuring && !worth} />
                 {added ? (
                   <Tag tone="good">In plan</Tag>
                 ) : (
@@ -83,9 +106,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             </div>
           );
         })}
-        {!all && cands.length > SHOWN && (
+        {!all && cands.length > shown && (
           <button className="gs-more" onClick={() => setAll(true)}>
-            <ChevronDown size={15} aria-hidden="true" /> {cands.length - SHOWN} more
+            <ChevronDown size={15} aria-hidden="true" /> {cands.length - shown} more
           </button>
         )}
       </div>
@@ -97,4 +120,15 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
 function CounterChanges({ league, opp, c }: { league: League; opp: number; c: Candidate }) {
   const line = useLeagueMemo(() => changesLine(screenChanges(effectiveTactics(league, opp), tacticsWithCounter(league, opp, c))), [league, opp, c]);
   return line ? <div className="mu-changes">{line}</div> : null;
+}
+
+/** A counter's measured worth (or that it's being measured: the first few the staff measures). */
+export function WorthTag({ w, measuring }: { w?: CounterWorth; measuring: boolean }) {
+  if (!w) return measuring ? <span className="mu-worth dim small">Measuring…</span> : null;
+  const { text, tone } = worthText(w);
+  return (
+    <span className={`mu-worth num ${tone ?? 'dim'}`} title={`${w.pts >= 0 ? '+' : ''}${w.pts.toFixed(1)} points a game, ±${w.se.toFixed(1)}`}>
+      {text}
+    </span>
+  );
 }

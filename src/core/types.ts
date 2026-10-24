@@ -976,6 +976,21 @@ export interface GameResult {
   wpLow?: number;
   /** The user's live games: his tactics changes, substitutions and timeouts, and the scoring around each (see analysis/moves.ts). */
   moves?: CoachMove[];
+  /** The user's games: his game plan's counters at tip-off, each with what it was aimed at, for the report's grade of the plan (see analysis/debrief.ts). */
+  plan?: PlanUse[];
+}
+
+/** One counter of the game plan a game was played with (GameResult.plan). */
+export interface PlanUse {
+  label: string;
+  /** The end of the floor it's about. */
+  end: 'def' | 'off' | 'both';
+  /** Finishing play types it's aimed at (theirs on defense, ours on offense). */
+  types?: string[];
+  /** One of theirs it's aimed at. */
+  pid?: number;
+  /** Points a game the staff measured it worth when it went in. */
+  pts?: number;
 }
 
 /** Trips and points for each side over a stretch of a game, and for what a move was aimed at. */
@@ -988,11 +1003,11 @@ export interface MoveTally {
 
 /** One of the coach's moves in a live game, and the scoring while it was in effect against the stretch before it. */
 export interface CoachMove {
-  kind: 'tactics' | 'sub' | 'timeout';
+  kind: 'tactics' | 'sub' | 'timeout' | 'play';
   q: number;
   /** Seconds left in the period. */
   clock: number;
-  /** "Pick-and-roll coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout". */
+  /** "Pick-and-roll coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout", "Horns: Jokić" (a play called: `after` is the trip it ran on). */
   text: string;
   /** The end of the floor it's about. */
   end: 'def' | 'off' | 'both';
@@ -1004,6 +1019,11 @@ export interface CoachMove {
   aim?: string;
   before: MoveTally;
   after: MoveTally;
+  /**
+   * Its stretch is over short of the trips a move in effect waits for (the next move of its kind
+   * came, or the final buzzer): it's judged on what it had.
+   */
+  closed?: true;
 }
 
 /** A number a key to the game is about (see analysis/keys.ts): a team's, or one player's points. */
@@ -1523,6 +1543,8 @@ export type LiveOp = { at: number } & (
   | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean; staff?: string } }
   | { op: 'timeout'; args: { reason?: string } }
   | { op: 'manualSubs'; args: { on: boolean } }
+  /** A play called in a huddle: set `set` on the next half-court trip this period, for `pid` (else the best fit on the floor). */
+  | { op: 'play'; args: { set: SetId; pid?: number } }
 );
 
 export interface CupGroup {
@@ -1596,6 +1618,8 @@ export interface GamePlanItem {
   patch: TacticsPatch;
   /** Why it's in the plan, from the scouting numbers. */
   evidence?: string;
+  /** Points a game the staff measured it worth when it went in (see counterWorth.ts): the projection counts it. */
+  pts?: number;
 }
 
 /** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */
