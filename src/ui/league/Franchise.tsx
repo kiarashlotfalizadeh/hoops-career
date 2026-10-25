@@ -79,26 +79,40 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
         }
       >
         <div className="card flush list">
-          {seasons.map((s) => (
-            <div key={s.season} className={`lg-season ${mine.has(s.season) ? 'lg-mine' : ''}`}>
-              <span className="yr">{seasonLabel(s.season)}</span>
-              <span className="rec">
-                {s.won}-{s.lost}
-              </span>
-              <span className="sd ellipsis">
-                {mine.has(s.season) && <span className="sr-only">Your season. </span>}
-                {s.seed ? `${ordinal(s.seed)} seed` : ''}
-              </span>
-              {/* a season not yet begun is next, not in progress */}
-              <OutcomeTag
-                o={
-                  s.season === league.season && league.phase === 'preseason' && s.won + s.lost === 0
-                    ? { label: 'Not started yet', short: 'Up next' }
-                    : seasonOutcome(league, tid, s)
-                }
-              />
-            </div>
-          ))}
+          {seasons.map((s) => {
+            // a finished season opens its page in History (its stories, its winners, your season)
+            const done = league.awards.some((a) => a.season === s.season && a.champion !== undefined);
+            const cls = `lg-season ${mine.has(s.season) ? 'lg-mine' : ''}`;
+            const row = (
+              <>
+                <span className="yr">{seasonLabel(s.season)}</span>
+                <span className="rec">
+                  {s.won}-{s.lost}
+                </span>
+                <span className="sd ellipsis">
+                  {mine.has(s.season) && <span className="sr-only">Your season. </span>}
+                  {s.seed ? `${ordinal(s.seed)} seed` : ''}
+                </span>
+                {/* a season not yet begun is next, not in progress */}
+                <OutcomeTag
+                  o={
+                    s.season === league.season && league.phase === 'preseason' && s.won + s.lost === 0
+                      ? { label: 'Not started yet', short: 'Up next' }
+                      : seasonOutcome(league, tid, s)
+                  }
+                />
+              </>
+            );
+            return done ? (
+              <Link key={s.season} to={`/league/history?season=${s.season}`} className={`${cls} lg-season-link`}>
+                {row}
+              </Link>
+            ) : (
+              <div key={s.season} className={cls}>
+                {row}
+              </div>
+            );
+          })}
         </div>
       </Section>
       <FranchiseLeaders league={league} tid={tid} />

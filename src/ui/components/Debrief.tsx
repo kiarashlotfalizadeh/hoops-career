@@ -1,12 +1,15 @@
 // The staff's debrief at the top of a game's recap (the live final card and the report's Debrief
 // tab): the lead assistant's verdict, the edges that decided it in points, your game plan's counters
-// graded on what each was aimed at, your moves in a live game and what each did, and what to do next time, the fix one tap away for the plan against this
-// opponent or for every game (or, for playing a step slow, the practice focus between games).
+// graded on what each was aimed at, your moves in a live game (what they were worth all together,
+// measured after the final by playing the night back with them and without, and what each did), and
+// what to do next time, the fix one tap away for the plan against this opponent or for every game
+// (or, for playing a step slow, the practice focus between games).
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameReport } from '../../core/analysis/gameReport';
-import { debrief, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
+import { debrief, nightLine, seasonCoachingLine, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
+import { measuringNight } from '../live/tonight';
 import { leadAssistant } from '../../core/ai/assistant';
 import { applyPatch } from '../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
@@ -62,6 +65,15 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
   const us = res.home.tid === me ? league.teams[res.home.tid] : league.teams[res.away.tid];
   // (a move a live game made: its team's abbreviations for the lines)
   const abbrevs = { us: us.abbrev, them: opp.abbrev };
+  // what the night's moves were worth, measured after the final (it lands on the result a few seconds
+  // after it: read on every render), and the season's so far
+  const night = res.moves?.length
+    ? nightLine(
+        res,
+        res.moves.every((m) => m.by === 'staff'),
+      )
+    : null;
+  const season = night ? seasonCoachingLine(league, res.season) : null;
   return (
     <div className="gd-debrief">
       <AssistantHead name={assistant.name} initials={assistant.initials} read={d.headline} />
@@ -124,6 +136,17 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
             )
           }
         >
+          {night ? (
+            <div className={`gd-night tone-${night.tone}`}>
+              <div className="gd-night-t">{night.text}</div>
+              <div className="small dim2">
+                {night.detail}
+                {season && ` ${season}.`}
+              </div>
+            </div>
+          ) : (
+            measuringNight(res.gid) && <div className="gd-night small dim">The staff is playing the night back with your moves and without them…</div>
+          )}
           <MovesList moves={res.moves} abbrevs={abbrevs} nameOf={nameOf} />
         </Section>
       )}
@@ -146,7 +169,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                     )}
                   </div>
                 )}
-                {a.patch && (
+                {a.patch && (inPlan.has(a.id) || d.meetAgain || a.worth) && (
                   <div className="gd-next-acts">
                     {inPlan.has(a.id) ? (
                       <Tag tone="good">In the plan vs {opp.abbrev}</Tag>
@@ -157,9 +180,13 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                         </button>
                       )
                     )}
-                    <button className={`btn xs ${d.meetAgain ? 'text' : ''}`} disabled={simming} onClick={() => apply(a, 'always')}>
-                      {d.meetAgain ? 'For every game' : `${a.label}: every game`}
-                    </button>
+                    {/* (for every game only a change measured as a gain: one night's tags are no reason to change them all) */}
+                    {a.worth && (
+                      <button className={`btn xs ${d.meetAgain ? 'text' : ''}`} disabled={simming} onClick={() => apply(a, 'always')}>
+                        {d.meetAgain ? 'For every game' : `${a.label}: every game`}
+                      </button>
+                    )}
+                    {a.worth && <span className="lv-note-worth tiny">{a.worth}</span>}
                   </div>
                 )}
               </div>

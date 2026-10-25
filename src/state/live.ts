@@ -18,6 +18,7 @@ import { coachMoves, slotMatcher, slotMoveName } from '../core/analysis/moves';
 import { shortName } from '../core/league/helpers';
 import { courtEdge } from '../core/league/difficulty';
 import { guideAfterLive } from '../core/league/agenda';
+import { forkSim } from './liveWorth';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -65,6 +66,12 @@ export class LiveGame {
   readonly edge: number;
   /** This game's journal: the league's `live` while the game is pending (see checkpoint). */
   readonly journal: LiveJournal;
+  /**
+   * The game at tip-off, unplayed (a copy, without play-by-play): what the night's moves are measured
+   * from after the final (state/liveWorth.ts nightWorth), with the journal's moves and without them.
+   * Played forward on the same seed, it's tonight's game possession for possession.
+   */
+  readonly tip: GameSim;
   /**
    * How the game was set up when it didn't start fresh: picked up from the save's journal, or
    * started over from tip-off because the journal couldn't be played back. The Live screen says
@@ -130,6 +137,7 @@ export class LiveGame {
       // (the difficulty's edge as it was at tip-off: a replay after a change of difficulty is the same game)
       edge: (from?.court === undefined ? courtEdge(league, game.home, game.away) : from.court) ?? undefined,
     });
+    this.tip = forkSim(this.sim);
     this.planned = this.sim.baseTactics(this.userSide);
     // (a journal from before win probability has none: the projection is worked out again from the tip)
     this.edge = from?.edge ?? tipoffEdge(league, game, this.sim);

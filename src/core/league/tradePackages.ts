@@ -17,7 +17,9 @@ import {
   evaluateTrade,
   findPick,
   flipped,
+  frozenFirst,
   judgedPick,
+  matchInfo,
   pickValue,
   pickValueFor,
   playerValueFor,
@@ -212,7 +214,11 @@ export function dumpPackage(league: League, from: number, to: number, bad: Playe
   const dps: DraftPick[] = [];
   const offer = (): TradeOffer => ({ a: { tid: to, pids: back.map((p) => p.pid), dpids: [] }, b: { tid: from, pids: [bad.pid], dpids: dps.map((d) => d.dpid) } });
   if (validateTrade(league, offer()).length) return null;
-  const picks = league.draftPicks.filter((d) => d.tid === from && !tradedAwayBy(league, d, to)).sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
+  // (past the second apron after the deal, its latest first is frozen: picks don't move salary, so that's known now)
+  const frozen = matchInfo(league, offer(), 'b').apron2 ? frozenFirst(league, from) : undefined;
+  const picks = league.draftPicks
+    .filter((d) => d.tid === from && d !== frozen && !tradedAwayBy(league, d, to))
+    .sort((x, y) => pickValue(league, x) - pickValue(league, y) || x.dpid - y.dpid);
   for (const x of picks) {
     if (done(offer())) break;
     const out = dps.length >= MAX_PICKS_OUT ? dps[0] : null;

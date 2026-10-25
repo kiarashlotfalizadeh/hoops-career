@@ -5,6 +5,7 @@ import type { DraftPick, League, Player } from '../../core/types';
 import { andList } from '../../core/league/helpers';
 import { ordinal, rankOf } from '../../core/format';
 import { overallPick } from '../league/shared';
+import { pickLabel, pickRange } from '../../core/league/trades';
 
 export function fmtIn(x: number | undefined) {
   if (x === undefined || !isFinite(x)) return '—';
@@ -59,6 +60,28 @@ export function boardRank(league: League, p: Player): string | null {
 /** A pick's projection, as every pick list writes it: "proj. #17" (neutral: a projection, not a grade). */
 export const projText = (n: number) => `proj. #${n}`;
 
+/**
+ * Where a pick projects, as every pick in the trade, assets and draft screens writes it: "proj.
+ * #6-12" (or "proj. #4" when the range is one slot), from the projected strength its trade value is
+ * priced on (pickRange: three outcomes in five, the lottery's draw included). Undefined once its slot
+ * is set (its name carries the number). Neutral: a projection, not a grade.
+ */
+export function pickProjText(league: League, d: DraftPick): string | undefined {
+  const r = pickRange(league, d);
+  if (!r) return undefined;
+  return r.lo === r.hi ? projText(r.lo) : `proj. #${r.lo}-${r.hi}`;
+}
+
+/** Each pick's expected overall slot by the same projection (see pickRange), for ordering pick lists; undefined once its slot is set. */
+export const projectedSlot =
+  (league: League) =>
+  (d: DraftPick): number | undefined =>
+    pickRange(league, d)?.mean;
+
+/** The note under projected picks (team pages, the Office's assets and the Draft screen). */
+export const PICK_RANGE_NOTE =
+  "Ranges come from each team's projected strength (its record and its roster's worth, as the season forecast reads them), the lottery's odds included: where the pick lands three times in five. Later drafts drift toward the middle. Trade values are priced on the same projection.";
+
 export interface PickGrade {
   label: 'Steal' | 'Value' | 'Fair' | 'Reach' | 'Big reach';
   /** How many places later (positive) or earlier than his board rank he went. */
@@ -109,4 +132,10 @@ export function markLotterySeen(league: League) {
   } catch {
     // (private windows and blocked storage: the reveal just plays again next time)
   }
+}
+
+/** A pick's name with where it projects, for lines that carry one name: "2028 1st (UTA) · proj. #6-12" (see pickProjText). */
+export function pickName(league: League, d: DraftPick, terms: { protection?: number } = {}): string {
+  const proj = pickProjText(league, d);
+  return `${pickLabel(league, d, terms)}${proj ? ` · ${proj}` : ''}`;
 }

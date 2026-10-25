@@ -757,7 +757,8 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     for (const p of Object.values(l.players)) if (p.tid === S || p.tid === B) delete p.tradeLock;
     const vetMin = CAP_FOR(l).vetMin;
     for (const p of standardRoster(l, S)) shapeAt(l, p, 66, 30, vetMin);
-    const vet = shapeAt(l, standardRoster(l, S)[0], 84, 30, 10_000);
+    // (an 82: a contender's own firsts are late ones, priced as such, and two of them don't buy an 84)
+    const vet = shapeAt(l, standardRoster(l, S)[0], 82, 30, 10_000);
     // three stars (off the table), a young player paid what the veteran is, the rest on the minimum
     const roster = standardRoster(l, B);
     roster.forEach((p, i) => shapeAt(l, p, i < 3 ? 88 : 70, i < 3 ? 28 : 31, vetMin));

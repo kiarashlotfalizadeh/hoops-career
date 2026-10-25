@@ -89,16 +89,17 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
         )}
         <div className="tx-ctl">
           <Toggle
-            // (while the staff runs the tactics it adjusts, as AI coaches do: a change here takes them over)
-            on={!!t.manage.assistantAdjusts || !t.manual}
+            // (on unless switched off, whoever runs the tactics: it's a measured gain, so taking over the
+            // tactics doesn't turn it off; see buildSimInput)
+            on={t.manage.assistantAdjusts !== false}
             onChange={(x) =>
               edit((tt) => {
-                if (x) tt.manage.assistantAdjusts = true;
-                else delete tt.manage.assistantAdjusts;
+                if (x) delete tt.manage.assistantAdjusts;
+                else tt.manage.assistantAdjusts = false;
               })
             }
             label="Assistant adjusts in simmed games"
-            help="At the breaks of a game you don't watch, the assistant changes one thing the other team is cashing in on (a switch they keep hunting, a drop they keep pulling up over), as AI coaches do. While the staff runs your tactics it always does; once you run them, it's your call."
+            help="At the breaks of a game you don't watch, the assistant changes one thing the other team is cashing in on (a switch they keep hunting, a roll man punishing your hedge), as AI coaches do, but never the changes that cost your side (Drop to Hedge, backing off the ball). Measured over 17,280 games played both ways: worth about +0.5 points a game. Live games are yours."
           />
         </div>
       </div>

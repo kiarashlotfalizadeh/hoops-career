@@ -21,12 +21,20 @@ export type QualityId = 'creation' | 'spacing' | 'rim' | 'movement' | 'transitio
 export const QUALITY_META: Record<QualityId, { label: string; side: 'off' | 'def'; help: string }> = {
   creation: { label: 'Shot creation', side: 'off', help: 'Getting a good shot when the play breaks down: your creators, and how much the offense leans on them.' },
   spacing: { label: 'Spacing', side: 'off', help: 'Shooters who make the defense stay home, and a shot profile that uses them.' },
-  rim: { label: 'Rim pressure', side: 'off', help: 'Getting to the basket: drivers, finishers, a roll man, and how hard you attack.' },
+  rim: {
+    label: 'Rim pressure',
+    side: 'off',
+    help: 'Getting to the basket and to the line: cutters, finishers, players who draw fouls, and how hard you attack (shooters and ball screens keep it outside).',
+  },
   movement: { label: 'Ball movement', side: 'off', help: 'Passers, and actions that move the ball (motion, handoffs) rather than stopping it (isolations).' },
   transition: { label: 'Transition', side: 'off', help: 'Speed and athleticism, and how hard you push after stops (crashing the glass slows the break).' },
   glass: { label: 'Second chances', side: 'off', help: 'Offensive rebounders, and how many you send to the glass.' },
   security: { label: 'Ball security', side: 'off', help: 'Secure handlers, and a pace that doesn’t rush them.' },
-  rimD: { label: 'Rim protection', side: 'def', help: 'A shot blocker and interior defenders, and how much help comes off the shooters to the paint.' },
+  rimD: {
+    label: 'Rim protection',
+    side: 'def',
+    help: 'Help behind the ball, a shot blocker and interior defenders, and how much help comes off the shooters; ball pressure the handlers beat gives the rim up.',
+  },
   perimD: { label: 'Perimeter D', side: 'def', help: 'Defenders who stay in front, and how much pressure they put on the ball.' },
   pnrD: {
     label: 'Pick-and-roll D',
@@ -137,13 +145,14 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
     [`Post-up: ${lvl('action', o.actions.post)}`, -step(o.actions.post) * 3],
     [`Motion & cuts: ${lvl('action', o.actions.motion)}`, step(o.actions.motion) * 2],
   ]);
-  const roll = best(
-    rows.filter((x) => x.p.ratings.hgt >= 58),
-    (x) => x.c.roll,
-  );
-  set('rim', 0.55 * wavg(rows, (x) => x.c.rim) + 0.25 * starC + 0.2 * (roll ? roll.c.roll : 45), `Finishers: ${leaders(rows, (x) => x.c.rim, name)}`, [
-    [`Attack the rim: ${lvl('rimAttack', o.rimAttack)}`, step(o.rimAttack) * 8],
-    [`Pick-and-roll: ${lvl('action', o.actions.pnr)}`, step(o.actions.pnr) * 2],
+  // (in the engine the rim comes from cutters and finishers, the drawn fouls with it, while shooters take
+  // their shots outside and ball screens turn into pull-ups and kick-outs: fitted to each team's rim
+  // attempts and free throws a shot against every other team, it ranks them at Spearman 0.65-0.79 a
+  // league, where a creator-and-roll-man base ranked them at 0.32-0.73)
+  const driver = (x: Row) => 0.6 * x.c.cut + 0.4 * x.c.rim;
+  set('rim', wavg(rows, driver) - 0.4 * wavg(rows, (x) => x.c.c3) + 0.2 * wavg(rows, (x) => x.p.ratings.drw), `Finishers: ${leaders(rows, driver, name)}`, [
+    [`Attack the rim: ${lvl('rimAttack', o.rimAttack)}`, step(o.rimAttack) * 6],
+    [`Pick-and-roll: ${lvl('action', o.actions.pnr)}`, -step(o.actions.pnr) * 6],
   ]);
   set(
     'movement',
@@ -182,10 +191,14 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   const anchor = best(bigs.length ? bigs : rows, (x) => x.c.rimProt);
   const anchorP = anchor ? anchor.c.rimProt : 45;
   const man = d.scheme === 'man';
-  set('rimD', 0.6 * anchorP + 0.4 * wavg(rows, (x) => x.c.intDef), anchor ? `Anchor: ${name(anchor.p)}` : 'No rim protector', [
-    [`Help defense: ${lvl('help', d.help)}`, step(d.help) * 7],
+  // (the rim is protected by the help behind the ball as much as by the anchor, and given up by
+  // pressure the handlers beat: fitted to what each team gives up at the rim a shot against every other
+  // team, it ranks them at Spearman 0.41-0.66 a league, the anchor-first base at 0.25-0.36)
+  set('rimD', 0.25 * anchorP + 0.5 * wavg(rows, (x) => x.c.helpD) + 0.25 * wavg(rows, (x) => x.c.intDef), anchor ? `Anchor: ${name(anchor.p)}` : 'No rim protector', [
+    [`Help defense: ${lvl('help', d.help)}`, step(d.help) * 5],
     [`Scheme: ${SCHEME_META[d.scheme].label}`, ZONE_RIM[d.scheme]],
-    [`Coverage: ${COVERAGE_META[d.pnr].label}`, man ? (d.pnr === 'drop' ? 4 : d.pnr === 'switch' ? -3 : 0) : 0],
+    [`Coverage: ${COVERAGE_META[d.pnr].label}`, man ? (d.pnr === 'drop' ? 6 : d.pnr === 'switch' ? -3 : 0) : 0],
+    [`Ball pressure: ${lvl('pressure', d.pressure)}`, -step(d.pressure) * 12],
   ]);
   set(
     'perimD',
@@ -261,7 +274,9 @@ function systemMods(league: League, tid: number, t: Tactics, rows: Row[], name: 
     const exposed = five.reduce((a, x) => a + Math.max(0, 40 - x.c.spacing) / 40, 0);
     const open = 1 - 0.75 * exposed;
     add('spacing', label, 6 * open);
-    add('rim', label, 7 * open);
+    // (its open paint is for the cutters it has; the shots it takes are threes: five-out teams got to
+    // the rim on 29% of their shots against every other team, four-out ones 34%)
+    add('rim', label, -4);
     add('glass', label, -5);
   } else if (shape === 'horns') {
     const bigPass = Math.max(0, ...five.filter((x) => x.p.ratings.hgt >= 58).map((x) => x.c.passing));
@@ -272,7 +287,6 @@ function systemMods(league: League, tid: number, t: Tactics, rows: Row[], name: 
     const bigs = [...five].sort((a, b) => b.p.ratings.hgt - a.p.ratings.hgt).slice(0, 2);
     const orb = bigs.reduce((a, x) => a + x.c.orb, 0) / Math.max(1, bigs.length);
     add('glass', label, 3 + (orb - 50) / 6);
-    add('rim', label, -5);
     add('spacing', label, -5);
   }
   for (const x of five) {

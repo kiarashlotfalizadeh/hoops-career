@@ -9,6 +9,7 @@ import {
   attendanceFor,
   gameFinances,
   luxuryTaxBill,
+  MERCH_PER_GAME,
   NATIONAL_REVENUE,
   referencePrice,
   REVENUE_SHARING,
@@ -17,11 +18,14 @@ import {
   taxRateAt,
   taxRepeater,
 } from '../league/finances';
-import { CAP_FOR, curTeamSeason, payroll, revenueScale, standardRoster, teamPlayers } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, teamPlayers } from '../league/helpers';
 import { salaryFor } from '../playerGen';
 import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../league/owner';
 import { newSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP, TAX_BRACKET_PCT } from '../constants';
+import { booksOutlook, booksReview, booksVerdict, sanctionedTax } from '../league/books';
+import { forcedPayroll, planOwnerGoals } from '../league/ownerGoals';
+import { signPlayer } from '../league/contracts';
 import type { League } from '../types';
 
 function league(): League {
@@ -204,6 +208,83 @@ describe('finances (L1, L15)', () => {
       expect(crowds.length).toBeGreaterThan(100);
       for (const c of crowds) expect(c.att).toBeLessThanOrEqual(c.seats);
       expect(new Set(crowds.map((c) => c.att)).size).toBeGreaterThan(crowds.length / 3);
+    }
+
+    // losing on purpose costs money: at the same payroll, a home game of a tank (hype gone, 15-67)
+    // brings in at least a sixth less than the same team at .500, each at its best ticket price
+    {
+      const l = league();
+      const home = (hype: number, won: number) => {
+        const t = { ...l.teams[5], hype };
+        Object.assign(curTeamSeason(l, 5), { won, lost: 82 - won });
+        t.budget = { ...t.budget, ticketPrice: aiTicketPrice(l, t) };
+        return (attendanceFor(l, t) * t.budget.ticketPrice) / 1000 + MERCH_PER_GAME * (0.5 + hype) * (0.7 + t.pop / 15);
+      };
+      expect(home(0.1, 15)).toBeLessThan(home(0.5, 41) * (5 / 6));
+    }
+
+    // one money story: the luxury tax a win-now owner's goal allows (to the first apron) doesn't count
+    // on the books, and any other owner's goal allows none
+    {
+      const l = league();
+      expect(startRegularSeason(l)).toEqual([]);
+      const u = l.userTid;
+      const cap = CAP_FOR(l);
+      // the payroll $5M into the tax
+      l.teams[u].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.luxuryTax + 5_000 - payroll(l, u) });
+      const og = l.ownerGoals!;
+      const goal = (title: string, target: number) => {
+        og.goals = og.goals.filter((g) => g.kind !== 'payroll' && g.kind !== 'profit');
+        og.goals.push({ kind: 'payroll', title, target, weight: 0.2 });
+      };
+      goal('Stay under the first apron', cap.firstApron);
+      const tax = luxuryTaxBill(l, payroll(l, u), l.season, taxRepeater(l, u));
+      expect(tax).toBeGreaterThan(0);
+      expect(sanctionedTax(l)).toBe(tax);
+      const o = booksOutlook(l);
+      expect(o.judged - o.end).toBe(tax);
+      // the regular season's close just that far in the red: no step, in the black once his tax is out
+      curTeamSeason(l, u).closeCash = -tax + 100;
+      expect(booksVerdict(l)).toBeNull();
+      booksReview(l);
+      expect(curTeamSeason(l, u).signedOff).toBe(tax);
+      // the same close under "stay under the luxury tax": an ultimatum (a second season in charge)
+      const m = structuredClone(l);
+      delete curTeamSeason(m, u).signedOff;
+      m.tenureStart = m.season - 1;
+      m.ownerGoals!.goals = m.ownerGoals!.goals.filter((g) => g.kind !== 'payroll');
+      m.ownerGoals!.goals.push({ kind: 'payroll', title: 'Stay under the luxury tax', target: cap.luxuryTax, weight: 0.2 });
+      expect(sanctionedTax(m)).toBe(0);
+      expect(booksVerdict(m)).toMatchObject({ stage: 'ultimatum' });
+    }
+
+    // a payroll the coach inherited past the owner's line (a contract signed before he came, raised on
+    // schedule) is the owner's: the goal asks him to add nothing to it, and the books count neither its
+    // tax nor its salary past the line against him; what he adds on top still counts
+    {
+      const l = league();
+      expect(startRegularSeason(l)).toEqual([]);
+      const u = l.userTid;
+      const cap = CAP_FOR(l);
+      const star = standardRoster(l, u)[0];
+      star.contract = { start: l.season, salaries: [salaryFor(star, l.season) + cap.firstApron + 20_000 - payroll(l, u)] };
+      const forced = forcedPayroll(l, u);
+      expect(forced).toBeGreaterThan(cap.firstApron);
+      const og = planOwnerGoals(l, u)!;
+      const g = og.goals.find((x) => x.kind === 'payroll')!;
+      expect(g.title).toBe('Add nothing to the payroll you inherited');
+      expect(g.target).toBe(Math.round(forced / 100) * 100);
+      l.ownerGoals = og;
+      const pay = payroll(l, u);
+      const upTo = Math.min(pay, g.target);
+      expect(sanctionedTax(l)).toBe(luxuryTaxBill(l, upTo, l.season, taxRepeater(l, u)) + upTo - g.line!);
+      // a signing of his own on top of it is his: the tax it adds isn't signed off
+      const fa = freeAgents(l)[0];
+      const before = sanctionedTax(l);
+      signPlayer(l, fa, u, 5_000, 1, { news: false });
+      expect(forcedPayroll(l, u)).toBe(forced);
+      expect(sanctionedTax(l)).toBe(before);
+      expect(luxuryTaxBill(l, payroll(l, u), l.season, taxRepeater(l, u))).toBeGreaterThan(before - (upTo - g.line!));
     }
   }, 180_000);
 });

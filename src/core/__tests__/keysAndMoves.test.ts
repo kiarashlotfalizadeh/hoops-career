@@ -14,7 +14,8 @@ import { gameKeys, gradeKey, keyState, keyValue } from '../analysis/keys';
 import { coachMoves, moveText, moveVerdict, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from '../analysis/moves';
 import { defaultTactics, cloneTactics } from '../sim/tactics';
 import type { PossLog } from '../sim/log';
-import type { CoachMove, GameResult, LiveOp, ScheduledGame } from '../types';
+import type { CoachMove, GameResult, League, LiveOp, ScheduledGame } from '../types';
+import { nightLine, seasonCoaching, seasonCoachingLine } from '../analysis/debrief';
 
 afterEach(() => clearLive());
 
@@ -173,6 +174,31 @@ describe('keys to the game and coach moves', () => {
     // coach moves
     {
       const names = (pid: number) => `P${pid}`;
+
+      // what the night's moves were worth (measured after the final), in a line: worth so many points when
+      // clear of even, too close to say inside two standard errors, the move that mattered most when one
+      // clearly did; and the season's added up where it was measured
+      {
+        const worth = (pts: number, raw: number, se: number, top?: { text: string; pts: number; se: number }) =>
+          ({ home: { tid: 3 }, away: { tid: 4 }, season: 2026, movesWorth: { pts, raw, se, win: 0.05, n: 200, moves: 4, ...(top && { top }) } }) as unknown as GameResult;
+        expect(nightLine(worth(1.8, 2.6, 0.9))).toMatchObject({ text: 'Your moves were worth +1.8 points tonight (about ±0.9)', tone: 'good' });
+        expect(nightLine(worth(-1.4, -2.2, 1.0), true)!.text).toBe("The staff's moves were worth −1.4 points tonight (about ±1.0)");
+        const close = nightLine(worth(0.3, 0.5, 0.9, { text: 'Pick-and-roll coverage: Hedge → Drop', pts: 1.4, se: 0.6 }))!;
+        expect(close).toMatchObject({ text: 'Your moves: too close to say tonight (+0.3, about ±0.9)', tone: 'dim' });
+        expect(close.detail).toBe(
+          'The rest of the game from the first move, played 200 times with 4 moves and without. The one that mattered most: Pick-and-roll coverage: Hedge → Drop (+1.4).',
+        );
+        expect(nightLine({ ...worth(0, 0, 1), movesWorth: undefined })).toBeNull();
+        const league = {
+          season: 2026,
+          userTid: 3,
+          games: [worth(1.8, 2.6, 0.9), worth(0.3, 0.5, 1.2), { ...worth(2, 2, 1), season: 2025 }, { ...worth(0, 0, 1), movesWorth: undefined }],
+        } as unknown as League;
+        expect(seasonCoaching(league)).toEqual({ pts: 2.1, raw: 3.1, se: 1.5, games: 2 });
+        expect(seasonCoachingLine(league)).toBe('Your live coaching this season: +2.1 points over 2 games, measured (about ±1.5)');
+        expect(seasonCoachingLine({ ...league, games: league.games.slice(0, 1) })).toBeNull();
+        expect(seasonCoaching({ ...league, userTid: 9 })).toBeNull();
+      }
 
       // measure a change of coverage on their pick-and-roll trips while it was in effect, and name it as Tactics does
       {

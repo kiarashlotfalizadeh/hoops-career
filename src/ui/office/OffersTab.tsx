@@ -9,7 +9,8 @@ import { CAP_FOR, payroll, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
 import { declineProposal, markOffersSeen, openProposals, proposalError } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
-import { capSalary, pickLabel, type TradeOffer } from '../../core/league/trades';
+import { capSalary, type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { neutralBalance } from '../../core/league/tradePackages';
 import { salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
@@ -160,7 +161,7 @@ function Side({ league, title, side }: { league: League; title: string; side: Tr
         return (
           <div key={d} className="fo-offer-item">
             <Ticket size={16} className="dim fo-pkg-ic" />
-            <span className="fo-name small">{pickLabel(league, dp)}</span>
+            <span className="fo-name small">{pickName(league, dp)}</span>
           </div>
         );
       })}

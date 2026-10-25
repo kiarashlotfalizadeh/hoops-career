@@ -17,7 +17,7 @@ vi.mock('../league/media', async (importOriginal) => {
 
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
-import { CAP } from '../constants';
+import { CAP, seasonLabel } from '../constants';
 import { teamPlayers } from '../league/helpers';
 import { BODIES_KEPT, frontPage, latestPower, mediaDay, prune, seasonHonors } from '../league/media';
 import { publish } from '../league/media/voice';
@@ -25,6 +25,9 @@ import { gradeTrade } from '../league/media/grades';
 import { pressGame } from '../league/media/nights';
 import { executeTrade } from '../league/trades';
 import { GRADES } from '../league/media/voice';
+import { CHRONICLE_STORIES, chronicleFarewell, chronicleOf, chronicleSeason } from '../league/media/chronicle';
+import { anniversaryOf, awardLine, droughtLine, rematchLine, titleLine } from '../league/media/history';
+import { emptyBook } from '../league/records';
 
 const DAYS = 46;
 
@@ -196,6 +199,91 @@ describe('the press', () => {
       expect(item.body).toContain(league.teams[9].name);
       // a front page only when a star (80+) or two firsts move
       expect(item.weight).toBe(Math.max(mine[0].ovr, theirs[0].ovr) >= 80 ? 3 : 2);
+    }
+
+    // the league's memory: a season's biggest stories kept for good (the user's a few of them, a few of a
+    // kind, its wrap first), its playoff series, the summer's farewells added, and kept as the news is pruned
+    {
+      const l = structuredClone(league);
+      const me = l.userTid;
+      const story = (head: string, kind: Parameters<typeof publish>[1]['kind'], weight: 1 | 2 | 3, tids: number[]) =>
+        publish(l, { kind, head, dek: `${head}.`, tids, pids: [], weight });
+      for (let i = 0; i < 5; i++) story(`Record ${i}`, 'record', 3, [10 + i]);
+      for (let i = 0; i < 5; i++) story(`Mine ${i}`, 'milestone', 3, [me]);
+      story('Small one', 'game', 1, [20]);
+      story('A preview', 'preview', 3, [21]);
+      const wrap = story('Season wrap', 'column', 2, [22, me]);
+      l.playoffs = [{ id: 'F', round: 4, conf: 'F', high: 3, low: 7, highSeed: 1, lowSeed: 2, highWins: 4, lowWins: 2, winner: 3 }];
+      chronicleSeason(l, l.season, wrap.id);
+      const c = chronicleOf(l, l.season)!;
+      const heads = c.stories.map((x) => x.head);
+      expect(c.stories.length).toBeLessThanOrEqual(CHRONICLE_STORIES);
+      expect(heads).toContain('Season wrap');
+      expect(c.wrap).toBe(wrap.id);
+      expect(c.stories.filter((x) => x.id !== wrap.id && x.tids.includes(me))).toHaveLength(3);
+      expect(heads.filter((h) => h.startsWith('Record'))).toHaveLength(2);
+      expect(heads).not.toContain('Small one');
+      expect(heads).not.toContain('A preview');
+      expect(c.series).toEqual([[4, 3, 7, 4, 2]]);
+      // a farewell in the summer joins it; read again once the news has let its stories go, it keeps them
+      const bye = publish(l, { kind: 'retire', head: 'A legend retires', dek: 'His line.', tids: [5], pids: [], weight: 3 });
+      chronicleFarewell(l, bye);
+      l.news = l.news.filter((n) => n.season !== l.season || n.kind === 'retire');
+      chronicleSeason(l, l.season);
+      expect(chronicleOf(l, l.season)!.stories.map((x) => x.head)).toEqual([...heads, 'A legend retires']);
+      // the history it and the awards give the press: a dynasty, a drought, an award again, a rematch, an anniversary
+      const s0 = l.season;
+      l.awards = [s0 - 4, s0 - 1, s0].map((season) => ({ season, champion: 3, allNba: [], allDefense: [], allRookie: [], allStars: { E: [], W: [] } }));
+      expect(titleLine(l, 3, s0)).toBe('back-to-back titles');
+      l.awards.find((a) => a.season === s0 - 1)!.champion = 9;
+      expect(titleLine(l, 3, s0)).toBe(`a first title since ${seasonLabel(s0 - 4)}`);
+      expect(titleLine(l, 3, s0 - 4)).toBeNull();
+      l.teams[3].seasons = [
+        { ...l.teams[3].seasons[0], season: s0 - 6, playoffRound: 2 },
+        { ...l.teams[3].seasons[0], season: s0 - 1, playoffRound: 1 },
+      ];
+      expect(droughtLine(l, 3, s0, 2)).toBe(`a first series win since ${seasonLabel(s0 - 6)}`);
+      expect(droughtLine(l, 3, s0, 1)).toBeNull();
+      const p = Object.values(l.players).find((x) => x.tid === 3)!;
+      p.awards = [s0 - 1, s0].map((season) => ({ season, type: 'MVP' }));
+      expect(awardLine(l, p, 'MVP', s0)).toBe('his second straight');
+      l.chronicle = [{ season: s0 - 2, stories: [], series: [[3, 3, 7, 4, 3]] }];
+      expect(rematchLine(l, 7, 3)).toBe(`a rematch of the ${seasonLabel(s0 - 2)} conference finals, which the ${l.teams[3].name} won in seven`);
+      const book = emptyBook(s0 - 6);
+      book.league.reg.players.pts = [[62, p.pid, 3, 7, s0 - 5, 40, 1]];
+      l.records = book;
+      expect(anniversaryOf(l, { home: 7, away: 3, day: 40 })?.line).toBe(`Five years ago tonight, ${p.firstName} ${p.lastName} had 62 points against the ${l.teams[7].name}.`);
+      expect(anniversaryOf(l, { home: 7, away: 3, day: 41 })).toBeNull();
+    }
+
+    // the summer's farewells: a Hall of Famer's own story with his career line, the wire's list without
+    // him, the Hall of Fame's class
+    {
+      const l = structuredClone(league);
+      l.phase = 'draftLottery';
+      const [legend, plain] = Object.values(l.players).filter((x) => x.tid === 6);
+      for (const x of [legend, plain]) {
+        x.tid = -3;
+        x.retiredSeason = l.season;
+      }
+      legend.hof = true;
+      legend.awards = [
+        { season: l.season, type: 'MVP' },
+        { season: l.season, type: 'Hall of Fame' },
+      ];
+      const nm = (x: typeof legend) => `${x.firstName} ${x.lastName}`;
+      l.news.push({ id: l.nextMsgId++, season: l.season, day: l.day, kind: 'retire', text: `Retirements: ${nm(legend)} (Hall of Fame), ${nm(plain)}.`, tids: [], pids: [] });
+      mediaDay(l);
+      const told = l.news.filter((n) => n.kind === 'retire' && n.head);
+      expect(told.map((n) => n.pids[0])).toEqual([legend.pid]);
+      expect(told[0]).toMatchObject({ weight: 3 });
+      expect(told[0].text).toMatch(/an MVP.*Hall of Fame$/);
+      expect(l.news.find((n) => n.kind === 'retire' && !n.head)?.text).toBe(`Also retiring: ${nm(plain)}.`);
+      expect(l.news.find((n) => n.kind === 'column' && n.pids.includes(legend.pid))?.head).toMatch(/Hall of Fame/);
+      // once a summer
+      const n = l.news.length;
+      mediaDay(l);
+      expect(l.news.length).toBe(n);
     }
 
     // pruning keeps the bodies of only the latest stories

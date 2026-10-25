@@ -6,7 +6,11 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { defPresetFit, defPresetTerms, fitRoster, fitScale, offPresetFit, offPresetTerms, rosterProfile, type ProfileKey, type RosterProfile } from '../ai/coachAI';
+import { defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, type ProfileKey, type RosterProfile } from '../ai/coachAI';
+import { ensureRotation } from '../league/games';
+import { freshFamiliarity } from '../sim/familiarity';
+import { applyDefPreset, applyOffPreset, cloneTactics } from '../sim/tactics';
+import type { Tactics } from '../types';
 import { composites } from '../ratings';
 import { GameSim } from '../sim/engine';
 import { solveMatchups, type MatchupDefender, type MatchupScorer } from '../sim/matchups';
@@ -119,11 +123,6 @@ describe('tactics model', () => {
               expect(terms[k][0].key).toBe('base');
               expect(Number.isFinite(fits[k])).toBe(true);
             }
-            // the shown scale runs from 45 for the worst to 100 for the best
-            const scale = fitScale(fits);
-            const shown = Object.keys(fits).map(scale);
-            expect(Math.max(...shown)).toBe(100);
-            expect(Math.min(...shown)).toBe(45);
           }
         }
       }
@@ -150,8 +149,9 @@ describe('tactics model', () => {
         const def = (v: Partial<RosterProfile>) => defPresetFit(at(v));
         const off = (v: Partial<RosterProfile>) => offPresetFit(at(v));
         // (since the trap's turnovers come from the trappers' hands alone, trapping pays only the league's
-        // quickest: the Thunder's 60, not a good 57)
+        // quickest: the Thunder's 60, not an average 54)
         expect(def({ steals: 60 }).blitz).toBeGreaterThan(def({ steals: 60 }).drop);
+        expect(def({ steals: 54 }).drop).toBeGreaterThan(def({ steals: 54 }).blitz);
         expect(def({ steals: 60 }).blitz - def({ steals: 60 }).drop).toBeGreaterThan(def({ steals: 52 }).blitz - def({ steals: 52 }).drop);
         expect(def({ steals: 44 }).drop).toBeGreaterThan(def({ steals: 44 }).blitz);
         expect(off({ size: 53 }).grind - off({ size: 53 }).fiveOut).toBeGreaterThan(off({ size: 41 }).grind - off({ size: 41 }).fiveOut);
@@ -187,6 +187,71 @@ describe('tactics model', () => {
           expect(c(pr.drivers.shooting[0]).spacing).toBeGreaterThanOrEqual(c(pr.drivers.shooting[top.length - 1]).spacing);
           expect(pr.drivers.depth).toEqual([top[7].pid, top[0].pid]);
         }
+      }
+
+      // says what the engine says (the fast version of scripts/style-check.ts, which fitted them): paired
+      // games by shot value, fully drilled (partnerships and all, as the fits were measured), against a
+      // spread of opponents. Pace & Space beats Grit & Grind, the playbooks the fits set furthest apart,
+      // for most rosters, by about what the fits say on average (Heliocentric against Hub Big, which they
+      // read at about 0.4, measures about 0.1 on the engine since a shooter's threes level off: too close
+      // for a check this size); full-court chaos pays the team with the quickest hands far more than the
+      // one with the slowest, as its steals term says
+      {
+        for (const t of league.teams) ensureRotation(league, t.tid);
+        const worth = (tid: number, a: Tactics, b: Tactics, n: number) => {
+          let d = 0;
+          const opps = league.teams.filter((o) => o.tid !== tid).slice(0, 10);
+          const players = teamPlayers(league, tid);
+          const side = (t: Tactics) => {
+            const team = { ...league.teams[tid], tactics: t };
+            return { team, players, adjust: true, fam: freshFamiliarity(team, players, 100) };
+          };
+          for (const o of opps)
+            for (let g = 0; g < n; g++) {
+              const them = { team: o, players: teamPlayers(league, o.tid), adjust: true };
+              const play = (t: Tactics) => {
+                const home = g % 2 === 0;
+                const sim = new GameSim(home ? side(t) : them, home ? them : side(t), {
+                  rng: new Rng(9001 + tid * 7919 + o.tid * 104729 + g),
+                  type: 'regular',
+                  injuries: false,
+                });
+                const r = sim.simToEnd();
+                const f = sim.xFouledMiss;
+                const v = [r.xShots![0].pts + f[0] + r.home.t.ftm, r.xShots![1].pts + f[1] + r.away.t.ftm];
+                return home ? v[0] - v[1] : v[1] - v[0];
+              };
+              d += play(b) - play(a);
+            }
+          return d / (opps.length * n);
+        };
+        const off = (tid: number, id: string) => {
+          const x = cloneTactics(league.teams[tid].tactics);
+          x.offense = applyOffPreset(x.offense, id);
+          return x;
+        };
+        const def = (tid: number, id: string) => {
+          const x = cloneTactics(league.teams[tid].tactics);
+          x.defense = applyDefPreset(x.defense, id);
+          return x;
+        };
+        const fitOf = (tid: number) => rosterProfile(fitRoster(teamPlayers(league, tid)));
+        // (AI teams: the user's team in a new league runs what he hasn't set yet)
+        const seven = [3, 7, 10, 14, 17, 21, 25];
+        const pace = seven.map((tid) => worth(tid, off(tid, 'grind'), off(tid, 'paceSpace'), 10));
+        const said = seven.map((tid) => (offPresetFit(fitOf(tid)).paceSpace - offPresetFit(fitOf(tid)).grind) / 10);
+        const avg = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
+        expect(pace.filter((x) => x > 0).length).toBeGreaterThanOrEqual(5);
+        expect(avg(pace)).toBeGreaterThan(0.4 * avg(said));
+        const bySteals = league.teams.map((t) => t.tid).sort((a, b) => fitOf(a).steals - fitOf(b).steals);
+        const slow = bySteals.slice(0, 2);
+        const quick = bySteals.slice(-2);
+        const chaos = (tid: number) => worth(tid, def(tid, 'switch'), def(tid, 'chaos'), 10);
+        const chaosSaid = (tid: number) => (defPresetFit(fitOf(tid)).chaos - defPresetFit(fitOf(tid)).switch) / 10;
+        const gap = avg(quick.map(chaos)) - avg(slow.map(chaos));
+        const gapSaid = avg(quick.map(chaosSaid)) - avg(slow.map(chaosSaid));
+        expect(gapSaid).toBeGreaterThan(1);
+        expect(gap).toBeGreaterThan(0.4 * gapSaid);
       }
     }
     // matchup solver: finds the cheapest assignment, five on five and for smaller and bigger groups

@@ -376,6 +376,27 @@
   max-width: 44ch;
 }
 
+/* the season's end: the owner's word in quotes, then the season's best a line each */
+.td-end-said {
+  margin: 8px 0 0;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 18px;
+  font-weight: 760;
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+  color: #fff;
+  text-wrap: pretty;
+}
+.td-end-best {
+  font-size: 14.5px;
+  font-weight: 560;
+  line-height: 1.4;
+}
+.td-end-best li + li {
+  margin-top: 6px;
+}
+
 /* a tablet: the poster grows with the page, the dek keeps a reading measure */
 @media (min-width: 640px) {
   .td-score,
@@ -1087,6 +1108,59 @@
 }
 .dg-stop.bad {
   border-left-color: var(--bad);
+}
+/* the moment of the stretch: its one big story, the headline set large on the paper under an ink rule */
+.dg-moment {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0 0 16px;
+  border: 0;
+  border-bottom: 2px solid var(--text);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.dg-moment-over {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--accent-text);
+}
+.dg-moment-head {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-weight: 900;
+  font-size: 27px;
+  line-height: 1;
+  letter-spacing: -0.035em;
+  color: var(--text);
+  text-wrap: balance;
+}
+.dg-moment.w3 .dg-moment-head {
+  font-size: 31px;
+}
+.dg-moment-by {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.dg-moment-by .avatar {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.dg-moment-dek {
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+.dg-moment:active .dg-moment-head {
+  color: var(--text-2);
 }
 /* the stretch's record as the sheet's poster figure, where you stand beside it */
 .dg-top {

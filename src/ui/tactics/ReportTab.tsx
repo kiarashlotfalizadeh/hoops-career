@@ -1,12 +1,14 @@
-// Tactics → Analysis → Report: your system's strengths and weaknesses first (the two best and two
-// worst grades, each with who carries it and the setting that moves it most), then all fourteen
-// grades, each a tap from what it's made of.
+// Tactics → Analysis → Report: what your recent changes measured ("Since you changed it"), then your
+// system's strengths and weaknesses (the two best and two worst grades, each with who carries it and
+// the setting that moves it most), then all fourteen grades, each a tap from what it's made of.
 import type { Quality, SystemReport } from '../../core/analysis/system';
 import { QUALITY_META } from '../../core/analysis/system';
 import { ordinal } from '../stats';
 import { Section } from '../components/ui';
 import { GradeBadge, SystemReportCard } from './SystemReport';
 import { strengthsOf } from './partners';
+import { SinceYouChanged } from './EditLedger';
+import { useLeague } from '../../state/store';
 
 /** What a grade is made of in a line: who carries it, and the setting that adds or takes away the most. */
 function why(q: Quality): string {
@@ -32,9 +34,12 @@ function Row({ q }: { q: Quality }) {
 }
 
 export function ReportTab({ report, was }: { report: SystemReport; was?: SystemReport }) {
+  const league = useLeague();
   const { strengths, weaknesses } = strengthsOf(report);
   return (
     <>
+      {/* what your changes measured, as made and on the games since (tactics/EditLedger) */}
+      <SinceYouChanged league={league} />
       <Section title="Strengths and weaknesses">
         <div className="card flush list">
           <div className="list-divider list-h" aria-hidden="true">

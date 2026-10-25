@@ -27,7 +27,10 @@ export function AssistantHead({ name, initials, read, right }: { name: string; i
   );
 }
 
-/** One of the staff's notes: its figure, headline and evidence, the moves on offer (the staff's pick first) and Not now. */
+/**
+ * One of the staff's notes: its figure, headline and evidence, the moves on offer (the staff's pick
+ * first) with what the call has been worth where it fires (measured, or the staff's read), and Not now.
+ */
 export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; onAct: (a: StaffAction) => void; onDismiss?: () => void; busy?: boolean }) {
   return (
     <div className={`lv-note tone-${note.tone} ${note.kind}`}>
@@ -57,6 +60,7 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
               {a.label}
             </button>
           ))}
+          {note.worth && <span className="lv-note-worth tiny">{note.worth}</span>}
         </div>
       )}
     </div>

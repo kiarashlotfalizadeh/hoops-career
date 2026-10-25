@@ -1,11 +1,12 @@
-// Why a playbook's fit is what it is, in its sheet: the fit and its place among the others, then
-// the start it has before the roster moves it and each roster quality's part (on the row's scale, so
-// they add up to the fit), with the players behind each, and what would raise it.
-import { fitScale, type FitTerm, type ProfileKey, type RosterProfile } from '../../core/ai/coachAI';
+// Why the staff reads a playbook as it does, in its sheet: what it's worth a game against the one in
+// use and its place among the others, then what it's worth against an average playbook, made of its
+// start (for a typical roster) and each roster quality's part, with the players behind each, and what
+// would raise it. All in points a game: the staff's read, from fits calibrated against the engine
+// (core/ai/coachAI.ts); the change itself is measured when it's made.
+import type { FitTerm, ProfileKey, RosterProfile } from '../../core/ai/coachAI';
 import type { DefPreset, OffPreset } from '../../core/sim/tactics';
 import { ordinal } from '../stats';
-import { FitScore } from './FitScore';
-import { fitTone, shownFit } from './fit';
+import { fitTone, readText, shownFit } from './fit';
 
 /** Each roster quality as the fit explanation names it, and what having more of it means. */
 const QUALITY: Record<ProfileKey, { label: string; more: string }> = {
@@ -40,10 +41,9 @@ function behind(t: FitTerm, pr: RosterProfile, name: (pid: number) => string): s
   return high ? name(d[0]) : `best you have: ${name(d[0])}`;
 }
 
-const signedInt = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}`;
-
 export function PresetFit({
   id,
+  cur,
   presets,
   terms,
   fits,
@@ -52,6 +52,8 @@ export function PresetFit({
   kind,
 }: {
   id: string;
+  /** The playbook in use. */
+  cur: string;
   presets: (OffPreset | DefPreset)[];
   terms: FitTerm[];
   fits: Record<string, number>;
@@ -59,37 +61,41 @@ export function PresetFit({
   name: (pid: number) => string;
   kind: 'off' | 'def';
 }) {
-  const scale = fitScale(fits);
-  const f = shownFit(id, terms, fits);
+  const f = shownFit(id, terms, fits, cur);
   const best = presets.reduce((a, p) => (fits[p.id] > fits[a.id] ? p : a), presets[0]);
+  const curName = presets.find((p) => p.id === cur)?.name ?? 'yours';
   const parts = [...f.parts].sort((a, b) => b.v - a.v);
-  // what raises it: more of a quality this playbook rewards, in shown fit for five rating points more
+  // what raises it: more of a quality this playbook rewards, in points a game for five rating points more
   const levers = terms
     .filter((t) => t.key !== 'base' && t.weight > 0)
     .sort((a, b) => b.weight - a.weight)
     .slice(0, 3)
-    .map((t) => ({ t, gain: fitScale({ ...fits, [id]: fits[id] + 5 * t.weight })(id) - f.shown }));
+    .map((t) => ({ t, gain: Math.round(5 * t.weight) / 10 }));
+  const mine = id === cur;
   return (
     <div className="col tx-why">
       <div className="tx-why-head">
-        <FitScore v={f.shown} tone={fitTone(f.shown)} />
+        <span className={`tx-fitv tx-read ${fitTone(mine ? f.total : f.vs)}`}>{readText(mine ? f.total : f.vs)}</span>
         <span className="grow">
           <span className="tx-why-rank">
-            {ordinal(f.rank)} of {presets.length} {kind === 'off' ? 'offenses' : 'defenses'} for your roster
+            {mine ? 'In use: a game against an average playbook' : `A game against ${curName}`} · {ordinal(f.rank)} of {presets.length} {kind === 'off' ? 'offenses' : 'defenses'}{' '}
+            for your roster
           </span>
-          <span className="tx-term-s">{best.id === id ? 'Your best fit: it shows as 100, your worst as 45.' : `Best: ${best.name} (${scale(best.id)}). Worst shows as 45.`}</span>
+          <span className="tx-term-s">
+            The staff&apos;s read, once drilled{best.id === id ? '' : `. Best: ${best.name}`}. Make the change and they measure it on your next games.
+          </span>
         </span>
       </div>
       <div className="tx-terms">
         <div className="tx-term">
-          <span className="tx-term-v num dim2">{f.start}</span>
-          <span className="grow tx-term-l">Its starting score</span>
+          <span className="tx-term-v num dim2">{readText(f.start)}</span>
+          <span className="grow tx-term-l">For a typical roster</span>
         </div>
         {parts.map(({ term, v }) => {
           const who = behind(term, pr, name);
           return (
             <div key={term.key} className="tx-term">
-              <span className={`tx-term-v num ${v > 0 ? 'good' : 'bad'}`}>{signedInt(v)}</span>
+              <span className={`tx-term-v num ${v > 0 ? 'good' : 'bad'}`}>{readText(v)}</span>
               <span className="grow">
                 <span className="tx-term-l">{QUALITY[term.key as ProfileKey].label}</span>
                 {who && <span className="tx-term-s">{who}</span>}
@@ -97,7 +103,11 @@ export function PresetFit({
             </div>
           );
         })}
-        {!parts.length && <div className="small dim2">It doesn&apos;t lean on any one quality, so it scores the same for every roster.</div>}
+        <div className="tx-term">
+          <span className="tx-term-v num bold">{readText(f.total)}</span>
+          <span className="grow tx-term-l">Against an average playbook, for your roster</span>
+        </div>
+        {!parts.length && <div className="small dim2">It doesn&apos;t lean on any one quality: about the same for every roster.</div>}
       </div>
       {levers.length > 0 && best.id !== id && (
         <div className="tx-terms">
@@ -105,7 +115,7 @@ export function PresetFit({
           {levers.map(({ t, gain }) => (
             <div key={t.key} className="tx-term">
               <span className="grow tx-term-l">{QUALITY[t.key as ProfileKey].more}</span>
-              <span className="tiny dim num nowrap">{gain > 0 ? `+${gain} for 5 rating points` : 'little change'}</span>
+              <span className="tiny dim num nowrap">{gain > 0 ? `+${gain.toFixed(1)} a game for 5 rating points` : 'little change'}</span>
             </div>
           ))}
         </div>

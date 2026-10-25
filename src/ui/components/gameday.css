@@ -1163,6 +1163,20 @@ table.stats .bx-team td {
   display: inline-flex;
   gap: 6px;
 }
+/* what the night's moves were worth, measured: a line in the signal's colour over the moves themselves */
+.gd-night {
+  margin-bottom: 10px;
+}
+.gd-night-t {
+  font-weight: 700;
+  line-height: 1.3;
+}
+.gd-night.tone-good .gd-night-t {
+  color: var(--good);
+}
+.gd-night.tone-bad .gd-night-t {
+  color: var(--bad);
+}
 /* the first nights' word on luck against the plan, under the edges that decided it */
 .gd-frame {
   margin: 0;

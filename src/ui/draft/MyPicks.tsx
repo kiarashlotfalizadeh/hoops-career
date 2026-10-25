@@ -10,9 +10,9 @@ import { TeamLogo } from '../components/TeamLogo';
 import { OvrPot } from '../office/common';
 import { useLeagueMemo } from '../../state/store';
 import { Empty, Section, Segmented } from '../components/ui';
-import { PROJECTION_NOTE, pickProjection } from '../league/shared';
+import { pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
-import { draftedThisYear, gradeTone, lotteryHidden, pickGrade, pickOrder, pickSlot, picksText, type PickGrade } from './common';
+import { PICK_RANGE_NOTE, draftedThisYear, gradeTone, lotteryHidden, pickGrade, pickOrder, pickSlot, picksText, projectedSlot, type PickGrade } from './common';
 import { SelectionRow } from './rows';
 
 /**
@@ -48,8 +48,8 @@ export function PicksPoster({ league }: { league: League }) {
 
 export function MyPicks({ league }: { league: League }) {
   const user = league.userTid;
-  // picks without a slot yet, projected as on the team page
-  const projected = useLeagueMemo(() => pickProjection(league), [league]);
+  // picks without a slot yet, projected as on the team page (see pickProjText)
+  const projected = useLeagueMemo(() => projectedSlot(league), [league]);
   // until the lottery's reveal has been watched, the picks show without their slots (and in no order that gives them away)
   const hidden = lotteryHidden(league);
   const proj = hidden ? () => undefined : projected;
@@ -89,21 +89,21 @@ export function MyPicks({ league }: { league: League }) {
         ) : (
           <div className="card flush list">
             {owned.map((d) => (
-              <PickRow key={d.dpid} league={league} d={d} proj={proj(d)} />
+              <PickRow key={d.dpid} league={league} d={d} hidden={hidden} />
             ))}
           </div>
         )}
         {hidden ? (
           <div className="tiny dim">Where they land shows once you reveal the lottery.</div>
         ) : (
-          owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>
+          owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PICK_RANGE_NOTE}</div>
         )}
       </Section>
       {owed.length > 0 && (
         <Section title={`Owed to others · ${owed.length}`}>
           <div className="card flush list">
             {owed.map((d) => (
-              <PickRow key={d.dpid} league={league} d={d} proj={proj(d)} owner />
+              <PickRow key={d.dpid} league={league} d={d} hidden={hidden} owner />
             ))}
           </div>
         </Section>

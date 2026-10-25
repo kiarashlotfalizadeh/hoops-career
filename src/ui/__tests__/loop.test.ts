@@ -1,7 +1,8 @@
 // The Continue loop: sims that stop for the right things (a new staff call, each playoff series of
-// his once as it starts, the morning of one of his biggest games, never a story) and say a call
-// they passed, "Sim to the next big night" from a game's billing, the Continue bar naming tonight's
-// stakes, and big moments that end a sim on one story, the biggest.
+// his once as it starts and each morning after a loss that has him behind, the morning of one of his
+// biggest games, never a story) and say a call they passed, "Sim to the next big night" from a
+// game's billing as it reads each day, the Continue bar naming tonight's stakes, and big moments
+// that end a sim on one story, the biggest.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { League, ScheduledGame } from '../../core/types';
 import { billingFor, type Billing } from '../../core/analysis/gameStory';
@@ -125,8 +126,17 @@ describe('the Continue loop', () => {
       expect(out).toEqual({ days: 2, stop: 'call' });
       expect(userGameOnDay(l, l.day)?.seriesId).toBe(`${conf}2-0`);
       expect(openCallIds(l)).toEqual([`series:${l.season}:${conf}2-0`]);
-      // a week on: Game 1 and the games after it, no second stop for the series
-      expect((await runSim(l, { kind: 'week' }, { progress: quiet(l) })).stop).toBe('target');
+      // a week on: Game 1 and the games after it, no second stop for the series' start; only the morning
+      // after a loss that has him behind (its call names the score: the staff's adjustment for that game)
+      for (let i = 0; i < 4; i++) {
+        const before = new Set(openCallIds(l));
+        const r = await runSim(l, { kind: 'week' }, { progress: quiet(l) });
+        if (r.stop === 'target') break;
+        const s = l.playoffs[0];
+        expect(r.stop).toBe('call');
+        expect(s.highWins).toBeLessThan(s.lowWins);
+        expect(newCall(l, openCallIds(l), before)?.card.id).toBe(`series:${l.season}:${conf}2-0:${s.highWins}-${s.lowWins}`);
+      }
       expect(l.playoffs[0].highWins + l.playoffs[0].lowWins).toBeGreaterThan(1);
     }
 
@@ -204,6 +214,18 @@ describe('the Continue loop', () => {
       await runSim(l, opt!.sim!);
       expect(l.day).toBe(big.day);
       expect(userGameOnDay(l, l.day)?.gid).toBe(big.gid);
+      // the billing is read each day it sims: a night that has become big on the way stops it there
+      const m = testLeague('bignight-on-the-way');
+      const [, , mid, , far] = ahead(m);
+      const farNight = { [far.gid]: { tag: 'Rivalry', line: '.', weight: 2 as const } };
+      bill(farNight);
+      let n = 0;
+      await runSim(
+        m,
+        { kind: 'bigNight', day: nextBigNight(m)!.g.day },
+        { progress: () => void (++n === 1 && bill({ ...farNight, [mid.gid]: { tag: 'Showdown', line: '.', weight: 2 } })) },
+      );
+      expect(m.day).toBe(mid.day);
     }
 
     // not offered when the next big night is simply the next game, or there is none
@@ -278,7 +300,15 @@ describe('the Continue loop', () => {
       const mark = digestMark(l);
       addNews(l, { kind: 'power', head: `Power rankings: the ${l.teams[me].name} slip to 16th`, text: '.', tids: [me], pids: [], weight: 2 });
       addNews(l, { kind: 'honor', head: 'Coach of the Month', text: '.', tids: [me], pids: [], weight: 2 });
-      expect(buildDigest(mark, l, { long: true })!.stories.map((s) => s.head)).toEqual(['Coach of the Month']);
+      // (a long stretch leads with its biggest story under the front page, its moment, told once)
+      const d = buildDigest(mark, l, { long: true })!;
+      expect([d.moment?.head, ...d.stories.map((s) => s.head)]).toEqual(['Coach of the Month']);
+      expect(d.moment).toMatchObject({ kind: 'honor', to: expect.stringMatching(/^\/league\/news\?story=\d+$/) });
+      // a front page takes the screen as a big moment before the digest: the digest doesn't lead with it
+      addNews(l, { kind: 'milestone', head: 'Big one', text: '.', tids: [me], pids: [], weight: 3 });
+      const d2 = buildDigest(mark, l, { long: true })!;
+      expect(d2.moment?.head).toBe('Coach of the Month');
+      expect(d2.stories.map((s) => s.head)).toEqual(['Big one']);
     }
 
     // his news: a league-wide column that names him on the way (the season's wrap) is the league's; the lead

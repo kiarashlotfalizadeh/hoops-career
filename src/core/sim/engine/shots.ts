@@ -78,13 +78,23 @@ export const shotsMethods = {
   },
 
   /**
+   * How much of his three-point tendency a shooter keeps tonight: all of it until his threes pass
+   * K.threeUse.level of his team's shots while he's on the floor, then less (the defense runs him off
+   * the line and the ball finds others), as K.useLevel levels off a player's share of the possessions.
+   */
+  threeDamp(this: GameSim, p: SP): number {
+    const over = p.b.tpa / p.b.tFga - K.threeUse.level;
+    return over > 0 ? Math.exp(-K.threeUse.damp * over) : 1;
+  },
+
+  /**
    * Second-half score effects: a big lead makes the leader ease off and the trailer play loose;
    * late in a close game the leader plays not to lose and the trailer presses.
    */
   scoreEffect(this: GameSim, off: ST, def: ST) {
     if (this.q < 3) return 0;
     const m = off.score - def.score;
-    let x = clamp((Math.abs(m) - K.easeFrom) / K.easeSpan, 0, 1) * K.ease;
+    let x = clamp((Math.abs(m) - K.easeFrom) / K.easeSpan, 0, 1) * K.ease + clamp((Math.abs(m) - K.easeBig.from) / K.easeBig.span, 0, 1) * K.easeBig.x;
     if (this.q >= 4 && this.clock < K.clutchSec && m !== 0 && Math.abs(m) <= 6) x += K.clutchEase;
     return m > 0 ? -x : x;
   },
@@ -187,7 +197,12 @@ export const shotsMethods = {
         skill = sh.c.midShot;
         break;
       default:
+        // (past K.threeTop.from a three-point shooter's skill counts at K.threeTop.keep: see there)
         skill = s.pullup ? sh.c.pu3 : sh.c.c3;
+        if (skill > K.threeTop.from) {
+          const t = K.threeTop;
+          skill = t.from + (Math.min(skill, t.top) - t.from) * t.keep + Math.max(0, skill - t.top) * t.keepTop;
+        }
     }
     // past 1x tactical leverage, a defense overplaying the ball is a step out of position on the
     // half-court shots that do get off, as much as the offense's handlers make of it (the trade-off
@@ -310,10 +325,13 @@ export const shotsMethods = {
     if (!fouled || made) {
       sh.b.fga++;
       off.tot.fga++;
-      for (const pl of off.on) pl.b.tFga++;
       if (three) {
         sh.b.tpa++;
         off.tot.tpa++;
+      }
+      for (const pl of off.on) {
+        pl.b.tFga++;
+        if (pl.b.tFga >= K.threeUse.from) pl.t3 = pl.t3o * this.threeDamp(pl);
       }
       if (zone === 'rim') sh.b.rimA++;
       if (zone === 'mid') sh.b.midA++;
@@ -325,7 +343,7 @@ export const shotsMethods = {
       if (xy) {
         this.shots.push({ t: off.side, pid: sh.pid, x: Math.round(xy.x * 10) / 10, y: Math.round(xy.y * 10) / 10, made, zone, q: this.q });
       }
-    }
+    } else this.xFouledMiss[off.side] += pMake * value;
     const shotStep: PossStep | null = this.record ? { k: 'shot', pid: sh.pid, zone, x: xy!.x, y: xy!.y, made, v: value, pid2: ast?.pid, f: s.finish } : null;
     if (shotStep) {
       this.cur!.steps.push(shotStep);
@@ -407,7 +425,13 @@ export const shotsMethods = {
       if (gift) s = { ...s, open: s.open + gift, tags: [...(s.tags ?? []), [md!.drole === 'roamer' ? 'role_roam' : 'role_anchor', gift]] };
     }
     const t3 = off.t.offense.threePoint / 100;
-    const wShoot = Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * (1 + levExtra(K.recenter.three)) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1));
+    const wShoot =
+      Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) *
+      (0.55 + t3) *
+      (1 + levExtra(K.recenter.three)) *
+      sh.t3 *
+      (1 + 0.6 * clamp(s.open, -0.5, 1)) *
+      (this.eases(off) ? K.garbage.three : 1);
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
     if (lk) wDrive *= 1 + 2 * lk.beat;

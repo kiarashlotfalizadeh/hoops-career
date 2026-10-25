@@ -30,6 +30,7 @@ import { CAP_FOR, addInbox, payroll, revenueScale, standardRoster } from './help
 import { LOCAL_TV_PER_GAME, MERCH_PER_GAME, NATIONAL_REVENUE, OPERATIONS_PER_SEASON, REVENUE_SHARING, attendanceFor, budgetCostPerSeason, profit } from './finances';
 import { confStandings } from './standings';
 import { money } from '../format';
+import { CAP } from '../constants';
 import { preset, userCourtPoints } from './difficulty';
 
 export type OwnerPersonality = 'builder' | 'win-now' | 'frugal';
@@ -60,6 +61,12 @@ export interface OwnerGoal {
   payRank?: number;
   /** Wins: last season's target with this team, when it held this one up (see WIN_SLIDE). */
   held?: number;
+  /**
+   * Payroll: the owner's own line (the tax line; a win-now owner's first apron) when the target is the
+   * payroll the coach inherited past it (see forcedPayroll): the books don't count that payroll's tax,
+   * nor its salary past this line, against him (see books.ts sanctionedTax).
+   */
+  line?: number;
   /**
    * Wins: the wins the difficulty's edge on the court moved the owner's read by (under 0 on Hard:
    * see userCourtPoints), counted in as the season forecast counts it. Absent in goals from before
@@ -405,6 +412,57 @@ function payrollRanks(league: League): number[] {
   return pays.map((p, tid) => 1 + pays.filter((q, i) => i !== tid && (q > p || (q === p && i < tid))).length);
 }
 
+/** Moves that bring a player to a team (a trade is read from its sides). */
+const ARRIVALS: ReadonlySet<string> = new Set(['sign', 'claim', 'tenDay', 'twoWay', 'convert', 'offerSheet', 'match']);
+
+/**
+ * The payroll a coach had no hand in, for `season` ($K): the contracts he inherited, at their
+ * scheduled salaries (signed before his tenure, by players on the team since before he arrived: not
+ * one he traded for, signed or claimed, nor a re-signing or an extension of his own), the
+ * rookie-scale deals of the team's own first-round picks, and the minimum deals that fill the roster
+ * to its 13. Read for the user's team; for any other
+ * team (a job he's offered) all of its payroll, as a new coach would inherit it. The real league's
+ * Thunder opened at $216M and, with no move of the coach's, went to $253M the next season on the
+ * extensions it signed before him (Gilgeous-Alexander's supermax, Williams's and Holmgren's): the
+ * owner's "get under the luxury tax" and the books' tax bill held that against a back-to-back
+ * champion, an ultimatum and then a freeze, whoever owned the team.
+ */
+export function forcedPayroll(league: League, tid: number, season = league.season): number {
+  const mine = tid === league.userTid;
+  const from = mine ? (league.tenureStart ?? league.startSeason) : season + 1;
+  const arrived = new Set<number>();
+  if (mine)
+    for (const t of league.transactions ?? []) {
+      // (moves made while he ran this team: the log marks them his)
+      if (!t.user || !t.tids.includes(tid)) continue;
+      if (t.kind === 'trade') for (const side of t.sides ?? []) if (side.tid !== tid) for (const x of side.players) arrived.add(x.pid);
+      if (ARRIVALS.has(t.kind) && t.pid !== undefined && t.tids[0] === tid) arrived.add(t.pid);
+    }
+  let sum = 0;
+  let n = 0;
+  const others: number[] = [];
+  for (const p of Object.values(league.players)) {
+    if (p.tid !== tid || p.contract.twoWay || p.contract.tenDay) continue;
+    const c = p.contract;
+    const inherited = c.start <= from && !arrived.has(p.pid);
+    const draftee = !!c.rookie && p.draft.round === 1 && p.draft.tid === tid;
+    // (the deal as it was signed: an extension of his own isn't in it)
+    const i = season - c.start;
+    const sal = i >= 0 && i < c.salaries.length ? c.salaries[i] : 0;
+    if (!inherited && !draftee) {
+      others.push(salaryFor(p, season));
+      continue;
+    }
+    sum += sal;
+    if (sal > 0) n++;
+  }
+  // and the roster minimum's bodies: the cheapest of his own players up to 13, at a veteran's minimum each at most
+  const vetMin = CAP_FOR(league, season).vetMin;
+  others.sort((a, b) => a - b);
+  for (let k = 0; k < Math.min(others.length, Math.max(0, CAP.rosterMin - n)); k++) sum += Math.min(others[k], vetMin);
+  return sum;
+}
+
 // ---------------------------------------------------------------- setting the goals
 
 const round100 = (x: number) => Math.round(x / 100) * 100;
@@ -554,23 +612,24 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   const line = cap.luxuryTax;
   const pay = payroll(league, tid);
   const market = team.pop < 3 ? 1.3 : team.pop > 7 ? 0.75 : 1;
-  if (who === 'win-now' && pay > line) {
-    const over = pay > cap.firstApron;
+  // a payroll the coach inherited past the owner's line is the owner's own: the line becomes "add
+  // nothing to it" (the books don't count its tax, nor its salary past his line: see sanctionedTax)
+  const payrollGoal = (own: number, under: string, getUnder: string) => {
+    const forced = Math.round(forcedPayroll(league, tid) / 100) * 100;
+    const target = Math.max(own, forced);
+    const over = pay > target;
     goals.push({
       kind: 'payroll',
-      title: over ? 'Get under the first apron' : 'Stay under the first apron',
-      target: cap.firstApron,
+      title: forced > own ? 'Add nothing to the payroll you inherited' : over ? getUnder : under,
+      target,
+      // a taxpayer's goal weighs more: what he pays for it comes out of his pocket
       weight: lean('payroll') * market * (over ? 1.3 : 1),
+      ...(forced > own ? { line: own } : {}),
     });
-  } else if (pay > line * 0.94) {
-    // a taxpayer's goal weighs more: what he pays for it comes out of his pocket
-    goals.push({
-      kind: 'payroll',
-      title: pay > line ? 'Get under the luxury tax' : 'Stay under the luxury tax',
-      target: line,
-      weight: lean('payroll') * market * (pay > line ? 1.3 : 1),
-    });
-  } else {
+  };
+  if (who === 'win-now' && pay > line) payrollGoal(cap.firstApron, 'Stay under the first apron', 'Get under the first apron');
+  else if (pay > line * 0.94) payrollGoal(line, 'Stay under the luxury tax', 'Get under the luxury tax');
+  else {
     const s = revenueScale(league);
     const b = seasonBudget(league, tid);
     // a roster that should lose draws smaller crowds game by game; one that should win earns playoff gates at the
@@ -648,6 +707,11 @@ export function goalsWhy(og: OwnerGoals): string[] {
   const wins = og.goals.find((g) => g.kind === 'wins');
   if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. I expect a record to match it.`);
   if (wins?.held) out.push(`Last season I asked for ${wins.held} wins. A roster that got worse on your watch doesn't lower the bar by more than ${WIN_SLIDE}.`);
+  // a payroll line past the tax: the tax up to it is his to pay (see books.ts sanctionedTax)
+  const pg = og.goals.find((g) => g.kind === 'payroll');
+  if (pg?.line !== undefined) out.push("You inherited this payroll, past my line, and I won't hold its tax against you on the books. Add to it and that's on you.");
+  else if (pg && /first apron/.test(pg.title))
+    out.push("I'll pay the luxury tax for a contender up to the first apron, and it won't count against you on the books. Past the apron, it's on you.");
   if (og.rebuild?.over)
     out.push(
       `${og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`} without the postseason is all I'll take. This season we compete: miss the play-in and it grades ${grade100(patienceCap(og, 0))} at best, whatever else goes right.`,

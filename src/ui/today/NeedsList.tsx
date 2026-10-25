@@ -85,22 +85,34 @@ export function NeedsSheet({ open, onClose }: { open: boolean; onClose: () => vo
 
 /**
  * The staff's calls open now, each with its one-tap answer, under a "Needs you" head: shown over what
- * would pass them by (the digest after a sim, the Play options before one).
+ * would pass them by (the digest after a sim, the Play options before one). `picks`: what the staff
+ * did with the calls a sim ran past (the digest's), a line each under them.
  */
-export function OpenCalls({ calls }: { calls: AgendaItem[] }) {
-  if (!calls.length) return null;
+export function OpenCalls({ calls, picks = [] }: { calls: AgendaItem[]; picks?: string[] }) {
+  if (!calls.length && !picks.length) return null;
   return (
     <section className="dg-sec">
       <div className="dg-sec-h">
-        <h3 className="dg-h">Needs you</h3>
+        <h3 className="dg-h">{calls.length ? 'Needs you' : "The staff's calls"}</h3>
       </div>
-      <div className="card flush ag-list" role="list" aria-label="Needs you">
-        {calls.map((i) => (
-          <div role="listitem" key={i.id}>
-            <AgendaRow item={i} />
-          </div>
-        ))}
-      </div>
+      {calls.length > 0 && (
+        <div className="card flush ag-list" role="list" aria-label="Needs you">
+          {calls.map((i) => (
+            <div role="listitem" key={i.id}>
+              <AgendaRow item={i} />
+            </div>
+          ))}
+        </div>
+      )}
+      {picks.length > 0 && (
+        <div className="card flush dg-list">
+          {picks.map((x) => (
+            <div key={x} className="dg-line">
+              {x}
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }

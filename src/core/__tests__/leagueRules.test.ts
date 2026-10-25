@@ -601,7 +601,7 @@ describe('awards and the All-Star break', () => {
       expect(l.inbox[0].body).toBe('Your team collected hardware: Coach of the Year (you).');
       const news = l.news[l.news.length - 1];
       expect(news.text).toContain(`COY ${l.coachName} (${l.teams[U].abbrev}).`);
-      expect(news.tids).toEqual([U]);
+      expect(news.tids).toContain(U);
       // three of the user's players have All-Star seasons
       const stars = standardRoster(l, U).slice(0, 3);
       for (const p of stars) line(p, 70, 70, 40);

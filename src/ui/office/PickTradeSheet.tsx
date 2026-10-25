@@ -6,6 +6,7 @@ import { Check, Ticket } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { playerName, sentence } from '../../core/league/helpers';
 import { pickLabel, type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { makeItWork } from '../../core/league/tradeHelp';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { makeTrade, useBusy } from '../../state/actions/office';
@@ -90,7 +91,7 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
                 <span className="fo-name grow">
                   {t.region} {t.name}
                 </span>
-                <span className="tiny dim num">{o.targetValue > 0 ? `${Math.round((o.myValue / o.targetValue) * 100)}% of its value` : ''}</span>
+                <span className="tiny dim num">{o.neutralGive > 0 ? `${Math.round((o.neutralGet / o.neutralGive) * 100)}% of its value` : ''}</span>
               </div>
               <Assets league={league} side={o.offer.b} />
               <button className="btn sm good block" disabled={busy} onClick={() => take(league, o.offer, onDone)}>
@@ -122,7 +123,7 @@ function Assets({ league, side }: { league: League; side: TradeOffer['a'] }) {
         return x ? (
           <div key={d} className="fo-pkg-item">
             <Ticket size={16} className="dim fo-pkg-ic" />
-            <span className="grow ellipsis bold">{pickLabel(league, x)}</span>
+            <span className="grow ellipsis bold">{pickName(league, x)}</span>
           </div>
         ) : null;
       })}

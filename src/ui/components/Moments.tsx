@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../state/store';
-import { MUST_SEE, currentMoments, newMoments, pickMoments, type Moment } from '../moments';
+import { MUST_SEE, currentMoments, newMoments, scheduleMoments, type Moment } from '../moments';
+import { touch } from '../../state/actions';
 import { TeamLogo } from './TeamLogo';
 import { Avatar } from './ui';
 import { slabVars } from '../teamColors';
@@ -20,10 +21,12 @@ function momentsKey(l: NonNullable<ReturnType<typeof useStore.getState>['league'
  * true when a league opens (or the user takes over another team: all but the new job itself) counts
  * as seen. They wait for a sim to finish and for the live game to be left, and Settings → Big moments
  * turns them off (all but the ultimatum and the sack: see MUST_SEE). Of the moments that come out
- * together, only the biggest shows with the job's own (pickMoments), and a front-page story not at
- * all when the digest opens with it after a long sim; the story of a game the user has just watched
- * live is his already, and on a game report (where a quick sim lands, on the result) game stories
- * are dropped.
+ * together, only the biggest shows with the job's own, and the rest worth it wait for the next sim
+ * (scheduleMoments). A front-page story takes the screen before "While you were away" as every
+ * moment does (the digest waits for it, and leads with another: see digest.ts momentOf); the story
+ * of a game the user has just watched live is his already, and on a game report (where a quick sim
+ * lands, on the result) game stories are dropped. The mail a moment says in full is read once it has
+ * shown.
  */
 export function Moments() {
   const league = useStore((s) => s.league);
@@ -32,7 +35,13 @@ export function Moments() {
   const { pathname } = useLocation();
   const seen = useRef<{ who: string; keys: Set<string> } | null>(null);
   const last = useRef('');
+  const waiting = useRef<Moment[]>([]);
   const [queue, setQueue] = useState<Moment[]>([]);
+  // (the queue as it stands, for the effect below: it reads it when the league changes, not with it)
+  const queued = useRef<Moment[]>([]);
+  useEffect(() => {
+    queued.current = queue;
+  }, [queue]);
   useEffect(() => {
     if (!league) return;
     const key = momentsKey(league);
@@ -44,23 +53,31 @@ export function Moments() {
       // a new job in the same league is a moment of its own: everything else about the new team is old news
       const took = seen.current?.who.startsWith(`${league.id}:`);
       seen.current = { who, keys: new Set(now.filter((m) => !(took && m.kind === 'hired')).map((m) => m.key)) };
+      waiting.current = [];
       setQueue([]);
       if (!took) return;
     }
     const all = newMoments(now, seen.current.keys);
-    if (!all.length) return;
     for (const m of all) seen.current.keys.add(m.key);
-    const fresh = league.settings.moments === false ? all.filter((m) => MUST_SEE.has(m.kind)) : all;
-    if (!fresh.length) return;
+    const on = league.settings.moments !== false;
+    const fresh = on ? all : all.filter((m) => MUST_SEE.has(m.kind));
+    if (!fresh.length && !waiting.current.length) return;
     const onLive = window.location.hash.startsWith('#/live');
-    // after a long sim the digest opens and leads with the stories: they don't take the screen as well
-    const digest = useStore.getState().digestOpen;
-    setQueue((q) => pickMoments([...q, ...fresh].filter((m) => !(onLive && m.news === 'game') && !(digest && m.kind === 'story'))));
+    // (the digest that opens with this sim leads with its moment of the stretch: that one is told)
+    const led = useStore.getState().digest?.moment?.story;
+    const keep = (m: Moment) => !(onLive && m.news === 'game') && !(led !== undefined && m.story === led);
+    const at = { season: league.season, day: league.day };
+    const { show, wait } = scheduleMoments(queued.current.filter(keep), fresh.filter(keep), on ? waiting.current.filter(keep) : [], at);
+    waiting.current = wait;
+    setQueue(show);
   }, [league, v]);
-  // a new digest leads with the stories queued while its sim ran: they're dropped here
+  // a new digest leads with its moment of the stretch: a moment queued or waiting that tells the same story is dropped
   const digest = useStore((s) => s.digest);
   useEffect(() => {
-    if (digest) setQueue((q) => (q.some((m) => m.kind === 'story') ? q.filter((m) => m.kind !== 'story') : q));
+    const led = digest?.moment?.story;
+    if (led === undefined) return;
+    waiting.current = waiting.current.filter((m) => m.story !== led);
+    setQueue((q) => (q.some((m) => m.story === led) ? q.filter((m) => m.story !== led) : q));
   }, [digest]);
   // a game's story doesn't take the screen on a game report, which opens on the result already (a
   // quick sim lands there): it's dropped
@@ -74,6 +91,14 @@ export function Moments() {
   useEffect(() => {
     if (useStore.getState().momentUp !== up) useStore.setState({ momentUp: up });
   }, [up]);
+  // the mail it says in full is read now (a sack or an ultimatum stays for the inbox: it needs him)
+  useEffect(() => {
+    const ids = showing?.mail;
+    if (!showing || !ids?.length || MUST_SEE.has(showing.kind)) return;
+    touch((l) => {
+      for (const m of l.inbox) if (ids.includes(m.id)) m.read = true;
+    });
+  }, [showing]);
   if (!showing || !league) return null;
   return (
     <MomentCard key={showing.key} m={showing} tid={league.userTid} colors={league.teams[league.userTid].colors} onDone={() => setQueue((q) => q.filter((m) => m !== showing))} />

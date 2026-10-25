@@ -8,7 +8,8 @@
 // defense, manage, insights, report, familiarity), which open the section that now holds them. The
 // hero's strengths and weaknesses move as you change a setting, so every lever shows what it buys and
 // what it costs. Edits save as they're made; while this visit has any, a compact dock says what they
-// did to the grades and offers Undo and Done (which hands the Continue bar back).
+// did to the grades and offers Undo and Done (which hands the Continue bar back, and has the staff
+// measure the change over the next games: tactics/editWatch.ts).
 import { useMemo, useState } from 'react';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -25,6 +26,8 @@ import { InstructionsTab } from '../tactics/InstructionsTab';
 import { MatchTab } from '../tactics/MatchTab';
 import { ANALYSIS_VIEWS, AnalysisTab, type AnalysisView } from '../tactics/AnalysisTab';
 import { phaseId, type Phase } from '../tactics/fam';
+import { settleEdits } from '../tactics/editWatch';
+import { EditMeasureBar } from '../tactics/EditLedger';
 import type { BoardSide } from '../tactics/Board';
 import './tactics.css';
 
@@ -121,11 +124,20 @@ export default function Tactics() {
           <button className="btn sm ghost" aria-label="Undo your changes" onClick={() => undoTo(start)}>
             <Undo2 size={16} />
           </button>
-          <button className="btn sm primary" aria-label="Done: keep the changes" onClick={() => setStart(visitStart(league))}>
+          {/* Done: the staff measures the change over the next games (editWatch) */}
+          <button
+            className="btn sm primary"
+            aria-label="Done: keep the changes"
+            onClick={() => {
+              settleEdits();
+              setStart(visitStart(league));
+            }}
+          >
             <Check size={16} /> Done
           </button>
         </div>
       )}
+      {!changed && !simming && <EditMeasureBar />}
     </>
   );
 }

@@ -5,13 +5,16 @@
 // foul trouble, runs, their coach's adjustments, their play types running hot, the tactical edges
 // against you) plus who's scoring on whom from the possession logs: the defender of theirs you're
 // beating, your own actions stalling or working. No call on a scorer's hot streak: the engine has no
-// shooting hot hand, so a double for one answers noise and costs points. Pure.
+// shooting hot hand, so a double for one answers noise and costs points. Every call was measured where
+// it fires (callWorth.ts): the ones that cost aren't made, and the rest say what they've been worth
+// (or that they're the staff's read, with no number yet). Pure.
 
 import type { Tactics } from '../../core/types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { zScore } from '../../core/analysis/playTypes';
 import { madeAtt } from '../../core/format';
 import { callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
+import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 
 export type StaffAction = { label: string } & (
   | { kind: 'tactics'; apply: (t: Tactics) => void }
@@ -37,6 +40,8 @@ export interface StaffNote {
   rank: number;
   /** With the bench handed to the staff, it makes its pick itself (a tactics change; subs and timeouts stay yours). */
   auto?: boolean;
+  /** A decision's measured worth where it fires, in a line (worthLine), or that it's the staff's read. */
+  worth?: string;
 }
 
 /** What the staff reads besides the alerts' input: the possessions the court has drawn. */
@@ -279,29 +284,24 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       });
   }
 
-  // a decided game: no tactics to chase (their scorer's garbage-time points, an action running hot),
-  // and with the lead safe, the bench can finish it if the coach hasn't said so
+  // a decided game: no tactics to chase (their scorer's garbage-time points, an action running hot).
+  // No call to rest the starters either when the coach switched that off: it cost 2.3 points of margin
+  // in 396 measured blowouts and never a result (callWorth.ts), and his starters are his call
   const decided = gameDecided(view.q, view.clock, margin);
-  if (decided && margin > 0 && !t.manage.garbageTime && !a.atBreak)
-    out.push({
-      id: `garbage-${view.q}`,
-      kind: 'decision',
-      tone: 'info',
-      title: `Up ${margin}: rest the starters`,
-      text: 'The game is decided: the deep bench can finish it, and nobody gets hurt in the last minutes of a blowout.',
-      actions: [{ kind: 'tactics', label: 'Rest starters in blowouts', apply: (x) => void (x.manage.garbageTime = true) }],
-      rank: 88,
-    });
   // a fix for the same thing only once (the hot play type and the tactical edge often agree)
   const seen = new Set<string>();
+  const manual = a.manualSubs;
   return (
     out
-      .filter((n) => !decided || n.id.startsWith('garbage-') || !n.actions.some((x) => x.kind === 'tactics'))
-      // nothing held back (callHold): but resting the starters is the decided game's own call, and
-      // fouling late is the last seconds'
+      // no call that measured as a cost where it fires (attacking the defender we're beating, leaning on
+      // our own play types: callWorth.ts), and each one kept says what it's been worth
+      .filter((n) => n.kind !== 'decision' || !callCosts(callKey(n.id, n.actions[0]?.label, manual)))
+      .map((n) => (n.kind === 'decision' && n.actions.length && n.actions[0].kind !== 'lineup' ? { ...n, worth: worthLine(callKey(n.id, n.actions[0].label, manual)) } : n))
+      .filter((n) => !decided || !n.actions.some((x) => x.kind === 'tactics'))
+      // nothing held back (callHold): but fouling late is the last seconds' own call
       .filter((n) => {
         const hold = callHold(a, n.actions[0]);
-        return !hold || (hold === 'decided' && n.id.startsWith('garbage-')) || (hold === 'late' && n.id.startsWith('late-'));
+        return !hold || (hold === 'late' && n.id.startsWith('late-'));
       })
       .sort((x, y) => y.rank - x.rank)
       .filter((n) => {

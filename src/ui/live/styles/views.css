@@ -276,6 +276,18 @@
   color: var(--text-dim);
   font-weight: 620;
 }
+/* a sub's measured worth against keeping him in (crunch time), at the chip's end */
+.lv-ps-sub-w {
+  margin-left: 2px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lv-ps-sub-w.good {
+  color: var(--good);
+}
+.lv-ps-sub-w.bad {
+  color: var(--bad);
+}
 
 /* the tactics */
 .lv-tp {

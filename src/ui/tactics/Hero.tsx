@@ -5,16 +5,16 @@
 // what it costs), and the assistant's switch.
 import { useState } from 'react';
 import { edit } from '../../state/actions';
-import { useLeague } from '../../state/store';
+import { useLeague, useStore } from '../../state/store';
 import { autoTactics } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
-import { playbookLabel } from '../../core/sim/playbooks';
+import { playbookLabel, playbookNameError, savePlaybook } from '../../core/sim/playbooks';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { famLabel } from '../../core/sim/familiarity';
 import { SLOT_LETTERS, activeSlot, slotName } from '../../core/sim/slots';
 import { QUALITY_META, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
 import { ordinal } from '../stats';
-import { Help, Toggle } from '../components/ui';
+import { Help, Sheet, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { SlotBar, StyleSheet } from './SlotBar';
 import { GradeBadge } from './SystemReport';
@@ -43,6 +43,23 @@ export function TacticsHero({
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
   const [style, setStyle] = useState(false);
+  // handing his own tactics back to the staff replaces them: asked first, with a way to keep them
+  const [handOver, setHandOver] = useState(false);
+  const toStaff = (keep = false) =>
+    edit((l) => {
+      const tm = l.teams[l.userTid];
+      if (keep) {
+        // "My tactics", "My tactics 2"...: the first name free; a full library keeps them as they are
+        let n = 1;
+        const name = () => (n === 1 ? 'My tactics' : `My tactics ${n}`);
+        while (playbookNameError(l, name()) && n < 20) n++;
+        const err = savePlaybook(l, name());
+        if (err) return void useStore.getState().toast(err, 'bad');
+      }
+      tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { links: true });
+      // his refits make it his playbook, not a saved one
+      tm.tactics.playbook = null;
+    });
   const off = OFF_PRESETS.find((p) => p.id === t.offPreset);
   const def = DEF_PRESETS.find((p) => p.id === t.defPreset);
   const { strengths, weaknesses } = strengthsOf(report);
@@ -106,7 +123,8 @@ export function TacticsHero({
           <Help title="Your tactic">
             <p>
               <b>Style:</b> your offensive playbook (pace, shot profile and the actions you run) and defensive identity (scheme, coverage, help, pressure and press). Pick one to
-              load its settings, then fine-tune them on Instructions. <Term id="fit">Fit</Term> scores how well your roster suits each.
+              load its settings, then fine-tune them on Instructions. The staff&apos;s read (<Term id="fit">fit</Term>) says what each is worth a game for your roster against
+              yours; make a change and they measure it on your next games.
             </p>
             <p>
               <b>Familiarity:</b> how well your team knows the tactic (<Term id="familiarity">familiarity</Term>). A new style costs it until it&apos;s drilled.
@@ -142,21 +160,40 @@ export function TacticsHero({
       <div className="tx-hero-auto">
         <Toggle
           on={!t.manual}
-          onChange={(on) =>
-            edit((l) => {
-              const tm = l.teams[l.userTid];
-              if (on) {
-                tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { links: true });
-                // his refits make it his playbook, not a saved one
-                tm.tactics.playbook = null;
-              } else tm.tactics.manual = true;
-            })
-          }
+          onChange={(on) => {
+            // (tactics of his own not kept in a playbook: ask before the staff's replace them)
+            if (on && !t.playbook) setHandOver(true);
+            else if (on) toStaff();
+            else edit((l) => void (l.teams[l.userTid].tactics.manual = true));
+          }}
           label="Let the assistant manage"
           help={!t.manual ? 'He refits the playbook, shape and roles as the roster changes. Your next edit takes over.' : 'You call it. Turn on to hand back the clipboard.'}
         />
       </div>
       <StyleSheet open={style} onClose={() => setStyle(false)} />
+      <Sheet open={handOver} onClose={() => setHandOver(false)} title="Hand the tactics to the staff?">
+        <div className="col" style={{ gap: 12 }}>
+          <p className="small dim2">They put in their pick for this roster in place of yours. Keep yours as a playbook and you can load them back from My playbooks.</p>
+          <button
+            className="btn primary block"
+            onClick={() => {
+              setHandOver(false);
+              toStaff(true);
+            }}
+          >
+            Keep mine as a playbook, then hand over
+          </button>
+          <button
+            className="btn block"
+            onClick={() => {
+              setHandOver(false);
+              toStaff();
+            }}
+          >
+            Hand over
+          </button>
+        </div>
+      </Sheet>
     </section>
   );
 }

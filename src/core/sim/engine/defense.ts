@@ -274,8 +274,13 @@ export const defenseMethods = {
     return def.on[this.rng.weighted(def.on.map((p) => p.c.steal * p.tsl))];
   },
 
-  /** Live-ball steal by `d` with base chance `base`, scaled by his steal tendency; else a dead-ball turnover. */
+  /**
+   * Live-ball steal by `d` with base chance `base`, scaled by his steal tendency, and less often once
+   * he has K.stealCap.from steals tonight (handlers stop putting the ball near him); else a dead-ball
+   * turnover.
+   */
   stealBy(this: GameSim, d: SP, base: number): SP | null {
-    return this.rng.chance(clamp(base * K.stealShare * d.tsl, 0, 0.92)) ? d : null;
+    const over = d.b.stl - K.stealCap.from;
+    return this.rng.chance(clamp(base * K.stealShare * d.tsl * (over >= 0 ? Math.exp(-K.stealCap.damp * (over + 1)) : 1), 0, 0.92)) ? d : null;
   },
 };

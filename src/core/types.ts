@@ -9,7 +9,8 @@ import type { JobOffer } from './league/jobs';
 import type { GuideStep } from './league/agenda';
 import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { Books } from './league/books';
-import type { DeadlineCall } from './league/calls';
+import type { CallWorth, DeadlineCall, SkidCall } from './league/calls';
+import type { StaffPick, WeekCall } from './league/weekCall';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PossLog } from './sim/log';
 
@@ -642,6 +643,31 @@ export interface Familiarity {
  * without the game-specific parts (matchups, the star target). Roles, shot freedom and screeners
  * are kept by player and only come back for players still on the roster.
  */
+/**
+ * A change the user made to his tactics or rotation, as the staff measured it (see
+ * core/ai/tacticEdits.ts): each setting it moved, when, the games ahead it was measured on and what
+ * it measured there, and later what it measured on the games played since, with and without it.
+ */
+export interface TacticEdit {
+  id: number;
+  season: number;
+  day: number;
+  /** What changed, in the Tactics screen's words ("Ball-screen coverage: Drop → Ice · Pace: Balanced → Up-tempo"). */
+  what: string;
+  /** Each setting it moved: its path in the team ("tactics.defense.pnr", "rotation.order"), what it was and what it became (undefined: not set). */
+  diff: [path: string, from: unknown, to: unknown][];
+  /** The user's games it was measured on as it was made (gids): the next few on the schedule. */
+  ahead: number[];
+  /** What it measured on them, in points a game (shrunk toward even; `raw` before, `se` its standard error); `drilled`: once the team knows it as well as what it replaced. */
+  worth?: { pts: number; raw: number; se: number; games: number; drilled?: { pts: number; raw: number; se: number } };
+  /** Measured again on the user's games played since (`games` of them, through `day`): each replayed with and without it, paired. */
+  check?: { pts: number; raw: number; se: number; games: number; day: number };
+  /** The staff's note on the check has gone out. */
+  told?: boolean;
+  /** No longer checked: put back (the check's one tap), or every setting it moved changed again since. */
+  closed?: 'reverted' | 'replaced';
+}
+
 export interface SavedPlaybook {
   id: string;
   name: string;
@@ -692,6 +718,8 @@ export interface TeamSeason {
   cashIn?: number;
   /** The team's cash when the regular season's books closed, revenue sharing and the luxury tax paid ($K): what the owner's review judges (see books.ts). */
   closeCash?: number;
+  /** What the owner's payroll goal signed off on for the user's team this season ($K: the luxury tax up to its line, and the payroll the coach inherited past it), set at his review: the books don't count it against the coach (see books.ts sanctionedTax). */
+  signedOff?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -719,6 +747,8 @@ export interface Budget {
   health: number; // 1..100 -> injury recovery
   facilities: number; // 1..100 -> attendance/hype, slow-moving
   ticketPrice: number; // dollars
+  /** The user set the ticket price himself (Finances, or a staff call's price): the staff no longer prices it at opening night. */
+  priceSet?: boolean;
 }
 
 export interface Team {
@@ -745,6 +775,12 @@ export interface Team {
   hype: number; // 0..1
   /** Coach personality bias for AI tactics. */
   coach: CoachProfile;
+  /**
+   * Only on the copy of the user's team a simmed game plays with (buildSimInput), never stored: its
+   * adjustments at the breaks are his assistant's, who leaves alone the kinds that cost his side
+   * (ASSISTANT_SKIPS in sim/engine/coach.ts).
+   */
+  assistant?: true;
   seasons: TeamSeason[];
   /** Dead money from released players: season -> amount (`stretched`: spread by the stretch provision, see stretchDeadMoney). */
   deadMoney: { pid: number; name: string; season: number; amount: number; stretched?: true }[];
@@ -973,8 +1009,30 @@ export interface GameResult {
   wpLow?: number;
   /** The user's live games: his tactics changes, substitutions and timeouts, and the scoring around each (see analysis/moves.ts). */
   moves?: CoachMove[];
+  /**
+   * The user's live games: what the night's moves were worth, measured after the final (nightWorth in
+   * state/liveWorth.ts): the rest of the game from the first move played over and over with every
+   * move and without them. Absent until measured (and for a game left before it was, or simmed).
+   */
+  movesWorth?: MovesWorth;
   /** The user's games: his game plan's counters at tip-off, each with what it was aimed at, for the report's grade of the plan (see analysis/debrief.ts). */
   plan?: PlanUse[];
+}
+
+/** What a live game's moves were worth (GameResult.movesWorth). */
+export interface MovesWorth {
+  /** Points of margin they added (under 0: cost), shrunk toward even by the reading's noise: what's shown and added up. */
+  pts: number;
+  /** The reading as measured, and its standard error. */
+  raw: number;
+  se: number;
+  /** Chance to win they added (0-1; under 0: cost). */
+  win: number;
+  /** Versions of the rest of the night it was measured over, and the moves in it. */
+  n: number;
+  moves: number;
+  /** The move that mattered most, when one clearly did: as the report lists it, its points (shrunk) and their standard error. */
+  top?: { text: string; pts: number; se: number };
 }
 
 /** One counter of the game plan a game was played with (GameResult.plan). */
@@ -1152,6 +1210,31 @@ export interface NewsItem {
   body?: string;
   /** How big it is: 3 the front page, 2 a story, 1 or absent a brief. */
   weight?: 1 | 2 | 3;
+}
+
+/** One of a season's biggest stories as the chronicle keeps it (League.chronicle): the news item's headline, without its body. */
+export interface ChronicleStory {
+  /** The news item's id, while the news still has it (its page opens from it). */
+  id: number;
+  day: number;
+  kind: NewsItem['kind'];
+  head: string;
+  /** The line under the headline. */
+  dek?: string;
+  tids: number[];
+  pids: number[];
+  weight: 1 | 2 | 3;
+}
+
+/** A finished season in the league's memory (League.chronicle). */
+export interface ChronicleSeason {
+  season: number;
+  /** Its biggest stories, oldest first (at most CHRONICLE_STORIES), and the summer's farewells after them. */
+  stories: ChronicleStory[];
+  /** Its playoff series: [round, high seed's tid, low seed's tid, the high seed's wins, the low seed's]. */
+  series: [round: number, high: number, low: number, highWins: number, lowWins: number][];
+  /** The id of its wrap (the press's column when the Finals end), always among its stories. */
+  wrap?: number;
 }
 
 /**
@@ -1430,6 +1513,14 @@ export interface League {
   callsDone?: string[];
   /** The staff's call at this season's trade deadline, worked out the day its card opened (see calls.ts). */
   deadlineCall?: DeadlineCall;
+  /** The staff's call for this week of the regular season, planned the week's first morning (see weekCall.ts). */
+  weekCall?: WeekCall;
+  /** A losing skid's call, from the day it opened (see calls.ts): one a skid, the next game's. */
+  skidCall?: SkidCall;
+  /** What the staff measured for the calls open now, by call id (see calls.ts's storeWorth): the numbers on their cards. */
+  callWorth?: Record<string, CallWorth>;
+  /** What the staff did on its own with calls a sim ran past, newest last (see weekCall.ts): the digest says it. */
+  staffPicks?: StaffPick[];
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;
@@ -1449,6 +1540,11 @@ export interface League {
   gamePlans?: Record<number, GamePlan>;
   /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */
   playbooks?: SavedPlaybook[];
+  /**
+   * The user's recent changes to his tactics and rotation as the staff measured them (see
+   * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Analysis's "Since you changed it".
+   */
+  tacticEdits?: TacticEdit[];
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */
@@ -1496,6 +1592,14 @@ export interface League {
   devWatch?: DevWatchState;
   /** The user's coaching legacy (see league/legacy.ts): milestones, honors, signature wins, season reviews. */
   legacy?: LegacyState;
+  /**
+   * The league's memory, a season at a time (see league/media/chronicle.ts): each finished season's
+   * biggest stories (headline, date, who) and its playoff series, kept for good once the news that
+   * told them is gone (about 1.5 KB a season). The press reads it back for dynasties, droughts,
+   * rematches and anniversaries, and History opens each season's page from it. Oldest first; absent
+   * until a season has ended.
+   */
+  chronicle?: ChronicleSeason[];
   /**
    * When the league was last exported to a file the user kept (see state/backup.ts), and its season
    * then; absent until the first one. A backup file carries its own, so an imported league has one.

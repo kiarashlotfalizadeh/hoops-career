@@ -11,7 +11,7 @@ import { coachCareer, userCoach } from './coaches';
 import { confStandings } from './standings';
 import { SEASON_GAMES, currentGoals, leagueOutlook } from './ownerGoals';
 import { teamSeasonRecords } from './records';
-import { REC_LABEL, REC_STATS, TEAM_REC_LABEL, TEAM_REC_STATS } from './records';
+import { REC_LABEL, REC_STATS, TEAM_REC_STATS, recordWhat } from './records';
 import { playerAge } from '../playerGen';
 import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legacy';
 import { fanScore } from './legacyPulse';
@@ -181,7 +181,7 @@ function recordsSet(league: League, season: number, tid: number): string[] {
     }
     for (const stat of TEAM_REC_STATS) {
       const top = book.league.reg.teams[stat]?.[0];
-      if (top && top[3] === season && top[1] === tid) out.push(`League record: ${top[0]} ${TEAM_REC_LABEL[stat].toLowerCase()} in a game`);
+      if (top && top[3] === season && top[1] === tid) out.push(`League record: ${recordWhat({ stat, team: true, v: top[0] })} in a game`);
     }
     const mine = book.teams[tid];
     if (mine && book.since < season) {

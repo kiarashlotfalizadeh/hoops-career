@@ -539,6 +539,33 @@
 .lv-pc-foot {
   margin-top: 8px;
 }
+/* what a play is worth from here, at the row's end: its win chance against no call, or too close to say */
+.lv-pc-worth {
+  flex: none;
+  max-width: 84px;
+  text-align: right;
+  line-height: 1.15;
+}
+.lv-pc-worth.num {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: -0.04em;
+}
+.lv-pc-worth.good {
+  color: var(--good);
+}
+.lv-pc-worth.bad {
+  color: var(--bad);
+}
+.lv-pc-u {
+  display: block;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text-dim);
+}
 @media (hover: hover) and (pointer: fine) {
   .lv-pc:not(.on):not(:disabled):hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);

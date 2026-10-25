@@ -37,7 +37,9 @@ describe('batch sims & reports', () => {
       const noop = runLab({ a, b, games: 60, seed: 7, patch: { manage: { hackThreshold: 5 } } });
       expect(noop.margins).toEqual(base.margins);
       const help = runLab({ a, b, games: 60, seed: 7, patch: { defense: { help: Math.min(100, a.team.tactics.defense.help + 10) } } });
-      expect(corr(base.margins, help.margins)).toBeGreaterThan(0.5);
+      // paired: the same seeds keep the games alike (unpaired, about 0). A help change touches every
+      // pick-and-roll, so the games drift apart as they go: 0.42 over 600 games, 0.34-0.62 over 60 (round 2026-10-25)
+      expect(corr(base.margins, help.margins)).toBeGreaterThan(0.3);
     }
     // is deterministic and paired
     {

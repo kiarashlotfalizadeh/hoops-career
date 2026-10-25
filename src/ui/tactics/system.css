@@ -316,3 +316,40 @@
   font-family: var(--mono);
   letter-spacing: -0.03em;
 }
+/* "Since you changed it": what a change moved over what it measured; its latest number in a column */
+.tx-edrow {
+  gap: 10px;
+}
+.tx-edmeta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tx-edmeta.good {
+  color: var(--good);
+}
+.tx-edmeta.bad {
+  color: var(--bad);
+}
+.tx-edv {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+.tx-edv.good {
+  color: var(--good);
+}
+.tx-edv.bad {
+  color: var(--bad);
+}
+.tx-edv .tiny {
+  font-family: var(--font);
+  font-weight: 500;
+  letter-spacing: 0;
+}

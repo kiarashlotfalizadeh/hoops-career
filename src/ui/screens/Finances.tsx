@@ -26,7 +26,7 @@ import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
 import { money, moneySigned, moneyExact, plural } from '../../core/format';
-import { FROZEN_BUDGET, booksOf } from '../../core/league/books';
+import { FROZEN_BUDGET, booksOf, booksOutlook } from '../../core/league/books';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -63,6 +63,8 @@ function Overview({ team }: { team: Team }) {
   const ts = curTeamSeason(league, team.tid);
   const pr = profit(league, team.tid);
   const end = seasonEndCash(league, team.tid);
+  // the owner's read of it: the tax he signed off on doesn't count against you (see sanctionedTax)
+  const books = booksOutlook(league);
   const games = ts.won + ts.lost;
   const homeGames = ts.homeWon + ts.homeLost;
   const attAvg = homeGames ? ts.attendance / homeGames : 0;
@@ -101,16 +103,16 @@ function Overview({ team }: { team: Team }) {
               {money(team.cash)}
             </div>
           </div>
-          {/* where the regular season's books close, tax paid: the one figure the owner's review reads (the playoff gates come after) */}
+          {/* where the regular season's books close, tax paid (bar what he signed off on): the one figure the owner's review reads (the playoff gates come after) */}
           {(end.left > 0 || ts.closeCash !== undefined) && (
             <div className="right">
               <div className="over">{isOffseason(league) ? `Books close ${shortSeason(league.season + 1)}` : end.left > 0 ? 'Books close' : 'Books closed'}</div>
-              <div className="fo-pay-v2" style={{ color: end.end < 0 ? 'var(--bad)' : undefined }}>
-                {money(end.end)}
+              <div className="fo-pay-v2" style={{ color: books.judged < 0 ? 'var(--bad)' : undefined }}>
+                {money(books.judged)}
               </div>
               <div className="tiny dim">
                 {end.left > 0 ? 'projected' : 'the owner reads this'}
-                {end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}
+                {end.tax > 0 ? `, after ${money(end.tax)} tax${books.sanctioned > 0 ? `; the ${money(books.sanctioned)} he signed off on doesn't count` : ''}` : ''}
               </div>
             </div>
           )}
@@ -379,7 +381,7 @@ function BudgetTab({ team }: { team: Team }) {
             min={minPrice}
             max={Math.max(maxPrice, price)}
             step={5}
-            onChange={(x) => set((t) => (t.budget.ticketPrice = x))}
+            onChange={(x) => set((t) => Object.assign(t.budget, { ticketPrice: x, priceSet: true }))}
             format={(x) => `$${x}`}
             left={`$${minPrice}`}
             right={`$${maxPrice}`}
@@ -399,6 +401,7 @@ function BudgetTab({ team }: { team: Team }) {
           />
           <div className="small dim2">
             Gate revenue peaks near <b className="num">${sweet.p}</b> ({money(sweet.g * 41)} a season) at today's demand.
+            {team.budget.priceSet ? '' : ' Until you set a price, the staff prices tickets there each opening night.'}
           </div>
           <More>
             <p className="small dim2">

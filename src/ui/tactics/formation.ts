@@ -118,7 +118,7 @@ export function place(spots: Spot[], five: BoardPlayer[]): Map<number, Spot> {
 /** A familiarity figure's tone: 80 and up good, 60 to 80 a warning, below that bad. */
 export const famTone = (v: number): 'good' | 'warn' | 'bad' => (v >= 80 ? 'good' : v >= 60 ? 'warn' : 'bad');
 
-/** A shape's fit as the board shows it: fit points are a tenth of a point per 100 possessions ("+0.8", "−1.2", "±0"). */
+/** A shape's fit as the board shows it: fit points are a tenth of a point a game ("+0.8", "−1.2", "±0"). */
 export function fitPts(v: number): string {
   const x = Math.round(v) / 10;
   if (Math.abs(x) < 0.05) return '±0';

@@ -100,6 +100,13 @@ export class GameSim {
     { pts: 0, tpm: 0 },
     { pts: 0, tpm: 0 },
   ];
+  /**
+   * Each side's fouled misses as expected to fall: xShots leaves out a shot the foul wiped out (it
+   * isn't an attempt) but keeps a fouled make, so over the fouled shots it counts only the ones that
+   * fell. A measurement by shot value adds these back (see counterWorth.ts), else a change that draws
+   * more fouls reads as a cost. Not kept on the result.
+   */
+  xFouledMiss: [number, number] = [0, 0];
   flow: number[] = [];
   /** Index into flow where each period starts. */
   flowPeriods: number[] = [0];
@@ -171,6 +178,13 @@ export class GameSim {
     this.record = !!opts.record;
     if (opts.stints) this.stints = new Map();
     this.T = [this.makeTeam(home, 0), this.makeTeam(away, 1)];
+    // each coach's read of a blowout, from a stream of its own: the simulation's draws stay where they were
+    const gar = new Rng(mix(this.seed, 0x7ffffffc));
+    for (const t of this.T) {
+      t.gLine = gar.uniform(K.garbage.patience[0], K.garbage.patience[1]);
+      t.gDepth = Math.floor(gar.uniform(0, K.garbage.depth + 1));
+      t.gLate = gar.uniform(K.garbage.late[0], K.garbage.late[1]);
+    }
     for (const t of this.T) {
       t.plan = this.makePlan(t);
       this.setLineup(t, this.initialLineup(t));
@@ -223,6 +237,7 @@ export class GameSim {
         ...planRoles(p.ratings, p.pos),
         tu: p.tend?.use ?? 1,
         t3: p.tend?.three ?? 1,
+        t3o: p.tend?.three ?? 1,
         td: p.tend?.drive ?? 1,
         tp: p.tend?.pass ?? 1,
         tbk: p.tend?.blk ?? 1,
@@ -284,6 +299,9 @@ export class GameSim {
       ex: { biggestLead: 0, fastBreak: 0, paint: 0, secondChance: 0, offTov: 0, bench: 0 },
       run: 0,
       garbage: false,
+      gLine: 1,
+      gDepth: 0,
+      gLate: 0,
       restedLate: new Set(),
       spacing: 50,
       passQ: 50,

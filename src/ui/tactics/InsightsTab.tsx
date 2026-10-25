@@ -5,8 +5,8 @@ import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
 import { scoutData, SCOUT_MIN_GAMES } from '../../core/analysis/scouting';
-import { scoutTeam } from '../../core/ai/advisor';
-import { IMPACT_TEXT, impactAdvice, impactSentence } from '../../core/analysis/gameReport';
+import { scoutTeam, seasonLevers } from '../../core/ai/advisor';
+import { IMPACT_TEXT, impactAdvice, impactSentence, leverNet } from '../../core/analysis/gameReport';
 import { Help, More, Section, Segmented } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { plural } from '../../core/format';
@@ -25,9 +25,15 @@ export function InsightsTab() {
   const helping = more ? helpAll : helpAll.slice(0, 3);
   const hurting = more ? hurtAll : hurtAll.slice(0, 3);
   const hidden = helpAll.length + hurtAll.length - helping.length - hurting.length;
+  // each setting's whole trade-off this season (what it gave up and won back): a cost a setting more
+  // than wins back is no reason to change it
+  const levers = useLeagueMemo(() => new Map(seasonLevers(league, league.userTid).map((l) => [l.what, l])), [league]);
   const row = (x: { key: string; perGame: number; forUser: boolean }) => {
-    // no "go to Hedge" once you already play Hedge
-    const advice = x.forUser ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
+    const lever = x.forUser ? undefined : levers.get(leverNet([], x.key, 0)?.what ?? '');
+    const paid = !!lever && lever.won > 0.05 && lever.net > -0.5;
+    // no "go to Hedge" once you already play Hedge, nor a change for a setting that pays its way
+    const advice = x.forUser || paid ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
+    const net = paid ? `It wins ${lever.won.toFixed(1)} back: ${lever.net >= 0 ? '+' : '−'}${Math.abs(lever.net).toFixed(1)} a game all told, so it stays.` : undefined;
     const X = x.forUser ? 'your team' : 'the opposition';
     const Y = x.forUser ? 'the opposition' : 'your team';
     return (
@@ -38,7 +44,7 @@ export function InsightsTab() {
         </span>
         <span className="grow">
           <span className="tx-imp-t">{impactSentence(x.key, X, Y)}</span>
-          {advice && <span className="tx-imp-a">{advice}</span>}
+          {(advice ?? net) && <span className="tx-imp-a">{advice ?? net}</span>}
         </span>
       </div>
     );

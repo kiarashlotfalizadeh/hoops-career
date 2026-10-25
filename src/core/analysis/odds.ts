@@ -517,3 +517,138 @@ export function gameStakes(league: League, gid: number, tid: number): { win: num
   const at = (won: boolean) => forecast(league, { sims: STAKES_SIMS, fixed: { gid, homeWon: won === (g.home === tid) } })!.teams[tid].reach[0];
   return { win: at(true), loss: at(false) };
 }
+
+// ---------------------------------------------------------------- draft pick projection
+
+/** Simulated standings a pick projection is read from (see pickProjection): about a tenth of a slot of noise in a pick's expected slot. */
+export const PICK_SIMS = 400;
+
+/** Lottery places a first-round pick can draw (the 2019 odds' table): the rest of the non-playoff teams, and the playoff teams, pick in order. */
+const LOTTERY_PLACES = LOTTERY_ODDS.length;
+
+const lotteryMatrices = new Map<number, number[][]>();
+
+/**
+ * For a lottery of `m` teams in draft order (worst first): the chance that place `i` gets pick
+ * `k` (m × m), from the 2019 odds' four drawings (every order of the four winners), the rest in
+ * order behind them. lotteryTable's walk, kept slot by slot.
+ */
+export function lotteryMatrix(m: number): number[][] {
+  const cached = lotteryMatrices.get(m);
+  if (cached) return cached;
+  const odds = Array.from({ length: m }, (_, i) => LOTTERY_ODDS[i] ?? 0);
+  const out = Array.from({ length: m }, () => new Array<number>(m).fill(0));
+  const draws = Math.min(4, odds.filter((o) => o > 0).length);
+  const walk = (drawn: number[], p: number) => {
+    if (drawn.length === draws) {
+      const order = [...drawn, ...Array.from({ length: m }, (_, t) => t).filter((t) => !drawn.includes(t))];
+      order.forEach((t, k) => (out[t][k] += p));
+      return;
+    }
+    const total = odds.reduce((a, o, t) => a + (drawn.includes(t) ? 0 : o), 0);
+    for (let t = 0; t < m; t++) if (!drawn.includes(t) && odds[t] > 0) walk([...drawn, t], (p * odds[t]) / total);
+  };
+  walk([], 1);
+  lotteryMatrices.set(m, out);
+  return out;
+}
+
+/**
+ * Where the picks of the next draft still to be ordered should land, team by team, from projected
+ * strength rather than the record alone: the record so far plus the games left at the strength the
+ * season forecast reads (this season's net rating blended with what the roster is worth, PRIOR_GAMES
+ * a side, the user's with the difficulty's edge on the court), spread by the forecast's own
+ * uncertainty (STRENGTH_SD, shrinking as games are played, and each game left a coin at that
+ * strength). PICK_SIMS standings are drawn (on a stream of the league's id and the draft, never
+ * the league's own), each ranked worst first; the non-playoff places (the 14 worst records, or the
+ * teams actually out once the playoffs are set) go through the lottery's odds, the rest pick in
+ * order. Before a game is played the strength is the roster's alone, so on opening night the
+ * worst projected team's first is priced as a likely top-five pick and a contender's as a late
+ * one, not every first at the middle's value; between the draft and the next season it is next
+ * season's draft, from the rosters as they stand. Reads the league only.
+ */
+export interface PickProjection {
+  /** The draft it is for: this season's until its order is set, then next season's. */
+  season: number;
+  /** Each team's projected regular-season win%, and its spread (SD). */
+  pct: number[];
+  sd: number[];
+  /** first[tid][k]: the chance the team's own first lands at slot k + 1 of the round (the lottery included); second[tid][k] the same for its second (by record alone). */
+  first: number[][];
+  second: number[][];
+  /** Each team's expected place by record (1: the worst). */
+  rank: number[];
+}
+
+const pickMemo = new WeakMap<League, { key: string; value: PickProjection }>();
+
+export function pickProjection(league: League): PickProjection {
+  // (a day, a game played, a roster move: injuries change with the first two. Read on every pick
+  // valued in a deal search, so the key itself must be cheap: no walk over the players)
+  const key = `${league.season}|${league.phase}|${league.day}|${league.games.length}|${league.nextTxnId ?? 0}|${league.playoffs.length}|${league.userTid}`;
+  const hit = pickMemo.get(league);
+  if (hit && hit.key === key) return hit.value;
+  const value = projectPicks(league);
+  pickMemo.set(league, { key, value });
+  return value;
+}
+
+function projectPicks(league: League): PickProjection {
+  const n = league.teams.length;
+  const set = league.draftPicks.some((d) => d.season === league.season && d.pick !== undefined);
+  // after this season's games (or once its draft order is set) the next draft still to project is next season's
+  const done = !['preseason', 'regular', 'playin', 'playoffs', 'draftLottery'].includes(league.phase) || set;
+  const season = done ? league.season + 1 : league.season;
+  const ratings = leagueRatings(league);
+  const players = new Map<number, Player[]>();
+  for (const p of Object.values(league.players)) if (p.tid >= 0 && p.tid < n) (players.get(p.tid) ?? players.set(p.tid, []).get(p.tid)!).push(p);
+  const rows = league.teams.map((t) => {
+    const ts = done ? undefined : t.seasons.find((s) => s.season === league.season);
+    const won = ts?.won ?? 0;
+    const gp = won + (ts?.lost ?? 0);
+    return { won, gp, left: Math.max(0, 82 - gp), playoff: !!ts && ts.playoffRound >= 1 };
+  });
+  const worth = league.teams.map((t, tid) => rosterWorth(players.get(t.tid) ?? [], Math.max(1, rows[tid].left)));
+  const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
+  const pct: number[] = [];
+  const sd: number[] = [];
+  league.teams.forEach((t, tid) => {
+    const { won, gp, left } = rows[tid];
+    const r = ratings.rows[tid];
+    const played = done ? 0 : gp;
+    const court = t.tid === league.userTid ? (userCourtPoints(league) * PRIOR_GAMES) / (played + PRIOR_GAMES) : 0;
+    const net = blendNet(played && r.gp ? r.net : 0, played, worth[tid] - avg, ROSTER_NET) + court;
+    const z = net / MARGIN_SD;
+    const p = phi(z);
+    // a point of strength moves each game's chance by the normal's density there
+    const slope = Math.exp((-z * z) / 2) / Math.sqrt(2 * Math.PI) / MARGIN_SD;
+    const strength = STRENGTH_SD * Math.sqrt(PRIOR_GAMES / (played + PRIOR_GAMES));
+    pct.push((won + p * left) / 82);
+    sd.push(Math.sqrt(left * p * (1 - p) + (left * slope * strength) ** 2) / 82);
+  });
+  const rng = new Rng(hashString(`${league.id}:${season}:pickProjection`));
+  const first = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  const second = Array.from({ length: n }, () => new Array<number>(n).fill(0));
+  const rank = new Array<number>(n).fill(0);
+  // once the playoffs are set, the lottery is the teams out of them; before, the worst records
+  const out = rows.some((r) => r.playoff) ? rows.filter((r) => !r.playoff).length : Math.min(LOTTERY_PLACES, n);
+  const lottery = lotteryMatrix(out);
+  const known = rows.some((r) => r.playoff);
+  const draw = new Float64Array(n);
+  const order = Array.from({ length: n }, (_, i) => i);
+  for (let s = 0; s < PICK_SIMS; s++) {
+    for (let i = 0; i < n; i++) draw[i] = pct[i] + (sd[i] > 0 ? rng.normal(0, sd[i]) : 0) + rng.next() * 1e-9;
+    order.sort((a, b) => draw[a] - draw[b]);
+    // the first round: the lottery's places first (the teams out of the playoffs, worst first), then the rest by record
+    const firstOrder = known ? [...order.filter((t) => !rows[t].playoff), ...order.filter((t) => rows[t].playoff)] : order;
+    firstOrder.forEach((tid, place) => {
+      if (place < out) for (let k = 0; k < out; k++) first[tid][k] += lottery[place][k] / PICK_SIMS;
+      else first[tid][place] += 1 / PICK_SIMS;
+    });
+    order.forEach((tid, place) => {
+      second[tid][place] += 1 / PICK_SIMS;
+      rank[tid] += (place + 1) / PICK_SIMS;
+    });
+  }
+  return { season, pct, sd, first, second, rank };
+}

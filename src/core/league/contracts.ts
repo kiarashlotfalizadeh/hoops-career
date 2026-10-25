@@ -61,17 +61,49 @@ export function valueScore(league: League, p: Player): number {
   return s;
 }
 
-/** Trade value per $1M a season of salary below (or above) what a player is worth. */
+/** Trade value per $1M a season of salary below what a player is worth: room the rest of the roster can use (a rebuilder, whose currency room is, counts it more). */
 const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, rebuild: 0.18 };
+
+/**
+ * A contract's burden, priced the way NBA front offices price salary dumps: a first-round pick buys
+ * off about $25-35M of dead money (Toronto sent DeMarre Carroll's $30M over two seasons to Brooklyn
+ * with a first and a second in 2017; Golden State gave Memphis a first to take Andre Iguodala's $17M
+ * expiring deal in 2019), and a big multi-year overpay costs two firsts or more. So DUMP_PER_FIRST of
+ * the cap (18%: $29.7M on 2026-27's $165M) of salary over what he's worth, summed over the seasons
+ * still to be paid, costs FIRST_VALUE, the value of a typical first a year out (a mid-round one: see
+ * pickValue; the league's median next-year first measured 13.9 on opening night). Cap-relative, so it
+ * holds as the cap grows. Overpay and underpay aren't mirror images: the surplus of a cheap deal is
+ * room under the cap and the tax (SURPLUS_VALUE), which a capped-out team can't spend, while every
+ * dollar of a burden is owed, waived or not. At SURPLUS_VALUE's 0.1 per $1M a 77 OVR 27-year-old on
+ * four years at $60M (his market $12M) still had a positive value, and $185M of overpay cost about a
+ * sixteenth of a first: Anthony Davis's $58.5M for two more seasons went to any team with room for
+ * nothing. A contender pays for talent with the owner's money and minds a burden a little less; a
+ * rebuilder, whose currency room is, a little more (the luxury tax a deal adds is priced on top, in
+ * trades.ts's moneyCost).
+ */
+export const DUMP_PER_FIRST = 0.18;
+export const FIRST_VALUE = 14;
+const BURDEN_LENS: Record<Strategy, number> = { contend: 0.8, retool: 1, rebuild: 1.2 };
 
 /** A team option on the contract's last season that is still to be decided: not guaranteed money. */
 const teamOptionOpen = (league: League, p: Player) => p.contract.option === 'team' && contractExp(p.contract) > league.season;
 
 /**
  * Trade value on an exponential scale (one 90 ≈ five 80s), with a premium for stars and the
- * contract's surplus or burden. A bad enough contract makes it negative: a liability.
+ * contract's surplus or burden (see DUMP_PER_FIRST). A bad enough contract makes it negative: a
+ * liability, which a team takes on only with something for it.
  */
 export function tradeValue(league: League, p: Player, strategy: Strategy = 'retool'): number {
+  const v = valueParts(league, p, strategy);
+  return v.player - v.burden;
+}
+
+/**
+ * A player's trade value in two parts: `player`, his game and the surplus of a cheap deal, and
+ * `burden`, the trade value of his salary over what he's worth (see DUMP_PER_FIRST). Waiving him
+ * loses the first and keeps the second: his dead money is owed either way.
+ */
+export function valueParts(league: League, p: Player, strategy: Strategy = 'retool'): { player: number; burden: number } {
   let s = valueScore(league, p);
   const a = age(league, p);
   if (strategy === 'rebuild') {
@@ -94,11 +126,18 @@ export function tradeValue(league: League, p: Player, strategy: Strategy = 'reto
   // an undecided team option (the last year) can be declined, so it never counts as a burden
   const optionSeason = teamOptionOpen(league, p) ? exp : null;
   let surplus = 0;
+  let burden = 0;
   for (let s = cs; s < cs + Math.min(4, Math.max(1, exp - cs + 1)); s++) {
-    const x = (market - (salaryFor(p, s) * revenueScale(league, cs)) / revenueScale(league, s)) / 1000;
-    if (s !== optionSeason || x >= 0) surplus += x;
+    const x = market - (salaryFor(p, s) * revenueScale(league, cs)) / revenueScale(league, s);
+    if (x >= 0) surplus += x / 1000;
+    else if (s !== optionSeason) burden -= x;
   }
-  return v + surplus * SURPLUS_VALUE[strategy];
+  return { player: v + surplus * SURPLUS_VALUE[strategy], burden: contractBurden(league, burden, strategy) };
+}
+
+/** Trade value of `overpay` ($K, this season's money) of salary over a player's worth, to a team of this strategy (see DUMP_PER_FIRST). */
+export function contractBurden(league: League, overpay: number, strategy: Strategy = 'retool'): number {
+  return (overpay / CAP_FOR(league, contractSeason(league)).salaryCap / DUMP_PER_FIRST) * FIRST_VALUE * BURDEN_LENS[strategy];
 }
 
 // Share of the cap a value score earns on the open market. Sized so that what rostered players
@@ -354,13 +393,37 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
   const cs = contractSeason(league);
   const cap = CAP_FOR(league, cs);
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  const floor = p.tid === FREE_AGENT ? summerFloor(league, p) : 0;
   // a minimum-level player takes the minimum from anyone
-  if (amount <= min) return { amount: min, years };
+  if (amount <= min && floor <= min) return { amount: min, years };
   const max = playerMax(league, p, cs, tid);
   if (!marked && market >= cap.maxContract(p.experience) * MAX_ASK) amount = max;
   else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), ringChase(league, p, tid) ? 1 / RING_DISCOUNT : 1 / 1.1, 1 / 0.9);
   if (tid === league.userTid) amount *= preset(league).contractAsk;
+  // (a good free agent's summer price holds a floor, a ring chaser's and a keen team's discount included)
+  amount = Math.max(amount, floor);
   return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
+}
+
+/**
+ * A good free agent (80+ OVR) doesn't sell himself short in the summer: his price comes down no
+ * further than SUMMER_FLOOR.early of his market value through the market's first SUMMER_FLOOR.day
+ * days, and SUMMER_FLOOR.late of it after that and through the preseason, whatever a team's appeal
+ * or a contender's ring (see askingContract), and whatever the teams can still pay (see faDay). The
+ * price used to come down every five days to the most any team that wanted him could still pay,
+ * with the summer's cap space spent in its first days: over three simulated summers of the real
+ * league the median 80+ free agent signed for 57% of his market value, and 23 of 45 for under 60%
+ * (Ty Jerome, an 89, on a $13.7M mid-level; Harrison Barnes, an 83, for the minimum), so a team
+ * with room that waited a few days signed stars at half price and traded them on as bargains.
+ */
+export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6 };
+
+/** The least a free agent's price comes down to in the summer market and the preseason (see SUMMER_FLOOR), $K; 0 for anyone else, and in season. */
+export function summerFloor(league: League, p: Player): number {
+  if (p.tid !== FREE_AGENT || p.ovr < SUMMER_FLOOR.ovr || p.waivers) return 0;
+  const summer = league.phase === 'freeAgency';
+  if (!summer && league.phase !== 'preseason') return 0;
+  return marketSalary(league, p) * (summer && league.faDay < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late);
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {

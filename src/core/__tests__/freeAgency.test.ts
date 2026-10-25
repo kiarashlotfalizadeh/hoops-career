@@ -26,6 +26,7 @@ import {
   FIRED_REASON,
   MLE_YEARS,
   PREF_KEYS,
+  SUMMER_FLOOR,
   askingContract,
   capSpace,
   convertTwoWay,
@@ -53,6 +54,7 @@ import {
   wantsTwoWay,
 } from '../league/contracts';
 import {
+  BID_FLOOR,
   bidFloor,
   bidStanding,
   capHolds,
@@ -458,12 +460,53 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     const rng = new Rng(4);
     faDay(l, rng, 0, 1);
     expect(star.asking.amount).toBe(start);
-    // every team over the cap: no one can pay him 60% of his value, so he doesn't wait for the summer's money to be spent
+    // every team over the cap and no exception near his price: from day 15 it softens a little at a
+    // time and holds his summer floor (no half-price star because nobody could pay him), and a team
+    // whose cap space reaches 90% of it bids that (see faInterest)
     l.faDay = 15;
     star.faDays = 1;
     faDay(l, rng, 0, 16);
-    const now = star.tid === FREE_AGENT ? star.asking!.amount : star.contract.salaries[0];
-    expect(now).toBeLessThan(marketSalary(l, star) * 0.6);
+    expect(star.tid).toBe(FREE_AGENT);
+    expect(star.asking!.amount).toBeGreaterThanOrEqual(Math.min(start * 0.96, marketSalary(l, star) * SUMMER_FLOOR.early) - 10);
+    expect(star.asking!.amount).toBeLessThan(start);
+    const rich = l.teams.find((t) => t.tid !== U)!;
+    for (const p of standardRoster(l, rich.tid).slice(5)) releasePlayer(l, p, { news: false });
+    rich.deadMoney = [];
+    for (const p of standardRoster(l, rich.tid)) shape(l, p, 70, 27, CAP_FOR(l, contractSeason(l)).vetMin, 2);
+    const bid = faInterest(l, star).find((o) => o.tid === rich.tid);
+    expect(bid?.amount).toBeGreaterThanOrEqual(star.asking!.amount * BID_FLOOR - 50);
+  }
+
+  // an 80+ free agent's summer price softens slowly and holds a floor (75% of his market value for
+  // 20 days, 60% after), whatever teams can pay, for the user too (a contender's ring-chase discount
+  // included); a team whose mid-level comes within 90% of his price bids it
+  {
+    const l = txLeague();
+    l.phase = 'freeAgency';
+    l.faDay = 0;
+    for (const t of l.teams) overCap(l, t.tid);
+    const p = shape(l, freeAgents(l)[0], 81, 31);
+    p.contract = { start: l.season, salaries: [0] };
+    p.asking = askingContract(l, p);
+    p.faDays = 1;
+    const m = marketSalary(l, p);
+    const rng = new Rng(3);
+    for (let d = 1; d < 20 && p.tid === FREE_AGENT; d++) {
+      l.faDay = d;
+      faDay(l, rng, 0, d + 1);
+      if (p.tid === FREE_AGENT) {
+        expect(p.asking!.amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 10);
+        expect(askingContract(l, p, U).amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
+      }
+    }
+    if (p.tid === FREE_AGENT) {
+      l.faDay = 25;
+      p.faDays = 1;
+      faDay(l, rng, 0, 26);
+    }
+    // signed at a team's price within reach, or still holding at least 60%
+    const now = p.tid === FREE_AGENT ? p.asking!.amount : p.contract.salaries[0];
+    expect(now).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.late - 50);
   }
 
   // cuts prices every 5 days until the market can pay, and the market clears (T1)
@@ -526,7 +569,8 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
         while (standardRoster(l, t.tid).length < CAP.rosterMax)
           signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
       }
-      const fa = shape(l, freeAgents(l)[0], 82, 27);
+      // (a 79 on a minimum ask: an 80+ holds his summer floor, see SUMMER_FLOOR)
+      const fa = shape(l, freeAgents(l)[0], 79, 27);
       fa.contract = { start: l.season, salaries: [0] };
       fa.asking = { amount: CAP_FOR(l, contractSeason(l)).vetMin, years: 1 };
       const rng = new Rng(6);

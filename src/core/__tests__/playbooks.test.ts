@@ -297,18 +297,19 @@ describe('saved playbooks', () => {
       expect(playbookStatus(l)?.changes.map(changeText)).toEqual(['Pace 80 → 70']);
     }
     {
-      // takes off a set package, situational plans and the assistant a playbook was saved without, and says so
+      // takes off a set package and situational plans a playbook was saved without, and the assistant
+      // it was saved with switched off, and says so
       const l = fresh();
       const t = tactics(l);
-      // the screens keep these as no key at all when they're empty or off
+      // the screens keep these as no key at all when they're empty (the assistant: when it's on)
       delete t.offense.sets;
       delete t.situations;
-      delete t.manage.assistantAdjusts;
+      t.manage.assistantAdjusts = false;
       expect(savePlaybook(l, 'Plain')).toBeNull();
       const pb = l.playbooks![0];
       t.offense.sets = ['spain', 'horns'];
       t.situations = [situationFromTemplate('chasing')];
-      t.manage.assistantAdjusts = true;
+      delete t.manage.assistantAdjusts;
       // what loading would change, and the header's "edited"
       const lines = ['Assistant adjusts in simmed games On → Off', 'Set package Spain, Horns → None', 'Situations changed'];
       expect(playbookDiff(t, pb, roster(l)).map(changeText)).toEqual(expect.arrayContaining(lines));
@@ -320,16 +321,17 @@ describe('saved playbooks', () => {
       const out = tactics(l);
       expect(out.offense).not.toHaveProperty('sets');
       expect(out).not.toHaveProperty('situations');
-      expect(out.manage).not.toHaveProperty('assistantAdjusts');
+      expect(out.manage.assistantAdjusts).toBe(false);
       expect(playbookStatus(l)?.changes).toEqual([]);
-      // and one saved with them on puts them back
+      // and one saved with them on puts them back (the assistant on: no key)
       out.offense.sets = ['floppy'];
-      out.manage.assistantAdjusts = true;
+      delete out.manage.assistantAdjusts;
       expect(savePlaybook(l, 'Busy')).toBeNull();
       delete out.offense.sets;
-      delete out.manage.assistantAdjusts;
+      out.manage.assistantAdjusts = false;
       const busy = loadPlaybook(out, l.playbooks![1], roster(l));
-      expect([busy.offense.sets, busy.manage.assistantAdjusts]).toEqual([['floppy'], true]);
+      expect(busy.offense.sets).toEqual(['floppy']);
+      expect(busy.manage).not.toHaveProperty('assistantAdjusts');
     }
     {
       // leaves them as they are when loading a playbook saved before it said so

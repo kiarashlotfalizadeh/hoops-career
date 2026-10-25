@@ -344,6 +344,8 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     if (g.hurt !== undefined && !(Array.isArray(g.hurt) && g.hurt.every(int))) delete g.hurt;
     if (g.wpLow !== undefined && !(num(g.wpLow) && g.wpLow >= 0 && g.wpLow <= 1)) delete g.wpLow;
     if (g.moves !== undefined && !movesIntact(g.moves)) delete g.moves;
+    // what a live game's moves were worth: damaged, it goes (the debrief then says nothing of it)
+    if (g.movesWorth !== undefined && !(worthIntact(g.movesWorth) && num(g.movesWorth.win) && int(g.movesWorth.n))) delete g.movesWorth;
     if (g.edge !== undefined && !num(g.edge)) delete g.edge;
     if (g.flowT !== undefined && !(nums(g.flowT) && g.flowT.length === g.flow?.length)) delete g.flowT;
     if (g.flowPoss !== undefined && !(Array.isArray(g.flowPoss) && g.flowPoss.length === g.flowPeriods?.length && g.flowPoss.every((s) => s === 0 || s === 1))) delete g.flowPoss;
@@ -359,11 +361,46 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
   // the user's weekly odds: a damaged trail goes (the next week starts it again)
   if (x.oddsTrail !== undefined && !trailIntact(x, x.oddsTrail)) delete x.oddsTrail;
   migrateOwner(x);
+  migrateReadings(x);
   // god mode's switch and its count of edits: out of shape, they go (god mode off, an unedited league)
   if (x.settings.godMode !== undefined && typeof x.settings.godMode !== 'boolean') delete x.settings.godMode;
   if (x.godEdits !== undefined && !(int(x.godEdits) && x.godEdits >= 0)) delete x.godEdits;
   x.version = SAVE_VERSION;
   return x;
+}
+
+/** A measured reading in shape: its shrunk worth, the reading as measured and its standard error. */
+const worthIntact = (w: unknown) => obj(w) && num(w.pts) && num(w.raw) && num(w.se);
+
+const editIntact = (e: unknown) =>
+  obj(e) &&
+  int(e.id) &&
+  int(e.season) &&
+  int(e.day) &&
+  str(e.what) &&
+  Array.isArray(e.diff) &&
+  e.diff.every((d) => Array.isArray(d) && str(d[0])) &&
+  nums(e.ahead) &&
+  (e.worth === undefined || worthIntact(e.worth)) &&
+  (e.check === undefined || worthIntact(e.check));
+
+const storyIntact = (s: unknown) => obj(s) && int(s.id) && int(s.day) && str(s.head) && nums(s.tids) && nums(s.pids);
+
+/**
+ * What the staff measured and the league remembers: the tactics edits and their checks, the week's
+ * and a skid's call, the calls' measured numbers, the staff's own picks and the seasons' chronicle.
+ * A damaged one goes (a call is planned again, an edit is no longer checked, a season is forgotten).
+ */
+function migrateReadings(x: League) {
+  if (x.tacticEdits !== undefined) x.tacticEdits = Array.isArray(x.tacticEdits) ? x.tacticEdits.filter(editIntact) : [];
+  if (x.weekCall !== undefined && !(obj(x.weekCall) && int(x.weekCall.season) && int(x.weekCall.week) && int(x.weekCall.tid) && Array.isArray(x.weekCall.kinds))) delete x.weekCall;
+  if (x.skidCall !== undefined && !(obj(x.skidCall) && int(x.skidCall.season) && int(x.skidCall.tid) && int(x.skidCall.gid) && int(x.skidCall.opp))) delete x.skidCall;
+  if (x.callWorth !== undefined && !(record(x.callWorth) && Object.values(x.callWorth).every((c) => obj(c) && int(c.gid) && num(c.sig)))) delete x.callWorth;
+  if (x.staffPicks !== undefined) x.staffPicks = Array.isArray(x.staffPicks) ? x.staffPicks.filter((p) => obj(p) && int(p.season) && int(p.day) && str(p.text)) : [];
+  if (x.chronicle !== undefined)
+    x.chronicle = Array.isArray(x.chronicle)
+      ? x.chronicle.filter((c) => obj(c) && int(c.season) && Array.isArray(c.stories) && c.stories.every(storyIntact) && Array.isArray(c.series) && c.series.every(nums))
+      : [];
 }
 
 /** The summer's job offers in shape: a season, and offers from teams in the league (not the user's), each with its kind and note. */

@@ -107,6 +107,24 @@ export function runOf(results: Result[]): { won: boolean; n: number } | null {
 /** "128-127", with the overtimes: "128-127 OT", "131-130 2OT". */
 export const scoreText = (r: Pick<Result, 'us' | 'them' | 'ot'>) => `${r.us}-${r.them}${r.ot ? ` ${r.ot > 1 ? r.ot : ''}OT` : ''}`;
 
+/** Days a lead story can be older than his last game and still lead Today: past it, the game does. */
+export const LEAD_STALE = 3;
+
+/**
+ * Today's lead: his last game while it's fresh (see freshResult); otherwise the top story about his
+ * team (topStory), unless his last game is newer than it by more than LEAD_STALE days (an 11-day-old
+ * front page doesn't lead over last night's loss: the game does, as the latest thing that happened).
+ */
+export function leadOf(l: League): { kind: 'result'; r: Result; story: GameStory | null } | { kind: 'story'; n: NewsItem } | null {
+  const fresh = freshResult(l);
+  if (fresh) return { kind: 'result', ...fresh };
+  const n = topStory(l);
+  const inSeason = l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs';
+  const [last] = inSeason ? lastResults(l, 1) : [];
+  if (last && (!n || last.day - n.day > LEAD_STALE)) return { kind: 'result', r: last, story: gameStoryFor(l, last.gid) };
+  return n ? { kind: 'story', n } : null;
+}
+
 /**
  * The user's last game while it's still the news: played yesterday (or today, finished live), in
  * the season's games. Its story is the press's (gameStoryFor), when there is one.

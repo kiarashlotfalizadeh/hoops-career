@@ -7,6 +7,7 @@ import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { billingFor } from '../core/analysis/gameStory';
 import { openCallIds } from '../core/league/calls';
+import { isWeekId } from '../core/league/weekCall';
 import { markOffersSeen } from '../core/league/proposals';
 
 export type SimTarget =
@@ -73,7 +74,9 @@ export function targetDone(l: League, target: SimTarget, startDay: number, start
     case 'month':
       return l.day - startDay >= MONTH_DAYS;
     case 'bigNight':
-      return l.day >= target.day;
+      // the day it was aimed at, or the first night on the way that's big now (a billing is read
+      // from the standings and the streaks of the day: the one aimed at can fall away, another come up)
+      return l.day >= target.day || (l.day > startDay && bigNightNow(l));
     case 'untilUserGame':
       if (l.day === startDay) return false;
       if (l.phase === 'playoffs') schedulePlayoffDay(l);
@@ -131,9 +134,10 @@ export interface SimHooks {
  * Play days until `target` (or a stop): the league in hand moves on in place. Under `stopOnNews`, a
  * sim stops early (except one of a set number of days) for what needs an answer: an important
  * unread message, a staff call that wasn't open when it started (or came due since: see
- * openCallIds; each playoff series of his once, the morning it starts), or the morning of one of his
- * biggest games (with a setting of its own). Stopping early changes nothing that's played: the next
- * sim carries on from the same day.
+ * openCallIds; each playoff series of his once, the morning it starts, and each morning after a loss
+ * that has him behind; the week's call only a week's sim), or the morning of one of his biggest games
+ * (with a setting of its own). Stopping early changes nothing that's played: the next sim carries on
+ * from the same day.
  */
 export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {}): Promise<{ days: number; stop: SimStop }> {
   // (it starts from a screen whose Needs you lists every open offer: their dates stand from here)
@@ -151,6 +155,7 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const callsBefore = new Set(stops ? openCallIds(l) : []);
   // (a sim to the next game, or to a big night, stops there anyway)
   const bigGames = stops && loopSetting(l, 'stopForBigGames') && target.kind !== 'untilUserGame' && target.kind !== 'bigNight';
+  const weekly = target.kind === 'week';
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
   for (;;) {
@@ -162,7 +167,9 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
     if ((l.fired && !firedBefore) || (ultimatum() !== undefined && ultimatum() !== ultimatumBefore)) return { days, stop: 'news' };
     // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
     if (stops && days > 1 && bigNews() > newsBefore) return { days, stop: 'news' };
-    if (stops && openCallIds(l).some((id) => !callsBefore.has(id))) return { days, stop: 'call' };
+    // (the week's call stops a week's sim, the one it opens at the end of; a longer one passes it,
+    // the staff makes its pick, and the digest says so; a sim to the next game ends on its morning anyway)
+    if (stops && openCallIds(l).some((id) => !callsBefore.has(id) && (weekly || !isWeekId(id)))) return { days, stop: 'call' };
     if (bigGames && bigNightToday(l)) return { days, stop: 'bigGame' };
     if (days % every === 0) await hooks.checkpoint?.(l);
     await hooks.yieldDay?.();
@@ -179,6 +186,15 @@ export const isFrontPage = (l: League, n: NewsItem) => n.weight === 3 && n.tids.
 export function bigNightToday(l: League): boolean {
   const g = userGameOnDay(l, l.day);
   return !!g && billingFor(l, g)?.weight === 3;
+}
+
+/** The smallest billing that makes a night big ("Sim to the next big night": flow.ts's BIG_NIGHT). */
+const BIG_NIGHT = 2;
+
+/** The user plays a big night today, as its billing reads now. */
+function bigNightNow(l: League): boolean {
+  const g = userGameOnDay(l, l.day);
+  return !!g && (billingFor(l, g)?.weight ?? 0) >= BIG_NIGHT;
 }
 
 export function runTask(l: League, op: TaskOp): TaskResult {

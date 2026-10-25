@@ -10,17 +10,19 @@ import { teamName } from '../../core/league/helpers';
 import { pickLabel, pickTermsNote } from '../../core/league/trades';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Statline } from '../components/ui';
-import { pickOrder, projText } from '../draft/common';
-import { PROJECTION_NOTE, pickProjection, teamPath } from './shared';
+import { PICK_RANGE_NOTE, pickOrder, pickProjText, projectedSlot } from '../draft/common';
+import { teamPath } from './shared';
 
 /**
  * One draft pick: whose it was (its team's mark) and its name ("2027 1st #4 (LAC)"), the team behind
- * it in words, its terms, and where it would land today ("proj. #17", neutral: a projection, not a
- * grade). Every row reads the same way: one owed to another team (`owner`) names its owner, one from
- * another team names that team, and either links to the other team; a team's own pick is "Own pick".
+ * it in words, its terms, and where it projects until its slot is set ("proj. #6-12", see
+ * pickProjText; neutral: a projection, not a grade; `hidden` while the lottery's reveal is still to
+ * be watched). Every row reads the same way: one owed to another team (`owner`) names its owner, one
+ * from another team names that team, and either links to the other team; a team's own pick is "Own pick".
  */
-export function PickRow({ league, d, proj, owner = false }: { league: League; d: DraftPick; proj?: number; owner?: boolean }) {
+export function PickRow({ league, d, hidden = false, owner = false }: { league: League; d: DraftPick; hidden?: boolean; owner?: boolean }) {
   const terms = pickTermsNote(league, d);
+  const proj = hidden ? undefined : pickProjText(league, d);
   // the other team in the pick's story: its owner, or the team whose record decides it
   const other = owner ? d.tid : d.originalTid !== d.tid ? d.originalTid : undefined;
   const whose = owner ? `Owned by the ${teamName(league.teams[d.tid])}.` : other !== undefined ? `From the ${teamName(league.teams[other])}.` : 'Own pick.';
@@ -33,7 +35,7 @@ export function PickRow({ league, d, proj, owner = false }: { league: League; d:
         <span className="lr-meta">{meta}</span>
       </span>
       <span className="row lg-pick-r">
-        {proj !== undefined && <span className="tiny dim num nowrap">{projText(proj)}</span>}
+        {proj !== undefined && <span className="tiny dim num nowrap">{proj}</span>}
         {other !== undefined && <ChevronRight size={16} className="dim" />}
       </span>
     </>
@@ -48,7 +50,7 @@ export function PickRow({ league, d, proj, owner = false }: { league: League; d:
 }
 
 export function PicksList({ league, tid }: { league: League; tid: number }) {
-  const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  const proj = useLeagueMemo(() => projectedSlot(league), [league]);
   // a pick whose slot is set carries its number in its name, and every pick its year: only a projection is added
   const order = pickOrder(league, proj);
   const owned = league.draftPicks.filter((d) => d.tid === tid).sort(order);
@@ -65,16 +67,16 @@ export function PicksList({ league, tid }: { league: League; tid: number }) {
           ]}
         />
       </div>
-      <Section title="Owned" right={owned.some((d) => proj(d) !== undefined) ? <Help title="Projected picks">{PROJECTION_NOTE}</Help> : undefined}>
+      <Section title="Owned" right={owned.some((d) => proj(d) !== undefined) ? <Help title="Projected picks">{PICK_RANGE_NOTE}</Help> : undefined}>
         <div className="card flush list">
-          {owned.length === 0 ? <div className="empty">No draft picks.</div> : owned.map((d) => <PickRow key={d.dpid} league={league} d={d} proj={proj(d)} />)}
+          {owned.length === 0 ? <div className="empty">No draft picks.</div> : owned.map((d) => <PickRow key={d.dpid} league={league} d={d} />)}
         </div>
       </Section>
       {away.length > 0 && (
         <Section title="Owed to others">
           <div className="card flush list">
             {away.map((d) => (
-              <PickRow key={d.dpid} league={league} d={d} proj={proj(d)} owner />
+              <PickRow key={d.dpid} league={league} d={d} owner />
             ))}
           </div>
         </Section>

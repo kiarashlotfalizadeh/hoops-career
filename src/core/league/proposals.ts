@@ -330,29 +330,37 @@ function trySell(league: League, rng: Rng): Pitch | null {
   return null;
 }
 
+/** Contracts a taxpayer tries to dump on the user, its worst first (see tryDump). */
+const DUMP_TRIES = 3;
+
 /**
- * A taxpayer offers its worst contract with picks attached, the cheapest first (the cheapest makes
- * way for a better one past three; two firsts at most), until the user comes out ahead in neutral
- * value. The user needs the cap room (or the salary going back) and the roster spot.
+ * A taxpayer offers its worst contract it can pay off with picks attached, the cheapest first (the
+ * cheapest makes way for a better one past three; two firsts at most), until the user comes out
+ * ahead in neutral value. The user needs the cap room (or the salary going back) and the roster spot.
  */
 function tryDump(league: League, rng: Rng): Pitch | null {
   const user = league.userTid;
   const cs = contractSeason(league);
   const tax = CAP_FOR(league, cs).luxuryTax;
   for (const t of rng.shuffle(free(league).filter((x) => capPayroll(league, x.tid, cs) > tax)).slice(0, 4)) {
+    // its worst contracts first, up to DUMP_TRIES: a burden that three picks (two firsts at most)
+    // can't pay off isn't one it can dump, so the next one is tried
     const bad = standardRoster(league, t.tid)
       .filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !tradedAwayBy(league, p, user) && tradeValue(league, p) < 0)
-      .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
-    if (!bad || pitchedLately(league, bad.pid, `dump:${t.tid}`)) continue;
-    const deal = dumpPackage(league, t.tid, user, bad, (o) => fair(league, o, 0));
-    if (!deal || !evaluateTrade(league, deal).accept) continue;
-    return {
-      tid: t.tid,
-      offer: deal,
-      kind: 'dump',
-      note: `We need to get under the luxury tax. Take ${shortName(league, bad)}'s contract and the pick${deal.b.dpids.length > 1 ? 's are' : ' is'} yours.`,
-      pitch: `dump:${t.tid}`,
-    };
+      .sort((a, b) => tradeValue(league, a) - tradeValue(league, b) || a.pid - b.pid)
+      .slice(0, DUMP_TRIES);
+    for (const p of bad) {
+      if (pitchedLately(league, p.pid, `dump:${t.tid}`)) break;
+      const deal = dumpPackage(league, t.tid, user, p, (o) => fair(league, o, 0));
+      if (!deal || !evaluateTrade(league, deal).accept) continue;
+      return {
+        tid: t.tid,
+        offer: deal,
+        kind: 'dump',
+        note: `We need to get under the luxury tax. Take ${shortName(league, p)}'s contract and the pick${deal.b.dpids.length > 1 ? 's are' : ' is'} yours.`,
+        pitch: `dump:${t.tid}`,
+      };
+    }
   }
   return null;
 }

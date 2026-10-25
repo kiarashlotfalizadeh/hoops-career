@@ -1,8 +1,12 @@
 // The owner and the books: the user's cash (Team.cash, every season's profit and loss since the
 // league began, the luxury tax included) has consequences once it's in the red. The owner judges one
 // measure, the cash the day the regular season's books close (after revenue sharing and that
-// season's luxury tax: see closeBooks): the playoff gates that come after are his bonus, not the
-// coach's cover, so a warned contender can't be bailed out by a deep run. The steps move only at
+// season's luxury tax: see closeBooks), with the luxury tax he signed off on taken back out (a
+// win-now owner's payroll goal lets a contender pay the tax up to the first apron: see
+// sanctionedTax), so the goals and the books tell one money story: a contender that pays the tax the
+// owner asked for isn't frozen or fired over it, and spending past his line still is. The playoff
+// gates that come after are his bonus, not the coach's cover, so a warned contender can't be bailed
+// out by a deep run (they are in the cash the next season's close reads). The steps move only at
 // his season review, on that close: in the red, no word or a warning becomes an ultimatum (the first
 // close of a payroll the coach inherited, in his first season in charge, only a warning); still in
 // the red at a later review, the budget is frozen (the staff and facilities budgets cut to the
@@ -18,8 +22,8 @@
 // Each step is a staff call on Today (see calls.ts), which stops a long sim; the owner's mail says it
 // in his words. Nothing here draws from the league's random stream.
 import type { League } from '../types';
-import { addInbox, curTeamSeason, revenueScale } from './helpers';
-import { PROJECT_HOME_GAMES, seasonEndCash } from './finances';
+import { CAP_FOR, addInbox, curTeamSeason, payroll, revenueScale } from './helpers';
+import { PROJECT_HOME_GAMES, seasonEndCash, teamTaxBill } from './finances';
 import { GRACE } from './jobSecurity';
 import { money } from '../format';
 
@@ -85,6 +89,59 @@ export function closeBooks(league: League) {
 /** Team `tid`'s cash when this season's regular-season books closed (before then, or in a save from before it was kept: its cash now). */
 export function closedCash(league: League, tid: number): number {
   return curTeamSeason(league, tid).closeCash ?? league.teams[tid].cash;
+}
+
+/**
+ * What this season's payroll goal signs off on ($K), on its payroll as assessed at the end of the
+ * regular season (before then, today's): the luxury tax up to its target (a win-now owner's first
+ * apron, or the payroll the coach inherited past the owner's line: see planOwnerGoals), and the
+ * inherited payroll's salary past the owner's own line (OwnerGoal.line). None without a payroll goal,
+ * or with one at the tax line itself.
+ */
+function allowedThisSeason(league: League, tid: number): number {
+  const og = league.ownerGoals;
+  if (!og || og.season !== league.season || og.tid !== tid) return 0;
+  const g = og.goals.find((x) => x.kind === 'payroll');
+  if (!g) return 0;
+  const tax = CAP_FOR(league).luxuryTax;
+  const own = g.line ?? Math.max(tax, g.target);
+  const pay = curTeamSeason(league, tid).payroll || payroll(league, tid);
+  const upTo = Math.min(pay, g.target);
+  return teamTaxBill(league, tid, upTo) + Math.max(0, upTo - own);
+}
+
+/**
+ * What the owner signed off on since the coach took over ($K), which the books don't count against
+ * him: the luxury tax up to his payroll goal's line, and the payroll the coach inherited past it
+ * (see allowedThisSeason), each reviewed season's (TeamSeason.signedOff, kept at the review) and this
+ * season's while it's still to be reviewed. Without it the two money stories disagreed: a win-now
+ * owner's goal said "stay under the first apron" and the season met it, while the tax it paid took
+ * the books into the red and brought an ultimatum, then a freeze (the 76ers on Hard, the review
+ * found); and the real league's Thunder, back-to-back champions on the extensions they signed before
+ * the coach arrived, went warning, ultimatum, freeze under every owner.
+ */
+export function sanctionedTax(league: League, tid = league.userTid): number {
+  const from = league.tenureStart ?? league.startSeason;
+  let sum = 0;
+  let current = false;
+  for (const ts of league.teams[tid].seasons) {
+    if (ts.season < from || ts.signedOff === undefined) continue;
+    sum += ts.signedOff;
+    if (ts.season === league.season) current = true;
+  }
+  return sum + (current ? 0 : allowedThisSeason(league, tid));
+}
+
+/**
+ * The books as the owner reads them (the coach's own: tid is the user's): the cash his review will
+ * judge, as it projects now (`judged`: the regular season's projected close, see seasonEndCash,
+ * with the tax he signed off on taken back out; the playoff gates still to come aren't in it), the
+ * projected close itself (`end`) and the tax he signed off on (`sanctioned`). Reads the league only.
+ */
+export function booksOutlook(league: League): { end: number; judged: number; sanctioned: number; tax: number } {
+  const p = seasonEndCash(league, league.userTid);
+  const sanctioned = sanctionedTax(league);
+  return { end: p.end, judged: p.end + sanctioned, sanctioned, tax: p.tax };
 }
 
 /** The coach's first season in charge (a new career or a new job): the payroll and the books are the ones he inherited. */
@@ -155,11 +212,11 @@ function step(league: League, stage: BooksStage, close?: number) {
     return;
   }
   if (stage === 'warning') {
-    const p = seasonEndCash(league, league.userTid);
+    const p = booksOutlook(league);
     addInbox(league, {
       from: 'Owner',
       subject: 'The books are heading into the red',
-      body: `At this rate the regular season's books close ${money(-p.end)} in the red${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax bill` : ''}. That comes out of my pocket, and playoff money won't cover it: I judge the books when the regular season ends. Payroll, the tax and the budgets are where the money goes. Fix it before the deadline, or we'll have a harder conversation at the review.`,
+      body: `At this rate the regular season's books close ${money(-p.judged)} in the red${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax bill` : ''}${p.sanctioned > 0 ? ` (the ${money(p.sanctioned)} I signed off on, tax to my line and any payroll you inherited past it, doesn't count against you)` : ''}. That comes out of my pocket, and playoff money won't cover it: I judge the books when the regular season ends. Payroll, the tax and the budgets are where the money goes. Fix it before the deadline, or we'll have a harder conversation at the review.`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -207,7 +264,7 @@ export function booksDaily(league: League) {
   if (league.fired || !warnWindow(league) || (b && !(b.stage === 'warning' && b.season < league.season))) return;
   const ts = curTeamSeason(league, league.userTid);
   if (ts.homeWon + ts.homeLost < PROJECT_HOME_GAMES) return;
-  if (seasonEndCash(league, league.userTid).end < -WARN_RED * revenueScale(league)) step(league, 'warning');
+  if (booksOutlook(league).judged < -WARN_RED * revenueScale(league)) step(league, 'warning');
 }
 
 /** What the season's review does about the books (see booksVerdict). */
@@ -224,8 +281,13 @@ export interface BooksVerdict {
   fire?: true;
 }
 
+/** The cash the season's review judges ($K): the regular season's close (see closeBooks), the tax the owner signed off on taken back out (see sanctionedTax). */
+export function reviewClose(league: League): number {
+  return Math.round(closedCash(league, league.userTid) + sanctionedTax(league));
+}
+
 /**
- * What the season's review will do about the books, on the regular season's close: in the black,
+ * What the season's review will do about the books, on its close (see reviewClose): in the black,
  * any step lifts; in the red, no step or a warning becomes an ultimatum, an ultimatum from an earlier
  * season a freeze; a season played frozen grades FREEZE_GRADE at best, and closed deeper in the red
  * than at the last review it gets the final warning (BLEED_GRADE at best), past DEBT_LIMIT or after
@@ -235,7 +297,7 @@ export interface BooksVerdict {
 export function booksVerdict(league: League): BooksVerdict | null {
   if (league.fired) return null;
   const b = booksOf(league);
-  const close = closedCash(league, league.userTid);
+  const close = reviewClose(league);
   if (close >= 0) return b ? { close, stage: null } : null;
   // (a payroll he inherited: its first close in the red only warns)
   if (!b || b.stage === 'warning') return { close, stage: inherited(league) ? 'warning' : 'ultimatum' };
@@ -249,6 +311,9 @@ export function booksVerdict(league: League): BooksVerdict | null {
 
 /** At the season's review: the books take the step the verdict says (see booksVerdict), and the owner says so when it changes. */
 export function booksReview(league: League, v: BooksVerdict | null = booksVerdict(league)) {
+  // what the owner signed off on this season, kept for the seasons to come (see sanctionedTax)
+  const allowed = allowedThisSeason(league, league.userTid);
+  if (allowed > 0) curTeamSeason(league, league.userTid).signedOff = Math.round(allowed);
   if (!v) return;
   const b = booksOf(league);
   if (v.stage === null) {

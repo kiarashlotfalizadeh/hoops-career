@@ -7,7 +7,19 @@ import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { startRegularSeason } from '../league/season';
 import { CAP_FOR, contractSeason, curTeamSeason, dateToDay, freeAgents, payroll, prospects, standardRoster, twoWayRoster } from '../league/helpers';
-import { DEC_15, askingContract, marketSalary, releaseDeadMoney, releasePlayer, signPlayer, tradeValue, twoWaySalary, valueScore } from '../league/contracts';
+import {
+  DEC_15,
+  DUMP_PER_FIRST,
+  FIRST_VALUE,
+  askingContract,
+  marketSalary,
+  releaseDeadMoney,
+  releasePlayer,
+  signPlayer,
+  tradeValue,
+  twoWaySalary,
+  valueScore,
+} from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import {
   CASH_PCT,
@@ -22,6 +34,7 @@ import {
   executeTrade,
   neutralSplit,
   pickLabel,
+  pickRange,
   pickTermsNote,
   pickValue,
   pickValueFor,
@@ -114,6 +127,13 @@ function record(l: League, tid: number, won: number, lost: number, playoffs = fa
   ts.won = won;
   ts.lost = lost;
   ts.playoffRound = playoffs ? 1 : -1;
+  // a point margin to go with it (about 40 points per 100 possessions per unit of win%), as a
+  // season's games would leave it: the pick projection reads the net rating as well as the record
+  const gp = won + lost;
+  const margin = gp ? 40 * (won / gp - 0.5) : 0;
+  ts.poss = ts.oppPoss = 100 * gp;
+  ts.ptsFor = (110 + margin / 2) * gp;
+  ts.ptsAgainst = (110 - margin / 2) * gp;
 }
 
 it("valuation and the AI's verdict: talent over depth, strategy lenses within 15%, liabilities, picks, injuries, the tax, easy mode, options, and the reasons it gives", () => {
@@ -159,12 +179,38 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(playerValueFor(l, vet, 2, true)).toBeCloseTo(neutral);
   }
 
+  // a bad contract carries its cost: a season of dead money at DUMP_PER_FIRST of the cap is worth about
+  // minus a typical first, no team takes it (or a talented 33-year-old overpaid by two firsts) for
+  // nothing, and a team with room takes it with picks attached; the tax makes it dearer still
+  {
+    const l = txLeague();
+    l.phase = 'regular';
+    const cap = CAP_FOR(l).salaryCap;
+    const dead = shape(l, standardRoster(l, U)[0], 45, 33, Math.round(cap * DUMP_PER_FIRST), 1);
+    expect(tradeValue(l, dead)).toBeLessThan(-FIRST_VALUE * 0.85);
+    expect(tradeValue(l, dead)).toBeGreaterThan(-FIRST_VALUE * 1.05);
+    const dump = (tid: number, dpids: number[] = []): TradeOffer => ({ a: { tid: U, pids: [dead.pid], dpids }, b: { tid, pids: [], dpids: [] } });
+    for (const t of l.teams) if (t.tid !== U) expect(teamAccepts(l, dump(t.tid), t.tid)).toBe(false);
+    const star = shape(l, standardRoster(l, U)[1], 84, 33, Math.round(cap * 0.35), 2);
+    expect(tradeValue(l, star)).toBeLessThan(0);
+    for (const t of l.teams) if (t.tid !== U && t.strategy !== 'contend') expect(teamAccepts(l, { ...dump(t.tid), a: { tid: U, pids: [star.pid], dpids: [] } }, t.tid)).toBe(false);
+    // a rebuilder with room is paid to absorb it: two firsts do it
+    const room = l.teams.find((t) => t.tid !== U)!.tid;
+    l.teams[room].strategy = 'rebuild';
+    for (const p of standardRoster(l, room).slice(4)) p.contract = { start: l.season, salaries: [CAP_FOR(l).minContract] };
+    const firsts = l.draftPicks
+      .filter((d) => d.tid === U && d.round === 1)
+      .slice(0, 2)
+      .map((d) => d.dpid);
+    expect(teamAccepts(l, dump(room, firsts), room)).toBe(true);
+  }
+
   // keeps a liability within 15% of neutral the same way: no team takes one in as a bigger burden than it sees
   {
     const l = txLeague();
     l.phase = 'regular';
     // an overpaid 76 at 31: a burden to the league, worth having to a contender, a bigger burden to a rebuilder
-    const bad = shape(l, standardRoster(l, AI)[0], 76, 31, Math.round(CAP_FOR(l).salaryCap * 0.25), 4);
+    const bad = shape(l, standardRoster(l, AI)[0], 76, 31, Math.round(CAP_FOR(l).salaryCap * 0.12), 2);
     const neutral = tradeValue(l, bad);
     expect(neutral).toBeLessThan(0);
     expect(tradeValue(l, bad, 'contend')).toBeGreaterThan(0);
@@ -954,13 +1000,44 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect(swapSeasons(l, U, THIRD)).not.toContain(y);
   }
 
+  // a pick is priced from projected strength from opening night: the worst roster's own first well
+  // above the best's before a game is played (every first was priced at the middle's value then),
+  // with a range for every pick ("proj. #lo-hi", the slot once it's set)
+  {
+    const l = termsLeague();
+    const roster = (tid: number, d: number) => {
+      for (const p of standardRoster(l, tid)) p.ovr = Math.max(40, Math.min(99, p.ovr + d));
+    };
+    roster(AI, -10);
+    roster(THIRD, 10);
+    const y = l.season;
+    const weak = pickValue(l, own(l, AI, y));
+    const strong = pickValue(l, own(l, THIRD, y));
+    expect(weak).toBeGreaterThan(strong * 1.5);
+    expect(topOdds(l, own(l, AI, y), 4)).toBeGreaterThan(topOdds(l, own(l, THIRD, y), 4));
+    const a = pickRange(l, own(l, AI, y))!;
+    const b = pickRange(l, own(l, THIRD, y))!;
+    expect(a.lo).toBeLessThanOrEqual(a.hi);
+    expect(a.hi).toBeLessThan(b.lo);
+    // a later draft drifts toward the middle
+    const later = pickRange(l, own(l, AI, y + 2))!;
+    expect(later.mean).toBeGreaterThan(a.mean);
+    // a second-rounder's range is in the second round
+    const second = l.draftPicks.find((d) => d.season === y && d.round === 2 && d.originalTid === AI)!;
+    expect(pickRange(l, second)!.lo).toBeGreaterThan(30);
+    own(l, AI, y).pick = 3;
+    expect(pickRange(l, own(l, AI, y))).toBeNull();
+    delete own(l, AI, y).pick;
+  }
+
   // is worth a lot from a much worse team and next to nothing from a much better one, for the holder and against the other
   {
     const l = termsLeague();
-    for (const t of l.teams) record(l, t.tid, 20, 20);
-    record(l, U, 20, 20);
-    record(l, AI, 3, 37);
-    record(l, THIRD, 37, 3);
+    // (a full season's records: the projection reads the rosters too until the games are in)
+    for (const t of l.teams) record(l, t.tid, 41, 41);
+    record(l, U, 41, 41);
+    record(l, AI, 6, 76);
+    record(l, THIRD, 76, 6);
     const y = l.season;
     const worse = swapOutlook(l, own(l, U, y), own(l, AI, y));
     const better = swapOutlook(l, own(l, U, y), own(l, THIRD, y));

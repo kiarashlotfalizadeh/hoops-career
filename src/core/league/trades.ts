@@ -8,7 +8,6 @@
 import type { DraftPick, League, Player, TeamSeason } from '../types';
 import { preset } from './difficulty';
 import { CAP, MATCH_MID_PCT, MATCH_SMALL_PCT, seasonLabel } from '../constants';
-import { clamp } from '../random';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import {
   CAP_FOR,
@@ -21,13 +20,13 @@ import {
   dateToDay,
   fmtDate,
   inSeason,
+  payroll,
   playerName,
   prospects,
   revenueScale,
   rosterMaxNow,
   standardRoster,
   twoWayRoster,
-  winPct,
 } from './helpers';
 import {
   type Strategy,
@@ -41,6 +40,7 @@ import {
   salaryForScore,
   summerRoster,
   tradeValue,
+  valueParts,
   valueScore,
 } from './contracts';
 import { teamTaxBill } from './finances';
@@ -49,6 +49,7 @@ import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
 import { money, moneyExact } from '../format';
 import { freezeTradeReason } from './books';
+import { type PickProjection, pickProjection } from '../analysis/odds';
 
 export interface TradeSide {
   tid: number;
@@ -174,15 +175,21 @@ interface Outlook {
  * kept for a day, a phase and a class as classProspects keeps it (the slots' values depend on
  * nothing else), so a deal search prices each pick once instead of on every look.
  */
-const outlookCache = new WeakMap<League, { key: string; byPick: Map<string, Outlook> }>();
+const outlookCache = new WeakMap<League, { key: string; proj: PickProjection; byPick: Map<string, Outlook> }>();
+
+/** How much of a team's projected place in the standings carries into each later draft (the rest regresses to the middle): NBA records keep about this much from one season to the next. */
+const PLACE_KEEP = 0.75;
 
 /**
  * A pick's outlook: what the player taken there would be worth once drafted, his rookie-scale
  * surplus included (the prospect ranked at its slot in this season's class, in later classes the
  * player a slot usually brings), discounted by the time to its draft: up to 15% over the last year
- * (who will be there, and how he turns out) and 7% for each year before that. Unknown slots are
- * projected from the original team's record (regressed toward the middle for later years) and
- * spread over a range of outcomes.
+ * (who will be there, and how he turns out) and 7% for each year before that. Unknown slots come
+ * from the original team's projected strength (see pickProjection): in the next draft to be
+ * ordered, its chance at each slot, the lottery's draw included; in a later one, a spread of
+ * outcomes around its expected place regressed toward the middle (PLACE_KEEP a season), wider each
+ * year out. On opening night every first used to be priced at the middle's value (the record of
+ * 0-0 projected .500), so the worst team's first sold for a contender's.
  */
 function outlook(league: League, dp: DraftPick): Outlook {
   const yearsOut = dp.season - league.season;
@@ -203,30 +210,28 @@ function outlook(league: League, dp: DraftPick): Outlook {
     const w = Array.from({ length: Math.max(30, dp.pick!) }, (_, i) => (i === dp.pick! - 1 ? 1 : 0));
     return { w, sum: 1, at: slot };
   }
-  const orig = league.teams[dp.originalTid];
-  const ts = curTeamSeason(league, orig.tid);
-  const games = ts.won + ts.lost;
-  const prev = orig.seasons.find((s) => s.season === league.season - 1);
-  const wp = games >= 15 ? winPct(ts) : prev ? winPct(prev) * 0.6 + 0.2 : 0.5;
-  // (classProspects' key: one class per entry)
+  const proj = pickProjection(league);
+  // (classProspects' key: one class per entry; the projection's own key moves with every game and roster move)
   const key = `${league.season}:${league.phase}:${league.day}:${league.draftPicks.length}`;
   let hit = outlookCache.get(league);
-  if (hit?.key !== key) outlookCache.set(league, (hit = { key, byPick: new Map() }));
-  const pickKey = `${dp.season}:${dp.round}:${games}:${wp}`;
+  if (hit?.key !== key || hit.proj !== proj) outlookCache.set(league, (hit = { key, proj, byPick: new Map() }));
+  const pickKey = `${dp.season}:${dp.round}:${dp.originalTid}`;
   const cached = hit.byPick.get(pickKey);
   if (cached) return cached;
   const values: number[] = [];
   const at = (k: number) => (values[k - 1] ??= slot(k));
-  // projected slot in the round (worst record = 1), regressing toward the middle for future years
-  const keep = Math.pow(0.75, Math.max(0, yearsOut));
-  const center = (1 + clamp(wp, 0, 1) * 29) * keep + 15.5 * (1 - keep);
-  const sd = yearsOut <= 0 ? 2 + 6 * (1 - Math.min(1, games / 82)) : 5 + 2 * yearsOut;
-  const w: number[] = [];
-  let sum = 0;
-  for (let k = 1; k <= 30; k++) {
-    w.push(Math.exp(-((k - center) ** 2) / (2 * sd * sd)));
-    sum += w[k - 1];
+  const n = league.teams.length;
+  let w: number[];
+  if (dp.season === proj.season) w = (dp.round === 1 ? proj.first : proj.second)[dp.originalTid].slice();
+  else {
+    // a later draft: the expected place now, regressing toward the middle a season at a time
+    const out = Math.max(1, dp.season - proj.season);
+    const keep = Math.pow(PLACE_KEEP, out);
+    const center = proj.rank[dp.originalTid] * keep + ((n + 1) / 2) * (1 - keep);
+    const sd = 5 + 2 * out;
+    w = Array.from({ length: n }, (_, i) => Math.exp(-((i + 1 - center) ** 2) / (2 * sd * sd)));
   }
+  const sum = w.reduce((a, x) => a + x, 0) || 1;
   const o = { w, sum, at, own: new Map<number, number>() };
   hit.byPick.set(pickKey, o);
   return o;
@@ -293,6 +298,32 @@ export function pickValue(league: League, dp: DraftPick): number {
   const holder = swapHolder(league, dp);
   if (!other && !holder) return base;
   return base + (other ? swapOutlook(league, dp, other).gain : 0) - (holder ? swapOutlook(league, holder, dp).gain : 0);
+}
+
+/** Share of a pick's projected outcomes its range leaves out at each end (see pickRange): the range holds it three times in five. */
+const RANGE_TAIL = 0.2;
+
+/**
+ * Where a pick projects, by the same slot chances that price it (see outlook): its overall numbers
+ * from the 20th to the 80th percentile (`lo`-`hi`, "proj. #6-12") and the expected one (`mean`,
+ * for ordering). Null once its slot is set: its name carries the number.
+ */
+export function pickRange(league: League, dp: DraftPick): { lo: number; hi: number; mean: number } | null {
+  if (dp.pick !== undefined) return null;
+  const o = outlook(league, dp);
+  const base = (dp.round - 1) * league.teams.length;
+  let acc = 0;
+  let lo = 0;
+  let hi = 0;
+  let mean = 0;
+  o.w.forEach((w, i) => {
+    const p = w / o.sum;
+    mean += p * (i + 1);
+    if (!lo && acc + p > RANGE_TAIL) lo = i + 1;
+    acc += p;
+    if (!hi && acc >= 1 - RANGE_TAIL) hi = i + 1;
+  });
+  return { lo: base + (lo || 1), hi: base + (hi || o.w.length), mean: base + mean };
 }
 
 /** The chance a pick lands in the first `n` slots of its round, by the projection its value uses. */
@@ -572,14 +603,34 @@ export function capSalary(league: League, pid: number, s = contractSeason(league
   return !p || p.contract.twoWay ? 0 : salaryFor(p, s);
 }
 
-const sideSalary = (league: League, side: TradeSide) => side.pids.reduce((a, pid) => a + capSalary(league, pid), 0);
+const sideSalary = (league: League, side: TradeSide, s = contractSeason(league)) => side.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+
+/**
+ * Next season's luxury tax a deal adds (or saves) counts at this share of this season's: a contract
+ * that runs on keeps a team in the tax next season too unless it sheds salary over the summer, which
+ * it has a summer to do (and the bill is a year off).
+ */
+const NEXT_TAX_WEIGHT = 0.5;
+
+/** Committed payroll per team for next season, kept for a day and a roster move (see moneyCost). */
+const nextPayCache = new WeakMap<League, { key: string; pay: Map<number, number> }>();
+
+function nextPayroll(league: League, tid: number, s: number): number {
+  const key = `${league.season}:${league.phase}:${league.day}:${league.nextTxnId ?? 0}`;
+  let hit = nextPayCache.get(league);
+  if (hit?.key !== key) nextPayCache.set(league, (hit = { key, pay: new Map() }));
+  let pay = hit.pay.get(tid);
+  if (pay === undefined) hit.pay.set(tid, (pay = payroll(league, tid, s)));
+  return pay;
+}
 
 /**
  * What a deal's salary does to a team's books: the value of the luxury tax (its progressive
  * brackets, a repeater's included) and cap room it adds (or saves), an apron crossed either way,
- * and the dollars behind it.
+ * and the dollars behind it. A contract running past this season adds next season's tax on the
+ * team's committed payroll then, at NEXT_TAX_WEIGHT: a burden is dearer to a team it keeps in the tax.
  */
-function moneyCost(league: League, tid: number, inSal: number, outSal: number): { value: number; payBefore: number; payAfter: number; taxCost: number } {
+function moneyCost(league: League, tid: number, inSal: number, outSal: number, inNext = 0, outNext = 0): { value: number; payBefore: number; payAfter: number; taxCost: number } {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const before = capPayroll(league, tid, s);
@@ -590,8 +641,14 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number): 
   const strategy = league.teams[tid].strategy;
   const line = (cap.salaryCap * TAX_LINE_SHARE * TAX_VALUE[strategy]) / 1000;
   const over = (x: number) => (x > cap.luxuryTax ? line : 0) + (x > cap.firstApron ? APRON_VALUE.first : 0) + (x > cap.secondApron ? APRON_VALUE.second : 0);
+  let nextTax = 0;
+  if (inNext !== outNext) {
+    const next = nextPayroll(league, tid, s + 1);
+    // (in next season's money, brought back to this season's as the burden is)
+    nextTax = ((teamTaxBill(league, tid, next + inNext - outNext, s + 1) - teamTaxBill(league, tid, next, s + 1)) * revenueScale(league, s)) / revenueScale(league, s + 1);
+  }
   return {
-    value: (taxCost * TAX_VALUE[strategy] + (room(before) - room(after)) * ROOM_VALUE[strategy]) / 1000 + over(after) - over(before),
+    value: ((taxCost + NEXT_TAX_WEIGHT * nextTax) * TAX_VALUE[strategy] + (room(before) - room(after)) * ROOM_VALUE[strategy]) / 1000 + over(after) - over(before),
     payBefore: before,
     payAfter: after,
     taxCost,
@@ -600,7 +657,8 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number): 
 
 /**
  * The value of the players a team would have to waive to get down to 15 (by opening night in the
- * offseason, when a roster can run to 21; at once in season), and how many more it would be.
+ * offseason, when a roster can run to 21; at once in season), and how many more it would be: their
+ * game (a waived contract's burden is owed as dead money all the same, see valueParts).
  */
 function cutCost(league: League, tid: number, out: number[], inc: number[]): { value: number; count: number } {
   const before = tradeRoster(league, tid);
@@ -609,7 +667,7 @@ function cutCost(league: League, tid: number, out: number[], inc: number[]): { v
   const strategy = league.teams[tid].strategy;
   const waived = (roster: Player[]) =>
     roster
-      .map((p) => Math.max(0, tradeValue(league, p, strategy)))
+      .map((p) => Math.max(0, valueParts(league, p, strategy).player))
       .sort((a, b) => a - b)
       .slice(0, Math.max(0, roster.length - CAP.rosterMax))
       .reduce((a, v) => a + v, 0);
@@ -649,7 +707,8 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const cashOut = values(outgoing, isCash).reduce((a, v) => a + v, 0);
   const salaryIn = sideSalary(league, other);
   const salaryOut = sideSalary(league, mine);
-  const money = moneyCost(league, tid, salaryIn, salaryOut);
+  const next = contractSeason(league) + 1;
+  const money = moneyCost(league, tid, salaryIn, salaryOut, sideSalary(league, other, next), sideSalary(league, mine, next));
   const cut = cutCost(league, tid, mine.pids, other.pids);
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
   const valueOut = playersOut + picksOut + cashOut;

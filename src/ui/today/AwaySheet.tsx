@@ -10,7 +10,7 @@ import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { agenda, CALL_KINDS } from '../../core/league/agenda';
 import { ordinal } from '../../core/format';
-import { Sheet } from '../components/ui';
+import { Avatar, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { curTeamSeason } from '../../core/league/helpers';
 import { storyLink } from './front';
@@ -18,7 +18,7 @@ import { senderOf } from './senders';
 import { isImportant, needsYou } from './messages';
 import { OpenCalls } from './NeedsList';
 import './today.css';
-import { shownResults, type Digest, type DigestStory } from './digest';
+import { shownResults, toldMail, type Digest, type DigestMoment, type DigestStory } from './digest';
 import { touch } from '../../state/actions';
 
 /** The most mail listed; the rest are a tap away in the inbox. */
@@ -40,12 +40,21 @@ export function DigestHost() {
     if (!wasShown || show || !digest) return;
     const now = useStore.getState().league;
     if (!now || now.id !== digest.leagueId) return;
-    const ids = new Set(digest.mail.filter((id) => now.inbox.some((m) => m.id === id)).slice(0, MAIL_SHOWN));
+    // (the few it listed, and the notes its other blocks told in full: see toldMail)
     const open = new Map(agenda(now).map((i) => [i.id, i]));
-    const listed = now.inbox.filter((m) => ids.has(m.id) && !m.read && !needsYou(m, open, now));
-    if (listed.length)
+    const kept = { ...digest, mail: digest.mail.filter((id) => now.inbox.some((m) => m.id === id)) };
+    const ids = new Set(
+      toldMail(kept, now, MAIL_SHOWN, (id) =>
+        needsYou(
+          now.inbox.find((m) => m.id === id)!,
+          open,
+          now,
+        ),
+      ),
+    );
+    if (ids.size)
       touch((l) => {
-        for (const m of l.inbox) if (listed.some((x) => x.id === m.id)) m.read = true;
+        for (const m of l.inbox) if (ids.has(m.id)) m.read = true;
       });
   }, [show, digest]);
   return (
@@ -72,13 +81,14 @@ function DigestBody({ d }: { d: Digest }) {
   return (
     <div className="dg col">
       <div className="dg-span">{d.span}</div>
+      {d.moment && <MomentRow m={d.moment} go={go} />}
       {d.stop && !(d.stop.call && calls.length) && (
         <button type="button" className={`dg-stop ${d.stop.tone}`} onClick={() => go(d.stop!.to)}>
           <span className="grow">{d.stop.text}</span>
           <ChevronRight size={16} aria-hidden="true" />
         </button>
       )}
-      <OpenCalls calls={calls} />
+      <OpenCalls calls={calls} picks={d.picks} />
       {(d.record || d.seed || d.power) && (
         <div className="dg-top">
           {d.record && (
@@ -201,6 +211,27 @@ function DigestSection({ title, more, go, children }: { title: string; more?: { 
       </div>
       <div className="card flush dg-list">{children}</div>
     </section>
+  );
+}
+
+/** The moment of the stretch: its one big story, the headline set large on the paper, with his player's jersey. */
+function MomentRow({ m, go }: { m: DigestMoment; go: (to: string) => void }) {
+  const league = useLeague();
+  const p = m.pid !== undefined ? league.players[m.pid] : undefined;
+  return (
+    <button type="button" className={`dg-moment w${m.weight}`} onClick={() => go(m.to)}>
+      <span className="dg-moment-over over">
+        <span>The moment of the stretch · {m.over}</span>
+        <ChevronRight size={14} aria-hidden="true" />
+      </span>
+      <span className="dg-moment-head">{m.head}</span>
+      {(m.dek || p) && (
+        <span className="dg-moment-by">
+          {p && <Avatar p={p} />}
+          {m.dek && <span className="dg-moment-dek">{m.dek}</span>}
+        </span>
+      )}
+    </button>
   );
 }
 

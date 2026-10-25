@@ -3,7 +3,7 @@
 import type { League } from '../../core/types';
 import { withHoldsMemo } from '../../core/league/freeAgency';
 import { type TradeOffer } from '../../core/league/trades';
-import { packageFor } from '../../core/league/tradePackages';
+import { neutralBalance, packageFor } from '../../core/league/tradePackages';
 
 export interface BlockOffer {
   tid: number;
@@ -12,6 +12,13 @@ export interface BlockOffer {
   myValue: number;
   /** Value of what the user gives (a player, a pick or several) to the user's team. */
   targetValue: number;
+  /**
+   * What the user gets and gives in league-neutral value (see neutralBalance), what the block's "% of
+   * his value" reads: the user's own strategy lens (which the front office sets and flips on its own)
+   * made a fair package read as a 141% overpay.
+   */
+  neutralGet: number;
+  neutralGive: number;
 }
 
 /** `give`: a player's id, or the user's players and picks. */
@@ -21,7 +28,9 @@ export function blockOffers(league: League, give: number | { pids: number[]; dpi
     league.teams
       .flatMap((t) => {
         const pkg = t.tid === league.userTid ? null : packageFor(league, t.tid, assets);
-        return pkg ? [{ tid: t.tid, offer: pkg.offer, myValue: pkg.myValue, targetValue: pkg.giveValue }] : [];
+        if (!pkg) return [];
+        const n = neutralBalance(league, pkg.offer);
+        return [{ tid: t.tid, offer: pkg.offer, myValue: pkg.myValue, targetValue: pkg.giveValue, neutralGet: n.net + n.out, neutralGive: n.out }];
       })
       .sort((x, y) => y.myValue - x.myValue),
   );

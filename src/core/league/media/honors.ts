@@ -273,8 +273,9 @@ function awardMonth(league: League, m: MediaState, from: number, to: number) {
     body: [body.join('\n')],
     tids: honors.map((h) => h.tid),
     pids: honors.flatMap((h) => (h.pid !== undefined ? [h.pid] : [])),
-    // (the user hears it from the league office; a month's honors are a story, not a front page)
-    weight: 2,
+    // (the user hears it from the league office; a month's honors are a story, not a front page, but
+    // for his own player of the month or rookie of the month)
+    weight: mine && mine.kind !== 'cotm' && mine.pid !== undefined ? 3 : 2,
   });
   const LABEL: Record<Honor['kind'], string> = { potw: 'Player of the Week', potm: 'Player of the Month', rotm: 'Rookie of the Month', cotm: 'Coach of the Month' };
   for (const h of honors) tellUser(league, m, h, n.id, `${confName(h.conf!)} ${LABEL[h.kind]} for ${label}`);

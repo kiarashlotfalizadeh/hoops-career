@@ -23,7 +23,9 @@ import * as P from '../src/core/league/proposals';
 import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
 import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
-import { arenaCapacity } from '../src/core/league/finances';
+import { arenaCapacity, aiTicketPrice, attendanceFor, MERCH_PER_GAME, LOCAL_TV_PER_GAME } from '../src/core/league/finances';
+import { booksOutlook, sanctionedTax } from '../src/core/league/books';
+import { pickProjection } from '../src/core/analysis/odds';
 import * as REC from '../src/core/league/records';
 import type { League, Player } from '../src/core/types';
 
@@ -901,6 +903,115 @@ function bidOnStar(): number | null {
   return null;
 }
 
+// ---------------------------------------------------------------- the economy's holes, kept shut
+// (the October 2026 economy round: each check fails on the hole it closed)
+
+/** 80+ free agents' summer signings this run: salary against the market value he had when the market opened. */
+const faTally: { ratio: number; name: string; back: boolean }[] = [];
+
+/**
+ * Opening night: dead money carries its cost, and picks are priced from projected strength. A
+ * contract worth nothing on the court (a 45 on two seasons at DUMP_PER_FIRST of the cap) is a
+ * burden no team takes for nothing, and one season of it some team takes with two firsts attached
+ * (the market for absorbing salary is still there); Anthony Davis-style overpays went for free
+ * before. And the
+ * worst projected team's own first is worth well above the best projected team's (every first was
+ * priced the same before 15 games).
+ */
+function checkEconomyOpening() {
+  const u = L.userTid;
+  const cs = H.contractSeason(L);
+  const cap = H.CAP_FOR(L, cs);
+  const host = std(u).sort((a, b) => a.ovr - b.ovr)[0];
+  if (host) {
+    const keep = { ...host, ratings: { ...host.ratings }, contract: structuredClone(host.contract) };
+    const sal = Math.round((cap.salaryCap * C.DUMP_PER_FIRST) / 10) * 10;
+    host.contract = { start: cs, salaries: [sal, sal] };
+    host.ovr = 45;
+    host.pot = 45;
+    host.bornYear = L.season - 33;
+    for (const k of Object.keys(host.ratings) as (keyof Player['ratings'])[]) host.ratings[k] = 20;
+    const dump = (dpids: number[]): TR.TradeOffer => ({ a: { tid: u, pids: [host.pid], dpids }, b: { tid: 0, pids: [], dpids: [] } });
+    const takers = L.teams.filter((t) => t.tid !== u).map((t) => t.tid);
+    const free = takers.filter((tid) => TR.teamDelta(L, { ...dump([]), b: { tid, pids: [], dpids: [] } }, tid) >= 0);
+    if (free.length) bad('dead money taken for nothing', `${free.map((t) => L.teams[t].abbrev).join(', ')} take two seasons at ${sal} of it for nothing`);
+    // one season of it, with two firsts attached: some team takes it (about a first's worth of dead money, two firsts however late)
+    host.contract = { start: cs, salaries: [sal] };
+    const firsts = L.draftPicks
+      .filter((d) => d.tid === u && d.round === 1 && d.season > L.season)
+      .slice(0, 2)
+      .map((d) => d.dpid);
+    if (firsts.length === 2 && !takers.some((tid) => TR.teamDelta(L, { ...dump(firsts), b: { tid, pids: [], dpids: [] } }, tid) >= 0))
+      bad('dead money no one absorbs for two firsts', `a season at ${sal}`);
+    Object.assign(host, keep);
+  }
+  // own firsts of the next draft, priced clean (no protection, no swap riding on it)
+  const proj = pickProjection(L);
+  const clean = (tid: number) => {
+    const dp = L.draftPicks.find((d) => d.season === proj.season && d.round === 1 && d.originalTid === tid);
+    return dp ? TR.pickValue(L, { ...dp, dpid: -1, tid, protection: undefined, swap: undefined }) : undefined;
+  };
+  const order = L.teams.map((t) => t.tid).sort((a, b) => proj.pct[a] - proj.pct[b]);
+  const worst = clean(order[0]);
+  const best = clean(order[order.length - 1]);
+  if (worst === undefined || best === undefined || worst < best * 1.5)
+    bad('day-one picks priced flat', `worst-projected ${L.teams[order[0]].abbrev} ${worst?.toFixed(1)} vs best ${L.teams[order[order.length - 1]].abbrev} ${best?.toFixed(1)}`);
+}
+
+/**
+ * A summer day of free agency: no 80+ free agent's price under his summer floor, and each 80+
+ * signing (with a team other than the one bringing him back on Bird rights it can't stretch) at
+ * SUMMER_FLOOR.late of his market value or more. `pool`: the free agents before the day, with their
+ * market values as the market opened.
+ */
+function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number | null }>) {
+  for (const p of H.freeAgents(L))
+    if (p.ovr >= C.SUMMER_FLOOR.ovr && !p.waivers && p.asking && p.asking.amount < C.summerFloor(L, p) - 60)
+      bad('80+ free agent priced under his summer floor', `${nm(p.pid)} ${p.asking.amount} < ${Math.round(C.summerFloor(L, p))}`);
+  for (const [pid, x] of pool) {
+    const p = L.players[pid];
+    if (p.tid < 0 || x.ovr < C.SUMMER_FLOOR.ovr) continue;
+    pool.delete(pid);
+    const sal = salaryFor(p, L.season + 1);
+    // (his old team on Bird rights that can't pay more: a non- or early-Bird limit under his floor)
+    const capped = p.tid === x.tid && sal >= C.resignLimit(L, p, p.tid) - 60;
+    faTally.push({ ratio: sal / x.m, name: H.playerName(p), back: p.tid === x.tid });
+    if (sal < x.m * C.SUMMER_FLOOR.late - 60 && !capped && !p.contract.twoWay)
+      bad('80+ free agent signed under his summer floor', `${nm(pid)} ${sal} vs market ${Math.round(x.m)} -> ${L.teams[p.tid].abbrev}`);
+  }
+}
+
+/**
+ * The season's end: losing on purpose costs money and the owner's money stories agree. A home game
+ * of the user's team as a tank (hype 0.1, a 15-67 record) must bring in less than the same team at
+ * .500 (hype 0.5), each at its own best ticket price, by at least a sixth (the payroll the same,
+ * the tank must not out-earn the .500 team); and the books' close the owner judges is the cash plus
+ * exactly the tax his goals signed off on.
+ */
+function checkEconomyClose() {
+  const u = L.userTid;
+  const t = L.teams[u];
+  const ts = H.curTeamSeason(L, u);
+  const keep = { hype: t.hype, won: ts.won, lost: ts.lost, price: t.budget.ticketPrice };
+  const gate = (hype: number, won: number) => {
+    t.hype = hype;
+    ts.won = won;
+    ts.lost = 82 - won;
+    t.budget.ticketPrice = aiTicketPrice(L, t);
+    const s = H.revenueScale(L);
+    return (attendanceFor(L, t) * t.budget.ticketPrice) / 1000 + MERCH_PER_GAME * s * (0.5 + t.hype) * (0.7 + t.pop / 15) + LOCAL_TV_PER_GAME * s * (0.6 + t.pop / 12);
+  };
+  const tank = gate(0.1, 15);
+  const even = gate(0.5, 41);
+  Object.assign(t, { hype: keep.hype });
+  t.budget.ticketPrice = keep.price;
+  ts.won = keep.won;
+  ts.lost = keep.lost;
+  if (tank > even * (5 / 6)) bad('a tank earns about what a .500 team does', `${tank.toFixed(0)} vs ${even.toFixed(0)} a home game`);
+  const o = booksOutlook(L);
+  if (Math.abs(o.judged - o.end - sanctionedTax(L)) > 1) bad('books outlook off the tax the owner signed off on', JSON.stringify(o));
+}
+
 /** `realCalendar`: the first season plays the NBA's own schedule; `fire`: the coach loses his job after it. */
 function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
   for (let s = 0; s < n; s++) {
@@ -921,6 +1032,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     check();
     const extended = Object.values(L.players).filter((p) => p.contract.next).length;
     checkOpeningNight();
+    checkEconomyOpening();
     checkCalendar(!(opts.realCalendar && s === 0));
     let accepted = '';
     // news is capped, so count trades by id as they appear (the deadline recap is a trade story too)
@@ -979,6 +1091,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     for (let g = 0; (L.phase === 'playin' || L.phase === 'playoffs') && g < 300; g++) S.simDay(L);
     check();
     checkSeasonEnd();
+    checkEconomyClose();
     // the coaching carousel after the playoffs: AI coaches fired, and their replacements (first-time head coaches or former ones)
     const carousel = L.news.filter((x) => x.kind === 'coach' && x.season === L.season);
     const coachLine = `coaching changes ${carousel.filter((x) => / (fired|parted ways with) /.test(x.text)).length} (${carousel.filter((x) => x.text.includes('first-time')).length} first-time head coaches)`;
@@ -1008,7 +1121,22 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         FA.userResign(L, p.pid, a.amount, a.years);
       }
     check();
+    // the free agents to be, valued as the market opens (the opening wave signs inside startFreeAgency)
+    const faPool = new Map<number, { m: number; ovr: number; tid: number | null }>();
+    for (const p of Object.values(L.players))
+      if ((p.tid >= 0 && contractExp(p.contract) <= L.season) || p.tid === -1) faPool.set(p.pid, { m: C.marketSalary(L, p), ovr: p.ovr, tid: p.tid >= 0 ? p.tid : null });
     S.startFreeAgency(L);
+    // (his old team re-signing him before the market opened isn't a free-agent signing)
+    for (const [pid, x] of faPool)
+      if (
+        L.players[pid].tid >= 0 &&
+        L.players[pid].tid === x.tid &&
+        L.players[pid].contract.start === L.season + 1 &&
+        L.faDay === 0 &&
+        !L.transactions?.some((t) => t.pid === pid && t.phase === 'freeAgency')
+      )
+        faPool.delete(pid);
+    checkFaPrices(faPool);
     check();
     checkOptions(true);
     // one withdrawn when there are two or more: an unrestricted free agent, his hold gone (not one
@@ -1028,6 +1156,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       const sheets = sheetSnapshot();
       const rfas = rfaSnapshot();
       S.faAdvance(L, 1);
+      checkFaPrices(faPool);
       for (const [pid, s] of sheetSnapshot()) sheets.set(pid, s);
       decideUserSheets();
       const x = settledSheets(sheets, next);
@@ -1075,6 +1204,10 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
     console.log(`   restricted free agency: ${rfaLine}`);
+    const ratios = faTally.map((x) => x.ratio).sort((a, b) => a - b);
+    console.log(
+      `   80+ free agents so far: ${ratios.length} signed, median ${ratios.length ? Math.round(ratios[Math.floor(ratios.length / 2)] * 100) : '-'}% of market value, ${ratios.filter((x) => x < C.SUMMER_FLOOR.late).length} under ${C.SUMMER_FLOOR.late * 100}% (${faTally.filter((x) => x.ratio < C.SUMMER_FLOOR.late && x.back).length} back with Bird rights capped)`,
+    );
     const highsKB = Object.values(L.players).reduce((a, p) => a + (p.highs ? JSON.stringify(p.highs).length : 0), 0) / 1000;
     console.log(
       `   record book: ${L.news.filter((n) => n.kind === 'record' && n.season === L.season - 1).length} record news in ${seasonLabel(L.season - 1)}, book ${(JSON.stringify(L.records ?? {}).length / 1000).toFixed(1)}KB, career highs ${highsKB.toFixed(1)}KB`,

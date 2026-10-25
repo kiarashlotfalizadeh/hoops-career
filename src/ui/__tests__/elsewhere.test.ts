@@ -68,6 +68,8 @@ describe('what happened elsewhere', () => {
       expect(heads.indexOf('A milestone')).toBeLessThan(heads.indexOf('Player of the Week'));
       expect(heads).not.toContain('A night at the Garden');
       expect(d.stories.find((s) => s.head === 'A milestone')).toMatchObject({ dek: 'Ten thousand points.', weight: 3 });
+      // (a week is no long stretch: no moment of the stretch over it)
+      expect(d.moment).toBeUndefined();
       // around the league: stories only, not briefs
       expect(d.around.map((s) => s.head)).toContain('Somebody else entirely');
       expect(d.around.every((s) => s.weight >= 2)).toBe(true);

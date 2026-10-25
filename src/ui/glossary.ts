@@ -155,7 +155,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'fit',
     term: 'Fit',
     group: 'Numbers',
-    text: 'How well a playbook suits your roster, from what each part of it needs (a lead creator, shooting, a passing big, rim protection, depth), ranked against the others: 100 is your best fit, 45 your worst. A set’s fit is how well the player it’s run for suits it.',
+    text: 'The staff’s read of what a playbook or shape is worth a game for your roster against the one you run, from what each leans on (a lead creator, shooting, quick hands, depth): an estimate fitted to what the game engine says each is worth, not a measurement. Make the change and the staff measures it on your next games. A set’s fit (out of 100) is how well the player it’s run for suits it.',
   },
   {
     id: 'wear',

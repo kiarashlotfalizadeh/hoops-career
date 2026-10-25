@@ -1,7 +1,8 @@
 import * as Comlink from 'comlink';
-import type { GameResult, League } from '../core/types';
-import { counterWorth } from '../core/ai/counterWorth';
+import type { GameResult, League, LiveOp } from '../core/types';
+import { counterWorth, measureChanges, type LeagueChange } from '../core/ai/counterWorth';
 import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type GamesDelta, type GamesSig, type SimProgress, type SimTarget, type TaskOp } from '../state/simCore';
+import { measureChoices, nightWorth, simFromState, type LiveChoice, type SimState } from '../state/liveWorth';
 
 // The season sim, off the main thread. The worker keeps its own copy of the open league's results
 // between runs (they are most of a league), so each run only carries the league without them plus
@@ -14,6 +15,15 @@ let stopFlag = false;
 let checkpointAsked = false;
 /** The counter measurement running (counterWorth): a newer one stops it. */
 let worthRun = 0;
+/** The live game's measurements given up (a huddle or a sheet closed), by the id each was started with. */
+const liveGone = new Set<number>();
+/** A season sim is running: the night's moves, measured after a final, wait for it (it's the one the user is waiting on). */
+let simming = false;
+/** Wait between chunks of a background measurement while a sim runs. */
+const simGone = async () => {
+  await new Promise<void>((r) => setTimeout(r, 0));
+  while (simming) await new Promise<void>((r) => setTimeout(r, 50));
+};
 
 /**
  * Between days the sim lets the worker's messages in (a stop). A timer would do, but nested timers
@@ -73,6 +83,7 @@ const api = {
     let last = performance.now();
     /** The checkpoint the main thread is taking in, until it has. */
     let inFlight: Promise<void> | null = null;
+    simming = true;
     try {
       const r = await runSim(l, target, {
         progress: (p) => void cb.progress(p),
@@ -111,6 +122,7 @@ const api = {
       cache = null;
       throw e;
     } finally {
+      simming = false;
       (cb as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
     }
   },
@@ -147,8 +159,57 @@ const api = {
       (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
     }
   },
+  /** What each change is worth to the user's game `gid` against `opp` (see measureChanges), as counterWorth runs. */
+  async measureChanges(
+    core: League,
+    delta: GamesDelta,
+    opp: number,
+    gid: number | undefined,
+    changes: LeagueChange[],
+    progress: (done: number, total: number) => void,
+    games?: number,
+  ) {
+    const run = ++worthRun;
+    const l = open(core, delta);
+    cache = { id: l.id, games: l.games };
+    const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
+    try {
+      return await measureChanges(l, opp, changes, game, {
+        games,
+        onProgress: (d, t) => void progress(d, t),
+        between: () => new Promise<void>((r) => setTimeout(r, 0)),
+        cancelled: () => run !== worthRun,
+      });
+    } finally {
+      (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
+    }
+  },
   cancelWorth() {
     worthRun++;
+  },
+  /**
+   * What each choice is worth from where a live game stands (`state`, see liveWorth.ts), against the
+   * first: the late play call's options in the huddle, a sub in crunch time. cancelLive(id) stops it.
+   */
+  async liveChoices(state: SimState, side: 0 | 1, choices: LiveChoice[], games: number | undefined, id: number, progress: (done: number, total: number) => void) {
+    try {
+      return await measureChoices(simFromState(state), side, choices, {
+        games,
+        onProgress: (d, t) => void progress(d, t),
+        between: () => new Promise<void>((r) => setTimeout(r, 0)),
+        cancelled: () => liveGone.has(id),
+      });
+    } finally {
+      liveGone.delete(id);
+      (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
+    }
+  },
+  cancelLive(id: number) {
+    liveGone.add(id);
+  },
+  /** What a live game's moves were worth (see nightWorth), from its tip-off (`tip`): run after the final, behind any sim. */
+  nightWorth(tip: SimState, side: 0 | 1, ops: LiveOp[]) {
+    return nightWorth(simFromState(tip), side, ops, { between: simGone });
   },
   stop() {
     stopFlag = true;

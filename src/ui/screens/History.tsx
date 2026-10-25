@@ -1,10 +1,11 @@
 // League → History (/league/history): the seasons and their champions (the user's titles marked),
-// each franchise's history (?tid=, his seasons with it marked), the record book, the Hall of Fame
-// and the coaches (his row marked). A season's winners in full are on the
+// each a page of its own (?season=: its champion, its stories as the league's memory kept them, its
+// winners, his season), each franchise's history (?tid=, his seasons with it marked), the record
+// book, the Hall of Fame and the coaches (his row marked). A season's winners in full are on the
 // Awards tab; this is the league's memory.
 import { Fragment, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, ChevronRight, Crown } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Crown } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -19,6 +20,13 @@ import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
 import { slabVars } from '../teamColors';
 import { careerOnRecord } from '../../core/analysis/milestones';
 import { coachCareer, userCoach } from '../../core/league/coaches';
+import { chronicleOf } from '../../core/league/media/chronicle';
+import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
+import { endText } from '../../core/league/legacyReview';
+import { fmtDate } from '../../core/league/helpers';
+import { KIND_ONE } from '../league/news/kinds';
+import '../league/news/news.css';
+import '../league/legacy.css';
 
 type View = 'seasons' | 'franchise' | 'records' | 'hof' | 'coaches';
 const VIEWS: { id: View; label: string }[] = [
@@ -34,7 +42,11 @@ export default function History() {
   const [raw] = useQueryParam<string>('view', '');
   const [tidStr] = useQueryParam<string>('tid', '');
   const [coach] = useQueryParam<string>('coach', '');
+  const [seasonStr] = useQueryParam<string>('season', '');
   const setParams = useSetParams();
+  // a past season opens as its own page (?season=): its champion, its stories, its awards, your season
+  const season = Number(seasonStr);
+  if (seasonStr && league.awards.some((a) => a.season === season)) return <SeasonPage league={league} season={season} />;
   // a link to a franchise (?tid=) or a coach (?coach=) opens its view; "league" was the seasons' old name
   const view: View = raw === 'league' ? 'seasons' : VIEWS.some((v) => v.id === raw) ? (raw as View) : tidStr ? 'franchise' : coach ? 'coaches' : 'seasons';
   return (
@@ -96,7 +108,11 @@ function Seasons({ league }: { league: League }) {
             a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
           ].filter(Boolean);
           return (
-            <Link key={a.season} to={`/league/awards?aseason=${a.season}`} className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}>
+            <Link
+              key={a.season}
+              to={a.season === league.season && a.champion === undefined ? `/league/awards?aseason=${a.season}` : `/league/history?season=${a.season}`}
+              className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}
+            >
               <span className="yr">{seasonLabel(a.season)}</span>
               {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
               <span className="lg-yr-t">
@@ -123,6 +139,123 @@ function Seasons({ league }: { league: League }) {
           );
         })}
       </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------- a season's page
+
+/**
+ * A past season as a page: its champion on a slab, its stories as the league's memory kept them
+ * (League.chronicle: its biggest headlines, its farewells, each opening while the news still has it),
+ * its winners, and the user's season with its review. Year 5 reads its own story, not year 1's.
+ */
+function SeasonPage({ league, season }: { league: League; season: number }) {
+  const setParams = useSetParams();
+  const a = league.awards.find((x) => x.season === season)!;
+  const c = chronicleOf(league, season);
+  const onFile = useLeagueMemo(() => new Set(league.news.map((n) => n.id)), [league]);
+  const name = (pid?: number) => (pid !== undefined && league.players[pid] ? `${league.players[pid].firstName} ${league.players[pid].lastName}` : undefined);
+  const winners: [string, string][] = [];
+  for (const [k, v] of [
+    ['MVP', name(a.mvp)],
+    ['Finals MVP', name(a.finalsMvp)],
+    ['Defensive Player of the Year', name(a.dpoy)],
+    ['Rookie of the Year', name(a.roy)],
+    ['NBA Cup', a.cupWinner !== undefined ? `${league.teams[a.cupWinner].region} ${league.teams[a.cupWinner].name}` : undefined],
+  ] as const)
+    if (v) winners.push([k, v]);
+  const me = userCoach(league);
+  const line = me ? coachCareer(league, me, new Map()).lines.find((l) => l.season === season) : undefined;
+  const review = seasonReviewOf(league, season);
+  const titles = a.champion !== undefined ? league.awards.filter((x) => x.champion === a.champion && x.season <= season).length : 0;
+  const stories = c?.stories ?? [];
+  return (
+    <>
+      <div className="lg-season-top">
+        <button type="button" className="card-link" onClick={() => setParams({ season: null })}>
+          <ChevronLeft size={14} aria-hidden="true" /> All seasons
+        </button>
+      </div>
+      {a.champion !== undefined ? (
+        <TitleSlab
+          league={league}
+          tid={a.champion}
+          over={`${seasonLabel(season)} champions`}
+          fig={titles > 1 ? titles : undefined}
+          figLabel={titles > 1 ? 'titles in this league' : undefined}
+        >
+          {a.runnerUp !== undefined ? `def. ${league.teams[a.runnerUp].name}` : ''}
+        </TitleSlab>
+      ) : (
+        <Poster over={seasonLabel(season)} head="No champion" />
+      )}
+      <Section title="The season's stories" right={<span className="lg-sec-meta">{stories.length}</span>}>
+        {stories.length ? (
+          <div className="card lg-chron">
+            <div className="lg-fp-hls">
+              {stories.map((x) => {
+                const tid = x.tids.find((t) => t === league.userTid) ?? x.tids[0];
+                const body = (
+                  <>
+                    <span className="lg-fp-hl-head">{x.head}</span>
+                    <span className="lg-fp-hl-meta">
+                      {tid !== undefined && league.teams[tid] && <TeamLogo tid={tid} size={16} decorative />}
+                      {KIND_ONE[x.kind]} · {fmtDate(season, x.day)}
+                    </span>
+                  </>
+                );
+                return onFile.has(x.id) ? (
+                  <Link key={x.id} to={`/league/news?story=${x.id}`} className={`lg-fp-hl ${x.weight === 3 ? 'strong' : ''}`}>
+                    {body}
+                  </Link>
+                ) : (
+                  <div key={x.id} className={`lg-fp-hl ${x.weight === 3 ? 'strong' : ''}`}>
+                    {body}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div className="card empty">The league kept no stories from this season: its memory starts with the seasons played in this version.</div>
+        )}
+      </Section>
+      {winners.length > 0 && (
+        <Section
+          title="Winners"
+          right={
+            <Link to={`/league/awards?aseason=${season}`} className="card-link">
+              All awards <ChevronRight size={14} aria-hidden="true" />
+            </Link>
+          }
+        >
+          <div className="card flush list">
+            {winners.map(([k, v]) => (
+              <div key={k} className="lg-season-win">
+                <span className="dim">{k}</span>
+                <span className="bold">{v}</span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+      {line && (
+        <Section title="Your season">
+          <Link to={review ? reviewPath(season) : `/league/history?tid=${line.tid}`} className="card lg-season-you">
+            <TeamLogo tid={line.tid} size={30} decorative />
+            <span className="grow">
+              <span className="bold">
+                {line.won}-{line.lost} with the {league.teams[line.tid].name}
+              </span>
+              <span className="sub">{endText({ round: line.round ?? -1 })}</span>
+            </span>
+            <span className="card-link">
+              {review ? 'Review' : 'Franchise'} <ChevronRight size={14} aria-hidden="true" />
+            </span>
+          </Link>
+        </Section>
+      )}
     </>
   );
 }

@@ -20,6 +20,7 @@ import { snapshot, streaks, type Drawn } from '../live/drawn';
 import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
+import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { fitPlayers, playOptions } from '../live/plays';
 import { SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
@@ -146,18 +147,23 @@ describe('the live assistant and the bench', () => {
       const g = game();
       for (let i = 0; i < 200; i++) g.sim.step();
       const view = snapshot(g.sim);
-      view.sides[1].pt = { ...view.sides[1].pt, spotup: { poss: 20, pts: 40 } };
+      // (post-ups: their counter, the post double, measured even or better; staying home on hot spot-ups
+      // didn't. In a game still to be decided and not in its last seconds: then there's no counter to call)
+      view.sides[1].pt = { ...view.sides[1].pt, post: { poss: 20, pts: 40 } };
+      view.sides[0].score = view.sides[1].score;
+      Object.assign(view, { q: 3, clock: 300 });
       const them = view.box.away;
       expect(them.t.fga).toBeGreaterThanOrEqual(20);
       const made = 2 * them.t.fgm + them.t.tpm;
-      const hot = () => liveAlerts(alertInput(g, view)).some((x) => x.id === 'pt-spotup');
+      const hot = () => liveAlerts(alertInput(g, view)).some((x) => x.id === 'pt-post');
       view.box.xShots = [view.box.xShots![0], { ...view.box.xShots![1], pts: made }];
       expect(hot()).toBe(true);
       view.box.xShots = [view.box.xShots![0], { ...view.box.xShots![1], pts: made - 0.12 * 2 * them.t.fga }];
       expect(hot()).toBe(false);
     }
 
-    // tired legs flagged only when the staff won't sub them out: manual subs or crunch time
+    // tired legs flagged only when you make the subs: the staff subs them out itself, and in crunch
+    // time plays through them (a gassed closer subbed out there cost about 0.1 a game, measured)
     {
       const g = game();
       for (let i = 0; i < 30; i++) g.sim.step();
@@ -175,37 +181,43 @@ describe('the live assistant and the bench', () => {
       const crunch = structuredClone(view);
       crunch.q = 4;
       crunch.clock = 200;
-      expect(tired(alertInput(g, crunch))).toHaveLength(1);
+      expect(tired(alertInput(g, crunch))).toEqual([]);
+      expect(tired(alertInput(g, crunch, { manualSubs: true }))).toHaveLength(1);
       // a blowout in the fourth: not worth a word (outside the close-game band the game stops in)
       crunch.sides[0].score += 30;
       expect(tired(alertInput(g, crunch))).toEqual([]);
       expect(tired(alertInput(g, crunch, { manualSubs: true }))).toEqual([]);
     }
 
-    // 5 fouls in the fourth quarter flagged with a Sit him button, crunch time or not
+    // 5 fouls in the fourth quarter flagged with a Sit him button, crunch time or not, when you make the
+    // subs; the staff makes that call itself (sitting him in a close fourth cost 1.3 points of win chance, measured)
     {
       const g = game();
       for (let i = 0; i < 30; i++) g.sim.step();
       const view = withPlayer(snapshot(g.sim), 1, { fouls: 5 });
       const pid = view.sides[0].on[1];
+      const manual = { manualSubs: true };
       expect(liveAlerts(alertInput(g, view)).filter((x) => x.id.startsWith('fouls-'))).toEqual([]);
       for (const clock of [500, 100]) {
         const late = structuredClone(view);
         late.q = 4;
         late.clock = clock;
-        const a = liveAlerts(alertInput(g, late)).filter((x) => x.id.startsWith('fouls-'));
+        // (a close game: up 2)
+        late.sides[0].score = late.sides[1].score + 2;
+        expect(liveAlerts(alertInput(g, late)).some((x) => x.id.startsWith('fouls-'))).toBe(false);
+        const a = liveAlerts(alertInput(g, late, manual)).filter((x) => x.id === `fouls-${pid}-5`);
         expect(a).toHaveLength(1);
         expect(a[0].title).toContain('5 fouls');
         expect(a[0].action).toMatchObject({ kind: 'sub', out: pid, label: `Sit P${pid}` });
         // down 30, or in the period's last 24 seconds, it isn't
         const blow = structuredClone(late);
         blow.sides[1].score += 30;
-        expect(liveAlerts(alertInput(g, blow)).some((x) => x.id.startsWith('fouls-'))).toBe(false);
+        expect(liveAlerts(alertInput(g, blow, manual)).some((x) => x.id === `fouls-${pid}-5`)).toBe(false);
       }
       const last = structuredClone(view);
       last.q = 4;
       last.clock = 20;
-      expect(liveAlerts(alertInput(g, last)).some((x) => x.id.startsWith('fouls-'))).toBe(false);
+      expect(liveAlerts(alertInput(g, last, manual)).some((x) => x.id === `fouls-${pid}-5`)).toBe(false);
     }
 
     // foul trouble at the staff's limit flagged only when you handle subs
@@ -275,23 +287,32 @@ describe('the live assistant and the bench', () => {
       expect(liveAlerts(alertInput(g, later, { events: ev })).some((x) => /^(inj|fo|adj)-/.test(x.id))).toBe(false);
     }
 
-    // the biggest edge against you turned into a one-tap fix
+    // the biggest edge against you turned into a one-tap fix, when that fix measured as a gain where it
+    // fires (callWorth.ts): a roll man punishing a hedge brings Go to Drop; pull-ups over a drop bring
+    // nothing (the switch to Hedge cost 1.6 a game, measured), nor does a counter-call on it
     {
       const g = game();
       for (let i = 0; i < 40; i++) g.sim.step();
       const t = g.sim.baseTactics(0);
       t.defense.scheme = 'man';
-      t.defense.pnr = 'drop';
+      t.defense.pnr = 'hedge';
       const view = structuredClone(snapshot(g.sim));
-      view.impacts = [{ key: 'drop_pullup:o', t: 1, count: 6, pts: 4.2, players: {} }];
-      const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-drop_pullup:o')!;
-      expect(a.action?.kind).toBe('tactics');
+      view.impacts = [{ key: 'hedge_roll:o', t: 1, count: 6, pts: 4.2, players: {} }];
+      const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-hedge_roll:o')!;
+      expect(a.action).toMatchObject({ kind: 'tactics', label: 'Go to Drop' });
+      const note = staffNotes({ ...staffInput(g), view, tactics: t }).find((n) => n.id === 'imp-hedge_roll:o')!;
+      expect(note.worth).toBe('Measured: worth +2.2 a game where we make it');
       if (a.action?.kind === 'tactics') {
         a.action.apply(t);
-        expect(t.defense.pnr).not.toBe('drop');
+        expect(t.defense.pnr).toBe('drop');
         // fixed: the edge no longer applies, so nothing more to say about it
-        expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
+        expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-hedge_roll:o')).toBe(false);
       }
+      view.impacts = [{ key: 'drop_pullup:o', t: 1, count: 6, pts: 4.2, players: {} }];
+      expect(callCosts(callKey('imp-drop_pullup:o', 'Switch to Hedge'))).toBe(true);
+      expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
+      // a call made too rarely to have measured is the staff's read
+      expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBe("The staff's read: not measured yet");
     }
 
     // straight makes and misses counted from the shot log
@@ -339,7 +360,8 @@ describe('the live assistant and the bench', () => {
       expect(notes.some((n) => n.id.startsWith('hot-') || n.actions.some((a) => /^Double /.test(a.label)))).toBe(false);
     }
 
-    // what's working and stalling on your own end, with a change to lean into or away from it
+    // no call to lean into or away from your own play types, nor to attack the defender you're beating:
+    // all three measured as costs where they fire (callWorth.ts)
     {
       const g = game();
       play(g, 60);
@@ -350,18 +372,15 @@ describe('the live assistant and the bench', () => {
       const t = cloneTactics(base.tactics);
       t.offense.actions.iso = 60;
       t.offense.actions.pnr = 50;
-      const notes = staffNotes({ ...base, view, tactics: t });
-      const cold = notes.find((n) => n.id === 'cold-iso')!;
-      const warm = notes.find((n) => n.id === 'work-pnrBH')!;
-      expect(cold.tone).toBe('warn');
-      expect(warm.tone).toBe('good');
-      const x = cloneTactics(t);
-      if (cold.actions[0].kind === 'tactics') cold.actions[0].apply(x);
-      expect(x.offense.actions.iso).toBeLessThan(t.offense.actions.iso);
-      expect(x.offense.actions.motion).toBeGreaterThan(t.offense.actions.motion);
+      expect(staffNotes({ ...base, view, tactics: t }).some((n) => /^(cold|work|hunt)-/.test(n.id))).toBe(false);
+      expect(['cold', 'work', 'hunt', 'tired', 'fouls5'].every((k) => callCosts(k))).toBe(true);
 
-      // held back when it can't matter: a decided game (up 40 in any quarter), a period's last 24 seconds;
-      // but resting the starters is a decided game's call, and fouling late the last seconds'
+      // a kept call held back when it can't matter: a decided game (up 40 in any quarter), a period's last
+      // 24 seconds; but fouling late is the last seconds' call. No call to rest the starters with the
+      // coach's switch for it off (2.3 points of margin in blowouts, never a result: his call)
+      t.defense.scheme = 'man';
+      t.defense.pnr = 'hedge';
+      view.impacts = [{ key: 'hedge_roll:o', t: 1, count: 6, pts: 4.2, players: {} }];
       const ids = (v: Drawn, over: Partial<StaffInput> = {}) => staffNotes({ ...base, view: v, tactics: t, ...over }).map((n) => n.id);
       const at = (q: number, clock: number, margin: number) => {
         const v = structuredClone(view);
@@ -369,20 +388,21 @@ describe('the live assistant and the bench', () => {
         v.sides[0].score = v.sides[1].score + margin;
         return v;
       };
-      expect(ids(at(2, 300, 0))).toContain('cold-iso');
-      expect(ids(at(2, 300, 40))).not.toContain('cold-iso');
-      expect(ids(at(2, 300, -40))).not.toContain('cold-iso');
-      expect(ids(at(2, 20, 0))).not.toContain('cold-iso');
+      const drop = 'imp-hedge_roll:o';
+      expect(ids(at(2, 300, 0))).toContain(drop);
+      expect(ids(at(2, 300, 40))).not.toContain(drop);
+      expect(ids(at(2, 300, -40))).not.toContain(drop);
+      expect(ids(at(2, 20, 0))).not.toContain(drop);
       t.manage.foulWhenTrailing = false;
       t.manage.garbageTime = false;
       expect(ids(at(4, 20, -2))).toContain('late-foul-4');
-      expect(ids(at(4, 200, 25))).toContain('garbage-4');
+      expect(ids(at(4, 200, 25)).some((id) => id.startsWith('garbage-'))).toBe(false);
       // and never on a setting changed fewer than 15 trips ago (no Drop → Hedge whiplash): another setting's change doesn't hold it
-      expect(ids(at(2, 300, 0), { recent: { 'offense.actions.iso': 6 } })).not.toContain('cold-iso');
-      expect(ids(at(2, 300, 0), { recent: { 'offense.actions.iso': 15, 'defense.pnr': 2 } })).toContain('cold-iso');
+      expect(ids(at(2, 300, 0), { recent: { 'defense.pnr': 6 } })).not.toContain(drop);
+      expect(ids(at(2, 300, 0), { recent: { 'defense.pnr': 15, 'offense.actions.iso': 2 } })).toContain(drop);
       // the trips since a change are the side's it acts on: theirs for a defensive setting
       const after = cloneTactics(t);
-      after.defense.pnr = t.defense.pnr === 'drop' ? 'hedge' : 'drop';
+      after.defense.pnr = 'drop';
       const r = recentLevers([{ op: { at: 0, op: 'tactics', args: { tactics: after } }, log: 10, before: t }], g.logs, 0);
       expect(Object.keys(r)).toEqual(['defense.pnr']);
       expect(r['defense.pnr']).toBe(g.logs.slice(10).filter((l) => l.off === 1 && l.kind !== 'ft').length);
@@ -431,10 +451,12 @@ describe('the live assistant and the bench', () => {
         return v;
       };
       const stopFor = (v: Drawn, x = lg, dismissed: string[] = []) => stopCalls(v, x, names, dismissed)[0] ?? null;
-      // (the staff sits him at five in the fourth before crunch time)
+      // (the staff sits him at five in the fourth before crunch time, and plays him through it in crunch
+      // time: sitting him there cost win chance, measured, so the game doesn't stop for it unless the subs are yours)
       expect(stopFor(at(4, 500, { fouls: 5 }))).toBeNull();
-      expect(stopFor(at(4, 200, { fouls: 5 }))).toMatchObject({ id: `fouls-${pid}`, pid });
-      expect(stopFor(at(4, 200, { fouls: 5 }), lg, [`fouls-${pid}-5`])).toBeNull();
+      expect(stopFor(at(4, 200, { fouls: 5 }))).toBeNull();
+      expect(stopFor(at(4, 200, { fouls: 5 }), manual)).toMatchObject({ id: `fouls-${pid}`, pid });
+      expect(stopFor(at(4, 200, { fouls: 5 }), manual, [`fouls-${pid}-5`])).toBeNull();
       expect(stopFor(at(3, 200, { fouls: 5 }), manual)).toBeNull();
       // with the subs yours a fifth foul stops the game before crunch time, while it's close: down 14
       // with 11 minutes left and the ball it is, down 15 or down 30 it isn't, nor up 30 with two minutes left
@@ -458,14 +480,16 @@ describe('the live assistant and the bench', () => {
       // it stops once a period, and its screen (who's tired or in foul trouble on it) stands for the fifth foul due with it
       const stopped = new Set<string>();
       const fifth = at(4, 14, { fouls: 5 }, -2, 0);
-      expect(stopCalls(fifth, lg, names, []).map((c) => c.id)).toEqual(['last-4', `fouls-${pid}`]);
+      expect(stopCalls(fifth, lg, names, []).map((c) => c.id)).toEqual(['last-4']);
+      expect(stopCalls(fifth, manual, names, []).map((c) => c.id)).toEqual(['last-4', `fouls-${pid}`]);
       const seen: (StopCall | null)[] = [fifth, at(4, 9, {}, 0, 0), at(4, 4, {}, -1, 0), at(5, 12, {}, -2, 0), at(5, 6, {}, 0, 0)].map((v) =>
-        takeStop(stopCalls(v, lg, names, []), stopped),
+        takeStop(stopCalls(v, manual, names, []), stopped),
       );
       expect(seen.map((c) => c?.id ?? null)).toEqual(['last-4', null, null, 'last-5', null]);
       const t = g.sim.T[0];
       t.team = { ...t.team, rotation: { ...t.team.rotation, closers: t.on.map((p) => p.pid) } };
-      expect(stopFor(at(4, 200, { energy: 0.3 }))).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
+      expect(stopFor(at(4, 200, { energy: 0.3 }))).toBeNull();
+      expect(stopFor(at(4, 200, { energy: 0.3 }), manual)).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
       t.team = {
         ...t.team,
         rotation: {
@@ -476,7 +500,7 @@ describe('the live assistant and the bench', () => {
             .map((p) => p.pid),
         },
       };
-      expect(stopFor(at(4, 200, { energy: 0.3 }))).toBeNull();
+      expect(stopFor(at(4, 200, { energy: 0.3 }), manual)).toBeNull();
 
       // the late play call is built around your closer (the go-to you named while he's on the floor,
       // else the engine's): his clear-out first, then the sets he fits best, then one set for someone else

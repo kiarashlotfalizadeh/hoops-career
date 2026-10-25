@@ -91,7 +91,7 @@ export interface LegacyState {
   pulse?: { season: number; tid: number; pts: PulsePoint[] };
   /** The owner's monthly check-ins this season: the days sent, and the record and his score at the last one. */
   checkins?: { season: number; tid: number; sent: string[]; last?: { won: number; lost: number; score: number } };
-  /** The season reviews, oldest first (at most REVIEWS_KEPT). */
+  /** The season reviews, oldest first: every season's (the pulse chart only in the latest LEGACY_REVIEWS_KEPT). */
   reviews: SeasonReview[];
 }
 
@@ -331,11 +331,7 @@ export function legacyGame(league: League, g: ScheduledGame) {
         {
           key: jobKey(stint.tid, stint.from),
           head: first
-            ? pick(league, 'first-win', [
-                `${coach} gets his first win`,
-                `Win No. 1 for ${coach}`,
-                `${coach} is off the mark: ${side.us}-${side.them} over the ${nick(league, side.opp)}`,
-              ])
+            ? pick(league, 'first-win', [`${coach} gets his first win`, `Win No. 1 for ${coach}`, `${coach} is off the mark against the ${nick(league, side.opp)}`])
             : pick(league, jobKey(stint.tid, stint.from), [
                 `${coach}'s first win with the ${nick(league, tid)}`,
                 `${coach} is off the mark in ${league.teams[tid].region}`,
@@ -575,12 +571,19 @@ function noteSignatureWin(league: League, g: ScheduledGame, res: GameResult, sid
   keepWin(league, { ...w, v: winValue(w, res.ot) });
 }
 
-/** Keep a signature win: the career's best WINS_KEPT, and the best three of this season and the last (for the reviews). */
+/** Keep a signature win: the career's best WINS_KEPT, the best three of this season and the last (for the reviews), and every season's best for good. */
 function keepWin(league: League, w: SignatureWin) {
   const s = ensureLegacy(league);
   const all = [...s.wins.filter((x) => x.gid !== w.gid || x.season !== w.season), w].sort((a, b) => b.v - a.v || b.season - a.season || b.day - a.day);
   const top = new Set(all.slice(0, WINS_KEPT));
   for (const season of [league.season, league.season - 1]) for (const x of all.filter((y) => y.season === season).slice(0, 3)) top.add(x);
+  // (sorted best first: the first of each season is its best)
+  const seasons = new Set<number>();
+  for (const x of all) {
+    if (seasons.has(x.season)) continue;
+    seasons.add(x.season);
+    top.add(x);
+  }
   s.wins = all.filter((x) => top.has(x));
 }
 
@@ -713,7 +716,9 @@ export function legacySeasonEnd(league: League) {
   const s = ensureLegacy(league);
   const review = buildSeasonReview(league);
   if (!review) return;
-  s.reviews = [...s.reviews.filter((r) => r.season !== review.season), review].slice(-LEGACY_REVIEWS_KEPT);
+  // every season's review is kept (a few hundred bytes), the pulse chart only for the latest LEGACY_REVIEWS_KEPT
+  s.reviews = [...s.reviews.filter((r) => r.season !== review.season), review];
+  for (const r of s.reviews.slice(0, -LEGACY_REVIEWS_KEPT)) delete r.pulse;
   // the owner's verdict (the season's mail) opens the review, which has it in full
   const mail = league.inbox.find((m) => m.season === league.season && m.from === 'Owner' && (m.subject === 'Season review' || m.subject === "You're fired"));
   if (mail && mail.subject === 'Season review') mail.link = reviewPath(review.season);

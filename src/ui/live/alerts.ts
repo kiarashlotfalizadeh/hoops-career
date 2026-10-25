@@ -13,6 +13,7 @@ import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
 import { CLOSE_WIN, crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
+import { callCosts, callKey } from '../../core/analysis/callWorth';
 import type { Drawn, DrawnPlayer } from './drawn';
 
 export type AlertAction =
@@ -216,9 +217,12 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     out.push({ id: e.id, tone: 'bad', ...eventLines(e), action: a.manualSubs ? { kind: 'subs', label: 'Subs' } : undefined });
   }
 
-  // one foul from fouling out late: worth a decision in a close game, crunch time or not
+  // one foul from fouling out late, when you make the subs: worth a decision in a close game, crunch
+  // time or not. The staff makes this call itself (it sits him at five before crunch time and plays
+  // him through it in crunch time), and sitting him in a close fourth quarter cost about 1.3 points of
+  // win chance where it measured it (callWorth.ts): no call when it's the staff's
   for (const p of onFloor) {
-    if (view.q >= 4 && p.fouls === 5 && close)
+    if (a.manualSubs && view.q >= 4 && p.fouls === 5 && close)
       out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', title: `${names(p.pid)} has 5 fouls`, text: "One more and he's out.", action: sit(p, 'Sit') });
   }
 
@@ -233,8 +237,9 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
       action: { kind: 'timeout', label: 'Timeout' },
     });
 
-  // tired legs: the staff subs them out itself, except in crunch time or when you handle subs
-  if ((a.manualSubs || crunch) && close)
+  // tired legs, when you make the subs: the staff subs them out itself, and plays through them in
+  // crunch time (a gassed closer subbed out there cost about 0.1 a game where it measured it: no call)
+  if (a.manualSubs && close)
     for (const p of onFloor) {
       if (p.out !== 0 || p.energy >= tactics.manage.fatigueSub) continue;
       const sub = a.subFor(p.pid);
@@ -317,8 +322,10 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
         text: `${(v.pts / v.poss).toFixed(2)} points a trip (league ${base.toFixed(2)}): try other actions.`,
       });
   }
-  // nothing the staff would hold back (a decided game, the last seconds, a setting just changed)
-  return out.filter((x) => !callHold(a, x.action));
+  // nothing the staff would hold back (a decided game, the last seconds, a setting just changed), and
+  // no counter that measured as a cost where it fires (callWorth.ts: the switches to Hedge off Drop,
+  // staying home on spot-ups): there's nothing to change for that edge
+  return out.filter((x) => !callHold(a, x.action) && !(x.action?.kind === 'tactics' && callCosts(callKey(x.id, x.action.label))));
 }
 
 /**

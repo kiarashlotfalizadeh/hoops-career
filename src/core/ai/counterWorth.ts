@@ -20,7 +20,7 @@
 // games show what the change did.
 // Pure: reads the league.
 
-import type { League, ScheduledGame } from '../types';
+import type { GamePlan, League, Player, ScheduledGame, Team } from '../types';
 import { GameSim } from '../sim/engine';
 import { Rng, hashString } from '../random';
 import { buildSimInput, neutralSite } from '../league/games';
@@ -55,14 +55,32 @@ export interface CounterWorth {
 /** A reading `raw` with standard error `se`, shrunk toward even by the share of it that can be noise. */
 export const shrinkWorth = (raw: number, se: number) => (raw * WORTH_SPREAD ** 2) / (WORTH_SPREAD ** 2 + se ** 2);
 
+/**
+ * One change measured over several games (each game's reading from measureChanges, weighted `w`, the
+ * weights adding to 1: a game's share of the stretch): the readings' weighted mean and its standard
+ * error, shrunk toward even as one reading. So five games of 60 paired games each read about as
+ * close as one of 240, and the number is about the stretch, not one opponent.
+ */
+export function poolWorth(id: string, parts: { w: number; raw: number; se: number }[]): CounterWorth {
+  const raw = parts.reduce((a, p) => a + p.w * p.raw, 0);
+  const se = Math.sqrt(parts.reduce((a, p) => a + (p.w * p.se) ** 2, 0));
+  return { id, pts: Math.round(shrinkWorth(raw, se) * 10) / 10, raw: Math.round(raw * 100) / 100, se: Math.round(se * 100) / 100 };
+}
+
 /** What a measured counter reads as: a gain, a cost, or too close to even to say (its shrunk worth against WORTH_MIN). */
 export const worthCall = (w: Pick<CounterWorth, 'pts'>): 'gain' | 'cost' | 'even' => (w.pts >= WORTH_MIN ? 'gain' : w.pts <= -WORTH_MIN ? 'cost' : 'even');
 
-/** A game's margin for the user's side by its shot value: expected points from the field plus free throws made. */
+/**
+ * A game's margin for the user's side by its shot value: expected points from the field (every shot
+ * the defense fouled included, made or not: an and-one's chance counts whether it fell) plus free
+ * throws made. Without the fouled misses, a change that draws fouls read as a cost: the assistant's
+ * adjustments at the breaks measured −0.6 a game that way and −0.1 ± 0.1 in points (round/gameday).
+ */
 function xMargin(sim: GameSim, side: 0 | 1): number {
   const r = sim.simToEnd();
   const x = r.xShots;
-  const v = x ? [x[0].pts + r.home.t.ftm, x[1].pts + r.away.t.ftm] : [r.home.pts, r.away.pts];
+  const f = sim.xFouledMiss;
+  const v = x ? [x[0].pts + f[0] + r.home.t.ftm, x[1].pts + f[1] + r.away.t.ftm] : [r.home.pts, r.away.pts];
   return side === 0 ? v[0] - v[1] : v[1] - v[0];
 }
 
@@ -77,27 +95,50 @@ export interface WorthOpts {
 }
 
 /**
- * The staff's counters against `opp` (the first WORTH_MAX the rules draft), each measured over paired
- * games of the user's next game against them (`game`, else a home game on today's date): its points
- * a game over the plan as it stands.
+ * A change to measure, as a patch over the league: teams' and players' fields to replace (a team's
+ * tactics or rotation, a player kept out with `injury`) and game plans to put in. Plain data, so a
+ * measurement can run in the worker.
  */
-export async function counterWorth(
-  league: League,
-  opp: number,
-  game?: Pick<ScheduledGame, 'home' | 'away' | 'day' | 'type' | 'seriesId' | 'cup'> & Partial<Pick<ScheduledGame, 'gid'>>,
-  opts: WorthOpts = {},
-): Promise<CounterWorth[] | null> {
+export interface LeagueChange {
+  id: string;
+  teams?: Record<number, Partial<Team>>;
+  players?: Record<number, Partial<Player>>;
+  gamePlans?: Record<number, GamePlan>;
+}
+
+/** The league with `c` laid over it (a view: the league itself isn't changed). */
+export function withChange(league: League, c: LeagueChange): League {
+  const teams = c.teams ? league.teams.map((t) => (c.teams![t.tid] ? { ...t, ...c.teams![t.tid] } : t)) : league.teams;
+  let players = league.players;
+  if (c.players) {
+    players = { ...league.players };
+    for (const [pid, patch] of Object.entries(c.players)) players[+pid] = { ...players[+pid], ...patch };
+  }
+  const gamePlans = c.gamePlans ? { ...league.gamePlans, ...c.gamePlans } : league.gamePlans;
+  return { ...league, teams, players, gamePlans };
+}
+
+type WorthGame = Pick<ScheduledGame, 'home' | 'away' | 'day' | 'type' | 'seriesId' | 'cup'> & Partial<Pick<ScheduledGame, 'gid'>>;
+
+/**
+ * What each change is worth to the user's next game against `opp` (`game`, else a home game on
+ * today's date), measured over paired games: the game as it stands and with the change, game for game
+ * on the same seeds (the season's for this opponent), in points a game by shot value. Only the user's
+ * side is rebuilt with a change; the opponent plays as it would. A reading past WORTH_RECHECK_Z is
+ * played again on fresh seeds, and every reading is shrunk toward even (shrinkWorth). The tool behind
+ * every number the staff shows before a choice: counters, a tactics edit, a rest night.
+ */
+export async function measureChanges(league: League, opp: number, changes: LeagueChange[], game?: WorthGame, opts: WorthOpts = {}): Promise<CounterWorth[] | null> {
   const games = opts.games ?? WORTH_GAMES;
   const user = league.userTid;
+  if (!changes.length) return [];
   const g = game ?? { home: user, away: opp, day: league.day, type: 'regular' as const, seriesId: undefined, cup: undefined };
-  const cands: Candidate[] = counterCandidates(league, user, opp).slice(0, WORTH_MAX);
-  if (!cands.length) return [];
   const side: 0 | 1 = g.home === user ? 0 : 1;
   const mine = buildSimInput(league, user, g.day, g.type, opp, g);
   const theirs = buildSimInput(league, opp, g.day, g.type, user, g);
   // (the season's seeds for this opponent: the same games every time it's measured)
   const seed = hashString(`${league.id}:${league.season}:${opp}:counter-worth`);
-  let total = cands.length + 1;
+  let total = changes.length + 1;
   let done = 0;
   const play = async (a: typeof mine, batch = 0) => {
     if (done) await opts.between?.();
@@ -119,12 +160,8 @@ export async function counterWorth(
     return { mean, se: sd / Math.sqrt(d.length) };
   };
   const out: CounterWorth[] = [];
-  for (const c of cands) {
-    // the counter in tonight's plan, in place of the plan's item in its group (as Add puts it there)
-    const plan = planFor(league, opp, g);
-    const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== itemGroup(c)), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
-    const view: League = { ...league, gamePlans: { ...league.gamePlans, [opp]: { ...plan, oppTid: opp, items, scope: plan?.scope ?? 'next' } } };
-    const input = buildSimInput(view, user, g.day, g.type, opp, g);
+  for (const c of changes) {
+    const input = buildSimInput(withChange(league, c), user, g.day, g.type, opp, g);
     const alt = await play(input);
     if (!alt) return null;
     let d = alt.map((x, i) => x - base[i]);
@@ -143,4 +180,22 @@ export async function counterWorth(
     out.push({ id: c.id, pts: Math.round(shrinkWorth(r.mean, r.se) * 10) / 10, raw: Math.round(r.mean * 10) / 10, se });
   }
   return out;
+}
+
+/**
+ * The staff's counters against `opp` (the first WORTH_MAX the rules draft), each measured over paired
+ * games of the user's next game against them (`game`, else a home game on today's date): its points
+ * a game over the plan as it stands.
+ */
+export async function counterWorth(league: League, opp: number, game?: WorthGame, opts: WorthOpts = {}): Promise<CounterWorth[] | null> {
+  const user = league.userTid;
+  const g = game ?? { home: user, away: opp, day: league.day, type: 'regular' as const, seriesId: undefined, cup: undefined };
+  const cands: Candidate[] = counterCandidates(league, user, opp).slice(0, WORTH_MAX);
+  // each counter in tonight's plan, in place of the plan's item in its group (as Add puts it there)
+  const plan = planFor(league, opp, g);
+  const changes = cands.map((c): LeagueChange => {
+    const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== itemGroup(c)), { id: c.id, label: c.label, group: c.group, patch: c.patch }];
+    return { id: c.id, gamePlans: { [opp]: { ...plan, oppTid: opp, items, scope: plan?.scope ?? 'next' } } };
+  });
+  return measureChanges(league, opp, changes, g, opts);
 }

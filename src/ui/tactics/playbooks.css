@@ -144,9 +144,21 @@
   align-items: center;
   gap: 12px;
 }
+/* the staff's read in points a game (no bar: it's a difference, not a score out of 100) */
+.tx-fitv.tx-read {
+  width: 44px;
+  font-size: 15px;
+  text-align: right;
+}
 .tx-why-head .tx-fitv {
   width: 54px;
   font-size: 28px;
+}
+.tx-why-head .tx-fitv.tx-read {
+  width: auto;
+  min-width: 54px;
+  font-size: 24px;
+  text-align: left;
 }
 .tx-why-rank {
   display: block;

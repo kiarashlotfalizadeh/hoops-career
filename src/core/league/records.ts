@@ -16,6 +16,7 @@ import type { BoxLine, GameResult, GameType, League, Player, PlayerStats, TeamSe
 import { RETIRED } from '../types';
 import { addInbox, addNews, playerName, seasonTotals } from './helpers';
 import { realCareerOnRecord } from '../analysis/milestones';
+import { seasonLabel } from '../constants';
 
 /** The player stats the book keeps single-game marks for. */
 export const REC_STATS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm'] as const;
@@ -308,7 +309,22 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
         ? playerName(league.players[first.pid])
         : '?';
     const text = `${who}${first.team ? '' : ` (${ab(first.tid)})`}: ${partsList(parts)} vs ${ab(opp)}.`;
-    addNews(league, { kind: 'record', text, tids: [first.tid], pids: first.pid !== undefined ? [first.pid] : [] });
+    // a league record set in another team's game is the front page (the user's own games tell theirs:
+    // their story leads with it, see gameStory.ts), with a headline about the record
+    const lg = shown.find((n) => n.scope === 'league' && n.book === 'reg' && n.kind === 'record');
+    const userGame = res.home.tid === user || res.away.tid === user;
+    if (lg && !userGame && remarkable(lg)) {
+      const what = recordWhat({ stat: lg.stat, team: lg.team, v: lg.v });
+      const oppName = league.teams[opp]?.name ?? ab(opp);
+      addNews(league, {
+        kind: 'record',
+        head: lg.team ? `The ${league.teams[first.tid]?.name ?? who} set a league record: ${what}` : `${who} sets a league record: ${what}`,
+        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game since ${seasonLabel(book.since)}.`,
+        tids: [first.tid, opp],
+        pids: first.pid !== undefined ? [first.pid] : [],
+        weight: 3,
+      });
+    } else addNews(league, { kind: 'record', text, tids: [first.tid], pids: first.pid !== undefined ? [first.pid] : [] });
     if (first.tid === user)
       addInbox(league, {
         from: 'Media Relations',
@@ -320,6 +336,16 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
       });
   }
 }
+
+/**
+ * A league record big enough for the front page on its own: in a league's first seasons the book is
+ * young and its records fall often (a ninth steal can be "a league record" in the second season), so
+ * the front page waits for a night the NBA would notice too, about its own all-time top ten: 60
+ * points, 25 rebounds, 20 assists, 9 steals, 10 blocks, 13 threes; a team's 160 points, 28 threes or a
+ * 55-point win. Lesser records stay the wire's line.
+ */
+const REMARKABLE: Record<string, number> = { pts: 60, reb: 25, ast: 20, stl: 9, blk: 10, tpm: 13, 'team-pts': 160, 'team-tpm': 28, 'team-margin': 55 };
+const remarkable = (n: RecordNote) => n.v >= (REMARKABLE[n.team ? `team-${n.stat}` : n.stat] ?? Infinity);
 
 const partsList = (parts: string[]) => (parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
 

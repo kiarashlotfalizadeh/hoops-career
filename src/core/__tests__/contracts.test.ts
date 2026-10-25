@@ -33,6 +33,7 @@ import {
   stretchDeadMoney,
   stretchPhrase,
   teamAppeal,
+  contractBurden,
   tradeValue,
   userBuyout,
   userClaim,
@@ -688,7 +689,8 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(tradeValue(l, over)).toBeLessThan(tradeValue(l, fair) - 3);
   }
 
-  // values normal contracts as before, within about 2% (season by season now, so an extension's years count)
+  // values normal contracts as before, within about 2% (season by season now, so an extension's years
+  // count); an overpay's burden at DUMP_PER_FIRST of the cap a first, not 0.1 a $1M (see contractBurden)
   {
     // the old formula: this season's surplus times the seasons left (up to four)
     const old = (l: League, p: Player, strategy: Strategy) => {
@@ -705,7 +707,8 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
       const yrs = Math.max(1, contractExp(p.contract) - cs + 1);
       const surplus = (marketSalary(l, p) - salaryFor(p, cs)) / 1000;
       const optionYear = p.contract.option === 'team' && contractExp(p.contract) > l.season && yrs <= 4;
-      return v + surplus * (optionYear && surplus < 0 ? yrs - 1 : Math.min(yrs, 4)) * (strategy === 'rebuild' ? 0.18 : 0.1);
+      const counted = optionYear && surplus < 0 ? yrs - 1 : Math.min(yrs, 4);
+      return surplus >= 0 ? v + surplus * counted * (strategy === 'rebuild' ? 0.18 : 0.1) : v - contractBurden(l, -surplus * 1000 * counted, strategy);
     };
     for (const seed of [1, 2]) {
       const l = extLeague(seed);
@@ -714,7 +717,9 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
         for (const p of Object.values(l.players).filter((x) => x.tid >= 0))
           for (const st of ['retool', 'contend', 'rebuild'] as const) {
             const was = old(l, p, st);
-            expect(Math.abs(tradeValue(l, p, st) - was)).toBeLessThanOrEqual(Math.abs(was) * 0.02 + 0.1);
+            // (a burden counted season by season moves more with a raise in a later year than 0.1 a $1M did)
+            const burdened = marketSalary(l, p) < salaryFor(p, contractSeason(l));
+            expect(Math.abs(tradeValue(l, p, st) - was)).toBeLessThanOrEqual(Math.abs(was) * (burdened ? 0.1 : 0.02) + (burdened ? 1 : 0.1));
           }
       }
     }

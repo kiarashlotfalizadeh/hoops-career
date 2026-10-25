@@ -4,6 +4,7 @@
 // never plays four), and in-game injuries.
 
 import { K } from './constants';
+import { GAME } from '../../constants';
 import { crunchTime } from '../../analysis/winProb';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
@@ -28,15 +29,39 @@ export const rotationMethods = {
   },
 
   /**
-   * Whether the game is a blowout the deep bench should finish: 22 points up with five minutes
-   * left or 16 with 2:30 left (nobody empties the bench for the last half minute). Once the bench
-   * is in it stays until the game is back within reach: a lead dipping to 14 with seconds left
-   * doesn't bring the starters back.
+   * Seconds of regulation left from the third quarter on (overtime: its own clock), the clock a lead
+   * is weighed against; none before it.
+   */
+  regLeft(this: GameSim): number {
+    return this.q < 3 ? Infinity : this.q === 3 ? this.clock + GAME.quarterSec : this.clock;
+  },
+
+  /** The lead that decides the game for this coach right now (see K.garbage): none before 3:00 left in the third quarter. */
+  garbageLine(this: GameSim, t: ST): number {
+    const left = this.regLeft();
+    return left > K.garbage.start ? Infinity : t.gLine * (K.garbage.from + K.garbage.per * Math.sqrt(left / 60));
+  },
+
+  /**
+   * Whether the game is a blowout the bench should finish: a lead past the coach's line (see
+   * K.garbage: 28.5 or so at the start of the fourth quarter, 23 with five minutes left, 18 with
+   * one), and nobody empties the bench for the last half minute. Once the bench is in it stays until
+   * the game is back within reach: a lead dipping to 14 with seconds left doesn't bring the starters
+   * back.
    */
   wantsGarbage(this: GameSim, t: ST): boolean {
     const margin = Math.abs(this.T[0].score - this.T[1].score);
-    if (this.q >= 4 && this.clock >= 30 && ((this.clock < 300 && margin >= 22) || (this.clock < 150 && margin >= 16))) return true;
-    return margin <= 6 + this.clock / 30 ? false : t.garbage;
+    const line = this.garbageLine(t);
+    if (this.clock >= 30 && margin >= line) return true;
+    return margin <= line - K.garbage.exit ? false : t.garbage;
+  },
+
+  /**
+   * The team leads a decided game (see wantsGarbage) and eases off: it walks the ball up, runs less,
+   * hunts fewer threes and stops pressing full court (K.garbage), whoever is on the floor.
+   */
+  eases(this: GameSim, t: ST): boolean {
+    return t.garbage && this.q >= 3 && t.score > this.T[1 - t.side].score;
   },
 
   /** Crunch time (see crunchTime): the last six minutes of a game still in reach, when the staff plays through fouls and fatigue. */
@@ -44,9 +69,9 @@ export const rotationMethods = {
     return crunchTime(this.q, this.clock, this.T[0].score - this.T[1].score);
   },
 
-  /** The deep bench is finishing a blowout (if the coach empties his bench in garbage time). */
+  /** The bench is finishing a blowout (if the coach empties his bench in garbage time). */
   inGarbageTime(this: GameSim, t: ST): boolean {
-    return t.t.manage.garbageTime && this.q >= 4 && t.garbage;
+    return t.t.manage.garbageTime && this.q >= 3 && t.garbage;
   },
 
   desiredLineup(this: GameSim, t: ST): SP[] {
@@ -55,8 +80,22 @@ export const rotationMethods = {
     t.garbage = this.wantsGarbage(t);
     const ordered = t.players.filter(avail);
     if (this.inGarbageTime(t) && ordered.length >= 8) {
-      // deep bench finishes blowouts
-      desired = ordered.slice(-5);
+      // the bench finishes blowouts: the reserves next in line (some nights the coach sits one or two
+      // of his regulars too, t.gDepth), the deepest end of the bench for the last minutes (t.gLate),
+      // a tired one spelled by a rested reserve
+      const res = ordered.filter((p) => !p.starter);
+      if (res.length >= 5) {
+        const from = this.q >= 4 && this.clock <= t.gLate ? res.length - 5 : Math.min(res.length - 5, t.gDepth);
+        desired = res.slice(from, from + 5);
+        const fresh = res.filter((p) => !desired.includes(p) && p.energy > 0.82);
+        desired = desired.map((p) => {
+          if (p.energy >= t.t.manage.fatigueSub) return p;
+          const alt = fresh.find((b) => b.big === p.big) ?? fresh[0];
+          if (!alt) return p;
+          fresh.splice(fresh.indexOf(alt), 1);
+          return alt;
+        });
+      } else desired = ordered.slice(-5);
       if (!desired.some((p) => p.guard)) {
         const g = ordered.slice(5).find((p) => p.guard && !desired.includes(p));
         if (g) desired[0] = g;

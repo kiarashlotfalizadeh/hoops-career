@@ -223,14 +223,15 @@ export default function Trade() {
   const pickTarget = (pid: number) => {
     const p = league.players[pid];
     const want: TradeOffer = { a: { tid: user, pids: [], dpids: [] }, b: { tid: p.tid, pids: [pid], dpids: [] } };
-    const result = closed ? null : makeItWork(league, want);
+    // (the ask that costs you least among the ways to match the salary: see makeItWork)
+    const result = closed ? null : makeItWork(league, want, [], { best: true });
     loadDeal(result?.offer ?? want);
     setAsk({ tid: p.tid, pid, result });
   };
 
   const whatWorks = () => {
     // (a small gap can be closed with a little of your cash)
-    const { offer: r, why } = makeItWork(league, offer, [], { cash: true });
+    const { offer: r, why } = makeItWork(league, offer, [], { cash: true, best: true });
     if (!r) {
       const gap = salaryMatchGap(league, offer, 'a');
       const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);

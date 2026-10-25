@@ -24,6 +24,7 @@ import { resetToPlan } from '../../ui/live/pills';
 import type { PossLog } from '../../core/sim/log';
 import { oppPlanIn } from '../../core/ai/opponentPlan';
 import { testLeague, toGameDay, userGames } from './fixtures';
+import { applyOp, forkSim, measureChoices, nightWorth, playOut, type LiveChoice } from '../liveWorth';
 
 /** Open the league and start today's game the way the Live screen does. */
 function goLive(l: League): LiveGame {
@@ -379,8 +380,9 @@ describe('live game', () => {
       lg.simTo('clutch');
       expect(lg.sim.q).toBe(4);
       expect(lg.sim.clock).toBeLessThanOrEqual(CLUTCH_SEC);
-      // stopped on the possession that crossed 5:00
-      expect(lg.sim.clock).toBeGreaterThan(CLUTCH_SEC - 30);
+      // stopped on the possession that crossed 5:00 (one with two offensive boards runs 24 + 14 + 14 seconds,
+      // and a team well ahead now walks it up and runs the clock)
+      expect(lg.sim.clock).toBeGreaterThan(CLUTCH_SEC - 55);
       expect(lg.simTo('clutch')).toEqual([]);
       expect(lg.simTo('half')).toEqual([]);
       lg.simTo('end');
@@ -484,7 +486,7 @@ describe('live game', () => {
       expect(half.headline).toMatch(/^Halftime: the .+ (lead|trail) the .+ \d+-\d+\.|^Halftime: the .+ and the .+ are tied at \d+\./);
       expect(half.headline).not.toMatch(/ beat | fell to /);
       if (/Biggest factor/.test(half.headline)) expect(half.headline).toContain('Biggest factor so far:');
-      for (const f of half.factors.filter((x) => x.category === 'stars')) expect(f.title).toMatch(/so far/);
+      expect(half.factors.some((x) => x.category === 'stars')).toBe(false);
       lg.simTo('quarter');
       expect(buildGameReport(l, lg.sim.result(), l.userTid, { partial: true })!.headline).toMatch(/^After Q3: /);
       const res = lg.commit(l);
@@ -496,7 +498,8 @@ describe('live game', () => {
       fresh();
     }
 
-    // measures a star line at a break against the time played
+    // a star line at a break isn't what's deciding the game: a quarter's points on pace for 50 are a few
+    // shots falling (the luck line beside it counts them), and there's nothing to double for them
     {
       const l = testLeague('star');
       toGameDay(l);
@@ -505,11 +508,9 @@ describe('live game', () => {
       const res = lg.sim.result();
       const mine = res.home.tid === l.userTid ? res.home : res.away;
       const star = [...mine.players].sort((a, b) => b.pts - a.pts)[0];
-      // a quarter of a game: 35 points' pace is about 9 (never fewer than 8)
-      star.pts = Math.max(12, star.pts);
+      star.pts = Math.max(14, star.pts);
       const q1 = buildGameReport(l, res, l.userTid, { partial: true })!;
-      const f = q1.factors.find((x) => x.category === 'stars' && x.title.startsWith(`${star.name} has ${star.pts} points so far`));
-      expect(f?.detail).toBe(`On pace for ${star.pts * 4}.`);
+      expect(q1.factors.some((x) => x.category === 'stars')).toBe(false);
       expect(buildGameReport(l, res)!.factors.some((x) => x.category === 'stars' && x.title.startsWith(star.name))).toBe(false);
       fresh();
     }
@@ -619,9 +620,53 @@ describe('live game', () => {
       expect(again.sim.baseTactics(again.userSide)).toEqual(lg.sim.baseTactics(lg.userSide));
       expect([again.manualSubs, again.sim.T[again.userSide].timeouts]).toEqual([lg.manualSubs, lg.sim.T[lg.userSide].timeouts]);
       expect([again.keep, again.seen]).toEqual([lg.keep, [1, 2]]);
+      // a copy of the game (state/liveWorth.ts) plays on as the game itself does; a choice measured from
+      // here reads the same every time, and the game as it stands reads even against itself
+      const side = again.userSide;
+      const end = playOut(forkSim(again.sim), side);
+      const choices: LiveChoice[] = [
+        { kind: 'none' },
+        { kind: 'noPlay' },
+        { kind: 'tactics', tactics: { ...again.sim.baseTactics(side), defense: { ...again.sim.baseTactics(side).defense, scheme: 'zone23' } } },
+      ];
+      const read = (await measureChoices(again.sim, side, choices, { games: 24 }))!;
+      expect(read.slice(0, 2).map((r) => [r.pts, r.win, r.n])).toEqual([
+        [0, 0, 24],
+        [0, 0, 24],
+      ]);
+      expect(await measureChoices(again.sim, side, choices, { games: 24 })).toEqual(read);
       // the rest of the game, and its record, are what the game left open would have had
       const res = again.commit(back);
       expect(res).toEqual(lg.commit(l));
+      expect(end.pts).toBe(side === 0 ? res.home.pts - res.away.pts : res.away.pts - res.home.pts);
+      // the game at tip-off, kept with it, played on the same seed with the journal's moves where they
+      // were made is tonight's game; the night's moves are measured from it, with them and without
+      {
+        const tip = forkSim(lg.tip);
+        const ops = lg.journal.ops;
+        let at = 0;
+        let k = 0;
+        while (!tip.over) {
+          while (k < ops.length && ops[k].at <= at) applyOp(tip, side, ops[k++]);
+          tip.step();
+          at++;
+        }
+        expect([tip.T[0].score, tip.T[1].score]).toEqual([res.home.pts, res.away.pts]);
+        expect(lg.tip.T[0].score + lg.tip.T[1].score).toBe(0);
+        const w = (await nightWorth(lg.tip, side, ops, { games: 30 }))!;
+        // (switching the subs to you and back isn't a move: it's how the game was run, either way)
+        expect([w.n, w.moves]).toEqual([30, 3]);
+        expect(Math.abs(w.pts)).toBeLessThanOrEqual(Math.abs(w.raw));
+        expect(w.se).toBeGreaterThan(0);
+        expect(await nightWorth(lg.tip, side, ops, { games: 30 })).toEqual(w);
+        expect(
+          await nightWorth(
+            lg.tip,
+            side,
+            ops.filter((o) => o.op === 'manualSubs'),
+          ),
+        ).toBeNull();
+      }
       expect([back.live, l.live, once(back, res.gid)]).toEqual([undefined, undefined, 1]);
       // the result keeps the night's moves and the scoring around each
       expect(res.moves!.map((m) => m.kind)).toEqual(['sub', 'tactics', 'timeout']);

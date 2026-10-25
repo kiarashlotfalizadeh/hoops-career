@@ -151,9 +151,10 @@ describe('game day', () => {
       }).story;
       expect(ot.head).toMatch(/double overtime/);
 
-      // (on a night after a win: ending a skid, or one going on, would be the bigger story)
+      // (on a night after a win: ending a skid, or one going on, would be the bigger story, and so would a 4th straight win)
       const games = userGames(base);
-      const afterWin = 1 + [...games].reverse().findIndex((_, k, rev) => k + 1 < rev.length && side(base, rev[k + 1]).pts > other(base, rev[k + 1]).pts);
+      const won = (g: GameResult) => side(base, g).pts > other(base, g).pts;
+      const afterWin = 1 + [...games].reverse().findIndex((_, k, rev) => k + 3 < rev.length && won(rev[k + 1]) && !(won(rev[k + 2]) && won(rev[k + 3])));
       const rout = craft((l, g) => {
         plain(l, g, true);
         side(l, g).pts = 135;
@@ -191,8 +192,9 @@ describe('game day', () => {
       expect(story.head).toContain(last);
       expect(story.head).toMatch(/buzzer|horn/);
       expect(story.body).toMatch(/at the buzzer/);
-      // a story on an ordinary night; the front page on a big one (Christmas Day)
-      expect(story.weight).toBe(2);
+      // a win at the horn is the front page on any night (it was a story on an ordinary one before the
+      // stories round), and so on a big one (Christmas Day)
+      expect(story.weight).toBe(3);
       const g = userGames(base).at(-1)!;
       const xmas = structuredClone(base);
       xmas.news = xmas.news.filter((x) => x.kind !== 'game');

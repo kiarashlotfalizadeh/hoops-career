@@ -22,6 +22,8 @@ import { contrast, slabVars, teamLook } from '../teamColors';
 import { injuryName, outFor } from '../../core/format';
 import { baseLabel, devBase, devTag, ovrChange } from '../../core/league/devWatch';
 import { DevDelta, DevTagChip } from './dev';
+import { careerInSave } from '../../core/league/media/history';
+import { careerOnRecord } from '../../core/analysis/milestones';
 
 /** A slab for a player with no team (a free agent, a prospect, a retired player): the neutral kit's colours. */
 const NO_TEAM: [string, string, string] = ['#2a3441', '#8a94a4', '#c4cfdc'];
@@ -122,7 +124,41 @@ export function bioFacts(league: League, p: Player): string[] {
   ].filter(Boolean);
 }
 
+/**
+ * A retired player's career, for his page: seasons played, his regular-season totals a game, and his
+ * best season by points a game (40 games or more), so a legend's page opens on what he was rather
+ * than on his last, worst season.
+ */
+export function careerOf(p: Player): { seasons: number; gp: number; pts: number; reb: number; ast: number; ts: number; best?: { season: number; ppg: number; tid: number } } {
+  let gp = 0;
+  let pts = 0;
+  let reb = 0;
+  let ast = 0;
+  let fga = 0;
+  let fta = 0;
+  const seasons = new Set<number>();
+  let best: { season: number; ppg: number; tid: number } | undefined;
+  for (const s of p.stats) {
+    if (s.playoffs || s.gp <= 0) continue;
+    gp += s.gp;
+    pts += s.pts;
+    reb += s.orb + s.drb;
+    ast += s.ast;
+    fga += s.fga;
+    fta += s.fta;
+    seasons.add(s.season);
+    if (s.gp >= 40 && (!best || s.pts / s.gp > best.ppg)) best = { season: s.season, ppg: s.pts / s.gp, tid: s.tid };
+  }
+  const tsa = fga + 0.44 * fta;
+  return { seasons: seasons.size, gp, pts: gp ? pts / gp : 0, reb: gp ? reb / gp : 0, ast: gp ? ast / gp : 0, ts: tsa ? pts / (2 * tsa) : 0, ...(best ? { best } : {}) };
+}
+
+/** His hero: a legend's career for a retired player, otherwise this season's poster. */
 export function PlayerHero({ league, p }: { league: League; p: Player }) {
+  return p.tid === RETIRED ? <RetiredHero league={league} p={p} /> : <ActiveHero league={league} p={p} />;
+}
+
+function ActiveHero({ league, p }: { league: League; p: Player }) {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const cur = playerSeason(p, league.season);
   // before his first game this season, show his most recent season instead
@@ -184,6 +220,96 @@ export function PlayerHero({ league, p }: { league: League; p: Player }) {
         </div>
       </div>
       {/* two marks at most; the rest, his particulars and where his career stands are on his Overview */}
+      {tags.length > 0 && (
+        <div className="tm-tags">
+          {tags.map((t) => (
+            <span key={t.key} className="tm-tagw">
+              {t.node}
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * A retired player's poster, in the colours of the team he gave the most seasons: his number there
+ * and, as the second figure, his peak OVR when his whole career was played in this league (a real
+ * veteran's peak came before it: his seasons instead), his career a game across its foot and his
+ * best season under it.
+ */
+function RetiredHero({ league, p }: { league: League; p: Player }) {
+  const c = careerOf(p);
+  const byTeam = new Map<number, number>();
+  for (const s of p.stats) if (!s.playoffs && s.gp > 0 && league.teams[s.tid]) byTeam.set(s.tid, (byTeam.get(s.tid) ?? 0) + s.gp);
+  const main = [...byTeam.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const team = main !== undefined ? league.teams[main] : null;
+  const colors = team ? (team.colors ?? FRANCHISES[team.tid]?.colors ?? NO_TEAM) : NO_TEAM;
+  const look = teamLook(colors);
+  const numColor = contrast(look.trim, look.slab) >= 3 ? look.trim : undefined;
+  const jersey = (team && team.retired?.find((r) => r.pid === p.pid)?.jersey) ?? p.jersey;
+  // his peak OVR is his when his whole career was played here; his totals are whole when it's all on record
+  const whole = careerInSave(league, p);
+  const onRecord = careerOnRecord(league, p);
+  const peak = Math.max(p.ovr, ...p.ratingsHistory.map((r) => r.ovr));
+  const tags = usePlayerTags(league, p).filter((t) => t.key === 'hof');
+  return (
+    <section className="tm-hero" aria-label={`${p.firstName} ${p.lastName}`}>
+      <div className="slab tm-hero-slab" style={slabVars(colors)}>
+        <div className="tm-over over">
+          {team && <TeamLogo tid={team.tid} size={20} decorative />}
+          <span>{[p.pos, statusLine(league, p)].filter(Boolean).join(' · ')}</span>
+        </div>
+        <div className="tm-hero-big">
+          <span className={`tm-jno${jersey ? '' : ' pos'}`} style={numColor ? { color: numColor } : undefined}>
+            {jersey ? (
+              <>
+                <span className="tm-jno-h" aria-hidden="true">
+                  #
+                </span>
+                {jersey}
+              </>
+            ) : (
+              p.pos
+            )}
+          </span>
+          <div className="tm-hovr">
+            <span className="tm-hovr-b" aria-label={whole ? `Peak OVR ${peak}` : `${c.seasons} seasons`}>
+              <span className="tm-hovr-k" aria-hidden="true">
+                {whole ? 'PEAK' : 'SEASONS'}
+              </span>
+              <span className="tm-hovr-v num" aria-hidden="true" style={whole ? { color: ovrColor(peak) } : undefined}>
+                {whole ? peak : c.seasons}
+              </span>
+              <span className="tm-hovr-rule" style={{ background: whole ? ovrColor(peak) : 'var(--line-3)' }} aria-hidden="true" />
+              <span className="tm-hovr-k" aria-hidden="true">
+                {whole ? `${c.seasons} seasons` : `${c.gp.toLocaleString('en-US')} games`}
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className="tm-names">
+          <span className="tm-first">{p.firstName}</span>
+          <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+            {p.lastName}
+          </h1>
+        </div>
+        <div className="tm-hero-figs">
+          <Statline
+            items={[
+              { k: 'PTS', v: c.gp ? f1(c.pts) : '—' },
+              { k: 'REB', v: c.gp ? f1(c.reb) : '—' },
+              { k: 'AST', v: c.gp ? f1(c.ast) : '—' },
+              { k: 'TS%', v: c.ts ? pct(c.ts) : '—' },
+            ]}
+          />
+          <div className="tm-hero-note">
+            Career per game{onRecord ? '' : ', the seasons on record'}
+            {c.best ? ` · best season ${seasonLabel(c.best.season)}, ${c.best.ppg.toFixed(1)} PTS` : ''}
+          </div>
+        </div>
+      </div>
       {tags.length > 0 && (
         <div className="tm-tags">
           {tags.map((t) => (

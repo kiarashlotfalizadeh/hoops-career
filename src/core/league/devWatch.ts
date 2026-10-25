@@ -606,7 +606,9 @@ function devNews(league: League, p: Player, kind: 'b' | 's' | 'p', by: number, e
       : kind === 'b'
         ? `The ${age}-year-old is up ${by} since opening night, now ${p.ovr}, and his staff see more coming.`
         : `The ${age}-year-old is down ${-by} since opening night, now ${p.ovr}.`;
-  addNews(league, { kind: 'general', head, text, tids: [p.tid], pids: [p.pid], weight: big ? 2 : 1 });
+  // (the user's own player's breakout is his front page: a rebuild's best news)
+  const mine = p.tid === league.userTid && kind !== 's';
+  addNews(league, { kind: 'general', head, text, tids: [p.tid], pids: [p.pid], weight: big ? (mine ? 3 : 2) : mine ? 2 : 1 });
 }
 
 /** Scoring breakouts: a young player's points a game well up on last season over 15 games or more. News for the notable, mail for the user's. */

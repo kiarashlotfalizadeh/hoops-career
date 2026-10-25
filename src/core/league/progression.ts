@@ -173,6 +173,39 @@ function starDrop(ovr: number, a: number, rng: Rng) {
 }
 
 /**
+ * The shot holds longest: a decline in three-point and free-throw shooting runs at this share of
+ * the shooting group's, however good the shooter (none of a strong attribute's faster fade or a
+ * star's), while his volume falls (LATE_VOLUME). Real shooters keep their percentages into their late
+ * thirties (Curry 38.9% from three at 37, Korver and Allen theirs at 38) and take fewer of them; with
+ * every skill fading alike, a good shooter's three-point rating fell 2-5 points a summer at 35 and his
+ * usage not at all.
+ */
+const SHOT_HOLDS: Partial<Record<RatingKey, number>> = { tp: 0.5, ft: 0.5 };
+
+/**
+ * Past LATE_FROM a player's share of his team's offense falls each summer, whatever his ratings
+ * say: he uses fewer possessions (`use`), creates less of his own (`create`), gets to the rim less
+ * (`drive`) and takes fewer threes (`three`, which his level's model otherwise raises as his OVR falls,
+ * see followTendencies: an aging shooter turned into more of a spot-up gunner every year), by these
+ * factors a summer (usage and creation settle back toward his level's a quarter a year, so they level
+ * off about a fifth lower). His minutes fall with his stamina and the coaches' veteran ceiling
+ * (coachAI's veteranCeiling). Over 48 seasons (four real leagues of twelve) players 36 or older led
+ * the league in threes 7 times (Thompson at 37, Hardaway at 36, Porter at 36 with 13 attempts a game
+ * in 19 minutes); with this and the engine's three-point volume (K.threeUse) 5 in points or threes: a
+ * 38-year-old Curry in two leagues' first season (4.8-5.1 a game; his 4.4 led the league at 37), two
+ * specialists at 36 and 37 (4.7-5.2) and Irving at 36 (28.0 points).
+ */
+const LATE_FROM = 33;
+const LATE_VOLUME = { use: 0.95, create: 0.93, drive: 0.92, three: 0.94 } as const;
+function lateVolume(p: Player, age: number) {
+  if (age <= LATE_FROM || !p.tend) return;
+  for (const k of Object.keys(LATE_VOLUME) as (keyof typeof LATE_VOLUME)[]) {
+    const v = p.tend[k];
+    if (v !== undefined) p.tend[k] = Math.round(Math.max(0.1, v * LATE_VOLUME[k]) * 1000) / 1000;
+  }
+}
+
+/**
  * Share of a year's gain an attribute still takes near the top of the scale: all of it up to
  * CEILING_FROM, then less the closer it is to 100 (a fifth at most from 96 up).
  */
@@ -203,7 +236,7 @@ export function develop(p: Player, season: number, ctx: DevContext, rng: Rng, fr
   for (const k of RATING_KEYS) {
     const g = GROUP_OF[k];
     let d = curve(g, a);
-    if (d < 0) d *= fadeScale(p.ratings[k], ctx.means?.[k]) * (1 + fade);
+    if (d < 0) d *= SHOT_HOLDS[k] ?? fadeScale(p.ratings[k], ctx.means?.[k]) * (1 + fade);
     if (g !== 'hgt') {
       const isSkill = g !== 'athletic' && g !== 'end' && g !== 'str';
       d += summer * (isSkill ? SUMMER_SKILLS : SUMMER_BODY) + rng.normal(0, OWN_NOISE);
@@ -381,6 +414,7 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     // were set for (in-season development and injuries since count too), or for a draftee without
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
+    lateVolume(p, playerAge(p, league.season));
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season

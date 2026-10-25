@@ -9,7 +9,7 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
@@ -17,7 +17,8 @@ import { ownerEvaluation } from '../league/owner';
 import { CONCEDE_COST, FLOOR_EASE, currentGoals, floorDanger, goalsWhy, lastWinsTarget, ownerProgress, previewTitle, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
 import { requestSetting } from '../league/difficulty';
 import { leagueForecast, pct } from '../analysis/odds';
-import { DEADLINE_DAYS, DUE_SOON, FLOOR_AGO, callsDaily, dueId, openCallIds } from '../league/calls';
+import { DEADLINE_DAYS, DUE_SOON, FLOOR_AGO, SKID_GAP, callsDaily, changeWorth, countersWorth, dueId, newCall, openCallIds, storeWorth } from '../league/calls';
+import { isWeekId, staffPicksSince } from '../league/weekCall';
 import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
 import { setPlanItem } from '../league/gamePlans';
 import {
@@ -427,9 +428,11 @@ describe('the agenda', () => {
       expect(card.title).toBe('Postseason odds down to 3%');
       expect(card.due).toBe(`Decide by ${fmtDate(l.season, l.tradeDeadlineDay)}`);
       // still open as the deadline nears, it stops a long sim once more: a new id within DUE_SOON days of it
-      expect(openCallIds(l)).toEqual([card.id]);
+      // (the week's own call is open beside it: see weekCall.ts)
+      const crisis = () => openCallIds(l).filter((id) => !isWeekId(id));
+      expect(crisis()).toEqual([card.id]);
       l.day = l.tradeDeadlineDay - DUE_SOON;
-      expect(openCallIds(l)).toEqual([card.id, dueId(card.id)]);
+      expect(crisis()).toEqual([card.id, dueId(card.id)]);
       l.day = 35;
       expect(card.suggestion!.label).toBe("Tell the owner it's a rebuild");
       const total = l.ownerMood.total;
@@ -471,10 +474,12 @@ describe('the agenda', () => {
     }
 
     // the deadline's last five days: the staff's deal, bought or sold as the odds say, made in one tap
-    // (the Hornets: a deal both ways; the Cavaliers: none that works, so the call is to stand pat)
+    // (the Hornets buying and the Bulls selling: a deal each; the Cavaliers: none that works, so the
+    // call is to stand pat. The Hornets' veterans no longer sell: a contender's late firsts are priced
+    // as late ones, see pickProjection)
     for (const [tid, odds] of [
       [3, 900],
-      [3, 20],
+      [4, 20],
       [5, 900],
     ]) {
       const l = camp(tid);
@@ -491,7 +496,7 @@ describe('the agenda', () => {
       // the odds it says are today's, as Today shows them, not the reading the call was worked out from
       const now = leagueForecast(l)!.teams[tid];
       expect(card.line.startsWith(`Postseason odds ${pct(now.reach[0], now.clinched)}. `)).toBe(true);
-      if (tid === 3) {
+      if (tid !== 5) {
         const theirs = call.offer!.b.pids;
         expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
         expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);
@@ -522,7 +527,9 @@ describe('the agenda', () => {
       l.playIn = [{ id: `${conf}-910`, conf, home: me, away: opp }];
       l.schedule.push({ gid: l.nextGid++, day: l.day, home: me, away: opp, type: 'playin', seriesId: `${conf}-910` });
       expect(card()).toMatchObject({ id: `series:${l.season}:${conf}-910`, title: `Play-in vs ${abbrev} tonight`, to: `/games/${opp}` });
-      expect(card()!.line).toMatch(/^Win and you play for the 8th seed; lose and the season is over\. /);
+      // the staff's counters measured as the card shows, their numbers first; then the stakes
+      expect(card()!.line).toBe('The staff is measuring its counters against them. Win and you play for the 8th seed; lose and the season is over.');
+      expect(card()!.measure).toMatchObject({ kind: 'counters', opp, max: 3 });
       expect(card()!.suggestion).toMatchObject({ label: 'Plan the game', to: `/games/${opp}?tab=plan` });
       // opening the plan doesn't answer it; the staff's way does: its measured counters go in, and it says what it set
       expect(resolveAgenda(l, card()!.suggestion!.action).ok).toBe(true);
@@ -569,6 +576,12 @@ describe('the agenda', () => {
     // digs deeper, then the sack, whatever he won), and a review in the black lifts it
     {
       const l = inCharge(1);
+      // (an owner who signs off on no tax: the payroll his coach inherited past the line would be his
+      // own, see sanctionedTax, and the ladder's steps are what this tests)
+      for (const g of l.ownerGoals!.goals.filter((x) => x.kind === 'payroll')) {
+        g.target = CAP_FOR(l).luxuryTax;
+        delete g.line;
+      }
       const team = l.teams[l.userTid];
       const scale = revenueScale(l);
       team.budget.coaching = 90;
@@ -778,6 +791,177 @@ describe('the agenda', () => {
     for (const c of feed.filter((x) => x.fix)) {
       const copy = structuredClone(l);
       expect(applyFix(copy, c.fix!)).toBeTruthy();
+    }
+  }, 120_000);
+
+  it('hands every week a small measured call, asks after a skid and each series deficit, and stops only the sims it should', async () => {
+    const { counterCandidates } = await import('../ai/advisor');
+    const { freshFamiliarity } = await import('../sim/familiarity');
+    const { runSim } = await import('../../state/simCore');
+    const card = (l: League) => agenda(l).find((i) => i.kind === 'week');
+    /** The staff's counters measured: the first candidate at `pts`, the rest costs. */
+    const measured = (l: League, m: NonNullable<ReturnType<typeof card>>['measure'], pts: number) => {
+      if (m?.kind !== 'counters') throw new Error('not counters');
+      const cands = counterCandidates(l, l.userTid, m.opp).slice(0, 5);
+      storeWorth(
+        l,
+        m.key,
+        countersWorth(
+          l,
+          m,
+          cands.map((c, i) => ({ id: c.id, pts: i ? -0.8 : pts, raw: i ? -0.9 : pts, se: 0.45 })),
+        ),
+      );
+      return cands[0];
+    };
+
+    // week 1 (the first is the guide's): the week's big game, the staff's counter measured as the card shows
+    {
+      const l = inCharge(1);
+      l.day = 7;
+      callsDaily(l);
+      expect(l.weekCall).toMatchObject({ season: l.season, week: 1, kinds: expect.arrayContaining(['game']) });
+      const c = card(l)!;
+      expect(c).toMatchObject({ id: `week:${l.season}:1`, measuring: true, measure: { kind: 'counters', max: 1 } });
+      expect(c.line).toMatch(/^The staff is measuring its counters against the /);
+      expect(isWeekId(c.id)).toBe(true);
+      const best = measured(l, c.measure, 1.4);
+      const m = card(l)!;
+      expect(m.measuring).toBeUndefined();
+      expect(m.line).toBe(`The staff's counter: ${best.label}, about +1.4 a game against them (measured). Unanswered, the staff puts it in on game day.`);
+      expect([m.suggestion!.label, ...m.choices!.map((x) => x.label)]).toEqual(['Put it in', 'Keep your plan']);
+      // unanswered on game day, the staff puts it in, and the digest says what it did
+      const wg = l.weekCall!.games![0];
+      const g = l.schedule.find((x) => x.gid === wg.gid)!;
+      const away = structuredClone(l);
+      for (away.day = l.day; away.day <= g.day; away.day++) callsDaily(away);
+      expect(away.gamePlans![wg.opp].items.map((x) => x.id)).toEqual([best.id]);
+      expect(away.weekCall!.taken).toBe('auto');
+      expect(staffPicksSince(away, l.season, l.day - 1)).toEqual([
+        expect.stringMatching(new RegExp(`the staff put in ${best.label}, measured at about \\+1\\.4 a game against them\\.$`)),
+      ]);
+      // answered here: it's in, the card's gone, and nothing more happens on game day
+      expect(resolveAgenda(l, m.suggestion!.action)).toMatchObject({ ok: true });
+      expect(l.gamePlans![wg.opp].items.map((x) => x.id)).toEqual([best.id]);
+      expect(card(l)).toBeUndefined();
+      expect(l.weekCall!.taken).toBe('staff');
+    }
+
+    // no gain against the biggest game: the week's next game, then nothing (a call is a choice); one call a week
+    {
+      const l = inCharge(1);
+      l.day = 14;
+      callsDaily(l);
+      const games = l.weekCall!.games!;
+      expect(games.length).toBe(2);
+      measured(l, card(l)!.measure, 0.2);
+      const next = card(l)!;
+      expect(next.title).toMatch(new RegExp(`(vs|@) ${l.teams[games[1].opp].abbrev} `));
+      expect(next.line).toMatch(new RegExp(`\\(Against ${l.teams[games[0].opp].abbrev}, nothing it measured beats your plan\\.\\)$`));
+      measured(l, next.measure, -0.3);
+      expect(card(l)).toBeUndefined();
+      expect(openCallIds(l).some(isWeekId)).toBe(false);
+      // a new week, a new call
+      l.day = 21;
+      callsDaily(l);
+      expect(card(l)?.id).toBe(`week:${l.season}:3`);
+    }
+
+    // a new playbook barely known: a week of tactical drills, the familiarity it makes worked out, its worth measured; back to balanced after the week
+    {
+      const l = inCharge(1);
+      const team = l.teams[l.userTid];
+      team.fam = freshFamiliarity(
+        team,
+        Object.values(l.players).filter((p) => p.tid === l.userTid),
+        55,
+      );
+      l.day = 28;
+      callsDaily(l);
+      expect(l.weekCall!.focus).toMatchObject({ to: 'system', from: 'balanced', why: 'drills' });
+      // (a billed game first: no gain there makes way for it)
+      for (let i = 0; i < 3 && card(l)?.measure?.kind === 'counters'; i++) measured(l, card(l)!.measure, 0);
+      const c = card(l)!;
+      expect(c.title).toMatch(/^The system is at \d+%$/);
+      const [, drills, balanced] = /By then the system (\d+)% with drills, (\d+)% at Balanced\./.exec(c.line)!.map(Number);
+      expect(drills).toBeGreaterThan(balanced);
+      expect(c.line).toMatch(
+        /^The staff's call: Tactical drills until \w+day, its worth \w+ (vs|@) [A-Z]{3} being measured\. By then .+ Unanswered, the staff sets it tomorrow\.$/,
+      );
+      const m = c.measure!;
+      if (m.kind !== 'change') throw new Error('not a change');
+      expect(m.base?.teams?.[l.userTid]).toMatchObject({ prep: 'balanced' });
+      expect(m.change.teams?.[l.userTid]).toMatchObject({ prep: 'system' });
+      storeWorth(l, m.key, changeWorth(l, m, { id: 'focus', pts: 0.7, raw: 0.8, se: 0.4 }));
+      expect(card(l)!.line).toMatch(/^The staff's call: Tactical drills until \w+day, about \+0\.7 a game \w+ (vs|@) [A-Z]{3} \(measured\)\. By then/);
+      expect(resolveAgenda(l, card(l)!.suggestion!.action)).toMatchObject({ ok: true, text: expect.stringMatching(/^Practice: Tactical drills until \w+day\.$/) });
+      expect(team.prep).toBe('system');
+      l.day = 35;
+      callsDaily(l);
+      expect(team.prep).toBe('balanced');
+    }
+
+    // a losing skid, a winning team's too: the staff's change for the next game, measured; one a skid; a
+    // bad team losing four straight is having its season, not a skid
+    {
+      const l = inCharge(1);
+      l.day = 40;
+      Object.assign(curTeamSeason(l, l.userTid), { won: 5, lost: 15, streak: -4, lastTen: [1, 0, 1, 0, 0, 1, 0, 0, 0, 0] });
+      callsDaily(l);
+      expect(l.skidCall).toBeUndefined();
+      Object.assign(curTeamSeason(l, l.userTid), { won: 14, lost: 6, streak: -4, lastTen: [1, 1, 1, 1, 1, 1, 0, 0, 0, 0] });
+      callsDaily(l);
+      const skid = () => agenda(l).find((i) => i.kind === 'skid');
+      expect(skid()).toMatchObject({ id: `skid:${l.season}:20`, title: '4 straight losses', measuring: true });
+      const best = measured(l, skid()!.measure, 1.1);
+      expect(skid()!.line).toMatch(new RegExp(`^The staff's change for \\w+ (vs|@) [A-Z]{3}: ${best.label}, about \\+1\\.1 a game against them \\(measured\\)\\.$`));
+      expect(resolveAgenda(l, skid()!.suggestion!.action).ok).toBe(true);
+      expect(l.gamePlans![l.skidCall!.opp].items.map((x) => x.id)).toEqual([best.id]);
+      expect(skid()).toBeUndefined();
+      // the slide goes on, but not another call for it until SKID_GAP more games
+      Object.assign(curTeamSeason(l, l.userTid), { lost: 6 + SKID_GAP - 1, streak: -(4 + SKID_GAP - 1) });
+      callsDaily(l);
+      expect(l.skidCall!.gp).toBe(20);
+    }
+
+    // a playoff series: a call each morning after a loss that has him behind, with the staff's adjustment for that game
+    {
+      const l = inCharge(1);
+      const me = l.userTid;
+      const conf = l.teams[me].conf;
+      const opp = l.teams.find((t) => t.tid !== me && t.conf === conf)!.tid;
+      l.phase = 'playoffs';
+      l.schedule = l.schedule.filter((g) => g.played);
+      l.playoffs = [{ id: `${conf}1-0`, round: 1, conf, high: me, low: opp, highSeed: 1, lowSeed: 8, highWins: 1, lowWins: 2 }];
+      schedulePlayoffDay(l);
+      l.day = l.schedule.find((g) => g.seriesId === `${conf}1-0` && !g.played)!.day;
+      const c = agenda(l).find((i) => i.kind === 'series')!;
+      expect(c).toMatchObject({ id: `series:${l.season}:${conf}1-0:1-2`, title: `${seriesLabel(l.playoffs[0])}: down 2-1 to ${l.teams[opp].abbrev}` });
+      expect(c.line).toMatch(/^Game 4 tonight\. The staff is measuring its counters against them for it\.$/);
+      const best = measured(l, c.measure, 0.9);
+      const m = agenda(l).find((i) => i.kind === 'series')!;
+      expect(m.suggestion).toMatchObject({ label: 'Make the adjustment' });
+      expect(m.line).toBe(`Game 4 tonight. The staff's adjustment: ${best.label}, about +0.9 a game against them (measured on tonight's game).`);
+      // level or ahead: no call
+      l.playoffs[0].highWins = 2;
+      expect(agenda(l).some((i) => i.kind === 'series')).toBe(false);
+    }
+
+    // the week's call stops a week's sim (at the week it opens), never a longer one: the staff takes those
+    {
+      const l = inCharge(1);
+      l.settings.stopOnNews = true;
+      const quiet = { progress: () => l.inbox.forEach((x) => (x.read = true)) };
+      for (; l.day < 10;) simDay(l);
+      const before = new Set(openCallIds(l));
+      const out = await runSim(l, { kind: 'week' }, quiet);
+      const opened = newCall(l, openCallIds(l), before);
+      if (out.stop === 'call' && opened && isWeekId(opened.card.id)) expect(l.day).toBe(14);
+      else expect(out.stop).not.toBe('target');
+      const from = new Set(openCallIds(l));
+      const long = await runSim(l, { kind: 'month' }, quiet);
+      const why = newCall(l, openCallIds(l), from);
+      if (long.stop === 'call') expect(isWeekId(why?.card.id ?? '')).toBe(false);
     }
   }, 120_000);
 });

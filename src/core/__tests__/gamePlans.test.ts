@@ -13,7 +13,8 @@ import { GameSim } from '../sim/engine';
 import { situationFromTemplate } from '../sim/tactics';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
-import { counterWorth, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
+import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
+import { CHECK_AFTER, EDIT_AHEAD, checksDue, editPlan, madeLine, readEdit, recordEdit, revertEdit, saveCheck, saveMade, type GameReadings } from '../ai/tacticEdits';
 import { PLAN_MAX_PTS, planPoints, projectGame } from '../analysis/projection';
 
 const opponentOf = (l: League) => {
@@ -200,30 +201,40 @@ describe('game plans', () => {
       expect(planFor(out, 6)?.items).toHaveLength(1);
     }
     {
-      // the user's assistant adjusts at breaks in simmed games while the staff runs the tactics, or when asked, deterministically
+      // the user's assistant adjusts at breaks in simmed games unless switched off, whoever runs the
+      // tactics, deterministically, and never with the kinds that cost the user's side (Drop to Hedge,
+      // backing off the ball, staying home: a measured gain without them, ASSISTANT_SKIPS); an AI
+      // coach makes them all
       const l = fresh();
       const opp = (l.userTid + 1) % 30;
-      const run = () => {
+      const skipped = /hedges ball screens instead of dropping|backs off the ball|stays home on shooters/;
+      const run = (asAi = false) => {
         const out: string[] = [];
         for (let g = 0; g < 20; g++) {
           const me = buildSimInput(l, l.userTid, l.day, 'regular', opp);
-          const res = new GameSim(me, buildSimInput(l, opp, l.day, 'regular', l.userTid), { rng: new Rng(30 + g), type: 'regular', injuries: false }).simToEnd();
+          const mine = asAi ? { ...me, team: { ...me.team, assistant: undefined } } : me;
+          const res = new GameSim(mine, buildSimInput(l, opp, l.day, 'regular', l.userTid), { rng: new Rng(30 + g), type: 'regular', injuries: false }).simToEnd();
           for (const a of res.adjustments ?? []) if (a.t === 0) out.push(`${g} Q${a.q} ${a.text}`);
         }
         return out;
       };
-      // the staff runs the tactics: it adjusts, as AI coaches do
-      l.teams[l.userTid].tactics.manual = false;
-      expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(true);
-      // the user runs them: only when asked
-      l.teams[l.userTid].tactics.manual = true;
-      expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(false);
-      expect(run()).toEqual([]);
-      l.teams[l.userTid].tactics.manage.assistantAdjusts = true;
-      expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(true);
+      for (const manual of [false, true]) {
+        l.teams[l.userTid].tactics.manual = manual;
+        const me = buildSimInput(l, l.userTid, l.day, 'regular', opp);
+        expect(me.adjust).toBe(true);
+        expect(me.team.assistant).toBe(true);
+      }
+      expect(buildSimInput(l, opp, l.day, 'regular', l.userTid).team.assistant).toBeUndefined();
       const first = run();
       expect(first.length).toBeGreaterThan(0);
       expect(run()).toEqual(first);
+      expect(first.some((x) => skipped.test(x))).toBe(false);
+      expect(run(true).some((x) => skipped.test(x))).toBe(true);
+      // switched off: none
+      l.teams[l.userTid].tactics.manage.assistantAdjusts = false;
+      expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(false);
+      expect(run()).toEqual([]);
+      l.teams[l.userTid].tactics.manage.assistantAdjusts = true;
       // with a game plan for that opponent too
       setPlanItem(l, opp, { id: 'pace', label: 'Push', patch: { nudge: { offense: { pace: 10 } } } });
       expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(true);
@@ -329,6 +340,78 @@ describe('game plans', () => {
       const m = migrate(JSON.parse(JSON.stringify(l)) as League);
       expect(m.gamePlans![opp].items[0].pts).toBeUndefined();
       expect(m.gamePlans![opp].items[1].pts).toBe(9);
+    }
+    {
+      // the user's change is kept as the settings it moved and measured over his next games (each with
+      // and without it, pooled; a coverage the team hasn't drilled also played as it will be once
+      // drilled); about ten games on, measured again on the games played, with one staff note; putting
+      // it back moves only what it set
+      const l = fresh();
+      toGameDay(l);
+      const me = l.teams[l.userTid];
+      const before = structuredClone({ tactics: me.tactics, rotation: me.rotation });
+      const was = me.tactics.defense.pnr;
+      const cov = was === 'blitz' ? 'drop' : 'blitz';
+      me.tactics.defense.pnr = cov;
+      me.tactics.manual = true;
+      const e = recordEdit(l, before, (pid) => `#${pid}`)!;
+      expect(e.diff).toEqual([['tactics.defense.pnr', was, cov]]);
+      expect(e.what).toMatch(/→/);
+      expect(e.ahead).toHaveLength(EDIT_AHEAD);
+      // a second change the same day, before a game, is the same change
+      me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
+      expect(recordEdit(l, before, (pid) => `#${pid}`)!.id).toBe(e.id);
+      expect(l.tacticEdits).toHaveLength(1);
+      expect(l.tacticEdits![0].diff.map(([p]) => p).sort()).toEqual(['tactics.defense.pnr', 'tactics.offense.pace']);
+      const play = async (plan: NonNullable<ReturnType<typeof editPlan>['plan']>, games: number): Promise<GameReadings> => {
+        const out: GameReadings = [];
+        for (const g of plan.games)
+          out.push({
+            w: g.w,
+            worth: (await measureChanges(
+              l,
+              g.opp,
+              plan.changes,
+              l.schedule.find((x) => x.gid === g.gid),
+              { games },
+            ))!,
+          });
+        return out;
+      };
+      const made = editPlan(l, l.tacticEdits![0], 'made').plan!;
+      expect(made.changes.map((c) => c.id)).toEqual(['without', 'drilled']);
+      expect(made.games.reduce((a, g) => a + g.w, 0)).toBeCloseTo(1, 9);
+      const rm = await play(made, 8);
+      const r = readEdit(rm);
+      // the change against the old way: each game's "without" reading turned round, weighted by its share
+      expect(r.worth.raw).toBeCloseTo(-rm.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
+      expect(Math.abs(r.worth.pts)).toBeLessThanOrEqual(Math.abs(r.worth.raw) + 0.05);
+      expect(r.drilled).toBeDefined();
+      saveMade(l, e.id, r, made.count);
+      expect(madeLine(l.tacticEdits![0])).toMatch(/^This change/);
+      // its check: once CHECK_AFTER of the user's games have been played since, on those games
+      expect(checksDue(l)).toHaveLength(0);
+      const mine = l.schedule.filter((g) => !g.played && (g.home === l.userTid || g.away === l.userTid)).slice(0, CHECK_AFTER);
+      for (const g of mine) g.played = true;
+      expect(checksDue(l)).toHaveLength(1);
+      const check = editPlan(l, l.tacticEdits![0], 'check').plan!;
+      expect(check.count).toBe(CHECK_AFTER);
+      expect(check.changes.map((c) => c.id)).toEqual(['without']);
+      const mail = l.inbox.length;
+      const w = readEdit(await play(check, 6)).worth;
+      saveCheck(l, e.id, w, check.count);
+      expect(l.inbox.length).toBe(mail + 1);
+      expect(l.inbox[0].subject).toMatch(/^Since you changed it: (it worked|it cost|too close to say)/);
+      expect(l.inbox[0].body).toMatch(/replayed with it and without it/);
+      saveCheck(l, e.id, w, check.count);
+      expect(l.inbox.length).toBe(mail + 1);
+      expect(checksDue(l)).toHaveLength(0);
+      // put back: the coverage goes back; a setting moved again since stays where the user put it
+      me.tactics.offense.pace = 64;
+      expect(revertEdit(l, l.tacticEdits![0])).toBe(true);
+      expect(me.tactics.defense.pnr).toBe(was);
+      expect(me.tactics.offense.pace).toBe(64);
+      expect(l.tacticEdits![0].closed).toBe('reverted');
     }
   }, 120_000);
 });

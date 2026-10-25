@@ -414,3 +414,33 @@ export function prepared(fam: Familiarity, base: Tactics, plan: Tactics): Famili
   for (const k of HABITS) if (setting(plan, k) !== setting(base, k)) out.habit[k] = setting(plan, k);
   return out;
 }
+
+/**
+ * Familiarity as it would be if the team knew tactics `want` as well as it knows `have` (a copy):
+ * each option `want` plays that `have` doesn't, known as well as the one of its kind `have` plays
+ * (a coverage for a coverage); each drilled slider as far off `want`'s setting as it is off
+ * `have`'s; each player in his `want` role pair as well as in his `have` one. What a change is
+ * worth once it's drilled (against what learning it costs tonight), and the other way round: the old
+ * way known as well as the new (see core/ai/tacticEdits.ts).
+ */
+export function drilledAs(fam: Familiarity, have: Tactics, want: Tactics, players: Pick<Player, 'pid' | 'ratings'>[]): Familiarity {
+  const out = structuredClone(fam);
+  const kinds: (keyof typeof optKey)[] = ['scheme', 'pnr', 'shape', 'press'];
+  for (const k of kinds) {
+    const w = optKey[k](want);
+    if (!w || w === optKey[k](have)) continue;
+    const h = optKey[k](have);
+    // (no press before: a press known as well as the man-to-man it's played over)
+    const level = h ? optValue(fam, h) : optValue(fam, optKey.scheme(have));
+    out.opt[w] = Math.max(optValue(fam, w), level);
+  }
+  for (const k of HABITS) {
+    const h = fam.habit[k];
+    if (h !== undefined) out.habit[k] = clamp(setting(want, k) + (h - setting(have, k)), 0, 100);
+  }
+  for (const p of players) {
+    const pair = rolePair(want, p);
+    if (pair !== rolePair(have, p)) out.roles[p.pid] = [pair, Math.max(roleFam(fam, want, p), roleFam(fam, have, p))];
+  }
+  return out;
+}

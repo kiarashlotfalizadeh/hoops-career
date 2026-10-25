@@ -150,6 +150,14 @@
 .lv-note-acts .btn {
   min-height: 34px;
 }
+/* what the call has been worth where it fires (measured, or the staff's read): beside its buttons */
+.lv-note-worth {
+  align-self: center;
+  flex: 1 1 140px;
+  min-width: 0;
+  color: var(--text-dim);
+  line-height: 1.3;
+}
 
 /* ------------------------------------------------------------------ the night's moves */
 .lv-mv-row {

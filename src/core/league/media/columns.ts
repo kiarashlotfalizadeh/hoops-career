@@ -2,7 +2,7 @@
 // "surprises and disappointments" (against opening night's predictions), the midseason report
 // card at the All-Star break, a preview when each playoff round starts and one for the Finals, and
 // the season's wrap. The user's team leads wherever it is part of the story.
-import type { League, PlayoffSeries, Txn } from '../../types';
+import type { League, NewsItem, PlayoffSeries, Txn } from '../../types';
 import { marketSalary } from '../contracts';
 import { money } from '../../format';
 import { playerAge } from '../../playerGen';
@@ -14,6 +14,7 @@ import { worldRng } from '../world';
 import type { MediaState } from '../media';
 import { gradeReason, gradeTrade, type SideGrade } from './grades';
 import { strengths, seriesOdds } from './strength';
+import { awardLine, droughtLine, rematchLine, titleLine } from './history';
 import { Voice, aGrade, confName, f1, gradeFor, last, list, netOf, nth, perGame, poss, publish, rec, recOf, rosters, signed, tsOf, type Grade } from './voice';
 
 /** Whether a column has run this season, and mark it run. */
@@ -353,7 +354,10 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
         .filter((x) => x.injury && x.injury.gamesRemaining > 2)
         .map((x) => ({ tid, x })),
     )[0];
+    // (their playoff history in this save: "A rematch of the 2029-30 conference finals, which the Celtics won in six.")
+    const again = rematchLine(league, s.high, s.low);
     const facts = [
+      again ? `${again.replace(/^./, (c) => c.toUpperCase())}.` : '',
       hw + lw ? `${hw === lw ? 'They split the season series' : `The ${N(hw > lw ? s.high : s.low)} won the season series ${rec(Math.max(hw, lw), Math.min(hw, lw))}`}.` : '',
       `Net ratings: ${N(s.high)} ${signed(netOf(tsOf(league, s.high)))}, ${N(s.low)} ${signed(netOf(tsOf(league, s.low)))}.`,
       hurt ? `${N(hurt.tid)} without ${last(league, hurt.x)} (out ${hurt.x.injury!.gamesRemaining} more games).` : '',
@@ -434,9 +438,9 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
 // ---------------------------------------------------------------- the wrap
 
 /** When the Finals end: the champion, how opening night's picks fared, the awards, and the user's season against its projection. */
-export function seasonWrap(league: League, m: MediaState) {
+export function seasonWrap(league: League, m: MediaState): NewsItem | undefined {
   const aw = league.awards.find((a) => a.season === league.season);
-  if (!aw || aw.champion === undefined || !once(league, m, 'wrap')) return;
+  if (!aw || aw.champion === undefined || !once(league, m, 'wrap')) return undefined;
   const v = new Voice(worldRng(league, 'wrap', league.season), m);
   const N = (tid: number) => league.teams[tid].name;
   const C = aw.champion;
@@ -445,16 +449,23 @@ export function seasonWrap(league: League, m: MediaState) {
   const u = league.userTid;
   const uts = tsOf(league, u);
   const userChamp = C === u;
-  const head = userChamp
-    ? v.say('wrap-u', [`Season wrap: the ${N(u)}, champions`, `The ${poss(N(u))} year: a title`, `${seasonLabel(league.season)} belongs to the ${N(u)}`])
-    : v.say('wrap', [
-        `Season wrap: the ${poss(N(C))} year`,
-        `The ${N(C)} close out ${seasonLabel(league.season)} as champions`,
-        `${seasonLabel(league.season)}, wrapped: the ${N(C)} on top`,
-      ]);
+  // what the title means against the league's history in this save ("a third title in four years")
+  const dyn = titleLine(league, C, league.season);
+  const head = dyn
+    ? v.say('wrap-dyn', [`The ${N(C)} win ${dyn}`, `Season wrap: ${dyn} for the ${N(C)}`])
+    : userChamp
+      ? v.say('wrap-u', [`Season wrap: the ${N(u)}, champions`, `The ${poss(N(u))} year: a title`, `${seasonLabel(league.season)} belongs to the ${N(u)}`])
+      : v.say('wrap', [
+          `Season wrap: the ${poss(N(C))} year`,
+          `The ${N(C)} close out ${seasonLabel(league.season)} as champions`,
+          `${seasonLabel(league.season)}, wrapped: the ${N(C)} on top`,
+        ]);
   const fmvp = aw.finalsMvp !== undefined ? league.players[aw.finalsMvp] : undefined;
   const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
-  const dek = `The ${N(C)} beat the ${R !== undefined ? N(R) : 'field'} in the Finals${fmvp ? `; ${playerName(fmvp)} was Finals MVP` : ''}.${mvp ? ` ${playerName(mvp)} was the MVP.` : ''}`;
+  const mvpAgain = mvp ? awardLine(league, mvp, 'MVP', league.season) : null;
+  const dek = `The ${N(C)} beat the ${R !== undefined ? N(R) : 'field'} in the Finals${fmvp ? `; ${playerName(fmvp)} was Finals MVP` : ''}.${mvp ? ` ${playerName(mvp)} was the MVP${mvpAgain && mvpAgain !== 'his first' ? `, ${mvpAgain}` : ''}.` : ''}`;
+  // the user's run against his franchise's history in this save ("a first series win since 2029-30")
+  const drought = uts.playoffRound >= 1 && uts.playoffRound < 5 ? droughtLine(league, u, league.season, uts.playoffRound) : null;
   const final = standings(league);
   const vs = league.teams.map((t) => ({ tid: t.tid, d: tsOf(league, t.tid).won - (pre?.rows[t.tid]?.wins ?? tsOf(league, t.tid).won) }));
   const over = [...vs].sort((a, b) => b.d - a.d || a.tid - b.tid)[0];
@@ -479,9 +490,9 @@ export function seasonWrap(league: League, m: MediaState) {
     pre && under && under.d <= -6 ? `The biggest letdown: the ${N(under.tid)}, ${-under.d} wins short.` : '',
     `The ${N(u)} finished ${recOf(uts)}${urow ? `, ${nth(urow.confRank)} in the ${confName(urow.conf)}` : ''}, and ${reached}.${
       pre ? ` They were picked for ${pre.rows[u].wins} wins${uts.won - pre.rows[u].wins >= 4 ? ': a step ahead' : uts.won - pre.rows[u].wins <= -4 ? ': a step short' : ''}.` : ''
-    }`,
+    }${drought && !userChamp ? ` For the ${N(u)}, ${drought}.` : ''}`,
   ];
-  publish(league, {
+  return publish(league, {
     kind: 'column',
     head,
     dek,

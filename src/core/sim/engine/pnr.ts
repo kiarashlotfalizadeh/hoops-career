@@ -89,15 +89,21 @@ export const pnrMethods = {
       this.impact('switch_screen', def.side, lev(K.switchScreen), H.pid);
       if (postAdv > isoAdv + 0.25 && S.c.postScore > 50 && this.rng.chance(0.7)) {
         const gain = ((dS.c.intDef * this.dq(dS) - dH.c.intDef * this.dq(dH)) / 20 + (dS.r.hgt - dH.r.hgt) / 70) * K.advPts.post;
-        this.impact('switch_mismatch', off.side, lev(gain), S.pid);
+        this.impact('switch_mismatch', off.side, lev(gain) * K.switchTag, S.pid);
         this.passStep(H, S);
-        return this.post(off, def, open + lev(0.1 + K.cov.switch.scramble) + levExtra(gain / K.advPts.post), forced, { actor: S, defender: dH, tag: 'switch_mismatch', entry: H });
+        return this.post(off, def, open + lev(0.1 + K.cov.switch.scramble) + levExtra(gain / K.advPts.post), forced, {
+          actor: S,
+          defender: dH,
+          tag: 'switch_mismatch',
+          entry: H,
+          tagW: K.switchTag,
+        });
       }
       // (the switch is a step late on a quick handler: a scramble on top of the matchup, and a step
       // more for each step of quickness he has on the defender he got)
       const swap = (dH.c.perDef * this.dq(dH) - dS.c.perDef * this.dq(dS)) / 20;
       const lag = K.cov.switch.scramble + (K.cov.switch.speed * Math.max(0, H.r.spd - dS.r.spd)) / 50;
-      this.impact('switch_mismatch', off.side, lev(swap + lag) * K.advPts.iso, H.pid);
+      this.impact('switch_mismatch', off.side, lev(swap + lag) * K.advPts.iso * K.switchTag, H.pid);
       return this.iso(off, def, open + levExtra(swap - screen) + lev(lag), late, forced, { actor: H, defender: dS, tag: 'switch_mismatch', fromPnr: true });
     }
 

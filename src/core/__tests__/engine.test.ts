@@ -456,12 +456,14 @@ describe('engine rules', () => {
       type G = {
         q: number;
         clock: number;
-        T: { score: number; garbage: boolean; subSig: number[]; on: { pid: number }[]; t: Team['tactics']; team: Team }[];
+        T: { score: number; garbage: boolean; gLine: number; subSig: number[]; on: { pid: number }[]; t: Team['tactics']; team: Team }[];
         subSignature(t: unknown): number[];
         checkSubs(t: unknown): void;
       };
       const sim = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
       const t = sim.T[0];
+      // (a coach at the league's line, K.garbage: tonight's own draw aside)
+      t.gLine = 1;
       sim.q = 4;
       sim.clock = 100;
       t.score = 100;
@@ -488,22 +490,24 @@ describe('engine rules', () => {
         q: number;
         clock: number;
         elapsed: number;
-        T: { score: number; garbage: boolean; subSig: number[]; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
+        T: { score: number; garbage: boolean; gLine: number; subSig: number[]; subLock: Map<number, number>; on: { pid: number }[]; team: Team }[];
         subSignature(t: unknown): number[];
         checkSubs(t: unknown): void;
       };
       const game = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false });
       const sim = game as unknown as G;
       const t = sim.T[0];
+      t.gLine = 1;
       sim.q = 4;
-      sim.clock = 160;
+      sim.clock = 200;
       t.score = 100;
-      sim.T[1].score = 82;
+      sim.T[1].score = 79;
       sim.checkSubs(t);
       expect(t.garbage).toBe(false);
-      // 18 up with 2:29 left is a blowout: the bench comes in now, not at the next minute mark
+      // 21 up with 2:40 left is a blowout at the league's line (21.7 with 3:20 left, 20.9 with 2:40):
+      // the bench comes in now, not at the next minute mark
       t.subSig = sim.subSignature(t);
-      sim.clock = 149;
+      sim.clock = 160;
       sim.checkSubs(t);
       expect(t.garbage).toBe(true);
       const starters = t.team.rotation.order.slice(0, 5);
@@ -515,6 +519,41 @@ describe('engine rules', () => {
       sim.elapsed += 241;
       sim.checkSubs(t);
       expect(t.subLock.size).toBe(0);
+    }
+    // a third-quarter rout: both benches finish it, the team up big eases off, and a team up 20 calls off its press
+    {
+      type S = { pid: number; on: boolean; starter: boolean };
+      type T = { score: number; garbage: boolean; gLine: number; subSig: number[]; on: S[]; players: S[] };
+      type G = { q: number; clock: number; T: [T, T]; checkSubs(t: unknown): void; eases(t: unknown): boolean; step(): boolean; drainLogs(): { steps: { k: string }[] }[] };
+      const sim = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
+      for (const t of sim.T) t.gLine = 1;
+      sim.q = 3;
+      // (4:00 left in the third: too soon for any lead to decide it)
+      sim.clock = 240;
+      sim.T[0].score = 90;
+      sim.T[1].score = 50;
+      for (const t of sim.T) sim.checkSubs(t);
+      expect(sim.T.some((t) => t.garbage)).toBe(false);
+      // 31 up with 2:50 left in the third (the line is 30.2 with 14:50 of regulation left)
+      sim.clock = 170;
+      sim.T[1].score = 59;
+      for (const t of sim.T) {
+        t.subSig = [];
+        sim.checkSubs(t);
+        expect(t.garbage).toBe(true);
+        expect(t.on.some((p) => p.starter)).toBe(false);
+      }
+      expect(sim.eases(sim.T[0])).toBe(true);
+      expect(sim.eases(sim.T[1])).toBe(false);
+      // the press: thirty first-quarter trips against a side that presses all game, the score held level or the pressing side 20 up
+      const pressed = (lead: number) => {
+        const g = new GameSim(side(6), side(7, { defense: { press: 'always' } }), { rng: new Rng(9), type: 'regular', injuries: false, record: true }) as unknown as G;
+        g.T[1].score = lead;
+        for (let i = 0; i < 30 && g.step(); i++) g.T[1].score = g.T[0].score + lead;
+        return g.drainLogs().filter((l) => l.steps.some((x) => x.k === 'press')).length;
+      };
+      expect(pressed(0)).toBeGreaterThan(0);
+      expect(pressed(20)).toBe(0);
     }
     // only two timeouts after the 3:00 mark of the fourth quarter
     {

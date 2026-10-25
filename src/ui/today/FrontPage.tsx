@@ -12,9 +12,15 @@ import { fmtDate } from '../../core/league/helpers';
 import { pct } from '../../core/analysis/odds';
 import { Avatar, Section, Statline } from '../components/ui';
 import { madeAtt } from '../../core/format';
+import { seasonLabel } from '../../core/constants';
+import { curTeamSeason } from '../../core/league/helpers';
+import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
+import { endText, gradeWord } from '../../core/league/legacyReview';
+import { cupTables } from '../../core/league/cup';
+import { allStarPhase, allStarRead, allStarResults, seasonEndLine } from './occasions';
 import { TrendMark, usePulse } from '../office/Pulse';
 import { useForecast } from '../useForecast';
-import { freshResult, headOf, lastResults, leagueHeadlines, runOf, scoreText, storyLink, topStory, type Result } from './front';
+import { headOf, lastResults, leadOf, leagueHeadlines, runOf, scoreText, storyLink, type Result } from './front';
 import { digestLine } from './digest';
 
 /** What a news item is, over its headline. */
@@ -57,14 +63,14 @@ function pogLine(league: League, gid: number): { pid: number; text: string } | n
 
 /**
  * The lead: the last game while it's the news (the press's story of it, or the score and the player
- * of the game), otherwise the top story about the user's team from the last two weeks.
+ * of the game), otherwise the top story about the user's team from the last two weeks, unless his
+ * last game is newer than it by more than a few days (see leadOf).
  */
 export function useLead(league: League) {
   return useLeagueMemo(() => {
-    const fresh = freshResult(league);
-    if (fresh) return { kind: 'result' as const, ...fresh, pog: fresh.story ? null : pogLine(league, fresh.r.gid) };
-    const n = topStory(league);
-    return n ? { kind: 'story' as const, n } : null;
+    const lead = leadOf(league);
+    if (lead?.kind === 'result') return { ...lead, pog: lead.story ? null : pogLine(league, lead.r.gid) };
+    return lead;
   }, [league]);
 }
 export type Lead = NonNullable<ReturnType<typeof useLead>>;
@@ -178,6 +184,7 @@ export function YourSeason({ league }: { league: League }) {
   const fc = useForecast(league);
   const odds = fc?.teams[me];
   const pulse = usePulse(league);
+  const cup = useCupCell(league);
   const played = !!row && row.won + row.lost > 0;
   const run = runOf(results);
   return (
@@ -217,12 +224,20 @@ export function YourSeason({ league }: { league: League }) {
               </span>
               <span className={`td-cell-v td-word tone-${pulse.owner.tone}`}>{MOOD_WORD(pulse.owner.word)}</span>
             </Link>
-            <Link to="/office/owner" className="td-cell" aria-label={`The fans are ${pulse.fans.word}. Owner`}>
-              <span className="td-cell-k">
-                Fans <TrendMark trend={pulse.fans.trend} />
-              </span>
-              <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
-            </Link>
+            {/* while the Cup runs, its cell takes the fans' place (they're on Office → Owner) */}
+            {cup ? (
+              <Link to="/league/cup" className="td-cell" aria-label={`${cup.label}. The Cup`}>
+                <span className="td-cell-k">Cup</span>
+                <span className="td-cell-v">{cup.v}</span>
+              </Link>
+            ) : (
+              <Link to="/office/owner" className="td-cell" aria-label={`The fans are ${pulse.fans.word}. Owner`}>
+                <span className="td-cell-k">
+                  Fans <TrendMark trend={pulse.fans.trend} />
+                </span>
+                <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
+              </Link>
+            )}
           </>
         )}
       </div>
@@ -300,4 +315,162 @@ export function DigestRow() {
       <ChevronRight size={18} className="dim" aria-hidden="true" />
     </button>
   );
+}
+
+/**
+ * The season's end as a ceremony, Today's hero from the night his season is over until the draft:
+ * how it ended and the record against opening night's pick, then, once the Finals are done, the
+ * owner's word and the season's best (its best win, its best player, its breakout, its records and
+ * honors), with the full review a tap away. Before the Finals end, the honors so far and when the
+ * verdict comes.
+ */
+export function SeasonEndHero({ league }: { league: League }) {
+  const me = league.userTid;
+  const ts = curTeamSeason(league, me);
+  const review = seasonReviewOf(league, league.season);
+  const verdict = league.ownerReviews?.find((r) => r.season === league.season && r.tid === me);
+  const pre = league.media?.preseason;
+  const picked = pre?.season === league.season ? pre.rows.find((r) => r.tid === me) : undefined;
+  const end = useLeagueMemo(() => seasonEndLine(league), [league]);
+  // the season's best, from the review (kept for good), or its honors so far
+  const best = review
+    ? [
+        review.best && `Best win: ${review.best.line}`,
+        review.star && `Player of the season: ${review.star.name}, ${review.star.line}`,
+        review.breakout && `Breakout: ${review.breakout.name}, ${review.breakout.from} → ${review.breakout.to} OVR`,
+        review.records[0],
+        ...review.honors.slice(0, 2),
+      ].filter((x): x is string => !!x)
+    : Object.values(league.players)
+        .filter((p) => p.tid === me)
+        .flatMap((p) =>
+          p.awards
+            .filter(
+              (a) => a.season === league.season && ['MVP', 'Defensive Player of the Year', 'Rookie of the Year', 'Sixth Man of the Year', 'Most Improved Player'].includes(a.type),
+            )
+            .map((a) => `${p.firstName} ${p.lastName}: ${a.type}`),
+        );
+  return (
+    <section className="slab td-phase td-end" aria-label="The season's end">
+      <div className="td-score-over">
+        <span>
+          {seasonLabel(league.season)} · {review ? 'Season review' : 'Season over'}
+        </span>
+        {review ? (
+          <Link to={reviewPath(league.season)} className="card-link">
+            Review <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        ) : (
+          <Link to="/league/playoffs" className="card-link">
+            Bracket <ChevronRight size={14} aria-hidden="true" />
+          </Link>
+        )}
+      </div>
+      <h2 className="td-phase-t">{endText({ round: ts.playoffRound })}</h2>
+      <p className="td-phase-l">
+        <span className="num">
+          {ts.won}-{ts.lost}
+        </span>
+        {' · '}
+        {end}
+        {picked ? ` Picked for ${picked.wins} wins.` : ''}
+      </p>
+      <div className="td-phase-goals">
+        <div className="td-phase-gk">
+          <span className="grow">{verdict ? `The owner: ${gradeWord(verdict.grade)}` : 'The verdict'}</span>
+          {league.phase === 'draftLottery' && (
+            <Link to="/office/draft" className="card-link">
+              Draft board <ChevronRight size={14} aria-hidden="true" />
+            </Link>
+          )}
+        </div>
+        {verdict ? verdict.said && <p className="td-end-said">“{verdict.said}”</p> : <p className="td-phase-gn">The owner gives his verdict when the Finals end.</p>}
+        {best.length > 0 && (
+          <ul className="td-phase-gl td-end-best">
+            {best.slice(0, 4).map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * All-Star weekend as a chapter, Today's hero over the break: on its eve the staff's read of who of
+ * his is in line (the vote as it stands tonight: a read, not the result), then the weekend's results
+ * until his next game.
+ */
+export function AllStarHero({ league }: { league: League }) {
+  const phase = allStarPhase(league);
+  const read = useLeagueMemo(() => (phase === 'eve' ? allStarRead(league) : []), [league, phase]);
+  const results = useLeagueMemo(() => (phase === 'after' ? allStarResults(league) : null), [league, phase]);
+  if (!phase) return null;
+  const date = fmtDate(league.season, league.allStarDay, { weekday: 'short', month: 'short', day: 'numeric' });
+  return (
+    <section className="slab td-phase td-allstar" aria-label="All-Star weekend">
+      <div className="td-score-over">
+        <span>All-Star weekend · {date}</span>
+        <Link to="/league/awards" className="card-link">
+          Awards <ChevronRight size={14} aria-hidden="true" />
+        </Link>
+      </div>
+      <h2 className="td-phase-t">{phase === 'eve' ? 'All-Star weekend' : (results?.head ?? 'All-Star weekend')}</h2>
+      <p className="td-phase-l">
+        {phase === 'eve'
+          ? `${league.day < league.allStarDay ? 'Tomorrow' : 'Today'} the All-Stars are named, then the Three-Point Contest, the Slam Dunk Contest and the game.`
+          : (results?.lines[0] ?? '')}
+      </p>
+      <div className="td-phase-goals">
+        <div className="td-phase-gk">
+          <span className="grow">{phase === 'eve' ? "The staff's read, as the vote stands" : 'The weekend'}</span>
+        </div>
+        {phase === 'eve' ? (
+          read.length ? (
+            <ul className="td-phase-gl">
+              {read.map((r) => (
+                <li key={r.p.pid}>
+                  {r.p.firstName} {r.p.lastName}: {r.status === 'in' ? 'in line' : 'on the bubble'}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="td-phase-gn">None of yours is in line this year.</p>
+          )
+        ) : (
+          <ul className="td-phase-gl">
+            {(results?.lines.slice(1) ?? []).map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+            {results?.mine.map((p) => (
+              <li key={p.pid}>
+                {p.firstName} {p.lastName}: All-Star
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** The NBA Cup as a cell of the season's strip while it runs: his group record and place, then his knockout round. */
+export function useCupCell(league: League): { v: string; label: string } | null {
+  return useLeagueMemo(() => {
+    const cup = league.cup;
+    const me = league.userTid;
+    if (!cup || cup.season !== league.season || cup.champion !== undefined || league.phase !== 'regular') return null;
+    if (cup.seeds) {
+      const alive = cup.bracket.filter((t) => t.high === me || t.low === me);
+      const live = alive.find((t) => t.winner === undefined);
+      if (!live) return null;
+      const round = live.round === 'final' ? 'Final' : live.round === 'sf' ? 'Semis' : 'QF';
+      return { v: round, label: `NBA Cup: in the ${live.round === 'final' ? 'final' : live.round === 'sf' ? 'semifinals' : 'quarterfinals'}` };
+    }
+    const t = cupTables(league).find((x) => x.group.tids.includes(me));
+    const row = t?.rows.find((r) => r.tid === me);
+    if (!t || !row) return null;
+    return { v: `${row.won}-${row.lost}`, label: `NBA Cup group ${t.group.id}: ${row.won}-${row.lost}, ${row.rank} of ${t.rows.length}` };
+  }, [league]);
 }

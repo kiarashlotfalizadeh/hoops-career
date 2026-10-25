@@ -5,7 +5,8 @@ import { Handshake } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { capSalary, evaluateTrade, neutralSplit, pickLabel, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { capSalary, evaluateTrade, neutralSplit, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
 import { capSeason } from '../office/common';
@@ -50,7 +51,7 @@ function Body({ league, offer, onClose, onConfirm }: { league: League; offer: Tr
     ...side.pids.map((pid) => ({ key: `p${pid}`, name: playerName(league.players[pid]) })),
     ...side.dpids.map((d) => {
       const dp = league.draftPicks.find((x) => x.dpid === d);
-      return { key: `d${d}`, name: dp ? pickLabel(league, dp, { protection: side.protect?.[d] }) : 'a pick' };
+      return { key: `d${d}`, name: dp ? pickName(league, dp, { protection: side.protect?.[d] }) : 'a pick' };
     }),
     ...(side.swaps ?? []).map((y) => ({ key: `s${y}`, name: `${y} swap right` })),
     ...(side.cash ? [{ key: 'c', name: `${moneyExact(side.cash)} cash` }] : []),

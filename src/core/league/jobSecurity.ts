@@ -11,8 +11,7 @@ import { clamp } from '../random';
 import { preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
 import { POSTSEASON, currentGoals, floorCap, gradeGoal, ownerProgress, patienceCap, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
-import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, frozen } from './books';
-import { seasonEndCash } from './finances';
+import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, frozen } from './books';
 import { addInbox, andList, curTeamSeason, revenueScale } from './helpers';
 import type { Forecast } from '../analysis/odds';
 
@@ -88,7 +87,8 @@ const HEAT: { min: number; heat: SeatHeat; label: string }[] = [
 export function frozenBooksOutlook(league: League): { cap: number; deeper: boolean; fire: boolean } | null {
   const b = booksOf(league);
   if (!b || !frozen(league) || b.season >= league.season) return null;
-  const end = seasonEndCash(league, league.userTid).end;
+  // (as the review reads them: the tax the owner signed off on doesn't count, see sanctionedTax)
+  const end = booksOutlook(league).judged;
   if (end >= 0) return null;
   const deeper = b.close !== undefined && end < b.close;
   return { cap: deeper ? BLEED_GRADE : FREEZE_GRADE, deeper, fire: deeper && (b.stage === 'final' || end < -DEBT_LIMIT * revenueScale(league)) };
@@ -165,8 +165,10 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   // (after the season's review, the grace left starts with next season)
   const reviewed = ['draftLottery', 'draft', 'resign', 'freeAgency'].includes(league.phase);
   const left = reviewed ? grace - 1 : grace;
+  // (a new career's first season sets the standing outright, grace or not: said, so the grace isn't read as a free season)
+  const sets = !reviewed && seasonWeight(league) >= 1;
   if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
-    line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}.`;
+    line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}${sets ? ', but this season sets your standing with him' : ''}.`;
   return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, ultimatum, off };
 }
 

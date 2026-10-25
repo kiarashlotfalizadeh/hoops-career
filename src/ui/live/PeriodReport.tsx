@@ -5,8 +5,10 @@
 // going into it and the keys; the rest of the game so far (the score by quarter and the scorers, the
 // battle of play types, the teams side by side, both coaches' moves) sits behind one switch under it.
 // The huddle is the short version for a timeout: late in the game the play call first (built around
-// your closer), then who to sub and the staff's top move; the last possession of a close game stops for
-// the same play call without one. The next period, or the game, goes on from the bench bar.
+// your closer, each play measured from where the game stands against no call, best first:
+// usePlayWorth), then who to sub and the staff's top move; the last possession of a close game stops
+// for the same play call without one. The staff's moves and counters say what they've been worth
+// where they fire (callWorth.ts). The next period, or the game, goes on from the bench bar.
 import { useMemo, useState } from 'react';
 import { Check, FastForward, Timer } from 'lucide-react';
 import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
@@ -15,20 +17,23 @@ import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
-import { CLUTCH_SEC } from '../../state/live';
 import { zScore } from '../../core/analysis/playTypes';
 import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
 import { Section, Segmented } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { KeysLive } from '../components/GameKeys';
-import { fmtClock, periodLabel } from '../stats';
+import { fmtClock, periodLabel, signed } from '../stats';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
 import { playOptions, readStatus, type PlayOption } from './plays';
+import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
+import { usePlayWorth, type PlayReading } from './usePlayWorth';
+import { CHOICE_GAMES } from '../../state/liveWorth';
+import { CLUTCH_SEC, pendingLive } from '../../state/live';
 
 interface Common {
   league: League;
@@ -101,22 +106,29 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
 
 /**
  * What's deciding the game so far: the report's biggest edges (each worth so many points of the
- * margin), the one-tap counter on each one going against you while your tactics still give it.
+ * margin), the one-tap counter on each one going against you while your tactics still give it, with
+ * what that counter has been worth where it fires (callWorth.ts). A counter that measured as a cost
+ * isn't offered (the switch to Hedge off a Drop their handlers pull up over): the edge is a read then,
+ * with its detail and not the advice to make that switch.
  */
 function useDeciding(league: League, view: Drawn, tactics: Tactics): StaffNote[] {
   return useMemo(() => {
     const rep = buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics });
     return decidingFactors(rep?.factors ?? []).map((f): StaffNote => {
-      const fix = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
+      const id = `f-${f.key ?? f.title}`;
+      const counter = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
+      const costs = !!counter && callCosts(callKey(id, counter.label));
+      const fix = costs ? undefined : counter;
       return {
-        id: `f-${f.key ?? f.title}`,
+        id,
         kind: fix ? 'decision' : 'read',
         tone: f.pts >= 0 ? 'good' : 'bad',
         title: f.title,
-        text: fix ? f.detail : (f.advice ?? f.detail),
+        text: fix || costs ? f.detail : (f.advice ?? f.detail),
         fig: { v: `${f.pts > 0 ? '+' : f.pts < 0 ? '−' : ''}${Math.abs(f.pts).toFixed(1)}`, unit: 'pts' },
         actions: fix ? [{ kind: 'tactics', label: fix.label, apply: fix.apply }] : [],
         rank: 60 + Math.abs(f.pts),
+        ...(fix && { worth: worthLine(callKey(id, fix.label)) }),
       };
     });
   }, [league, view, tactics]);
@@ -312,10 +324,22 @@ function playLook(p: PlayOption, view: Drawn, side: 0 | 1, names: (pid: number) 
   return `${r.runs ? `${r.text} · ` : ''}${cap(SETS[p.id].look)}`;
 }
 
+/** What one play's reading says, beside it: its win chance against no call, too close to say, or still being measured. */
+function PlayWorth({ r }: { r: PlayReading | null }) {
+  if (!r) return <span className="lv-pc-worth tiny dim">Measuring…</span>;
+  if (!r.clear) return <span className="lv-pc-worth tiny dim">Too close to say</span>;
+  return (
+    <span className={`lv-pc-worth num ${r.win > 0 ? 'good' : 'bad'}`}>
+      {signed(r.win * 100, 0)}%<span className="lv-pc-u">to win</span>
+    </span>
+  );
+}
+
 /**
  * The late play call, at the top of a late huddle and of the last possession: built around your closer
- * (who he is, in a line), his isolation and his sets first, each play saying who it's for, the one
- * called lit; under it, when it runs.
+ * (who he is, in a line), his isolation and his sets first, each play saying who it's for and what it's
+ * worth from here (the rest of the game played out with it against no call: usePlayWorth), best first
+ * once they're measured, the one called lit; under it, when it runs.
  */
 function PlayCall({
   plays,
@@ -329,6 +353,7 @@ function PlayCall({
   busy,
   defenderOf,
   foot,
+  readings,
 }: Pick<Common, 'view' | 'side' | 'tactics' | 'names' | 'busy'> & {
   plays: PlayOption[];
   closer: number;
@@ -336,8 +361,13 @@ function PlayCall({
   onCall: (id: CallId, pid: number) => void;
   defenderOf: (pid: number) => number | undefined;
   foot: string;
+  /** Each play's reading, in `plays` order (null while it's measured). */
+  readings: PlayReading[] | null;
 }) {
   const goTo = tactics.manage.goTo;
+  // best first once measured: the win chance, then the margin
+  const rows = plays.map((p, i) => ({ p, r: readings?.[i] ?? null }));
+  if (readings) rows.sort((a, b) => b.r!.win - a.r!.win || b.r!.pts - a.r!.pts);
   const who =
     goTo === closer
       ? `${names(closer)} is your go-to.`
@@ -348,7 +378,7 @@ function PlayCall({
     <Section title="Call the play">
       <div className="small dim2 lv-pc-who">{who}</div>
       <div className="card flush list" role="group" aria-label="Call the play">
-        {plays.map((p) => {
+        {rows.map(({ p, r }) => {
           const on = called?.set === p.id && (called.pid === null || called.pid === p.pid);
           return (
             <button key={`${p.id}-${p.pid}`} className={`lv-pc${on ? ' on' : ''}`} aria-pressed={on} disabled={busy} onClick={() => onCall(p.id, p.pid)}>
@@ -359,11 +389,15 @@ function PlayCall({
                 <span className="lr-name">{callLabel(p.id, names(p.pid))}</span>
                 <span className="lr-meta ellipsis">{playLook(p, view, side, names, defenderOf)}</span>
               </span>
+              <PlayWorth r={r} />
             </button>
           );
         })}
       </div>
-      <div className="small dim lv-pc-foot">{foot}</div>
+      <div className="small dim lv-pc-foot">
+        {foot}
+        {readings && ` Each against no call, the rest of the game played ${CHOICE_GAMES} times.`}
+      </div>
     </Section>
   );
 }
@@ -396,6 +430,8 @@ export function Huddle(
   const late = kind === 'last' || (view.q >= 4 && view.clock <= CLUTCH_SEC);
   const five = view.sides[side].on;
   const plays = useMemo(() => (late && closer !== undefined ? playOptions(props.league, five, tactics, closer) : []), [late, props.league, five, tactics, closer]);
+  // (in a huddle the sim is where the court is: the options are measured from there)
+  const readings = usePlayWorth(pendingLive(props.league), plays, late && closer !== undefined);
   const callName = called ? callLabel(called.set, called.pid != null ? names(called.pid) : undefined) : '';
   const foot =
     kind === 'last'
@@ -405,7 +441,7 @@ export function Huddle(
       : called
         ? `Called: ${callName}, on your next trip up the floor.`
         : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play (${atoText})` : ''}.`;
-  const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} /> : null;
+  const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} readings={readings} /> : null;
   if (kind === 'last') {
     const me = view.sides[side];
     const margin = me.score - view.sides[1 - side].score;

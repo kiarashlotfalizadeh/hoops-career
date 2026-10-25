@@ -171,8 +171,11 @@ describe('the record book', () => {
       recordNews(l, next, recordGame(l, next));
       const news = l.news.slice(before).filter((n) => n.kind === 'record');
       expect(news).toHaveLength(1);
-      expect(news[0].text).toContain('100 points (a league record)');
-      expect(news[0].text).not.toContain('Knicks record');
+      // (another team's: the front page, its headline about the record; the user's own game's story leads with it instead)
+      const userGame = next.home.tid === l.userTid || next.away.tid === l.userTid;
+      if (userGame) expect(news[0].text).toContain('100 points (a league record)');
+      else expect(news[0]).toMatchObject({ head: expect.stringContaining('sets a league record: 100 points'), weight: 3 });
+      expect(`${news[0].head ?? ''} ${news[0].text}`).not.toContain('Knicks record');
     }
 
     // what one game did to the book
@@ -204,9 +207,11 @@ describe('the record book', () => {
       {
         const x = structuredClone(l);
         expect(x.records!.league.post.players.pts).toBeUndefined();
-        expect(recordGame(x, night(999_202, [12, 25, 8], 'playoffs'))).toEqual([]);
+        // (the away side held to nothing: its top scorer's night in the shared game would start the list too)
+        const quiet = (g: GameResult) => (g.away.players.forEach((b) => (b.pts = 0)), g);
+        expect(recordGame(x, quiet(night(999_202, [12, 25, 8], 'playoffs')))).toEqual([]);
         // the next night that beats it is one
-        const notes = recordGame(x, night(999_203, [40], 'playoffs')).filter((n) => n.stat === 'pts' && !n.team);
+        const notes = recordGame(x, quiet(night(999_203, [40], 'playoffs'))).filter((n) => n.stat === 'pts' && !n.team);
         expect(notes.map((n) => [n.scope, n.kind, n.v])).toEqual([
           ['league', 'record', 40],
           ['team', 'record', 40],

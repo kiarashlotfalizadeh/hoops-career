@@ -422,10 +422,11 @@ describe('scouting and the staff', () => {
       expect(factor().key).toBeUndefined();
       expect(factor().advice).toBeUndefined();
       expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.id === 'fix-drop_pullup:o')).toBe(false);
-      // it won back only 0.4: the fix stands
+      // it won back only 0.4: the report's edge stands, but the switch to Hedge isn't next time's fix:
+      // it measured as a cost where the bench calls it (callWorth.ts)
       res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
       expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
-      expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')?.label).toBe('Switch to Hedge');
+      expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')).toBeUndefined();
     }
     // tells each deciding edge once: a won-back setting in one row, an edge that is part of another under it
     {

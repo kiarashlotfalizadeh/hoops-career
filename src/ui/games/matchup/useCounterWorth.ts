@@ -10,6 +10,7 @@ import { effectiveTactics } from '../../../core/league/gamePlans';
 import { hashString } from '../../../core/random';
 import { measureCounters } from '../../../state/simClient';
 import { useStore } from '../../../state/store';
+import { inLane } from '../../tactics/worthLane';
 
 /** A measurement: its counters once done, else how far it has got. */
 export interface WorthState {
@@ -50,13 +51,16 @@ function start(league: League, opp: number, key: string) {
   measured.set(key, { progress: 0 });
   tell();
   const g = nextMeeting(league, opp);
-  measureCounters(league, opp, g?.gid, (done, total) => {
-    const cur = measured.get(key);
-    if (cur && !cur.worth) {
-      measured.set(key, { progress: done / total });
-      tell();
-    }
-  }).then(
+  // (it holds the lane: the staff's measurements of the user's changes wait for it, worthLane.ts)
+  inLane(() =>
+    measureCounters(league, opp, g?.gid, (done, total) => {
+      const cur = measured.get(key);
+      if (cur && !cur.worth) {
+        measured.set(key, { progress: done / total });
+        tell();
+      }
+    }),
+  ).then(
     (out) => {
       if (running === key) running = null;
       // (stopped by a newer one: measured again when it's asked for again)

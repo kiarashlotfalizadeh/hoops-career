@@ -126,7 +126,10 @@ export function startRegularSeason(league: League): string[] {
   for (const t of league.teams) ensureRotation(league, t.tid);
   // training camp drills what each team opens the season with (and its new players learn the system)
   trainingCamps(league);
-  for (const t of league.teams) if (t.tid !== league.userTid) t.budget.ticketPrice = aiTicketPrice(league, t);
+  // tickets priced where the gate peaks, the user's too until he sets a price himself: left at the
+  // default, a contender's crowd paid $95-113 where the gate peaked at $123-152, $20-35M a season
+  // short (OKC, four seasons, round 2026-10-25)
+  for (const t of league.teams) if (t.tid !== league.userTid || !t.budget.priceSet) t.budget.ticketPrice = aiTicketPrice(league, t);
   aiExtensions(league);
   // a difficulty or job-security change made in Settings since last season's opener takes effect now
   applyPendingSettings(league);

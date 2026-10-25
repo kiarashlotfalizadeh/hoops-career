@@ -18,7 +18,8 @@ export const K = {
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.262,
   toBase: 0.15,
-  nonShootFoul: 0.23,
+  /** Reach-ins and holds on the handler, a chance per trip (0.23 until 2026-10-25: see K.recenter). */
+  nonShootFoul: 0.22,
   /**
    * A side-out foul in an action that plays on: the seconds the inbound and the reset take before the
    * action's shot (it used to go up on the same tick as the whistle).
@@ -73,6 +74,35 @@ export const K = {
    */
   useLevel: 0.32,
   usageDamp: 9,
+  /**
+   * A shooter's three-point volume levels off past `level` of his team's shots while he's on the
+   * floor (see threeDamp; from `from` of them on), his three-point tendency falling by exp(-damp) per
+   * unit of share over it, as useLevel levels off his share of the possessions. The real league's
+   * biggest share is Curry's, about 0.20 (11.3 a game at 37); without it the sim's high-volume
+   * shooters took 0.22-0.31 (a generated guard took 18.7 a game at 22): over 48 seasons (four leagues
+   * of twelve) the threes leader averaged 6.3 a game, up to 9.1, with 44 nights a season of ten made
+   * threes, up to 93 (the record is 5.1 a game; the NBA has about a dozen such nights). With this,
+   * threeTop and the aging of volume (progression.ts): 5.0 and 5.6, and 11 nights a season (26 at
+   * most). A harder level (0.17, damp 20) took the leader no lower and broke the tactics' measured
+   * worth (engineBalance: running and switching ball screens moved half again off their tags) and the
+   * sets' looks; a set run for a shooter takes his own tendency (possession.ts). Damp 10 → 15 when
+   * the AI's staffs were refit (2026-10-25) and the league went to Five-Out and Pace & Space, whose
+   * shooters had the leader back to 6.2 a game and 35 ten-three nights in a season: now 5.1 (6.2 at
+   * most) and 13 (26), over star-check's 32 seasons.
+   */
+  threeUse: { from: 15, level: 0.18, damp: 15 },
+  /**
+   * A three-point shooter's skill (c3 or pu3) counts in full up to `from`, at `keep` of it to `top` and
+   * at `keepTop` past that. The real league's shooting was fitted to the engine before the big
+   * decisions' looks came to count by who takes them (K.matchup), so the better the shooter the more
+   * he outshot his real line: by skill band over six real-league seasons +1.2 points of percentage in
+   * the 60s, +1.5 in the 70s and +2.4 in the 80s (the 30s to 50s within 0.3), the league at 36.8% (the
+   * NBA's 35.9%), and shooters who developed past 90 made 47-52% on 11-14 a game. Now every band is
+   * within 0.7 of the real league's, the league is at 35.9%, the real league's 25 top three-point
+   * shooters make 0.04 a game more than they did (0.16 before; Curry at 38: 4.5, his 4.4 at 37), and
+   * a band of 90 and up makes 45%.
+   */
+  threeTop: { from: 55, keep: 0.7, top: 80, keepTop: 0.4 },
   freedomGreen: 1.25,
   freedomLimited: 0.55,
   /** How strongly usage tendency tilts an actor's shoot-vs-pass choice. */
@@ -135,6 +165,15 @@ export const K = {
    * otherwise have run). Before, not switching tagged +1.7 a game against a measured +0.8.
    */
   offBallTag: { cross: 0.24, hunt: 0.6, glass: 0.28, deny: 0.24 },
+  /**
+   * The same for a switched ball screen's mismatch (the handler on the big, or the screener posting
+   * the guard): what its tags count of their own estimates. Measured as engineBalance does (switching
+   * every screen against icing them, two real matchups over ten seed sets): at 1 the mismatches tagged
+   * −1.79 a game against a measured −1.46 for them (2026-10-24), then −2.29 against −1.10 once volume
+   * shooters were damped and the AI's offenses refit (2026-10-25): each mismatch is still taken, and
+   * worth less. At 0.5 the switch tags −1.10 against a measured −1.01.
+   */
+  switchTag: 0.5,
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
   /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
@@ -144,8 +183,52 @@ export const K = {
   /** Score effects: past this second-half margin the leader eases off and the trailer plays
    * loose, up to this much field-goal percentage either way, reached this many points later. */
   easeFrom: 8,
-  ease: 0.058,
+  ease: 0.05,
   easeSpan: 12,
+  /**
+   * ...and past `from`, a deep bench against a deep bench in a game nobody is playing for any more:
+   * up to `x` more by `from` + `span`. The engine's possessions are noisier than the NBA's (a real
+   * team against itself: 9.0 points of margin SD a quarter, the NBA's about 8), so games ran away by
+   * halftime (45 a season were 30 or more apart at the break) and the fourth quarter couldn't bring
+   * them back. Over 48 seasons (four leagues of twelve), with garbage time (K.garbage) and this: 6.7
+   * games a season decided by 40 or more (27.8 before; the NBA about 6), the season's biggest margin
+   * 50 on average and 63 at most (68 and 89; the record is 73), its biggest team score in regulation
+   * 160 and 171 (163 and 191), with the margin's SD at 15.7 (16.5) and 23% of games decided by 20 or
+   * more (22%): `ease` came down from 0.058 to hold that share near the NBA's 21%.
+   */
+  easeBig: { from: 27, span: 12, x: 0.08 },
+  /**
+   * Garbage time (see wantsGarbage): with `start` seconds of regulation left or fewer (from 3:00 left
+   * in the third quarter), a lead of `from` + `per`·√(minutes left) decides a game for a coach at the
+   * league's line (30 with three minutes left in the third, 28.5 at the start of the fourth, 23 with
+   * five minutes left, 18 with one), times his own `patience` tonight (a range, drawn per game: some
+   * coaches empty the bench sooner). Both benches finish it, until the lead is back under the line
+   * less `exit`: the reserves next in line, the first `depth` of them sitting it out some nights
+   * (drawn), and the deepest end of the bench for the last `late` seconds (a range, drawn), a tired
+   * one spelled by a rested reserve. The team up big eases off (eases): `slow` more seconds walking it
+   * up, `run` of its run-outs and `three` of its taste for threes; and a team up `pressLead` or more
+   * calls off its full-court press, in any quarter (a 57-10 first quarter of pressing a team with no
+   * ball handlers left had made an 84-point game). Before, the deepest five came in for the last five
+   * minutes at 22 up or the last 2:30 at 16 up, and played exactly that in every blowout, while the
+   * starters played on through a 35-point third quarter. Over the 48 seasons, starters now play 23.4
+   * minutes in games decided by 30 or more (25.8 before) and a team's best starter 28.2 (31.7); over
+   * a season each team's two best players give up about half a minute a game (star-check's 31.8/30.0,
+   * 32.5/30.5 before), and the real league's top 20 scorers still land within 1.7-2.4 points a game
+   * of their real lines in the first season (2.0-2.4 before).
+   */
+  garbage: {
+    start: 900,
+    from: 14,
+    per: 4.2,
+    patience: [0.9, 1.15] as [number, number],
+    exit: 8,
+    depth: 2,
+    late: [150, 330] as [number, number],
+    slow: 3,
+    run: 0.5,
+    three: 0.75,
+    pressLead: 20,
+  },
   clutchSec: 240,
   clutchEase: 0.05,
   /**
@@ -474,9 +557,19 @@ export const K = {
   /**
    * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
    * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
-   * 8.2 with turnovers on its 13.9.
+   * 8.2 with turnovers on its 13.9 (0.88 then; 0.92 since stealCap).
    */
-  stealShare: 0.88,
+  stealShare: 0.92,
+  /**
+   * Past `from` steals in a game a defender's share of his man's turnovers that are steals falls by
+   * exp(-damp) a steal: handlers stop putting the ball near him. The calibrated ball hawks stole
+   * twice their real rates in league play, where they guard the other team's lead handler as its
+   * point-of-attack stopper (Caruso 2.8-3.4 a game in 21 minutes, his real 1.3): the steals leader
+   * averaged 2.98 a game (3.48 at most, one season of nine real-league runs), the NBA's about 2.0-2.3.
+   * With this and stealShare up from 0.88 to give the league back its steals: 2.41 (2.96), the
+   * league's steals at 7.85 a team game (8.08; the NBA's 8.2); over 48 seasons 2.19 (2.72 at most).
+   */
+  stealCap: { from: 2, damp: 0.6 },
   /**
    * A roamer's give-back (the open catch his man gets while he helps) grows as the leverage to this
    * power, about 1.6 times at 2x. The offense takes more of a bigger gift, and each one is better, so
@@ -494,8 +587,14 @@ export const K = {
    * under (two real-league seasons, rng 7 and 11, now every rate within 5%). Moved again (turnovers
    * −0.16 → −0.12, fouls −0.1 → −0.05, blocks −0.03 → 0) when pressure and the blitz were cut to a
    * realistic size and fewer AI teams pressed: those had fallen 3-6% under (rng 7, 11 and 23).
+   * Moved again (threes −0.045 → −0.2, fouls −0.08 → −0.04, turnovers −0.2 → −0.12, reach-ins
+   * K.nonShootFoul 0.23 → 0.22) on 2026-10-25, when the AI's staffs were refit to what each style
+   * measures on the engine with blowouts and old stars tamed: the league went from Hub Big to
+   * Five-Out and Pace & Space, and from blitzing and pressing to icing and hedging, which had sent
+   * threes 9% over, fouls 8% under, free throws 9%, turnovers 7% and steals 9% under (two seasons,
+   * rng 7 and 11). Now within 3% (rng 7, 11 and 23).
    */
-  recenter: { three: -0.045, foul: -0.08, orb: -0.15, tov: -0.2, blk: 0 },
+  recenter: { three: -0.2, foul: -0.04, orb: -0.15, tov: -0.12, blk: 0 },
   /**
    * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
    * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,

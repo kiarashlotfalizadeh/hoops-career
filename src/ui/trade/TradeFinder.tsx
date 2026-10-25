@@ -7,7 +7,8 @@ import type { League, Pos } from '../../core/types';
 import { POSITIONS } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
 import { withHoldsMemo } from '../../core/league/freeAgency';
-import { pickLabel, type TradeOffer } from '../../core/league/trades';
+import { type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { filterTargets, maxTakeBack, tradeTargets } from '../../core/league/tradeFinder';
 import { type WorkResult } from '../../core/league/tradeHelp';
 import { useLeagueMemo } from '../../state/store';
@@ -236,7 +237,7 @@ export function AskCallout({ league, ask, onClose }: { league: League; ask: Ask;
     ...o.a.pids.map((pid) => playerName(league.players[pid])),
     ...o.a.dpids.map((d) => {
       const dp = league.draftPicks.find((x) => x.dpid === d);
-      return dp ? pickLabel(league, dp) : 'a pick';
+      return dp ? pickName(league, dp) : 'a pick';
     }),
   ];
   return (

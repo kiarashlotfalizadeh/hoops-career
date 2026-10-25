@@ -562,10 +562,17 @@ export interface FitTerm {
 
 /**
  * A playbook's fit model: its starting score and, for each roster quality it leans on, fit points per
- * rating point of it from the level where it's neutral. One fit point is a tenth of a point per 100
- * possessions: the models are fitted to what each playbook was worth in paired engine games over 150
- * real and fictional rosters (healthy and missing their two best players), as a difference from the
- * roster's average playbook, so a fit says what the engine rewards and a gap of 10 is a point per 100.
+ * rating point of it from the level where it's neutral (the 90 rosters' average). One fit point is a
+ * tenth of a point a game: the models are fitted (2026-10, scripts/style-check.ts checks them) to what
+ * each playbook was worth in paired engine games, fully drilled, for 90 real and fictional rosters
+ * against every other team (290 games each, by shot value), as a difference from the roster's average
+ * playbook, the terms picked one at a time while they predict a roster left out better. So a fit is
+ * the staff's read of what the engine rewards, and a gap of 10 is a point a game. Over the real league
+ * (on fresh seeds) the fit tracks the measured worth at r ≈ 0.5 on offense and 0.84 on defense (the old
+ * models: 0.2-0.3 and 0.7, with Hub Big their pick for 18 teams, a point and more a game under the best
+ * on average; the staff's picks now 0.4 under at both ends). Most of a
+ * roster's spread from one playbook to the next is the playbook's own (its base); the qualities move a
+ * fit by a few tenths, which is about all the engine says they do.
  */
 interface FitModel {
   base: number;
@@ -578,61 +585,83 @@ const termsOf = (m: FitModel, pr: RosterProfile): FitTerm[] => [
 ];
 const fitSum = (terms: Record<string, FitTerm[]>): Record<string, number> => Object.fromEntries(Object.entries(terms).map(([k, ts]) => [k, ts.reduce((a, x) => a + x.value, 0)]));
 
-/** The offensive playbooks' fit models (see FitModel). */
+/**
+ * The offensive playbooks' fit models (see FitModel), on the playbooks as rebalanced in 2026-10 (see
+ * OFF_PRESETS) and the engine as it plays since a shooter's three-point volume levels off: Pace & Space
+ * and Five-Out are the strong bases (Five-Out the more for a small roster with no one creator),
+ * Heliocentric pays a lead creator, Hub Big runs worse around one (its touches go to the big), and Grit
+ * & Grind is the weakest, less so for a big roster.
+ */
 const OFF_FIT: Record<string, FitModel> = {
-  balanced: { base: 51.7, terms: [] },
-  helio: { base: 49.4, terms: [['starCreator', 0.31, 64]] },
+  balanced: { base: -0.3, terms: [] },
+  helio: { base: 1, terms: [['starCreator', 0.26, 67]] },
   fiveOut: {
-    base: 52.4,
+    base: 3.1,
     terms: [
-      ['size', -0.66, 47],
-      ['creatorGap', -0.29, 5],
+      ['size', -0.56, 46],
+      ['starCreator', -0.29, 67],
     ],
   },
   hub: {
-    base: 53.7,
+    base: -2.6,
     terms: [
-      ['starCreator', -0.26, 64],
-      ['passing', 0.22, 52],
-      ['shooting', 0.12, 33],
+      ['starCreator', -0.22, 67],
+      ['bigPassing', 0.06, 42],
     ],
   },
-  paceSpace: {
-    base: 51.4,
-    terms: [
-      ['perimeterD', 0.52, 52],
-      ['passing', 0.27, 52],
-    ],
-  },
-  grind: { base: 41.3, terms: [['size', 0.58, 47]] },
+  paceSpace: { base: 3.6, terms: [] },
+  grind: { base: -5.1, terms: [['size', 0.3, 46]] },
 };
 
 /**
- * The defensive playbooks' fit models (see FitModel), refitted when the big decisions were made to
- * matter (2026-10: a coverage's room counts by who gets it, ice gives up the weak-side corner, a
- * switch the slip and the boards, pressure and the trap lean on the offense's ball security): each
- * preset against ice for every team of the real league, paired over all 29 opponents (24 games each,
- * familiarity aside), regressed on the roster's terms. Ice is left as it was fitted. Trapping and the
- * press pay a team with quick hands (blitz +1.4 and chaos +3.1 a point of steals, R² 0.6 and 0.5); a
- * switch pays mobile bigs; the man-to-man coverages are within a few tenths of each other for most
- * rosters (the real league's spread around these is the opponents', which the game plans are for), and
- * a 2-3 zone all game costs about 1.2 a game (a weapon against a team that can't shoot, not a base).
+ * The defensive playbooks' fit models (see FitModel; from the same runs, on the roster's defensive
+ * qualities, measured again in the league the refitted offenses make). Quick hands are most of it:
+ * trapping and the press pay them (blitz +1.05 and chaos +2 fit points a point of steals) and the
+ * coverages that stay home don't; the press also wants depth. Since a shooter's three-point volume
+ * levels off (2026-10), a 2-3 zone gives up less at the arc than it did and measures the best base for
+ * many rosters, more so with perimeter defenders to close out (+0.9 a game over a roster's average
+ * defense, +0.5 in the real league, where it was −0.3): an engine question, so staffs don't base on it
+ * unless it's their coach's (NOT_A_BASE), while the staff's read tells the user what it's worth.
  */
 const DEF_FIT: Record<string, FitModel> = {
-  drop: { base: 53.3, terms: [['steals', -0.47, 50]] },
+  drop: { base: 5.3, terms: [['steals', -0.67, 51]] },
   switch: {
-    base: 57.2,
+    base: 2.8,
     terms: [
-      ['steals', -0.47, 50],
-      ['perimeterD', -0.2, 52],
-      ['bigMobility', 0.12, 50],
+      ['perimeterD', -0.61, 53],
+      ['steals', -0.39, 51],
+      ['depth', -0.36, -14],
     ],
   },
-  blitz: { base: 54.9, terms: [['steals', 1.44, 50]] },
-  ice: { base: 56.9, terms: [['steals', -0.49, 50]] },
-  hedge: { base: 54.7, terms: [['steals', -0.28, 50]] },
-  zone: { base: 44.6, terms: [['steals', -0.31, 50]] },
-  chaos: { base: 43.8, terms: [['steals', 3.13, 50]] },
+  blitz: {
+    base: -5.2,
+    terms: [
+      ['steals', 1.05, 51],
+      ['athleticism', -0.36, 55],
+    ],
+  },
+  ice: { base: 6.9, terms: [['steals', -0.6, 51]] },
+  hedge: {
+    base: 1.4,
+    terms: [
+      ['steals', -0.48, 51],
+      ['rimProtection', 0.1, 65],
+    ],
+  },
+  zone: {
+    base: 9.3,
+    terms: [
+      ['steals', -0.77, 51],
+      ['perimeterD', 0.88, 53],
+    ],
+  },
+  chaos: {
+    base: -20.3,
+    terms: [
+      ['steals', 2, 51],
+      ['depth', 1.07, -14],
+    ],
+  },
 };
 
 const modelTerms = (models: Record<string, FitModel>, pr: RosterProfile) => Object.fromEntries(Object.entries(models).map(([k, m]) => [k, termsOf(m, pr)]));
@@ -657,14 +686,16 @@ export function defPresetFit(pr: RosterProfile): Record<string, number> {
 }
 
 /**
- * A coach's lean toward his own playbooks, in fit points: enough to pick his among playbooks about as
- * good for the roster (a few tenths of a point per 100), never one the roster plays clearly worse. On
- * defense more: the coverages fit most rosters within a point, and a league where every coach played
- * the one that fit best by a few tenths (twenty ices) gave scouting nothing to find. At 8 the real
- * league plays hedge, ice, blitz, switch, drop and a press, at about half a point a game under each
- * team's best fit.
+ * A coach's lean toward his own playbooks, in fit points: enough to play his own style where another
+ * fits about as well (inside what the fits can tell apart), never one the roster plays clearly worse.
+ * Measured over the real league (each playbook for each team, 290 paired games, the engine since a
+ * shooter's threes level off): at 8 the staffs' picks run 0.4 a game under each team's best at both
+ * ends, as at 5, and the league plays five offenses (Five-Out 12, Hub Big 6, Heliocentric 6, Pace &
+ * Space 5) and six defenses; at 5, 24 of 30 ran Five-Out or Pace & Space and the league took an eighth
+ * more threes than the NBA; at none, 0.5 under the best with twenty-one zones, which gave scouting
+ * nothing to find.
  */
-const PHILOSOPHY_LEAN = { off: 3, def: 8 };
+const PHILOSOPHY_LEAN = { off: 8, def: 8 };
 
 export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; freedom: Record<number, ShotFreedom> } {
   const roles: Record<number, OffRole> = {};
@@ -722,33 +753,27 @@ function shapeUnits(players: Player[], order?: number[]): { five: Player[]; eigh
 }
 
 /**
- * How well each shape fits a roster, in fit points against four-out, one-in (a tenth of a point per
- * 100 possessions, as the playbooks' fits), from what each shape does in the engine (K.shape) for its
- * starting five: five-out's open paint, worth less for each non-shooter in the five, against the
- * offensive boards it gives up; the double post's two bigs on the glass and finishing inside, against
- * the crowded paint (more so when they're shooters, wasted inside); horns' handoffs from a passing
- * elbow big and its fewer turnovers; the double post also spares a five with two inside bigs (Rim Runners,
- * Post Hubs) the crowded paint. Each shape's value at the league's average roster is its measured
- * one (scripts/system-impact.ts: about −0.1, +0.2 and +0.3 per 100); real rosters vary less than the
- * games' noise, so the slopes come from rosters built to the extremes (all shooters, two post bigs, a
- * non-shooting center).
+ * How well each shape fits a roster, in fit points against four-out, one-in (a tenth of a point a
+ * game, as the playbooks' fits), the staff's read of what the engine says it's worth: fitted (2026-10)
+ * to each shape played for 90 real and fictional rosters against every other team (290 paired games
+ * each, fully drilled), on the parts of the five and the tactics that move it, picked one at a time
+ * while they predict a roster left out better (refitted on the merged engine, where a shooter's
+ * three-point volume levels off). Five-out pays a roster that shoots (the top eight's spacing) with a
+ * big who passes, and costs most rosters a few tenths; horns is a tenth or so better for nearly
+ * everyone, whoever plays it (nothing about a roster moved it more than the games' noise); the double
+ * post is a few tenths better for most, the more the less the roster shoots, and spares a five with two
+ * inside bigs (Rim Runners, Post Hubs) the crowded paint. (The old fits, worked out from what each
+ * shape does in the engine for rosters built to the extremes, had the sign right about half the time.)
  */
 export function shapeFits(players: Player[], tactics?: Pick<Tactics, 'offense'>, order?: number[]): Record<OffShape, number> {
-  const { five } = shapeUnits(players, order);
+  const { five, eight } = shapeUnits(players, order);
   const cs = five.map((p) => composites(p.ratings));
-  const n = Math.max(1, cs.length);
-  const exposed = cs.reduce((a, c) => a + Math.max(0, 40 - c.spacing) / 40, 0);
-  const orb = cs.reduce((a, c) => a + c.orb, 0) / n;
+  const spacing = eight.reduce((a, p) => a + composites(p.ratings).spacing, 0) / Math.max(1, eight.length);
   const bigs = five
     .map((p, i) => ({ p, c: cs[i] }))
     .sort((a, b) => b.p.ratings.hgt - a.p.ratings.hgt || b.c.orb - a.c.orb)
     .slice(0, 2);
-  const bigOrb = bigs.reduce((a, x) => a + x.c.orb, 0) / Math.max(1, bigs.length);
-  const waste = bigs.reduce((a, x) => a + Math.max(0, x.c.spacing - 25), 0);
   const bigPass = Math.max(0, ...bigs.map((x) => x.c.passing));
-  const a = tactics?.offense.actions;
-  const lean = (k: 'pnr' | 'handoff' | 'motion' | 'post') => (a ? (a[k] - 50) / 50 : 0);
-  const drives = tactics ? (tactics.offense.rimAttack - 50) / 50 : 0;
   // two bigs who live inside crowd the paint in every shape but the double post (see sim/links.ts)
   const inside = five.filter((p) => {
     const r = tactics?.offense.roles[p.pid] ?? archetype(p.ratings).role;
@@ -756,14 +781,14 @@ export function shapeFits(players: Player[], tactics?: Pick<Tactics, 'offense'>,
   }).length;
   return {
     fourOut: 0,
-    fiveOut: 20 * (1 - 0.75 * exposed) * (1 + 0.3 * drives) - 9 * (orb / 46.5) - 3 * lean('post'),
-    horns: 1.5 + 0.15 * (bigPass - 55) + 2 * lean('handoff') + 1 * lean('pnr') - 2 * lean('motion'),
-    twoIn: 8 * (bigOrb / 50) + 2 - 9.5 * (1 + 0.3 * drives) - 0.1 * waste + 3 * lean('post') + (inside >= 2 ? CROWD_FIT : 0),
+    fiveOut: -3.8 + 0.45 * (spacing - 36) + 0.17 * (bigPass - 55),
+    horns: 1.3,
+    twoIn: 2.6 - 0.13 * (spacing - 36) + (inside >= 2 ? CROWD_FIT : 0),
   };
 }
 
 /** What the double post saves a five with two inside bigs (the crowded paint they'd play into otherwise), in fit points. */
-const CROWD_FIT = 4;
+const CROWD_FIT = 5.1;
 
 /** Fit points another shape has to win by before the staff leaves four-out, the shape every player knows. */
 const SHAPE_EDGE = 4;
@@ -848,19 +873,21 @@ export function fitRoster(players: Player[]): Player[] {
   return healthy.length >= 8 ? healthy : players;
 }
 
-/** Fit scores as the Tactics screen shows them: 100 for the playbook that fits best, 45 for the worst. */
-export function fitScale(fits: Record<string, number>): (k: string) => number {
-  const vals = Object.values(fits);
-  const max = Math.max(...vals);
-  const min = Math.min(...vals);
-  return (k: string) => Math.round(45 + ((fits[k] - min) / Math.max(1, max - min)) * 55);
-}
+/**
+ * Defenses a staff plays as its base only when they're its coach's own: the 2-3 zone, which since a
+ * shooter's three-point volume levels off measures the best base for most rosters (see DEF_FIT), where
+ * NBA staffs play it as a weapon for a night. Without this, 14 of the real league's 30 staffs went to
+ * the zone (20 of a fictional league's); with it, the four whose coaches teach it. (The user can still pick it, and the staff's read
+ * says what it's worth.) Drop it once the engine's zone gives up what an NBA zone does.
+ */
+const NOT_A_BASE = new Set(['zone']);
 
-/** Each preset's fit for this roster and coach, his philosophy's lean included. */
+/** Each preset's fit for this roster and coach, his philosophy's lean included (defenses not a base for him left out: NOT_A_BASE). */
 export function presetScores(team: Team, players: Player[]): { off: Record<string, number>; def: Record<string, number> } {
   const pr = rosterProfile(fitRoster(players));
   const lean = (fits: Record<string, number>, mine: string, by: number) => Object.fromEntries(Object.entries(fits).map(([k, v]) => [k, v + (k === mine ? by : 0)]));
-  return { off: lean(offPresetFit(pr), team.coach.offPhilosophy, PHILOSOPHY_LEAN.off), def: lean(defPresetFit(pr), team.coach.defPhilosophy, PHILOSOPHY_LEAN.def) };
+  const def = Object.fromEntries(Object.entries(defPresetFit(pr)).filter(([k]) => !NOT_A_BASE.has(k) || k === team.coach.defPhilosophy));
+  return { off: lean(offPresetFit(pr), team.coach.offPhilosophy, PHILOSOPHY_LEAN.off), def: lean(def, team.coach.defPhilosophy, PHILOSOPHY_LEAN.def) };
 }
 
 /** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
@@ -874,7 +901,7 @@ export function rankedPresets(team: Team, players: Player[]): { off: string[]; d
 }
 
 /**
- * In season, how much better (in fit points, a tenth of a point per 100 each) another playbook or
+ * In season, how much better (in fit points, a tenth of a point a game each) another playbook or
  * shape has to fit before the staff changes to it: a new system costs familiarity for weeks (see
  * src/core/sim/familiarity.ts), so a marginal gain isn't worth relearning for.
  */

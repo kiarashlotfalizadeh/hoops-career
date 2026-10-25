@@ -16,10 +16,11 @@ import { seasonLabel } from '../constants';
 import { madeAtt, ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
 import { careerTotals, markText, milestonesIn, newsworthy, type MilestoneStat } from './milestones';
-import { recordsHeld, recordWhat } from '../league/records';
+import { REC_LABEL, gameMark, recordsHeld, recordWhat, type HeldRecord, type RecStat } from '../league/records';
 import { winChance } from './winProb';
 import { billingStorylines } from './storylines';
 import { SETS } from '../sim/sets';
+import { anniversaryOf, droughtLine, meetings, titleLine } from '../league/media/history';
 
 /** A finished game told as a story, from one team's side. */
 export interface GameStory {
@@ -147,6 +148,11 @@ interface Facts {
   /** The chance to win at tip-off, when the result keeps the projection. */
   chance?: number;
   firstWin: boolean;
+  /**
+   * A record this team set tonight that leads its story: a league record (a player's or the team's),
+   * or a franchise scoring record by one of its players; `who` is his line, `prev` the mark it beat.
+   */
+  record?: { scope: 'league' | 'team'; stat: HeldRecord['stat']; team?: true; v: number; who?: BoxLine; prev?: { v: number; name: string; season: number } };
   name: (b: BoxLine) => string;
   full: (b: BoxLine) => string;
 }
@@ -289,6 +295,34 @@ function highsWhole(league: League, p: Player) {
   return p.stats.every((s) => s.gp === 0 || s.season >= league.startSeason) && careerTotals(p).gp >= 15;
 }
 
+/**
+ * The record tid's side set tonight that its story leads with: a league record (a player's, or the
+ * team's), else a franchise scoring record (a player's points, the team's points) once the book has a
+ * season behind it (recordsHeld). The mark it beat is the list's second, when the book has one.
+ */
+function recordOf(league: League, res: GameResult, tid: number, us: TeamBox): Facts['record'] {
+  const held = recordsHeld(league, res).filter((r) => r.tid === tid && r.book === 'reg');
+  const r =
+    held.find((x) => x.scope === 'league' && !x.team) ??
+    held.find((x) => x.scope === 'league') ??
+    held.find((x) => x.scope === 'team' && x.stat === 'pts' && (x.team || x.v >= 40));
+  if (!r) return undefined;
+  const who = r.pid !== undefined ? us.players.find((b) => b.pid === r.pid) : undefined;
+  if (!r.team && !who) return undefined;
+  const book = league.records!;
+  const shelf = r.scope === 'league' ? book.league.reg : book.teams[tid]?.reg;
+  const second = !r.team && shelf ? shelf.players[r.stat as RecStat]?.[1] : undefined;
+  const prev = second ? gameMark(league, second) : undefined;
+  return {
+    scope: r.scope,
+    stat: r.stat,
+    ...(r.team ? { team: true as const } : {}),
+    v: r.v,
+    ...(who ? { who } : {}),
+    ...(prev ? { prev: { v: prev.v, name: prev.name, season: prev.season } } : {}),
+  };
+}
+
 function factsOf(league: League, res: GameResult, tid: number): Facts | null {
   const us = res.home.tid === tid ? res.home : res.away.tid === tid ? res.away : null;
   if (!us) return null;
@@ -365,6 +399,7 @@ function factsOf(league: League, res: GameResult, tid: number): Facts | null {
     them,
     team,
     foe,
+    record: recordOf(league, res, tid, us),
     won,
     margin: Math.abs(us.pts - them.pts),
     home,
@@ -464,6 +499,23 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
         : pick('cup-adv', [`${T} beat ${O}, into the Cup ${f.res.cup === 'qf' ? 'semifinals' : 'final'}`, `${T} advance in the Cup with ${score} win`]);
     return pick('cup-out', [`${O} knock ${T} out of the Cup`, `${poss(T)} Cup run ends in the ${round}`]);
   }
+  // a record set tonight leads the story, a win or a loss (the night is remembered for it)
+  const rc = f.record;
+  if (rc) {
+    const what = recordWhat({ stat: rc.stat, team: rc.team, v: rc.v });
+    if (rc.team)
+      return rc.scope === 'league'
+        ? pick('rec-lt', [`${T} set a league record: ${what}`, `A league record for ${T}: ${what} ${f.won ? `in a win over ${O}` : `in a loss to ${O}`}`])
+        : pick('rec-ft', [`${T} set a franchise record with ${what}`, `${what} for ${T}, a franchise record`]);
+    const W = f.name(rc.who!);
+    if (rc.scope === 'league')
+      return f.won
+        ? pick('rec-l', [`${W} sets a league record with ${what}`, `A league-record ${what} for ${W} as ${T} beat ${O}`, `${what}: ${W} sets a league record`])
+        : pick('rec-ll', [`${poss(W)} league-record ${what} not enough for ${T}`, `${W} sets a league record with ${what} in a loss to ${O}`]);
+    return f.won
+      ? pick('rec-f', [`${poss(W)} ${rc.v} sets a ${T} record`, `A ${T} record: ${rc.v} for ${W}`, `${W} scores ${rc.v}, a ${T} record, as ${T} beat ${O}`])
+      : pick('rec-fl', [`${W} scores a ${T}-record ${rc.v} in a loss to ${O}`, `${poss(W)} ${T}-record ${rc.v} not enough against ${O}`]);
+  }
   const d = f.decider;
   if (d?.buzzer)
     return d.ours
@@ -493,6 +545,7 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
     return pick('high', [`${H} career-high ${f.hero.pts} powers ${T} past ${O}`, `Career night: ${H} scores ${f.hero.pts} in ${T} win`]);
   if (f.won && f.hero && f.hero.pts >= 40)
     return pick('forty', [`${poss(H)} ${f.hero.pts} sinks ${O}`, `${H} scores ${f.hero.pts} as ${T} beat ${O}`, `${f.hero.pts} for ${H}, a win for ${T}`]);
+  if (!f.won && f.hero && f.hero.pts >= 50) return pick('fifty-l', [`${poss(H)} ${f.hero.pts} not enough for ${T}`, `${H} scores ${f.hero.pts}, but ${T} fall to ${O}`]);
   if (!f.won && f.star && f.star.pts >= 40) return pick('forty-l', [`${poss(S)} ${f.star.pts} too much for ${T}`, `${S} scores ${f.star.pts}, ${O} beat ${T}`]);
   if (f.won && f.firstWin) return pick('first', [`First win for the new coach as ${T} beat ${O}`, `${T} beat ${O} for their new coach's first win`]);
   if (f.streak.after >= 4)
@@ -563,6 +616,17 @@ function tiedOnCall(f: Facts): string | undefined {
 function dekOf(league: League, f: Facts, cat: string): string {
   const rng = worldRng(league, 'story-dek', f.res.gid);
   const out: string[] = [];
+  // the record its headline leads with: what it beat
+  if (cat.startsWith('rec-') && f.record) {
+    const rc = f.record;
+    const since = league.records ? seasonLabel(league.records.since) : '';
+    const most = rc.team ? (rc.stat === 'margin' ? 'the biggest win' : `the most ${rc.stat === 'pts' ? 'points' : 'threes'}`) : `the most ${REC_LABEL[rc.stat as RecStat][1]}`;
+    const where = rc.scope === 'league' ? `in a game since ${since}` : `in a game for the ${f.team.name} since ${since}`;
+    const prev =
+      rc.prev && rc.prev.v < rc.v ? ` The old mark was ${rc.prev.v}, by ${rc.prev.name}${rc.prev.season !== f.res.season ? ` in ${seasonLabel(rc.prev.season)}` : ''}.` : '';
+    out.push(rc.who ? `${f.full(rc.who)} had ${nightWords(rc.who)}: ${most} ${where}.${prev}` : `${most.replace(/^./, (c) => c.toUpperCase())} ${where}.`);
+    return out.join(' ');
+  }
   const h = f.hero;
   if (h) {
     const n = f.full(h);
@@ -629,6 +693,11 @@ function meansOf(league: League, f: Facts): string[] {
           ? 'One more chance for the 8th seed'
           : 'Season over',
     );
+  // a series won against the franchise's history in this save: a dynasty, or a drought ended
+  if (s && s.w === 4 && f.res.season === league.season) {
+    const h = s.round === 4 ? titleLine(league, f.tid, f.res.season, true) : droughtLine(league, f.tid, f.res.season, s.round + 1);
+    if (h) out.push(h.charAt(0).toUpperCase() + h.slice(1));
+  }
   const st = f.res.stakes?.tid === f.tid ? f.res.stakes : undefined;
   if (st?.after.clinched && st.after.clinched !== st.before.clinched) out.push(CLINCH[st.after.clinched]);
   if (st && f.rec[0] + f.rec[1] >= 10) {
@@ -729,22 +798,26 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
     }
   }
   if (mean.length) paras.push(mean.join(' '));
+  // a night these two remember on this date, a round number of years ago (the league's memory)
+  if (reg) {
+    const ann = anniversaryOf(league, { home: f.res.home.tid, away: f.res.away.tid, day: f.res.day }, f.res.season);
+    if (ann) paras.push(ann.line);
+  }
   return paras.join('\n\n');
 }
 
 /**
  * How big a night it was, for the news and the result's presentation. The front page (3) stops a
- * long sim and can take the screen, so it's rare: a handful of regular-season nights (opening night,
- * a 60-point or career-high 50-point night, a 10-game win streak and every five after, a
- * buzzer-beater or a 20-point comeback on a big night, a playoff spot clinched or lost for good) and the playoffs' huge ones (a series won or
+ * long sim and can take the screen, so it's rare: a handful of regular-season nights (a win on opening night,
+ * a 60-point or career-high 50-point night, a 10-game win streak and every five after, a win at the
+ * buzzer, from 20 down or as a 15% underdog, a rivalry game in the run-in with both sides in the
+ * race, a playoff spot clinched or lost for good, a league record) and the playoffs' huge ones (a series won or
  * lost, a Game 7, the title, getting in or going out in the play-in, the Cup final). Everything else
  * notable is a story (2).
  */
 function weightOf(f: Facts, means: string[]): 1 | 2 | 3 {
   const s = f.series;
   const h = f.hero;
-  // a night that was billed as a big one (see billingsFor), or any postseason game
-  const billed = !!s || !!f.playIn || f.rivalry.hot || f.christmas || f.homeOpener || (!!f.res.cup && f.res.cup !== 'group');
   const pi = f.playIn;
   const stakes = f.res.stakes?.tid === f.tid ? f.res.stakes : undefined;
   const clinched = !!stakes?.after.clinched && stakes.after.clinched !== stakes.before.clinched;
@@ -753,10 +826,15 @@ function weightOf(f: Facts, means: string[]): 1 | 2 | 3 {
     (pi && (f.won ? !pi.endsWith('-910') : !pi.endsWith('-78'))) ||
     f.res.cup === 'final' ||
     f.res.type === 'cup' ||
-    f.opening ||
+    // (opening night's front page is a win: a loss that night is a story)
+    (f.opening && f.won) ||
     (h && (h.pts >= 60 || (h.pts >= 50 && f.high === 'career'))) ||
     (f.streak.after >= 10 && f.streak.after % 5 === 0) ||
-    (billed && f.won && (f.decider?.buzzer || f.comeback >= 20)) ||
+    // a win at the horn or from 20 down, and one as a big underdog (15% or less at tip-off)
+    (f.won && (f.decider?.buzzer || f.comeback >= 20)) ||
+    // a rivalry game when it mattered: the run-in (60 games played), both sides in the postseason race
+    (f.rivalry.hot && f.res.type === 'regular' && f.rec[0] + f.rec[1] >= 60 && !!stakes && stakes.after.rank <= 10 && f.theirRank > 0 && f.theirRank <= 10) ||
+    (f.won && f.res.type === 'regular' && f.chance !== undefined && f.chance <= 0.15) ||
     // (once a season at most: in the playoffs for sure, or out of them)
     (clinched && (stakes!.after.clinched === 'x' || stakes!.after.clinched === 'e')) ||
     means.some((m) => m.startsWith('League record'));
@@ -994,6 +1072,15 @@ function rivalry0(league: League, a: number, b: number): Rivalry {
     const [w, l] = real.winner === ta.abbrev ? [ta, tb] : [tb, ta];
     reasons.push({ text: `The ${w.name} beat the ${l.name} in the ${real.season + 1} ${real.label}, ${real.tally}`, w: 4 });
   }
+  // older playoff series, from the league's memory (the chronicle keeps every one): a little less each year back
+  for (const m of meetings(league, a, b)) {
+    const ago = league.season - m.season;
+    if (ago < 2 || ago > 5) continue;
+    heat += ago === 2 ? 2 : ago === 3 ? 1.5 : 1;
+    playoff = true;
+    const sn = ['', 'first round', 'second round', 'conference finals', 'Finals'][m.round] ?? 'playoffs';
+    reasons.push({ text: `${m.won ? ta.name : tb.name} won the ${seasonLabel(m.season)} ${sn}, ${Math.max(m.w, m.l)}-${Math.min(m.w, m.l)}`, w: 4 - ago / 5 });
+  }
   for (const s of league.playoffs) {
     if (!([s.high, s.low].includes(a) && [s.high, s.low].includes(b)) || s.winner === undefined) continue;
     const sn = seriesName(s.id);
@@ -1103,8 +1190,20 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       league.schedule.filter((x) => !x.played && x.type === 'regular' && (x.home === tid || x.away === tid) && pred(x)).sort((a, b) => a.day - b.day || a.gid - b.gid)[0];
     if (!played.length && firstUnplayed(() => true)?.gid === g.gid)
       add({ tag: g.day === 0 ? 'Opening night' : 'Season opener', line: `The ${seasonLabel(league.season)} season starts ${at}`, weight: 3 }, 2);
-    else if (home && !played.some((r) => r.home.tid === tid) && firstUnplayed((x) => x.home === tid)?.gid === g.gid)
-      add({ tag: 'Home opener', line: `The first game ${at} this season`, weight: 2 }, 6);
+    else if (home && !played.some((r) => r.home.tid === tid) && firstUnplayed((x) => x.home === tid)?.gid === g.gid) {
+      // the numbers retired last summer go up before it (see media/legends.ts)
+      const up = (me.retired ?? []).filter((r) => r.season === league.season - 1);
+      if (up.length)
+        add(
+          {
+            tag: 'Banner night',
+            line: `${andList(up.map((r) => `No. ${r.jersey} for ${league.players[r.pid] ? playerName(league.players[r.pid]) : r.name}`))} goes up before tip-off`,
+            weight: 2,
+          },
+          5,
+        );
+      else add({ tag: 'Home opener', line: `The first game ${at} this season`, weight: 2 }, 6);
+    }
     if (g.day === christmasDay(league.season)) add({ tag: 'Christmas Day', line: `One of the league's Christmas games, ${at}`, weight: 2 }, 1);
     if (g.cup === 'group') add({ tag: 'NBA Cup', line: 'A group game: the best in each group go to the knockouts', weight: 1 }, 20);
   }
@@ -1138,6 +1237,9 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
         if (!met) add({ tag: 'Old team', line: `Your first game against the ${them.name} since you left them`, weight: 2 }, 6);
       }
     }
+    // a night these two remember on this date, a round number of years ago
+    const ann = anniversaryOf(league, g);
+    if (ann) add({ tag: 'Anniversary', line: stripStop(ann.line), weight: 1 }, 13);
     const ms = st.milestone[0];
     // (the marks that make the league's news are a big night; the round thousands between, a little extra)
     const mark = ms ? /-(pts|reb|ast)-(\d+)$/.exec(ms.id) : null;

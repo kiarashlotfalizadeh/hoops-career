@@ -731,33 +731,29 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     });
   }
 
-  // star performances (and whether the user's team played a Star plan tonight, whatever its saved tactics say)
+  // star performances (and whether the user's team played a Star plan tonight, whatever its saved tactics
+  // say). Not at a break: a quarter's points on pace for 50 is a few shots falling, its "points of the
+  // margin" are made up (the points over 22, halved) and they'd count again in the luck line beside it,
+  // and a double for it answers noise (the bench makes no call on a hot scorer for the same reason);
+  // the break's story already says who's carrying each side
   const starPlanPlayed = (res.impacts ?? []).some((im) => im.t === userSide && im.key === 'star_double:d');
   for (const [side, box, sign] of [
     [ut, u, 1],
     [ot, o, -1],
   ] as const) {
     const star = [...box.players].sort((a, b) => b.pts - a.pts)[0];
-    // 35 in a full game; at a break, the same pace (and never fewer than 8)
-    if (star && star.pts >= Math.max(8, 35 * played)) {
+    // 35 in a full game
+    if (!opts.partial && star && star.pts >= Math.max(8, 35 * played)) {
       factors.push({
-        title: opts.partial
-          ? `${star.name} has ${star.pts} points so far (${madeAtt(star.fgm, star.fga)} FG).`
-          : `${star.name} erupted for ${star.pts} points (${madeAtt(star.fgm, star.fga)} FG).`,
-        // (no pace to be on once regulation is played)
-        detail:
-          opts.partial && played < 1
-            ? `On pace for ${Math.round(star.pts / played)}.`
-            : `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
+        title: `${star.name} erupted for ${star.pts} points (${madeAtt(star.fgm, star.fga)} FG).`,
+        detail: `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
         pts: sign * (star.pts - 22 * played) * 0.5,
         category: 'stars',
         topic: `star-${side.tid}`,
         // (none when a double was played tonight, saved, in the plan or called live: the engine tagged it)
         advice:
           sign < 0 && tactics.defense.starPlan === 'none' && !starPlanPlayed
-            ? opts.partial
-              ? 'Put your best perimeter defender on him (Matchups), or double him if he can’t pass out of it (Star plan).'
-              : 'Next time put your best perimeter defender on him (Matchups), or double him if he can’t pass out of it (Star plan).'
+            ? 'Next time put your best perimeter defender on him (Matchups), or double him if he can’t pass out of it (Star plan).'
             : undefined,
       });
     }

@@ -521,7 +521,7 @@ describe('two seasons of a fictional league', () => {
       expect(league.news.filter((n) => n.text.startsWith('Around the league')).every((n) => n.day >= league.day - 15)).toBe(true);
       expect(JSON.stringify(m).length).toBeLessThan(30_000);
       // a season of injuries doesn't push the Cup out of the news
-      expect(league.news.some((n) => n.season === league.season && n.text.includes('win the NBA Cup'))).toBe(true);
+      expect(league.news.some((n) => n.season === league.season && (n.head ?? n.text).includes('win the NBA Cup'))).toBe(true);
     }
 
     // the user's games make the front page on a handful of nights of a fictional league's regular season

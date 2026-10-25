@@ -95,6 +95,23 @@ describe('player development', () => {
       expect(Math.min(...drops)).toBeGreaterThanOrEqual(1);
     }
 
+    // the shot holds longest while the volume goes: a summer at 35 takes much less off a shooter's three-point
+    // rating than off his mid-range (half, before the league's anchor gives some back to both), and the veterans
+    // get to the rim less and create less of their own (by 7% and 14% here)
+    {
+      const c = structuredClone(l);
+      const vets = ps.filter((p) => p.tend?.create !== undefined && p.ratings.tp > 70);
+      expect(vets.length).toBeGreaterThan(20);
+      for (const p of vets) c.players[p.pid].bornYear = c.season - 35;
+      annualProgression(c, new Rng(11));
+      const mean = (f: (before: (typeof ps)[number], after: (typeof ps)[number]) => number) => vets.reduce((a, p) => a + f(p, c.players[p.pid]), 0) / vets.length;
+      const tp = mean((p, q) => p.ratings.tp - q.ratings.tp);
+      const mid = mean((p, q) => p.ratings.mid - q.ratings.mid);
+      expect(tp).toBeLessThan(mid * 0.75);
+      expect(mean((p, q) => q.tend!.drive / p.tend!.drive)).toBeLessThan(0.95);
+      expect(mean((p, q) => q.tend!.create! / p.tend!.create!)).toBeLessThan(0.97);
+    }
+
     // the hidden development arc is the same every summer for a player in a league, differs between leagues, and moves a young player's course
     {
       const p = Object.values(l.players).find((x) => x.tid >= 0)!;

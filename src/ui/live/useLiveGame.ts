@@ -34,6 +34,7 @@ import { otherGames } from './scoreboard';
 import type { SkipTo } from './skip';
 import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Status } from './session';
 import { stakesOf, useAtmosphere } from './useAtmosphere';
+import { measureTonight } from './tonight';
 import type { AtmoCtx } from './atmosphere';
 import type { FeedRow } from './Feed';
 
@@ -489,6 +490,8 @@ export function useLiveGame() {
       // throws, the league goes back to before it rather than keep a game recorded on a day that never ended
       if (!act('Recording the game', (l) => void lg.commit(l))) return leave();
       clearLive();
+      // what the night's moves were worth: measured in the worker now, kept on the result for its report
+      measureTonight(lg);
     }
     // the box score shows the final numbers
     viewRef.current = snapshot(lg.sim, lg.logs.length);
@@ -876,10 +879,11 @@ const lastId = (q: number) => `last-${q}`;
 /**
  * The calls the drawn game `v` stops for, the biggest first, and only in a close game (closeGame: a
  * blowout never stops): the last possession, your ball (the play is yours to call, the staff calls
- * none); then one of your five on five fouls from the fourth quarter on, or one of your closers below
- * the energy your staff subs at in crunch time, only when the staff won't make that call for you (in
- * crunch time it stops subbing for fouls and legs, and it never does when you make the subs), and not
- * once you've dismissed the alert for it.
+ * none); then, when you make the subs, one of your five on five fouls from the fourth quarter on, or
+ * one of your closers below the energy your staff subs at in crunch time, and not once you've
+ * dismissed the alert for it. With the staff making the subs there's no stop for either: in crunch
+ * time it plays through fouls and legs, and sitting a five-foul player or a gassed closer there cost
+ * points of win chance where it was measured (callWorth.ts).
  */
 export function stopCalls(v: Drawn, lg: LiveGame, names: (pid: number) => string, dismissed: string[]): StopCall[] {
   if (!closeGame(v, lg.edge)) return [];
@@ -892,7 +896,7 @@ export function stopCalls(v: Drawn, lg: LiveGame, names: (pid: number) => string
   }
   const t = lg.sim.T[side];
   const crunch = crunchTime(v);
-  if (!lg.manualSubs && !crunch) return out;
+  if (!lg.manualSubs) return out;
   // the closing five: the rotation's, else the five the staff plans most minutes for
   const set = t.team.rotation.closers;
   const closers = new Set(

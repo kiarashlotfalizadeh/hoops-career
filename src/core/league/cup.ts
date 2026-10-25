@@ -445,11 +445,14 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
   t.hype = Math.min(1, t.hype + 0.03);
   const score = `${Math.max(final.highPts!, final.lowPts!)}-${Math.min(final.highPts!, final.lowPts!)}`;
   const mvpName = cup.mvp !== undefined ? playerName(league.players[cup.mvp]) : '—';
+  // (the league's story of the night: the user's own final is his game's story too)
   addNews(league, {
     kind: 'award',
-    text: `🏆 The ${teamName(t)} win the NBA Cup, beating the ${teamName(league.teams[runnerUp])} ${score} in the championship. Cup MVP: ${mvpName}.`,
+    head: `The ${t.name} win the NBA Cup`,
+    text: `They beat the ${teamName(league.teams[runnerUp])} ${score} in the championship in Las Vegas. Cup MVP: ${mvpName}.`,
     tids: [champ, runnerUp],
     pids: cup.mvp !== undefined ? [cup.mvp] : [],
+    weight: 2,
   });
   if (champ === league.userTid) {
     addInbox(league, {

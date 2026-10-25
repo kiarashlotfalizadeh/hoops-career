@@ -9,9 +9,9 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import { GRACE, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
+import { GRACE, seasonWeight, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
-import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, deeperText } from '../../core/league/books';
+import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
   FLOOR_GRADE,
@@ -221,7 +221,12 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
   const done = isOff(league);
   const left = done ? js.grace - 1 : js.grace;
   const graceSaid = !js.off && left > 0 && (js.heat === 'warm' || js.heat === 'hot');
-  const graceText = left > 0 ? ` · he can't fire you ${left === 1 ? (done ? 'next season' : 'this season') : `for ${done ? 'the next ' : ''}${left} seasons`}` : ' · no grace left';
+  // (a new career's first season sets the standing outright: the grace isn't a free season, see seasonWeight)
+  const sets = !done && seasonWeight(league) >= 1;
+  const graceText =
+    left > 0
+      ? ` · he can't fire you ${left === 1 ? (done ? 'next season' : 'this season') : `for ${done ? 'the next ' : ''}${left} seasons`}${sets ? ', but this one sets your standing' : ''}`
+      : ' · no grace left';
   const tenure = league.fired
     ? null
     : seasonsIn < 1
@@ -339,20 +344,22 @@ const redOrBlack = (x: number) => `${money(Math.abs(x))} in the ${x < 0 ? 'red' 
 /**
  * The books in the red: the step he has taken, what it means, and the one figure he judges: where
  * the regular season's books close (projected in season, the close itself in the postseason, next
- * season's between seasons).
+ * season's between seasons), the luxury tax he signed off on not counted against the coach (see
+ * sanctionedTax).
  */
 function BooksCard({ league }: { league: League }) {
   const b = booksOf(league)!;
-  const p = seasonEndCash(league, league.userTid);
+  const o = booksOutlook(league);
+  const left = seasonEndCash(league, league.userTid).left;
   const between = isOff(league);
   const closed = b.close ?? league.teams[league.userTid].cash;
-  const tax = p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : '';
+  const tax = o.tax > 0 ? `, after a ${money(o.tax)} luxury tax${o.sanctioned > 0 ? ` (the ${money(o.sanctioned)} he signed off on doesn't count against you)` : ''}` : '';
   const proj =
-    p.left === 0
-      ? `The regular season's books closed ${redOrBlack(p.end)}${tax}: the review reads that, not the playoff gates.`
+    left === 0 && !between
+      ? `The regular season's books closed ${redOrBlack(o.judged)}${tax}: the review reads that, not the playoff gates.`
       : between
-        ? `Next season's books project ${redOrBlack(p.end)}${tax}.`
-        : `Projected when the regular season's books close: ${redOrBlack(p.end)}${tax}.`;
+        ? `Next season's books project ${redOrBlack(o.judged)}${tax}.`
+        : `Projected when the regular season's books close: ${redOrBlack(o.judged)}${tax}.`;
   // what closing deeper in the red brings, as the review will read it (the final warning, or past the debt limit the sack)
   const deeper = deeperText(league, between);
   return (
@@ -362,11 +369,11 @@ function BooksCard({ league }: { league: League }) {
         <span className="over grow">The books</span>
         <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
       </div>
-      <h2>{b.stage === 'warning' && b.close === undefined ? `${money(-Math.min(0, p.end))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
+      <h2>{b.stage === 'warning' && b.close === undefined ? `${money(-Math.min(0, o.judged))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
       <div className="small dim2">
         {b.stage === 'warning'
           ? b.close === undefined
-            ? "Where the regular season's books are heading, luxury tax included; playoff money doesn't count. Still in the red when they close, and he gives you an ultimatum."
+            ? "Where the regular season's books are heading, luxury tax included (bar what he signed off on); playoff money doesn't count. Still in the red when they close, and he gives you an ultimatum."
             : "You inherited this payroll, so it's a warning this time. Still in the red when next season's books close, and he gives you an ultimatum."
           : b.stage === 'ultimatum'
             ? "Back in the black when the next season's books close, or he freezes the budget."

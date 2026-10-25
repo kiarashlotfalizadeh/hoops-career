@@ -19,6 +19,7 @@ import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
 import {
+  forcedPayroll,
   CROWN_GRADE,
   FLOOR_GAMES,
   FLOOR_GRADE,
@@ -294,7 +295,7 @@ describe('two seasons of the real league', () => {
       expect(og.goals[0].title).toMatch(/^Win \d+ games$/);
       for (const g of og.goals)
         expect(g.title).toMatch(
-          /^(Win \d+ games|Reach the play-in|Make the playoffs|Win a playoff round|Reach the conference finals|Reach the Finals|Turn a \$\d+\.\dM profit|Break even|Keep the loss under \$\d+\.\dM|Stay under the luxury tax|Get under the luxury tax|Keep the payroll under \$\d+\.\dM|Play your young players: [\d,]+ minutes for players 23 or under)$/,
+          /^(Win \d+ games|Reach the play-in|Make the playoffs|Win a playoff round|Reach the conference finals|Reach the Finals|Turn a \$\d+\.\dM profit|Break even|Keep the loss under \$\d+\.\dM|Stay under the luxury tax|Get under the luxury tax|Stay under the first apron|Get under the first apron|Add nothing to the payroll you inherited|Keep the payroll under \$\d+\.\dM|Play your young players: [\d,]+ minutes for players 23 or under)$/,
         );
       // he says so, with each goal's weight
       const mail = l.inbox.find((m) => m.subject === 'My goals for this season')!;
@@ -347,9 +348,15 @@ describe('two seasons of the real league', () => {
         else expect(post!.target, t.abbrev).toBe(r <= 8 ? 2 : 1);
         const pay = payroll(l, og.tid);
         if (pay <= line * 0.94) expect(goal(og, 'profit'), t.abbrev).toBeDefined();
-        // the tax line is his limit (a win-now owner's the first apron)
-        else if (ownerPersonality(l, og.tid) === 'win-now' && pay > line) expect(goal(og, 'payroll')!.target, t.abbrev).toBe(CAP_FOR(l).firstApron);
-        else expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({ target: line, title: pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax' });
+        // the tax line is his limit (a win-now owner's the first apron), or the payroll a coach would
+        // inherit past it: add nothing to that
+        else {
+          const own = ownerPersonality(l, og.tid) === 'win-now' && pay > line ? CAP_FOR(l).firstApron : line;
+          const forced = Math.round(forcedPayroll(l, og.tid) / 100) * 100;
+          if (forced > own) expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({ target: forced, line: own, title: 'Add nothing to the payroll you inherited' });
+          else if (own > line) expect(goal(og, 'payroll')!.target, t.abbrev).toBe(own);
+          else expect(goal(og, 'payroll')!, t.abbrev).toMatchObject({ target: line, title: pay <= line ? 'Stay under the luxury tax' : 'Get under the luxury tax' });
+        }
         // the expectation and the target agree, but for the owner's nudge of a win or two, the floor
         // (normal: a .300 pace), and a payroll in the league's top half that raises the bar half-way
         // to what a team paid like it should win

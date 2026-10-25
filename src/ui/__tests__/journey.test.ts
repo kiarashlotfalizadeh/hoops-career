@@ -9,7 +9,8 @@ import { createLeague, defaultSettings } from '../../core/league/create';
 import { curTeamSeason, standardRoster, teamPlayers } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
-import { BIG_SIGNING_OVR, currentMoments, newMoments, pickMoments } from '../moments';
+import { BIG_SIGNING_OVR, WAIT_DAYS, currentMoments, newMoments, pickMoments, scheduleMoments } from '../moments';
+import { emptyBook } from '../../core/league/records';
 import { currentGoals, setOwnerGoals } from '../../core/league/ownerGoals';
 import { ownerEvaluation } from '../../core/league/owner';
 import { takeJob } from '../../core/league/jobs';
@@ -206,6 +207,102 @@ describe('the journey between screens', () => {
       const m = currentMoments(l).filter((x) => x.kind === 'signing');
       expect(m.map((x) => x.pid)).toEqual([star.pid]);
       expect(m[0].sub).toContain('4 years · $30.0M a year');
+    }
+
+    // the season's occasions are moments of their own: his All-Stars (with the weekend's results), a
+    // record his player set, a career mark, a number going up at his home opener, the summer's biggest
+    // farewell, the Cup's knockouts; a story one of them tells isn't a story moment too; and of those
+    // that come out together one shows, the rest that keep waiting for the next sim (not past WAIT_DAYS)
+    {
+      const l = make();
+      l.phase = 'regular';
+      l.day = 40;
+      l.allStarDay = 38;
+      const me = l.userTid;
+      const [a, b] = [...teamPlayers(l, me)].sort((x, y) => y.ovr - x.ovr);
+      const nm = (p: typeof a) => `${p.firstName} ${p.lastName}`;
+      l.awards.push({
+        season: l.season,
+        allNba: [],
+        allDefense: [],
+        allRookie: [],
+        allStars: { E: [a.pid, 99_999], W: [] },
+        allStarGame: { east: 180, west: 170, mvp: { pts: 31, reb: 5, ast: 6 } },
+        allStarMvp: a.pid,
+      });
+      const book = emptyBook(l.season - 1);
+      book.league.reg.players.pts = [[62, a.pid, me, 5, l.season, 30, 777]];
+      l.records = book;
+      l.news.push({
+        id: l.nextMsgId++,
+        season: l.season,
+        day: 31,
+        kind: 'milestone',
+        head: `${nm(b)} reaches 10,000 points`,
+        text: `${nm(b)} (ABC) scored his 10,000th career point.`,
+        body: 'He got there in his 600th game, in his 8th season.',
+        tids: [me],
+        pids: [b.pid],
+        weight: 3,
+      });
+      l.teams[me].retired = [{ jersey: '7', pid: b.pid, name: nm(b), season: l.season - 1 }];
+      l.games.push({ ...game(l, me, 3, 101, 99), type: 'regular', day: 2 } as GameResult);
+      const gone = Object.values(l.players).find((p) => p.tid === 5)!;
+      gone.tid = -3;
+      gone.retiredSeason = l.season;
+      l.news.push({
+        id: l.nextMsgId++,
+        season: l.season,
+        day: 39,
+        kind: 'retire',
+        head: `${nm(gone)} calls it a career`,
+        text: '20,000 points · Hall of Fame',
+        tids: [5],
+        pids: [gone.pid],
+        weight: 3,
+      });
+      l.cup = {
+        season: l.season,
+        groups: [],
+        nights: [],
+        qfDays: [41, 42],
+        sfDay: 45,
+        finalDay: 48,
+        seeds: { E: [me, 1, 2, 3], W: [15, 16, 17, 18] },
+        bracket: [{ round: 'qf', conf: 'E', high: me, low: 3, highSeed: 1, lowSeed: 4, gid: 1, day: 41 }],
+      };
+      const m = currentMoments(l);
+      const one = (kind: string) => m.filter((x) => x.kind === kind);
+      expect(one('allStar')[0]).toMatchObject({ title: 'All-Star', pid: a.pid });
+      expect(one('allStar')[0].sub).toMatch(new RegExp(`^${nm(a)} makes the All-Star team`));
+      expect(one('allStar')[0].lines![0]).toBe(`The game: East 180-170 · MVP ${nm(a)}, 31 points`);
+      expect(one('record')[0]).toMatchObject({ title: '62 points', pid: a.pid, link: '/game/777' });
+      expect(one('record')[0].sub).toMatch(/the most in a game since/);
+      expect(one('milestone')[0]).toMatchObject({ title: '10,000 points', sub: `${nm(b)}. He got there in his 600th game, in his 8th season.` });
+      expect(one('jersey')[0]).toMatchObject({ title: 'No. 7', pid: b.pid });
+      expect(one('farewell')[0]).toMatchObject({ title: nm(gone), pid: gone.pid });
+      expect(one('cup')[0]).toMatchObject({ title: 'Into the knockouts' });
+      // (the career mark's and the farewell's news items are theirs, not a front-page story's)
+      expect(one('story')).toEqual([]);
+      // knocked out of the Cup: that's a moment too
+      l.cup.bracket[0] = { ...l.cup.bracket[0], winner: 3, highPts: 99, lowPts: 104 };
+      expect(currentMoments(l).find((x) => x.key === `cup-out-${l.season}`)).toMatchObject({
+        title: 'Out of the Cup',
+        sub: `104-99 to the ${l.teams[3].name} in the quarterfinal.`,
+      });
+      // one shows, the ones that keep wait; a story doesn't, and nothing waits past WAIT_DAYS
+      const story = { key: 'st', kind: 'story' as const, over: '', title: '', sub: '', rank: 9, season: l.season, day: 40 };
+      const at = { season: l.season, day: 40 };
+      const first = scheduleMoments([], [...m, story], [], at);
+      expect(first.show.map((x) => x.kind)).toEqual(['cup']);
+      expect(first.wait.length).toBe(3);
+      expect(first.wait.some((x) => x.kind === 'story')).toBe(false);
+      const next = scheduleMoments([], [], first.wait, at);
+      expect(next.show).toEqual([first.wait[0]]);
+      expect(scheduleMoments([], [], first.wait, { season: l.season, day: 40 + WAIT_DAYS + 20 }).show).toEqual([]);
+      // beside the job's own, a night's or a player's moment waits
+      const verdict = { key: 'v', kind: 'verdict' as const, over: '', title: '', sub: '' };
+      expect(pickMoments([one('record')[0], verdict]).map((x) => x.kind)).toEqual(['verdict']);
     }
 
     // the job's moments, for every team: the owner's ultimatum, his verdict on a losing season goal by

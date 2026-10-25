@@ -6,6 +6,7 @@ import { contractExp, salaryFor } from '../playerGen';
 import { contractSeason, playerName, rosterMaxNow, standardRoster } from './helpers';
 import { summerRoster, tradeValue } from './contracts';
 import { withHoldsMemo } from './freeAgency';
+import { neutralBalance } from './tradePackages';
 import { money, moneyExact } from '../format';
 import {
   TradeOffer,
@@ -88,9 +89,13 @@ function theirFiller(league: League, o: TradeOffer, gap: number): number[] | nul
  * the most valuable one (a full roster takes a player). See salaryMatchGap for the salary A would
  * need to send. The user's untouchables are never asked for, nor anyone in `keep`. With `cash`, a
  * gap that a little of A's cash covers (within what both teams can still move this season) is
- * closed with cash before any pick or player is added.
+ * closed with cash before any pick or player is added. With `best` (the user asking, on demand),
+ * up to WORK_FILLERS ways of matching the salary are each topped up and the deal that costs A the
+ * least in neutral value is the answer: the least valuable filler alone often meant a star as the
+ * only salary that matched and a 2× overpay (Trae Young for Kawhi Leonard), or a bad contract the
+ * AI then wanted two firsts to take.
  */
-export function makeItWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
+export function makeItWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
   return withHoldsMemo(() => findWork(league, offer, keep, opts));
 }
 
@@ -107,7 +112,10 @@ function cashToClose(league: League, o: TradeOffer, need: number): number | null
   return per > 0 && total <= room ? total : null;
 }
 
-function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean } = {}): WorkResult {
+/** Ways of matching the salary "what would make this work?" tries when asked for the best (see makeItWork). */
+const WORK_FILLERS = 3;
+
+function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [], opts: { cash?: boolean; best?: boolean } = {}): WorkResult {
   let cur = withA(offer, []);
   const ai = cur.b.tid;
   if (!canMakeWork(league, cur)) return { offer: null, why: 'value' };
@@ -121,21 +129,48 @@ function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [
   const gapA = salaryMatchGap(league, cur, 'a');
   const legal = (o: TradeOffer) => validateTrade(league, o).length === 0;
   const off = new Set([...keep, ...(cur.a.tid === league.userTid ? (league.untouchable ?? []) : [])]);
-  const spare = () =>
-    standardRoster(league, cur.a.tid)
-      .filter((p) => !cur.a.pids.includes(p.pid) && !off.has(p.pid) && !untradeableReason(league, p))
+  const spare = (o: TradeOffer) =>
+    standardRoster(league, o.a.tid)
+      .filter((p) => !o.a.pids.includes(p.pid) && !off.has(p.pid) && !untradeableReason(league, p))
       .map((p) => ({ p, v: tradeValue(league, p, 'retool'), sal: capSalary(league, p.pid) }));
   if (gapA > 0) {
-    const pool = spare().filter((x) => x.sal > 0);
+    const pool = spare(cur).filter((x) => x.sal > 0);
     const options: { pids: number[]; v: number }[] = [];
     for (let i = 0; i < pool.length; i++) {
       if (pool[i].sal >= gapA) options.push({ pids: [pool[i].p.pid], v: pool[i].v });
       for (let j = i + 1; j < pool.length; j++) if (pool[i].sal + pool[j].sal >= gapA) options.push({ pids: [pool[i].p.pid, pool[j].p.pid], v: pool[i].v + pool[j].v });
     }
-    const fix = options.sort((x, y) => x.v - y.v).find((o) => legal(withA(cur, o.pids)));
+    const sorted = options.sort((x, y) => x.v - y.v);
+    const fix = sorted.find((o) => legal(withA(cur, o.pids)));
     if (!fix) return { offer: null, why: 'salary' };
+    if (opts.best) {
+      // the least valuable filler, the one nearest no value either way, and the next: each topped up,
+      // the one that costs A least in neutral value wins
+      const near = [...sorted].sort((x, y) => Math.abs(x.v) - Math.abs(y.v)).find((o) => o !== fix && legal(withA(cur, o.pids)));
+      const next = sorted.find((o) => o !== fix && o !== near && legal(withA(cur, o.pids)));
+      const tries = [fix, near, next].filter((x): x is { pids: number[]; v: number } => !!x).slice(0, WORK_FILLERS);
+      const done = tries.flatMap((t) => {
+        const r = topUp(league, withA(cur, t.pids), spare, legal, ai, opts);
+        return r.offer ? [r.offer] : [];
+      });
+      if (!done.length) return { offer: null, why: 'value' };
+      return { offer: done.sort((x, y) => neutralBalance(league, y).net - neutralBalance(league, x).net)[0] };
+    }
     cur = withA(cur, fix.pids);
   }
+  return topUp(league, cur, spare, legal, ai, opts);
+}
+
+/** The value top-up of findWork: each round adds the smallest pick or player that covers what's missing, else the biggest (see makeItWork). */
+function topUp(
+  league: League,
+  start: TradeOffer,
+  spare: (o: TradeOffer) => { p: Player; v: number; sal: number }[],
+  legal: (o: TradeOffer) => boolean,
+  ai: number,
+  opts: { cash?: boolean },
+): WorkResult {
+  let cur = start;
   for (let iter = 0; iter < 6; iter++) {
     const ev = evaluateTrade(league, cur);
     if (ev.accept) return { offer: cur };
@@ -150,7 +185,7 @@ function findWork(league: League, offer: TradeOffer, keep: readonly number[] = [
     const picks = league.draftPicks
       .filter((d) => d.tid === cur.a.tid && !cur.a.dpids.includes(d.dpid) && legal(withA(cur, [], [d.dpid])))
       .map((d) => ({ next: withA(cur, [], [d.dpid]), v: pickValueFor(league, d, ai, true) }));
-    const players = spare()
+    const players = spare(cur)
       .map(({ p }) => ({ next: withA(cur, [p.pid]), v: playerValueFor(league, p, ai, true) }))
       .filter((c) => c.v > 0 && legal(c.next));
     // picks and players together: a pile of picks alone often can't reach a good player's value

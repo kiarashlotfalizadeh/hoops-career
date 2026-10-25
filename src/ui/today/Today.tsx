@@ -1,6 +1,7 @@
 // Today: the front page of your season, calm enough to read at a glance. One hero: on game day the
-// next game, otherwise the lead (your last result while it's fresh, or the top story about your team)
-// or, outside the season's games, where the season stands. Then a few blocks in order of use: what
+// next game, over the All-Star break the weekend, otherwise the lead (your last result while it's
+// fresh, or the top story about your team); from the night your season is over until the draft, the
+// season's end as a ceremony; or, outside the season's games, where the season stands. Then a few blocks in order of use: what
 // needs you (the staff's calls first and always on the page, then the decisions waiting, AI teams'
 // offers as one row, the trade deadline, mail that needs you, once a season a backup: see needs.ts)
 // in one list; from your staff (the owner when the seat is warm, the staff's top advice); the next
@@ -20,7 +21,8 @@ import { GlossarySheet } from '../components/Glossary';
 import { InstallRow } from '../components/InstallRow';
 import { Section, Sheet } from '../components/ui';
 import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
-import { DigestRow, Headlines, LeadStory, YourSeason, useLead } from './FrontPage';
+import { AllStarHero, DigestRow, Headlines, LeadStory, SeasonEndHero, YourSeason, useLead } from './FrontPage';
+import { allStarPhase, seasonOver } from './occasions';
 import { PracticeRow, PracticeSheet } from './Practice';
 import { MessageSheet, markRead } from './messages';
 import { useNeedsYou } from './needs';
@@ -84,11 +86,19 @@ export default function Today() {
   const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
   const moreAdvice = full.filter((c) => !onToday.has(c.id)).length;
 
-  // the hero: the game on game day; between games the lead (or the next game); outside the season's
-  // games, where the season stands (the lead goes to the news)
-  const leadIsHero = !!g && !gameDay && !!lead;
+  // the hero: the game on game day; over the All-Star break, the weekend; between games the lead (or
+  // the next game); from the night his season is over until the draft, the season's end as a
+  // ceremony; otherwise, outside the season's games, where the season stands (the lead goes to the news)
+  const allStar = !!g && !gameDay && !!allStarPhase(league);
+  const leadIsHero = !!g && !gameDay && !!lead && !allStar;
   const hero = !g ? (
-    <PhaseCard league={league} linked={items.map((i) => i.to)} />
+    seasonOver(league) ? (
+      <SeasonEndHero league={league} />
+    ) : (
+      <PhaseCard league={league} linked={items.map((i) => i.to)} />
+    )
+  ) : allStar ? (
+    <AllStarHero league={league} />
   ) : leadIsHero ? (
     <LeadStory league={league} lead={lead} />
   ) : (
@@ -162,8 +172,8 @@ export default function Today() {
         </Section>
       )}
 
-      {/* the next game, when the lead has the top */}
-      {leadIsHero && g && (
+      {/* the next game, when the lead or the weekend has the top */}
+      {(leadIsHero || allStar) && g && (
         <Section title="Next game">
           <NextGameRow league={league} g={g} />
         </Section>

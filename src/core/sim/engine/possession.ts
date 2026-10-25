@@ -108,7 +108,8 @@ export const possessionMethods = {
     // ---- full court press
     let pressBroken = false;
     let pressed = 0;
-    const pressOn = def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'));
+    // (a team up big calls off its press, whatever the quarter: K.garbage.pressLead)
+    const pressOn = (def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'))) && def.score - off.score < K.garbage.pressLead;
     if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start' || outOfTimeout) && !late.hold) {
       const before = this.clock;
       const res = this.press(off, def);
@@ -131,6 +132,9 @@ export const possessionMethods = {
     transP *= leak;
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
+    // (nor does it push the ball: it walks it up, see K.garbage)
+    const easing = this.eases(off);
+    if (easing) transP *= K.garbage.run;
     if (late.hurry) transP *= 1.5;
     // a called play is walked up and run in the half court, and so is the inbounds play after a foul to
     // give or a timeout
@@ -161,6 +165,7 @@ export const possessionMethods = {
     // (a press beaten is the ball brought up: the time it took was the walk-up)
     if (pressed) setup = Math.max(2, setup - pressed);
     if (late.milk) setup += 6;
+    else if (easing) setup += K.garbage.slow;
     if (late.hold) {
       // run the clock down for a last shot. At the end of a game, start the action with time for it to
       // work: tied, with eight to ten seconds left (the shot goes up with a few to spare, a miss can
@@ -270,6 +275,9 @@ export const possessionMethods = {
         }
       }
       this.play = play;
+      // (a set run for a shooter is the staff getting him his look: he takes it whatever his share of
+      // the threes tonight, see threeDamp; the damp is back at the next shot)
+      if (play) play.cast.star.t3 = play.cast.star.t3o;
       const res = this.runAction(action, off, def, ctxOpen, ballFrom, late, forced || buzzer);
       this.calledActor = null;
       this.play = null;
@@ -320,6 +328,8 @@ export const possessionMethods = {
       three *= 1.8;
       mid *= 0.5;
     } else if (late.tie) three *= 0.6;
+    // (a team easing off a blowout hunts fewer threes)
+    if (this.eases(off)) three *= K.garbage.three;
     return { three, mid, rim: late.need3 ? rim * two : rim, two };
   },
 

@@ -5,6 +5,18 @@ import { ROLE_META } from '../../core/ratings';
 import { Chips, Help, More, Statline, Tag, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
 import { fitPlayers } from './plays';
+import { pendingLive } from '../../state/live';
+import { CHOICE_GAMES } from '../../state/liveWorth';
+import { signed } from '../stats';
+import { measuresSubs, useSubWorth, type PlayReading } from './usePlayWorth';
+
+/** A sub's reading against keeping him in, on its chip: its win chance, or even inside the noise. */
+function SubWorth({ r }: { r: PlayReading | null | undefined }) {
+  if (r === undefined) return null;
+  if (r === null) return <span className="lv-ps-sub-w dim">…</span>;
+  if (!r.clear) return <span className="lv-ps-sub-w dim">even</span>;
+  return <span className={`lv-ps-sub-w num ${r.win > 0 ? 'good' : 'bad'}`}>{signed(r.win * 100, 0)}%</span>;
+}
 
 /** A player's night so far, at the top of his sheet (yours or theirs). */
 export function PlayerLine({ p }: { p: DrawnPlayer }) {
@@ -42,9 +54,10 @@ export interface SubOptions {
 
 /**
  * One of your players: his line tonight, the sub (the bench players who can come in for him, the
- * staff's pick first, or the five he can come in for), and his orders: shot freedom, role, crunch-time
- * go-to and who he guards. Every order goes through your tactics, so the game's journal keeps it, and
- * "Keep changes after this game" treats it like any other change (tonight's matchups excepted).
+ * staff's pick first, or the five he can come in for; in crunch time each sub for him measured against
+ * keeping him in: useSubWorth), and his orders: shot freedom, role, crunch-time go-to and who he
+ * guards. Every order goes through your tactics, so the game's journal keeps it, and "Keep changes
+ * after this game" treats it like any other change (tonight's matchups excepted).
  */
 export function MyPlayer({
   league,
@@ -78,6 +91,11 @@ export function MyPlayer({
   const role: OffRole | undefined = fp?.role;
   const goTo = tactics.manage.goTo === pid;
   const assigned = Object.entries(tactics.defense.matchups).find(([, d]) => d === pid)?.[0];
+  // (in crunch time: each sub against keeping him in, from where the game is)
+  const lg = pendingLive(league);
+  const ins = subs.on && !subs.out ? subs.options.map((o) => o.pid) : [];
+  const readings = useSubWorth(lg, pid, ins, ins.length > 0);
+  const measured = ins.length > 0 && measuresSubs(lg);
   return (
     <div className="lv-ps">
       <PlayerLine p={p} />
@@ -94,16 +112,18 @@ export function MyPlayer({
           {subs.options.length ? (
             <>
               <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
-                {subs.options.map((o) => (
+                {subs.options.map((o, i) => (
                   <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
                     {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
                     {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
+                    {measured && <SubWorth r={readings ? readings[i] : null} />}
                     {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
                   </button>
                 ))}
               </div>
               <div className="tiny dim" aria-hidden="true">
                 Energy{subs.on ? '' : ' and fouls'}
+                {measured && ` · to win, against keeping him in (the rest of the game played ${CHOICE_GAMES} times each)`}
                 {subs.options.some((o) => o.staff) && (
                   <>
                     {' '}

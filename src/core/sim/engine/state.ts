@@ -128,7 +128,9 @@ export interface SP {
   big: boolean;
   /** Tendencies: usage, three, drive, pass multipliers. */
   tu: number;
+  /** His three-point tendency tonight: his own (t3o), less as he takes more than his share of the threes (see threeDamp). */
   t3: number;
+  t3o: number;
   td: number;
   tp: number;
   /** hidden event tendencies: blocks, steals, offensive / defensive boards, turnovers */
@@ -178,6 +180,14 @@ export interface ST {
   run: number; // unanswered points
   /** The deep bench is finishing a blowout (stays on until the game is back within reach). */
   garbage: boolean;
+  /**
+   * This coach's own read of a blowout tonight (see K.garbage, drawn from a stream of its own): his
+   * lead line's multiplier, how many of his regular reserves sit out the bench's minutes, and the
+   * seconds left in the fourth quarter when the deepest end of the bench takes over.
+   */
+  gLine: number;
+  gDepth: number;
+  gLate: number;
   /** Players the staff sat for a breather late in a decided game (see desiredLineup): they stay sat unless it gets close again. */
   restedLate: Set<number>;
   // caches for current lineup

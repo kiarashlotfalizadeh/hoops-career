@@ -3,6 +3,8 @@ import { composites } from '../ratings';
 import { playerAge } from '../playerGen';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
+import { seasonLabel } from '../constants';
+import { awardLine } from './media/history';
 
 /** Hollinger's game score, for a box line or a season's totals. */
 export function gameScore(s: Pick<PlayerStats, 'pts' | 'fgm' | 'fga' | 'ftm' | 'fta' | 'orb' | 'drb' | 'ast' | 'stl' | 'blk' | 'tov' | 'pf'>): number {
@@ -235,13 +237,7 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   allNba.forEach((team, i) => team.forEach((pid) => give(pid, `All-NBA ${['1st', '2nd', '3rd'][i]} Team`)));
   allDef.forEach((team, i) => team.forEach((pid) => give(pid, `All-Defensive ${['1st', '2nd'][i]} Team`)));
   allRookie.forEach((pid, i) => give(pid, `All-Rookie ${i < 5 ? '1st' : '2nd'} Team`));
-  const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
-  addNews(league, {
-    kind: 'award',
-    text: `Awards: MVP ${nm(awards.mvp)} · DPOY ${nm(awards.dpoy)} · ROY ${nm(awards.roy)} · 6MOY ${nm(awards.smoy)} · MIP ${nm(awards.mip)} · COY ${coy ? `${awards.coyCoach} (${coy.abbrev})` : '—'}.`,
-    tids: coy ? [coy.tid] : [],
-    pids: [awards.mvp, awards.dpoy, awards.roy, awards.smoy, awards.mip].filter((x): x is number => x !== undefined),
-  });
+  awardsStory(league, awards, coy?.abbrev);
   // "Name (MVP, All-NBA 1st Team)" for each of the user's winners
   const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])} (${types.join(', ')})`);
   if (coy?.tid === league.userTid) mine.push('Coach of the Year (you)');
@@ -257,6 +253,51 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   return awards;
 }
 
+/** "28.4 points, 11.2 rebounds and 8.1 assists a game": a season's line, for an award's story. */
+function seasonLine(p: Player, season: number): string {
+  const s = seasonTotals(p, season, false);
+  if (!s?.gp) return '';
+  const pg = (x: number) => (x / s.gp).toFixed(1);
+  return `${pg(s.pts)} points, ${pg(s.orb + s.drb)} rebounds and ${pg(s.ast)} assists a game`;
+}
+
+/**
+ * The season's awards as the front page tells them: the MVP in the headline (what it is for him:
+ * "his second straight", see awardLine), the rest of the winners under it, and a line each in the
+ * body.
+ */
+function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
+  const season = aw.season;
+  const nm = (pid?: number) => (pid !== undefined ? playerName(league.players[pid]) : '—');
+  const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
+  const again = mvp ? awardLine(league, mvp, 'MVP', season) : null;
+  const team = (p: Player) => league.teams[p.tid]?.name;
+  const head = mvp ? (again ? `${playerName(mvp)} wins ${again} MVP` : `${playerName(mvp)} is the MVP`) : `The ${seasonLabel(season)} awards`;
+  const line = (label: string, type: string, pid?: number) => {
+    const p = pid !== undefined ? league.players[pid] : undefined;
+    if (!p) return '';
+    const what = awardLine(league, p, type, season);
+    return `${label}: ${playerName(p)}${team(p) ? ` (${team(p)})` : ''}${what && what !== 'his first' ? `, ${what}` : ''}. ${seasonLine(p, season)}.`.replace(/\. \.$/, '.');
+  };
+  addNews(league, {
+    kind: 'award',
+    head,
+    text: `DPOY ${nm(aw.dpoy)} · ROY ${nm(aw.roy)} · 6MOY ${nm(aw.smoy)} · MIP ${nm(aw.mip)} · COY ${aw.coyCoach ? `${aw.coyCoach}${coyAbbrev ? ` (${coyAbbrev})` : ''}` : '—'}.`,
+    body: [
+      line('Most Valuable Player', 'MVP', aw.mvp),
+      line('Defensive Player of the Year', 'Defensive Player of the Year', aw.dpoy),
+      line('Rookie of the Year', 'Rookie of the Year', aw.roy),
+      line('Sixth Man of the Year', 'Sixth Man of the Year', aw.smoy),
+      line('Most Improved Player', 'Most Improved Player', aw.mip),
+    ]
+      .filter(Boolean)
+      .join('\n\n'),
+    tids: [...new Set([mvp?.tid, aw.coy].filter((t): t is number => t !== undefined && t >= 0))],
+    pids: [aw.mvp, aw.dpoy, aw.roy, aw.smoy, aw.mip].filter((x): x is number => x !== undefined),
+    weight: 3,
+  });
+}
+
 /** A knock this short heals over the All-Star break: the player keeps his place and plays. */
 const ALL_STAR_KNOCK_GAMES = 2;
 
@@ -269,9 +310,16 @@ const ALL_STAR_VOTE_GAMES = 7;
 /** Already out when the coaches voted and not back for the game: they pass him over (one hurt since is picked, then replaced). */
 const outAtTheVote = (p: Player) => missesAllStarGame(p) && p.injury!.gamesTotal - p.injury!.gamesRemaining >= ALL_STAR_VOTE_GAMES;
 
-export function selectAllStars(league: League): SeasonAwards['allStars'] {
+/**
+ * The All-Stars as the vote stands today, each conference's twelve in order and the next few after
+ * them (`next`), with those hurt since the vote replaced (`replacements`): what selectAllStars names
+ * on the day, and before it the staff's read of who is in line (Today's All-Star weekend). Reads the
+ * league, changes nothing.
+ */
+export function allStarVote(league: League): { picks: SeasonAwards['allStars']; next: SeasonAwards['allStars']; replacements: { text: string; pid: number }[] } {
   const all = candidates(league).filter((c) => c.gp >= 15 && c.p.tid >= 0 && !outAtTheVote(c.p));
   const out: SeasonAwards['allStars'] = { E: [], W: [] };
+  const next: SeasonAwards['allStars'] = { E: [], W: [] };
   const replacements: { text: string; pid: number }[] = [];
   for (const conf of ['E', 'W'] as const) {
     const pool = all.filter((c) => league.teams[c.p.tid]?.conf === conf);
@@ -297,7 +345,16 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     const subs = ranked.filter((c) => !chosen.has(c) && !missesAllStarGame(c.p)).slice(0, hurt.length);
     subs.forEach((c, i) => replacements.push({ text: `${playerName(c.p)} replaces the injured ${playerName(hurt[i].p)}`, pid: c.p.pid }));
     out[conf] = [...picks, ...subs].map((c) => c.p.pid);
+    next[conf] = ranked
+      .filter((c) => !chosen.has(c) && !subs.includes(c))
+      .slice(0, 3)
+      .map((c) => c.p.pid);
   }
+  return { picks: out, next, replacements };
+}
+
+export function selectAllStars(league: League): SeasonAwards['allStars'] {
+  const { picks: out, replacements } = allStarVote(league);
   let aw = league.awards.find((a) => a.season === league.season);
   if (!aw) {
     aw = { season: league.season, allNba: [], allDefense: [], allRookie: [], allStars: out };
@@ -310,11 +367,16 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     const names = pids.slice(0, 5).map((pid) => league.players[pid].lastName);
     return pids.length > 5 ? `${names.join(', ')} and ${pids.length - 5} more` : andList(names);
   };
+  // the headline names each conference's first pick, and the user's own when he has one
+  const top = (pids: number[]) => (pids[0] !== undefined ? playerName(league.players[pids[0]]) : '');
+  const myFirst = mine[0] !== undefined ? league.players[mine[0]] : undefined;
   addNews(league, {
     kind: 'award',
-    text: `All-Stars announced. East: ${named(out.E)}. West: ${named(out.W)}.`,
-    tids: [],
+    head: myFirst && ![out.E[0], out.W[0]].includes(myFirst.pid) ? `The All-Stars are in: ${playerName(myFirst)} among them` : `${top(out.E)} and ${top(out.W)} lead the All-Stars`,
+    text: `East: ${named(out.E)}. West: ${named(out.W)}.`,
+    tids: [...new Set(mine.map((pid) => league.players[pid].tid))],
     pids: [...out.E, ...out.W],
+    weight: 2,
   });
   if (replacements.length)
     addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('; ')}.`, tids: [], pids: replacements.map((r) => r.pid) });

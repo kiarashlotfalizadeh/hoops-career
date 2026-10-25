@@ -784,8 +784,11 @@ export function famReadout(league: League, opp?: number, tid = league.userTid): 
   return { overall: sys.overall, off: sys.off, def: sys.def, prep: team.prep ?? 'balanced', risks, learning };
 }
 
-/** Fit points (shapeFits: 10 ≈ a point per 100 possessions) a shape has to beat the one played by for the staff to say so. */
-const SHAPE_EDGE = 15;
+/**
+ * Fit points (shapeFits: 10 is a point a game) a shape has to beat the one played by for the staff to
+ * say so: half a point a game, as a measured change has to reach to read as a gain (WORTH_MIN).
+ */
+const SHAPE_EDGE = 5;
 /** A defensive role fit the staff calls obvious. */
 const ROLE_OBVIOUS = 70;
 
@@ -856,7 +859,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       id: `shape-${best}`,
       tone: 'alert',
       title: `${SHAPE_META[best].label} fits this roster better`,
-      body: `About ${((fits[best] - fits[cur]) / 10).toFixed(1)} points per 100 possessions over the ${SHAPE_META[cur].label} with this rotation: ${SHAPE_META[best].good.charAt(0).toLowerCase()}${SHAPE_META[best].good.slice(1)}.${known < FLUID ? ` We're ${pct(known)} familiar with it, so it takes some practice first.` : ''}`,
+      body: `My read: about ${((fits[best] - fits[cur]) / 10).toFixed(1)} points a game over the ${SHAPE_META[cur].label} with this rotation, once drilled: ${SHAPE_META[best].good.charAt(0).toLowerCase()}${SHAPE_META[best].good.slice(1)}.${known < FLUID ? ` We're ${pct(known)} familiar with it, so it takes some practice first.` : ''} Make the change and I'll measure it on our next games.`,
       link: '/team/tactics',
       fix: { kind: 'patch', patch: { offense: { shape: best } }, label: `Play ${SHAPE_META[best].short}` },
     });

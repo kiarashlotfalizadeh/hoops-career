@@ -1,7 +1,8 @@
 // The style sheet's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
-// roster first, each a row to pick it by with how well the team knows it (what a switch costs) and its fit in a column. Its fit or ⓘ opens one sheet: what
-// it is, who it's for, the fit broken into its parts (on the row's scale), what would raise it, and
-// Use.
+// roster first, each a row to pick it by with how well the team knows it (what a switch costs) and, in a
+// column, the staff's read of what it's worth a game against the one in use (coachAI's fits, calibrated
+// against the engine: the same unit a change is measured in once it's made). Its read or ⓘ opens one
+// sheet: what it is, who it's for, the read broken into its parts, what would raise it, and Use.
 import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -10,13 +11,12 @@ import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics,
 import { famLabel } from '../../core/sim/familiarity';
 import { systemFamiliarity } from '../../core/league/practice';
 import { presetMatches } from '../../core/sim/playbooks';
-import { defPresetFit, defPresetTerms, fitRoster, fitScale, offPresetFit, offPresetTerms, rosterProfile } from '../../core/ai/coachAI';
+import { defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile } from '../../core/ai/coachAI';
 import { rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
 import { Sheet, Tag } from '../components/ui';
-import { FitScore } from './FitScore';
 import { PresetFit } from './PresetFit';
-import { byFit, fitTone } from './fit';
+import { byFit, fitTone, readText, shownFit } from './fit';
 import { famTone } from './formation';
 import '../screens/tactics.css';
 
@@ -32,7 +32,6 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const prof = useMemo(() => rosterProfile(healthy), [healthy]);
   const terms = useMemo(() => (kind === 'off' ? offPresetTerms(prof) : defPresetTerms(prof)), [prof, kind]);
   const fits = useMemo(() => (kind === 'off' ? offPresetFit(prof) : defPresetFit(prof)), [prof, kind]);
-  const shown = useMemo(() => fitScale(fits), [fits]);
   const name = useMemo(() => rosterNames(healthy, { initial: true }), [healthy]);
   const [open, setOpen] = useState<string | null>(null);
   const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits), [kind, fits]);
@@ -69,13 +68,13 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
     <>
       <div className="card flush list wide2 tx-presets">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
-          <span>Best fit for your roster first</span>
-          <span>Fit</span>
+          <span>Best for your roster first</span>
+          <span>Staff&apos;s read, a game</span>
         </div>
         {presets.map((p) => {
           const on = cur === p.id;
           const custom = isCustom(p);
-          const v = shown(p.id);
+          const v = shownFit(p.id, terms[p.id], fits, cur).vs;
           return (
             <div key={p.id} className={`tx-preset ${on ? 'on' : ''}`}>
               <button className="tx-preset-pick" aria-pressed={on} onClick={() => pick(p.id)}>
@@ -98,8 +97,13 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
                   </span>
                 </span>
               </button>
-              <button className="tx-fit" aria-label={`Fit ${v} of 100: why, for ${p.name}`} aria-haspopup="dialog" onClick={() => setOpen(p.id)}>
-                <FitScore v={v} tone={fitTone(v)} />
+              <button
+                className="tx-fit"
+                aria-label={on ? `${p.name} is in use: why` : `The staff's read: ${readText(v)} a game against yours: why, for ${p.name}`}
+                aria-haspopup="dialog"
+                onClick={() => setOpen(p.id)}
+              >
+                <span className={`tx-fitv tx-read ${on ? '' : fitTone(v)}`}>{on ? 'Yours' : readText(v)}</span>
               </button>
               <button className="iconbtn tx-about" aria-label={`About ${p.name}`} aria-haspopup="dialog" onClick={() => setOpen(p.id)}>
                 <Info size={18} />
@@ -117,7 +121,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               <span className="over">Best for</span>
               <span>{sheet.bestFor}</span>
             </div>
-            <PresetFit id={sheet.id} presets={presets} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} kind={kind} />
+            <PresetFit id={sheet.id} cur={cur} presets={presets} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} kind={kind} />
             <button
               className="btn primary block"
               disabled={sheetOn && !sheetCustom}

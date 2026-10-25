@@ -33,6 +33,7 @@ import '../screens/start.css';
 import './office.css';
 import './legacy.css';
 import { money, ordinal, plural } from '../../core/format';
+import { seasonCoachingRead } from '../../core/analysis/debrief';
 
 const pct = (w: number, l: number) => (w + l ? (w / (w + l)).toFixed(3).replace(/^0/, '') : '—');
 
@@ -179,6 +180,8 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
   const series = k.lines.reduce((a, l) => (l.round !== undefined && l.round >= 1 ? [a[0] + l.round - 1, a[1] + (l.round < 5 ? 1 : 0)] : a), [0, 0]);
   const post = lg.post;
   const firstCoached = k.lines[0]?.season;
+  // what his live coaching was worth this season, measured game by game after each final (debrief.ts)
+  const live = useLeagueMemo(() => seasonCoachingRead(league), [league]);
   return (
     <>
       {latest && (
@@ -257,6 +260,18 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
             </div>
             <span className="num bold">{k.best >= 1 ? bestText(k.best) : '—'}</span>
           </div>
+          {live && (
+            <div className="listrow">
+              <Sparkles size={20} className="fo-lc-ic" aria-hidden="true" />
+              <div className="grow fo-min0">
+                <div className="lr-name">Live coaching, this season</div>
+                <div className="lr-meta">
+                  {plural(live.games, 'game')} coached live, measured (about {live.pm})
+                </div>
+              </div>
+              <span className="num bold">{live.clear ? live.worth : 'Too close'}</span>
+            </div>
+          )}
         </div>
       </Section>
 

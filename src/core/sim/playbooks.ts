@@ -86,7 +86,7 @@ export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' |
     offense: { ...omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget', 'glass']), sets: c.offense.sets ?? [] } as SavedPlaybook['offense'],
     defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD', 'roles']) as SavedPlaybook['defense'],
     // hack-a-player targets are one opponent's players: they belong in game plans
-    manage: { ...omit(c.manage, ['hackTargets', 'hackFromQ']), assistantAdjusts: !!c.manage.assistantAdjusts } as SavedPlaybook['manage'],
+    manage: { ...omit(c.manage, ['hackTargets', 'hackFromQ']), assistantAdjusts: c.manage.assistantAdjusts !== false } as SavedPlaybook['manage'],
     offPreset: c.offPreset,
     defPreset: c.defPreset,
     roles: c.offense.roles,
@@ -129,11 +129,12 @@ export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<num
   if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
   if (src.manage.atoPid !== undefined && src.manage.atoPid !== null && !on.has(src.manage.atoPid)) out.manage.atoPid = t.manage.atoPid ?? null;
   Object.assign(out, omit(src.extra ?? {}, KNOWN));
-  // what a playbook saved off (no set package, no situational plans, no assistant adjusting) is taken
-  // off: the screens keep it as no key at all (a playbook from before it said so leaves them as they are)
+  // what a playbook saved off (no set package, no situational plans) is taken off: the screens keep it
+  // as no key at all (a playbook from before it said so leaves them as they are). The assistant's
+  // adjusting is the other way round: on unless switched off, so on is no key and off stays false.
   if (src.offense.sets?.length === 0) delete out.offense.sets;
   if (Array.isArray(src.extra?.situations) && !src.extra.situations.length) delete out.situations;
-  if (src.manage.assistantAdjusts === false) delete out.manage.assistantAdjusts;
+  if (src.manage.assistantAdjusts === true) delete out.manage.assistantAdjusts;
   out.offPreset = src.offPreset;
   out.defPreset = src.defPreset;
   out.playbook = { id: pb.id, name: pb.name };
@@ -151,6 +152,8 @@ export interface TacticsChange {
 export const changeText = (c: TacticsChange) => (c.from || c.to ? `${c.label} ${c.from} → ${c.to}` : `${c.label} changed`);
 
 const onOff = (v: unknown) => (v ? 'On' : 'Off');
+/** A switch that's on unless switched off (no key: on). */
+const onUnlessOff = (v: unknown) => (v === false ? 'Off' : 'On');
 /** Settings this module doesn't know by name: switches read On/Off, numbers and words as they are. */
 const onOffOr = (v: unknown) => (typeof v === 'boolean' ? onOff(v) : String(v));
 const whole = (v: unknown) => String(Math.round(v as number));
@@ -198,7 +201,7 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['foulTrouble', 'Foul trouble', (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1)],
   ['fatigueSub', 'Sub out tired players at', (v) => `${Math.round((v as number) * 100)}% energy`],
   ['ato', 'After-timeout play', (v) => atoLabel(v as string | null, (a) => ACTION_META[a].label)],
-  ['assistantAdjusts', 'Assistant adjusts in simmed games', onOff],
+  ['assistantAdjusts', 'Assistant adjusts in simmed games', onUnlessOff],
 ];
 /** Parts of the tactics that aren't settings to compare (game by game, or bookkeeping; the go-to player is named below). */
 const NOT_COMPARED = new Set([
@@ -239,11 +242,11 @@ const same = (x: unknown, y: unknown) => x === y || JSON.stringify(x) === JSON.s
 export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => string = (pid) => `#${pid}`): TacticsChange[] {
   const out: TacticsChange[] = [];
   const add = (label: string, x: unknown, y: unknown, fmt: (v: unknown) => string = String) => {
-    if (same(x, y)) return;
+    if (same(x, y) || (fmt === onUnlessOff && fmt(x) === fmt(y))) return;
     if (LEVEL_FMT.has(fmt) && typeof x === 'number' && typeof y === 'number' && fmt(x) === fmt(y)) fmt = whole;
     const prim = (v: unknown) => v === undefined || v === null || typeof v !== 'object';
     // (a switch that isn't there is off: the screens delete some when they're turned off)
-    const shown = (v: unknown) => (v === undefined && fmt !== onOff ? '—' : fmt(v));
+    const shown = (v: unknown) => (v === undefined && fmt !== onOff && fmt !== onUnlessOff ? '—' : fmt(v));
     out.push(prim(x) && prim(y) ? { label, from: shown(x), to: shown(y) } : { label, from: '', to: '' });
   };
   // known fields in screen order, then any others in that part of the tactics

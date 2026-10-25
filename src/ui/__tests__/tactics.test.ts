@@ -8,13 +8,13 @@ import { describe, expect, it } from 'vitest';
 import { DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from '../tactics/formation';
 import { PHASES, offHabit, phaseFam, phaseId } from '../tactics/fam';
 import { linkLine, plateAt, startersOf, strengthsOf } from '../tactics/partners';
-import { byFit, fitTone, shownFit } from '../tactics/fit';
+import { byFit, fitTone, readText, shownFit } from '../tactics/fit';
 import { patchText, screenChanges, changesLine } from '../tactics/changes';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { hackThreshold, livePills, offPlan, resetToPlan, type PillContext } from '../live/pills';
 import { keptTactics } from '../live/keep';
 import type { Quality, SystemReport } from '../../core/analysis/system';
-import { fitScale, offPresetFit, offPresetTerms, defPresetFit, defPresetTerms, type RosterProfile } from '../../core/ai/coachAI';
+import { offPresetFit, offPresetTerms, defPresetFit, defPresetTerms, type RosterProfile } from '../../core/ai/coachAI';
 import { OFF_PRESETS, SITUATION_TEMPLATES, applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { simDay, startRegularSeason } from '../../core/league/season';
@@ -184,31 +184,32 @@ describe('tactics in the UI', () => {
     expect(plateAt({ x: 5, y: 2 })).toEqual({ x: 16.5, y: 8.5 });
     expect(plateAt({ x: 50, y: 40 })).toEqual({ x: 50, y: 40 });
 
-    // playbook fit on the shown scale: its start and parts add up to the fit on the row, for every preset
+    // playbook fit as shown, the staff's read in points a game: its start and parts add up to its worth
+    // against an average playbook exactly, and the row says what it's worth against the one in use
     for (const pr of [profile(50), profile(62, 85), profile(40, 70)]) {
       for (const [terms, fits] of [
         [offPresetTerms(pr), offPresetFit(pr)],
         [defPresetTerms(pr), defPresetFit(pr)],
       ] as const) {
-        const scale = fitScale(fits);
-        for (const id of Object.keys(fits)) {
-          const f = shownFit(id, terms[id], fits);
-          expect(f.shown).toBe(scale(id));
-          expect(f.start + f.parts.reduce((a, p) => a + p.v, 0)).toBe(f.shown);
+        const ids = Object.keys(fits);
+        for (const id of ids) {
+          const f = shownFit(id, terms[id], fits, ids[0]);
+          expect(Math.round((f.start + f.parts.reduce((a, p) => a + p.v, 0)) * 10) + 0).toBe(Math.round(f.total * 10) + 0);
+          expect(f.vs).toBeCloseTo((fits[id] - fits[ids[0]]) / 10, 1);
+          expect(shownFit(id, terms[id], fits, id).vs).toBe(0);
         }
       }
     }
-    // the best ranked first, as 100, and the worst as 45
+    // the best ranked first
     {
       const fits = offPresetFit(profile(62, 85));
       const order = byFit(OFF_PRESETS, fits);
-      const scale = fitScale(fits);
-      expect(scale(order[0].id)).toBe(100);
-      expect(scale(order[order.length - 1].id)).toBe(45);
-      expect(shownFit(order[0].id, offPresetTerms(profile(62, 85))[order[0].id], fits).rank).toBe(1);
+      expect(fits[order[0].id]).toBe(Math.max(...Object.values(fits)));
+      expect(shownFit(order[0].id, offPresetTerms(profile(62, 85))[order[0].id], fits, 'balanced').rank).toBe(1);
     }
-    // 85 and up reads as good and under 60 as bad
-    expect([fitTone(100), fitTone(85), fitTone(84), fitTone(60), fitTone(59)]).toEqual(['good', 'good', '', '', 'bad']);
+    // half a point a game either way reads as a gain or a cost, as a measured change does
+    expect([fitTone(0.6), fitTone(0.5), fitTone(0.4), fitTone(-0.4), fitTone(-0.5)]).toEqual(['good', 'good', '', '', 'bad']);
+    expect([readText(0.6), readText(-1.24), readText(0)]).toEqual(['+0.6', '−1.2', '0.0']);
 
     // situational plans say what each template changes, in the Tactics screen words
     expect(patchText(SITUATION_TEMPLATES.protectLead.patch)).toBe(

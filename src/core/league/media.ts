@@ -12,6 +12,9 @@ import { monthlyHonors, playersOfTheWeek } from './media/honors';
 import { seasonPreview } from './media/preseason';
 import { midseasonColumn, moveColumns, playoffPreviews, seasonWrap, surprisesColumn } from './media/columns';
 import { aboutUser } from './media/voice';
+import { jerseyNight, legendFarewells } from './media/legends';
+import { careerMarks } from './media/marks';
+import { chronicleSeason } from './media/chronicle';
 
 /**
  * A weekly or monthly honor, by conference where the league names two: Player of the Week, Player,
@@ -64,6 +67,8 @@ export interface MediaState {
   roundup?: number;
   /** Phrasings used lately ("key:index"), so the next story reaches for another. */
   recent?: string[];
+  /** The last summer whose retirements the press has told (see media/legends.ts). */
+  farewell?: number;
 }
 
 /** Stories that keep their bodies; older ones keep their headline and dek. */
@@ -93,7 +98,10 @@ const pressOn = (league: League) => league.phase === 'regular' || league.phase =
 
 export function mediaGame(league: League, g: ScheduledGame) {
   if (!pressOn(league)) return;
-  pressGame(league, g, (league.media ??= {}));
+  const m = (league.media ??= {});
+  pressGame(league, g, m);
+  careerMarks(league, m, g);
+  jerseyNight(league, m, g);
 }
 
 export function mediaDay(league: League) {
@@ -110,6 +118,8 @@ export function mediaDay(league: League) {
     monthlyHonors(league, m);
     playoffPreviews(league, m);
   }
+  // the night the Finals end, once the summer's retirements are in
+  legendFarewells(league, m);
   moveColumns(league, m);
   prune(league);
 }
@@ -120,6 +130,8 @@ export function mediaSeasonStart(league: League) {
   m.month = { season: league.season, from: 0 };
   m.streaks = { season: league.season, s: league.teams.map(() => 0) };
   delete m.done;
+  // last season's chronicle, read once more with its summer (the draft, free agency) before its weekly items go
+  if (league.chronicle?.some((c) => c.season === league.season - 1)) chronicleSeason(league, league.season - 1);
   // the columns read moves from here on (on a save from before the press, nothing older)
   if (m.txn === undefined) m.txn = league.transactions?.length ? league.transactions[league.transactions.length - 1].id : 0;
   // last season's weekly items have had their day: its rankings and roundups go (the honors stay on record)
@@ -130,7 +142,9 @@ export function mediaSeasonStart(league: League) {
 
 export function mediaSeasonEnd(league: League) {
   const m = (league.media ??= {});
-  seasonWrap(league, m);
+  const wrap = seasonWrap(league, m);
+  // the season goes in the league's memory (see media/chronicle.ts), its wrap first among its stories
+  chronicleSeason(league, league.season, wrap?.id);
   prune(league);
 }
 

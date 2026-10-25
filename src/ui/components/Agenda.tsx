@@ -1,5 +1,7 @@
 // The agenda as rows (see core/league/agenda.ts): each decision with the staff's call and its quick
-// choices one tap away, settled in place, and the screen with the whole decision behind the row.
+// choices one tap away, settled in place, and the screen with the whole decision behind the row. A
+// staff call whose number is still to measure is measured as its row shows (see today/staffPlan.ts),
+// with how far the staff has got under its line.
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight } from 'lucide-react';
@@ -7,9 +9,9 @@ import type { League } from '../../core/types';
 import { agenda, resolveAgenda, type AgendaAction, type AgendaItem } from '../../core/league/agenda';
 import { act, touch } from '../../state/actions';
 import { markOffersSeen, openProposals } from '../../core/league/proposals';
-import { useStore } from '../../state/store';
+import { useLeague, useStore } from '../../state/store';
 import { haptic } from '../../native';
-import { leaveToStaff } from '../today/staffPlan';
+import { leaveToStaff, useCallWorth } from '../today/staffPlan';
 import './agenda.css';
 
 /** The choice waiting on its second tap, if one is (the Continue bar won't run past it: see App.tsx). */
@@ -28,6 +30,8 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
   const choices = [...(item.suggestion ? [item.suggestion] : []), ...(item.choices ?? [])];
   // (the league can't change while a sim runs: act would only say so)
   const simming = useStore((s) => !!s.sim);
+  // a staff call's number, measured as the row shows: how far it has got
+  const measuring = useCallWorth(useLeague(), item);
   const nav = useNavigate();
   // a choice that can't be undone takes a second tap, its cost said in between
   const [armed, setArmed] = useState<string | null>(null);
@@ -59,6 +63,12 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
         <div className="ag-line">
           {item.line}
           {item.due && <span className="ag-due"> · {item.due}</span>}
+          {measuring !== null && !simming && (
+            <span className="ag-due" role="status">
+              {' '}
+              · {measuring > 0 ? `${Math.round(measuring * 100)}% measured` : 'Measuring'}
+            </span>
+          )}
         </div>
       </div>
       {item.to && !item.steps && <ChevronRight size={18} className="dim" aria-hidden="true" />}

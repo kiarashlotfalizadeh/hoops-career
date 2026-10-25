@@ -207,10 +207,11 @@ describe('roles, partnerships and the system', () => {
       expect(roles[big.pid]).toBe('roller');
     }
     {
-      // the staff's shape follows the roster: five-out for five shooters, never for non-shooters
+      // the staff's shape follows the roster: five-out for five shooters, never for non-shooters; the
+      // double post for bigs who own the offensive glass
       const shooters = (ps: Player[]) => ps.map((p) => ({ ...p, ratings: { ...p.ratings, tp: Math.max(p.ratings.tp, 85) }, injury: null }));
       const bruisers = (ps: Player[]) =>
-        ps.map((p) => ({ ...p, ratings: { ...p.ratings, ...(p.ratings.hgt >= 55 ? { tp: 10, reb: 90, ins: 85, post: 85 } : { tp: Math.min(p.ratings.tp, 35) }) }, injury: null }));
+        ps.map((p) => ({ ...p, ratings: { ...p.ratings, ...(p.ratings.hgt >= 55 ? { tp: 10, oreb: 90, ins: 85, post: 85 } : { tp: Math.min(p.ratings.tp, 35) }) }, injury: null }));
       const l = fresh();
       const ps = roster(l);
       const order = user(l).rotation.order;

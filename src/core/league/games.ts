@@ -364,18 +364,20 @@ export function buildSimInput(
     const extra = play.length ? { play } : {};
     // opponent-specific game plan for the user's team (drilled for tonight after a day of opponent
     // prep); situational plans that switch to another tactic slot carry its changes. The assistant
-    // adjusts at breaks as AI coaches do when the staff runs the tactics, and when the user runs them,
-    // only if asked to (without it the other bench kept cashing in on what it had found: a switch
-    // hunted all night, the smaller man fouling)
-    const adjust = !!team.tactics.manage.assistantAdjusts || !team.tactics.manual;
+    // adjusts at breaks unless switched off (Tactics: crunch time), whoever runs the tactics, leaving
+    // alone the kinds that cost the user's side (ASSISTANT_SKIPS in engine/coach.ts: the team played
+    // carries `assistant` to say they're his): measured over 17,280 paired games, +0.47 ± 0.09 points
+    // a game against no adjustments (with every kind, as AI coaches make them: +0.31 ± 0.09)
+    const adjust = team.tactics.manage.assistantAdjusts !== false;
+    const marked = adjust ? { assistant: true as const } : {};
     if (opp !== undefined && planFor(league, opp, game)) {
       const tactics = withSlotPlans(team, effectiveTactics(league, opp, game));
       const fam = team.prep === 'opponent' && team.fam ? { fam: prepared(team.fam, team.tactics, tactics) } : {};
-      return { team: { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust, ...extra, ...fam };
+      return { team: { ...team, tactics, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra, ...fam };
     }
     const tactics = withSlotPlans(team, team.tactics);
-    const same = rotation === team.rotation && tactics === team.tactics;
-    return { team: same ? team : { ...team, tactics, rotation }, players, perf, rest, injuryMult, adjust, ...extra };
+    const same = rotation === team.rotation && tactics === team.tactics && !adjust;
+    return { team: same ? team : { ...team, tactics, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra };
   }
   // an AI coach never plays the situational plans or crunch-time calls a user left on this team
   const t = team.tactics;

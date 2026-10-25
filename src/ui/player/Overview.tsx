@@ -15,7 +15,8 @@ import { PlayerMoves } from '../league/MovesTab';
 import { accolades } from '../league/shared';
 import { ContractSection, deskBlocks } from './Contract';
 import { RookieWatch, SeasonHighlights } from './Highlights';
-import { bioFacts, usePlayerTags } from './Hero';
+import { bioFacts, careerOf, usePlayerTags } from './Hero';
+import { RETIRED } from '../../core/types';
 import { growthStory } from '../../core/league/devWatch';
 
 /** His scouting profile: each skill as a percentile among every rostered player, best first when `top` trims it. */
@@ -97,6 +98,9 @@ export function Overview({
   // the hero shows his first two marks; the rest are here with his particulars
   const tags = usePlayerTags(league, p).slice(2);
   const story = p.tid >= -1 ? growthStory(league, p) : '';
+  // a retired player's page is his career: no role, contract or scouting for a man who has stopped
+  // (a career's honors: the press's weekly and monthly ones don't make a legend's line)
+  if (p.tid === RETIRED) return <LegendOverview league={league} p={p} honors={honors.filter((a) => !/of the (Week|Month)$/.test(a.label))} />;
   return (
     <>
       <div className="md-grid2">
@@ -165,6 +169,71 @@ export function Overview({
               ))}
             </div>
           )}
+        </div>
+      </Section>
+      <PlayerMoves league={league} pid={p.pid} />
+    </>
+  );
+}
+
+/**
+ * A retired player's Overview: where he played and for how long, his totals, the numbers retired for
+ * him, his honors (the same names and order as the league history) and his particulars, then his
+ * moves. The season-by-season lines are on Stats.
+ */
+function LegendOverview({ league, p, honors }: { league: League; p: Player; honors: ReturnType<typeof accolades> }) {
+  const c = careerOf(p);
+  // his teams in the order he first played for them, with his seasons at each
+  const by = new Map<number, Set<number>>();
+  for (const s of p.stats) {
+    if (s.playoffs || s.gp <= 0 || !league.teams[s.tid]) continue;
+    if (!by.has(s.tid)) by.set(s.tid, new Set());
+    by.get(s.tid)!.add(s.season);
+  }
+  const teams = [...by.entries()].map(([tid, ss]) => ({ tid, seasons: ss.size }));
+  const numbers = league.teams.flatMap((t) => (t.retired ?? []).filter((r) => r.pid === p.pid).map((r) => `${t.name} No. ${r.jersey}`));
+  const totals = [
+    { k: 'Games', v: c.gp.toLocaleString('en-US') },
+    { k: 'Points', v: Math.round(c.pts * c.gp).toLocaleString('en-US') },
+    { k: 'Rebounds', v: Math.round(c.reb * c.gp).toLocaleString('en-US') },
+    { k: 'Assists', v: Math.round(c.ast * c.gp).toLocaleString('en-US') },
+  ];
+  return (
+    <>
+      <Section title="His career">
+        <div className="tm-about">
+          <div className="tm-meta">
+            <span className="tm-meta-in">
+              {teams.map((t) => (
+                <span key={t.tid}>
+                  {league.teams[t.tid].name} · {t.seasons} {t.seasons === 1 ? 'season' : 'seasons'}
+                </span>
+              ))}
+            </span>
+          </div>
+          <Statline items={totals} />
+          {numbers.length > 0 && <div className="small dim">Retired: {numbers.join(', ')}</div>}
+          {honors.length > 0 && (
+            <div className="tm-honors">
+              {honors.map((a) => (
+                <span key={a.label} className={`tag ${a.gold ? 'tm-gold' : ''}`}>
+                  {a.n > 1 ? `${a.n}× ` : ''}
+                  {a.label}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </Section>
+      <Section title="About him">
+        <div className="tm-about">
+          <div className="tm-meta">
+            <span className="tm-meta-in">
+              {bioFacts(league, p).map((x, i) => (
+                <span key={i}>{x}</span>
+              ))}
+            </span>
+          </div>
         </div>
       </Section>
       <PlayerMoves league={league} pid={p.pid} />

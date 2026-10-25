@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { Lock, LockKeyhole, Ticket } from 'lucide-react';
 import type { League } from '../../core/types';
 import { playerName, shortName, teamPlayers } from '../../core/league/helpers';
-import { capSalary, pickLabel, untradeable, type TradeOffer } from '../../core/league/trades';
+import { capSalary, untradeable, type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
@@ -79,9 +80,10 @@ export function TradingBlock({
           <div className="card flush list">
             {(showAll ? offers : offers.slice(0, 8)).map((o) => {
               const t = league.teams[o.tid];
-              // a player worth less than nothing to you (a bad contract): any taker is a salary dump, not a share of his value
-              const dump = o.targetValue <= 0;
-              const ratio = dump ? 0 : o.myValue / o.targetValue;
+              // a player worth less than nothing (a bad contract): any taker is a salary dump, not a share of his value;
+              // the share in league-neutral value, not your front office's lens on it
+              const dump = o.neutralGive <= 0;
+              const ratio = dump ? 0 : o.neutralGet / o.neutralGive;
               const tone = dump
                 ? { l: 'Salary dump', c: 'good' }
                 : ratio >= 1.1
@@ -135,7 +137,7 @@ export function TradingBlock({
                       return (
                         <div key={d} className="fo-pkg-item">
                           <Ticket size={16} className="dim fo-pkg-ic" />
-                          <span className="grow bold">{pickLabel(league, dp)}</span>
+                          <span className="grow bold">{pickName(league, dp)}</span>
                         </div>
                       );
                     })}

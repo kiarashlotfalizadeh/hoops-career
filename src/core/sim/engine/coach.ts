@@ -14,6 +14,18 @@ import type { GameSim } from './game';
 /** The on-ball defense every one of the five needs before a coach switches ball screens to break up a partnership. */
 const SWITCH_PERD = 50;
 
+/**
+ * The adjustments the user's assistant doesn't make at the breaks of a simmed game (the side whose
+ * team is marked `assistant`: see buildSimInput), measured for the user's side (12 teams' first 12
+ * games, 120 seeds each, injuries off; scratch round/gameday/adjust.mts, 2026-10-25), each kind kept
+ * alone against none over 7,200 paired games, in points of margin: going from Drop to Hedge cost 1.9
+ * a game where it was made, backing off the ball 0.35 and staying home on shooters 3.4 (on 36 games).
+ * Over 17,280 paired games against no adjustments: with every kind, +0.31 ± 0.09 a game; without
+ * these three, +0.47 ± 0.09 (the three together −0.16 ± 0.04). By shot value both read below even,
+ * which leaves out the and-ones a change of coverage moves. AI coaches make all of them as before.
+ */
+const ASSISTANT_SKIPS = new Set(['hedge', 'backoff', 'home']);
+
 export const coachMethods = {
   /** The first enabled situational plan whose trigger matches the game right now. */
   situationFor(this: GameSim, t: ST): SituationalPlan | null {
@@ -106,6 +118,8 @@ export const coachMethods = {
     // the change is decided on what is being played, and made to the base tactics too, so it
     // outlasts a situational plan coming or going
     let what = '';
+    /** Which kind of change it is (see ASSISTANT_SKIPS). */
+    let kind = '';
     let change = (x: Tactics) => void x;
     // a defender the other bench hunts with success gets hidden on their weakest scorer on the floor
     // (only ever when the opponent hunts one: never in a game between AI teams)
@@ -118,51 +132,63 @@ export const coachMethods = {
         x.defense.matchups[weak.pid] = huntedD.pid;
       };
       what = `hides ${huntedD.name} on ${weak.name}`;
+      kind = 'hide';
     } else if (d.scheme !== 'man') {
       if (rate('zone_3pt:o') + rate('zone_glass:o') + rate('box_open:o') + rate('box_beat:o') >= 1) {
         change = (x) => void (x.defense.scheme = 'man');
         what = 'goes back to man-to-man';
+        kind = 'man';
       }
     } else if (d.pnr === 'drop' && (rate('drop_pullup:o') + rate('drop_pop:o') >= 0.8 || ppp('pnrBH') >= 1.15)) {
       change = (x) => void (x.defense.pnr = 'hedge');
       what = 'hedges ball screens instead of dropping';
+      kind = 'hedge';
     } else if (d.pnr === 'blitz' && rate('blitz_4v3:o') >= 0.6) {
       change = (x) => void (x.defense.pnr = 'hedge');
       what = 'stops blitzing ball screens';
+      kind = 'unblitz';
       // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
       // so this is the 0.8 the coaches read before, the same games for them to react to)
     } else if (d.pnr !== 'switch' && rate('link_twoMan:o') + rate('link_popMan:o') >= 0.3 && Math.min(...t.on.map((p) => p.c.perDef)) >= SWITCH_PERD) {
       // a two-man game or a pick-and-pop they know cold: switching takes the screen, and the link, away
       change = (x) => void (x.defense.pnr = 'switch');
       what = 'switches ball screens to break up their two-man game';
+      kind = 'switch';
     } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.3 || rate('hedge_roll:o') >= 0.6)) {
       change = (x) => {
         x.defense.pnr = 'drop';
         x.defense.switchOffBall = false;
       };
       what = 'drops the big on ball screens';
+      kind = 'drop';
     }
     if (!what) {
       if (rate('help_kick:o') >= 0.6 && d.help > 30) {
         change = (x) => void (x.defense.help = Math.max(0, x.defense.help - 15));
         what = 'stays home on shooters';
+        kind = 'home';
       } else if (rate('help_paint:o') + rate('spacing:o') >= 0.6 && d.help < 75) {
         change = (x) => void (x.defense.help = Math.min(100, x.defense.help + 15));
         what = 'packs the paint';
+        kind = 'pack';
         // (backing off and crashing less pay only from an extreme: the change stops at the middle,
         // where giving up turnovers or boards would cost more than the blow-bys or run-outs it saves)
       } else if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.5 && d.pressure > 60) {
         change = (x) => void (x.defense.pressure = Math.max(50, x.defense.pressure - 15));
         what = 'backs off the ball';
+        kind = 'backoff';
       } else if (rate('crash_leak:o') >= 0.5 && t.t.offense.crashBoards > 65) {
         change = (x) => void (x.offense.crashBoards = Math.max(55, x.offense.crashBoards - 20));
         what = 'sends fewer players to the offensive glass';
+        kind = 'glass';
       } else if (rate('getback:o') >= 0.4 && d.getBack < 80) {
         change = (x) => void (x.defense.getBack = Math.min(100, x.defense.getBack + 15));
         what = 'sprints back in transition';
+        kind = 'getback';
       }
     }
-    if (!what) return;
+    // (the user's assistant leaves the kinds that cost his side alone, and may look again at the next stop)
+    if (!what || (t.team.assistant && ASSISTANT_SKIPS.has(kind))) return;
     change(t.t);
     change(t.base);
     change(t.drilled);

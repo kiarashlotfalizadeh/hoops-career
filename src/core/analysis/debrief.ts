@@ -17,6 +17,7 @@ import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { famReadout, impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
+import { callCosts, callKey, callWorth, worthLine } from './callWorth';
 
 export interface DebriefAdvice {
   id: string;
@@ -30,6 +31,12 @@ export interface DebriefAdvice {
   group?: string;
   /** A practice focus to switch to between games (one tap, instead of a tactics change). */
   prep?: PrepFocus;
+  /**
+   * The change measured as a gain where the bench calls it (callWorth.ts): what it's been worth, in a
+   * line. Only a change with one is offered for every game; one without stays tonight's lesson (the
+   * plan against this opponent).
+   */
+  worth?: string;
 }
 
 /** How one counter of the game plan went (see planGrades). */
@@ -138,7 +145,7 @@ const SYSTEM_KNOWN = 85;
  * (Tactical drills, and no more changes to it), or a game plan that asked for what the team hadn't
  * drilled (Opponent prep drills the plan for the game). Null when it cost little.
  */
-export function practiceAdvice(league: League, cost: number): DebriefAdvice | null {
+export function practiceAdvice(league: League, cost: number, planMeasured = false): DebriefAdvice | null {
   if (cost < FAM_COST) return null;
   const me = league.userTid;
   const prep = league.teams[me].prep ?? 'balanced';
@@ -150,7 +157,9 @@ export function practiceAdvice(league: League, cost: number): DebriefAdvice | nu
     return {
       id: 'prep-opponent',
       title: 'Drill the game plan',
-      text: `Playing a step slow cost us ${pts}: tonight we played things we haven't drilled. ${prep === 'opponent' ? 'Opponent prep has the next plan drilled for its game.' : `${PREP_META.opponent.label} drills the next game's plan for that game.`}`,
+      // (a plan whose counters were measured: their worth was measured at the step slow they were played
+      // at, so the plan's number is already after this cost, not against it)
+      text: `Playing a step slow cost us ${pts}: tonight we played things we haven't drilled${planMeasured ? ", and the plan's measured worth is after that cost: drilled, it's worth more" : ''}. ${prep === 'opponent' ? 'Opponent prep has the next plan drilled for its game.' : `${PREP_META.opponent.label} drills the next game's plan for that game.`}`,
       ...(prep !== 'opponent' && { prep: 'opponent' as const, label: PREP_META.opponent.label }),
     };
   }
@@ -371,6 +380,73 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
   });
 }
 
+/** A win by this many has no "next time": the advice is for nights that were in reach. */
+const ROUT = 15;
+
+/** "+2.1", "−0.4", "0.0": a reading in points with its sign (a true minus). */
+const sgn1 = (x: number) => (Math.abs(x) < 0.05 ? '0.0' : `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`);
+
+/**
+ * What the night's moves were worth (GameResult.movesWorth, measured after the final), in a line and
+ * how it was measured: worth so many points when the reading is clear of even (two standard errors),
+ * "too close to say" inside them, with the move that mattered most when one clearly did. Null for a
+ * game with none measured. `staff`: every move was the staff's (the bench handed to it).
+ */
+export function nightLine(res: GameResult, staff = false): { text: string; detail: string; tone: 'good' | 'bad' | 'dim' } | null {
+  const w = res.movesWorth;
+  if (!w || !Number.isFinite(w.pts) || !Number.isFinite(w.se)) return null;
+  const who = staff ? "The staff's moves" : 'Your moves';
+  const pm = `about ±${Math.max(0.1, w.se).toFixed(1)}`;
+  const clear = Math.abs(w.raw) >= 2 * w.se && Math.abs(w.pts) >= 0.05;
+  const text = clear ? `${who} were worth ${sgn1(w.pts)} points tonight (${pm})` : `${who}: too close to say tonight (${sgn1(w.pts)}, ${pm})`;
+  const top = w.top && typeof w.top.text === 'string' ? ` The one that mattered most: ${w.top.text} (${sgn1(w.top.pts)}).` : '';
+  return {
+    text,
+    detail: `The rest of the game from the first move, played ${w.n} times with ${plural(w.moves, 'move')} and without.${top}`,
+    tone: !clear ? 'dim' : w.pts > 0 ? 'good' : 'bad',
+  };
+}
+
+/**
+ * The coach's live coaching over a season, as measured game by game (GameResult.movesWorth): the
+ * points his moves added, the standard error of that sum, and the games it's over. Null before a
+ * coached game was measured. The line reads where a coach's record is (Career: see seasonCoachingLine).
+ */
+export function seasonCoaching(league: League, season = league.season, tid = league.userTid): { pts: number; raw: number; se: number; games: number } | null {
+  let pts = 0;
+  let raw = 0;
+  let v = 0;
+  let games = 0;
+  for (const g of league.games) {
+    const w = g.movesWorth;
+    if (g.season !== season || (g.home.tid !== tid && g.away.tid !== tid) || !w || !Number.isFinite(w.pts) || !Number.isFinite(w.raw) || !Number.isFinite(w.se)) continue;
+    pts += w.pts;
+    raw += w.raw;
+    v += w.se ** 2;
+    games++;
+  }
+  const r1 = (x: number) => Math.round(x * 10) / 10;
+  return games ? { pts: r1(pts), raw: r1(raw), se: r1(Math.sqrt(v)), games } : null;
+}
+
+/**
+ * "Your live coaching this season: +4.2 points over 9 games, measured (about ±2.7)": said clear of even
+ * as a night is (the readings as measured, two standard errors), the shrunk sum shown. Null with fewer
+ * than two games measured (one is the night's own line).
+ */
+export function seasonCoachingLine(league: League, season = league.season, tid = league.userTid): string | null {
+  const c = seasonCoachingRead(league, season, tid);
+  if (!c) return null;
+  return `Your live coaching this season: ${c.clear ? `${c.worth} points` : `too close to say (${c.worth})`} over ${plural(c.games, 'game')}, measured (about ${c.pm})`;
+}
+
+/** The season's live coaching as the line reads it, in parts (Career's record row): its worth ("+4.2"), whether it's clear of even, its ± and the games. Null under two games. */
+export function seasonCoachingRead(league: League, season = league.season, tid = league.userTid): { worth: string; clear: boolean; pm: string; games: number } | null {
+  const c = seasonCoaching(league, season, tid);
+  if (!c || c.games < 2) return null;
+  return { worth: sgn1(c.pts), clear: Math.abs(c.raw) >= 2 * c.se && Math.abs(c.pts) >= 0.05, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games };
+}
+
 /** The coach's games so far with his team this season (tonight's included). */
 const gamesIn = (league: League, res: GameResult, me: number) =>
   league.games.filter((g) => g.season === res.season && g.day <= res.day && (g.home.tid === me || g.away.tid === me)).length;
@@ -398,7 +474,11 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
     return (g?.impacts ?? []).filter((im) => im.t !== s && FAM_KEYS.has(im.key)).reduce((a, im) => a + im.pts, 0);
   };
   const famCost = famCostOf(res);
-  const fa = practiceAdvice(league, famCost);
+  const fa = practiceAdvice(
+    league,
+    famCost,
+    (res.plan ?? []).some((u) => u.pts !== undefined),
+  );
   // with the focus already the one it asks for, it's said once, not after every game of the stretch
   const famAdvice = fa && !fa.prep && famCostOf(prev) >= FAM_COST ? null : fa;
   for (const f of report.factors) {
@@ -422,12 +502,25 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
     if (fix) {
       if (seen.has(fix.label)) continue;
       seen.add(fix.label);
+      // (a counter that measured as a cost where the bench calls it isn't next time's fix either: the
+      // switch to Hedge off a Drop their handlers pulled up over)
+      const key = callKey(`imp-${f.key}`, fix.label);
+      if (callCosts(key)) continue;
       const after = cloneTactics(tactics);
       fix.apply(after);
       const patch = tacticsDiff(tactics, after);
       if (emptyPatch(patch)) continue;
       topics.add((f.key && IMPACT_TOPIC[f.key]) || f.key!);
-      advice.push({ id: `fix-${f.key}`, title: f.title.replace(/\.$/, ''), text: f.advice ?? f.detail, patch, label: fix.label, group: `debrief-${fix.label}` });
+      const m = callWorth(key);
+      advice.push({
+        id: `fix-${f.key}`,
+        title: f.title.replace(/\.$/, ''),
+        text: f.advice ?? f.detail,
+        patch,
+        label: fix.label,
+        group: `debrief-${fix.label}`,
+        ...(m && m.pts >= 2 * m.ptsSe && { worth: worthLine(key) }),
+      });
     } else if (f.advice && advice.length < 4) {
       const topic = (f.key && IMPACT_TOPIC[f.key]) || (f.key ? f.key : f.category);
       if (topics.has(topic)) continue;
@@ -455,6 +548,9 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       }
     : null;
   const meetAgain = league.schedule.some((g) => !g.played && g.day >= league.day && ((g.home === me && g.away === opp) || (g.away === me && g.home === opp)));
+  // a win by 15 or more has no lesson in it: whatever cost a few points didn't decide anything
+  const mine = side === 0 ? res.home.pts - res.away.pts : res.away.pts - res.home.pts;
+  if (mine >= ROUT) advice.length = 0;
   const plan = planGrades(league, res, side);
   // a coach's first nights: what one game can and can't say, so "luck" doesn't read as "nothing you do matters"
   const first = league.settings.teaching !== false && league.season === league.startSeason && gamesIn(league, res, me) <= FRAME_GAMES;

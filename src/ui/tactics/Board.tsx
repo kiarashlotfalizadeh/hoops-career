@@ -49,7 +49,7 @@ function rowOf(t: Tactics, fam: Familiarity, p: Player): Row {
   return { p, off, def, offFit: of[off], defFit: df[def], offBetter: miscast(of, off), defBetter: miscast(df, def), pair: roleFam(fam, t, p) };
 }
 
-/** A shape's fit as a tone: half a point per 100 or more either way shows. */
+/** A shape's fit as a tone: half a point a game or more either way shows. */
 const fitClass = (v: number) => (v >= 5 ? 'good' : v <= -5 ? 'bad' : '');
 
 /** First sentence of a line of help. */
@@ -172,8 +172,8 @@ export function Board({
               }
               help={
                 <>
-                  Where your five stand in the half court. The figure is what the shape should be worth for this roster against 4-out, 1-in, in points per 100 possessions; the % is
-                  how well your team knows it.
+                  Where your five stand in the half court. The figure is the staff&apos;s read of what the shape is worth a game for this roster against 4-out, 1-in, once drilled;
+                  the % is how well your team knows it. Change it and the staff measures it on your next games.
                 </>
               }
               options={[...OFF_SHAPES]
@@ -183,7 +183,7 @@ export function Board({
                   label: SHAPE_META[s].label,
                   sub: (
                     <>
-                      <b className={fitClass(fits[s])}>{fitPts(fits[s])} per 100</b> · {famSub(`shape:${s}`, first(SHAPE_META[s].help))}
+                      <b className={fitClass(fits[s])}>{fitPts(fits[s])} a game</b> · {famSub(`shape:${s}`, first(SHAPE_META[s].help))}
                       <span className="tx-shape-gb">
                         <span>
                           <b className="good">+</b> {SHAPE_META[s].good}
@@ -200,7 +200,7 @@ export function Board({
                   <>The baseline shape · {famSub('shape:fourOut')}</>
                 ) : (
                   <>
-                    <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> per 100 vs 4-out · {famSub(`shape:${shape}`)}
+                    <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> a game vs 4-out · {famSub(`shape:${shape}`)}
                   </>
                 )
               }

@@ -2,13 +2,14 @@
 import type { League } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX } from '../../core/league/helpers';
-import { EXCEPTIONS, WAIVER_DAYS, exceptionAmount, twoWaySalary, type Exception } from '../../core/league/contracts';
+import { EXCEPTIONS, SUMMER_FLOOR, WAIVER_DAYS, exceptionAmount, twoWaySalary, type Exception } from '../../core/league/contracts';
 import { FA_DAYS } from '../../core/league/season';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS } from '../../core/league/tenDay';
 import { HelpSheet } from './common';
 import { MATCH_DAYS, SHEET_MAX_YEARS, SHEET_MIN_YEARS } from '../../core/league/rfa';
 import { money, moneyExact } from '../../core/format';
+import { pct } from '../../core/analysis/odds';
 
 /** The rules of signing, behind the header's "?": `space` and `exceptions` are what's open to you now. */
 export function FaHelp({ league, s, space, exceptions }: { league: League; s: number; space: number; exceptions: { k: Exception; room: number }[] }) {
@@ -55,7 +56,9 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
       </p>
       <p>
         <b>Timing.</b> The summer market lasts {FA_DAYS} days and opens for every team at once: AI teams sign their first wave on day 1 too. Unsigned players cut their price every
-        few days (a star holds his for two weeks first), and stay available in season.
+        few days (a star holds his for two weeks first), and stay available in season. A good player ({SUMMER_FLOOR.ovr}+ OVR) comes down slowly and never under{' '}
+        {pct(SUMMER_FLOOR.early)} of his market value in the summer's first {SUMMER_FLOOR.day} days, {pct(SUMMER_FLOOR.late)} after that and through the preseason: waiting a few
+        days doesn't buy a star at half price, and AI teams bid their cap space or mid-level once his price comes within reach.
       </p>
       <p>
         <b>Waivers.</b> A player released in season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, worst record first, and take over his

@@ -10,10 +10,9 @@ import { playerAge, salaryFor } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Ovr } from '../components/ui';
 import { useLeagueMemo } from '../../state/store';
-import { pickProjection } from '../league/shared';
 import { Term } from '../components/Glossary';
 import { contractEnd, outTag, rosterLine, salaryText } from '../office/common';
-import { pickOrder, projText } from '../draft/common';
+import { pickOrder, pickProjText, projectedSlot } from '../draft/common';
 import { rosterNames } from '../stats';
 import { AvailFlag, TierLine } from './common';
 import { CashControl, SwapChips } from './Terms';
@@ -49,8 +48,8 @@ export function AssetList({
   // named in one line under the list rather than offered at $0
   const leaving = all.filter((p) => untradeable(league, p)?.kind === 'expiring');
   const players = all.filter((p) => !leaving.includes(p));
-  // this draft's picks: where they'd land if the season ended today (until the lottery sets the order)
-  const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  // where each pick projects (until its slot is set), by the strength its value is priced on
+  const proj = useLeagueMemo(() => projectedSlot(league), [league]);
   // in the order every pick list uses: by draft, then where each lands
   const picks = league.draftPicks.filter((d) => d.tid === tid).sort(pickOrder(league, proj));
   // the swap rights and cash fold away until wanted (open from the start while the deal has some)
@@ -87,7 +86,7 @@ export function AssetList({
               key={dp.dpid}
               league={league}
               dp={dp}
-              proj={proj(dp)}
+              proj={pickProjText(league, dp)}
               on={sel.dpids.includes(dp.dpid)}
               onToggle={() => onChange({ ...sel, dpids: toggle(sel.dpids, dp.dpid) })}
             />
@@ -147,7 +146,7 @@ function PlayerAsset({ league, p, name, season, on, onToggle }: { league: League
 }
 
 /** A pick to tap into the deal, on one line: its name (the original team's mark, round, protection, swap) and where it projects. */
-function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: DraftPick; proj?: number; on: boolean; onToggle: () => void }) {
+function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: DraftPick; proj?: string; on: boolean; onToggle: () => void }) {
   return (
     <button className={`fo-asset pick ${on ? 'on' : ''}`} onClick={onToggle} aria-pressed={on}>
       <span className="fo-check" aria-hidden="true">
@@ -155,7 +154,7 @@ function PickAsset({ league, dp, proj, on, onToggle }: { league: League; dp: Dra
       </span>
       <TeamLogo tid={dp.originalTid} size={24} decorative />
       <span className="fo-name grow">{pickLabel(league, dp)}</span>
-      {proj !== undefined && <span className="tiny dim num nowrap">{projText(proj)}</span>}
+      {proj !== undefined && <span className="tiny dim num nowrap">{proj}</span>}
     </button>
   );
 }

@@ -16,6 +16,7 @@ import '../screens/team.css';
 import { money } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { ordinal } from '../stats';
+import { useTeamEditWatch } from '../tactics/editWatch';
 
 const Roster = lazyRetry(() => import('../screens/Roster'));
 const Rotation = lazyRetry(() => import('../screens/Rotation'));
@@ -97,6 +98,8 @@ export default function TeamHub() {
   const { tab } = useParams();
   const nav = useNavigate();
   const section = SECTIONS.find((s) => s.id === tab)?.id ?? 'roster';
+  // a change to the tactics or rotation is measured by the staff when the user leaves (or taps Done on Tactics)
+  useTeamEditWatch();
   return (
     <main className="page tm-hub">
       <TeamHeader league={league} slim={section !== 'roster'} />

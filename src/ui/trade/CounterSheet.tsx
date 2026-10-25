@@ -4,7 +4,8 @@ import { Handshake, Minus, PackagePlus, Plus } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { capSalary, evaluateTrade, pickLabel, type TradeOffer } from '../../core/league/trades';
+import { capSalary, evaluateTrade, type TradeOffer } from '../../core/league/trades';
+import { pickName } from '../draft/common';
 import { type CounterOffer } from '../../core/league/tradeHelp';
 import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
@@ -96,7 +97,7 @@ function CounterCard({
   // a pick with the protection its side puts on it in that version of the deal
   const pick = (d: number, side: TradeOffer['a']) => {
     const dp = league.draftPicks.find((x) => x.dpid === d);
-    return dp ? pickLabel(league, dp, { protection: side.protect?.[d] }) : 'a pick';
+    return dp ? pickName(league, dp, { protection: side.protect?.[d] }) : 'a pick';
   };
   const items = (now: TradeOffer['a'], was: TradeOffer['a']): Item[] => [
     ...now.pids.map((pid) => ({ key: `p${pid}`, name: playerName(league.players[pid]), change: was.pids.includes(pid) ? undefined : ('added' as const) })),

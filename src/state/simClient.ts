@@ -4,8 +4,10 @@
 // it was. Where no worker can start (tests in Node, a browser that refuses one), the same code runs
 // on a copy of the league in this thread.
 import * as Comlink from 'comlink';
-import type { League } from '../core/types';
-import { counterWorth, type CounterWorth } from '../core/ai/counterWorth';
+import type { League, LiveOp } from '../core/types';
+import { counterWorth, measureChanges as measureLocally, type CounterWorth, type LeagueChange } from '../core/ai/counterWorth';
+import type { GameSim } from '../core/sim/engine';
+import { forkSim, measureChoices, nightWorth, simState, type ChoiceWorth, type LiveChoice, type NightWorth } from './liveWorth';
 import type { SimWorkerApi } from '../workers/sim.worker';
 import {
   applyGames,
@@ -219,8 +221,104 @@ export async function measureCounters(l: League, opp: number, gid: number | unde
   }
 }
 
+/**
+ * What each change is worth to the user's game `gid` against `opp` (see measureChanges in
+ * counterWorth.ts), measured in the worker (here, without one), as measureCounters is: a newer
+ * measurement of either kind stops this one, which then comes back null.
+ */
+export async function measureChanges(
+  l: League,
+  opp: number,
+  gid: number | undefined,
+  changes: LeagueChange[],
+  progress: (done: number, total: number) => void,
+  /** Games each configuration is played (WORTH_GAMES by default): fewer for one of several games pooled. */
+  games?: number,
+): Promise<CounterWorth[] | null> {
+  const r = ensure();
+  if (!r) {
+    const run = ++localWorth;
+    const game = gid !== undefined ? l.schedule.find((g) => g.gid === gid) : undefined;
+    return measureLocally(l, opp, changes, game, {
+      games,
+      onProgress: progress,
+      between: () => new Promise<void>((res) => setTimeout(res, 0)),
+      cancelled: () => run !== localWorth,
+    });
+  }
+  try {
+    const out = await guarded(() => r.measureChanges(withoutGames(l), deltaFor(l), opp, gid, changes, Comlink.proxy(progress), games));
+    held = { id: l.id, sig: gamesSig(l.games) };
+    return out;
+  } catch (e) {
+    held = null;
+    if (e instanceof WorkerUnavailable) return measureChanges(l, opp, gid, changes, progress, games);
+    throw e;
+  }
+}
+
 /** Stop a counter measurement in flight (its screen closed). */
 export function cancelWorth() {
   localWorth++;
   void remote?.cancelWorth();
+}
+
+/** Live measurements: the next one's id, and those given up in this thread (no worker). */
+let liveIds = 0;
+const localGone = new Set<number>();
+
+/**
+ * What each choice is worth from where the live game `sim` stands, against the first (see
+ * measureChoices in liveWorth.ts): in the worker, sent the game as plain data; here, without one, on
+ * a copy, a chunk at a time. `id` (nextLiveId) is what cancelLive stops it by: it then comes back null.
+ */
+export async function measureLive(
+  sim: GameSim,
+  side: 0 | 1,
+  choices: LiveChoice[],
+  id: number,
+  progress: (done: number, total: number) => void = () => {},
+  games?: number,
+): Promise<ChoiceWorth[] | null> {
+  const r = ensure();
+  if (!r) {
+    const out = await measureChoices(forkSim(sim), side, choices, {
+      games,
+      onProgress: progress,
+      between: () => new Promise<void>((res) => setTimeout(res, 0)),
+      cancelled: () => localGone.has(id),
+    });
+    localGone.delete(id);
+    return out;
+  }
+  try {
+    return await guarded(() => r.liveChoices(simState(sim), side, choices, games, id, Comlink.proxy(progress)));
+  } catch (e) {
+    if (e instanceof WorkerUnavailable) return measureLive(sim, side, choices, id, progress, games);
+    throw e;
+  }
+}
+
+/** An id for a live measurement, to stop it by. */
+export const nextLiveId = () => ++liveIds;
+
+/** Stop a live measurement in flight (its huddle or sheet closed). */
+export function cancelLive(id: number) {
+  localGone.add(id);
+  void remote?.cancelLive(id);
+}
+
+/**
+ * What a live game's moves were worth (see nightWorth in liveWorth.ts), from the game at tip-off: in
+ * the worker after the final, behind any sim (here, without one, a chunk at a time).
+ */
+export async function measureNight(tip: GameSim, side: 0 | 1, ops: LiveOp[]): Promise<NightWorth | null> {
+  const r = ensure();
+  if (!r) return nightWorth(forkSim(tip), side, ops, { between: () => new Promise<void>((res) => setTimeout(res, 0)) });
+  try {
+    return await guarded(() => r.nightWorth(simState(tip), side, ops));
+  } catch (e) {
+    if (e instanceof WorkerUnavailable) return measureNight(tip, side, ops);
+    throw e;
+  }
 }
