@@ -33,7 +33,8 @@ function keyOf(league: League, opp: number, gid: number): string {
     .filter((p) => (p.tid === opp || p.tid === league.userTid) && p.injury)
     .map((p) => p.pid)
     .sort((a, b) => a - b);
-  return `${league.id}:${league.season}:${gid}:${opp}:${hashString(JSON.stringify(effectiveTactics(league, opp)) + JSON.stringify(me.rotation) + out.join(','))}`;
+  // (camp's drills and cuts change the teams at opening night: a preseason reading isn't kept past it)
+  return `${league.id}:${league.season}:${league.phase === 'preseason' ? 'pre:' : ''}${gid}:${opp}:${hashString(JSON.stringify(effectiveTactics(league, opp)) + JSON.stringify(me.rotation) + out.join(','))}`;
 }
 
 /** The user's next game against `opp` this season, if any. */
@@ -78,13 +79,13 @@ function start(league: League, opp: number, key: string) {
 
 /**
  * The staff's counters against `opp`, measured: their worth by counter id once done, and the
- * progress until then. Only in season, with a game against them still to play; never while a sim
- * runs (it waits for it).
+ * progress until then. Only in season (the preseason too: the opener's plan is the first week's
+ * guide), with a game against them still to play; never while a sim runs (it waits for it).
  */
 export function useCounterWorth(league: League, opp: number): WorthState | null {
   const [, bump] = useState(0);
   const simming = useStore((s) => !!s.sim);
-  const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
+  const inSeason = league.phase === 'preseason' || league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
   const next = inSeason ? nextMeeting(league, opp) : undefined;
   const key = next ? keyOf(league, opp, next.gid) : null;
   useEffect(() => {

@@ -193,6 +193,45 @@
   color: #fff;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.9);
 }
+/* one line: on a screen's later tabs the board steps back to a band (mark, figure, pill, figure, mark) */
+.gd-board.compact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  padding: 6px 14px;
+  border-radius: var(--radius);
+}
+.gd-board.compact::before {
+  display: none;
+}
+.gd-board.compact .gd-bd-row,
+.gd-board.compact .gd-bd-ids {
+  display: contents;
+}
+.gd-board.compact .gd-bd-id:not(.home) {
+  order: 1;
+}
+.gd-board.compact .gd-bd-figc:not(.home) {
+  order: 2;
+}
+.gd-board.compact .gd-bd-mid {
+  order: 3;
+}
+.gd-board.compact .gd-bd-figc.home {
+  order: 4;
+}
+.gd-board.compact .gd-bd-id.home {
+  order: 5;
+}
+.gd-board.compact .gd-bd-fig {
+  font-size: 30px;
+  line-height: 1;
+}
+.gd-board.compact .gd-bd-sub {
+  display: none;
+}
+
 /* a line across the foot of the board (the projection) */
 .gd-bd-foot {
   display: flex;
@@ -846,7 +885,7 @@ table.stats .bx-team td {
 .gv-pts-u {
   display: block;
   margin-top: 4px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text-dim);
@@ -998,7 +1037,7 @@ table.stats .bx-team td {
   background: var(--ink);
   color: var(--paper-ink);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 .gv-swing .num {
@@ -1210,20 +1249,20 @@ table.stats .bx-team td {
    Thin lines, quiet axes, sentence-case labels; colour only for whose it is */
 .ch-axis {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   fill: var(--text-dim);
 }
 .ch-val {
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.03em;
   fill: var(--text-2);
 }
 .ch-mark {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   fill: var(--paper-ink);
 }

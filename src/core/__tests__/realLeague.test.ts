@@ -486,7 +486,7 @@ describe('two seasons of the real league', () => {
       });
       l.ownerReviews = [reviewed(l.season - 1, false)];
       expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 2, of: 2 }, floor: 0.3 });
-      expect(goalsWhy(planOwnerGoals(l, tid, outlook)!)).toContain("Rebuilding: season 2 of the 2 without the postseason I'll give it. After that I want the play-in.");
+      expect(goalsWhy(planOwnerGoals(l, tid, outlook)!)).toContain("This is the last of the two seasons without the playoffs I'll give you. After that, I want the play-in.");
       l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
       const out = planOwnerGoals(l, tid, outlook)!;
       expect(out).toMatchObject({ rebuild: { year: 3, of: 2, over: true }, floor: 0.4 });
@@ -939,7 +939,11 @@ describe('two seasons of the real league', () => {
       expect(r.records.length).toBeLessThanOrEqual(4);
       expect(r.next!.wins).toBeGreaterThan(10);
       expect(r.next!.wins).toBeLessThan(72);
+      // the career keeps the difficulty the season was played on
+      expect(r).toMatchObject({ difficulty: l.settings.difficulty });
       const verdict = l.inbox.find((m) => m.season === l.season && m.subject === 'Season review')!;
+      // and the review keeps the owner's own first words, which his verdict opens with
+      expect(verdict.body.startsWith(l.ownerReviews!.find((x) => x.season === l.season)!.said!)).toBe(true);
       expect(verdict.link).toBe(reviewPath(l.season));
       // with the press's prediction, the season against it
       const x = structuredClone(l);

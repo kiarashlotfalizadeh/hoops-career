@@ -55,7 +55,7 @@ export function CounterSheet({
   );
 }
 
-interface Item {
+export interface Item {
   key: string;
   name: string;
   /** new in this version, or gone from the deal you proposed */
@@ -122,19 +122,7 @@ function CounterCard({
         <Side title="You send" items={items(c.offer.a, base.a)} />
         <Side title="You get" items={items(c.offer.b, base.b)} />
       </div>
-      <div className="tiny dim num">
-        {info.inc >= info.out ? 'You take on' : 'You shed'} {money(Math.abs(info.inc - info.out))} in salary · payroll after{' '}
-        <b className={info.after > cap.luxuryTax ? 'bad' : info.after > cap.salaryCap ? 'warn' : 'good'}>{money(info.after)}</b>
-        {info.after > cap.secondApron
-          ? `, ${money(info.after - cap.secondApron)} over the second apron`
-          : info.after > cap.firstApron
-            ? `, ${money(info.after - cap.firstApron)} over the first apron`
-            : info.after > cap.luxuryTax
-              ? `, ${money(info.after - cap.luxuryTax)} over the tax`
-              : info.after > cap.salaryCap
-                ? `, ${money(info.after - cap.salaryCap)} over the cap`
-                : `, ${money(cap.salaryCap - info.after)} in cap space`}
-      </div>
+      <PayrollLine cap={cap} out={info.out} inc={info.inc} after={info.after} />
       {info.warn.length > 0 && <TradeNotes notes={info.warn} />}
       <div className="row">
         <button className="btn sm grow" onClick={() => onEdit(c.offer)} aria-label={`Edit in builder: ${c.label}`}>
@@ -148,7 +136,26 @@ function CounterCard({
   );
 }
 
-function Side({ title, items }: { title: string; items: Item[] }) {
+/** "You take on $X in salary · payroll after $Y, $Z over the tax": what a deal does to your books. */
+export function PayrollLine({ cap, out, inc, after }: { cap: ReturnType<typeof CAP_FOR>; out: number; inc: number; after: number }) {
+  return (
+    <div className="tiny dim num">
+      {inc >= out ? 'You take on' : 'You shed'} {money(Math.abs(inc - out))} in salary · payroll after{' '}
+      <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
+      {after > cap.secondApron
+        ? `, ${money(after - cap.secondApron)} over the second apron`
+        : after > cap.firstApron
+          ? `, ${money(after - cap.firstApron)} over the first apron`
+          : after > cap.luxuryTax
+            ? `, ${money(after - cap.luxuryTax)} over the tax`
+            : after > cap.salaryCap
+              ? `, ${money(after - cap.salaryCap)} over the cap`
+              : `, ${money(cap.salaryCap - after)} in cap space`}
+    </div>
+  );
+}
+
+export function Side({ title, items }: { title: string; items: Item[] }) {
   return (
     <div className="fo-counter-side">
       <span className="over">{title}</span>

@@ -120,6 +120,8 @@ describe('the press', () => {
       const item = league.news.filter((n) => n.kind === 'power').at(-1)!;
       expect(item.head).toBeTruthy();
       expect(item.tids).toContain(league.userTid);
+      // an opinion that moves every week is a story, never a front page
+      expect(league.news.filter((n) => n.kind === 'power').every((n) => n.weight === 2)).toBe(true);
     }
 
     // predicts the season on opening night and previews it

@@ -5,6 +5,8 @@ import { App } from './ui/App';
 import { Capacitor } from '@capacitor/core';
 import { initNative } from './native';
 import { useStore } from './state/store';
+import { noteStorageKept } from './state/backup';
+import { watchInstall } from './ui/components/InstallRow';
 
 // QA scripts drive the store directly in dev builds (save, inspect the league).
 if (import.meta.env.DEV || import.meta.env.VITE_QA === '1') (window as unknown as { __hc: unknown }).__hc = { store: useStore };
@@ -74,5 +76,19 @@ if (!Capacitor.isNativePlatform() && 'serviceWorker' in navigator && !import.met
   });
 }
 
-// Ask the browser not to evict saved careers under storage pressure (Safari clears idle sites).
-void navigator.storage?.persist?.().catch(() => false);
+// Ask the browser not to evict saved careers under storage pressure (Safari clears idle sites). On
+// the web, where it won't promise (or can't be asked), Today asks for a backup a season sooner and
+// offers to install the app (see InstallRow, which needs the install prompt from the start).
+if (Capacitor.isNativePlatform()) void navigator.storage?.persist?.().catch(() => false);
+else {
+  watchInstall();
+  void (async () => {
+    let kept = false;
+    try {
+      kept = (await navigator.storage?.persisted?.()) || (await navigator.storage?.persist?.()) || false;
+    } catch {
+      /* not answered: as not kept */
+    }
+    noteStorageKept(kept);
+  })();
+}

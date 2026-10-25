@@ -49,8 +49,10 @@ export interface DigestResult {
   score: string;
   opp: number;
   home: boolean;
-  /** The press's headline for it, for the newest few. */
+  /** The press's headline for it (the newest RESULTS_READ). */
   head?: string;
+  /** How big a night the press made it (gameStoryFor): 3 the front page, 2 a story, 1 a brief. */
+  weight?: number;
 }
 
 export interface DigestStory {
@@ -85,8 +87,28 @@ export interface Digest {
   stop?: { text: string; tone: 'good' | 'bad' | 'neutral'; to: string; call?: true };
 }
 
-/** The newest results that carry the press's headline. */
-export const HEADLINED = 8;
+/** The results a digest lists: all of a short stretch's; a longer one's newest RESULTS_NEW and its biggest nights. */
+export const RESULTS_SHOWN = 5;
+const RESULTS_NEW = 2;
+/** The newest results the press's story is read for, to list the biggest nights of a long stretch (a sim to the season's end has 80). */
+const RESULTS_READ = 40;
+
+/**
+ * The results a digest lists, newest first: a stretch of up to RESULTS_SHOWN + 2 all but its oldest;
+ * a longer one its RESULTS_NEW newest and then its biggest nights by the press's weight (a buzzer-
+ * beater, Christmas), newer first at equal size.
+ */
+export function shownResults(results: DigestResult[]): DigestResult[] {
+  if (results.length <= RESULTS_SHOWN + 2) return results.slice(0, RESULTS_SHOWN);
+  const rest = results
+    .slice(RESULTS_NEW)
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (b.r.weight ?? 1) - (a.r.weight ?? 1) || a.i - b.i)
+    .slice(0, RESULTS_SHOWN - RESULTS_NEW)
+    .sort((a, b) => a.i - b.i)
+    .map((x) => x.r);
+  return [...results.slice(0, RESULTS_NEW), ...rest];
+}
 
 const story = (n: { id: number; head?: string; text: string; weight?: 1 | 2 | 3 }): DigestStory => ({
   id: n.id,
@@ -115,7 +137,8 @@ export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean;
       const r = resultOf(l, g);
       if (r.won) w++;
       else lo++;
-      results.push({ gid: r.gid, won: r.won, score: scoreText(r), opp: r.opp, home: r.home, head: results.length < HEADLINED ? gameStoryFor(l, r.gid)?.head : undefined });
+      const st = results.length < RESULTS_READ ? gameStoryFor(l, r.gid) : null;
+      results.push({ gid: r.gid, won: r.won, score: scoreText(r), opp: r.opp, home: r.home, head: st?.head, weight: st?.weight });
     }
   const days = sameSeason ? l.day - mark.day : Infinity;
   if (!opts.long && results.length < 2 && days < 3) return null;
@@ -124,8 +147,8 @@ export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean;
   const others = [];
   for (let i = l.news.length - 1; i >= 0 && l.news[i].id >= mark.msgId; i--) {
     const n = l.news[i];
-    // (his games are told in the results)
-    if (isHisStory(l, n) && n.kind !== 'game') mine.push(n);
+    // (his games are told in the results, and the power rankings in their figure)
+    if (isHisStory(l, n) && n.kind !== 'game' && n.kind !== 'power') mine.push(n);
     else if (isLeagueStory(l, n)) others.push(n);
   }
   const stories = mine.sort(byWeight).slice(0, 6).map(story);

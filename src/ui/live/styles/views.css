@@ -45,7 +45,7 @@
   margin-left: auto;
   font-family: var(--mono);
   font-stretch: normal;
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
   color: var(--text-dim);
@@ -89,7 +89,7 @@
   font-family: var(--display);
   font-stretch: var(--display-w);
   font-weight: 720;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1;
 }
 .lv-oc-name {
@@ -107,7 +107,7 @@
   align-items: center;
   gap: 1px;
   flex: none;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 680;
 }
 .lv-oc-mark.hot {
@@ -134,7 +134,7 @@
   gap: 5px;
   min-width: 0;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -170,7 +170,7 @@
 .lv-oc-pf {
   grid-area: pf;
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1;
@@ -195,7 +195,7 @@
 .lv-lu-head {
   flex: 1;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-dim);
   text-align: right;
@@ -447,7 +447,7 @@
   font-family: var(--mono);
   font-stretch: normal;
   font-weight: 600;
-  font-size: 11.5px;
+  font-size: 12px;
   color: var(--paper-ink);
 }
 .lv-slot.on .lv-slot-l {
@@ -466,7 +466,7 @@
 .lv-slot-f {
   font-family: var(--mono);
   font-stretch: normal;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.03em;
   color: var(--text-dim);
@@ -535,7 +535,7 @@
   padding-bottom: 5px;
   border-bottom: 2px solid var(--ink);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-dim);
 }
@@ -597,7 +597,7 @@
   width: 58px;
   padding-top: 1px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: -0.03em;
   color: var(--text-dim);
 }
@@ -606,7 +606,7 @@
   padding-top: 1px;
   font-family: var(--mono);
   font-stretch: normal;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--text-dim);

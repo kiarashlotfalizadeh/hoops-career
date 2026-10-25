@@ -16,14 +16,14 @@
 // for one still open as its due date nears (see openCallIds and runSim), and for nothing else that
 // doesn't need an answer. A card is settled by its call or a choice; it is remembered
 // (League.callsDone) so it doesn't come back. Nothing here draws from the league's random stream.
-import type { League, PlayInGame, PlayoffSeries, Player, ScheduledGame } from '../types';
+import type { GamePlanItem, League, PlayInGame, PlayoffSeries, Player, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
 import { fmtDate, playerName, revenueScale, standardRoster } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
 import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST, easeFloor, easeFloorBlockedReason, floorDanger, FLOOR_EASE } from './ownerGoals';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
-import { BLEED_GRADE, booksOf, frozen, FROZEN_BUDGET, warnWindow } from './books';
+import { booksOf, deeperText, frozen, FROZEN_BUDGET, warnWindow } from './books';
 import { aiTicketPrice, attendanceFor, budgetCostPerSeason, seasonEndCash } from './finances';
 import { tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
@@ -33,8 +33,9 @@ import { tradeValue } from './contracts';
 import { assetText, cleanProposals } from './proposals';
 import { ensureRotation, userGameOnDay } from './games';
 import { seriesLabel } from './playoffs';
-import { planFor, planMade } from './gamePlans';
+import { planFor, planMade, setPlanItem } from './gamePlans';
 import { playerAge } from '../playerGen';
+import { leagueForecast, pct } from '../analysis/odds';
 
 /** A star: one of the team's three best players by OVR. */
 export const STAR_RANK = 3;
@@ -100,8 +101,12 @@ export function settleCall(league: League, id: string) {
   league.callsDone = done.slice(-DONE_KEPT);
 }
 
-/** Odds in tenths of a percent as the cards say them: "3%", and "<1%" under one (as the screens' odds read). */
-const oddsText = (tenths: number) => `${tenths < 10 ? '<1' : Math.round(tenths / 10)}%`;
+/**
+ * Odds in tenths of a percent as the cards say them, as the screens' odds read (pct): "3%", "<1%"
+ * and ">99%" at the ends, never a 100% or a 0% a simulated count can't promise. They count the
+ * play-in too, so the cards call them the postseason odds.
+ */
+const oddsText = (tenths: number) => pct(tenths / 1000);
 
 /**
  * The user's playoff odds as of the latest weekly point this season (tenths of a percent), how many
@@ -189,12 +194,22 @@ function seriesStart(league: League): { id: string; opp: number; g: ScheduledGam
   return series && series.winner === undefined && series.highWins + series.lowWins === 0 ? { id, opp, g, series } : null;
 }
 
+/**
+ * A plan set for this series (or play-in game) since it began: the series call's answer, so it
+ * settles it. (A plan from before, for the next game or the season, still opens the call: its
+ * answer is to keep or review it.) A series plan can only be made once the series is on.
+ */
+function planSet(league: League, start: NonNullable<ReturnType<typeof seriesStart>>): boolean {
+  const made = planFor(league, start.opp, start.g);
+  return !!made && planMade(made) && (made.scope === 'series' || !!start.playIn);
+}
+
 /** The ids of the calls that may be open now, before asking whether each has a real choice in it. */
 function candidateIds(league: League): string[] {
   if (league.fired) return [];
   const ids: string[] = [];
   const series = seriesStart(league);
-  if (series) ids.push(series.id);
+  if (series && !planSet(league, series)) ids.push(series.id);
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') for (const s of hurtStars(league)) ids.push(s.id);
   if (oddsCall(league)) ids.push(oddsId(league));
   if (floorCall(league)) ids.push(floorId(league));
@@ -339,6 +354,13 @@ export interface CallCard {
 
 export type CallAction =
   | { kind: 'settle'; id: string }
+  /** A look at the screen with the answer (the plan): the call stays open until it's answered there. */
+  | { kind: 'open'; id: string }
+  /**
+   * The staff's plan for a series: the counters it measured as gains against `opp` (the screen
+   * measures them in the worker first and passes them in; none, or none passed: his playbook as it is).
+   */
+  | { kind: 'staffPlan'; id: string; opp: number; items?: GamePlanItem[] }
   | { kind: 'tenDay'; id: string; pid: number }
   | { kind: 'staffRotation'; id: string }
   | { kind: 'concede'; id: string }
@@ -390,9 +412,10 @@ export function staffCalls(league: League): CallCard[] {
         : playIn.id.endsWith('-910')
           ? 'Win and you play for the 8th seed; lose and the season is over.'
           : "Win and you're the 8th seed; lose and the season is over.";
+    // (opening the plan doesn't answer the call: a plan set for the series does, see planSet)
     const plan: CallChoice = {
       label: planned ? 'Review the plan' : series ? 'Plan the series' : 'Plan the game',
-      action: { kind: 'settle', id },
+      action: { kind: 'open', id },
       to: `/games/${opp}?tab=plan`,
     };
     cards.push({
@@ -403,7 +426,8 @@ export function staffCalls(league: League): CallCard[] {
       tone: 'info',
       to: `/games/${opp}`,
       suggestion: plan,
-      choices: [{ label: planned ? 'Keep it' : 'Leave it to the staff', action: { kind: 'settle', id } }],
+      // the staff's way: its plan, the counters its numbers back (the Preview's "Use the staff's plan")
+      choices: [planned ? { label: 'Keep it', action: { kind: 'settle', id } } : { label: 'Leave it to the staff', action: { kind: 'staffPlan', id, opp } }],
     });
   }
 
@@ -454,7 +478,7 @@ export function staffCalls(league: League): CallCard[] {
     cards.push({
       id,
       kind: 'odds',
-      title: `Playoff odds down to ${oddsText(odds.now)}`,
+      title: `Postseason odds down to ${oddsText(odds.now)}`,
       line: blocked
         ? `The staff's call: keep pushing. ${blocked}`
         : "The staff's call: tell the owner now, play the young players and sell veterans before the deadline, rather than miss his playoff goal.",
@@ -501,9 +525,23 @@ export function staffCalls(league: League): CallCard[] {
     const left = league.tradeDeadlineDay - league.day;
     const offer = call?.offer;
     const other = offer ? league.teams[offer.b.tid] : null;
-    const pct = call ? `Playoff odds ${oddsText(call.odds)}. ` : '';
+    // (today's odds, as Today and the standings show them: not the reading the call was worked out from)
+    const now = call ? leagueForecast(league)?.teams[me] : undefined;
+    const odds = now ? `Postseason odds ${pct(now.reach[0], now.clinched)}. ` : call ? `Postseason odds ${oddsText(call.odds)}. ` : '';
     const stand: CallChoice = { label: 'Stand pat', action: { kind: 'settle', id } };
-    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: '/office/trade' };
+    // with no deal found, the need the staff was looking for: a player better than the fifth best
+    // to buy (Trade → Find), the veteran a contender would pay most for to sell (the trading block)
+    const roster = standardRoster(league, me);
+    const bar = [...roster].sort((x, y) => y.ovr - x.ovr)[4]?.ovr ?? 0;
+    const vet = roster.filter((p) => playerAge(p, league.season) >= 28 && p.ovr >= 70).sort((x, y) => tradeValue(league, y) - tradeValue(league, x) || x.pid - y.pid)[0];
+    const lookTo = call?.mode === 'buy' ? `/office/trade?tab=find&minOvr=${bar + 1}` : call?.mode === 'sell' && vet ? `/office/trade?give=${vet.pid}` : '/office/trade';
+    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: lookTo };
+    const none =
+      call?.mode === 'buy'
+        ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one; Find lists who's out there.`
+        : call?.mode === 'sell'
+          ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet; the trading block shows who would.`
+          : 'stand pat. The team is where it is.';
     const deal: CallChoice | null =
       offer && other
         ? {
@@ -518,8 +556,8 @@ export function staffCalls(league: League): CallCard[] {
       title: left === 0 ? 'Trade deadline: today' : `Trade deadline in ${plural(left, 'day')}`,
       line:
         deal && other
-          ? `${pct}The staff's call: ${call!.mode === 'buy' ? 'buy' : 'sell'}. ${assetText(league, offer!.b)} from the ${other.name} for ${assetText(league, offer!.a)}.`
-          : `${pct}The staff's call: ${call?.mode === 'buy' ? 'buy, but nothing they found works: stand pat or look yourself.' : call?.mode === 'sell' ? 'sell, but no contender bites: stand pat or look yourself.' : 'stand pat. The team is where it is.'}`,
+          ? `${odds}The staff's call: ${call!.mode === 'buy' ? 'buy' : 'sell'}. ${assetText(league, offer!.b)} from the ${other.name} for ${assetText(league, offer!.a)}.`
+          : `${odds}The staff's call: ${none}`,
       tone: 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
@@ -545,13 +583,8 @@ export function staffCalls(league: League): CallCard[] {
     const ticket = ticketLever(league);
     const cut: CallChoice | null =
       save > 0 ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` } : null;
-    const price: CallChoice | null = ticket
-      ? {
-          label: `Price tickets at $${ticket.price}`,
-          action: { kind: 'ticketPrice', id, price: ticket.price },
-          confirm: `From $${team.budget.ticketPrice}: where the gate peaks at today's demand.`,
-        }
-      : null;
+    // (no second tap: a price can be changed back on Finances)
+    const price: CallChoice | null = ticket ? { label: `Price tickets at $${ticket.price}`, action: { kind: 'ticketPrice', id, price: ticket.price } } : null;
     const shed: CallChoice | null = tradingClosedReason(league) ? null : { label: 'Shed salary', action: { kind: 'settle', id }, to: '/office/trade' };
     const noted: CallChoice = { label: 'Not now', action: { kind: 'settle', id } };
     // the staff's call: whichever of the budgets and the tickets brings more, else salary out
@@ -562,20 +595,33 @@ export function staffCalls(league: League): CallCard[] {
       .filter((x): x is { c: CallChoice; v: number } => !!x.c)
       .sort((x, y) => y.v - x.v);
     const suggestion = levers[0]?.c ?? shed ?? noted;
+    // the gap the next step turns on: to the black (the warning, the ultimatum), or under the freeze
+    // to no deeper than the last close (else to the black); and how much of it the staff's call covers
+    const floor = (b.stage === 'freeze' || b.stage === 'final') && b.close !== undefined && p.end < b.close ? b.close : 0;
+    const gap = p.left > 0 ? Math.max(0, floor - p.end) : 0;
+    const covers = levers[0] && suggestion === levers[0].c ? levers[0].v : 0;
+    const share =
+      gap > 0 && covers > 0
+        ? covers >= gap
+          ? `, enough to close the ${money(gap)} gap`
+          : `. It closes ${money(covers)} of the ${money(gap)} gap: on its own it won't change what happens ${between ? "when next season's books close" : 'when the books close'}${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
+        : '';
     const call =
       suggestion === cut
-        ? `cut the staff budgets to the league standard (saves ${money(save)}${between ? ' a season' : ' over the rest of the season'})`
+        ? `cut the staff budgets to the league standard (saves ${money(save)}${between ? ' a season' : ' over the rest of the season'})${share}`
         : suggestion === price
-          ? `price tickets at $${ticket!.price}, where the gate peaks (${money(ticket!.gain)} more over the home games left)`
+          ? `price tickets at $${ticket!.price}, where the gate peaks (${money(ticket!.gain)} more over the home games left)${share}`
           : suggestion === shed
-            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}`
+            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}${gap > 0 ? ` (${money(gap)} to find)` : ''}`
             : '';
     const next = between ? "when next season's books close" : 'when the books close';
+    // what digging deeper brings, in the Owner page's words (past the debt limit, or in the grace years)
+    const deeper = deeperText(league, between);
     const lines: Record<typeof b.stage, string> = {
       warning: `${capitalize(heading)}, and playoff money doesn't count. Still in the red then, and the owner gives you an ultimatum.`,
       ultimatum: `${id === booksDueId(league) ? capitalize(heading) : `The books closed ${closed} in the red${heading ? `; ${heading}` : ''}`}. Still in the red ${next}, and he freezes the budget.`,
-      freeze: `Minimum deals only, no raises, no trade that takes on salary, until a season's books close in the black${heading ? `: ${heading}` : ''}. Deeper in the red than ${closed} ${next}, and it's his final warning.`,
-      final: `Deeper in the red than ${closed} ${next} and ${league.settings.jobSecurity ? "you're fired, whatever you win" : `that season grades ${Math.round(BLEED_GRADE * 100)} at best too`}${heading ? `: ${heading}` : ''}.`,
+      freeze: `Minimum deals only, no raises, no trade that takes on salary, until a season's books close in the black${heading ? `: ${heading}` : ''}. ${deeper}`,
+      final: `${deeper.slice(0, -1)}${heading ? `: ${heading}` : ''}.`,
     };
     const titles: Record<typeof b.stage, string> = {
       warning: 'The books are heading into the red',
@@ -605,6 +651,21 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
     case 'settle':
       r = { ok: true, text: '' };
       break;
+    case 'open':
+      // (nothing settled: the answer is made on the screen it opens)
+      return { ok: true, text: '' };
+    case 'staffPlan': {
+      const abbrev = league.teams[a.opp].abbrev;
+      for (const it of a.items ?? []) setPlanItem(league, a.opp, it);
+      const items = a.items ?? [];
+      r = {
+        ok: true,
+        text: items.length
+          ? `The staff's plan vs ${abbrev}: ${items.map((x) => x.label).join(', ')}.`
+          : `The staff plays ${abbrev} with your playbook as it is: none of its counters measured as a gain.`,
+      };
+      break;
+    }
     case 'tenDay': {
       const t = userTenDay(league, a.pid);
       r = { ok: t.ok, text: t.reason };

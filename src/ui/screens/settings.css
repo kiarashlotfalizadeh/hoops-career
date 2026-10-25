@@ -23,6 +23,14 @@
 .set-list > .dif {
   padding: 12px 6px 8px;
 }
+/* a change that waits for the next opening night: right under the setting, no rule between */
+.set-list > .set-pending {
+  min-height: 0;
+  padding-top: 0;
+  border-top: 0;
+  color: var(--warn);
+  line-height: 1.35;
+}
 .set-label {
   font-weight: 680;
   gap: 6px;

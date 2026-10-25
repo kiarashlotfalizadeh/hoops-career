@@ -759,7 +759,8 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(l.faBids).toBeUndefined();
   }
 
-  // below his asking price an offer only wins against rival bids he likes less; alone he holds out
+  // below his asking price an offer wins against rival bids he likes less, and alone: with nobody
+  // else's money there, he doesn't hold out (to take less a day later)
   {
     for (const rival of [true, false]) {
       const { l, open } = bidsSummer();
@@ -767,10 +768,11 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
       if (rival) open(R, 22, 0.1);
       const [star] = stars(l, 1);
       const ask = askingContract(l, star, U);
-      expect(userBid(l, star.pid, Math.ceil((ask.amount * 0.95) / 50) * 50, ask.years).ok).toBe(true);
+      const bid = Math.ceil((ask.amount * 0.95) / 50) * 50;
+      if (!rival) expect(bidStanding(l, star, bid, ask.years)).toMatchObject({ leads: true, toLead: bidFloor(l, star, ask.years) });
+      expect(userBid(l, star.pid, bid, ask.years).ok).toBe(true);
       resolveBids(l);
-      expect(star.tid).toBe(rival ? U : FREE_AGENT);
-      if (!rival) expect(l.inbox[0].subject).toMatch(/turned us down/);
+      expect(star.tid).toBe(U);
     }
   }
 

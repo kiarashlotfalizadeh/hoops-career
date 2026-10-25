@@ -11,7 +11,6 @@ import { eventLines, foulLimit, type LiveEvent } from './alerts';
 import type { BannerItem } from './Banner';
 import type { SubOptions } from './MyPlayer';
 import { drawnPlayer, subsLine, type Drawn } from './drawn';
-import { HOT_STREAK } from './OnCourt';
 import { livePills, type Pill } from './pills';
 import { gameShare } from '../components/GameKeys';
 
@@ -103,19 +102,18 @@ export function subOptions(view: Drawn, userSide: 0 | 1, me: GameSim['T'][number
 
 /**
  * The Tactics tab's quick changes for the game as the court has drawn it, against `planned` (the
- * tactics the game tipped off with). Their threat is the player already targeted, else their hottest
- * shooter, else their leading scorer.
+ * tactics the game tipped off with). Their threat is the player already targeted, else their leading
+ * scorer (never a shooter's streak: the engine has no hot hand to double).
  */
 export function quickPills(view: Drawn, userSide: 0 | 1, tactics: Tactics, planned: Tactics, nameOf: (pid: number) => string): Pill[] {
   const me = view.sides[userSide];
   const them = view.sides[1 - userSide];
   const oppOn = them.on.map((pid) => ({ pid, name: nameOf(pid), ftPct: drawnPlayer(view, pid)?.ftPct ?? 0.75 }));
   const five = them.players.filter((p) => them.on.includes(p.pid));
-  // the player already targeted stays the target; otherwise their hottest shooter, or their leading scorer
+  // the player already targeted stays the target; otherwise their leading scorer
   const targeted = tactics.defense.starPlan !== 'none' ? five.find((p) => p.pid === tactics.defense.starTarget) : undefined;
-  const hot = [...five].filter((p) => p.streak >= HOT_STREAK).sort((a, b) => b.streak - a.streak)[0];
   const top = [...five].sort((a, b) => b.pts - a.pts)[0];
-  const threat = targeted ?? hot ?? top;
+  const threat = targeted ?? top;
   return livePills(tactics, planned, {
     q: view.q,
     clock: view.clock,

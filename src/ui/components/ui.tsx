@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useInRouterContext, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { ovrColor } from '../../core/ratings';
@@ -366,6 +367,64 @@ const SHEET_OUT_MS = 180;
 /** The open sheets, the top one last: Escape and Tab are its alone (a Help sheet over a contract sheet). */
 const openSheets: object[] = [];
 
+// ---------------------------------------------------------------- Back closes the top sheet
+// Each open sheet holds a history entry of its own: the same URL and router key, marked with the
+// sheet's number (numbers rise as sheets open, so a sheet over another has the higher one). Browser
+// and Android Back take that entry, and the sheets above the entry Back lands on close. A sheet closed
+// any other way takes its entry back; one closed by going to another screen leaves its entry under
+// that screen, and Back steps past it later. (The native shell's Back taps the top backdrop: the same
+// close, the same entry taken back.)
+let sheetSeq = 0;
+/** Open sheets by number: how to close one, and whether its entry is in the history yet. */
+const sheetEntries = new Map<number, { close: () => void; pushed: boolean }>();
+/** Our own history.back()s not yet landed: an entry pushed meanwhile could be the one they take. */
+let sheetBacks = 0;
+const sheetMark = () => (window.history.state as { hcSheet?: number } | null)?.hcSheet ?? 0;
+const sheetBack = () => {
+  sheetBacks++;
+  window.history.back();
+};
+function pushSheetEntries() {
+  for (const [n, e] of sheetEntries)
+    if (!e.pushed) {
+      e.pushed = true;
+      window.history.pushState({ ...(window.history.state as object | null), hcSheet: n }, '');
+    }
+}
+function onSheetPop() {
+  if (sheetBacks) sheetBacks--;
+  const at = sheetMark();
+  for (const [n, e] of sheetEntries) if (e.pushed && n > at) e.close();
+  // an entry left by a sheet that has closed since: step past it
+  if (at && !sheetEntries.has(at)) return sheetBack();
+  if (!sheetBacks) pushSheetEntries();
+}
+let sheetPopOn = false;
+function openSheetEntry(close: () => void): number {
+  if (!sheetPopOn) {
+    sheetPopOn = true;
+    window.addEventListener('popstate', onSheetPop);
+  }
+  const n = ++sheetSeq;
+  sheetEntries.set(n, { close, pushed: false });
+  if (!sheetBacks) pushSheetEntries();
+  return n;
+}
+function closeSheetEntry(n: number) {
+  sheetEntries.delete(n);
+  if (sheetMark() === n) sheetBack();
+}
+
+/** A sheet closes when the screen under it changes (a link inside it, a shortcut). */
+function ClosesOnNavigate({ onClose }: { onClose: () => void }) {
+  const { pathname } = useLocation();
+  const at = useRef(pathname);
+  useEffect(() => {
+    if (pathname !== at.current) onClose();
+  }, [pathname, onClose]);
+  return null;
+}
+
 /**
  * Bottom sheet on phones, centred dialog on tablets. Focus moves in and is restored on close,
  * Tab stays inside, Escape / the close button / a backdrop tap / a downward swipe dismiss it,
@@ -413,11 +472,14 @@ export function Sheet({
   const start = useRef<{ x: number; y: number; locked: boolean } | null>(null);
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
+  const routed = useInRouterContext();
+  const closeNow = useMemo(() => () => closeRef.current(), []);
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     const me = {};
     openSheets.push(me);
+    const entry = openSheetEntry(() => closeRef.current());
     document.body.classList.add('sheet-open');
     ref.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
@@ -443,6 +505,7 @@ export function Sheet({
     return () => {
       window.removeEventListener('keydown', onKey);
       openSheets.splice(openSheets.indexOf(me), 1);
+      closeSheetEntry(entry);
       if (!openSheets.length) document.body.classList.remove('sheet-open');
       prev?.focus?.({ preventScroll: true });
     };
@@ -506,6 +569,7 @@ export function Sheet({
         </div>
         {shown.children}
       </div>
+      {open && routed && <ClosesOnNavigate onClose={closeNow} />}
     </>,
     document.body,
   );

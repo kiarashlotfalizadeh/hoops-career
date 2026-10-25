@@ -10,19 +10,26 @@ interface InjuryType {
   min: number;
   max: number;
   severity: Injury['severity'];
+  /** Most games it can cost, after the medical budget and age have stretched it. */
+  cap?: number;
 }
 
 /**
- * The inbox hears of an injury that changes plans: one of the eight biggest minute loads out this
+ * The inbox hears of an injury that changes plans: one of the MAIL_RANK biggest minute loads out this
  * many games, or anyone else in the rotation out RETURN_MAIL_GAMES. Shorter absences, and players
- * out of the rotation, still show on the roster, Today's next game and the rotation.
+ * out of the rotation, still show on the roster, Today's next game, the rotation and the digest's
+ * Injuries (a role player's few weeks out was most of a season's mail).
  */
 const MAIL_MIN_GAMES = 8;
+/** The minute loads whose shorter absences still get mail: the starters. */
+const MAIL_RANK = 5;
 /** A return gets its own mail only after an absence this long; shorter ones end without a word. */
 const RETURN_MAIL_GAMES = 15;
 
 // Weights and lengths tuned so a team loses about four to six players a season to 10+ game
-// absences and the league sees a handful of season-ending tears, as in recent NBA seasons.
+// absences and the league sees a handful of season-ending tears, as in recent NBA seasons: four to
+// eight absences of 60+ games a season, one to three of them Achilles ruptures (at twice these
+// weights star-check counted 9 a season, 4 Achilles, up to 18 and 10).
 export const INJURY_TYPES: InjuryType[] = [
   { name: 'Sprained ankle', weight: 24, min: 1, max: 7, severity: 'minor' },
   { name: 'Knee soreness', weight: 13, min: 1, max: 5, severity: 'minor' },
@@ -40,8 +47,8 @@ export const INJURY_TYPES: InjuryType[] = [
   { name: 'MCL sprain', weight: 2.4, min: 8, max: 26, severity: 'moderate' },
   { name: 'Torn meniscus', weight: 1.3, min: 18, max: 40, severity: 'major' },
   { name: 'Foot stress fracture', weight: 1, min: 22, max: 55, severity: 'major' },
-  { name: 'Torn ACL', weight: 0.35, min: 70, max: 110, severity: 'severe' },
-  { name: 'Ruptured Achilles', weight: 0.3, min: 80, max: 125, severity: 'severe' },
+  { name: 'Torn ACL', weight: 0.2, min: 70, max: 110, severity: 'severe' },
+  { name: 'Ruptured Achilles', weight: 0.16, min: 72, max: 95, severity: 'severe', cap: 95 },
 ];
 
 export function rollInjury(league: League, p: Player, rng: Rng): Injury {
@@ -51,7 +58,7 @@ export function rollInjury(league: League, p: Player, rng: Rng): Injury {
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
   const health = team ? team.budget.health : 50;
   let games = Math.round(rng.uniform(t.min, t.max) * (1.12 - 0.25 * (health / 100)) * (a >= 32 ? 1.15 : 1));
-  games = Math.max(1, games);
+  games = Math.max(1, Math.min(t.cap ?? Infinity, games));
   return { type: t.name, gamesRemaining: games, gamesTotal: games, severity: t.severity };
 }
 
@@ -98,7 +105,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
   const rot = p.tid === league.userTid ? league.teams[p.tid].rotation : null;
   const byMinutes = rot ? [...rot.order].filter((pid) => (rot.minutes[pid] ?? 0) > 0).sort((a, b) => (rot.minutes[b] ?? 0) - (rot.minutes[a] ?? 0)) : [];
   const rank = byMinutes.indexOf(p.pid);
-  if (rank >= 0 && inj.gamesRemaining >= (rank < 8 ? MAIL_MIN_GAMES : RETURN_MAIL_GAMES)) {
+  if (rank >= 0 && inj.gamesRemaining >= (rank < MAIL_RANK ? MAIL_MIN_GAMES : RETURN_MAIL_GAMES)) {
     addInbox(league, {
       // (a star's long absence is a staff call that stops a long sim: see calls.ts)
       from: 'Medical Staff',

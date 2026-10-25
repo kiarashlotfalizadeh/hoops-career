@@ -33,7 +33,8 @@ export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';
 
 /** What a tap on an agenda item's suggestion or choice does (see resolveAgenda). */
 export type AgendaAction =
-  | { kind: 'release'; pid: number }
+  /** `pids`: several at once (the staff's picks for the opening-night cuts), `pid` the first of them. */
+  | { kind: 'release'; pid: number; pids?: number[] }
   | { kind: 'sign'; pid: number }
   | { kind: 'sheet'; pid: number; match: boolean }
   | { kind: 'autoPick' }
@@ -81,6 +82,23 @@ export interface AgendaItem {
   steps?: { title: string; done: boolean; to: string; next: boolean }[];
 }
 
+/** What releasing him leaves on the books: "$2.4M dead money", or "no dead money" (camp and minimum deals before opening night). */
+function deadText(league: League, p: Player): string {
+  const dead = releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
+  return dead > 0 ? `${money(dead)} dead money` : 'no dead money';
+}
+
+/** The staff's picks released in one tap ("Release 2 · staff's picks"), confirmed when any of it stays on the books. */
+function releaseAll(league: League, ps: Player[]): AgendaChoice {
+  if (ps.length === 1) return { ...releaseChoice(league, ps[0]), label: `Release ${playerName(ps[0])} · staff's pick` };
+  const dead = ps.reduce((a, p) => a + releaseDeadMoney(league, p).reduce((b, d) => b + d.amount, 0), 0);
+  return {
+    label: `Release ${ps.length} · staff's picks`,
+    action: { kind: 'release', pid: ps[0].pid, pids: ps.map((p) => p.pid) },
+    ...(dead > 0 ? { confirm: `${money(dead)} stays on your books as dead money.` } : {}),
+  };
+}
+
 /** Releasing a player: free for camp and minimum deals before opening night; anything owed stays on the books, so it's confirmed. */
 function releaseChoice(league: League, p: Player): AgendaChoice {
   const dead = releaseDeadMoney(league, p).reduce((a, d) => a + d.amount, 0);
@@ -126,14 +144,16 @@ export function cutOrder(league: League, players: Player[]): Player[] {
 export const GUIDE_STEPS: { step: GuideStep; title: string; line: string }[] = [
   { step: 'rotation', title: 'Set your rotation', line: 'Starters, minutes and who closes: change one, or keep the five the staff picked.' },
   { step: 'playbook', title: 'Pick a playbook', line: "Each one shows how well it fits this roster. Pick one, or keep the staff's." },
-  { step: 'scout', title: 'Plan for your opener', line: 'Add a counter to their best play, or go in with no plan.' },
+  { step: 'scout', title: 'Plan for your opener', line: "Add the staff's counter, or go in with no plan." },
   { step: 'coach', title: 'Coach a game live', line: 'Timeouts, subs and adjustments, then the report says what your plan did.' },
 ];
 
 /**
  * The guide's steps done, each by a real choice: the rotation or playbook changed or kept on its
- * screen (the guide strip there), a counter added for a game or no plan chosen, a live game coached.
- * Opening a screen ticks nothing.
+ * screen (the guide strip there), a counter added for a game or no plan chosen, a live game coached:
+ * a move of his own in it (a timeout, a sub, a change of tactics or a staff call taken: the report
+ * keeps them), or a period of it watched whole (the live game notes that: see guideAfterLive).
+ * Opening a screen, or a live game simmed to its end, ticks nothing.
  */
 export function guideDone(league: League): Set<GuideStep> {
   const done = new Set<GuideStep>(league.onboarding?.done ?? []);
@@ -141,18 +161,54 @@ export function guideDone(league: League): Set<GuideStep> {
   if (t.rotation.manual) done.add('rotation');
   if (t.tactics.manual) done.add('playbook');
   if (Object.values(league.gamePlans ?? {}).some(planMade)) done.add('scout');
-  // the latest live game's highlights are kept with the save
-  if (league.reel) done.add('coach');
+  if (!done.has('coach') && league.games.some((r) => r.moves?.some((m) => m.by !== 'staff'))) done.add('coach');
   return done;
+}
+
+/** Note a step of the guide done (its strip's "keep", or a live game watched): it stays done. */
+export function guideStepDone(league: League, step: GuideStep) {
+  const o = (league.onboarding ??= { done: [] });
+  if (!o.done.includes(step)) o.done.push(step);
+}
+
+/** The guide's weeks: the user's first season, from the preseason through its first three weeks, unless he put it away (or teaching is off). */
+function guideWeeks(league: League): boolean {
+  const o = league.onboarding;
+  if (!o || o.hidden || league.settings.teaching === false) return false;
+  if (league.season !== league.startSeason) return false;
+  return league.phase === 'preseason' || (league.phase === 'regular' && league.day < 21);
 }
 
 /** The guide shows in the user's first season, from the preseason through its first weeks, until each step is done or he puts it away. */
 export function guideOpen(league: League): boolean {
+  return guideWeeks(league) && guideDone(league).size < GUIDE_STEPS.length;
+}
+
+/** How a normal week goes, as the staff's note says it when the guide is done (three lines). */
+const GUIDE_WEEK = [
+  'Most days: play or sim to the next game. The staff covers the rest.',
+  "Before a big game: add the staff's counter (Matchup → Plan).",
+  'Once a month the owner checks his goals (Office → Owner).',
+];
+const WEEK_SUBJECT = 'A normal week';
+
+/**
+ * With every step done, the staff's note on how a normal week goes, once (the live game that coaches
+ * the last step, or the guide strip's last "keep", sends it). It links home, as the welcome does: it's
+ * the guide's, not something that needs him.
+ */
+export function guideFinished(league: League) {
   const o = league.onboarding;
-  if (!o || o.hidden || league.settings.teaching === false) return false;
-  if (league.season !== league.startSeason) return false;
-  if (league.phase !== 'preseason' && !(league.phase === 'regular' && league.day < 21)) return false;
-  return guideDone(league).size < GUIDE_STEPS.length;
+  if (!o || league.settings.teaching === false || league.season !== league.startSeason || guideDone(league).size < GUIDE_STEPS.length) return;
+  if (league.inbox.some((m) => m.subject === WEEK_SUBJECT && m.season === league.season)) return;
+  addInbox(league, { from: 'Assistant Coach', subject: WEEK_SUBJECT, body: GUIDE_WEEK.join('\n\n'), tone: 'good', link: '/' });
+}
+
+/** A live game over: a period of it watched whole coaches it (a move of his own does too: see guideDone), and the last step done sends the staff's note. */
+export function guideAfterLive(league: League, watched: boolean) {
+  if (!league.onboarding) return;
+  if (watched) guideStepDone(league, 'coach');
+  guideFinished(league);
 }
 
 /** Bring the guide back (Today's "Guide" link): it shows again while the first weeks last. */
@@ -175,8 +231,23 @@ export function guideStepTo(league: League, step: GuideStep): string {
 }
 
 function guideItems(league: League): AgendaItem[] {
-  if (!guideOpen(league)) return [];
+  if (!guideWeeks(league)) return [];
   const done = guideDone(league);
+  const noted = league.inbox.some((m) => m.subject === WEEK_SUBJECT && m.season === league.season);
+  if (done.size >= GUIDE_STEPS.length)
+    return [
+      {
+        id: 'guide:done',
+        kind: 'guide',
+        required: false,
+        title: `Your first week · all ${GUIDE_STEPS.length} done`,
+        // (Today shows two lines of it: the staff's note has all three)
+        line: noted ? `${GUIDE_WEEK[0]} More in the staff's note.` : GUIDE_WEEK.join(' '),
+        ...(noted ? { to: '/inbox' } : {}),
+        tone: 'good',
+        choices: [{ label: 'Got it', action: { kind: 'hideGuide' } }],
+      },
+    ];
   const next = GUIDE_STEPS.find((s) => !done.has(s.step))!;
   return [
     {
@@ -237,19 +308,17 @@ export function agenda(league: League): AgendaItem[] {
     const std = standardRoster(league, me);
     const over = std.length - CAP.rosterMax;
     if (over > 0) {
-      const first = cutOrder(league, std)[0];
+      const picks = cutOrder(league, std).slice(0, over);
       items.push({
         id: 'cuts',
         kind: 'cuts',
         required: true,
-        title: `Cut ${plural(over, 'player')}`,
-        line: `${std.length} signed · ${CAP.rosterMax} allowed on opening night`,
+        title: `Release ${plural(over, 'player')}`,
+        line: `${std.length} signed · ${CAP.rosterMax} allowed on opening night. The staff's ${over === 1 ? 'pick' : 'picks'}, least value to the team: ${picks.map((p) => `${playerName(p)} (${deadText(league, p)})`).join(', ')}.`,
         tone: 'bad',
         to: '/team',
-        suggestion: releaseChoice(league, first),
-        pids: cutOrder(league, std)
-          .slice(0, over)
-          .map((p) => p.pid),
+        suggestion: releaseAll(league, picks),
+        pids: picks.map((p) => p.pid),
       });
     }
     const under = CAP.rosterMin - std.length;
@@ -419,11 +488,12 @@ export function agendaBlocker(league: League): AgendaItem | null {
 export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; text: string } {
   switch (a.kind) {
     case 'release': {
-      const p = league.players[a.pid];
-      if (!p || p.tid !== league.userTid) return { ok: false, text: 'He is no longer on your roster.' };
+      const ps = (a.pids ?? [a.pid]).map((pid) => league.players[pid]);
+      if (ps.some((p) => !p || p.tid !== league.userTid))
+        return { ok: false, text: ps.length > 1 ? 'One of them is no longer on your roster.' : 'He is no longer on your roster.' };
       if (league.fired) return { ok: false, text: FIRED_REASON };
-      releasePlayer(league, p);
-      return { ok: true, text: `${playerName(p)} released.` };
+      for (const p of ps) releasePlayer(league, p);
+      return { ok: true, text: `${ps.map((p) => playerName(p)).join(' and ')} released.` };
     }
     case 'sign': {
       const p = league.players[a.pid];
@@ -458,15 +528,16 @@ export function resolveAgenda(league: League, a: AgendaAction): { ok: boolean; t
       if (r.ok && league.phase === 'draft') continueDraft(league);
       return { ok: r.ok, text: r.reason };
     }
-    case 'guide': {
+    case 'guide':
       // (the guide strip's "keep" on its step's screen: keeping the staff's choice is a choice)
-      const o = (league.onboarding ??= { done: [] });
-      if (!o.done.includes(a.step)) o.done.push(a.step);
+      guideStepDone(league, a.step);
+      guideFinished(league);
       return { ok: true, text: '' };
-    }
     case 'hideGuide': {
+      // (the last card's "Got it": nothing left to bring back)
+      const finished = guideDone(league).size >= GUIDE_STEPS.length;
       league.onboarding = { done: league.onboarding?.done ?? [], hidden: true };
-      return { ok: true, text: 'Guide hidden. Bring it back from Today.' };
+      return { ok: true, text: finished ? '' : 'Guide hidden. Bring it back from Today.' };
     }
     case 'call':
       if (league.fired) return { ok: false, text: FIRED_REASON };

@@ -79,8 +79,10 @@ body:has(.input:focus, .lg-search input:focus) .dockbar {
   .btn.xs::after {
     inset: -8px -2px;
   }
-  .help-btn::after {
-    inset: -11px;
+  /* a sortable column's head: the whole cell is the button */
+  table.stats th:has(.th-sort) {
+    height: 44px;
+    vertical-align: bottom;
   }
 }
 

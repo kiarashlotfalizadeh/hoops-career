@@ -77,7 +77,8 @@ export default function GameReport() {
           )
         }
       />
-      <FinalSlab res={g} league={league} story={story} moment={moment} />
+      {/* the night's story leads the first tab; on the others the board is one line, so the tab's own content starts on the first screen */}
+      <FinalSlab res={g} league={league} story={story} moment={moment} compact={tab !== tabs[0].id} />
       {tabs.length > 1 && <TabBar value={tab} onChange={setTab} options={tabs} label="Game report sections" />}
       {tab === 'recap' && userGame && (
         <GameRecap res={g} league={league} report={report} highlights={league.reel?.gid === g.gid ? <HighlightsCard league={league} res={g} /> : undefined} />

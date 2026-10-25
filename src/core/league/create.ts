@@ -27,7 +27,7 @@ import {
 } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import { teamStrategyUpdate } from './aiTrades';
-import { goalsWhy, planOwnerGoals } from './ownerGoals';
+import { goalsWhy, planOwnerGoals, previewTitle } from './ownerGoals';
 import { fillRosters, trimRosters } from './freeAgency';
 import { ratingMeans, ratingSpreads } from './progression';
 import { injuryName, money } from '../format';
@@ -442,7 +442,7 @@ export function createLeague(opts: CreateOpts): League {
       ...(goals
         ? [
             "Here is what I expect from this roster. I'll set the goals on opening night from the roster you open with, and grade the season on them:",
-            ...goals.goals.map((g) => `${g.title} (${Math.round(g.weight * 100)}% of my review)`),
+            ...goals.goals.map((g) => `${previewTitle(g)} (${Math.round(g.weight * 100)}% of my review)`),
             ...goalsWhy(goals),
           ]
         : []),

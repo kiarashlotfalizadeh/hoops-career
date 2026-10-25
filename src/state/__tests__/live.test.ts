@@ -13,6 +13,7 @@ import { releasePlayer, signPlayer } from '../../core/league/contracts';
 import { buildGameReport } from '../../core/analysis/gameReport';
 import { REEL_MAX } from '../../core/analysis/highlights';
 import { curTeamSeason } from '../../core/league/helpers';
+import { guideDone } from '../../core/league/agenda';
 import type { League, LiveJournal, Rotation } from '../../core/types';
 import { gamesOnDay } from '../../core/league/games';
 import { emptyPatch, tacticsDiff } from '../../core/sim/tactics';
@@ -567,6 +568,14 @@ describe('live game', () => {
       next.simTo('end');
       next.commit(l);
       expect(l.reel!.gid).toBe(next.game.gid);
+      // neither game, skipped to its end with no move made, coached one for the first-week guide; a quarter's worth watched does
+      expect(guideDone(l).has('coach')).toBe(false);
+      simDay(l);
+      toGameDay(l);
+      const watched = prepareLive(l)!;
+      while (watched.sim.q === 1) watched.step();
+      watched.commit(l);
+      expect(guideDone(l).has('coach')).toBe(true);
     }
   });
 

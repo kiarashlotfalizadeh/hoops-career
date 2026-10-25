@@ -6,11 +6,14 @@ import { type MockDraft, type MockSlot } from '../../core/league/mockDraft';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, Section } from '../components/ui';
 import { HelpSheet, OvrPot } from '../office/common';
+import { lotteryHidden } from './common';
 
 /** The mock draft, slot by slot: the likeliest pick and the next ones, the user's picks lit. */
 export function MockView({ league, mock, onOpen }: { league: League; mock: MockDraft | null; onOpen: (pid: number) => void }) {
   const [round2, setRound2] = useState(false);
   if (!mock || !mock.slots.length) return <Empty>The mock draft starts once games are played.</Empty>;
+  // (it plays the lottery's order: not before its reveal)
+  if (lotteryHidden(league)) return <Empty>The mock follows the lottery&apos;s order. Reveal it on the Lottery tab first.</Empty>;
   const projected = mock.slots[0].projected;
   const shown = mock.slots.filter((s) => round2 || s.round === 1);
   return (

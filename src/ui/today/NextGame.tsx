@@ -22,7 +22,7 @@ import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
 import { billingTitle, useBillings } from '../games/occasion';
 import { gameProjection } from '../../core/analysis/preview';
-import { goalsWhy, planOwnerGoals } from '../../core/league/ownerGoals';
+import { goalsWhy, planOwnerGoals, previewTitle } from '../../core/league/ownerGoals';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -98,8 +98,10 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   const staked = billed.has('Game 7') || billed.has('Elimination game') || billed.has('Closeout game') || billed.has('Play-In');
   const tags: { text: string; stake?: boolean; to?: string }[] = [];
   if (live?.gid === g.gid) tags.push({ text: `Live · ${liveScoreText(league, live)}` });
-  // (the missing plan is a link to the Plan tab: the one tag here with something to do)
-  if (noPlan) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
+  // (the missing plan is a link to the Plan tab, the one tag here with something to do, in the first
+  // week; after it a plain note, after the night's own tags: most nights go fine without one)
+  const firstWeek = league.season === league.startSeason && (league.phase === 'preseason' || league.day < 7);
+  if (noPlan && firstWeek) tags.push({ text: 'No game plan yet', to: `/games/${opp}?tab=plan` });
   // (a closeout, an elimination game or Game 7 says the series score in its line)
   if (series && series.wins + series.losses > 0 && !staked)
     tags.push({
@@ -114,6 +116,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   else if (series?.clinch) tags.push({ text: 'A win takes the series', stake: true });
   else if (pv?.playIn) tags.push({ text: 'Winner is the 7th seed', stake: true });
   for (const b of bills.slice(1, 3)) if (b.weight >= 2) tags.push({ text: b.tag });
+  if (noPlan && !firstWeek) tags.push({ text: 'No game plan yet' });
   const outs = pv ? [pv.us, pv.them].map((s) => ({ tid: s.tid, text: outText(league, s) })).filter((x) => x.text) : [];
   const t = league.teams[opp];
   const home = g.home === me;
@@ -340,10 +343,10 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
           </div>
           <ul className="td-phase-gl">
             {goals.goals.map((g) => (
-              <li key={g.kind}>{g.title}</li>
+              <li key={g.kind}>{previewTitle(g)}</li>
             ))}
           </ul>
-          <p className="td-phase-gn">{[...goalsWhy(goals).slice(0, 1), 'He sets them on opening night, from the roster you open with.'].join(' ')}</p>
+          <p className="td-phase-gn">{[...goalsWhy(goals).slice(0, 1), "I'll set the final numbers on opening night, from the roster you open with."].join(' ')}</p>
         </div>
       )}
     </section>

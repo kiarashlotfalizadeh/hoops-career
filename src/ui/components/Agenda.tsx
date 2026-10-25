@@ -5,10 +5,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Check, ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { agenda, resolveAgenda, type AgendaAction, type AgendaItem } from '../../core/league/agenda';
-import { act } from '../../state/actions';
+import { act, touch } from '../../state/actions';
+import { markOffersSeen, openProposals } from '../../core/league/proposals';
 import { useStore } from '../../state/store';
 import { haptic } from '../../native';
+import { leaveToStaff } from '../today/staffPlan';
 import './agenda.css';
+
+/** The choice waiting on its second tap, if one is (the Continue bar won't run past it: see App.tsx). */
+export const pendingConfirm: { label: string | null } = { label: null };
 
 /** Carry out an agenda choice, all or nothing, and say how it went. True when it went through. */
 export function runAgenda(label: string, a: AgendaAction): boolean {
@@ -31,7 +36,19 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
     const t = setTimeout(() => setArmed(null), 4000);
     return () => clearTimeout(t);
   }, [armed]);
+  // a trade offer shown as a row has been seen: its date stands as it reads (see markOffersSeen)
+  useEffect(() => {
+    const l = useStore.getState().league;
+    if (item.kind === 'tradeOffer' && !simming && l && openProposals(l).some((p) => !p.seen)) touch(markOffersSeen);
+  }, [item.id, item.kind, simming]);
   const armedChoice = choices.find((c) => c.label === armed);
+  useEffect(() => {
+    if (!armed) return;
+    pendingConfirm.label = armed;
+    return () => {
+      if (pendingConfirm.label === armed) pendingConfirm.label = null;
+    };
+  }, [armed]);
   const head = (
     <>
       <div className="grow">
@@ -88,6 +105,8 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
               onClick={() => {
                 if (c.confirm && armed !== c.label) return setArmed(c.label);
                 setArmed(null);
+                // (the staff's plan for a series is measured first: see staffPlan.ts)
+                if (c.action.kind === 'call' && c.action.call.kind === 'staffPlan' && !c.action.call.items) return void leaveToStaff(item.title, c.action.call);
                 // (a look for a trade: the answer is made on its screen)
                 if (runAgenda(item.title, c.action) && c.to) nav(c.to);
               }}

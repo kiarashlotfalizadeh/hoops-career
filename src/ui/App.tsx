@@ -45,7 +45,7 @@ import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
 import { TABS, tabFor, type TabId } from './nav';
-import { AgendaList } from './components/Agenda';
+import { AgendaList, pendingConfirm } from './components/Agenda';
 import { useNeedsYou } from './today/needs';
 import { NeedsSheet, OpenCalls } from './today/NeedsList';
 import { agenda, CALL_KINDS } from '../core/league/agenda';
@@ -356,6 +356,11 @@ function ContinueBar() {
   const [agendaOpen, setAgendaOpen] = useState(false);
   const go = (a: FlowAction, fromBar = false) => {
     haptic();
+    // a choice waiting on its second tap isn't dropped by moving on: it's said, and nothing runs
+    if (pendingConfirm.label && (a.sim || a.cmd)) {
+      useStore.getState().toast(`Tap "Confirm: ${pendingConfirm.label}" first, or let it lapse.`, 'neutral');
+      return;
+    }
     // a decision the league waits on: settle it right here (its row links to the whole screen); one
     // with nothing to settle in a sheet (sign players, find a job) opens its screen straight away
     if (a.agenda) {
@@ -376,6 +381,8 @@ function ContinueBar() {
   const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
   // the next step is the screen you're on (the draft board, free agents, re-signing): only the options button stays, out of the way
   const here = !!primary?.to && pathname === primary.to.split('?')[0];
+  // game day: a quick sim of tonight's game is one tap too, beside Watch & coach
+  const quick = primary?.cmd === 'watchLive' && primary.id === 'live' && !liveInProgress(league) ? actions.find((a) => a.id === 'quick' && a.cmd === 'quickGame') : undefined;
   return (
     <>
       <div className="sr-only" role="status">
@@ -418,6 +425,11 @@ function ContinueBar() {
                     <span className="cg-label ellipsis">{label}</span>
                     {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
                   </span>
+                </button>
+              )}
+              {!here && quick && (
+                <button className="continue-chip" disabled={!!quick.disabled} onClick={() => go(quick)}>
+                  Quick sim
                 </button>
               )}
               <button className="continue-more" onClick={() => setOpen(true)} aria-label="Play options">

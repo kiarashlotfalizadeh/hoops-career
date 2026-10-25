@@ -11,6 +11,7 @@ import { rosterSorted } from '../../core/league/helpers';
 import { playbookLabel } from '../../core/sim/playbooks';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 import { famLabel } from '../../core/sim/familiarity';
+import { SLOT_LETTERS, activeSlot, slotName } from '../../core/sim/slots';
 import { QUALITY_META, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
 import { ordinal } from '../stats';
 import { Help, Toggle } from '../components/ui';
@@ -27,6 +28,7 @@ export function TacticsHero({
   was,
   fam,
   onAnalysis,
+  compact = false,
 }: {
   report: SystemReport;
   /** The report as this visit found it: a grade that has moved since shows where it was. */
@@ -35,6 +37,8 @@ export function TacticsHero({
   fam: number;
   /** Opens Analysis at the report or the familiarity. */
   onAnalysis: (view: 'report' | 'familiarity') => void;
+  /** One line on the sections after Tactic (the slot, the style, the familiarity): the section leads the page. */
+  compact?: boolean;
 }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
@@ -58,6 +62,31 @@ export function TacticsHero({
       </span>
     );
   };
+  if (compact) {
+    const team = league.teams[league.userTid];
+    const slot = activeSlot(team);
+    return (
+      <section className="card tx-hero compact" aria-label="Your tactic">
+        <button className="tx-hero-pick" aria-haspopup="dialog" onClick={() => setStyle(true)}>
+          <span className="tx-slot-l" aria-hidden="true">
+            {SLOT_LETTERS[slot]}
+          </span>
+          <span className="tx-hero-line ellipsis">
+            <span className="sr-only">
+              Tactic {SLOT_LETTERS[slot]}, {slotName(team, slot)}:{' '}
+            </span>
+            <b>{off?.name ?? 'Custom offense'}</b> · {def?.name ?? 'Custom'} on defense
+          </span>
+          <span className={`tx-hero-fv num ${famTone(fam)}`}>
+            <span className="sr-only">Familiarity </span>
+            {Math.round(fam)}%
+          </span>
+          <span className="btn sm">Change</span>
+        </button>
+        <StyleSheet open={style} onClose={() => setStyle(false)} />
+      </section>
+    );
+  }
   return (
     <section className="card tx-hero" aria-label="Your tactic">
       <SlotBar />

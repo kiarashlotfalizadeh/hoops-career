@@ -98,7 +98,7 @@
   padding-bottom: 7px;
   border-bottom: 2px solid var(--text);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--text-dim);
@@ -163,7 +163,7 @@
 .tm-rmeta > .tag {
   height: 18px;
   padding: 0 5px;
-  font-size: 11px;
+  font-size: 12px;
 }
 /* hurt: the injury takes the figures' room */
 .tm-rrow.out .tm-rmeta {
@@ -227,7 +227,7 @@
   margin-top: 6px;
 }
 .tm-plan-head {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 640;
   color: var(--text-dim);
   text-align: center;
@@ -308,7 +308,7 @@
   border-radius: var(--radius-xs);
   display: inline-grid;
   place-items: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   color: var(--text-dim);
   background: var(--surface-2);
@@ -318,7 +318,7 @@
   background: var(--text-2);
 }
 .tm-swap-out {
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 620;
   color: var(--bad);
 }

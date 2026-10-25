@@ -1133,6 +1133,27 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   }
   if (x.tooManyFirsts) add('bad', `No team gives up more than ${MAX_FIRSTS_OUT} first-round picks in one deal`, 1e9);
 
+  // a deal turned down on value always says how far apart the sides are, as they see it, ahead of
+  // the reasons that only shade it
+  if (!ev.accept && ev.delta < 0) {
+    const label = (xs: AssetView[], all: string) => (xs.length === 1 ? nameOf(xs[0]) : all);
+    const theirs = label(x.outgoing, "what they'd send");
+    const yours = label(x.incoming, 'your side');
+    const ratio = ev.valueIn > 0 ? ev.valueOut / ev.valueIn : Infinity;
+    // (an even swap of value turned down for the money or the roster says so in those notes instead)
+    const text =
+      ev.valueOut <= 0
+        ? `They'd want something for taking on ${yours}`
+        : ev.valueIn <= 0
+          ? `They see no value in ${yours} for ${theirs}`
+          : ratio >= 1.5
+            ? `They value ${theirs} about ${ratio >= 3 ? Math.round(ratio) : ratio.toFixed(1)}× ${yours}`
+            : ratio >= 1.03
+              ? `They value ${theirs} about ${Math.round((ratio - 1) * 100)}% more than ${yours}`
+              : null;
+    if (text) add('bad', text, 9e8);
+  }
+
   // the team's strategy, for what it takes in (what it sends never goes below neutral)
   if (t.strategy !== 'retool') {
     const noun = STRATEGY_NOUN[t.strategy];

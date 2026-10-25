@@ -136,7 +136,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text-dim);
@@ -186,7 +186,7 @@
   align-items: center;
   gap: 1px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }

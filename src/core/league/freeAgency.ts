@@ -68,7 +68,6 @@ import {
   spendRoute,
   valueScore,
   wantsTwoWay,
-  willSign,
 } from './contracts';
 import { type OfferResult, hearOffer } from './negotiation';
 import {
@@ -945,24 +944,44 @@ export function faInterest(league: League, p: Player): FaOffer[] {
 }
 
 /**
- * Where an offer from the user would stand against the AI teams bidding now: his utility for it,
- * whether it wins (with no rival bids, only at his asking price), and about what would lead the
- * field (null when even the max wouldn't).
+ * The offers a top free agent weighs against the user's on his decision day: the AI teams' (see
+ * faInterest), and his old team's on his Bird rights even when its budget can't reach his price
+ * (what it can pay, see birdRoom), all scored by the same offerUtility as the user's. Without it, a
+ * star who passed on the user's offer could take his old team's lower one a day later, once his
+ * price had come down to it.
+ */
+export function bidRivals(league: League, p: Player): FaOffer[] {
+  const offers = faInterest(league, p);
+  const season = contractSeason(league);
+  const bird = birdRoom(league, p, season);
+  const cap = CAP_FOR(league, season);
+  const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+  if (!bird || offers.some((o) => o.tid === bird.tid)) return offers;
+  const amount = Math.floor(bird.room / 50) * 50;
+  if (amount <= min) return offers;
+  const years = askingContract(league, p, bird.tid).years;
+  offers.push({ tid: bird.tid, amount, years, route: 'min', bird: true, utility: offerUtility(league, p, bird.tid, amount, years) });
+  return offers.sort((a, b) => b.utility - a.utility || a.tid - b.tid);
+}
+
+/**
+ * Where an offer from the user would stand against the offers he weighs now (see bidRivals): his
+ * utility for it, whether it wins (with no rival offer, any he'll consider: his floor, see
+ * bidFloor), and about what would lead the field (null when even the max wouldn't).
  */
 export function bidStanding(
   league: League,
   p: Player,
   amount: number,
   years: number,
-  offers: FaOffer[] = faInterest(league, p),
+  offers: FaOffer[] = bidRivals(league, p),
 ): { offers: FaOffer[]; leads: boolean; toLead: number | null } {
   const tid = league.userTid;
   const prefs = playerPrefs(league, p);
   const best = offers[0];
   if (!best) {
-    const ask = askingContract(league, p, tid);
-    const atAsk = Math.ceil((ask.amount * (1 + Math.abs(years - ask.years) * 0.03)) / 50) * 50;
-    return { offers, leads: willSign(league, p, tid, amount, years).ok, toLead: atAsk };
+    const floor = bidFloor(league, p, years);
+    return { offers, leads: amount >= floor, toLead: floor };
   }
   const mine = offerUtility(league, p, tid, amount, years, prefs);
   // the amount whose utility matches the best rival's (utility is a power of the amount)
@@ -1044,7 +1063,11 @@ function bidRouteNow(league: League, b: FaBid, p: Player): { route: SigningRoute
 const yrs = (n: number) => `${n} yr${n > 1 ? 's' : ''}`;
 const PREF_LABEL: Record<keyof PlayerPrefs, string> = { winning: 'winning', money: 'money', role: 'playing time', market: 'market size' };
 
-/** He decides on the user's offer: the user's (if it still fits) against the AI teams' bids, best utility wins. */
+/**
+ * He decides on the user's offer: the user's (if it still fits) against the offers he weighs (see
+ * bidRivals), best utility wins; alone, an offer he'd consider (90% of his price and up, see
+ * userBid) wins, since nobody else's money is there for him to hold out for.
+ */
 function decideBid(league: League, b: FaBid) {
   const p = league.players[b.pid];
   if (!p || p.tid !== FREE_AGENT) return;
@@ -1052,11 +1075,11 @@ function decideBid(league: League, b: FaBid) {
   const season = contractSeason(league);
   const name = playerName(p);
   const prefs = playerPrefs(league, p);
-  const offers = faInterest(league, p);
+  const offers = bidRivals(league, p);
   const best = offers[0];
   const { route, why } = bidRouteNow(league, b, p);
   const mine = route ? offerUtility(league, p, tid, b.amount, b.years, prefs) : -Infinity;
-  if (route && (best ? mine >= best.utility : willSign(league, p, tid, b.amount, b.years).ok)) {
+  if (route && (!best || mine >= best.utility)) {
     spendRoute(league, tid, route, season);
     signPlayer(league, p, tid, b.amount, b.years, { start: season });
     slackForBids(league, route, salaryFor(p, season));
@@ -1090,13 +1113,10 @@ function decideBid(league: League, b: FaBid) {
     });
     return;
   }
-  const ask = askingContract(league, p, tid);
   addInbox(league, {
     from: 'Assistant GM',
-    subject: `${name} turned us down`,
-    body: route
-      ? `No other team bid for ${name}, so he's holding out for his asking price (${yrs(ask.years)} at ${money(ask.amount)}) rather than take ours. ${ours} He's still on the market.`
-      : `Our offer to ${name} fell through: ${why}. He's still on the market.`,
+    subject: `Our offer to ${name} fell through`,
+    body: `Our offer to ${name} fell through: ${why}. ${ours} He's still on the market.`,
     tone: 'neutral',
     link: '/office/free-agents',
   });

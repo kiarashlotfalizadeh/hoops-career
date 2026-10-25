@@ -277,6 +277,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           wants={ask.years}
           firstSeason={season}
           yearDisabled={(y) => sheet && y < SHEET_MIN_YEARS}
+          overAsk={!bidding}
           yearsMax={yearsMax}
           yearsNote={
             <>

@@ -65,7 +65,7 @@
   .lv.more-bench .lv-stage > .live-intro {
     border-radius: var(--radius);
   }
-  /* the lineups on the smaller court: the names and numbers alone, one line each, so Tip off stays in view
+  /* the lineups on the smaller court: the names and numbers alone, one line each, so Skip intro stays in view
      (the season lines are on the bigger court, a tap on "Bigger court" away) */
   .lv.more-bench .live-intro {
     gap: 6px;
@@ -95,7 +95,7 @@
   .lv.more-bench .lv-li-num {
     width: 20px;
     height: 20px;
-    font-size: 10px;
+    font-size: 12px;
   }
   .lv.more-bench .lv-li-name {
     overflow: hidden;

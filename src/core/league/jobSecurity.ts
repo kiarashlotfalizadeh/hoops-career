@@ -26,6 +26,12 @@ export interface JobSecurity {
   label: string;
   /** One line: where it stands and why. */
   line: string;
+  /**
+   * Set when the season is heading for the sack whatever the standing says (a live ultimatum, or the
+   * books under the freeze projected to close where the review fires him): the line, said under the
+   * score, which is held on the hot seat (under the firing line when it's on course to happen).
+   */
+  danger?: string;
   /** The standing now (−1..1), and where this season's review would leave it as things project. */
   standing: number;
   projected: number;
@@ -101,6 +107,21 @@ function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): n
   return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, books?.cap ?? 1);
 }
 
+/** The score the meter is held at (most) with a live ultimatum the season projects to meet: the top of the hot seat (on course to miss it, or for the books' sack: just under the firing line). */
+const ULTIMATUM_SCORE = 31;
+
+/**
+ * A live ultimatum (one not yet met) and whether the season projects to meet it: the wins or the
+ * postseason level as the goals project them (see ownerProgress).
+ */
+function ultimatumOutlook(league: League, og: OwnerGoals, fc?: Forecast | null): { met: boolean; onCourse: boolean } | null {
+  const u = og.ultimatum;
+  if (!u) return null;
+  if (ultimatumVerdict(league, og) === 'met') return { met: true, onCourse: true };
+  const p = ownerProgress(league, og, fc).find((x) => x.goal.kind === u.kind);
+  return { met: false, onCourse: !!p && p.projected >= u.target };
+}
+
 export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const standing = league.ownerMood.total;
   const og = currentGoals(league);
@@ -109,15 +130,25 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const projected = grade === null ? standing : clamp(grade * w + standing * (1 - w), -1, 1);
   const off = !league.settings.jobSecurity;
   const grace = Math.max(0, GRACE[league.settings.difficulty] - seasonsInCharge(league) + 1);
-  const score = toScore(projected);
-  const h = HEAT.find((x) => score >= x.min)!;
   const ultimatum = og?.ultimatum;
+  // the sack on the way whatever the standing: a live ultimatum, or the books under the freeze
+  // heading where the review fires him. The meter says so: hot, under the line when it's on course
+  const live = og && !league.fired && !off ? ultimatumOutlook(league, og, fc) : null;
+  const booksFire = !league.fired && !off && canBeFired(league) && !!frozenBooksOutlook(league)?.fire;
+  const danger =
+    live && !live.met
+      ? `Ultimatum: ${ultimatum!.text.toLowerCase()}, or you're fired.`
+      : booksFire
+        ? "The books are heading deeper into the red under the freeze: close there and you're fired, whatever you win."
+        : undefined;
+  const raw = toScore(projected);
+  const score = booksFire || (live && !live.onCourse) ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;
+  const h = HEAT.find((x) => score >= x.min)!;
   let line: string;
   if (league.fired) line = 'You were fired. Take a job offer from Career.';
   else if (off) line = 'Job security is off: the owner never fires you.';
-  else if (ultimatum) line = `Ultimatum: ${ultimatum.text.toLowerCase()}, or you're fired.`;
-  else if (canBeFired(league) && frozenBooksOutlook(league)?.fire)
-    line = "The books are heading deeper into the red under his final warning: close there and you're fired, whatever you win.";
+  else if (danger) line = danger;
+  else if (ultimatum) line = `Ultimatum met: ${ultimatum.text.toLowerCase()}. He'll count it at the review.`;
   else if (grade === null) line = h.heat === 'secure' || h.heat === 'steady' ? 'The owner is happy with the direction.' : 'The owner wants a better season than the last.';
   else {
     const prog = ownerProgress(league, og!, fc);
@@ -136,7 +167,7 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const left = reviewed ? grace - 1 : grace;
   if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
     line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}.`;
-  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, standing, projected, grace, ultimatum, off };
+  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, ultimatum, off };
 }
 
 /**

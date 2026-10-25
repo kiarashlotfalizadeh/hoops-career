@@ -49,7 +49,7 @@
 /* an option's familiarity, in its chip: "Blitz 40%" */
 .tx-optfam {
   margin-left: 6px;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 680;
   font-variant-numeric: tabular-nums;
 }
@@ -203,6 +203,28 @@
 }
 .tx-hero-pick:active > .btn {
   background: var(--surface-3);
+}
+/* one line on the sections after Tactic: the slot, the style, how well it's known, Change */
+.tx-hero.compact {
+  padding: 8px 10px 8px 12px;
+}
+.tx-hero.compact .tx-hero-pick {
+  gap: 10px;
+  min-height: 44px;
+}
+.tx-hero.compact .tx-slot-l {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tx-hero-line {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  color: var(--text-2);
+}
+.tx-hero-line b {
+  color: var(--text);
+  font-weight: 760;
 }
 .tx-hero-r {
   flex: none;
@@ -478,7 +500,7 @@
   flex: none;
   height: 18px;
   padding: 0 5px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .tx-famp-c {
   flex: none;

@@ -178,6 +178,8 @@ export interface ST {
   run: number; // unanswered points
   /** The deep bench is finishing a blowout (stays on until the game is back within reach). */
   garbage: boolean;
+  /** Players the staff sat for a breather late in a decided game (see desiredLineup): they stay sat unless it gets close again. */
+  restedLate: Set<number>;
   // caches for current lineup
   spacing: number;
   passQ: number;

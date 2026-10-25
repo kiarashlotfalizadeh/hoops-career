@@ -7,13 +7,13 @@ import { PencilLine, Ticket } from 'lucide-react';
 import type { League, Proposal } from '../../core/types';
 import { CAP_FOR, payroll, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { declineProposal, openProposals, proposalError } from '../../core/league/proposals';
+import { declineProposal, markOffersSeen, openProposals, proposalError } from '../../core/league/proposals';
 import { agenda, type AgendaItem } from '../../core/league/agenda';
 import { capSalary, pickLabel, type TradeOffer } from '../../core/league/trades';
 import { neutralBalance } from '../../core/league/tradePackages';
 import { salaryFor } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { act } from '../../state/actions';
+import { act, touch } from '../../state/actions';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, More, Ovr } from '../components/ui';
@@ -26,6 +26,11 @@ export function OffersTab({ league, closed, focus, onReview }: { league: League;
   // why each can't be taken right now (another deal moved a player since), worked out once per change
   const errors = useLeagueMemo(() => withHoldsMemo(() => new Map(openProposals(league).map((p) => [p.id, proposalError(league, p)]))), [league]);
   const items = useLeagueMemo(() => new Map(agenda(league).flatMap((i) => (i.kind === 'tradeOffer' ? [[i.id, i] as const] : []))), [league]);
+  // shown here, each one's date stands as it reads (see markOffersSeen)
+  const unseen = offers.some((p) => !p.seen);
+  useEffect(() => {
+    if (unseen) touch(markOffersSeen);
+  }, [unseen]);
   if (!offers.length)
     return closed ? (
       <Empty>No offers until trading reopens.</Empty>

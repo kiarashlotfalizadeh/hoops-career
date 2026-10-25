@@ -1,11 +1,15 @@
 // The Plan's counters: what the staff would change against this team, each with what it measured
-// worth in tonight's game (see useCounterWorth: the gains first, the costs behind "more"), exactly
-// what it changes in the Tactics screen's words, why, and the numbers behind it. Add puts one in the
-// plan (with its worth, which the win chance counts), Always in your tactics for every game.
-import { useState } from 'react';
+// worth in tonight's game (see useCounterWorth: the gains first, the costs behind "more"), what it
+// costs in familiarity tonight, exactly what it changes in the Tactics screen's words, why, and the
+// numbers behind it. Add puts one in the plan (with its worth, which the win chance counts); Always,
+// confirmed, in your tactics for every game.
+import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
-import { counterCandidates, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
+import { counterCandidates, RISKY, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
+import { systemFamiliarity } from '../../../core/league/practice';
+import { freshFamiliarity, optionsOf, optValue } from '../../../core/sim/familiarity';
+import { teamPlayers } from '../../../core/league/helpers';
 import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
 import { byWorth, useCounterWorth, worthText } from './useCounterWorth';
 import { effectiveTactics, persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
@@ -27,6 +31,13 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const cands = byWorth(drafted, worth);
   const inPlan = new Set(planFor(league, opp)?.items.map((it) => it.id));
   const [all, setAll] = useState(false);
+  // Always writes into your tactics for every game: a second tap confirms it
+  const [armed, setArmed] = useState<string | null>(null);
+  useEffect(() => {
+    if (!armed) return;
+    const t = setTimeout(() => setArmed(null), 4000);
+    return () => clearTimeout(t);
+  }, [armed]);
   const them = league.teams[opp];
 
   const apply = (c: Candidate, scope: 'game' | 'always') => {
@@ -72,7 +83,10 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
             times with and without each one: the number is the points a game it adds (Even: too close to call). Gains come first; a counter in your plan counts in the win chance at
             its number.
           </p>
-          <p>Adding one replaces any item of the same kind in your plan; Always puts it in your tactics for every game.</p>
+          <p>
+            One the team hasn&apos;t drilled costs familiarity tonight (a step slow where it&apos;s new): each says how much before you add it. Adding one replaces any item of the
+            same kind in your plan; Always, confirmed, puts it in your tactics for every game.
+          </p>
         </Help>
       }
     >
@@ -93,8 +107,17 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
                 ) : (
                   <>
                     {always && (
-                      <button className="btn xs text" disabled={simming} onClick={() => apply(c, 'always')} aria-label={`${c.label}: into your tactics for every game`}>
-                        Always
+                      <button
+                        className="btn xs text mu-always"
+                        disabled={simming}
+                        onClick={() => {
+                          if (armed !== c.id) return setArmed(c.id);
+                          setArmed(null);
+                          apply(c, 'always');
+                        }}
+                        aria-label={armed === c.id ? `Confirm: ${c.label} into your tactics for every game` : `${c.label}: into your tactics for every game`}
+                      >
+                        {armed === c.id ? 'Confirm' : 'Always'}
                       </button>
                     )}
                     <button className="btn xs" disabled={simming} onClick={() => apply(c, 'game')} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
@@ -103,6 +126,12 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
                   </>
                 )}
               </div>
+              {armed === c.id && !added && (
+                <div className="mu-fam small" role="status">
+                  Always puts it in your tactics for every game, not just against the {them.name}. Tap again to confirm.
+                </div>
+              )}
+              {!added && <FamCost league={league} opp={opp} c={c} />}
               <CounterChanges league={league} opp={opp} c={c} />
               <div className="mu-note">{c.why}</div>
               {c.evidence && (
@@ -121,6 +150,34 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       </div>
     </Section>
   );
+}
+
+/**
+ * What a counter costs in familiarity tonight, as the Familiarity card's "Tonight" reads it: "−11%
+ * familiarity tonight: new to this team", or null when it costs under a point.
+ */
+export function famCostText(league: League, opp: number, c: Candidate): string | null {
+  const me = league.userTid;
+  const base = effectiveTactics(league, opp);
+  const t = tacticsWithCounter(league, opp, c);
+  const drop = Math.round(systemFamiliarity(league, me, base).overall) - Math.round(systemFamiliarity(league, me, t).overall);
+  if (drop < 1) return null;
+  const team = league.teams[me];
+  const fam = team.fam ?? freshFamiliarity(team, teamPlayers(league, me));
+  const was = new Set(optionsOf(base));
+  const low = Math.min(
+    100,
+    ...optionsOf(t)
+      .filter((k) => !was.has(k))
+      .map((k) => optValue(fam, k)),
+  );
+  return `−${drop}% familiarity tonight${low < RISKY ? ': new to this team' : ''}`;
+}
+
+/** A counter's familiarity cost tonight, if it has one. */
+export function FamCost({ league, opp, c }: { league: League; opp: number; c: Candidate }) {
+  const text = useLeagueMemo(() => famCostText(league, opp, c), [league, opp, c]);
+  return text ? <div className="mu-fam small warn">{text}</div> : null;
 }
 
 /** What adding a counter would change now, in the Tactics screen's words. */

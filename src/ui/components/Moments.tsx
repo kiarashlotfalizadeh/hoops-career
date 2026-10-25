@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../state/store';
-import { currentMoments, newMoments, pickMoments, type Moment } from '../moments';
+import { MUST_SEE, currentMoments, newMoments, pickMoments, type Moment } from '../moments';
 import { TeamLogo } from './TeamLogo';
 import { Avatar } from './ui';
 import { slabVars } from '../teamColors';
@@ -17,12 +17,13 @@ function momentsKey(l: NonNullable<ReturnType<typeof useStore.getState>['league'
 
 /**
  * Watches the open league for big moments and shows each new one full-screen, once: what's already
- * true when a league opens (or the user takes over another team) counts as seen. They wait for a sim
- * to finish and for the live game to be left, and Settings → Big moments turns them off. Of the
- * moments that come out together, only the biggest shows (pickMoments), and a front-page story not
- * at all when the digest opens with it after a long sim; the story of a
- * game the user has just watched live is his already, and on a game report (where a quick sim lands,
- * on the result) game stories are dropped.
+ * true when a league opens (or the user takes over another team: all but the new job itself) counts
+ * as seen. They wait for a sim to finish and for the live game to be left, and Settings → Big moments
+ * turns them off (all but the ultimatum and the sack: see MUST_SEE). Of the moments that come out
+ * together, only the biggest shows with the job's own (pickMoments), and a front-page story not at
+ * all when the digest opens with it after a long sim; the story of a game the user has just watched
+ * live is his already, and on a game report (where a quick sim lands, on the result) game stories
+ * are dropped.
  */
 export function Moments() {
   const league = useStore((s) => s.league);
@@ -40,14 +41,17 @@ export function Moments() {
     const now = currentMoments(league);
     const who = `${league.id}:${league.userTid}`;
     if (seen.current?.who !== who) {
-      seen.current = { who, keys: new Set(now.map((m) => m.key)) };
+      // a new job in the same league is a moment of its own: everything else about the new team is old news
+      const took = seen.current?.who.startsWith(`${league.id}:`);
+      seen.current = { who, keys: new Set(now.filter((m) => !(took && m.kind === 'hired')).map((m) => m.key)) };
       setQueue([]);
-      return;
+      if (!took) return;
     }
-    const fresh = newMoments(now, seen.current.keys);
+    const all = newMoments(now, seen.current.keys);
+    if (!all.length) return;
+    for (const m of all) seen.current.keys.add(m.key);
+    const fresh = league.settings.moments === false ? all.filter((m) => MUST_SEE.has(m.kind)) : all;
     if (!fresh.length) return;
-    for (const m of fresh) seen.current.keys.add(m.key);
-    if (league.settings.moments === false) return;
     const onLive = window.location.hash.startsWith('#/live');
     // after a long sim the digest opens and leads with the stories: they don't take the screen as well
     const digest = useStore.getState().digestOpen;
@@ -87,7 +91,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
     btn.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onDone();
-      // Tab stays on the card's buttons (Continue, and Read the story when there's one)
+      // Tab stays on the card's buttons (Continue, and its link when there's one)
       if (e.key === 'Tab') {
         e.preventDefault();
         const all = [...(btn.current?.parentElement?.querySelectorAll('button') ?? [])];
@@ -133,6 +137,13 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
           {m.title}
         </h2>
         {m.sub && <p className="moment-sub">{m.sub}</p>}
+        {m.lines && m.lines.length > 0 && (
+          <ul className="moment-lines">
+            {m.lines.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        )}
         <div className="moment-acts">
           <button
             ref={btn}
@@ -153,7 +164,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
                 nav(m.link!);
               }}
             >
-              Read the story
+              {m.linkLabel ?? 'Read the story'}
             </button>
           )}
         </div>

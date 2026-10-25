@@ -147,6 +147,15 @@ export function ownerEvaluation(league: League) {
   // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze, a freeze deeper in the red a final warning (none for a coach he fires)
   if (!fired) booksReview(league, books);
   const held = booksText ? 'books' : impatient ? 'patience' : floored ? 'floor' : undefined;
+  // his first words on it: why he fired the coach, or how he feels
+  const feeling = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
+  const said = fired
+    ? verdict === 'missed'
+      ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
+      : books?.fire
+        ? `The books closed ${money(-books.close)} in the red, deeper again under the freeze. I told you what that meant, and winning doesn't pay for it. We are going in a different direction.`
+        : 'The results have not been good enough. We are going in a different direction.'
+    : `I'm ${feeling}.`;
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -157,6 +166,7 @@ export function ownerEvaluation(league: League) {
     ...(crowned ? { crowned } : {}),
     ...(held ? { held } : {}),
     ...(fired ? { fired: true as const } : {}),
+    said,
   };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
@@ -178,21 +188,12 @@ export function ownerEvaluation(league: League) {
       important: true,
       from: 'Owner',
       subject: "You're fired",
-      body: [
-        verdict === 'missed'
-          ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
-          : books?.fire
-            ? `The books closed ${money(-books.close)} in the red, deeper again under the freeze. I told you what that meant, and winning doesn't pay for it. We are going in a different direction.`
-            : 'The results have not been good enough. We are going in a different direction.',
-        ...lines,
-        '(Your agent will bring you the offers: take one to keep your career going. The league waits until you do.)',
-      ].join('\n'),
+      body: [said, ...lines, '(Your agent will bring you the offers: take one to keep your career going. The league waits until you do.)'].join('\n'),
       tone: 'bad',
       link: '/office/career',
     });
     return;
   }
-  const feeling = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
   const answered = verdict === 'met' ? 'You answered my ultimatum. That counts for something.' : '';
   const warning = total < -0.2 && fireable ? 'Another season like this and we will have a serious conversation.' : '';
   addInbox(league, {

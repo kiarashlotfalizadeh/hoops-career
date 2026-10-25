@@ -67,8 +67,8 @@ export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficu
       const x = DIFFICULTY[d];
       if (!x.court) return 'Even';
       const sign = x.court > 0 ? '+' : '−';
-      // (Hard's grows with your team: 1 to 5 points, the better the team, the more)
-      return x.courtGrowth ? `${sign}${Math.abs(x.court) * COURT_RANGE[0]} to ${Math.abs(x.court) * COURT_RANGE[1]}` : `${sign}${Math.abs(x.court)}`;
+      // (Hard's grows with your team: 1 to 5 points, the better the team, the more; the sign on both ends)
+      return x.courtGrowth ? `${sign}${Math.abs(x.court) * COURT_RANGE[0]} to ${sign}${Math.abs(x.court) * COURT_RANGE[1]}` : `${sign}${Math.abs(x.court)}`;
     },
     help: 'Points a game your team gets (+) or your opponents get (−) over what the rosters and tactics are worth, the way home court works. On Hard it grows with your team: the better your roster, the harder they play you.',
   },

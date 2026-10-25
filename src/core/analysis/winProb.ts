@@ -92,6 +92,26 @@ export function winProb(s: WpState, k: WpParams = WP): number {
  */
 export const winChance = (margin: number, k: WpParams = WP) => winProb({ q: 1, clock: GAME.quarterSec, margin: 0, ball: null, edge: margin }, k);
 
+/**
+ * A close game's bound: neither side this likely to win it. At 95% a game is close down 14 with 11
+ * minutes left, down 9 with five, 6 with two and 4 with 30 seconds.
+ */
+export const CLOSE_WIN = 0.95;
+
+/** Whether neither side is CLOSE_WIN to win from this state. */
+export const closeState = (s: WpState) => {
+  const p = winProb(s);
+  return p < CLOSE_WIN && p > 1 - CLOSE_WIN;
+};
+
+/**
+ * Crunch time, when a staff stops subbing for fouls and fatigue: the last six minutes of the fourth
+ * quarter and overtime, in a game still in reach (closeState from the score and the clock alone: the
+ * bench reads the scoreboard, not the projection). Up 15 with 3:24 left is not crunch time, and the
+ * starters get their breather.
+ */
+export const crunchTime = (q: number, clock: number, margin: number) => q >= 4 && clock < 360 && closeState({ margin, q, clock, ball: null, edge: 0 });
+
 /** One point of a game's win-probability line. */
 export interface WpPoint {
   /** Index into the game's flow (-1: tip-off). */

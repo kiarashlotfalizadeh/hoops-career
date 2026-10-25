@@ -1,8 +1,13 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
 
-// CI signs every APK with one fixed key from repository secrets, so a new build installs over the
-// old one (and keeps its saves). Without ANDROID_KEYSTORE_FILE, Gradle's own debug key is used.
+// CI signs every build with one fixed key from repository secrets, so a new build installs over the
+// old one (and keeps its saves). Without ANDROID_KEYSTORE_FILE, debug builds use Gradle's own debug
+// key and release builds refuse to run (see the check at the end).
 def keystoreFile = System.getenv('ANDROID_KEYSTORE_FILE')
+// the version players see is the web app's (package.json), so the store listing and Settings agree
+def appVersion = new JsonSlurper().parse(rootProject.file('../package.json')).version
 
 android {
     namespace "com.hoopscareer.app"
@@ -11,9 +16,10 @@ android {
         applicationId "com.hoopscareer.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Android only installs an update with a higher versionCode: CI passes its run number
+        // Android only installs an update with a versionCode at least the installed one's, and Google
+        // Play wants a higher one for every upload: CI passes its run number, which only goes up
         versionCode = (project.findProperty('versionCode') ?: 1) as Integer
-        versionName "1.0"
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -62,6 +68,18 @@ dependencies {
 }
 
 apply from: 'capacitor.build.gradle'
+
+// A release build (an APK or the Play bundle) must carry the one key every later update is signed
+// with: without it, stop and say why instead of producing a build that can never be updated.
+gradle.taskGraph.whenReady { graph ->
+    def release = graph.allTasks.any { it.project == project && it.name ==~ /(assemble|bundle|package|sign)Release.*/ }
+    if (!release) return
+    def missing = ['ANDROID_KEYSTORE_FILE', 'ANDROID_KEYSTORE_PASSWORD', 'ANDROID_KEY_ALIAS', 'ANDROID_KEY_PASSWORD'].findAll { !System.getenv(it) }
+    if (!missing && !file(keystoreFile).exists()) missing = ["ANDROID_KEYSTORE_FILE (no file at ${keystoreFile})"]
+    if (missing) {
+        throw new GradleException("A release build needs the release signing key, and these are not set: ${missing.join(', ')}. See README → Ship to phones → Android signing. (Debug builds don't need it: ./gradlew assembleDebug.)")
+    }
+}
 
 try {
     def servicesJSON = file('google-services.json')

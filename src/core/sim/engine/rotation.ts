@@ -4,6 +4,7 @@
 // never plays four), and in-game injuries.
 
 import { K } from './constants';
+import { crunchTime } from '../../analysis/winProb';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -38,6 +39,11 @@ export const rotationMethods = {
     return margin <= 6 + this.clock / 30 ? false : t.garbage;
   },
 
+  /** Crunch time (see crunchTime): the last six minutes of a game still in reach, when the staff plays through fouls and fatigue. */
+  crunch(this: GameSim): boolean {
+    return crunchTime(this.q, this.clock, this.T[0].score - this.T[1].score);
+  },
+
   /** The deep bench is finishing a blowout (if the coach empties his bench in garbage time). */
   inGarbageTime(this: GameSim, t: ST): boolean {
     return t.t.manage.garbageTime && this.q >= 4 && t.garbage;
@@ -70,7 +76,12 @@ export const rotationMethods = {
       }
     }
     // foul trouble: bench players at the limit (except crunch time)
-    const crunch = this.q >= 4 && this.clock < 360;
+    const crunch = this.crunch();
+    // the last six minutes of a game already decided (not crunch time): someone sat for a breather
+    // stays sat, rather than coming back for the last minute of a twelve-point game
+    const decided = this.q >= 4 && this.clock < 360 && !crunch;
+    if (!decided) t.restedLate.clear();
+    else if (t.restedLate.size) desired = desired.filter((p) => !t.restedLate.has(p.pid));
     const limit = this.foulLimit(t);
     const bigsWanted = desired.filter((p) => p.big).length;
     desired = desired.filter((p) => crunch || p.fouls < limit);
@@ -78,12 +89,13 @@ export const rotationMethods = {
     // coach doesn't reach past it for a breather: the deep bench plays in blowouts and emergencies)
     const fatigueLine = t.t.manage.fatigueSub;
     const playoffs = this.opts.type === 'playoffs';
-    const bench = ordered.filter((p) => !desired.includes(p) && (crunch || p.fouls < limit));
+    const bench = ordered.filter((p) => !desired.includes(p) && (crunch || p.fouls < limit) && !t.restedLate.has(p.pid));
     desired = desired.map((p) => {
       if (p.energy >= fatigueLine || crunch) return p;
       const alt = bench.filter((b) => b.energy > 0.82 && b.big === p.big && b.planMin > 0).sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
       if (alt) {
         bench.splice(bench.indexOf(alt), 1);
+        if (decided) t.restedLate.add(p.pid);
         return alt;
       }
       return p;
@@ -130,7 +142,7 @@ export const rotationMethods = {
   subSignature(this: GameSim, t: ST): number[] {
     const fl = t.t.manage.fatigueSub;
     // (a blowout, or one getting back within reach, changes the lineup now, not at the next minute mark)
-    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.q >= 4 && this.clock < 360 ? 1 : 0, this.wantsGarbage(t) ? 1 : 0];
+    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.crunch() ? 1 : 0, this.wantsGarbage(t) ? 1 : 0];
     for (const p of t.players) {
       const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;
       sig.push(p.out + 4 * state + 16 * p.fouls + (this.capped(p) ? 1024 : 0) + (t.hacked.size && (t.hacked.get(p.pid) ?? 0) >= 2 ? 2048 : 0));

@@ -7,7 +7,7 @@
 // game when it isn't today; your season as a strip of figures; the news in two headlines; and More
 // (practice, the way back to "While you were away", the glossary, the guide). Anything with more to
 // it is one tap away; nothing here repeats something else here or on the top bar.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -17,6 +17,7 @@ import { assistantFeed, type AssistantArea, type AssistantCard } from '../../cor
 import { jobSecurity } from '../../core/league/jobSecurity';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
+import { InstallRow } from '../components/InstallRow';
 import { Section, Sheet } from '../components/ui';
 import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
 import { DigestRow, Headlines, LeadStory, YourSeason, useLead } from './FrontPage';
@@ -26,6 +27,7 @@ import { useNeedsYou } from './needs';
 import { NeedRow, needRows } from './NeedsList';
 import './today.css';
 import { useForecast } from '../useForecast';
+import { dayStamp, freshAdvice, noteSeen, readSeen } from './staffAge';
 
 /** Today's advice leaves the owner to the job-security row. */
 const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
@@ -72,7 +74,13 @@ export default function Today() {
   const hidden = guideHidden(league);
   const msg = openMsg !== null ? league.inbox.find((m) => m.id === openMsg) : undefined;
 
-  const advice = feed.slice(0, needs.count + (seat ? 1 : 0) >= 3 ? 1 : STAFF_SHOWN);
+  // (a card sat on Today a week without being acted on gives way to newer ones: see staffAge.ts)
+  const now = dayStamp(league.season, league.day);
+  const seen = useLeagueMemo(() => readSeen(league.id), [league]);
+  const advice = freshAdvice(feed, seen, now).slice(0, needs.count + (seat ? 1 : 0) >= 3 ? 1 : STAFF_SHOWN);
+  const shownIds = advice.map((c) => c.id).join('|');
+  const feedIds = full.map((c) => c.id).join('|');
+  useEffect(() => noteSeen(league.id, shownIds ? shownIds.split('|') : [], feedIds.split('|'), now), [league.id, shownIds, feedIds, now]);
   const onToday = new Set([...advice.map((c) => c.id), `plan:${opp}`, ...(seat ? ['owner'] : [])]);
   const moreAdvice = full.filter((c) => !onToday.has(c.id)).length;
 
@@ -134,6 +142,8 @@ export default function Today() {
           </div>
         </Section>
       )}
+
+      <InstallRow />
 
       {staffRows.length > 0 && (
         <Section

@@ -1,9 +1,9 @@
 // Before the opening tip of a live game: the starting lineups on the court, as a broadcast
 // introduces them (the night's billing as its opening graphic, "Rivalry night at Madison Square
 // Garden", the arena, what's at stake, both fives with their numbers, positions and season lines),
-// until the user tips it off or a few seconds pass.
+// until a few seconds pass (or the user skips the rest).
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Play } from 'lucide-react';
+import { SkipForward } from 'lucide-react';
 import type { League, Team } from '../../core/types';
 import { FRANCHISES } from '../../core/teams';
 import { seasonTotals } from '../../core/league/helpers';
@@ -147,8 +147,9 @@ export function Intro({
         {col(1)}
         {col(0)}
       </div>
+      {/* (the game tips off by itself when the bar runs out: this only skips the wait, so it isn't a second "Tip off") */}
       <button className="btn primary sm lv-li-tip" onClick={onTip}>
-        <Play size={15} fill="currentColor" /> Tip off
+        <SkipForward size={15} aria-hidden="true" /> Skip intro
       </button>
       <span className="lv-li-bar" aria-hidden="true">
         <span style={{ width: `${Math.max(0, Math.min(100, (left / INTRO_MS) * 100))}%` }} />

@@ -331,6 +331,15 @@ describe('reading a league', () => {
       expect(() => migrate({ id: 'x' })).toThrow('damaged');
     }
 
+    // a setting waiting for opening night loads as it was; a damaged one goes, as if never chosen
+    {
+      const l = testLeague('pending');
+      l.settings.pending = { difficulty: 'hard', jobSecurity: false };
+      expect(migrate(structuredClone(l)).settings.pending).toEqual({ difficulty: 'hard', jobSecurity: false });
+      (l.settings as { pending?: unknown }).pending = { difficulty: 'nightmare' };
+      expect(migrate(structuredClone(l)).settings.pending).toBeUndefined();
+    }
+
     // keeps only in-app routes as inbox links
     {
       const l = testLeague('links');

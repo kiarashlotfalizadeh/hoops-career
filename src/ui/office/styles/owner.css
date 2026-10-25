@@ -143,6 +143,14 @@
   color: var(--text-2);
 }
 
+/* the sack on the way whatever the score says: under the score, in the seat's colour */
+.fo-seat-danger {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--seat);
+}
+
 .fo-meterbar {
   position: relative;
   padding: 18px 0 20px;
@@ -179,7 +187,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 12px;
   letter-spacing: -0.02em;
   color: var(--text-dim);
@@ -217,7 +225,7 @@
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.02em;
   color: var(--text-2);

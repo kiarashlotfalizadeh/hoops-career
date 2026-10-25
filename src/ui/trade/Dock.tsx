@@ -16,6 +16,7 @@ import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
 import { taxLine, useDockHeight } from '../office/common';
 import { TermsList } from './Terms';
+import { overpayNote } from './ConfirmSheet';
 import { type EditCheck } from '../../core/league/godMode';
 import { money } from '../../core/format';
 
@@ -25,7 +26,13 @@ import { money } from '../../core/format';
  * the meter short of a deal.
  */
 function reaction(ev: TradeEval): { pct: number; label: string; color: string; figure: string } {
-  if (ev.accept) return { pct: 100, label: ev.delta > Math.abs(ev.valueOut) * 0.25 ? "They'd jump at it" : "They'd take it", color: 'var(--good)', figure: 'Deal' };
+  if (ev.accept) {
+    const eager = ev.delta > Math.abs(ev.valueOut) * 0.25 ? "They'd jump at it" : "They'd take it";
+    // said from your side: their yes is no good news when you're the one overpaying
+    return overpayNote(ev)
+      ? { pct: 100, label: `${eager}: you're overpaying`, color: 'var(--warn)', figure: 'Deal' }
+      : { pct: 100, label: eager, color: 'var(--good)', figure: 'Deal' };
+  }
   // the AI's own verdict on how far the value is from enough
   const { gap: rel, label } = valueVerdict(ev);
   const pct = Math.max(4, Math.min(94, (1 - rel) * 100));
@@ -108,6 +115,7 @@ export function Dock({
   const theyreOver = capView.theyreOver;
   const fixable = !ev.accept && capView.workable;
   const abbrev = league.teams[offer.b.tid].abbrev;
+  const overpay = overpayNote(ev);
   return (
     <div ref={ref} className={`fo-dock ${fold ? 'folded' : ''}`} style={{ ['--react' as string]: r.color }}>
       <button
@@ -137,6 +145,8 @@ export function Dock({
       <div className="fo-meter" aria-hidden="true">
         <i style={{ width: `${r.pct}%` }} />
       </div>
+      {/* (folded, your warning stays in view: their reasons are behind the fold) */}
+      {fold && overpay && <TradeNotes notes={[overpay]} />}
       {!fold && (
         <>
           {/* their two main reasons (one when a rule problem already needs the room) */}
@@ -215,7 +225,7 @@ export function Dock({
         <button className="btn sm grow" disabled={!fixable} onClick={onWork}>
           {theyreOver && !fixable ? "They can't absorb that salary" : 'What would make this work?'}
         </button>
-        <button className={`btn sm ${ev.accept ? 'good' : 'primary'}`} disabled={!ev.ok} onClick={onPropose}>
+        <button className={`btn sm ${ev.accept && !overpay ? 'good' : 'primary'}`} disabled={!ev.ok} onClick={onPropose}>
           <Handshake size={16} /> Propose
         </button>
       </div>

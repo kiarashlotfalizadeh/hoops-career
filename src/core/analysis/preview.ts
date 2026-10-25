@@ -9,8 +9,8 @@ import type { Familiarity, GameType, League, Player, Pos, ScheduledGame, Tactics
 import type { Ranked } from './projection';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
-import { buildSimInput, neutralSite } from '../league/games';
-import { playerName } from '../league/helpers';
+import { buildSimInput, ensureRotation, neutralSite } from '../league/games';
+import { playerName, teamPlayers } from '../league/helpers';
 import { standings } from '../league/standings';
 import { seriesLabel } from '../league/playoffs';
 import { planFor } from '../league/gamePlans';
@@ -385,15 +385,35 @@ function playInState(g: ScheduledGame): PlayInState | undefined {
 }
 
 /**
- * A scheduled game set up as it will tip off: both sides' inputs and a throwaway game on a fixed
- * seed (setting one up plans both rotations and matchups for the tip, and draws nothing from the league).
+ * The league as game `g` will find it at the tip: both teams' rotations and playbooks brought up to
+ * date as the game itself brings them (ensureRotation: injuries, trades and signings since a team's
+ * last game), on copies of the two teams and their players, so the league is never touched. Without
+ * it a projection read the rotations as the last game left them, and moved once any screen (the
+ * matchup preview's) refreshed them in the league: the same game showed 31% on Today and 29% after
+ * a visit to its matchup page.
  */
-function setUpGame(league: League, g: ScheduledGame) {
+function atTip(league: League, g: ScheduledGame): League {
+  const tids = [g.home, g.away];
+  const players = { ...league.players };
+  for (const tid of tids) for (const p of teamPlayers(league, tid)) players[p.pid] = { ...p, jerseys: p.jerseys && { ...p.jerseys } };
+  const teams = league.teams.map((t) => (tids.includes(t.tid) ? { ...t, rotation: structuredClone(t.rotation), tactics: structuredClone(t.tactics) } : t));
+  const view: League = { ...league, teams, players, inbox: [...league.inbox] };
+  for (const tid of tids) ensureRotation(view, tid);
+  return view;
+}
+
+/**
+ * A scheduled game set up as it will tip off: both sides' inputs and a throwaway game on a fixed
+ * seed (setting one up plans both rotations and matchups for the tip, and draws nothing from the
+ * league), and the league as the game finds it (atTip), which every read of the game goes through.
+ */
+function setUpGame(at: League, g: ScheduledGame) {
+  const league = atTip(at, g);
   const neutral = neutralSite(g);
   const homeIn = buildSimInput(league, g.home, g.day, g.type, g.away, g);
   const awayIn = buildSimInput(league, g.away, g.day, g.type, g.home, g);
   const sim = new GameSim(homeIn, awayIn, { rng: new Rng(1), type: g.type, injuries: false, neutral });
-  return { sim, homeIn, awayIn, neutral };
+  return { sim, homeIn, awayIn, neutral, league };
 }
 
 /**
@@ -401,19 +421,19 @@ function setUpGame(league: League, g: ScheduledGame) {
  * (and the one the game keeps), so every screen that quotes one quotes the same number. Pass
  * `ratings` when projecting a day's games.
  */
-export function gameProjection(league: League, g: ScheduledGame, ratings = leagueRatings(league)): { margin: number; win: number } {
-  const { sim, neutral } = setUpGame(league, g);
+export function gameProjection(at: League, g: ScheduledGame, ratings = leagueRatings(at)): { margin: number; win: number } {
+  const { sim, neutral, league } = setUpGame(at, g);
   const { margin } = projectGame(league, sim, neutral, ratings);
   return { margin, win: winChance(margin) };
 }
 
-export function matchupPreview(league: League, gid: number): MatchupPreview | null {
-  const g = league.schedule.find((x) => x.gid === gid);
+export function matchupPreview(at: League, gid: number): MatchupPreview | null {
+  const g = at.schedule.find((x) => x.gid === gid);
   if (!g) return null;
-  const userGame = g.home === league.userTid || g.away === league.userTid;
-  const usHome = !userGame || g.home === league.userTid;
+  const userGame = g.home === at.userTid || g.away === at.userTid;
+  const usHome = !userGame || g.home === at.userTid;
   const [usTid, themTid] = usHome ? [g.home, g.away] : [g.away, g.home];
-  const { sim, homeIn, awayIn, neutral } = setUpGame(league, g);
+  const { sim, homeIn, awayIn, neutral, league } = setUpGame(at, g);
   const ratings = leagueRatings(league);
   const rows = new Map(standings(league).map((r) => [r.tid, r]));
   const sHome = side(league, sim, 0, g, homeIn.rest ?? [], ratings, rows.get(g.home));

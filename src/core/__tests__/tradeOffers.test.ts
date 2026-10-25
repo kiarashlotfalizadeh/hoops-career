@@ -5,7 +5,7 @@
 import { expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { advanceDay, continueDraft, draftNextPick, startDraft, startRegularSeason, userDraftPick } from '../league/season';
-import { CAP_FOR, contractSeason, dateToDay, freeAgents, payroll, prospects, standardRoster } from '../league/helpers';
+import { CAP_FOR, contractSeason, dateToDay, fmtDate, freeAgents, payroll, prospects, standardRoster } from '../league/helpers';
 import { DEC_15, marketSalary, releasePlayer, signPlayer, tradeValue } from '../league/contracts';
 import { capPayroll } from '../league/freeAgency';
 import {
@@ -17,6 +17,7 @@ import {
   draftProposals,
   freeAgencyProposals,
   isUntouchable,
+  markOffersSeen,
   offerSubject,
   openProposals,
   proposalError,
@@ -576,6 +577,23 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
     expect(proposalError(l, q)).toMatch(/expired/);
     cleanProposals(l);
     expect(openProposals(l)).not.toContain(q);
+    // once it has been in front of him (on Today with Accept and Turn down), its date stands as
+    // shown, mail unread or not; one held while unseen says its new date in its mail
+    const r = waitForOffer(l, (x) => x.id !== p.id && x.id !== q.id)!;
+    expect(r).toBeDefined();
+    const mail = l.inbox.find((m) => m.proposal === r.id)!;
+    mail.read = false;
+    const shown = r.expires;
+    markOffersSeen(l);
+    l.day = shown;
+    cleanProposals(l);
+    expect(r.expires).toBe(shown);
+    const s = waitForOffer(l, (x) => ![p.id, q.id, r.id].includes(x.id))!;
+    expect(s).toBeDefined();
+    l.day = s.expires;
+    cleanProposals(l);
+    expect(s.expires).toBeGreaterThan(l.day);
+    expect(l.inbox.find((m) => m.proposal === s.id)!.body).toContain(`It stands until ${fmtDate(l.season, s.expires)}.`);
   }
 
   // accepting one goes through; a stale one fails cleanly and changes nothing

@@ -9,7 +9,10 @@ import { ChevronRight, Eye } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { liveInProgress } from '../../state/live';
-import { nextOpponent } from '../../core/league/agenda';
+import { guideStepOpen, nextOpponent } from '../../core/league/agenda';
+import { counterCandidates } from '../../core/ai/advisor';
+import { worthCall } from '../../core/ai/counterWorth';
+import { byWorth, useCounterWorth, worthText } from './matchup/useCounterWorth';
 import { GuideStrip } from '../components/GuideStrip';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
@@ -71,21 +74,38 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
           </Link>
         }
       />
-      <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} />
-      <JustPlayed league={league} opp={opp} />
-      {opp === nextOpponent(league) && <GuideStrip step="scout" keep="No plan this time" />}
+      {/* the full poster on the first section; on the others it's one line, so the section starts on the first screen */}
+      <Hero league={league} opp={opp} onPlan={tab === 'plan' ? undefined : () => setTab('plan')} compact={tab !== tabs[0]} />
+      {tab === tabs[0] && <JustPlayed league={league} opp={opp} />}
+      {opp === nextOpponent(league) && guideStepOpen(league, 'scout') && <ScoutGuide league={league} opp={opp} />}
       <TabBar value={tab} onChange={setTab} options={tabs.map((id) => ({ id, label: LABEL[id] }))} label="Matchup sections" />
       {tab === 'preview' && preview && <PreviewTab key={preview.gid} league={league} game={preview} onPlan={() => setTab('plan')} />}
       {tab === 'scout' && <ScoutTab league={league} opp={opp} />}
       {tab === 'plan' && <PlanTab league={league} opp={opp} />}
       {tab === 'matchups' && <MatchupPlanner league={league} opp={opp} />}
-      {today && <TipOff league={league} gid={preview.gid} name={league.teams[opp].name} />}
+      {today && <TipOff league={league} gid={preview.gid} opp={opp} name={league.teams[opp].name} />}
     </main>
   );
 }
 
+/**
+ * The guide's plan step on the opener's page: the staff's counter by name and measured worth, or that
+ * none of them beats the playbook tonight (until it's measured, the guide's own words).
+ */
+function ScoutGuide({ league, opp }: { league: League; opp: number }) {
+  const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const worth = useCounterWorth(league, opp)?.worth;
+  const best = worth && byWorth(drafted, worth).find((c) => worth.get(c.id) && worthCall(worth.get(c.id)!) === 'gain');
+  const line = !worth
+    ? undefined
+    : best
+      ? `Add the staff's counter, ${best.label} (${worthText(worth.get(best.id)!).text.toLowerCase()}), or go in with no plan.`
+      : "None of the staff's counters beats your playbook tonight: go in with no plan.";
+  return <GuideStrip step="scout" keep="No plan this time" line={line} />;
+}
+
 /** Game day: tip off (or get back to the game under way), or sim it from here (this dock stands in for the Continue bar). */
-function TipOff({ league, gid, name }: { league: League; gid: number; name: string }) {
+function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: number; name: string }) {
   const nav = useNavigate();
   const simming = useStore((s) => !!s.sim);
   // (also finishes the game under way, from its current score) the result is the moment: its report
@@ -97,15 +117,27 @@ function TipOff({ league, gid, name }: { league: League; gid: number; name: stri
   };
   const live = liveInProgress(league);
   const resume = live?.gid === gid;
+  // the staff's counters for tonight still being measured: said on the button, so a quick tap doesn't skip the plan unseen
+  const measuring = useCounterWorth(league, opp);
+  const pending = !resume && !!measuring && !measuring.worth;
   return (
     <div className="dockbar mu-dock" role="group" aria-label="Game day">
       <button
         className="btn primary big grow"
         disabled={simming}
         onClick={() => nav('/live')}
-        aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}`}
+        aria-label={
+          resume
+            ? `Resume the game against the ${name}`
+            : `Tip off against the ${name}${pending ? `. The staff is still measuring its counters: ${Math.round(measuring!.progress * 100)}%` : ''}`
+        }
       >
-        <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
+        <span className="mu-dock-tip">
+          <span>
+            <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
+          </span>
+          {pending && <span className="mu-dock-sub">Staff still measuring · {Math.round(measuring!.progress * 100)}%</span>}
+        </span>
       </button>
       <button className="btn" disabled={simming} onClick={() => void quick()}>
         {resume ? 'Finish it' : 'Quick sim'}
@@ -119,7 +151,7 @@ function TipOff({ league, gid, name }: { league: League; gid: number; name: stri
  * margin under it; with no meeting left, the two records), what the night is billed as, the season
  * series and your plan for them (`onPlan`: a tap to it; none on the Plan tab).
  */
-function Hero({ league, opp, onPlan }: { league: League; opp: number; onPlan?: () => void }) {
+function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; onPlan?: () => void; compact?: boolean }) {
   const me = league.userTid;
   const t = league.teams[opp];
   const next = meetings(league, opp);
@@ -168,6 +200,12 @@ function Hero({ league, opp, onPlan }: { league: League; opp: number; onPlan?: (
   // the projected margin, from the favourite's side
   const margin = proj ? proj.margin : 0;
   const fav = league.teams[margin >= 0 ? homeTid : awayTid];
+  if (compact)
+    return (
+      <section className="mu-hero" aria-label={`Matchup: the ${t.region} ${t.name}`}>
+        <GameBoard league={league} compact away={side(awayTid)} home={side(homeTid)} over={['']} mid={<span className="gd-bd-k">{proj ? 'To win' : 'Record'}</span>} />
+      </section>
+    );
   return (
     <section className="mu-hero" aria-label={`Matchup: the ${t.region} ${t.name}`}>
       <GameBoard

@@ -84,7 +84,7 @@
   font-family: var(--font);
   font-stretch: var(--text-w);
   letter-spacing: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 620;
   color: var(--text-dim);
 }

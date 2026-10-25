@@ -87,7 +87,7 @@ export function Touchline({
           );
         })}
       </div>
-      {filled < 2 && <div className="tiny dim">Set up a Tactic B or C on the Tactics screen to switch to it here.</div>}
+      {filled < 2 && <div className="tiny dim">A Tactic B or C is set up between games: then you can switch to it here.</div>}
       <Levels
         label="Mentality"
         value={(m + 2) * 25}

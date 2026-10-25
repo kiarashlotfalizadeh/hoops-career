@@ -143,3 +143,41 @@ export function courtEdge(league: Pick<League, 'settings' | 'players' | 'teams' 
   const pts = courtPoints(league, home, away);
   return pts ? [(pts / 2) * FG_PER_POINT, (-pts / 2) * FG_PER_POINT] : undefined;
 }
+
+// ---------------------------------------------------------------- changing it mid-career
+
+/**
+ * A change to the difficulty or to job security from Settings. One that could ease a season under way
+ * (any new difficulty: its owner's grace, its edge on the court, its asks; job security turned off)
+ * waits for the next opening night (Settings.pending, see applyPendingSettings), so it can't dodge a
+ * review or a firing; job security turned back on counts at once. Choosing what's in force again
+ * cancels the wait.
+ */
+export function requestSetting(league: Pick<League, 'settings'>, k: 'difficulty' | 'jobSecurity', v: Difficulty | boolean) {
+  const st = league.settings;
+  const pending = { ...st.pending };
+  if (k === 'difficulty') {
+    if (v === st.difficulty) delete pending.difficulty;
+    else pending.difficulty = v as Difficulty;
+  } else if (v) {
+    delete pending.jobSecurity;
+    st.jobSecurity = true;
+  } else if (st.jobSecurity) pending.jobSecurity = false;
+  if (Object.keys(pending).length) st.pending = pending;
+  else delete st.pending;
+}
+
+/** What Settings shows as chosen: the change waiting for opening night, else what's in force. */
+export function chosenSetting(league: Pick<League, 'settings'>): { difficulty: Difficulty; jobSecurity: boolean } {
+  const st = league.settings;
+  return { difficulty: st.pending?.difficulty ?? st.difficulty, jobSecurity: st.pending?.jobSecurity ?? st.jobSecurity };
+}
+
+/** On opening night (startRegularSeason, before the owner sets his goals): the changes waiting in Settings take effect. */
+export function applyPendingSettings(league: Pick<League, 'settings'>) {
+  const p = league.settings.pending;
+  if (!p) return;
+  if (p.difficulty && DIFFICULTY[p.difficulty]) league.settings.difficulty = p.difficulty;
+  if (p.jobSecurity === false) league.settings.jobSecurity = false;
+  delete league.settings.pending;
+}

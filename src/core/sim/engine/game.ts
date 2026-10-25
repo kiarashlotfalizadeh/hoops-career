@@ -284,6 +284,7 @@ export class GameSim {
       ex: { biggestLead: 0, fastBreak: 0, paint: 0, secondChance: 0, offTov: 0, bench: 0 },
       run: 0,
       garbage: false,
+      restedLate: new Set(),
       spacing: 50,
       passQ: 50,
       helpQ: 50,

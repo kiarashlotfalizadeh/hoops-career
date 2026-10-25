@@ -1267,6 +1267,8 @@ export interface Proposal {
   season: number;
   day: number;
   expires: number;
+  /** It has been in front of the user (Today's Needs you lists every open offer): its date no longer moves (see holdUnseen in proposals.ts). */
+  seen?: true;
 }
 
 export interface SeasonAwards {
@@ -1332,6 +1334,11 @@ export interface Settings {
   injuries: boolean;
   /** Can the owner fire you? */
   jobSecurity: boolean;
+  /**
+   * Changes that wait for the next opening night (see applyPendingSettings): a new difficulty, and
+   * job security turned off, so neither can dodge a season's review once it's under way.
+   */
+  pending?: { difficulty?: 'easy' | 'normal' | 'hard'; jobSecurity?: false };
   /** Auto-play speed for live game. */
   liveSpeed: number;
   /** Where a live game stops for a break with a period report (default 'quarters'). */

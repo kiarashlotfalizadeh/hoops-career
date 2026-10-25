@@ -476,6 +476,16 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     // a fair one-for-one has no such warning
     const equal = shapeAt(l, standardRoster(l, AI)[1], 88, 26, vetMin);
     expect(evaluateTrade(l, offer([star.pid], [equal.pid])).notes.filter((n) => n.tone === 'warn')).toEqual([]);
+    // turned down on value, it always says how far apart the sides are as they see it, first
+    const mineScrub = shapeAt(l, standardRoster(l, U)[1], 64, 31, vetMin);
+    const lop = evaluateTrade(l, offer([mineScrub.pid], [equal.pid]));
+    expect(lop.message).toBe('Not even close.');
+    expect(lop.notes[0]).toEqual({
+      tone: 'bad',
+      text: expect.stringMatching(new RegExp(`^They value ${equal.firstName} ${equal.lastName} about \\d+× ${mineScrub.firstName} ${mineScrub.lastName}$`)),
+    });
+    // a deal they take says nothing of the kind
+    expect(ev.notes.some((n) => /^They value /.test(n.text))).toBe(false);
   }
 
   // names depth for talent, waivers in the offseason and the two-firsts limit

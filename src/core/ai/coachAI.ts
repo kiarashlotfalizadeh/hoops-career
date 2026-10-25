@@ -271,6 +271,41 @@ function trimRotation(mins: number[], caps: number[]): number[] {
   return out;
 }
 
+/**
+ * The fewest minutes a team's two best healthy players play: real teams' top two average about 34
+ * and 32, and a plan spread flat (role memory from a small role last season, a roster without a
+ * clear star) had them at 27.
+ */
+const STAR_FLOOR = 33;
+
+/**
+ * Minutes in depth order with the two best healthy players (by `q`, the front office's lean
+ * included) raised to STAR_FLOOR, their `ceiling` allowing (a veteran's age, a hard cap; a
+ * veteran a youth movement is phasing out keeps its lower ceiling, while its two best young players
+ * don't: the lean goes down the bench, not out of their minutes). The minutes come from the
+ * reserves, the most from those who play the most, then from the other starters.
+ */
+function starMinutes(mins: number[], depth: Player[], q: (p: Player) => number, ceiling: (p: Player) => number): number[] {
+  const out = [...mins];
+  const top = depth
+    .map((_, i) => i)
+    .sort((a, b) => q(depth[b]) - q(depth[a]))
+    .slice(0, 2);
+  for (const i of top) {
+    let short = Math.min(STAR_FLOOR, ceiling(depth[i])) - out[i];
+    for (const from of [(j: number) => j >= 5, (j: number) => j < 5]) {
+      const givers = out.map((_, j) => j).filter((j) => !top.includes(j) && from(j) && out[j] > 0);
+      const pool = givers.reduce((a, j) => a + out[j], 0);
+      if (short <= 0 || pool <= 0) continue;
+      const take = Math.min(short, pool / 2);
+      for (const j of givers) out[j] -= (take * out[j]) / pool;
+      out[i] += take;
+      short -= take;
+    }
+  }
+  return out;
+}
+
 /** The fewest minutes a starter plays when the reserves have them to give (stamina and hard caps allowing). */
 const STARTER_FLOOR = 20;
 
@@ -414,6 +449,7 @@ export function autoRotation(players: Player[], prev?: Rotation, opts: { lean?: 
     const f = (240 - total) / room;
     mins = mins.map((m, i) => (open[i] ? Math.min(caps[i], m + open[i] * f) : m));
   }
+  mins = starMinutes(mins, depth, q, (p) => Math.min(MAX_PLAN, vet(p), hardCaps[p.pid] ?? MAX_PLAN, (lean?.(p) ?? 0) < 0 ? maxMinutes : MAX_PLAN));
   mins = trimRotation(mins, caps);
   const minutes: Record<number, number> = {};
   depth.forEach((p, i) => (minutes[p.pid] = Math.round(mins[i])));

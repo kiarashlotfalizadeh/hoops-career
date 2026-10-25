@@ -2,9 +2,13 @@
 // in its own process, the user's team auto-managed as in season-test) and watches what fans
 // screenshot as broken: the scoring leaders with their usage, the night's biggest scoring games, the
 // best record and the longest winning streak, how the best players age, and in the first season how
-// the real league's top scorers' lines hold up. Fails (exit 1) when any league has a season whose
-// scoring leader averages more than MAX_PPG or a game over MAX_GAME_PTS, or when more seasons than
-// BEST_RECORD_ALLOWANCE allows end with a record better than MAX_WINS.
+// the real league's top scorers' lines hold up, the leaders in made threes and steals, the season's
+// biggest margin and team score, and the injuries that end seasons. Fails (exit 1) when any league
+// has a season whose scoring leader averages more than MAX_PPG, a game over MAX_GAME_PTS, a threes
+// or steals leader past MAX_TPM or MAX_STL, a margin past MAX_MARGIN or a team score past
+// MAX_TEAM_PTS, or more than MAX_35_SEASONS seasons of a 35-point scorer; when more seasons than
+// BEST_RECORD_ALLOWANCE allows end with a record better than MAX_WINS; or when the seasons average
+// more than MAX_LONG_INJURIES absences of 60+ games or MAX_ACHILLES Achilles ruptures.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
 //   TEAM=<abbrev>: the user's team where a league names none, Orlando by default; DIFFICULTY=easy|normal|hard)
 import { readFileSync } from 'node:fs';
@@ -32,6 +36,25 @@ const MAX_PPG = 39;
  * a once-in-a-generation game, and one in a check's few dozen seasons is the engine running away.
  */
 const MAX_GAME_PTS = 73;
+/**
+ * The outlier guards below sit just past what the engine does today (4 leagues x 8 seasons, October
+ * 2026: threes leader up to 8.2 a game, steals leader 3.6, margin 83, a 191-point night in
+ * regulation), short of the NBA's records (5.1 threes, about 2.7 steals, a 73-point margin, about 160
+ * points in regulation), which the engine doesn't meet yet: they catch it getting worse, and come
+ * down as it is tuned toward those records.
+ */
+const MAX_TPM = 8.5;
+const MAX_STL = 3.8;
+const MAX_MARGIN = 86;
+const MAX_TEAM_PTS = 195;
+/**
+ * Seasons per league with a 35-PPG scorer: the NBA has had about a dozen in its history, and an
+ * engine that made one perennial (Edwards at 35-37 in 6 of 8 seasons) had 12 in 32.
+ */
+const MAX_35_SEASONS = 3;
+/** New absences of 60+ games and Achilles ruptures a season, on average over every season played (the NBA: about 4-8 and 1-3). */
+const MAX_LONG_INJURIES = 8;
+const MAX_ACHILLES = 3.5;
 /** The best record ever is 73-9 (Golden State, 2015-16): a 74-win season is a record the engine shouldn't be breaking. */
 const MAX_WINS = 73;
 /**
@@ -56,6 +79,20 @@ interface SeasonReport {
   game: { name: string; pts: number };
   best: { team: string; won: number; lost: number };
   streak: { team: string; games: number };
+  /** The regular season's leaders per game in made threes and steals (50+ games). */
+  tpm: { name: string; pg: number };
+  stl: { name: string; pg: number };
+  /** Scorers at 35+ PPG (50+ games). */
+  over35: number;
+  /** The season's biggest margin and biggest team score in regulation (playoffs included, not the All-Star Game). */
+  margin: { text: string; pts: number };
+  score: { text: string; pts: number };
+  /** New injuries in the season's games: all of them per team, and the league's 10+, 60+ game ones and Achilles/ACL tears. */
+  injuries: { perTeam: number; ten: number; sixty: number; achilles: number; acl: number };
+  /** Overtime games and the share decided by 3 or fewer (regular season), and the league's average MPG of each team's top two (50+ games). */
+  otRate: number;
+  close: number;
+  topMin: [number, number];
 }
 
 const quiet = !!process.env.QUIET;
@@ -96,6 +133,14 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
   for (const r of all) {
     if (r.leader.ppg > MAX_PPG) failures.push(`${at(r)}: ${r.leader.name} led the league with ${r.leader.ppg.toFixed(1)} PPG (max ${MAX_PPG})`);
     if (r.game.pts > MAX_GAME_PTS) failures.push(`${at(r)}: ${r.game.name} scored ${r.game.pts} in a game (max ${MAX_GAME_PTS})`);
+    if (r.tpm.pg > MAX_TPM) failures.push(`${at(r)}: ${r.tpm.name} made ${r.tpm.pg.toFixed(2)} threes a game (max ${MAX_TPM})`);
+    if (r.stl.pg > MAX_STL) failures.push(`${at(r)}: ${r.stl.name} had ${r.stl.pg.toFixed(2)} steals a game (max ${MAX_STL})`);
+    if (r.margin.pts > MAX_MARGIN) failures.push(`${at(r)}: ${r.margin.text} was decided by ${r.margin.pts} (max ${MAX_MARGIN})`);
+    if (r.score.pts > MAX_TEAM_PTS) failures.push(`${at(r)}: ${r.score.text} had a team score ${r.score.pts} in regulation (max ${MAX_TEAM_PTS})`);
+  }
+  for (const seed of new Set(all.map((r) => r.seed))) {
+    const n = all.filter((r) => r.seed === seed && r.over35 > 0).length;
+    if (n > MAX_35_SEASONS) failures.push(`rng ${seed}: ${n} seasons with a 35-PPG scorer (max ${MAX_35_SEASONS})`);
   }
   const over = all.filter((r) => r.best.won > MAX_WINS);
   const allowed = Math.floor(all.length / BEST_RECORD_ALLOWANCE);
@@ -110,11 +155,25 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
   console.log(
     `Over ${all.length} seasons: scoring leader max ${Math.max(...all.map((r) => r.leader.ppg)).toFixed(1)} PPG, game high max ${Math.max(...all.map((r) => r.game.pts))}; best record median ${mid(wins)} wins (max ${wins[wins.length - 1]}), ${over.length} over ${MAX_WINS}; longest streak median ${mid(streaks)} (max ${streaks[streaks.length - 1]})`,
   );
+  const max = (f: (r: SeasonReport) => number) => Math.max(...all.map(f));
+  const mean = (f: (r: SeasonReport) => number) => all.reduce((a, r) => a + f(r), 0) / Math.max(1, all.length);
+  const by35 = new Map<string, number>();
+  for (const r of all) by35.set(r.seed, (by35.get(r.seed) ?? 0) + (r.over35 > 0 ? 1 : 0));
+  console.log(
+    `  3PM leader max ${max((r) => r.tpm.pg).toFixed(2)} (mean ${mean((r) => r.tpm.pg).toFixed(2)}), STL leader max ${max((r) => r.stl.pg).toFixed(2)} (mean ${mean((r) => r.stl.pg).toFixed(2)}), margin max ${max((r) => r.margin.pts)} (mean ${mean((r) => r.margin.pts).toFixed(1)}), team score max ${max((r) => r.score.pts)} (mean ${mean((r) => r.score.pts).toFixed(1)}), seasons with a 35+ PPG scorer per league ${[...by35].map(([k, v]) => `${v} (rng ${k})`).join(', ')}`,
+  );
+  console.log(
+    `  OT ${(100 * mean((r) => r.otRate)).toFixed(1)}%, by 3 or less ${(100 * mean((r) => r.close)).toFixed(1)}%, top-two MPG ${mean((r) => r.topMin[0]).toFixed(1)}/${mean((r) => r.topMin[1]).toFixed(1)}, injuries ${mean((r) => r.injuries.perTeam).toFixed(1)}/team-season, 10+ games ${mean((r) => r.injuries.ten).toFixed(1)}/season (${(mean((r) => r.injuries.ten) / 30).toFixed(1)}/team), 60+ games ${mean((r) => r.injuries.sixty).toFixed(1)}/season (max ${max((r) => r.injuries.sixty)}), Achilles ${mean((r) => r.injuries.achilles).toFixed(1)} (max ${max((r) => r.injuries.achilles)}), ACL ${mean((r) => r.injuries.acl).toFixed(1)}`,
+  );
+  if (mean((r) => r.injuries.sixty) > MAX_LONG_INJURIES) failures.push(`${mean((r) => r.injuries.sixty).toFixed(1)} absences of 60+ games a season (max ${MAX_LONG_INJURIES})`);
+  if (mean((r) => r.injuries.achilles) > MAX_ACHILLES) failures.push(`${mean((r) => r.injuries.achilles).toFixed(1)} Achilles ruptures a season (max ${MAX_ACHILLES})`);
   if (failures.length) {
     console.error(`FAIL: ${failures.join('; ')}`);
     return false;
   }
-  console.log(`OK: no scoring leader above ${MAX_PPG} PPG, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins`);
+  console.log(
+    `OK: no scoring leader above ${MAX_PPG} PPG, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins, leaders within ${MAX_TPM} threes and ${MAX_STL} steals, margins within ${MAX_MARGIN}, team scores within ${MAX_TEAM_PTS}, at most ${MAX_35_SEASONS} seasons of a 35-PPG scorer per league, long injuries and Achilles ruptures within ${MAX_LONG_INJURIES} and ${MAX_ACHILLES} a season`,
+  );
   return true;
 }
 
@@ -135,7 +194,21 @@ function seasonGames(league: League, season: number) {
   const run = new Map<number, number>();
   let streak = { tid: -1, games: 0 };
   let ast = 0;
+  let margin = { text: '-', pts: 0 };
+  let score = { text: '-', pts: 0 };
+  let ot = 0;
+  let close = 0;
+  const box = (g: League['games'][number]) => `${league.teams[g.away.tid]?.abbrev} ${g.away.pts} @ ${league.teams[g.home.tid]?.abbrev} ${g.home.pts}`;
+  // (every game that counts, the playoffs too, not the All-Star Game; scores in regulation, as an overtime adds its own)
+  for (const g of league.games.filter((x) => x.season === season && x.type !== 'allstar')) {
+    const m = Math.abs(g.home.pts - g.away.pts);
+    if (m > margin.pts) margin = { text: `${box(g)}, ${g.type}`, pts: m };
+    const hi = Math.max(g.home.pts, g.away.pts);
+    if (!g.ot && hi > score.pts) score = { text: `${box(g)}, ${g.type}`, pts: hi };
+  }
   for (const g of games) {
+    if (g.ot) ot++;
+    if (Math.abs(g.home.pts - g.away.pts) <= 3) close++;
     for (const side of [g.home, g.away]) {
       ast += side.t.ast;
       for (const b of side.players) if (b.pts > game.pts) game = { name: b.name, pts: b.pts };
@@ -145,7 +218,8 @@ function seasonGames(league: League, season: number) {
       if (n > streak.games) streak = { tid: side.tid, games: n };
     }
   }
-  return { game, streak, astPerGame: ast / Math.max(1, 2 * games.length) };
+  const n = Math.max(1, games.length);
+  return { game, streak, astPerGame: ast / Math.max(1, 2 * games.length), margin, score, otRate: ot / n, close: close / n };
 }
 
 /** One league, start to finish: prints its seasons and returns what the thresholds look at. */
@@ -187,7 +261,16 @@ function playLeague(spec: string): SeasonReport[] {
       if (errs.length) throw new Error(errs.join('; '));
     }
     let guard = 0;
-    while ((league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') && guard++ < 600) simDay(league);
+    // every new injury of the season's games, seen as a new Injury on a player after a day
+    const seen = new Map(Object.values(league.players).map((p) => [p.pid, p.injury]));
+    const hurt: { type: string; games: number }[] = [];
+    while ((league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') && guard++ < 600) {
+      simDay(league);
+      for (const p of Object.values(league.players)) {
+        if (p.injury && p.injury !== seen.get(p.pid)) hurt.push({ type: p.injury.type, games: p.injury.gamesTotal });
+        seen.set(p.pid, p.injury);
+      }
+    }
     const season = league.season;
     const rows = Object.values(league.players)
       .map((p) => ({ p, ...line(p, season), age: playerAge(p, season) }))
@@ -195,11 +278,53 @@ function playLeague(spec: string): SeasonReport[] {
       .sort((a, b) => b.ppg - a.ppg);
     const lead = rows[0];
     const over30 = rows.filter((x) => x.ppg >= 30).length;
-    const { game, streak, astPerGame } = seasonGames(league, season);
+    const { game, streak, astPerGame, margin, score, otRate, close } = seasonGames(league, season);
+    const perGame = (k: 'tpm' | 'stl') =>
+      Object.values(league.players)
+        .map((p) => {
+          const st = p.stats.filter((x) => x.season === season && !x.playoffs);
+          const gp = st.reduce((a, x) => a + x.gp, 0);
+          return { name: playerName(p), gp, pg: st.reduce((a, x) => a + x[k], 0) / Math.max(1, gp) };
+        })
+        .filter((x) => x.gp >= 50)
+        .sort((a, b) => b.pg - a.pg)[0] ?? { name: '-', pg: 0 };
+    const tpm = perGame('tpm');
+    const stl = perGame('stl');
+    const over35 = rows.filter((x) => x.ppg >= 35).length;
+    const injuries = {
+      perTeam: hurt.length / league.teams.length,
+      ten: hurt.filter((h) => h.games >= 10).length,
+      sixty: hurt.filter((h) => h.games >= 60).length,
+      achilles: hurt.filter((h) => h.type === 'Ruptured Achilles').length,
+      acl: hurt.filter((h) => h.type === 'Torn ACL').length,
+    };
+    const tops = league.teams.map((t) =>
+      rows
+        .filter((x) => x.p.tid === t.tid)
+        .map((x) => x.mpg)
+        .sort((a, b) => b - a),
+    );
+    const avg = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length);
+    const topMin: [number, number] = [avg(tops.map((x) => x[0] ?? 0)), avg(tops.map((x) => x[1] ?? 0))];
     const table = [...standings(league)].sort((a, b) => b.won - a.won);
     const abbrev = (tid: number) => league.teams[tid]?.abbrev ?? '-';
     const best = { team: abbrev(table[0].tid), won: table[0].won, lost: table[0].lost };
-    reports.push({ season, leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 }, game, best, streak: { team: abbrev(streak.tid), games: streak.games } });
+    reports.push({
+      season,
+      leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 },
+      game,
+      best,
+      streak: { team: abbrev(streak.tid), games: streak.games },
+      tpm,
+      stl,
+      over35,
+      margin,
+      score,
+      injuries,
+      otRate,
+      close,
+      topMin,
+    });
     console.log(
       `${season}: ${rows
         .slice(0, quiet ? 3 : 5)
@@ -208,6 +333,9 @@ function playLeague(spec: string): SeasonReport[] {
         .slice(0, 3)
         .map((r) => `${abbrev(r.tid)} ${r.won}-${r.lost}`)
         .join(', ')} · streak ${abbrev(streak.tid)} ${streak.games}`,
+    );
+    console.log(
+      `  3PM ${tpm.name} ${tpm.pg.toFixed(2)} · STL ${stl.name} ${stl.pg.toFixed(2)} · margin ${margin.pts} (${margin.text}) · score ${score.pts} (${score.text}) · OT ${pct(otRate)}, by 3 or less ${pct(close)} · top-two MPG ${topMin[0].toFixed(1)}/${topMin[1].toFixed(1)} · injuries ${injuries.perTeam.toFixed(1)}/team, ${injuries.ten} of 10+, ${injuries.sixty} of 60+ (${injuries.achilles} Achilles, ${injuries.acl} ACL)`,
     );
     if (!quiet) {
       const best5 = Object.values(league.players)

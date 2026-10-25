@@ -176,8 +176,9 @@ export function powerRankings(league: League, m: MediaState) {
           .join(' ')
       : '',
   ];
-  // a front page only for a big move or reaching No. 1 (front pages about the user's team stop a long sim)
-  const weight = Math.abs(move) >= 5 || (u.rank === 1 && u.prev !== 1) ? 3 : 2;
+  // a story, never a front page: an opinion that moves every week (the user's rank shows as a figure,
+  // and a slide from 11th to 16th shouldn't lead his news while he's 14-6)
+  const weight = 2;
   // the team the headline is about comes first (its mark goes with the story)
   const tids = head.includes(UN) ? [u.tid, top.tid] : [top.tid, u.tid];
   return publish(league, { kind: 'power', head, dek, body, tids: [...new Set(tids)], pids: [], weight });

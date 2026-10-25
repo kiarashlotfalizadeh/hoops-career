@@ -12,7 +12,7 @@ export interface BannerItem {
 
 /**
  * The one banner over the court's bottom edge, styled like the assistant's rows elsewhere: a tone on
- * its edge, the headline and one line. Its fix, when it has one, is the staff's call on the Bench.
+ * its edge, the headline and one line. Its fix, when it has one, is the staff's call on the Staff tab.
  */
 export function Banner({ item, onClose }: { item: BannerItem; onClose: () => void }) {
   const Icon = item.tone === 'info' ? Lightbulb : AlertTriangle;

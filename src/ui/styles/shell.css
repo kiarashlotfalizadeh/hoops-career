@@ -6,11 +6,21 @@
   top: 0;
   z-index: 30;
   padding-top: var(--safe-t);
-  background: rgba(243, 239, 231, 0.86);
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  /* opaque: nothing scrolls by visibly behind it */
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
+}
+/* what takes focus (Tab, a link to a section) scrolls clear of the sticky top bar, a hub's sticky tabs
+   under it, and the dock at the foot */
+html {
+  scroll-padding-top: calc(var(--top-h) + var(--safe-t) + 12px);
+  scroll-padding-bottom: calc(var(--nav-h) + var(--safe-b) + 12px);
+}
+html:has(.lg-tabs) {
+  scroll-padding-top: calc(var(--top-h) + var(--safe-t) + 60px);
+}
+html:has(.continue:not(.is-compact)) {
+  scroll-padding-bottom: calc(var(--nav-h) + var(--cont-h) + var(--safe-b) + 12px);
 }
 .topbar-inner {
   height: var(--top-h);
@@ -49,7 +59,7 @@
 .topbar .sub {
   margin-top: 4px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: -0.01em;
   color: var(--text-dim);
   font-weight: 500;
@@ -108,16 +118,16 @@
 }
 .badge-dot {
   position: absolute;
-  top: -4px;
-  right: -5px;
-  min-width: 16px;
-  height: 16px;
+  top: -5px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
   padding: 0 4px;
-  border-radius: 8px;
+  border-radius: 9px;
   background: var(--brand);
   color: #fff;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: -0.04em;
   display: grid;
@@ -182,7 +192,7 @@
   justify-content: center;
   gap: 4px;
   color: var(--text-dim);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 560;
   letter-spacing: 0;
   position: relative;
@@ -281,7 +291,7 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
   display: block;
   margin-top: 3px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
   color: var(--text-dim);
@@ -402,6 +412,22 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
   transition: background var(--dur-fast) ease;
 }
 .continue-stop:active {
+  background: var(--surface-3);
+}
+/* game day: "Quick sim" beside Watch & coach, a pill like Stop's */
+.continue-chip {
+  flex: none;
+  align-self: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-weight: 640;
+  font-size: 13.5px;
+  white-space: nowrap;
+  transition: background var(--dur-fast) ease;
+}
+.continue-chip:active {
   background: var(--surface-3);
 }
 /* the Play options sheet: the staff's calls still open first (over the sims that would pass them), then one row per step, the primary one in brand */

@@ -4,7 +4,7 @@
 import { Check, Gavel, Minus, TriangleAlert, X } from 'lucide-react';
 import type { Player } from '../../core/types';
 import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from '../../core/league/contracts';
-import { bidDecideDay, bidStanding, faInterest, pendingBid, withdrawBid } from '../../core/league/freeAgency';
+import { bidDecideDay, bidRivals, bidStanding, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
@@ -19,7 +19,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   const league = useLeague();
   const tid = league.userTid;
   // rival bids don't depend on the slider: work them out once per league change
-  const offers = useLeagueMemo(() => faInterest(league, p), [league, p]);
+  const offers = useLeagueMemo(() => bidRivals(league, p), [league, p]);
   const standing = bidStanding(league, p, amount, years, offers);
   const prefs = playerPrefs(league, p);
   const terms = useLeagueMemo(() => appealTerms(league, tid, p), [league, tid, p]);

@@ -544,6 +544,8 @@ export function devCheckIn(league: League, changes: { pid: number; delta: number
   ratingsWatch(league, dw);
   scoringWatch(league, dw);
   const r = devReport(league);
+  // a month with no one rising or slipping isn't worth a letter (Team → Growth has it)
+  if (!r.rising.length && !r.slipping.length) return;
   const mail = reportMail(league, r);
   addInbox(league, { from: 'Player Development', subject: mail.subject, body: mail.body, tone: mail.tone, link: '/team/growth' });
 }

@@ -10,7 +10,7 @@ import { playerAge } from '../../core/playerGen';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
-import { gradeTone, pickGrade, projText } from './common';
+import { gradeTone, lotteryHidden, pickGrade, projText } from './common';
 import { ordinal } from '../../core/format';
 import './draft-night.css';
 import { overallPick } from '../league/shared';
@@ -63,7 +63,8 @@ export function BoardList({
   const [limit, setLimit] = useState(30);
   if (!list.length) return <Empty>No prospects left on the board.</Empty>;
   // the mock's read of where each goes, and whether he'll still be there at the user's next pick
-  const mine = mock ? userNextSlot(league, mock) : undefined;
+  // (not before the lottery's reveal: it would give your slot away)
+  const mine = mock && !lotteryHidden(league) ? userNextSlot(league, mock) : undefined;
   const projection = (p: Player) => {
     const r = mock?.range.get(p.pid);
     if (!mock || !r) return null;

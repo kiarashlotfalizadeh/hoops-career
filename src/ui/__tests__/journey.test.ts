@@ -9,7 +9,11 @@ import { createLeague, defaultSettings } from '../../core/league/create';
 import { curTeamSeason, standardRoster, teamPlayers } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
-import { BIG_SIGNING_OVR, currentMoments, newMoments } from '../moments';
+import { BIG_SIGNING_OVR, currentMoments, newMoments, pickMoments } from '../moments';
+import { currentGoals, setOwnerGoals } from '../../core/league/ownerGoals';
+import { ownerEvaluation } from '../../core/league/owner';
+import { takeJob } from '../../core/league/jobs';
+import { gradeWord } from '../../core/league/legacyReview';
 import { NEWS_DAYS, needsYou } from '../today/messages';
 import { needsItems, needsYouOf } from '../today/needs';
 import type { AgendaItem } from '../../core/league/agenda';
@@ -202,6 +206,44 @@ describe('the journey between screens', () => {
       const m = currentMoments(l).filter((x) => x.kind === 'signing');
       expect(m.map((x) => x.pid)).toEqual([star.pid]);
       expect(m[0].sub).toContain('4 years · $30.0M a year');
+    }
+
+    // the job's moments, for every team: the owner's ultimatum, his verdict on a losing season goal by
+    // goal, the sack in his own words (it says the verdict itself), and a new job; each shows with
+    // whatever else came out with it
+    {
+      const l = make();
+      l.phase = 'regular';
+      setOwnerGoals(l, true);
+      currentGoals(l)!.ultimatum = { kind: 'postseason', target: 1, text: 'Reach the play-in' };
+      expect(currentMoments(l).find((x) => x.kind === 'ultimatum')).toMatchObject({ title: 'Reach the play-in', sub: "Miss it and you're fired, whatever else goes right." });
+      l.phase = 'playoffs';
+      Object.assign(curTeamSeason(l, 0), { won: 20, lost: 62, playoffRound: -1 });
+      const f = structuredClone(l);
+      // in his grace period: the verdict
+      ownerEvaluation(l);
+      const r = l.ownerReviews!.at(-1)!;
+      const v = currentMoments(l).find((x) => x.kind === 'verdict')!;
+      expect(v).toMatchObject({ key: `verdict-${l.season}-0`, title: gradeWord(r.grade), linkLabel: 'Full review' });
+      expect(v.sub).toMatch(/^“I'm .+\.” Season grade [+−]\d+, standing [+−]\d+ after 20-62\.$/);
+      expect(v.lines).toHaveLength(Math.min(4, r.goals.length));
+      // past it, the missed ultimatum: fired, in his words, with what's next
+      f.tenureStart = f.season - 4;
+      ownerEvaluation(f);
+      expect(f.fired).toBe(true);
+      const fm = currentMoments(f).filter((x) => x.kind === 'fired' || x.kind === 'verdict');
+      expect(fm.map((x) => x.kind)).toEqual(['fired']);
+      expect(fm[0].sub).toBe("“I told you at the break: reach the play-in. It didn't happen. We are going in a different direction.”");
+      expect(fm[0].lines![0]).toMatch(/^20-62 · Missed the playoffs · season grade/);
+      // they never wait in the digest behind a bigger moment, and the sack says the verdict itself
+      const clinch = { key: 'c', kind: 'clinch' as const, over: '', title: '', sub: '' };
+      expect(pickMoments([v, fm[0], clinch]).map((x) => x.kind)).toEqual(['clinch', 'fired']);
+      // a new job: the new team's own moment, its owner and what's next
+      f.settings.godMode = true;
+      expect(takeJob(f, 5)).toBeNull();
+      const h = currentMoments(f).find((x) => x.kind === 'hired')!;
+      expect(h).toMatchObject({ title: `${f.teams[5].region} ${f.teams[5].name}`, link: '/office/owner' });
+      expect(h.sub).toMatch(/^(Builder|Win-now|Frugal) owner: /);
     }
 
     // the unread badge counts mail that needs the user: big news and decisions still open

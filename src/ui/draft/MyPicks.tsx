@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import type { League, Player } from '../../core/types';
+import type { DraftPick, League, Player } from '../../core/types';
 import { playerName } from '../../core/league/helpers';
 import { ordinal, plural } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
@@ -12,7 +12,7 @@ import { useLeagueMemo } from '../../state/store';
 import { Empty, Section, Segmented } from '../components/ui';
 import { PROJECTION_NOTE, pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
-import { draftedThisYear, gradeTone, pickGrade, pickOrder, pickSlot, picksText, type PickGrade } from './common';
+import { draftedThisYear, gradeTone, lotteryHidden, pickGrade, pickOrder, pickSlot, picksText, type PickGrade } from './common';
 import { SelectionRow } from './rows';
 
 /**
@@ -49,11 +49,21 @@ export function PicksPoster({ league }: { league: League }) {
 export function MyPicks({ league }: { league: League }) {
   const user = league.userTid;
   // picks without a slot yet, projected as on the team page
-  const proj = useLeagueMemo(() => pickProjection(league), [league]);
+  const projected = useLeagueMemo(() => pickProjection(league), [league]);
+  // until the lottery's reveal has been watched, the picks show without their slots (and in no order that gives them away)
+  const hidden = lotteryHidden(league);
+  const proj = hidden ? () => undefined : projected;
+  const view = (d: DraftPick): DraftPick => (hidden ? { ...d, pick: undefined } : d);
   // this draft's picks in the order every pick list uses (the later ones live with the moves log: Office → Picks & moves)
   const order = pickOrder(league, proj);
-  const owned = league.draftPicks.filter((d) => d.tid === user && d.season === league.season).sort(order);
-  const owed = league.draftPicks.filter((d) => d.originalTid === user && d.tid !== user && d.season === league.season).sort(order);
+  const owned = league.draftPicks
+    .filter((d) => d.tid === user && d.season === league.season)
+    .map(view)
+    .sort(order);
+  const owed = league.draftPicks
+    .filter((d) => d.originalTid === user && d.tid !== user && d.season === league.season)
+    .map(view)
+    .sort(order);
   const drafted = draftedThisYear(league).filter((p) => p.draft.tid === user);
   return (
     <>
@@ -83,7 +93,11 @@ export function MyPicks({ league }: { league: League }) {
             ))}
           </div>
         )}
-        {owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>}
+        {hidden ? (
+          <div className="tiny dim">Where they land shows once you reveal the lottery.</div>
+        ) : (
+          owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PROJECTION_NOTE}</div>
+        )}
       </Section>
       {owed.length > 0 && (
         <Section title={`Owed to others · ${owed.length}`}>

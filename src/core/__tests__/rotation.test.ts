@@ -7,6 +7,7 @@ import { teamPlayers } from '../league/helpers';
 import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
+import { youthLean } from '../league/games';
 import { Rng } from '../random';
 import type { Player, Rotation } from '../types';
 
@@ -308,6 +309,28 @@ describe('rotations', () => {
       expect(Math.max(...healthy)).toBeLessThanOrEqual(38);
       // at least nine healthy players get a real look
       expect(healthy.filter((m) => m >= 8).length).toBeGreaterThanOrEqual(9);
+    }
+    {
+      // the two best healthy players play a star's minutes however flat last season's roles were, from
+      // the bench's; under a youth movement its two best young players get them, while the veterans
+      // it is phasing out keep its lower ceiling (the lean goes down the bench, not out of the stars')
+      const ps = roster(5, (_, i) => [22, 21, 26, 25, 24, 25, 24, 22, 20, 18, 14, 10, 6, 4][i]);
+      const flat = autoRotation(ps);
+      expect(flat.minutes[0]).toBeGreaterThanOrEqual(33);
+      expect(flat.minutes[1]).toBeGreaterThanOrEqual(33);
+      expect(Math.abs(total(flat.minutes) - 240)).toBeLessThanOrEqual(3);
+      for (const [i, age] of [
+        [0, 33],
+        [1, 32],
+        [5, 21],
+        [6, 20],
+      ])
+        ps[i].bornYear = SEASON - age;
+      const youth = autoRotation(ps, undefined, { lean: (p) => youthLean(SEASON - p.bornYear), maxMinutes: 30 });
+      expect(youth.minutes[5]).toBeGreaterThanOrEqual(33);
+      expect(youth.minutes[6]).toBeGreaterThanOrEqual(33);
+      expect(Math.max(youth.minutes[0], youth.minutes[1])).toBeLessThanOrEqual(30);
+      expect(Math.abs(total(youth.minutes) - 240)).toBeLessThanOrEqual(3);
     }
     {
       // holds a veteran's minutes down by age, whatever his stamina: 38 for the star at 26, 36 at

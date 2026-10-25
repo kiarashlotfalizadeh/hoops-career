@@ -25,6 +25,12 @@ import { buildGameReport, IMPACT_TEXT, impactSentence } from '../analysis/gameRe
 import { billingsFor, christmasDay, gameStoryFor, rivalryOf, RIVALRY, storyGame } from '../analysis/gameStory';
 import { runLab } from '../ai/lab';
 import { wpSeries } from '../analysis/winProb';
+import { gameStakes } from '../analysis/odds';
+import { gameKeys } from '../analysis/keys';
+import { previewMatchups } from '../analysis/matchupPreview';
+import { scoutData } from '../analysis/scouting';
+import { guardingPlan } from '../analysis/guarding';
+import { scoutTeam } from '../ai/advisor';
 import { GameSim } from '../sim/engine';
 import { Rng } from '../random';
 import { seasonLabel } from '../constants';
@@ -1068,6 +1074,33 @@ describe('game day', () => {
         expect(pv.usHome ? p.margin : -p.margin).toBeCloseTo(pv.projection.margin, 9);
       }
       expect({ rng: l.rng, players: JSON.stringify(l.players) }).toEqual(before);
+    }
+
+    // one chance to win, whichever screen asks first: the projection reads both rotations as the game
+    // will start them, so nothing the matchup page runs (its preview refreshes the rotations in the
+    // league) moves it, and it is the edge the game keeps
+    {
+      const l = snap(rematch);
+      const g = userGameOnDay(l, l.day)!;
+      // both teams' best players hurt since their last game: the rotations in the league still play them
+      for (const tid of [g.home, g.away])
+        teamPlayers(l, tid).sort((a, b) => b.ovr - a.ovr)[0].injury = { type: 'Calf strain', gamesRemaining: 6, gamesTotal: 6, severity: 'moderate' };
+      const first = gameProjection(l, g);
+      const opp = opponent(l, g);
+      const pv = matchupPreview(l, g.gid)!;
+      expect(pv.usHome ? first.win : 1 - first.win).toBeCloseTo(pv.projection.win, 12);
+      scoutTeam(l, opp);
+      scoutData(l, opp);
+      previewMatchups(l, opp);
+      guardingPlan(l, opp);
+      gameKeys(l, g);
+      gameStakes(l, g.gid, l.userTid);
+      expect(gameProjection(l, g)).toEqual(first);
+      ensureRotation(l, g.home);
+      ensureRotation(l, g.away);
+      expect(gameProjection(l, g)).toEqual(first);
+      simDay(l);
+      expect(l.games.find((r) => r.gid === g.gid)!.edge).toBe(Math.round(first.margin * 100) / 100);
     }
 
     // playoff games carry the series: game number, elimination and clinch, and the tag Home shows

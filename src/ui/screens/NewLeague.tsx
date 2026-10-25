@@ -17,7 +17,7 @@ import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
-import { rosterLine, seedRosterSizes } from '../newLeague';
+import { defaultTeam, rosterLine, seedRosterSizes } from '../newLeague';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -43,21 +43,9 @@ export default function NewLeague() {
   // a build without roster data can only make a fictional league
   const kind: 'real' | 'fictional' = sp.get('kind') === 'fictional' || (seedLoaded && !seed && !loadFailed) ? 'fictional' : 'real';
   const setKind = (k: 'real' | 'fictional') => choose({ kind: k === 'real' ? null : k });
-  // no tid: the default pick; an empty one: none, after switching to the other conference
+  // no tid: the default pick (see defaultTeam); an empty one: none, after switching to the other conference
   const tidParam = sp.get('tid');
-  const tid: number | null = tidParam === null ? 19 : tidParam !== '' && FRANCHISES[Number(tidParam)] ? Number(tidParam) : null;
   const setTid = (t: number) => choose({ tid: String(t) });
-  const asked = sp.get('step');
-  const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
-  const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
-  // back through the history (the main menu is behind the first step), and without any (a deep link or
-  // a reload) to the step before, or the main menu in place of this screen
-  const back = () => {
-    if (canGoBack()) nav(-1);
-    else if (step === 'type') nav('/start', { replace: true });
-    else setStep(step === 'setup' ? 'team' : 'type');
-  };
-  const [conf, setConf] = useState<'E' | 'W'>(() => (tid !== null ? FRANCHISES[tid].conf : 'E'));
   const [name, setName] = useState('My League');
   const [coach, setCoach] = useState('');
   const [settings, setSettings] = useState<Settings>(() => ({ ...defaultSettings(), teaching: teachingDefault() }));
@@ -76,9 +64,9 @@ export default function NewLeague() {
       .finally(() => setSeedLoaded(true));
   }, []);
 
-  // real rosters only: a fictional league's players are generated when it is created
-  const teamInfo = useMemo(() => {
-    if (!seed || kind !== 'real') return null;
+  // each real roster's top three and strength (the default pick reads it for a fictional league too)
+  const seedInfo = useMemo(() => {
+    if (!seed) return null;
     const rostered = seed.players.filter((p) => p.team);
     const scale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     const by: Record<number, { name: string; ovr: number }[]> = {};
@@ -94,18 +82,37 @@ export default function NewLeague() {
       out[+k] = { top: list.slice(0, 3), strength: top8.reduce((a, x) => a + x.ovr, 0) / Math.max(1, top8.length) };
     }
     return out;
-  }, [seed, kind]);
+  }, [seed]);
+  // real rosters only: a fictional league's players are generated when it is created
+  const teamInfo = kind === 'real' ? seedInfo : null;
 
   // where each roster stands before opening night (real rosters: a fictional league's are generated at the start)
   const rosterSize = useMemo(() => (seed && kind === 'real' ? seedRosterSizes(seed) : null), [seed, kind]);
 
-  const rank = useMemo(() => {
-    if (!teamInfo) return null;
-    const ids = Object.keys(teamInfo)
+  const seedRank = useMemo(() => {
+    if (!seedInfo) return null;
+    const ids = Object.keys(seedInfo)
       .map(Number)
-      .sort((a, b) => teamInfo[b].strength - teamInfo[a].strength);
+      .sort((a, b) => seedInfo[b].strength - seedInfo[a].strength);
     return Object.fromEntries(ids.map((id, i) => [id, i + 1])) as Record<number, number>;
-  }, [teamInfo]);
+  }, [seedInfo]);
+  const rank = teamInfo ? seedRank : null;
+  // the pick before the user makes one: a mid-table team with a legal roster under the tax (none: the step asks)
+  const fallback = useMemo(() => (seed && seedRank ? defaultTeam(seed, seedRank) : null), [seed, seedRank]);
+  const tid: number | null = tidParam === null ? fallback : tidParam !== '' && FRANCHISES[Number(tidParam)] ? Number(tidParam) : null;
+  // the grid's conference: the user's choice, else the pick's
+  const [confPick, setConf] = useState<'E' | 'W' | null>(null);
+  const conf = confPick ?? (tid !== null ? FRANCHISES[tid].conf : 'E');
+  const asked = sp.get('step');
+  const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
+  const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
+  // back through the history (the main menu is behind the first step), and without any (a deep link or
+  // a reload) to the step before, or the main menu in place of this screen
+  const back = () => {
+    if (canGoBack()) nav(-1);
+    else if (step === 'type') nav('/start', { replace: true });
+    else setStep(step === 'setup' ? 'team' : 'type');
+  };
 
   const create = async (force = false) => {
     setBusy(true);

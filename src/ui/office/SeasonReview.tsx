@@ -11,7 +11,7 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { fmtDate } from '../../core/league/helpers';
 import { legacyOf } from '../../core/league/legacy';
-import { endText, vsPress, type SeasonReview } from '../../core/league/legacyReview';
+import { endText, gradeWord, vsPress, type SeasonReview } from '../../core/league/legacyReview';
 import { ownerWord } from '../../core/league/legacyPulse';
 import { resultText } from '../../core/league/ownerGoals';
 import { ordinal, plural } from '../../core/format';
@@ -20,11 +20,6 @@ import { slabVars } from '../teamColors';
 import { CenterBar, fmtGrade } from './common';
 import { PulseChart } from './Pulse';
 import './legacy.css';
-
-/** A season grade (−1..1) in a word, for the verdict's headline. */
-export function gradeWord(g: number): string {
-  return g >= 0.4 ? 'Excellent' : g >= 0.1 ? 'Good' : g > -0.1 ? 'As expected' : g > -0.4 ? 'Short of it' : 'Poor';
-}
 
 const gradeTone = (x: number) => (x >= 0.1 ? 'good' : x <= -0.1 ? 'bad' : 'warn');
 

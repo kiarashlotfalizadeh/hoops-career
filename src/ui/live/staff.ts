@@ -3,14 +3,15 @@
 // the stretch before), and the moves on offer, the staff's pick first. Decisions want a call from
 // you; reads say what's working or not with nothing to change. Built on the live alerts (tired legs,
 // foul trouble, runs, their coach's adjustments, their play types running hot, the tactical edges
-// against you) plus who's scoring on whom from the possession logs: their hot scorer and who's on
-// him, the defender of theirs you're beating, your own actions stalling or working. Pure.
+// against you) plus who's scoring on whom from the possession logs: the defender of theirs you're
+// beating, your own actions stalling or working. No call on a scorer's hot streak: the engine has no
+// shooting hot hand, so a double for one answers noise and costs points. Pure.
 
 import type { Tactics } from '../../core/types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { zScore } from '../../core/analysis/playTypes';
 import { madeAtt } from '../../core/format';
-import { liveAlerts, type AlertInput, type LiveAlert } from './alerts';
+import { callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
 
 export type StaffAction = { label: string } & (
   | { kind: 'tactics'; apply: (t: Tactics) => void }
@@ -38,11 +39,9 @@ export interface StaffNote {
   auto?: boolean;
 }
 
-/** What the staff reads besides the alerts' input: the possessions the court has drawn and the players' defensive ratings. */
+/** What the staff reads besides the alerts' input: the possessions the court has drawn. */
 export interface StaffInput extends AlertInput {
   logs: PossLog[];
-  /** A player's defense on the perimeter and inside (composites), for who could take a scorer. */
-  defense: (pid: number) => { per: number; int: number; hgt: number } | undefined;
 }
 
 /** One matchup over the game so far: their trips finished by `off` against `def` (or ours, against theirs). */
@@ -161,9 +160,9 @@ export function gameDecided(q: number, clock: number, margin: number): boolean {
 }
 
 /**
- * Everything the staff has to say now, most pressing first: the alerts (with their fixes), their hot
- * scorer and who could take him, the defender of theirs you're beating, your own actions stalling or
- * working, and the late-game switches that are off when they matter.
+ * Everything the staff has to say now, most pressing first: the alerts (with their fixes), the
+ * defender of theirs you're beating, your own actions stalling or working, and the late-game switches
+ * that are off when they matter.
  */
 export function staffNotes(a: StaffInput): StaffNote[] {
   const { view, side, tactics: t, names } = a;
@@ -173,44 +172,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
     // (the stalling-actions read is the staff's own below, with something to do about it)
     .filter((x) => !x.id.startsWith('mypt-'))
     .map(fromAlert);
-  const theirRows = matchups(a.logs, (1 - side) as 0 | 1);
   const ourRows = matchups(a.logs, side);
-
-  // their scorer heating up, and who's been on him
-  const targeted = t.defense.starPlan !== 'none' ? t.defense.starTarget : null;
-  const scorer = them.players.filter((p) => them.on.includes(p.pid) && p.pts >= 10 && ((p.fga >= 6 && p.fgm / p.fga >= 0.55) || p.streak >= 3)).sort((x, y) => y.pts - x.pts)[0];
-  if (scorer && scorer.pid !== targeted) {
-    const on = theirRows.filter((r) => r.off === scorer.pid).sort((x, y) => y.trips - x.trips)[0];
-    const now = on ? names(on.def) : 'the staff';
-    // the best perimeter defender on your floor who isn't already on him
-    const best = me.on
-      .map((pid) => ({ pid, d: a.defense(pid) }))
-      .filter((x) => x.d && x.pid !== on?.def)
-      .sort((x, y) => (y.d!.per ?? 0) - (x.d!.per ?? 0))[0];
-    const cur = on ? (a.defense(on.def)?.per ?? 0) : 0;
-    const actions: StaffAction[] = [];
-    if (best && (best.d!.per ?? 0) >= cur + 4)
-      actions.push({
-        kind: 'tactics',
-        label: `${names(best.pid)} on him`,
-        apply: (x) => {
-          for (const k of Object.keys(x.defense.matchups)) if (x.defense.matchups[+k] === best.pid || +k === scorer.pid) delete x.defense.matchups[+k];
-          x.defense.matchups[scorer.pid] = best.pid;
-        },
-      });
-    actions.push({ kind: 'tactics', label: `Double ${names(scorer.pid)}`, apply: (x) => void ((x.defense.starPlan = 'double'), (x.defense.starTarget = scorer.pid)) });
-    out.push({
-      id: `hot-${scorer.pid}`,
-      kind: 'decision',
-      tone: 'warn',
-      title: `${names(scorer.pid)} is heating up`,
-      text: `${scorer.pts} points on ${madeAtt(scorer.fgm, scorer.fga)}${scorer.streak >= 3 ? `, ${scorer.streak} straight makes` : ''}${on ? `; ${on.pts} of them on ${now}` : ''}.`,
-      fig: { v: String(scorer.pts), unit: 'pts' },
-      actions,
-      rank: 74,
-      auto: true,
-    });
-  }
 
   // the defender of theirs you're beating: attack him (while he's on the floor)
   if (t.offense.huntTarget == null) {
@@ -332,16 +294,24 @@ export function staffNotes(a: StaffInput): StaffNote[] {
     });
   // a fix for the same thing only once (the hot play type and the tactical edge often agree)
   const seen = new Set<string>();
-  return out
-    .filter((n) => !decided || n.id.startsWith('garbage-') || !n.actions.some((x) => x.kind === 'tactics'))
-    .sort((x, y) => y.rank - x.rank)
-    .filter((n) => {
-      const key = n.actions[0]?.label;
-      if (!key || n.actions[0].kind !== 'tactics') return true;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  return (
+    out
+      .filter((n) => !decided || n.id.startsWith('garbage-') || !n.actions.some((x) => x.kind === 'tactics'))
+      // nothing held back (callHold): but resting the starters is the decided game's own call, and
+      // fouling late is the last seconds'
+      .filter((n) => {
+        const hold = callHold(a, n.actions[0]);
+        return !hold || (hold === 'decided' && n.id.startsWith('garbage-')) || (hold === 'late' && n.id.startsWith('late-'));
+      })
+      .sort((x, y) => y.rank - x.rank)
+      .filter((n) => {
+        const key = n.actions[0]?.label;
+        if (!key || n.actions[0].kind !== 'tactics') return true;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+  );
 }
 
 /**

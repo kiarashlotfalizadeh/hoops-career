@@ -1,6 +1,6 @@
 // Today's front page pieces: the lead (the user's last result while it's fresh, or the top story
 // about his team), the hero when there's no game today; his season as one strip of figures (the
-// playoff odds, the last five, the owner's and the fans' pulse); the news in two headlines; and the
+// postseason odds, the last five, the owner's and the fans' pulse); the news in two headlines; and the
 // way back to "While you were away". The numbers behind each are one tap down (the report, the
 // standings, the story's page, Office → Owner).
 import { Link } from 'react-router-dom';
@@ -166,7 +166,7 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
 const MOOD_WORD = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
 /**
- * His season in one strip of figures, each opening where it lives in full: the playoff odds (the
+ * His season in one strip of figures, each opening where it lives in full: the postseason odds (the
  * standings), the last five results (the schedule), the owner's and the fans' mood (Office →
  * Owner). Where he stands and his record are on the top bar.
  */
@@ -184,8 +184,9 @@ export function YourSeason({ league }: { league: League }) {
     <Section title="Your season">
       <div className="td-strip">
         {played && odds && (
-          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the playoffs. Standings' : `Playoff odds ${pct(odds.reach[0], odds.clinched)}. Standings`}>
-            <span className="td-cell-k">{odds.out ? 'Of the playoffs' : 'Playoff odds'}</span>
+          // (the figure counts a play-in place too: the postseason's odds, not the playoffs', short enough for the cell)
+          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `Postseason odds ${pct(odds.reach[0], odds.clinched)}. Standings`}>
+            <span className="td-cell-k">Postseason</span>
             <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(odds.reach[0], odds.clinched)}</span>
           </Link>
         )}

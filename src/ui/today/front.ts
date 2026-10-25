@@ -18,11 +18,14 @@ export const headOf = (n: NewsItem) => n.head ?? n.text;
 
 /**
  * Whether a news item is about the user's team: it names it, and for the power rankings (which name
- * every week's leader and the user's team) its headline does too ("the Thunder lead again" isn't his).
+ * every week's leader and the user's team) its headline does too ("the Thunder lead again" isn't his);
+ * so does a league-wide column that only mentions his team on the way (the season's wrap, the
+ * surprises), one that doesn't lead with it.
  */
 function names(l: League, n: NewsItem): boolean {
   if (!n.tids.includes(l.userTid)) return false;
-  return n.kind !== 'power' || headOf(n).includes(l.teams[l.userTid].name);
+  const aside = n.kind === 'power' || (n.kind === 'column' && n.tids[0] !== l.userTid);
+  return !aside || headOf(n).includes(l.teams[l.userTid].name);
 }
 
 /** A story about the user's team worth a place on Today or in the digest: one about it that is a story (or an honor, a milestone, a record). */
@@ -38,6 +41,8 @@ export const byWeight = (a: NewsItem, b: NewsItem) => weightOf(b) - weightOf(a) 
 
 /** Today's lead story about the user's team: from the last two weeks of this season, the biggest of the newest few. */
 export const STORY_DAYS = 14;
+/** Days that cost a story one step of weight in the lead: a front page from ten days ago gives way to this week's story. */
+const STORY_FADE = 3;
 
 export function topStory(l: League): NewsItem | null {
   const recent: NewsItem[] = [];
@@ -46,7 +51,9 @@ export function topStory(l: League): NewsItem | null {
     if (n.season !== l.season || l.day - n.day > STORY_DAYS) break;
     if (isHisStory(l, n)) recent.push(n);
   }
-  return recent.sort(byWeight)[0] ?? null;
+  // the bigger first, as long as it's news: each STORY_FADE days old costs a step
+  const size = (n: NewsItem) => weightOf(n) - (l.day - n.day) / STORY_FADE;
+  return recent.sort((a, b) => size(b) - size(a) || b.id - a.id)[0] ?? null;
 }
 
 /** The league's top headlines (other teams' stories) from the last week, biggest first. */

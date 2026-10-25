@@ -17,6 +17,7 @@ import { reelOf } from '../core/analysis/highlights';
 import { coachMoves, slotMatcher, slotMoveName } from '../core/analysis/moves';
 import { shortName } from '../core/league/helpers';
 import { courtEdge } from '../core/league/difficulty';
+import { guideAfterLive } from '../core/league/agenda';
 
 /** Clutch time: the last five minutes of the fourth quarter. */
 export const CLUTCH_SEC = 300;
@@ -78,6 +79,8 @@ export class LiveGame {
   rewound?: number;
   /** Possessions are being played back or skipped through: where the game has got to is noted once, after (see reach). */
   private quiet = false;
+  /** Periods with possessions played as they came, and with any skipped through or played back: one watched whole coaches the game for the first-week guide. */
+  private periods = { seen: new Set<number>(), skipped: new Set<number>() };
 
   /** A new game from tip-off, or (with `from`) the game a journal describes, at tip-off: replay() plays it back. */
   constructor(league: League, game: ScheduledGame, from?: LiveJournal) {
@@ -165,6 +168,7 @@ export class LiveGame {
   /** Advance one possession; returns the possession logs produced. */
   step(): PossLog[] {
     if (this.sim.over) return [];
+    (this.quiet ? this.periods.skipped : this.periods.seen).add(this.sim.q);
     this.sim.step();
     this.steps++;
     if (!this.quiet) reach(this);
@@ -391,6 +395,11 @@ export class LiveGame {
     if (reel.plays.length) league.reel = reel;
     else delete league.reel;
     postGame(league, g, res.home.pts > res.away.pts);
+    // the first-week guide: a period watched whole coaches the game (as a move of his own does, from the report's moves)
+    guideAfterLive(
+      league,
+      [...this.periods.seen].some((q) => !this.periods.skipped.has(q)),
+    );
     advanceDay(league);
     this.committed = res;
     return res;

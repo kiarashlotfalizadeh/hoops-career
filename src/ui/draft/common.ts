@@ -100,6 +100,9 @@ export function lotterySeen(league: League): boolean {
     return false;
   }
 }
+/** The lottery is in but its reveal hasn't been watched: the draft's other tabs keep the order (slots, "via") to themselves until then. */
+export const lotteryHidden = (league: League) => league.phase === 'draftLottery' && !lotterySeen(league);
+
 export function markLotterySeen(league: League) {
   try {
     localStorage.setItem(lotteryKey(league), '1');

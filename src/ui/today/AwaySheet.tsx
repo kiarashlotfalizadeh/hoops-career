@@ -2,8 +2,9 @@
 // once the sim is done (after any big moment, and never over the live game): the record over the
 // stretch with each result's headline, the stories about the user's team, where he stands now,
 // who got hurt, new mail and the league's biggest stories. Each line opens its own page. Closing it
-// keeps it a tap away on Today until the next sim.
-import type { ReactNode } from 'react';
+// keeps it a tap away on Today until the next sim, and marks the mail it listed read (what still
+// needs him stays unread: a decision open, big news).
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -14,13 +15,14 @@ import { TeamLogo } from '../components/TeamLogo';
 import { curTeamSeason } from '../../core/league/helpers';
 import { storyLink } from './front';
 import { senderOf } from './senders';
-import { isImportant } from './messages';
+import { isImportant, needsYou } from './messages';
 import { OpenCalls } from './NeedsList';
 import './today.css';
-import type { Digest, DigestStory } from './digest';
+import { shownResults, type Digest, type DigestStory } from './digest';
+import { touch } from '../../state/actions';
 
-/** The most results listed; the rest are a tap away on the schedule. */
-const RESULTS_SHOWN = 5;
+/** The most mail listed; the rest are a tap away in the inbox. */
+const MAIL_SHOWN = 3;
 
 /** Mounted once in the shell: the digest's sheet, opened by the store when a sim ends (or from Today). */
 export function DigestHost() {
@@ -30,6 +32,22 @@ export function DigestHost() {
   const { pathname } = useLocation();
   const league = useStore((s) => s.league);
   const show = open && !blocked && pathname !== '/live' && !!digest && !!league && digest.leagueId === league.id;
+  // once it has been read, the mail it listed is read too, but for what still needs him
+  const was = useRef(false);
+  useEffect(() => {
+    const wasShown = was.current;
+    was.current = show;
+    if (!wasShown || show || !digest) return;
+    const now = useStore.getState().league;
+    if (!now || now.id !== digest.leagueId) return;
+    const ids = new Set(digest.mail.filter((id) => now.inbox.some((m) => m.id === id)).slice(0, MAIL_SHOWN));
+    const open = new Map(agenda(now).map((i) => [i.id, i]));
+    const listed = now.inbox.filter((m) => ids.has(m.id) && !m.read && !needsYou(m, open, now));
+    if (listed.length)
+      touch((l) => {
+        for (const m of l.inbox) if (listed.some((x) => x.id === m.id)) m.read = true;
+      });
+  }, [show, digest]);
   return (
     <Sheet open={show} onClose={() => useStore.getState().showDigest(false)} title="While you were away">
       {digest && league && <DigestBody d={digest} />}
@@ -47,6 +65,8 @@ function DigestBody({ d }: { d: Digest }) {
   };
   const ts = curTeamSeason(league, league.userTid);
   const mail = d.mail.map((id) => league.inbox.find((m) => m.id === id)).filter((m) => !!m);
+  // a long stretch: its newest results and its biggest nights
+  const shown = shownResults(d.results);
   // the staff's calls open now, each with its one-tap answer: what a sim stops for is answered here
   const calls = useLeagueMemo(() => agenda(league).filter((i) => CALL_KINDS.has(i.kind)), [league]);
   return (
@@ -77,8 +97,8 @@ function DigestBody({ d }: { d: Digest }) {
       )}
 
       {d.results.length > 0 && (
-        <DigestSection title="Results" more={d.results.length > RESULTS_SHOWN ? { label: `All ${d.results.length}`, to: '/games' } : undefined} go={go}>
-          {d.results.slice(0, RESULTS_SHOWN).map((r) => (
+        <DigestSection title="Results" more={d.results.length > shown.length ? { label: `All ${d.results.length}`, to: '/games' } : undefined} go={go}>
+          {shown.map((r) => (
             <button key={r.gid} type="button" className="dg-res" onClick={() => go(`/game/${r.gid}`)}>
               <span className={`td-wl ${r.won ? 'w' : 'l'}`}>
                 <span aria-hidden="true">{r.won ? 'W' : 'L'}</span>
@@ -118,7 +138,7 @@ function DigestBody({ d }: { d: Digest }) {
 
       {mail.length > 0 && (
         <DigestSection title="New mail" more={{ label: 'Inbox', to: '/inbox' }} go={go}>
-          {mail.slice(0, 3).map((m) => (
+          {mail.slice(0, MAIL_SHOWN).map((m) => (
             <button key={m.id} type="button" className={`dg-mail ${m.read ? '' : 'unread'}`} onClick={() => go(`/inbox?m=${m.id}`)}>
               <span className="grow">
                 <span className="dg-mail-s">
@@ -130,7 +150,7 @@ function DigestBody({ d }: { d: Digest }) {
               <ChevronRight size={16} className="dim" aria-hidden="true" />
             </button>
           ))}
-          {mail.length > 3 && <div className="dg-line dim">and {mail.length - 3} more</div>}
+          {mail.length > MAIL_SHOWN && <div className="dg-line dim">and {mail.length - MAIL_SHOWN} more</div>}
         </DigestSection>
       )}
 

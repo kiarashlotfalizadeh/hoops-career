@@ -1,17 +1,31 @@
 // Big moments: the events of the user's career that take the screen for a moment (a clinch, a
 // series, a title, the Cup, his draft picks, a big signing, an award, and the front-page stories
-// about his team: a milestone, an honor, a career night, a streak, a breakout). Each is read from the
-// league as it stands and has a stable key, so the shell can show only the ones that happen while
-// it's open: whatever is already true when a league opens counts as seen.
+// about his team: a milestone, an honor, a career night, a streak, a breakout), and the job's own:
+// the owner's ultimatum, his verdict on the season, the sack, a new job, for every team, winners or
+// not. Each is read from the league as it stands and has a stable key, so the shell can show only
+// the ones that happen while it's open: whatever is already true when a league opens counts as seen.
 import type { League, NewsItem, Player } from '../core/types';
 import { confStandings } from '../core/league/standings';
 import { seasonLabel } from '../core/constants';
 import { money, plural } from '../core/format';
-import { fmtDate } from '../core/league/helpers';
+import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { storyLink } from './today/front';
 import { isFrontPage } from '../state/simCore';
+import { PERSONALITY, currentGoals, ownerPersonality, resultText } from '../core/league/ownerGoals';
+import { GRACE } from '../core/league/jobSecurity';
+import { openStint, userCoach } from '../core/league/coaches';
+import { reviewPath, seasonReviewOf } from '../core/league/legacy';
+import { endText, gradeWord } from '../core/league/legacyReview';
 
-export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award' | 'story';
+export type MomentKind = 'clinch' | 'series' | 'title' | 'cup' | 'draft' | 'signing' | 'award' | 'story' | 'verdict' | 'ultimatum' | 'fired' | 'hired';
+
+/**
+ * The job's moments: each shows whatever else came out with it (they're never the one left in the
+ * digest), and whatever the digest leads with.
+ */
+export const JOB_MOMENTS: ReadonlySet<MomentKind> = new Set<MomentKind>(['verdict', 'ultimatum', 'fired', 'hired']);
+/** ...and the two no one sims past unseen: they show even with Settings → Big moments off. */
+export const MUST_SEE: ReadonlySet<MomentKind> = new Set<MomentKind>(['ultimatum', 'fired']);
 
 export interface Moment {
   key: string;
@@ -32,6 +46,10 @@ export interface Moment {
   rank?: number;
   /** The kind of news a story is. */
   news?: NewsItem['kind'];
+  /** A few short lines under the sub (the owner's goal by goal, the record, what's next). */
+  lines?: string[];
+  /** The link's button ("Full review"; a story's is "Read the story"). */
+  linkLabel?: string;
 }
 
 const ROUND = ['', 'First Round', 'Conference Semifinals', 'Conference Finals', 'NBA Finals'];
@@ -95,17 +113,105 @@ function storyMoments(league: League): Moment[] {
 
 /** Career moments by size, the biggest first: one that comes out with a bigger one waits in the digest. */
 const CAREER_ORDER: MomentKind[] = ['title', 'cup', 'series', 'clinch', 'award', 'signing', 'draft'];
+/** The job's moments in the order they show, after the biggest of the rest: the verdict, then what it led to. */
+const JOB_ORDER: MomentKind[] = ['verdict', 'ultimatum', 'fired', 'hired'];
 
 /**
- * The moment to show from those new at once: the biggest career moment, or else the biggest
+ * The moments to show from those new at once: the biggest career moment, or else the biggest
  * front-page story, so whatever ends a sim takes the screen once, not as a stack of cards (the rest
- * are in the digest).
+ * are in the digest); and after it every one of the job's (a sack says the season's verdict itself).
  */
 export function pickMoments(fresh: Moment[]): Moment[] {
-  const career = fresh.filter((m) => m.kind !== 'story').sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind));
-  if (career.length) return career.slice(0, 1);
+  const job = fresh.filter((m) => JOB_MOMENTS.has(m.kind)).sort((a, b) => JOB_ORDER.indexOf(a.kind) - JOB_ORDER.indexOf(b.kind));
+  const jobs = job.filter((m) => !(m.kind === 'verdict' && job.some((x) => x.kind === 'fired')));
+  const career = fresh.filter((m) => m.kind !== 'story' && !JOB_MOMENTS.has(m.kind)).sort((a, b) => CAREER_ORDER.indexOf(a.kind) - CAREER_ORDER.indexOf(b.kind));
+  if (career.length) return [career[0], ...jobs];
   const stories = fresh.filter((m) => m.kind === 'story').sort((a, b) => (b.rank ?? 0) - (a.rank ?? 0));
-  return stories.slice(0, 1);
+  return [...stories.slice(0, 1), ...jobs];
+}
+
+const grade100 = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))}`;
+
+/**
+ * The job's moments as the league stands: the owner's ultimatum this season, his verdict on the last
+ * season reviewed (or the sack), and the job the user holds when it isn't his first.
+ */
+function jobMoments(league: League): Moment[] {
+  const out: Moment[] = [];
+  const me = league.userTid;
+  const team = league.teams[me];
+  const season = league.season;
+  const og = currentGoals(league);
+  if (og?.ultimatum) {
+    const u = og.ultimatum;
+    out.push({
+      key: `ultimatum-${season}-${me}`,
+      kind: 'ultimatum',
+      over: `${seasonLabel(season)} · The owner's ultimatum`,
+      title: u.text,
+      sub: "Miss it and you're fired, whatever else goes right.",
+      lines: [
+        u.kind === 'wins' ? `${(curTeamSeason(league, me).won ?? 0) - (og.from?.won ?? 0)} of ${u.target} so far.` : '',
+        `“This season is heading the wrong way. ${u.text}, or I make a change this summer.”`,
+      ].filter(Boolean),
+      link: '/office/owner',
+      linkLabel: 'See where it stands',
+    });
+  }
+  // the season's review: his verdict, or the sack (the latest one with this team: it stands until the next)
+  const r = (league.ownerReviews ?? []).find((x) => x.season === season && x.tid === me);
+  if (r) {
+    const ts = team.seasons.find((x) => x.season === season);
+    const rec = ts ? `${ts.won}-${ts.lost}` : '';
+    const kept = seasonReviewOf(league, season);
+    const goals = r.goals.map((g) => `${g.title}: ${resultText(g, g.result)} (${grade100(g.grade)})`);
+    if (r.fired && league.fired)
+      out.push({
+        key: `fired-${season}-${me}`,
+        kind: 'fired',
+        over: `${seasonLabel(season)} · ${team.region} ${team.name}`,
+        title: "You're fired",
+        sub: r.said ? `“${r.said}”` : 'The owner is going in a different direction.',
+        lines: [
+          [rec, ts ? endText({ round: ts.playoffRound }) : '', `season grade\u00a0${grade100(r.grade)}`].filter(Boolean).join(' · '),
+          'Your agent brings you the offers. The league waits until you take one.',
+        ],
+        link: '/office/career?tab=jobs',
+        linkLabel: 'Find a new job',
+      });
+    else if (!r.fired)
+      out.push({
+        key: `verdict-${season}-${me}`,
+        kind: 'verdict',
+        over: `${seasonLabel(season)} · The owner's verdict`,
+        title: gradeWord(r.grade),
+        sub: `${r.said ? `“${r.said}” ` : ''}Season grade ${grade100(r.grade)}, standing ${grade100(r.total)}${rec ? ` after ${rec}` : ''}.`,
+        lines: goals.slice(0, 4),
+        link: kept ? reviewPath(season) : '/office/owner',
+        linkLabel: 'Full review',
+      });
+  }
+  // a new job (not his first): the new team's colours, its owner and what he wants
+  const coach = userCoach(league);
+  const stint = coach && !league.fired && coach.stints.length > 1 ? openStint(coach) : undefined;
+  if (stint && stint.tid === me) {
+    const who = PERSONALITY[ownerPersonality(league, me)];
+    const grace = GRACE[league.settings.difficulty];
+    out.push({
+      key: `hired-${me}-${stint.from}`,
+      kind: 'hired',
+      over: `${seasonLabel(stint.from)} · New job`,
+      title: `${team.region} ${team.name}`,
+      sub: `${who.label} owner: ${who.blurb}.`,
+      lines: [
+        og ? `He wants: ${og.goals.map((g) => g.title.toLowerCase()).join('; ')}.` : 'He sets his goals on opening night, from the roster you open with.',
+        grace === 1 ? "He can't fire you in your first season." : `He can't fire you in your first ${grace} seasons.`,
+      ],
+      link: '/office/owner',
+      linkLabel: 'Meet the owner',
+    });
+  }
+  return out;
 }
 
 /** Every moment the league holds for the user's team right now, oldest kinds first. */
@@ -199,7 +305,7 @@ export function currentMoments(league: League): Moment[] {
       });
     }
   }
-  return out.concat(storyMoments(league));
+  return out.concat(jobMoments(league), storyMoments(league));
 }
 
 /** The moments in `now` that weren't in `seen`, oldest first. */

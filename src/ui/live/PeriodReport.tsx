@@ -440,16 +440,11 @@ export function Huddle(
       <Decisions {...props} max={2} deciding={deciding} />
       <Trouble {...props} huddle />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} compact />}
-      {!call && (
+      {/* (the saved after-timeout play, read-only: it's set away from the game, so with none there's nothing to say) */}
+      {!call && atoText && (
         <Section title="Out of the timeout">
           <div className="small">
-            {atoText ? (
-              <>
-                Your after-timeout play: <b>{atoText}</b>
-              </>
-            ) : (
-              <span className="dim">No play set: the team runs its offense. Set one in Tactics → Match.</span>
-            )}
+            Your after-timeout play: <b>{atoText}</b>
           </div>
         </Section>
       )}

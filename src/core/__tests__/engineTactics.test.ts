@@ -379,7 +379,7 @@ describe('engine tactics', () => {
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
       // much: the tactical-leverage check in engineDefense.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
       // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
-      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter)
+      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter, and when crunch time came to need a game still in reach and the AI's rotations floored their two best players' minutes)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -387,10 +387,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [118, 134, 92, 87, 50, 35, 11, 7],
-        [111, 112, 88, 95, 47, 40, 11, 10],
-        [102, 123, 91, 95, 54, 54, 8, 4],
-        [106, 115, 91, 89, 52, 32, 10, 10],
+        [121, 130, 96, 92, 57, 43, 9, 13],
+        [106, 109, 90, 91, 44, 42, 12, 14],
+        [111, 135, 97, 95, 54, 49, 11, 8],
+        [122, 129, 88, 95, 50, 37, 7, 15],
       ]);
     }
 

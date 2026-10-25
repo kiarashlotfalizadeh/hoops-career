@@ -1,6 +1,8 @@
-# Builds the Android APK. With the ANDROID_KEYSTORE_* repository secrets set (see README → Ship to
-# phones), every APK is signed with that one key, so each build installs over the last and keeps
-# its saves; v* tags also get a signed release APK. Without them, APKs use a throwaway debug key.
+# Builds the Android app. Every push to main gets a debug APK. A v* tag (or a run started by hand from
+# the Actions tab) also builds the release: the Play bundle (.aab) and a release APK, both signed with
+# the ANDROID_KEYSTORE_* repository secrets (see README → Ship to phones). A release without them
+# fails with a message saying which are missing: an unsigned or throwaway-signed release could never
+# be updated. Without the secrets, debug APKs use a throwaway debug key.
 name: Android APK
 on:
   workflow_dispatch:
@@ -52,20 +54,40 @@ jobs:
         with:
           name: hoops-career-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
-      - name: Build signed release APK (tags only)
-        if: startsWith(github.ref, 'refs/tags/v') && env.HAS_KEYSTORE == 'true'
+      - name: Check the tag matches package.json's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "${GITHUB_REF_NAME#v}" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match package.json's version $version: bump the version, then tag v$version."
+            exit 1
+          fi
+      - name: Build the signed release (Play bundle and APK)
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         working-directory: android
         env:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon -PversionCode=${{ github.run_number }}
-      - if: startsWith(github.ref, 'refs/tags/v') && env.HAS_KEYSTORE == 'true'
+        run: |
+          if [ "$HAS_KEYSTORE" != "true" ]; then
+            echo "::error::A release needs the ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD repository secrets (README → Ship to phones → Android signing)."
+            exit 1
+          fi
+          ./gradlew bundleRelease assembleRelease --no-daemon -PversionCode=${{ github.run_number }}
+      - if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: hoops-career-release-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+      - if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: hoops-career-release-apk
           path: android/app/build/outputs/apk/release/app-release.apk
-  # the only job with write access: it runs no build tools, it just attaches the APKs to the release
+          if-no-files-found: error
+  # the only job with write access: it runs no build tools, it just attaches the builds to the release
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: apk
@@ -84,3 +106,4 @@ jobs:
           files: |
             apk/app-debug.apk
             apk/app-release.apk
+            apk/app-release.aab

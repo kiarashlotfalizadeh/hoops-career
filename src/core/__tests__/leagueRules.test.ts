@@ -16,7 +16,7 @@ import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
 import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
 import { inSeasonProgression } from '../league/progression';
-import { applyInjury, injuryText } from '../league/injuries';
+import { applyInjury, injuryText, rollInjury } from '../league/injuries';
 import { RATING_KEYS, ovrRaw, toDisplay } from '../ratings';
 import { playerAge, salaryFor } from '../playerGen';
 import { CAP } from '../constants';
@@ -742,6 +742,15 @@ describe('injuries, wear and development', () => {
         p.injury = null;
       }
       expect(hit).toBe(true);
+      // a ruptured Achilles costs at most 95 games, even an injury-prone 33-year-old's on the leanest medical budget
+      const old = Object.values(l.players).find((x) => x.tid >= 0)!;
+      old.bornYear = l.season - 33;
+      old.injuryProne = 1;
+      l.teams[old.tid].budget.health = 1;
+      const rolls = Array.from({ length: 4000 }, () => rollInjury(l, old, rng));
+      const achilles = rolls.filter((x) => x.type === 'Ruptured Achilles');
+      expect(achilles.length).toBeGreaterThan(0);
+      expect(Math.max(...achilles.map((x) => x.gamesTotal))).toBeLessThanOrEqual(95);
     }
 
     // in-season development counts this season's minutes, not last season's (L14)

@@ -94,7 +94,7 @@ try {
   await watch.click();
   // the starting lineups go up first: tip it off
   await page
-    .getByRole('button', { name: 'Tip off', exact: true })
+    .getByRole('button', { name: 'Skip intro', exact: true })
     .click({ timeout: 10_000 })
     .then(
       () => step('tipped off from the starting lineups'),
@@ -232,7 +232,7 @@ try {
   }
   await watch.click();
   await page
-    .getByRole('button', { name: 'Tip off', exact: true })
+    .getByRole('button', { name: 'Skip intro', exact: true })
     .click({ timeout: 10_000 })
     .catch(() => {});
   const start = await bug.getAttribute('aria-label', { timeout: 15_000 });

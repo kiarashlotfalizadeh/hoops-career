@@ -25,3 +25,31 @@ export function rosterLine(n: number): string {
   const open = CAP.rosterMax - n;
   return open ? `${n} players · ${open} open spot${open === 1 ? '' : 's'}` : `${n} players`;
 }
+
+/** Each team's opening payroll in the seed, as createLeague books it (two-way deals don't count). */
+function seedPayrolls(seed: SeedData): Record<number, number> {
+  const pay: Record<number, number> = {};
+  for (const p of seed.players) {
+    const t = p.team ? BBREF_TO_TID[p.team] : undefined;
+    if (t === undefined || p.contract?.twoWay) continue;
+    pay[t] = (pay[t] ?? 0) + (p.contract?.salaries?.[0] ?? 0);
+  }
+  return pay;
+}
+
+/**
+ * The team step's pick before the user makes one: the team ranked nearest the middle (`rank`: each
+ * roster's strength rank) whose roster is legal on opening night and whose payroll is under the tax
+ * line, so a newcomer's first hour isn't cuts, an apron goal and a contender's demands. Null when none
+ * qualifies (the step asks for a pick).
+ */
+export function defaultTeam(seed: SeedData, rank: Record<number, number>): number | null {
+  const size = seedRosterSizes(seed);
+  const pay = seedPayrolls(seed);
+  const n = Object.keys(rank).length;
+  const fits = Object.keys(rank)
+    .map(Number)
+    .filter((t) => size[t] >= CAP.rosterMin && size[t] <= CAP.rosterMax && (pay[t] ?? 0) < CAP.luxuryTax)
+    .sort((a, b) => Math.abs(rank[a] - (n + 1) / 2) - Math.abs(rank[b] - (n + 1) / 2) || rank[a] - rank[b]);
+  return fits[0] ?? null;
+}

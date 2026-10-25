@@ -23,7 +23,7 @@ import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { jerseyColors } from '../teamColors';
 import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
-import { closeGame, crunchTime, foulLimit, lastPossession, liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
+import { closeGame, crunchTime, foulLimit, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -208,6 +208,9 @@ export function useLiveGame() {
         names: nameOf,
         baselines,
         subFor,
+        edge: lg.edge,
+        // (the settings changed tonight, and the trips the court has drawn since)
+        recent: recentLevers(lg.marks, lg.logs.slice(0, v.logs), lg.userSide),
       };
     },
     [home, away, atBreak, toPending, events, nameOf, baselines, subFor],
@@ -769,24 +772,14 @@ export function useLiveGame() {
   useEffect(() => {
     if (!over) sayStaff(alerts);
   }, [alerts, over, sayStaff]);
-  /** A player's defense on the perimeter and inside, for who the staff would put on a scorer. */
-  const defense = useCallback(
-    (pid: number) => {
-      const p = league.players[pid];
-      if (!p) return undefined;
-      const c = composites(p.ratings);
-      return { per: c.perDef, int: c.intDef, hgt: p.ratings.hgt };
-    },
-    [league],
-  );
   /** The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed. */
   const notes = useMemo(() => {
     const lg = liveRef.current;
     if (!view || over || !lg) return [];
     const input = alertInput(view);
-    return input ? staffNotes({ ...input, logs: lg.logs.slice(0, view.logs), defense }).filter((n) => !dismissed.includes(n.id)) : [];
+    return input ? staffNotes({ ...input, logs: lg.logs.slice(0, view.logs) }).filter((n) => !dismissed.includes(n.id)) : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, tick, dismissed, over, alertInput, defense]);
+  }, [view, tick, dismissed, over, alertInput]);
 
   return {
     league,
@@ -898,7 +891,7 @@ export function stopCalls(v: Drawn, lg: LiveGame, names: (pid: number) => string
     out.push({ id: lastId(v.q), kind: 'last', text: `Last possession, your ball, ${margin ? `down ${-margin}` : 'tied'}.` });
   }
   const t = lg.sim.T[side];
-  const crunch = crunchTime(v.q, v.clock);
+  const crunch = crunchTime(v);
   if (!lg.manualSubs && !crunch) return out;
   // the closing five: the rotation's, else the five the staff plans most minutes for
   const set = t.team.rotation.closers;

@@ -69,20 +69,40 @@ const UNSEEN_LEFT = STANDS[0];
 export const OFFER_MAX_DAYS = PITCH_REST;
 
 /**
- * An offer's days run from when the user could see it: while its mail is unread (a long sim goes
- * on), it stands at least UNSEEN_LEFT days more, up to OFFER_MAX_DAYS days after it was made; the trade
- * deadline (or a pick being made) still ends it.
+ * The user has had every open offer in front of him (Today's Needs you and the bell list them all,
+ * the Offers tab each in full): from now on their dates stand as shown. Called as a sim starts (it
+ * starts from a screen with them on it) and as the Offers tab shows them.
+ */
+export function markOffersSeen(league: League) {
+  for (const p of openProposals(league)) p.seen = true;
+}
+
+/**
+ * An offer's days run from when the user could see it: while he hasn't (it came during a long sim,
+ * its mail unread), it stands at least UNSEEN_LEFT days more, up to OFFER_MAX_DAYS days after it was
+ * made, and its mail says the new date; once he has (see markOffersSeen), the date shown no longer
+ * moves. The trade deadline (or a pick being made) still ends it.
  */
 function holdUnseen(league: League) {
   // (never past the trade deadline: the offer would read as standing after trading closed)
   const last = league.phase === 'regular' ? league.tradeDeadlineDay : Infinity;
   for (const p of openProposals(league)) {
     if (p.kind === 'pick' || p.season !== league.season) continue;
-    const unread = league.inbox.some((m) => m.proposal === p.id && !m.read);
-    if (unread) p.expires = Math.max(p.expires, Math.min(league.day + UNSEEN_LEFT, p.day + OFFER_MAX_DAYS, last));
+    const mail = league.inbox.find((m) => m.proposal === p.id);
+    const was = p.expires;
+    if (mail && !mail.read && !p.seen) p.expires = Math.max(p.expires, Math.min(league.day + UNSEEN_LEFT, p.day + OFFER_MAX_DAYS, last));
     p.expires = Math.min(p.expires, Math.max(last, league.day));
+    if (mail && p.expires !== was) mail.body = mail.body.replace(/It stands until [^.]+\./, standsText(league, p));
   }
 }
+
+/** "It stands until Oct 25.", as an offer's mail says it. */
+const standsText = (league: League, p: Proposal) =>
+  p.kind === 'pick'
+    ? 'It stands until the pick is made.'
+    : p.expires === league.day
+      ? 'It stands until the end of today.'
+      : `It stands until ${fmtDate(league.season, p.expires)}.`;
 
 /**
  * Drop offers that expired or stopped being valid (an asset moved, the deadline passed, the AI's
@@ -178,12 +198,7 @@ function post(league: League, pitch: Pitch, rng: Rng, lastDay?: number): Proposa
   league.nextProposalId = p.id + 1;
   league.proposals = [...open, p];
   const t = league.teams[p.tid];
-  const until =
-    p.kind === 'pick'
-      ? 'It stands until the pick is made.'
-      : p.expires === league.day
-        ? 'It stands until the end of today.'
-        : `It stands until ${fmtDate(league.season, p.expires)}.`;
+  const until = standsText(league, p);
   const ask = p.offer.a.pids.length || p.offer.a.dpids.length ? `for ${assetText(league, p.offer.a)}` : 'and want nothing back';
   const from = `${t.region} ${t.name} GM`;
   // the same pitch made again this season replaces its earlier mail: one message per pitch, the latest on top

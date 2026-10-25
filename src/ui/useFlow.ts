@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore, type TaskOp } from '../state/store';
 import { simStart, simSummary, type FlowAction } from './flow';
 import { newSeasonBlockedReason } from '../core/league/season';
+import { userGameOnDay } from '../core/league/games';
 import { seasonLabel } from '../core/constants';
 
 export function useFlowRunner() {
@@ -49,8 +50,14 @@ export function useFlowRunner() {
         const r = await task('Opening night', { kind: 'startRegular' });
         if (!r) return;
         const errs = r.errors ?? [];
-        if (errs.length) st.toast(errs[0], 'bad');
-        else st.toast('The regular season is under way.', 'good');
+        if (errs.length) {
+          st.toast(errs[0], 'bad');
+          return;
+        }
+        st.toast('The regular season is under way.', 'good');
+        // on to opening night's morning (the league's first day may not be the user's): not an empty day before it
+        const l = useStore.getState().league;
+        if (l && !userGameOnDay(l, l.day)) await st.simulate({ kind: 'untilUserGame' });
         return;
       }
       case 'startDraft':

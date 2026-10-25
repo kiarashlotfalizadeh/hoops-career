@@ -315,7 +315,8 @@ describe('sets in the engine', () => {
         }
         if (id === 'floppy') expect(by(star, ['c3', 'ab3', 'rim']), id).toBeGreaterThan(0.55);
         if (id === 'elevator') expect(by(star, ['ab3']), id).toBeGreaterThan(0.5);
-        if (id === 'hammer') expect(by(star, ['c3']), id).toBeGreaterThan(0.45);
+        // (0.46 of them before the staff's rotations gave the two best players a star's minutes, 0.43 since: other fives around him)
+        if (id === 'hammer') expect(by(star, ['c3']), id).toBeGreaterThan(0.4);
         if (id === 'chicago') expect(by(star), id).toBeGreaterThan(0.55);
         if (id === 'horns') expect(logs.filter((l) => l.steps.some((st) => st.pid === l.set!.pid || st.pid2 === l.set!.pid)).length / logs.length, id).toBeGreaterThan(0.9);
         if (id === 'postSplit') {
@@ -409,18 +410,18 @@ describe('sets in the engine', () => {
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses)
+      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses), and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer
       const expected = {
         ai: [
-          [101, 127, 79, 33, 8, 33, 8, 0],
-          [134, 144, 79, 34, 7, 27, 15, 0],
-          [118, 117, 88, 37, 5, 20, 15, 0],
+          [129, 127, 88, 42, 8, 29, 8, 0],
+          [140, 139, 80, 34, 7, 27, 15, 0],
+          [113, 102, 91, 36, 8, 6, 9, 0],
         ],
         // (taken again when play calls from the bench were retired)
         coached: [
           [124, 100, 94, 27, 19, 26, 8, 0],
-          [109, 129, 89, 39, 10, 15, 13, 0],
-          [120, 134, 74, 40, 7, 38, 19, 0],
+          [120, 128, 88, 34, 8, 23, 20, 0],
+          [126, 129, 76, 39, 8, 40, 20, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

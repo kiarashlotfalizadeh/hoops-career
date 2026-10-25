@@ -333,9 +333,9 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: 'bench',
-    term: 'The bench (live games)',
+    term: 'The staff (live games)',
     group: 'The game',
-    text: 'Your lead assistant during a live game: his read of it, the calls he wants from you with his pick first, and your moves with what each has done since (their points a trip since the change, against before it).',
+    text: 'The Staff tab in a live game: your lead assistant’s read of it, the calls he wants from you with his pick first, and your moves with what each has done since (their points a trip since the change, against before it). Your substitutes are under Lineup.',
   },
 ];
 

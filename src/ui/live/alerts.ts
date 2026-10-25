@@ -4,13 +4,14 @@
 // top fix as the pill in its quick actions, and turns their actions into timeouts, substitutions and
 // tactic changes. Pure.
 
-import type { GameAdjustment, GameManagement, Tactics } from '../../core/types';
+import type { GameAdjustment, GameManagement, LiveOp, Tactics } from '../../core/types';
 import type { InGameInjury } from '../../core/sim/engine';
-import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
+import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
+import { cloneTactics } from '../../core/sim/tactics';
 import { impactAdvice, impactSentence, leverPaid, teamRef } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
-import { winProb } from '../../core/analysis/winProb';
+import { CLOSE_WIN, crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import type { Drawn, DrawnPlayer } from './drawn';
 
@@ -53,15 +54,11 @@ export interface LiveEvent {
 /** Events stay up as alerts for two minutes of game time (or until dismissed). */
 const EVENT_SEC = 120;
 
-/** Crunch time, when the staff stops subbing for fouls and fatigue: the last six minutes of the fourth quarter and overtime. */
-export const crunchTime = (q: number, clock: number) => q >= 4 && clock < 360;
-
 /**
- * A close game's bound: neither side this likely to win it, as the scorebug's win probability has it.
- * At 95% a game is close down 14 with 11 minutes left (not 15), down 9 with five, 6 with two and 4
- * with 30 seconds, and always tied or down three with the ball on the last possession (6% at worst).
+ * Crunch time, when the staff stops subbing for fouls and fatigue: the last six minutes of the fourth
+ * quarter and overtime in a game still in reach, the engine's own rule (core crunchTime).
  */
-export const CLOSE_WIN = 0.95;
+export const crunchTime = (v: Pick<Drawn, 'q' | 'clock' | 'sides'>) => coreCrunch(v.q, v.clock, v.sides[0].score - v.sides[1].score);
 
 /**
  * A close game, the one meaning every live pause goes by (a fifth foul, a closer out of legs, the last
@@ -129,6 +126,66 @@ export interface AlertInput {
   baselines: Record<string, number>;
   /** Who the staff would bring in for `pid`, if anyone can come in. */
   subFor: (pid: number) => number | undefined;
+  /** The projected home margin at tip-off (LiveGame.edge), for win probability (0 if not given). */
+  edge?: number;
+  /** Each setting changed in the game, and the trips played since it last was (see recentLevers). */
+  recent?: Record<string, number>;
+}
+
+/** A side this likely to win (or to lose) has a decided game: the staff makes no calls in it but its own and the bench's. */
+export const DECIDED_WIN = 0.97;
+/** Trips a setting is left to work after a change before the staff calls to change it again (no Drop → Hedge whiplash). */
+export const LEVER_TRIPS = 15;
+
+/** The settings two tactics differ on, as paths: "defense.pnr", "offense.actions.iso", "defense.matchups.12". */
+export function tacticsDiff(a: unknown, b: unknown, at = ''): string[] {
+  if (a === b) return [];
+  if (a && b && typeof a === 'object' && typeof b === 'object' && !Array.isArray(a) && !Array.isArray(b)) {
+    const x = a as Record<string, unknown>;
+    const y = b as Record<string, unknown>;
+    return [...new Set([...Object.keys(x), ...Object.keys(y)])].flatMap((k) => tacticsDiff(x[k], y[k], at ? `${at}.${k}` : k));
+  }
+  return JSON.stringify(a) === JSON.stringify(b) ? [] : [at];
+}
+
+/**
+ * Each setting the coach changed in the game (on the staff's word or his own), with the trips played
+ * since it last changed: the other side's for a defensive setting, yours for the rest. From the game's
+ * moves (LiveGame.marks) and the possessions the court has drawn.
+ */
+export function recentLevers(marks: { op: LiveOp; log: number; before?: Tactics }[], logs: PossLog[], side: 0 | 1): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of marks) {
+    if (m.op.op !== 'tactics' || !m.before) continue;
+    const since = logs.slice(m.log).filter((l) => l.kind !== 'ft');
+    for (const k of tacticsDiff(m.before, m.op.args.tactics)) {
+      const off = k.startsWith('defense.') ? 1 - side : side;
+      out[k] = Math.min(out[k] ?? Infinity, since.filter((l) => l.off === off).length);
+    }
+  }
+  return out;
+}
+
+/**
+ * Why the staff keeps a call to itself now, if it does: the game is decided (neither side between
+ * 3% and 97% to win it: no tactics to chase, no timeout to take), it's the period's last 24 seconds
+ * (no change or sub has time to matter; a timeout still can), or the call changes a setting changed
+ * fewer than LEVER_TRIPS trips ago (it hasn't had the trips to be judged).
+ */
+export function callHold(a: AlertInput, act: { kind: string; apply?: (t: Tactics) => void } | undefined): 'decided' | 'late' | 'lever' | null {
+  if (!act) return null;
+  const v = a.view;
+  if (act.kind === 'tactics' || act.kind === 'timeout') {
+    const p = winProb({ margin: v.sides[0].score - v.sides[1].score, q: v.q, clock: v.clock, ball: v.ball, edge: a.edge ?? 0 });
+    if (p > DECIDED_WIN || p < 1 - DECIDED_WIN) return 'decided';
+  }
+  if (!a.atBreak && v.clock > 0 && v.clock <= GAME.shotClock && (act.kind === 'tactics' || act.kind === 'sub')) return 'late';
+  if (act.kind === 'tactics' && act.apply && a.recent) {
+    const x = cloneTactics(a.tactics);
+    act.apply(x);
+    if (tacticsDiff(a.tactics, x).some((k) => (a.recent![k] ?? Infinity) < LEVER_TRIPS)) return 'lever';
+  }
+  return null;
 }
 
 /** Everything the assistant would say now, most urgent first (the screen shows the first few not dismissed). */
@@ -143,7 +200,10 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
   const themTeam = a.teams[1 - side];
   const meTeam = a.teams[side];
   const out: LiveAlert[] = [];
-  const crunch = crunchTime(view.q, view.clock);
+  const crunch = crunchTime(view);
+  // from the fourth quarter on, legs and fouls only while the game is close (the band the game stops
+  // in): up 15 in the fourth, a tired starter or a fifth foul isn't worth a word
+  const close = view.q < 4 || closeGame(view, a.edge ?? 0);
   const onFloor = me.on.map((pid) => me.players.find((p) => p.pid === pid)).filter((p): p is DrawnPlayer => !!p);
   const sit = (p: DrawnPlayer, label: string): LiveAlert['action'] => {
     const sub = a.subFor(p.pid);
@@ -156,9 +216,9 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     out.push({ id: e.id, tone: 'bad', ...eventLines(e), action: a.manualSubs ? { kind: 'subs', label: 'Subs' } : undefined });
   }
 
-  // one foul from fouling out late: worth a decision every time, crunch time or not
+  // one foul from fouling out late: worth a decision in a close game, crunch time or not
   for (const p of onFloor) {
-    if (view.q >= 4 && p.fouls === 5)
+    if (view.q >= 4 && p.fouls === 5 && close)
       out.push({ id: `fouls-${p.pid}-5`, tone: 'warn', title: `${names(p.pid)} has 5 fouls`, text: "One more and he's out.", action: sit(p, 'Sit') });
   }
 
@@ -174,7 +234,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     });
 
   // tired legs: the staff subs them out itself, except in crunch time or when you handle subs
-  if (a.manualSubs || crunch)
+  if ((a.manualSubs || crunch) && close)
     for (const p of onFloor) {
       if (p.out !== 0 || p.energy >= tactics.manage.fatigueSub) continue;
       const sub = a.subFor(p.pid);
@@ -257,7 +317,8 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
         text: `${(v.pts / v.poss).toFixed(2)} points a trip (league ${base.toFixed(2)}): try other actions.`,
       });
   }
-  return out;
+  // nothing the staff would hold back (a decided game, the last seconds, a setting just changed)
+  return out.filter((x) => !callHold(a, x.action));
 }
 
 /**

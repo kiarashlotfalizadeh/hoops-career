@@ -3,7 +3,8 @@
 // measure, the cash the day the regular season's books close (after revenue sharing and that
 // season's luxury tax: see closeBooks): the playoff gates that come after are his bonus, not the
 // coach's cover, so a warned contender can't be bailed out by a deep run. The steps move only at
-// his season review, on that close: in the red, no word or a warning becomes an ultimatum; still in
+// his season review, on that close: in the red, no word or a warning becomes an ultimatum (the first
+// close of a payroll the coach inherited, in his first season in charge, only a warning); still in
 // the red at a later review, the budget is frozen (the staff and facilities budgets cut to the
 // league's standard and held there, and the payroll can't grow past minimum deals: no raises on a
 // re-signing, an extension, a qualifying offer or a matched offer sheet, no waiver claim on more than
@@ -19,6 +20,7 @@
 import type { League } from '../types';
 import { addInbox, curTeamSeason, revenueScale } from './helpers';
 import { PROJECT_HOME_GAMES, seasonEndCash } from './finances';
+import { GRACE } from './jobSecurity';
 import { money } from '../format';
 
 export type BooksStage = 'warning' | 'ultimatum' | 'freeze' | 'final';
@@ -85,19 +87,73 @@ export function closedCash(league: League, tid: number): number {
   return curTeamSeason(league, tid).closeCash ?? league.teams[tid].cash;
 }
 
-/** What follows the next review deeper in the red, under the freeze, in the owner's words. */
-const nextTime = (league: League, final: boolean) =>
-  final
-    ? league.settings.jobSecurity
-      ? "Deeper in the red when next season's books close and you're done here, whatever you win."
-      : `Deeper in the red when next season's books close and that season grades ${grade100(BLEED_GRADE)} at best too.`
-    : "Deeper in the red when next season's books close, and that's your final warning.";
+/** The coach's first season in charge (a new career or a new job): the payroll and the books are the ones he inherited. */
+const inherited = (league: League) => league.season - (league.tenureStart ?? league.startSeason) + 1 <= 1;
+
+/** The phases after the season's review: the review that next reads the books is next season's. */
+const AFTER_REVIEW: ReadonlySet<League['phase']> = new Set(['draftLottery', 'draft', 'resign', 'freeAgency']);
+
+/** Whether the review that next reads the books can fire the coach: job security on and his grace period over (`next`: next season's review). */
+export function reviewCanFire(league: League, next = AFTER_REVIEW.has(league.phase)): boolean {
+  const seasons = league.season - (league.tenureStart ?? league.startSeason) + 1 + (next ? 1 : 0);
+  return league.settings.jobSecurity && seasons > GRACE[league.settings.difficulty];
+}
+
+/**
+ * What closing deeper in the red than at the last review brings under the freeze (see booksVerdict):
+ * the sack after the final warning, or past DEBT_LIMIT (`fire`), else the final warning. Null when
+ * the budget isn't frozen. `limit`: the debt limit ($K, grown with the cap).
+ */
+export function deeperMeans(league: League): { fire: boolean; closed: number; limit: number } | null {
+  const b = booksOf(league);
+  if (!b || (b.stage !== 'freeze' && b.stage !== 'final')) return null;
+  const closed = b.close ?? league.teams[league.userTid].cash;
+  const limit = DEBT_LIMIT * revenueScale(league);
+  // (closed at the limit already, any close deeper is past it)
+  return { fire: b.stage === 'final' || closed <= -limit, closed, limit };
+}
+
+/**
+ * What the next close deeper in the red than the last review's brings under the freeze, in a
+ * sentence: the final warning (and past the debt limit the sack), or the sack itself; with job
+ * security off or in the grace period, the season's cap instead. `nextSeason`: the close is next
+ * season's (between seasons); `owner`: in the owner's own words, else the screens'. Empty when the
+ * budget isn't frozen.
+ */
+export function deeperText(league: League, nextSeason = AFTER_REVIEW.has(league.phase), owner = false): string {
+  const d = deeperMeans(league);
+  if (!d) return '';
+  const next = nextSeason ? "when next season's books close" : 'when the books close';
+  const can = reviewCanFire(league, nextSeason);
+  const closed = money(-d.closed);
+  const fired = owner ? "you're done here, whatever you win" : "you're fired, whatever you win";
+  const capped = `that season grades ${grade100(BLEED_GRADE)} at best`;
+  if (owner)
+    return d.fire
+      ? `Deeper in the red ${next} and ${can ? fired : `${capped} too`}.`
+      : `Deeper in the red ${next}, and that's your final warning${can ? `. Past ${money(d.limit)} in the red, ${fired}` : `: ${capped}`}.`;
+  return d.fire
+    ? `Deeper in the red than ${closed} ${next}, and ${can ? fired : `${capped} too`}.`
+    : `Deeper in the red than ${closed} ${next}, and it's his final warning${can ? `; past ${money(d.limit)} in the red, deeper and you're fired` : `: ${capped}`}.`;
+}
 
 const grade100 = (g: number) => `${g > 0 ? '+' : g < 0 ? '−' : ''}${Math.abs(Math.round(g * 100))}`;
 
 function step(league: League, stage: BooksStage, close?: number) {
   league.books = { stage, tid: league.userTid, season: league.season, day: league.day, ...(close !== undefined ? { close } : {}) };
   const team = league.teams[league.userTid];
+  if (stage === 'warning' && close !== undefined) {
+    // at the review, the first close of an inherited payroll: a warning, not yet an ultimatum
+    addInbox(league, {
+      important: true,
+      from: 'Owner',
+      subject: 'The books: a warning',
+      body: `The regular season's books closed ${money(-close)} in the red, luxury tax and all. You inherited that payroll, so this time it's a warning. Back in the black when next season's books close, or it's an ultimatum.`,
+      tone: 'bad',
+      link: '/office/finances',
+    });
+    return;
+  }
   if (stage === 'warning') {
     const p = seasonEndCash(league, league.userTid);
     addInbox(league, {
@@ -124,7 +180,7 @@ function step(league: League, stage: BooksStage, close?: number) {
     addInbox(league, {
       from: 'Owner',
       subject: 'The budget is frozen',
-      body: `The books closed ${red} in the red again, and I warned you. The budget is frozen until a season's books close in the black: minimum deals only, no raises (re-signing, extending, qualifying or matching an offer sheet), no trade that takes on salary or sends cash, and the staff and facilities budgets cut to the league standard. ${nextTime(league, false)}`,
+      body: `The books closed ${red} in the red again, and I warned you. The budget is frozen until a season's books close in the black: minimum deals only, no raises (re-signing, extending, qualifying or matching an offer sheet), no trade that takes on salary or sends cash, and the staff and facilities budgets cut to the league standard. ${deeperText(league, true, true)}`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -133,7 +189,7 @@ function step(league: League, stage: BooksStage, close?: number) {
       important: true,
       from: 'Owner',
       subject: 'The books: a final warning',
-      body: `Frozen, and the books still closed ${red} in the red, deeper than last season. The freeze stands, and no title pays for this: this season grades ${grade100(BLEED_GRADE)} at best. ${nextTime(league, true)}`,
+      body: `Frozen, and the books still closed ${red} in the red, deeper than last season. The freeze stands, and no title pays for this: this season grades ${grade100(BLEED_GRADE)} at best. ${deeperText(league, true, true)}`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -146,7 +202,9 @@ function step(league: League, stage: BooksStage, close?: number) {
  */
 export function booksDaily(league: League) {
   // (one warning a season: settled or not, it stands until the review, which steps it up or lifts it)
-  if (league.fired || !warnWindow(league) || booksOf(league)) return;
+  // (a warning from last season's review, an inherited payroll's, gives way to this season's)
+  const b = booksOf(league);
+  if (league.fired || !warnWindow(league) || (b && !(b.stage === 'warning' && b.season < league.season))) return;
   const ts = curTeamSeason(league, league.userTid);
   if (ts.homeWon + ts.homeLost < PROJECT_HOME_GAMES) return;
   if (seasonEndCash(league, league.userTid).end < -WARN_RED * revenueScale(league)) step(league, 'warning');
@@ -179,7 +237,8 @@ export function booksVerdict(league: League): BooksVerdict | null {
   const b = booksOf(league);
   const close = closedCash(league, league.userTid);
   if (close >= 0) return b ? { close, stage: null } : null;
-  if (!b || b.stage === 'warning') return { close, stage: 'ultimatum' };
+  // (a payroll he inherited: its first close in the red only warns)
+  if (!b || b.stage === 'warning') return { close, stage: inherited(league) ? 'warning' : 'ultimatum' };
   // (a step this review has taken already stands)
   if (b.season >= league.season) return { close, stage: b.stage };
   if (b.stage === 'ultimatum') return { close, stage: 'freeze' };
@@ -207,7 +266,8 @@ export function booksReview(league: League, v: BooksVerdict | null = booksVerdic
       });
     return;
   }
-  if (b && b.stage === v.stage && b.season >= league.season) return;
+  // (an in-season warning becomes the review's, with the close, once)
+  if (b && b.stage === v.stage && b.season >= league.season && (v.stage !== 'warning' || b.close !== undefined)) return;
   // a frozen season that didn't dig deeper stands as it is: the review says so (see booksLine)
   if (b && b.stage === v.stage && b.stage !== 'warning') {
     league.books = { ...b, season: league.season, day: league.day, close: v.close };

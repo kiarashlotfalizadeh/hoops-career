@@ -11,6 +11,7 @@ import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
 import { gameTime } from '../format';
 import { Rng } from '../random';
 import { GAME } from '../constants';
+import { crunchTime } from '../analysis/winProb';
 import type { Team } from '../types';
 
 describe('game engine', () => {
@@ -210,6 +211,16 @@ describe('game engine', () => {
         if (sim.pbp.some((e) => e.kind === 'sub' && e.q >= 4 && e.clock < 30 && Math.abs(e.hs - e.as) >= 12 && starters.some((n) => e.text.includes(`${n} in for`)))) lateReturns++;
       }
       expect(lateReturns).toBeLessThanOrEqual(4);
+      // crunch time, when the staff plays through fouls and fatigue, is the last six minutes of a game
+      // still in reach: up 15 with 3:24 left the starters get their breather, tied or within a few they don't
+      expect(crunchTime(4, 204, 15)).toBe(false);
+      expect(crunchTime(4, 204, -15)).toBe(false);
+      expect(crunchTime(4, 204, 5)).toBe(true);
+      expect(crunchTime(4, 355, -9)).toBe(true);
+      expect(crunchTime(4, 30, 6)).toBe(false);
+      expect(crunchTime(5, 200, 2)).toBe(true);
+      expect(crunchTime(3, 100, 0)).toBe(false);
+      expect(crunchTime(4, 400, 0)).toBe(false);
     }
     // the end of close games: a team holding for the last shot gets it up with time to spare, and the horn
     // decides a game about as often as in the NBA (a game-winner at the buzzer in about one game in a

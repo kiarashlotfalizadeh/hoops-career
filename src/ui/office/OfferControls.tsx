@@ -1,6 +1,8 @@
 // The offer as the contract and extension sheets build it: the amount in scoreboard type with its
 // total, a slider with steppers, the quick amounts (the minimum, his ask, the max), then the years.
-import type { ReactNode } from 'react';
+// Against a stray drag: the slider stops at 1.5× his ask until widened, and an offer more than 10%
+// over his ask says what he'd sign for.
+import { useState, type ReactNode } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { Range, shortSeason } from './common';
 import { money, moneyExact } from '../../core/format';
@@ -22,6 +24,7 @@ export function OfferControls({
   firstSeason,
   yearDisabled,
   yearsNote,
+  overAsk = true,
 }: {
   amount: number;
   total: number;
@@ -37,7 +40,15 @@ export function OfferControls({
   firstSeason: number;
   yearDisabled?: (y: number) => boolean;
   yearsNote: ReactNode;
+  /** Warn when the offer runs more than 10% over his ask (off where paying more can win him: a top free agent's bid). */
+  overAsk?: boolean;
 }) {
+  const [wide, setWide] = useState(false);
+  const top = Math.floor(maxAmt / STEP) * STEP;
+  // (a deliberate step past it, a quick amount or a figure from elsewhere widens it too)
+  const near = Math.max(Math.ceil(minAmt / STEP) * STEP, Math.ceil((askAt * 1.5) / STEP) * STEP);
+  const capped = !wide && near < top && amount <= near;
+  const over = amount - askAt;
   return (
     <>
       <div className="fo-offer-amt">
@@ -56,7 +67,7 @@ export function OfferControls({
             <Minus size={16} />
           </button>
           <div className="grow">
-            <Range label="Salary per season" value={amount} min={Math.floor(minAmt / STEP) * STEP} max={Math.floor(maxAmt / STEP) * STEP} step={STEP} onChange={set} />
+            <Range label="Salary per season" value={amount} min={Math.floor(minAmt / STEP) * STEP} max={capped ? near : top} step={STEP} onChange={set} />
           </div>
           <button className="fo-stepper" aria-label="Raise by $50K" onClick={() => set(amount + STEP)}>
             <Plus size={16} />
@@ -73,6 +84,15 @@ export function OfferControls({
             Max {moneyExact(maxAmt)}
           </button>
         </div>
+        {overAsk && over > askAt * 0.1 ? (
+          <div className="tiny warn num">
+            {moneyExact(over)} over his ask: he&apos;d sign for {moneyExact(askAt)}.
+          </div>
+        ) : capped ? (
+          <button className="btn text tiny" onClick={() => setWide(true)}>
+            The slider stops at {moneyExact(near)}, 1.5× his ask: widen it
+          </button>
+        ) : null}
       </div>
       <div className="fo-years">
         <div className="over">Years</div>

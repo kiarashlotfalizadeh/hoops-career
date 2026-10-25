@@ -71,6 +71,7 @@ export function GameBoard({
   over,
   mid,
   links = true,
+  compact = false,
   className = '',
   children,
 }: {
@@ -80,6 +81,8 @@ export function GameBoard({
   over: [ReactNode, ReactNode?];
   mid?: ReactNode;
   links?: boolean;
+  /** One line (a screen's section below it is the page now): mark, figure, the pill, figure, mark. */
+  compact?: boolean;
   className?: string;
   children?: ReactNode;
 }) {
@@ -94,8 +97,14 @@ export function GameBoard({
         <TeamLogo tid={t.tid} size={24} decorative />
         <span className="gd-bd-who">
           {/* (a long name gives way to its abbreviation on a phone) */}
-          <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : ''}`}>{t.name}</span>
-          {t.name.length > 9 && <span className="gd-bd-nm short">{t.abbrev}</span>}
+          {compact ? (
+            <span className="gd-bd-nm">{t.abbrev}</span>
+          ) : (
+            <>
+              <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : ''}`}>{t.name}</span>
+              {t.name.length > 9 && <span className="gd-bd-nm short">{t.abbrev}</span>}
+            </>
+          )}
           {s.sub && <span className="gd-bd-sub num">{s.sub}</span>}
         </span>
       </>
@@ -117,11 +126,13 @@ export function GameBoard({
   };
   const [sa, sh] = [side(away, false), side(home, true)];
   return (
-    <div className={`gd-board ${className}`} style={{ '--fa': la.slab, '--fh': lh.slab } as CSSProperties}>
-      <div className="gd-bd-over">
-        <span>{over[0]}</span>
-        {over[1] && <span>{over[1]}</span>}
-      </div>
+    <div className={`gd-board${compact ? ' compact' : ''} ${className}`} style={{ '--fa': la.slab, '--fh': lh.slab } as CSSProperties}>
+      {!compact && (
+        <div className="gd-bd-over">
+          <span>{over[0]}</span>
+          {over[1] && <span>{over[1]}</span>}
+        </div>
+      )}
       <div className="gd-bd-row">
         {sa.fig}
         {sh.fig}
@@ -131,7 +142,7 @@ export function GameBoard({
         <span className="gd-bd-mid">{mid}</span>
         {sh.id}
       </div>
-      {children}
+      {!compact && children}
     </div>
   );
 }
@@ -147,6 +158,7 @@ export function FinalSlab({
   story,
   moment,
   linescore = false,
+  compact = false,
   children,
 }: {
   res: GameResult;
@@ -157,6 +169,8 @@ export function FinalSlab({
   moment?: boolean;
   /** The points by period under the story (off by default: the report has them on its Box). */
   linescore?: boolean;
+  /** Just the board, on one line: a report's tab other than its first leads with its own content. */
+  compact?: boolean;
   children?: ReactNode;
 }) {
   const home = league.teams[res.home.tid];
@@ -175,6 +189,7 @@ export function FinalSlab({
     >
       <GameBoard
         league={league}
+        compact={compact}
         away={{ tid: away.tid, fig: fig(res.away.pts), lost: res.away.pts < res.home.pts }}
         home={{ tid: home.tid, fig: fig(res.home.pts), lost: res.home.pts < res.away.pts }}
         over={[`${res.ot ? finalLabel(res.ot) : 'Final'} · ${fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}`, occasion]}
@@ -190,7 +205,7 @@ export function FinalSlab({
           )
         }
       />
-      {story && <StoryBlock league={league} res={res} story={story} moment={moment} />}
+      {story && !compact && <StoryBlock league={league} res={res} story={story} moment={moment} />}
       {linescore && <QuarterTable g={res} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />}
       {children && <div className="gd-fs-actions">{children}</div>}
     </section>

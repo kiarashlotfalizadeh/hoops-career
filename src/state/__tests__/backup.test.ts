@@ -1,4 +1,4 @@
-// Backups: the whole league with its results, written in the current format and checked and cleaned before an import is stored.
+// Backups: the whole league with its results, written gzipped in the current format and checked and cleaned before an import is stored (plain JSON backups too).
 // (A backup made mid-draft or in free agency is in flow.test.ts, on the season played there.)
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -21,17 +21,25 @@ function played(name: string): League {
 
 const quotaError = () => new DOMException('The quota has been exceeded.', 'QuotaExceededError');
 
-/** Export with the browser's download parts stubbed out; returns the file it wrote. */
-async function exported(l: League): Promise<unknown> {
+/** Export with the browser's download parts stubbed out; returns the file it wrote, as written and its name. */
+async function download(l: League): Promise<File> {
   let file: Blob | undefined;
+  const a = { download: '', click() {}, remove() {} };
   vi.stubGlobal('matchMedia', () => ({ matches: false }));
-  vi.stubGlobal('document', { createElement: () => ({ click() {}, remove() {} }), body: { appendChild() {} } });
+  vi.stubGlobal('document', { createElement: () => a, body: { appendChild() {} } });
   vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
     file = b as Blob;
     return 'blob:backup';
   });
   expect(await exportLeague(l)).toBe(true);
-  return JSON.parse(await file!.text());
+  return new File([file!], a.download, { type: file!.type });
+}
+
+const gunzip = (f: Blob) => new Response(f.stream().pipeThrough(new DecompressionStream('gzip'))).text();
+
+/** Export with the browser's download parts stubbed out; returns the league in the file it wrote. */
+async function exported(l: League): Promise<unknown> {
+  return JSON.parse(await gunzip(await download(l)));
 }
 
 /** Each scenario starts with no league open and nothing mocked. */
@@ -162,6 +170,27 @@ describe('backups', () => {
       expect(unsaved.lastBackup).toEqual({ at: expect.any(Number), season: unsaved.season });
       fresh();
 
+      // the file is gzipped JSON, a few times smaller, and imports as the plain file does (every
+      // import above is of a plain one, as backups were before); where the browser can't compress, plain JSON
+      {
+        const l = played('gzip');
+        const gz = await download(l);
+        const plain = JSON.stringify({ ...l, version: SAVE_VERSION, lastBackup: l.lastBackup });
+        expect([gz.name, gz.type, [...new Uint8Array(await gz.slice(0, 2).arrayBuffer())]]).toEqual([`hoops-career-gzip-${l.season}.json.gz`, 'application/gzip', [0x1f, 0x8b]]);
+        expect(gz.size).toBeLessThan(plain.length / 4);
+        const back = await importLeague(gz);
+        expect(back).toEqual(await importLeague(backup(JSON.parse(plain))).then((x) => ({ ...x, id: back.id, name: back.name })));
+        // a damaged one isn't a backup; one that unpacks to more than any league is too big
+        await expect(importLeague(new File([(await gz.arrayBuffer()).slice(0, 200)], 'cut.json.gz'))).rejects.toThrow('not a Hoops Career backup');
+        const bomb = new Response(new Blob([new Uint8Array(65 * 1024 * 1024)]).stream().pipeThrough(new CompressionStream('gzip')));
+        await expect(importLeague(new File([await bomb.arrayBuffer()], 'bomb.json.gz'))).rejects.toThrow('too big');
+        fresh();
+        vi.stubGlobal('CompressionStream', undefined);
+        const old = await download(testLeague('no gzip'));
+        expect([old.name.endsWith('.json'), JSON.parse(await old.text()).name]).toEqual([true, 'no gzip']);
+        fresh();
+      }
+
       // a cancelled share sheet is no backup
       {
         const l = testLeague('cancelled');
@@ -184,6 +213,13 @@ describe('backups', () => {
         expect(backupDue(l)).toBe(true);
         l.lastBackup = { at: Date.now(), season: l.season };
         expect(backupDue(l)).toBe(false);
+        // where the browser may clear the saves (no persistent storage), from a month into the first season
+        const first = testLeague('unkept');
+        expect([backupDue(first, false), backupDue(first, true)]).toEqual([false, false]);
+        first.day = 30;
+        expect([backupDue(first, false), backupDue(first, true)]).toEqual([true, false]);
+        first.backupAsked = first.season;
+        expect(backupDue(first, false)).toBe(false);
       }
 
       // exporting the open league mid-game brings its save on the device as far as the file

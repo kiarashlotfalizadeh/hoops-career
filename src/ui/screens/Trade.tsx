@@ -1,7 +1,8 @@
 // Office → Trade: the builder (a partner, the deal, both sides' assets and their GM's live reaction
 // in the dock), the finder, the trading block and the offers other teams make. This module holds the
 // deal and the tabs; each part lives in src/ui/trade/. Deep links: ?with=tid, ?give/get(dp)=ids,
-// ?proposal=id (an AI team's offer, in the builder), ?offer=id and ?tab=offers.
+// ?proposal=id (an AI team's offer, in the builder), ?offer=id, ?tab=offers, ?tab=find&minOvr=N (the
+// finder with its OVR floor set) and ?give=pid alone (that player on the trading block).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Ban } from 'lucide-react';
@@ -18,6 +19,7 @@ import { Callout, capSeason, deadlineLabel } from '../office/common';
 import { openProposals } from '../../core/league/proposals';
 import { OffersTab } from '../office/OffersTab';
 import { CounterSheet } from '../trade/CounterSheet';
+import { ConfirmSheet, needsConfirm } from '../trade/ConfirmSheet';
 import { protectable } from '../trade/Terms';
 import { AskCallout, FINDER_DEFAULT, TradeFinder, type Ask, type FinderState } from '../trade/TradeFinder';
 import { checkForceTrade, forceTrade } from '../../core/league/godMode';
@@ -41,7 +43,10 @@ const ids = (s: string | null) =>
 
 type Tab = 'build' | 'find' | 'block' | 'offers';
 
-function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null } {
+/** The finder's OVR floor from ?minOvr=N: the highest of its filter's steps at or under N. */
+const minOvrOf = (params: URLSearchParams) => [85, 80, 75, 70].find((x) => x <= Number(params.get('minOvr'))) ?? 0;
+
+function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null; minOvr: number } {
   const user = league.userTid;
   // an offer from the agenda (?offer=id): the Offers tab, that offer first
   const focus = params.get('offer') !== null ? Number(params.get('offer')) : null;
@@ -56,6 +61,7 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
       shop: null,
       tab: 'build',
       focus: null,
+      minOvr: 0,
     };
   const w = params.get('with');
   const wt = w !== null ? Number(w) : NaN;
@@ -65,7 +71,8 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
   const get: Sel = { pids: ids(params.get('get')), dpids: ids(params.get('getdp')) };
   // "Trade him" from the contracts list opens the trading block for that player
   const shop = w === null && give.pids.length === 1 && !give.dpids.length && !get.pids.length && !get.dpids.length ? give.pids[0] : null;
-  return { partner, give, get, shop, focus, tab: pr !== null || focus !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : 'build' };
+  const tab: Tab = pr !== null || focus !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : params.get('tab') === 'find' ? 'find' : 'build';
+  return { partner, give, get, shop, focus, tab, minOvr: minOvrOf(params) };
 }
 
 export default function Trade() {
@@ -82,8 +89,10 @@ export default function Trade() {
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
   // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
   const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
-  const [finder, setFinder] = useState<FinderState>(FINDER_DEFAULT);
+  const [finder, setFinder] = useState<FinderState>(() => ({ ...FINDER_DEFAULT, minOvr: init.minOvr }));
   const [ask, setAsk] = useState<Ask | null>(null);
+  // a deal they'd take that you overpay for, or that moves a first, waits for a second tap
+  const [confirm, setConfirm] = useState<TradeOffer | null>(null);
 
   // react to new deep links while already on the screen (e.g. from the inbox)
   const key = params.toString();
@@ -100,6 +109,7 @@ export default function Trade() {
     setShop(r.shop);
     setFocus(r.focus);
     setTab(r.tab);
+    if (r.tab === 'find') setFinder({ ...FINDER_DEFAULT, minOvr: r.minOvr });
     setAsk(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -181,16 +191,23 @@ export default function Trade() {
     setAsk(null);
   };
 
+  /** A deal they'd take: made now, or shown for a second look first (see needsConfirm). */
+  const take = (o: TradeOffer, r = evaluateTrade(league, o)) => {
+    if (needsConfirm(league, o, r)) setConfirm(o);
+    else execute(o);
+  };
+
   const propose = () => {
     const r = evaluateTrade(league, offer);
     if (r.accept) {
-      execute(offer);
+      take(offer, r);
       return;
     }
     // turned down: the versions they would take instead (worked out only now: it takes a moment)
     const list = r.ok ? counterOffers(league, offer) : [];
     if (list.length) setCounters({ base: offer, list });
-    else useStore.getState().toast(`${pt.abbrev}: ${r.message}`, 'bad');
+    // (with the main reason: how far apart the sides are, as a rule)
+    else useStore.getState().toast(`${pt.abbrev}: ${r.message}${r.ok && r.notes.length ? ` ${r.notes[0].text}.` : ''}`, 'bad');
   };
 
   const loadDeal = (o: TradeOffer) => {
@@ -361,11 +378,20 @@ export default function Trade() {
         onClose={() => setCounters(null)}
         onAccept={(o) => {
           setCounters(null);
-          execute(o);
+          take(o);
         }}
         onEdit={(o) => {
           setCounters(null);
           loadDeal(o);
+        }}
+      />
+      <ConfirmSheet
+        league={league}
+        offer={confirm}
+        onClose={() => setConfirm(null)}
+        onConfirm={(o) => {
+          setConfirm(null);
+          execute(o);
         }}
       />
     </main>

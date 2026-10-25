@@ -38,7 +38,7 @@ export function ImportButton({ block = false, ghost = false, text = false }: { b
       <button className={`btn ${block ? 'block' : ''} ${ghost ? 'ghost' : ''} ${text ? 'text' : ''}`} disabled={busy} onClick={() => input.current?.click()}>
         <Upload size={17} /> {busy ? 'Importing…' : 'Import backup'}
       </button>
-      <input ref={input} type="file" accept=".json,application/json" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
+      <input ref={input} type="file" accept=".json,.gz,application/json,application/gzip" hidden onChange={(e) => void onFile(e.target.files?.[0])} />
       <Sheet open={!!old} onClose={() => setOld(null)} title="Older backup">
         <p className="dim2" style={{ marginTop: 0 }}>
           {old}

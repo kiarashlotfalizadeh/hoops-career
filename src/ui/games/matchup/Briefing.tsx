@@ -16,7 +16,8 @@ import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
 import { worthCall } from '../../../core/ai/counterWorth';
 import { byWorth, useCounterWorth } from './useCounterWorth';
-import { WorthTag } from './CountersCard';
+import { famCostText, WorthTag } from './CountersCard';
+import { nightWatch } from '../data';
 
 /** Counters the briefing proposes: the ones that measured as gains, the biggest first, one per game-plan group. */
 const PLAN_MAX = 3;
@@ -55,8 +56,10 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
     });
     if (ok) useStore.getState().toast(list.length > 1 ? `Plan vs ${them.abbrev}: the staff's ${list.length} changes` : `Plan vs ${them.abbrev}: ${list[0].label}`, 'good');
   };
-  const threat = scout.threats[0];
-  const read = threat ? `Watch ${threat.name}. ${threat.why}` : scout.summary;
+  // (the night's one pick: the live bench watches the same man)
+  const threat = useLeagueMemo(() => nightWatch(league, opp), [league, opp]);
+  const read = threat ? `Watch ${threat.name.replace(/\.$/, '')}. ${threat.why}` : scout.summary;
+  const costs = useLeagueMemo(() => new Map(drafted.map((c) => [c.id, famCostText(league, opp, c)])), [league, opp, drafted]);
   return (
     <Section title="The staff's plan">
       <div className="mu-brief">
@@ -70,7 +73,10 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
                   <div className="lr-name">
                     {c.label} <WorthTag w={worth?.get(c.id)} measuring={false} />
                   </div>
-                  <div className="lr-meta mu-brief-why">{c.evidence ?? c.why}</div>
+                  <div className="lr-meta mu-brief-why">
+                    {costs.get(c.id) && <span className="warn">{costs.get(c.id)}. </span>}
+                    {c.evidence ?? c.why}
+                  </div>
                 </div>
                 <button className="btn xs" disabled={simming} onClick={() => add([c])} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
                   Add
@@ -91,7 +97,7 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
           </div>
         ) : measuring && !worth ? (
           <div className="small dim" role="status">
-            The staff is playing your game against them out with each counter: {Math.round(measuring.progress * 100)}%.
+            The staff is still measuring each counter · {Math.round(measuring.progress * 100)}%
           </div>
         ) : (
           <div className="small dim">

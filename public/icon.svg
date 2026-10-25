@@ -1,13 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect id="bg" width="512" height="512" rx="112" fill="#12110e"/>
+  <rect id="bg" width="512" height="512" rx="112" fill="#f3efe7"/>
   <g id="art">
-    <!-- the ball, flat, its seams drawn in fine ink like the printed program's ornament -->
-    <circle cx="256" cy="256" r="164" fill="#ff6a2b"/>
-    <g fill="none" stroke="#12110e" stroke-width="11" stroke-linecap="round">
-      <path d="M92 256 H420"/>
-      <path d="M256 92 V420"/>
-      <path d="M140 140 C 196 196, 196 316, 140 372"/>
-      <path d="M372 140 C 316 196, 316 316, 372 372"/>
+    <!-- the coach's chalk: an X and his play, the cut in ink on the paper and in chalk where it runs
+         onto the colour block (Hardwood: bone paper, black ink, one solid block) -->
+    <defs><clipPath id="block"><rect x="64" y="288" width="384" height="160"/></clipPath></defs>
+    <rect x="64" y="288" width="384" height="160" fill="#c33724"/>
+    <path d="M104 84 L224 204 M224 84 L104 204" fill="none" stroke="#121212" stroke-width="52" stroke-linecap="round"/>
+    <g fill="none" stroke-width="32" stroke-linecap="round">
+      <path d="M164 256 C 164 340, 200 372, 330 372" stroke="#121212"/>
+      <path d="M164 256 C 164 340, 200 372, 330 372" stroke="#f3efe7" clip-path="url(#block)"/>
     </g>
+    <path d="M322 334 L396 372 L322 410 Z" fill="#f3efe7" stroke="#f3efe7" stroke-width="10" stroke-linejoin="round"/>
   </g>
 </svg>

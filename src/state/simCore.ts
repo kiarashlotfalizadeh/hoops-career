@@ -7,6 +7,7 @@ import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { billingFor } from '../core/analysis/gameStory';
 import { openCallIds } from '../core/league/calls';
+import { markOffersSeen } from '../core/league/proposals';
 
 export type SimTarget =
   | { kind: 'days'; n: number }
@@ -135,11 +136,16 @@ export interface SimHooks {
  * sim carries on from the same day.
  */
 export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {}): Promise<{ days: number; stop: SimStop }> {
+  // (it starts from a screen whose Needs you lists every open offer: their dates stand from here)
+  markOffersSeen(l);
   const startDay = l.day;
   const startPhase = l.phase;
   const total = estimateTotal(l, target);
   const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
   const newsBefore = bigNews();
+  // the owner's ultimatum and the sack stop any sim, whatever the settings: nobody sims past them unseen
+  const ultimatum = () => (l.ownerGoals?.ultimatum ? l.ownerGoals.season : undefined);
+  const [firedBefore, ultimatumBefore] = [!!l.fired, ultimatum()];
   const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
   // (a call open when it started, or settled, doesn't stop it again; one coming due is a new id)
   const callsBefore = new Set(stops ? openCallIds(l) : []);
@@ -153,6 +159,7 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
     days++;
     hooks.progress?.({ label: 'Simulating', done: days, total: Math.max(total, days) });
     if (targetDone(l, target, startDay, startPhase)) return { days, stop: 'target' };
+    if ((l.fired && !firedBefore) || (ultimatum() !== undefined && ultimatum() !== ultimatumBefore)) return { days, stop: 'news' };
     // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
     if (stops && days > 1 && bigNews() > newsBefore) return { days, stop: 'news' };
     if (stops && openCallIds(l).some((id) => !callsBefore.has(id))) return { days, stop: 'call' };

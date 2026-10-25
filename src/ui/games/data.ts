@@ -3,6 +3,7 @@
 import type { GamePlan, League, PlanScope, ScheduledGame } from '../../core/types';
 import { plural } from '../../core/format';
 import { planFor } from '../../core/league/gamePlans';
+import { scoutTeam, type Threat } from '../../core/ai/advisor';
 import { roundName } from '../league/shared';
 
 const TYPE_LABEL: Record<string, string> = { playin: 'Play-In', playoffs: 'Playoffs', allstar: 'All-Star' };
@@ -14,6 +15,14 @@ export function meetings(league: League, opp: number): ScheduledGame[] {
   return league.schedule
     .filter((g) => !g.played && g.day >= league.day && ((g.home === me && g.away === opp) || (g.away === me && g.home === opp)))
     .sort((a, b) => a.day - b.day || a.gid - b.gid);
+}
+
+/**
+ * The player of theirs the staff watches tonight: the threat its scouting names first. One pick for
+ * the night, so the preview's "Watch" and the live bench's "Watching" are the same man.
+ */
+export function nightWatch(league: League, opp: number): Threat | undefined {
+  return scoutTeam(league, opp).threats[0];
 }
 
 /** The playoff series the user is playing against `opp` right now. */

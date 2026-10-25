@@ -7,10 +7,28 @@
 import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION, seasonLabel } from '../core/constants';
-import { migrate, obj } from './saveCheck';
+import { migrate as checkSave, obj } from './saveCheck';
 
 // what a loaded save must look like lives in saveCheck.ts; screens and the backup import it from here
-export { isLeague, migrate, OldSaveError } from './saveCheck';
+export { isLeague, OldSaveError } from './saveCheck';
+
+const DIFFICULTIES: readonly unknown[] = ['easy', 'normal', 'hard'];
+
+/**
+ * A save checked and brought up to date (see saveCheck.ts), and the owner's parts in shape: a setting
+ * waiting for opening night that's damaged goes, as if it was never chosen (see applyPendingSettings).
+ * Saves from before it load as they are: the owner's newer fields (a goal's edge on the court, his
+ * words on a review, a season's difficulty) are optional, read as absent.
+ */
+export function migrate(x: unknown, notALeague?: string): League {
+  const league = checkSave(x, notALeague);
+  const p: unknown = league.settings.pending;
+  if (p !== undefined) {
+    const ok = obj(p) && (p.difficulty === undefined || DIFFICULTIES.includes(p.difficulty)) && (p.jobSecurity === undefined || p.jobSecurity === false);
+    if (!ok) delete league.settings.pending;
+  }
+  return league;
+}
 
 export interface LeagueMeta {
   id: string;

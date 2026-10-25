@@ -14,13 +14,13 @@ import { autoRotation } from '../ai/coachAI';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason, winPct } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
-import { faDay, marqueeFA } from '../league/freeAgency';
+import { bidFloor, faDay, marqueeFA, offerUtility, userBid } from '../league/freeAgency';
 import { aiPackage, sellable } from '../league/aiTrades';
 import { buildSimInput, restForPlayoffs, restVeterans, seedLocked, youthLean, youthMovement, youthNews } from '../league/games';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { activeCoach, candidateScore, coachCareer, openStint, profileOf, registryProblems, userCoach, type CarouselMoves } from '../league/coaches';
 import { declineJob, makeJobOffers, takeJob } from '../league/jobs';
-import { simDay, startDraft, startRegularSeason } from '../league/season';
+import { faAdvance, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { playerAge } from '../playerGen';
 import { CAP } from '../constants';
 import { Rng } from '../random';
@@ -160,6 +160,52 @@ describe('AI front offices', () => {
       expect(p.birdSince).toBe(l.season - 2);
     }
 
+    // a real league's summer: a top free agent never signs for less (by the utility his decision
+    // weighs) than an offer of ours he turned down, a lone offer at his floor wins, and one he turns
+    // down loses to a rival he likes more
+    {
+      const l = realLeague();
+      const U19 = l.userTid;
+      l.phase = 'resign';
+      startFreeAgency(l);
+      const s = contractSeason(l);
+      for (const p of standardRoster(l, U19)) p.contract = { start: s, salaries: [CAP_FOR(l, s).vetMin] };
+      l.teams[U19].deadMoney = [];
+      const targets = freeAgents(l)
+        .filter((p) => marqueeFA(l, p))
+        .sort((a, b) => valueScore(l, b) - valueScore(l, a));
+      for (const p of targets) {
+        if ((l.faBids?.length ?? 0) >= 4) break;
+        const ask = askingContract(l, p, U19);
+        userBid(l, p.pid, bidFloor(l, p, ask.years), ask.years);
+      }
+      expect(l.faBids!.length).toBeGreaterThanOrEqual(2);
+      const declined: { pid: number; at: League; amount: number; years: number }[] = [];
+      let ours = 0;
+      for (let d = 0; d < 20; d++) {
+        const before = structuredClone(l);
+        const due = (l.faBids ?? []).filter((b) => b.decideDay <= l.faDay + 1);
+        faAdvance(l, 1);
+        for (const b of due) {
+          const p = l.players[b.pid];
+          if (p.tid === U19) ours++;
+          else if (p.tid === FREE_AGENT) declined.push({ pid: b.pid, at: before, amount: b.amount, years: b.years });
+          else {
+            // he chose a rival: one he liked at least as much as ours
+            const was = before.players[b.pid];
+            expect(offerUtility(before, was, p.tid, p.contract.salaries[0], p.contract.salaries.length)).toBeGreaterThanOrEqual(offerUtility(before, was, U19, b.amount, b.years));
+          }
+        }
+        for (const x of declined) {
+          const p = l.players[x.pid];
+          if (p.tid < 0) continue;
+          const was = x.at.players[x.pid];
+          expect(offerUtility(x.at, was, p.tid, p.contract.salaries[0], p.contract.salaries.length)).toBeGreaterThanOrEqual(offerUtility(x.at, was, U19, x.amount, x.years));
+        }
+      }
+      expect(ours).toBeGreaterThan(0);
+    }
+
     // a retooling team out of it sells its veteran star; one in the race keeps him
     {
       const fading = shop('retool', 10, 20, { ovr: 86, age: 31 });
@@ -255,7 +301,10 @@ describe('AI front offices', () => {
       const plain = autoRotation(ps, t.rotation);
       const youth = autoRotation(ps, t.rotation, { lean: (p) => youthLean(playerAge(p, L.season)), maxMinutes: 30 });
       expect(youngShare(youth.minutes)).toBeGreaterThan(youngShare(plain.minutes));
-      expect(Math.max(...Object.values(youth.minutes))).toBeLessThanOrEqual(31);
+      // its veterans are held under the youth movement's 30; its two best young players keep a star's 33
+      // (the lean comes out of the bench's and the veterans' minutes, not theirs)
+      expect(Math.max(...ps.filter((p) => youthLean(age(p.pid)) < 0).map((p) => youth.minutes[p.pid] ?? 0))).toBeLessThanOrEqual(31);
+      expect(Math.max(...Object.values(youth.minutes))).toBeLessThanOrEqual(34);
       // over a week, each veteran of 30 or more sits about every other night
       const vets = ps.filter((p) => playerAge(p, L.season) >= 30);
       const rested = new Map<number, number>();

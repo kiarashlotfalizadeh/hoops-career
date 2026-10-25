@@ -8,11 +8,12 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../../core/league/create';
-import { curTeamSeason, standardRoster } from '../../core/league/helpers';
+import { curTeamSeason, payroll, standardRoster } from '../../core/league/helpers';
+import { agenda } from '../../core/league/agenda';
 import { CAP } from '../../core/constants';
 import { RETIRED, type GameResult, type League, type PlayoffSeries } from '../../core/types';
 import { matchScore, normalize, search, searchIndex } from '../search';
-import { rosterLine, seedRosterSizes } from '../newLeague';
+import { defaultTeam, rosterLine, seedRosterSizes } from '../newLeague';
 import { seasonOutcome } from '../league/shared';
 import { editOf as playerEdit, formOf as playerForm } from '../god/PlayerEditor';
 import { editOf as teamEdit, formOf as teamForm } from '../god/TeamEditor';
@@ -81,6 +82,15 @@ describe('screen logic', () => {
       expect(search(index, 'injured')[0]).toMatchObject({ kind: 'screen', to: '/league/news?kind=injury' });
       expect(search(index, 'big moments')[0]).toMatchObject({ kind: 'screen', to: '/settings' });
       expect(search(index, 'fa')[0]).toMatchObject({ title: 'Free agents' }); // a whole word before "Hall of Fame"
+      // the GM's words, and one row per screen (rows are keyed by id)
+      expect(search(index, 'contracts')[0]).toMatchObject({ kind: 'screen', to: '/team?view=contracts' });
+      expect(search(index, 'contract')[0]).toMatchObject({ kind: 'screen', to: '/team?view=contracts' });
+      expect(search(index, 'salaries')[0]).toMatchObject({ kind: 'screen', to: '/team?view=contracts' });
+      expect(search(index, 'cap sheet')[0]).toMatchObject({ kind: 'screen', to: '/office' });
+      expect(search(index, 'extend')[0]).toMatchObject({ kind: 'screen', to: '/office/resign' });
+      expect(search(index, 'player roles')[0]).toMatchObject({ kind: 'screen', to: '/team/tactics' });
+      expect(search(index, 'playoff odds')[0]).toMatchObject({ kind: 'screen', to: '/league/standings' });
+      expect(new Set(index.map((e) => e.id)).size).toBe(index.length);
       // your last game's report, once there is one
       expect(index.some((e) => e.title === 'Last game')).toBe(false);
       const played = { ...league, games: [{ gid: 7, season: league.season, home: { tid: 0 }, away: { tid: league.userTid } } as unknown as GameResult] };
@@ -126,6 +136,16 @@ describe('screen logic', () => {
         const n = sizes[t.tid] ?? 0;
         if (n >= CAP.rosterMin) expect(standardRoster(league, t.tid).length, t.abbrev).toBe(n);
       }
+      // the team step's pick before the user makes one: nearest the middle of the strength ranks with a
+      // legal roster under the tax (no cuts, no apron goal on day one); none qualifying, no pick
+      const rank = Object.fromEntries(Object.keys(sizes).map((t, i) => [+t, i + 1])) as Record<number, number>;
+      const pick = defaultTeam(seed, rank)!;
+      expect(sizes[pick]).toBeGreaterThanOrEqual(CAP.rosterMin);
+      expect(sizes[pick]).toBeLessThanOrEqual(CAP.rosterMax);
+      const mine = createLeague({ name: 'd', userTid: pick, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 3 });
+      expect(payroll(mine, pick)).toBeLessThan(CAP.luxuryTax);
+      expect(agenda(mine).some((i) => i.required)).toBe(false);
+      expect(defaultTeam({ ...seed, players: seed.players.map((p) => ({ ...p, contract: p.contract && { ...p.contract, salaries: [CAP.luxuryTax] } })) }, rank)).toBeNull();
     }
     // and says what opening night needs
     expect(rosterLine(CAP.rosterMax + 1)).toBe(`${CAP.rosterMax + 1} players · 1 to cut before opening night`);

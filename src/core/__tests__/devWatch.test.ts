@@ -193,15 +193,22 @@ describe('the development watch', () => {
       expect(mail.body).not.toMatch(/ -\d/);
     }
 
-    // a check-in sends the user one report, linked to Team → Growth
+    // a check-in sends the user one report, linked to Team → Growth; a quiet month (no one rising or slipping) none
     {
       const l = copy();
       const mails = l.inbox.length;
+      const m = () => l.inbox.slice(0, l.inbox.length - mails).filter((x) => x.from === 'Player Development');
       l.day = 45;
       devCheckIn(l, []);
-      const m = l.inbox.slice(0, l.inbox.length - mails).filter((x) => x.from === 'Player Development');
-      expect(m.length).toBe(1);
-      expect(m[0].link).toBe('/team/growth');
+      expect(m().length).toBe(0);
+      const up = teamPlayers(l, 0)
+        .filter((p) => playerAge(p, l.season) <= 26 && !isRookie(l, p))
+        .sort((a, b) => a.pid - b.pid)[0];
+      lift(l, up, 3);
+      l.day = 90;
+      devCheckIn(l, []);
+      expect(m().length).toBe(1);
+      expect(m()[0].link).toBe('/team/growth');
     }
 
     // his story says where his career stands

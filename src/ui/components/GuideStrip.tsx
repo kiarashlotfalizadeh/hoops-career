@@ -7,7 +7,8 @@ import { useLeague, useStore } from '../../state/store';
 import { runAgenda } from './Agenda';
 import './agenda.css';
 
-export function GuideStrip({ step, keep }: { step: GuideStep; keep: string }) {
+/** `line`: what the step asks, said for this screen (else the guide's own words). */
+export function GuideStrip({ step, keep, line }: { step: GuideStep; keep: string; line?: string }) {
   const league = useLeague();
   const simming = useStore((s) => !!s.sim);
   if (!guideStepOpen(league, step)) return null;
@@ -20,7 +21,7 @@ export function GuideStrip({ step, keep }: { step: GuideStep; keep: string }) {
           First week · {i + 1} of {GUIDE_STEPS.length}
         </div>
         <div className="guide-t">{s.title}</div>
-        <div className="guide-l">{s.line}</div>
+        <div className="guide-l">{line ?? s.line}</div>
       </div>
       <button type="button" className="btn sm" disabled={simming} onClick={() => runAgenda(s.title, { kind: 'guide', step })}>
         {keep}

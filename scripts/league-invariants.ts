@@ -16,6 +16,7 @@ import { finalsHomeCourt, standings } from '../src/core/league/standings';
 import { cupTables } from '../src/core/league/cup';
 import { missesAllStarGame } from '../src/core/league/awards';
 import { takeOverTeam } from '../src/core/league/owner';
+import { frozen } from '../src/core/league/books';
 import * as TR from '../src/core/league/trades';
 import { makeItWork } from '../src/core/league/tradeHelp';
 import * as P from '../src/core/league/proposals';
@@ -719,7 +720,8 @@ function extendBest() {
   const p = H.teamPlayers(L, L.userTid)
     .filter((x) => !C.extensionBlockedReason(L, x) && !C.extensionRefusal(L, x))
     .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a))[0];
-  if (!p) return;
+  // (a frozen budget allows no raises: the owner's rule, not a refusal to check)
+  if (!p || frozen(L)) return;
   const ask = C.extensionAsk(L, p);
   const res = N.userExtend(L, p.pid, ask.amount, ask.years);
   if (!res.ok || !p.contract.next) bad('extension at his ask refused', `${nm(p.pid)} ${res.reason}`);
@@ -996,6 +998,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // offer sheets come in for the user to decide); the other 70+ players are re-signed
     for (const p of FA.expiringPlayers(L, L.userTid))
       if (R.rfaEligible(L, p) && C.valueScore(L, p) >= 64) {
+        // (under a frozen budget a qualifying offer is a raise the owner forbids: he walks)
+        if (frozen(L)) continue;
         const res = R.userQualify(L, p.pid);
         if (!res.ok || !p.rfa) bad('qualifying offer refused', `${nm(p.pid)} ${res.reason}`);
       } else if (p.ovr >= 70) {

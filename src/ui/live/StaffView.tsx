@@ -1,4 +1,4 @@
-// The live game's Bench, the view the console opens on: the lead assistant and his read of the game,
+// The live game's Staff view, the one the console opens on: the lead assistant and his read of the game,
 // the calls he wants from you (each with the moves on offer, his pick first), what's working and
 // what isn't, the keys to the game as they stand and the scorer of theirs he's watching, whether he
 // makes his tactics calls himself, and your moves tonight with what each has done since.

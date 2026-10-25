@@ -99,9 +99,9 @@ export function ScoreBug({
   // the two colour blocks never read as one: on a clash the away side wears its second colour
   const looks = matchupLooks(home.colors, away.colors);
   const pct = wpText;
-  // each block says what its figures are: the timeouts left, and the team fouls this period ("Penalty"
-  // once they put the other team in the bonus: it shoots on every foul from here)
-  const side = (t: Team, s: Drawn['sides'][number], pts: number, penalty: boolean, isHome: boolean) => {
+  // each block says what its figures are: the timeouts left, and the team fouls this period (PF), with
+  // "Bonus" on the team that shoots free throws on every foul from here (the other team's fouls put it there)
+  const side = (t: Team, s: Drawn['sides'][number], pts: number, isHome: boolean) => {
     const look = looks[isHome ? 0 : 1];
     // (the side behind reads a shade quieter, as a broadcast's bug has it)
     const behind = pts < (isHome ? score[1] : score[0]);
@@ -113,8 +113,10 @@ export function ScoreBug({
             <span className="lv-lb-to">
               Timeouts <b>{s.timeouts}</b>
             </span>
-            <span className={`lv-lb-tf${penalty ? ' on' : ''}`}>
-              {penalty ? 'Penalty' : 'Fouls'} <b>{s.fouls}</b>
+            {/* (PF: "Fouls" and the Bonus chip don't fit the block at a readable size) */}
+            <span className="lv-lb-tf" title="Team fouls this period">
+              PF <b>{s.fouls}</b>
+              {s.bonus && <span className="lv-lb-bonus">Bonus</span>}
             </span>
           </span>
         </div>
@@ -142,7 +144,7 @@ export function ScoreBug({
         role="group"
         aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
       >
-        {side(away, a, score[1], h.bonus, false)}
+        {side(away, a, score[1], false)}
         <div className="lv-lb-mid" aria-hidden="true">
           <span className="lv-lb-q">{brk ? (quarter === 2 ? 'Half' : `End ${qLabel}`) : clutch ? `${qLabel} · Clutch` : qLabel}</span>
           {!brk && <span className="lv-lb-clock num">{fmtClock(clock)}</span>}
@@ -152,7 +154,7 @@ export function ScoreBug({
             </span>
           )}
         </div>
-        {side(home, h, score[0], a.bonus, true)}
+        {side(home, h, score[0], true)}
       </div>
       {wp !== null && (
         <div className="lv-lb-wp" aria-hidden="true">

@@ -110,7 +110,7 @@
   margin-top: 2px;
   font-family: var(--font);
   font-stretch: var(--text-w);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   color: var(--text-dim);
@@ -164,7 +164,7 @@
   width: 54px;
   padding-top: 2px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 12px;
   letter-spacing: -0.02em;
   color: var(--text-dim);
 }
@@ -187,7 +187,7 @@
   background: var(--surface-2);
   border-radius: var(--radius-xs);
   color: var(--text-2);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
   vertical-align: 1px;
 }

@@ -36,8 +36,8 @@ const SECTIONS: { id: Section; label: string }[] = [
  * The team's poster: its slab, in your colours. The city and the season as a kicker, the name in the
  * headline cut and the record as the one big figure (where it stands under it), then the roster
  * spots and the payroll in mono across its foot (the only place Team shows money; it's in full in the
- * Office). On the other sections it's a slim band (the mark, the name, the record), so the section's
- * own first block leads. Who runs the rotation and the tactics is their own tab's switch.
+ * Office). On the other sections it's a slim band (the mark and the name: the top bar has the record), so
+ * the section's own first block leads. Who runs the rotation and the tactics is their own tab's switch.
  */
 function TeamHeader({ league, slim }: { league: League; slim: boolean }) {
   const t = league.teams[league.userTid];
@@ -63,12 +63,15 @@ function TeamHeader({ league, slim }: { league: League; slim: boolean }) {
       <div className="tm-hh-main">
         {slim && <TeamLogo tid={t.tid} size={34} decorative />}
         <h1 className="tm-hh-name">{t.name}</h1>
-        <div className="tm-hh-rec">
-          <span className="tm-hh-wl" aria-label={`Record ${ts.won} and ${ts.lost}`}>
-            {ts.won}-{ts.lost}
-          </span>
-          <span className="tm-hh-rank">{gp ? `${ordinal(rank)} in the ${conf}` : 'No games yet'}</span>
-        </div>
+        {/* (the slim band leaves the record to the top bar, which always shows it) */}
+        {!slim && (
+          <div className="tm-hh-rec">
+            <span className="tm-hh-wl" aria-label={`Record ${ts.won} and ${ts.lost}`}>
+              {ts.won}-{ts.lost}
+            </span>
+            <span className="tm-hh-rank">{gp ? `${ordinal(rank)} in the ${conf}` : 'No games yet'}</span>
+          </div>
+        )}
       </div>
       {!slim && (
         <div className="tm-hh-figs">

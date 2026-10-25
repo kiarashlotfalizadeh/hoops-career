@@ -13,6 +13,10 @@ import { schedulePlayoffDay } from '../../core/league/playoffs';
 import { flowActions, nextBigNight } from '../flow';
 import { currentMoments, pickMoments, type Moment } from '../moments';
 import { testLeague } from '../../state/__tests__/fixtures';
+import { buildDigest, digestMark, shownResults, type DigestResult } from '../today/digest';
+import { isHisStory, isLeagueStory, topStory } from '../today/front';
+import { freshAdvice, STALE_DAYS } from '../today/staffAge';
+import type { AssistantCard } from '../../core/ai/assistant';
 
 vi.mock('../../core/analysis/gameStory', async (load) => {
   const m = await load<typeof import('../../core/analysis/gameStory')>();
@@ -260,6 +264,50 @@ describe('the Continue loop', () => {
       const [top] = pickMoments(stories);
       expect(top).toMatchObject({ title: 'Ten thousand', sub: 'He got there.', pid });
       expect(top.link).toMatch(/^\/league\/news\?story=\d+$/);
+    }
+
+    // a long stretch's digest lists its 2 newest results and then its 3 biggest nights; a short one its newest
+    {
+      const res = (gid: number, weight: number): DigestResult => ({ gid, won: true, score: '1-0', opp: 1, home: true, weight });
+      const long = [res(15, 1), res(14, 1), res(13, 1), res(12, 3), res(11, 1), res(10, 2), res(9, 1), res(8, 3), res(7, 1), res(6, 1)];
+      expect(shownResults(long).map((r) => r.gid)).toEqual([15, 14, 12, 10, 8]);
+      expect(shownResults(long.slice(0, 7)).map((r) => r.gid)).toEqual([15, 14, 13, 12, 11]);
+      // the power rankings are a figure in it, not his news
+      const l = testLeague('digest');
+      const me = l.userTid;
+      const mark = digestMark(l);
+      addNews(l, { kind: 'power', head: `Power rankings: the ${l.teams[me].name} slip to 16th`, text: '.', tids: [me], pids: [], weight: 2 });
+      addNews(l, { kind: 'honor', head: 'Coach of the Month', text: '.', tids: [me], pids: [], weight: 2 });
+      expect(buildDigest(mark, l, { long: true })!.stories.map((s) => s.head)).toEqual(['Coach of the Month']);
+    }
+
+    // his news: a league-wide column that names him on the way (the season's wrap) is the league's; the lead
+    // story prefers this week's story to a bigger one gone stale
+    {
+      const l = testLeague('front');
+      const me = l.userTid;
+      const other = (me + 1) % 30;
+      l.day = 30;
+      addNews(l, { kind: 'column', head: `Season wrap: the ${l.teams[other].name}' year`, text: '.', tids: [other, me], pids: [], weight: 2 });
+      const wrap = l.news.at(-1)!;
+      expect([isHisStory(l, wrap), isLeagueStory(l, wrap)]).toEqual([false, true]);
+      addNews(l, { kind: 'milestone', head: 'Old and big', text: '.', tids: [me], pids: [], weight: 3 });
+      l.news.at(-1)!.day = 19;
+      addNews(l, { kind: 'honor', head: 'New and smaller', text: '.', tids: [me], pids: [], weight: 2 });
+      l.news.at(-1)!.day = 28;
+      expect(topStory(l)?.head).toBe('New and smaller');
+      addNews(l, { kind: 'milestone', head: 'New and big', text: '.', tids: [me], pids: [], weight: 3 });
+      l.news.at(-1)!.day = 27;
+      expect(topStory(l)?.head).toBe('New and big');
+    }
+
+    // From your staff: a card shown a week without being acted on gives way (it's in All advice), the days
+    // ahead come first, and an extension never sits on Today
+    {
+      const card = (id: string, area: AssistantCard['area'] = 'team'): AssistantCard => ({ id, area, tone: 'tip', title: id, line: '', weight: 50 });
+      const feed = [card('extend:1', 'office'), card('alert:lineup-1'), card('alert:wear-7'), card('open-spot', 'office')];
+      expect(freshAdvice(feed, {}, 100).map((c) => c.id)).toEqual(['alert:wear-7', 'alert:lineup-1', 'open-spot']);
+      expect(freshAdvice(feed, { 'alert:wear-7': 100 - STALE_DAYS, 'alert:lineup-1': 99 }, 100).map((c) => c.id)).toEqual(['alert:lineup-1', 'open-spot']);
     }
   }, 180_000);
 });

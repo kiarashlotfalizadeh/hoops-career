@@ -84,7 +84,7 @@ export default function Tactics() {
     <>
       {/* the hero: the plan in use (its slot, its style, how well it's known, its strengths and weaknesses, who runs it) */}
       <fieldset className="tx-fieldset" disabled={simming}>
-        <TacticsHero report={report} was={base} fam={sys.overall} onAnalysis={(v) => setParams({ tab: 'analysis', view: v === 'report' ? null : v })} />
+        <TacticsHero report={report} was={base} fam={sys.overall} onAnalysis={(v) => setParams({ tab: 'analysis', view: v === 'report' ? null : v })} compact={tab !== 'tactic'} />
       </fieldset>
       <GuideStrip step="playbook" keep="Keep this playbook" />
       <AssistantCards league={league} areas={['tactics']} max={2} />

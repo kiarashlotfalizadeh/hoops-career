@@ -9,7 +9,7 @@ import { seasonLabel } from '../constants';
 import { playerName } from './helpers';
 import { coachCareer, userCoach } from './coaches';
 import { confStandings } from './standings';
-import { SEASON_GAMES, currentGoals, expectedWinPct, leagueOutlook } from './ownerGoals';
+import { SEASON_GAMES, currentGoals, leagueOutlook } from './ownerGoals';
 import { teamSeasonRecords } from './records';
 import { REC_LABEL, REC_STATS, TEAM_REC_LABEL, TEAM_REC_STATS } from './records';
 import { playerAge } from '../playerGen';
@@ -51,6 +51,9 @@ export interface SeasonReview {
   /** What the roster as it stands should win next season (the owner's read), unless he was fired. */
   next?: { wins: number };
   fired?: true;
+  /** The difficulty the season was played on (changes wait for opening night, so one a season), and job security when it was off; absent in reviews from before it was kept. */
+  difficulty?: League['settings']['difficulty'];
+  jobSecurity?: false;
 }
 
 /** A player's line for a season with one team, regular season. */
@@ -121,9 +124,8 @@ export function buildSeasonReview(league: League): SeasonReview | null {
   // next season, from the roster as it stands: what the owner would expect of it
   let next: SeasonReview['next'];
   if (!league.fired) {
-    const out = leagueOutlook(league);
-    const avg = out.reduce((a, o) => a + o.talent, 0) / Math.max(1, out.length);
-    next = { wins: Math.round(expectedWinPct(out[tid].talent, avg) * SEASON_GAMES) };
+    // (his read: the edge on the court in it, as the goals he sets will have it)
+    next = { wins: Math.round(leagueOutlook(league)[tid].pct * SEASON_GAMES) };
   }
   const s = legacyOf(league);
   const pulse = s.pulse && s.pulse.season === season && s.pulse.tid === tid ? s.pulse.pts : undefined;
@@ -158,6 +160,8 @@ export function buildSeasonReview(league: League): SeasonReview | null {
     fans: fanScore(league, tid),
     ...(next ? { next } : {}),
     ...(league.fired ? { fired: true as const } : {}),
+    difficulty: league.settings.difficulty,
+    ...(league.settings.jobSecurity ? {} : { jobSecurity: false as const }),
   };
 }
 
@@ -196,6 +200,11 @@ function recordsSet(league: League, season: number, tid: number): string[] {
     if (net?.season === season) out.push(`The franchise's best net rating since ${seasonLabel(league.startSeason)}`);
   }
   return out.slice(0, 4);
+}
+
+/** A season grade (−1..1) in a word, for the verdict's headline. */
+export function gradeWord(g: number): string {
+  return g >= 0.4 ? 'Excellent' : g >= 0.1 ? 'Good' : g > -0.1 ? 'As expected' : g > -0.4 ? 'Short of it' : 'Poor';
 }
 
 /** How a season ended, in words: "Won the title", "Lost in the second round", "Missed the playoffs". */

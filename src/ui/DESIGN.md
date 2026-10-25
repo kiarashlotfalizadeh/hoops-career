@@ -311,13 +311,13 @@ graphics package); the console under it is paper and card stock like every other
   shows points, energy (bar and %) and fouls as "n PF".
 - **One bench bar** takes the tab bar's place: the one action the moment calls for first (Timeout
   while the game plays, Start the next period at a break, Resume in your huddle), then the
-  console's views (Bench, Game plan, Lineup, Stats; the Bench counts the staff's calls waiting).
+  console's views (Staff, Game plan, Lineup, Stats; the Staff tab counts the staff's calls waiting).
   Don't add a second row or a floating button.
 - **One console** under the court (beside it, held sideways) holds every coaching control, in its
   four views. **Evidence next to the lever**: a control in the Game plan sits beside the number it
   moves (the coverage beside their pick-and-roll's points a trip). Every setting is in its sheet,
   one tap down. A new control goes in one view, once.
-- **The staff has one voice**: the lead assistant (`leadAssistant`) heads the Bench, the breaks,
+- **The staff has one voice**: the lead assistant (`leadAssistant`) heads the Staff tab, the breaks,
   the pre-game briefing and the debrief, as `AssistantHead` with a read in a sentence; his calls are
   `NoteCard`s (evidence, the moves on offer with his pick first, Not now). Don't build another
   advice box.

@@ -11,7 +11,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP, TAX_BRACKET_PCT, TAX_RATES } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, fmtDate, freeAgents, payroll, playerName, prospects, shortName, teamPlayers } from '../../core/league/helpers';
-import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason, hardCapLine } from '../../core/league/contracts';
+import { EXCEPTIONS, EXCEPTION_ORDER, exceptionAmount, exceptionUsedShort, extensionBlockedReason, hardCapLine, onWaivers } from '../../core/league/contracts';
 import { bidOnException, capHolds, expiringPlayers, signedThisSummer, signingClosedReason, userExceptionRoom } from '../../core/league/freeAgency';
 import { HARDSHIP_OUT } from '../../core/league/tenDay';
 import { draftOrder, nextPick } from '../../core/league/draft';
@@ -582,7 +582,8 @@ interface Desk {
 function Desks({ league }: { league: League }) {
   const tid = league.userTid;
   const team = league.teams[tid];
-  const market = useLeagueMemo(() => freeAgents(league), [league]);
+  // (counted as the Free agents screen lists them: players on waivers too, to be claimed)
+  const market = useLeagueMemo(() => [...freeAgents(league), ...onWaivers(league)], [league]);
   const best = market.reduce((a, p) => Math.max(a, p.ovr), 0);
   const extendable = useLeagueMemo(() => teamPlayers(league, tid).filter((p) => !extensionBlockedReason(league, p)).length, [league, tid]);
   const proj = useLeagueMemo(() => pickProjection(league), [league]);

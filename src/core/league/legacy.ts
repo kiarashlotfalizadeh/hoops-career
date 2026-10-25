@@ -388,6 +388,11 @@ export function legacyGame(league: League, g: ScheduledGame) {
       const sw = cur?.won ?? 0;
       for (const n of SEASON_MARKS) {
         if (sw < n || has(league, `season:${league.season}:${n}`)) continue;
+        // his career's same mark in the same game (a first season) already says it: one story, not two
+        if (sw === n && k.won === n && WIN_MARKS.includes(n)) {
+          mark(league, `season:${league.season}:${n}`);
+          continue;
+        }
         const firstEver = !k.lines.some((l) => l.season !== league.season && l.won >= n);
         reach(
           league,

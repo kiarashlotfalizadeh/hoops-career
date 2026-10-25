@@ -11,7 +11,7 @@ import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers'
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
 import { GRACE, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
-import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf } from '../../core/league/books';
+import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
   FLOOR_GRADE,
@@ -30,6 +30,7 @@ import {
   ownerProgress,
   planOwnerGoals,
   postseasonLevel,
+  previewTitle,
   resultText,
   type GoalStatus,
 } from '../../core/league/ownerGoals';
@@ -78,7 +79,7 @@ export default function Owner() {
             review ? (
               <Tag tone={review.grade >= 0.1 ? 'good' : review.grade <= -0.1 ? 'bad' : 'warn'}>Season grade {fmtGrade(review.grade)}</Tag>
             ) : provisional ? (
-              <Tag tone="info">Set on opening night</Tag>
+              <Tag tone="info">Final on opening night</Tag>
             ) : (
               <Tag tone={onTrack === progress.length ? 'good' : onTrack * 2 >= progress.length ? 'info' : 'warn'}>
                 {onTrack} of {progress.length} on track
@@ -105,8 +106,8 @@ export default function Owner() {
               : progress.map((p) => (
                   <div key={p.goal.kind} className="fo-goal">
                     <div className="fo-goal-h">
-                      <span className="bold grow">{p.goal.title}</span>
-                      {!provisional && <Tag tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Tag>}
+                      <span className="bold grow">{provisional ? previewTitle(p.goal) : p.goal.title}</span>
+                      {!provisional && <Tag tone={STATUS_TONE[p.status]}>{p.before && p.status === 'behind' ? 'Behind his read' : STATUS_LABEL[p.status]}</Tag>}
                     </div>
                     {/* (no bar before opening night: nothing has happened yet) */}
                     {!provisional && (
@@ -236,8 +237,10 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
           <div className="over">{league.fired ? 'Job security' : 'Job security · out of 100'}</div>
         </div>
       </div>
+      {/* the sack on the way whatever the standing (a live ultimatum has its own card below) */}
+      {js.danger && !js.ultimatum && <p className="fo-seat-danger bold">{js.danger}</p>}
       {!league.fired && <SeatMeter score={js.score} />}
-      {!js.ultimatum && (
+      {!js.ultimatum && !js.danger && (
         <p className="fo-seat-line">
           {js.line}
           {league.fired && (
@@ -350,7 +353,8 @@ function BooksCard({ league }: { league: League }) {
       : between
         ? `Next season's books project ${redOrBlack(p.end)}${tax}.`
         : `Projected when the regular season's books close: ${redOrBlack(p.end)}${tax}.`;
-  const fireNext = league.settings.jobSecurity ? "you're fired, whatever you win" : `that season grades ${fmtGrade(BLEED_GRADE)} at best too`;
+  // what closing deeper in the red brings, as the review will read it (the final warning, or past the debt limit the sack)
+  const deeper = deeperText(league, between);
   return (
     <section className="card fo-ultimatum" aria-label="The books">
       <div className="row">
@@ -358,16 +362,18 @@ function BooksCard({ league }: { league: League }) {
         <span className="over grow">The books</span>
         <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
       </div>
-      <h2>{b.stage === 'warning' ? `${money(-Math.min(0, p.end))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
+      <h2>{b.stage === 'warning' && b.close === undefined ? `${money(-Math.min(0, p.end))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
       <div className="small dim2">
         {b.stage === 'warning'
-          ? "Where the regular season's books are heading, luxury tax included; playoff money doesn't count. Still in the red when they close, and he gives you an ultimatum."
+          ? b.close === undefined
+            ? "Where the regular season's books are heading, luxury tax included; playoff money doesn't count. Still in the red when they close, and he gives you an ultimatum."
+            : "You inherited this payroll, so it's a warning this time. Still in the red when next season's books close, and he gives you an ultimatum."
           : b.stage === 'ultimatum'
             ? "Back in the black when the next season's books close, or he freezes the budget."
             : b.stage === 'freeze'
-              ? `Minimum deals only, no raises (re-signing, extending, qualifying or matching), no trade that takes on salary or sends cash, the staff budgets at the league standard, until a season's books close in the black. Closed in the red, a frozen season grades ${fmtGrade(FREEZE_GRADE)} at best, a title or not; deeper than ${money(-closed)}, his final warning.`
-              : `The freeze stands. Deeper in the red than ${money(-closed)} when the books close and ${fireNext}.`}{' '}
-        {b.stage !== 'warning' && proj}
+              ? `Minimum deals only, no raises (re-signing, extending, qualifying or matching), no trade that takes on salary or sends cash, the staff budgets at the league standard, until a season's books close in the black. Closed in the red, a frozen season grades ${fmtGrade(FREEZE_GRADE)} at best, a title or not. ${deeper}`
+              : `The freeze stands. ${deeper}`}{' '}
+        {(b.stage !== 'warning' || b.close !== undefined) && proj}
       </div>
       <Link to="/office/finances" className="card-link">
         Finances

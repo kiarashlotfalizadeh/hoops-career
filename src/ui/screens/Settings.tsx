@@ -12,6 +12,7 @@ import { seasonLabel } from '../../core/constants';
 import { plural } from '../../core/format';
 import { deleteLeague } from '../../state/persistence';
 import { seasonsInCharge } from '../../core/league/owner';
+import { DIFFICULTY, chosenSetting, requestSetting } from '../../core/league/difficulty';
 import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { guideOpen, showGuide } from '../../core/league/agenda';
 import { edit } from '../../state/actions';
@@ -126,6 +127,11 @@ export default function Settings() {
     nav('/');
   };
 
+  // a difficulty change, or job security off, waits for the next opening night (see requestSetting)
+  const chosen = chosenSetting(league);
+  const from = league.phase === 'preseason' ? 'opening night' : 'next season';
+  const request = (k: 'difficulty' | 'jobSecurity', v: GameSettings['difficulty'] | boolean) => edit((l) => requestSetting(l, k, v));
+
   const seasonsIn = seasonsInCharge(league);
   const seasonsPlayed = league.season - league.startSeason + 1;
   const offers = league.jobOffers?.offers.length ?? 0;
@@ -147,7 +153,12 @@ export default function Settings() {
         <>
           <Section title="Gameplay">
             <fieldset className="card flush set-list" disabled={simming}>
-              <DifficultyPicker value={st.difficulty} onChange={(d) => set('difficulty', d)} />
+              <DifficultyPicker value={chosen.difficulty} onChange={(d) => request('difficulty', d)} />
+              {st.pending?.difficulty && (
+                <div className="set-pending small" role="status">
+                  From {from}: {DIFFICULTY[st.pending.difficulty].label}. {DIFFICULTY[st.difficulty].label} until then, so a change can&apos;t dodge a season under way.
+                </div>
+              )}
               <Toggle
                 on={st.injuries}
                 onChange={(v) => set('injuries', v)}
@@ -155,16 +166,21 @@ export default function Settings() {
                 help="Fatigue, age and history raise the risk. Off stops new injuries; the hurt still heal."
               />
               <Toggle
-                on={st.jobSecurity}
-                onChange={(v) => set('jobSecurity', v)}
+                on={chosen.jobSecurity}
+                onChange={(v) => request('jobSecurity', v)}
                 label="Job security"
-                help="After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals. Off, he never does."
+                help={`After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals. Off, he never does: turning it off takes effect from the next opening night, so it can't dodge a review; on counts at once.`}
               />
+              {st.pending?.jobSecurity === false && (
+                <div className="set-pending small" role="status">
+                  Off from {from}. Until then the owner can still fire you.
+                </div>
+              )}
               <Toggle
                 on={st.moments !== false}
                 onChange={(v) => set('moments', v)}
                 label="Big moments"
-                help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment: one at most when they come out together, the biggest. After a long sim the stories are in While you were away instead."
+                help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment: one at most when they come out together, the biggest. After a long sim the stories are in While you were away instead. The owner's verdict on your season and a new job show as well, whatever came out with them; his ultimatum and a firing show even with this off."
               />
             </fieldset>
           </Section>

@@ -1,5 +1,5 @@
 // The live game, broadcast first: the scorebug and the court own the top of the screen; under them,
-// the console holds the bench (the lead assistant's read, the calls he wants from you and your moves
+// the console holds the staff (the lead assistant's read, the calls he wants from you and your moves
 // with what each has done), the game plan (each of tonight's numbers beside the lever that moves it),
 // the lineup and the stats; the bench bar in the tab bar's place has the timeout and the views. At a
 // period's end or in your timeout the court steps aside for the report or the huddle, on this screen.
@@ -55,15 +55,17 @@ import type { CallId, Tactics } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
+import { nightWatch } from '../games/data';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
 import { CallOut, ClutchOffer, Crowd, CrowdLine, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
+import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
 import '../live/live.css';
 
 export default function Live() {
   const s = useLiveGame();
   const { league, nav, simBusy, status, game, view, home, away, colors, userSide, nameOf, over, script, panel, setPanel, coach } = s;
-  // the console's view (at a stop, its bench is the report or the huddle)
-  const [cview, setCview] = useState<ConsoleView>('bench');
+  // the console's view (at a stop, the staff's is the report or the huddle)
+  const [cview, setCview] = useState<ConsoleView>('staff');
   const [statsTab, setStatsTab] = useState<BoxTab | 'pbp'>('players');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
@@ -97,6 +99,8 @@ export default function Live() {
     [game, view, s.tick, nameOf, slotName],
   );
   const assistant = useMemo(() => leadAssistant(league), [league]);
+  // the night's one watch pick, the preview's "Watch" (games/data.ts): the staff watches him all game
+  const pick = useMemo(() => (game ? nightWatch(league, game.userSide === 0 ? game.game.away : game.game.home) : undefined), [league, game]);
 
   // clutch time, as the court has drawn the game: at speed, the finish is offered at 1× (once a game)
   const clutch = !!view && !over && isClutch(view.q, view.clock, view.sides[0].score - view.sides[1].score);
@@ -113,6 +117,14 @@ export default function Live() {
     } else setOffer(true);
   }, [clutch, game, speed, watchAt, s.atBreak]);
   const closeOffer = useCallback(() => setOffer(false), []);
+
+  // the first live game's coach marks (with teaching on, once on this device): the card up, if any
+  const [tip, setTip] = useState<number | null>(() => (league.settings.teaching !== false && !coachMarksSeen() ? 0 : null));
+  const nextTip = () => {
+    if (tip === null || tip < COACH_MARKS.length - 1) return setTip(tip === null ? null : tip + 1);
+    markCoachMarksSeen();
+    setTip(null);
+  };
 
   // the game stopped for a call on one of yours (a fifth foul, a closer out of legs): his sheet, with who can come in
   // (the last possession waits in the huddle instead)
@@ -145,7 +157,7 @@ export default function Live() {
   // a stop opens on its report (or the huddle), at the top
   useEffect(() => {
     if (!stop) return;
-    setCview('bench');
+    setCview('staff');
     conRef.current?.scrollTo({ top: 0 });
   }, [stop]);
 
@@ -251,13 +263,16 @@ export default function Live() {
   const moreBench = league.settings.liveView === 'bench';
   // shooters on a streak wear a heat ring on the court
   const hot = new Set(view.sides.flatMap((sd) => sd.players.filter((p) => p.streak >= HOT_STREAK).map((p) => p.pid)));
-  // the scorer of theirs the staff watches: their best night so far, or their best player before anyone has one
+  // the player of theirs the staff watches: the night's pick; one not dressed, their best night so far or their best player
   const themSide = view.sides[1 - userSide];
   const watchP =
+    (pick && themSide.players.find((p) => p.pid === pick.pid)) ??
     [...themSide.players].filter((p) => p.pts >= 8).sort((a, b) => b.pts - a.pts)[0] ??
     [...themSide.players].filter((p) => themSide.on.includes(p.pid)).sort((a, b) => (league.players[b.pid]?.ovr ?? 0) - (league.players[a.pid]?.ovr ?? 0))[0];
   const watch = watchP ? { pid: watchP.pid, defender: me.guardOf.get(watchP.pid)?.pid } : undefined;
 
+  // (a card only while the court plays: not over the intro, a break or a huddle)
+  const tipUp = tip !== null && !s.intro && !stop;
   const canTimeout = me.timeouts > 0 && !atBreak && !toPending && !s.intro && !buzzer && !simBusy;
   const toState = toPending
     ? game.timeoutWaiting
@@ -334,7 +349,7 @@ export default function Live() {
   };
 
   const consoleBody = () => {
-    if (cview === 'bench') {
+    if (cview === 'staff') {
       if (atBreak)
         return (
           <PeriodReport
@@ -458,7 +473,7 @@ export default function Live() {
   };
 
   return (
-    <main className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${moreBench ? ' more-bench' : ''}`}>
+    <main className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${moreBench ? ' more-bench' : ''}`} data-tip={tipUp ? COACH_MARKS[tip].at.join(' ') : undefined}>
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
         Live game: {away.region} {away.name} {neutral ? 'vs' : 'at'} {home.region} {home.name}
@@ -547,6 +562,7 @@ export default function Live() {
             onDropBanner={s.dropBanner}
           />
         )}
+        {tipUp && <CoachMark step={tip} onNext={nextTip} />}
         {s.intro && (
           <Intro
             league={league}
@@ -568,9 +584,9 @@ export default function Live() {
           <button
             className="lv-grab"
             onClick={() => edit((l) => void (l.settings.liveView = moreBench ? 'court' : 'bench'))}
-            aria-label={moreBench ? 'Bigger court' : 'Smaller court, more of the bench'}
+            aria-label={moreBench ? 'Bigger court' : 'Smaller court, more room under it'}
           >
-            {moreBench ? 'Bigger court' : 'More bench'}
+            {moreBench ? 'Bigger court' : 'Smaller court'}
           </button>
         )}
         <div className="lv-con-body">{consoleBody()}</div>

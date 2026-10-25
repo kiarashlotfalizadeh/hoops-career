@@ -14,7 +14,8 @@ import { curTeamSeason, fmtDate, payroll } from '../../core/league/helpers';
 import { coachCareer, coyWinners, userCoach, type CoachCareer } from '../../core/league/coaches';
 import { seasonsInCharge } from '../../core/league/owner';
 import { cabinet, coachRanks, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
-import { endText } from '../../core/league/legacyReview';
+import { endText, gradeWord, type SeasonReview } from '../../core/league/legacyReview';
+import { DIFFICULTY } from '../../core/league/difficulty';
 import { agenda } from '../../core/league/agenda';
 import type { JobOffer } from '../../core/league/jobs';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -25,7 +26,7 @@ import { More, PageHeader, Section, Segmented, Statline } from '../components/ui
 import { TabBar, useQueryParam } from '../league/shared';
 import { slabVars } from '../teamColors';
 import { STRATEGY_META, capSeason, fmtGrade, shortSeason } from './common';
-import { SeasonReviewView, gradeWord } from './SeasonReview';
+import { SeasonReviewView } from './SeasonReview';
 import { usePulse, TrendMark } from './Pulse';
 import { seatOf } from './seat';
 import '../screens/start.css';
@@ -55,6 +56,8 @@ function Profile({ league }: { league: League }) {
   const k = useLeagueMemo(() => (me ? coachCareer(league, me, coyWinners(league)) : null), [league, me]);
   const fired = useMemo(() => agenda(league).find((i) => i.kind === 'fired'), [league]);
   const [tab, setTab] = useQueryParam<Tab>('tab', league.fired ? 'jobs' : 'profile', ['profile', 'milestones', 'jobs']);
+  // the record's poster on the first tab; on the others it's one line, so the tab starts on the first screen
+  const full = tab === (league.fired ? 'jobs' : 'profile');
   const offers = league.jobOffers?.season === league.season ? league.jobOffers.offers : [];
   const team = league.teams[league.userTid];
   const seasonsIn = seasonsInCharge(league);
@@ -72,9 +75,12 @@ function Profile({ league }: { league: League }) {
         </div>
       )}
 
-      <section className="slab fo-career-slab" aria-label="Your record">
+      <section className={`slab fo-career-slab${full ? '' : ' compact no-court'}`} aria-label="Your record">
         <div className="row between">
-          <span className="over">{league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`}</span>
+          <span className="over">
+            {league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`} ·{' '}
+            {DIFFICULTY[league.settings.difficulty].label}
+          </span>
           {me && k && k.seasons > 0 && (
             <Link to={`/league/history?view=coaches&coach=${me.id}`} className="card-link">
               Season by season
@@ -100,7 +106,7 @@ function Profile({ league }: { league: League }) {
         {k && <CareerLine k={k} />}
       </section>
 
-      {!league.fired && <JobLine league={league} />}
+      {!league.fired && full && <JobLine league={league} />}
 
       {offers.length > 0 && (
         <Section title={league.fired ? 'Teams that want you' : 'Teams calling'} right={<span className="tiny dim">Until the draft</span>}>
@@ -182,6 +188,7 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
           <span className="small">
             {latest.won}-{latest.lost}
             {verdict ? ` · owner's grade ${fmtGrade(verdict.grade)}, ${gradeWord(verdict.grade).toLowerCase()}` : ''}
+            {playedOn(latest) && ` · ${playedOn(latest)}`}
           </span>
           <ChevronRight size={18} className="fo-lc-review-go" aria-hidden="true" />
         </Link>
@@ -268,6 +275,7 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
                       <div className="lr-name">{seasonLabel(r.season)}</div>
                       <div className="lr-meta">
                         {r.won}-{r.lost} · {r.fired ? 'fired' : endText(r).toLowerCase()}
+                        {playedOn(r) && ` · ${playedOn(r)}`}
                       </div>
                     </div>
                     {v && <span className="num bold">{fmtGrade(v.grade)}</span>}
@@ -281,6 +289,9 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
     </>
   );
 }
+
+/** The difficulty a season was played on, as the career records it ("Hard", "Easy, job security off"); empty for a season from before it was kept. */
+const playedOn = (r: SeasonReview) => (r.difficulty ? `${DIFFICULTY[r.difficulty].label}${r.jobSecurity === false ? ', job security off' : ''}` : '');
 
 const bestText = (round: number) => (round === 5 ? 'Champion' : round === 4 ? 'Finals' : round === 3 ? 'Conf. finals' : round === 2 ? '2nd round' : '1st round');
 
