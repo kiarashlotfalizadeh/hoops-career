@@ -69,7 +69,7 @@ function coachedGame(l: League): LiveGame {
   return lg;
 }
 
-/** A live game coached with sets: a package and an after-timeout set, and timeouts to run it. */
+/** A live game coached with sets: a package and an after-timeout set, timeouts to run it, and a clear-out called from the bench for the go-to player. */
 function setsGame(l: League): LiveGame {
   const lg = goLive(l);
   const play = (n: number) => {
@@ -79,6 +79,7 @@ function setsGame(l: League): LiveGame {
   const t = lg.sim.baseTactics(lg.userSide);
   t.offense.sets = ['floppy', 'spain', 'hammer'];
   t.manage.ato = 'elevator';
+  t.manage.goTo = lg.sim.T[lg.userSide].on[0].pid;
   lg.setTactics(t);
   play(15);
   expect(lg.callTimeout()).toBe(true);
@@ -90,6 +91,9 @@ function setsGame(l: League): LiveGame {
   play(6);
   lg.simTo('half');
   play(9);
+  // (no timeout: shouted from the bench, for the closer the late call is built around)
+  expect(lg.callPlay('iso', lg.sim.closer(lg.sim.T[lg.userSide])!.pid)).toBe(true);
+  play(6);
   return lg;
 }
 
@@ -720,6 +724,11 @@ describe('live game', () => {
       expect(l.live!.ops.some((o) => o.op === 'play' && o.args.set === 'hammer')).toBe(true);
       expect(lg.calledPlay).toBeNull();
       expect(lg.logs.some((x) => x.off === lg.userSide && x.set?.id === 'hammer')).toBe(true);
+      // the clear-out is journaled and ran as his isolation
+      const iso = l.live!.ops.find((o) => o.op === 'play' && o.args.set === 'iso');
+      const ran = lg.logs.find((x) => x.off === lg.userSide && x.iso !== undefined);
+      expect(iso?.op === 'play' && iso.args.pid).toBe(ran?.iso);
+      expect(ran?.action).toBe('iso');
       await useStore.getState().flush();
       const back = (await loadLeague(l.id))!;
       useStore.getState().setLeague(back);
@@ -729,7 +738,9 @@ describe('live game', () => {
       expect(again.sim.result()).toEqual(lg.sim.result());
       expect(again.logs).toEqual(lg.logs);
       expect(again.sim.setReads(again.userSide)).toEqual(lg.sim.setReads(lg.userSide));
-      expect(again.commit(back)).toEqual(lg.commit(l));
+      const res = lg.commit(l);
+      expect(again.commit(back)).toEqual(res);
+      expect(res.moves?.find((m) => m.call?.id === 'iso')).toMatchObject({ kind: 'play', call: { pid: ran!.iso }, after: { us: { poss: 1 } } });
       fresh();
     }
 
@@ -986,6 +997,9 @@ describe('live game', () => {
       const w = JSON.parse(JSON.stringify(l)) as League;
       const g = w.games.find((r) => r.gid === res.gid)!;
       expect(migrate(structuredClone(w)).games.find((r) => r.gid === res.gid)!.sets).toEqual(res.sets);
+      // and its moves, the plays called among them
+      expect(res.moves!.filter((m) => m.kind === 'play').length).toBe(2);
+      expect(migrate(structuredClone(w)).games.find((r) => r.gid === res.gid)!.moves).toEqual(res.moves);
       Object.assign(g.sets![0], { id: 'flex' });
       expect(migrate(w).games.find((r) => r.gid === res.gid)!.sets).toBeUndefined();
     }

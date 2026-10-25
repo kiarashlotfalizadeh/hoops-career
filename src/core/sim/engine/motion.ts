@@ -95,17 +95,12 @@ export const motionMethods = {
           o += lk.beat;
           tags.push([lk.beatTag, lk.beat]);
         }
-        const sag = this.sagHelp(def, off, cutter, passer);
-        if (sag) {
-          o -= sag;
-          tags.push([this.sagKey, -sag]);
+        const roam = this.roamHelp(def, off, cutter, passer);
+        if (roam) {
+          o -= roam;
+          tags.push(['role_roam', -roam]);
         }
-        const body = this.body(def, cutter);
-        if (body) {
-          o -= lev(K.pd.body.drive);
-          tags.push(['pd_body', -lev(K.pd.body.drive)]);
-        }
-        this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags, ...body });
+        this.shoot(off, def, { shooter: cutter, zone: this.rimOr(cutter, 0.8), open: o, contest: this.rimContester(def, cd), assister: passer, finish: 'cut', tags });
         return 'done';
       }
       case 1: {
@@ -167,17 +162,12 @@ export const motionMethods = {
             ['spacing', this.spacingBonus(off) * 0.4],
           ];
           let o = dAdv * 0.35 - lev(help * 0.25) + this.spacingBonus(off) * 0.4;
-          const body = this.body(def, dr);
-          if (body) {
-            o -= lev(K.pd.body.drive);
-            tags.push(['pd_body', -lev(K.pd.body.drive)]);
+          const roam = this.roamHelp(def, off, dr, passer);
+          if (roam) {
+            o -= roam;
+            tags.push(['role_roam', -roam]);
           }
-          const sag = this.sagHelp(def, off, dr, passer);
-          if (sag) {
-            o -= sag;
-            tags.push([this.sagKey, -sag]);
-          }
-          this.shoot(off, def, { shooter: dr, zone: zoneS, open: o, contest: zoneS === 'rim' ? this.rimContester(def, d) : d, assister: passer, finish: 'spotup', tags, ...body });
+          this.shoot(off, def, { shooter: dr, zone: zoneS, open: o, contest: zoneS === 'rim' ? this.rimContester(def, d) : d, assister: passer, finish: 'spotup', tags });
         }
         return 'done';
       }

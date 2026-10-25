@@ -31,6 +31,7 @@ import {
 import { numberTeam } from './jerseys';
 import { logMove } from './transactions';
 import { money } from '../format';
+import { freezeSigningReason } from './books';
 
 export type Strategy = Team['strategy'];
 
@@ -978,7 +979,8 @@ export function claimBlockedReason(league: League, tid: number, p: Player): stri
   const room = cap.salaryCap - payroll(league, tid, league.season);
   if (salary > min + 10 && salary > room)
     return `His ${seasonLabel(league.season)} salary is ${money(salary)}: claiming him needs that much cap space (${room > 0 ? `${money(room)}` : 'none'} now).`;
-  return null;
+  // the owner's freeze: a claim takes on his whole contract, so only a minimum one
+  return tid === league.userTid ? freezeSigningReason(league, salary, min + 10) : null;
 }
 
 /** An AI team claims a player whose contract is worth having (positive trade value to it) and who'd make its roster: 64+ in value, or anyone when it's short of 13. */

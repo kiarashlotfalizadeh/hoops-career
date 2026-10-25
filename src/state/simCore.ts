@@ -39,8 +39,10 @@ export interface SimProgress {
 /**
  * Why a sim stopped short of its target: the user stopped it, mail that needs an answer (an
  * important message: the owner, a job offer, an offer sheet), a new staff call (see calls.ts: a
- * star hurt, the playoff odds gone, the trade deadline, the books), or the morning of one of his
- * biggest games. What only happened (a milestone, a streak, a front-page story) waits in the digest.
+ * star hurt, the playoff odds gone, the owner's floor, the trade deadline, a playoff series or
+ * play-in game starting, the books) or one still open as its due date nears, or the morning of one
+ * of his biggest games. What only happened (a milestone, a streak, a front-page story) waits in the
+ * digest.
  */
 export type SimStop = 'target' | 'stopped' | 'news' | 'call' | 'bigGame';
 
@@ -127,7 +129,8 @@ export interface SimHooks {
 /**
  * Play days until `target` (or a stop): the league in hand moves on in place. Under `stopOnNews`, a
  * sim stops early (except one of a set number of days) for what needs an answer: an important
- * unread message, a staff call that wasn't open when it started, or the morning of one of his
+ * unread message, a staff call that wasn't open when it started (or came due since: see
+ * openCallIds; each playoff series of his once, the morning it starts), or the morning of one of his
  * biggest games (with a setting of its own). Stopping early changes nothing that's played: the next
  * sim carries on from the same day.
  */
@@ -138,7 +141,7 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const bigNews = () => l.inbox.filter((m) => !m.read && m.important).length;
   const newsBefore = bigNews();
   const stops = l.settings.stopOnNews !== false && target.kind !== 'days';
-  // (a call open when it started, or settled, doesn't stop it again)
+  // (a call open when it started, or settled, doesn't stop it again; one coming due is a new id)
   const callsBefore = new Set(stops ? openCallIds(l) : []);
   // (a sim to the next game, or to a big night, stops there anyway)
   const bigGames = stops && loopSetting(l, 'stopForBigGames') && target.kind !== 'untilUserGame' && target.kind !== 'bigNight';

@@ -266,15 +266,19 @@ export const PROJECT_HOME_GAMES = 4;
  * revenue a home game has brought so far, or before PROJECT_HOME_GAMES of them an estimate of it;
  * the national money, payroll, budgets and operations every game), plus revenue sharing, less the
  * luxury tax still to come at the end of the regular season or, under the line, plus a share of the
- * league's tax pot (every team's tax at today's payrolls). Between seasons it projects next season's
- * books in full; during the postseason the books are closed (playoff gates aren't counted, so it errs
- * low). Reads the league only.
+ * league's tax pot (every team's tax at today's payrolls): the regular season's close, what the
+ * owner's review judges (see books.ts). Between seasons it projects next season's close in full;
+ * during the postseason the books have closed, and it is the close itself (playoff gates come after
+ * it). Reads the league only.
  */
 export function seasonEndCash(league: League, tid: number): { end: number; tax: number; left: number } {
   const team = league.teams[tid];
   const inSeason = league.phase === 'preseason' || league.phase === 'regular';
   const between = ['draftLottery', 'draft', 'resign', 'freeAgency'].includes(league.phase);
-  if (!inSeason && !between) return { end: team.cash, tax: 0, left: 0 };
+  if (!inSeason && !between) {
+    const ts = curTeamSeason(league, tid);
+    return { end: ts.closeCash ?? team.cash, tax: ts.payroll ? teamTaxBill(league, tid, ts.payroll) : 0, left: 0 };
+  }
   const s = between ? league.season + 1 : league.season;
   const scale = revenueScale(league, s);
   const national = (NATIONAL_REVENUE * scale) / 82;

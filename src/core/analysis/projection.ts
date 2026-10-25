@@ -8,8 +8,14 @@ import type { GameSim } from '../sim/engine';
 import { courtPoints } from '../league/difficulty';
 import { planFor } from '../league/gamePlans';
 
-/** Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated seasons, r ≈ 0.8). */
-export const TALENT_NET = 1.7;
+/**
+ * Net rating per point of a rotation's minutes-weighted OVR above the league's (fitted over simulated
+ * seasons, r ≈ 0.8). Six real-league seasons measured 2.0 before the big decisions were made to matter
+ * and 2.2 after (a decision's open looks count by who takes them, so skill tells a little more), from
+ * the 1.7 first fitted; at 2.2 the owner's win targets ran two wins over what the league won (his
+ * floors and the payroll's raise only push them up), so it sits at 2.0.
+ */
+export const TALENT_NET = 2;
 /** Games of this season's net rating that weigh as much as the talent prior (the blend predicts a season's final net best). */
 export const PRIOR_GAMES = 15;
 /** Points a home team gains in the engine (measured over 2,460 simulated games: 1.8, a 55% home win rate). */

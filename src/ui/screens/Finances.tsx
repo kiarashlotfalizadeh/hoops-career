@@ -101,14 +101,17 @@ function Overview({ team }: { team: Team }) {
               {money(team.cash)}
             </div>
           </div>
-          {/* where the books close: what the owner's review reads */}
-          {end.left > 0 && (
+          {/* where the regular season's books close, tax paid: the one figure the owner's review reads (the playoff gates come after) */}
+          {(end.left > 0 || ts.closeCash !== undefined) && (
             <div className="right">
-              <div className="over">{isOffseason(league) ? `End of ${shortSeason(league.season + 1)}` : "Season's end"}</div>
+              <div className="over">{isOffseason(league) ? `Books close ${shortSeason(league.season + 1)}` : end.left > 0 ? 'Books close' : 'Books closed'}</div>
               <div className="fo-pay-v2" style={{ color: end.end < 0 ? 'var(--bad)' : undefined }}>
                 {money(end.end)}
               </div>
-              <div className="tiny dim">projected{end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}</div>
+              <div className="tiny dim">
+                {end.left > 0 ? 'projected' : 'the owner reads this'}
+                {end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}
+              </div>
             </div>
           )}
         </div>
@@ -242,7 +245,7 @@ function BudgetTab({ team }: { team: Team }) {
   const set = (fn: (t: Team) => void) => !fired && edit((l) => fn(l.teams[l.userTid]));
   // the books in the red: the owner's step, and under a freeze the budgets go no higher than the standard
   const books = booksOf(league);
-  const frozen = books?.stage === 'freeze';
+  const frozen = books?.stage === 'freeze' || books?.stage === 'final';
   const rank = (k: BudgetKey) => 1 + league.teams.filter((t) => t.budget[k] > team.budget[k]).length;
   const avg = (k: BudgetKey) => league.teams.reduce((a, t) => a + t.budget[k], 0) / league.teams.length;
   const cost = (lvl: number) => budgetCostPerSeason(league, lvl);
@@ -314,12 +317,12 @@ function BudgetTab({ team }: { team: Team }) {
       )}
       {books && (
         <Callout tone="bad" icon={<TriangleAlert size={18} className="bad" />}>
-          <b>{frozen ? 'The budget is frozen.' : books.stage === 'ultimatum' ? "The owner's ultimatum." : "You're in the red."}</b> {money(-team.cash)} in the red.{' '}
+          <b>{frozen ? 'The budget is frozen.' : books.stage === 'ultimatum' ? "The owner's ultimatum." : 'The books are heading into the red.'}</b>{' '}
           {frozen
-            ? `The staff and facilities budgets stay at the league standard (${FROZEN_BUDGET}) or under, until the books are back in the black.`
+            ? `The staff and facilities budgets stay at the league standard (${FROZEN_BUDGET}) or under, until a season's books close in the black.`
             : books.stage === 'ultimatum'
-              ? 'Back in the black by the next review, or he freezes the budget.'
-              : "Still in the red at the season's review, and he gives you an ultimatum."}{' '}
+              ? "Back in the black when the next season's books close, or he freezes the budget."
+              : "Still in the red when the regular season's books close, and he gives you an ultimatum."}{' '}
           <Link to="/office/owner" className="bold accent-text">
             Owner
           </Link>

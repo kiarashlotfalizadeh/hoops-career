@@ -1,9 +1,8 @@
-// How to guard one opponent's players and which of their defenders to attack: the staff's suggested
-// scouting-report instruction for each of their top players (go under, top-lock, sag off, get
-// physical) and the weakest perimeter defender in their rotation, each with the numbers behind it
-// (their games where there are enough, their ratings otherwise).
+// Their players as the matchup planner reads them (each one's shooting numbers, from his games where
+// there are enough, his ratings otherwise) and which of their defenders to attack: the weakest
+// perimeter defender in their rotation, with the numbers behind it.
 
-import type { League, Player, PlayerDefense, PlayerStats, RatingKey } from '../types';
+import type { League, Player, PlayerStats, RatingKey } from '../types';
 import { attrDisplay, composites, RATING_META } from '../ratings';
 import { seasonTotals } from '../league/helpers';
 import { projectedRotation, SCOUT_MIN_GAMES } from './scouting';
@@ -23,20 +22,6 @@ export interface GuardLine {
   /** Share of his shots at the rim. */
   rimShare: number;
 }
-
-export interface GuardAdvice {
-  pid: number;
-  /** The instruction the staff suggests, if one clearly fits. */
-  suggest?: PlayerDefense;
-  /** Why, in a few words with the numbers ("29% from three on 2.1 a game, runs their ball screens"). */
-  why?: string;
-  line: GuardLine;
-}
-
-const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
-const per = (v: number) => v.toFixed(1);
-/** Threes a game under which his percentage says nothing ("100.0% from three on 0.1 a game"). */
-const FEW_THREES = 0.5;
 
 /** His numbers this season with his team (five games or more), else last season's, else none. */
 export function guardLine(league: League, p: Player): GuardLine {
@@ -68,63 +53,9 @@ export function ratingText(p: Player, key: RatingKey): string {
   return `${label.replace(/^[A-Z](?=[a-z])/, (ch) => ch.toLowerCase())} ${attrDisplay(p.ratings[key])}`;
 }
 
-/**
- * The staff's read on guarding one player: going under screens on a ball handler who can't shoot
- * off the dribble, top-locking a volume shooter who can't put it on the floor, getting physical with
- * a post scorer or driver who misses his free throws, sagging off a rotation player who doesn't
- * shoot threes. None when nothing clearly fits.
- */
-export function guardAdvice(league: League, p: Player): GuardAdvice {
-  const line = guardLine(league, p);
-  const c = composites(p.ratings);
-  const games = line.source !== 'ratings';
-  // his threes as his games show them: a percentage only on enough of them to mean something, else how many he took
-  const few = games && line.tpa < FEW_THREES;
-  const taken = Math.round(line.tpa * line.gp);
-  // (last season's numbers say so, as the guard planner's line does)
-  const when = line.source === 'last' ? ' last season' : '';
-  // (the reads weigh the engine's blends; what they quote is his ratings, as his Ratings tab shows them)
-  const shoots = !games
-    ? ratingText(p, 'tp')
-    : !few
-      ? `${pct1(line.tpPct)} from three on ${per(line.tpa)} a game${when}`
-      : `${taken ? `${taken} three${taken === 1 ? '' : 's'}` : 'no threes'} in his ${line.gp} games${when}`;
-  // a ball handler who runs their screens and is no threat to pull up (about the bottom third of
-  // pull-up shooters on the ratings' 40-99 scale)
-  if (c.pnrHandle >= 60 && c.pu3 < 45 && (!games || line.tpa < 3 || line.tpPct < 0.33))
-    return {
-      pid: p.pid,
-      suggest: 'under',
-      why: `Runs ball screens (${ratingText(p, 'hnd')}) but is no threat to pull up (${shoots}).`,
-      line,
-    };
-  // a volume shooter who rarely beats his man off the dribble (the bottom quarter in creation)
-  if (c.c3 >= 66 && c.create < 47 && (!games || (line.tpa >= 4 && line.tpPct >= 0.36)))
-    return { pid: p.pid, suggest: 'tight', why: `A shooter (${shoots}) who rarely beats his man off the dribble (${ratingText(p, 'hnd')}).`, line };
-  // a post scorer or driver who misses free throws (before sagging off him: his scoring is the threat)
-  const ftShown = games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? `${pct1(line.ftPct)} from the line on ${per(line.fta)} a game${when}` : ratingText(p, 'ft');
-  const ftPoor = games && Number.isFinite(line.ftPct) && line.fta >= 1.5 ? line.ftPct < 0.68 : p.ratings.ft < 55;
-  if ((c.postScore >= 62 || c.rim >= 66) && ftPoor)
-    return {
-      pid: p.pid,
-      suggest: 'body',
-      why: `Scores inside (${ratingText(p, c.postScore >= 62 ? 'post' : 'ins')}) but misses free throws (${ftShown}).`,
-      line,
-    };
-  // a rotation player who doesn't shoot threes (by his games; by his ratings, about the bottom sixth)
-  if (games ? c.c3 < 45 && (line.tpa < 1 || line.tpPct < 0.28) : c.c3 < 38)
-    return {
-      pid: p.pid,
-      suggest: 'sag',
-      why: !games ? `Can't shoot from three (${ratingText(p, 'tp')}).` : few && taken ? `Rarely shoots threes (${shoots}).` : `Doesn't shoot threes (${shoots}).`,
-      line,
-    };
-  return { pid: p.pid, line };
-}
-
-/** Their projected top eight, each with the staff's read on guarding him (`out`: players who sit tonight). */
-export function guardingPlan(league: League, tid: number, out?: Set<number>): GuardAdvice[] {
-  return projectedRotation(league, tid, 8, out).map((p) => guardAdvice(league, p));
+/** Their projected top eight, each with his numbers (`out`: players who sit tonight). */
+export function guardingPlan(league: League, tid: number, out?: Set<number>): GuardLine[] {
+  return projectedRotation(league, tid, 8, out).map((p) => guardLine(league, p));
 }
 
 export interface HuntPick {

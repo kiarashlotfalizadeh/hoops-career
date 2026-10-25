@@ -4,16 +4,17 @@
 // moves it would make for the next period, what's deciding the game), who's tired or in foul trouble
 // going into it and the keys; the rest of the game so far (the score by quarter and the scorers, the
 // battle of play types, the teams side by side, both coaches' moves) sits behind one switch under it.
-// The huddle is the short version for a timeout: who to sub, the staff's top move and the play out of
-// it. The next period, or the game, goes on from the bench bar.
+// The huddle is the short version for a timeout: late in the game the play call first (built around
+// your closer), then who to sub and the staff's top move; the last possession of a close game stops for
+// the same play call without one. The next period, or the game, goes on from the bench bar.
 import { useMemo, useState } from 'react';
-import { FastForward } from 'lucide-react';
-import type { CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
+import { Check, FastForward, Timer } from 'lucide-react';
+import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
 import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
-import { MAX_SETS, SETS, SET_IDS, atoLabel, bestFor, fitPlayer, setFit, setLabel, setPackage, type SetId } from '../../core/sim/sets';
+import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
 import { CLUTCH_SEC } from '../../state/live';
 import { zScore } from '../../core/analysis/playTypes';
 import { gameTime, plural } from '../../core/format';
@@ -21,12 +22,13 @@ import type { GameKey } from '../../core/analysis/keys';
 import { Section, Segmented } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { KeysLive } from '../components/GameKeys';
-import { periodLabel } from '../stats';
+import { fmtClock, periodLabel } from '../stats';
 import { foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
+import { playOptions, readStatus, type PlayOption } from './plays';
 
 interface Common {
   league: League;
@@ -298,64 +300,147 @@ export function PeriodReport(
   );
 }
 
-/** Plays the late-game huddle offers: the set package's, else the sets that fit the five on the floor best. */
-const CALL_MAX = 3;
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/**
- * The plays you can call out of a late-game timeout, each for the one of your five it fits best:
- * your set package when you have one, else the sets the five on the floor fit best. The call runs
- * on your next half-court trip (in place of the after-timeout play).
- */
-function playOptions(league: League, five: number[], tactics: Tactics): { id: SetId; pid: number; fit: number }[] {
-  const fp = five.flatMap((pid) => (league.players[pid] ? [fitPlayer(league.players[pid], tactics)] : []));
-  if (fp.length < 5) return [];
-  const pkg = setPackage(tactics);
-  const rows = (pkg.length ? pkg : SET_IDS).map((id) => {
-    const best = bestFor(id, fp)!;
-    return { id, pid: best.pid, fit: setFit(id, best) };
-  });
-  return rows.sort((a, b) => b.fit - a.fit).slice(0, pkg.length ? MAX_SETS : CALL_MAX);
+/** What one of the late plays goes for, in a line: an isolation's matchup, a set's look (and how far their defense has read it tonight). */
+function playLook(p: PlayOption, view: Drawn, side: 0 | 1, names: (pid: number) => string, defenderOf: (pid: number) => number | undefined): string {
+  if (p.id === 'iso') {
+    const d = defenderOf(p.pid);
+    return d !== undefined ? `One-on-one against ${names(d)}` : cap(CLEAR_OUT.look);
+  }
+  const r = readStatus(view.sides[side], p.id);
+  return `${r.runs ? `${r.text} · ` : ''}${cap(SETS[p.id].look)}`;
 }
 
-/** Your timeout: the staff's read and top move, who to sub, the keys and the play out of it (the score and the clock are on the scorebug). Resume is on the bench bar. */
-export function Huddle(props: Common & { called: { set: SetId; pid: number | null } | null; onCall: (set: SetId, pid: number) => void }) {
-  const { view, side, teams, tactics, names, keys, assistant, read, called, onCall } = props;
+/**
+ * The late play call, at the top of a late huddle and of the last possession: built around your closer
+ * (who he is, in a line), his isolation and his sets first, each play saying who it's for, the one
+ * called lit; under it, when it runs.
+ */
+function PlayCall({
+  plays,
+  closer,
+  view,
+  side,
+  tactics,
+  names,
+  called,
+  onCall,
+  busy,
+  defenderOf,
+  foot,
+}: Pick<Common, 'view' | 'side' | 'tactics' | 'names' | 'busy'> & {
+  plays: PlayOption[];
+  closer: number;
+  called: { set: CallId; pid: number | null } | null;
+  onCall: (id: CallId, pid: number) => void;
+  defenderOf: (pid: number) => number | undefined;
+  foot: string;
+}) {
+  const goTo = tactics.manage.goTo;
+  const who =
+    goTo === closer
+      ? `${names(closer)} is your go-to.`
+      : goTo != null
+        ? `${names(goTo)} sits: ${names(closer)} is the best closer out there.`
+        : `No go-to set: ${names(closer)} is the best closer out there.`;
+  return (
+    <Section title="Call the play">
+      <div className="small dim2 lv-pc-who">{who}</div>
+      <div className="card flush list" role="group" aria-label="Call the play">
+        {plays.map((p) => {
+          const on = called?.set === p.id && (called.pid === null || called.pid === p.pid);
+          return (
+            <button key={`${p.id}-${p.pid}`} className={`lv-pc${on ? ' on' : ''}`} aria-pressed={on} disabled={busy} onClick={() => onCall(p.id, p.pid)}>
+              <span className="lv-pc-mark" aria-hidden="true">
+                {on && <Check size={14} strokeWidth={3} />}
+              </span>
+              <span className="grow">
+                <span className="lr-name">{callLabel(p.id, names(p.pid))}</span>
+                <span className="lr-meta ellipsis">{playLook(p, view, side, names, defenderOf)}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="small dim lv-pc-foot">{foot}</div>
+    </Section>
+  );
+}
+
+/**
+ * Your timeout ('timeout'): late in the game the play call first, built around your closer; then the
+ * staff's read and top move, who to sub and the keys (earlier, the play out of it at the foot). The last
+ * possession ('last': the game stopped for it, no timeout taken): the situation, the play call (shouted
+ * from the bench), a timeout to take if one is left, and who to sub. The score and the clock are on the
+ * scorebug; Resume is on the bench bar.
+ */
+export function Huddle(
+  props: Common & {
+    kind: 'timeout' | 'last';
+    called: { set: CallId; pid: number | null } | null;
+    onCall: (id: CallId, pid: number) => void;
+    /** Who the late call is built around (GameSim.closer): your go-to while he's on the floor, else the best closer out there. */
+    closer?: number;
+    /** Their defender on one of yours. */
+    defenderOf: (pid: number) => number | undefined;
+    /** At the last possession, with a timeout left: take it (the huddle opens, the call kept). */
+    onTimeout?: () => void;
+  },
+) {
+  const { kind, view, side, teams, tactics, names, keys, assistant, read, called, closer, onTimeout } = props;
   const deciding = useDeciding(props.league, view, tactics).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
   // late in the game the play out of the timeout is yours to call
-  const late = view.q >= 4 && view.clock <= CLUTCH_SEC;
+  const late = kind === 'last' || (view.q >= 4 && view.clock <= CLUTCH_SEC);
   const five = view.sides[side].on;
-  const plays = useMemo(() => (late ? playOptions(props.league, five, tactics) : []), [late, props.league, five, tactics]);
+  const plays = useMemo(() => (late && closer !== undefined ? playOptions(props.league, five, tactics, closer) : []), [late, props.league, five, tactics, closer]);
+  const callName = called ? callLabel(called.set, called.pid != null ? names(called.pid) : undefined) : '';
+  const foot =
+    kind === 'last'
+      ? called
+        ? `Called: ${callName}.`
+        : `No call: they run the offense, through ${closer !== undefined ? names(closer) : 'your closer'}.`
+      : called
+        ? `Called: ${callName}, on your next trip up the floor.`
+        : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play (${atoText})` : ''}.`;
+  const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} /> : null;
+  if (kind === 'last') {
+    const me = view.sides[side];
+    const margin = me.score - view.sides[1 - side].score;
+    return (
+      <div className="lv-rep huddle">
+        <div className="lv-rep-head">
+          <div className="lv-rep-kicker">
+            <span>Last possession</span>
+            {onTimeout && (
+              <button className="lv-rep-skip" onClick={onTimeout} disabled={props.busy}>
+                <Timer size={14} aria-hidden="true" /> Timeout
+              </button>
+            )}
+          </div>
+          <div className="small dim2">
+            {margin === 0 ? `Tied at ${me.score}` : `Down ${-margin}`}, {fmtClock(view.clock)} left, your ball.{' '}
+            {onTimeout ? 'A timeout rests legs and sets the play up, but gives their coach a chance to adjust.' : 'No timeouts left: you call it from the bench.'}
+          </div>
+        </div>
+        {call}
+        <Trouble {...props} huddle />
+      </div>
+    );
+  }
   return (
     <div className="lv-rep huddle">
       <div className="lv-rep-head">
         <div className="lv-rep-kicker">Timeout {teams[side].abbrev}</div>
       </div>
+      {call}
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
       <Decisions {...props} max={2} deciding={deciding} />
       <Trouble {...props} huddle />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} compact />}
-      {plays.length > 0 && (
-        <Section title="Call the play">
-          <div className="lv-calls" role="group" aria-label="Call a play for the next trip">
-            {plays.map((p) => {
-              const on = called?.set === p.id;
-              return (
-                <button key={p.id} className={`btn sm${on ? ' primary' : ''}`} aria-pressed={on} disabled={props.busy} onClick={() => onCall(p.id, p.pid)}>
-                  {setLabel(p.id, names(p.pid))}
-                </button>
-              );
-            })}
-          </div>
-          <div className="small dim">
-            {called
-              ? `Called: ${called.pid != null ? setLabel(called.set, names(called.pid)) : SETS[called.set].name}, on your next trip up the floor.`
-              : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play (${atoText})` : ''}.`}
-          </div>
-        </Section>
-      )}
-      {plays.length === 0 && (
+      {!call && (
         <Section title="Out of the timeout">
           <div className="small">
             {atoText ? (

@@ -1,6 +1,6 @@
 // The engine's tuning constants (K): shooting by zone, the base rates of turnovers, fouls, boards and
 // run-outs, time, fatigue and injuries, and the size of every tactical edge (coverages, zones and junk
-// defenses, pressure, the press, deny and double, guarding instructions, hunting, the late-game fouls),
+// defenses, pressure, the press, the double, hunting, the late-game fouls),
 // each with what it is and how it was sized; the tactical leverage those edges are played at
 // (K.tacticEdge, with lev and the helpers after K that apply it); and the diagnostics the
 // calibration scripts read.
@@ -8,7 +8,7 @@
 import type { DefScheme, ShotZone } from '../../types';
 
 export const K = {
-  zoneBase: { rim: 0.629, paint: 0.451, mid: 0.414, c3: 0.377, ab3: 0.341 } as Record<ShotZone, number>,
+  zoneBase: { rim: 0.624, paint: 0.447, mid: 0.411, c3: 0.371, ab3: 0.336 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
   foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
@@ -81,13 +81,10 @@ export const K = {
   actCap: 0.68,
   /** Assist share of teammates' baskets past which a passer starts looking for his own shot. */
   astCap: 0.45,
-  /** Star plan "deny": his share of actions, the advantage he loses catching it late and further out, extra drain on his defender. */
-  denyTouch: 0.62,
-  denyCatch: 0.3,
-  denyDrain: 1.3,
-  /** A junk defense's chaser, with a zone behind him, denies harder than a man-to-man deny: his man's share of actions, and the advantage he loses on the catch. */
+  /** A junk defense's chaser face-guarding his man: his share of actions, the advantage he loses catching it late and further out, and the chaser's extra drain. */
   chaseTouch: 0.4,
   chaseCatch: 0.45,
+  chaseDrain: 1.3,
   /**
    * ...and the usage share past which the defense loads up on him comes this much sooner (see
    * usageWeight): 0.14 when the damping past it was 5.2. With the steeper damping past useLevel a box-and-one
@@ -162,7 +159,18 @@ export const K = {
   feel: 0.22,
   feelGap: 3,
   /** Full-court press: turnover rate against average ball handlers. */
-  pressTO: 0.06,
+  pressTO: 0.012,
+  /**
+   * The press against the handlers bringing it up: their ball security and passing over the league's
+   * (`sec`, the two most secure handlers' and the unit's passing) against the trappers' hands and feet
+   * over the league's (`trap`), a step per `per` points. The turnovers it forces fall by `to` a step,
+   * and it's broken (a run-out) `broken` of the time at even and `brokenAdv` more a step; the pressing
+   * side's legs go `drain` faster all game (on top of the press's drain on both). It had read the two
+   * against each other, where the league's handlers stand 15 points over its trappers: the press
+   * forced its floor of turnovers against almost everyone. Now it's about even blind and two points
+   * a game either way against the loosest and the most secure handlers (with K.pressTO's average 1.2%).
+   */
+  pressAdv: { sec: 65, trap: 50, per: 8, to: 0.025, broken: 0.4, brokenAdv: 0.08, drain: 1.1 },
   /**
    * Blitz: the trap's turnover rate, a flat part and a part per unit of the trappers' hands and length
    * (pnr.ts; about 0.24 for the league's average pair, 0.34 for the quickest), and the 4-on-3's
@@ -172,8 +180,8 @@ export const K = {
    * ice and pays the quickest hands about as much (paired preset runs, every team's offense).
    */
   blitzTO: 0,
-  blitzHands: 0.24,
-  blitz4v3: 0.39,
+  blitzHands: 0.18,
+  blitz4v3: 0.75,
   /** Field-goal percentage a fully physical defense takes off every shot. */
   physContest: 0.01,
   /**
@@ -187,7 +195,7 @@ export const K = {
    * edge at which its tag counts a unit of it at half of K.advPts (see blowByTag).
    */
   blowBy: 0.15,
-  blowByConvex: 0.48,
+  blowByConvex: 0.62,
   blowBySat: 2,
   /** Expected points of one unit of handler advantage per action, for impact tags. */
   advPts: { pnr: 0.04, handoff: 0.04, iso: 0.04, post: 0.04 },
@@ -232,18 +240,20 @@ export const K = {
    * (weight multiplier, openness, the corner's share of them); and its offensive-board multiplier
    * and tag. The 2-3 walls off the paint and leaves threes; the 3-2's three on the arc close out
    * harder than man-to-man does (negative openness: the ball still swings, into contested threes)
-   * but leave the paint, the post, cutters and the glass softer.
+   * but leave the paint, the post, cutters and the glass softer. The 2-3's walls and the 3-2's
+   * closeouts were made bigger (2026-10) as their threes came to count by who takes them (K.matchup):
+   * the 2-3 is about +1.8 a game against the league's worst-shooting fives and −3.8 against the best.
    */
   zone: {
     zone23: {
-      roll: 0.3,
-      pnr: 0.3,
-      pnrTag: 0.3 * 0.1,
-      iso: 0.35,
-      isoTag: 0.035,
-      post: 0.55,
-      postTag: 0.055,
-      drive: 0.3,
+      roll: 0.5,
+      pnr: 0.6,
+      pnrTag: 0.6 * 0.1,
+      iso: 0.65,
+      isoTag: 0.065,
+      post: 0.9,
+      postTag: 0.09,
+      drive: 0.6,
       kick: 0.2,
       pop: 0.15,
       handoff: 0.1,
@@ -264,13 +274,13 @@ export const K = {
       post: 0,
       postTag: 0,
       drive: 0.05,
-      kick: -0.6,
-      pop: -0.4,
-      handoff: -0.5,
+      kick: -0.8,
+      pop: -0.5,
+      handoff: -0.6,
       cutW: 0.2,
       cut: 0.06,
       swingW: 1.5,
-      swing: -0.6,
+      swing: -0.8,
       corner: 0.15,
       glass: 1.22,
       glassTag: 0.22,
@@ -320,27 +330,16 @@ export const K = {
     },
   } as Record<Exclude<DefScheme, 'man'>, ZoneK>,
   /**
-   * Top-locking a player off the ball, by a junk defense's chaser or a "tight" instruction (on top
-   * of the deny's fewer touches and late catches for a chased player): his weight as a kick-out
-   * target, the openness taken off his catch-and-shoot threes, the edge lost coming off screens and
-   * handoffs, and what a defender caught high gives back on his drives on the catch, his curls and
-   * his back-cuts (the openness, and his cut weight multiplier).
+   * A junk defense's chaser top-locking his man off the ball (on top of the fewer touches and late
+   * catches): his weight as a kick-out target, the openness taken off his catch-and-shoot threes, the
+   * edge lost coming off screens and handoffs, and what a defender caught high gives back on his
+   * drives on the catch, his curls and his back-cuts (the openness, and his cut weight multiplier).
+   * (Guarding instructions on one player, top-locking, going under, sagging and getting physical,
+   * were cut in 2026-10 with the star plan's deny: over the real league each was worth under a
+   * point a game against every opponent, and they crowded the plan's real decisions.)
    */
   lock: {
     box: { kickW: 0.45, c3: 0.4, offScreen: 0.3, beat: 0.3, cutW: 1.6 },
-    tight: { kickW: 0.6, c3: 0.3, offScreen: 0.25, beat: 0.3, cutW: 1.4 },
-  },
-  /**
-   * Scouting-report instructions on one player: going under screens on him (openness his pull-ups
-   * gain, the edge his drives off the screen lose, the roll and pop openness the screener's defender
-   * takes away by staying home); sagging off him (rim openness taken off teammates' drives, cuts and
-   * rolls while he's off the ball, openness his own catch-and-shoot looks gain); getting physical
-   * with him (the edge his post-ups and drives lose, and his shooting and reach-in fouls drawn).
-   */
-  pd: {
-    under: { pull: 0.4, drive: 0.5, roll: 0.25 },
-    sag: { help: 0.2, kick: 0.6 },
-    body: { post: 0.35, drive: 0.25, foul: 1.35 },
   },
   /**
    * Hunting one defender: how much more often the player he guards gets the isolations, post-ups and
@@ -362,10 +361,10 @@ export const K = {
    * choice gets from fitting (or not fitting) the opponent and its own personnel is this many times
    * the size written where it's set (the tables above and the numbers in the actions are its 1x
    * sizes; see lev and levW): the pick-and-roll coverages, switching, the zones and junk defenses,
-   * help, ball pressure and physicality, the press, deny and double, the guarding instructions,
+   * help, ball pressure and physicality, the press, the double,
    * hunting, sets and the defense's reads of them, crashing the glass and getting back. Where twice
    * the edge would have made a blind extreme a win against average personnel, its cost grows with
-   * the leverage too (tradeOff); a guarding instruction's give-back grows a little less (giftExp);
+   * the leverage too (tradeOff); a roamer's give-back grows a little less (giftExp);
    * and a few base rates are recentered (recenter). All of them are nothing at 1, where the engine
    * plays exactly as it did before the change. scripts/tactic-impact.ts measures aimed choices at
    * 1x and at this leverage, scripts/tactic-sweep.ts the blind extremes.
@@ -383,7 +382,60 @@ export const K = {
    * 1.5 times; and the turnovers pressure forces lean the same way, by that difference over sec.to
    * (see toChance). Pressure is the call against loose handlers, not against everyone.
    */
-  tradeOff: { pressure: 0.27, blitz: 0.36, crash: 1.5, sec: { avg: 55, open: 20, to: 70 } },
+  tradeOff: { pressure: 0.45, blitz: 0.36, crash: 1.5, sec: { avg: 56, open: 8, to: 15 } },
+  /**
+   * The ball-screen coverages' room (openness, at 1x) on the pick-and-roll's looks: drop's big sags
+   * (the handler's pull-ups open, his drive and the roll taken away, more so by a rim protector:
+   * a step of `rim` per `rimProt` of his over 50; a popping screener open), hedge's show (the
+   * handler stalled, the roll and the rotation's kick-out left open as the big recovers), ice's
+   * sideline (the middle's pull-ups, drives and rolls taken away, the weak side's corner given up),
+   * the switch's scramble (the edge a handler gets on the switched big, on top of the matchup, and
+   * `speed` more per 50 of quickness he has on him) and the slip (a screener who rolls well slips it
+   * before the switch `slip` of the time, a roll at `slipOpen`: a switch had killed the roll outright,
+   * and against ice switching everything had become a free point a game).
+   * The blitz's and a star double's trap: the handler's passing over 55 that's a step of escape (the
+   * turnovers it forces and the 4-on-3 behind it). `help`: how far the help comes at a setting
+   * (help's room on drives and kick-outs, and its pull on the rim's contests, grow with it).
+   */
+  cov: {
+    drop: { pull: 0.7, rim: 0.7, rimProt: 200, roll: 0.6, pop: 0.7 },
+    hedge: { stall: 0.4, roll: 0.45, kick: 0.35 },
+    ice: { pull: 0.35, rim: 0.3, roll: 0.1, kick: 0.42 },
+    switch: { scramble: 0.2, speed: 0.5, slip: 0.15, slipOpen: 0.3 },
+    blitz: { escape: 50 },
+    double: { escape: 40 },
+    help: 2,
+  },
+  /**
+   * The big decisions' matchups: what makes the scheme, the ball-screen coverage, help, the
+   * double-team and ball pressure worth points against one opponent and costly against another. A
+   * look one of them gives up counts by who gets it: on top of the room the decision leaves, the
+   * shooter gets `open[family]` more openness per step of his skill for the shot over the league's
+   * (against `avg`, the attempt-weighted average for it, in steps of `per`, about its spread; at most
+   * `cap` steps either way; less for a worse shooter, down to `floor` of the room for one who can't
+   * shoot at all; a half-court look only, not a putback or a run-out). So a drop's pull-up room is a gift to an elite pull-up shooter and none to one who
+   * can't shoot, and a zone's open threes sink a shooting team and not one that can't make them.
+   * Before it every look counted the same whoever took it, and over the real league each of these
+   * choices varied by under 0.7 points a game from one opponent to the next (the 2-3 zone's by 0.03):
+   * nothing for scouting to find. `family`: the impact tags each family's looks carry.
+   */
+  matchup: {
+    avg: { rim: 52, paint: 55, mid: 59, c3: 60, pu3: 59 },
+    per: 12,
+    cap: 1.5,
+    open: { coverage: 1.4, zone: 1.1, help: 1.4, double: 1.3, pressure: 0.6 },
+    /** The share of a decision's room the worst shooter keeps (an open look still beats a contested one for him). */
+    floor: 0.25,
+    /** Each family's average taker of its looks against the league's average taker of the shot, so the term is even for him (measured in real-league games). */
+    center: { coverage: 2, zone: 0, help: -3, double: -2, pressure: 0 },
+    family: {
+      // (a switch's mismatches are the off-ball switching's too, a Fine-tune setting: not one of these)
+      coverage: ['drop_', 'ice_', 'hedge_', 'blitz_', 'switch_slip'],
+      zone: ['zone_', 'box_'],
+      help: ['help_'],
+      double: ['double_', 'star_double'],
+    },
+  },
   /**
    * Ball pressure under 50: the share of the turnover rate's swing a containing defense gives up
    * (above 50 an average lineup, ST.pressQ 50, forces half of it). At the full swing, dropping from 50
@@ -397,9 +449,20 @@ export const K = {
    * (K.recenter.tov): at 0.32 pressing loose handlers at 85 was worth nothing at 2x (it had been +1.2).
    * Then cut to 0.6 of that with the costs that pay for it (blowByConvex, tradeOff.pressure and
    * .blitz): pressure and the blitz are the same trade at a realistic size, as the league's forced
-   * turnovers spread about as the NBA's do (top team about 1.3 times the average, not 1.5).
+   * turnovers spread about as the NBA's do (top team about 1.3 times the average, not 1.5). Raised
+   * again (0.24 → 0.34, with blowByConvex and tradeOff.pressure, and the trade leaning on the offense's
+   * ball security, K.tradeOff.sec) when ball pressure was made a big decision: +1.9 a game against the
+   * loosest-handling fives, −2.2 against the most secure, about even blind.
    */
-  pressureTO: 0.24,
+  pressureTO: 0.34,
+  /**
+   * What the "why" tags of the turnovers pressure forces (or gives back) count of their own estimate:
+   * with them leaning on the offense's ball security (K.tradeOff.sec), turning the AI's pressure off in
+   * engineBalance's games measured -1.7 a game where the full tags said -2.0 more than that (a
+   * turnover's tagged points show about three quarters in the margin, as crashing's boards show
+   * part of theirs: see K.crashTag).
+   */
+  pressureTag: 0.75,
   /** How much of K.pressureTO's swing a pressing unit gets for its hands and feet (ST.pressQ): half at 50, a step per `per` points, within [min, max]. */
   pressQ: { per: 16, min: 0.15, max: 1.2 },
   /**
@@ -407,19 +470,17 @@ export const K = {
    * by it), and the share secure handlers save per unit of their edge on the trap: before both,
    * pressing secure handlers after makes was a win at 2x (about +0.9 per 100) its tags called a loss.
    */
-  pressTime: { min: 3, max: 6, beat: 0.4 },
+  pressTime: { min: 2, max: 4, beat: 0.4 },
   /**
    * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
    * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
    * 8.2 with turnovers on its 13.9.
    */
-  stealShare: 0.94,
+  stealShare: 0.88,
   /**
-   * A guarding instruction's give-back on the player it names (the open catch a sag leaves him, the
-   * room going under gives his pull-ups, the drives and back-cuts a top-lock gives up, the fouls
-   * getting physical sends him to the line for) grows as the leverage to this power, about 1.6
-   * times at 2x. The offense takes more of a bigger gift, and each one is better, so its cost
-   * compounds: at the full leverage it grew several times what the instruction's take-away saved.
+   * A roamer's give-back (the open catch his man gets while he helps) grows as the leverage to this
+   * power, about 1.6 times at 2x. The offense takes more of a bigger gift, and each one is better, so
+   * its cost compounds: at the full leverage it grew several times what the help saved.
    */
   giftExp: 0.65,
   /**
@@ -434,7 +495,7 @@ export const K = {
    * −0.16 → −0.12, fouls −0.1 → −0.05, blocks −0.03 → 0) when pressure and the blitz were cut to a
    * realistic size and fewer AI teams pressed: those had fallen 3-6% under (rng 7, 11 and 23).
    */
-  recenter: { three: 0.03, foul: -0.05, orb: -0.15, tov: -0.12, blk: 0 },
+  recenter: { three: -0.045, foul: -0.08, orb: -0.15, tov: -0.2, blk: 0 },
   /**
    * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
    * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,
@@ -465,8 +526,9 @@ export const K = {
    * Out-of-possession roles (DEF_ROLE_META): the point-of-attack stopper's edge against the
    * handler's blow-bys and the turnovers he forces on him; the wing stopper's man's touches and the
    * contest he adds; the rim anchor's weight among the rim's contesters and the open catch his man
-   * gets per unit of shooting over 50; the roamer's help (a share of a sag's) and his man's open
-   * catch (a share of a sag's); and the extra drain of the chasing roles. How hard the matchups send
+   * gets per unit of shooting over 50; the roamer's help (rim openness off teammates' drives, cuts and
+   * rolls) and his man's open catch (at the roamer's give-back, see giftExp); and the extra drain of
+   * the chasing roles. How hard the matchups send
    * each role to its man is `pull` (a cost the matchup solver weighs against size and quality).
    */
   role: {
@@ -476,8 +538,8 @@ export const K = {
     stopperContest: 0.006,
     anchorRim: 1.15,
     anchorKick: 0.06,
-    roamHelp: 0.8,
-    roamKick: 0.85,
+    roamHelp: 0.16,
+    roamKick: 0.51,
     drain: 1.1,
     pull: 2.5,
   },
@@ -519,7 +581,7 @@ export const lev = (x: number) => x * K.tacticEdge;
 export const levW = (m: number) => m ** K.tacticEdge;
 /** The part of a tactical edge past its 1x size, for an edge that comes from a matchup rather than a number: 0 at 1x. */
 export const levExtra = (x: number) => x * (K.tacticEdge - 1);
-/** A guarding instruction's give-back at the game's tactical leverage (see K.giftExp); a multiplier with `w`. */
+/** A roamer's give-back at the game's tactical leverage (see K.giftExp); a multiplier with `w`. */
 export const levGift = (x: number) => x * K.tacticEdge ** K.giftExp;
 export const levGiftW = (m: number) => m ** (K.tacticEdge ** K.giftExp);
 /**

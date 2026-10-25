@@ -1,8 +1,8 @@
-// Tactics → Instructions, out of possession: three headline decisions (the base scheme, the
-// ball-screen coverage with how your starting big suits it, and help), then Fine-tune (ball pressure,
-// physicality, switching off the ball, the star plan). Each control marks the identity's own setting,
-// and every scheme and coverage shows how well the team knows it, so the cost of a switch is in view
-// before you make it.
+// Tactics → Instructions, out of possession: the headline decisions (the base scheme, the ball-screen
+// coverage with how your starting big suits it, ball pressure and help: the ones whose worth turns on
+// the opponent), then Fine-tune (switching off the ball, the star plan). Each control marks the
+// identity's own setting, and every scheme and coverage shows how well the team knows it, so the cost
+// of a switch is in view before you make it.
 import type { ReactNode } from 'react';
 import { useLeague } from '../../state/store';
 import type { DefScheme, Familiarity, PnrCoverage, StarPlan, Tactics } from '../../core/types';
@@ -45,7 +45,7 @@ export const optLabel = (label: string, mine: boolean, fam?: Familiarity, key?: 
 
 type Props = { t: Tactics; fam: Familiarity };
 
-/** Out of possession's headline decisions: the base scheme, the ball-screen coverage, help. */
+/** Out of possession's headline decisions: the base scheme, the ball-screen coverage, ball pressure, help. */
 export function OutOfPossession({ t, fam }: Props) {
   const league = useLeague();
   const team = league.teams[league.userTid];
@@ -92,21 +92,19 @@ export function OutOfPossession({ t, fam }: Props) {
           </div>
         )}
       </div>
+      <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
       <Lv label="Help" k="help" level="help" t={t} fam={fam} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
     </div>
   );
 }
 
 /** What's in Out of possession's Fine-tune, in a few words. */
-export const OUT_POSS_FINE = 'Ball pressure, physicality, off-ball switches, star plan';
+export const OUT_POSS_FINE = 'Off-ball switches, star plan';
 
-/** Out of possession's fine-tuning: ball pressure, physicality, switching off the ball, the star plan. */
-export function OutOfPossessionFine({ t, fam }: Props) {
-  const pv = defPresetOf(t).values;
+/** Out of possession's fine-tuning: switching off the ball, the star plan. */
+export function OutOfPossessionFine({ t }: Props) {
   return (
     <>
-      <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
-      <Lv label="Physicality" k="physicality" level="physicality" t={t} fam={fam} mark={pv.physicality} set={(tt, x) => void (tt.defense.physicality = x)} />
       <div className="tx-toggles">
         <Toggle
           on={t.defense.switchOffBall}
@@ -161,11 +159,13 @@ export function OutOfPossessionHelp() {
       ))}
       <p>Drop needs a big who protects the rim; switching and hedging need one who moves. Blitzing needs length and quick hands behind it; ice needs disciplined guards.</p>
       <p>
-        <b>Help:</b> packing the paint walls off drives and post-ups but gives up kick-out threes. Stay home against good shooting teams.
+        These turn on who you play: a 2-3 zone or packing the paint pays against a team that can&apos;t shoot and costs against one that can (the open looks they leave count by who
+        takes them), drop pays against a handler who can&apos;t shoot off the dribble and costs against one who can, and ball pressure pays against loose handlers and gets beaten
+        by secure ones. A game plan sets them for one opponent; the staff measures each against the next game (Games → matchup → Plan).
       </p>
       <p>
-        <b>Ball pressure</b> (Fine-tune): more steals and turnovers, but quick creators blow by and backdoor cuts open up. Also more fouls. <b>Physicality:</b> tighter contests
-        against more free throws for the opponent.
+        <b>Ball pressure:</b> more steals and turnovers, but secure handlers blow by and backdoor cuts open up. Also more fouls. <b>Help:</b> packing the paint walls off drives and
+        post-ups but gives up kick-out threes. Stay home against good shooting teams.
       </p>
       <p>
         The % on a scheme or coverage is how well your team knows it (<Term id="familiarity">familiarity</Term>): below 95 they play it a step slow.

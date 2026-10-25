@@ -1,24 +1,46 @@
 // The agenda: required decisions hold the league (and the Continue bar) until they're settled, each
 // with the staff's call one tap away; optional ones never block, the staff's calls (a star hurt,
-// the odds gone, the owner's floor in danger, the deadline, the books) among them, each only with a
-// real choice in it. The guided first week is one checklist item. Job security: the meter, the grace period by difficulty, the ultimatum.
+// the odds gone two weeks running, the owner's floor in danger on two readings, the deadline, a
+// playoff series or play-in game starting, the books) among them, each only with a real choice in
+// it, and one still open coming due again before its deadline. The guided first week is one
+// checklist item. Job security: the meter, the grace period by difficulty, the ultimatum.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideOpen, guideStepOpen, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
-import { curTeamSeason, revenueScale, standardRoster } from '../league/helpers';
+import { curTeamSeason, fmtDate, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
 import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerEvaluation } from '../league/owner';
-import { CONCEDE_COST, FLOOR_EASE, currentGoals, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
-import { DEADLINE_DAYS, callsDaily } from '../league/calls';
-import { FROZEN_BUDGET, WARN_RED, booksDaily, booksReview, freezeResignReason, freezeSigningReason, freezeTradeReason } from '../league/books';
-import { PROJECT_HOME_GAMES, seasonEndCash } from '../league/finances';
+import { CONCEDE_COST, FLOOR_EASE, currentGoals, floorDanger, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
+import { DEADLINE_DAYS, DUE_SOON, FLOOR_AGO, callsDaily, dueId, openCallIds } from '../league/calls';
+import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
+import { setPlanItem } from '../league/gamePlans';
+import {
+  BLEED_GRADE,
+  DEBT_LIMIT,
+  FREEZE_GRADE,
+  FROZEN_BUDGET,
+  WARN_DAYS,
+  WARN_RED,
+  booksDaily,
+  booksReview,
+  booksVerdict,
+  closeBooks,
+  freezeResignReason,
+  freezeSigningReason,
+  freezeTradeReason,
+} from '../league/books';
+import { PROJECT_HOME_GAMES, aiTicketPrice, seasonEndCash } from '../league/finances';
+import { extensionBlockedReason, valueScore } from '../league/contracts';
+import { extensionFrozenReason, userExtend } from '../league/negotiation';
+import { qualifyFrozenReason, sheetDecisionBlocked } from '../league/rfa';
+import { salaryFor } from '../playerGen';
 import { tenDayOpenDay } from '../league/tenDay';
 import { flowActions } from '../../ui/flow';
-import type { League } from '../types';
+import { FREE_AGENT, type League } from '../types';
 
 const seed = seedJson as unknown as SeedData;
 
@@ -262,9 +284,10 @@ describe('the agenda', () => {
       const og = currentGoals(l)!;
       og.goals = og.goals.filter((g) => g.kind !== 'postseason');
       const ts = curTeamSeason(l, l.userTid);
-      // (the pace is read against his read of the roster, as the wins goal projects it: 2-28 is well under)
+      // (the pace is read against his read of the roster, as the wins goal projects it: 2-28 is well under, and was three losses ago)
       ts.won = 2;
       ts.lost = 28;
+      ts.lastTen = Array(10).fill(0);
       const card = () => agenda(l).find((i) => i.kind === 'floor');
       expect(card()!.title).toMatch(/^On pace for \d+ wins: under the owner's floor$/);
       expect(card()!.suggestion).toMatchObject({ label: 'Chase the floor', to: '/office/trade' });
@@ -280,9 +303,18 @@ describe('the agenda', () => {
       currentGoals(m)!.goals = currentGoals(m)!.goals.filter((g) => g.kind !== 'postseason');
       Object.assign(curTeamSeason(m, m.userTid), { won: 15, lost: 15 });
       expect(agenda(m).some((i) => i.kind === 'floor')).toBe(false);
-      Object.assign(curTeamSeason(m, m.userTid), { won: 2, lost: 28 });
+      Object.assign(curTeamSeason(m, m.userTid), { won: 2, lost: 28, lastTen: Array(10).fill(0) });
       m.day = m.tradeDeadlineDay + 1;
       expect(agenda(m).some((i) => i.kind === 'floor')).toBe(false);
+      // one reading isn't a call: a team that went under the pace with its latest losses waits FLOOR_AGO more games
+      m.day = 40;
+      const ms = curTeamSeason(m, m.userTid);
+      ms.won = 10;
+      for (ms.lost = 10; !floorDanger(m) && ms.lost < 70; ms.lost++);
+      expect(floorDanger(m)).not.toBeNull();
+      expect(agenda(m).some((i) => i.kind === 'floor')).toBe(false);
+      ms.lost += FLOOR_AGO;
+      expect(agenda(m).find((i) => i.kind === 'floor')?.due).toMatch(/^Decide by \w{3} \d+$/);
     }
 
     // the playoff odds gone for a team the owner expects in the postseason: tell him it's a rebuild, or keep pushing
@@ -292,9 +324,21 @@ describe('the agenda', () => {
       if (!og.goals.some((g) => g.kind === 'postseason')) og.goals.push({ kind: 'postseason', title: 'Make the playoffs', target: 2, weight: 0 });
       l.oddsTrail = { season: l.season, tid: l.userTid, pts: [[6, 400, 10]] };
       expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      // one week under 5% is a dip, not a call: it takes two in a row
       l.oddsTrail.pts.push([13, 30, 0]);
+      expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      l.oddsTrail.pts.push([20, 60, 0], [27, 40, 0]);
+      expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      l.oddsTrail.pts.push([34, 30, 0]);
+      l.day = 35;
       const card = agenda(l).find((i) => i.kind === 'odds')!;
       expect(card.title).toBe('Playoff odds down to 3%');
+      expect(card.due).toBe(`Decide by ${fmtDate(l.season, l.tradeDeadlineDay)}`);
+      // still open as the deadline nears, it stops a long sim once more: a new id within DUE_SOON days of it
+      expect(openCallIds(l)).toEqual([card.id]);
+      l.day = l.tradeDeadlineDay - DUE_SOON;
+      expect(openCallIds(l)).toEqual([card.id, dueId(card.id)]);
+      l.day = 35;
       expect(card.suggestion!.label).toBe("Tell the owner it's a rebuild");
       const total = l.ownerMood.total;
       const weights = og.goals.reduce((a, g) => a + g.weight, 0);
@@ -318,7 +362,14 @@ describe('the agenda', () => {
       m.ownerReviews = [reviewed(m.season - 2), reviewed(m.season - 1)];
       setOwnerGoals(m, true);
       expect(currentGoals(m)!.goals.some((g) => g.kind === 'postseason')).toBe(true);
-      m.oddsTrail = { season: m.season, tid: m.userTid, pts: [[6, 20, 0]] };
+      m.oddsTrail = {
+        season: m.season,
+        tid: m.userTid,
+        pts: [
+          [6, 20, 0],
+          [13, 20, 0],
+        ],
+      };
       const no = agenda(m).find((i) => i.kind === 'odds')!;
       expect(no.suggestion!.label).toBe('Keep pushing');
       expect(no.line).toMatch(/he wants the play-in/);
@@ -359,30 +410,95 @@ describe('the agenda', () => {
       expect(agenda(l).some((i) => i.kind === 'deadline')).toBe(false);
     }
 
-    // the books: a warning when they project into the red, steps only at reviews (an ultimatum, then a freeze that blocks new money), and a review in the black lifts it
+    // the morning a play-in game or a playoff series of his starts: plan it (on the matchup page), or leave it to the staff; gone once it's under way
+    {
+      const l = inCharge(1);
+      const me = l.userTid;
+      const conf = l.teams[me].conf;
+      const opp = l.teams.find((t) => t.tid !== me && t.conf === conf)!.tid;
+      const abbrev = l.teams[opp].abbrev;
+      const card = () => agenda(l).find((i) => i.kind === 'series');
+      l.schedule = l.schedule.filter((g) => g.played);
+      l.phase = 'playin';
+      l.playIn = [{ id: `${conf}-910`, conf, home: me, away: opp }];
+      l.schedule.push({ gid: l.nextGid++, day: l.day, home: me, away: opp, type: 'playin', seriesId: `${conf}-910` });
+      expect(card()).toMatchObject({ id: `series:${l.season}:${conf}-910`, title: `Play-in vs ${abbrev} tonight`, to: `/games/${opp}` });
+      expect(card()!.line).toMatch(/^Win and you play for the 8th seed; lose and the season is over\. /);
+      expect(card()!.suggestion).toMatchObject({ label: 'Plan the game', to: `/games/${opp}?tab=plan` });
+      // the staff's way settles it
+      expect(card()!.choices!.map((c) => c.label)).toEqual(['Leave it to the staff']);
+      expect(resolveAgenda(l, card()!.choices![0].action).ok).toBe(true);
+      expect(card()).toBeUndefined();
+      // a series: Game 1 today, plan the series; with a plan against them in place, review it
+      l.phase = 'playoffs';
+      l.playoffs = [{ id: `${conf}1-0`, round: 1, conf, high: me, low: opp, highSeed: 1, lowSeed: 8, highWins: 0, lowWins: 0 }];
+      l.schedule = l.schedule.filter((g) => g.played);
+      schedulePlayoffDay(l);
+      expect(card()).toMatchObject({ id: `series:${l.season}:${conf}1-0`, title: `${seriesLabel(l.playoffs[0])} vs ${abbrev}: Game 1 tonight` });
+      expect(card()!.suggestion).toMatchObject({ label: 'Plan the series', to: `/games/${opp}?tab=plan` });
+      setPlanItem(l, opp, { id: 'x', label: 'Pack the paint', patch: {} });
+      expect(card()!.suggestion!.label).toBe('Review the plan');
+      // Game 1 played, the series is under way: no call, and none again for it
+      l.schedule.find((g) => g.seriesId === `${conf}1-0`)!.played = true;
+      l.playoffs[0].highWins = 1;
+      schedulePlayoffDay(l);
+      expect(card()).toBeUndefined();
+      l.day = l.schedule.find((g) => g.seriesId === `${conf}1-0` && !g.played)!.day;
+      expect(card()).toBeUndefined();
+    }
+
+    // the books: judged on the regular season's close (the playoff gates come after); a warning only in
+    // the weeks before the deadline, the card's choices levers he can pull then; steps at reviews (an
+    // ultimatum, a freeze that blocks new money on every path, a final warning when a frozen season
+    // digs deeper, then the sack, whatever he won), and a review in the black lifts it
     {
       const l = inCharge(1);
       const team = l.teams[l.userTid];
+      const scale = revenueScale(l);
       team.budget.coaching = 90;
-      // projected a little short of the black: within the projection's noise, no word; well into the red
-      // (the season's costs and any tax to come), the warning, once the home games so far say what one brings
+      // (the gate already at its peak: the budgets are the lever here)
+      team.budget.ticketPrice = aiTicketPrice(l, team);
       const ts = curTeamSeason(l, l.userTid);
       ts.homeWon = PROJECT_HOME_GAMES;
-      team.cash = -1_000 - (seasonEndCash(l, l.userTid).end - team.cash);
+      const projectTo = (x: number) => (team.cash = x - (seasonEndCash(l, l.userTid).end - team.cash));
+      // week two, deep in the red: no word yet (the projection's error is the warning's size, the summer's signings can't be traded)
+      l.day = 14;
+      projectTo(-50_000 * scale);
+      booksDaily(l);
+      expect(l.books).toBeUndefined();
+      // three weeks before the deadline: a little short of the black is noise; well into the red, the warning
+      l.day = l.tradeDeadlineDay - WARN_DAYS;
+      projectTo(-1_000);
       expect(seasonEndCash(l, l.userTid).end).toBe(-1_000);
       booksDaily(l);
       expect(l.books).toBeUndefined();
-      team.cash -= WARN_RED * revenueScale(l);
-      ts.homeWon = PROJECT_HOME_GAMES - 1;
-      booksDaily(l);
-      expect(l.books).toBeUndefined();
-      ts.homeWon = PROJECT_HOME_GAMES;
+      projectTo(-1_000 - WARN_RED * scale);
       booksDaily(l);
       expect(l.books).toMatchObject({ stage: 'warning', tid: l.userTid });
       expect(l.inbox[0].subject).toBe('The books are heading into the red');
+      expect(l.inbox[0].body).toMatch(/playoff money won't cover it/);
       const card = agenda(l).find((i) => i.kind === 'books')!;
       expect(card.suggestion!.label).toBe('Cut the budgets');
-      expect(card.line).toMatch(/^Projected .+ in the red at the season's end/);
+      expect(card.choices!.map((c) => c.label)).toEqual(['Shed salary', 'Not now']);
+      expect(card.line).toMatch(/^Projected .+ in the red when the regular season's books close.+playoff money doesn't count/);
+      // a ticket priced well under where the gate peaks is a lever too, one tap away
+      {
+        const m = structuredClone(l);
+        m.teams[m.userTid].budget.ticketPrice = 40;
+        const c = agenda(m).find((i) => i.kind === 'books')!;
+        const price = [c.suggestion!, ...c.choices!].find((x) => /^Price tickets at \$\d+$/.test(x.label))!;
+        expect(resolveAgenda(m, price.action).ok).toBe(true);
+        expect(m.teams[m.userTid].budget.ticketPrice).toBe(aiTicketPrice(m, m.teams[m.userTid]));
+      }
+      // after the deadline the window has shut: a season that heads into the red late hears it at the review
+      {
+        const m = inCharge(1);
+        m.day = m.tradeDeadlineDay + 1;
+        curTeamSeason(m, m.userTid).homeWon = PROJECT_HOME_GAMES;
+        m.teams[m.userTid].cash = -500_000;
+        booksDaily(m);
+        expect(m.books).toBeUndefined();
+      }
       // cash crossing zero day to day moves nothing: no second warning, no lift, no step up
       const mail = l.inbox.length;
       team.cash = 50_000;
@@ -391,27 +507,91 @@ describe('the agenda', () => {
       booksDaily(l);
       expect(l.books!.stage).toBe('warning');
       expect(l.inbox.length).toBe(mail);
-      // a review in the red: an ultimatum, held there for the season
+      // the review reads the close: in the red when the regular season's books closed, an ultimatum,
+      // though the playoff gates put the cash back in the black (held there for the season)
+      team.cash = -2_000;
+      closeBooks(l);
+      team.cash = 30_000;
+      expect(booksVerdict(l)).toMatchObject({ close: -2_000, stage: 'ultimatum' });
+      booksReview(l);
+      expect(l.books).toMatchObject({ stage: 'ultimatum', close: -2_000 });
+      expect(l.inbox[0].body).toMatch(/closed \$2\.0M in the red.+playoff gates are my bonus/);
       booksReview(l);
       expect(l.books!.stage).toBe('ultimatum');
+      // still in the red when next season's books close: frozen, the budgets cut to the standard
+      const nextReview = (close: number) => {
+        l.books!.season--;
+        ts.closeCash = close;
+        return booksVerdict(l);
+      };
+      nextReview(-2_500);
       booksReview(l);
-      expect(l.books!.stage).toBe('ultimatum');
-      // still in the red at the next season's review: frozen, the budgets cut to the standard
-      l.books!.season--;
-      booksReview(l);
-      expect(l.books!.stage).toBe('freeze');
+      expect(l.books).toMatchObject({ stage: 'freeze', close: -2_500 });
       expect(team.budget.coaching).toBe(FROZEN_BUDGET);
       expect(l.inbox[0].subject).toBe('The budget is frozen');
-      // minimum deals only, no raises, no trade that takes on salary
+      // minimum deals only (his minimum always), no raises, no trade that takes on salary or sends cash
       expect(freezeSigningReason(l, 5_000, 2_000)).toMatch(/minimum deals only/);
       expect(freezeSigningReason(l, 2_000, 2_000)).toBeNull();
       expect(freezeResignReason(l, 10_000, 9_000)).toMatch(/no raises/);
+      expect(freezeResignReason(l, 1_300, 1_100, 1_300)).toBeNull();
       expect(freezeTradeReason(l, 10_000, 9_000)).toMatch(/can't take on more salary/);
       expect(freezeTradeReason(l, 9_000, 10_000)).toBeNull();
-      // back in the black between reviews: still frozen; a review in the black lifts it
-      team.cash = 1;
-      booksDaily(l);
-      expect(l.books!.stage).toBe('freeze');
+      expect(freezeTradeReason(l, 9_000, 10_000, 500)).toMatch(/no cash/);
+      // and every path that adds to the payroll says so where its button is: an extension, a qualifying offer, a matched offer sheet
+      {
+        const m = structuredClone(l);
+        const p = standardRoster(m, m.userTid)
+          .sort((a, b) => salaryFor(a, m.season) - salaryFor(b, m.season))
+          .find((x) => salaryFor(x, m.season) >= 3_000 && valueScore(m, x) < 80)!;
+        const now = salaryFor(p, m.season);
+        p.contract = { start: m.season - 1, salaries: [now, now] };
+        expect(extensionBlockedReason(m, p)).toBeNull();
+        expect(userExtend(m, p.pid, now + 5_000, 3).reason).toMatch(/no raises, and extending him at .+ is one/);
+        expect(extensionFrozenReason(m, p, now)).toBeNull();
+        expect(qualifyFrozenReason(m, p)).toMatch(/no raises, and his qualifying offer/);
+        m.phase = 'freeAgency';
+        p.tid = FREE_AGENT;
+        p.rfa = { tid: m.userTid, qo: now, sheet: { tid: (m.userTid + 1) % m.teams.length, amount: now + 5_000, years: 3, route: 'space', day: 0, until: 1 } };
+        expect(sheetDecisionBlocked(m, p.pid, true)).toMatch(/no raises, and matching the sheet/);
+        expect(sheetDecisionBlocked(m, p.pid, false)).toBeNull();
+        expect(agenda(m).find((i) => i.kind === 'offerSheet')!.choices![0].blocked).toMatch(/budget is frozen/);
+      }
+      // a frozen season that closes in the red grades no better than FREEZE_GRADE, a title or not;
+      // closed shallower than the last review, the freeze stands
+      expect(nextReview(-1_500)).toEqual({ close: -1_500, stage: 'freeze', cap: FREEZE_GRADE });
+      booksReview(l);
+      expect(l.books).toMatchObject({ stage: 'freeze', close: -1_500 });
+      // deeper than at the last review: the freeze didn't stop the bleeding, the final warning (and a lower cap)
+      expect(nextReview(-3_000)).toEqual({ close: -3_000, stage: 'final', cap: BLEED_GRADE, deeper: true });
+      booksReview(l);
+      expect(l.books!.stage).toBe('final');
+      expect(l.inbox[0]).toMatchObject({ subject: 'The books: a final warning', important: true });
+      expect(agenda(l).find((i) => i.kind === 'books')!.title).toBe("The owner's final warning: the books");
+      // deeper again: the sack at the review once it can fire him, whatever he won; in grace, the cap
+      expect(nextReview(-4_000)).toMatchObject({ stage: 'final', cap: BLEED_GRADE, fire: true });
+      {
+        const m = structuredClone(l);
+        const mts = curTeamSeason(m, m.userTid);
+        [mts.won, mts.lost, mts.playoffRound] = [70, 12, 5];
+        ownerEvaluation(m);
+        expect(m.fired).toBeFalsy();
+        expect(m.ownerReviews!.at(-1)).toMatchObject({ grade: BLEED_GRADE, held: 'books' });
+        expect(m.inbox.find((x) => x.subject === 'Season review')!.body).toMatch(
+          /We won the title\.\nThe books closed \$4\.0M in the red under the freeze, deeper than last season/,
+        );
+        const f = structuredClone(l);
+        Object.assign(curTeamSeason(f, f.userTid), { won: 70, lost: 12, playoffRound: 5 });
+        f.tenureStart = f.season - 3;
+        ownerEvaluation(f);
+        expect(f.fired).toBe(true);
+        expect(f.inbox[0].body).toMatch(/^The books closed \$4\.0M in the red, deeper again under the freeze/);
+      }
+      // past the debt limit, deeper under the freeze skips the final warning
+      l.books!.stage = 'freeze';
+      l.books!.close = -DEBT_LIMIT * scale;
+      expect(nextReview(-DEBT_LIMIT * scale - 1)).toMatchObject({ stage: 'final', fire: true });
+      // a review in the black lifts it all
+      expect(nextReview(1)).toEqual({ close: 1, stage: null });
       booksReview(l);
       expect(l.books).toBeUndefined();
       expect(l.inbox[0].subject).toBe('Back in the black');

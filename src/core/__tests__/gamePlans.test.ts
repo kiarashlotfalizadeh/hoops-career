@@ -4,18 +4,7 @@
 // hack-a-player targets from a game plan, and what an AI coach plays when it inherits the user's team.
 import { describe, expect, it } from 'vitest';
 import { testLeague, toGameDay } from '../../state/__tests__/fixtures';
-import {
-  clearAllPlans,
-  consumePlans,
-  effectiveTactics,
-  persistableTactics,
-  planFor,
-  removePlanItem,
-  setPlanItem,
-  setPlanMatchup,
-  setPlanPlayerD,
-  setPlanScope,
-} from '../league/gamePlans';
+import { clearAllPlans, consumePlans, effectiveTactics, persistableTactics, planFor, removePlanItem, setPlanItem, setPlanMatchup, setPlanScope } from '../league/gamePlans';
 import { buildSimInput, playGame, userGameOnDay } from '../league/games';
 import { migrate } from '../../state/persistence';
 import { LiveGame } from '../../state/live';
@@ -68,21 +57,6 @@ describe('game plans', () => {
       setPlanMatchup(l, 3, theirs[1].pid, mine.pid);
       expect(effectiveTactics(l, 3).defense.matchups).toEqual({ [theirs[1].pid]: mine.pid });
       setPlanMatchup(l, 3, theirs[1].pid, null);
-      expect(l.gamePlans?.[3]).toBeUndefined();
-    }
-    {
-      // plans how to guard their players: one instruction each, on top of the base tactics, for this opponent only
-      const l = fresh();
-      const [a, b] = teamPlayers(l, 3);
-      setPlanPlayerD(l, 3, a.pid, 'under');
-      setPlanPlayerD(l, 3, b.pid, 'sag');
-      setPlanPlayerD(l, 3, a.pid, 'tight');
-      expect(effectiveTactics(l, 3).defense.playerD).toEqual({ [a.pid]: 'tight', [b.pid]: 'sag' });
-      expect(effectiveTactics(l, 4).defense.playerD).toBeUndefined();
-      // the instructions alone keep the plan; taking the last one off ends it
-      expect(planFor(l, 3)).not.toBeNull();
-      setPlanPlayerD(l, 3, a.pid, null);
-      setPlanPlayerD(l, 3, b.pid, null);
       expect(l.gamePlans?.[3]).toBeUndefined();
     }
     {
@@ -145,15 +119,13 @@ describe('game plans', () => {
       t.defense.matchups = { 1: 2 };
       t.defense.starTarget = 3;
       t.defense.chase = [4];
-      t.defense.playerD = { 5: 'body' };
       t.offense.huntTarget = 6;
       t.manage.hackTargets = [7];
       t.manage.foulToGive = true;
       const kept = persistableTactics(t);
-      expect([kept.defense.matchups, kept.defense.starTarget, kept.defense.chase, kept.defense.playerD, kept.offense.huntTarget, kept.manage.hackTargets]).toEqual([
+      expect([kept.defense.matchups, kept.defense.starTarget, kept.defense.chase, kept.offense.huntTarget, kept.manage.hackTargets]).toEqual([
         {},
         null,
-        undefined,
         undefined,
         undefined,
         undefined,
@@ -162,13 +134,14 @@ describe('game plans', () => {
       expect(kept.manage.foulToGive).toBe(true);
     }
     {
-      // drops damaged junk-defense, hunt, instruction and foul-to-give settings from a save, and keeps good ones
+      // drops damaged junk-defense, hunt and foul-to-give settings from a save, and keeps good ones; instructions by player and a deny (both cut) go
       const l = fresh();
       const raw = structuredClone(l) as League;
       const t = raw.teams[raw.userTid].tactics as unknown as Record<string, Record<string, unknown>>;
       t.defense.scheme = 'box9';
       t.defense.chase = 'everyone';
       t.defense.playerD = { 12: 'under', 13: 'hug', x: 'sag' };
+      t.defense.starPlan = 'deny';
       t.offense.huntTarget = 'him';
       t.manage.foulToGive = 'yes';
       const other = raw.teams[4].tactics;
@@ -181,21 +154,22 @@ describe('game plans', () => {
             { id: 'junk', label: 'Box', group: 'coverage', patch: { defense: { scheme: 'box1', chase: [3] } } },
             { id: 'bad', label: 'Bad', patch: { defense: { scheme: 'nope' as never, chase: [1, 2, 3] }, offense: { huntTarget: 'x' as never } } },
           ],
-          playerD: { 7: 'tight', 8: 'nope' as never },
+          ...({ playerD: { 7: 'tight', 8: 'nope' } } as object),
         },
-        6: { oppTid: 6, items: [], playerD: 'all' as never },
+        6: { oppTid: 6, items: [], ...({ playerD: 'all' } as object) },
       };
       const out = migrate(raw);
       const d = out.teams[out.userTid].tactics.defense;
       expect(d.scheme).toBe('man');
       expect(d.chase).toBeUndefined();
-      expect(d.playerD).toEqual({ 12: 'under' });
+      expect(d).not.toHaveProperty('playerD');
+      expect(d.starPlan).toBe('none');
       expect(out.teams[out.userTid].tactics.offense).not.toHaveProperty('huntTarget');
       expect(out.teams[out.userTid].tactics.manage).not.toHaveProperty('foulToGive');
       expect(out.teams[4].tactics.defense).toMatchObject({ scheme: 'tri2', chase: [1, 2] });
       expect(out.gamePlans![5].items[0].patch).toEqual({ defense: { scheme: 'box1', chase: [3] } });
       expect(out.gamePlans![5].items[1].patch).toEqual({ defense: {}, offense: {} });
-      expect(out.gamePlans![5].playerD).toEqual({ 7: 'tight' });
+      expect(out.gamePlans![5]).not.toHaveProperty('playerD');
       expect(out.gamePlans![6]).not.toHaveProperty('playerD');
       // a save without any of it loads as it was
       expect(migrate(structuredClone(l))).toEqual({ ...l, version: out.version });
@@ -333,10 +307,10 @@ describe('game plans', () => {
       expect(await counterWorth(l, opp, g, { games: 16 })).toEqual(w);
       expect(JSON.stringify(l)).toBe(before);
       expect(await counterWorth(l, opp, g, { games: 16, cancelled: () => true })).toBeNull();
-      // a reading of +1.0 at ±0.45 is about +0.4 likely real: just a gain; +0.6 at the same noise, even
-      expect(shrinkWorth(1, 0.45)).toBeCloseTo(0.44, 2);
+      // with counters' worth spread wide (the big decisions), a reading of +1.0 at ±0.45 is mostly real: a gain; +0.5 at the same noise, even
+      expect(shrinkWorth(1, 0.45)).toBeCloseTo(0.88, 2);
       expect(worthCall({ pts: shrinkWorth(1, 0.45) })).toBe('gain');
-      expect(worthCall({ pts: shrinkWorth(0.6, 0.45) })).toBe('even');
+      expect(worthCall({ pts: shrinkWorth(0.5, 0.45) })).toBe('even');
       expect(worthCall({ pts: shrinkWorth(-1.2, 0.45) })).toBe('cost');
       // a counter in the plan counts in the projection at its measured worth, for the user's side, capped
       const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), {

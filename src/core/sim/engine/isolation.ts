@@ -28,7 +28,7 @@ export const isolationMethods = {
     const pf = this.prefs(off, late);
     const help = this.help(def);
     let adv = (A.c.create * A.perf - D.c.perDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 140 + this.rng.normal(0, 0.6) + open;
-    if (!fixed) adv -= this.denyCatch(def, off, A, 'iso');
+    if (!fixed) adv -= this.chaseCatch(def, off, A, 'iso');
     if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'iso', A.pid);
     const pr = this.pressure(def);
     // pressure: aggressive defenders get blown by, quick creators most of all
@@ -88,19 +88,16 @@ export const isolationMethods = {
           ['help_paint', hp],
           ['spacing', spacing * 0.5],
         ];
-        const body = this.body(def, A);
-        if (body) tags.push(['pd_body', -lev(K.pd.body.drive)]);
-        const sag = this.sagHelp(def, off, A);
-        if (sag) tags.push([this.sagKey, -sag]);
+        const roam = this.roamHelp(def, off, A);
+        if (roam) tags.push(['role_roam', -roam]);
         this.shoot(off, def, {
           shooter: A,
           zone,
-          open: advOpen + spacing * 0.5 + hp - 0.08 - (body ? lev(K.pd.body.drive) : 0) - sag,
+          open: advOpen + spacing * 0.5 + hp - 0.08 - roam,
           contest: zone === 'rim' ? this.rimContester(def, D) : D,
           assister: null,
           finish,
           tags,
-          ...body,
         });
         return 'done';
       }
@@ -142,7 +139,7 @@ export const isolationMethods = {
   doubleTeam(this: GameSim, off: ST, def: ST, A: SP, from: 'iso' | 'pnrBH' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
-    const escape = (A.c.passing - 55) / 100;
+    const escape = (A.c.passing - 55) / K.cov.double.escape;
     const pTO0 = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
     const pTO = star ? pTO0 + levExtra(pTO0 - 0.06) : pTO0;
     if (star) this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
@@ -157,15 +154,25 @@ export const isolationMethods = {
       this.passStep(A, sh);
       const o0 = 0.5 + escape * 0.5;
       const o = star ? o0 + levExtra(o0 - 0.15) : o0;
-      this.impact('double_kick', off.side, o * 0.06 * 3 * 0.35, sh.pid);
+      // (a Star plan double's 4-on-3 is the plan's look, and counts by who gets it: see K.matchup)
+      if (!star) this.impact('double_kick', off.side, o * 0.06 * 3 * 0.35, sh.pid);
       // (what the defense has read of the split takes its share off this look too)
       const read = split ? play!.read : 0;
-      const tags: [string, number][] | undefined = split ? [['set_postSplit', lev(SPLIT_DOUBLE)], ...(read ? [['set_read', -read] as [string, number]] : [])] : undefined;
+      const tags = (room: number): [string, number][] | undefined =>
+        split ? [['set_postSplit', lev(SPLIT_DOUBLE)], ...(read ? [['set_read', -read] as [string, number]] : [])] : star ? [['double_kick', room]] : undefined;
       const so = split ? lev(SPLIT_DOUBLE) - read : 0;
       if (split ? sh === split.c : this.rng.chance(0.3) && sh.c.rim > 52) {
-        this.shoot(off, def, { shooter: sh, zone: 'rim', open: o * 0.6 + so, contest: this.rimContester(def, this.defOf(def, sh), 1.2), assister: A, finish: 'cut', tags });
+        this.shoot(off, def, {
+          shooter: sh,
+          zone: 'rim',
+          open: o * 0.6 + so,
+          contest: this.rimContester(def, this.defOf(def, sh), 1.2),
+          assister: A,
+          finish: 'cut',
+          tags: tags(o * 0.6),
+        });
       } else {
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o + so, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags });
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o + so, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: tags(o) });
       }
       return 'done';
     }

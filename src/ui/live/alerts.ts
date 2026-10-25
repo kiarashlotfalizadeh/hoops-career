@@ -10,6 +10,8 @@ import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { impactAdvice, impactSentence, leverPaid, teamRef } from '../../core/analysis/gameReport';
 import { impactCounter, liveCounter } from '../../core/ai/advisor';
 import { zScore } from '../../core/analysis/playTypes';
+import { winProb } from '../../core/analysis/winProb';
+import { GAME } from '../../core/constants';
 import type { Drawn, DrawnPlayer } from './drawn';
 
 export type AlertAction =
@@ -53,6 +55,34 @@ const EVENT_SEC = 120;
 
 /** Crunch time, when the staff stops subbing for fouls and fatigue: the last six minutes of the fourth quarter and overtime. */
 export const crunchTime = (q: number, clock: number) => q >= 4 && clock < 360;
+
+/**
+ * A close game's bound: neither side this likely to win it, as the scorebug's win probability has it.
+ * At 95% a game is close down 14 with 11 minutes left (not 15), down 9 with five, 6 with two and 4
+ * with 30 seconds, and always tied or down three with the ball on the last possession (6% at worst).
+ */
+export const CLOSE_WIN = 0.95;
+
+/**
+ * A close game, the one meaning every live pause goes by (a fifth foul, a closer out of legs, the last
+ * possession): the fourth quarter or overtime, with neither side CLOSE_WIN to win it from the drawn
+ * game (the score, the clock, the ball and the projection at tip-off, `edge`). A blowout never stops.
+ */
+export function closeGame(v: Pick<Drawn, 'q' | 'clock' | 'ball' | 'sides'>, edge: number): boolean {
+  if (v.q < 4) return false;
+  const p = winProb({ margin: v.sides[0].score - v.sides[1].score, q: v.q, clock: v.clock, ball: v.ball, edge });
+  return p < CLOSE_WIN && p > 1 - CLOSE_WIN;
+}
+
+/**
+ * The last possession: the fourth quarter or overtime with the game clock under the shot clock (the
+ * shot is the period's last), the ball yours, tied or down three or less. Up, there's no call to make:
+ * the clock is yours to run out.
+ */
+export function lastPossession(v: Pick<Drawn, 'q' | 'clock' | 'ball' | 'sides'>, side: 0 | 1): boolean {
+  const margin = v.sides[side].score - v.sides[1 - side].score;
+  return v.q >= 4 && v.clock <= GAME.shotClock && v.clock > 0.05 && v.ball === side && margin <= 0 && margin >= -3;
+}
 
 /**
  * The foul count at which the staff sits a player in period `q` (the engine's rule): 2 in Q1, 3 in

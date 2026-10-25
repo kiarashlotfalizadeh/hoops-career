@@ -1,22 +1,18 @@
-// Who guards whom against one opponent, and how: their projected top eight, the staff's defender for
-// each at tip-off or the plan's own (setPlanMatchup), and a guarding instruction for each
-// (setPlanPlayerD), with the staff's suggestion and the numbers behind it. One row per player of
-// theirs; a tap opens both choices.
+// Who guards whom against one opponent: their projected top eight, the staff's defender for each at
+// tip-off or the plan's own (setPlanMatchup), with the numbers behind the pairing. One row per player
+// of theirs; a tap opens the choice.
 import { useState } from 'react';
 import { Check, ChevronRight } from 'lucide-react';
-import type { League, Player, PlayerDefense } from '../../core/types';
-import { PLAYER_DEFENSES } from '../../core/types';
+import type { League, Player } from '../../core/types';
 import { previewMatchups, matchupNotes } from '../../core/analysis/matchupPreview';
-import { guardingPlan, type GuardAdvice } from '../../core/analysis/guarding';
-import { effectiveTactics, setPlanMatchup, setPlanPlayerD } from '../../core/league/gamePlans';
-import { PLAYER_D_META } from '../../core/sim/tactics';
+import { guardingPlan, type GuardLine } from '../../core/analysis/guarding';
+import { setPlanMatchup } from '../../core/league/gamePlans';
 import { fmtHeight } from '../../core/ratings';
 import { edit } from '../../state/actions';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
-import { Avatar, Chips, Help, Ovr, Section, Sheet, Tag } from './ui';
-import { Term } from './Glossary';
+import { Avatar, Help, Ovr, Section, Sheet, Tag } from './ui';
 import './scouting.css';
 
 function Notes({ them, me }: { them: Player; me: Player }) {
@@ -36,8 +32,7 @@ function Notes({ them, me }: { them: Player; me: Player }) {
 const pct1 = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 /** His shooting as a short line: "34.1% 3P on 5.2 a game · 71.0% FT" from his games, else nothing. */
-function shootingLine(a: GuardAdvice | undefined): string {
-  const l = a?.line;
+function shootingLine(l: GuardLine | undefined): string {
   if (!l || l.source === 'ratings') return '';
   const parts = [Number.isFinite(l.tpPct) && l.tpa >= 0.5 ? `${pct1(l.tpPct)} 3P on ${l.tpa.toFixed(1)}` : `${l.tpa.toFixed(1)} 3PA`];
   if (Number.isFinite(l.ftPct) && l.fta >= 1) parts.push(`${pct1(l.ftPct)} FT`);
@@ -47,21 +42,17 @@ function shootingLine(a: GuardAdvice | undefined): string {
 export function MatchupPlanner({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const pv = useLeagueMemo(() => previewMatchups(league, opp), [league, opp]);
-  const advice = useLeagueMemo(() => new Map(guardingPlan(league, opp).map((a) => [a.pid, a])), [league, opp]);
-  const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
+  const lines = useLeagueMemo(() => new Map(guardingPlan(league, opp).map((a) => [a.pid, a])), [league, opp]);
   const [pick, setPick] = useState<number | null>(null);
   // each side's players told apart from their own teammates (the injured too), as the Preview's starting fives do
   const theirNames = useLeagueMemo(() => rosterNames(teamPlayers(league, opp)), [league, opp]);
   const myNames = useLeagueMemo(() => rosterNames(teamPlayers(league, league.userTid)), [league]);
   const names = (pid: number) => (league.players[pid]?.tid === opp ? theirNames(pid) : myNames(pid)) || league.players[pid]?.lastName || '';
-  const how = eff.defense.playerD ?? {};
-  const planned = pv.rows.filter((r) => r.planned !== null).length + Object.keys(how).length;
+  const planned = pv.rows.filter((r) => r.planned !== null).length;
   const setGuard = (theirs: number, mine: number | null) => edit((l) => setPlanMatchup(l, opp, theirs, mine));
-  const setHow = (theirs: number, d: PlayerDefense | null) => edit((l) => setPlanPlayerD(l, opp, theirs, d));
   const row = pick !== null ? pv.rows.find((r) => r.pid === pick) : undefined;
   const them = row ? league.players[row.pid] : undefined;
-  const adv = row ? advice.get(row.pid) : undefined;
-  const cur = row ? (how[row.pid] ?? null) : null;
+  const shooting = row ? shootingLine(lines.get(row.pid)) : '';
   return (
     <Section
       title="Who guards whom"
@@ -71,12 +62,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
             Their projected top eight against your top ten, as the staff would match them at tip-off: starters on starters, bench on bench. The staff matches size and puts its best
             defenders on the players their offense runs through. A planned matchup holds whenever both players are on the floor.
           </p>
-          {PLAYER_DEFENSES.map((d) => (
-            <p key={d}>
-              <b>{PLAYER_D_META[d].label}:</b> {PLAYER_D_META[d].help}
-            </p>
-          ))}
-          <p>Each instruction is for this opponent only. ★ is the staff&apos;s suggestion, from his games when there are enough, his ratings otherwise.</p>
+          <p>Each pairing is for this opponent only.</p>
         </Help>
       }
     >
@@ -89,7 +75,6 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
               const p = league.players[r.pid];
               const def = r.planned ?? r.auto;
               const d = def !== null ? league.players[def] : undefined;
-              const h = how[r.pid];
               return (
                 <button key={r.pid} className="gp-match" onClick={() => setPick(r.pid)} aria-haspopup="dialog">
                   <Avatar p={p} />
@@ -105,7 +90,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
                   <span className="gp-match-d">
                     <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
                     <span className="gp-match-dn ellipsis">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</span>
-                    {h ? <Tag tone="info">{PLAYER_D_META[h].short}</Tag> : r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff pick</span>}
+                    {r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff pick</span>}
                   </span>
                   <ChevronRight size={16} className="dim gp-chev" aria-hidden="true" />
                   {d && <Notes them={p} me={d} />}
@@ -114,7 +99,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
             })}
           </div>
           <div className="mu-note">
-            Tap a player to set who guards him and how{planned ? ` · ${planned} planned` : ''}. Under a pairing: <span className="good">your edge</span>,{' '}
+            Tap a player to set who guards him{planned ? ` · ${planned} planned` : ''}. Under a pairing: <span className="good">your edge</span>,{' '}
             <span className="warn">worth watching</span>, <span className="bad">a mismatch to fix</span>.
           </div>
         </>
@@ -123,24 +108,8 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
         {them && row && (
           <div className="col" style={{ gap: 16 }}>
             <div className="col" style={{ gap: 8 }}>
-              <div className="over">
-                <Term id="guarding">How to guard him</Term>
-              </div>
-              <Chips
-                label={`How to guard ${names(them.pid)}`}
-                value={cur ?? ('' as PlayerDefense)}
-                disabled={simming}
-                onChange={(d: PlayerDefense) => setHow(them.pid, d === cur ? null : d)}
-                options={PLAYER_DEFENSES.map((d) => ({ id: d, label: `${PLAYER_D_META[d].short}${d === adv?.suggest ? ' ★' : ''}` }))}
-              />
-              <div className="mu-note">
-                {cur ? PLAYER_D_META[cur].label : 'Straight up'}
-                {adv?.suggest && adv.why ? ` · ★ ${PLAYER_D_META[adv.suggest].short}: ${adv.why}` : ''}
-                {shootingLine(adv) ? ` · ${shootingLine(adv)}` : ''}
-              </div>
-            </div>
-            <div className="col" style={{ gap: 8 }}>
               <div className="over">Who guards him</div>
+              {shooting && <div className="mu-note">{shooting}</div>}
               <div className="card flush list">
                 <button className={`gp-opt ${row.planned === null ? 'on' : ''}`} aria-pressed={row.planned === null} disabled={simming} onClick={() => setGuard(row.pid, null)}>
                   <span className="grow">

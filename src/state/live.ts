@@ -4,7 +4,7 @@
 // with the possession it came after), so it survives the app being closed: the engine draws each
 // possession from the game's seed, and playing the journal back rebuilds the same game.
 
-import type { GameResult, League, LiveJournal, LiveOp, ScheduledGame, SetId, Tactics } from '../core/types';
+import type { CallId, GameResult, League, LiveJournal, LiveOp, ScheduledGame, Tactics } from '../core/types';
 import { GameSim, type SimTeamInput } from '../core/sim/engine';
 import type { PossLog } from '../core/sim/log';
 import { Rng } from '../core/random';
@@ -124,7 +124,8 @@ export class LiveGame {
       keepShots: true,
       injuries,
       neutral: neutralSite(game),
-      edge: courtEdge(league, game.home, game.away),
+      // (the difficulty's edge as it was at tip-off: a replay after a change of difficulty is the same game)
+      edge: (from?.court === undefined ? courtEdge(league, game.home, game.away) : from.court) ?? undefined,
     });
     this.planned = this.sim.baseTactics(this.userSide);
     // (a journal from before win probability has none: the projection is worked out again from the tip)
@@ -147,6 +148,7 @@ export class LiveGame {
         ...(mine.play?.length ? { play: [...mine.play] } : {}),
       },
       edge: this.edge,
+      court: courtEdge(league, game.home, game.away) ?? null,
       opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}) },
       steps: 0,
       q: this.sim.q,
@@ -214,13 +216,17 @@ export class LiveGame {
     return this.record({ op: 'timeout', args: reason ? { reason } : {} });
   }
 
-  /** Call set `set` for the next half-court trip this period (from a huddle), for `pid` or the best fit on the floor: false when it can't be. */
-  callPlay(set: SetId, pid?: number): boolean {
+  /**
+   * Call a play for the next half-court trip this period (from a huddle, or shouted from the bench):
+   * set `set`, or 'iso' for a clear-out isolation, for `pid` (else the best fit on the floor). False
+   * when it can't be.
+   */
+  callPlay(set: CallId, pid?: number): boolean {
     return this.record({ op: 'play', args: { set, ...(pid !== undefined && { pid }) } });
   }
 
   /** The play called for the next trip, if one is waiting to be run. */
-  get calledPlay(): { set: SetId; pid: number | null } | null {
+  get calledPlay(): { set: CallId; pid: number | null } | null {
     const q = this.sim.T[this.userSide].nextSet;
     return q ? { set: q.id, pid: q.pid } : null;
   }

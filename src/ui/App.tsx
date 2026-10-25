@@ -47,7 +47,8 @@ import { haptic } from '../native';
 import { TABS, tabFor, type TabId } from './nav';
 import { AgendaList } from './components/Agenda';
 import { useNeedsYou } from './today/needs';
-import { agenda } from '../core/league/agenda';
+import { NeedsSheet, OpenCalls } from './today/NeedsList';
+import { agenda, CALL_KINDS } from '../core/league/agenda';
 import { todayRoutes } from './routes/today';
 import { teamRoutes } from './routes/team';
 import { gamesRoutes } from './routes/games';
@@ -219,11 +220,14 @@ function statusLine(league: League): string {
 function TopBar() {
   const league = useLeague();
   const nav = useNavigate();
-  const { pathname } = useLocation();
+  const loc = useLocation();
+  const { pathname } = loc;
   const t = league.teams[league.userTid];
   const ts = curTeamSeason(league, league.userTid);
-  // the badge counts what needs him, as Today's Needs you does (see needs.ts); the rest is unread in the list without a number on the bell
+  // the badge counts what needs him, as Today's Needs you does (see needs.ts), and opens it; the rest is unread in the inbox without a number on the bell
   const unread = useNeedsYou(league).count;
+  // the bell's sheet, open on the screen it was opened on: a row that leads elsewhere closes it on the way
+  const [needsAt, setNeedsAt] = useState<string | null>(null);
   // the standings scan every game: worked out again when a game is played, not on every edit
   // (fired: the old team's mark stays up there, but it isn't his to run; outside the memo, as a firing plays no game)
   const status = league.fired ? `Between jobs · ${PHASE_LABEL[league.phase] ?? seasonLabel(league.season)}` : gamesMemo(statusLines, league, () => statusLine(league));
@@ -275,17 +279,18 @@ function TopBar() {
         <button className="iconbtn" onClick={() => setSearching(true)} aria-label="Search" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K /">
           <Search size={20} />
         </button>
-        {/* named by the badge it shows, then the rest: "9+ need you (12). Inbox" */}
-        <button className="iconbtn" onClick={() => nav('/inbox')} aria-current={pathname.startsWith('/inbox') ? 'page' : undefined}>
+        {/* named by the badge it shows: "9+ need you (12)", "3 need you", "Needs you" */}
+        <button className="iconbtn" onClick={() => setNeedsAt(loc.key)} aria-haspopup="dialog">
           <Bell size={20} aria-hidden="true" />
           {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
-          <span className="sr-only">{unread > 9 ? ` need you (${unread}). Inbox` : unread > 0 ? ' need you. Inbox' : 'Inbox'}</span>
+          <span className="sr-only">{unread > 9 ? ` need you (${unread})` : unread > 0 ? ' need you' : 'Needs you'}</span>
         </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings" aria-current={pathname === '/settings' ? 'page' : undefined}>
           <SettingsIcon size={20} />
         </button>
       </div>
       <QuickSearch open={searching} onClose={() => setSearching(false)} />
+      <NeedsSheet open={needsAt === loc.key} onClose={() => setNeedsAt(null)} />
     </header>
   );
 }
@@ -326,8 +331,14 @@ function ContinueBar() {
   const stop = useStore((s) => s.stopSim);
   const nav = useNavigate();
   const run = useFlowRunner();
-  const { pathname } = useLocation();
-  const [open, setOpen] = useState(false);
+  const loc = useLocation();
+  const { pathname } = loc;
+  // the Play options, open on the screen they were opened on: a call's answer that leads elsewhere closes them on the way
+  const [openAt, setOpenAt] = useState<string | null>(null);
+  const open = openAt === loc.key;
+  const setOpen = (on: boolean) => setOpenAt(on ? loc.key : null);
+  // the staff's calls still open, over the sims that would pass them by
+  const calls = open ? agenda(league).filter((i) => CALL_KINDS.has(i.kind)) : [];
   // screen readers hear a sim start and finish, not every simmed day: the status region stays put and its text only changes then
   const [ran, setRan] = useState(false);
   if (sim && !ran) setRan(true);
@@ -422,6 +433,11 @@ function ContinueBar() {
       </Sheet>
       <Sheet open={open} onClose={() => setOpen(false)} title="What next?">
         <div className="col" style={{ gap: 8 }}>
+          {calls.length > 0 && (
+            <div className="flow-calls">
+              <OpenCalls calls={calls} />
+            </div>
+          )}
           {actions.map((a) => (
             <button
               key={a.id}

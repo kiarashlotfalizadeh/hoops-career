@@ -32,20 +32,7 @@ import { DEF_QUALITIES, OFF_QUALITIES, defRoleFits, fitStars, gradeChanges, grad
 import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter, teamAlerts } from '../ai/advisor';
 import { Rng } from '../random';
-import {
-  DEF_ROLES,
-  PLAYER_DEFENSES,
-  SET_IDS,
-  type DefRole,
-  type DefScheme,
-  type League,
-  type Player,
-  type PlayerDefense,
-  type PnrCoverage,
-  type PressMode,
-  type StarPlan,
-  type Tactics,
-} from '../types';
+import { DEF_ROLES, SET_IDS, type DefRole, type DefScheme, type League, type Player, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
 const baseLeague = testLeague();
 const fresh = () => structuredClone(baseLeague);
@@ -70,10 +57,7 @@ function cast(t: Tactics, ps: Player[], off: Record<number, string>, def: Record
 function randomTactics(rng: Rng): Tactics {
   const t = defaultTactics();
   t.defense.scheme = rng.pick<DefScheme>(['man', 'man', 'zone23', 'zone32', 'box1', 'tri2']);
-  // instructions on a couple of their players, a hunt, a foul to give, how much the ball moves
-  const pd: Record<number, PlayerDefense> = {};
-  for (const pid of [31, 32]) if (rng.chance(0.4)) pd[pid] = rng.pick(PLAYER_DEFENSES);
-  if (Object.keys(pd).length) t.defense.playerD = pd;
+  // a hunt, a foul to give, how much the ball moves
   // out-of-possession roles on a couple of your players
   const roles: Record<number, DefRole> = {};
   for (const pid of [1, 2]) if (rng.chance(0.5)) roles[pid] = rng.pick(DEF_ROLES);
@@ -89,7 +73,7 @@ function randomTactics(rng: Rng): Tactics {
   t.defense.getBack = rng.int(0, 100);
   t.defense.physicality = rng.int(0, 100);
   t.defense.switchOffBall = rng.chance(0.5);
-  t.defense.starPlan = rng.pick<StarPlan>(['none', 'deny', 'double']);
+  t.defense.starPlan = rng.pick<StarPlan>(['none', 'double']);
   t.offense.crashBoards = rng.int(0, 100);
   t.offense.transition = rng.int(0, 100);
   t.manage.hackThreshold = rng.chance(0.5) ? 0 : rng.int(40, 65);
@@ -426,24 +410,23 @@ describe('the controls', () => {
         b.defense.starTarget = 21;
         b.defense.chase = [22];
         const d = tacticsDiff(a, b);
-        expect(d.defense && ['matchups', 'starTarget', 'chase', 'playerD'].some((k) => k in d.defense!)).toBeFalsy();
+        expect(d.defense && ['matchups', 'starTarget', 'chase'].some((k) => k in d.defense!)).toBeFalsy();
         expect(d.offense && 'huntTarget' in d.offense).toBeFalsy();
         const back = applyPatch(a, d);
         const game = (t: Tactics) => ({
           matchups: t.defense.matchups,
           starTarget: t.defense.starTarget,
           chase: t.defense.chase,
-          playerD: t.defense.playerD,
           huntTarget: t.offense.huntTarget,
         });
-        const { matchups, starTarget, chase, playerD, huntTarget } = game(b);
+        const { matchups, starTarget, chase, huntTarget } = game(b);
         // a junk defense named for their players is tonight's too: the scheme stays as it was
         const junk = namedJunk(b.defense);
         if (junk) expect(back.defense.scheme).toBe(a.defense.scheme);
         const withB = {
           ...back,
           offense: { ...back.offense, huntTarget },
-          defense: { ...back.defense, matchups, starTarget, chase, playerD, ...(junk ? { scheme: b.defense.scheme } : {}) },
+          defense: { ...back.defense, matchups, starTarget, chase, ...(junk ? { scheme: b.defense.scheme } : {}) },
         };
         for (const x of [withB.offense, withB.defense] as Record<string, unknown>[]) for (const k of Object.keys(x)) if (x[k] === undefined) delete x[k];
         expect(withB).toEqual(b);

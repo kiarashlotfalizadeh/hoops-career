@@ -51,7 +51,7 @@ import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
 import { liveOpt, liveSlots, tipSlot } from '../live/familiar';
 import { slotMatcher, slotMoveName } from '../../core/analysis/moves';
-import type { SetId, Tactics } from '../../core/types';
+import type { CallId, Tactics } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
@@ -115,6 +115,7 @@ export default function Live() {
   const closeOffer = useCallback(() => setOffer(false), []);
 
   // the game stopped for a call on one of yours (a fifth foul, a closer out of legs): his sheet, with who can come in
+  // (the last possession waits in the huddle instead)
   const stopCall = s.stopCall;
   useEffect(() => {
     if (!stopCall) return;
@@ -273,8 +274,8 @@ export default function Live() {
     setPanel('player');
   };
 
-  /** A play called in the huddle, for the next trip up the floor. */
-  const callPlay = (set: SetId, pid: number) => {
+  /** A play called in the huddle (or from the bench on the last possession), for the next trip up the floor. */
+  const callPlay = (set: CallId, pid: number) => {
     if (coach((g) => g.callPlay(set, pid))) s.bump();
   };
 
@@ -346,7 +347,19 @@ export default function Live() {
             story={story}
           />
         );
-      if (huddling) return <Huddle {...common} called={game.calledPlay} onCall={callPlay} />;
+      if (huddling)
+        return (
+          <Huddle
+            {...common}
+            kind={s.huddle ?? 'timeout'}
+            called={game.calledPlay}
+            onCall={callPlay}
+            // (in a huddle the sim is where the court is: who closes for you, and who guards whom, now)
+            closer={sim.closer(me)?.pid}
+            defenderOf={(pid) => sim.T[1 - userSide].guardOf.get(pid)?.pid}
+            onTimeout={s.huddle === 'last' && me.timeouts > 0 && !simBusy ? () => s.callTimeout() : undefined}
+          />
+        );
       return (
         <StaffView
           assistant={assistant}

@@ -28,8 +28,8 @@ function teamGames(league: League) {
 
 // ---------------------------------------------------------------- three-point contest
 
-/** The league's three-point percentage the shooters' form is read against. */
-const LEAGUE_3P = 0.36;
+/** The league's three-point percentage the shooters' form is read against (the engine's: about 36.5% since the big decisions' open looks came to count by who takes them). */
+const LEAGUE_3P = 0.365;
 /** Attempts of league-average shooting his season is blended with, so a hot month on few shots is mostly noise. */
 const FORM_PRIOR = 150;
 /** Three-point attempts a team game he needs to be invited (some 140 by the All-Star break). */
@@ -84,7 +84,8 @@ export function threeSkill(p: Player, season: number): number {
   return clamp(SKILL_BASE + SKILL_PER_TP * p.ratings.tp + FORM_WEIGHT * (threeForm(p, season) - LEAGUE_3P), 0.25, 0.8);
 }
 
-const SKILL_BASE = 0.26;
+/** (0.26 until the best shooters' seasons came to run about two points hotter, when the big decisions' looks came to count by who takes them: the field's first rounds had gone from 21 to 23.) */
+const SKILL_BASE = 0.245;
 const SKILL_PER_TP = 0.0042;
 const FORM_WEIGHT = 0.5;
 /** A money ball at the end of a rack comes in a hurry. */

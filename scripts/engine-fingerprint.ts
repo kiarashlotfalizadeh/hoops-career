@@ -108,15 +108,7 @@ const cfgs: Cfg[] = [
   { name: 'press always', home: 2, away: 18, h: () => D({ press: 'always', pressure: 100 }), a: () => D({ press: 'afterMade', pressure: 0 }) },
   { name: 'help extremes', home: 6, away: 10, h: () => D({ help: 100, physicality: 100, getBack: 0 }), a: () => D({ help: 0, physicality: 0, getBack: 100 }) },
   { name: 'glass', home: 6, away: 10, h: () => O({ crashBoards: 100, transition: 100, pace: 100 }), a: () => O({ crashBoards: 0, transition: 0, pace: 0 }) },
-  { name: 'star deny', home: 11, away: 23, h: (o) => D({ starPlan: 'deny', starTarget: o.star }), a: () => D({ starPlan: 'deny', starTarget: null }) },
   { name: 'star double', home: 11, away: 23, h: (o) => D({ starPlan: 'double', starTarget: o.star }), a: () => D({ starPlan: 'double', starTarget: null }) },
-  {
-    name: 'guarding',
-    home: 19,
-    away: 24,
-    h: (o) => D({ scheme: 'man', pnr: 'drop', playerD: { [o.handler]: 'under', [o.shooter]: 'tight', [o.brick]: 'sag', [o.big]: 'body' } }),
-    a: (o) => D({ scheme: 'man', pnr: 'switch', playerD: { [o.handler]: 'body', [o.shooter]: 'tight', [o.brick]: 'sag' } }),
-  },
   { name: 'hunt', home: 15, away: 26, h: (o) => O({ huntTarget: o.brick, hotHand: true }), a: (o) => O({ huntTarget: o.star }), adjust: true },
   {
     name: 'sets',

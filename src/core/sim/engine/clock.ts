@@ -66,18 +66,18 @@ export const clockMethods = {
     for (const t of this.T) {
       const press = this.T[1 - t.side].t.defense.press !== 'none' || t.t.defense.press !== 'none';
       const paceMult = 0.9 + (t.t.offense.pace / 100) * 0.2;
-      // face-guarding the star on defense wears out his defender, and so does chasing in a junk defense
+      // chasing in a junk defense wears out the chasers
       const off = this.T[1 - t.side];
-      const denier = t.side !== this.poss && t.t.defense.starPlan === 'deny' ? this.starTarget(t, off) : null;
-      const denyD = denier ? t.guardOf.get(denier.pid) : undefined;
       const chased = t.side !== this.poss ? this.chased(t, off) : NONE;
       for (const p of t.players) {
         if (p.on) {
           p.b.sec += dt;
           let drain = K.drain * (1.4 - 0.75 * (p.r.end / 100)) * paceMult;
           if (press) drain *= levW(1.15);
+          // (and the pressing side runs more of it)
+          if (t.t.defense.press !== 'none') drain *= levW(K.pressAdv.drain);
           if (t.t.defense.press === 'always') drain *= levW(1.12);
-          if (p === denyD || (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p))) drain *= levW(K.denyDrain);
+          if (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p)) drain *= levW(K.chaseDrain);
           // (the chasing roles wear their players down on defense)
           else if (t.side !== this.poss && (p.drole === 'poa' || p.drole === 'stopper')) drain *= K.role.drain;
           p.energy = Math.max(0.2, p.energy - drain * dt);

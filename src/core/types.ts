@@ -434,13 +434,8 @@ export type PnrCoverage = 'drop' | 'switch' | 'hedge' | 'blitz' | 'ice';
 /** Man-to-man, the zones, and the junk defenses: box-and-one (four in a 2-2 zone, one chaser) and triangle-and-two (three in a zone, two chasers). */
 export type DefScheme = 'man' | 'zone23' | 'zone32' | 'box1' | 'tri2';
 export type PressMode = 'none' | 'afterMade' | 'always';
-export type StarPlan = 'none' | 'deny' | 'double';
-/**
- * A scouting-report instruction for guarding one opponent: go under screens on him, run him off
- * the line (top-lock), sag off him into the paint, or get physical with him.
- */
-export type PlayerDefense = 'under' | 'tight' | 'sag' | 'body';
-export const PLAYER_DEFENSES: PlayerDefense[] = ['under', 'tight', 'sag', 'body'];
+/** Plan for the opponent's star: none, or double-team him (a deny was cut: it was worth nothing against anyone). */
+export type StarPlan = 'none' | 'double';
 
 /**
  * A named offensive set (see src/core/sim/sets.ts): a specific way of running one of the engine's
@@ -448,6 +443,8 @@ export const PLAYER_DEFENSES: PlayerDefense[] = ['under', 'tight', 'sag', 'body'
  */
 export type SetId = 'spain' | 'horns' | 'floppy' | 'elevator' | 'hammer' | 'chicago' | 'postSplit';
 export const SET_IDS: SetId[] = ['spain', 'horns', 'floppy', 'elevator', 'hammer', 'chicago', 'postSplit'];
+/** A play the bench can call in a live game: one of the sets, or the clear-out isolation ('iso'). */
+export type CallId = SetId | 'iso';
 
 export interface OffenseTactics {
   /** 0..100: 0 = grind every possession, 100 = run-and-gun. */
@@ -512,8 +509,6 @@ export interface DefenseTactics {
    * is their main creator on the floor, picked as the star plan picks one.
    */
   chase?: number[];
-  /** Scouting-report instructions by opponent pid (game-specific). */
-  playerD?: Record<number, PlayerDefense>;
   /** Out-of-possession roles by pid (absent: 'standard'). */
   roles?: Record<number, DefRole>;
 }
@@ -653,7 +648,7 @@ export interface SavedPlaybook {
   /** When it was saved or last overwritten. */
   saved: { season: number; day: number };
   offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget' | 'glass'>;
-  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'playerD' | 'roles'>;
+  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'roles'>;
   manage: GameManagement;
   offPreset: string;
   defPreset: string;
@@ -695,6 +690,8 @@ export interface TeamSeason {
   playIn?: boolean;
   /** Cash received in trades this season ($K): booked as revenue, but not local revenue that revenue sharing evens out. */
   cashIn?: number;
+  /** The team's cash when the regular season's books closed, revenue sharing and the luxury tax paid ($K): what the owner's review judges (see books.ts). */
+  closeCash?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -1009,6 +1006,12 @@ export interface CoachMove {
   clock: number;
   /** "Pick-and-roll coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout", "Horns: Jokić" (a play called: `after` is the trip it ran on). */
   text: string;
+  /**
+   * A play called: the play and who it was run for; `late` when its trip won the game in the last 24
+   * seconds (put us ahead for good) or tied it there to force overtime (the period's last score), with
+   * the clock its basket came at. Absent in reports from before isolations could be called.
+   */
+  call?: { id: CallId; pid?: number; late?: { how: 'won' | 'tied'; clock: number } };
   /** The end of the floor it's about. */
   end: 'def' | 'off' | 'both';
   /** The staff made it. */
@@ -1414,7 +1417,7 @@ export interface League {
   ownerGoals?: OwnerGoals;
   /** The owner's reviews of the user's last seasons, oldest first (at most REVIEWS_KEPT). */
   ownerReviews?: OwnerReview[];
-  /** The owner's word on the user's books once they're in the red (see books.ts): a warning, an ultimatum, a freeze. */
+  /** The owner's word on the user's books once they're in the red (see books.ts): a warning, an ultimatum, a freeze, a final warning. */
   books?: Books;
   /** The staff's calls the user has settled (see calls.ts), newest last. */
   callsDone?: string[];
@@ -1515,6 +1518,12 @@ export interface LiveJournal {
   /** The projected home margin at tip-off (see GameResult.edge): absent in journals from before win probability. */
   edge?: number;
   /**
+   * The difficulty's edge on the court at tip-off (SimOptions.edge; null on Normal): a replay plays
+   * it as it was, whatever the difficulty is now. Absent in journals from before it was kept (read
+   * from today's difficulty).
+   */
+  court?: [number, number] | null;
+  /**
    * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
    * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a
    * backup imported as a copy).
@@ -1543,8 +1552,11 @@ export type LiveOp = { at: number } & (
   | { op: 'tactics'; args: { tactics: Tactics; plan?: boolean; staff?: string } }
   | { op: 'timeout'; args: { reason?: string } }
   | { op: 'manualSubs'; args: { on: boolean } }
-  /** A play called in a huddle: set `set` on the next half-court trip this period, for `pid` (else the best fit on the floor). */
-  | { op: 'play'; args: { set: SetId; pid?: number } }
+  /**
+   * A play called in a huddle or from the bench: `set` (a set, or 'iso' for a clear-out isolation) on
+   * the next half-court trip this period, for `pid` (else the best fit on the floor).
+   */
+  | { op: 'play'; args: { set: CallId; pid?: number } }
 );
 
 export interface CupGroup {
@@ -1635,8 +1647,6 @@ export interface GamePlan {
   seriesId?: string;
   /** Planned matchups against this opponent: their pid -> my defender pid. */
   matchups?: Record<number, number>;
-  /** How to guard their players: their pid -> a scouting-report instruction. */
-  playerD?: Record<number, PlayerDefense>;
   note?: string;
 }
 

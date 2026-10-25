@@ -1,13 +1,15 @@
-// The Continue loop: sims that stop for the right things (a new staff call, the morning of one of
-// his biggest games, never a story), "Sim to the next big night" from a game's billing, the
-// Continue bar naming tonight's stakes, and big moments that end a sim on one story, the biggest.
+// The Continue loop: sims that stop for the right things (a new staff call, each playoff series of
+// his once as it starts, the morning of one of his biggest games, never a story) and say a call
+// they passed, "Sim to the next big night" from a game's billing, the Continue bar naming tonight's
+// stakes, and big moments that end a sim on one story, the biggest.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { League, ScheduledGame } from '../../core/types';
 import { billingFor, type Billing } from '../../core/analysis/gameStory';
 import { addNews, standardRoster } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
-import { openCallIds, settleCall } from '../../core/league/calls';
+import { newCall, openCallIds, settleCall } from '../../core/league/calls';
+import { schedulePlayoffDay } from '../../core/league/playoffs';
 import { flowActions, nextBigNight } from '../flow';
 import { currentMoments, pickMoments, type Moment } from '../moments';
 import { testLeague } from '../../state/__tests__/fixtures';
@@ -84,6 +86,44 @@ describe('the Continue loop', () => {
       expect(out).toEqual({ days: 3, stop: 'call' });
       expect(l.day).toBe(day0 + 3);
       expect(openCallIds(l)).toEqual([`injury:${best(l).pid}:${best(l).injuryCount}`]);
+      // what the sim's end says: the call new since it started
+      expect(newCall(l, openCallIds(l), new Set())).toMatchObject({ card: { kind: 'injury' }, due: false });
+    }
+
+    // a sim through the playoffs stops the morning each series of his starts (Game 1 on the calendar,
+    // a call: plan it or leave it to the staff), once: the next sim plays the series on
+    {
+      const l = stopping('series');
+      const me = l.userTid;
+      const conf = l.teams[me].conf;
+      const [opp, a, b] = l.teams.filter((t) => t.tid !== me && t.conf === conf).map((t) => t.tid);
+      l.phase = 'playoffs';
+      l.schedule = l.schedule.filter((g) => g.played);
+      l.playoffs = [];
+      const hush = quiet(l);
+      let n = 0;
+      const out = await runSim(
+        l,
+        { kind: 'endPostseason' },
+        {
+          progress: () => {
+            hush();
+            // the next round's draw two days in
+            if (++n !== 2) return;
+            l.playoffs.push(
+              { id: `${conf}2-0`, round: 2, conf, high: me, low: opp, highSeed: 1, lowSeed: 4, highWins: 0, lowWins: 0 },
+              { id: `${conf}2-1`, round: 2, conf, high: a, low: b, highSeed: 2, lowSeed: 3, highWins: 0, lowWins: 0 },
+            );
+            schedulePlayoffDay(l);
+          },
+        },
+      );
+      expect(out).toEqual({ days: 2, stop: 'call' });
+      expect(userGameOnDay(l, l.day)?.seriesId).toBe(`${conf}2-0`);
+      expect(openCallIds(l)).toEqual([`series:${l.season}:${conf}2-0`]);
+      // a week on: Game 1 and the games after it, no second stop for the series
+      expect((await runSim(l, { kind: 'week' }, { progress: quiet(l) })).stop).toBe('target');
+      expect(l.playoffs[0].highWins + l.playoffs[0].lowWins).toBeGreaterThan(1);
     }
 
     // a call that was open when the sim started, or that he settled, or a short absence, or no stops at all, plays on
@@ -109,11 +149,24 @@ describe('the Continue loop', () => {
       expect(out.stop, set).toBe('target');
     }
 
-    // a sim of a set number of days never stops for it
+    // a sim of a set number of days never stops for it, but a call that opened on the way is still said at its end
     {
       const l = stopping('days');
-      const out = await runSim(l, { kind: 'days', n: 4 }, { progress: () => addNews(l, { kind: 'milestone', head: 'x', text: '.', tids: [l.userTid], pids: [], weight: 3 }) });
+      const before = new Set(openCallIds(l));
+      let n = 0;
+      const out = await runSim(
+        l,
+        { kind: 'days', n: 4 },
+        {
+          progress: () => {
+            addNews(l, { kind: 'milestone', head: 'x', text: '.', tids: [l.userTid], pids: [], weight: 3 });
+            // (out long enough that a trade is still an answer when it ends: a real choice)
+            if (++n === 2) hurt(best(l), 30);
+          },
+        },
+      );
       expect(out).toEqual({ days: 4, stop: 'target' });
+      expect(newCall(l, openCallIds(l), before)?.card.kind).toBe('injury');
     }
 
     // a sim stops on the morning of one of his biggest games, before it is played

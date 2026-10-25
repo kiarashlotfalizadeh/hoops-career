@@ -51,7 +51,6 @@ const all: [string, TacticsPatch, string[]][] = [
   ['box1', { defense: { scheme: 'box1' } }, ['box_', 'zone_']],
   ['tri2', { defense: { scheme: 'tri2' } }, ['box_', 'zone_']],
   ['switchOffBall', { defense: { switchOffBall: true } }, ['switch_', 'drop_']],
-  ['star deny', { defense: { starPlan: 'deny' } }, ['star_deny']],
   ['star double', { defense: { starPlan: 'double' } }, ['star_double', 'double_kick']],
   ['pace 0', { offense: { pace: 0 } }, []],
   ['pace 100', { offense: { pace: 100 } }, []],

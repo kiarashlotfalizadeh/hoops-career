@@ -491,12 +491,58 @@
 .lv-rep-skip:active {
   background: var(--surface-2);
 }
-/* the late-game huddle's play calls: a row of buttons, the one called filled */
-.lv-calls {
+/* the late play call: who it's built around, then a row a play (his isolation and sets first), the one
+   called lit with its mark filled, as a set in the package is */
+.lv-pc-who {
+  margin: -4px 0 10px;
+}
+.lv-pc {
+  width: 100%;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  text-align: left;
+  transition: background var(--dur-fast) ease;
+}
+.lv-pc .grow {
+  min-width: 0;
+}
+.lv-pc .lr-name,
+.lv-pc .lr-meta {
+  display: block;
+}
+.lv-pc:not(:disabled):active {
+  background: var(--surface);
+}
+.lv-pc.on {
+  background: var(--surface-2);
+}
+.lv-pc:disabled {
+  opacity: 0.5;
+}
+.lv-pc-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line-3);
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+}
+.lv-pc.on .lv-pc-mark {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.lv-pc-foot {
+  margin-top: 8px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-pc:not(.on):not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
 }
 .lv-rep-skip::after {
   content: '';

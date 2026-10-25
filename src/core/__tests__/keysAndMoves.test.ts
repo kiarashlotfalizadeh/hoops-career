@@ -299,7 +299,8 @@ describe('keys to the game and coach moves', () => {
       {
         const logs: PossLog[] = [];
         for (let i = 0; i < 40; i++) logs.push(trip(0, 1), trip(1, 2));
-        for (let i = 0; i < 8; i++) logs.push({ ...trip(0, 1), ...(i === 0 ? { set: { id: 'horns' as const, pid: 5, n: 1 }, pts: 3 } : {}) }, trip(1, 0));
+        // (the last eight trips each, in the fourth quarter)
+        for (let i = 0; i < 8; i++) logs.push({ ...trip(0, 1), q: 4, ...(i === 0 ? { set: { id: 'horns' as const, pid: 5, n: 1 }, pts: 3 } : {}) }, { ...trip(1, 0), q: 4 });
         const marks = [
           { op: { at: 0, op: 'sub', args: { out: 1, in: 2 } } as LiveOp, log: 80, q: 4, clock: 120 },
           { op: { at: 0, op: 'play', args: { set: 'horns' } } as LiveOp, log: 80, q: 4, clock: 120 },
@@ -310,17 +311,37 @@ describe('keys to the game and coach moves', () => {
         const [late] = coachMoves(marks, logs, 0, names, undefined, true);
         expect(late.closed).toBe(true);
         expect(moveVerdict(late).verdict).toBe('better');
-        expect(play).toMatchObject({ kind: 'play', text: 'Horns: P5', after: { us: { poss: 1, pts: 3 } } });
+        expect(play).toMatchObject({ kind: 'play', text: 'Horns: P5', call: { id: 'horns', pid: 5 }, after: { us: { poss: 1, pts: 3 } } });
+        // a clear-out called late is the trip that ran it; once the game is over, one whose basket put us
+        // ahead for good in the last shot clock won it, and one that tied it there sent it to overtime
+        const end = (q: number, clockEnd: number, pts: number, score: [number, number], off: 0 | 1 = 0, more: Partial<PossLog> = {}): PossLog => ({
+          ...trip(off, pts),
+          q,
+          clockEnd,
+          score,
+          ...more,
+        });
+        const iso = { op: { at: 0, op: 'play', args: { set: 'iso', pid: 5 } } as LiveOp, log: 1, q: 4, clock: 14 };
+        const won = [end(4, 20, 2, [100, 100], 1), end(4, 3, 2, [102, 100], 0, { iso: 5 }), end(4, 0, 0, [102, 100], 1)];
+        expect(coachMoves([iso], won, 0, names, undefined, true)[0]).toMatchObject({
+          text: 'Iso: P5',
+          call: { id: 'iso', pid: 5, late: { how: 'won', clock: 3 } },
+          after: { us: { poss: 1, pts: 2 } },
+        });
+        // (not before the game is over, nor when they answered)
+        expect(coachMoves([iso], won, 0, names)[0].call?.late).toBeUndefined();
+        expect(coachMoves([iso], [...won.slice(0, 2), end(4, 0, 3, [102, 103], 1)], 0, names, undefined, true)[0].call?.late).toBeUndefined();
+        const tied = [end(4, 20, 2, [98, 100], 1), end(4, 3, 2, [100, 100], 0, { iso: 5 }), end(4, 0, 0, [100, 100], 1), end(5, 280, 3, [103, 100])];
+        expect(coachMoves([iso], tied, 0, names, undefined, true)[0].call?.late).toEqual({ how: 'tied', clock: 3 });
       }
 
-      // name game-specific orders: a matchup, an instruction, a hunt
+      // name game-specific orders: a matchup, a hunt
       {
         const a = defaultTactics();
         const b = cloneTactics(a);
         b.defense.matchups = { 7: 3 };
-        b.defense.playerD = { 9: 'under' };
         b.offense.huntTarget = 11;
-        expect(moveText(a, b, names)).toBe('P3 guards P7 · Go under: P9 · Attack P11');
+        expect(moveText(a, b, names)).toBe('P3 guards P7 · Attack P11');
       }
     }
   }, 120_000);

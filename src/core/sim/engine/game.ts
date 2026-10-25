@@ -5,14 +5,14 @@
 // defense, possession, transition, setPlays, the actions (pnr, isolation, postUp, handoff, motion),
 // shots, rebounds, fouls and record.
 
-import type { GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact, XShots } from '../../types';
+import type { CallId, GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact, XShots } from '../../types';
 import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
 import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PossLog } from '../log';
 import { cloneTactics, defRoleOf, shapeOf, withMentality } from '../tactics';
-import { isSetId, readAfter } from '../sets';
+import { isCallId, readAfter } from '../sets';
 import { K, ftChance, lev } from './constants';
 import { execution, famPenalty } from '../familiarity';
 import { LINK_META, linksAmong } from '../links';
@@ -144,8 +144,6 @@ export class GameSim {
   scramble = 1;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
-  /** The tag the last sagHelp's openness goes under ('pd_sag', or 'role_roam' for a roamer's). */
-  sagKey = 'pd_sag';
   /** A set handed to the action about to run (it takes it: see takePlay). */
   play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -487,13 +485,14 @@ export class GameSim {
   }
 
   /**
-   * Run set `id` on this side's next half-court trip this period, for `pid` while he's on the floor
-   * (else for the best fit there): the engine's tests and the measurement scripts use it to put a set
-   * on the floor. The user's bench calls no plays.
+   * Run set `id` (or 'iso': a clear-out isolation, as the after-timeout isolation runs one) on this
+   * side's next half-court trip this period, for `pid` while he's on the floor (else for the best fit
+   * there, or whoever the isolation finds): the user's play calls in a live game, and the engine's
+   * tests and measurement scripts. The staff calls no plays.
    */
-  runSet(side: 0 | 1, id: SetId, pid?: number): boolean {
+  runSet(side: 0 | 1, id: CallId, pid?: number): boolean {
     const t = this.T[side];
-    if (!isSetId(id) || (pid != null && !t.byId.has(pid))) return false;
+    if (!isCallId(id) || (pid != null && !t.byId.has(pid))) return false;
     t.nextSet = { id, pid: pid ?? null };
     return true;
   }

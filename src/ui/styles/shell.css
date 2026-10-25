@@ -404,7 +404,10 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
 .continue-stop:active {
   background: var(--surface-3);
 }
-/* the Play options sheet: one row per step, the primary one in brand */
+/* the Play options sheet: the staff's calls still open first (over the sims that would pass them), then one row per step, the primary one in brand */
+.flow-calls {
+  margin-bottom: 14px;
+}
 .flow-opt {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

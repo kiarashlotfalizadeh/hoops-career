@@ -9,12 +9,13 @@
 // rather than the points: a counter changes the looks, and whether this one look fell is noise it
 // can't move. Paired that way, 240 games pin a counter to about ±0.45 a game (the points alone: ±0.6).
 //
-// That is as big as most counters are worth (over thirty measured against six opponents with 2,000
-// games each, their true worth spread about ±0.4 a game, the largest 0.8), so a reading on its own
-// mostly measures its own noise, and the counters it calls gains are the ones whose noise ran high.
-// A counter that reads promising is played again on fresh seeds, and every reading is shrunk toward
-// even by how much of it can be noise (WORTH_SPREAD against its standard error) before it's shown,
-// called a gain or counted in the projection. The seeds are the season's for this opponent, not the
+// Since the big decisions were made to matter (2026-10: see K.matchup), a counter aimed right is worth
+// two points a game and more against the opponent it's for, and a wrong one costs as much (over the
+// real league each big decision's true worth spreads about ±1.2 a game from one opponent to the next),
+// so a reading is mostly the counter and partly noise. A counter that reads promising is still played
+// again on fresh seeds, and every reading is shrunk toward even by how much of it can be noise
+// (WORTH_SPREAD against its standard error) before it's shown, called a gain or counted in the
+// projection. (Before, the knobs were small, true worth spread ±0.4, and most readings were noise.) The seeds are the season's for this opponent, not the
 // day's: measured again with nothing changed, it reads the same; with something changed, the same
 // games show what the change did.
 // Pure: reads the league.
@@ -31,15 +32,15 @@ export const WORTH_GAMES = 240;
 /** Counters measured: the first the rules draft (the ones the numbers back first). */
 export const WORTH_MAX = 5;
 /** How far counters' true worth spreads either side of even, in points a game (what a reading is shrunk toward even by). */
-export const WORTH_SPREAD = 0.4;
+export const WORTH_SPREAD = 1.2;
 /** A first reading this many standard errors from even is played again on fresh seeds before it's believed. */
 export const WORTH_RECHECK_Z = 1.2;
 /**
  * Points a game a counter's shrunk worth must reach to read as a gain (or a cost): with a reading's
- * noise at about ±0.45, a counter worth nothing gets there about one time in a hundred, one worth a
- * point a game about half the time, and "Even" is the honest word for the rest.
+ * noise at about ±0.45 (shrunk by about a seventh), a counter worth nothing gets there about one time
+ * in a hundred, one worth a point a game nearly always, and "Even" is the honest word for the rest.
  */
-export const WORTH_MIN = 0.4;
+export const WORTH_MIN = 0.5;
 
 export interface CounterWorth {
   id: string;

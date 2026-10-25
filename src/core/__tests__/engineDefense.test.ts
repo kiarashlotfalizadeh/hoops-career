@@ -1,6 +1,5 @@
-// Defensive depth in the engine: the junk defenses (box-and-one, triangle-and-two), scouting-report
-// instructions on single players, hunting one defender (and an AI coach hiding him), and the foul to
-// give. Each does what its help text says and has a cost, and none of it touches a game that
+// Defensive depth in the engine: the junk defenses (box-and-one, triangle-and-two), hunting one
+// defender (and an AI coach hiding him), and the foul to give. Each does what its help text says and has a cost, and none of it touches a game that
 // doesn't use it.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
@@ -10,7 +9,7 @@ import type { PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { composites } from '../ratings';
 import { Rng } from '../random';
-import type { Player, PlayerDefense, TacticImpact, Tactics } from '../types';
+import type { Player, TacticImpact, Tactics } from '../types';
 
 /** The tactics without the overhaul's shape and out-of-possession roles: the games these numbers were taken from. */
 function basic(t: Tactics): Tactics {
@@ -77,7 +76,7 @@ describe('engine defense', () => {
   }
   const usage = (b: Box) => (b.fga + 0.44 * b.fta + b.tov) / (b.tFga + 0.44 * b.tFta + b.tTov);
 
-  it('plays junk defenses, instructions by player, hunting a defender and the foul to give as their help texts say, and games without them as before', () => {
+  it('plays junk defenses, hunting a defender and the foul to give as their help texts say, and games without them as before', () => {
     // junk defenses
     // a box-and-one takes the ball out of the chased star’s hands, but the others get more threes and the glass gets softer
     {
@@ -159,60 +158,6 @@ describe('engine defense', () => {
         const chasers = l.chase!.map((pid) => league.players[l.guards[pid]]);
         const best = [...def].sort((a, b) => composites(b.ratings).perDef - composites(a.ratings).perDef).slice(0, 2);
         expect(chasers.reduce((a, p) => a + composites(p.ratings).perDef, 0)).toBeGreaterThanOrEqual(best.reduce((a, p) => a + composites(p.ratings).perDef, 0) - 12);
-      }
-    }
-    // instructions by player
-    {
-      /** Their starters with an instruction for each (as `patchFor` picks), and the raw lines of the players named. */
-      const lines = (patchFor: (players: Player[]) => Record<number, PlayerDefense>, games = 20) => {
-        const players = teamPlayers(league, 12);
-        const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
-        const pd = patchFor(players.filter((p) => starters.has(p.pid)));
-        const pids = Object.keys(pd).map(Number);
-        const [base, inst] = paired(11, 12, { players, tactics: league.teams[12].tactics }, { defense: { playerD: pd } }, games, 300, pids);
-        return { base, inst };
-      };
-      const by = (players: Player[], f: (c: ReturnType<typeof composites>) => number) => [...players].sort((a, b) => f(composites(b.ratings)) - f(composites(a.ratings)));
-      // "under" gives his pull-ups room and takes his drives away; "tight" trades his threes for drives
-      {
-        // (the tags are the engine's own accounting: openness his pull-ups gained, his drives and the roll lost)
-        const under = lines((ps) => ({ [by(ps, (c) => c.pnrHandle)[0].pid]: 'under' }));
-        expect(under.inst.impacts['pd_under:o']).toBeGreaterThan(0);
-        expect(under.inst.impacts['pd_under:d']).toBeGreaterThan(0);
-        expect(under.base.impacts['pd_under:o']).toBeUndefined();
-        const tight = lines((ps) => ({ [by(ps, (c) => c.c3)[0].pid]: 'tight' }));
-        expect(tight.inst.tpa).toBeLessThan(tight.base.tpa * 0.92);
-        expect(tight.inst.rimA).toBeGreaterThan(tight.base.rimA);
-        expect(tight.inst.impacts['pd_tight:d']).toBeGreaterThan(0);
-      }
-
-      // "sag" helps at the rim and leaves him open; "body" makes his finishes harder and sends him to the line more
-      {
-        const sag = lines((ps) => ({ [by(ps, (c) => -c.c3)[0].pid]: 'sag' }));
-        expect(sag.inst.impacts['pd_sag:d']).toBeGreaterThan(0);
-        const body = lines((ps) => ({ [by(ps, (c) => c.postScore + c.rim)[0].pid]: 'body' }), 30);
-        expect(body.inst.fta).toBeGreaterThan(body.base.fta);
-        expect(body.inst.impacts['pd_body:d']).toBeGreaterThan(0);
-        expect(body.inst.impacts['pd_body:o']).toBeGreaterThan(0);
-      }
-
-      // fit one player and cost against another: sagging off a shooter gives up the open looks it leaves him
-      {
-        const ps = structuredClone(teamPlayers(league, 12));
-        const starters = new Set(league.teams[12].rotation.order.slice(0, 5));
-        const target = ps.filter((p) => starters.has(p.pid)).sort((a, b) => composites(a.ratings).c3 - composites(b.ratings).c3)[0];
-        // (a shooter's tendencies, or a non-shooter's, come with his rating: none, so only the rating differs)
-        delete target.tend;
-        const run = (tp: number) => {
-          target.ratings.tp = tp;
-          return paired(11, 12, { players: ps, tactics: league.teams[12].tactics }, { defense: { playerD: { [target.pid]: 'sag' } } }, 25, 500, [target.pid])[1].impacts;
-        };
-        const nonShooter = run(15);
-        const shooter = run(90);
-        // the help at the rim is about the same; the open looks it gives up grow with his shooting
-        expect(nonShooter['pd_sag:d']).toBeGreaterThan(nonShooter['pd_sag:o'] ?? 0);
-        expect(Math.abs(shooter['pd_sag:d'] - nonShooter['pd_sag:d'])).toBeLessThan(0.3 * nonShooter['pd_sag:d']);
-        expect(shooter['pd_sag:o']).toBeGreaterThan(3 * (nonShooter['pd_sag:o'] ?? 0) + 2);
       }
     }
     // hunting a defender
@@ -327,45 +272,45 @@ describe('engine defense', () => {
     }
     // leaves games that use none of it exactly as they were
     {
-      // box-score fingerprints taken from the engine before junk defenses, instructions, hunting and the foul to give
+      // box-score fingerprints taken from the engine before junk defenses, hunting and the foul to give
       // (taken again when side-out fouls started restarting the shot clock at 14, a rule every game plays, and when
       // tactics were made to matter twice as much: the tactical-leverage check below plays these games at 1x leverage and gets
       // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
       // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
-      // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate)
+      // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter and AI coaches came to play their own defenses)
       const expected: Record<string, number[][]> = {
         default: [
-          [116, 103, 78, 37, 13, 21, 14, 0],
-          [136, 132, 94, 27, 10, 36, 10, 0],
-          [109, 112, 89, 38, 7, 13, 13, 0],
+          [101, 127, 79, 33, 8, 33, 8, 0],
+          [134, 144, 79, 34, 7, 27, 15, 0],
+          [118, 117, 88, 37, 5, 20, 15, 0],
         ],
         zone23: [
-          [113, 122, 94, 41, 15, 22, 12, 0],
-          [138, 124, 95, 38, 15, 15, 13, 0],
-          [104, 107, 93, 29, 8, 20, 16, 0],
+          [120, 101, 88, 42, 10, 22, 10, 0],
+          [132, 119, 87, 35, 11, 23, 12, 0],
+          [115, 107, 89, 35, 6, 14, 14, 0],
         ],
         zone32: [
-          [109, 123, 82, 39, 9, 25, 17, 0],
-          [132, 111, 97, 27, 13, 33, 7, 0],
-          [103, 108, 99, 19, 15, 24, 15, 0],
+          [115, 120, 79, 39, 9, 36, 12, 0],
+          [124, 116, 85, 16, 8, 23, 12, 0],
+          [128, 130, 101, 34, 6, 27, 14, 1],
         ],
         double: [
-          [104, 119, 83, 38, 17, 8, 13, 0],
-          [131, 122, 91, 30, 11, 29, 8, 0],
-          [120, 103, 94, 36, 9, 19, 14, 0],
+          [109, 122, 79, 37, 7, 17, 11, 0],
+          [145, 139, 84, 31, 9, 36, 13, 0],
+          [113, 110, 91, 41, 7, 12, 13, 0],
         ],
         // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
         // the couple of trips the mismatch hunt changes back to the same team lines)
         hunt: [
-          [113, 104, 76, 38, 13, 21, 16, 0],
-          [118, 127, 92, 21, 12, 24, 11, 0],
-          [109, 112, 89, 38, 7, 13, 13, 0],
+          [109, 129, 83, 34, 7, 34, 7, 0],
+          [137, 134, 83, 34, 6, 25, 13, 0],
+          [118, 117, 88, 37, 5, 20, 15, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
         default: undefined,
         zone23: { defense: { scheme: 'zone23' } },
-        zone32: { defense: { scheme: 'zone32', starPlan: 'deny' } },
+        zone32: { defense: { scheme: 'zone32' } },
         double: { defense: { starPlan: 'double', pnr: 'switch', switchOffBall: true } },
         hunt: { offense: { huntMismatch: true }, manage: { hackThreshold: 62 } },
       };
@@ -383,9 +328,11 @@ describe('engine defense', () => {
   }, 120_000);
 
   // Tactical leverage (K.tacticEdge): the owner's call to make tactics matter about twice as much as
-  // they did. At 1x the engine plays exactly as it did before the change, and at the game's 2x the edge
-  // a choice gets from fitting the opponent is about twice as big both ways.
-  it('weighs tactics at twice their old size: 1x plays every game as before, and a box-and-one aimed at a star with non-shooters around him is a weapon, one against a shooting team a loser, each about twice as much as at 1x', () => {
+  // they did. At 1x the engine plays every tactical edge at its written size (exactly as it did before
+  // the change, until the big decisions were made to matter in 2026-10 and their 1x sizes moved with
+  // them), and at the game's 2x the edge a choice gets from fitting the opponent is about twice as big
+  // both ways.
+  it('weighs tactics at twice their old size: 1x plays every edge at its written size, and a box-and-one aimed at a star with non-shooters around him is a weapon, one against a shooting team a loser, each at least twice as much as at 1x', () => {
     const EDGE = K.tacticEdge;
     try {
       // the game at 2x, and every game played exactly as before at 1x
@@ -397,48 +344,48 @@ describe('engine defense', () => {
       // and mismatch hunting with a set package, heavy help and getting back (taken again at 1x when the late
       // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
-      // every tactical edge at its 1x size, game after game; all of them again when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate)
+      // every tactical edge at its 1x size, game after game; all of them again when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter: a decision's looks counting by who takes them, the coverages' and the zone's sizes, the press centred on the league's handlers)
       const expected: Record<string, number[][]> = {
         default: [
-          [122, 115, 72, 38, 16, 15, 16, 0],
-          [132, 120, 97, 23, 9, 33, 10, 0],
-          [121, 119, 95, 31, 7, 25, 9, 0],
+          [108, 119, 77, 31, 8, 24, 11, 0],
+          [141, 114, 91, 23, 12, 35, 11, 0],
+          [114, 119, 102, 33, 15, 25, 11, 0],
         ],
         zone23: [
-          [125, 120, 71, 49, 14, 12, 17, 0],
-          [118, 102, 101, 29, 21, 22, 11, 0],
-          [117, 114, 98, 33, 10, 12, 12, 0],
+          [123, 106, 73, 37, 9, 24, 7, 0],
+          [116, 103, 91, 24, 16, 25, 12, 0],
+          [109, 119, 93, 36, 14, 12, 12, 0],
         ],
         zone32: [
-          [111, 117, 73, 40, 12, 20, 14, 0],
-          [122, 114, 91, 22, 16, 33, 11, 0],
-          [111, 108, 85, 38, 11, 19, 16, 0],
+          [123, 112, 81, 33, 10, 35, 10, 0],
+          [117, 113, 82, 22, 10, 34, 18, 0],
+          [104, 116, 92, 30, 12, 21, 15, 0],
         ],
         box1: [
-          [107, 105, 81, 42, 13, 19, 13, 0],
-          [120, 102, 100, 31, 19, 34, 11, 0],
-          [128, 122, 97, 39, 11, 18, 15, 1],
+          [113, 123, 84, 40, 10, 37, 13, 0],
+          [121, 112, 95, 27, 19, 24, 10, 0],
+          [122, 97, 89, 26, 12, 17, 14, 0],
         ],
         double: [
-          [122, 126, 84, 37, 11, 22, 18, 1],
-          [136, 130, 85, 35, 9, 14, 15, 0],
-          [119, 110, 94, 23, 9, 15, 9, 0],
+          [112, 122, 78, 30, 5, 26, 9, 0],
+          [113, 120, 91, 37, 15, 22, 16, 0],
+          [131, 117, 89, 30, 12, 20, 10, 0],
         ],
         pressure: [
-          [126, 118, 82, 41, 14, 25, 18, 0],
-          [146, 145, 89, 28, 15, 60, 16, 0],
-          [112, 101, 92, 28, 7, 25, 22, 0],
+          [109, 99, 90, 41, 15, 29, 12, 0],
+          [128, 144, 92, 28, 10, 34, 19, 0],
+          [124, 114, 97, 33, 12, 20, 13, 0],
         ],
         hunting: [
-          [122, 115, 81, 37, 12, 24, 16, 0],
-          [130, 122, 89, 30, 12, 35, 15, 0],
-          [114, 108, 96, 36, 13, 18, 14, 0],
+          [110, 114, 76, 44, 9, 19, 15, 0],
+          [117, 137, 80, 27, 4, 17, 17, 0],
+          [123, 112, 94, 33, 9, 27, 10, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
         default: undefined,
         zone23: { defense: { scheme: 'zone23' } },
-        zone32: { defense: { scheme: 'zone32', starPlan: 'deny' } },
+        zone32: { defense: { scheme: 'zone32' } },
         box1: { defense: { scheme: 'box1' } },
         double: { defense: { starPlan: 'double', pnr: 'switch', switchOffBall: true } },
         pressure: { defense: { pressure: 90, press: 'afterMade', pnr: 'blitz', physicality: 80 }, offense: { crashBoards: 85, transition: 90 } },
@@ -482,13 +429,14 @@ describe('engine defense', () => {
       };
       const [r1, w1, r2, w2] = [pairedDelta(...lab('helio', 1, 500)), pairedDelta(...lab('shooters', 1, 500)), at2('helio', h400), at2('shooters', s400)];
       // aimed right it gains more and aimed wrong it costs more, and the gap between the two (the part of
-      // its value that comes from the matchup) is about twice what it was
-      // (about +2.1 and -0.9 per 100 at 1x here, +2.3 and -4.2 at 2x: a gap 2.2 times as wide)
+      // its value that comes from the matchup) is at least twice what it was: more, since the open looks
+      // it leaves count by who takes them (K.matchup), in full past a room the leverage gets them to
+      // (about +2.4 and -1.9 per 100 at 1x here, +4.9 and -8.2 at 2x: a gap 3.1 times as wide)
       expect(r2.delta).toBeGreaterThan(r1.delta);
       expect(w2.delta).toBeLessThan(w1.delta - 1);
       const ratio = (r2.delta - w2.delta) / (r1.delta - w1.delta);
       expect(ratio).toBeGreaterThan(1.5);
-      expect(ratio).toBeLessThan(2.6);
+      expect(ratio).toBeLessThan(3.6);
     } finally {
       K.tacticEdge = EDGE;
     }

@@ -1,7 +1,7 @@
 // Opponent-specific game plans for the user's team: changes to the base tactics (and planned
 // matchups) that apply only against one opponent, for the next game, a playoff series or the season.
 
-import type { GamePlan, GamePlanItem, League, PlanScope, PlayerDefense, ScheduledGame, Tactics } from '../types';
+import type { GamePlan, GamePlanItem, League, PlanScope, ScheduledGame, Tactics } from '../types';
 import { applyPatch, cloneTactics, withoutGameSpecific } from '../sim/tactics';
 
 /** The playoff series the user is playing against `opp` right now, if any. */
@@ -10,8 +10,8 @@ function liveSeries(league: League, opp: number) {
   return league.playoffs.find((s) => s.winner === undefined && ((s.high === me && s.low === opp) || (s.low === me && s.high === opp)));
 }
 
-/** Whether a plan asks for anything on the floor: a counter, a matchup or how to guard a player. */
-export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0 || Object.keys(p.playerD ?? {}).length > 0;
+/** Whether a plan asks for anything on the floor: a counter or a matchup. */
+export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0;
 
 /** A plan still has something in it (a note alone counts). */
 const hasContent = (p: GamePlan) => planMade(p) || !!p.note;
@@ -80,17 +80,6 @@ export function setPlanMatchup(league: League, opp: number, theirs: number, mine
   prune(league, opp);
 }
 
-/** How to guard one of their players (`d` null: no instruction). */
-export function setPlanPlayerD(league: League, opp: number, theirs: number, d: PlayerDefense | null) {
-  const plan = ensurePlan(league, opp);
-  const m = { ...(plan.playerD ?? {}) };
-  if (d === null) delete m[theirs];
-  else m[theirs] = d;
-  if (Object.keys(m).length) plan.playerD = m;
-  else delete plan.playerD;
-  prune(league, opp);
-}
-
 /** How long the plan against `opp` lasts. A series scope needs a series under way against them. */
 export function setPlanScope(league: League, opp: number, scope: PlanScope): boolean {
   const plan = league.gamePlans?.[opp];
@@ -120,7 +109,7 @@ function prune(league: League, opp: number) {
 
 /**
  * The user's tactics for a game against `opp`: the base tactics with the plan's items applied in
- * order, then its matchups and instructions by player on top of any the base tactics carry.
+ * order, then its matchups on top of any the base tactics carry.
  */
 export function effectiveTactics(league: League, opp: number, game?: Pick<ScheduledGame, 'seriesId'>, base: Tactics = league.teams[league.userTid].tactics): Tactics {
   const plan = planFor(league, opp, game);
@@ -129,7 +118,6 @@ export function effectiveTactics(league: League, opp: number, game?: Pick<Schedu
   for (const it of plan.items) t = applyPatch(t, it.patch);
   const out = cloneTactics(t);
   if (plan.matchups) out.defense.matchups = { ...out.defense.matchups, ...plan.matchups };
-  if (plan.playerD && Object.keys(plan.playerD).length) out.defense.playerD = { ...out.defense.playerD, ...plan.playerD };
   return out;
 }
 
@@ -159,7 +147,7 @@ export function consumePlans(league: League, g: ScheduledGame) {
 
 /**
  * Tactics the user keeps for every game: tonight's matchups, star, chase, hunt and hack-a-player
- * targets, instructions by player and a junk defense named for their players all name this
+ * targets and a junk defense named for their players all name this
  * opponent's players, so they stay in the game (or its plan) instead; `base` is the tactics they
  * were applied over (a named junk defense goes back to its scheme).
  */

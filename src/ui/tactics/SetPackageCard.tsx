@@ -55,7 +55,7 @@ export function SetPackageCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             From your package the half court runs one on about {pctEach} trips in 100 for each set in it (favoring the ones run least so far), never in a late-game situation (a
             last shot, a 2-for-1, a lead to run out, a deficit to chase), after an offensive rebound or with under 14 seconds to play with, and only for a player on the floor who
             fits it well (fit {SET_K.fit} or more). Your staff stops running a set once their defense is on it; you can still call it yourself. In live games you can call any set
-            yourself (Plays), and on Match one can be your after-timeout play.
+            yourself late in the game, and on Match one can be your after-timeout play.
           </p>
         </Help>
       }

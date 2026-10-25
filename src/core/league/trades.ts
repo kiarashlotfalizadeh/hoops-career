@@ -914,9 +914,9 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     const m = matchInfo(league, offer, key);
     const { inSal, outSal } = m;
     if (salaryMatchGap(league, offer, key) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)}, over its ${matchLimitText(league, m)}.`);
-    // the user's budget frozen by his owner (see books.ts): no taking on salary
+    // the user's budget frozen by his owner (see books.ts): no taking on salary, no cash out
     if (mine.tid === league.userTid) {
-      const frozen = freezeTradeReason(league, inSal, outSal);
+      const frozen = freezeTradeReason(league, inSal, outSal, mine.cash ?? 0);
       if (frozen) errors.push(frozen);
     }
     const cap = CAP_FOR(league, s);

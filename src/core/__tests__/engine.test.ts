@@ -800,7 +800,7 @@ describe('engine rules', () => {
       const base = side(14);
       const players = base.players.map((p) => ({ ...p, lastName: `${p.lastName} Jr.` }));
       let ot = 0;
-      for (let g = 0; g < 80 && ot < 2; g++) {
+      for (let g = 0; g < 200 && ot < 2; g++) {
         const res = new GameSim({ ...base, players }, side(15), { rng: new Rng(700 + g), type: 'regular', record: true, injuries: false }).simToEnd();
         for (const e of res.pbp!) expect(e.text).not.toMatch(/\.\./);
         if (!res.ot) continue;
@@ -933,42 +933,6 @@ describe('engine rules', () => {
       };
       expect(doubles('none')).toBe(0);
       expect(doubles('double')).toBeGreaterThan(0);
-    }
-    // the star deny is tagged only where it slows the star: not on a switched pick-and-roll, where it changes nothing
-    {
-      type P = Internals & {
-        impact(key: string, benefit: number, pts: number): void;
-        halfCourt(): void;
-        pnr(off: unknown, def: unknown, open: number, late: unknown, forced: boolean): unknown;
-      };
-      const denies = (pnr: 'switch' | 'drop') => {
-        const sim = new GameSim(side(0), side(1, { defense: { scheme: 'man', pnr, starPlan: 'deny', starTarget: null } }), {
-          rng: new Rng(6),
-          type: 'regular',
-          injuries: false,
-        }) as unknown as P;
-        let n = 0;
-        const impact = sim.impact.bind(sim);
-        sim.impact = (key, benefit, pts) => {
-          if (key === 'star_deny') n++;
-          impact(key, benefit, pts);
-        };
-        // just the pick-and-roll: no further actions after an offensive board
-        sim.halfCourt = () => {};
-        for (let i = 0; i < 300; i++) sim.pnr(sim.T[0], sim.T[1], 0, sim.lateMode(sim.T[0], sim.T[1]), false);
-        return n;
-      };
-      expect(denies('drop')).toBeGreaterThan(20);
-      expect(denies('switch')).toBe(0);
-    }
-    // the best defender stays on a denied star (threat ignores the deny itself)
-    {
-      type Sim = { T: { guardOf: Map<number, { pid: number }> }[]; starTarget(def: unknown, off: unknown): { pid: number } };
-      const sim = (plan: 'none' | 'deny') =>
-        new GameSim(side(16), side(17, { defense: { starPlan: plan, starTarget: null } }), { rng: new Rng(2), type: 'regular' }) as unknown as Sim;
-      const denied = sim('deny');
-      const star = denied.starTarget(denied.T[1], denied.T[0]).pid;
-      expect(denied.T[1].guardOf.get(star)!.pid).toBe(sim('none').T[1].guardOf.get(star)!.pid);
     }
   });
 });

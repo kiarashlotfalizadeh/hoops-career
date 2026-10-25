@@ -572,32 +572,31 @@ const OFF_FIT: Record<string, FitModel> = {
 };
 
 /**
- * The defensive playbooks' fit models (see FitModel). Blitz and chaos were moved by what paired preset
- * runs against ice measured when pressure and the blitz were cut to a realistic size (at 50 hands
- * −5.6 each, and 0.3 and 0.79 less per point of hands: trapping now pays only the quickest hands), the rest left as fitted.
+ * The defensive playbooks' fit models (see FitModel), refitted when the big decisions were made to
+ * matter (2026-10: a coverage's room counts by who gets it, ice gives up the weak-side corner, a
+ * switch the slip and the boards, pressure and the trap lean on the offense's ball security): each
+ * preset against ice for every team of the real league, paired over all 29 opponents (24 games each,
+ * familiarity aside), regressed on the roster's terms. Ice is left as it was fitted. Trapping and the
+ * press pay a team with quick hands (blitz +1.4 and chaos +3.1 a point of steals, R² 0.6 and 0.5); a
+ * switch pays mobile bigs; the man-to-man coverages are within a few tenths of each other for most
+ * rosters (the real league's spread around these is the opponents', which the game plans are for), and
+ * a 2-3 zone all game costs about 1.2 a game (a weapon against a team that can't shoot, not a base).
  */
 const DEF_FIT: Record<string, FitModel> = {
-  drop: { base: 56.4, terms: [['steals', -0.61, 50]] },
-  switch: { base: 53.9, terms: [['steals', -0.7, 50]] },
-  blitz: { base: 44.7, terms: [['steals', 0.76, 50]] },
+  drop: { base: 53.3, terms: [['steals', -0.47, 50]] },
+  switch: {
+    base: 57.2,
+    terms: [
+      ['steals', -0.47, 50],
+      ['perimeterD', -0.2, 52],
+      ['bigMobility', 0.12, 50],
+    ],
+  },
+  blitz: { base: 54.9, terms: [['steals', 1.44, 50]] },
   ice: { base: 56.9, terms: [['steals', -0.49, 50]] },
-  hedge: {
-    base: 53.2,
-    terms: [
-      ['size', -0.21, 47],
-      ['rimProtection', 0.11, 67],
-      ['steals', -0.15, 50],
-    ],
-  },
-  zone: { base: 43, terms: [['steals', -0.62, 50]] },
-  chaos: {
-    base: 30.8,
-    terms: [
-      ['steals', 0.65, 50],
-      ['depth', 0.47, -14],
-      ['athleticism', 0.34, 54],
-    ],
-  },
+  hedge: { base: 54.7, terms: [['steals', -0.28, 50]] },
+  zone: { base: 44.6, terms: [['steals', -0.31, 50]] },
+  chaos: { base: 43.8, terms: [['steals', 3.13, 50]] },
 };
 
 const modelTerms = (models: Record<string, FitModel>, pr: RosterProfile) => Object.fromEntries(Object.entries(models).map(([k, m]) => [k, termsOf(m, pr)]));
@@ -623,9 +622,13 @@ export function defPresetFit(pr: RosterProfile): Record<string, number> {
 
 /**
  * A coach's lean toward his own playbooks, in fit points: enough to pick his among playbooks about as
- * good for the roster (a few tenths of a point per 100), never one the roster plays clearly worse.
+ * good for the roster (a few tenths of a point per 100), never one the roster plays clearly worse. On
+ * defense more: the coverages fit most rosters within a point, and a league where every coach played
+ * the one that fit best by a few tenths (twenty ices) gave scouting nothing to find. At 8 the real
+ * league plays hedge, ice, blitz, switch, drop and a press, at about half a point a game under each
+ * team's best fit.
  */
-const PHILOSOPHY_LEAN = 3;
+const PHILOSOPHY_LEAN = { off: 3, def: 8 };
 
 export function autoRoles(players: Player[]): { roles: Record<number, OffRole>; freedom: Record<number, ShotFreedom> } {
   const roles: Record<number, OffRole> = {};
@@ -820,8 +823,8 @@ export function fitScale(fits: Record<string, number>): (k: string) => number {
 /** Each preset's fit for this roster and coach, his philosophy's lean included. */
 export function presetScores(team: Team, players: Player[]): { off: Record<string, number>; def: Record<string, number> } {
   const pr = rosterProfile(fitRoster(players));
-  const lean = (fits: Record<string, number>, mine: string) => Object.fromEntries(Object.entries(fits).map(([k, v]) => [k, v + (k === mine ? PHILOSOPHY_LEAN : 0)]));
-  return { off: lean(offPresetFit(pr), team.coach.offPhilosophy), def: lean(defPresetFit(pr), team.coach.defPhilosophy) };
+  const lean = (fits: Record<string, number>, mine: string, by: number) => Object.fromEntries(Object.entries(fits).map(([k, v]) => [k, v + (k === mine ? by : 0)]));
+  return { off: lean(offPresetFit(pr), team.coach.offPhilosophy, PHILOSOPHY_LEAN.off), def: lean(defPresetFit(pr), team.coach.defPhilosophy, PHILOSOPHY_LEAN.def) };
 }
 
 /** Offensive and defensive presets ranked by fit for this roster and coach, best first. */

@@ -293,7 +293,6 @@ export function PlanView({
             {scorers.map((p) => {
               const on = theirRows.filter((r) => r.off === p.pid).sort((a, b) => b.trips - a.trips)[0];
               const target = t.defense.starPlan !== 'none' && t.defense.starTarget === p.pid;
-              const how = t.defense.playerD?.[p.pid];
               return (
                 <button key={p.pid} className="lv-sc-row" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
                   <span className="lv-sc-pts num">{p.pts}</span>
@@ -307,8 +306,7 @@ export function PlanView({
                       {on ? ` · ${nameOf(on.def)} on him: ${on.pts} on ${on.trips} trips` : ''}
                     </span>
                   </span>
-                  {target && <Tag tone="info">{t.defense.starPlan === 'double' ? 'Doubled' : 'Denied'}</Tag>}
-                  {how && !target && <Tag>{how === 'under' ? 'Under' : how === 'tight' ? 'Top-lock' : how === 'sag' ? 'Sag' : 'Physical'}</Tag>}
+                  {target && <Tag tone="info">Doubled</Tag>}
                   <ChevronRight size={16} className="dim" aria-hidden="true" />
                 </button>
               );

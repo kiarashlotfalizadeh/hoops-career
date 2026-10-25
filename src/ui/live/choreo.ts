@@ -4,7 +4,7 @@
 
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { madeAtt } from '../../core/format';
-import { SETS } from '../../core/sim/sets';
+import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import type { LogVoice } from './atmosphere';
 
 export interface Pt {
@@ -274,7 +274,8 @@ export function buildScript(
         }
         ball = { ...o.get(holder)! };
         follow();
-        snap(750, log.set ? cap(`${SETS[log.set.id].name} for ${N(log.set.pid)}`) : {});
+        // (a set or a clear-out called for a player says so as the ball comes up)
+        snap(750, log.set ? cap(`${SETS[log.set.id].name} for ${N(log.set.pid)}`) : log.iso !== undefined ? cap(`${CLEAR_OUT.name} for ${N(log.iso)}`) : {});
         break;
       }
       case 'press': {

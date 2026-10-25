@@ -23,7 +23,7 @@ import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { jerseyColors } from '../teamColors';
 import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
-import { crunchTime, foulLimit, liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
+import { closeGame, crunchTime, foulLimit, lastPossession, liveAlerts, newEvents, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -128,12 +128,15 @@ export function useLiveGame() {
   const atmoApi = atmo.api;
   const [feed, setFeed] = useState<FeedRow[]>([]);
   const [panel, setPanel] = useState<Panel>('none');
-  /** Your timeout, while it's taken: the game waits in the huddle (on the screen, under any sheet opened from it). */
-  const [huddle, setHuddle] = useState(false);
+  /**
+   * Your timeout, while it's taken ('timeout'), or the last possession of a close game ('last': the play
+   * call without a timeout): the game waits in the huddle (on the screen, under any sheet opened from it).
+   */
+  const [huddle, setHuddle] = useState<HuddleKind | null>(null);
   const [clipOpen, setClipOpen] = useState(false);
   const [tick, setTick] = useState(0);
   const [dismissed, setDismissed] = useState<string[]>([]);
-  /** The last call the game stopped for (a fifth foul, a closer out of legs): the screen opens his sheet. */
+  /** The last call on a player the game stopped for (a fifth foul, a closer out of legs): the screen opens his sheet. */
   const [stopCall, setStopCall] = useState<StopCall | null>(null);
   /** The calls the game has stopped for tonight: each stops it once. */
   const stoppedFor = useRef(new Set<string>());
@@ -337,7 +340,7 @@ export function useLiveGame() {
       setPaused(false);
       setDismissed([]);
       setPanel('none');
-      setHuddle(false);
+      setHuddle(null);
       setClipOpen(false);
       setResultGid(null);
       setAnnounce('');
@@ -438,7 +441,7 @@ export function useLiveGame() {
       const res = lg.committed!;
       // the coaching sheets have nothing left to change
       setPanel('none');
-      setHuddle(false);
+      setHuddle(null);
       setClipOpen(false);
       setStatus('final');
       setResultGid(res.gid);
@@ -458,7 +461,7 @@ export function useLiveGame() {
       const res = useStore.getState().league!.games.find((g) => g.gid === lg.game.gid);
       clearLive();
       setPanel('none');
-      setHuddle(false);
+      setHuddle(null);
       setClipOpen(false);
       setStatus('simmed');
       setResultGid(res?.gid ?? null);
@@ -561,11 +564,13 @@ export function useLiveGame() {
       huddleNext.current = false;
       // the court has got to the user's timeout: the game waits in the huddle (the sim is no longer ahead)
       if (s.timeoutOpens() === lg.userSide) {
+        // (a timeout on the last possession is where its play gets called: the game doesn't stop for it again)
+        if (lastPossession(v, lg.userSide)) stoppedFor.current.add(lastId(v.q));
         setScript(null);
         setPaused(true);
         setClipOpen(false);
         setPanel('none');
-        setHuddle(true);
+        setHuddle('timeout');
         return;
       }
       // (a timeout waiting for a dead ball when the period ran out isn't taken: the break is the stop)
@@ -585,16 +590,22 @@ export function useLiveGame() {
       // no break here (Settings → Live games → Breaks): the period's end is saved all the same, once
       if (lg.journal.steps !== lg.steps) saveSpot(lg);
     }
-    // a call only you can make now stops the game, once: a fifth foul, a closer out of legs
-    const call = lg.over ? null : stopCallIn(v, lg, loopHelpers.current.nameOf, opts.current.dismissed);
-    if (call && !stoppedFor.current.has(call.id)) {
-      stoppedFor.current.add(call.id);
+    // a call only you can make now stops a close game, once each: the last possession, a fifth foul, a closer out of legs
+    const call = lg.over ? null : takeStop(stopCalls(v, lg, loopHelpers.current.nameOf, opts.current.dismissed), stoppedFor.current);
+    if (call) {
       setScript(null);
       setPaused(true);
-      ff.current.waiting = true;
-      setStopCall(call);
       setAnnounce(`Paused: ${call.text}`);
       haptic('warning');
+      // the last possession waits in the huddle, for the play call (no timeout taken); a player's call opens his sheet
+      if (call.kind === 'last') {
+        setClipOpen(false);
+        setPanel('none');
+        setHuddle('last');
+      } else {
+        ff.current.waiting = true;
+        setStopCall(call);
+      }
       return;
     }
     let logs: PossLog[] = [];
@@ -637,7 +648,7 @@ export function useLiveGame() {
     nextRef.current();
   };
 
-  const huddling = huddle;
+  const huddling = huddle !== null;
   useEffect(() => {
     if (status === 'live' && !script && !atBreak && !huddling && !intro && !ff.current.timer && !ff.current.waiting) nextPossession();
   }, [status, script, atBreak, huddling, intro, nextPossession]);
@@ -718,13 +729,22 @@ export function useLiveGame() {
   const callTimeout = (reason?: string) => {
     const lg = liveRef.current;
     if (!lg || lg.over || !coach((g) => g.callTimeout(reason))) return;
+    haptic();
+    const abbrev = lg.sim.T[userSide].team.abbrev;
+    // stopped for the last possession, the court has caught up with the sim and the ball is yours: the
+    // timeout is taken now and the huddle opens at once, with any play called from the bench kept
+    if (huddle === 'last' && lg.sim.timeoutOpens() === userSide) {
+      takeView(lg, false);
+      flushFeed(false);
+      setHuddle('timeout');
+      setAnnounce(`Timeout ${abbrev}.`);
+      return;
+    }
     // the court flashes it as the next possession opens: the one possession still being drawn finishes
     // first, and then the huddle comes up. In the other side's live ball (a steal or a defensive board)
     // it's taken at the next dead ball, and the huddle waits for that
     setToPending(true);
     huddleNext.current = true;
-    haptic();
-    const abbrev = lg.sim.T[userSide].team.abbrev;
     if (lg.timeoutWaiting) {
       setAnnounce(`Timeout ${abbrev} at the next dead ball.`);
       useStore.getState().toast('Timeout at the next dead ball: they have the ball.');
@@ -735,7 +755,7 @@ export function useLiveGame() {
   const over = status !== 'live';
   const resume = () => {
     setPanel('none');
-    setHuddle(false);
+    setHuddle(null);
     setPaused(false);
     setReveal((x) => x + 1);
   };
@@ -830,6 +850,8 @@ export function useLiveGame() {
     panel,
     setPanel,
     huddling,
+    /** Which huddle the game waits in: your timeout, or the last possession's play call. */
+    huddle,
     clipOpen,
     setClipOpen,
     // the end
@@ -842,24 +864,42 @@ export function useLiveGame() {
 
 export type LiveSession = ReturnType<typeof useLiveGame>;
 
-/** A call the live game stops for: the player it's about, and what it is in a line. */
+/** The huddles the game waits in: your timeout, or the last possession's play call without one. */
+export type HuddleKind = 'timeout' | 'last';
+
+/** A call the live game stops for: what it is in a line; a player's (his sheet opens), or the last possession's (the play call opens). */
 export interface StopCall {
   id: string;
-  pid: number;
+  /** The player it's about; none for the last possession. */
+  pid?: number;
   text: string;
+  /** 'last': the last possession, your ball. */
+  kind?: 'last';
 }
 
+/** The last possession's stop: once a period (the end of regulation and of each overtime is a last possession of its own). */
+const lastId = (q: number) => `last-${q}`;
+
 /**
- * The call the drawn game `v` stops for, if any: one of your five on five fouls from the fourth quarter
- * on, or one of your closers below the energy your staff subs at in crunch time. Only when the staff
- * won't make it for you (in crunch time it stops subbing for fouls and legs, and it never does when
- * you make the subs), and not once you've dismissed the alert for it.
+ * The calls the drawn game `v` stops for, the biggest first, and only in a close game (closeGame: a
+ * blowout never stops): the last possession, your ball (the play is yours to call, the staff calls
+ * none); then one of your five on five fouls from the fourth quarter on, or one of your closers below
+ * the energy your staff subs at in crunch time, only when the staff won't make that call for you (in
+ * crunch time it stops subbing for fouls and legs, and it never does when you make the subs), and not
+ * once you've dismissed the alert for it.
  */
-export function stopCallIn(v: Drawn, lg: LiveGame, names: (pid: number) => string, dismissed: string[]): StopCall | null {
-  const t = lg.sim.T[lg.userSide];
+export function stopCalls(v: Drawn, lg: LiveGame, names: (pid: number) => string, dismissed: string[]): StopCall[] {
+  if (!closeGame(v, lg.edge)) return [];
+  const out: StopCall[] = [];
+  const side = lg.userSide;
+  const me = v.sides[side];
+  if (lastPossession(v, side)) {
+    const margin = me.score - v.sides[1 - side].score;
+    out.push({ id: lastId(v.q), kind: 'last', text: `Last possession, your ball, ${margin ? `down ${-margin}` : 'tied'}.` });
+  }
+  const t = lg.sim.T[side];
   const crunch = crunchTime(v.q, v.clock);
-  if (!lg.manualSubs && !crunch) return null;
-  const me = v.sides[lg.userSide];
+  if (!lg.manualSubs && !crunch) return out;
   // the closing five: the rotation's, else the five the staff plans most minutes for
   const set = t.team.rotation.closers;
   const closers = new Set(
@@ -873,9 +913,21 @@ export function stopCallIn(v: Drawn, lg: LiveGame, names: (pid: number) => strin
   for (const pid of me.on) {
     const p = me.players.find((x) => x.pid === pid);
     if (!p || p.out !== 0) continue;
-    if (v.q >= 4 && p.fouls === 5 && !dismissed.includes(`fouls-${pid}-5`)) return { id: `fouls-${pid}`, pid, text: `${names(pid)} has 5 fouls. One more and he's out.` };
+    if (v.q >= 4 && p.fouls === 5 && !dismissed.includes(`fouls-${pid}-5`)) return [...out, { id: `fouls-${pid}`, pid, text: `${names(pid)} has 5 fouls. One more and he's out.` }];
     if (crunch && closers.has(pid) && p.energy < t.t.manage.fatigueSub && !dismissed.some((d) => d.startsWith(`tired-${pid}-`)))
-      return { id: `tired-${pid}-${v.q}`, pid, text: `${names(pid)} is gassed (${Math.round(p.energy * 100)}% energy).` };
+      return [...out, { id: `tired-${pid}-${v.q}`, pid, text: `${names(pid)} is gassed (${Math.round(p.energy * 100)}% energy).` }];
   }
-  return null;
+  return out;
+}
+
+/**
+ * The call to stop for now, of those `due`: the first not stopped for yet tonight, marked as stopped
+ * for (each stops the game once). The last possession's marks the others due with it: its screen has
+ * who's tired or in foul trouble, with the subs, so no stop follows it for them.
+ */
+export function takeStop(due: StopCall[], stopped: Set<string>): StopCall | null {
+  const call = due.find((c) => !stopped.has(c.id));
+  if (!call) return null;
+  for (const c of call.kind === 'last' ? due : [call]) stopped.add(c.id);
+  return call;
 }

@@ -5,6 +5,7 @@ import { buildSimInput, ensureRotation } from '../league/games';
 import { teamPlayers } from '../league/helpers';
 import { pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { GameSim } from '../sim/engine';
+import { applyDefPreset } from '../sim/tactics';
 import { Rng } from '../random';
 
 const seed = seedJson as unknown as SeedData;
@@ -16,6 +17,15 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
     [5, 9],
     [13, 22],
   ];
+  // the four play ice, the defense the tags are calibrated against: since AI coaches play their own
+  // defenses (two of these trap and one presses full court), a trap makes the half court worth more
+  // and a push in transition less than the tags count (walking it up measured -0.1 a game against
+  // them, tagged -1.7), which is the matchup, not the tags
+  for (const tid of pairs.flat()) {
+    const t = league.teams[tid].tactics;
+    t.defense = applyDefPreset(t.defense, 'ice');
+    t.defPreset = 'ice';
+  }
   const games = 150;
   // the AI coaches' in-game adjustments would react to the change being measured
   const side = (tid: number, opp: number) => ({ ...buildSimInput(league, tid, 1, 'regular', opp), adjust: false });

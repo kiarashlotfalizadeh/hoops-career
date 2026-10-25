@@ -14,7 +14,7 @@ import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { nextPick } from '../league/draft';
-import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, statsLine } from '../league/helpers';
+import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRoster, statsLine, teamSeason } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
@@ -23,6 +23,7 @@ import {
   FLOOR_GAMES,
   FLOOR_GRADE,
   FLOOR_SLOPE,
+  PATIENCE_STEP,
   REVIEWS_KEPT,
   WIN_SCALE,
   WIN_SLIDE,
@@ -37,6 +38,7 @@ import {
   ownerCheckIn,
   ownerPersonality,
   ownerProgress,
+  patienceCap,
   planOwnerGoals,
   seasonBudget,
   type GoalProgress,
@@ -470,8 +472,8 @@ describe('two seasons of the real league', () => {
       // (a short stretch after a late takeover doesn't count)
       expect(floorCap(weak, 0, FLOOR_GAMES - 1)).toBe(1);
 
-      // the rebuild clock: Normal gives two seasons in a row without a postseason goal; in the third
-      // he wants the play-in at least, and the floor rises
+      // the rebuild clock: Normal gives two seasons in a row without the postseason; in the third he
+      // wants the play-in at least, the floor rises, and missing it anyway caps the grade
       const tid = weak.tid;
       expect(goal(weak, 'postseason')).toBeUndefined();
       expect(weak.rebuild).toEqual({ year: 1, of: 2 });
@@ -484,15 +486,35 @@ describe('two seasons of the real league', () => {
       });
       l.ownerReviews = [reviewed(l.season - 1, false)];
       expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 2, of: 2 }, floor: 0.3 });
-      expect(goalsWhy(planOwnerGoals(l, tid, outlook)!)).toContain("Rebuilding: season 2 of the 2 I'll give it. After that I want the play-in.");
+      expect(goalsWhy(planOwnerGoals(l, tid, outlook)!)).toContain("Rebuilding: season 2 of the 2 without the postseason I'll give it. After that I want the play-in.");
       l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
       const out = planOwnerGoals(l, tid, outlook)!;
       expect(out).toMatchObject({ rebuild: { year: 3, of: 2, over: true }, floor: 0.4 });
       expect(goal(out, 'postseason')!.target).toBeGreaterThanOrEqual(1);
       expect(goal(out, 'wins')!.target).toBeGreaterThanOrEqual(Math.round(82 * 0.4));
-      // a season with a postseason goal in between starts the count again; Easy gives three
+      // past his allowance, a season that misses the postseason grades Poor at best, lower each season it goes on; reaching it lifts the cap
+      expect(goalsWhy(out)).toContain(
+        "2 seasons without the postseason is all I'll take. This season we compete: miss the play-in and it grades −40 at best, whatever else goes right.",
+      );
+      results(l, out, { postseason: 0 });
+      expect(gradeOwnerGoals(l, out)).toMatchObject({ grade: FLOOR_GRADE, impatient: true });
+      expect(patienceCap({ rebuild: { year: 5, of: 2, over: true } }, 0)).toBeCloseTo(FLOOR_GRADE - 2 * PATIENCE_STEP, 5);
+      results(l, out, { postseason: 1 });
+      expect(gradeOwnerGoals(l, out).impatient).toBeUndefined();
+      // only a season that reached the postseason (the play-in counts) starts the count again: one that
+      // had a postseason goal and missed it doesn't; Easy gives three
       l.ownerReviews = [reviewed(l.season - 3, false), reviewed(l.season - 2, true), reviewed(l.season - 1, false)];
+      expect(rebuildRun(l, tid)).toBe(3);
+      const reached = teamSeason(l.teams[tid], l.season - 2);
+      reached.playIn = true;
       expect(rebuildRun(l, tid)).toBe(1);
+      reached.playIn = false;
+      // a season he asks to compete in after a miss says the clock is running
+      const top = [...outlook].sort((a, b) => b.talent - a.talent)[0].tid;
+      l.ownerReviews = [{ ...reviewed(l.season - 1, true), tid: top }];
+      const comp = planOwnerGoals(l, top, outlook)!;
+      expect(comp).toMatchObject({ missed: { seasons: 1, of: 2 } });
+      expect(goalsWhy(comp)).toContain("Last season went without the postseason, one of the 2 I'll allow. Miss it again and I want the play-in at least.");
       l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
       l.settings.difficulty = 'easy';
       expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 3, of: 3 }, floor: 0.25 });
@@ -668,6 +690,17 @@ describe('two seasons of the real league', () => {
       // only the games after he took over count
       ts.won += 3;
       expect(goalResult(l, og, og.goals[0])).toBe(3);
+      // the reputation he brought (a review by his last owner on file) survives his first review here:
+      // the season counts 40% against it, where a new career's first season sets the standing; the
+      // parts are the new owner's own read
+      const rep = structuredClone(l);
+      rep.ownerReviews = [{ season: rep.season - 1, tid: U, goals: [], grade: -0.6, total: -0.6 }];
+      rep.ownerMood.total = -0.3;
+      results(rep, og);
+      ownerEvaluation(rep);
+      const first = rep.ownerReviews!.at(-1)!;
+      expect(first.total).toBeCloseTo(0.4 * first.grade + 0.6 * -0.3, 2);
+      expect(rep.ownerMood.wins).toBeCloseTo(first.goals.find((g) => g.kind === 'wins')!.grade, 2);
     }
 
     // in the preseason the new owner waits for opening night; after the season, for the next one; in the postseason he wants the next round

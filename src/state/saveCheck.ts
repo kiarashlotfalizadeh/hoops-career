@@ -2,7 +2,7 @@
 // imported backup goes through migrate(): the shape is checked, older optional parts are filled in,
 // and anything damaged is repaired or dropped rather than left to break a screen later. Everything
 // here is pure; persistence.ts reads and writes the saves.
-import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, PLAYER_DEFENSES, SET_IDS, type League, type Player, type PlayerDefense, type Tactics, type Team } from '../core/types';
+import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, SET_IDS, type League, type Player, type Tactics, type Team } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
 import { teamPlayers } from '../core/league/helpers';
@@ -62,15 +62,8 @@ const isRoute = (s: unknown) => typeof s === 'string' && /^\/(?![/\\])/.test(s);
 const isColor = (s: unknown) => typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
 
 const SCHEMES = new Set<string>(['man', 'zone23', 'zone32', 'box1', 'tri2']);
-const PD = new Set<string>(PLAYER_DEFENSES);
-
-/** Instructions by player in shape (opponent pid -> one of the four), or undefined when nothing valid is left. */
-function cleanPlayerD(v: unknown): Record<number, PlayerDefense> | undefined {
-  if (!obj(v)) return undefined;
-  const out: Record<number, PlayerDefense> = {};
-  for (const [k, d] of Object.entries(v)) if (Number.isInteger(Number(k)) && typeof d === 'string' && PD.has(d)) out[Number(k)] = d as PlayerDefense;
-  return Object.keys(out).length ? out : undefined;
-}
+/** The star plans this version plays (a save from before the deny was cut may have one). */
+const STAR_PLANS = new Set<string>(['none', 'double']);
 
 const KNOWN_SETS = new Set<string>(SET_IDS);
 const SHAPES = new Set<string>(OFF_SHAPES);
@@ -89,12 +82,13 @@ function byPid<T>(v: unknown, ok: (x: unknown) => boolean): Record<number, T> | 
 const ATOS = new Set<string>([...ACTIONS, ...SET_IDS]);
 
 /**
- * The junk-defense, hunt, instruction, foul-to-give and set settings in a part of some tactics (a
- * whole defense / offense / management block, or a patch's) kept only when in shape: an unknown
- * scheme, chase targets that aren't up to two pids, a hunt target that isn't a pid, damaged
- * instructions, a foul to give that isn't a switch, an after-timeout play that's no action or set
- * (or a player for it who isn't a pid) are dropped (a scheme falls back to man-to-man when `whole`),
- * and a set package keeps the sets this version knows, at most four and each once.
+ * The junk-defense, star plan, hunt, foul-to-give and set settings in a part of some tactics (a whole
+ * defense / offense / management block, or a patch's) kept only when in shape: an unknown scheme or
+ * star plan (the deny, cut), chase targets that aren't up to two pids, a hunt target that isn't a
+ * pid, a foul to give that isn't a switch, an after-timeout play that's no action or set (or a player
+ * for it who isn't a pid) are dropped (a scheme falls back to man-to-man and a star plan to none when
+ * `whole`), instructions by player (cut) go, and a set package keeps the sets this version knows, at
+ * most four and each once.
  */
 function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
   if (obj(d)) {
@@ -102,12 +96,12 @@ function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
       if (whole) d.scheme = 'man';
       else delete d.scheme;
     }
-    if (d.chase !== undefined && !(Array.isArray(d.chase) && d.chase.length <= 2 && d.chase.every(int))) delete d.chase;
-    if (d.playerD !== undefined) {
-      const pd = cleanPlayerD(d.playerD);
-      if (pd) d.playerD = pd;
-      else delete d.playerD;
+    if (d.starPlan !== undefined && !STAR_PLANS.has(d.starPlan as string)) {
+      if (whole) d.starPlan = 'none';
+      else delete d.starPlan;
     }
+    if (d.chase !== undefined && !(Array.isArray(d.chase) && d.chase.length <= 2 && d.chase.every(int))) delete d.chase;
+    delete d.playerD;
   }
   if (obj(o) && o.huntTarget !== undefined && o.huntTarget !== null && !int(o.huntTarget)) delete o.huntTarget;
   // the shape, glass duties and out-of-possession roles: an unknown one goes (four-out, the team's glass, a position defender)
@@ -198,7 +192,7 @@ const DEFENSE_NUMS = ['help', 'pressure', 'getBack', 'physicality'] as const;
 const MANAGE_NUMS = ['hackThreshold', 'timeoutRun', 'fatigueSub'] as const;
 /** The optional settings each part may carry beyond the defaults' (checked by cleanTacticsParts, or below). */
 const OFFENSE_EXTRAS = ['huntTarget', 'sets'] as const;
-const DEFENSE_EXTRAS = ['chase', 'playerD'] as const;
+const DEFENSE_EXTRAS = ['chase'] as const;
 const MANAGE_EXTRAS = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
 
 const record = (v: unknown): v is Record<string, unknown> => obj(v) && !Array.isArray(v);
@@ -286,11 +280,7 @@ function cleanGamePlans(x: League) {
       else for (const [pid, d] of Object.entries(p.matchups)) if (!int(d)) delete p.matchups[pid];
     }
     if (p.note !== undefined && !str(p.note)) delete p.note;
-    if (p.playerD !== undefined) {
-      const pd = cleanPlayerD(p.playerD);
-      if (pd) p.playerD = pd;
-      else delete p.playerD;
-    }
+    delete p.playerD;
     for (const it of p.items as { patch: Record<string, unknown>; pts?: unknown }[]) {
       cleanTacticsParts(it.patch.offense, it.patch.defense, it.patch.manage, false);
       // (what the staff measured it worth feeds the win chance: a number that isn't one, or past any a counter measures, goes)
@@ -683,7 +673,7 @@ function movesIntact(v: unknown): boolean {
     v.every(
       (m) =>
         obj(m) &&
-        ['tactics', 'sub', 'timeout'].includes(m.kind as string) &&
+        ['tactics', 'sub', 'timeout', 'play'].includes(m.kind as string) &&
         int(m.q) &&
         num(m.clock) &&
         str(m.text) &&
@@ -693,9 +683,17 @@ function movesIntact(v: unknown): boolean {
         (m.pid === undefined || int(m.pid)) &&
         (m.aim === undefined || (str(m.aim) && (m.aim as string).length <= 60)) &&
         tally(m.before) &&
-        tally(m.after),
+        tally(m.after) &&
+        (m.call === undefined || callIntact(m.call)),
     )
   );
+}
+
+/** A play call on a move in shape: a set or 'iso', who for, and the basket late that won or tied it. */
+function callIntact(c: unknown): boolean {
+  if (!obj(c) || !(c.id === 'iso' || KNOWN_SETS.has(c.id as string)) || (c.pid !== undefined && !int(c.pid))) return false;
+  const l = c.late;
+  return l === undefined || (obj(l) && (l.how === 'won' || l.how === 'tied') && num(l.clock));
 }
 
 /** A result's set tallies in shape (see SetStat): a side, a known set or 'iso', runs and points, and the run it was read by. */
@@ -738,7 +736,11 @@ function migrateDealTerms(x: League) {
   for (const t of x.teams) {
     const c = t.cashTrades;
     if (c !== undefined && !(obj(c) && int(c.season) && money(c.sent) && money(c.received))) delete t.cashTrades;
-    for (const s of t.seasons) if (obj(s) && s.cashIn !== undefined && !money(s.cashIn)) delete s.cashIn;
+    for (const s of t.seasons) {
+      if (obj(s) && s.cashIn !== undefined && !money(s.cashIn)) delete s.cashIn;
+      // (the books' close can be in the red; a save from before it was kept has none, and the review reads the cash then)
+      if (obj(s) && s.closeCash !== undefined && !num(s.closeCash)) delete s.closeCash;
+    }
   }
   for (const t of Array.isArray(x.transactions) ? x.transactions : []) {
     for (const s of obj(t) && Array.isArray(t.sides) ? t.sides : []) {
@@ -770,7 +772,7 @@ function liveArgs(op: unknown, a: Record<string, unknown>): boolean {
     case 'manualSubs':
       return typeof a.on === 'boolean';
     case 'play':
-      return (SET_IDS as unknown[]).includes(a.set) && (a.pid === undefined || int(a.pid));
+      return (a.set === 'iso' || (SET_IDS as unknown[]).includes(a.set)) && (a.pid === undefined || int(a.pid));
   }
   return false;
 }
@@ -786,6 +788,8 @@ function liveIntact(l: League, j: unknown): boolean {
   const u = j.user;
   if (!obj(u) || !isTactics(u.tactics) || !numValues(u.perf) || !nums(u.rest) || !num(u.injuryMult) || (u.play !== undefined && !nums(u.play))) return false;
   if (j.edge !== undefined && !num(j.edge)) return false;
+  // (the court edge at tip-off: a pair of numbers, or null on Normal)
+  if (j.court !== undefined && j.court !== null && !(Array.isArray(j.court) && j.court.length === 2 && j.court.every(num))) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;
   if (j.seen !== undefined && !(nums(j.seen) && j.seen.length === 2)) return false;

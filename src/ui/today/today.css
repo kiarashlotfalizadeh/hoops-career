@@ -482,6 +482,10 @@
   font-weight: 640;
   color: var(--text-dim);
 }
+/* the bell's sheet: Needs you, then the inbox a row away */
+.td-bell {
+  gap: 20px;
+}
 
 /* a mail row in Needs you: a button drawn as the agenda's link rows */
 .td-mailrow {

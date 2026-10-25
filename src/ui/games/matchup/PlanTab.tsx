@@ -152,14 +152,13 @@ function PlanItemRow({ league, opp, it }: { league: League; opp: number; it: Gam
   );
 }
 
-/** "2 planned matchups and 3 guarding instructions", or '' when there are none. */
-function plannedExtras(plan: { matchups?: Record<number, number>; playerD?: Record<number, unknown> }) {
+/** "2 planned matchups", or '' when there are none. */
+function plannedExtras(plan: { matchups?: Record<number, number> }) {
   const m = Object.keys(plan.matchups ?? {}).length;
-  const d = Object.keys(plan.playerD ?? {}).length;
-  return [m ? plural(m, 'planned matchup') : '', d ? plural(d, 'guarding instruction') : ''].filter(Boolean).join(' and ');
+  return m ? plural(m, 'planned matchup') : '';
 }
 
-/** A star plan for this opponent: none, deny or double, on one of their top eight. */
+/** A star plan for this opponent: none or a double, on one of their top eight. */
 function StarPlanCard({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
   const eff = useLeagueMemo(() => effectiveTactics(league, opp), [league, opp]);
@@ -183,7 +182,7 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
       }
       // (named as the chips name him: "R. McBride" when two of them share the name)
       const who = tgt !== null ? names(tgt) || l.players[tgt]?.lastName : 'their top creator';
-      const label = plan === 'none' ? 'Play their stars straight' : plan === 'double' ? `Double-team ${who}` : `Deny ${who}`;
+      const label = plan === 'none' ? 'Play their stars straight' : `Double-team ${who}`;
       setPlanItem(l, opp, { id: `star-${plan}`, label, group: 'star', patch: { defense: { starPlan: plan, starTarget: plan === 'none' ? null : tgt } } });
     });
   const who = target !== null ? names(target) || league.players[target]?.lastName : 'their top creator';
@@ -193,8 +192,8 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
       peek={sp === 'none' ? STAR_PLAN_META.none.label : `${STAR_PLAN_META[sp].label} · ${who}`}
       help={
         <Help title="Star plan">
-          Deny keeps the ball out of one player&apos;s hands; a double team sends a second defender when he attacks. Without a target it goes after their primary creator. ★ is the
-          player their offense runs through by the numbers, or their best shot creator by the scouts.
+          A double team sends a second defender when he attacks: it pays against a star who can&apos;t pass out of it with non-shooters around him, and costs against one who can.
+          Without a target it goes after their primary creator. ★ is the player their offense runs through by the numbers, or their best shot creator by the scouts.
         </Help>
       }
     >
@@ -204,7 +203,7 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
             label="Star plan"
             value={sp}
             disabled={simming}
-            // from no star plan it goes after the suggested star; between deny and double the target picked (Top creator too) stays
+            // from no star plan it goes after the suggested star
             onChange={(x: StarPlan) => set(x, x === 'none' ? null : sp === 'none' ? suggested : target)}
             options={(Object.keys(STAR_PLAN_META) as StarPlan[]).map((k) => ({ id: k, label: STAR_PLAN_META[k].label }))}
           />

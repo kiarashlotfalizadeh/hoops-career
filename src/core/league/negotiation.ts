@@ -14,7 +14,7 @@
 import type { League, Player, TalkTerms, Talks } from '../types';
 import { seasonLabel } from '../constants';
 import { clamp, hashString } from '../random';
-import { contractExp, extensionStart, playerAge } from '../playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../playerGen';
 import { CAP_FOR, addInbox, contractSeason, fmtDate, playerName } from './helpers';
 import {
   type Ask,
@@ -32,6 +32,7 @@ import {
   valueScore,
 } from './contracts';
 import { money, moneyExact } from '../format';
+import { freezeResignReason } from './books';
 
 export type TalkKind = Talks['kind'];
 
@@ -278,14 +279,22 @@ export function hearOffer(
   return { accept: false, counter: t.counter, text: `${name} counters at ${moneyExact(amount)} a season over ${yrs(cy)}.${hurt}` };
 }
 
+/** Why extending him at `amount` a season is off under the owner's freeze: a raise on what he's paid now (past his minimum then), or null. */
+export function extensionFrozenReason(league: League, p: Player, amount: number): string | null {
+  const exp = contractExp(p.contract);
+  const cap = CAP_FOR(league, exp + 1);
+  return freezeResignReason(league, amount, salaryFor(p, exp), p.experience >= 3 ? cap.vetMin : cap.minContract, 'extending him');
+}
+
 /**
  * The user extends one of his players (see extensionBlockedReason): a negotiation like any other,
  * on the extension's ask (see hearOffer), with no options (any option on his deal is picked up).
+ * Under the owner's freeze, at no more than he's paid now.
  */
 export function userExtend(league: League, pid: number, amount: number, years: number): OfferResult {
   const p = league.players[pid];
   if (!p) return { ok: false, reason: 'Player not found.' };
-  const blocked = extensionBlockedReason(league, p) ?? extensionRefusal(league, p);
+  const blocked = extensionBlockedReason(league, p) ?? extensionRefusal(league, p) ?? extensionFrozenReason(league, p, amount);
   if (blocked) return { ok: false, reason: blocked };
   const maxYears = extensionMaxYears(p);
   if (years < 1 || years > maxYears) return { ok: false, reason: `His extension can run 1 to ${maxYears} years.` };

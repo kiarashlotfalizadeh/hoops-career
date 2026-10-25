@@ -17,7 +17,7 @@ import { DIFFICULTY, courtEdge, courtPoints, userCourtPoints, userProjectedNet }
 import { matchupPreview } from '../analysis/preview';
 import { simDay } from '../league/season';
 import { shortName, teamPlayers } from '../league/helpers';
-import { guardAdvice, huntPick } from '../analysis/guarding';
+import { guardLine, huntPick } from '../analysis/guarding';
 import { projectedRotation } from '../analysis/scouting';
 import { applyPatch, cloneTactics, defaultTactics, hasCoachPlans, withoutCoachPlans } from '../sim/tactics';
 import { persistableTactics } from '../league/gamePlans';
@@ -76,52 +76,21 @@ function oneManTeam(l: League, tid: number): Player {
 }
 
 describe('planning for an opponent', () => {
-  it('reads how to guard each of their players and whom to attack, counters a one-man offense or a weak link, keeps a junk defense with its opponent, and has a one-tap fix live', () => {
+  it('reads their players and whom to attack, counters a one-man offense or a weak link, keeps a junk defense with its opponent, and has a one-tap fix live', () => {
     {
-      // suggests going under on a ball handler who can't shoot, top-locking a shooter who can't drive, sagging off a non-shooter, getting physical with a poor free-throw shooter inside
-      const l = fresh();
-      const p = structuredClone(teamPlayers(l, 3)[0]);
-      // ratings only: no games this season or last
-      p.stats = [];
-      const advise = (r: Partial<Player['ratings']>) => guardAdvice(l, { ...p, ratings: { ...p.ratings, ...r } }).suggest;
-      expect(advise({ hnd: 90, pas: 85, oiq: 80, tp: 25, mid: 50, spd: 70 })).toBe('under');
-      expect(advise({ tp: 92, hnd: 35, spd: 35, oiq: 60, ath: 40, str: 40 })).toBe('tight');
-      expect(advise({ tp: 20, hnd: 40, pas: 40 })).toBe('sag');
-      expect(advise({ tp: 40, post: 90, str: 90, hgt: 90, ins: 85, ft: 35, hnd: 40, pas: 40 })).toBe('body');
-      // a complete player: nothing clearly fits
-      expect(advise({ tp: 80, hnd: 80, pas: 80, oiq: 80, spd: 80, mid: 80, ft: 85, post: 50 })).toBeUndefined();
-    }
-    {
-      // reads his games when there are enough, and says so
+      // reads each player's shooting from his games when there are enough, and says when they're last season's
       const lg = leagueAt('easy', 14);
       const them = projectedRotation(lg, 3, 8);
-      const withGames = them.map((x) => guardAdvice(lg, x)).filter((a) => a.line.source === 'season');
-      expect(withGames.length).toBeGreaterThan(4);
-      for (const a of withGames.filter((x) => x.suggest)) expect(a.why).toMatch(/%|a game|\d/);
-    }
-    {
-      // quotes his three-point percentage only on enough threes to mean something
-      const lg = leagueAt('easy', 14);
-      const q = structuredClone(projectedRotation(lg, 3, 8).find((x) => (x.stats.find((s) => s.season === lg.season && s.tid === 3 && !s.playoffs)?.gp ?? 0) >= 5)!);
+      expect(them.map((x) => guardLine(lg, x)).filter((a) => a.source === 'season').length).toBeGreaterThan(4);
+      const q = structuredClone(them.find((x) => (x.stats.find((s) => s.season === lg.season && s.tid === 3 && !s.playoffs)?.gp ?? 0) >= 5)!);
       const s = q.stats.find((x) => x.season === lg.season && x.tid === 3 && !x.playoffs)!;
-      // a non-shooter who isn't a handler or a post scorer, and makes his free throws
-      Object.assign(q.ratings, { tp: 10, hnd: 35, pas: 40, post: 30, ins: 40, ft: 85 });
-      s.ftm = s.fta;
-      // one three in his games, and he made it
-      s.tpa = s.tpm = 1;
-      const one = guardAdvice(lg, q);
-      expect(one.suggest).toBe('sag');
-      expect(one.why).toBe(`Rarely shoots threes (1 three in his ${s.gp} games).`);
-      s.tpa = s.tpm = 0;
-      expect(guardAdvice(lg, q).why).toBe(`Doesn't shoot threes (no threes in his ${s.gp} games).`);
-      // enough of them to mean something: the percentage
       s.tpa = 2 * s.gp;
       s.tpm = Math.floor(s.tpa / 5);
-      expect(guardAdvice(lg, q).why).toMatch(/^Doesn't shoot threes \(\d+\.\d% from three on 2\.0 a game\)\.$/);
-      // last season's numbers (before five games with his team this season) say so
+      expect(guardLine(lg, q)).toMatchObject({ source: 'season', tpa: 2 });
       q.stats = [{ ...s, season: lg.season - 1, real: undefined }];
-      expect(guardAdvice(lg, q).line.source).toBe('last');
-      expect(guardAdvice(lg, q).why).toMatch(/^Doesn't shoot threes \(\d+\.\d% from three on 2\.0 a game last season\)\.$/);
+      expect(guardLine(lg, q).source).toBe('last');
+      q.stats = [];
+      expect(guardLine(lg, q).source).toBe('ratings');
     }
     {
       // picks their weakest perimeter defender to attack, and says when he isn't much of a weak link
@@ -199,10 +168,9 @@ describe('planning for an opponent', () => {
       expect(theirs.every((x) => x.scheme === 'man' && !x.chase?.length)).toBe(true);
     }
     {
-      // the live one-tap fixes take a junk defense, an instruction or a hunt away
+      // the live one-tap fixes take a junk defense or a hunt away
       const t = defaultTactics();
       t.defense.scheme = 'tri2';
-      t.defense.playerD = { 3: 'under', 4: 'sag' };
       t.offense.huntTarget = 9;
       const fix = (key: string) => {
         const c = impactCounter(key, t)!;
@@ -211,7 +179,6 @@ describe('planning for an opponent', () => {
         return { label: c.label, after: out };
       };
       expect(fix('box_open:o').after.defense.scheme).toBe('man');
-      expect(fix('pd_under:o').after.defense.playerD).toEqual({ 4: 'sag' });
       expect(fix('hunt:d').after.offense.huntTarget).toBeNull();
       expect(fix('box_chase:d').label).toBe('Move the ball');
     }
@@ -356,13 +323,12 @@ describe('planning for an opponent', () => {
       t.manage.foulToGive = true;
       t.offense.huntTarget = 3;
       t.defense.chase = [4];
-      t.defense.playerD = { 5: 'sag' };
       expect(hasCoachPlans(t)).toBe(true);
       const ai = withoutCoachPlans(t);
-      expect([ai.manage.foulToGive, ai.offense.huntTarget, ai.defense.chase, ai.defense.playerD]).toEqual([undefined, undefined, undefined, undefined]);
+      expect([ai.manage.foulToGive, ai.offense.huntTarget, ai.defense.chase]).toEqual([undefined, undefined, undefined]);
     }
     {
-      // AI coaches can attack the user's weakest perimeter defender and plan how to guard one of his regulars, and play it in the game
+      // AI coaches can attack the user's weakest perimeter defender, and zone a five of his that can't shoot, and play it in the game
       const l = leagueAt('hard', 14);
       ensureRotation(l, l.userTid);
       const rot = projectedRotation(l, l.userTid, 8);
@@ -373,7 +339,6 @@ describe('planning for an opponent', () => {
       Object.assign(brick.ratings, { tp: 5 });
       for (const s of brick.stats) if (s.season === l.season) s.tpa = s.tpm = 0;
       let hunts = 0;
-      let guards = 0;
       for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
         const g = nextMeeting(l, tid);
         if (!g) continue;
@@ -388,17 +353,21 @@ describe('planning for an opponent', () => {
           expect(hunt.why).toMatch(/defends the perimeter at \d+, your rotation at \d+\./);
           expect(t().offense.huntTarget).toBe(sieve.pid);
         }
-        const guard = plan?.items.find((it) => it.group === 'guard');
-        if (guard) {
-          guards++;
-          const [pid, how] = Object.entries(guard.patch.defense!.playerD!)[0];
-          expect(rot.slice(0, 7).map((p) => p.pid)).toContain(Number(pid));
-          expect(guard.id).toBe(`guard-${how}`);
-          expect(t().defense.playerD).toEqual({ [pid]: how });
-        }
       }
       expect(hunts).toBeGreaterThan(3);
-      expect(guards).toBeGreaterThan(0);
+      // the five who play most can't shoot: some coaches pack it into a 2-3 zone (one item a group: in place of a coverage)
+      for (const p of projectedRotation(l, l.userTid, 5)) Object.assign(p.ratings, { tp: 5, mid: 10 });
+      let zones = 0;
+      for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
+        const g = nextMeeting(l, tid);
+        if (!g) continue;
+        const zone = aiGamePlan(l, tid, l.userTid, g)?.items.find((it) => it.id === 'zone23');
+        if (!zone) continue;
+        zones++;
+        expect(zone).toMatchObject({ group: 'coverage', text: 'plays a 2-3 zone' });
+        expect(buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics.defense.scheme).toBe('zone23');
+      }
+      expect(zones).toBeGreaterThan(3);
     }
     {
       // AI coaches don't plan for a player of the user's who rests tonight
@@ -424,7 +393,7 @@ describe('planning for an opponent', () => {
           Object.assign(l.teams[tid].tactics.defense, { scheme: 'man', pnr: 'drop' });
           for (const it of aiGamePlan(l, tid, me, { gid: 90000 + tid, day })?.items ?? []) {
             const d = it.patch.defense;
-            for (const pid of [it.patch.offense?.huntTarget, d?.starTarget, ...(d?.chase ?? []), ...Object.keys(d?.playerD ?? {}).map(Number)]) if (pid != null) named.add(pid);
+            for (const pid of [it.patch.offense?.huntTarget, d?.starTarget, ...(d?.chase ?? []), ...Object.keys(d?.matchups ?? {}).map(Number)]) if (pid != null) named.add(pid);
           }
         }
         return named;

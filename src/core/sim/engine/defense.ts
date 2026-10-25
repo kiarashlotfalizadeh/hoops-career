@@ -1,19 +1,19 @@
 // The defense: who guards whom (the matchup solver, a junk defense's chasers on the creators), the
 // scheme played now (the zone tables, a junk defense playing man while its chased players sit), the
-// star plan's target, scouting-report instructions on one player (under, top-lock, sag, physical), the
-// defender being hunted and what attacking him is worth, help and ball pressure, the rim contest,
-// the turnovers pressure forces and who gets the steal. Each edge is tagged with its expected points.
+// star plan's target (a double), a roamer's help, the defender being hunted and what attacking him is
+// worth, help and ball pressure, the rim contest, the turnovers pressure forces and who gets the
+// steal. Each edge is tagged with its expected points.
 
-import type { DefScheme, PlayerDefense } from '../../types';
+import type { DefScheme } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
 import { solveMatchups } from '../matchups';
 import { shapeOf } from '../tactics';
-import { K, blowByTag, lev, levExtra, levGift, levGiftW, levW, type ZoneK } from './constants';
+import { K, blowByTag, lev, levExtra, levW, type ZoneK } from './constants';
 import { type SP, type ST, NONE } from './state';
 import type { GameSim } from './game';
 
-/** A top-lock on one player as the actions play it (K.lock's table at the tactical leverage), with the tags for what it takes away and what it gives back. */
+/** A junk defense's chaser top-locking his man, as the actions play it (K.lock's table at the tactical leverage), with the tags for what it takes away and what it gives back. */
 export interface Lock {
   kickW: number;
   c3: number;
@@ -114,49 +114,26 @@ export const defenseMethods = {
     return def.t.defense.scheme !== 'box1' && def.t.defense.scheme !== 'tri2' ? 1 : this.chased(def, off).includes(p) ? levW(K.chaseTouch) : 1;
   },
 
-  /** The scouting-report instruction for guarding offensive player `p`, if any. */
-  pd(this: GameSim, def: ST, p: SP): PlayerDefense | undefined {
-    return def.t.defense.playerD?.[p.pid];
-  },
-
   /**
-   * Whether offensive player `p` is top-locked off the ball, and how hard: a junk defense's chaser
-   * face-guards him, or a "tight" instruction runs him off the line. With the impact tags for what
-   * it takes away (his catch-and-shoot and off-screen looks) and what it gives back (drives on the
-   * catch, curls and back-cuts against a defender caught high), at the tactical leverage: a "tight"
-   * instruction's give-back grows as an instruction's does (see K.giftExp).
+   * Whether offensive player `p` is top-locked off the ball: a junk defense's chaser face-guards him.
+   * With the impact tags for what it takes away (his catch-and-shoot and off-screen looks) and what it
+   * gives back (drives on the catch, curls and back-cuts against a defender caught high), at the
+   * tactical leverage.
    */
   lock(this: GameSim, def: ST, off: ST, p: SP): Lock | null {
-    if (def.t.defense.scheme === 'box1' || def.t.defense.scheme === 'tri2') {
-      if (this.chased(def, off).includes(p)) {
-        const k = K.lock.box;
-        return { kickW: levW(k.kickW), c3: lev(k.c3), offScreen: lev(k.offScreen), beat: lev(k.beat), cutW: levW(k.cutW), tag: 'box_chase', beatTag: 'box_beat' };
-      }
-    }
-    if (this.pd(def, p) === 'tight') {
-      const k = K.lock.tight;
-      return { kickW: levW(k.kickW), c3: lev(k.c3), offScreen: lev(k.offScreen), beat: levGift(k.beat), cutW: levGiftW(k.cutW), tag: 'pd_tight', beatTag: 'pd_tight' };
-    }
-    return null;
+    if ((def.t.defense.scheme !== 'box1' && def.t.defense.scheme !== 'tri2') || !this.chased(def, off).includes(p)) return null;
+    const k = K.lock.box;
+    return { kickW: levW(k.kickW), c3: lev(k.c3), offScreen: lev(k.offScreen), beat: lev(k.beat), cutW: levW(k.cutW), tag: 'box_chase', beatTag: 'box_beat' };
   },
 
   /**
-   * Rim openness taken off a shot at the basket by `sh` because the defense sags off non-shooters
-   * ("sag" instructions on teammates of his who are off the ball, and roamers off theirs), up to two
-   * of them; `sagKey` is the tag it goes under (whichever gives more of it).
+   * Rim openness taken off a shot at the basket because roamers help off their men (teammates of the
+   * shooter's who are off the ball), up to two of them; tagged 'role_roam'.
    */
-  sagHelp(this: GameSim, def: ST, off: ST, ...onBall: SP[]): number {
-    const pd = def.t.defense.playerD;
-    let n = 0;
+  roamHelp(this: GameSim, def: ST, off: ST, ...onBall: SP[]): number {
     let roam = 0;
-    for (const p of off.on) {
-      if (onBall.includes(p)) continue;
-      if (pd?.[p.pid] === 'sag') n++;
-      // a roamer helps off his man as a sag would, a little less
-      else if (def.guardOf.get(p.pid)?.drole === 'roamer') roam += K.role.roamHelp;
-    }
-    this.sagKey = roam > n ? 'role_roam' : 'pd_sag';
-    return Math.min(2, n + roam) * lev(K.pd.sag.help);
+    for (const p of off.on) if (!onBall.includes(p) && def.guardOf.get(p.pid)?.drole === 'roamer') roam++;
+    return Math.min(2, roam) * lev(K.role.roamHelp);
   },
 
   /** The offensive player the defender being hunted guards (while both are on the floor), or null. */
@@ -202,8 +179,9 @@ export const defenseMethods = {
     return def.on[this.rng.weighted(ws)];
   },
 
+  /** How far the help comes: -1 staying home .. +1 packing the paint, at K.cov.help's size. */
   help(this: GameSim, def: ST) {
-    return (def.t.defense.help - 50) / 50; // -1 stay home .. +1 pack paint
+    return ((def.t.defense.help - 50) / 50) * K.cov.help;
   },
 
   pressure(this: GameSim, def: ST) {
@@ -235,23 +213,11 @@ export const defenseMethods = {
     return def.t.defense.scheme === 'box1' || def.t.defense.scheme === 'tri2' ? 'box_open' : 'zone_3pt';
   },
 
-  /** "Get physical with him": the shooting fouls he draws, as a shot's options take them (none without the instruction). */
-  body(this: GameSim, def: ST, p: SP): { forcedFoulMult: number; foulTag: [string, number] } | undefined {
-    return this.pd(def, p) === 'body' ? { forcedFoulMult: levGiftW(K.pd.body.foul), foulTag: ['pd_body', levGiftW(K.pd.body.foul)] } : undefined;
-  },
-
-  /**
-   * Star plan "deny", and a junk defense's chaser: when the face-guarded player does get the ball,
-   * he catches it late and further out (the chaser's doing when both are on him).
-   */
-  denyCatch(this: GameSim, def: ST, off: ST, p: SP, from: 'pnr' | 'handoff' | 'iso' | 'post'): number {
-    if (this.chased(def, off).includes(p)) {
-      this.impact('box_chase', def.side, lev(K.chaseCatch) * K.advPts[from], p.pid);
-      return lev(K.chaseCatch);
-    }
-    if (def.t.defense.starPlan !== 'deny' || this.starTarget(def, off) !== p) return 0;
-    this.impact('star_deny', def.side, lev(K.denyCatch) * K.advPts[from], p.pid);
-    return lev(K.denyCatch);
+  /** A junk defense's chaser: when the face-guarded player does get the ball, he catches it late and further out. */
+  chaseCatch(this: GameSim, def: ST, off: ST, p: SP, from: 'pnr' | 'handoff' | 'iso' | 'post'): number {
+    if (!this.chased(def, off).includes(p)) return 0;
+    this.impact('box_chase', def.side, lev(K.chaseCatch) * K.advPts[from], p.pid);
+    return lev(K.chaseCatch);
   },
 
   /** Defensive effectiveness modifier from fatigue. */
@@ -279,7 +245,7 @@ export const defenseMethods = {
     const poa = this.defOf(def, handler).drole === 'poa' && handler.on ? lev(K.role.poaTO) : 0;
     const sys = 1 + fam + horns + poa;
     const p = (base * (1 + levExtra(K.recenter.tov) + swing * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv * sys;
-    if (pr !== 0) this.impact('pressure_to', def.side, base * swing * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts, handler.pid);
+    if (pr !== 0) this.impact('pressure_to', def.side, base * swing * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts * K.pressureTag, handler.pid);
     const sysTo = base * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts;
     if (fam) this.impact('fam_off', def.side, fam * sysTo, handler.pid);
     if (horns) this.impact('shape_tov', off.side, -horns * sysTo, handler.pid);
@@ -293,7 +259,9 @@ export const defenseMethods = {
    */
   blowBy(this: GameSim, def: ST, h: SP, from: 'pnr' | 'handoff' | 'iso'): number {
     const pr = this.pressure(def);
-    const edge = lev(K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2);
+    // (pressing: as much as the offense's handlers make of it, as its open looks are, see shoot)
+    const beat = pr > 0 ? clamp(1 + (this.T[1 - def.side].secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.open, 0.25, 1.5) : 1;
+    const edge = lev(K.blowBy * pr + K.blowByConvex * Math.max(0, pr) ** 2) * beat;
     if (edge !== 0) this.impact('pressure_blowby', (1 - def.side) as 0 | 1, blowByTag(edge, from), h.pid);
     // a point-of-attack stopper on him stays in front more often
     const poa = this.defOf(def, h).drole === 'poa' ? lev(K.role.poaBlowBy) : 0;

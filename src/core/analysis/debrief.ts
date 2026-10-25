@@ -92,7 +92,7 @@ const KEY_ADVICE: Record<string, string> = {
   attack: 'You never got to the line: attack the rim more.',
   fly: "Their defense gave up threes and you didn't take them: more threes next time.",
   pressure: 'Their handlers were loose and you let them be: more ball pressure, or a press after makes.',
-  star: 'Their scorer got his: deny him the ball (Star plan), or put your best defender on him (Matchups).',
+  star: 'Their scorer got his: put your best defender on him (Matchups), or double him if he can’t pass out of it (Star plan).',
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
 

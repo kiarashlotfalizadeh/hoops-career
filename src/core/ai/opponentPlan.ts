@@ -9,12 +9,12 @@
 
 import { preset } from '../league/difficulty';
 import type { GameSim } from '../sim/engine';
-import type { League, Player, PlayerDefense, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
+import type { League, Player, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { applyPatch } from '../sim/tactics';
 import { DEFAULT_PPP, zScore } from '../analysis/playTypes';
 import { SCOUT_MIN_GAMES, projectedRotation } from '../analysis/scouting';
-import { guardingPlan, huntPick } from '../analysis/guarding';
+import { huntPick } from '../analysis/guarding';
 import { playerName, seasonLine, seasonTotals, shortName, teamPlayers } from '../league/helpers';
 import { CRAMPED_SPACING, defPresetFit, rosterProfile } from './coachAI';
 import { composites } from '../ratings';
@@ -267,14 +267,6 @@ export function leagueThreePct(league: League): number {
 
 const COVERAGE_TEXT: Partial<Record<PnrCoverage, string>> = { hedge: 'hedges ball screens', ice: 'ices ball screens', drop: 'drops the big on ball screens' };
 
-/** A guarding instruction as the coach's plan reads ("goes under screens on Brunson"). */
-const GUARD_TEXT: Record<PlayerDefense, (name: string) => string> = {
-  under: (n) => `goes under screens on ${n}`,
-  tight: (n) => `runs ${n} off the three-point line`,
-  sag: (n) => `sags off ${n}`,
-  body: (n) => `gets physical with ${n}`,
-};
-
 /** Everything the coach could plan against the user's team tonight, each weighted by how strong the numbers behind it are. */
 function candidates(league: League, aiTid: number, base: Tactics, userTid: number, day: number): Cand[] {
   const out: Cand[] = [];
@@ -394,29 +386,22 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       patch: { offense: { huntTarget: hunt.pid } },
       w: (hunt.teamPerDef - hunt.perDef) / 4,
     });
-  // ---- how to guard one of the user's regulars (his top seven, who play the minutes worth a plan):
-  // the read the user's own staff makes on an opponent
-  // (go under on a handler who can't shoot off the dribble, top-lock a shooter who can't drive, sag
-  // off a non-shooter, get physical with a poor free-throw shooter inside); a man-to-man thing
-  if (d.scheme === 'man' && !d.playerD) {
-    const read = guardingPlan(league, userTid, resting)
-      .slice(0, 7)
-      .find((a) => a.suggest && (a.suggest !== 'under' || (d.pnr !== 'switch' && d.pnr !== 'blitz')));
-    const who = read && league.players[read.pid];
-    if (read?.suggest && who)
-      out.push({
-        id: `guard-${read.suggest}`,
-        group: 'guard',
-        text: GUARD_TEXT[read.suggest](shortName(league, who)),
-        why: `${playerName(who)}: ${read.why}`,
-        patch: { defense: { playerD: { [who.pid]: read.suggest } } },
-        // a small edge (see the README's numbers): the plan's second item at most, unless nothing else stands out
-        w: 1.2,
-      });
-  }
-  // ---- the player the user's offense runs through: denied the ball, doubled only when he can't pass
-  // out of it and the players around him can't shoot by their ratings (over real rosters a double, or
-  // a box-and-one read off a three-point percentage, cost the coach who tried it points)
+  // ---- a 2-3 zone against a five that can't shoot (the five who play most tonight, by their ratings):
+  // the zone's open threes go to players who miss them (see K.matchup)
+  const five = projectedRotation(league, userTid, 5, resting);
+  const fiveSpacing = five.reduce((a, x) => a + composites(x.ratings).spacing, 0) / Math.max(1, five.length);
+  if (man && five.length >= 5 && fiveSpacing <= CRAMPED_SPACING + 6)
+    out.push({
+      id: 'zone23',
+      group: 'coverage',
+      text: 'plays a 2-3 zone',
+      why: `Your five who play most space the floor at ${Math.round(fiveSpacing)}: the league's bottom fifth starts at ${CRAMPED_SPACING}.`,
+      patch: { defense: { scheme: 'zone23' } },
+      w: 1.5 + (CRAMPED_SPACING + 6 - fiveSpacing) / 3,
+    });
+  // ---- the player the user's offense runs through: doubled only when he can't pass out of it and
+  // the players around him can't shoot by their ratings (over real rosters a double, or a box-and-one
+  // read off a three-point percentage, cost the coach who tried it points)
   const star = userStar(league, userTid, day);
   const around = star ? castSpacing(league, userTid, star.p.pid, resting) : 100;
   const selfish = !!star && composites(star.p.ratings).passing < 55;
@@ -437,15 +422,15 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     const spot = p ? ptRead(p, p.off, 'spotup') : null;
     // a double leaves a shooter open: not against a team whose shooters make it pay
     const shooters = !!p && ((!!spot && spot.z >= 1) || div(p.off.tpm, p.off.tpa) > div(p.lg.tpm, p.lg.tpa) + 0.02);
-    const double = star.usg >= 0.32 && !shooters && selfish && around < CRAMPED_SPACING;
-    out.push({
-      id: double ? 'star-double' : 'star-deny',
-      group: 'star',
-      text: double ? `doubles ${shortName(league, star.p)}` : `denies ${shortName(league, star.p)} the ball`,
-      why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions when he plays.`,
-      patch: { defense: { starPlan: double ? 'double' : 'deny', starTarget: star.p.pid } },
-      w: 1.5 + (star.usg - 0.28) * 25 + (iso && iso.z >= 1.5 ? 1 : 0),
-    });
+    if (star.usg >= 0.32 && !shooters && selfish && around < CRAMPED_SPACING)
+      out.push({
+        id: 'star-double',
+        group: 'star',
+        text: `doubles ${shortName(league, star.p)}`,
+        why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions when he plays, and doesn't pass out of traps.`,
+        patch: { defense: { starPlan: 'double', starTarget: star.p.pid } },
+        w: 1.5 + (star.usg - 0.28) * 25 + (iso && iso.z >= 1.5 ? 1 : 0),
+      });
   }
   return out;
 }
@@ -468,18 +453,22 @@ export function aiGamePlan(league: League, aiTid: number, userTid: number, game:
   while (pool.length && items.length < OPP_PLAN_MAX) {
     const c = items.length ? pool[rng.weighted(pool.map((x) => x.w))] : pool[0];
     items.push({ id: c.id, group: c.group, text: c.text, why: c.why, patch: c.patch });
-    pool = pool.filter((x) => x.group !== c.group);
+    // (one item a group, and one scheme: a zone and a box-and-one don't both go in)
+    pool = pool.filter((x) => x.group !== c.group && !(c.patch.defense?.scheme && x.patch.defense?.scheme));
   }
-  if (!items.length && base.defense.starPlan === 'none') {
-    // nothing stands out: take away the best player who's playing
+  if (!items.length) {
+    // nothing stands out: his best perimeter defender on the best player who's playing
     const star = userStar(league, userTid, game.day);
-    if (star)
+    const stopper = teamPlayers(league, aiTid)
+      .filter((x) => !x.injury)
+      .sort((a, b) => composites(b.ratings).perDef - composites(a.ratings).perDef || a.pid - b.pid)[0];
+    if (star && stopper)
       items.push({
-        id: 'star-deny',
+        id: 'star-stopper',
         group: 'star',
-        text: `denies ${shortName(league, star.p)} the ball`,
+        text: `puts ${shortName(league, stopper)} on ${shortName(league, star.p)}`,
         why: star.usg > 0 ? `${playerName(star.p)} uses the most of your possessions (${pct(star.usg)}).` : `${playerName(star.p)} is your best player.`,
-        patch: { defense: { starPlan: 'deny', starTarget: star.p.pid } },
+        patch: { defense: { matchups: { [star.p.pid]: stopper.pid } } },
       });
   }
   return items.length ? { tid: aiTid, gid: game.gid, items } : null;

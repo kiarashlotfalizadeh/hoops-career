@@ -24,7 +24,59 @@ const TWO_ASSIST = 0.91;
 /** No partnership effect (shared: never added to). */
 const NONE_TAGS: [string, number][] = [];
 
+export type MatchupFamily = keyof typeof K.matchup.open;
+
+const familyOf = new Map<string, MatchupFamily | null>();
+/** The big decision an impact tag is one of (K.matchup.family), if any. */
+export function matchupFamily(k: string): MatchupFamily | null {
+  let f = familyOf.get(k);
+  if (f === undefined) {
+    f = (Object.entries(K.matchup.family).find(([, ps]) => ps.some((p) => k.startsWith(p)))?.[0] as MatchupFamily | undefined) ?? null;
+    familyOf.set(k, f);
+  }
+  return f;
+}
+
+/** Room a big decision leaves on a look that gets its full skill term (K.matchup): less room, a share of it. */
+const FULL_ROOM = 0.3;
+
 export const shotsMethods = {
+  /**
+   * The big decisions' looks on this shot, counted by who gets them (K.matchup): for each family that
+   * left it open (and the room ball pressure gives up, `over`), the shooter's skill for it over the
+   * league's in openness, by tag (the first of the family's tags on the look). `skill` is his rating
+   * for the shot; his form counts.
+   */
+  matchupOpen(this: GameSim, sh: SP, zone: ShotZone, pullup: boolean, skill: number, tags: [string, number][] | undefined, over: number): [string, number][] {
+    const m = K.matchup;
+    // (by family: its net room, and the tag the term goes to, the family's largest the same way as the net)
+    let fams: [MatchupFamily, string, number, [string, number][]][] | null = null;
+    if (tags)
+      for (const [k, d] of tags) {
+        const f = matchupFamily(k);
+        if (!f) continue;
+        const e = (fams ??= []).find((x) => x[0] === f);
+        if (e) {
+          e[2] += d;
+          e[3].push([k, d]);
+        } else fams.push([f, k, d, [[k, d]]]);
+      }
+    for (const e of fams ?? []) e[1] = e[3].reduce((a, x) => ((e[2] >= 0 ? x[1] > a[1] : x[1] < a[1]) ? x : a), e[3][0])[0];
+    if (!fams && over <= 0) return NONE_TAGS;
+    const avg = zone === 'rim' ? m.avg.rim : zone === 'paint' ? m.avg.paint : zone === 'mid' ? m.avg.mid : pullup ? m.avg.pu3 : m.avg.c3;
+    const z = (f: MatchupFamily) => clamp((skill * sh.perf - avg - m.center[f]) / m.per, -m.cap, m.cap);
+    // (the room keeps `floor` of its size at worst for a shooter who can't use it, and a look taken
+    // away keeps as much of its cost: the term never turns a decision's room into its opposite)
+    const term = (f: MatchupFamily, d: number) => {
+      const x = m.open[f] * z(f) * clamp(d / FULL_ROOM, -1, 1);
+      return d > 0 ? Math.max(x, -d * (1 - m.floor)) : Math.min(x, -d * (1 - m.floor));
+    };
+    const out: [string, number][] = [];
+    for (const [f, k, d] of fams ?? []) if (d !== 0) out.push([k, term(f, d)]);
+    if (over > 0) out.push(['pressure_blowby', term('pressure', over)]);
+    return out;
+  },
+
   /**
    * Second-half score effects: a big lead makes the leader ease off and the trailer play loose;
    * late in a close game the leader plays not to lose and the trailer presses.
@@ -143,13 +195,18 @@ export const shotsMethods = {
     const beat = clamp(1 + (off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.open, 0.25, 1.5);
     const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)) * beat);
     // (the room tactics have to open or close a look grows with the tactical leverage)
+    // the big decisions' looks count by who gets them (K.matchup): the room the scheme, the coverage,
+    // help, the double or ball pressure left him, by his skill for the shot
+    const fit = s.finish === 'putback' || s.finish === 'transition' ? NONE_TAGS : this.matchupOpen(sh, zone, !!s.pullup, skill, s.tags, over);
+    let mine = 0;
+    for (const [, v] of fit) mine += v;
     // the shape: five-out's open paint, the double post's crowded one (and its bigs inside)
     const shape = this.shapeOpen(off, sh, zone, s.finish);
     // partnerships: the passer and the shooter's link, the wall a drive meets, the crowded paint
     const links = this.linkOpen(off, s);
     let link = 0;
     for (const [, v] of links) link += v;
-    const open = clamp(s.open + over + shape + link + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
+    const open = clamp(s.open + over + mine + shape + link + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
     // contesting defender quality
@@ -185,14 +242,22 @@ export const shotsMethods = {
     p *= this.scramble;
     p = clamp(p, 0.04, 0.93);
 
-    // impact accounting: each tag's openness contribution in expected points
+    // impact accounting: each tag's openness contribution in expected points (a big decision's with
+    // what the shooter made of it: see matchupOpen)
+    // (once a key: a family's term goes to its first tag on the look)
+    const credited = fit.length ? new Set<string>() : null;
+    const extra = (k: string) => {
+      if (!credited || credited.has(k)) return 0;
+      credited.add(k);
+      return fit.reduce((a, [fk, v]) => (fk === k ? a + v : a), 0);
+    };
     if (s.tags) {
       for (const [k, d] of s.tags) {
         if (d === 0) continue;
-        this.impact(k, off.side, d * K.zoneOpen[zone] * value, sh.pid);
+        this.impact(k, off.side, (d + extra(k)) * K.zoneOpen[zone] * value, sh.pid);
       }
     }
-    if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value, sh.pid);
+    if (over) this.impact('pressure_blowby', off.side, (over + extra('pressure_blowby')) * K.zoneOpen[zone] * value, sh.pid);
     if (famO) this.impact('fam_off', def.side, famO * value, sh.pid);
     if (shape) this.impact('shape_space', off.side, shape * K.zoneOpen[zone] * value, sh.pid);
     for (const [k, v] of links) this.impact(k, off.side, v * (K.link.tag[k] ?? 1) * K.zoneOpen[zone] * value, sh.pid);
@@ -327,21 +392,18 @@ export const shotsMethods = {
   /** Catch on a kick-out: let it fly, or attack a hard closeout. */
   spotUp(this: GameSim, off: ST, def: ST, s: ShotOpts) {
     const sh = s.shooter;
-    // top-locked (a junk defense's chaser, or run off the line): a hand in his face on the catch (none
-    // of a junk zone's open looks reach him), but his man closes out high and can be driven past
+    // top-locked by a junk defense's chaser: a hand in his face on the catch (none of the junk zone's
+    // open looks reach him), but his man closes out high and can be driven past
     const lk = this.lock(def, off, sh);
     if (lk) {
       const key = this.openKey(def);
-      const zoneOpen = lk.tag === 'box_chase' ? (s.tags ?? []).reduce((a, [k, x]) => (k === key ? a + x : a), 0) : 0;
-      s = { ...s, open: s.open - zoneOpen - lk.c3, tags: [...(s.tags ?? []).filter(([k]) => lk.tag !== 'box_chase' || k !== key), [lk.tag, -lk.c3]] };
-    } else if (this.pd(def, sh) === 'sag') {
-      // sagged off: the kick-out finds him open
-      s = { ...s, open: s.open + levGift(K.pd.sag.kick), tags: [...(s.tags ?? []), ['pd_sag', levGift(K.pd.sag.kick)]] };
+      const zoneOpen = (s.tags ?? []).reduce((a, [k, x]) => (k === key ? a + x : a), 0);
+      s = { ...s, open: s.open - zoneOpen - lk.c3, tags: [...(s.tags ?? []).filter(([k]) => k !== key), [lk.tag, -lk.c3]] };
     } else {
       // a roamer has left him to help, and a rim anchor stays home in the paint: the catch is open
       // (the anchor's man only as far as he's a shooter)
       const md = def.guardOf.get(sh.pid);
-      const gift = md?.drole === 'roamer' ? levGift(K.pd.sag.kick) * K.role.roamKick : md?.drole === 'anchor' ? lev(K.role.anchorKick) * clamp((sh.c.c3 - 40) / 30, 0, 1.5) : 0;
+      const gift = md?.drole === 'roamer' ? levGift(K.role.roamKick) : md?.drole === 'anchor' ? lev(K.role.anchorKick) * clamp((sh.c.c3 - 40) / 30, 0, 1.5) : 0;
       if (gift) s = { ...s, open: s.open + gift, tags: [...(s.tags ?? []), [md!.drole === 'roamer' ? 'role_roam' : 'role_anchor', gift]] };
     }
     const t3 = off.t.offense.threePoint / 100;
@@ -374,17 +436,12 @@ export const shotsMethods = {
       o -= lev(zd.drive);
       tags.push(['zone_paint', -lev(zd.drive)]);
     }
-    const body = this.body(def, sh);
-    if (body) {
-      o -= lev(K.pd.body.drive);
-      tags.push(['pd_body', -lev(K.pd.body.drive)]);
+    const roam = zone !== 'mid' ? this.roamHelp(def, off, sh) : 0;
+    if (roam) {
+      o -= roam;
+      tags.push(['role_roam', -roam]);
     }
-    const sag = zone !== 'mid' ? this.sagHelp(def, off, sh) : 0;
-    if (sag) {
-      o -= sag;
-      tags.push([this.sagKey, -sag]);
-    }
-    this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags, ...body });
+    this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags });
   },
 
   /**

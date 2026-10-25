@@ -198,7 +198,6 @@ export function staffNotes(a: StaffInput): StaffNote[] {
           x.defense.matchups[scorer.pid] = best.pid;
         },
       });
-    actions.push({ kind: 'tactics', label: `Deny ${names(scorer.pid)}`, apply: (x) => void ((x.defense.starPlan = 'deny'), (x.defense.starTarget = scorer.pid)) });
     actions.push({ kind: 'tactics', label: `Double ${names(scorer.pid)}`, apply: (x) => void ((x.defense.starPlan = 'double'), (x.defense.starTarget = scorer.pid)) });
     out.push({
       id: `hot-${scorer.pid}`,

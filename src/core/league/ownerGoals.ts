@@ -4,10 +4,13 @@
 // team with its payroll's league rank should win, and never under the difficulty's win% floor), a
 // postseason goal from where that projects the team in its conference and its front office's
 // strategy (or a development goal for a rebuilder or a team projected out of the play-in: minutes
-// for players 23 or under, for as many seasons in a row as the difficulty gives a rebuild; after
-// that, the play-in at least and a higher floor), and a money goal (a profit from the season's
-// budget, or the luxury tax line for a team near or over it: a win-now owner's the first apron).
-// A season under the floor grades Poor or worse whatever else went right (see floorCap). Each franchise's owner has a personality of his own (a builder, win-now or frugal), the
+// for players 23 or under, for as many seasons in a row without the postseason as the difficulty
+// gives a rebuild; after that, the play-in at least and a higher floor, and only reaching the
+// postseason resets the clock), and a money goal (a profit from the season's budget, or the luxury
+// tax line for a team near or over it: a win-now owner's the first apron). A season under the floor
+// grades Poor or worse whatever else went right (see floorCap), and so does one past the rebuild
+// allowance that misses the postseason, lower each season it goes on (see patienceCap). Each
+// franchise's owner has a personality of his own (a builder, win-now or frugal), the
 // same every season of a league, which moves the targets and weights a little. In season the goals
 // report their progress (ownerProgress) and the owner checks in at the All-Star break (monthly too: legacyPulse.ts) and when the
 // team falls clearly off pace; after the playoffs each goal is graded −1..1 by how far the result beat
@@ -73,8 +76,10 @@ export interface OwnerGoals {
   ultimatum?: Ultimatum;
   /** The least win% he accepts this season (see floorCap); absent in goals from before the floor. */
   floor?: number;
-  /** A rebuild season: which one in a row, of how many he allows; `over`: he allows no more (the play-in at least). */
+  /** The rebuild clock: which season in a row without the postseason this is, of how many he allows; `over`: he allows no more (the play-in at least). */
   rebuild?: { year: number; of: number; over?: true };
+  /** A season he asks to compete in after seasons without the postseason, short of his allowance: how many, of how many he allows (the rebuild clock is running). */
+  missed?: { seasons: number; of: number };
   /** He lowered the floor this season when told it was a development year (see easeFloor). */
   eased?: true;
 }
@@ -102,6 +107,8 @@ export interface OwnerReview {
   games?: number;
   /** A championship (or a postseason two rounds past the goal) that lifted the season's grade (see CROWN_GRADE). */
   crowned?: 'title' | 'run';
+  /** What held the season's grade down, when something did: the win floor, the rebuild clock (see patienceCap), or the books closed in the red under the freeze (see booksVerdict). */
+  held?: 'floor' | 'patience' | 'books';
   fired?: true;
 }
 
@@ -322,17 +329,38 @@ function youngPerGame(league: League, tid: number): number {
 // ---------------------------------------------------------------- the floor and the rebuild clock
 
 /**
- * Seasons in a row, up to last season, the owner of `tid` let the user's team rebuild: reviewed
- * seasons of his with this team whose goals had no postseason goal. A season with one ends the run.
+ * Seasons in a row, up to last season, the user's team has gone without the postseason under the
+ * owner of `tid`: reviewed seasons of his with this team that missed the play-in, a rebuild he
+ * allowed or a season he asked to compete alike. Only a season that reached the postseason (the
+ * play-in counts: it's what he asks for once his patience is out) ends the run, so a missed
+ * "compete" season doesn't reset his patience.
  */
 export function rebuildRun(league: League, tid: number): number {
   const reviews = (league.ownerReviews ?? []).filter((r) => r.tid === tid && r.season < league.season);
+  const team = league.teams[tid];
   let n = 0;
   for (let s = league.season - 1; ; s--) {
     const r = reviews.find((x) => x.season === s);
-    if (!r || !r.goals.length || r.goals.some((g) => g.kind === 'postseason')) return n;
+    if (!r || !r.goals.length || postseasonLevel(team?.seasons.find((x) => x.season === s)) >= 1) return n;
     n++;
   }
+}
+
+/**
+ * The most a season can grade once the owner's patience with a rebuild is out (OwnerGoals.rebuild
+ * `over`) and it misses the postseason anyway: Poor (FLOOR_GRADE) the first season past his allowance,
+ * PATIENCE_STEP lower for each one after it. A coach who keeps missing runs out of road: on normal
+ * (each season 40% of the standing) one whose rebuild seasons graded about even crosses the firing
+ * line in his third season past the allowance (−0.16, −0.34, −0.52), where the clock used to reset
+ * after each season he was asked to compete in.
+ */
+export const PATIENCE_STEP = 0.2;
+
+/** The grade cap for a season past the owner's rebuild allowance that missed the postseason (none otherwise: 1). */
+export function patienceCap(og: Pick<OwnerGoals, 'rebuild'>, level: number): number {
+  const r = og.rebuild;
+  if (!r?.over || level >= 1) return 1;
+  return Math.max(-1, FLOOR_GRADE - PATIENCE_STEP * Math.max(0, r.year - r.of - 1));
 }
 
 /** Wins a season's target can fall under last season's with the same team, outside a rebuild season. */
@@ -427,7 +455,7 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   if (!opening) base.from = { day: league.day, won: ts?.won ?? 0, lost: ts?.lost ?? 0, profit: profit(league, tid), youth: youngMinutes(league, tid) };
   const goals = base.goals;
   const diff = preset(league);
-  // the rebuild clock: seasons in a row he has let this team rebuild, of the difficulty's allowance
+  // the rebuild clock: seasons in a row this team has gone without the postseason under him, of the difficulty's allowance
   const run = rebuildRun(league, tid);
   const patienceOut = run >= diff.rebuildSeasons;
   const floor = diff.winFloor + (patienceOut ? REBUILD_OVER_FLOOR : 0);
@@ -474,9 +502,11 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     ...(byRank - o.pct >= 0.02 ? { payRank } : {}),
     ...(last !== undefined && wins > Math.round(pct * o.left + WIN_NUDGE[who] * share) ? { held: last } : {}),
   });
-  // a season without a postseason goal is a rebuild season, one of the allowance
+  // a season without a postseason goal is a rebuild season, one of the allowance; past it, the
+  // season competes, and missing the postseason anyway caps its grade (see patienceCap)
   if (!level) base.rebuild = { year: run + 1, of: diff.rebuildSeasons };
   else if (patienceOut && run > 0) base.rebuild = { year: run + 1, of: diff.rebuildSeasons, over: true };
+  else if (run > 0) base.missed = { seasons: run, of: diff.rebuildSeasons };
   if (level) goals.push({ kind: 'postseason', title: POSTSEASON[level].goal, target: level, weight: lean('postseason'), rank });
   // development: a rebuilder, a team projected out of the play-in, or a retooling team with young players in its rotation
   const youngPg = youngPerGame(league, tid);
@@ -571,8 +601,17 @@ export function goalsWhy(og: OwnerGoals): string[] {
   const wins = og.goals.find((g) => g.kind === 'wins');
   if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. I expect a record to match it.`);
   if (wins?.held) out.push(`Last season I asked for ${wins.held} wins. A roster that got worse on your watch doesn't lower the bar by more than ${WIN_SLIDE}.`);
-  if (og.rebuild?.over) out.push(`${og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`} of rebuilding is all I'll take. This season we compete.`);
-  else if (og.rebuild) out.push(`Rebuilding: season ${og.rebuild.year} of the ${og.rebuild.of} I'll give it. After that I want the play-in.`);
+  if (og.rebuild?.over)
+    out.push(
+      `${og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`} without the postseason is all I'll take. This season we compete: miss the play-in and it grades ${grade100(patienceCap(og, 0))} at best, whatever else goes right.`,
+    );
+  else if (og.rebuild) out.push(`Rebuilding: season ${og.rebuild.year} of the ${og.rebuild.of} without the postseason I'll give it. After that I want the play-in.`);
+  else if (og.missed) {
+    const { seasons: n, of } = og.missed;
+    out.push(
+      `${n === 1 ? 'Last season' : `The last ${n} seasons`} went without the postseason, ${n === 1 ? 'one' : n} of the ${of} I'll allow. ${of - n === 1 ? 'Miss it again' : `${of - n} more`} and I want the play-in at least.`,
+    );
+  }
   // (the floor is said when it's near: a rebuild, or a win goal within ten wins of it)
   const near = og.floor !== undefined && (!!og.rebuild || (wins && wins.target <= og.floor * og.games + 10));
   if (near) out.push(`Whatever the plan, under ${Math.round(og.floor! * og.games)} wins${og.from ? ` of the ${og.games}` : ''} is a failed season.`);
@@ -592,7 +631,7 @@ export function concedeBlockedReason(league: League): string | null {
   if (!og.goals.some((g) => g.kind === 'postseason')) return 'He already expects a rebuild this season.';
   const run = rebuildRun(league, og.tid);
   const of = preset(league).rebuildSeasons;
-  if (run >= of) return `He has given you ${run === 1 ? 'a rebuilding season' : `${run} rebuilding seasons`} already: he wants the play-in.`;
+  if (run >= of) return `He has given you ${run === 1 ? 'a season' : `${run} seasons`} without the postseason already: he wants the play-in.`;
   return null;
 }
 
@@ -674,7 +713,7 @@ export function easeFloorBlockedReason(league: League): string | null {
   if (og.eased) return 'He has eased the floor once this season already.';
   const run = rebuildRun(league, og.tid);
   if (og.rebuild?.over || run >= preset(league).rebuildSeasons)
-    return `He has given you ${run === 1 ? 'a rebuilding season' : `${run} rebuilding seasons`} already: he wants wins, not patience.`;
+    return `He has given you ${run === 1 ? 'a season' : `${run} seasons`} without the postseason already: he wants wins, not patience.`;
   return null;
 }
 
@@ -769,6 +808,9 @@ export function gradeGoal(league: League, og: OwnerGoals, g: OwnerGoal, result: 
       return r2((result - g.target) / Math.max(1_000 * span, 0.5 * g.target));
   }
 }
+
+/** A grade (−1..1) as the owner says it: "−40", "+12". */
+const grade100 = (g: number) => `${g > 0 ? '+' : g < 0 ? '−' : ''}${Math.abs(Math.round(g * 100))}`;
 
 const ordinalRank = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 
@@ -904,11 +946,13 @@ export const CROWN_GRADE: Record<'title' | 'run', number> = { title: 0.5, run: 0
 
 /**
  * The season's goals graded: each one's result and grade, and the season's grade by weight, held
- * under the floor's cap when the record fell under it (`floored`: it did, and the cap bit), and lifted
- * to CROWN_GRADE by a title or a postseason two rounds past the goal (`crowned`): what a season is
- * remembered for, whatever the money goals did.
+ * under the floor's cap when the record fell under it (`floored`: it did, and the cap bit) or under
+ * the rebuild clock's when a season past his allowance missed the postseason (`impatient`, see
+ * patienceCap), and lifted to CROWN_GRADE by a title or a postseason two rounds past the goal
+ * (`crowned`): what a season is remembered for, whatever the money goals did (the books can still
+ * hold it down: see booksVerdict).
  */
-export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerReview['goals']; grade: number; floored?: true; crowned?: 'title' | 'run' } {
+export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerReview['goals']; grade: number; floored?: true; impatient?: true; crowned?: 'title' | 'run' } {
   const goals = og.goals.map((g) => {
     const result = goalResult(league, og, g);
     // (the plan's per-game numbers were for the in-season projection only)
@@ -916,12 +960,22 @@ export function gradeOwnerGoals(league: League, og: OwnerGoals): { goals: OwnerR
   });
   const sum = goals.reduce((a, g) => a + g.weight * g.grade, 0);
   const rec = goalsRecord(league, og);
-  const cap = floorCap(og, rec.won, rec.games);
   const level = postseasonLevel(thisSeason(league, og.tid));
+  const floor = floorCap(og, rec.won, rec.games);
+  const patience = patienceCap(og, level);
+  const cap = Math.min(floor, patience);
   const post = og.goals.find((g) => g.kind === 'postseason');
   const crowned = level >= 6 ? 'title' : post && level - post.target >= 2 ? 'run' : undefined;
   const grade = Math.round(Math.max(Math.min(sum, cap), crowned ? CROWN_GRADE[crowned] : -1) * 100) / 100;
-  return { goals, grade, ...(cap < sum && !crowned ? { floored: true as const } : {}), ...(crowned ? { crowned } : {}) };
+  // (whichever cap held it lowest is the one the review names)
+  const bit = cap < sum && !crowned;
+  return {
+    goals,
+    grade,
+    ...(bit && floor <= patience ? { floored: true as const } : {}),
+    ...(bit && patience < floor ? { impatient: true as const } : {}),
+    ...(crowned ? { crowned } : {}),
+  };
 }
 
 // ---------------------------------------------------------------- check-ins

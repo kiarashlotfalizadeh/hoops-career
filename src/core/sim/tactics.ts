@@ -8,7 +8,6 @@ import type {
   Mentality,
   OffShape,
   OffenseTactics,
-  PlayerDefense,
   PnrCoverage,
   PressMode,
   SituationTrigger,
@@ -136,7 +135,7 @@ export const DEF_PRESETS: DefPreset[] = [
     tagline: 'Pack it in',
     description: 'Shrinks driving lanes and clogs the post, but leaves corner threes and the offensive glass vulnerable.',
     bestFor: 'Long lineups with a rim anchor vs poor-shooting, drive-heavy teams.',
-    values: { scheme: 'zone23', pnr: 'drop', help: 70, pressure: 48, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
+    values: { scheme: 'zone23', pnr: 'drop', help: 56, pressure: 48, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
   },
   {
     id: 'chaos',
@@ -222,29 +221,6 @@ export const chasers = (s: DefScheme) => (s === 'box1' ? 1 : s === 'tri2' ? 2 : 
 /** Every defensive scheme, junk defenses included. */
 export const ALL_SCHEMES = Object.keys(SCHEME_META) as DefScheme[];
 
-export const PLAYER_D_META: Record<PlayerDefense, { label: string; short: string; help: string }> = {
-  under: {
-    label: 'Go under screens',
-    short: 'Go under',
-    help: 'His defender goes under ball screens and handoffs (in man-to-man, unless you switch or blitz): his pull-ups get more room, his drives off the screen get harder, and the screener’s man can stay home on the roll and the pop. Right against a handler who can’t shoot off the dribble.',
-  },
-  tight: {
-    label: 'Run him off the line',
-    short: 'Top-lock',
-    help: 'His defender top-locks him off the ball: his catch-and-shoot and off-screen threes are rarer and tougher, but he gets more room to drive on the catch and to cut backdoor. Right against a shooter who can’t put it on the floor.',
-  },
-  sag: {
-    label: 'Sag off him',
-    short: 'Sag off',
-    help: 'His defender sags into the paint when he’s off the ball: better help at the rim on everyone else’s drives, cuts and rolls, but kick-outs to him are more open. Right against a player who can’t shoot.',
-  },
-  body: {
-    label: 'Get physical',
-    short: 'Physical',
-    help: 'His defender plays him physically: his post-ups, drives, rolls and cuts are tougher, but he draws more fouls. Right against a post scorer or driver who misses his free throws.',
-  },
-};
-
 export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
   none: { label: 'No press', help: 'Set up in the half court.' },
   afterMade: { label: 'After makes', help: 'Full-court pressure after made baskets and free throws.' },
@@ -253,7 +229,6 @@ export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
 
 export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> = {
   none: { label: 'Play straight', help: 'No special treatment.' },
-  deny: { label: 'Deny', help: 'Face-guard to keep the ball away from him. Fewer touches, more fatigue on his defender.' },
   double: { label: 'Double-team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
 };
 
@@ -538,7 +513,6 @@ export function cloneTactics(t: Tactics): Tactics {
       ...t.defense,
       matchups: { ...t.defense.matchups },
       ...(t.defense.chase && { chase: [...t.defense.chase] }),
-      ...(t.defense.playerD && { playerD: { ...t.defense.playerD } }),
       ...(t.defense.roles && { roles: { ...t.defense.roles } }),
     },
     manage: t.manage.hackTargets ? { ...t.manage, hackTargets: [...t.manage.hackTargets] } : { ...t.manage },
@@ -556,15 +530,14 @@ export function hasCoachPlans(t: Tactics): boolean {
     COACH_MANAGE.some((k) => t.manage[k] !== undefined && t.manage[k] !== null && t.manage[k] !== false) ||
     t.offense.huntTarget != null ||
     t.offense.sets !== undefined ||
-    t.defense.chase !== undefined ||
-    t.defense.playerD !== undefined
+    t.defense.chase !== undefined
   );
 }
 
 /**
  * The tactics without what only the user's bench uses: situational plans, the crunch-time go-to
  * player and after-timeout play, hack targets, the foul to give, the assistant's adjustments, the set
- * package, and the game-specific hunt target, chase targets and instructions on tonight's opponents.
+ * package, and the game-specific hunt target and chase targets on tonight's opponents.
  * An AI coach who inherits a team (the user took over another) plays its playbook, not those.
  */
 export function withoutCoachPlans(t: Tactics): Tactics {
@@ -574,7 +547,6 @@ export function withoutCoachPlans(t: Tactics): Tactics {
   delete out.offense.sets;
   delete out.offense.huntTarget;
   delete out.defense.chase;
-  delete out.defense.playerD;
   return out;
 }
 
@@ -592,7 +564,6 @@ export function withoutGameSpecific(t: Tactics, base?: Tactics): Tactics {
   out.defense.matchups = {};
   out.defense.starTarget = null;
   delete out.defense.chase;
-  delete out.defense.playerD;
   delete out.offense.huntTarget;
   delete out.manage.hackTargets;
   return out;
@@ -632,8 +603,8 @@ export function applyPatch(t: Tactics, patch?: TacticsPatch): Tactics {
   return cloneTactics(out);
 }
 
-/** Defense settings that name tonight's opponents (matchups, the star and chase targets, instructions by player). */
-const GAME_DEFENSE = new Set<keyof DefenseTactics>(['matchups', 'starTarget', 'chase', 'playerD']);
+/** Defense settings that name tonight's opponents (matchups, the star and chase targets). */
+const GAME_DEFENSE = new Set<keyof DefenseTactics>(['matchups', 'starTarget', 'chase']);
 
 /** Same value, objects (roles, freedom, screeners) compared by content. */
 const same = (a: unknown, b: unknown) => a === b || (typeof a === 'object' && JSON.stringify(a) === JSON.stringify(b));

@@ -57,6 +57,8 @@ import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { compareHref, counterpart } from '../compare';
 import { money, moneyExact } from '../../core/format';
+import { freezeResignReason, freezeSigningReason } from '../../core/league/books';
+import { salaryFor } from '../../core/playerGen';
 
 export type OfferMode = 'fa' | 'resign' | 'extend';
 
@@ -170,6 +172,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           ? 'Re-signing happens between the draft and free agency.'
           : null;
   const rosterBlocked = rosterN >= rosterMax;
+  // the owner's freeze: minimum deals only, and no raise on what one of your own is paid now
+  const paidNow = mode === 'resign' ? salaryFor(p, league.season) : 0;
+  const frozenAt = (x: number) => (mode === 'fa' ? freezeSigningReason(league, x, minAmt) : freezeResignReason(league, x, paidNow, minAmt, 're-signing him'));
+  const frozenTop = mode === 'fa' ? minAmt : Math.max(paidNow, minAmt);
+  const frozenWhy = closed ? null : frozenAt(amount);
   const route = mode === 'fa' ? offerRoute(league, p, amount, season, years, via) : signingRoute(league, tid, amount, season, p);
   // covered by an exception, but not for this long
   const tooLong = mode === 'fa' && !route && isException(offerRoute(league, p, amount, season)) ? offerBlockedReason(league, p, amount, years, via) : null;
@@ -182,7 +189,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
     .filter((x, _, all) => x.k !== 'tmle' || (all.find((y) => y.k === 'mle')?.room ?? 0) < x.room);
   const floor = bidding ? bidFloor(league, p, years) : 0;
   const talksOff = !!talks?.closed;
-  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff || overRights;
+  const blocked = !!closed || rosterBlocked || capBlocked || !!tooLong || !!frozenWhy || amount < floor || (sheet && years < SHEET_MIN_YEARS) || talksOff || overRights;
   // as signed: each season at least his minimum
   const contract = makeContract(league, amount, years, season, p.experience, { raise, max: maxAmt });
   const total = contract.salaries.reduce((a, b) => a + b, 0);
@@ -193,7 +200,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const counterBlocked = (c: TalkTerms): string | null =>
     mode === 'fa'
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, c.years) : null) ?? offerBlockedReason(league, p, c.amount, c.years, via))
-      : (closed ?? (rosterBlocked ? `Your roster is full for next season (${rosterMax}).` : null));
+      : (closed ?? (rosterBlocked ? `Your roster is full for next season (${rosterMax}).` : frozenAt(c.amount)));
 
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
@@ -386,6 +393,17 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             </button>
           </div>
           {ask.amount > minAmt && <div className="tiny dim">He asks {moneyExact(ask.amount)}: a minimum deal is unlikely.</div>}
+        </Callout>
+      )}
+
+      {frozenWhy && !rosterBlocked && !capBlocked && !tooLong && (
+        <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
+          <b>{frozenWhy}</b>
+          <div className="chips fo-callout-btns">
+            <button className="btn xs" onClick={() => set(frozenTop)}>
+              Offer {moneyExact(frozenTop)} instead
+            </button>
+          </div>
         </Callout>
       )}
 

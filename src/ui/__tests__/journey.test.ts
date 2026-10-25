@@ -1,15 +1,18 @@
 // The player's journey between screens: what a long sim says when it stops (simSummary), how a game in
 // progress reads on the Continue bar, what free agency's last step warns about, the big moments (read
 // from the league as it stands, each with a key that stays the same, so only the ones that happen while
-// the app is open are shown), and what the unread badge counts.
+// the app is open are shown), what the unread badge counts, and Needs you's order (the staff's calls
+// first, AI teams' offers as one row).
 import { describe, expect, it } from 'vitest';
-import type { GameResult, League, PlayoffSeries } from '../../core/types';
+import type { GameResult, League, PlayoffSeries, Proposal } from '../../core/types';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { curTeamSeason, standardRoster, teamPlayers } from '../../core/league/helpers';
 import { CAP } from '../../core/constants';
 import { flowActions, liveScoreText, simStart, simSummary } from '../flow';
 import { BIG_SIGNING_OVR, currentMoments, newMoments } from '../moments';
 import { NEWS_DAYS, needsYou } from '../today/messages';
+import { needsItems, needsYouOf } from '../today/needs';
+import type { AgendaItem } from '../../core/league/agenda';
 
 const make = (): League => createLeague({ name: 'j', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 11 });
 
@@ -51,7 +54,7 @@ function playoffLeague(): League {
 }
 
 describe('the journey between screens', () => {
-  it('sums up a sim, reads the Continue bar, picks the moments and counts the unread mail', () => {
+  it('sums up a sim, reads the Continue bar, picks the moments and counts what needs you', () => {
     // simSummary: how a stretch of the regular season went, and the record when it differs
     {
       const l = make();
@@ -222,6 +225,42 @@ describe('the journey between screens', () => {
       expect(needsYou(news, open, { season: 2028, day: 0 })).toBe(false);
       // a decision still open needs him however old it is
       expect(needsYou({ ...news, important: false, proposal: 4 }, new Map([['tradeOffer:4', true]]), { season: 2028, day: 0 })).toBe(true);
+    }
+
+    // Needs you (the bell's count and Today's list): the staff's calls first, AI teams' offers last as one row, counted once
+    {
+      const l = make();
+      const item = (id: string, kind: AgendaItem['kind'], required = false): AgendaItem => ({ id, kind, required, title: id, line: '', tone: 'info' });
+      const offer = (id: number, tid: number, expires: number): Proposal => ({
+        id,
+        tid,
+        offer: { a: { tid: 0, pids: [], dpids: [] }, b: { tid, pids: [], dpids: [] } },
+        kind: 'buy',
+        note: '',
+        season: l.season,
+        day: 0,
+        expires,
+      });
+      l.proposals = [offer(1, 5, 30), offer(2, 9, 20), offer(3, 12, 25)];
+      const agendaOrder = [
+        item('tradeOffer:1', 'tradeOffer'),
+        item('tradeOffer:2', 'tradeOffer'),
+        item('tradeOffer:3', 'tradeOffer'),
+        item('guide', 'guide'),
+        item('tenDay:1', 'tenDay'),
+        item('cuts', 'cuts', true),
+        item('odds:1', 'odds'),
+      ];
+      const items = needsItems(l, agendaOrder);
+      expect(items.map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'tenDay:1', 'tradeOffers']);
+      // the offers' row names the teams, the first to lapse first, and opens them all
+      const ab = (tid: number) => l.teams[tid].abbrev;
+      expect(items.at(-1)).toMatchObject({ title: `3 trade offers: ${ab(9)}, ${ab(12)}, ${ab(5)}`, to: '/office/trade?tab=offers', required: false });
+      // one offer is its own row
+      expect(needsItems(l, agendaOrder.slice(2)).map((i) => i.id)).toEqual(['odds:1', 'cuts', 'guide', 'tenDay:1', 'tradeOffer:3']);
+      // and the count is the rows, the offers' one counted once
+      const needs = needsYouOf(l);
+      expect(needs.count).toBe(needs.items.length + needs.mail.length + (needs.deadline !== null ? 1 : 0) + (needs.backup ? 1 : 0));
     }
   });
 });

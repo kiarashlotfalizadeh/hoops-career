@@ -1,7 +1,7 @@
 // The assistant coach: opponent scouting, counter-tactic candidates, and alerts about rotation and
 // tactics issues on your own team.
 
-import type { ActionType, DefRole, DefScheme, League, OffRole, OffShape, Player, PlayerDefense, PnrCoverage, PrepFocus, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
+import type { ActionType, DefRole, DefScheme, League, OffRole, OffShape, Player, PnrCoverage, PrepFocus, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
 import { OFF_SHAPES, SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
@@ -186,14 +186,24 @@ export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidat
  * playbook is run, and counters the scouting numbers back carry that evidence and come first. A
  * counter already in the plan, or one that would change nothing, isn't offered.
  *
- * Gambles are only offered where they pay: over real rosters in paired engine games, doubling a
- * star, a 2-3 zone and the junk defenses cost the team that tried them points against almost every
- * opponent the old rules flagged (a high-usage star, a below-average three-point percentage). A
- * double now needs a star who can't pass with non-shooters around him, a box-and-one or
- * triangle-and-two a cast that can't shoot by its ratings (a percentage over twenty games is mostly
- * noise), and the staff doesn't suggest a zone at all: it lost points even against a cramped post-up
- * team, the case it's built for (the Defense tab still has it).
+ * The big decisions come first (the scheme, the ball-screen coverage, ball pressure and the press,
+ * help, the double): each is worth two points a game and more against the opponent it's aimed at,
+ * and costs about as much against the wrong one (paired real-league games; see K.matchup and
+ * scripts/tactic-impact.ts). So each is offered only on the read it's aimed at: a 2-3 zone against a
+ * five that can't shoot (spacing CRAMPED_SPACING + 6 or less: the measured best cases were 25-38), a
+ * 3-2 against one that lives on threes (ZONE32_SPACING and more), pressure against handlers who
+ * don't protect it (security under PRESSURE_SECURITY), the press against the loosest, a double
+ * against a star who can't pass with non-shooters around him, a box-and-one or triangle-and-two
+ * against a cast that can't shoot by its ratings (a percentage over twenty games is mostly noise).
  */
+/** A five's spacing (the rotation's five who play most) from which the staff offers a 3-2 zone: the measured best cases were 58-66. */
+export const ZONE32_SPACING = 56;
+/** The five's ball security under which the staff offers ball pressure (the press a point lower): the measured best cases were 49-52. */
+export const PRESSURE_SECURITY = 53;
+
+/** Groups of the big decisions, which the staff measures first (see counterWorth.ts). */
+const BIG_GROUPS = new Set(['coverage', 'pressure', 'press', 'help', 'star']);
+
 export function counterCandidates(league: League, userTid: number, oppTid: number): Candidate[] {
   const opp = league.teams[oppTid];
   const { rot, cs, creators, spacing, security } = readRotation(league, oppTid);
@@ -204,6 +214,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     return five.reduce((a, x) => a + x.c.spacing, 0) / Math.max(1, five.length);
   };
   const forUser = userTid === league.userTid;
+  // (the junk zones below read a percentage; the 2-3 and the 3-2 read the five's spacing)
   const plan = forUser ? planFor(league, oppTid) : null;
   const cur = forUser ? effectiveTactics(league, oppTid) : cloneTactics(league.teams[userTid].tactics);
   const data = scoutData(league, oppTid);
@@ -230,23 +241,38 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     cov('blitz', `${top.p.lastName} is a shaky passer; trap him and make others beat you.`, top.c.passing < 55);
     cov('drop', 'Protect the rim and live with contested pull-ups.', top.c.passing >= 55);
     cov('switch', 'Switch everything to take away ball screens and handoffs.', true);
-    // the player the numbers say they run through, else their best creator: denied the ball, or
-    // doubled when he can't pass out of it and the players around him can't make the shots it leaves
+    // the player the numbers say they run through, else their best creator: doubled when he can't
+    // pass out of it and the players around him can't make the shots it leaves
     const star = (data.star !== undefined && league.players[data.star]) || top.p;
     const starPass = composites(star.ratings).passing;
     const around = castSpacing([star.pid]);
-    const plans = [
-      ...(starPass < 55 && around < CRAMPED_SPACING
-        ? ([
-            ['double', `Double-team ${star.lastName}`, `${star.lastName} doesn't pass out of traps, and the ${opp.name} around him can't shoot (spacing ${Math.round(around)}).`],
-          ] as const)
-        : []),
-      ['deny', `Deny ${star.lastName}`, 'Keep the ball out of his hands without giving up 4-on-3s.'],
-    ] as const;
-    for (const [sp, label, why] of plans)
-      if (cur.defense.starPlan !== sp || cur.defense.starTarget !== star.pid)
-        add({ id: `star-${sp}`, label, why, group: 'star', patch: { defense: { starPlan: sp, starTarget: star.pid } } });
+    if (starPass < 55 && around < CRAMPED_SPACING && (cur.defense.starPlan !== 'double' || cur.defense.starTarget !== star.pid))
+      add({
+        id: 'star-double',
+        label: `Double-team ${star.lastName}`,
+        why: `${star.lastName} doesn't pass out of traps, and the ${opp.name} around him can't shoot (spacing ${Math.round(around)}).`,
+        group: 'star',
+        patch: { defense: { starPlan: 'double', starTarget: star.pid } },
+      });
   }
+  // the zones: the 2-3 walls off the paint and dares a five that can't shoot to fire; the 3-2 closes
+  // out on the arc and dares one that lives on threes to win inside (a zone and a coverage share a group)
+  if (cur.defense.scheme !== 'zone23' && (spacing <= CRAMPED_SPACING + 6 || backed('zone23')))
+    add({
+      id: 'zone23',
+      label: '2-3 zone',
+      why: `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}): wall off the paint and let them fire from outside.`,
+      group: 'coverage',
+      patch: { defense: { scheme: 'zone23' } },
+    });
+  if (cur.defense.scheme !== 'zone32' && (spacing >= ZONE32_SPACING || backed('zone32')))
+    add({
+      id: 'zone32',
+      label: '3-2 zone',
+      why: `The ${opp.name} live on threes (spacing ${Math.round(spacing)}): run their shooters off the arc and make them win inside.`,
+      group: 'coverage',
+      patch: { defense: { scheme: 'zone32' } },
+    });
   // spacing as scouting reads it: packing the paint against a little more than the cramped fifth it
   // flags, staying home against about the best-spaced third; between those, the numbers decide
   // (never both at once)
@@ -300,9 +326,15 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       patch: { defense: { scheme, chase: chased.map((p) => p.pid) } },
     });
   }
-  if ((security < 55 || backed('pressure-up')) && cur.defense.pressure < 70)
-    add({ id: 'pressure-up', label: 'Turn up the pressure', why: 'Their ball handlers are loose with it.', group: 'pressure', patch: { defense: { pressure: 82 } } });
-  if ((security < 52 || backed('press-on')) && cur.defense.press === 'none')
+  if ((security < PRESSURE_SECURITY || backed('pressure-up')) && cur.defense.pressure < 70)
+    add({
+      id: 'pressure-up',
+      label: 'Turn up the pressure',
+      why: `Their ball handlers are loose with it (security ${Math.round(security)}): get into them.`,
+      group: 'pressure',
+      patch: { defense: { pressure: 82 } },
+    });
+  if ((security < PRESSURE_SECURITY - 1 || backed('press-on')) && cur.defense.press === 'none')
     add({
       id: 'press-on',
       label: 'Press after makes',
@@ -417,9 +449,10 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   const inPlan = new Set(plan?.items.map((x) => x.id));
   const now = JSON.stringify(cur);
   const changes = (c: Candidate) => JSON.stringify(forUser ? tacticsWithCounter(league, oppTid, c) : applyPatch(cur, c.patch)) !== now;
+  // the big decisions first, then the counters the numbers back
   return out
     .filter((c) => !inPlan.has(c.id) && changes(c))
-    .sort((a, b) => Number(!!b.evidence) - Number(!!a.evidence))
+    .sort((a, b) => Number(BIG_GROUPS.has(b.group ?? '')) - Number(BIG_GROUPS.has(a.group ?? '')) || Number(!!b.evidence) - Number(!!a.evidence))
     .slice(0, 9);
 }
 
@@ -461,6 +494,8 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'drop_pop:o': { label: 'Switch screens', apply: (t) => void (t.defense.pnr = 'switch') },
   'drop_handoff:o': { label: 'Switch off-ball screens', apply: (t) => void (t.defense.switchOffBall = true) },
   'switch_mismatch:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
+  'switch_slip:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
+  'ice_corner:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
   'hedge_roll:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },
   'blitz_4v3:o': {
     label: 'Stop trapping',
@@ -502,10 +537,6 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
       t.offense.actions.handoff = Math.max(t.offense.actions.handoff, 65);
     },
   },
-  'pd_under:o': { label: 'Stop going under', apply: (t) => dropInstruction(t, 'under') },
-  'pd_tight:o': { label: 'Stop top-locking', apply: (t) => dropInstruction(t, 'tight') },
-  'pd_sag:o': { label: 'Stop sagging off', apply: (t) => dropInstruction(t, 'sag') },
-  'pd_body:o': { label: 'Less physical', apply: (t) => dropInstruction(t, 'body') },
   'hunt:d': { label: 'Stop the hunt', apply: (t) => void (t.offense.huntTarget = null) },
   'role_anchor:o': { label: 'No rim anchor', apply: (t) => dropRole(t, 'anchor') },
   'role_roam:o': { label: 'No roamer', apply: (t) => dropRole(t, 'roamer') },
@@ -529,14 +560,6 @@ function dropRole(t: Tactics, r: DefRole) {
   if (!roles) return;
   for (const [pid, x] of Object.entries(roles)) if (x === r) delete roles[+pid];
   if (!Object.keys(roles).length) delete t.defense.roles;
-}
-
-/** Take one kind of instruction off every opponent it's on. */
-function dropInstruction(t: Tactics, d: PlayerDefense) {
-  const pd = t.defense.playerD;
-  if (!pd) return;
-  for (const [pid, x] of Object.entries(pd)) if (x === d) delete pd[+pid];
-  if (!Object.keys(pd).length) delete t.defense.playerD;
 }
 
 /**

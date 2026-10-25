@@ -170,7 +170,6 @@ interface Case {
   teams?: number[];
 }
 const d = (defense: TacticsPatch['defense']): TacticsPatch => ({ defense: { ...MAN.defense, ...defense } });
-const pd = (kind: 'under' | 'tight' | 'sag' | 'body') => (s: Shape) => d({ playerD: { [s.who!]: kind } });
 const PKG: SetId[] = ['floppy', 'chicago', 'spain', 'elevator'];
 const COV = ['drop_', 'switch_', 'blitz_', 'hedge_', 'ice_'];
 const cases: Case[] = [
@@ -184,13 +183,6 @@ const cases: Case[] = [
   { name: 'drop (not hedge) vs pull-up shooter', aim: '-', by: 'def', shape: 'pullup', base: () => d({ pnr: 'hedge' }), alt: () => d({ pnr: 'drop' }), tags: COV },
   { name: 'hedge (not drop) vs pull-up shooter', aim: '+', by: 'def', shape: 'pullup', base: () => d({ pnr: 'drop' }), alt: () => d({ pnr: 'hedge' }), tags: COV },
   { name: 'hedge (not drop) vs roll threat', aim: '-', by: 'def', shape: 'roller', base: () => d({ pnr: 'drop' }), alt: () => d({ pnr: 'hedge' }), tags: COV },
-  { name: 'top-lock a shooter who cannot drive', aim: '+', by: 'def', shape: 'shooterNoDrive', base: () => MAN, alt: pd('tight'), tags: ['pd_'] },
-  { name: 'top-lock a shooter who drives', aim: '-', by: 'def', shape: 'shooterDriver', base: () => MAN, alt: pd('tight'), tags: ['pd_'] },
-  { name: 'sag off a non-shooter', aim: '+', by: 'def', shape: 'nonShooter', base: () => MAN, alt: pd('sag'), tags: ['pd_'] },
-  { name: 'sag off a shooter', aim: '-', by: 'def', shape: 'shooterNoDrive', base: () => MAN, alt: pd('sag'), tags: ['pd_'] },
-  { name: 'go under a handler who cannot shoot', aim: '+', by: 'def', shape: 'driver', base: () => MAN, alt: pd('under'), tags: ['pd_'] },
-  { name: 'go under a pull-up shooter', aim: '-', by: 'def', shape: 'pullup', base: () => MAN, alt: pd('under'), tags: ['pd_'] },
-  { name: 'get physical with a poor FT big', aim: '+', by: 'def', shape: 'poorFtBig', base: () => MAN, alt: pd('body'), tags: ['pd_'] },
   {
     name: 'double a star who cannot pass',
     aim: '+',
@@ -209,7 +201,6 @@ const cases: Case[] = [
     alt: (s) => d({ starPlan: 'double', starTarget: s.who! }),
     tags: ['star_', 'double_'],
   },
-  { name: 'deny the star (non-shooters around)', aim: '+', by: 'def', shape: 'helio', base: () => MAN, alt: (s) => d({ starPlan: 'deny', starTarget: s.who! }), tags: ['star_'] },
   { name: 'press after makes vs loose handlers', aim: '+', by: 'def', shape: 'loose', base: () => MAN, alt: () => d({ press: 'afterMade' }), tags: ['press_'] },
   { name: 'press after makes vs secure handlers', aim: '-', by: 'def', shape: 'secure', base: () => MAN, alt: () => d({ press: 'afterMade' }), tags: ['press_'] },
   { name: 'pressure 85 vs loose handlers', aim: '+', by: 'def', shape: 'loose', base: () => MAN, alt: () => d({ pressure: 85 }), tags: ['pressure_'] },

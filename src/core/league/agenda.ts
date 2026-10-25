@@ -2,9 +2,10 @@
 // are the ones the league won't move on without (the same checks the season loop makes: a roster
 // over or under its limits on opening night, an offer sheet on one of his restricted free agents,
 // a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
-// Optional items (the staff's calls, see calls.ts: a star hurt, the playoff odds gone, the trade
-// deadline, the books in the red; offers, 10-day contracts running out, job offers, the guided
-// first week) never block. Each item can be settled where it stands: the staff's suggestion and any quick choices are
+// Optional items (the staff's calls, see calls.ts: a star hurt, the playoff odds gone, the owner's
+// floor in danger, the trade deadline, a playoff series starting, the books in the red; offers, one
+// item each, 10-day contracts running out, job offers, the guided first week) never block. Each
+// item can be settled where it stands: the staff's suggestion and any quick choices are
 // AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
 // decision. Nothing here is stored except the guided week's progress (League.onboarding).
 import type { League, Player } from '../types';
@@ -23,6 +24,9 @@ import { planMade } from './gamePlans';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind } from './calls';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
+
+/** The agenda's kinds that are the staff's calls (see calls.ts): Needs you puts them first, and the digest and the Play options show them. */
+export const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<CallKind>(['injury', 'odds', 'floor', 'deadline', 'series', 'books']);
 
 /** A step of the guided first week. */
 export type GuideStep = 'rotation' | 'playbook' | 'scout' | 'coach';

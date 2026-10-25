@@ -353,16 +353,17 @@ describe('engine tactics', () => {
     {
       // (the table from before the per-scheme ones, with the back line on the roller and a firmer post
       // defense for less of a glass cost since the late-2026 polish: man-to-man had beaten the 2-3 even
-      // against post-up teams)
+      // against post-up teams; its walls doubled when the big decisions were made to matter, as its open
+      // threes came to count by who takes them)
       expect(K.zone.zone23).toEqual({
-        roll: 0.3,
-        pnr: 0.3,
-        pnrTag: 0.3 * 0.1,
-        iso: 0.35,
-        isoTag: 0.035,
-        post: 0.55,
-        postTag: 0.055,
-        drive: 0.3,
+        roll: 0.5,
+        pnr: 0.6,
+        pnrTag: 0.6 * 0.1,
+        iso: 0.65,
+        isoTag: 0.065,
+        post: 0.9,
+        postTag: 0.09,
+        drive: 0.6,
         kick: 0.2,
         pop: 0.15,
         handoff: 0.1,
@@ -378,7 +379,7 @@ describe('engine tactics', () => {
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
       // much: the tactical-leverage check in engineDefense.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
       // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
-      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%)
+      // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -386,10 +387,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [108, 120, 102, 87, 45, 33, 12, 9],
-        [105, 117, 92, 90, 46, 42, 13, 12],
-        [99, 126, 98, 98, 51, 57, 16, 9],
-        [121, 117, 87, 79, 49, 27, 7, 6],
+        [118, 134, 92, 87, 50, 35, 11, 7],
+        [111, 112, 88, 95, 47, 40, 11, 10],
+        [102, 123, 91, 95, 54, 54, 8, 4],
+        [106, 115, 91, 89, 52, 32, 10, 10],
       ]);
     }
 

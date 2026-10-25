@@ -40,10 +40,10 @@ export function gameTag(league: League, g: ScheduledGame): string {
   return TYPE_LABEL[g.type] ?? '';
 }
 
-/** How much a plan holds: its changes, planned matchups and guarding instructions. */
+/** How much a plan holds: its changes and planned matchups. */
 export function planSize(plan: GamePlan | null): number {
   if (!plan) return 0;
-  return plan.items.length + Object.keys(plan.matchups ?? {}).length + Object.keys(plan.playerD ?? {}).length;
+  return plan.items.length + Object.keys(plan.matchups ?? {}).length;
 }
 
 /** How long a plan lasts, as its status line says it. */

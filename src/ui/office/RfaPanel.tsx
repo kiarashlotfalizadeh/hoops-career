@@ -14,6 +14,7 @@ import {
   deadlineLabel,
   pendingSheets,
   qualifyBlockedReason,
+  qualifyFrozenReason,
   qualifyingOffer,
   restrictedFreeAgents,
   sheetDecisionBlocked,
@@ -63,7 +64,9 @@ export function rfaTag(league: League, p: Player): { label: string; tone: 'info'
  */
 export function QualifyRow({ league, p }: { league: League; p: Player }) {
   const qualified = p.rfa?.tid === league.userTid;
-  if (!qualified && qualifyBlockedReason(league, p)) return null;
+  // (one the owner's freeze rules out says so, where the button would be)
+  const frozenWhy = qualified ? null : qualifyFrozenReason(league, p);
+  if (!qualified && !frozenWhy && qualifyBlockedReason(league, p)) return null;
   const qo = qualified ? p.rfa!.qo : qualifyingOffer(league, p);
   return (
     <div className={`fo-qualify ${qualified ? 'on' : ''}`}>
@@ -73,6 +76,8 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
           <>
             <b className="good">Qualified</b> · {money(qo)} {forYears(1)}: you can match any offer sheet.
           </>
+        ) : frozenWhy ? (
+          <span className="bad">{frozenWhy}</span>
         ) : (
           <>
             <Term id="qo">Qualifying offer</Term> <b className="num">{money(qo)}</b> {forYears(1)} makes him <Term id="rfa">restricted</Term>.
@@ -88,7 +93,12 @@ export function QualifyRow({ league, p }: { league: League; p: Player }) {
           Withdraw
         </button>
       ) : (
-        <button className="btn xs" aria-label={`Extend ${playerName(p)} a qualifying offer`} onClick={() => act('The qualifying offer', (l) => userQualify(l, p.pid))}>
+        <button
+          className="btn xs"
+          aria-label={`Extend ${playerName(p)} a qualifying offer`}
+          disabled={!!frozenWhy}
+          onClick={() => act('The qualifying offer', (l) => userQualify(l, p.pid))}
+        >
           Qualify
         </button>
       )}

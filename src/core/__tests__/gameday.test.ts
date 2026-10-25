@@ -145,16 +145,19 @@ describe('game day', () => {
       }).story;
       expect(ot.head).toMatch(/double overtime/);
 
+      // (on a night after a win: ending a skid, or one going on, would be the bigger story)
+      const games = userGames(base);
+      const afterWin = 1 + [...games].reverse().findIndex((_, k, rev) => k + 1 < rev.length && side(base, rev[k + 1]).pts > other(base, rev[k + 1]).pts);
       const rout = craft((l, g) => {
         plain(l, g, true);
         side(l, g).pts = 135;
-      }).story;
+      }, afterWin).story;
       expect(rout.head).toMatch(/rout|blow out|off the floor/);
 
       const routed = craft((l, g) => {
         plain(l, g, false);
         other(l, g).pts = 130;
-      }).story;
+      }, afterWin).story;
       expect(routed.won).toBe(false);
       expect(routed.head).toMatch(/rout/);
     }
@@ -192,6 +195,44 @@ describe('game day', () => {
       xg.day = christmasDay(xmas.season);
       expect(xg.gid).toBe(g.gid);
       expect(gameStoryFor(xmas, xg.gid)!.weight).toBe(3);
+    }
+
+    // the play you called is named with the shot that won it late, and so is one that tied it for overtime
+    {
+      const tally = { us: { poss: 1, pts: 2 }, them: { poss: 0, pts: 0 } };
+      let last = '';
+      const won = craft((l, g) => {
+        plain(l, g, true);
+        const us = side(l, g);
+        other(l, g).pts = 108;
+        const shooter = [...us.players].sort((a, b) => b.min - a.min)[0];
+        last = l.players[shooter.pid].lastName;
+        const homeUs = g.home === us;
+        const score = (ours: number, theirs: number) => (homeUs ? { hs: ours, as: theirs } : { hs: theirs, as: ours });
+        g.pbp = [
+          { q: 4, clock: 30, t: homeUs ? 1 : 0, text: 'Other jumper — good.', ...score(108, 108), kind: 'make' },
+          { q: 4, clock: 4.2, t: homeUs ? 0 : 1, text: `${last} step-back jumper — good.`, ...score(110, 108), kind: 'make' },
+        ];
+        g.moves = [
+          { kind: 'play', q: 4, clock: 18, text: `Iso: ${last}`, end: 'off', call: { id: 'iso', pid: shooter.pid, late: { how: 'won', clock: 4.2 } }, before: tally, after: tally },
+        ];
+      }).story;
+      expect(won.head).toContain(last);
+      expect(won.dek).toMatch(/ahead with 4 seconds left, on the iso you called for him\.$/);
+      expect(won.body).toMatch(/with 4 seconds left, on the iso you called for him\./);
+      const tied = craft((l, g) => {
+        plain(l, g, true);
+        g.ot = 1;
+        const pid = [...side(l, g).players].sort((a, b) => b.min - a.min)[0].pid;
+        last = l.players[pid].lastName;
+        g.moves = [
+          { kind: 'play', q: 4, clock: 15, text: `Chicago: ${last}`, end: 'off', call: { id: 'chicago', pid, late: { how: 'tied', clock: 2.4 } }, before: tally, after: tally },
+        ];
+      }).story;
+      expect(tied.dek).toMatch(new RegExp(`The Chicago you called for .*${last} tied it with 2 seconds left in regulation\\.`));
+      expect(tied.body).toContain('The Chicago you called for');
+      // (a play called that didn't decide it isn't named)
+      expect(craft((l, g) => plain(l, g, true)).story.dek).not.toMatch(/you called/);
     }
 
     // a losing streak ended, a winning streak extended, and the chip agrees with the streak on record
@@ -904,8 +945,8 @@ describe('game day', () => {
       expect(s, key).not.toMatch(/\byou(r)?\b/i);
       expect(s, key).toMatch(/the Aces|the Bees/i);
     }
-    expect(impactSentence('pd_under:o', 'the Knicks', 'the Celtics')).toBe('The Knicks made the Celtics pay for going under screens with pull-up jumpers.');
-    expect(impactSentence('pd_body:o', 'your team', 'the opposition')).toBe("Your team drew fouls against the opposition's physical defense.");
+    expect(impactSentence('drop_pop:o', 'the Knicks', 'the Celtics')).toBe("The Knicks' popping big punished the drop with open threes.");
+    expect(impactSentence('switch_slip:o', 'your team', 'the opposition')).toBe("Your team's screeners slipped the opposition's switches for rolls to the rim.");
   }, 120_000);
 
   it('previews a matchup as the game will be played, from the rosters and the results, leaving the league untouched', () => {

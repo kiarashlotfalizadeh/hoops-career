@@ -19,7 +19,9 @@ import type { PossLog } from '../../core/sim/log';
 import { snapshot, streaks, type Drawn } from '../live/drawn';
 import { foulLimit, liveAlerts, newEvents, staffCallsTimeout, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
-import { stopCallIn } from '../live/useLiveGame';
+import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
+import { fitPlayers, playOptions } from '../live/plays';
+import { SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
 import type { LiveGame } from '../../state/live';
 import { GRAPHIC_GAP, KEY_PRIORITY, graphicCandidates, nextGraphic, type Graphic, type GraphicInput, type PlayerBefore } from '../live/graphics';
@@ -380,22 +382,65 @@ describe('the live assistant and the bench', () => {
     expect(gameDecided(4, 600, 30)).toBe(true);
     expect(gameDecided(4, 3, 30)).toBe(false);
 
-    // the game stops for a call only you can make, the staff's pick never one in foul trouble: a fifth
-    // foul from the fourth on, a closer out of legs in crunch time, and only when the staff won't
+    // the game stops for a call only you can make, and only in a close game (neither side 95% to win
+    // it): the last possession (your ball, tied or down three, once a period), a fifth foul from the
+    // fourth on and a closer out of legs in crunch time (those two only when the staff won't, the
+    // staff's pick never one in foul trouble). A blowout never stops
     {
       const g = game();
       for (let i = 0; i < 30; i++) g.sim.step();
-      const lg = { sim: g.sim, userSide: 0, manualSubs: false } as unknown as LiveGame;
+      const lg = { sim: g.sim, userSide: 0, manualSubs: false, edge: 0 } as unknown as LiveGame;
+      const manual = { ...lg, manualSubs: true } as LiveGame;
       const pid = g.sim.T[0].on[0].pid;
-      const at = (q: number, clock: number, p: Parameters<typeof withPlayer>[2]) => ({ ...withPlayer(snapshot(g.sim), 0, p), q, clock });
+      const names = (x: number) => `P${x}`;
+      // (the drawn game at `margin` for the user, the home side, his five fresh and out of foul trouble but
+      // for `p` on the first of them: their ball unless said)
+      const at = (q: number, clock: number, p: Parameters<typeof withPlayer>[2], margin = 2, ball: 0 | 1 = 1): Drawn => {
+        const fresh = snapshot(g.sim);
+        for (const x of fresh.sides[0].players) Object.assign(x, { energy: 1, fouls: 0 });
+        const v = { ...withPlayer(fresh, 0, p), q, clock, ball };
+        v.sides = [
+          { ...v.sides[0], score: 90 + margin },
+          { ...v.sides[1], score: 90 },
+        ];
+        return v;
+      };
+      const stopFor = (v: Drawn, x = lg, dismissed: string[] = []) => stopCalls(v, x, names, dismissed)[0] ?? null;
       // (the staff sits him at five in the fourth before crunch time)
-      expect(stopCallIn(at(4, 500, { fouls: 5 }), lg, (x) => `P${x}`, [])).toBeNull();
-      expect(stopCallIn(at(4, 200, { fouls: 5 }), lg, (x) => `P${x}`, [])).toMatchObject({ id: `fouls-${pid}`, pid });
-      expect(stopCallIn(at(4, 200, { fouls: 5 }), lg, (x) => `P${x}`, [`fouls-${pid}-5`])).toBeNull();
-      expect(stopCallIn(at(3, 200, { fouls: 5 }), { ...lg, manualSubs: true } as LiveGame, (x) => `P${x}`, [])).toBeNull();
+      expect(stopFor(at(4, 500, { fouls: 5 }))).toBeNull();
+      expect(stopFor(at(4, 200, { fouls: 5 }))).toMatchObject({ id: `fouls-${pid}`, pid });
+      expect(stopFor(at(4, 200, { fouls: 5 }), lg, [`fouls-${pid}-5`])).toBeNull();
+      expect(stopFor(at(3, 200, { fouls: 5 }), manual)).toBeNull();
+      // with the subs yours a fifth foul stops the game before crunch time, while it's close: down 14
+      // with 11 minutes left and the ball it is, down 15 or down 30 it isn't, nor up 30 with two minutes left
+      expect(stopFor(at(4, 660, { fouls: 5 }, -14, 0), manual)).toMatchObject({ id: `fouls-${pid}` });
+      expect(stopFor(at(4, 660, { fouls: 5 }, -15, 0), manual)).toBeNull();
+      expect(stopCalls(at(4, 600, { fouls: 5 }, -30), manual, names, [])).toEqual([]);
+      expect(stopCalls(at(4, 120, { fouls: 5, energy: 0.3 }, 30, 0), manual, names, [])).toEqual([]);
+      // the last possession: the game clock under the shot clock in the fourth or an overtime, your
+      // ball, tied or down three or less (up, there's no call to make); its id is the period's
+      const last = (margin: number, clock = 14, ball: 0 | 1 = 0, q = 4) => stopFor(at(q, clock, {}, margin, ball));
+      expect(last(0)).toMatchObject({ id: 'last-4', kind: 'last', text: 'Last possession, your ball, tied.' });
+      expect(last(-3, 1)).toMatchObject({ id: 'last-4', text: 'Last possession, your ball, down 3.' });
+      expect(last(-1, 3, 0, 5)).toMatchObject({ id: 'last-5' });
+      for (const [margin, clock, ball] of [
+        [-4, 14, 0],
+        [1, 14, 0],
+        [0, 14, 1],
+        [0, 30, 0],
+      ] as const)
+        expect(last(margin, clock, ball), `${margin} ${clock} ${ball}`).toBeNull();
+      // it stops once a period, and its screen (who's tired or in foul trouble on it) stands for the fifth foul due with it
+      const stopped = new Set<string>();
+      const fifth = at(4, 14, { fouls: 5 }, -2, 0);
+      expect(stopCalls(fifth, lg, names, []).map((c) => c.id)).toEqual(['last-4', `fouls-${pid}`]);
+      const seen: (StopCall | null)[] = [fifth, at(4, 9, {}, 0, 0), at(4, 4, {}, -1, 0), at(5, 12, {}, -2, 0), at(5, 6, {}, 0, 0)].map((v) =>
+        takeStop(stopCalls(v, lg, names, []), stopped),
+      );
+      expect(seen.map((c) => c?.id ?? null)).toEqual(['last-4', null, null, 'last-5', null]);
       const t = g.sim.T[0];
       t.team = { ...t.team, rotation: { ...t.team.rotation, closers: t.on.map((p) => p.pid) } };
-      expect(stopCallIn(at(4, 200, { energy: 0.3 }), lg, (x) => `P${x}`, [])).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
+      expect(stopFor(at(4, 200, { energy: 0.3 }))).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
       t.team = {
         ...t.team,
         rotation: {
@@ -406,7 +451,37 @@ describe('the live assistant and the bench', () => {
             .map((p) => p.pid),
         },
       };
-      expect(stopCallIn(at(4, 200, { energy: 0.3 }), lg, (x) => `P${x}`, [])).toBeNull();
+      expect(stopFor(at(4, 200, { energy: 0.3 }))).toBeNull();
+
+      // the late play call is built around your closer (the go-to you named while he's on the floor,
+      // else the engine's): his clear-out first, then the sets he fits best, then one set for someone else
+      const five = t.on.map((p) => p.pid);
+      const go = g.sim.baseTactics(0);
+      const fits = fitPlayers(g.league, five, go);
+      go.manage.goTo = null;
+      g.sim.setTactics(0, go);
+      const auto = g.sim.closer(t)!.pid;
+      const named = five.find((x) => x !== auto)!;
+      go.manage.goTo = named;
+      g.sim.setTactics(0, go);
+      expect(g.sim.closer(t)!.pid).toBe(named);
+      const plays = playOptions(g.league, five, go, named);
+      expect(plays[0]).toEqual({ id: 'iso', pid: named });
+      expect(plays.length).toBeLessThanOrEqual(4);
+      const others = plays.filter((p) => p.pid !== named);
+      expect(others.length).toBeLessThanOrEqual(1);
+      if (others.length) expect(plays.at(-1)).toBe(others[0]);
+      for (const p of plays.slice(1))
+        expect(
+          setFit(
+            p.id as Exclude<typeof p.id, 'iso'>,
+            fits.find((x) => x.pid === p.pid)!,
+          ),
+        ).toBeGreaterThanOrEqual(SET_K.fit);
+      // on the bench, he isn't the closer: the best one on the floor is
+      go.manage.goTo = t.players.find((p) => !p.on)!.pid;
+      g.sim.setTactics(0, go);
+      expect(g.sim.closer(t)!.pid).toBe(auto);
       // the bench's sheet puts the ones at the period's foul limit last (past its six, gone), with their fouls
       const bench = t.players.filter((p) => !p.on && p.out === 0);
       const sheet = () => subOptions(snapshot(g.sim), 0, t, pid, () => undefined).options;
@@ -553,7 +628,7 @@ describe('broadcast graphics', () => {
 
     // record book: a franchise or league scoring record broken goes up, the league one first; one within reach late is a watch
     {
-      const { sim, views, logs } = playThrough(23);
+      const { sim, views, logs } = playThrough(24);
       const end = views[views.length - 1];
       // (the night's top scorer, whichever side he's on: a record is tonight's best)
       const top = [...end.box.home.players, ...end.box.away.players].sort((a, b) => b.pts - a.pts)[0];

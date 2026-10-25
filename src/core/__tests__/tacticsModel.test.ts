@@ -86,7 +86,9 @@ describe('tactics model', () => {
       expect(levelName('pace', off('grind').pace)).toBe('Patient');
       expect(levelName('crashBoards', off('grind').crashBoards)).toBe('Crash often');
       expect(levelName('action', off('fiveOut').actions.motion)).toBe('Heavily');
-      expect(levelName('help', def('zone').help)).toBe('Pack the paint');
+      // (the zone is its own help: the 2-3 playbook doesn't pack the paint on top of it)
+      expect(levelName('help', def('zone').help)).toBe('Balanced');
+      expect(levelName('help', def('blitz').help)).toBe('Balanced');
       expect(levelName('pressure', def('chaos').pressure)).toBe('Pressure');
       expect(levelName('pressure', def('switch').pressure)).toBe('Balanced');
     }

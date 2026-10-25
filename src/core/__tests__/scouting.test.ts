@@ -9,7 +9,7 @@ import { scoutData, SCOUT_MIN_GAMES, type Ranked, type ScoutData } from '../anal
 import { counterCandidates, scoutTeam, tacticsWithCounter } from '../ai/advisor';
 import { effectiveTactics, ensurePlan, setPlanItem } from '../league/gamePlans';
 import { buildSimInput, ensureRotation, playGame } from '../league/games';
-import { shortName, teamSeason } from '../league/helpers';
+import { shortName, teamPlayers, teamSeason } from '../league/helpers';
 import { huntPick } from '../analysis/guarding';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { buildGameReport, decidingFactors } from '../analysis/gameReport';
@@ -276,11 +276,12 @@ describe('scouting and the staff', () => {
       const plain = counterCandidates(l, l.userTid, opp).map((c) => c.id);
       expect(plain).not.toContain('vs-drop');
       expect(plain).not.toContain('vs-pack');
-      // a plan that only says how to guard one of theirs
-      ensurePlan(l, opp).playerD = { [pid]: 'sag' };
+      // a plan that only plans a matchup on one of theirs
+      const mine = teamPlayers(l, l.userTid)[0].pid;
+      ensurePlan(l, opp).matchups = { [pid]: mine };
       const guarded = counterCandidates(l, l.userTid, opp);
       expect(guarded.map((c) => c.id)).toEqual(plain);
-      for (const c of guarded) expect(tacticsWithCounter(l, opp, c).defense.playerD).toEqual({ [pid]: 'sag' });
+      for (const c of guarded) expect(tacticsWithCounter(l, opp, c).defense.matchups[pid]).toBe(mine);
       l.teams[l.userTid].tactics = saved;
       delete l.gamePlans;
 
@@ -297,7 +298,9 @@ describe('scouting and the staff', () => {
       expect(covs.map((c) => c.id)).not.toContain(cov.id);
       // (the zone replaces the coverage in the plan: man-to-man's coverage goes back to the base tactics')
       for (const c of covs)
-        expect(tacticsWithCounter(l, opp, c).defense).toMatchObject(c.id === 'zone' ? { scheme: 'zone23', pnr: base.defense.pnr } : { scheme: 'man', pnr: c.patch.defense?.pnr });
+        expect(tacticsWithCounter(l, opp, c).defense).toMatchObject(
+          c.id === 'zone23' || c.id === 'zone32' ? { scheme: c.id, pnr: base.defense.pnr } : { scheme: 'man', pnr: c.patch.defense?.pnr },
+        );
     }
 
     // the matchup preview opens with the engine's own tip-off matchups
@@ -387,13 +390,13 @@ describe('scouting and the staff', () => {
       const g = league.schedule.find((x) => !x.played && (x.home === 0 || x.away === 0))!;
       const opp = g.home === 0 ? g.away : g.home;
       const pnr = league.teams[0].tactics.defense.pnr === 'hedge' ? 'drop' : 'hedge';
-      setPlanItem(league, opp, { id: 'cov', label: 'Change the coverage', patch: { defense: { pnr } }, pts: 0.4 });
+      setPlanItem(league, opp, { id: 'cov', label: 'Change the coverage', patch: { defense: { pnr } }, pts: 0.6 });
       const res = playGame(league, g);
-      expect(res.plan).toEqual([{ label: 'Change the coverage', end: 'def', types: ['pnrBH', 'pnrRoll'], pts: 0.4 }]);
+      expect(res.plan).toEqual([{ label: 'Change the coverage', end: 'def', types: ['pnrBH', 'pnrRoll'], pts: 0.6 }]);
       const d = debrief(league, res, buildGameReport(league, res)!);
       expect(d.plan).toHaveLength(1);
-      // graded on its measured worth (a gain at +0.4), the night beside it
-      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.4 a game', call: 'gain' });
+      // graded on its measured worth (a gain at +0.6), the night beside it
+      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.6 a game', call: 'gain' });
       expect(d.plan[0].line).toMatch(/pick-and-roll/);
       expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].night);
       // a counter measured even is even, whatever one night did

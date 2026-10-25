@@ -8,7 +8,7 @@
 // set is strongest early and costly when spammed.
 // Sets come from bench calls, after-timeout plays and the user's set package; AI coaches run none.
 
-import type { ActionType, DefScheme, OffRole, Player, PnrCoverage, SetId, Tactics } from '../types';
+import type { ActionType, CallId, DefScheme, OffRole, Player, PnrCoverage, SetId, Tactics } from '../types';
 import { SET_IDS } from '../types';
 import { archetype, composites, type Composites } from '../ratings';
 import { planRoles } from './rotationPlan';
@@ -150,6 +150,8 @@ export const CLEAR_OUT = {
 };
 
 export const isSetId = (x: unknown): x is SetId => typeof x === 'string' && (SET_IDS as string[]).includes(x);
+/** A play the bench can call: a set, or the clear-out isolation. */
+export const isCallId = (x: unknown): x is CallId => x === 'iso' || isSetId(x);
 
 /** The most sets in a package. */
 export const MAX_SETS = 4;
@@ -441,6 +443,12 @@ export const SPLIT_DOUBLE = 0.4;
 
 /** "Spain: Holmgren". */
 export const setLabel = (id: SetId, name: string) => `${SETS[id].short}: ${name}`;
+
+/** A called play as the screens name it: "Spain: Holmgren", "Iso: Bane"; the play alone without a name. */
+export function callLabel(id: CallId, name?: string): string {
+  if (id === 'iso') return name ? `${CLEAR_OUT.short}: ${name}` : CLEAR_OUT.name;
+  return name ? setLabel(id, name) : SETS[id].name;
+}
 
 /** The after-timeout play as the screens name it: an action, a set, or a clear-out iso for one player. */
 export function atoLabel(ato: string | null | undefined, actionLabel: (a: ActionType) => string, playerName?: string): string {

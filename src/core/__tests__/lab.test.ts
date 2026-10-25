@@ -113,15 +113,15 @@ describe('batch sims & reports', () => {
       expect(rep.headline).not.toMatch(/pull-up|nail-biter/);
       expect(rep.headline.split(':')).toHaveLength(2);
       expect(rep.factors.find((f) => f.title.includes('kick-out'))!.detail).toMatch(/^Over 1 play\.$/);
-      // an opposing star's big night suggests a Star plan only to a team without one
+      // an opposing star's big night suggests a matchup or a double only to a team without a Star plan
       const star: GameResult = { ...res, [oppSide]: { ...res[oppSide], players: res[oppSide].players.map((p, i) => (i === 0 ? { ...p, pts: 45 } : p)) } };
       const t = league.teams[0].tactics;
-      expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toMatch(/Star plan \(Instructions\)/);
-      league.teams[0].tactics = applyPatch(t, { defense: { starPlan: 'deny' } });
+      expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toMatch(/\(Matchups\), or double him/);
+      league.teams[0].tactics = applyPatch(t, { defense: { starPlan: 'double' } });
       expect(buildGameReport(league, star)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
       league.teams[0].tactics = t;
       // nor to one that played one tonight (in the plan or called live) whatever its saved tactics say
-      const denied: GameResult = { ...star, impacts: [...(star.impacts ?? []), { key: 'star_deny:d', t: me, count: 12, pts: 0.4, players: {} }] };
+      const denied: GameResult = { ...star, impacts: [...(star.impacts ?? []), { key: 'star_double:d', t: me, count: 12, pts: 0.4, players: {} }] };
       expect(buildGameReport(league, denied)!.factors.find((f) => f.category === 'stars' && f.pts < 0)!.advice).toBeUndefined();
     }
     // only gives advice the team still needs: no "try Hedge" for a team already hedging

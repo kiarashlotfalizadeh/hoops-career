@@ -1,18 +1,20 @@
-// The coach's moves in a live game, and what each did: every tactics change, substitution and
-// timeout the user made (or let the staff make), in the Tactics screen's words, with the scoring
+// The coach's moves in a live game, and what each did: every tactics change, substitution, timeout
+// and play call the user made (or let the staff make), in the Tactics screen's words, with the scoring
 // while it was in effect next to the stretch before it (at least MOVE_BASE_TRIPS of it). A change of
 // tactics is measured until the next change; a substitution while the players it brought in were on
-// the floor; a timeout over the trips either side of it.
+// the floor; a timeout over the trips either side of it; a play called on the trip it ran on (and,
+// once the game is over, whether it won the game late or tied it for overtime).
 // Read by the live game's bench as the night goes, and kept with the result for the post-game
 // report. Pure: it reads the possession logs the game already keeps.
 
 import type { CoachMove, League, LiveOp, MoveTally, ScheduledGame, Tactics, TacticsPatch } from '../types';
 import type { FinishType, PossLog } from '../sim/log';
 import { tacticsChanges } from '../sim/playbooks';
-import { PLAYER_D_META, SCHEME_META, applyPatch, emptyPatch, tacticsDiff } from '../sim/tactics';
+import { SCHEME_META, applyPatch, emptyPatch, tacticsDiff } from '../sim/tactics';
 import { SLOT_COUNT, SLOT_LETTERS, activeSlot, slotTactics } from '../sim/slots';
 import { effectiveTactics } from '../league/gamePlans';
-import { SETS, setLabel } from '../sim/sets';
+import { callLabel } from '../sim/sets';
+import { GAME } from '../constants';
 
 /** A move as the live game made it (see LiveMark in state/live.ts). */
 export interface MoveMark {
@@ -108,11 +110,11 @@ function aimOf(a: Tactics, b: Tactics): Aim {
     const d1 = b.defense;
     if (d0.pnr !== d1.pnr && d0.scheme === d1.scheme) return { end, types: ['pnrBH', 'pnrRoll'] };
     if (d0.getBack !== d1.getBack && d0.pnr === d1.pnr && d0.scheme === d1.scheme) return { end, types: ['transition'] };
-    // aimed at one of theirs: a star plan, an instruction or a matchup on him
+    // aimed at one of theirs: a star plan or a matchup on him
     if (d1.starPlan !== 'none' && d1.starTarget != null && (d0.starPlan !== d1.starPlan || d0.starTarget !== d1.starTarget)) return { end, pid: d1.starTarget };
     const changed = (x: Record<number, unknown> = {}, y: Record<number, unknown> = {}) =>
       [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number).find((p) => x[p] !== y[p]);
-    const pid = changed(d0.playerD, d1.playerD) ?? changed(d0.matchups, d1.matchups);
+    const pid = changed(d0.matchups, d1.matchups);
     return pid !== undefined ? { end, pid } : { end };
   }
   if (end === 'off') {
@@ -136,11 +138,6 @@ export function moveText(a: Tactics, b: Tactics, nameOf: (pid: number) => string
   for (const p of new Set([...Object.keys(d0.matchups), ...Object.keys(d1.matchups)].map(Number)))
     if (d0.matchups[p] !== d1.matchups[p]) parts.push(d1.matchups[p] != null ? `${nameOf(d1.matchups[p])} guards ${nameOf(p)}` : `${nameOf(p)}'s matchup back to the staff`);
   if (d0.starTarget !== d1.starTarget && d1.starPlan !== 'none') parts.push(`Star plan on ${d1.starTarget != null ? nameOf(d1.starTarget) : 'their top creator'}`);
-  for (const p of new Set([...Object.keys(d0.playerD ?? {}), ...Object.keys(d1.playerD ?? {})].map(Number))) {
-    const x = d0.playerD?.[p];
-    const y = d1.playerD?.[p];
-    if (x !== y) parts.push(y ? `${PLAYER_D_META[y].short}: ${nameOf(p)}` : `Play ${nameOf(p)} straight`);
-  }
   if (JSON.stringify(d0.chase ?? []) !== JSON.stringify(d1.chase ?? []) && d1.chase?.length)
     parts.push(`${SCHEME_META[d1.scheme].label} chasing ${d1.chase.map(nameOf).join(' and ')}`);
   if ((a.offense.huntTarget ?? null) !== (b.offense.huntTarget ?? null))
@@ -263,15 +260,18 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
         ...(closed(end, tAfter) ? { closed: true as const } : {}),
       });
     } else if (m.op.op === 'play') {
-      // the trip it ran on: the next of ours that ran it (none when the period ran out first)
+      // the trip it ran on: the next of ours this period that ran it (none when the period ran out first)
       const id = m.op.args.set;
-      const j = logs.findIndex((l, k) => k >= m.log && l.off === side && l.set?.id === id);
+      const j = logs.findIndex((l, k) => k >= m.log && l.off === side && l.q === m.q && (id === 'iso' ? l.iso !== undefined : l.set?.id === id));
       const ran = j >= 0 ? logs[j] : undefined;
-      const pid = ran?.set?.pid ?? m.op.args.pid;
+      const pid = (id === 'iso' ? ran?.iso : ran?.set?.pid) ?? m.op.args.pid;
+      // (whether it won the game or tied it late is known once the game is over)
+      const late = ran && over ? lateBasket(logs, j, side) : undefined;
       out.push({
         kind: 'play',
         ...at,
-        text: pid !== undefined ? setLabel(id, nameOf(pid)) : SETS[id].name,
+        text: callLabel(id, pid !== undefined ? nameOf(pid) : undefined),
+        call: { id, ...(pid !== undefined && { pid }), ...(late && { late }) },
         end: 'off',
         before: tally(logs, side, 0, 0),
         after: j >= 0 ? tally(logs, side, j, j + 1) : tally(logs, side, 0, 0),
@@ -288,6 +288,23 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
     }
   });
   return out;
+}
+
+/**
+ * A called play's trip late in the fourth quarter or an overtime (its basket in the period's last
+ * shot clock) that won the game, from level or behind into a lead never given up, or tied it there for
+ * overtime (the period's last score): how, and the clock its basket came at. Read once the game is over.
+ */
+function lateBasket(logs: PossLog[], j: number, side: 0 | 1): { how: 'won' | 'tied'; clock: number } | undefined {
+  const l = logs[j];
+  if (l.q < 4 || l.clockEnd > GAME.shotClock || l.pts <= 0) return undefined;
+  const margin = (x: PossLog) => x.score[side] - x.score[1 - side];
+  const to = margin(l);
+  const from = to - l.pts;
+  const rest = logs.slice(j + 1);
+  if (from <= 0 && to > 0 && rest.every((x) => margin(x) > 0)) return { how: 'won', clock: l.clockEnd };
+  if (from < 0 && to === 0 && rest.every((x) => x.q !== l.q || margin(x) === 0)) return { how: 'tied', clock: l.clockEnd };
+  return undefined;
 }
 
 /** Points per trip, or null with no trips. */

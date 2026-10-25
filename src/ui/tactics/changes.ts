@@ -8,7 +8,7 @@ import type { Tactics, TacticsPatch } from '../../core/types';
 /** Every setting that differs from `a` to `b` (core/sim/playbooks names each as the Tactics screen does). */
 export const screenChanges = (a: Tactics, b: Tactics, nameOf?: (pid: number) => string) => tacticsChanges(a, b, nameOf);
 
-/** "Help defense: Balanced → Pack the paint · Star plan: Play straight → Deny". */
+/** "Help defense: Balanced → Pack the paint · Star plan: Play straight → Double-team". */
 export const changesLine = (list: TacticsChange[]) => list.map((c) => (c.from || c.to ? `${c.label}: ${c.from} → ${c.to}` : `${c.label} changes`)).join(' · ');
 
 /** Each 0-100 tactic a situational plan can move, as its control is named. */

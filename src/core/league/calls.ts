@@ -1,33 +1,39 @@
 // The staff's calls: the moments in a season that need the user's answer, each a Needs-you card on
 // Today with the staff's call one tap away (see agenda.ts for how cards are drawn and settled). A
 // star goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
-// trade for a long absence before the deadline); the playoff odds collapse under 5% for a team the
-// owner expects in the postseason (the call: tell him it's a rebuild, before the deadline); a team
-// on pace under the owner's win floor (the call: chase it with a trade, or tell him it's a
-// development year, before the deadline); the deadline's last five days (the call: the staff's best
-// deal, buying or selling as the odds say, a look for one, or standing pat); and the books heading
-// into the red at the season's end, or the owner's ultimatum or freeze on them (the call: the
-// budgets down to the league standard, or salary shed before the deadline). A call is only a call
-// with a real choice in it: one whose only answer is "OK" isn't opened (the digest has the news). A
-// long sim stops the day a new one opens (see runSim), and for nothing else that doesn't need an
-// answer. A card is settled by its call or a choice; it is remembered (League.callsDone) so it
-// doesn't come back. Nothing here draws from the league's random stream.
-import type { League, Player } from '../types';
+// trade for a long absence before the deadline); the playoff odds under 5% two weeks running for a
+// team the owner expects in the postseason (the call: tell him it's a rebuild, before the
+// deadline); a team on pace under the owner's win floor, now and three games ago (the call: chase
+// it with a trade, or tell him it's a development year, before the deadline); the deadline's last
+// five days (the call: the staff's best deal, buying or selling as the odds say, a look for one, or
+// standing pat); the morning a playoff series or a play-in game of his starts (the call: a plan for
+// it, or the staff's way); and the books: their close heading into the red in the weeks before the
+// deadline, or a step the owner took on them at his review (the call: the budgets down to the
+// league standard, tickets priced where the gate peaks, or salary shed while deals can be made). A
+// reading that moves week to week (the odds, the pace) is a call only once two readings agree: one
+// bad week isn't. A call is only a call with a real choice in it: one whose only answer is "OK"
+// isn't opened (the digest has the news). A long sim stops the day a new one opens, and once more
+// for one still open as its due date nears (see openCallIds and runSim), and for nothing else that
+// doesn't need an answer. A card is settled by its call or a choice; it is remembered
+// (League.callsDone) so it doesn't come back. Nothing here draws from the league's random stream.
+import type { League, PlayInGame, PlayoffSeries, Player, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
-import { playerName, standardRoster } from './helpers';
+import { fmtDate, playerName, revenueScale, standardRoster } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
 import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST, easeFloor, easeFloorBlockedReason, floorDanger, FLOOR_EASE } from './ownerGoals';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
-import { booksOf, FROZEN_BUDGET } from './books';
-import { budgetCostPerSeason, seasonEndCash } from './finances';
+import { BLEED_GRADE, booksOf, frozen, FROZEN_BUDGET, warnWindow } from './books';
+import { aiTicketPrice, attendanceFor, budgetCostPerSeason, seasonEndCash } from './finances';
 import { tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
 import { packageFor } from './tradePackages';
-import { executeTrade, teamAccepts, validateTrade, type TradeOffer } from './trades';
+import { executeTrade, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
 import { tradeValue } from './contracts';
 import { assetText, cleanProposals } from './proposals';
-import { ensureRotation } from './games';
+import { ensureRotation, userGameOnDay } from './games';
+import { seriesLabel } from './playoffs';
+import { planFor, planMade } from './gamePlans';
 import { playerAge } from '../playerGen';
 
 /** A star: one of the team's three best players by OVR. */
@@ -36,16 +42,44 @@ export const STAR_RANK = 3;
 export const STAR_OUT = 10;
 /** The playoff odds (tenths of a percent, as League.oddsTrail keeps them) under which the season is a call. */
 export const ODDS_LOW = 50;
+/**
+ * Weekly points in a row under ODDS_LOW that make the odds a call. One week's point is noise: in six
+ * simulated seasons (every team's weekly trail, 250 seasons a point as the trail takes it) the next
+ * week read between a quarter and 2.3 times this one for a team at 2-20% (10th to 90th percentile),
+ * and 7 of 18 first dips under 5% came back over 15% later. Two in a row: 2 such false alarms in
+ * 14, and every one still opened 24 days or more before the deadline. (A collapse in the deadline's
+ * last week is the deadline call's: it sells when the odds are low.)
+ */
+export const ODDS_WEEKS = 2;
 /** ...for a team the owner expects in the postseason, or that was at least this likely to get there this season. */
 export const ODDS_WAS = 250;
+/**
+ * The user's games back that the floor is read a second time from: on pace under it then and now,
+ * so a team a game from the line isn't a call one night and gone the next. (The pace already blends
+ * 20 games and more with the owner's read: in ten seasons of the weakest teams, the two that went
+ * under stayed under to the deadline; the second reading only keeps a loss at the line from opening it.)
+ */
+export const FLOOR_AGO = 3;
 /** Days before the deadline its call opens (and a long sim stops). */
 export const DEADLINE_DAYS = 5;
+/**
+ * Days before its due date (the deadline, for the odds and the floor) that a call still open stops a
+ * long sim once more: twice the deadline call's window, so the two are separate stops, with the
+ * market's busiest stretch still ahead (AI offers come three times as often in the deadline's last
+ * ten days).
+ */
+export const DUE_SOON = 10;
 /** Games out that make a trade for cover a real answer to a star's injury (before the deadline). */
 export const TRADE_OUT = 20;
 /** Settled calls kept, newest last. */
 const DONE_KEPT = 60;
+/**
+ * What pricing tickets where the gate peaks must bring over the home games left (first-season $K)
+ * to be one of the books' calls: about a fifth of the owner's warning line.
+ */
+export const TICKET_GAIN = 1_000;
 
-export type CallKind = 'injury' | 'odds' | 'floor' | 'deadline' | 'books';
+export type CallKind = 'injury' | 'odds' | 'floor' | 'deadline' | 'series' | 'books';
 
 /** The staff's deadline call, worked out once when its card opens (League.deadlineCall). */
 export interface DeadlineCall {
@@ -66,12 +100,20 @@ export function settleCall(league: League, id: string) {
   league.callsDone = done.slice(-DONE_KEPT);
 }
 
-/** The user's playoff odds as of the latest weekly point this season (tenths of a percent), and the best point before it. */
-function oddsNow(league: League): { now: number; best: number } | null {
+/** Odds in tenths of a percent as the cards say them: "3%", and "<1%" under one (as the screens' odds read). */
+const oddsText = (tenths: number) => `${tenths < 10 ? '<1' : Math.round(tenths / 10)}%`;
+
+/**
+ * The user's playoff odds as of the latest weekly point this season (tenths of a percent), how many
+ * points in a row up to it are under ODDS_LOW, and the best point before those.
+ */
+function oddsNow(league: League): { now: number; low: number; best: number } | null {
   const t = league.oddsTrail;
   if (!t || t.season !== league.season || t.tid !== league.userTid || !t.pts.length) return null;
-  const now = t.pts[t.pts.length - 1][1];
-  return { now, best: Math.max(...t.pts.slice(0, -1).map((p) => p[1]), 0) };
+  const pts = t.pts.map((p) => p[1]);
+  let low = 0;
+  while (low < pts.length && pts[pts.length - 1 - low] < ODDS_LOW) low++;
+  return { now: pts[pts.length - 1], low, best: Math.max(0, ...pts.slice(0, pts.length - low)) };
 }
 
 /**
@@ -93,46 +135,127 @@ const oddsId = (league: League) => `odds:${league.season}`;
 const floorId = (league: League) => `floor:${league.season}`;
 const deadlineId = (league: League) => `deadline:${league.season}`;
 const booksId = (league: League) => `books:${league.books!.season}:${league.books!.day}`;
+/** A step from an earlier review the books' close still projects to repeat: its reminder in the weeks before the deadline. */
+const booksDueId = (league: League) => `books:${league.season}:close`;
 
 /** Whether the deadline's call is open: its last DEADLINE_DAYS days, deadline day included. */
 const deadlineOpen = (league: League) => league.phase === 'regular' && league.day <= league.tradeDeadlineDay && league.tradeDeadlineDay - league.day <= DEADLINE_DAYS;
 
-/** Whether the odds call stands: under ODDS_LOW for a team expected in the postseason, before the deadline. */
+/** Whether the odds call stands: under ODDS_LOW for ODDS_WEEKS points running, for a team expected in the postseason, before the deadline. */
 function oddsCall(league: League): { now: number } | null {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return null;
   const o = oddsNow(league);
-  if (!o || o.now >= ODDS_LOW) return null;
+  if (!o || o.low < ODDS_WEEKS) return null;
   const expected = !!currentGoals(league)?.goals.some((g) => g.kind === 'postseason');
   return expected || o.best >= ODDS_WAS ? { now: o.now } : null;
 }
 
-/** Whether the floor call stands: on pace under the owner's floor, before the deadline, for a team the odds call isn't about. */
+/** The floor as the owner reads it with the user's record of `n` games ago (a shallow copy of the league: nothing in it changes). */
+function floorAgo(league: League, n: number): ReturnType<typeof floorDanger> {
+  const team = league.teams[league.userTid];
+  const ts = team.seasons.find((s) => s.season === league.season);
+  if (!ts || ts.lastTen.length < n) return null;
+  const won = ts.lastTen.slice(-n).reduce((a, x) => a + x, 0);
+  const then = { ...ts, won: ts.won - won, lost: ts.lost - (n - won) };
+  const teams = league.teams.map((t) => (t === team ? { ...t, seasons: t.seasons.map((s) => (s === ts ? then : s)) } : t));
+  return floorDanger({ ...league, teams });
+}
+
+/**
+ * Whether the floor call stands: on pace under the owner's floor now and FLOOR_AGO games ago, before
+ * the deadline, for a team the odds call isn't about.
+ */
 function floorCall(league: League): { projected: number; floorWins: number } | null {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay || oddsCall(league)) return null;
-  return floorDanger(league);
+  const now = floorDanger(league);
+  return now && floorAgo(league, FLOOR_AGO) ? now : null;
+}
+
+/**
+ * A playoff series or play-in game of the user's that starts today: its first game on today's
+ * calendar and not yet played (a series still 0-0), with the opponent.
+ */
+function seriesStart(league: League): { id: string; opp: number; g: ScheduledGame; series?: PlayoffSeries; playIn?: PlayInGame } | null {
+  if (league.phase !== 'playin' && league.phase !== 'playoffs') return null;
+  const g = userGameOnDay(league, league.day);
+  if (!g?.seriesId || (g.type !== 'playin' && g.type !== 'playoffs')) return null;
+  const opp = g.home === league.userTid ? g.away : g.home;
+  const id = `series:${league.season}:${g.seriesId}`;
+  if (g.type === 'playin') {
+    const playIn = league.playIn.find((p) => p.id === g.seriesId);
+    return playIn && playIn.winner === undefined ? { id, opp, g, playIn } : null;
+  }
+  const series = league.playoffs.find((s) => s.id === g.seriesId);
+  return series && series.winner === undefined && series.highWins + series.lowWins === 0 ? { id, opp, g, series } : null;
 }
 
 /** The ids of the calls that may be open now, before asking whether each has a real choice in it. */
 function candidateIds(league: League): string[] {
   if (league.fired) return [];
   const ids: string[] = [];
+  const series = seriesStart(league);
+  if (series) ids.push(series.id);
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') for (const s of hurtStars(league)) ids.push(s.id);
   if (oddsCall(league)) ids.push(oddsId(league));
   if (floorCall(league)) ids.push(floorId(league));
   if (deadlineOpen(league)) ids.push(deadlineId(league));
-  if (booksOf(league)) ids.push(booksId(league));
+  // the books: the step the owner took (its call, once), or in the weeks before the deadline a step
+  // from an earlier review the close projects to repeat; none in the postseason, once they've closed
+  const b = league.phase === 'playin' || league.phase === 'playoffs' ? undefined : booksOf(league);
+  if (b && !settled(league, booksId(league))) ids.push(booksId(league));
+  else if (b && b.stage !== 'warning' && b.season < league.season && warnWindow(league) && seasonEndCash(league, league.userTid).end < 0) ids.push(booksDueId(league));
   return ids.filter((id) => !settled(league, id));
 }
 
-/** The ids of the calls open now (what a long sim checks each day: nothing to work out on most days). */
+const DUE = '~due';
+/** The id openCallIds gives a call still open within DUE_SOON days of its due date: new then, so a long sim stops for it once more. */
+export const dueId = (id: string) => `${id}${DUE}`;
+
+/**
+ * What a long sim checks each day (nothing to work out on most days): the ids of the calls open now,
+ * and dueId for each still open within DUE_SOON days of its due date.
+ */
 export function openCallIds(league: League): string[] {
-  return candidateIds(league).length ? staffCalls(league).map((c) => c.id) : [];
+  if (!candidateIds(league).length) return [];
+  return staffCalls(league).flatMap((c) => (c.dueDay !== undefined && c.dueDay - league.day <= DUE_SOON ? [c.id, dueId(c.id)] : [c.id]));
 }
 
-/** The user's budgets over the league standard (what a cut would save). */
-function overStandard(league: League): boolean {
-  const b = league.teams[league.userTid].budget;
-  return b.coaching > FROZEN_BUDGET || b.health > FROZEN_BUDGET || b.facilities > FROZEN_BUDGET;
+/**
+ * The first call in `ids` (from openCallIds) not in `before`: the call a sim stopped for or passed,
+ * and whether it's one still open as its due date nears rather than a new one.
+ */
+export function newCall(league: League, ids: readonly string[], before: ReadonlySet<string>): { card: CallCard; due: boolean } | null {
+  const id = ids.find((x) => !before.has(x));
+  if (id === undefined) return null;
+  const due = id.endsWith(DUE);
+  const card = staffCalls(league).find((c) => c.id === (due ? id.slice(0, -DUE.length) : id));
+  return card ? { card, due } : null;
+}
+
+/** What cutting the user's budgets to the league standard saves over the rest of the season (between seasons, over next season), or 0 when none is over it. */
+function budgetCutSaves(league: League): number {
+  const t = league.teams[league.userTid];
+  const year = (['coaching', 'health', 'facilities'] as const).reduce(
+    (a, k) => a + Math.max(0, budgetCostPerSeason(league, t.budget[k]) - budgetCostPerSeason(league, Math.min(t.budget[k], FROZEN_BUDGET))),
+    0,
+  );
+  return (year * (seasonEndCash(league, league.userTid).left || 82)) / 82;
+}
+
+/**
+ * The ticket price where the user's gate peaks at today's demand (see aiTicketPrice), and what it
+ * brings over his home games left (next season's 41 between seasons), or null when that's under
+ * TICKET_GAIN (or the postseason is on: its prices follow).
+ */
+function ticketLever(league: League): { price: number; gain: number } | null {
+  const t = league.teams[league.userTid];
+  if (league.phase === 'playin' || league.phase === 'playoffs') return null;
+  const ts = t.seasons.find((x) => x.season === league.season);
+  const home = league.phase === 'regular' || league.phase === 'preseason' ? Math.max(0, 41 - (ts ? ts.homeWon + ts.homeLost : 0)) : 41;
+  const price = aiTicketPrice(league, t);
+  const gate = (x: number) => (attendanceFor(league, { ...t, budget: { ...t.budget, ticketPrice: x } }) * x) / 1000;
+  const gain = home * (gate(price) - gate(t.budget.ticketPrice));
+  return gain >= TICKET_GAIN * revenueScale(league) ? { price, gain } : null;
 }
 
 // ---------------------------------------------------------------- the deadline's call
@@ -207,6 +330,8 @@ export interface CallCard {
   tone: 'bad' | 'warn' | 'info';
   to?: string;
   due?: string;
+  /** The last day its answer can be made (the deadline, for the odds and the floor): within DUE_SOON days of it, a long sim stops once more. */
+  dueDay?: number;
   pids?: number[];
   suggestion?: CallChoice;
   choices?: CallChoice[];
@@ -219,7 +344,8 @@ export type CallAction =
   | { kind: 'concede'; id: string }
   | { kind: 'easeFloor'; id: string }
   | { kind: 'trade'; id: string; offer: TradeOffer }
-  | { kind: 'budgetCut'; id: string };
+  | { kind: 'budgetCut'; id: string }
+  | { kind: 'ticketPrice'; id: string; price: number };
 
 export interface CallChoice {
   label: string;
@@ -247,6 +373,39 @@ export function staffCalls(league: League): CallCard[] {
   const cards: CallCard[] = [];
   const me = league.userTid;
   const team = league.teams[me];
+  const byDeadline = `Decide by ${fmtDate(league.season, league.tradeDeadlineDay)}`;
+
+  // (first: it's tonight)
+  const start = seriesStart(league);
+  if (start && open.has(start.id)) {
+    const { id, opp, g, series, playIn } = start;
+    const abbrev = league.teams[opp].abbrev;
+    // a plan made for this opponent already holds (a series plan, or one for the season)
+    const made = planFor(league, opp, g);
+    const planned = !!made && planMade(made);
+    const stakes = !playIn
+      ? 'A plan set now holds for every game of the series.'
+      : playIn.id.endsWith('-78')
+        ? "Win and you're the 7th seed; lose and there's one more game for the 8th."
+        : playIn.id.endsWith('-910')
+          ? 'Win and you play for the 8th seed; lose and the season is over.'
+          : "Win and you're the 8th seed; lose and the season is over.";
+    const plan: CallChoice = {
+      label: planned ? 'Review the plan' : series ? 'Plan the series' : 'Plan the game',
+      action: { kind: 'settle', id },
+      to: `/games/${opp}?tab=plan`,
+    };
+    cards.push({
+      id,
+      kind: 'series',
+      title: series ? `${seriesLabel(series)} vs ${abbrev}: Game 1 tonight` : `Play-in vs ${abbrev} tonight`,
+      line: `${stakes} ${planned ? 'Your plan against them is in place.' : `The staff's call: scout them and set ${series ? 'one' : 'a plan'}.`}`,
+      tone: 'info',
+      to: `/games/${opp}`,
+      suggestion: plan,
+      choices: [{ label: planned ? 'Keep it' : 'Leave it to the staff', action: { kind: 'settle', id } }],
+    });
+  }
 
   for (const { p, id } of hurtStars(league)) {
     if (!open.has(id)) continue;
@@ -295,12 +454,14 @@ export function staffCalls(league: League): CallCard[] {
     cards.push({
       id,
       kind: 'odds',
-      title: `Playoff odds down to ${odds.now < 10 ? '<1' : Math.round(odds.now / 10)}%`,
+      title: `Playoff odds down to ${oddsText(odds.now)}`,
       line: blocked
         ? `The staff's call: keep pushing. ${blocked}`
         : "The staff's call: tell the owner now, play the young players and sell veterans before the deadline, rather than miss his playoff goal.",
       tone: 'warn',
       to: '/office/owner',
+      due: byDeadline,
+      dueDay: league.tradeDeadlineDay,
       ...(blocked ? { suggestion: push, choices: [look] } : { suggestion: concede, choices: [push] }),
     });
   }
@@ -328,6 +489,8 @@ export function staffCalls(league: League): CallCard[] {
       }`,
       tone: 'warn',
       to: '/office/owner',
+      due: byDeadline,
+      dueDay: league.tradeDeadlineDay,
       ...(blocked ? { suggestion: chase } : { suggestion: chase, choices: [ease] }),
     });
   }
@@ -338,7 +501,7 @@ export function staffCalls(league: League): CallCard[] {
     const left = league.tradeDeadlineDay - league.day;
     const offer = call?.offer;
     const other = offer ? league.teams[offer.b.tid] : null;
-    const pct = call ? `Playoff odds ${Math.round(call.odds / 10)}%. ` : '';
+    const pct = call ? `Playoff odds ${oddsText(call.odds)}. ` : '';
     const stand: CallChoice = { label: 'Stand pat', action: { kind: 'settle', id } };
     const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: '/office/trade' };
     const deal: CallChoice | null =
@@ -365,38 +528,70 @@ export function staffCalls(league: League): CallCard[] {
   }
 
   const b = booksOf(league);
-  if (b && open.has(booksId(league))) {
-    const id = booksId(league);
-    const save = (['coaching', 'health', 'facilities'] as const).reduce(
-      (a, k) => a + Math.max(0, budgetCostPerSeason(league, team.budget[k]) - budgetCostPerSeason(league, Math.min(team.budget[k], FROZEN_BUDGET))),
-      0,
-    );
-    const red = money(-team.cash);
-    const p = seasonEndCash(league, league.userTid);
+  const bid = b && (open.has(booksId(league)) ? booksId(league) : open.has(booksDueId(league)) ? booksDueId(league) : null);
+  if (b && bid) {
+    const id = bid;
+    const p = seasonEndCash(league, me);
+    // where the close is heading: this season's in season, next season's between seasons (none in the postseason: it has closed)
+    const between = !['preseason', 'regular', 'playin', 'playoffs'].includes(league.phase);
     const heading =
-      p.left > 0 ? `${money(Math.abs(p.end))} ${p.end < 0 ? 'in the red' : 'in the black'} at the season's end${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : ''}` : '';
+      p.left > 0
+        ? `${between ? "next season's books project" : 'projected'} ${money(Math.abs(p.end))} in the ${p.end < 0 ? 'red' : 'black'}${between ? '' : " when the regular season's books close"}${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : ''}`
+        : '';
+    const closed = money(-(b.close ?? team.cash));
+    // the levers, each only when he can pull it now: the budgets (not under the freeze: it has cut
+    // them), the ticket price, and salary out while deals can be made (the freeze allows those)
+    const save = frozen(league) ? 0 : budgetCutSaves(league);
+    const ticket = ticketLever(league);
     const cut: CallChoice | null =
-      b.stage !== 'freeze' && overStandard(league)
-        ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` }
-        : null;
-    // shedding salary is an answer while deals can still be made (and the freeze still allows them)
-    const shed: CallChoice | null =
-      league.phase === 'regular' && league.day <= league.tradeDeadlineDay ? { label: 'Shed salary', action: { kind: 'settle', id }, to: '/office/trade' } : null;
+      save > 0 ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` } : null;
+    const price: CallChoice | null = ticket
+      ? {
+          label: `Price tickets at $${ticket.price}`,
+          action: { kind: 'ticketPrice', id, price: ticket.price },
+          confirm: `From $${team.budget.ticketPrice}: where the gate peaks at today's demand.`,
+        }
+      : null;
+    const shed: CallChoice | null = tradingClosedReason(league) ? null : { label: 'Shed salary', action: { kind: 'settle', id }, to: '/office/trade' };
     const noted: CallChoice = { label: 'Not now', action: { kind: 'settle', id } };
-    const call = cut ? `cut the staff budgets to the league standard (saves ${money(save)} a season)` : 'shed salary before the deadline (the budgets are at the standard already)';
+    // the staff's call: whichever of the budgets and the tickets brings more, else salary out
+    const levers = [
+      { c: cut, v: save },
+      { c: price, v: ticket?.gain ?? 0 },
+    ]
+      .filter((x): x is { c: CallChoice; v: number } => !!x.c)
+      .sort((x, y) => y.v - x.v);
+    const suggestion = levers[0]?.c ?? shed ?? noted;
+    const call =
+      suggestion === cut
+        ? `cut the staff budgets to the league standard (saves ${money(save)}${between ? ' a season' : ' over the rest of the season'})`
+        : suggestion === price
+          ? `price tickets at $${ticket!.price}, where the gate peaks (${money(ticket!.gain)} more over the home games left)`
+          : suggestion === shed
+            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}`
+            : '';
+    const next = between ? "when next season's books close" : 'when the books close';
+    const lines: Record<typeof b.stage, string> = {
+      warning: `${capitalize(heading)}, and playoff money doesn't count. Still in the red then, and the owner gives you an ultimatum.`,
+      ultimatum: `${id === booksDueId(league) ? capitalize(heading) : `The books closed ${closed} in the red${heading ? `; ${heading}` : ''}`}. Still in the red ${next}, and he freezes the budget.`,
+      freeze: `Minimum deals only, no raises, no trade that takes on salary, until a season's books close in the black${heading ? `: ${heading}` : ''}. Deeper in the red than ${closed} ${next}, and it's his final warning.`,
+      final: `Deeper in the red than ${closed} ${next} and ${league.settings.jobSecurity ? "you're fired, whatever you win" : `that season grades ${Math.round(BLEED_GRADE * 100)} at best too`}${heading ? `: ${heading}` : ''}.`,
+    };
+    const titles: Record<typeof b.stage, string> = {
+      warning: 'The books are heading into the red',
+      ultimatum: "The owner's ultimatum: the books",
+      freeze: 'The budget is frozen',
+      final: "The owner's final warning: the books",
+    };
     cards.push({
       id,
       kind: 'books',
-      title: b.stage === 'warning' ? 'The books are heading into the red' : b.stage === 'ultimatum' ? "The owner's ultimatum: the books" : 'The budget is frozen',
-      line:
-        b.stage === 'warning'
-          ? `Projected ${heading}. Still in the red at the review, and the owner gives you an ultimatum. The staff's call: ${call}.`
-          : b.stage === 'ultimatum'
-            ? `${team.cash < 0 ? `${red} in the red` : 'Back in the black for now'}${heading ? `; projected ${heading}` : ''}. Still in the red at the next review, and he freezes the budget. The staff's call: ${call}.`
-            : `Minimum deals only, no raises, no trade that takes on salary, until a review finds the books back in the black${heading ? ` (projected ${heading})` : ''}.`,
+      title: titles[b.stage],
+      line: `${lines[b.stage]}${call ? ` The staff's call: ${call}.` : ''}`,
       tone: 'bad',
       to: '/office/finances',
-      ...(cut ? { suggestion: cut, choices: [...(shed ? [shed] : []), noted] } : shed ? { suggestion: shed, choices: [noted] } : { suggestion: noted }),
+      suggestion,
+      choices: [levers[1]?.c, shed, noted].filter((x): x is CallChoice => !!x && x !== suggestion),
     });
   }
   // a call is a choice: one whose only answer is to carry on isn't opened
@@ -451,7 +646,13 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       r = { ok: true, text: 'Budgets cut to the league standard.' };
       break;
     }
+    case 'ticketPrice':
+      league.teams[league.userTid].budget.ticketPrice = a.price;
+      r = { ok: true, text: `Tickets priced at $${a.price}.` };
+      break;
   }
   if (r.ok) settleCall(league, a.id);
   return r;
 }
+
+const capitalize = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);

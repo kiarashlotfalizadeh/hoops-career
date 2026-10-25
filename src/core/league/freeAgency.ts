@@ -1258,7 +1258,8 @@ export function userResign(league: League, pid: number, amount: number, years: n
     return { ok: false, reason: most === 5 ? 'Contracts must be 1 to 5 years.' : `Without full Bird rights (three seasons with you) he re-signs for 4 years at most.` };
   if (extras.option && years < 2) return { ok: false, reason: 'An option needs a deal of two years or more.' };
   const limit = resignLimit(league, p, league.userTid);
-  const frozen = freezeResignReason(league, amount, salaryFor(p, league.season));
+  const next = CAP_FOR(league, league.season + 1);
+  const frozen = freezeResignReason(league, amount, salaryFor(p, league.season), p.experience >= 3 ? next.vetMin : next.minContract, 're-signing him');
   if (frozen) return { ok: false, reason: frozen };
   // a player worth more than his Bird rights allow goes to the market
   if (amount > limit || askingContract(league, p, league.userTid).amount > limit) return { ok: false, reason: resignLimitReason(league, p, limit) };

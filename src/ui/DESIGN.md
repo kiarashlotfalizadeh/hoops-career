@@ -281,7 +281,7 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
 - The dock (App.tsx): the tab bar with the play row on top of it, one ink slab with round top
   corners; inside it the tokens invert (white text, `--accent` = `--team-night`). The play row names
   the next step in the headline cut and runs it (a round play button in your team's trim); its
-  arrow opens every option. A
+  arrow opens every option, under the staff's calls still open. A
   required agenda item takes its place and opens in a sheet to be settled. On the screen the next
   step names, it shrinks to a round options button.
 - `.empty` for empty states: one line, what to do next; no icon or display headline.
@@ -329,6 +329,10 @@ graphics package); the console under it is paper and card stock like every other
 - **The breaks are on the screen, not over it**: at a period's end or in your timeout the court
   steps aside for the period report or the huddle in the console; the next period starts from the
   bench bar.
+- **The game stops for you only when it's close** (`closeGame`: neither side 95% to win it): a fifth
+  foul or a closer out of legs the staff won't handle, and the last possession (your ball, tied or
+  down three, the shot clock off), which opens the play call without a timeout. Late in a game the
+  play call heads the huddle, built around your closer: his isolation, his sets, one for someone else.
 - Every change during a game goes through the live controller (the journal records it), never a raw
   league edit. The Game plan says what's changed since the tip, in Tactics' words.
 - **One box score**: `BoxScore` (`components/BoxScore.tsx`), in the live game and the report, with
@@ -373,10 +377,16 @@ graphics package); the console under it is paper and card stock like every other
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.
 - **One "Needs you" count** (`today/needs.ts`): the bell's badge and Today's Needs you are the same
-  number: the agenda's decisions, mail that needs you and isn't one of them (`needsYou`: important
-  mail from the last two weeks of this season), the deadline's last week and a backup due. The
-  staff's advice and a warm seat sit beside it on Today, uncounted. The inbox's own filter for big
-  news and open decisions is "Important"; other mail is unread in the list without feeding a count.
+  number, in the same order, and the bell opens it (a sheet over any screen, the inbox a row under
+  it): the agenda's decisions (the staff's calls first, always on Today's page; AI teams' trade
+  offers last, two or more as one row), mail that needs you and isn't one of them (`needsYou`:
+  important mail from the last two weeks of this season), the deadline's last week and a backup
+  due. The staff's advice and a warm seat sit beside it on Today, uncounted. The inbox's own filter
+  for big news and open decisions is "Important"; other mail is unread in the list without feeding
+  a count.
+- **A call is never passed in silence.** A sim that opens one says so (stopped for it, or ending
+  where it was going anyway), the digest and the Play options show the calls still open over what
+  would pass them, and one still open stops a long sim once more as its due date nears.
 
 ## Motion
 

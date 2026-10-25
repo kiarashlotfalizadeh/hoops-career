@@ -24,7 +24,7 @@ export interface PillContext {
   margin?: number;
   /** Their five on the floor, with free-throw percentages (0..1). */
   oppOn: { pid: number; name: string; ftPct: number }[];
-  /** Who to deny or double: their hottest shooter, or their leading scorer. */
+  /** Who to double: their hottest shooter, or their leading scorer. */
   oppThreat?: { pid: number; name: string };
 }
 
@@ -101,20 +101,19 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
   });
 
   const th = ctx.oppThreat;
-  if (th)
-    for (const how of ['deny', 'double'] as const) {
-      const on = t.defense.starPlan === how && t.defense.starTarget === th.pid;
-      out.push({
-        id: how,
-        label: `${how === 'deny' ? 'Deny' : 'Double'} ${th.name}`,
-        on,
-        help: how === 'deny' ? `Face-guard ${th.name}: fewer touches, a tired defender.` : `Double-team ${th.name} when he attacks: make the others beat you.`,
-        apply: (x) => {
-          x.defense.starPlan = on ? 'none' : how;
-          x.defense.starTarget = on ? null : th.pid;
-        },
-      });
-    }
+  if (th) {
+    const on = t.defense.starPlan === 'double' && t.defense.starTarget === th.pid;
+    out.push({
+      id: 'double',
+      label: `Double ${th.name}`,
+      on,
+      help: `Double-team ${th.name} when he attacks: make the others beat you.`,
+      apply: (x) => {
+        x.defense.starPlan = on ? 'none' : 'double';
+        x.defense.starTarget = on ? null : th.pid;
+      },
+    });
+  }
 
   // the worst free-throw shooter on the floor, while a hack is still legal this period (not in its last two minutes)
   const worst = [...ctx.oppOn].sort((a, b) => a.ftPct - b.ftPct)[0];

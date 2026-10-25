@@ -1,11 +1,11 @@
 // Handoffs and off-ball screens (Floppy, Elevator, Chicago, Horns from the elbow): the shooter coming
 // off it and the hub, the switch that denies it (and the mismatch post-ups and isolations a switched
-// handoff hands out), drop's soft spot, the zone's room, top-locking and going under, and the shot.
+// handoff hands out), drop's soft spot, the zone's room, a junk defense's top-lock, and the shot.
 
 import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
 import type { Cast } from '../sets';
-import { K, lev, levExtra, levGift } from './constants';
+import { K, lev, levExtra } from './constants';
 import type { SP, ST, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -39,7 +39,7 @@ export const handoffMethods = {
       this.cur.steps.push(...(play ? this.handoffSetSteps(play.cast) : [{ k: 'handoff' as const, pid: B.pid, pid2: Sh.pid }]));
     }
     let adv = (Sh.c.offBall * Sh.perf - (D.c.perDef * 0.6 + D.c.helpD * 0.4) * this.dq(D)) / 22 + (B.r.str + B.r.hgt - 100) / 200 + this.rng.normal(0, 0.55) + open;
-    adv += this.blowBy(def, Sh, 'handoff') - this.denyCatch(def, off, Sh, 'handoff');
+    adv += this.blowBy(def, Sh, 'handoff') - this.chaseCatch(def, off, Sh, 'handoff');
     const tags: [string, number][] = [];
     const zd = this.zone(def);
     const sw = !zd && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall);
@@ -70,8 +70,6 @@ export const handoffMethods = {
       adv -= lev(K.hunt.flow);
       tags.push(['hunt', -lev(K.hunt.flow) * 0.35]);
     }
-    // going under the handoff: room for his jumper, none for his drive
-    const under = !zd && !sw && this.pd(def, Sh) === 'under';
     // the switch puts the shooter's man on the hub and the hub's man on the shooter: a big switched
     // onto a guard gets attacked off the dribble, a guard switched onto a big gets posted up
     if (sw) {
@@ -115,14 +113,13 @@ export const handoffMethods = {
     const c = this.rng.weighted(opts);
     switch (c) {
       case 0: {
-        const u = under ? levGift(K.pd.under.pull) : 0;
-        const st: [string, number][] = u ? [...tags, ['pd_under', u]] : [...tags];
+        const st: [string, number][] = [...tags];
         const so = play ? this.setOpen(play, 'three', st) : 0;
         this.shoot(off, def, {
           shooter: Sh,
           // (Elevator's doors are at the top of the key)
           zone: play?.cast.id === 'elevator' ? 'ab3' : this.rng.chance(0.2) ? 'c3' : 'ab3',
-          open: advOpen - 0.02 + u + so,
+          open: advOpen - 0.02 + so,
           contest: D,
           assister: B,
           finish,
@@ -132,12 +129,10 @@ export const handoffMethods = {
       }
       case 1: {
         // the zone's open threes are for shooters who stay outside
-        const u = under ? levGift(K.pd.under.pull) : 0;
         const key = this.openKey(def);
         const mt = tags.filter(([k]) => k !== key);
-        if (u) mt.push(['pd_under', u]);
         const so = play ? this.setOpen(play, 'mid', mt) : 0;
-        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05 + u + so, contest: D, assister: B, finish, tags: mt });
+        this.shoot(off, def, { shooter: Sh, zone: this.midOr(Sh, 0.5), open: advOpen - 0.05 + so, contest: D, assister: B, finish, tags: mt });
         return 'done';
       }
       case 2: {
@@ -148,22 +143,13 @@ export const handoffMethods = {
           o += lk.beat;
           rt.push([lk.beatTag, lk.beat]);
         }
-        if (under) {
-          o -= lev(K.pd.under.drive);
-          rt.push(['pd_under', -lev(K.pd.under.drive)]);
-        }
-        const body = this.body(def, Sh);
-        if (body) {
-          o -= lev(K.pd.body.drive);
-          rt.push(['pd_body', -lev(K.pd.body.drive)]);
-        }
-        const sag = this.sagHelp(def, off, Sh, B);
-        if (sag) {
-          o -= sag;
-          rt.push([this.sagKey, -sag]);
+        const roam = this.roamHelp(def, off, Sh, B);
+        if (roam) {
+          o -= roam;
+          rt.push(['role_roam', -roam]);
         }
         if (play) o += this.setOpen(play, 'rim', rt);
-        this.shoot(off, def, { shooter: Sh, zone: 'rim', open: o, contest: this.rimContester(def, D), assister: B, finish, tags: rt, ...body });
+        this.shoot(off, def, { shooter: Sh, zone: 'rim', open: o, contest: this.rimContester(def, D), assister: B, finish, tags: rt });
         return 'done';
       }
       case 3: {

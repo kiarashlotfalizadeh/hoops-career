@@ -23,7 +23,7 @@ const oppOf = (lg: LiveGame) => (lg.userSide === 0 ? lg.game.away : lg.game.home
 /**
  * Slot `i` as tonight's game plays it, switched to from `now`: the slot's tactics with tonight's game
  * plan on top, and tonight's orders on their players carried over as they stand (matchups, the star
- * target, how to guard each of them, the chase, the man to attack, the hack targets), as a switch on
+ * target, the chase, the man to attack, the hack targets), as a switch on
  * the Tactics screen keeps them. Its situational plans that switch slots play from it. Null for an
  * empty slot.
  */
@@ -35,8 +35,6 @@ export function slotForGame(league: League, lg: LiveGame, i: number, now: Tactic
   const d = now.defense;
   next.defense.matchups = { ...d.matchups };
   next.defense.starTarget = d.starTarget;
-  if (d.playerD) next.defense.playerD = { ...d.playerD };
-  else delete next.defense.playerD;
   if (d.chase?.length && chasers(next.defense.scheme) > 0) next.defense.chase = d.chase.slice(0, chasers(next.defense.scheme));
   if (now.offense.huntTarget != null) next.offense.huntTarget = now.offense.huntTarget;
   if (now.manage.hackTargets?.length) {

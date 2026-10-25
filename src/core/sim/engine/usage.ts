@@ -94,14 +94,9 @@ export const usageMethods = {
         if (d) ws[i] *= Math.exp(lev(clamp((p.c.create - d.c.perDef) / 40, -0.5, 0.9)));
       });
     }
-    // star plan "deny": face-guarding keeps the ball out of his hands, as a junk defense's chasers do
+    // a junk defense's chasers face-guard their men: the ball goes elsewhere
     const def = this.T[1 - t.side];
-    const denied = def.t.defense.starPlan === 'deny' ? this.starTarget(def, t) : null;
-    if (def.t.defense.starPlan === 'deny') {
-      const i = t.on.indexOf(denied!);
-      if (i >= 0) ws[i] *= levW(K.denyTouch);
-    }
-    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= c === denied ? levW(K.chaseTouch) / levW(K.denyTouch) : levW(K.chaseTouch);
+    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= levW(K.chaseTouch);
     // crunch time: the ball finds the go-to player (the one named, or else the staff's: his best scorer on the floor)
     const go = this.goTo(t);
     if (go) ws[t.on.indexOf(go)] *= go.pid === t.t.manage.goTo ? K.goToPick : K.goToAuto;
@@ -113,11 +108,19 @@ export const usageMethods = {
 
   /**
    * The go-to player in crunch time (the last two minutes of the 4th quarter or overtime, within five):
-   * the one the coach named while he's on the floor, else the best scorer on the floor (his shot
-   * creation and his own usage), whom the ball finds a little less (K.goToAuto).
+   * the team's closer (see closer), whom the ball finds a little less when the coach didn't name him (K.goToAuto).
    */
   goTo(this: GameSim, t: ST): SP | null {
     if (this.q < 4 || this.clock > 120 || Math.abs(t.score - this.T[1 - t.side].score) > 5) return null;
+    return this.closer(t);
+  },
+
+  /**
+   * Who a team's last shots go to: the go-to player the coach named while he's on the floor, else the
+   * best scorer on the floor (his shot creation and his own usage). The live game builds its late play
+   * call around him.
+   */
+  closer(this: GameSim, t: ST): SP | null {
     const pid = t.t.manage.goTo;
     const p = pid == null ? undefined : t.byId.get(pid);
     if (p?.on) return p;

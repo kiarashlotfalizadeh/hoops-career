@@ -19,6 +19,7 @@ import { careerTotals, markText, milestonesIn, newsworthy, type MilestoneStat } 
 import { recordsHeld, recordWhat } from '../league/records';
 import { winChance } from './winProb';
 import { billingStorylines } from './storylines';
+import { SETS } from '../sim/sets';
 
 /** A finished game told as a story, from one team's side. */
 export interface GameStory {
@@ -121,6 +122,11 @@ interface Facts {
   /** The biggest lead the loser let slip. */
   blown: number;
   decider?: Decider;
+  /**
+   * The play you called that won it late or tied it for overtime (from the night's moves: see
+   * CoachMove.call): the play in words ("the iso", "the Chicago"), who it was for, how, and when.
+   */
+  called?: { play: string; for?: BoxLine; how: 'won' | 'tied'; secs: number; q: number };
   run?: Run & { ours: boolean };
   /** The period the winner won by the most, and by how much. */
   turn?: { i: number; w: number; l: number };
@@ -345,6 +351,13 @@ function factsOf(league: League, res: GameResult, tid: number): Facts | null {
   const stint = league.coaches?.find((c) => c.user)?.stints.at(-1);
   if (won && reg && tid === league.userTid && stint && stint.tid === tid && stint.from === res.season) firstWin = r0[0] - (stint.at?.[0] ?? 0) <= 0;
   const edge = res.edge;
+  // the play you called that won it or tied it late (the night's moves are the user's)
+  const callMove = tid === league.userTid ? [...(res.moves ?? [])].reverse().find((m) => m.call?.late) : undefined;
+  const c = callMove?.call;
+  const called: Facts['called'] =
+    callMove && c?.late
+      ? { play: c.id === 'iso' ? 'the iso' : `the ${SETS[c.id].short}`, for: us.players.find((b) => b.pid === c.pid), how: c.late.how, secs: c.late.clock, q: callMove.q }
+      : undefined;
   return {
     res,
     tid,
@@ -366,6 +379,7 @@ function factsOf(league: League, res: GameResult, tid: number): Facts | null {
     comeback: won ? them.extra.biggestLead : 0,
     blown: won ? 0 : us.extra.biggestLead,
     decider: deciderOf(res, usSide),
+    called,
     run: winRun.pts >= 10 ? { ...winRun, ours: won } : undefined,
     turn,
     streak: { before: pass.streak, after },
@@ -532,6 +546,20 @@ function nightWords(b: BoxLine): string {
 /** Where it was: "at Madison Square Garden", "in Boston", "on a neutral floor in Las Vegas". */
 const venue = (f: Facts) => (f.neutral ? 'in Las Vegas' : f.arena ? `at ${f.arena}` : f.home ? 'at home' : `in ${f.foe.region}`);
 
+/** "on the iso you called for him", "on the Chicago you called for Bane": the play you called that a late basket came on, `who` having scored it. */
+function onCall(f: Facts, who?: BoxLine): string {
+  const c = f.called!;
+  return `on ${c.play} you called${c.for ? ` for ${c.for.pid === who?.pid ? 'him' : f.name(c.for)}` : ''}`;
+}
+
+/** "The iso you called for Bane tied it with 2 seconds left in regulation.": a play you called that tied it for overtime. */
+function tiedOnCall(f: Facts): string | undefined {
+  const c = f.called;
+  if (c?.how !== 'tied') return undefined;
+  const when = c.secs <= BUZZER ? 'at the buzzer' : `with ${plural(Math.max(1, Math.round(c.secs)), 'second')} left`;
+  return `${c.play.charAt(0).toUpperCase()}${c.play.slice(1)} you called${c.for ? ` for ${f.name(c.for)}` : ''} tied it ${when} ${c.q === 4 ? 'in regulation' : `in ${periodWord(c.q - 1)}`}.`;
+}
+
 function dekOf(league: League, f: Facts, cat: string): string {
   const rng = worldRng(league, 'story-dek', f.res.gid);
   const out: string[] = [];
@@ -548,8 +576,14 @@ function dekOf(league: League, f: Facts, cat: string): string {
   }
   const d = f.decider;
   const s = f.series;
-  if (d && d.who && d.secs <= 12)
-    out.push(`${f.name(d.who)} put ${d.ours ? 'them' : 'the ' + f.foe.name} ahead with ${d.buzzer ? 'no time' : plural(Math.max(1, Math.round(d.secs)), 'second')} left.`);
+  // the play you called, when it won it (the shot that won it came on it) or tied it for overtime
+  const onIt = d?.ours && f.called?.how === 'won';
+  const tie = tiedOnCall(f);
+  if (d && d.who && (d.secs <= 12 || onIt))
+    out.push(
+      `${f.name(d.who)} put ${d.ours ? 'them' : 'the ' + f.foe.name} ahead with ${d.buzzer ? 'no time' : plural(Math.max(1, Math.round(d.secs)), 'second')} left${onIt ? `, ${onCall(f, d.who)}` : ''}.`,
+    );
+  else if (tie) out.push(tie);
   else if (f.won && f.comeback >= 12) out.push(`The ${f.team.name} trailed by ${f.comeback} ${venue(f)}.`);
   else if (!f.won && f.blown >= 12) out.push(`They led by ${f.blown}.`);
   else if (s)
@@ -664,10 +698,13 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
   // the turning point: the shot that won it, the comeback, the collapse or the run
   const d = f.decider;
   const turn: string[] = [];
+  const tie = tiedOnCall(f);
+  if (tie) turn.push(tie);
   if (d) {
     const who = d.who ? f.full(d.who) : d.ours ? `The ${T}` : `The ${f.foe.name}`;
     const what = d.ft ? 'free throws' : d.three ? 'a three' : 'a basket';
-    turn.push(`${who} won it with ${what} ${d.buzzer ? 'at the buzzer' : `with ${plural(Math.max(1, Math.round(d.secs)), 'second')} left`}.`);
+    const call = d.ours && f.called?.how === 'won' ? `, ${onCall(f, d.who)}` : '';
+    turn.push(`${who} won it with ${what} ${d.buzzer ? 'at the buzzer' : `with ${plural(Math.max(1, Math.round(d.secs)), 'second')} left`}${call}.`);
   }
   if (f.won && f.comeback >= 10) turn.push(`The ${T} came back from ${f.comeback} points down.`);
   if (!f.won && f.blown >= 10) turn.push(`The ${T} had led by ${f.blown}.`);

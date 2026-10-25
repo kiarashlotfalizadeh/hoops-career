@@ -13,9 +13,10 @@ export const transitionMethods = {
     const h = handlers[0];
     const trapQ = def.on.reduce((a, p) => a + p.c.steal + p.r.spd, 0) / (def.on.length * 2);
     const secQ = (h.c.ballSec + handlers[1].c.ballSec + off.passQ) / 3;
-    const adv = (secQ - trapQ) / 20;
-    const pTO = clamp(K.pressTO - lev(adv * 0.035), 0.02, 0.16);
-    const pBroken = clamp(0.2 + lev(adv * 0.08), 0.06, 0.4);
+    const k = K.pressAdv;
+    const adv = (secQ - k.sec - (trapQ - k.trap)) / k.per;
+    const pTO = clamp(K.pressTO - lev(adv * k.to), 0.004, 0.16);
+    const pBroken = clamp(k.broken + lev(adv * k.brokenAdv), 0.06, 0.7);
     // (secure handlers beat it sooner: less of the shot clock is gone)
     this.tick(this.rng.uniform(K.pressTime.min, K.pressTime.max) * clamp(1 - K.pressTime.beat * adv, 0.5, 1.3));
     if (this.cur) {

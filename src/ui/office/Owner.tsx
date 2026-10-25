@@ -11,10 +11,12 @@ import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers'
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
 import { GRACE, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
-import { booksOf } from '../../core/league/books';
+import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
+  FLOOR_GRADE,
   ON_TRACK,
+  PATIENCE_STEP,
   PAYROLL_SCALE,
   PERSONALITY,
   POSTSEASON,
@@ -118,6 +120,7 @@ export default function Owner() {
                   </div>
                 ))}
           </div>
+          {review?.held && <div className="small dim2">{HELD[review.held]}</div>}
           {review && (
             <div className="tiny dim">
               Each goal is graded −100 to +100 against its target (0: met exactly); weighted, they make the season&apos;s grade, which moves your job security.
@@ -319,17 +322,35 @@ function UltimatumCard({ league, js }: { league: League; js: JobSecurity }) {
   );
 }
 
-const BOOKS_LABEL = { warning: 'Warning', ultimatum: 'Ultimatum', freeze: 'Budget frozen' } as const;
+const BOOKS_LABEL = { warning: 'Warning', ultimatum: 'Ultimatum', freeze: 'Budget frozen', final: 'Final warning' } as const;
 
-/** The books in the red: the step he has taken, what it means, and where the season's books project. */
+/** What held a reviewed season's grade down, in a line (see OwnerReview.held). */
+const HELD = {
+  floor: 'Under his floor: nothing else could lift this grade.',
+  patience: 'Past his rebuild allowance and out of the postseason: nothing else could lift this grade.',
+  books: 'The books closed in the red under the freeze: no result, a title included, could lift this grade past that.',
+} as const;
+
+const redOrBlack = (x: number) => `${money(Math.abs(x))} in the ${x < 0 ? 'red' : 'black'}`;
+
+/**
+ * The books in the red: the step he has taken, what it means, and the one figure he judges: where
+ * the regular season's books close (projected in season, the close itself in the postseason, next
+ * season's between seasons).
+ */
 function BooksCard({ league }: { league: League }) {
   const b = booksOf(league)!;
-  const cash = league.teams[league.userTid].cash;
   const p = seasonEndCash(league, league.userTid);
+  const between = isOff(league);
+  const closed = b.close ?? league.teams[league.userTid].cash;
+  const tax = p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : '';
   const proj =
-    p.left > 0
-      ? `Projected at the season's end: ${p.end < 0 ? `${money(-p.end)} in the red` : `${money(p.end)} in the black`}${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax` : ''}.`
-      : '';
+    p.left === 0
+      ? `The regular season's books closed ${redOrBlack(p.end)}${tax}: the review reads that, not the playoff gates.`
+      : between
+        ? `Next season's books project ${redOrBlack(p.end)}${tax}.`
+        : `Projected when the regular season's books close: ${redOrBlack(p.end)}${tax}.`;
+  const fireNext = league.settings.jobSecurity ? "you're fired, whatever you win" : `that season grades ${fmtGrade(BLEED_GRADE)} at best too`;
   return (
     <section className="card fo-ultimatum" aria-label="The books">
       <div className="row">
@@ -337,17 +358,15 @@ function BooksCard({ league }: { league: League }) {
         <span className="over grow">The books</span>
         <Tag tone="bad">{BOOKS_LABEL[b.stage]}</Tag>
       </div>
-      <h2>
-        {b.stage === 'warning' && p.left > 0
-          ? `${money(-Math.min(0, p.end))} in the red at the season's end`
-          : `${money(Math.abs(cash))} ${cash < 0 ? 'in the red' : 'in the black'}`}
-      </h2>
+      <h2>{b.stage === 'warning' ? `${money(-Math.min(0, p.end))} in the red when the books close` : `Closed ${money(-closed)} in the red`}</h2>
       <div className="small dim2">
         {b.stage === 'warning'
-          ? "Where the books are heading. Still in the red at the season's review, and he gives you an ultimatum."
+          ? "Where the regular season's books are heading, luxury tax included; playoff money doesn't count. Still in the red when they close, and he gives you an ultimatum."
           : b.stage === 'ultimatum'
-            ? 'Back in the black at the next review, or he freezes the budget.'
-            : 'Minimum deals only, no raises when you re-sign, no trade that takes on salary, and the staff budgets at the league standard, until a review finds the books back in the black.'}{' '}
+            ? "Back in the black when the next season's books close, or he freezes the budget."
+            : b.stage === 'freeze'
+              ? `Minimum deals only, no raises (re-signing, extending, qualifying or matching), no trade that takes on salary or sends cash, the staff budgets at the league standard, until a season's books close in the black. Closed in the red, a frozen season grades ${fmtGrade(FREEZE_GRADE)} at best, a title or not; deeper than ${money(-closed)}, his final warning.`
+              : `The freeze stands. Deeper in the red than ${money(-closed)} when the books close and ${fireNext}.`}{' '}
         {b.stage !== 'warning' && proj}
       </div>
       <Link to="/office/finances" className="card-link">
@@ -389,8 +408,8 @@ function GradingHelp({ league }: { league: League }) {
         </p>
       ))}
       <p>
-        <b>Standing.</b> Your first season sets it; after that each season counts about {weight}%. The meter reads where this season would leave it as it projects now: 0 to 100,
-        the firing line at {Math.round(50 + 50 * FIRING_LINE)}.
+        <b>Standing.</b> Your first season sets it; after that each season counts about {weight}%, and so does your first with a new team, against the reputation you bring. The
+        meter reads where this season would leave it as it projects now: 0 to 100, the firing line at {Math.round(50 + 50 * FIRING_LINE)}.
       </p>
       <p>
         <b>Grace.</b> On this difficulty he waits {grace} season{grace === 1 ? '' : 's'} before a review can fire you. Below the line after that, you&apos;re out.
@@ -404,13 +423,18 @@ function GradingHelp({ league }: { league: League }) {
         {Math.round(preset(league).winFloor * 1000)} pace is a failed season: it grades Poor or worse, whatever else went right.
       </p>
       <p>
-        <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} rebuilding season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row (no postseason
-        goal). After that he wants the play-in at least, and the floor rises to .{Math.round((preset(league).winFloor + REBUILD_OVER_FLOOR) * 1000)}. With the playoffs gone before
-        the deadline, you can tell him it&apos;s a rebuild: it costs you some standing and counts as one.
+        <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row without the postseason (a
+        rebuild, or a season that missed). After that he wants the play-in at least, the floor rises to .{Math.round((preset(league).winFloor + REBUILD_OVER_FLOOR) * 1000)}, and a
+        season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best, {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the
+        postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you some standing and counts as
+        one.
       </p>
       <p>
-        <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash. In the red he warns you; still in the red at the review, an ultimatum; at the next,
-        he freezes the budget: minimum deals only, no raises, no trade that takes on salary, the staff budgets at the league standard.
+        <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash, and he judges it the day the regular season&apos;s books close, tax paid: the playoff
+        gates come after, his bonus rather than your cover. Heading into the red in the three weeks before the deadline, he warns you. Closed in the red at the review: an
+        ultimatum; at the next, he freezes the budget: minimum deals only, no raises, no trade that takes on salary, the staff budgets at the league standard. A frozen season
+        closed in the red grades {fmtGrade(FREEZE_GRADE)} at best, a title or not; deeper in the red than the season before, a final warning ({fmtGrade(BLEED_GRADE)} at best), and
+        deeper again (or deeper at all past {money(DEBT_LIMIT * scale)} in the red) gets you fired.
       </p>
       <p>
         A win-now owner weighs the playoffs more and lets a contender pay some tax (up to the first apron); a builder cares about the young players; a frugal one wants more profit.

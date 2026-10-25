@@ -7,7 +7,8 @@ import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
 import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
-import { booksReview } from './books';
+import { booksLine, booksReview, booksVerdict } from './books';
+import { money } from '../format';
 import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 
 /** Seasons the user has run his current team, counting this one (grace period, owner weighting). */
@@ -79,14 +80,18 @@ export const FIRING_LINE = -0.5;
 
 /**
  * The owner's review after the playoffs: each of the season's goals graded −1..1 against its target
- * (see gradeGoal), the season's grade their weighted sum, and the overall standing its running
- * average: the first season in charge sets it, after that each season counts 40%. The parts of the
- * standing (wins, playoffs, money and, once a season had a development goal, youth) are running
- * averages of the goals behind them; a part without a goal this season keeps its value. A season
- * without goals (a save from before them, picked up in the postseason) is graded on the old absolute
- * scale: wins against .500, the playoff round reached and profit against a fixed target. The review
- * goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by goal; after the grace
- * period, with job security on, a standing under FIRING_LINE gets the coach fired.
+ * (see gradeGoal), the season's grade their weighted sum (held down by the floor, the rebuild clock
+ * or the books under the freeze; lifted by a title), and the overall standing its running average:
+ * a new career's first season sets it, after that (and from the first season after a job change,
+ * against the reputation he brought) each season counts 40%. The parts of the standing (wins,
+ * playoffs, money and, once a season had a development goal, youth) are running averages of the goals
+ * behind them, this owner's own from his first season; a part without a goal this season keeps its
+ * value. A season without goals (a save from before them, picked up in the postseason) is graded on
+ * the old absolute scale: wins against .500, the playoff round reached and profit against a fixed
+ * target. The review goes into the history (the last REVIEWS_KEPT seasons) and the inbox, goal by
+ * goal; after the grace period, with job security on, a standing under FIRING_LINE gets the coach
+ * fired, and so do a missed ultimatum and books that closed deeper in the red under his final
+ * warning (see booksVerdict), whatever the season won.
  */
 export function ownerEvaluation(league: League) {
   // a fired coach has no owner until he takes over another team
@@ -97,11 +102,14 @@ export function ownerEvaluation(league: League) {
   let goals: OwnerReview['goals'] = [];
   let grade: number;
   let floored = false;
+  let impatient = false;
   let crowned: 'title' | 'run' | undefined;
   if (og) {
     let f: true | undefined;
-    ({ goals, grade, floored: f, crowned } = gradeOwnerGoals(league, og));
+    let p: true | undefined;
+    ({ goals, grade, floored: f, impatient: p, crowned } = gradeOwnerGoals(league, og));
     floored = !!f;
+    impatient = !!p;
     for (const k of ['wins', 'playoffs', 'money', 'youth'] as const) {
       const mine = goals.filter((g) => PART[g.kind] === k);
       const w = mine.reduce((a, g) => a + g.weight, 0);
@@ -115,23 +123,30 @@ export function ownerEvaluation(league: League) {
     parts.money = ownerMoneyScore(league, profit(league, tid));
     grade = parts.wins * 0.4 + parts.playoffs * 0.4 + parts.money * 0.2;
   }
+  // the books under the freeze, closed in the red: no title lifts the season past their cap
+  const books = booksVerdict(league);
+  const booksText = booksLine(books, grade);
+  if (books?.cap !== undefined) grade = Math.min(grade, books.cap);
   const prev = league.ownerMood;
   // how far one season moves his standing, and how long he waits to fire: see jobSecurity.ts
   const w = seasonWeight(league);
+  // (the parts are this owner's own read: his first season sets them, whatever reputation came with the coach)
+  const wp = seasonsInCharge(league) <= 1 ? 1 : w;
   const verdict = ultimatumVerdict(league, og);
   const r2 = (x: number) => Math.round(x * 100) / 100;
   const blend = (k: 'wins' | 'playoffs' | 'money' | 'youth') => {
     const now = parts[k];
-    return now === undefined ? prev[k] : r2(now * w + (prev[k] ?? 0) * (1 - w));
+    return now === undefined ? prev[k] : r2(now * wp + (prev[k] ?? 0) * (1 - wp));
   };
   // an ultimatum met buys back some standing; missed, nothing else counts
   const total = clamp(grade * w + prev.total * (1 - w) + (verdict === 'met' ? ULTIMATUM_MET : 0), -1, 1);
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);
-  const fired = fireable && (total < FIRING_LINE || verdict === 'missed');
-  // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze (none for a coach he fires)
-  if (!fired) booksReview(league);
+  const fired = fireable && (total < FIRING_LINE || verdict === 'missed' || !!books?.fire);
+  // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze, a freeze deeper in the red a final warning (none for a coach he fires)
+  if (!fired) booksReview(league, books);
+  const held = booksText ? 'books' : impatient ? 'patience' : floored ? 'floor' : undefined;
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -140,11 +155,14 @@ export function ownerEvaluation(league: League) {
     total: league.ownerMood.total,
     ...(og ? { games: og.games } : {}),
     ...(crowned ? { crowned } : {}),
+    ...(held ? { held } : {}),
     ...(fired ? { fired: true as const } : {}),
   };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
-  if (crowned)
+  // (a title is what the season is remembered for, unless the books under the freeze hold it down)
+  if (crowned && booksText) lines.push(crowned === 'title' ? 'We won the title.' : 'Two rounds further than I asked for.');
+  else if (crowned)
     lines.push(
       crowned === 'title' ? 'We won the title. Nothing else this season takes that away.' : 'Two rounds further than I asked for. That is what I will remember about this season.',
     );
@@ -152,6 +170,8 @@ export function ownerEvaluation(league: League) {
     const rec = goalsRecord(league, og);
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
   }
+  if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't: nothing else saves this season's grade.`);
+  if (booksText) lines.push(booksText);
   if (fired) {
     league.fired = true;
     addInbox(league, {
@@ -161,7 +181,9 @@ export function ownerEvaluation(league: League) {
       body: [
         verdict === 'missed'
           ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
-          : 'The results have not been good enough. We are going in a different direction.',
+          : books?.fire
+            ? `The books closed ${money(-books.close)} in the red, deeper again under the freeze. I told you what that meant, and winning doesn't pay for it. We are going in a different direction.`
+            : 'The results have not been good enough. We are going in a different direction.',
         ...lines,
         '(Your agent will bring you the offers: take one to keep your career going. The league waits until you do.)',
       ].join('\n'),

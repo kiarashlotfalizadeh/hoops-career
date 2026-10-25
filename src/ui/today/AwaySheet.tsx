@@ -7,8 +7,7 @@ import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
-import { agenda, type AgendaKind } from '../../core/league/agenda';
-import { AgendaRow } from '../components/Agenda';
+import { agenda, CALL_KINDS } from '../../core/league/agenda';
 import { ordinal } from '../../core/format';
 import { Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
@@ -16,11 +15,9 @@ import { curTeamSeason } from '../../core/league/helpers';
 import { storyLink } from './front';
 import { senderOf } from './senders';
 import { isImportant } from './messages';
+import { OpenCalls } from './NeedsList';
 import './today.css';
 import type { Digest, DigestStory } from './digest';
-
-/** The agenda's kinds that are staff calls (see calls.ts). */
-const CALL_KINDS: ReadonlySet<AgendaKind> = new Set<AgendaKind>(['injury', 'odds', 'floor', 'deadline', 'books']);
 
 /** The most results listed; the rest are a tap away on the schedule. */
 const RESULTS_SHOWN = 5;
@@ -61,20 +58,7 @@ function DigestBody({ d }: { d: Digest }) {
           <ChevronRight size={16} aria-hidden="true" />
         </button>
       )}
-      {calls.length > 0 && (
-        <section className="dg-sec">
-          <div className="dg-sec-h">
-            <h3 className="dg-h">Needs you</h3>
-          </div>
-          <div className="card flush ag-list" role="list" aria-label="Needs you">
-            {calls.map((i) => (
-              <div role="listitem" key={i.id}>
-                <AgendaRow item={i} />
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      <OpenCalls calls={calls} />
       {(d.record || d.seed || d.power) && (
         <div className="dg-top">
           {d.record && (

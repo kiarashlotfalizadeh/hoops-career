@@ -3,7 +3,7 @@
 // him, and the shot or the pass out (Post split's cutter and flare).
 
 import { clamp } from '../../random';
-import { K, lev, levGiftW } from './constants';
+import { K, lev } from './constants';
 import type { SP, ST, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -27,14 +27,8 @@ export const postUpMethods = {
     if (play && this.record) this.cur!.steps.push({ k: 'pin', pid: play.cast.d!.pid, pid2: play.cast.c.pid });
     const help = this.help(def);
     let adv = (A.c.postScore * A.perf - D.c.intDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 80 + (A.r.hgt - D.r.hgt) / 70 + this.rng.normal(0, 0.55) + open;
-    if (!fixed) adv -= this.denyCatch(def, off, A, 'post');
+    if (!fixed) adv -= this.chaseCatch(def, off, A, 'post');
     if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'post', A.pid);
-    // getting physical with him: a tougher post-up, at the price of more shooting fouls
-    const body = this.body(def, A);
-    if (body) {
-      adv -= lev(K.pd.body.post);
-      this.impact('pd_body', def.side, lev(K.pd.body.post) * K.advPts.post, A.pid);
-    }
     const zd = this.zone(def);
     if (zd) {
       adv -= lev(zd.post);
@@ -51,13 +45,8 @@ export const postUpMethods = {
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
     // a small switched onto a big can only hold his ground by fouling
-    let reach = fixed?.tag === 'switch_mismatch' ? 1 + lev(Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul) : 1;
-    let foulTag: [string, number, number?] | undefined = reach > 1 ? ['switch_mismatch', reach, fixed?.tagW] : undefined;
-    // (the physical defender's extra fouls go to the instruction unless a switch already put a small on him)
-    if (body) {
-      reach *= levGiftW(K.pd.body.foul);
-      foulTag ??= body.foulTag;
-    }
+    const reach = fixed?.tag === 'switch_mismatch' ? 1 + lev(Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul) : 1;
+    const foulTag: [string, number, number?] | undefined = reach > 1 ? ['switch_mismatch', reach, fixed?.tagW] : undefined;
     const ss = this.selfShot(A);
     const opts = [
       Math.pow(A.c.close / 50, 2) * 1.1 * ss, // hook / short shot

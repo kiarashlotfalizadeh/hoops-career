@@ -15,7 +15,7 @@ import { loadPlaybook, tacticsChanges, toPlaybook } from '../sim/playbooks';
 import { SETS, SET_IDS, SET_K, READ_ON_IT, castFor, fitsFloor, readAfter, readRate, setEdges, setFit, setLook, type DefRead, type FitPlayer } from '../sim/sets';
 import { buildGameReport, setLineText, setLines } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
-import type { SetId, Tactics } from '../types';
+import type { CallId, SetId, Tactics } from '../types';
 
 /** The tactics without the overhaul's shape and out-of-possession roles: the games these numbers were taken from. */
 function basic(t: Tactics): Tactics {
@@ -264,7 +264,7 @@ describe('the set library', () => {
 
 describe('sets in the engine', () => {
   /** Logs of the home side's trips over `games` games, queueing the set `call(sim)` names before each of its quiet trips (Q1-Q3), reads cleared when `fresh`. */
-  function trips(o: number, def: TacticsPatch, games: number, seed: number, call: (sim: GameSim) => { set: SetId; pid?: number } | null, fresh = true): PossLog[] {
+  function trips(o: number, def: TacticsPatch, games: number, seed: number, call: (sim: GameSim) => { set: CallId; pid?: number } | null, fresh = true): PossLog[] {
     const out: PossLog[] = [];
     for (let g = 0; g < games; g++) {
       const sim = new GameSim(side(o), side(9, def), opts(seed + g, true));
@@ -409,18 +409,18 @@ describe('sets in the engine', () => {
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate
+      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses)
       const expected = {
         ai: [
-          [116, 103, 78, 37, 13, 21, 14, 0],
-          [136, 132, 94, 27, 10, 36, 10, 0],
-          [109, 112, 89, 38, 7, 13, 13, 0],
+          [101, 127, 79, 33, 8, 33, 8, 0],
+          [134, 144, 79, 34, 7, 27, 15, 0],
+          [118, 117, 88, 37, 5, 20, 15, 0],
         ],
         // (taken again when play calls from the bench were retired)
         coached: [
-          [133, 121, 91, 30, 13, 23, 9, 0],
-          [117, 118, 93, 33, 14, 23, 19, 0],
-          [104, 117, 79, 40, 7, 26, 18, 0],
+          [124, 100, 94, 27, 19, 26, 8, 0],
+          [109, 129, 89, 39, 10, 15, 13, 0],
+          [120, 134, 74, 40, 7, 38, 19, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -483,6 +483,33 @@ describe('sets in the engine', () => {
         ran++;
       }
       expect(ran).toBeGreaterThan(10);
+    }
+    {
+      // a clear-out called for the go-to player (the late play call's first) is his isolation on the
+      // trip it's called for, the after-timeout isolation's path, counted with the night's clear-outs
+      const o = teamFor('chicago');
+      const star = league.teams[o].rotation.order[0];
+      const sim0 = new GameSim(side(o, { manage: { goTo: star } }), side(9, MAN), opts(1));
+      expect(sim0.closer(sim0.T[0])!.pid).toBe(star);
+      const logs = trips(o, MAN, 2, 1400, (sim) => ({ set: 'iso', pid: sim.closer(sim.T[0])!.pid }));
+      const ran = logs.filter((l) => l.kind === 'half' && l.iso !== undefined);
+      expect(ran.length).toBeGreaterThan(60);
+      for (const l of ran) {
+        expect(l.action).toBe('iso');
+        expect(l.on[0]).toContain(l.iso);
+        expect(l.steps.find((x) => x.k === 'drive')?.pid).toBe(l.iso);
+      }
+      // (the home side's go-to is named: while he's on the floor the call is for him)
+      const home = new GameSim(side(o, { manage: { goTo: star } }), side(9, MAN), opts(1400, true));
+      let n = 0;
+      while (!home.over) {
+        const s = inn(home);
+        if (s.poss === 0 && s.q <= 3 && s.clock > 30 && !s.T[0].nextSet && s.T[0].on.some((p) => p.pid === star)) home.runSet(0, 'iso', star);
+        home.step();
+        n += home.drainLogs().filter((l) => l.off === 0 && l.iso === star).length;
+      }
+      expect(n).toBeGreaterThan(20);
+      expect(home.result().sets?.find((x) => x.t === 0 && x.id === 'iso')?.runs).toBeGreaterThanOrEqual(n);
     }
   }, 180_000);
 });

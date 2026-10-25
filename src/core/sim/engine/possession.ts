@@ -80,7 +80,7 @@ export const possessionMethods = {
 
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
-    // the after-timeout play is for this trip (a queued set takes its place). Both wait for a trip
+    // the after-timeout play is for this trip (a called play takes its place). Both wait for a trip
     // that gets to the half court: a press turnover or a run-out leaves them for the next one
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
     const queued = off.nextSet;
@@ -90,10 +90,19 @@ export const possessionMethods = {
     let set: { id: SetId; pid: number | null } | null = ato && isSetId(ato) ? { id: ato, pid: atoPid } : null;
     let first: ActionType | null = ato && !isSetId(ato) ? ato : null;
     let isoFor: SP | null = first === 'iso' && atoPid !== null ? (off.byId.get(atoPid) ?? null) : null;
+    // a called play takes the after-timeout play's place: a set, or a clear-out isolation run as the
+    // after-timeout isolation is (for its player while he's on the floor)
     if (queued) {
-      first = null;
-      isoFor = null;
-      set = { ...queued };
+      const { id, pid } = queued;
+      if (id === 'iso') {
+        first = 'iso';
+        isoFor = pid !== null ? (off.byId.get(pid) ?? null) : null;
+        set = null;
+      } else {
+        first = null;
+        isoFor = null;
+        set = { id, pid };
+      }
     }
 
     // ---- full court press
@@ -123,7 +132,7 @@ export const possessionMethods = {
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     if (late.hurry) transP *= 1.5;
-    // a queued set is walked up and run in the half court, and so is the inbounds play after a foul to
+    // a called play is walked up and run in the half court, and so is the inbounds play after a foul to
     // give or a timeout
     if (queued || this.inbound || outOfTimeout) transP = 0;
 
@@ -138,7 +147,7 @@ export const possessionMethods = {
       return;
     }
 
-    // ---- half court: the trip uses up the after-timeout play and a queued set
+    // ---- half court: the trip uses up the after-timeout play and a called one
     if (this.cur) this.cur.kind = 'half';
     // a defense that didn't crash the glass is back and set when the ball comes up the floor
     if (crashLeak < 0 && !outOfTimeout) {
@@ -255,7 +264,10 @@ export const possessionMethods = {
       if (n === 0 && isoFor) {
         this.calledActor = isoFor;
         // a clear-out for a player on the floor: its possession counts for the night's tally of them
-        if (isoFor.on) this.possSet = this.setStat(off.side, 'iso');
+        if (isoFor.on) {
+          this.possSet = this.setStat(off.side, 'iso');
+          if (this.cur) this.cur.iso = isoFor.pid;
+        }
       }
       this.play = play;
       const res = this.runAction(action, off, def, ctxOpen, ballFrom, late, forced || buzzer);

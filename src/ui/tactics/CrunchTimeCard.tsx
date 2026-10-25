@@ -39,7 +39,9 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
             After one of your timeouts (yours or the staff&apos;s), the next half-court trip opens with the after-timeout play. A set is run for the player you name while he&apos;s
             on the floor, else for the one who fits it best, and like any set it&apos;s read a little better each time it&apos;s run in a game.
           </p>
-          <p>In live games you can also call plays from the bench (Plays).</p>
+          <p>
+            In live games the play late is yours to call, built around your go-to player: out of a timeout in the last five minutes, and on the last possession of a close game.
+          </p>
           <p>
             Assistant adjusts in simmed games: at breaks and timeouts he changes one thing a quarter when the other team is exploiting it, as AI coaches do. Game reports list every
             change. Never in games you coach live.

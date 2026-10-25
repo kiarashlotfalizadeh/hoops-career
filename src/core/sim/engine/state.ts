@@ -6,6 +6,7 @@
 
 import type {
   ActionType,
+  CallId,
   DefRole,
   Familiarity,
   GlassDuty,
@@ -224,8 +225,8 @@ export interface ST {
   sit: { id: string; label: string } | null;
   /** Times each player has been hacked this period. */
   hacked: Map<number, number>;
-  /** A set queued for the side's next half-court trip this period (runSet: the engine's tests and measurement scripts). */
-  nextSet: { id: SetId; pid: number | null } | null;
+  /** A play called for the side's next half-court trip this period (runSet): a set, or a clear-out isolation ('iso'). */
+  nextSet: { id: CallId; pid: number | null } | null;
   /** A timeout asked for while the other side had a live ball (the reason given): taken at the next dead ball. */
   toWait: string | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */

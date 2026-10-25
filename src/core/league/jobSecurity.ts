@@ -10,8 +10,10 @@ import type { League } from '../types';
 import { clamp } from '../random';
 import { preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
-import { POSTSEASON, currentGoals, floorCap, gradeGoal, ownerProgress, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
-import { addInbox, andList, curTeamSeason } from './helpers';
+import { POSTSEASON, currentGoals, floorCap, gradeGoal, ownerProgress, patienceCap, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
+import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, frozen } from './books';
+import { seasonEndCash } from './finances';
+import { addInbox, andList, curTeamSeason, revenueScale } from './helpers';
 import type { Forecast } from '../analysis/odds';
 
 export type SeatHeat = 'secure' | 'steady' | 'warm' | 'hot';
@@ -37,9 +39,15 @@ export interface JobSecurity {
 /** Seasons in charge the owner waits before a review can fire the coach, by difficulty. */
 export const GRACE: Record<League['settings']['difficulty'], number> = { easy: 3, normal: 2, hard: 1 };
 
-/** How much this season's grade counts in his standing (the first season in charge sets it). */
+/**
+ * How much this season's grade counts in his standing: a new career's first season sets it; after
+ * that, and from the first season after a job change (when a review by another owner is on file:
+ * the reputation he brought, see REPUTATION_CARRY, weighs against it rather than being wiped), 40%
+ * at normal.
+ */
 export function seasonWeight(league: League): number {
-  return seasonsInCharge(league) <= 1 ? 1 : clamp(0.4 * preset(league).ownerPressure, 0.2, 0.6);
+  const fresh = seasonsInCharge(league) <= 1 && !(league.ownerReviews ?? []).some((r) => r.tid !== league.userTid);
+  return fresh ? 1 : clamp(0.4 * preset(league).ownerPressure, 0.2, 0.6);
 }
 
 /** Whether this season's review can fire the coach (the grace period is over and job security is on). */
@@ -65,14 +73,32 @@ const HEAT: { min: number; heat: SeatHeat; label: string }[] = [
   { min: -1, heat: 'hot', label: 'Hot seat' },
 ];
 
+/**
+ * Where the books' close projects under the freeze, as the review will read it (see booksVerdict):
+ * in the red (its grade capped), and deeper than at the last review (the final warning's cap, or the
+ * sack after one or past the debt limit). Null when the budget isn't frozen or the close projects in
+ * the black.
+ */
+export function frozenBooksOutlook(league: League): { cap: number; deeper: boolean; fire: boolean } | null {
+  const b = booksOf(league);
+  if (!b || !frozen(league) || b.season >= league.season) return null;
+  const end = seasonEndCash(league, league.userTid).end;
+  if (end >= 0) return null;
+  const deeper = b.close !== undefined && end < b.close;
+  return { cap: deeper ? BLEED_GRADE : FREEZE_GRADE, deeper, fire: deeper && (b.stage === 'final' || end < -DEBT_LIMIT * revenueScale(league)) };
+}
+
 /** The season's grade if each goal ends where it projects (null without goals this season). */
 function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): number | null {
   const prog = ownerProgress(league, og, fc);
   if (!prog.length) return null;
   const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected), 0);
-  // a record projected under his floor caps it, as the review will
+  // a record projected under his floor caps it, as the review will; so does a season past the
+  // rebuild allowance projected out of the postseason, and books projected in the red under the freeze
   const wins = prog.find((p) => p.goal.kind === 'wins');
-  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1);
+  const post = prog.find((p) => p.goal.kind === 'postseason');
+  const books = frozenBooksOutlook(league);
+  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, books?.cap ?? 1);
 }
 
 export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
@@ -90,6 +116,8 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   if (league.fired) line = 'You were fired. Take a job offer from Career.';
   else if (off) line = 'Job security is off: the owner never fires you.';
   else if (ultimatum) line = `Ultimatum: ${ultimatum.text.toLowerCase()}, or you're fired.`;
+  else if (canBeFired(league) && frozenBooksOutlook(league)?.fire)
+    line = "The books are heading deeper into the red under his final warning: close there and you're fired, whatever you win.";
   else if (grade === null) line = h.heat === 'secure' || h.heat === 'steady' ? 'The owner is happy with the direction.' : 'The owner wants a better season than the last.';
   else {
     const prog = ownerProgress(league, og!, fc);

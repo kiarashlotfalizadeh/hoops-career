@@ -273,8 +273,8 @@ describe('tactics in the UI', () => {
     // a short curated row, slowing it down instead of pushing only to protect a lead in the fourth
     {
       const t = defaultTactics();
-      expect(ids(t, ctx({ q: 4 }))).toEqual(['zone', 'push', 'pack', 'getback', 'deny', 'double', 'hack']);
-      expect(ids(t, ctx({ q: 4, margin: 6 }))).toEqual(['zone', 'slow', 'pack', 'getback', 'deny', 'double', 'hack']);
+      expect(ids(t, ctx({ q: 4 }))).toEqual(['zone', 'push', 'pack', 'getback', 'double', 'hack']);
+      expect(ids(t, ctx({ q: 4, margin: 6 }))).toEqual(['zone', 'slow', 'pack', 'getback', 'double', 'hack']);
       // a lead earlier on: still push
       expect(ids(t, ctx({ q: 2, margin: 6 }))).toContain('push');
       // never more than seven
@@ -298,9 +298,9 @@ describe('tactics in the UI', () => {
       const zone = press(plan, plan, ctx(), 'zone');
       expect(zone.defense.scheme).toBe('zone23');
       expect(press(zone, plan, ctx(), 'man').defense.scheme).toBe('man');
-      const denied = press(plan, plan, ctx(), 'deny');
-      expect([denied.defense.starPlan, denied.defense.starTarget]).toEqual(['deny', 1]);
-      expect(press(denied, plan, ctx(), 'deny').defense.starPlan).toBe('none');
+      const doubled = press(plan, plan, ctx(), 'double');
+      expect([doubled.defense.starPlan, doubled.defense.starTarget]).toEqual(['double', 1]);
+      expect(press(doubled, plan, ctx(), 'double').defense.starPlan).toBe('none');
     }
 
     // a Hack-a offered on their worst free-throw shooter, only while it is legal, at a threshold that targets him
@@ -355,11 +355,11 @@ describe('tactics in the UI', () => {
       {
         const now = cloneTactics(planned);
         now.defense.matchups = { 7: 4, 9: 1 };
-        now.defense.starPlan = 'deny';
+        now.defense.starPlan = 'double';
         now.defense.starTarget = 7;
         const kept = keptTactics(saved, planned, now);
         expect(kept.defense.matchups).toEqual({ 40: 2 });
-        expect([kept.defense.starPlan, kept.defense.starTarget]).toEqual(['deny', null]);
+        expect([kept.defense.starPlan, kept.defense.starTarget]).toEqual(['double', null]);
       }
 
       // what was taken off tonight taken off (a setting whose key the screens delete)

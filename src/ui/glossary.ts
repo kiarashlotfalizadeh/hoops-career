@@ -92,16 +92,10 @@ export const GLOSSARY: GlossaryEntry[] = [
     text: 'Pressure in the backcourt, all over the floor. Forces turnovers and burns the shot clock; risky against good ball handlers.',
   },
   {
-    id: 'guarding',
-    term: 'Go under, top-lock, sag off, physical',
-    group: 'Defense',
-    text: 'How one defender plays his man. Go under screens: room for his pull-ups, none for his drives. Top-lock: runs a shooter off the line, opens drives and backdoor cuts. Sag off: helps in the paint, leaves him open from outside. Physical: tougher drives and post-ups, more fouls.',
-  },
-  {
     id: 'starplan',
-    term: 'Star plan (deny, double-team)',
+    term: 'Star plan (double-team)',
     group: 'Defense',
-    text: 'Deny face-guards their main creator to keep the ball out of his hands; a double-team sends a second defender when he attacks and makes the others beat you.',
+    text: 'A double-team sends a second defender when their main creator attacks and makes the others beat you: worth it against a star who can’t pass out of it, with non-shooters around him.',
   },
   {
     id: 'foultogive',

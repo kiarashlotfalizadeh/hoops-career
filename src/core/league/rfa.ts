@@ -40,6 +40,7 @@ import {
 } from './contracts';
 import { logMove } from './transactions';
 import { money } from '../format';
+import { freezeResignReason } from './books';
 
 /** Free-agency days a team has to match an offer sheet: the day it is signed and the next (until the market closes, if that comes first). */
 export const MATCH_DAYS = 2;
@@ -197,7 +198,18 @@ export function qualifyBlockedReason(league: League, p: Player): string | null {
   if (p.contract.qualifying) return `${playerName(p)} played this season on a qualifying offer: he is unrestricted now.`;
   if (!rfaEligible(league, p))
     return `Only a first-round pick finishing his rookie-scale deal, or a player with ${RFA_MAX_SERVICE} seasons or fewer in the league, can be made a restricted free agent.`;
-  return null;
+  return qualifyFrozenReason(league, p);
+}
+
+/** The least a player of his experience is paid next season (the minimum a freeze always allows). */
+const nextMin = (league: League, p: Player) => {
+  const cap = CAP_FOR(league, league.season + 1);
+  return p.experience >= 3 ? cap.vetMin : cap.minContract;
+};
+
+/** Why the owner's freeze rules out this player's qualifying offer (a raise on his salary, past his minimum), or null. */
+export function qualifyFrozenReason(league: League, p: Player): string | null {
+  return freezeResignReason(league, qualifyingOffer(league, p), salaryFor(p, league.season), nextMin(league, p), 'his qualifying offer');
 }
 
 /** The user extends a qualifying offer to one of his expiring players (re-sign period). */
@@ -351,7 +363,8 @@ export function sheetDecisionBlocked(league: League, pid: number, match: boolean
   if (r.tid !== league.userTid) return `His rights belong to the ${league.teams[r.tid].name}: they decide on it.`;
   if (match && summerRoster(league, league.userTid) >= OFFSEASON_ROSTER_MAX)
     return `Matching needs a roster spot: yours is full (${OFFSEASON_ROSTER_MAX}${league.faBids?.length || pendingSheets(league, league.userTid).length ? ', counting your pending offers and offer sheets' : ''}). Release or trade someone first.`;
-  return null;
+  // the owner's freeze: matching a sheet above his salary is a raise, and the price of the freeze is that he walks
+  return match ? freezeResignReason(league, r.sheet.amount, salaryFor(p, league.season), nextMin(league, p), 'matching the sheet') : null;
 }
 
 /** The user matches the offer sheet on his restricted free agent, or lets him go to the team that signed it. */

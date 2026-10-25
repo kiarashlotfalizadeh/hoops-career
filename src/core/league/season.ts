@@ -70,7 +70,7 @@ import { aiDraftTrade, aiOffseasonTrades, aiTaxDumps, aiToAiTrade, teamStrategyU
 import { aiProposals, cleanProposals, draftProposals, freeAgencyProposals, openingProposal } from './proposals';
 import { tenDayDaily } from './tenDay';
 import { deadlineDay } from './deadline';
-import { booksDaily } from './books';
+import { booksDaily, closeBooks } from './books';
 import { callsDaily } from './calls';
 import { ownerEvaluation } from './owner';
 import { ownerCheckIn, setOwnerGoals } from './ownerGoals';
@@ -296,7 +296,7 @@ export function advanceDay(league: League) {
   deadlineDay(league);
   // the staff's deadline call, worked out the day its card opens
   callsDaily(league);
-  // the owner's word on the books, the day they go into the red (or out of it)
+  // the owner's word on the books, the day their close projects into the red (in the weeks before the deadline)
   booksDaily(league);
   worldDay(league);
 }
@@ -306,6 +306,8 @@ function endRegularSeason(league: League) {
   // revenue sharing first: the tax pot is shared on top of it
   const shared = shareRevenue(league).get(league.userTid) ?? 0;
   const bills = assessLuxuryTax(league);
+  // the books close: what the owner's review judges (the playoff gates come after)
+  closeBooks(league);
   seasonBooksMail(league, shared, bills);
   startPlayIn(league);
 }

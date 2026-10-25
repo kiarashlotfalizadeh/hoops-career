@@ -1,32 +1,29 @@
 // Today: the front page of your season, calm enough to read at a glance. One hero: on game day the
 // next game, otherwise the lead (your last result while it's fresh, or the top story about your team)
 // or, outside the season's games, where the season stands. Then a few blocks in order of use: what
-// needs you (the decisions waiting, the trade deadline, mail that needs you, the owner when the seat
-// is warm, once a season a backup, the staff's top advice) in one list; the next game when it isn't today; your season as a
-// strip of figures; the news in two headlines; and More (practice, the way back to "While you were
-// away", the glossary, the guide). Anything with more to it is one tap away; nothing here repeats
-// something else here or on the top bar.
+// needs you (the staff's calls first and always on the page, then the decisions waiting, AI teams'
+// offers as one row, the trade deadline, mail that needs you, once a season a backup: see needs.ts)
+// in one list; from your staff (the owner when the seat is warm, the staff's top advice); the next
+// game when it isn't today; your season as a strip of figures; the news in two headlines; and More
+// (practice, the way back to "While you were away", the glossary, the guide). Anything with more to
+// it is one tap away; nothing here repeats something else here or on the top bar.
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
-import type { InboxMessage, League } from '../../core/types';
+import type { League } from '../../core/types';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
-import { GUIDE_STEPS, guideDone, showGuide, type AgendaItem } from '../../core/league/agenda';
+import { CALL_KINDS, GUIDE_STEPS, guideDone, showGuide } from '../../core/league/agenda';
 import { assistantFeed, type AssistantArea, type AssistantCard } from '../../core/ai/assistant';
 import { jobSecurity } from '../../core/league/jobSecurity';
-import { fmtDate } from '../../core/league/helpers';
-import { AgendaRow } from '../components/Agenda';
-import { BackupRow } from '../components/Backup';
 import { AssistantRow } from '../components/Assistant';
 import { GlossarySheet } from '../components/Glossary';
 import { Section, Sheet } from '../components/ui';
-import { NextGameRow, NextGameSlab, PhaseCard, deadlineText, nextGame } from './NextGame';
+import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
 import { DigestRow, Headlines, LeadStory, YourSeason, useLead } from './FrontPage';
 import { PracticeRow, PracticeSheet } from './Practice';
-import { MessageSheet, markRead, previewText } from './messages';
+import { MessageSheet, markRead } from './messages';
 import { useNeedsYou } from './needs';
-import { senderOf } from './senders';
+import { NeedRow, needRows } from './NeedsList';
 import './today.css';
 import { useForecast } from '../useForecast';
 
@@ -35,12 +32,9 @@ const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
 
 const inSeason = (l: League) => l.phase === 'regular' || l.phase === 'playin' || l.phase === 'playoffs';
 
-/** Needs you's order: what the league waits on, then the first week's checklist, then the rest. */
-const rank = (i: AgendaItem) => (i.required ? 2 : i.kind === 'guide' ? 1 : 0);
-
 /** The most of the staff's cards in Needs you (the rest are behind All advice): fewer when the list is long already. */
 const STAFF_SHOWN = 2;
-/** The most rows Needs you shows on the page (required decisions always show); the rest, mail included, are in its sheet. */
+/** The most rows Needs you shows on the page (the staff's calls and required decisions always show); the rest, mail included, are in its sheet. */
 const NEEDS_SHOWN = 3;
 
 /** The guide was put away, but its weeks aren't over (Today offers it back). */
@@ -64,7 +58,7 @@ export default function Today() {
   const lead = useLead(league);
   // what needs him (the bell counts the same: see needs.ts)
   const needs = useNeedsYou(league);
-  const { items, mail, deadline, backup: askBackup } = needs;
+  const { items } = needs;
   // the whole feed for the sheet. Today's own cards leave the owner to the job-security row, and the
   // next opponent's missing plan to the slab
   const full = useLeagueMemo(() => assistantFeed(league), [league]);
@@ -92,47 +86,11 @@ export default function Today() {
   ) : (
     <NextGameSlab league={league} g={g} noPlan={noPlan} />
   );
-  // every row of Needs you, in order: the decisions (required first), the deadline, mail, a backup
-  const needRows = [
-    ...[...items]
-      .sort((a, b) => rank(b) - rank(a))
-      .map((i) => (
-        <div role="listitem" className="td-need" key={i.id}>
-          <AgendaRow item={i} />
-        </div>
-      )),
-    ...(deadline !== null
-      ? [
-          <div role="listitem" className="td-need" key="deadline">
-            <NeedRow
-              to="/office/trade"
-              tone="warn"
-              title={deadlineText(deadline)}
-              line={deadline === 0 ? 'Deals have to be done by the end of the day.' : `The last day for deals: ${fmtDate(league.season, league.tradeDeadlineDay)}.`}
-            />
-          </div>,
-        ]
-      : []),
-    ...mail.map((m) => (
-      <div role="listitem" className="td-need" key={`mail:${m.id}`}>
-        <MailRow
-          league={league}
-          m={m}
-          onOpen={() => {
-            setOpenMsg(m.id);
-            markRead(m.id);
-          }}
-        />
-      </div>
-    )),
-    ...(askBackup
-      ? [
-          <div role="listitem" className="td-need" key="backup">
-            <BackupRow league={league} />
-          </div>,
-        ]
-      : []),
-  ];
+  // every row of Needs you, in order (see needs.ts); a message opens here
+  const rows = needRows(league, needs, (m) => {
+    setOpenMsg(m.id);
+    markRead(m.id);
+  });
   // beside it, what doesn't wait on an answer: the owner when the seat is warm, and the staff's top advice
   const staffRows = [
     ...(seat
@@ -148,9 +106,9 @@ export default function Today() {
       </div>
     )),
   ];
-  // a few on the front page (every required one), the rest one tap away in a sheet
-  const shownNeeds = Math.max(NEEDS_SHOWN, items.filter((i) => i.required).length);
-  const hiddenNeeds = Math.max(0, needRows.length - shownNeeds);
+  // a few on the front page (every call and every required one: they come first), the rest one tap away in a sheet
+  const shownNeeds = Math.max(NEEDS_SHOWN, items.filter((i) => i.required || CALL_KINDS.has(i.kind)).length);
+  const hiddenNeeds = Math.max(0, rows.length - shownNeeds);
 
   return (
     <main className="page td-page">
@@ -172,7 +130,7 @@ export default function Today() {
           }
         >
           <div className="td-needs" role="list" aria-label="Needs you">
-            {needRows.slice(0, shownNeeds)}
+            {rows.slice(0, shownNeeds)}
           </div>
         </Section>
       )}
@@ -235,7 +193,7 @@ export default function Today() {
 
       <Sheet open={sheet === 'needs'} onClose={() => setSheet(null)} title="Needs you">
         <div className="td-needs" role="list" aria-label="Needs you">
-          {needRows}
+          {rows}
         </div>
       </Sheet>
       <Sheet open={sheet === 'advice'} onClose={() => setSheet(null)} title="From your staff">
@@ -258,43 +216,6 @@ function AllAdvice({ feed }: { feed: AssistantCard[] }) {
           <AssistantRow card={c} />
         </div>
       ))}
-    </div>
-  );
-}
-
-/** A row of Needs you that isn't a decision or advice (the deadline, the owner): drawn as the agenda's rows are. */
-function NeedRow({ to, tone, title, line }: { to: string; tone: 'warn' | 'bad'; title: string; line: string }) {
-  return (
-    <div className={`ag-row tone-${tone}`}>
-      <Link to={to} className="ag-head">
-        <div className="grow">
-          <div className="ag-title">
-            <span className="ag-dot" aria-hidden="true" /> {title}
-          </div>
-          <div className="ag-line">{line}</div>
-        </div>
-        <ChevronRight size={18} className="dim" aria-hidden="true" />
-      </Link>
-    </div>
-  );
-}
-
-/** Mail that needs him, as a row of Needs you: the subject, then who and the first words; it opens in its sheet. */
-function MailRow({ league, m, onOpen }: { league: League; m: InboxMessage; onOpen: () => void }) {
-  return (
-    <div className="ag-row tone-brand">
-      <button type="button" className="ag-head td-mailrow" aria-haspopup="dialog" onClick={onOpen}>
-        <div className="grow">
-          <div className="ag-title">
-            <span className="ag-dot" aria-hidden="true" />
-            <span className="sr-only">Unread: </span> {m.subject}
-          </div>
-          <div className="ag-line td-one">
-            {senderOf(league, m).name} · {previewText(m.body)}
-          </div>
-        </div>
-        <ChevronRight size={18} className="dim" aria-hidden="true" />
-      </button>
     </div>
   );
 }
