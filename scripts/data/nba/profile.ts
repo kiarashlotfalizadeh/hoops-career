@@ -2,7 +2,6 @@
 // ready for rating derivation and calibration targets.
 import type { NbaProfile } from './build';
 import { ZONES, type PlayerPbp, type Zone } from './pbp';
-import { crosswalk, type BbrefRow, type NbaPerson } from './crosswalk';
 import { SEASON_WEIGHT } from '../derive';
 
 export interface PbpAgg {
@@ -54,27 +53,9 @@ export interface PbpAgg {
 
 const ZERO_Z = (): Record<Zone, number> => ({ rim: 0, paint: 0, mid: 0, c3: 0, ab3: 0 });
 
-export function profilesByBbref(prof: NbaProfile, bbref: BbrefRow[], log = console.log): Map<string, PbpAgg> {
-  const people = new Map<number, NbaPerson>();
-  prof.seasons.forEach((s, i) => {
-    for (const p of Object.values(prof.players[i])) {
-      if (p.secs <= 0) continue;
-      const e = people.get(p.id) ?? { pid: p.id, name: prof.names[p.id] ?? p.nameI, teams: {} };
-      e.teams[s] = prof.teams[s]?.[p.id] ?? Object.keys(p.teams)[0];
-      people.set(p.id, e);
-    }
-  });
-  const { map, unmatched } = crosswalk([...people.values()], bbref);
-  log(
-    `  crosswalk: ${map.size} of ${people.size} NBA.com players matched${
-      unmatched.length
-        ? ` (unmatched: ${unmatched
-            .slice(0, 8)
-            .map((p) => p.name)
-            .join(', ')})`
-        : ''
-    }`,
-  );
+/** Each matched player's profile (`ids`: NBA.com person id → Basketball Reference id). */
+export function profilesByBbref(prof: NbaProfile, ids: Map<number, string>): Map<string, PbpAgg> {
+  const map = new Map([...ids].filter(([pid]) => prof.players.some((s) => (s[pid]?.secs ?? 0) > 0)));
   const out = new Map<string, PbpAgg>();
   for (const [pid, bid] of map) {
     const a: PbpAgg = {

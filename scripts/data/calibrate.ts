@@ -4,10 +4,10 @@
 //      efficiency, playmaking, rebounding and defensive event rates), nudging his shooting ratings
 //      and hidden tendencies.
 //   2. His value: what his team gains with him on the floor in the simulated games (RAPM over the
-//      batch's stints, value.ts) with his projected EPM, nudging only the skills whose evidence is
-//      his impact (valueWeights), with his own scoring held where it was.
+//      batch's stints, value.ts) with his projected impact (games/impact.ts), nudging only the
+//      skills whose evidence is his impact (valueWeights), with his own scoring held where it was.
 // After a few passes both match: each player reproduces his real line and is worth on the floor
-// what the projection says, its gaps between players included.
+// what his impact says, its gaps between players included.
 
 import type { League, Player, RatingKey, Ratings, Tactics, Team } from '../../src/core/types';
 import { GameSim, type Stint } from '../../src/core/sim/engine';
@@ -198,7 +198,7 @@ export interface CalibReport {
   err: Record<string, number>;
 }
 
-/** A player's value target, his projected EPM at each end, and the defensive skills a miss there moves, by how much of it each takes. */
+/** A player's value target, his projected impact at each end, and the defensive skills a miss there moves, by how much of it each takes. */
 export interface ValueTarget {
   off: number;
   def: number;
@@ -232,7 +232,7 @@ const VALUE_STEP_MAX = 6;
 /**
  * The most value moves a skill from where his evidence put it, all passes together: about one
  * standard deviation of a rating across the league. The engine values some players far from their
- * projection whatever their skills (a high-usage scorer's efficient volume above it, a non-scoring
+ * impact whatever their skills (a high-usage scorer's efficient volume above it, a non-scoring
  * role player's below, a rim protector's blocks and boards above, a small guard's defense below),
  * and closing those gaps entirely would push their feel and defense to the ends of the scale; within
  * the band they close as far as their evidence allows, and the build reports what is left.
@@ -418,7 +418,7 @@ export function calibrate(
 
 /**
  * One value pass: each player's simulated RAPM against his target, and his value skills stepped by
- * the miss. RAPM is relative to the league's rate and the projection to its own league, so the
+ * the miss. RAPM is relative to the league's rate and the impact estimate to its own players, so the
  * misses are put on one level first, weighted as the steps are (possessions, times how much his
  * sample counts), and after the steps each value skill's league mean (the rostered players') goes
  * back to where the evidence put it: value moves players only against each other and leaves the

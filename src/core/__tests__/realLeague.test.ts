@@ -404,9 +404,10 @@ describe('two seasons of the real league', () => {
     {
       const l = structuredClone(pre);
       const outlook = leagueOutlook(l);
-      const order = [...outlook].sort((a, b) => a.talent - b.talent);
-      const weak = planOwnerGoals(l, order[0].tid, outlook)!;
-      const strong = planOwnerGoals(l, order[29].tid, outlook)!;
+      // (the lowest bar and the highest: a roster's talent on opening night counts its injured out, its target doesn't)
+      const plans = outlook.map((o) => planOwnerGoals(l, o.tid, outlook)!).sort((a, b) => goal(a, 'wins')!.target - goal(b, 'wins')!.target);
+      const weak = plans[0];
+      const strong = plans[plans.length - 1];
       const [lo, hi] = [goal(weak, 'wins')!.target, goal(strong, 'wins')!.target];
       expect(hi - lo).toBeGreaterThan(15);
       // every goal met: a small plus
@@ -468,7 +469,8 @@ describe('two seasons of the real league', () => {
     {
       const l = structuredClone(pre);
       const outlook = leagueOutlook(l);
-      const weak = planOwnerGoals(l, [...outlook].sort((a, b) => a.talent - b.talent)[0].tid, outlook)!;
+      // (the lowest bar: a roster's talent on opening night counts its injured out, its target doesn't)
+      const weak = outlook.map((o) => planOwnerGoals(l, o.tid, outlook)!).sort((a, b) => goal(a, 'wins')!.target - goal(b, 'wins')!.target)[0];
       results(l, weak, { wins: 5 });
       const g = gradeOwnerGoals(l, weak);
       expect(g.goals.filter((x) => x.kind !== 'wins').every((x) => x.grade >= 0)).toBe(true);
@@ -564,8 +566,8 @@ describe('two seasons of the real league', () => {
       l.day += 7;
       ownerCheckIn(l);
       expect(off()).toBe(1);
-      // ahead of the pace instead
-      const good = Math.min(gp, Math.round((target * gp) / 82) + 8);
+      // ahead of the pace instead (well ahead: the forecast regresses a half season toward the roster's strength)
+      const good = Math.min(gp, Math.round((target * gp) / 82) + 12);
       [ts.won, ts.lost] = [good, gp - good];
       expect(ownerProgress(l, og, forecast(l)).find((p) => p.goal.kind === 'wins')!.status).toMatch(/^(ahead|met)$/);
       l.day = l.allStarDay;
@@ -880,6 +882,9 @@ describe('two seasons of the real league', () => {
     // the cabinet keeps a Coach of the Month after the press has pruned it
     {
       const x = structuredClone(mid);
+      // (from a league whose user hasn't been one yet)
+      if (x.legacy) x.legacy.honors = x.legacy.honors.filter((h) => h.kind !== 'cotm');
+      x.inbox = x.inbox.filter((m) => m.subject !== 'Coach of the Month');
       const day = x.day;
       x.media = { honors: [{ season: x.season, day, kind: 'cotm', conf: 'E', tid: U, line: 'The Knicks went 12-3 in December.' }] };
       legacyDay(x);

@@ -2,7 +2,7 @@
 // Seasons are weighted by recency and minutes, then regressed toward a size-appropriate
 // mean in proportion to sample size. Ratings are a first guess; calibrate.ts then nudges
 // them until each player reproduces his real per-36 profile in the engine and is worth on the
-// floor what Dunks & Threes' EPM projection says.
+// floor what his projected impact says (games/impact.ts).
 
 import type { Ratings, Tendencies } from '../../src/core/types';
 import { clampRatings, heightToRating } from '../../src/core/ratings';
@@ -251,7 +251,7 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const rng = new Rng(hashString(seedKey));
   const age = bio.age || a.lastAge || 26;
   // Impact ratings start from the evidence (box plus-minus, RAPM, matchup and rim defense); the
-  // calibration then moves them until his simulated value matches his projected EPM (calibrate.ts).
+  // calibration then moves them until his simulated value matches his projected impact (calibrate.ts).
   const r: Ratings = {
     hgt: h,
     spd: 72 - 0.42 * h + 5 * z('stlPct') + 2 * z('ftr') + (has ? 3 * z('transShare') + 2 * z('driveShare') : 0) - Math.max(0, age - 29) * 1.8 + rng.normal(0, 3),

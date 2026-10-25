@@ -2,7 +2,8 @@
 // players (+1 in their offense columns), the five defenders (+1 in their defense columns), home
 // court, and the offense's points per 100 possessions as the target, weighted by possessions
 // (and by season recency). Ridge regression shrinks each coefficient toward a prior (zero by
-// default, or a box-score estimate), which is what makes RAPM stable enough to use.
+// default, or a box-score estimate), which is what makes RAPM stable enough to use; defense, the
+// noisier end, may take a stronger penalty than offense.
 import type { Stint } from './pbp';
 
 export interface RapmResult {
@@ -21,7 +22,8 @@ export interface RapmInput {
   weight: number; // season recency weight
 }
 
-export function rapm(seasons: RapmInput[], lambda: number, prior?: { off: Record<number, number>; def: Record<number, number> }): RapmResult {
+export function rapm(seasons: RapmInput[], lambda: number | { off: number; def: number }, prior?: { off: Record<number, number>; def: Record<number, number> }): RapmResult {
+  const lam = typeof lambda === 'number' ? { off: lambda, def: lambda } : lambda;
   // index players
   const idx = new Map<number, number>();
   const ids: number[] = [];
@@ -69,10 +71,11 @@ export function rapm(seasons: RapmInput[], lambda: number, prior?: { off: Record
     }
   // ridge toward the prior (defense coefficients are "points allowed", so the prior flips sign)
   for (let i = 0; i < 2 * n; i++) {
-    A[i * m + i] += lambda;
+    const l = i < n ? lam.off : lam.def;
+    A[i * m + i] += l;
     if (prior) {
       const pid = ids[i % n];
-      b[i] += lambda * (i < n ? (prior.off[pid] ?? 0) : -(prior.def[pid] ?? 0));
+      b[i] += l * (i < n ? (prior.off[pid] ?? 0) : -(prior.def[pid] ?? 0));
     }
   }
   A[H * m + H] += 1e-6;

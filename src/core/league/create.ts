@@ -26,6 +26,7 @@ import {
   valueScore,
 } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
+import type { RecStat } from './records';
 import { teamStrategyUpdate } from './aiTrades';
 import { goalsWhy, planOwnerGoals, previewTitle } from './ownerGoals';
 import { fillRosters, trimRosters } from './freeAgency';
@@ -58,17 +59,26 @@ export interface SeedPlayer {
   injury?: SeedInjury;
   /** The number he last wore at each franchise he gave five seasons and has left, by its Basketball Reference code today. */
   jerseys?: Record<string, string>;
-  /** Dunks & Threes' projection for the season the seed opens, for seeds built with it. */
+  /** His projected impact for the season the seed opens, when his play-by-play sample is big enough. */
   proj?: SeedProjection;
+  /** His regular-season career highs from every NBA game he had played. */
+  highs?: Partial<Record<RecStat, SeedHigh>>;
 }
 
-/** A projected season: minutes a game and EPM (offense, defense, total). */
+/** A career high: the number, the season (by end year), the date (yyyymmdd) and the opponent (its Basketball Reference code today). */
+export type SeedHigh = [v: number, season: number, date: number, opp: string];
+
+/**
+ * A player's impact going into a season (scripts/data/games/impact.ts): points per 100 possessions
+ * his team gains with him on the floor, at each end and in all, from seven seasons of play-by-play
+ * lineups and his box line, aged to the season; and the minutes a game behind it.
+ */
 export interface SeedProjection {
   season: number;
   mpg: number;
-  oepm: number;
-  depm: number;
-  epm: number;
+  off: number;
+  def: number;
+  tot: number;
 }
 
 export interface SeedInjury {
@@ -175,6 +185,18 @@ function onRookieScale(sp: SeedPlayer, season: number): boolean {
   return season + c.salaries.length - 1 <= sp.draft.year + 4 && c.salaries[0] >= scale * 0.85;
 }
 
+/** A seeded player's real career highs as the record book keeps them: on their season's calendar, with no game in this league to open. */
+function seedHighs(h: NonNullable<SeedPlayer['highs']>): NonNullable<Player['highs']> {
+  const out: NonNullable<Player['highs']> = {};
+  for (const [k, [v, season, date, opp]] of Object.entries(h) as [RecStat, SeedHigh][]) {
+    const tid = BBREF_TO_TID[opp];
+    if (tid === undefined) continue;
+    const day = Math.round((Date.UTC(Math.floor(date / 10000), (Math.floor(date / 100) % 100) - 1, date % 100) - Date.UTC(season - 1, 9, 20)) / 86_400_000);
+    out[k] = [v, season, day, tid, -1];
+  }
+  return out;
+}
+
 /** Basketball Reference lists every number a player wore in a season ("6, 9"): the latest is his. */
 const lastNumber = (jersey: string) => jersey.split(',').pop()!.trim();
 
@@ -211,6 +233,7 @@ function seedToPlayer(sp: SeedPlayer, pid: number, season: number, rng: Rng, fir
       ? { jerseys: Object.fromEntries(Object.entries(sp.jerseys).flatMap(([team, j]) => (BBREF_TO_TID[team] === undefined ? [] : [[BBREF_TO_TID[team], lastNumber(j)]]))) }
       : {}),
     ...(sp.proj ? { proj: { ...sp.proj } } : {}),
+    ...(sp.highs ? { highs: seedHighs(sp.highs) } : {}),
     injury: null,
     injuryCount: 0,
     training: 'balanced',
@@ -303,6 +326,7 @@ export function createLeague(opts: CreateOpts): League {
     faDay: 30,
     startSeason: season,
     ...(opts.seed?.careersFrom !== undefined && opts.seed.players.length ? { careersFrom: opts.seed.careersFrom } : {}),
+    ...(opts.seed?.players.some((p) => p.highs) ? { realHighs: true } : {}),
   };
   teams[opts.userTid].coach.name = opts.coachName;
   // no two head coaches share a name (drawn from 900, a third of leagues had two, and Coach of the

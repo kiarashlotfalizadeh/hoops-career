@@ -1,16 +1,21 @@
-// Build src/data/seed.json from cached Basketball Reference pages (run data:fetch first).
+// Build src/data/seed.json from the game files and cached Basketball Reference pages (put the game
+// files in data/raw/games and run data:fetch first).
 //
-// Inputs: per-game + advanced tables for 2023-24, 2024-25, 2025-26 (ratings) and every season
-// back to 2003-04 (careers on record, see careers.ts); the current contracts table (who plays where
-// in 2026-27 and their salaries); team roster pages (height, weight, birth date, jersey, country,
-// college, and the numbers players wore at franchises they've left); draft pages (draft slot);
-// NBA.com play-by-play and college box scores; the opening-night extras; Dunks & Threes' EPM
-// projection for the seed season (data/epm/projection/, see epm-projection.ts), without which the
-// build fails. Every input is pinned by content in data/seed-inputs.json (inputs.ts): a build from
-// other files fails unless run with --update-lock, so a rebuild reproduces the seed exactly.
+// Inputs: the game files (games/sources.ts): every game's box score per player and its play-by-play
+// since 1996-97, which give every real season on record (regular season and playoffs, each line's
+// totals, starts, plus-minus, on-court points and usage, and shots by zone), the play-by-play profiles
+// of the three stat seasons (2023-24 to 2025-26: shot zones and creation, true rebounding, defense)
+// and each player's impact (games/impact.ts); Basketball Reference's per-game and advanced tables back
+// to 2003-04 (positions, ages, matching NBA.com's players to its ids, and advanced numbers: PER, win
+// shares, box plus-minus), the current contracts table (who plays where in 2026-27 and their
+// salaries), team roster pages (height, weight, birth date, jersey, country, college, and the numbers
+// players wore at franchises they've left) and draft pages (draft slot); NBA.com matchup archives and
+// college box scores; the opening-night extras. Every input is pinned by content in
+// data/seed-inputs.json (inputs.ts): a build from other files fails unless run with --update-lock, so
+// a rebuild reproduces the seed exactly.
 //
 // Ratings are derived from the evidence (derive.ts), then calibrated in the engine against two
-// targets together (calibrate.ts): each player's real line (his style) and his projected EPM (his
+// targets together (calibrate.ts): each player's real line (his style) and his projected impact (his
 // value, what his team gains with him on the floor in simulated games).
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -31,12 +36,12 @@ import {
 } from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
 import { VALUE_BAND, calibrate, valueWeights, type CalibReport, type ValueTarget } from './calibrate';
-import { buildNbaProfile } from './nba/build';
+import { IMPACT_SEASONS, buildNbaProfile } from './nba/build';
 import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
 import { collegePop, collegeRatings, findCollege, loadCollege } from './nba/college';
 import { refreshPlayerDerived } from '../../src/core/playerGen';
-import type { Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
+import type { PlayerStats, Pos, RatingKey, Ratings, Tendencies } from '../../src/core/types';
 import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { RATING_KEYS, buildOvrScale, ovrRaw, shiftToOvr, toDisplay } from '../../src/core/ratings';
@@ -46,9 +51,13 @@ import { COMBINED, inferPosition, statsPosition } from './positions';
 import { applyExtras } from './extra/index';
 import { tuneStarUsage } from './starUsage';
 import { EXTRA_RAW } from './extra/sources';
-import { PROJ_DIR, loadProjection, projectionByBbref, projectionNote, type EpmProjection } from './epm-projection';
 import { pinInputs } from './inputs';
-import { byId, formerNumbers, historyLines, loadSeasons, realLine, seedIds } from './careers';
+import { byId, formerNumbers, historyLines, loadSeasons, seedIds } from './careers';
+import { GAMES_RAW, lineKey } from './games/sources';
+import { readBoxScores, type BoxData, type BoxLine } from './games/boxscores';
+import { pbpFile, readPlayByPlay, type PbpData } from './games/playbyplay';
+import { IMPACT_WEIGHTS, agedImpact, estimateImpact, type Impact } from './games/impact';
+import { franchiseCodes, franchiseOf, matchPlayers, perGameRow, seedLine } from './games/lines';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -67,7 +76,7 @@ async function main() {
   const update = process.argv.includes('--update-lock');
   let pins: ReturnType<typeof pinInputs>;
   try {
-    pins = pinInputs({ raw: RAW, nba: NBA_RAW, extra: EXTRA_RAW, projection: PROJ_DIR }, SEED_SEASON, { update, today: () => new Date().toISOString().slice(0, 10) });
+    pins = pinInputs({ raw: RAW, games: GAMES_RAW, nba: NBA_RAW, extra: EXTRA_RAW }, SEED_SEASON, { update, today: () => new Date().toISOString().slice(0, 10) });
   } catch (e) {
     console.error((e as Error).message);
     process.exit(1);
@@ -158,33 +167,114 @@ async function main() {
     return page.find((r) => r.id === id);
   };
 
-  // NBA.com play-by-play profiles (shot zones, creation, defense, RAPM), if downloaded
-  let pbpById = new Map<string, PbpAgg>();
-  let prof: Awaited<ReturnType<typeof buildNbaProfile>> | null = null;
-  if (existsSync(join(NBA_RAW, `cdnnba_${STAT_SEASONS[STAT_SEASONS.length - 1] - 1}.tar.xz`))) {
-    console.log('NBA.com play-by-play:');
-    prof = await buildNbaProfile();
-    pbpById = profilesByBbref(
-      prof,
-      perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
-    );
-  } else console.log('NBA.com play-by-play not found (npm run data:fetch-nba); using box scores only');
-
-  // Dunks & Threes' projection for the seed season (the calibration's value target), matched through
-  // the play-by-play crosswalk's NBA.com ids, else by name and team (now, from the contracts, and in
-  // the stat seasons)
-  let projRows: EpmProjection[];
+  // the game files: every line on record, each line's shots and starts, the stat seasons' lineups and
+  // play-by-play profiles, and every player's impact
+  console.log('game files:');
+  let box: BoxData;
+  // (without the play-by-play, as the offline fixture builds: no shots by zone, starts only where the
+  // box scores mark them, no play-by-play profiles and no impact, so no value targets)
+  let pbp: PbpData | null = null;
   try {
-    projRows = loadProjection(SEED_SEASON);
+    box = await readBoxScores(SEED_SEASON);
+    if (pbpFile()) pbp = await readPlayByPlay(IMPACT_SEASONS, FIRST_SEASON, SEED_SEASON);
   } catch (e) {
     console.error((e as Error).message);
     process.exit(1);
   }
-  const projById = projectionByBbref(
-    projRows,
-    [...contracts.map((c) => ({ id: c.id, name: c.name, season: SEED_SEASON, team: c.team })), ...perGame.map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team }))],
-    new Map<number, string>([...pbpById].map(([id, b]) => [b.nbaId, id])),
+  if (pbp)
+    console.log(`  opening fives read whole in ${pbp.starters.whole} of ${pbp.starters.games} games (the games started of the seasons whose box scores don't mark starters)`);
+  else console.warn(`  no play-by-play in ${GAMES_RAW}: box scores only (no shot zones, play-by-play profiles or impact)`);
+  const codes = franchiseCodes(box);
+  const nbaToBbref = matchPlayers(
+    box,
+    [
+      ...[...history.perGame, ...perGame].map((r) => ({ id: r.id, name: r.name, season: r.season, team: r.team })),
+      ...contracts.map((c) => ({ id: c.id, name: c.name, season: SEED_SEASON, team: c.team })),
+    ],
+    codes,
+    FIRST_SEASON,
   );
+  const nbaOf = new Map([...nbaToBbref].map(([pid, id]) => [id, pid]));
+  const linesById = new Map<string, BoxLine[]>();
+  for (const l of box.lines) {
+    const id = l.season >= FIRST_SEASON ? nbaToBbref.get(l.pid) : undefined;
+    if (id) (linesById.get(id) ?? linesById.set(id, []).get(id)!).push(l);
+  }
+  const impact = pbp
+    ? estimateImpact(
+        IMPACT_SEASONS.flatMap((s) => [pbp!.full[`${s}|reg`], pbp!.full[`${s}|post`]].filter((x) => x)),
+        box.lines.filter((l) => IMPACT_WEIGHTS[l.season]),
+      ).impact
+    : new Map<number, Impact>();
+  const pbpById = pbp ? profilesByBbref(await buildNbaProfile(pbp), nbaToBbref) : new Map<string, PbpAgg>();
+  /** Minutes a game behind his impact (regular seasons, weighted as the estimate weighs them). */
+  const impactMpg = (pid: number) => {
+    let min = 0;
+    let gp = 0;
+    for (const l of box.lines)
+      if (l.pid === pid && l.part === 'reg' && IMPACT_WEIGHTS[l.season]) {
+        min += l.min * IMPACT_WEIGHTS[l.season];
+        gp += l.gp * IMPACT_WEIGHTS[l.season];
+      }
+    return gp ? min / gp : 0;
+  };
+
+  /**
+   * His regular-season rows of the stat seasons as the ratings read them: the box scores' lines, one
+   * per team (his age and position from Basketball Reference's row of the season), else Basketball
+   * Reference's own (its combined row when he changed teams).
+   */
+  const statRows = (id: string): PerGameRow[] => {
+    const rows = pgById.get(id) ?? [];
+    const lines = (linesById.get(id) ?? []).filter((l) => l.part === 'reg');
+    const out: PerGameRow[] = [];
+    for (const s of STAT_SEASONS) {
+      const sr = rows.filter((r) => r.season === s);
+      const bl = lines.filter((l) => l.season === s);
+      const any = sr[0] ?? rows[0];
+      if (bl.length && any) {
+        for (const l of bl) {
+          const code = codes.get(l.teamId)!;
+          const like = sr.find((r) => franchiseOf(r.team) === code) ?? sr.find((r) => !COMBINED.test(r.team)) ?? { ...any, age: any.age + s - any.season };
+          out.push(perGameRow(l, code, like));
+        }
+        continue;
+      }
+      const comb = sr.find((r) => COMBINED.test(r.team));
+      if (comb) out.push(comb);
+      else out.push(...sr);
+    }
+    return out;
+  };
+  /**
+   * His career on record, oldest first: each season's lines from the box scores (regular season, then
+   * postseason; Basketball Reference's advanced numbers on the regular season's), or, for a season
+   * they don't have him in, Basketball Reference's regular-season rows.
+   */
+  const careerStats = (id: string): PlayerStats[] => {
+    const lines = linesById.get(id) ?? [];
+    const pg = [...(histById.get(id) ?? []), ...(pgById.get(id) ?? [])];
+    const adv = [...(histAdvById.get(id) ?? []), ...(advById.get(id) ?? [])];
+    const out: PlayerStats[] = [];
+    for (let s = FIRST_SEASON; s < SEED_SEASON; s++) {
+      const bl = lines.filter((l) => l.season === s).sort((a, b) => (a.part === b.part ? a.first - b.first : a.part === 'reg' ? -1 : 1));
+      if (!bl.length) {
+        out.push(
+          ...historyLines(
+            pg.filter((r) => r.season === s),
+            adv.filter((r) => r.season === s),
+          ),
+        );
+        continue;
+      }
+      for (const l of bl) {
+        const code = codes.get(l.teamId)!;
+        const a = l.part === 'reg' ? adv.find((x) => x.season === s && franchiseOf(x.team) === code) : undefined;
+        out.push(seedLine(l, code, pbp?.lines[lineKey(l.pid, s, l.teamId, l.part)], box.startsListed[`${s}|${l.part}`] ?? false, a));
+      }
+    }
+    return out;
+  };
 
   // college production for rookies and recent draftees
   const college = await loadCollege(NBA_RAW);
@@ -194,15 +284,7 @@ async function main() {
   // aggregate stats
   const aggs = new Map<string, Agg>();
   for (const id of ids) {
-    const rows = pgById.get(id) ?? [];
-    // use the combined row when a player changed teams mid-season; otherwise the single row
-    const forAgg: PerGameRow[] = [];
-    for (const s of STAT_SEASONS) {
-      const sr = rows.filter((r) => r.season === s);
-      const comb = sr.find((r) => COMBINED.test(r.team));
-      if (comb) forAgg.push(comb);
-      else forAgg.push(...sr);
-    }
+    const forAgg = statRows(id);
     const advRows: AdvRow[] = [];
     for (const s of STAT_SEASONS) {
       const sr = (advById.get(id) ?? []).filter((r) => r.season === s);
@@ -276,27 +358,17 @@ async function main() {
       ratings = pr.r;
       tend = pr.tend;
     }
-    const nbaId = pbpById.get(id)?.nbaId;
-    const seasonFga = (s: number) => rows.filter((r) => r.season === s && !COMBINED.test(r.team)).reduce((a, r) => a + r.fga * r.g, 0);
-    const recent = rows
-      .filter((r) => !COMBINED.test(r.team))
-      .map((r) => {
-        // real shot locations from NBA.com, split across teams by shot volume
-        const sp = nbaId && prof ? prof.players[prof.seasons.indexOf(r.season)]?.[nbaId] : undefined;
-        const share = sp ? (r.fga * r.g) / Math.max(1, seasonFga(r.season)) : 0;
-        const zn = (x: number) => Math.round(x * share);
-        return realLine(
-          r,
-          (advById.get(id) ?? []).find((x) => x.season === r.season && x.team === r.team),
-          sp ? { rimM: zn(sp.fgm.rim), rimA: zn(sp.fga.rim), midM: zn(sp.fgm.mid), midA: zn(sp.fga.mid) } : undefined,
-        );
-      });
-    // his career before the stat seasons: on record, not in his ratings
+    const nbaId = nbaOf.get(id);
+    // his whole career on record; only the stat seasons reach his ratings
+    const stats = careerStats(id);
     const past = histById.get(id) ?? [];
-    const stats = [...historyLines(past, histAdvById.get(id) ?? []), ...recent];
     const jerseys = formerNumbers([...past, ...rows], c?.team ?? null, (team, season) => rosterRow(id, team, season));
     const lastOpt = c?.options[c.options.length - 1];
-    const pr = projById.get(id);
+    // his impact going into the season, with a sample worth a value target
+    const imp = nbaId !== undefined ? impact.get(nbaId) : undefined;
+    // his regular-season career highs, from every game he has played
+    const highs = nbaId !== undefined ? seedHighs(box.highs[nbaId], codes) : undefined;
+    const pr = imp && imp.poss >= PROJ_POSS ? agedImpact(imp, SEED_SEASON, age) : undefined;
     if (!fivePos) inferredPos.set(players.length, label);
     const sp: SeedPlayer = {
       id,
@@ -317,7 +389,8 @@ async function main() {
       tend,
       stats,
       ...(Object.keys(jerseys).length ? { jerseys } : {}),
-      ...(pr ? { proj: { season: pr.season, mpg: r1(pr.mpg), oepm: r1(pr.off), depm: r1(pr.def), epm: r1(pr.tot) } } : {}),
+      ...(pr ? { proj: { season: SEED_SEASON, mpg: r1(impactMpg(nbaId!)), off: r1(pr.off), def: r1(pr.def), tot: r1(pr.off + pr.def) } } : {}),
+      ...(highs ? { highs } : {}),
     };
     if (agg && agg.rawMin >= 300) targets.push({ idx: players.length, agg, rel });
     players.push(sp);
@@ -330,7 +403,7 @@ async function main() {
   );
   const unlisted = players.filter((p) => p.team && !p.proj);
   console.log(
-    `EPM projection: ${players.filter((p) => p.proj).length} seed players listed${unlisted.length ? `; under contract but not listed (no value target, leveled by minutes or draft slot): ${unlisted.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}` : ''}`,
+    `impact: ${players.filter((p) => p.proj).length} seed players with a value target${unlisted.length ? `; under contract without one (too few NBA possessions: leveled by minutes or draft slot): ${unlisted.length}, ${unlisted.filter((p) => p.stats.some((s) => s.real && s.gp > 0)).length} of them with NBA games` : ''}`,
   );
   const noBio = players.filter((p) => p.team && !rosterById.has(p.id));
   if (noBio.length) console.warn(`  under contract but on no roster page (size, age and country estimated): ${noBio.map((p) => `${p.first} ${p.last} (${p.team})`).join(', ')}`);
@@ -360,7 +433,7 @@ async function main() {
     version: 1,
     generated: pins.pinned,
     inputs: pins.id,
-    source: `Basketball Reference: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)} per-game & advanced (ratings from ${seasonLabel(STAT_SEASONS[0])}); current contracts; ${projectionNote(SEED_SEASON)}`,
+    source: `NBA.com box scores and play-by-play: ${seasonLabel(FIRST_SEASON)} to ${seasonLabel(SEED_SEASON - 1)}, regular seasons and playoffs (ratings from ${seasonLabel(STAT_SEASONS[0])}, impact from ${seasonLabel(IMPACT_SEASONS[0])}); Basketball Reference: positions, advanced stats, bios, drafts and current contracts`,
     season: SEED_SEASON,
     careersFrom: FIRST_SEASON,
     players,
@@ -376,12 +449,12 @@ async function main() {
     const pid = pidByIdx.get(t.idx);
     if (pid !== undefined) tmap.set(pid, { agg: t.agg, rel: t.rel });
   }
-  // value targets: every listed player's projected EPM, moving the skills his derived ratings say carry it
+  // value targets: every player's projected impact, moving the skills his derived ratings say carry it
   const value = new Map<number, ValueTarget>();
   for (const [idx, pid] of pidByIdx) {
     const pr = players[idx].proj;
     const r = league.players[pid].ratings;
-    if (pr) value.set(pid, { off: pr.oepm, def: pr.depm, from: { ...r }, ...valueWeights(r) });
+    if (pr) value.set(pid, { off: pr.off, def: pr.def, from: { ...r }, ...valueWeights(r) });
   }
   console.log(`calibrating ${tmap.size} players' style and ${value.size} players' value in the engine…`);
   calibrate(league, tmap, value, PASSES);
@@ -396,7 +469,7 @@ async function main() {
     }
   }
 
-  // (players the projection lists have their level from it: only the rest are leveled by minutes)
+  // (players with a value target have their level from it: only the rest are leveled by minutes)
   levelPlayers(players, aggs, levelTargets, true);
   // leveling moves role players' skills, which shifts usage around them: settle again
   for (const [idx, pid] of pidByIdx) league.players[pid].ratings = { ...players[idx].ratings };
@@ -415,14 +488,15 @@ async function main() {
   // how far value moved each skill from the evidence, and how many it took to the edge of the band
   const projected = [...pidByIdx].filter(([idx, pid]) => value.has(pid) && players[idx].team);
   const moved = (k: RatingKey) => projected.map(([idx, pid]) => players[idx].ratings[k] - value.get(pid)!.from[k]);
-  console.log(
-    `value moves from the evidence (rostered players): ${(['oiq', 'diq', 'perD', 'intD', 'blk'] as const)
-      .map(
-        (k) =>
-          `${k} ${(moved(k).reduce((a, d) => a + Math.abs(d), 0) / projected.length).toFixed(1)} on average, ${moved(k).filter((d) => Math.abs(d) > VALUE_BAND - 0.5).length} at ±${VALUE_BAND}`,
-      )
-      .join('; ')}`,
-  );
+  if (projected.length)
+    console.log(
+      `value moves from the evidence (rostered players): ${(['oiq', 'diq', 'perD', 'intD', 'blk'] as const)
+        .map(
+          (k) =>
+            `${k} ${(moved(k).reduce((a, d) => a + Math.abs(d), 0) / projected.length).toFixed(1)} on average, ${moved(k).filter((d) => Math.abs(d) > VALUE_BAND - 0.5).length} at ±${VALUE_BAND}`,
+        )
+        .join('; ')}`,
+    );
 
   // positions inferred from ratings follow the calibrated ratings
   for (const [idx, label] of inferredPos) players[idx].pos = inferPosition(label, players[idx].heightIn, players[idx].ratings);
@@ -458,14 +532,15 @@ async function main() {
       ).toFixed(3)} over ${rr.length} players`,
     );
   const re = players.filter((p) => p.team && p.proj && p.proj.mpg >= 15);
-  console.log(
-    `OVR vs projected EPM correlation (15+ projected min): ${pearson(
-      re.map((p) => toDisplay(ovrRaw(p.ratings), finalScale)),
-      re.map((p) => p.proj!.epm),
-    ).toFixed(3)} over ${re.length} players`,
-  );
+  if (re.length)
+    console.log(
+      `OVR vs projected impact correlation (15+ min): ${pearson(
+        re.map((p) => toDisplay(ovrRaw(p.ratings), finalScale)),
+        re.map((p) => p.proj!.tot),
+      ).toFixed(3)} over ${re.length} players`,
+    );
   const last = settle[settle.length - 1] as CalibReport;
-  if (value.size) console.log(`value: mean miss ${last.err.valOff.toFixed(2)} offense, ${last.err.valDef.toFixed(2)} defense (points per 100, simulated RAPM vs projected EPM)`);
+  if (value.size) console.log(`value: mean miss ${last.err.valOff.toFixed(2)} offense, ${last.err.valDef.toFixed(2)} defense (points per 100, simulated RAPM vs projected impact)`);
   const top = [...players]
     .map((p) => ({ n: `${p.first} ${p.last}`, ovr: toDisplay(ovrRaw(p.ratings), finalScale), t: p.team }))
     .sort((a, b) => b.ovr - a.ovr)
@@ -504,6 +579,17 @@ async function main() {
   console.log(`wrote ${OUT} (${(JSON.stringify(seed).length / 1e6).toFixed(2)} MB)`);
 }
 
+/** A player's career highs as the seed keeps them, the opponent by its franchise code (none without a game). */
+function seedHighs(h: BoxData['highs'][number] | undefined, codes: Map<number, string>): SeedPlayer['highs'] {
+  if (!h) return undefined;
+  const out: NonNullable<SeedPlayer['highs']> = {};
+  for (const [k, [v, season, date, , opp]] of Object.entries(h) as [keyof typeof h, NonNullable<(typeof h)[keyof typeof h]>][]) {
+    const code = codes.get(opp);
+    if (code) out[k] = [v, season, date, code];
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
   const age = SEED_SEASON - sp.bornYear;
@@ -525,7 +611,7 @@ function priorOvr(sp: SeedPlayer): number {
  * the player's minutes per game, with weight minutes / (minutes + 500), so a hot 1,500-minute
  * stretch counts for less than three full seasons. Targets are fixed on first sight; later
  * passes only re-hit them as the display scale moves. Before calibration this is where every
- * small sample starts; after it, a player the projection lists keeps the level his value
+ * small sample starts; after it, a player with a value target keeps the level his value
  * calibration gave him.
  */
 function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Map<string, number>, calibrated: boolean) {
@@ -598,6 +684,8 @@ const SETTLE = [
 ];
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
+/** Weighted possessions of play-by-play a player needs for his impact to be his value target (about ten full games, recently). */
+const PROJ_POSS = 1000;
 
 function r3(x: number) {
   return Math.round(x * 1000) / 1000;

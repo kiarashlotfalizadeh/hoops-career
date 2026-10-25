@@ -17,7 +17,9 @@ export function useStatSeason(league: League) {
   const season = seasons.some((s) => s.season === Number(seasonStr)) ? Number(seasonStr) : fallback;
   const [po, setPo] = useQueryParam<'reg' | 'po'>('po', 'reg', ['reg', 'po']);
   const real = seasons.find((s) => s.season === season)?.real ?? false;
-  return { seasons, season, setSeason: (s: number) => setSeasonStr(String(s)), fallback, po, setPo, real };
+  // (a real season's playoffs, when the seed has its playoff lines)
+  const types = !real || !!seasons.find((s) => s.season === season)?.post;
+  return { seasons, season, setSeason: (s: number) => setSeasonStr(String(s)), fallback, po: types ? po : ('reg' as const), setPo, real, types };
 }
 
 export type StatSeason = ReturnType<typeof useStatSeason>;
@@ -35,10 +37,10 @@ export function SeasonSelect({ s }: { s: StatSeason }) {
   );
 }
 
-/** Regular season or playoffs; an imported real-life season has no playoff stats. */
+/** Regular season or playoffs; a real season from a seed without its playoff lines has only the regular season. */
 export function TypeSelect({ s }: { s: StatSeason }) {
   return (
-    <select className="lg-select" value={s.real ? 'reg' : s.po} onChange={(e) => s.setPo(e.target.value as 'reg' | 'po')} aria-label="Season type" disabled={s.real}>
+    <select className="lg-select" value={s.po} onChange={(e) => s.setPo(e.target.value as 'reg' | 'po')} aria-label="Season type" disabled={!s.types}>
       <option value="reg">Regular season</option>
       <option value="po">Playoffs</option>
     </select>
@@ -47,7 +49,7 @@ export function TypeSelect({ s }: { s: StatSeason }) {
 
 /** The season a view reads, as one quiet line over it ("2026-27 · Regular season ⌄") that opens the season and its type in a sheet. `types` false for a view kept for the regular season only. */
 export function SeasonPicker({ s, types = true }: { s: StatSeason; types?: boolean }) {
-  const po = types && s.po === 'po' && !s.real;
+  const po = types && s.po === 'po';
   const parts = [seasonLabel(s.season), ...(types ? [po ? 'Playoffs' : 'Regular season'] : []), ...(s.real ? ['Real'] : [])];
   return (
     <PickerLine parts={parts} title="Season" label={`Season: ${parts.join(', ')}. Change`}>

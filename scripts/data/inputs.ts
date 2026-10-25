@@ -1,8 +1,8 @@
-// Every file the seed is built from, pinned by content (data/seed-inputs.json): the Basketball
-// Reference pages, the NBA.com play-by-play and college archives, the opening-night extras and the
-// EPM projection. data:build checks its inputs against the pins before it starts and fails on any
+// Every file the seed is built from, pinned by content (data/seed-inputs.json): the game files (box
+// scores and play-by-play), the Basketball Reference pages, the NBA.com matchup and college archives
+// and the opening-night extras. data:build checks its inputs against the pins before it starts and fails on any
 // file added, changed or missing, so a rebuild from the pinned files reproduces the seed exactly (the
-// build is deterministic: seeded simulations, no clock). New inputs (a refetch, a new projection)
+// build is deterministic: seeded simulations, no clock). New inputs (a refetch, new game files)
 // are taken on purpose: `npm run data:build -- --update-lock` pins what is there and builds from it.
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -19,8 +19,8 @@ export interface InputLock {
 /** The lock: data/seed-inputs.json, or seed-inputs.json inside HC_RAW_DIR for an offline fixture build. */
 export const LOCK_PATH = process.env.HC_INPUT_LOCK ?? (process.env.HC_RAW_DIR ? join(process.env.HC_RAW_DIR, 'seed-inputs.json') : join(process.cwd(), 'data', 'seed-inputs.json'));
 
-/** What the build writes next to its inputs (parsed play-by-play caches, the profile kept for inspection), and the lock itself: not inputs. */
-const NOT_INPUT = /^(pbp|matchups)_\d+\.json$|^nba_profile\.json$|^seed-inputs\.json$|^\.DS_Store$/;
+/** What the build writes next to its inputs (parsed caches, the profile kept for inspection), and the lock itself: not inputs. */
+const NOT_INPUT = /^matchups_\d+\.json$|^cache_.+\.json$|^nba_profile\.json$|^seed-inputs\.json$|^\.DS_Store$/;
 
 /** Each file under each root, as `${root name}/${path}` → its SHA-256 (a root nested in another is listed once, under its own name). */
 export function hashInputs(roots: Record<string, string>): Record<string, string> {

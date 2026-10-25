@@ -414,9 +414,10 @@ export default function Settings() {
                   <div className="col small dim2" style={{ gap: 8 }}>
                     <p className="set-p">
                       Rosters and salaries come from Basketball Reference's contracts page; the 2026-27 schedule and NBA Cup groups from NBA.com, future pick ownership from RealGM
-                      and opening-night injuries from ESPN's injury report. Ratings are built from 2023-24 to 2025-26 per-game and advanced stats (Basketball Reference), NBA.com
-                      play-by-play, lineup and matchup data (shot zones, shot creation, adjusted plus-minus), and college box scores for rookies, then calibrated in the engine.
-                      Fictional leagues use generated players.
+                      and opening-night injuries from ESPN's injury report. Every real season since 2003-04, playoffs and career highs included, comes from NBA.com box scores and
+                      play-by-play; ratings are built from the 2023-24 to 2025-26 ones (shot zones, shot creation, lineups, matchups), Basketball Reference's advanced stats and
+                      college box scores for rookies, then calibrated in the engine to each player's real line and to his impact over seven seasons of lineups. Fictional leagues
+                      use generated players.
                     </p>
                     <p className="set-p tiny dim">Team marks are original monograms in public team colors. Not affiliated with the NBA or its teams.</p>
                   </div>

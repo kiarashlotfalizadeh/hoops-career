@@ -35,8 +35,8 @@ export function StatsTab({ league }: { league: League }) {
 }
 
 function SeasonStats({ league, view, s }: { league: League; view: Exclude<View, 'ratings'>; s: StatSeason }) {
-  // team stats are kept for the regular season only; imported seasons have no playoff lines
-  const playoffs = s.po === 'po' && view !== 'teams' && !s.real;
+  // team stats are kept for the regular season only (s.po is the regular season's for a real season without playoff lines)
+  const playoffs = s.po === 'po' && view !== 'teams';
   const rows = useSeasonRows(league, s.season, playoffs);
   return (
     <>

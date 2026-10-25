@@ -1,14 +1,19 @@
 # Builds src/data/seed.json on GitHub's runners (open network): Basketball Reference pages
-# (contracts, rosters, bios, box scores and careers back to 2003-04; ~200 pages at 1 request / 3.7 s) plus NBA.com
-# play-by-play / matchup archives and ESPN college box scores from public GitHub datasets, and
-# the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries, two-way
-# contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only)
-# and then starts the CI and Android APK workflows on it, and stores the Basketball Reference
-# pages and the extras as a tarball on the `data-raw` branch (the GitHub datasets re-download fast;
+# (contracts, rosters, bios, positions, advanced stats and careers back to 2003-04; ~200 pages at 1
+# request / 3.7 s) plus NBA.com matchup archives and ESPN college box scores from public GitHub
+# datasets, and the opening-night extras (NBA.com schedule, RealGM pick ownership, ESPN injuries,
+# two-way contracts). Calibrates ratings in the engine, commits the seed to main (runs from main only)
+# and then starts the CI and Android APK workflows on it, and stores the Basketball Reference pages
+# and the extras as a tarball on the `data-raw` branch (the GitHub datasets re-download fast;
 # data/seed-inputs.json, committed with the seed, pins every input by content, so a rebuild from
-# that tarball, the same archives and the committed projection reproduces the seed exactly). With
+# that tarball, the same archives and the same game files reproduces the seed exactly). With
 # `extras_only`, it just refreshes the extras in the current seed. A successful build uploads the
 # seed as an artifact.
+#
+# A full build also needs the game files (every game's box scores and play-by-play since 1996-97,
+# data/raw/games/, ~1.4 GB), which nothing here downloads: it stops at once without them, so build
+# the seed locally (npm run data:build) and commit it, or put the files on the runner first. The
+# extras-only refresh doesn't need them.
 name: Build seed data
 on:
   workflow_dispatch:
@@ -47,6 +52,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check for the game files
+        if: ${{ !inputs.extras_only }}
+        run: |
+          if [ ! -f data/raw/games/PlayerStatisticsExtended.csv ]; then
+            echo "::error::A full seed build needs the game files in data/raw/games/ (PlayerStatisticsExtended.csv and PlayByPlay.parquet), which this workflow can't download: build the seed locally with npm run data:build, or run with extras_only."
+            exit 1
+          fi
       - name: Reuse previously fetched pages
         if: ${{ !inputs.extras_only && !inputs.refetch }}
         # fetch-depth 0 already fetched every branch, data-raw included
@@ -58,7 +70,7 @@ jobs:
       - name: Fetch Basketball Reference pages
         if: ${{ !inputs.extras_only }}
         run: npm run data:fetch -- --refresh
-      - name: Fetch NBA.com play-by-play and college data
+      - name: Fetch NBA.com matchup and college data
         if: ${{ !inputs.extras_only }}
         run: npm run data:fetch-nba
       # always fresh: the injury report changes hourly and pick ownership with every trade; --strict
@@ -69,7 +81,7 @@ jobs:
       - name: Archive raw pages
         id: archive
         if: ${{ !cancelled() && !inputs.extras_only }}
-        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
+        run: tar czf /tmp/data-raw.tgz --exclude=data/raw/nba --exclude=data/raw/games data/raw && ls -la /tmp/data-raw.tgz data/raw | head -100
       # allowed to fail so the fetched pages still reach data-raw below; the last step fails the run
       - name: Build seed (parse, derive, calibrate)
         id: build

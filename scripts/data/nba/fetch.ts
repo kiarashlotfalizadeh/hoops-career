@@ -1,4 +1,4 @@
-// Downloads the NBA.com play-by-play / matchup archives and college stats into data/raw/nba/.
+// Downloads the NBA.com matchup archives and college stats into data/raw/nba/.
 // Usage: npm run data:fetch-nba [-- --force]
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

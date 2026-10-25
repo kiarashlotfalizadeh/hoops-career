@@ -144,20 +144,23 @@ export function teamAbbrev(league: League, tid: number | null | undefined) {
 /**
  * All seasons with any player stats, newest first, plus the current season. Of the real seasons
  * before the league, the ones it has for everyone (RATED_SEASONS): the earlier ones on record are
- * only the careers of the players it began with, no league to rank.
+ * only the careers of the players it began with, no league to rank. `post`: a real season with
+ * playoff lines (a seed from the game files has them; one from before, only regular seasons).
  */
-export function statSeasons(league: League): { season: number; real: boolean }[] {
+export function statSeasons(league: League): { season: number; real: boolean; post?: true }[] {
   const real = new Map<number, boolean>();
+  const post = new Set<number>();
   real.set(league.season, false);
   for (const p of Object.values(league.players)) {
     for (const s of p.stats) {
       if (s.real && s.season < league.startSeason - RATED_SEASONS) continue;
+      if (s.real && s.playoffs) post.add(s.season);
       const prev = real.get(s.season);
       if (prev === undefined) real.set(s.season, !!s.real);
       else if (s.real && !prev) real.set(s.season, true);
     }
   }
-  return [...real.entries()].map(([season, r]) => ({ season, real: r })).sort((a, b) => b.season - a.season);
+  return [...real.entries()].map(([season, r]) => ({ season, real: r, ...(r && post.has(season) ? { post: true as const } : {}) })).sort((a, b) => b.season - a.season);
 }
 
 export interface Outcome {

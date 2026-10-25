@@ -175,13 +175,12 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     stat('ts', 'TS%', (t) => (t.fga || t.fta ? pg(t).tsPct : null), 'high', 'pct'),
     // a bigger role isn't a better player: usage is shown, not judged
     stat('usg', 'USG%', (t) => pg(t).usg, 'none', 'pct', 'Advanced'),
-    // imported seasons carry no plus-minus or on-court numbers, only their own advanced stats
+    // (a real season from a seed before the game files has no plus-minus or on-court numbers)
     stat('pm', '+/-', (t) => (t.real && !t.pm ? null : pg(t).pm), 'high', 'signed'),
     stat('net', 'Net on court', (t) => (t.onPoss ? pg(t).onOff : null), 'high', 'signed'),
-    // PER and win shares for a season played here too (worked out from its box score); BPM and EPM only for imported ones
+    // PER and win shares for a season played here too (worked out from its box score); BPM only for real ones
     row('per', 'PER', (p) => (lines.get(p) ? (advancedView(league, p, lines.get(p)!.tot)?.per ?? null) : null), 'high', 'f1'),
     stat('bpm', 'BPM', (t) => t.adv?.bpm ?? null, 'high', 'signed'),
-    stat('epm', 'EPM', (t) => t.adv?.epm ?? null, 'high', 'signed'),
     row('ws', 'Win shares', (p) => (lines.get(p) ? (advancedView(league, p, lines.get(p)!.tot)?.ws ?? null) : null), 'high', 'f1'),
   ];
 
@@ -244,7 +243,15 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
       rows: careerRows,
       empty: 'No NBA games yet.',
     },
-    { id: 'highs', title: 'Career highs', note: `Regular-season games since ${seasonLabel(since)}.`, rows: highs, empty: 'No games in this league yet.' },
+    {
+      id: 'highs',
+      title: 'Career highs',
+      note: league.realHighs
+        ? `Regular-season games: a real player's whole NBA career, anyone else's since ${seasonLabel(since)}.`
+        : `Regular-season games since ${seasonLabel(since)}.`,
+      rows: highs,
+      empty: 'No games in this league yet.',
+    },
     { id: 'honors', title: 'Honors', rows: honors, empty: 'No honors yet.' },
   ];
   // rows neither has a value for say nothing (PER and win shares between two simulated seasons)

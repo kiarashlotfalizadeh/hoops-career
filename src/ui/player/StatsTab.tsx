@@ -33,7 +33,7 @@ function seasonsOf(p: Player) {
   return rows.sort((a, b) => b.season - a.season || Number(a.playoffs) - Number(b.playoffs));
 }
 
-const ADV_KEYS = new Set(['per', 'bpm', 'epm', 'ws', 'ws48']);
+const ADV_KEYS = new Set(['per', 'bpm', 'ws', 'ws48']);
 
 export function StatsTab({ p, league }: { p: Player; league: League }) {
   const [po, setPo] = useState(false);
@@ -74,14 +74,13 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
     { key: 'usg', label: 'USG%', get: (r) => pg(r).usg, fmt: (v) => pct(v as number) },
     { key: 'per', label: 'PER', get: (r) => adv(r)?.per ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'bpm', label: 'BPM', get: (r) => r.tot.adv?.bpm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
-    { key: 'epm', label: 'EPM', get: (r) => r.tot.adv?.epm ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : signed(v as number)) },
     { key: 'ws', label: 'WS', get: (r) => adv(r)?.ws ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : f1(v as number)) },
     { key: 'ws48', label: 'WS/48', get: (r) => adv(r)?.ws48 ?? NaN, fmt: (v) => (isNaN(v as number) ? '—' : (v as number).toFixed(3)) },
-    // imported seasons carry no plus-minus: "—", not 0.0 (as in the league stats)
+    // a real season from a seed before the game files carries no plus-minus: "—", not 0.0 (as in the league stats)
     { key: 'pm', label: '+/-', get: (r) => (r.tot.real && !r.tot.pm ? NaN : pg(r).pm), fmt: (v) => signed(v as number) },
   ];
-  // the all-in-one numbers only where a season has them, as in the league stats: BPM and EPM come
-  // with imported seasons alone, and a season played here has no PER or win shares in the playoffs
+  // the all-in-one numbers only where a season has them, as in the league stats: BPM comes with real
+  // regular seasons alone, and no playoffs have PER or win shares
   const shown = cols.filter((c) => !ADV_KEYS.has(c.key) || rows.some((r) => Number.isFinite(c.get(r))));
   const real = p.stats.some((s) => s.real);
   return (
@@ -109,18 +108,19 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
         {real ? (
           <More label="“real” seasons and advanced stats">
             <p className="tm-more-p">
-              “real” seasons are imported from Basketball Reference, with EPM from Dunks & Threes for the last three; only they have BPM and EPM. PER and win shares for seasons
-              played in this league are worked out from their box scores the way Basketball Reference does (not in the playoffs). +/- is only kept for simulated seasons.
+              “real” seasons, regular season and playoffs, come from NBA.com&apos;s box scores, with games started and shots by zone from its play-by-play; their PER, win shares
+              and BPM are Basketball Reference&apos;s (regular seasons only), and only they have BPM. PER and win shares for seasons played in this league are worked out from their
+              box scores the way Basketball Reference does (not in the playoffs).
             </p>
           </More>
         ) : (
           'PER and win shares come from each box score, as Basketball Reference works them (not in the playoffs).'
         )}
       </div>
-      {!po && p.proj?.season === league.season && (
+      {!po && p.proj?.season === league.season && p.proj.tot !== undefined && (
         <div className="tm-foot">
-          Projected for {seasonLabel(p.proj.season)} by Dunks & Threes: {signed(p.proj.epm)} EPM ({signed(p.proj.oepm)} offense, {signed(p.proj.depm)} defense) in{' '}
-          {Math.round(p.proj.mpg)} minutes a game. His ratings lean on it most of all.
+          Impact going into {seasonLabel(p.proj.season)}: {signed(p.proj.tot)} points per 100 possessions ({signed(p.proj.off!)} offense, {signed(p.proj.def!)} defense), from his
+          teams&apos; lineups over seven seasons and his box line ({Math.round(p.proj.mpg)} minutes a game), aged a year. His ratings make him worth that in the engine.
         </div>
       )}
       {!po && <CareerHighs p={p} league={league} />}
@@ -134,7 +134,8 @@ function CareerHighs({ p, league }: { p: Player; league: League }) {
   if (!highs || !Object.keys(highs).length) return null;
   const since = league.records?.since ?? league.startSeason;
   const first = Math.min(...p.stats.filter((s) => !s.real).map((s) => s.season));
-  const whole = !p.stats.some((s) => s.real) && careerOnRecord(league, p) && first >= since;
+  // (a real player's are his whole career's when the seed brought them)
+  const whole = (p.real && !!league.realHighs) || (!p.stats.some((s) => s.real) && careerOnRecord(league, p) && first >= since);
   const stored = new Set(league.games.map((g) => g.gid));
   return (
     <Section title={whole ? 'Career highs' : since >= league.season ? 'Highs this season' : `Highs since ${seasonLabel(since)}`}>

@@ -1,7 +1,7 @@
 // What a player is worth on the floor in simulated games: the points per 100 possessions his team
 // scores and keeps off the board with him on it, adjusted for the other nine on the floor (ridge-
-// regressed plus-minus, RAPM, which Dunks & Threes' EPM is built on). calibrate.ts fits it against
-// his projected EPM.
+// regressed plus-minus, RAPM, as his real impact is measured: games/impact.ts). calibrate.ts fits it
+// against his projected impact.
 import type { Stint } from '../../src/core/sim/engine';
 
 /** A player's simulated on-court value, points per 100 possessions above the league's, at each end (defense: points kept off). */

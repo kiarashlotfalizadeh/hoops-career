@@ -123,7 +123,7 @@ export interface PlayerStats {
   season: number;
   tid: number;
   playoffs: boolean;
-  /** True for real seed seasons imported from Basketball Reference. */
+  /** True for real seasons a seeded player arrives with (from NBA.com's box scores, or Basketball Reference's tables in a seed from before them). */
   real?: boolean;
   gp: number;
   gs: number;
@@ -143,7 +143,7 @@ export interface PlayerStats {
   pf: number;
   pts: number;
   pm: number; // plus/minus
-  // shot zones (simulated seasons only)
+  // shot zones (simulated seasons, and real ones from the play-by-play)
   rimM: number;
   rimA: number;
   midM: number;
@@ -171,10 +171,6 @@ export interface PlayerStats {
     dbpm: number;
     bpm: number;
     vorp: number;
-    /** Dunks & Threes EPM (offense, defense, total), the season's across his teams, for seeds built with it. */
-    oepm?: number;
-    depm?: number;
-    epm?: number;
   };
 }
 
@@ -274,8 +270,12 @@ export interface Player {
   highs?: Partial<Record<RecStat, HighRow>>;
   /** The number he last wore for each team that numbered him (tid -> number), so a franchise retiring it after he moved on knows which (see jerseys.ts); dropped when he retires. */
   jerseys?: Record<number, string>;
-  /** Dunks & Threes' projection for the season a real league opens in (minutes a game, EPM offense, defense and total), for seeds built with it. */
-  proj?: { season: number; mpg: number; oepm: number; depm: number; epm: number };
+  /**
+   * His projected impact for the season a real league opens in (points per 100 possessions at each end
+   * and in all, and the minutes a game behind it). A league from before it may hold Dunks & Threes'
+   * projection here instead (oepm, depm, epm), which is no longer shown.
+   */
+  proj?: { season: number; mpg: number; off?: number; def?: number; tot?: number };
 }
 
 /** A contract offer in talks with a player: first-season salary ($K), length, and an option on the final season. */
@@ -1536,6 +1536,12 @@ export interface League {
    * with only the three seasons his ratings come from.
    */
   careersFrom?: number;
+  /**
+   * A real league whose seed carried each real player's regular-season career highs from every NBA
+   * game he had played (Player.highs): they are his whole career's from the first day. Absent, a real
+   * player's highs are this league's alone.
+   */
+  realHighs?: boolean;
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
   /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */

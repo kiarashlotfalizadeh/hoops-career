@@ -125,8 +125,8 @@ console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixe
   console.log(
     `  games: margin SD ${sd(margins).toFixed(1)} (${TARGETS.marginSd}), 20+ ${((margins.filter((m) => Math.abs(m) >= 20).length / margins.length) * 100).toFixed(1)}% (${TARGETS.blowout20 * 100}%), OT ${((played.filter((g) => g.ot > 0).length / played.length) * 100).toFixed(1)}% (${TARGETS.otRate * 100}%), score corr ${(cov(hs, as) / sd(hs) / sd(as)).toFixed(2)} (${TARGETS.scoreCorr}); ${(cov(wins, diff) / sd(diff) ** 2).toFixed(2)} wins per point of margin (NBA 2.2-2.4), win SD ${sd(wins).toFixed(1)} (NBA ~13), wins ${Math.min(...wins)}-${Math.max(...wins)}`,
   );
-  // team net ratings vs what the same players' real box plus-minus and EPM (3 seasons) say at the minutes they got
-  const impact = (p: Player, key: 'bpm' | 'epm') => {
+  // team net ratings vs what the same players' real box plus-minus (3 seasons) says at the minutes they got
+  const impact = (p: Player, key: 'bpm') => {
     let v = 0;
     let m = 0;
     for (const s of p.stats) {
@@ -139,14 +139,14 @@ console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixe
     return m >= 300 ? v / m : -2;
   };
   const net = ts.map((x) => ((x.ptsFor - x.ptsAgainst) / ((x.poss + x.oppPoss) / 2)) * 100);
-  // (and the season's projected EPM, for seeds built with it: a player it doesn't list counts as -2)
-  const projEpm = new Map(seed.players.flatMap((sp) => (sp.proj ? [[sp.id, sp.proj.epm] as const] : [])));
-  const vs = (key: 'bpm' | 'epm' | 'proj', label: string) => {
+  // (and the season's projected impact: a player without one counts as -2)
+  const projected = new Map(seed.players.flatMap((sp) => (sp.proj ? [[sp.id, sp.proj.tot] as const] : [])));
+  const vs = (key: 'bpm' | 'proj', label: string) => {
     const proj = league.teams.map((t) =>
       Object.values(league.players).reduce(
         (a, p) =>
           a +
-          ((key === 'proj' ? (projEpm.get(p.bbrefId ?? '') ?? -2) : impact(p, key)) *
+          ((key === 'proj' ? (projected.get(p.bbrefId ?? '') ?? -2) : impact(p, key)) *
             p.stats.filter((s) => s.season === season && !s.playoffs && s.tid === t.tid).reduce((b, s) => b + s.min, 0)) /
             (82 * 48),
         0,
@@ -154,10 +154,7 @@ console.log('  ' + lg.map(([k, v, t]) => `${k} ${v < 2 ? v.toFixed(3) : v.toFixe
     );
     return `vs the players' ${label} at sim minutes (SD ${sd(proj).toFixed(2)}): r ${(cov(net, proj) / sd(net) / sd(proj)).toFixed(2)}, slope ${(cov(net, proj) / sd(proj) ** 2).toFixed(2)}`;
   };
-  const withEpm = Object.values(league.players).some((p) => p.stats.some((s) => s.adv?.epm !== undefined));
-  console.log(
-    `  team net rating SD ${sd(net).toFixed(2)} (NBA 5.4-6.1); ${vs('bpm', 'real BPM')}${withEpm ? `; ${vs('epm', 'real EPM')}` : ''}${projEpm.size ? `; ${vs('proj', 'projected EPM')}` : ''}`,
-  );
+  console.log(`  team net rating SD ${sd(net).toFixed(2)} (NBA 5.4-6.1); ${vs('bpm', 'real BPM')}${projected.size ? `; ${vs('proj', 'projected impact')}` : ''}`);
 }
 const zl = (z: 'rim' | 'paint' | 'mid' | 'three') => `${z} ${((100 * engineDiag.ast[z]) / Math.max(1, engineDiag.made[z])).toFixed(0)}%`;
 console.log(`  assisted share of makes: ${zl('rim')}, ${zl('paint')}, ${zl('mid')}, ${zl('three')} (NBA ~65/45/40/85)`);

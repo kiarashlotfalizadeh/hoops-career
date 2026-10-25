@@ -150,13 +150,6 @@ describe('display helpers', () => {
       // the merged line kept no usage at all: imported rows carry no on-court team totals to work it out from
       expect(playerSeason(p, 2026)!.usg).toBeCloseTo((28.8 * 280 + 26.3 * 140) / 420 / 100);
 
-      // the season's EPM kept once: every team's row carries the whole season's
-      const epm = { oepm: 4.1, depm: -0.6, epm: 3.5 };
-      const q = { stats: p.stats.map((r) => ({ ...r, adv: { ...r.adv!, ...epm } })) } as unknown as Player;
-      expect(seasonLine(q, 2026)!.adv).toMatchObject(epm);
-      // a seed built without EPM has none to show
-      expect(seasonLine(p, 2026)!.adv!.epm).toBeUndefined();
-
       // a one-team season left as it is
       expect(seasonLine({ stats: [p.stats[0]] } as unknown as Player, 2026)).toBe(p.stats[0]);
       expect(seasonLine(p, 2025)).toBeNull();

@@ -290,8 +290,9 @@ function boxNamer(league: League, res: GameResult) {
   return { name: (b: BoxLine) => ((count.get(lastOf(b)) ?? 0) > 1 ? full(b) : lastOf(b)), full };
 }
 
-/** His regular-season career highs cover his whole career: every season he has played is one in this league. */
+/** His regular-season career highs cover his whole career: every season he has played is one in this league, or the seed brought a real player's from every game he had played. */
 function highsWhole(league: League, p: Player) {
+  if (p.real && league.realHighs) return true;
   return p.stats.every((s) => s.gp === 0 || s.season >= league.startSeason) && careerTotals(p).gp >= 15;
 }
 

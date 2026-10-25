@@ -113,14 +113,13 @@ describe('Basketball Reference pages and careers', () => {
       BBREF_TO_TID.CHO,
     ]);
 
-    // one history line per team in a season, totals from the averages, with no shot locations or EPM
+    // one history line per team in a season, totals from the averages, with no shot locations (a season the game files don't have him in falls back to these)
     const before = rows('duranke01').filter((r) => r.season < STAT_SEASONS[0]);
     const adv = HISTORY_SEASONS.flatMap((s) => parseAdvanced(read(`advanced_${s}`)!, s));
     const lines = historyLines(before, adv);
     expect(lines.map((l) => l.season)).toEqual([2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023, 2023]);
     expect(lines[0]).toMatchObject({ tid: BBREF_TO_TID.OKC, real: true, playoffs: false, gp: 80, min: 2840, pts: 2184, fga: 1544, rimA: 0, midA: 0 });
     expect(lines[0].adv).toMatchObject({ ws: 9.1, bpm: 6.4 });
-    expect(lines[0].adv?.epm).toBeUndefined();
     // the season he was traded: Brooklyn's line and Phoenix's, no combined one
     expect(lines.slice(-2).map((l) => [l.tid, l.gp])).toEqual([
       [BBREF_TO_TID.BRK, 39],

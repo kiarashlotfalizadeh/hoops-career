@@ -32,6 +32,8 @@ import {
 } from '../league/records';
 import { blankStats } from '../playerGen';
 import type { GameResult, League } from '../types';
+import seedJson from '../../data/seed.json';
+import type { SeedData } from '../league/create';
 
 const mark = (v: number, gid: number, day = gid): MarkRow => [v, gid, 0, 1, 2027, day, gid];
 const ins = (list: MarkRow[], m: MarkRow, keep = 3) => insertMark(list, m, keep, markKey);
@@ -115,27 +117,40 @@ describe('the record book', () => {
       expect(margin[0].v).toBe(Math.max(...counted.map((g) => Math.abs(g.home.pts - g.away.pts))));
       expect(margin[0].score[0] - margin[0].score[1]).toBe(margin[0].v);
 
-      // career highs are each player's best stored line
+      // career highs are each player's best stored line, or a real player's high from before the league
+      // when the seed brought it (League.realHighs) and it stands above them
+      const seeded = new Map((seedJson as unknown as SeedData).players.map((sp) => [sp.id, sp.highs]));
+      const own = new Map<number, Record<string, number>>();
       let checked = 0;
+      let real = 0;
       for (const p of Object.values(l.players)) {
         const lines = counted.flatMap((g) => [...g.home.players, ...g.away.players].filter((b) => b.pid === p.pid && b.min > 0));
         for (const stat of REC_STATS) {
           const high = Math.max(0, ...lines.map((b) => lineStat(b, stat)));
-          if (high > 0) {
-            expect(careerHighOf(p, stat)?.v, `${p.lastName} ${stat}`).toBe(high);
+          if (high > 0) (own.get(p.pid) ?? own.set(p.pid, {}).get(p.pid)!)[stat] = high;
+          const before = l.realHighs && p.real ? (seeded.get(p.bbrefId!)?.[stat]?.[0] ?? 0) : 0;
+          if (before > high) real++;
+          if (Math.max(high, before) > 0) {
+            expect(careerHighOf(p, stat)?.v, `${p.lastName} ${stat}`).toBe(Math.max(high, before));
             checked++;
           } else expect(p.highs?.[stat]).toBeUndefined();
         }
       }
       expect(checked).toBeGreaterThan(1000);
+      if (l.realHighs) expect(real).toBeGreaterThan(1000);
 
       // a save from before the book reads it back from the stored results, the same book
+      // (it had no real highs either: its players' highs are the book's alone)
       const copy = structuredClone(l);
       delete copy.records;
+      delete copy.realHighs;
       for (const p of Object.values(copy.players)) delete p.highs;
       backfillRecords(copy);
       expect(copy.records).toEqual(book);
-      for (const p of Object.values(copy.players)) expect(p.highs).toEqual(l.players[p.pid].highs);
+      for (const p of Object.values(copy.players)) {
+        if (l.realHighs && p.real) expect(Object.fromEntries(Object.entries(p.highs ?? {}).map(([k, h]) => [k, h![0]]))).toEqual(own.get(p.pid) ?? {});
+        else expect(p.highs).toEqual(l.players[p.pid].highs);
+      }
 
       // survives a save, and a damaged book is rebuilt on load
       await saveLeague(l);
@@ -147,8 +162,12 @@ describe('the record book', () => {
       (bad.players[pid] as unknown as { highs: unknown }).highs = { pts: 'x' };
       const fixed = migrate(bad);
       expect(fixed.records).toEqual(book);
-      // rebuilt with the book, from the same results
-      expect(fixed.players[pid].highs).toEqual(l.players[pid].highs);
+      // rebuilt with the book, from the same results (a real player's highs from before the league go with the damage)
+      const values = (h: League['players'][number]['highs']) => Object.fromEntries(Object.entries(h ?? {}).map(([k, x]) => [k, x![0]]));
+      if (l.realHighs && l.players[pid].real) expect(values(fixed.players[pid].highs)).toEqual(own.get(pid) ?? {});
+      else expect(fixed.players[pid].highs).toEqual(l.players[pid].highs);
+      // the others' are untouched, the real ones included
+      for (const p of Object.values(fixed.players)) if (p.pid !== pid) expect(p.highs).toEqual(l.players[p.pid].highs);
       // damaged highs on their own just go
       const odd = structuredClone(l);
       (odd.players[pid] as unknown as { highs: unknown }).highs = { pts: [3, 2027] };

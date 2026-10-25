@@ -1,6 +1,7 @@
-// TEST UTILITY ONLY: writes Basketball-Reference-shaped HTML (and a Dunks & Threes-shaped EPM
-// projection) for a simulated fictional league so the seed pipeline (parse → derive → calibrate)
-// can be exercised end to end offline, careers back to 2003-04 included.
+// TEST UTILITY ONLY: writes Basketball-Reference-shaped HTML and the game files' box scores (no
+// play-by-play: the build then runs on box scores alone) for a simulated fictional league, so the
+// seed pipeline (parse → derive → calibrate) can be exercised end to end offline, careers back to
+// 2003-04 included (the seasons before the box scores' from the per-game pages).
 // Usage: tsx scripts/data/test/make-fixture.ts <outDir>
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -19,7 +20,7 @@ if (!out) {
   console.error('Usage: tsx scripts/data/test/make-fixture.ts <outDir>');
   process.exit(1);
 }
-mkdirSync(join(out, 'epm', 'projection'), { recursive: true });
+mkdirSync(join(out, 'games'), { recursive: true });
 const league = createLeague({ name: 'fx', userTid: 0, coachName: 'x', settings: { ...defaultSettings(), injuries: false }, seed: null, rngSeed: 5 });
 const id = (pid: number) => `fx${String(pid).padStart(5, '0')}01`;
 const cell = (stat: string, v: string | number, extra = '') => `<td data-stat="${stat}"${extra}>${v}</td>`;
@@ -49,6 +50,11 @@ function writeSeason(season: number, acc: Map<number, Line>, teamOf: (p: Player)
   writeFileSync(join(out, `advanced_${season}.html`), wrap('advanced', adv));
 }
 let first = new Map<number, Line>();
+// the box score of every game in the stat seasons, with NBA.com-style ids (person 1,000,000 + pid, team 1610612737 + tid)
+const box: string[] = [
+  'firstName,lastName,personId,gameId,gameDateTimeEst,gameType,playerteamId,playerteamCity,playerteamName,opponentteamId,opponentteamCity,opponentteamName,startingPosition,numMinutes,points,assists,reboundsOffensive,reboundsDefensive,fieldGoalsMade,fieldGoalsAttempted,threePointersMade,threePointersAttempted,freeThrowsMade,freeThrowsAttempted,steals,blocks,turnovers,foulsPersonal,plusMinusPoints,offensiveRating,defensiveRating,possessions,percentTeamFieldGoalsAttempted,percentTeamFreeThrowsAttempted,percentTeamTurnovers',
+];
+const teamId = (tid: number) => 1610612737 + tid;
 for (const season of [2024, 2025, 2026]) {
   const rng = new Rng(season);
   const acc = new Map<number, Line>();
@@ -58,10 +64,53 @@ for (const season of [2024, 2025, 2026]) {
     const a = (h + 1 + Math.floor(rng.next() * 29)) % 30;
     const sim = new GameSim({ team: league.teams[h], players: rosters[h] }, { team: league.teams[a], players: rosters[a] }, { rng, type: 'regular', injuries: false });
     sim.simToEnd();
+    const date = new Date(Date.UTC(season - 1, 9, 22 + Math.floor(g / 3))).toISOString().slice(0, 10);
     for (const rb of sim.rawBoxes()) {
       if (rb.b.sec <= 0) continue;
-      const e = acc.get(rb.pid) ?? { g: 0, sec: 0, fg: 0, fga: 0, fg3: 0, fg3a: 0, ft: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0, tUse: 0 };
+      const p = league.players[rb.pid];
+      const [us, them] = [FRANCHISES[rb.tid], FRANCHISES[rb.tid === h ? a : h]];
       const b = rb.b;
+      const share = (x: number, of: number) => (of > 0 ? (x / of).toFixed(3) : 0);
+      box.push(
+        [
+          p.firstName,
+          p.lastName,
+          1_000_000 + rb.pid,
+          `2${String(season - 1).slice(2)}${String(g + 1).padStart(5, '0')}`,
+          `${date} 19:30:00`,
+          'Regular Season',
+          teamId(rb.tid),
+          us.region,
+          us.name,
+          teamId(rb.tid === h ? a : h),
+          them.region,
+          them.name,
+          rb.starter ? p.pos[p.pos.length - 1] : '',
+          (b.sec / 60).toFixed(2),
+          b.pts,
+          b.ast,
+          b.orb,
+          b.drb,
+          b.fgm,
+          b.fga,
+          b.tpm,
+          b.tpa,
+          b.ftm,
+          b.fta,
+          b.stl,
+          b.blk,
+          b.tov,
+          b.pf,
+          b.pm,
+          b.onPoss ? ((100 * b.onPF) / b.onPoss).toFixed(1) : 0,
+          b.onPoss ? ((100 * b.onPA) / b.onPoss).toFixed(1) : 0,
+          b.onPoss,
+          share(b.fga, b.tFga),
+          share(b.fta, b.tFta),
+          share(b.tov, b.tTov),
+        ].join(','),
+      );
+      const e = acc.get(rb.pid) ?? { g: 0, sec: 0, fg: 0, fga: 0, fg3: 0, fg3a: 0, ft: 0, fta: 0, orb: 0, drb: 0, ast: 0, stl: 0, blk: 0, tov: 0, pf: 0, pts: 0, tUse: 0 };
       e.g++;
       e.sec += b.sec;
       e.fg += b.fgm;
@@ -84,49 +133,8 @@ for (const season of [2024, 2025, 2026]) {
   }
   if (season === 2024) first = acc;
   writeSeason(season, acc, (p) => FRANCHISES[p.tid].bbref);
-  if (season !== 2026) continue;
-  // Dunks & Threes projection for 2026-27 from the last season: NBA.com-style ids and tricodes, so
-  // the build matches it by name and team (per 48 minutes standing in for per 100 possessions)
-  const proj: string[] = [
-    'season,nba_id,name,team,p_mpg,p_usg,oepm,depm,epm,p_pts_100,p_tspct,p_fg2a_100,p_fg2pct,p_fg3a_100,p_fg3pct,p_fta_100,p_ftpct,p_orb_100,p_drb_100,p_ast_100,p_tov_100,p_stl_100,p_blk_100',
-  ];
-  for (const [pid, e] of acc) {
-    const p = league.players[pid];
-    const [off, def] = [(p.ovr - 72) / 4, (p.ratings.diq - 50) / 15];
-    const mins = e.sec / 60;
-    const p48 = (v: number) => ((v / Math.max(1, mins)) * 48).toFixed(2);
-    const pct = (m: number, a: number, d: number) => (a ? m / a : d).toFixed(3);
-    const usg = (e.fga + 0.44 * e.fta + e.tov) / Math.max(1, e.tUse);
-    proj.push(
-      [
-        2027,
-        1_000_000 + pid,
-        `"${p.firstName} ${p.lastName}"`,
-        FRANCHISES[p.tid].abbrev,
-        (mins / e.g).toFixed(1),
-        usg.toFixed(3),
-        off.toFixed(2),
-        def.toFixed(2),
-        (off + def).toFixed(2),
-        p48(e.pts),
-        pct(e.pts, 2 * (e.fga + 0.44 * e.fta), 0.56),
-        p48(e.fga - e.fg3a),
-        pct(e.fg - e.fg3, e.fga - e.fg3a, 0.53),
-        p48(e.fg3a),
-        pct(e.fg3, e.fg3a, 0.35),
-        p48(e.fta),
-        pct(e.ft, e.fta, 0.76),
-        p48(e.orb),
-        p48(e.drb),
-        p48(e.ast),
-        p48(e.tov),
-        p48(e.stl),
-        p48(e.blk),
-      ].join(','),
-    );
-  }
-  writeFileSync(join(out, 'epm', 'projection', 'dunksandthrees_proj_2027.csv'), proj.join('\n') + '\n');
 }
+writeFileSync(join(out, 'games', 'PlayerStatisticsExtended.csv'), box.join('\n') + '\n');
 // the seasons before them: each player's 2023-24 line in every season since his experience says he
 // came in; every third one played his seasons before 2018-19 for the next franchise over (Seattle,
 // before 2008-09, for the Thunder), so his number there comes from that team's roster page

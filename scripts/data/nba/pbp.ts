@@ -1,11 +1,11 @@
-// One pass over a season of cdn.nba.com play-by-play. Produces, per player:
+// A season of NBA.com play-by-play (its cdn.nba.com form, 2019-20 on), game by game. Produces, per player:
 // - shooting by zone (the engine's zones: rim / paint / mid / corner 3 / above-the-break 3)
 // - how shots are created (pull-up, drive, cut, lob, putback, post move, transition, assisted)
 // - assists by the zone of the shot they set up, turnover and foul types, fouls drawn
 // - rebounds with on-court opportunities (true ORB% / DRB%), steals, blocks by zone
 // - on-court possessions, points for/against and opponent rim shooting (rim deterrence)
-// and lineup stints (who was on the floor for each possession) for RAPM.
-import { tarCsvRows } from './csv';
+// and lineup stints (who was on the floor for each possession) for RAPM. The rows come from the
+// game-level archive (scripts/data/games/playbyplay.ts), which groups them by game.
 
 export type Zone = 'rim' | 'paint' | 'mid' | 'c3' | 'ab3';
 export const ZONES: Zone[] = ['rim', 'paint', 'mid', 'c3', 'ab3'];
@@ -145,7 +145,7 @@ function blank(id: number, nameI: string): PlayerPbp {
   };
 }
 
-interface Row {
+export interface Row {
   order: number;
   period: number;
   clock: number; // seconds remaining in the period
@@ -159,7 +159,12 @@ interface Row {
   poss: number;
   sh: number;
   sa: number;
+  /** NBA.com's zone label for a shot ("Restricted Area"...), where the log has one (2022-23 on). */
   area: string;
+  /** Shot location in NBA.com's legacy chart units (tenths of a foot from the basket; y toward half court), 0, 0 when unrecorded. */
+  x: number;
+  y: number;
+  three: boolean;
   made: boolean;
   ast: number;
   blk: number;
@@ -168,6 +173,7 @@ interface Row {
   nameI: string;
 }
 
+/** NBA.com's zone labels. */
 const AREA: Record<string, Zone> = {
   'Restricted Area': 'rim',
   'In The Paint (Non-RA)': 'paint',
@@ -177,55 +183,39 @@ const AREA: Record<string, Zone> = {
   'Above the Break 3': 'ab3',
 };
 
-const clockSecs = (c: string) => {
+/**
+ * A shot's zone: NBA.com's own label where the log has one (2022-23 on: the zones the engine's
+ * shooting was calibrated against), else zoneOf, from where it was taken.
+ */
+export const shotZone = (area: string, x: number, y: number, three: boolean): Zone => AREA[area] ?? zoneOf(x, y, three);
+
+/**
+ * The zone of a shot from where it was taken, the way NBA.com draws its zones: the restricted area
+ * (4 feet, and the tip-ins and putbacks it records at the basket with no location), the rest of the
+ * lane (16 feet wide, 19 from the baseline, which is 5¼ feet behind the basket), mid-range, and threes
+ * from the corners (within 9¼ feet of the basket's line) or above the break. It agrees with NBA.com's
+ * own labels (2022-23 on) on 98% of shots, 99.4% leaving out the unlocated tips, which those labels
+ * split between the restricted area and mid-range (this calls them all the restricted area); it labels
+ * the seasons before them.
+ */
+export function zoneOf(x: number, y: number, three: boolean): Zone {
+  if (three) return y <= 92.5 && (x !== 0 || y !== 0) ? 'c3' : 'ab3';
+  if (x === 0 && y === 0) return 'rim';
+  if (Math.hypot(x, y) <= 43) return 'rim';
+  return Math.abs(x) < 80 && y <= 137.5 ? 'paint' : 'mid';
+}
+
+/** Seconds left in the period from an ISO duration ("PT11M43.00S"). */
+export const clockSecs = (c: string) => {
   const m = /PT(\d+)M([\d.]+)S/.exec(c);
   return m ? Number(m[1]) * 60 + Number(m[2]) : 0;
 };
 const periodLen = (p: number) => (p <= 4 ? 720 : 300);
 
-export async function processSeason(file: string, season: number, log = console.log): Promise<SeasonPbp> {
-  const out: SeasonPbp = { season, games: 0, players: {}, stints: [], lineupIssues: 0 };
-  let game: Row[] = [];
-  let gid = '';
-  const flush = () => {
-    if (game.length) processGame(game, out);
-    game = [];
-  };
-  for await (const get of tarCsvRows(file)) {
-    const g = get('gameId');
-    if (g !== gid) {
-      flush();
-      gid = g;
-    }
-    game.push({
-      order: Number(get('orderNumber')),
-      period: Number(get('period')),
-      clock: clockSecs(get('clock')),
-      type: get('actionType'),
-      sub: get('subType'),
-      desc: get('descriptor'),
-      qual: get('qualifiers'),
-      pid: Number(get('personId')) || 0,
-      team: Number(get('teamId')) || 0,
-      tri: get('teamTricode'),
-      poss: Number(get('possession')) || 0,
-      sh: Number(get('scoreHome')) || 0,
-      sa: Number(get('scoreAway')) || 0,
-      area: get('area'),
-      made: get('shotResult') === 'Made',
-      ast: Number(get('assistPersonId')) || 0,
-      blk: Number(get('blockPersonId')) || 0,
-      stl: Number(get('stealPersonId')) || 0,
-      drawn: Number(get('foulDrawnPersonId')) || 0,
-      nameI: get('playerNameI'),
-    });
-  }
-  flush();
-  log(`  ${season}: ${out.games} games, ${Object.keys(out.players).length} players, ${out.stints.length} stints, ${out.lineupIssues} lineup repairs`);
-  return out;
-}
+export const newSeason = (season: number): SeasonPbp => ({ season, games: 0, players: {}, stints: [], lineupIssues: 0 });
 
-function processGame(rows: Row[], out: SeasonPbp) {
+/** One game's rows (any order: sorted here) into its season. */
+export function processGame(rows: Row[], out: SeasonPbp) {
   rows.sort((a, b) => a.order - b.order);
   // teams, tricodes and each player's team
   const tri: Record<number, string> = {};
@@ -373,13 +363,13 @@ function processGame(rows: Row[], out: SeasonPbp) {
     function event(r: Row) {
       const t = r.team;
       if (r.type === '2pt' || r.type === '3pt') {
-        const z = AREA[r.area];
-        if (!z || !r.pid) return;
+        if (!r.pid) return;
+        const z = shotZone(r.area, r.x, r.y, r.three);
         const p = P(r.pid);
         p.fga[z]++;
         if (r.made) p.fgm[z]++;
         const d = r.desc;
-        const three = r.type === '3pt';
+        const three = r.three;
         if (r.made && r.ast) {
           if (three) p.astFgm3++;
           else p.astFgm2++;

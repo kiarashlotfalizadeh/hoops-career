@@ -474,13 +474,13 @@ describe('the agenda', () => {
     }
 
     // the deadline's last five days: the staff's deal, bought or sold as the odds say, made in one tap
-    // (the Hornets buying and the Bulls selling: a deal each; the Cavaliers: none that works, so the
+    // (the Hornets buying and the Rockets selling: a deal each; the Celtics: none that works, so the
     // call is to stand pat. The Hornets' veterans no longer sell: a contender's late firsts are priced
     // as late ones, see pickProjection)
     for (const [tid, odds] of [
       [3, 900],
-      [4, 20],
-      [5, 900],
+      [10, 20],
+      [1, 900],
     ]) {
       const l = camp(tid);
       while (standardRoster(l, tid).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, tid))[0], { news: false });
@@ -496,7 +496,7 @@ describe('the agenda', () => {
       // the odds it says are today's, as Today shows them, not the reading the call was worked out from
       const now = leagueForecast(l)!.teams[tid];
       expect(card.line.startsWith(`Postseason odds ${pct(now.reach[0], now.clinched)}. `)).toBe(true);
-      if (tid !== 5) {
+      if (tid !== 1) {
         const theirs = call.offer!.b.pids;
         expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
         expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);

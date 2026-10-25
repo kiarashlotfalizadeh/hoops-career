@@ -30,7 +30,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
   // the column a leaderboard's "All" opened the table on
   const [sortKey] = useQueryParam<string>('sort', 'pts');
   const quali = useMemo(() => qualifier(league, season, rows, playoffs), [league, season, rows, playoffs]);
-  // PER and win shares wherever a season has them (imported, or a regular season played here); BPM and EPM only come imported
+  // PER and win shares wherever a season has them (a real regular season, or one played here); BPM only comes with real ones
   const hasAdv = rows.some((r) => r.adv);
   const hasBpm = real && rows.some((r) => r.s.adv);
   const tot = mode === 'tot';
@@ -164,17 +164,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
         fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)),
         help: "Player efficiency rating (Hollinger's): his per-minute production, adjusted for pace; the league's average is 15.",
       });
-    if (hasBpm)
-      c.push(
-        { key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) },
-        {
-          key: 'epm',
-          label: 'EPM',
-          get: (r) => r.s.adv?.epm ?? -99,
-          fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)),
-          help: 'Estimated plus-minus (Dunks & Threes): points per 100 possessions he adds over an average player, offense and defense.',
-        },
-      );
+    if (hasBpm) c.push({ key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) });
     if (hasAdv)
       c.push(
         {

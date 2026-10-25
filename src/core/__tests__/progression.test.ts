@@ -154,7 +154,9 @@ describe('player development', () => {
       const widened = spread();
       expect(widened).toBeGreaterThan(before * 1.2);
       anchorRatings(a);
-      expect(spread()).toBeLessThan(widened - (widened - before) * 0.4);
+      // (toward the spread the display scale was built on at creation, before preseason cuts: what it holds the league to)
+      const q = (f: number) => a.ovrScale.raw[OVR_ANCHORS.findIndex(([x]) => x === f)];
+      expect(spread()).toBeLessThan(widened - (widened - (q(0.85) - q(0.15))) * 0.4);
     }
 
     // fictional leagues are spread like the real league was before its calibration to the projection's value

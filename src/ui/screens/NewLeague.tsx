@@ -192,8 +192,9 @@ export default function NewLeague() {
           </button>
           <More label="How the real ratings are made">
             <p className="small dim2" style={{ margin: 0 }}>
-              Ratings come from three seasons of box scores (through 2025-26), NBA.com play-by-play and impact data, calibrated so every player reproduces his real numbers in the
-              engine. Then Dunks & Threes&apos; 2026-27 EPM projection has the last word: how good each player is now, rookies included.
+              Ratings come from three seasons of NBA.com box scores and play-by-play (through 2025-26), calibrated so every player reproduces his real numbers in the engine. Then
+              his impact has the last word: what his teams gained with him on the floor over seven seasons of lineups, read against his box line and aged a year, so each player is
+              worth in the engine what he was worth on the court. Rookies start from their draft slot and college numbers.
             </p>
           </More>
           <div className="nl-cta">

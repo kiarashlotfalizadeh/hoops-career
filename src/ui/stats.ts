@@ -79,8 +79,8 @@ export function perGame(s: PlayerStats | null | undefined): PerGame | null {
 }
 
 /**
- * A season's all-in-one numbers as the stats tables show them: an imported season's, Basketball
- * Reference's own (BPM and EPM only there), or a regular season played in this league's, computed
+ * A season's all-in-one numbers as the stats tables show them: a real season's, Basketball
+ * Reference's own (BPM only there), or a regular season played in this league's, computed
  * from its box score totals (`computed`; see src/core/analysis/advanced.ts). Null for the playoffs
  * of a season played here, whose teams' totals aren't kept.
  */
@@ -89,12 +89,11 @@ export interface AdvView {
   ws: number;
   ws48: number;
   bpm?: number;
-  epm?: number;
   computed?: true;
 }
 
 export function advancedView(league: League, p: Player, s: PlayerStats): AdvView | null {
-  if (s.adv) return { per: s.adv.per, ws: s.adv.ws, ws48: s.adv.ws48, bpm: s.adv.bpm, ...(s.adv.epm !== undefined ? { epm: s.adv.epm } : {}) };
+  if (s.adv) return { per: s.adv.per, ws: s.adv.ws, ws48: s.adv.ws48, bpm: s.adv.bpm };
   if (s.real || s.playoffs) return null;
   const a = seasonAdvanced(league, p, s.season);
   return a ? { per: a.per, ws: a.ws, ws48: a.ws48, computed: true } : null;

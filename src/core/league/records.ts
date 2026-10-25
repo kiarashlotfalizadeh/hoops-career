@@ -4,7 +4,9 @@
 // kept as each game is recorded. Single-season and career records are read from what the save keeps
 // for good: every player's and team's seasons. Only seasons played in this league count: the real
 // seasons a seeded player arrives with are history from before it, and his career highs are the
-// league's ("since 2026-27") unless his whole career is on record. Career totals follow the same
+// league's ("since 2026-27") unless his whole career is on record or the seed brought his real ones
+// (League.realHighs: from every NBA game he had played, as a seed from the game files does; a real
+// high has no game in this league to open, game id -1). Career totals follow the same
 // rule: a real player whose whole career is on record counts it all (LeBron James's points lead the
 // list from the first day, as his franchises' leaders do on their pages).
 //

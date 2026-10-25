@@ -46,8 +46,9 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
       const whole = careerOnRecord(league, p);
       const h = high.get(pid);
       const c = whole ? careerTotals(p) : null;
-      // (his highs are the league's unless his whole career is on record: only then are they his career's)
-      const best = whole && p.highs ? { pts: p.highs.pts?.[0], reb: p.highs.reb?.[0], ast: p.highs.ast?.[0] } : null;
+      // (his highs are the league's unless his whole career is on record: only then are they his career's;
+      // a real player's only when the seed brought his real ones, not just his real seasons' totals)
+      const best = whole && (!p.real || league.realHighs) && p.highs ? { pts: p.highs.pts?.[0], reb: p.highs.reb?.[0], ast: p.highs.ast?.[0] } : null;
       const franchise = lists && team ? book!.teams[tid]?.[lists.kind].players.pts?.[0]?.[0] : undefined;
       out.set(pid, {
         ...(h ? { high: { ...h, career: whole && p.experience === 0 } } : {}),
