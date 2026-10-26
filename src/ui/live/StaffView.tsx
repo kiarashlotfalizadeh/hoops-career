@@ -21,6 +21,7 @@ export function StaffView({
   assistant,
   read,
   notes,
+  quiet,
   onAct,
   onDismiss,
   autonomy,
@@ -38,6 +39,8 @@ export function StaffView({
   assistant: { name: string; initials: string };
   read: string;
   notes: StaffNote[];
+  /** The staff's line when it measured and found nothing to change, or while it measures (useStaffCall). */
+  quiet?: string | null;
   onAct: (n: StaffNote, a: StaffAction) => void;
   onDismiss: (n: StaffNote) => void;
   autonomy: 'ask' | 'auto';
@@ -66,7 +69,9 @@ export function StaffView({
           ))}
         </div>
       ) : (
-        <div className="lv-calm small dim">Nothing the staff would change right now.</div>
+        <div className="lv-calm small dim" role="status">
+          {quiet ?? 'Nothing the staff would change right now.'}
+        </div>
       )}
       {reads.length > 0 && (
         <div className="lv-notes reads">
@@ -97,7 +102,7 @@ export function StaffView({
           on={autonomy === 'auto'}
           onChange={(on) => setAutonomy(on ? 'auto' : 'ask')}
           label="Let the staff make tactics calls"
-          help={`${assistant.name.split(' ').slice(-1)[0]} makes the changes he would bring you himself, and they show in your moves. Subs and timeouts stay yours.`}
+          help={`${assistant.name.split(' ').slice(-1)[0]} makes his measured calls himself, the moment one clears its noise, and they show in your moves. Subs and timeouts stay yours.`}
         />
       </div>
     </div>

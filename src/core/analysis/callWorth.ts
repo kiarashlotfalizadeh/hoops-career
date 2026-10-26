@@ -2,8 +2,10 @@
 // games, and from that exact spot the rest of the game played 30 times with it and without it, game
 // for game on the same seeds (state/liveWorth.ts; scratch round/gameday/calls.mts, 2026-10-25: MIA,
 // NYK, BOS, DEN, POR and UTA as the user, their first 8 games, 1,920 games and 5,067 calls, with the
-// staff's switches on and with them off). A call is kept only where it measured even or better; the
-// rest are the staff's no longer. Taking every call as it fired, over 1,200 paired games with the
+// staff's switches on and with them off). A call is dropped only where it measured as a cost beyond
+// its noise (shrunk toward even, then two standard errors below it: callCosts); one inside its noise
+// is kept as a place to look, and the live staff measures it from the spot before it proposes it
+// (ui/live/calls.ts). Taking every call as it fired, over 1,200 paired games with the
 // switches on: −0.20 ± 0.24 points a game before (1.9 calls a game, the most frequent, "We're beating
 // X: attack him", at −0.2 each, the coverage switches to Hedge at −1.3 to −1.6), +0.10 ± 0.12 after
 // (0.2 calls a game, +1.5 each). A kept call shows its number; one the staff makes too rarely to have
@@ -86,8 +88,37 @@ export function callWorth(key: string): CallWorth | undefined {
   return m && m.n >= CALL_MIN_N ? m : undefined;
 }
 
-/** Whether a call measured as a cost where it fires: the staff no longer makes it. */
+/**
+ * How far the calls' true worth spreads either side of even, in points of margin a call (and in win
+ * chance, for the ones judged by it): what a reading is shrunk toward even by before it's believed.
+ */
+export const CALL_WORTH_SPREAD = { pts: 1.0, win: 0.03 };
+
+/** A call's reading (by what it's judged by) shrunk toward even by the share of it that can be noise, with its standard error. */
+export function callShrunk(m: CallWorth): { v: number; se: number } {
+  const [v, se, s] = m.by === 'win' ? [m.win, m.winSe, CALL_WORTH_SPREAD.win] : [m.pts, m.ptsSe, CALL_WORTH_SPREAD.pts];
+  return { v: (v * s ** 2) / (s ** 2 + se ** 2), se };
+}
+
+/**
+ * Whether a call measured as a cost where it fires: its reading, shrunk toward even by its noise, is
+ * below even by more than two standard errors (the staff no longer makes it). A reading below even but
+ * inside its noise ("Stay home" at −0.5 ± 0.47 on 14 calls) isn't a cost: it's too close to say, and
+ * the staff still looks there (the live staff measures it from the spot before it says anything).
+ */
 export function callCosts(key: string): boolean {
+  const m = callWorth(key);
+  if (!m) return false;
+  const { v, se } = callShrunk(m);
+  return v < 0 && -v >= 2 * se;
+}
+
+/**
+ * Whether a call's reading is below even at all, noise or not: the debrief's "Next time" one-tap is
+ * offered only for a fix that hasn't measured as a loss (a bench look inside its noise is measured from
+ * the spot live; a one-tap for next game isn't).
+ */
+export function callBelowEven(key: string): boolean {
   const m = callWorth(key);
   if (!m) return false;
   return m.by === 'win' ? m.win < 0 : m.pts < 0;

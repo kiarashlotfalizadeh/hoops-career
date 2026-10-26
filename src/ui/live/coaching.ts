@@ -12,6 +12,7 @@ import { keptTactics } from './keep';
 import { currentSlot, liveSlots, replaceWith, slotForGame, tipSlot } from './familiar';
 import type { LiveAlert } from './alerts';
 import { userSetup } from './session';
+import { changesLine, screenChanges } from '../tactics/changes';
 import type { LiveSession } from './useLiveGame';
 
 export function coachingMoves(s: LiveSession, openLineup: () => void) {
@@ -37,15 +38,19 @@ export function coachingMoves(s: LiveSession, openLineup: () => void) {
 
   /**
    * Every in-game tactics change goes through the tactics the coach set (never an in-game overlay on
-   * them); `staff`: the staff made it, and why (its moves are marked as the staff's).
+   * them); `staff`: the staff made it, and why (its moves are marked as the staff's). One the coach
+   * makes himself is measured from where he made it (`what` names it; the staff's call he takes,
+   * `measured`, has its number already).
    */
-  const applyTactics = (fn: (t: Tactics) => void, staff?: string) => {
+  const applyTactics = (fn: (t: Tactics) => void, staff?: string, opts: { what?: string; measured?: boolean } = {}) => {
     const lg = liveRef.current;
     if (!lg) return;
+    const before = lg.sim.baseTactics(userSide);
     const t = lg.sim.baseTactics(userSide);
     fn(t);
     coach((g) => g.setTactics(t, false, staff));
     keep(lg);
+    if (!staff && !opts.measured) s.staff.changed(lg, before, t, opts.what ?? changesLine(screenChanges(before, t, nameOf).slice(0, 2)));
     bump();
   };
 
@@ -60,7 +65,7 @@ export function coachingMoves(s: LiveSession, openLineup: () => void) {
     const now = lg.sim.baseTactics(userSide);
     const next = slotForGame(l, lg, i, now);
     if (!next) return;
-    applyTactics((x) => replaceWith(x, next));
+    applyTactics((x) => replaceWith(x, next), undefined, { what: `Tactic ${slotLabel(l.teams[l.userTid], i)}` });
     haptic();
     const fam = liveSlots(useStore.getState().league!, lg, lg.sim.baseTactics(userSide)).slots[i]?.fam;
     useStore.getState().toast(`Tactic ${slotLabel(l.teams[l.userTid], i)}${fam !== undefined ? `, ${Math.round(fam)}% familiar` : ''}: from the next possession.`, 'good');

@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { haptic } from '../../native';
 import { useLeague, useStore, useVersion } from '../../state/store';
 import { act, edit } from '../../state/actions';
-import { prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type LiveGame } from '../../state/live';
+import { CLUTCH_SEC, prepareLive, clearLive, dropLive, pendingLive, playedElsewhere, type LiveGame } from '../../state/live';
 import { composites } from '../../core/ratings';
 import { gameTime, plural } from '../../core/format';
 import type { League, PbpEntry } from '../../core/types';
@@ -25,6 +25,10 @@ import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, foulLimit, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
+import { useStaffCall } from './useStaffCall';
+import { MID_STOP_SEC, callNote, callQuietLine } from './calls';
+import { liveSlots } from './familiar';
+import { slotLabel } from '../../core/sim/slots';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from './graphics';
@@ -142,6 +146,11 @@ export function useLiveGame() {
   /** The calls the game has stopped for tonight: each stops it once. */
   const stoppedFor = useRef(new Set<string>());
   const [resultGid, setResultGid] = useState<number | null>(null);
+  /** The staff's live voice: what it measured at the last stop in play, and the coach's last change as measured (useStaffCall). */
+  const staff = useStaffCall();
+  const { stop: staffMeasure, reset: staffReset, hush: staffHush } = staff;
+  /** The run of theirs the staff last stopped for (where it started), and the period whose end it measured from. */
+  const staffSeen = useRef({ run: -1, q: 0, mid: 0 });
   const [announce, setAnnounce] = useState('');
   const mounted = useRef(true);
   useEffect(() => {
@@ -262,6 +271,50 @@ export function useLiveGame() {
   loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
 
   /**
+   * A stop in play (`prio` 2: a period's end; 1: a timeout of either side, a run of theirs): the staff
+   * drafts its changes from the game as the sim stands now and measures them in the worker (useStaffCall).
+   */
+  const staffStop = useCallback(
+    (lg: LiveGame, prio: number) => {
+      const l = useStore.getState().league;
+      const input = l && loopHelpers.current.alertInput(snapshot(lg.sim, lg.logs.length));
+      if (!l || !input || lg.over) return;
+      const tactics = lg.sim.baseTactics(lg.userSide);
+      const sl = liveSlots(l, lg, tactics);
+      const team = l.teams[l.userTid];
+      const slots = sl.slots.flatMap((x) => (x.tactics && x.i !== sl.cur ? [{ i: x.i, label: `Tactic ${slotLabel(team, x.i)}`, tactics: x.tactics, fam: x.fam }] : []));
+      staffMeasure(lg, { ...input, atBreak: lg.sim.clock <= 0.05, timeoutPending: lg.sim.atBuzzer(), logs: lg.logs }, slots, prio);
+    },
+    [staffMeasure],
+  );
+  /**
+   * After a possession: a timeout either side took, a run of theirs reaching 8-0, or the middle of a
+   * period (its first trip under MID_STOP_SEC, where a broadcast takes its timeout) is a stop the staff
+   * measures from.
+   */
+  const staffAfter = useCallback(
+    (lg: LiveGame, timeouts: [number, number]) => {
+      const s = lg.sim;
+      const them = s.T[1 - lg.userSide];
+      const run = them.run >= 8 && staffSeen.current.run !== them.score - them.run;
+      if (run) staffSeen.current.run = them.score - them.run;
+      const mid = s.clock <= MID_STOP_SEC && s.clock > 0.05 && staffSeen.current.mid !== s.q;
+      if (mid) staffSeen.current.mid = s.q;
+      if (run || mid || s.T[0].timeouts < timeouts[0] || s.T[1].timeouts < timeouts[1]) staffStop(lg, 1);
+    },
+    [staffStop],
+  );
+  /** A period's end (a break or not): the staff measures from it, once. */
+  const staffBreak = useCallback(
+    (lg: LiveGame) => {
+      if (staffSeen.current.q === lg.sim.q || lg.over) return;
+      staffSeen.current.q = lg.sim.q;
+      staffStop(lg, 2);
+    },
+    [staffStop],
+  );
+
+  /**
    * Append play-by-play the sim has written since the last read (timeouts, subs and period ends
    * included), in the night's voice with the moments it called: the atmosphere folds the possessions
    * first (`loud`: its biggest moment goes up over the court). Returns the sim's new lines, newest first.
@@ -324,6 +377,8 @@ export function useLiveGame() {
       brokeAt.current = 0;
       stoppedFor.current = new Set();
       setStopCall(null);
+      staffReset();
+      staffSeen.current = { run: -1, q: 0, mid: 0 };
       viewRef.current = lg ? snapshot(lg.sim, lg.logs.length) : null;
       setView(viewRef.current);
       setEvents([]);
@@ -361,7 +416,7 @@ export function useLiveGame() {
       setTicker(createTicker(lg.sim.clock, score));
       setStatus('live');
     },
-    [resetOverCourt, atmoApi],
+    [resetOverCourt, atmoApi, staffReset],
   );
 
   /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
@@ -516,6 +571,7 @@ export function useLiveGame() {
     (lg: LiveGame) => {
       // a break is a good moment to save where the game is (the app may be closed next)
       saveSpot(lg);
+      staffBreak(lg);
       setScript(null);
       // (the court steps aside: its callout goes with it, the period report tells the story)
       atmoApi.clear();
@@ -526,7 +582,7 @@ export function useLiveGame() {
       ticker.set(lg.sim.clock, [h.score, a.score], true);
       setAnnounce(`${lg.sim.q === 2 ? 'Halftime' : `End of ${periodLabel(lg.sim.q)}`}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     },
-    [ticker, atmoApi],
+    [ticker, atmoApi, staffBreak],
   );
 
   /** Something in the sim's last possession the assistant would bring up, or the night would call: worth drawing in key plays mode. */
@@ -577,6 +633,8 @@ export function useLiveGame() {
         setClipOpen(false);
         setPanel('none');
         setHuddle('timeout');
+        // (a late huddle measures the play call: the staff's own measurement gives way to it)
+        if (s.q >= 4 && s.clock <= CLUTCH_SEC) staffHush();
         return;
       }
       // (a timeout waiting for a dead ball when the period ran out isn't taken: the break is the stop)
@@ -593,8 +651,9 @@ export function useLiveGame() {
         brokeAt.current = s.q;
         return enterBreak(lg);
       }
-      // no break here (Settings → Live games → Breaks): the period's end is saved all the same, once
+      // no break here (Settings → Live games → Breaks): the period's end is saved all the same, once, and the staff measures from it
       if (lg.journal.steps !== lg.steps) saveSpot(lg);
+      staffBreak(lg);
     }
     // a call only you can make now stops a close game, once each: the last possession, a fifth foul, a closer out of legs
     const call = lg.over ? null : takeStop(stopCalls(v, lg, loopHelpers.current.nameOf, opts.current.dismissed), stoppedFor.current);
@@ -605,6 +664,7 @@ export function useLiveGame() {
       haptic('warning');
       // the last possession waits in the huddle, for the play call (no timeout taken); a player's call opens his sheet
       if (call.kind === 'last') {
+        staffHush();
         setClipOpen(false);
         setPanel('none');
         setHuddle('last');
@@ -618,10 +678,12 @@ export function useLiveGame() {
     let guard = 0;
     // the score the drawn possession starts from (its log keeps only the one it ends on)
     let from: [number, number] = [0, 0];
+    const timeouts: [number, number] = [s.T[0].timeouts, s.T[1].timeouts];
     while (!logs.length && !lg.over && guard++ < 5) {
       from = [s.T[0].score, s.T[1].score];
       logs = lg.step();
     }
+    staffAfter(lg, timeouts);
     if (!logs.length) {
       flushFeed();
       return finish();
@@ -643,7 +705,7 @@ export function useLiveGame() {
       buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev], loopHelpers.current.nameOf, atmoApi.voiceAhead(lg)),
     );
     setTick((t) => t + 1);
-  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi]);
+  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi, staffAfter, staffBreak, staffHush]);
   nextRef.current = nextPossession;
 
   /** The court finished drawing: on to the next possession. */
@@ -693,6 +755,8 @@ export function useLiveGame() {
     }
     // clutch time: the court picks up from here (saved there, like a break)
     edit(() => void lg.checkpoint());
+    // (and the staff measures from it, as at a break)
+    if (to === 'clutch') staffStop(lg, 2);
     const [h, a] = s.T;
     if (to === 'clutch') setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setAtBreak(false);
@@ -775,14 +839,33 @@ export function useLiveGame() {
   useEffect(() => {
     if (!over) sayStaff(alerts);
   }, [alerts, over, sayStaff]);
-  /** The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed. */
+  /**
+   * The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed.
+   * Its tactics changes are the measured call's to make (calls.ts): the bench's own rules only say where
+   * to look, so their notes read as what they see, with no button; the call, while it still fits the
+   * tactics it was measured on, leads with its number. Subs, timeouts and the late fouls stay the bench's.
+   */
+  const staffCall = staff.call;
   const notes = useMemo(() => {
     const lg = liveRef.current;
     if (!view || over || !lg) return [];
     const input = alertInput(view);
-    return input ? staffNotes({ ...input, logs: lg.logs.slice(0, view.logs) }).filter((n) => !dismissed.includes(n.id)) : [];
+    if (!input) return [];
+    const own = staffNotes({ ...input, logs: lg.logs.slice(0, view.logs) })
+      .filter((n) => !dismissed.includes(n.id))
+      .map((n) =>
+        n.kind === 'decision' && n.actions[0]?.kind === 'tactics' && !n.id.startsWith('late-') ? { ...n, kind: 'read' as const, actions: [], worth: undefined, auto: false } : n,
+      );
+    const c = staffCall?.state === 'call' && staffCall.base === JSON.stringify(lg.sim.baseTactics(lg.userSide)) ? callNote(staffCall) : null;
+    return c && !dismissed.includes(c.id) ? [c, ...own.filter((n) => n.id !== (staffCall?.state === 'call' ? staffCall.draft.id : ''))] : own;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, tick, dismissed, over, alertInput]);
+  }, [view, tick, dismissed, over, alertInput, staffCall]);
+  // a call that lands goes up over the court once, with its number
+  useEffect(() => {
+    if (staffCall?.state !== 'call' || over) return;
+    const n = callNote(staffCall);
+    queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
+  }, [staffCall, over, queueBanner]);
 
   return {
     league,
@@ -836,6 +919,10 @@ export function useLiveGame() {
     toPending,
     alerts,
     notes,
+    /** The staff's line when it measured and found nothing to change (or while it measures). */
+    quiet: callQuietLine(staffCall),
+    /** The staff's live voice: its call, the coach's last change as measured, and taking or turning down a call. */
+    staff,
     dismissed,
     setDismissed,
     stopCall,

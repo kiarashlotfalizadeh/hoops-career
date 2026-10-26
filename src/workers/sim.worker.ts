@@ -3,6 +3,7 @@ import type { GameResult, League, LiveOp } from '../core/types';
 import { counterWorth, measureChanges, type LeagueChange } from '../core/ai/counterWorth';
 import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type GamesDelta, type GamesSig, type SimProgress, type SimTarget, type TaskOp } from '../state/simCore';
 import { measureChoices, nightWorth, simFromState, type LiveChoice, type SimState } from '../state/liveWorth';
+import { measureCalls, measureChange } from '../state/liveWorth';
 
 // The season sim, off the main thread. The worker keeps its own copy of the open league's results
 // between runs (they are most of a league), so each run only carries the league without them plus
@@ -206,6 +207,35 @@ const api = {
   },
   cancelLive(id: number) {
     liveGone.add(id);
+  },
+  /**
+   * The staff's call from where a live game stands (see measureCalls in liveWorth.ts): each drafted
+   * change against the game as it stands, the best played again on fresh seeds. cancelLive(id) stops it.
+   */
+  async liveCalls(state: SimState, side: 0 | 1, changes: LiveChoice[], by: 'pts' | 'win', confirm: number, id: number, progress: (done: number, total: number) => void) {
+    try {
+      return await measureCalls(simFromState(state), side, changes, {
+        by,
+        confirm,
+        onProgress: (d, t) => void progress(d, t),
+        between: () => new Promise<void>((r) => setTimeout(r, 0)),
+        cancelled: () => liveGone.has(id),
+      });
+    } finally {
+      liveGone.delete(id);
+      (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
+    }
+  },
+  /** One change made in a live game, measured from where it was made (see measureChange). cancelLive(id) stops it. */
+  async liveChange(state: SimState, side: 0 | 1, before: LiveChoice, after: LiveChoice, id: number) {
+    try {
+      return await measureChange(simFromState(state), side, before, after, {
+        between: () => new Promise<void>((r) => setTimeout(r, 0)),
+        cancelled: () => liveGone.has(id),
+      });
+    } finally {
+      liveGone.delete(id);
+    }
   },
   /** What a live game's moves were worth (see nightWorth), from its tip-off (`tip`): run after the final, behind any sim. */
   nightWorth(tip: SimState, side: 0 | 1, ops: LiveOp[]) {

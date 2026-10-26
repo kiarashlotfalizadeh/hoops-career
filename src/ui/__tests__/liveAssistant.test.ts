@@ -17,10 +17,13 @@ import { cloneTactics } from '../../core/sim/tactics';
 import { DEFAULT_PPP } from '../../core/analysis/playTypes';
 import type { PossLog } from '../../core/sim/log';
 import { snapshot, streaks, type Drawn } from '../live/drawn';
+import { tacticsDiff } from '../live/alerts';
 import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type AlertInput } from '../live/alerts';
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
+import { CALL_DRAFTS, callDrafts, callQuietLine, readingLine } from '../live/calls';
+import { measureCalls, measureChange } from '../../state/liveWorth';
 import { fitPlayers, playOptions } from '../live/plays';
 import { SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
@@ -128,7 +131,7 @@ function playOnce(seed: number) {
 }
 
 describe('the live assistant and the bench', () => {
-  it('alert from the drawn game only when the staff will not handle it, and the bench reads matchups, calls and the game', () => {
+  it('alert from the drawn game only when the staff will not handle it, and the bench reads matchups, calls and the game', { timeout: 60_000 }, async () => {
     // alerts come from the drawn snapshot: the sim running on changes nothing they say
     {
       const g = game();
@@ -167,7 +170,10 @@ describe('the live assistant and the bench', () => {
     {
       const g = game();
       for (let i = 0; i < 30; i++) g.sim.step();
-      const view = withPlayer(snapshot(g.sim), 0, { energy: 0.4 });
+      // (the rest of the five fresh, whatever the engine's legs did to them by now: one gassed player)
+      const fresh = snapshot(g.sim);
+      for (const p of fresh.sides[0].players) if (fresh.sides[0].on.includes(p.pid)) p.energy = 0.9;
+      const view = withPlayer(fresh, 0, { energy: 0.4 });
       const tired = (a: AlertInput) => liveAlerts(a).filter((x) => x.id.startsWith('tired-'));
       expect(view.q).toBeLessThan(4);
       expect(tired(alertInput(g, view))).toEqual([]);
@@ -181,6 +187,8 @@ describe('the live assistant and the bench', () => {
       const crunch = structuredClone(view);
       crunch.q = 4;
       crunch.clock = 200;
+      // (a close game, whatever the first 30 trips made the score)
+      crunch.sides[0].score = crunch.sides[1].score;
       expect(tired(alertInput(g, crunch))).toEqual([]);
       expect(tired(alertInput(g, crunch, { manualSubs: true }))).toHaveLength(1);
       // a blowout in the fourth: not worth a word (outside the close-game band the game stops in)
@@ -360,8 +368,9 @@ describe('the live assistant and the bench', () => {
       expect(notes.some((n) => n.id.startsWith('hot-') || n.actions.some((a) => /^Double /.test(a.label)))).toBe(false);
     }
 
-    // no call to lean into or away from your own play types, nor to attack the defender you're beating:
-    // all three measured as costs where they fire (callWorth.ts)
+    // no call to attack the defender you're beating (a cost beyond its noise where it fires: callWorth.ts);
+    // leaning into or away from your own play types measured below even but inside the noise, so the
+    // bench looks there again (the live staff measures it from the spot before it's offered: calls.ts)
     {
       const g = game();
       play(g, 60);
@@ -372,8 +381,9 @@ describe('the live assistant and the bench', () => {
       const t = cloneTactics(base.tactics);
       t.offense.actions.iso = 60;
       t.offense.actions.pnr = 50;
-      expect(staffNotes({ ...base, view, tactics: t }).some((n) => /^(cold|work|hunt)-/.test(n.id))).toBe(false);
-      expect(['cold', 'work', 'hunt', 'tired', 'fouls5'].every((k) => callCosts(k))).toBe(true);
+      expect(staffNotes({ ...base, view, tactics: t }).some((n) => /^hunt-/.test(n.id))).toBe(false);
+      expect(['hunt', 'fouls5', 'garbage'].every((k) => callCosts(k))).toBe(true);
+      expect(['cold', 'work', 'tired', 'pt-spotup>Stay home', 'pt-transition>Sprint back'].some((k) => callCosts(k))).toBe(false);
 
       // a kept call held back when it can't matter: a decided game (up 40 in any quarter), a period's last
       // 24 seconds; but fouling late is the last seconds' call. No call to rest the starters with the
@@ -406,6 +416,47 @@ describe('the live assistant and the bench', () => {
       const r = recentLevers([{ op: { at: 0, op: 'tactics', args: { tactics: after } }, log: 10, before: t }], g.logs, 0);
       expect(Object.keys(r)).toEqual(['defense.pnr']);
       expect(r['defense.pnr']).toBe(g.logs.slice(10).filter((l) => l.off === 1 && l.kind !== 'ft').length);
+    }
+
+    // the staff's live voice (calls.ts): at a stop it drafts three to five real changes from the game in
+    // front of it (none it was told no to lately, none on a lever just changed), measures them from the
+    // spot (the same spot reads the same), and proposes one only when its fresh reading clears its noise
+    {
+      const g = game();
+      play(g, 100);
+      const input = staffInput(g, { atBreak: true });
+      const drafts = callDrafts(input, g.sim);
+      expect(drafts.length).toBeGreaterThanOrEqual(3);
+      expect(drafts.length).toBeLessThanOrEqual(CALL_DRAFTS);
+      expect(new Set(drafts.map((d) => d.id)).size).toBe(drafts.length);
+      const now = input.tactics;
+      for (const d of drafts) if (d.choice.kind === 'tactics') expect(tacticsDiff(now, d.choice.tactics).length).toBeGreaterThan(0);
+      expect(callDrafts(input, g.sim, [], new Set([drafts[0].id])).some((d) => d.id === drafts[0].id)).toBe(false);
+      const held = callDrafts({ ...input, recent: { 'defense.scheme': 3, 'defense.help': 3 } }, g.sim);
+      expect(held.some((d) => d.choice.kind === 'tactics' && tacticsDiff(now, d.choice.tactics).some((k) => k === 'defense.scheme' || k === 'defense.help'))).toBe(false);
+      const m = (await measureCalls(
+        g.sim,
+        0,
+        drafts.map((d) => d.choice),
+        { screen: 6, confirm: 12 },
+      ))!;
+      expect(
+        await measureCalls(
+          g.sim,
+          0,
+          drafts.map((d) => d.choice),
+          { screen: 6, confirm: 12 },
+        ),
+      ).toEqual(m);
+      expect(m.tried).toBe(drafts.length);
+      if (m.pick !== null) expect(m.reading!.raw).toBeGreaterThanOrEqual(2 * m.reading!.se);
+      if (m.reading) expect(Math.abs(m.reading.pts)).toBeLessThanOrEqual(Math.abs(m.reading.raw) + 0.05);
+      // a change that changes nothing reads even, and the staff says so when nothing clears
+      const same = (await measureChange(g.sim, 0, { kind: 'none' }, { kind: 'tactics', tactics: g.sim.baseTactics(0) }, { games: 8 }))!;
+      expect([same.raw, same.win, same.n]).toEqual([0, 0, 8]);
+      expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Measured 4 changes from Q2 3:10: none clears the noise. Nothing to change.');
+      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.015 }, 'pts')).toBe('+1.4 to the margin (±0.5), +4% to win');
+      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.03 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
     }
 
     // the game read in a sentence: the score early, then the biggest edges in the box score

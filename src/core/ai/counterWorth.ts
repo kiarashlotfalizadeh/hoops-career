@@ -92,6 +92,8 @@ export interface WorthOpts {
   between?: () => Promise<void> | void;
   /** Checked between configurations: true stops it (and it comes back null). */
   cancelled?: () => boolean;
+  /** Counters measured at most (counterWorth: WORTH_MAX by default), the first the rules draft: fewer for a sim's budget. */
+  counters?: number;
 }
 
 /**
@@ -190,7 +192,7 @@ export async function measureChanges(league: League, opp: number, changes: Leagu
 export async function counterWorth(league: League, opp: number, game?: WorthGame, opts: WorthOpts = {}): Promise<CounterWorth[] | null> {
   const user = league.userTid;
   const g = game ?? { home: user, away: opp, day: league.day, type: 'regular' as const, seriesId: undefined, cup: undefined };
-  const cands: Candidate[] = counterCandidates(league, user, opp).slice(0, WORTH_MAX);
+  const cands: Candidate[] = counterCandidates(league, user, opp).slice(0, opts.counters ?? WORTH_MAX);
   // each counter in tonight's plan, in place of the plan's item in its group (as Add puts it there)
   const plan = planFor(league, opp, g);
   const changes = cands.map((c): LeagueChange => {

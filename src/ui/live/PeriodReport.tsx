@@ -7,13 +7,12 @@
 // The huddle is the short version for a timeout: late in the game the play call first (built around
 // your closer, each play measured from where the game stands against no call, best first:
 // usePlayWorth), then who to sub and the staff's top move; the last possession of a close game stops
-// for the same play call without one. The staff's moves and counters say what they've been worth
-// where they fire (callWorth.ts). The next period, or the game, goes on from the bench bar.
+// for the same play call without one. The staff's call says what it measured from this spot (calls.ts),
+// or that nothing it measured clears the noise. The next period, or the game, goes on from the bench bar.
 import { useMemo, useState } from 'react';
 import { Check, FastForward, Timer } from 'lucide-react';
 import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
-import { impactCounter } from '../../core/ai/advisor';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
@@ -30,7 +29,6 @@ import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
 import { playOptions, readStatus, type PlayOption } from './plays';
-import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { usePlayWorth, type PlayReading } from './usePlayWorth';
 import { CHOICE_GAMES } from '../../state/liveWorth';
 import { CLUTCH_SEC, pendingLive } from '../../state/live';
@@ -55,6 +53,8 @@ interface Common {
   keys?: GameKey[];
   moves: CoachMove[];
   busy?: boolean;
+  /** The staff's line when it measured and found nothing to change, or while it measures (useStaffCall). */
+  quiet?: string | null;
 }
 
 /** Your five going into the next stretch who are tired or in foul trouble, each with the staff's sub. */
@@ -106,48 +106,54 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
 
 /**
  * What's deciding the game so far: the report's biggest edges (each worth so many points of the
- * margin), the one-tap counter on each one going against you while your tactics still give it, with
- * what that counter has been worth where it fires (callWorth.ts). A counter that measured as a cost
- * isn't offered (the switch to Hedge off a Drop their handlers pull up over): the edge is a read then,
- * with its detail and not the advice to make that switch.
+ * margin), as reads. The counter to one going against you is the staff's to measure from here before
+ * it's offered (calls.ts: its call leads the report when one clears), so an edge carries its detail,
+ * not a one-tap fix with no number (or one the staff's numbers call a cost).
  */
 function useDeciding(league: League, view: Drawn, tactics: Tactics): StaffNote[] {
   return useMemo(() => {
     const rep = buildGameReport(league, view.box, league.userTid, { partial: true, elapsed: view.elapsed, tactics });
-    return decidingFactors(rep?.factors ?? []).map((f): StaffNote => {
-      const id = `f-${f.key ?? f.title}`;
-      const counter = f.pts < 0 && f.key ? impactCounter(f.key, tactics) : undefined;
-      const costs = !!counter && callCosts(callKey(id, counter.label));
-      const fix = costs ? undefined : counter;
-      return {
-        id,
-        kind: fix ? 'decision' : 'read',
-        tone: f.pts >= 0 ? 'good' : 'bad',
-        title: f.title,
-        text: fix || costs ? f.detail : (f.advice ?? f.detail),
-        fig: { v: `${f.pts > 0 ? '+' : f.pts < 0 ? '−' : ''}${Math.abs(f.pts).toFixed(1)}`, unit: 'pts' },
-        actions: fix ? [{ kind: 'tactics', label: fix.label, apply: fix.apply }] : [],
-        rank: 60 + Math.abs(f.pts),
-        ...(fix && { worth: worthLine(callKey(id, fix.label)) }),
-      };
-    });
+    return decidingFactors(rep?.factors ?? []).map((f): StaffNote => ({
+      id: `f-${f.key ?? f.title}`,
+      kind: 'read',
+      tone: f.pts >= 0 ? 'good' : 'bad',
+      title: f.title,
+      text: f.detail,
+      fig: { v: `${f.pts > 0 ? '+' : f.pts < 0 ? '−' : ''}${Math.abs(f.pts).toFixed(1)}`, unit: 'pts' },
+      actions: [],
+      rank: 60 + Math.abs(f.pts),
+    }));
   }, [league, view, tactics]);
 }
 
 /** The staff's moves for the stretch ahead (its decisions, its pick first on each), then what's deciding the game. */
-function Decisions({ notes, onAct, onDismiss, busy, max, deciding }: Pick<Common, 'notes' | 'onAct' | 'onDismiss' | 'busy'> & { max: number; deciding: StaffNote[] }) {
+function Decisions({
+  notes,
+  onAct,
+  onDismiss,
+  busy,
+  max,
+  deciding,
+  quiet,
+}: Pick<Common, 'notes' | 'onAct' | 'onDismiss' | 'busy' | 'quiet'> & { max: number; deciding: StaffNote[] }) {
   const list = notes.filter((n) => n.kind === 'decision' && n.actions.some((a) => a.kind === 'tactics' || a.kind === 'sub')).slice(0, max);
   // (a counter the staff already offers isn't offered twice)
   const offered = new Set(list.flatMap((n) => n.actions.map((a) => a.label)));
   const edges = deciding.filter((n) => !n.actions.some((a) => offered.has(a.label)));
   return (
     <>
-      {list.length > 0 && (
+      {list.length > 0 ? (
         <div className="lv-notes">
           {list.map((n) => (
             <NoteCard key={n.id} note={n} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>
+      ) : (
+        quiet && (
+          <div className="lv-calm small dim" role="status">
+            {quiet}
+          </div>
+        )
       )}
       {edges.length > 0 && (
         <Section title="What's deciding it">

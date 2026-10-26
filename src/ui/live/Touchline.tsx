@@ -9,6 +9,9 @@ import { SLOT_LETTERS, slotName } from '../../core/sim/slots';
 import { famLabel } from '../../core/sim/familiarity';
 import { Chips, Help, Levels } from '../components/ui';
 import { FAM_OK, OPT, famSuffix, withMentalityOf, withShapeOf, type LiveSlot } from './familiar';
+import type { ChangeWorth } from './useStaffCall';
+import { readingLine } from './calls';
+import { clearOf } from '../../state/liveWorth';
 
 /** A familiarity figure's tone: fluid reads good, learning a warning, new or awkward bad. */
 export const famTone = (v: number) => (v >= FAM_OK ? 'good' : v >= 75 ? '' : v >= 55 ? 'warn' : 'bad');
@@ -26,6 +29,7 @@ export function Touchline({
   famOf,
   shape = true,
   busy,
+  measured,
 }: {
   team: Team;
   slots: LiveSlot[];
@@ -41,6 +45,8 @@ export function Touchline({
   /** Show the shape control (the Game plan view leaves it to Every setting). */
   shape?: boolean;
   busy?: boolean;
+  /** Your last change, measured from where you made it (useStaffCall). */
+  measured?: ChangeWorth | null;
 }) {
   const m = t.mentality ?? 0;
   const filled = slots.filter((s) => s.tactics).length;
@@ -114,6 +120,39 @@ export function Touchline({
           />
         </div>
       )}
+      {measured && <ChangeLine c={measured} />}
+    </div>
+  );
+}
+
+/**
+ * Your last change, as measured from where you made it: the rest of the game played with it and without
+ * it, game for game. Clear of its noise, its number; inside it, too close to say (with the reading).
+ */
+export function ChangeLine({ c }: { c: ChangeWorth }) {
+  const r = c.reading;
+  const who = c.call ? "The staff's call" : 'Your change';
+  if (!r)
+    return (
+      <div className="lv-touch-worth small dim" role="status">
+        {who} ({c.what}): measuring from {c.at}…
+      </div>
+    );
+  const clear = clearOf(r.raw, r.se);
+  return (
+    <div className="lv-touch-worth small" role="status">
+      <span className="dim2">
+        {who} ({c.what}), from {c.at}:{' '}
+      </span>
+      {clear ? (
+        <b className={`num ${r.raw > 0 ? 'good' : 'bad'}`}>{readingLine(r, 'pts')}</b>
+      ) : (
+        <span className="num">
+          too close to say ({r.pts > 0 ? '+' : r.pts < 0 ? '−' : ''}
+          {Math.abs(r.pts).toFixed(1)}, ±{r.band.toFixed(1)})
+        </span>
+      )}
+      <span className="dim">. {r.n} replays each way.</span>
     </div>
   );
 }

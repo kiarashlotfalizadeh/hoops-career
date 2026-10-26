@@ -161,7 +161,8 @@ export default function Live() {
     conRef.current?.scrollTo({ top: 0 });
   }, [stop]);
 
-  // with the bench handed to the staff, it makes its tactics calls itself: one at a time, each once a game
+  // with the bench handed to the staff, it takes its own measured calls: a tactics change that cleared
+  // its noise, the moment it lands (subs and timeouts stay yours), and the late fouls
   const autonomy = league.settings.liveStaff === 'auto' ? 'auto' : 'ask';
   const autoDone = useRef(new Set<string>());
   useEffect(() => {
@@ -170,9 +171,11 @@ export default function Live() {
     const a = n?.actions[0];
     if (!n || a?.kind !== 'tactics') return;
     autoDone.current.add(n.id);
-    applyTactics(a.apply, n.title);
+    const call = n.id.startsWith('call-');
+    applyTactics(a.apply, n.title, { measured: call });
+    if (call) s.staff.took(a.label);
     s.setDismissed((d) => [...d, n.id]);
-    useStore.getState().toast(`${assistant.last}: ${a.label}`, 'good');
+    useStore.getState().toast(`${assistant.last}: ${a.label}${call && n.fig ? ` (${n.fig.v} ${n.fig.unit}, measured)` : ''}`, 'good');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.notes, autonomy, over, simBusy]);
 
@@ -302,15 +305,22 @@ export default function Live() {
   };
   /** One of the staff's moves, taken: its change, sub, timeout or the lineup. */
   const act = (n: StaffNote, a: StaffAction) => {
+    // the staff's measured call: its number is the change's (nothing to measure again)
+    const call = n.id.startsWith('call-');
     if (a.kind === 'tactics') {
-      applyTactics(a.apply);
+      applyTactics(a.apply, undefined, { measured: call });
       useStore.getState().toast(`${a.label}: from the next possession.`, 'good');
     } else if (a.kind === 'sub') (stop ? subAtStop : substitute)(a.out, a.in);
-    else if (a.kind === 'timeout') s.callTimeout('stop the run');
+    else if (a.kind === 'timeout') s.callTimeout(call ? a.label : 'stop the run');
     else setCview('lineup');
+    if (call) s.staff.took(a.label);
     s.setDismissed((d) => [...d, n.id]);
   };
-  const dismiss = (n: StaffNote) => s.setDismissed((d) => [...d, n.id]);
+  const dismiss = (n: StaffNote) => {
+    // a call turned down isn't measured again for a while
+    if (n.id.startsWith('call-')) s.staff.decline(n.id.slice(5), game.steps);
+    s.setDismissed((d) => [...d, n.id]);
+  };
   const changed = offPlan(tactics, game.planned) ? changesLine(screenChanges(game.planned, tactics, nameOf).slice(0, 3)) : '';
   // the touchline: your three tactics, the mentality and (in Every setting) the shape, with what the team knows of each
   const famOf = (key: string) => liveOpt(game, key);
@@ -326,6 +336,7 @@ export default function Live() {
         apply={applyTactics}
         famOf={famOf}
         shape={shape}
+        measured={s.staff.change}
       />
     );
 
@@ -346,6 +357,7 @@ export default function Live() {
     keys: s.keys,
     moves,
     busy: simBusy,
+    quiet: s.quiet,
   };
 
   const consoleBody = () => {
@@ -380,6 +392,7 @@ export default function Live() {
           assistant={assistant}
           read={read}
           notes={notes}
+          quiet={s.quiet}
           onAct={act}
           onDismiss={dismiss}
           autonomy={autonomy}

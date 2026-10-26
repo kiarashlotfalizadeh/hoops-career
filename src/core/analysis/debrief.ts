@@ -16,7 +16,7 @@ import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { famReadout, impactCounter } from '../ai/advisor';
 import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
-import { CALL_WORTH, callCosts, callKey, callWorth, worthLine } from './callWorth';
+import { CALL_WORTH, callBelowEven, callKey, callWorth, worthLine } from './callWorth';
 
 export interface DebriefAdvice {
   id: string;
@@ -66,7 +66,7 @@ export function sameChange(base: Tactics, advice: TacticsPatch, counter: Tactics
 }
 
 /** A change the bench measured as a cost under any of its calls ("Stay home" off hot spot-ups): not next time's fix either. */
-const labelCosts = (label: string) => Object.keys(CALL_WORTH).some((k) => k.endsWith(`>${label}`) && callCosts(k));
+const labelCosts = (label: string) => Object.keys(CALL_WORTH).some((k) => k.endsWith(`>${label}`) && callBelowEven(k));
 
 /** How one counter of the game plan went (see planGrades). */
 export interface PlanGrade {
@@ -573,7 +573,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       // (a counter that measured as a cost where the bench calls it, off this edge or another, isn't
       // next time's fix either: the switch to Hedge off a Drop their handlers pulled up over, Stay home)
       const key = callKey(`imp-${f.key}`, fix.label);
-      if (callCosts(key) || labelCosts(fix.label)) continue;
+      if (callBelowEven(key) || labelCosts(fix.label)) continue;
       const after = cloneTactics(tactics);
       fix.apply(after);
       const patch = tacticsDiff(tactics, after);
