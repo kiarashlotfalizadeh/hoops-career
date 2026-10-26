@@ -23,7 +23,8 @@ import {
   startRegularSeason,
   userDraftPick,
 } from '../league/season';
-import { aiChoose, draftOrder, draftPlayer, generateDraftClass, lotteryOdds, nextPick, runLottery } from '../league/draft';
+import { aiChoose, draftNeed, draftOrder, draftPlayer, draftScore, draftUntilUser, generateDraftClass, lotteryOdds, nextPick, runLottery } from '../league/draft';
+import { consensusRead, prospectsDay, readRange, scoutDays, scoutList, seenPlayer, staffRead, stockMove, teamRead, toggleScout } from '../league/prospects';
 import { mockAvailable, mockDraft } from '../league/mockDraft';
 import { FIRED_REASON, askingContract, decideTeamOption, marketSalary, pendingOption, releasePlayer, valueScore } from '../league/contracts';
 import { expiringPlayers, faDay } from '../league/freeAgency';
@@ -48,28 +49,6 @@ function league(rngSeed = 7): League {
 }
 
 const aiTeam = (l: League) => l.teams.find((t) => t.tid !== l.userTid)!.tid;
-
-/** aiChoose as it was before its scoring was shared with the mock draft. */
-function oldChoose(league: League, tid: number, rng: Rng): Player | undefined {
-  const avail = prospects(league, league.season);
-  if (!avail.length) return undefined;
-  const roster = teamPlayers(league, tid);
-  const bigs = roster.filter((p) => p.ratings.hgt >= 60).length;
-  const guards = roster.filter((p) => p.ratings.hnd >= 60).length;
-  let best: Player | undefined;
-  let bs = -Infinity;
-  for (const p of avail) {
-    let s = p.pot * 0.65 + p.ovr * 0.35 + rng.normal(0, 1.5);
-    if (bigs <= 2 && p.ratings.hgt >= 60) s += 1;
-    if (guards <= 2 && p.ratings.hnd >= 60) s += 1;
-    s -= (p.prospect?.rank ?? 50) * 0.04;
-    if (s > bs) {
-      bs = s;
-      best = p;
-    }
-  }
-  return best;
-}
 
 describe('the draft', () => {
   let l: League;
@@ -189,12 +168,77 @@ describe('the draft', () => {
       expect([...odds.values()].reduce((a, b) => a + b, 0)).toBeCloseTo(1000);
     }
 
-    // the mock draft: the real draft picks exactly as it did before its scoring was shared
-    for (let tid = 0; tid < l.teams.length; tid++) {
-      const a = new Rng(1000 + tid);
-      const b = new Rng(1000 + tid);
-      expect(aiChoose(l, tid, a)?.pid).toBe(oldChoose(l, tid, b)?.pid);
-      expect(a.state).toBe(b.state);
+    // scouting (prospects.ts): nobody drafts by the truth. Reads are fixed per team and prospect, the
+    // stated ranges hold the truth about four times in five, the boards disagree, and the staff's
+    // pick is the best on its own read
+    {
+      const x = structuredClone(l);
+      const cls = prospects(x, x.season);
+      const ai = aiTeam(x);
+      const p0 = cls[0];
+      expect(teamRead(x, ai, p0)).toEqual(teamRead(x, ai, p0));
+      expect(teamRead(x, ai, p0).score).not.toBe(p0.pot * 0.65 + p0.ovr * 0.35);
+      // coverage of the staff's ranges, and the consensus's error, over the class
+      const inside = cls.filter((p) => {
+        const r = readRange(staffRead(x, p));
+        return r.potLo <= p.pot && p.pot <= r.potHi;
+      }).length;
+      expect(inside / cls.length).toBeGreaterThan(0.6);
+      expect(inside / cls.length).toBeLessThan(0.95);
+      // AI boards disagree: the same prospect reads differently across front offices
+      const scores = x.teams.filter((t) => t.tid !== x.userTid).map((t) => teamRead(x, t.tid, p0).score);
+      expect(Math.max(...scores) - Math.min(...scores)).toBeGreaterThan(2);
+      // the staff's pick: the best on its read (need counted), never a player it reads worse
+      const need = draftNeed(teamPlayers(x, x.userTid));
+      const best = cls.reduce((a, p) => (draftScore(p, need, 0, staffRead(x, p), false) > draftScore(a, need, 0, staffRead(x, a), false) ? p : a));
+      expect(aiChoose(x, x.userTid, new Rng(1))?.pid).toBe(best.pid);
+      // what the user sees of a prospect is the staff's read; anyone else as he is
+      const seen = seenPlayer(x, p0);
+      expect(seen.ovr).toBe(readRange(staffRead(x, p0)).ovr);
+      expect(seenPlayer(x, teamPlayers(x, ai)[0])).toBe(teamPlayers(x, ai)[0]);
+      // scouts narrow the read: five at most, and a month on a prospect halves the range or better
+      const sd0 = staffRead(x, p0).sd;
+      for (const p of cls.slice(0, 5)) expect(toggleScout(x, p.pid)).toBeNull();
+      expect(toggleScout(x, cls[5].pid)).toMatch(/scouts are out/);
+      expect(scoutList(x).filter((s) => !s.auto)).toHaveLength(5);
+      for (let d = 0; d < 45; d++) prospectsDay(x);
+      expect(scoutDays(x, p0.pid)).toBe(45);
+      expect(staffRead(x, p0).sd).toBeLessThan(sd0 / 2);
+      expect(toggleScout(x, p0.pid)).toBeNull();
+      expect(scoutList(x).some((s) => s.pid === p0.pid)).toBe(false);
+      // a poor coaching budget reads worse than the room; a big one better
+      const y = structuredClone(l);
+      y.teams[y.userTid].budget.coaching = 1;
+      const poor = staffRead(y, p0).sd;
+      y.teams[y.userTid].budget.coaching = 100;
+      expect(staffRead(y, p0).sd).toBeLessThan(consensusRead(y, p0).sd);
+      expect(poor).toBeGreaterThan(consensusRead(y, p0).sd);
+      // a league from before scouting: no state, a fresh read, no stock move
+      const old = structuredClone(l);
+      delete old.scouting;
+      for (const p of prospects(old, old.season)) delete p.prospect!.rank0;
+      expect(readRange(staffRead(old, prospects(old, old.season)[0])).exact).toBe(false);
+      expect(stockMove(prospects(old, old.season)[0])).toBeNull();
+      // the whole draft by every team's own board: the order follows the truth, far from exactly
+      const z = structuredClone(l);
+      runLottery(z, new Rng(9));
+      z.phase = 'draft';
+      const truth = new Map(prospects(z, z.season).map((p) => [p.pid, p.pot * 0.65 + p.ovr * 0.35]));
+      draftUntilUser(z, new Rng(4), true);
+      const taken = Object.values(z.players)
+        .filter((p) => p.draft.year === z.season && p.draft.round > 0)
+        .sort((a, b) => (a.draft.round - b.draft.round) * 100 + a.draft.pick - b.draft.pick);
+      expect(taken).toHaveLength(60);
+      // Spearman: slot against the truth's order
+      const byTruth = [...taken].sort((a, b) => truth.get(b.pid)! - truth.get(a.pid)!);
+      const n = taken.length;
+      const d2 = taken.reduce((a, p, i) => a + (i - byTruth.indexOf(p)) ** 2, 0);
+      const rho = 1 - (6 * d2) / (n * (n * n - 1));
+      expect(rho).toBeGreaterThan(0.6);
+      expect(rho).toBeLessThan(0.97);
+      // the room's read on the night is kept for a later grade, and the user's staff's on his own picks
+      expect(taken.every((p) => p.draft.read && p.draft.read.pot >= p.draft.read.ovr)).toBe(true);
+      expect(taken.filter((p) => p.tid === z.userTid).every((p) => p.draft.read?.staff)).toBe(true);
     }
 
     // it reads the same for the same league and never touches it

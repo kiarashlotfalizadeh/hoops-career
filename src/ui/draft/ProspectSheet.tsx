@@ -1,19 +1,74 @@
-// A prospect's scouting report: who he is, his combine, and Draft him when you're on the clock.
+// A prospect's scouting report: who he is, your staff's read of him and the scouts on him, his
+// season, his combine, and Draft him when you're on the clock.
 import { Link } from 'react-router-dom';
-import { Scale } from 'lucide-react';
-import { playerName } from '../../core/league/helpers';
+import { Binoculars, Scale } from 'lucide-react';
+import type { League, Player } from '../../core/types';
+import { DRAFT_PROSPECT } from '../../core/types';
+import { fmtDate, playerName } from '../../core/league/helpers';
+import { SCOUT_SLOTS, combineIn, scoutDays, scoutList, seenRange, toggleScout } from '../../core/league/prospects';
 import { fmtHeight } from '../../core/ratings';
 import { playerAge } from '../../core/playerGen';
-import { useLeague } from '../../state/store';
+import { useLeague, useStore } from '../../state/store';
+import { edit } from '../../state/actions';
 import { Avatar, Ovr, Section, Sheet } from '../components/ui';
 import { overallPick } from '../league/shared';
 import { boardNeighbors, compareHref } from '../compare';
 import { boardRank, fmtIn } from './common';
+import { StockMove } from './read';
+
+/** His season so far, month by month: "A hot December (+2), an injury in February (−2)". */
+function seasonLine(league: League, p: Player): string | null {
+  const moves = p.prospect?.moves ?? [];
+  if (!moves.length) return null;
+  const month = (day: number) => fmtDate(league.season, day - 5, { month: 'long' });
+  const one = (m: (typeof moves)[number]) => `${m.kind === 'hurt' ? `an injury in ${month(m.day)}` : `a ${m.kind} ${month(m.day)}`} (${m.d > 0 ? '+' : '−'}${Math.abs(m.d)})`;
+  const text = moves.map(one).join(', ');
+  return text[0].toUpperCase() + text.slice(1) + '.';
+}
+
+/** The staff's read and the scouts: the ranges, the days watched, and Scout him / Call the scout back while the season runs. */
+function StaffRead({ league, p }: { league: League; p: Player }) {
+  const r = seenRange(league, p);
+  const list = scoutList(league);
+  const me = list.find((s) => s.pid === p.pid);
+  const sent = list.filter((s) => !s.auto).length;
+  const days = scoutDays(league, p.pid);
+  // the scouting runs through the season; by the lottery the reads are what they are
+  const open = league.phase !== 'draftLottery' && league.phase !== 'draft';
+  const toggle = () => {
+    if (!me?.auto && !me && sent >= SCOUT_SLOTS) {
+      useStore.getState().toast(`All ${SCOUT_SLOTS} scouts are out. Call one back first.`, 'bad');
+      return;
+    }
+    edit((l) => void toggleScout(l, p.pid));
+  };
+  const status = me ? (me.auto ? "The staff's scouts are on him, near your pick" : 'Your scouts are on him') : days ? 'No scout on him now' : 'Not scouted yet';
+  return (
+    <div className="dn-scout">
+      <div className="fo-meta">
+        Staff read: OVR {r.ovrLo}-{r.ovrHi} · POT {r.potLo}-{r.potHi}
+      </div>
+      <div className="tiny dim">
+        {status}
+        {days ? ` · ${days} ${days === 1 ? 'day' : 'days'} watched` : ''}. The more they watch, the narrower the range.
+      </div>
+      {open && (
+        <button className={`btn sm ${me && !me.auto ? '' : 'primary'}`} onClick={toggle}>
+          <Binoculars size={14} /> {me && !me.auto ? 'Call the scout back' : `Scout him (${sent} of ${SCOUT_SLOTS} out)`}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number | null; onClose: () => void; canDraft: boolean; onDraft: (pid: number) => void }) {
   const league = useLeague();
   const p = pid !== null ? league.players[pid] : undefined;
-  const c = p?.prospect?.combine;
+  // the combine's figures only once it's held, in May
+  const c = p && (p.tid !== DRAFT_PROSPECT || combineIn(league)) ? p.prospect?.combine : undefined;
+  const prospect = p?.tid === DRAFT_PROSPECT;
+  const r = p && prospect ? seenRange(league, p) : null;
+  const season = p && prospect ? seasonLine(league, p) : null;
   const fig = (k: string, val: string) => (
     <div>
       <div className="k">{k}</div>
@@ -27,13 +82,15 @@ export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number
           <div className="fo-prospect-h">
             <Avatar p={p} size="lg" />
             <div className="grow">
-              <div className="over">{boardRank(league, p) ? `Rank ${boardRank(league, p)}` : 'Unranked'}</div>
+              <div className="over">
+                {boardRank(league, p) ? `Rank ${boardRank(league, p)}` : 'Unranked'} {prospect && <StockMove p={p} />}
+              </div>
               <div className="fo-prospect-first">{p.firstName}</div>
               <h2 className="fo-prospect-last">{p.lastName}</h2>
             </div>
             <div className="fo-prospect-r">
-              <Ovr v={p.ovr} size="lg" />
-              <span className="pot">POT {p.pot}</span>
+              <Ovr v={r ? r.ovr : p.ovr} size="lg" />
+              <span className="pot">POT {r ? (r.potLo === r.potHi ? r.pot : `${r.potLo}-${r.potHi}`) : p.pot}</span>
             </div>
           </div>
           <div className="fo-meta fo-wrap">
@@ -53,6 +110,8 @@ export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number
             </Link>
           </div>
           {p.prospect?.blurb && <p className="fo-lede">{p.prospect.blurb}</p>}
+          {prospect && <StaffRead league={league} p={p} />}
+          {season && <div className="tiny dim">{season}</div>}
           {c && (
             <Section title="Combine">
               <div className="fo-combine">

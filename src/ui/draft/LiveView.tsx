@@ -110,6 +110,12 @@ function YourPick({ league, picks }: { league: League; picks: Player[] }) {
           <span className="dn-yours-meta">
             {p.pos} · {p.archetype} <GradeTag league={league} p={p} />
           </span>
+          {/* what the staff read before the pick, beside what he is now he's ours */}
+          {p.draft.read?.staff && (
+            <span className="dn-yours-meta">
+              Staff read {p.draft.read.staff.ovr} · POT {p.draft.read.staff.pot}
+            </span>
+          )}
         </span>
         <OvrPot p={p} />
       </span>

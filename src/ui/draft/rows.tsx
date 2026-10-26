@@ -15,6 +15,7 @@ import { ordinal } from '../../core/format';
 import './draft-night.css';
 import { overallPick } from '../league/shared';
 import { OvrKey } from '../components/OvrKey';
+import { ReadOvrPot, ScoutMark, StockMove, scoutedSet } from './read';
 
 /** A pick's grade against the big board, as a quiet tag: "Steal · ranked 4th". */
 export function GradeTag({ league, p }: { league: League; p: Player }) {
@@ -65,6 +66,7 @@ export function BoardList({
   // the mock's read of where each goes, and whether he'll still be there at the user's next pick
   // (not before the lottery's reveal: it would give your slot away)
   const mine = mock && !lotteryHidden(league) ? userNextSlot(league, mock) : undefined;
+  const scouted = scoutedSet(league);
   const projection = (p: Player) => {
     const r = mock?.range.get(p.pid);
     if (!mock || !r) return null;
@@ -74,11 +76,11 @@ export function BoardList({
   };
   return (
     <div className="card flush">
-      {/* what each column is: the scouts' rank (the help says how it differs from the mocks' projection), the prospect, his rating now over the ceiling scouts see */}
+      {/* what each column is: the consensus rank (the help says how it differs from the mocks' projection), the prospect, your staff's read of his rating now over his ceiling */}
       <div className="fo-board-h" aria-hidden="true">
         <span className="fo-rank">Rank</span>
         <span className="grow">Prospect</span>
-        <span>OVR · POT</span>
+        <span>Staff read</span>
       </div>
       <div className="list wide2">
         {list.slice(0, limit).map((p) => {
@@ -92,15 +94,18 @@ export function BoardList({
                   {p.prospect?.rank ?? '—'}
                 </span>
                 <div className="grow">
-                  <div className="fo-name">{playerName(p)}</div>
-                  {/* one line: who he is and where the mocks have him (his school, size and type are on his sheet); the chance he's gone before your pick wraps under it */}
+                  <div className="fo-name">
+                    {playerName(p)}
+                    <ScoutMark on={scouted.has(p.pid)} />
+                  </div>
+                  {/* one line: who he is, his move on the board and where the mocks have him (his school, size and type are on his sheet); the chance he's gone before your pick wraps under it */}
                   <div className="fo-board-proj">
-                    {p.pos} · {playerAge(p, league.season)}
+                    {p.pos} · {playerAge(p, league.season)} <StockMove p={p} />
                     {pr ? <span className="fo-proj"> · {pr.where}</span> : null}
                     {pr?.gone ? <span className="warn"> · {pr.gone}</span> : null}
                   </div>
                 </div>
-                <OvrPot p={p} />
+                <ReadOvrPot league={league} p={p} />
               </button>
               {onDraft && (
                 <button className="btn sm good" aria-label={`Draft ${playerName(p)}`} onClick={() => onDraft(p.pid)}>

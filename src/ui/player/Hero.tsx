@@ -51,7 +51,7 @@ function statusLine(league: League, p: Player): string {
       ? 'Restricted free agent'
       : 'Free agent'
     : p.tid === DRAFT_PROSPECT
-      ? `${p.draft.year} draft prospect`
+      ? `${p.draft.year} draft prospect · staff read`
       : p.tid === RETIRED
         ? `Retired${p.retiredSeason ? ` after ${seasonLabel(p.retiredSeason)}` : ''}`
         : team

@@ -11,8 +11,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { autoDraftUserPick, finishDraftPhase, newSeason, simDay, startDraft, startFreeAgency, startRegularSeason } from '../league/season';
 import { nextPick } from '../league/draft';
+import { stockMove } from '../league/prospects';
 import { cupTables } from '../league/cup';
-import { curTeamSeason, dayToDate, freeAgents, standardRoster, teamPlayers } from '../league/helpers';
+import { curTeamSeason, dayToDate, freeAgents, prospects, standardRoster, teamPlayers } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { takeOverTeam } from '../league/owner';
@@ -527,6 +528,23 @@ describe('two seasons of a fictional league', () => {
     // the user's games make the front page on a handful of nights of a fictional league's regular season
     expect(frontPages).toBeDefined();
     expect(frontPages!.length, frontPages!.map((n) => n.head).join(' | ')).toBeLessThanOrEqual(8);
+
+    // the class lived through the season (prospects.ts): five monthly moves and the combine, risers
+    // and fallers on the board, the news of the big ones, the user's mail about them kept sparing,
+    // and the staff's scouts on the prospects near his pick
+    {
+      const cls = prospects(league, league.season);
+      expect(league.scouting).toMatchObject({ season: league.season, moves: 5, combine: true });
+      expect(cls.filter((p) => p.prospect?.moves?.length).length).toBeGreaterThan(cls.length / 4);
+      expect(cls.filter((p) => stockMove(p)).length).toBeGreaterThan(cls.length / 2);
+      const stock = league.news.filter((n) => n.season === league.season && n.text.startsWith('Draft stock'));
+      expect(stock.length).toBeGreaterThan(0);
+      expect(stock.length).toBeLessThanOrEqual(10);
+      const mail = league.inbox.filter((m) => m.season === league.season && m.from === 'Scouting Department');
+      expect(mail.length).toBeLessThanOrEqual(8);
+      expect(Object.values(league.scouting!.looks).reduce((a, d) => a + d, 0)).toBeGreaterThan(200);
+      expect(cls.every((p) => p.prospect?.combine)).toBe(true);
+    }
 
     // it drafts and rolls over: two rounds of rookies, 80 games per team up front (the NBA Cup knockout window adds the last two per team)
     expect(rookies).toBe(60);

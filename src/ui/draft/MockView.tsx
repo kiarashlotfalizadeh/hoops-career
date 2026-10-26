@@ -5,8 +5,9 @@ import { playerName } from '../../core/league/helpers';
 import { type MockDraft, type MockSlot } from '../../core/league/mockDraft';
 import { TeamLogo } from '../components/TeamLogo';
 import { Empty, Section } from '../components/ui';
-import { HelpSheet, OvrPot } from '../office/common';
+import { HelpSheet } from '../office/common';
 import { lotteryHidden } from './common';
+import { ReadOvrPot } from './read';
 
 /** The mock draft, slot by slot: the likeliest pick and the next ones, the user's picks lit. */
 export function MockView({ league, mock, onOpen }: { league: League; mock: MockDraft | null; onOpen: (pid: number) => void }) {
@@ -22,8 +23,8 @@ export function MockView({ league, mock, onOpen }: { league: League; mock: MockD
       right={
         <HelpSheet title="Mock draft">
           <p>
-            The draft played out {mock.runs} times the way AI teams pick: potential and talent, a nudge toward what the roster lacks, and their usual unpredictability on the night.
-            Your picks go to the top player left on your big board, or to your staff&apos;s choice.
+            The draft played out {mock.runs} times the way AI teams pick: potential and talent as the consensus reads them, a nudge toward what the roster lacks, and what nobody
+            outside a front office knows: its own board and its mood on the night. Your picks go to your staff&apos;s choice, the best on their read.
           </p>
           <p>
             Each pick shows the likeliest player not already named above it and how often he was the pick there, then the next likeliest. On the big board, each prospect&apos;s
@@ -71,7 +72,7 @@ function MockRow({ league, s, onOpen }: { league: League; s: MockSlot; onOpen: (
           {alts.length > 0 && <span className="dim"> · or {alts.map((a) => `${name(a.pid)}\u00a0${Math.round(a.p * 100)}%`).join(', ')}</span>}
         </div>
       </div>
-      <OvrPot p={p} />
+      <ReadOvrPot league={league} p={p} />
     </button>
   );
 }

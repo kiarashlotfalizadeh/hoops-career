@@ -22,6 +22,7 @@ import { RatingsTab } from '../player/RatingsTab';
 import { StatsTab } from '../player/StatsTab';
 import { GameLog } from '../player/GameLog';
 import { GrowthTab } from '../player/GrowthTab';
+import { seenPlayer } from '../../core/league/prospects';
 import './team.css';
 
 type Tab = 'overview' | 'ratings' | 'stats' | 'log' | 'dev';
@@ -30,7 +31,8 @@ export default function PlayerView() {
   const league = useLeague();
   const nav = useNavigate();
   const { pid } = useParams();
-  const p = league.players[Number(pid)];
+  // a prospect as the user's staff read him (core/league/prospects.ts)
+  const p = seenPlayer(league, league.players[Number(pid)]);
   const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'ratings', 'stats', 'log', 'dev']);
   const [confirmRelease, setConfirmRelease] = useState(false);
   const [roleOpen, setRoleOpen] = useState(false);

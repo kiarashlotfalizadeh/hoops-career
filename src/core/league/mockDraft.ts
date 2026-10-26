@@ -1,22 +1,27 @@
 // The mock draft: this season's draft played out the way AI teams pick (draftScore: potential and
-// talent, a nudge toward a roster's needs, the consensus rank, and their unpredictability on the
-// night), a few hundred times on a stream of its own. Before the lottery the order is the one by
+// talent as the consensus reads them, a nudge toward a roster's needs, the consensus rank, and
+// what nobody outside knows: each team's own board and its whim on the night, MOCK_SPREAD), a few
+// hundred times on a stream of its own. Before the lottery the order is the one by
 // record (as the projected slots read it: lottery teams first, then the playoff teams), with each
 // pick going to its owner (a protected pick that lands inside its protection stays home, a swap
 // right takes the other first when that one lands higher); after the lottery it's the real order,
 // and on draft night it starts from the picks already made. The user's picks go to the highest
-// player left on his own big board, or the way his staff would make them. Pure reads of the
-// league: the real draft's draws never change.
+// player left on his own big board, or to his staff's pick (the best on their read). Pure reads of
+// the league: the real draft's draws never change.
 
 import type { DraftPick, League } from '../types';
 import { Rng, hashString, mix32 } from '../random';
 import { DRAFT_NOISE, draftNeed, draftOrder, draftScore, draftStandings, type DraftNeed } from './draft';
 import { curTeamSeason, prospects, teamPlayers } from './helpers';
+import { consensusRead, mystery, staffRead, teamSpread } from './prospects';
 
 /** Simulated drafts in a mock. */
 export const MOCK_RUNS = 250;
-/** A prospect this far below a slot's best rated one (about seven of a team's reads on the night) is never its pick. */
+/** A prospect this far below a slot's best rated one (about five of a team's reads on the night) is never its pick. */
 const OUT_OF_REACH = 10;
+
+/** How far an AI team's score of a prospect strays from the consensus's, one standard deviation: its own board (teamSpread, for a prospect this hard to read) and its whim on the night (DRAFT_NOISE). */
+export const mockSpread = (league: League, m = 1) => Math.hypot(teamSpread(league, m), DRAFT_NOISE);
 
 export interface MockSlot {
   round: 1 | 2;
@@ -94,6 +99,10 @@ export function mockDraft(league: League, runs = MOCK_RUNS): MockDraft | null {
   // the user's board, as pool indexes, best first
   const board = (league.draftBoard ?? []).map((pid) => idx.get(pid)).filter((i): i is number => i !== undefined);
   const need0 = league.teams.map((t) => draftNeed(teamPlayers(league, t.tid)));
+  // the room's read of each prospect, and the user's staff's
+  const room = pool.map((p) => consensusRead(league, p));
+  const staff = pool.map((p) => staffRead(league, p));
+  const spread = pool.map((p) => mockSpread(league, mystery(league, p)));
   const big = pool.map((p) => p.ratings.hgt >= 60);
   const guard = pool.map((p) => p.ratings.hnd >= 60);
   const counts = order.map(() => new Map<number, number>());
@@ -109,19 +118,32 @@ export function mockDraft(league: League, runs = MOCK_RUNS): MockDraft | null {
     order.forEach((slot, si) => {
       let pick = -1;
       if (slot.tid === user) pick = board.find((i) => !taken[i]) ?? -1;
+      if (pick < 0 && slot.tid === user) {
+        // his staff's pick: the best on their read, need counted
+        let best = -Infinity;
+        const nd = need[slot.tid] ?? { bigs: 3, guards: 3 };
+        for (let i = 0; i < pool.length; i++) {
+          if (taken[i]) continue;
+          const s = draftScore(pool[i], nd, 0, staff[i], false);
+          if (s > best) {
+            best = s;
+            pick = i;
+          }
+        }
+      }
       if (pick < 0) {
         const nd = need[slot.tid] ?? { bigs: 3, guards: 3 };
         // the rating without the night's read; a prospect out of reach of the best is left out of the draws
         let top = -Infinity;
         for (let i = 0; i < pool.length; i++) {
           if (taken[i]) continue;
-          at[i] = draftScore(pool[i], nd);
+          at[i] = draftScore(pool[i], nd, 0, room[i]);
           if (at[i] > top) top = at[i];
         }
         let best = -Infinity;
         for (let i = 0; i < pool.length; i++) {
           if (taken[i] || at[i] < top - OUT_OF_REACH) continue;
-          const s = at[i] + rng.normal(0, DRAFT_NOISE);
+          const s = at[i] + rng.normal(0, spread[i]);
           if (s > best) {
             best = s;
             pick = i;

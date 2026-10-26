@@ -21,6 +21,7 @@ import { skillColor, useSkillPercentiles } from '../playerSkills';
 import { identityColor, matchupLooks, type TeamLook } from '../teamColors';
 import { compareQuery, compareSections, pidParam, rememberComparison, rowView, type CmpSection, type Side } from '../compare';
 import './compare.css';
+import { seenPlayer } from '../../core/league/prospects';
 import { injuryName, money, outFor } from '../../core/format';
 
 type View = 'profile' | 'ratings' | 'stats';
@@ -246,8 +247,9 @@ export default function Compare() {
   const league = useLeague();
   const [params, setParams] = useSearchParams();
   const ids: Record<Side, number | null> = { a: pidParam(params.get('a')), b: pidParam(params.get('b')) };
-  const pa = ids.a !== null ? league.players[ids.a] : undefined;
-  const pb = ids.b !== null ? league.players[ids.b] : undefined;
+  // a prospect as the user's staff read him (core/league/prospects.ts)
+  const pa = useLeagueMemo(() => (ids.a !== null ? seenPlayer(league, league.players[ids.a]) : undefined), [league, ids.a]);
+  const pb = useLeagueMemo(() => (ids.b !== null ? seenPlayer(league, league.players[ids.b]) : undefined), [league, ids.b]);
   const [picking, setPicking] = useState<Side | null>(null);
   const [view, setView] = useState<View>('profile');
   const pctile = useSkillPercentiles(league);

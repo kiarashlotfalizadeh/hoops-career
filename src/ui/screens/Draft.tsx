@@ -16,7 +16,7 @@ import { act, edit } from '../../state/actions';
 import { draftPick, useBusy } from '../../state/actions/office';
 import { runAgenda } from '../components/Agenda';
 import { Avatar, PageHeader, Sheet, Toggle } from '../components/ui';
-import { HelpSheet, OvrPot } from '../office/common';
+import { HelpSheet } from '../office/common';
 import { PickTradeSheet } from '../office/PickTradeSheet';
 import { TabBar, overallPick } from '../league/shared';
 import { BoardList } from '../draft/rows';
@@ -27,6 +27,7 @@ import { CombineView } from '../draft/CombineView';
 import { LotteryView } from '../draft/LotteryView';
 import { MyPicks, PicksPoster, Results } from '../draft/MyPicks';
 import { ProspectSheet } from '../draft/ProspectSheet';
+import { ReadOvrPot } from '../draft/read';
 
 type View = 'live' | 'lottery' | 'board' | 'combine' | 'mock' | 'mine' | 'results';
 
@@ -147,8 +148,16 @@ export default function Draft() {
               not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p>
-              <b>Big board.</b> Rank is the scouts' consensus order of the class, mixing potential and current ability; proj. is where the league's mock drafts have him going, by
-              each team's needs, so the two can differ. OVR is what he can do now; POT is the ceiling scouts see.
+              <b>Big board.</b> Rank is the league's consensus order of the class, mixing potential and current ability; proj. is where the league's mock drafts have him going, by
+              each team's needs, so the two can differ. The arrow is his move on the board since the preseason.
+            </p>
+            <p>
+              <b>Staff read.</b> Nobody knows a prospect's true ratings. OVR is your staff's read of what he can do now; POT is the range his ceiling falls in four times in five.
+              Send scouts to up to five prospects (on his report) and the range narrows with every day they watch; the staff keep free scouts near your pick. A bigger coaching
+              budget sharpens every read. Every team drafts by its own board, so steals and busts happen.
+            </p>
+            <p>
+              <b>The season.</b> Prospects have hot and cold months and the odd injury, and the combine in May sharpens everyone's read.
             </p>
             <p>Undrafted prospects with promise become free agents after the draft.</p>
           </HelpSheet>
@@ -212,7 +221,7 @@ export default function Draft() {
                   {boardRank(league, league.players[confirmPick]) ? ` · rank ${boardRank(league, league.players[confirmPick])}` : ''}
                 </div>
               </div>
-              <OvrPot p={league.players[confirmPick]} />
+              <ReadOvrPot league={league} p={league.players[confirmPick]} />
             </div>
             <p className="fo-lede">
               Pick #{overallPick(league, np.round, np.pick!)}: {np.round === 1 ? '1st round, a 4-year rookie-scale deal' : '2nd round, a 2-year minimum deal'}.

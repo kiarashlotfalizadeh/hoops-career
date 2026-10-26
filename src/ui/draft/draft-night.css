@@ -277,3 +277,34 @@
   letter-spacing: -0.02em;
   color: var(--text-2);
 }
+
+/* ------------------------------------------------------------ the staff's read and the scouts */
+/* the badge at the staff's read over POT as a range: wider than a plain OVR stack */
+.fo-ovrstack.dn-read {
+  width: auto;
+  min-width: 36px;
+}
+/* a prospect's move on the board since the preseason, as the power rankings write one */
+.dn-stock {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  vertical-align: -1px;
+}
+.dn-scouted {
+  display: inline-flex;
+  margin-left: 6px;
+  color: var(--text-dim);
+  vertical-align: -1px;
+}
+/* the report's staff read: the ranges, the scouts, the button */
+.dn-scout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
