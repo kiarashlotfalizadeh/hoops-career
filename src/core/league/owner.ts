@@ -138,8 +138,11 @@ export function ownerEvaluation(league: League) {
     const now = parts[k];
     return now === undefined ? prev[k] : r2(now * wp + (prev[k] ?? 0) * (1 - wp));
   };
-  // an ultimatum met buys back some standing; missed, nothing else counts
-  const total = clamp(grade * w + prev.total * (1 - w) + (verdict === 'met' ? ULTIMATUM_MET : 0), -1, 1);
+  // an ultimatum met buys back some standing; missed, nothing else counts. What conceding the season
+  // cost stays off in full (it had come off the standing before the review, which a first season's
+  // grade then replaced outright: a free concession)
+  const cost = og?.cost ?? 0;
+  const total = clamp(grade * w + (prev.total + cost) * (1 - w) - cost + (verdict === 'met' ? ULTIMATUM_MET : 0), -1, 1);
   const youth = blend('youth');
   league.ownerMood = { wins: blend('wins') ?? 0, playoffs: blend('playoffs') ?? 0, money: blend('money') ?? 0, total: r2(total), ...(youth !== undefined ? { youth } : {}) };
   const fireable = canBeFired(league);

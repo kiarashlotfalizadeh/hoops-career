@@ -2,14 +2,13 @@
 // style the active one runs (its offensive playbook as the headline, the defensive identity under it,
 // a tap from the picker), how well the team knows it as one figure, its two strengths and two
 // weaknesses from the system report (they move as you edit, so every lever shows what it buys and
-// what it costs), and the assistant's switch.
+// what it costs), and the assistant's switch. The style reads as the team plays it: a playbook whose
+// settings have moved (by the user, or by the staff acting on the season's evidence) is "Custom (Drop
+// base)", as Matchup → Plan names it.
 import { useState } from 'react';
 import { edit } from '../../state/actions';
-import { useLeague, useStore } from '../../state/store';
-import { autoTactics } from '../../core/ai/coachAI';
-import { rosterSorted } from '../../core/league/helpers';
-import { playbookLabel, playbookNameError, savePlaybook } from '../../core/sim/playbooks';
-import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
+import { useLeague, useLeagueMemo, useStore } from '../../state/store';
+import { defenseLabel, offenseLabel, playbookLabel, playbookNameError, savePlaybook } from '../../core/sim/playbooks';
 import { famLabel } from '../../core/sim/familiarity';
 import { SLOT_LETTERS, activeSlot, slotName } from '../../core/sim/slots';
 import { QUALITY_META, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
@@ -20,6 +19,7 @@ import { SlotBar, StyleSheet } from './SlotBar';
 import { GradeBadge } from './SystemReport';
 import { famTone } from './formation';
 import { strengthsOf } from './partners';
+import { handOverLine, userStaffTactics } from './fit';
 
 const ORDER: Grade[] = ['F', 'D', 'C', 'C+', 'B', 'B+', 'A', 'A+'];
 
@@ -56,12 +56,14 @@ export function TacticsHero({
         const err = savePlaybook(l, name());
         if (err) return void useStore.getState().toast(err, 'bad');
       }
-      tm.tactics = autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { links: true });
+      tm.tactics = userStaffTactics(l);
       // his refits make it his playbook, not a saved one
       tm.tactics.playbook = null;
     });
-  const off = OFF_PRESETS.find((p) => p.id === t.offPreset);
-  const def = DEF_PRESETS.find((p) => p.id === t.defPreset);
+  // (moved off its playbook's settings: "Custom (Five-Out base)", as Plan names it)
+  const offName = offenseLabel(t) === 'Custom' ? 'Custom offense' : offenseLabel(t);
+  const defName = defenseLabel(t);
+  const handOverText = useLeagueMemo(() => (handOver ? handOverLine(league, userStaffTactics(league)) : ''), [handOver, league]);
   const { strengths, weaknesses } = strengthsOf(report);
   const before = new Map([...was.off, ...was.def].map((q) => [q.id, q.grade]));
   const grade = (q: Quality) => {
@@ -92,7 +94,7 @@ export function TacticsHero({
             <span className="sr-only">
               Tactic {SLOT_LETTERS[slot]}, {slotName(team, slot)}:{' '}
             </span>
-            <b>{off?.name ?? 'Custom offense'}</b> · {def?.name ?? 'Custom'} on defense
+            <b>{offName}</b> · {defName} on defense
           </span>
           <span className={`tx-hero-fv num ${famTone(fam)}`}>
             <span className="sr-only">Familiarity </span>
@@ -110,9 +112,9 @@ export function TacticsHero({
       <div className="tx-hero-style">
         <button className="tx-hero-pick" aria-haspopup="dialog" onClick={() => setStyle(true)}>
           <span className="grow">
-            <span className="tx-hero-off">{off?.name ?? 'Custom offense'}</span>
+            <span className="tx-hero-off">{offName}</span>
             <span className="tx-hero-def">
-              {def?.name ?? 'Custom'} on defense
+              {defName} on defense
               {t.manual && t.playbook ? ` · from ${t.playbook.name}` : ''}
             </span>
           </span>
@@ -173,6 +175,7 @@ export function TacticsHero({
       <StyleSheet open={style} onClose={() => setStyle(false)} />
       <Sheet open={handOver} onClose={() => setHandOver(false)} title="Hand the tactics to the staff?">
         <div className="col" style={{ gap: 12 }}>
+          <p className="small">{handOverText}</p>
           <p className="small dim2">They put in their pick for this roster in place of yours. Keep yours as a playbook and you can load them back from My playbooks.</p>
           <button
             className="btn primary block"

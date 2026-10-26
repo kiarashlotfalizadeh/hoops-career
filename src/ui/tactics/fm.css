@@ -193,9 +193,8 @@
 .tx-hero-def {
   font-size: 14px;
   color: var(--text-2);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* (wraps: "Custom (Hedge base) on defense" is what's played, cut short it isn't) */
+  text-wrap: balance;
 }
 .tx-hero-pick > .btn {
   flex: none;

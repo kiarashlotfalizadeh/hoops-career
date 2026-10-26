@@ -191,7 +191,7 @@ export default function Settings() {
                 on={st.stopOnNews !== false}
                 onChange={(v) => set('stopOnNews', v)}
                 label="Pause sims for what needs you"
-                help="A long sim (any but one of a set number of days) stops only for what needs your answer: a star out ten games or more, a losing skid, your playoff odds collapsing, the trade deadline's last five days, a playoff series starting or going against you, the books in the red, an owner's verdict, a job offer or an offer sheet. Each opens with the staff's call, one tap away. A week's sim also stops for the week's call; a longer one leaves it to the staff, and the digest says what it did. Milestones, streaks and stories wait in the digest. Off, the one below is off too."
+                help="A long sim (any but one of a set number of days) stops only for what needs your answer: a star out ten games or more, a losing skid, your playoff odds collapsing, the trade deadline's last five days, a playoff series starting or going against you, the books in the red, an owner's verdict, a job offer or an offer sheet. Each opens with the staff's call, one tap away. A week's sim also stops for the week's call. A longer one runs past it: the staff still sets the week's drills, but it puts in only counters it has measured, and a long sim doesn't stop to measure them, so your game plan stands; the digest says which calls went by. Milestones, streaks and stories wait in the digest. Off, the one below is off too."
               />
               <Toggle
                 on={st.stopOnNews !== false && loopSetting(league, 'stopForBigGames')}

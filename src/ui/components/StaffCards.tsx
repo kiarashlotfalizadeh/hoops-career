@@ -1,9 +1,9 @@
 // The staff's shared pieces, in the live game and after it: the lead assistant at the head of a
 // section, one of his notes (a decision with the moves on offer, or a read), and the night's moves
-// with what each has done since.
-import { ArrowLeftRight, Bot, Check, Timer, X } from 'lucide-react';
+// with what each has done since (the numbers alone: whether a move worked is the replayed night's to say).
+import { ArrowLeftRight, Bot, Timer, X } from 'lucide-react';
 import type { CoachMove } from '../../core/types';
-import { moveVerdict, type MoveVerdict } from '../../core/analysis/moves';
+import { moveRate } from '../../core/analysis/moves';
 import { fmtClock, periodLabel, signed } from '../stats';
 import { plural } from '../../core/format';
 import type { StaffAction, StaffNote } from '../live/staff';
@@ -67,18 +67,6 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
   );
 }
 
-const VERDICT: Record<MoveVerdict, { label: string; tone: string }> = {
-  better: { label: 'Working', tone: 'good' },
-  worse: { label: 'Not working', tone: 'bad' },
-  same: { label: 'No clear change', tone: 'dim' },
-  early: { label: 'Too early', tone: 'dim' },
-};
-
-/** A move whose stretch ended (the next one of its kind, or the buzzer) before it had a few trips. */
-const CUT_SHORT = { label: 'Too short to tell', tone: 'dim' };
-/** ...and one whose stretch is over with no clear change: there won't be one now. */
-const NO_DIFFERENCE = { label: 'No clear difference', tone: 'dim' };
-
 /** What a move has done since, in a line: "SAS 0.91 a trip since (22 trips), 1.18 before". */
 export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, nameOf: (pid: number) => string): string {
   // a play called: the one trip it ran on
@@ -86,7 +74,7 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
     const t = m.after.us;
     return !t.poss ? 'Not run yet.' : t.pts ? `Ran it: ${plural(t.pts, 'point')}.` : 'Ran it: came up empty.';
   }
-  const v = moveVerdict(m);
+  const v = moveRate(m);
   if (v.now === null) return 'Not a trip since yet.';
   if (v.what === 'margin') {
     const t = m.after;
@@ -108,41 +96,32 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   return v.was !== null ? `${now}, ${v.was.toFixed(2)} before.` : `${now}.`;
 }
 
-/** The night's moves, newest first, each with what it has done since and the staff's verdict on it. */
+/**
+ * The night's moves, newest first, each with what it has done since against the stretch before it, and
+ * no verdict: a move made after a hot stretch reads better afterwards whatever it did (the rate falls
+ * back toward the usual either way), so "working" is left to the replayed night (see nightLine).
+ */
 export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[]; abbrevs: { us: string; them: string }; nameOf: (pid: number) => string; max?: number }) {
   const list = [...moves].reverse().slice(0, max ?? moves.length);
   if (!list.length) return <div className="lv-mv-empty small dim">Nothing changed yet. Every change you make shows here, with what it has done since.</div>;
   return (
     <div className="lv-mv card flush list">
-      {list.map((m, i) => {
-        const v = moveVerdict(m);
-        // (a timeout rests legs and stops the clock: what follows it isn't its verdict)
-        // (nor is one trip a play's: it scored or it didn't)
-        const verdict =
-          m.kind === 'timeout' || m.kind === 'play' ? null : m.closed && v.verdict === 'early' ? CUT_SHORT : m.closed && v.verdict === 'same' ? NO_DIFFERENCE : VERDICT[v.verdict];
-        return (
-          <div key={`${m.q}-${m.clock}-${i}`} className="lv-mv-row">
-            <span className="lv-mv-when num">{m.clock <= 0 ? (m.q === 2 ? 'Half' : `End ${periodLabel(m.q)}`) : `${periodLabel(m.q)} ${fmtClock(m.clock)}`}</span>
-            <div className="grow lv-mv-tx">
-              <div className="lv-mv-what">
-                {m.by === 'staff' && (
-                  <span className="lv-mv-by" title="The staff made this change">
-                    <Bot size={12} aria-hidden="true" /> Staff
-                  </span>
-                )}
-                {m.text}
-              </div>
-              <div className="lv-mv-line small dim2">{moveLine(m, abbrevs, nameOf)}</div>
+      {list.map((m, i) => (
+        <div key={`${m.q}-${m.clock}-${i}`} className="lv-mv-row">
+          <span className="lv-mv-when num">{m.clock <= 0 ? (m.q === 2 ? 'Half' : `End ${periodLabel(m.q)}`) : `${periodLabel(m.q)} ${fmtClock(m.clock)}`}</span>
+          <div className="grow lv-mv-tx">
+            <div className="lv-mv-what">
+              {m.by === 'staff' && (
+                <span className="lv-mv-by" title="The staff made this change">
+                  <Bot size={12} aria-hidden="true" /> Staff
+                </span>
+              )}
+              {m.text}
             </div>
-            {verdict && (
-              <span className={`lv-mv-v ${verdict.tone}`}>
-                {v.verdict === 'better' && <Check size={12} aria-hidden="true" />}
-                {verdict.label}
-              </span>
-            )}
+            <div className="lv-mv-line small dim2">{moveLine(m, abbrevs, nameOf)}</div>
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }

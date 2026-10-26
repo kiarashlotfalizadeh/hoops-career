@@ -15,7 +15,7 @@ import { money, plural } from '../core/format';
 import { curTeamSeason, fmtDate } from '../core/league/helpers';
 import { storyLink } from './today/front';
 import { isFrontPage } from '../state/simCore';
-import { PERSONALITY, currentGoals, ownerPersonality, resultText } from '../core/league/ownerGoals';
+import { currentGoals, ownerPersonality, personalityLine, resultText } from '../core/league/ownerGoals';
 import { GRACE } from '../core/league/jobSecurity';
 import { openStint, userCoach } from '../core/league/coaches';
 import { reviewPath, seasonReviewOf } from '../core/league/legacy';
@@ -543,14 +543,15 @@ function jobMoments(league: League): Moment[] {
   const coach = userCoach(league);
   const stint = coach && !league.fired && coach.stints.length > 1 ? openStint(coach) : undefined;
   if (stint && stint.tid === me) {
-    const who = PERSONALITY[ownerPersonality(league, me)];
+    // (in the words the Owner page uses, so a win-now owner taking a rebuild says so)
+    const who = personalityLine(ownerPersonality(league, me), og ?? undefined).replace(' · ', ' owner: ');
     const grace = GRACE[league.settings.difficulty];
     out.push({
       key: `hired-${me}-${stint.from}`,
       kind: 'hired',
       over: `${seasonLabel(stint.from)} · New job`,
       title: `${team.region} ${team.name}`,
-      sub: `${who.label} owner: ${who.blurb}.`,
+      sub: `${who}.`,
       lines: [
         og ? `He wants: ${og.goals.map((g) => g.title.toLowerCase()).join('; ')}.` : 'He sets his goals on opening night, from the roster you open with.',
         grace === 1 ? "He can't fire you in your first season." : `He can't fire you in your first ${grace} seasons.`,

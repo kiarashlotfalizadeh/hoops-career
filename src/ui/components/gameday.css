@@ -1159,10 +1159,6 @@ table.stats .bx-team td {
   gap: 6px;
   margin-top: 8px;
 }
-.gd-tally {
-  display: inline-flex;
-  gap: 6px;
-}
 /* what the night's moves were worth, measured: a line in the signal's colour over the moves themselves */
 .gd-night {
   margin-bottom: 10px;

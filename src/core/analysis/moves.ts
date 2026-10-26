@@ -29,27 +29,21 @@ export interface MoveMark {
 
 /** Trips either side of a timeout that measure it. */
 const TIMEOUT_TRIPS = 8;
-/** Trips at a rate since a move before its effect reads as anything but early. */
-export const MOVE_MIN_TRIPS = 15;
 /**
- * Trips a move whose stretch is over (see CoachMove.closed: the next move of its kind came, or the
- * game ended) is judged on: it will never have more, and at MOVE_Z a swing that reads over so few is
- * a big one. A move still in effect waits for MOVE_MIN_TRIPS, so its verdict doesn't flip trip to trip.
+ * Trips on what a move is aimed at (a play type, one of theirs) since it before its rate is the one
+ * quoted, rather than that end of the floor's.
  */
+export const MOVE_MIN_TRIPS = 15;
+/** ...and for a move whose stretch is over (see CoachMove.closed): it will never have more. */
 export const MOVE_CLOSED_TRIPS = 4;
-/** Trips at the rate before a move it needs to be judged against (a rate over two or three trips is noise, not a baseline). */
+/** Trips on what it's aimed at before the move for that rate to be the baseline (a rate over two or three trips is noise, not one). */
 export const MOVE_MIN_BEFORE = 8;
 /**
  * Trips (each way) the stretch before a move reaches back at least, past the last move of its kind
  * when that came only a few trips earlier: two changes a few trips apart otherwise left the second
- * a baseline too short to judge it against for the rest of the night ("Too early" after 26 trips).
+ * a baseline of a few trips for the rest of the night.
  */
 export const MOVE_BASE_TRIPS = 20;
-/**
- * Standard errors the rate has to move, the stretch before's noise counted too, to read as working
- * or not: at one, a move that changed nothing read one way or the other about a third of the time.
- */
-const MOVE_Z = 2;
 /** Trips each side the stretch before a timeout needs for its margin a trip to be quoted. */
 const MARGIN_MIN_BEFORE = 4;
 
@@ -310,47 +304,24 @@ function lateBasket(logs: PossLog[], j: number, side: 0 | 1): { how: 'won' | 'ti
 /** Points per trip, or null with no trips. */
 export const ppp = (x: { poss: number; pts: number } | undefined) => (x && x.poss ? x.pts / x.poss : null);
 
-export type MoveVerdict = 'better' | 'worse' | 'same' | 'early';
-
 /**
- * How a move is going: the number it's judged by (what it's aimed at when that has a few trips,
- * else their points a trip for a move on defense, ours on offense, the margin per trip for the
- * rest), now and in the stretch before, and whether it reads better or worse, by how far the rate
- * moved against the noise of the trips behind it.
+ * What a move has done since, as evidence with no verdict: the number it's read by (what it's aimed at
+ * when that has a few trips, else their points a trip for a move on defense, ours on offense, the
+ * margin per trip for the rest), since it and in the stretch before. Whether it worked is the
+ * replayed night's to say (GameResult.movesWorth: the rest of the game played with it and without):
+ * a rate after a move set off by a hot stretch reads better afterwards whether or not the move did
+ * anything (regression to the mean), so a before-and-after verdict would flatter every move.
  */
-export function moveVerdict(m: CoachMove): { now: number | null; was: number | null; trips: number; what: 'them' | 'us' | 'focus' | 'margin'; verdict: MoveVerdict } {
-  // (what it's aimed at, when that has the trips a verdict needs, each side of it: a play type is a
-  // few trips a quarter, and judged on them alone a change of coverage stayed early all night)
+export function moveRate(m: CoachMove): { now: number | null; was: number | null; trips: number; what: 'them' | 'us' | 'focus' | 'margin' } {
   const need = m.closed ? MOVE_CLOSED_TRIPS : MOVE_MIN_TRIPS;
   const aimed = !!m.after.focus && m.after.focus.poss >= need && (m.before.focus?.poss ?? 0) >= MOVE_MIN_BEFORE;
   const what = aimed ? 'focus' : m.end === 'def' ? 'them' : m.end === 'off' ? 'us' : 'margin';
   if (what === 'margin') {
     const per = (t: MoveTally) => (t.us.poss + t.them.poss ? (t.us.pts - t.them.pts) / ((t.us.poss + t.them.poss) / 2) : null);
-    const now = per(m.after);
     // (a margin a trip over a trip or two before isn't a rate: a timeout a minute in has none to compare)
     const was = Math.min(m.before.us.poss, m.before.them.poss) >= MARGIN_MIN_BEFORE ? per(m.before) : null;
-    const trips = Math.min(m.after.us.poss, m.after.them.poss);
-    return { now, was, trips, what, verdict: judge(now, was, trips, Math.min(m.before.us.poss, m.before.them.poss), 1, 1.5, !!m.closed) };
+    return { now: per(m.after), was, trips: Math.min(m.after.us.poss, m.after.them.poss), what };
   }
   const pick = (t: MoveTally) => (what === 'focus' ? t.focus : what === 'them' ? t.them : t.us);
-  const now = ppp(pick(m.after));
-  const was = ppp(pick(m.before));
-  const trips = pick(m.after)?.poss ?? 0;
-  // fewer points is better on defense (their trips, or their player's), more on offense
-  const better = what === 'us' || (what === 'focus' && m.end === 'off') ? 1 : -1;
-  return { now, was, trips, what, verdict: judge(now, was, trips, pick(m.before)?.poss ?? 0, better, 1.1, !!m.closed) };
-}
-
-/**
- * A trip's points spread about 1.1 either way (a margin per trip about 1.5): a move reads as more
- * than noise once the two rates are MOVE_Z standard errors of their difference apart, which counts
- * the trips on both sides of it (a hot stretch before a move flatters or damns it as much as one after).
- * A move whose stretch is over needs only MOVE_CLOSED_TRIPS: the standard error over so few is wide, so
- * it reads as more than noise only on a big swing.
- */
-function judge(now: number | null, was: number | null, trips: number, wasTrips: number, better: 1 | -1, spread: number, closed: boolean): MoveVerdict {
-  if (now === null || was === null || trips < (closed ? MOVE_CLOSED_TRIPS : MOVE_MIN_TRIPS) || wasTrips < MOVE_MIN_BEFORE) return 'early';
-  const se = spread * Math.sqrt(1 / trips + 1 / wasTrips);
-  const d = (now - was) * better;
-  return d > MOVE_Z * se ? 'better' : d < -MOVE_Z * se ? 'worse' : 'same';
+  return { now: ppp(pick(m.after)), was: ppp(pick(m.before)), trips: pick(m.after)?.poss ?? 0, what };
 }

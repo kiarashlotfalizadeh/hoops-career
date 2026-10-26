@@ -6,7 +6,6 @@ import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { hacks, isJunk } from '../sim/tactics';
 import { CLEAR_OUT, SETS, SET_IDS } from '../sim/sets';
 import { shortName, wholeMinutes } from '../league/helpers';
-import { GAME } from '../constants';
 import { madeAtt, plural } from '../format';
 
 export interface Factor {
@@ -583,9 +582,9 @@ export function setLineText(l: SetLine): string {
 }
 
 export interface ReportOptions {
-  /** A game still being played, stopped at a break (the Live screen's period report): "so far" wording, star lines scaled to the time played. */
+  /** A game still being played, stopped at a break (the Live screen's period report): "so far" wording. */
   partial?: boolean;
-  /** Game seconds played so far (partial reports); defaults to the periods the box score has. */
+  /** Game seconds played so far (partial reports). No longer read: it scaled the star rows, which are gone. */
   elapsed?: number;
   /** The tactics the user's team is playing with now, for advice (defaults to its saved tactics). */
   tactics?: Tactics;
@@ -609,8 +608,6 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
   const factors: Factor[] = [];
   const tactics = opts.tactics ?? ut.tactics;
   const periods = Math.max(res.home.quarters.length, 1);
-  // the share of a full game played: star lines are measured against it
-  const played = opts.partial ? Math.min(1, (opts.elapsed ?? Math.min(periods, 4) * GAME.quarterSec) / (4 * GAME.quarterSec)) : 1;
 
   // tactical impacts
   for (const im of res.impacts ?? []) {
@@ -731,33 +728,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     });
   }
 
-  // star performances (and whether the user's team played a Star plan tonight, whatever its saved tactics
-  // say). Not at a break: a quarter's points on pace for 50 is a few shots falling, its "points of the
-  // margin" are made up (the points over 22, halved) and they'd count again in the luck line beside it,
-  // and a double for it answers noise (the bench makes no call on a hot scorer for the same reason);
-  // the break's story already says who's carrying each side
-  const starPlanPlayed = (res.impacts ?? []).some((im) => im.t === userSide && im.key === 'star_double:d');
-  for (const [side, box, sign] of [
-    [ut, u, 1],
-    [ot, o, -1],
-  ] as const) {
-    const star = [...box.players].sort((a, b) => b.pts - a.pts)[0];
-    // 35 in a full game
-    if (!opts.partial && star && star.pts >= Math.max(8, 35 * played)) {
-      factors.push({
-        title: `${star.name} erupted for ${star.pts} points (${madeAtt(star.fgm, star.fga)} FG).`,
-        detail: `${Math.round(star.min)} min, ${star.orb + star.drb} reb, ${star.ast} ast for the ${side.name}.`,
-        pts: sign * (star.pts - 22 * played) * 0.5,
-        category: 'stars',
-        topic: `star-${side.tid}`,
-        // (none when a double was played tonight, saved, in the plan or called live: the engine tagged it)
-        advice:
-          sign < 0 && tactics.defense.starPlan === 'none' && !starPlanPlayed
-            ? 'Next time put your best perimeter defender on him (Matchups), or double him if he can’t pass out of it (Star plan).'
-            : undefined,
-      });
-    }
-  }
+  // (no row for a star's big night: its "points of the margin" were made up, the points over 22
+  // halved, they counted again in the luck line beside it, and "double him" answered what the staff
+  // never measured; the box score has his line)
 
   factors.sort((a, b) => Math.abs(b.pts) - Math.abs(a.pts));
 

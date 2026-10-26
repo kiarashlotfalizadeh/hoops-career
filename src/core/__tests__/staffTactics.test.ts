@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
 import { seasonAdjust, seasonLevers, staffLeverChanges, staffTactics } from '../ai/advisor';
-import { autoTactics } from '../ai/coachAI';
+import { autoTactics, defPresetFit, fitRoster, offPresetFit, rankedPresets, rosterProfile, staffPick } from '../ai/coachAI';
 import { cloneTactics } from '../sim/tactics';
 import { teamPlayers } from '../league/helpers';
 import type { League, TacticImpact } from '../types';
@@ -64,7 +64,23 @@ describe('the staff acts on the season', () => {
       const ai = l.teams[1];
       expect(staffTactics(l, 1)).toEqual(autoTactics(ai, teamPlayers(l, 1), true, { sticky: true }));
       const quiet = league(() => []);
-      expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true, { sticky: true }));
+      // (the user's own staff: by its read, and it casts the five for partnerships)
+      expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true, { sticky: true, links: true, user: true }));
+    }
+    {
+      // the user's own staff picks by its read, the style picker's top (no coach's lean, the zone not
+      // barred); AI staffs keep their coach's lean and bases; in season a staff keeps what it runs
+      // until another reads STICK better
+      const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
+      const pr = rosterProfile(fitRoster(teamPlayers(l, 0)));
+      const top = (f: Record<string, number>) => Object.entries(f).sort((a, b) => b[1] - a[1])[0][0];
+      expect([l.teams[0].tactics.offPreset, l.teams[0].tactics.defPreset]).toEqual([top(offPresetFit(pr)), top(defPresetFit(pr))]);
+      for (const t of l.teams.slice(1)) {
+        const r = rankedPresets(t, teamPlayers(l, t.tid));
+        expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([r.off[0], r.def[0]]);
+      }
+      expect(rankedPresets(l.teams[0], teamPlayers(l, 0), { user: true }).def[0]).toBe(top(defPresetFit(pr)));
+      expect([staffPick({ a: 10, b: 17 }, 'a', true), staffPick({ a: 10, b: 18 }, 'a', true), staffPick({ a: 10, b: 17 }, 'a')]).toEqual(['a', 'b', 'b']);
     }
     {
       // names each change it makes once, with what the setting cost

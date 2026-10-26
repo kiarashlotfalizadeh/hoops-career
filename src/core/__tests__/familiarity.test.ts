@@ -183,21 +183,22 @@ describe('familiarity', () => {
     expect(optionName('pnr:blitz')).toBe('the blitz');
     expect(optionName('scheme:zone23')).toBe('the 2-3 zone');
     {
-      // flags an option the team hasn't drilled, with tactical drills one tap away
+      // flags an option the team hasn't drilled, with tactical drills one tap away (a 3-2 zone: the
+      // user's staff may base on the 2-3)
       const l = staffLeague();
       expect(famReadout(l).risks).toEqual([]);
       const t = l.teams[0].tactics;
       t.manual = true;
-      t.defense.scheme = 'zone23';
+      t.defense.scheme = 'zone32';
       const r = famReadout(l);
-      expect(r.risks[0]).toMatchObject({ key: 'scheme:zone23', plan: false });
-      const card = assistantFeed(l).find((c) => c.id === 'alert:fam-opt-scheme:zone23');
+      expect(r.risks[0]).toMatchObject({ key: 'scheme:zone32', plan: false });
+      const card = assistantFeed(l).find((c) => c.id === 'alert:fam-opt-scheme:zone32');
       expect(card?.area).toBe('tactics');
       expect(card?.fix).toEqual({ kind: 'prep', focus: 'system', label: 'Tactical drills' });
       expect(applyFix(l, card!.fix!)).toMatch(/Tactical drills/);
       expect(l.teams[0].prep).toBe('system');
       // with the drills on, the card has no fix left to offer
-      expect(assistantFeed(l).find((c) => c.id === 'alert:fam-opt-scheme:zone23')?.fix).toBeUndefined();
+      expect(assistantFeed(l).find((c) => c.id === 'alert:fam-opt-scheme:zone32')?.fix).toBeUndefined();
     }
     {
       // marks what tonight's plan brings apart from the system
@@ -213,7 +214,7 @@ describe('familiarity', () => {
       expect(practiceAdvice(l, 0.3)).toBeNull();
       // the system is learned: the plan was the gap
       expect(practiceAdvice(l, 1.2)).toMatchObject({ id: 'prep-opponent', prep: 'opponent' });
-      l.teams[0].tactics.defense.scheme = 'zone23';
+      l.teams[0].tactics.defense.scheme = 'zone32';
       const a = practiceAdvice(l, 1.2)!;
       expect(a).toMatchObject({ id: 'prep-system', prep: 'system', label: 'Tactical drills' });
       l.teams[0].prep = 'system';
@@ -248,15 +249,17 @@ describe('familiarity', () => {
       const tactics = cast(user(l).tactics, starters, { [a.pid]: 'creator', [b.pid]: 'roller' });
       const team = { ...user(l), tactics };
       const opp = l.teams.find((t) => t.tid !== l.userTid)!;
-      const play = (fam: ReturnType<typeof freshFamiliarity> | undefined) => {
-        const sim = new GameSim(
-          { team: { ...team, fam }, players: ps },
-          { team: { ...opp, fam: undefined }, players: teamPlayers(l, opp.tid) },
-          { rng: new Rng(41), type: 'regular' },
-        );
-        sim.simToEnd();
-        return [...sim.impacts.keys()].filter((k) => k.startsWith('link_') || k.startsWith('clash_'));
-      };
+      // (three games: a playbook that runs fewer ball screens than another can go a night without the pair's)
+      const play = (fam: ReturnType<typeof freshFamiliarity> | undefined) =>
+        [41, 42, 43].flatMap((seed) => {
+          const sim = new GameSim(
+            { team: { ...team, fam }, players: ps },
+            { team: { ...opp, fam: undefined }, players: teamPlayers(l, opp.tid) },
+            { rng: new Rng(seed), type: 'regular' },
+          );
+          sim.simToEnd();
+          return [...sim.impacts.keys()].filter((k) => k.startsWith('link_') || k.startsWith('clash_'));
+        });
       expect(play(undefined)).toEqual([]);
       expect(play(freshFamiliarity(team, ps, 97)).some((k) => k.startsWith('link_twoMan:o'))).toBe(true);
       const strangers = freshFamiliarity(team, ps, 97);

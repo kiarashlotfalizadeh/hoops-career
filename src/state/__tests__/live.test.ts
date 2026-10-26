@@ -106,7 +106,8 @@ function withPlanB(): League {
   const team = l.teams[l.userTid];
   copyToSlot(team, 1);
   const b = team.slots!.stored[1]!;
-  b.defense.scheme = 'zone23';
+  // (a 3-2: the user's staff may base on the 2-3)
+  b.defense.scheme = 'zone32';
   b.offense.shape = 'fiveOut';
   team.slots!.names[1] = 'Zone look';
   return l;
@@ -417,7 +418,7 @@ describe('live game', () => {
       const mine = lg.sim.T[lg.userSide].players[0].pid;
       now.defense.matchups = { [theirs]: mine };
       const b = slotForGame(league, lg, 1, now)!;
-      expect(b.defense.scheme).toBe('zone23');
+      expect(b.defense.scheme).toBe('zone32');
       expect(b.offense.shape).toBe('fiveOut');
       expect(b.defense.matchups[theirs]).toBe(mine);
       // an empty slot has nothing to switch to
@@ -435,7 +436,7 @@ describe('live game', () => {
       expect(cur).toBe(1);
       expect(slots[0].fam).toBeGreaterThan(slots[1].fam);
       expect(slots[2].tactics).toBeNull();
-      expect(liveOpt(lg, 'scheme:zone23')).toBeLessThan(liveOpt(lg, 'scheme:man'));
+      expect(liveOpt(lg, 'scheme:zone32')).toBeLessThan(liveOpt(lg, `scheme:${league.teams[league.userTid].tactics.defense.scheme}`));
       // "Reset to game plan": back on A
       const back = lg.sim.baseTactics(lg.userSide);
       resetToPlan(back, lg.planned);
@@ -472,7 +473,7 @@ describe('live game', () => {
       useStore.getState().mutate((x) => void (res = lg.commit(x)));
       expect(res!.moves?.[0].text).toBe('Switched to Tactic B (Zone look)');
       // and the saved tactics are still Tactic A's
-      expect(useStore.getState().league!.teams[league.userTid].tactics.defense.scheme).not.toBe('zone23');
+      expect(useStore.getState().league!.teams[league.userTid].tactics.defense.scheme).not.toBe('zone32');
       fresh();
     }
 

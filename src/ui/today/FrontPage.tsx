@@ -10,6 +10,7 @@ import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate } from '../../core/league/helpers';
 import { pct } from '../../core/analysis/odds';
+import { goalChance } from '../../core/league/ownerGoals';
 import { Avatar, Section, Statline } from '../components/ui';
 import { madeAtt } from '../../core/format';
 import { seasonLabel } from '../../core/constants';
@@ -183,6 +184,7 @@ export function YourSeason({ league }: { league: League }) {
   const row = useLeagueMemo(() => (league.phase === 'regular' ? confStandings(league, conf).find((r) => r.tid === me) : undefined), [league, conf, me]);
   const fc = useForecast(league);
   const odds = fc?.teams[me];
+  const chance = odds ? goalChance(league, odds) : null;
   const pulse = usePulse(league);
   const cup = useCupCell(league);
   const played = !!row && row.won + row.lost > 0;
@@ -190,11 +192,11 @@ export function YourSeason({ league }: { league: League }) {
   return (
     <Section title="Your season">
       <div className="td-strip">
-        {played && odds && (
-          // (the figure counts a play-in place too: the postseason's odds, not the playoffs', short enough for the cell)
-          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `Postseason odds ${pct(odds.reach[0], odds.clinched)}. Standings`}>
-            <span className="td-cell-k">Postseason</span>
-            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(odds.reach[0], odds.clinched)}</span>
+        {played && odds && chance && (
+          // (the chance at the owner's postseason goal while he has one, named by it: "Play-in 21%")
+          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `${chance.label} odds ${pct(chance.p, chance.sure)}. Standings`}>
+            <span className="td-cell-k">{chance.label}</span>
+            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(chance.p, chance.sure)}</span>
           </Link>
         )}
         {results.length > 0 && (
@@ -218,7 +220,7 @@ export function YourSeason({ league }: { league: League }) {
         )}
         {!league.fired && (
           <>
-            <Link to="/office/owner" className="td-cell" aria-label={`The owner is ${pulse.owner.word}. Owner`}>
+            <Link to="/office/owner" className="td-cell" aria-label={`Owner: ${pulse.owner.word}. Owner`}>
               <span className="td-cell-k">
                 Owner <TrendMark trend={pulse.owner.trend} />
               </span>

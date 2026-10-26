@@ -8,12 +8,24 @@
 // reach): met, it buys him back some standing; missed, he's fired whatever else went right.
 import type { League } from '../types';
 import { clamp } from '../random';
-import { preset } from './difficulty';
+import { DIFFICULTY, preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
-import { POSTSEASON, currentGoals, floorCap, gradeGoal, ownerProgress, patienceCap, postseasonLevel, type OwnerGoals, type Ultimatum } from './ownerGoals';
+import {
+  POSTSEASON,
+  WIN_SCALE,
+  currentGoals,
+  floorCap,
+  gradeGoal,
+  ownerProgress,
+  patienceCap,
+  planOwnerGoals,
+  postseasonLevel,
+  type OwnerGoals,
+  type Ultimatum,
+} from './ownerGoals';
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, frozen } from './books';
 import { addInbox, andList, curTeamSeason, revenueScale } from './helpers';
-import type { Forecast } from '../analysis/odds';
+import type { Forecast, TeamOdds } from '../analysis/odds';
 
 export type SeatHeat = 'secure' | 'steady' | 'warm' | 'hot';
 
@@ -36,6 +48,8 @@ export interface JobSecurity {
   projected: number;
   /** Reviews before he can fire you (0: this season's can). */
   grace: number;
+  /** The same from the next review on: after the season's review, next season's (see graceLeft). */
+  left: number;
   ultimatum?: Ultimatum;
   /** Job security is off in Settings: he never fires you. */
   off: boolean;
@@ -55,9 +69,33 @@ export function seasonWeight(league: League): number {
   return fresh ? 1 : clamp(0.4 * preset(league).ownerPressure, 0.2, 0.6);
 }
 
+/** The phases after the season's review: the review that comes next is next season's. */
+const REVIEWED: ReadonlySet<League['phase']> = new Set(['draftLottery', 'draft', 'resign', 'freeAgency']);
+
+/**
+ * Reviews before one can fire the coach, this season's first (0: this season's can; `next`: counted
+ * from next season's, on the difficulty it will be played on). Each season of his tenure already
+ * played uses up 1 / GRACE of the grace on the difficulty it was played on (the season review keeps
+ * it), and never more grace is left than the difficulty in force gives from the start: a Hard
+ * season graded −83 followed by a switch to Easy had bought two more seasons no review could fire
+ * him in (the review, round 2).
+ */
+export function graceLeft(league: League, next = false): number {
+  const from = league.tenureStart ?? league.startSeason;
+  const upTo = league.season + (next ? 1 : 0);
+  const now = next ? (league.settings.pending?.difficulty ?? league.settings.difficulty) : league.settings.difficulty;
+  let used = 0;
+  for (let s = from; s < upTo; s++) {
+    const played = s === league.season ? league.settings.difficulty : league.legacy?.reviews.find((r) => r.season === s && r.tid === league.userTid)?.difficulty;
+    used += 1 / GRACE[played ?? now];
+  }
+  const fresh = GRACE[now] - (upTo - from);
+  return Math.max(0, Math.min(fresh, Math.ceil((1 - used) * GRACE[now] - 1e-9)));
+}
+
 /** Whether this season's review can fire the coach (the grace period is over and job security is on). */
 export function canBeFired(league: League): boolean {
-  return league.settings.jobSecurity && seasonsInCharge(league) > GRACE[league.settings.difficulty];
+  return league.settings.jobSecurity && graceLeft(league) === 0;
 }
 
 /** How much of the season the goals cover has been played (0 on opening night, 1 once the regular season is over). */
@@ -77,6 +115,9 @@ const HEAT: { min: number; heat: SeatHeat; label: string }[] = [
   { min: 32, heat: 'warm', label: 'Warm seat' },
   { min: -1, heat: 'hot', label: 'Hot seat' },
 ];
+
+/** The meter's word for a score ("Steady", "Hot seat"): the one ladder every screen names the owner's standing by. */
+export const seatHeat = (score: number) => HEAT.find((x) => score >= x.min)!;
 
 /**
  * Where the books' close projects under the freeze, as the review will read it (see booksVerdict):
@@ -124,12 +165,17 @@ function ultimatumOutlook(league: League, og: OwnerGoals, fc?: Forecast | null):
 
 export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
   const standing = league.ownerMood.total;
-  const og = currentGoals(league);
+  // (once the season's review is in, the standing is its result: counting the season's grade in again
+  // had read a coach at −47 after his review as 21, under the firing line)
+  const goals = currentGoals(league);
+  const og = goals && !(league.ownerReviews ?? []).some((r) => r.season === goals.season && r.tid === goals.tid) ? goals : undefined;
   const grade = og && !league.fired ? projectedGrade(league, og, fc) : null;
   const w = seasonWeight(league) * seasonPlayed(league, og);
-  const projected = grade === null ? standing : clamp(grade * w + standing * (1 - w), -1, 1);
+  // (a concession's cost stays off whatever the season grades, as the review counts it)
+  const cost = og?.cost ?? 0;
+  const projected = grade === null ? standing : clamp(grade * w + (standing + cost) * (1 - w) - cost, -1, 1);
   const off = !league.settings.jobSecurity;
-  const grace = Math.max(0, GRACE[league.settings.difficulty] - seasonsInCharge(league) + 1);
+  const grace = graceLeft(league);
   const ultimatum = og?.ultimatum;
   // the sack on the way whatever the standing: a live ultimatum, or the books under the freeze
   // heading where the review fires him. The meter says so: hot, under the line when it's on course
@@ -143,41 +189,90 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
         : undefined;
   const raw = toScore(projected);
   const score = booksFire || (live && !live.onCourse) ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;
-  const h = HEAT.find((x) => score >= x.min)!;
+  const h = seatHeat(score);
   let line: string;
   if (league.fired) line = 'You were fired. Take a job offer from Career.';
   else if (off) line = 'Job security is off: the owner never fires you.';
   else if (danger) line = danger;
   else if (ultimatum) line = `Ultimatum met: ${ultimatum.text.toLowerCase()}. He'll count it at the review.`;
-  else if (grade === null) line = h.heat === 'secure' || h.heat === 'steady' ? 'The owner is happy with the direction.' : 'The owner wants a better season than the last.';
+  else if (grade === null)
+    line =
+      h.heat === 'secure' || h.heat === 'steady'
+        ? 'The owner is happy with the direction.'
+        : (nextReviewNeeds(league, standing) ?? 'The owner wants a better season than the last.');
   else {
     const prog = ownerProgress(league, og!, fc);
-    const titles = (s: string) => andList(prog.filter((p) => p.status === s).map((p) => p.goal.title.toLowerCase()));
-    const [missed, behind] = [titles('missed'), titles('behind')];
+    const titles = (s: string, before = false) => andList(prog.filter((p) => p.status === s && !!p.before === before).map((p) => p.goal.title.toLowerCase()));
+    // (before a game counts, a goal behind is one he set over his own read of the roster: said so, ahead of the meter's neutral 50)
+    const [missed, behind, over] = [titles('missed'), titles('behind'), titles('behind', true)];
     // a goal the season can no longer meet is missed, not behind; on track with a cool seat: what's left of a poor standing from before
     line =
-      missed || behind
-        ? `${[missed && `Missed: ${missed}`, behind && `${missed ? 'behind' : 'Behind'}: ${behind}`].filter(Boolean).join('; ')}.`
+      missed || behind || over
+        ? `${[over && `He expects more than his read of this roster: ${over}`, missed && `${over ? 'missed' : 'Missed'}: ${missed}`, behind && `${over || missed ? 'behind' : 'Behind'}: ${behind}`].filter(Boolean).join('; ')}.`
         : h.heat === 'warm' || h.heat === 'hot'
           ? 'On track with his goals, but your standing from before still weighs on it.'
           : 'On track with his goals.';
   }
   // (after the season's review, the grace left starts with next season)
-  const reviewed = ['draftLottery', 'draft', 'resign', 'freeAgency'].includes(league.phase);
-  const left = reviewed ? grace - 1 : grace;
+  const reviewed = REVIEWED.has(league.phase);
+  const left = reviewed ? graceLeft(league, true) : grace;
   // (a new career's first season sets the standing outright, grace or not: said, so the grace isn't read as a free season)
   const sets = !reviewed && seasonWeight(league) >= 1;
   if (!off && left > 0 && (h.heat === 'warm' || h.heat === 'hot'))
     line += ` He can't fire you ${left === 1 ? (reviewed ? 'next season' : 'this season') : `for ${reviewed ? 'the next ' : ''}${left} seasons`}${sets ? ', but this season sets your standing with him' : ''}.`;
-  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, ultimatum, off };
+  return { score, heat: h.heat, label: league.fired ? 'Fired' : h.label, line, ...(danger ? { danger } : {}), standing, projected, grace, left, ultimatum, off };
+}
+
+/**
+ * Between seasons, on a warm or hot seat: what the next review needs to keep the coach above the
+ * firing line, when it can fire him ("Next review needs a season grade of −37 or better: about 31
+ * wins and the play-in"). The grade from his standing and how much a season counts; in the preseason
+ * the fewest wins from the goals he'd set today (see planOwnerGoals) that get there, the floor's cap
+ * counted, his postseason goal named only when no record gets there without it. Null when that review can't fire him or no grade can
+ * sink him.
+ */
+function nextReviewNeeds(league: League, standing: number): string | null {
+  const reviewed = REVIEWED.has(league.phase);
+  if (!league.settings.jobSecurity || graceLeft(league, reviewed) > 0) return null;
+  const d = reviewed ? (league.settings.pending?.difficulty ?? league.settings.difficulty) : league.settings.difficulty;
+  const w = reviewed ? clamp(0.4 * DIFFICULTY[d].ownerPressure, 0.2, 0.6) : seasonWeight(league);
+  const need = (FIRING_LINE - standing * (1 - w)) / w;
+  if (need <= -1) return null;
+  const head = `Next review needs a season grade of ${need > 0 ? '+' : need < 0 ? '−' : ''}${Math.abs(Math.ceil(need * 100))} or better`;
+  const og = league.phase === 'preseason' ? planOwnerGoals(league, league.userTid) : null;
+  const wins = og?.goals.find((g) => g.kind === 'wins');
+  if (!og || !wins) return `${head}.`;
+  const post = og.goals.find((g) => g.kind === 'postseason');
+  // (the fewest wins whose season grade gets there, under the floor's cap too, the other goals on
+  // target and the postseason goal missed; only when no record gets there that way, with it met)
+  const fewest = (met: boolean) => {
+    const postGrade = post ? post.weight * (met ? 0.3 : Math.max(-1, -0.35 * post.target)) : 0;
+    for (let n = 0; n <= og.games; n++) if (Math.min(wins.weight * clamp((n - wins.target) / WIN_SCALE, -1, 1) + postGrade, floorCap(og, n, og.games)) >= need) return n;
+    return null;
+  };
+  const alone = fewest(false);
+  if (alone === 0) return `${head}.`;
+  if (alone !== null) return `${head}: about ${alone} wins.`;
+  const n = fewest(true);
+  return n === null ? `${head}.` : `${head}: about ${n} wins and to ${post!.title.charAt(0).toLowerCase()}${post!.title.slice(1)}.`;
+}
+
+/** The least chance the season forecast must give an ultimatum: one it gives less is a firing announced, not a demand. */
+export const ULTIMATUM_ODDS = 0.25;
+
+/** The forecast's chance of reaching a postseason level (see POSTSEASON): the play-in or the top six, then each round. */
+export function levelOdds(o: TeamOdds, level: number): number {
+  return level <= 0 ? 1 : level === 1 ? o.top6 + o.playIn : o.reach[Math.min(4, level - 2)];
 }
 
 /**
  * At the All-Star break: a coach the review could fire whose season projects near or under the
- * firing line gets an ultimatum, once. It asks for what the season can still deliver: a few wins
- * over his projection (never more than the owner's target, never less than his floor), or the next
- * postseason level up from where the team projects (never past his goal). Money and youth goals
- * don't make ultimatums.
+ * firing line gets an ultimatum, once. It asks for what the season can still deliver: the next
+ * postseason level up from where the team projects (never past his goal), or a few wins over his
+ * projection (never more than the owner's target, never less than his floor), and with the season
+ * forecast at hand, one it gives at least ULTIMATUM_ODDS: the highest level that clears it, else
+ * the most wins that do. The play-in at 0.0% had been a firing announced in February (the Kings on
+ * Hard, the review found, round 2). Money and youth goals don't make ultimatums.
  */
 export function maybeUltimatum(league: League, fc?: Forecast | null): Ultimatum | null {
   const og = currentGoals(league);
@@ -187,16 +282,22 @@ export function maybeUltimatum(league: League, fc?: Forecast | null): Ultimatum 
   const prog = ownerProgress(league, og, fc);
   const post = prog.find((p) => p.goal.kind === 'postseason');
   const wins = prog.find((p) => p.goal.kind === 'wins');
-  let u: Ultimatum | null = null;
-  if (post && post.projected < post.goal.target) {
-    const target = Math.min(post.goal.target, Math.max(1, Math.round(post.projected) + 1));
-    u = { kind: 'postseason', target, text: POSTSEASON[target].goal };
-  } else if (wins && wins.projected < wins.goal.target) {
+  const odds = fc?.season === og.season ? fc.teams[og.tid] : undefined;
+  const winsAsk = (most: number): Ultimatum | null => {
+    if (!wins) return null;
     // a few wins over the projection, and never under the floor: "win 10 games" is no ultimatum
     const floorWins = og.floor !== undefined ? Math.ceil(og.floor * og.games) : 0;
-    const target = Math.min(wins.goal.target, Math.max(Math.round(wins.projected) + 3, floorWins));
-    u = { kind: 'wins', target, text: `Win ${target} games${og.from ? ' from here' : ''}` };
-  }
+    let target = Math.min(most, Math.max(Math.round(wins.projected) + 3, floorWins));
+    // (the forecast's 10th-90th percentiles of wins, read as a normal spread: its upper quarter is a 25% chance)
+    if (odds) target = Math.min(target, Math.floor(odds.w + 0.674 * Math.max(0.5, (odds.hi - odds.lo) / 2.563)) - (og.from?.won ?? 0));
+    return target > wins.now ? { kind: 'wins', target, text: `Win ${target} games${og.from ? ' from here' : ''}` } : null;
+  };
+  let u: Ultimatum | null = null;
+  if (post && post.projected < post.goal.target) {
+    let target = Math.min(post.goal.target, Math.max(1, Math.round(post.projected) + 1));
+    while (odds && target > 1 && levelOdds(odds, target) < ULTIMATUM_ODDS) target--;
+    u = !odds || levelOdds(odds, target) >= ULTIMATUM_ODDS ? { kind: 'postseason', target, text: POSTSEASON[target].goal } : winsAsk(wins?.goal.target ?? 0);
+  } else if (wins && wins.projected < wins.goal.target) u = winsAsk(wins.goal.target);
   if (!u) return null;
   og.ultimatum = u;
   addInbox(league, {

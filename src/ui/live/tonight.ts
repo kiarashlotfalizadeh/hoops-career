@@ -39,6 +39,7 @@ export function measureTonight(lg: LiveGame) {
         raw: w.raw,
         se: w.se,
         win: w.win,
+        winSe: w.winSe,
         n: w.n,
         moves: w.moves,
         ...(w.top && move && { top: { text: move.text, pts: w.top.pts, se: w.top.se } }),

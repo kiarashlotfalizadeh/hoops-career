@@ -89,8 +89,10 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
         )}
         <div className="tx-ctl">
           <Toggle
-            // (on unless switched off, whoever runs the tactics: it's a measured gain, so taking over the
-            // tactics doesn't turn it off; see buildSimInput)
+            // (on unless switched off, whoever runs the tactics: taking over the tactics doesn't turn it
+            // off; see buildSimInput). Measured again with injuries on (2026-10-25: 32 team runs over two
+            // leagues, 28,160 paired games, each team's first 10-12): +0.05 ± 0.15 a game, about even, so
+            // the help says so and quotes no number (DESIGN.md)
             on={t.manage.assistantAdjusts !== false}
             onChange={(x) =>
               edit((tt) => {
@@ -99,7 +101,7 @@ export function CrunchTimeCard({ t, edit, players }: { t: Tactics; edit: (fn: (t
               })
             }
             label="Assistant adjusts in simmed games"
-            help="At the breaks of a game you don't watch, the assistant changes one thing the other team is cashing in on (a switch they keep hunting, a roll man punishing your hedge), as AI coaches do, but never the changes that cost your side (Drop to Hedge, backing off the ball). Measured over 17,280 games played both ways: worth about +0.5 points a game. Live games are yours."
+            help="At the breaks of a game you don't watch, the assistant changes one thing the other team is cashing in on (a switch they keep hunting, a roll man punishing your hedge), as AI coaches do, but never the changes that cost your side (Drop to Hedge, backing off the ball). About even by the staff's measurements: it answers what the other bench finds, and some nights that helps and some it doesn't. Live games are yours."
           />
         </div>
       </div>

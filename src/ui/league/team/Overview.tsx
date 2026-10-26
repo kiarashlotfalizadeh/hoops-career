@@ -6,7 +6,7 @@ import type { League } from '../../../core/types';
 import { useLeagueMemo } from '../../../state/store';
 import { CAP_FOR, contractSeason, curTeamSeason, payroll, rosterSorted } from '../../../core/league/helpers';
 import { pct } from '../../../core/analysis/odds';
-import { DEF_PRESETS, OFF_PRESETS } from '../../../core/sim/tactics';
+import { defenseLabel, offenseLabel } from '../../../core/sim/playbooks';
 import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coaches';
 import { seasonLabel } from '../../../core/constants';
 import { money, rankOf } from '../../../core/format';
@@ -43,8 +43,11 @@ function useOutlook(league: League, tid: number): string | null {
   return `${rec}Playoffs ${pct(t.reach[0], t.clinched)}${t.reach[4] >= 0.01 ? ` · Title ${pct(t.reach[4])}` : ''}${f.preseason ? ' (preseason)' : ''}`;
 }
 
-const playbook = (team: League['teams'][number]) =>
-  `${OFF_PRESETS.find((p) => p.id === team.tactics.offPreset)?.name ?? 'Custom offense'} / ${DEF_PRESETS.find((p) => p.id === team.tactics.defPreset)?.name ?? 'Custom defense'}`;
+// (moved off its playbook's settings: "Custom (Drop base)", as the Tactics hero and Plan name it)
+const playbook = (team: League['teams'][number]) => {
+  const off = offenseLabel(team.tactics);
+  return `${off === 'Custom' ? 'Custom offense' : off} / ${defenseLabel(team.tactics)}`;
+};
 
 /** The head coach from the coach registry: since when he's had the job (or when he takes it), and the playbook the team runs. */
 function coachLine(league: League, tid: number) {

@@ -13,7 +13,7 @@ import { shortName, teamPlayers, teamSeason } from '../league/helpers';
 import { huntPick } from '../analysis/guarding';
 import { previewMatchups } from '../analysis/matchupPreview';
 import { buildGameReport, decidingFactors } from '../analysis/gameReport';
-import { debrief, keyAdvice, luckLine } from '../analysis/debrief';
+import { debrief, keyAdvice, luckLine, sameChange } from '../analysis/debrief';
 import { createLeague, defaultSettings } from '../league/create';
 import { takeOverTeam } from '../league/owner';
 import { rankedPresets } from '../ai/coachAI';
@@ -399,9 +399,14 @@ describe('scouting and the staff', () => {
       expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.6 a game', call: 'gain' });
       expect(d.plan[0].line).toMatch(/pick-and-roll/);
       expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].night);
-      // a counter measured even is even, whatever one night did
+      // a bad night for a counter measured a gain: one clause bridges the two (their pick-and-roll at 2.00 a trip)
+      const theirs = res.home.tid === opp ? res.home : res.away;
+      theirs.playTypes = { ...theirs.playTypes, pnrBH: { poss: 20, pts: 40 }, pnrRoll: { poss: 0, pts: 0 } };
+      expect(debrief(league, res, buildGameReport(league, res)!).plan[0]).toMatchObject({ night: 'worse', bridge: "A bad night for it; over many games it's worth +0.6 a game." });
+      // a counter measured even is even, whatever one night did (and there's nothing to bridge)
       res.plan![0].pts = undefined;
-      expect(debrief(league, res, buildGameReport(league, res)!).plan[0].call).toBe('even');
+      const even = debrief(league, res, buildGameReport(league, res)!).plan[0];
+      expect([even.call, even.bridge]).toEqual(['even', undefined]);
       // (and used up: a next-game plan is for one game)
       expect(league.gamePlans?.[opp]).toBeUndefined();
     }
@@ -427,6 +432,18 @@ describe('scouting and the staff', () => {
       res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
       expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
       expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')).toBeUndefined();
+      // nor is Stay home off their kick-out threes: the bench measured staying home as a cost (off hot spot-ups)
+      league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
+      res.impacts = [im('help_kick:o', them, 3)];
+      expect(buildGameReport(league, res)!.factors.find((f) => f.key === 'help_kick:o')).toBeTruthy();
+      expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.label === 'Stay home')).toBe(false);
+      // a fix goes in the plan only as the staff counter making the same change (measured against them on
+      // the matchup page): the same settings moved the same way, the counter maybe moving more
+      const t = league.teams[0].tactics;
+      expect(sameChange(t, { defense: { help: 35 } }, { defense: { help: 32 } })).toBe(true);
+      expect(sameChange(t, { defense: { help: 35 } }, { defense: { help: 78 } })).toBe(false);
+      expect(sameChange(t, { offense: { huntMismatch: true } }, { offense: { huntMismatch: true }, nudge: { actions: { iso: 25, post: 15 } } })).toBe(true);
+      expect(sameChange(t, { offense: { huntMismatch: true }, nudge: { actions: { iso: 25 } } }, { offense: { huntMismatch: true } })).toBe(false);
     }
     // tells each deciding edge once: a won-back setting in one row, an edge that is part of another under it
     {

@@ -620,8 +620,8 @@ const OFF_FIT: Record<string, FitModel> = {
  * coverages that stay home don't; the press also wants depth. Since a shooter's three-point volume
  * levels off (2026-10), a 2-3 zone gives up less at the arc than it did and measures the best base for
  * many rosters, more so with perimeter defenders to close out (+0.9 a game over a roster's average
- * defense, +0.5 in the real league, where it was −0.3): an engine question, so staffs don't base on it
- * unless it's their coach's (NOT_A_BASE), while the staff's read tells the user what it's worth.
+ * defense, +0.5 in the real league, where it was −0.3): an engine question, so AI staffs don't base on
+ * it unless it's their coach's (NOT_A_BASE), while the user's own staff goes by its read (StaffFor).
  */
 const DEF_FIT: Record<string, FitModel> = {
   drop: { base: 5.3, terms: [['steals', -0.67, 51]] },
@@ -686,8 +686,9 @@ export function defPresetFit(pr: RosterProfile): Record<string, number> {
 }
 
 /**
- * A coach's lean toward his own playbooks, in fit points: enough to play his own style where another
- * fits about as well (inside what the fits can tell apart), never one the roster plays clearly worse.
+ * An AI coach's lean toward his own playbooks (the user's staff has none: StaffFor), in fit points:
+ * enough to play his own style where another fits about as well (inside what the fits can tell apart),
+ * never one the roster plays clearly worse.
  * Measured over the real league (each playbook for each team, 290 paired games, the engine since a
  * shooter's threes level off): at 8 the staffs' picks run 0.4 a game under each team's best at both
  * ends, as at 5, and the league plays five offenses (Five-Out 12, Hub Big 6, Heliocentric 6, Pace &
@@ -874,25 +875,43 @@ export function fitRoster(players: Player[]): Player[] {
 }
 
 /**
- * Defenses a staff plays as its base only when they're its coach's own: the 2-3 zone, which since a
+ * Defenses an AI staff plays as its base only when they're its coach's own: the 2-3 zone, which since a
  * shooter's three-point volume levels off measures the best base for most rosters (see DEF_FIT), where
  * NBA staffs play it as a weapon for a night. Without this, 14 of the real league's 30 staffs went to
- * the zone (20 of a fictional league's); with it, the four whose coaches teach it. (The user can still pick it, and the staff's read
- * says what it's worth.) Drop it once the engine's zone gives up what an NBA zone does.
+ * the zone (20 of a fictional league's); with it, the four whose coaches teach it. Drop it once the
+ * engine's zone gives up what an NBA zone does. The user's own staff isn't held to it (StaffFor).
  */
 const NOT_A_BASE = new Set(['zone']);
 
-/** Each preset's fit for this roster and coach, his philosophy's lean included (defenses not a base for him left out: NOT_A_BASE). */
-export function presetScores(team: Team, players: Player[]): { off: Record<string, number>; def: Record<string, number> } {
+/**
+ * Whose staff picks. An AI team's leans toward its coach's own playbooks (PHILOSOPHY_LEAN) and keeps off
+ * the zone unless it's his (NOT_A_BASE): both keep the league's styles spread as an NBA league's are.
+ * The user's own staff ('user') picks by its read alone, the one the style picker shows (best for the
+ * roster first): the user may pick the zone himself and the read says what it's worth, so a staff that
+ * passed over its own best read for a coach's habit, or for the league's look, would knowingly cost
+ * him points (over the real league, fully drilled, the read's top beats the leaned pick by 0.2-0.3 a game
+ * on offense and 0.4-0.5 on defense: scripts/style-check.ts, 2026-10-25). Once the zone is retuned, AI
+ * staffs may lose NOT_A_BASE too.
+ */
+export interface StaffFor {
+  user?: boolean;
+}
+
+/**
+ * Each preset's fit for this roster: for an AI staff, his philosophy's lean included and defenses not a
+ * base for him left out (NOT_A_BASE); for the user's staff, the read as the style picker shows it (StaffFor).
+ */
+export function presetScores(team: Team, players: Player[], staff: StaffFor = {}): { off: Record<string, number>; def: Record<string, number> } {
   const pr = rosterProfile(fitRoster(players));
+  if (staff.user) return { off: offPresetFit(pr), def: defPresetFit(pr) };
   const lean = (fits: Record<string, number>, mine: string, by: number) => Object.fromEntries(Object.entries(fits).map(([k, v]) => [k, v + (k === mine ? by : 0)]));
   const def = Object.fromEntries(Object.entries(defPresetFit(pr)).filter(([k]) => !NOT_A_BASE.has(k) || k === team.coach.defPhilosophy));
   return { off: lean(offPresetFit(pr), team.coach.offPhilosophy, PHILOSOPHY_LEAN.off), def: lean(def, team.coach.defPhilosophy, PHILOSOPHY_LEAN.def) };
 }
 
-/** Offensive and defensive presets ranked by fit for this roster and coach, best first. */
-export function rankedPresets(team: Team, players: Player[]): { off: string[]; def: string[] } {
-  const sc = presetScores(team, players);
+/** Offensive and defensive presets ranked by fit for this roster and coach (or the user's staff: StaffFor), best first. */
+export function rankedPresets(team: Team, players: Player[], staff: StaffFor = {}): { off: string[]; def: string[] } {
+  const sc = presetScores(team, players, staff);
   const rank = (fits: Record<string, number>) =>
     Object.entries(fits)
       .sort((a, b) => b[1] - a[1])
@@ -903,23 +922,27 @@ export function rankedPresets(team: Team, players: Player[]): { off: string[]; d
 /**
  * In season, how much better (in fit points, a tenth of a point a game each) another playbook or
  * shape has to fit before the staff changes to it: a new system costs familiarity for weeks (see
- * src/core/sim/familiarity.ts), so a marginal gain isn't worth relearning for.
+ * src/core/sim/familiarity.ts), so a marginal gain isn't worth relearning for. The style picker says
+ * so when it's keeping the user's staff on one (PresetPicker).
  */
 export const STICK = { preset: 8, shape: 6 };
+
+/** The playbook a staff picks from fits `fits`: the best, or in season (`sticky`) the one it runs (`cur`) unless another fits better by STICK. */
+export function staffPick(fits: Record<string, number>, cur: string | undefined, sticky = false): string {
+  const top = Object.entries(fits).sort((a, b) => b[1] - a[1])[0][0];
+  return sticky && cur && fits[cur] !== undefined && fits[top] - fits[cur] < STICK.preset ? cur : top;
+}
 
 /**
  * The staff's tactics for a roster: the best-fitting playbooks, roles and shot freedom at both ends,
  * and the shape. `sticky` (in season): the team keeps the playbooks and shape it runs unless another
  * fits better by STICK. `links`: the user's own staff also casts the starting five for partnerships
- * (partnerRoles).
+ * (partnerRoles). `user`: the user's own staff, which picks by its read (StaffFor).
  */
-export function autoTactics(team: Team, players: Player[], keepManual = true, opts: { sticky?: boolean; links?: boolean } = {}): Tactics {
+export function autoTactics(team: Team, players: Player[], keepManual = true, opts: { sticky?: boolean; links?: boolean } & StaffFor = {}): Tactics {
   if (keepManual && team.tactics.manual) return team.tactics;
-  const sc = presetScores(team, players);
-  const best = (fits: Record<string, number>, cur: string | undefined) => {
-    const top = Object.entries(fits).sort((a, b) => b[1] - a[1])[0][0];
-    return opts.sticky && cur && fits[cur] !== undefined && fits[top] - fits[cur] < STICK.preset ? cur : top;
-  };
+  const sc = presetScores(team, players, opts);
+  const best = (fits: Record<string, number>, cur: string | undefined) => staffPick(fits, cur, opts.sticky);
   const off = best(sc.off, team.tactics?.offPreset);
   const def = best(sc.def, team.tactics?.defPreset);
   const base = team.tactics ? cloneTactics(team.tactics) : defaultTactics(off, def);

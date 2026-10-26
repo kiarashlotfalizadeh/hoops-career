@@ -1028,6 +1028,8 @@ export interface MovesWorth {
   se: number;
   /** Chance to win they added (0-1; under 0: cost). */
   win: number;
+  /** Its standard error (absent in readings from before it was kept: those are read by the points alone). */
+  winSe?: number;
   /** Versions of the rest of the night it was measured over, and the moves in it. */
   n: number;
   moves: number;

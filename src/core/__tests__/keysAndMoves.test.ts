@@ -11,7 +11,7 @@ import { userGameOnDay } from '../league/games';
 import { teamSeason } from '../league/helpers';
 import { simDay } from '../league/season';
 import { gameKeys, gradeKey, keyState, keyValue } from '../analysis/keys';
-import { coachMoves, moveText, moveVerdict, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from '../analysis/moves';
+import { coachMoves, moveRate, moveText, MOVE_BASE_TRIPS, MOVE_MIN_TRIPS } from '../analysis/moves';
 import { defaultTactics, cloneTactics } from '../sim/tactics';
 import type { PossLog } from '../sim/log';
 import type { CoachMove, GameResult, League, LiveOp, ScheduledGame } from '../types';
@@ -189,6 +189,31 @@ describe('keys to the game and coach moves', () => {
           'The rest of the game from the first move, played 200 times with 4 moves and without. The one that mattered most: Pick-and-roll coverage: Hedge → Drop (+1.4).',
         );
         expect(nightLine({ ...worth(0, 0, 1), movesWorth: undefined })).toBeNull();
+        // moves only in crunch time (a late play call) are judged by the win chance, as the bench's late
+        // calls are: a call that won it moves the margin a point and the result far more
+        {
+          const play = {
+            kind: 'play',
+            q: 4,
+            clock: 5,
+            text: 'Isolation: P5',
+            end: 'off',
+            before: { us: { poss: 0, pts: 0 }, them: { poss: 0, pts: 0 } },
+            after: { us: { poss: 1, pts: 2 }, them: { poss: 0, pts: 0 } },
+          };
+          const late = (win: number, winSe: number | undefined, moves: object[] = [play]) => {
+            const g = worth(0.2, 0.2, 0.3);
+            return { ...g, moves, movesWorth: { ...g.movesWorth!, moves: moves.length, win, ...(winSe !== undefined && { winSe }) } } as GameResult;
+          };
+          expect(nightLine(late(0.09, 0.02))).toMatchObject({ text: 'Your call: +9% to win tonight, measured (about ±2%)', tone: 'good' });
+          expect(nightLine(late(0.09, 0.06))).toMatchObject({ text: 'Your call: too close to say tonight (+9% to win, about ±6%)', tone: 'dim' });
+          // (a reading from before its noise was kept: by the points)
+          expect(nightLine(late(0.09, undefined))!.text).toBe('Your call: too close to say tonight (+0.2, about ±0.3)');
+          // earlier moves: by the points, unless the win chance reads clearer
+          const early = { ...play, kind: 'tactics', q: 2, clock: 300 };
+          expect(nightLine(late(0.01, 0.02, [early, play]))!.text).toBe('Your moves: too close to say tonight (+0.2, about ±0.3)');
+          expect(nightLine(late(-0.08, 0.02, [early, play]), true)).toMatchObject({ text: "The staff's moves: −8% to win tonight, measured (about ±2%)", tone: 'bad' });
+        }
         const league = {
           season: 2026,
           userTid: 3,
@@ -215,7 +240,7 @@ describe('keys to the game and coach moves', () => {
         expect(m).toMatchObject({ kind: 'tactics', q: 2, clock: 432, end: 'def', text: 'Pick-and-roll coverage: Drop → Hedge' });
         expect(m.before.focus).toEqual({ poss: 20, pts: 40 });
         expect(m.after.focus).toEqual({ poss: 20, pts: 10 });
-        expect(moveVerdict(m)).toMatchObject({ what: 'focus', now: 0.5, was: 2, verdict: 'better' });
+        expect(moveRate(m)).toEqual({ what: 'focus', now: 0.5, was: 2, trips: 20 });
       }
 
       // measure a substitution over the stint it started, and a timeout over the trips either side of it
@@ -233,7 +258,7 @@ describe('keys to the game and coach moves', () => {
         );
         expect(moves.map((m) => m.text)).toEqual(['P2 in for P1', 'Timeout']);
         expect(moves[0].after).toMatchObject({ us: { poss: 15, pts: 30 }, them: { poss: 15, pts: 0 } });
-        expect(moveVerdict(moves[0]).verdict).toBe('better');
+        expect(moveRate(moves[0])).toMatchObject({ what: 'margin', now: 2 });
         // a timeout reads the eight trips each way either side of it
         expect(moves[1].before.us.poss + moves[1].before.them.poss).toBe(16);
         expect(moves[1].after.us.poss + moves[1].after.them.poss).toBe(16);
@@ -268,24 +293,32 @@ describe('keys to the game and coach moves', () => {
         );
         expect(moves).toHaveLength(2);
         expect(moves[1].before.them.poss).toBeGreaterThanOrEqual(MOVE_BASE_TRIPS);
-        expect(moveVerdict(moves[1]).verdict).not.toBe('early');
+        expect(moveRate(moves[1]).was).not.toBeNull();
       }
 
-      // call a move early until enough trips are in, and the same when the rate barely moved
+      // a move reads as its rate since against the stretch before, and nothing more: no verdict. (A move
+      // made after a hot stretch reads better afterwards whatever it did, the rate falling back toward
+      // the usual either way: the replayed night says whether it worked.) What it's aimed at is the
+      // rate once it has the trips, each side of it; a baseline of a few trips falls back to that end of the floor
       {
         const t = { poss: MOVE_MIN_TRIPS - 1, pts: MOVE_MIN_TRIPS };
         const m: CoachMove = { kind: 'tactics', q: 1, clock: 100, text: 'x', end: 'off', before: { us: { poss: 20, pts: 22 }, them: t }, after: { us: t, them: t } };
-        expect(moveVerdict(m).verdict).toBe('early');
-        m.after.us = { poss: 30, pts: 34 };
-        expect(moveVerdict(m).verdict).toBe('same');
-        // a baseline of a few trips isn't one: 3.00 a trip over 3 trips, then 0.56 over 30, is still early
-        m.before.us = { poss: 3, pts: 9 };
-        m.after.us = { poss: 30, pts: 17 };
-        expect(moveVerdict(m).verdict).toBe('early');
-        // a swing one standard error wide reads as no change, not as working: 1.10 over 20 trips, then 1.40 over 30
-        m.before.us = { poss: 20, pts: 22 };
-        m.after.us = { poss: 30, pts: 42 };
-        expect(moveVerdict(m).verdict).toBe('same');
+        expect(moveRate(m)).toEqual({ what: 'us', now: MOVE_MIN_TRIPS / (MOVE_MIN_TRIPS - 1), was: 1.1, trips: MOVE_MIN_TRIPS - 1 });
+        expect(Object.keys(moveRate(m))).not.toContain('verdict');
+        // (a hot stretch of theirs, 2.00 a trip over 12, then the usual 1.10 over 20 with nothing changed: the line has the two numbers only)
+        const hot: CoachMove = {
+          kind: 'tactics',
+          q: 2,
+          clock: 300,
+          text: 'x',
+          end: 'def',
+          aim: 'pick-and-roll',
+          before: { us: { poss: 30, pts: 33 }, them: { poss: 30, pts: 36 }, focus: { poss: 12, pts: 24 } },
+          after: { us: { poss: 30, pts: 33 }, them: { poss: 30, pts: 33 }, focus: { poss: 20, pts: 22 } },
+        };
+        expect(moveRate(hot)).toEqual({ what: 'focus', now: 1.1, was: 2, trips: 20 });
+        hot.before.focus = { poss: 3, pts: 6 };
+        expect(moveRate(hot).what).toBe('them');
       }
 
       // moves made together at a break are one move, measured from the break to the next one of
@@ -314,7 +347,7 @@ describe('keys to the game and coach moves', () => {
         expect(moves[0].text).toBe('P2 in for P1 · P4 in for P3');
         expect(moves[0].before.us.poss).toBe(20);
         expect(moves[0].after.us.poss).toBe(20);
-        expect(moveVerdict(moves[0]).verdict).toBe('better');
+        expect(moveRate(moves[0])).toMatchObject({ what: 'margin', now: 2, was: -2 });
         // (the two tactics changes two logs apart: one move, from the first's tactics to the last's)
         expect(moves[1].text).toContain('Hedge');
         expect(moves[1].after.us.poss + moves[1].after.them.poss).toBe(38);
@@ -333,10 +366,9 @@ describe('keys to the game and coach moves', () => {
         ];
         const [live, play] = coachMoves(marks, logs, 0, names);
         expect(live.closed).toBeUndefined();
-        expect(moveVerdict(live).verdict).toBe('early');
         const [late] = coachMoves(marks, logs, 0, names, undefined, true);
         expect(late.closed).toBe(true);
-        expect(moveVerdict(late).verdict).toBe('better');
+        expect(moveRate(late)).toMatchObject({ what: 'margin', trips: 8 });
         expect(play).toMatchObject({ kind: 'play', text: 'Horns: P5', call: { id: 'horns', pid: 5 }, after: { us: { poss: 1, pts: 3 } } });
         // a clear-out called late is the trip that ran it; once the game is over, one whose basket put us
         // ahead for good in the last shot clock won it, and one that tied it there sent it to overtime

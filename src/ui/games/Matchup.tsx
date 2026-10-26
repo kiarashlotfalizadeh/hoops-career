@@ -12,7 +12,9 @@ import { liveInProgress } from '../../state/live';
 import { guideStepOpen, nextOpponent } from '../../core/league/agenda';
 import { counterCandidates } from '../../core/ai/advisor';
 import { worthCall } from '../../core/ai/counterWorth';
-import { byWorth, useCounterWorth, worthText } from './matchup/useCounterWorth';
+import { byWorth, counterItem, useCounterWorth, worthText } from './matchup/useCounterWorth';
+import { setPlanItem } from '../../core/league/gamePlans';
+import { act } from '../../state/actions';
 import { GuideStrip } from '../components/GuideStrip';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { confStandings } from '../../core/league/standings';
@@ -101,7 +103,15 @@ function ScoutGuide({ league, opp }: { league: League; opp: number }) {
     : best
       ? `Add the staff's counter, ${best.label} (${worthText(worth.get(best.id)!).text.toLowerCase()}), or go in with no plan.`
       : "None of the staff's counters beats your playbook tonight: go in with no plan.";
-  return <GuideStrip step="scout" keep="No plan this time" line={line} />;
+  // (the measured counter is the step's move: Add does what the Counters card's Add does, and ticks the step)
+  const add = best && {
+    label: `Add ${best.label}`,
+    run: () => {
+      if (act('Game plan', (l) => setPlanItem(l, opp, counterItem(best, worth.get(best.id)))))
+        useStore.getState().toast(`Plan vs ${league.teams[opp].abbrev}: ${best.label}`, 'good');
+    },
+  };
+  return <GuideStrip step="scout" keep={add ? 'No plan' : 'No plan this time'} line={line} act={add || undefined} />;
 }
 
 /** Game day: tip off (or get back to the game under way), or sim it from here (this dock stands in for the Continue bar). */

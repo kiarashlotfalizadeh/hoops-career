@@ -10,7 +10,7 @@ import { clamp } from '../random';
 import { worldRng } from './world';
 import { addInbox, dateToDay, fmtDate } from './helpers';
 import { arenaCapacity } from './finances';
-import { jobSecurity } from './jobSecurity';
+import { jobSecurity, seatHeat, type SeatHeat } from './jobSecurity';
 import { frozen } from './books';
 import { currentGoals, ownerPersonality, SEASON_GAMES, type OwnerPersonality } from './ownerGoals';
 import { confStandings } from './standings';
@@ -31,7 +31,7 @@ export type Trend = 'up' | 'down' | 'flat';
 export interface Mood {
   /** 0..100. */
   score: number;
-  /** "pleased", "buzzing". */
+  /** "Steady" (the owner: the meter's word, see ownerWord), "buzzing" (the fans). */
   word: string;
   tone: 'good' | 'info' | 'warn' | 'bad';
   trend: Trend;
@@ -42,16 +42,16 @@ export interface Mood {
 
 // ---------------------------------------------------------------- the owner
 
-const OWNER_WORDS: { min: number; word: string; tone: Mood['tone'] }[] = [
-  { min: 80, word: 'delighted', tone: 'good' },
-  { min: 65, word: 'pleased', tone: 'good' },
-  { min: 52, word: 'content', tone: 'info' },
-  { min: 45, word: 'watchful', tone: 'info' },
-  { min: 32, word: 'uneasy', tone: 'warn' },
-  { min: -1, word: 'impatient', tone: 'bad' },
-];
+const HEAT_TONE: Record<SeatHeat, Mood['tone']> = { secure: 'good', steady: 'info', warm: 'warn', hot: 'bad' };
 
-export const ownerWord = (score: number) => OWNER_WORDS.find((w) => score >= w.min)!;
+/**
+ * The owner's mood in the job-security meter's own words ("Steady", "Hot seat": see seatHeat): a
+ * ladder of its own here ("Watchful 47") had named the same score twice on one screen.
+ */
+export const ownerWord = (score: number): { word: string; tone: Mood['tone'] } => {
+  const h = seatHeat(score);
+  return { word: h.label, tone: HEAT_TONE[h.heat] };
+};
 
 // ---------------------------------------------------------------- the fans
 
@@ -330,7 +330,7 @@ function checkInMail(
   const f = fanScore(league);
   lines.push(`${fanLine(league, tid, f)}.`);
   lines.push(rng.pick(CLOSERS[who]));
-  const mood = ownerWord(red ? Math.min(score, 51) : score).word;
+  const mood = ownerWord(red ? Math.min(score, 51) : score).word.toLowerCase();
   return {
     from: 'Owner',
     subject: `${MONTHS[month]} check-in: ${mood}`,

@@ -12,9 +12,25 @@ import { canStartRegularSeason, simDay, startRegularSeason } from '../league/sea
 import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
-import { canBeFired, jobSecurity, maybeUltimatum, ultimatumVerdict } from '../league/jobSecurity';
+import { ULTIMATUM_ODDS, canBeFired, jobSecurity, levelOdds, maybeUltimatum, seatHeat, ultimatumVerdict } from '../league/jobSecurity';
+import { ownerWord } from '../league/legacyPulse';
+import { legacyOf } from '../league/legacy';
 import { ownerEvaluation } from '../league/owner';
-import { CONCEDE_COST, FLOOR_EASE, currentGoals, floorDanger, goalsWhy, lastWinsTarget, ownerProgress, previewTitle, setOwnerGoals, type OwnerReview } from '../league/ownerGoals';
+import {
+  CONCEDE_COST,
+  FLOOR_EASE,
+  YOUTH_TOP,
+  currentGoals,
+  floorDanger,
+  goalsWhy,
+  gradeGoal,
+  lastWinsTarget,
+  ownerProgress,
+  personalityLine,
+  previewTitle,
+  setOwnerGoals,
+  type OwnerReview,
+} from '../league/ownerGoals';
 import { requestSetting } from '../league/difficulty';
 import { leagueForecast, pct } from '../analysis/odds';
 import { DEADLINE_DAYS, DUE_SOON, FLOOR_AGO, SKID_GAP, callsDaily, changeWorth, countersWorth, dueId, newCall, openCallIds, storeWorth } from '../league/calls';
@@ -225,6 +241,33 @@ describe('the agenda', () => {
       expect([3, 4].map((n) => canBeFired(inCharge(n, 'easy')))).toEqual([false, true]);
       l.settings.jobSecurity = false;
       expect(jobSecurity(l).off).toBe(true);
+      // grace counts from the difficulty each season was played on: a Hard season and then Easy buys no more seasons
+      const easy = inCharge(2, 'easy');
+      const played = (d: League['settings']['difficulty']) => {
+        (easy.legacy ??= legacyOf(easy)).reviews = [
+          { season: easy.season - 1, tid: easy.userTid, won: 20, lost: 62, conf: 'E', round: -1, records: [], honors: [], difficulty: d },
+        ];
+        return canBeFired(easy);
+      };
+      expect([played('easy'), played('normal'), played('hard')]).toEqual([false, false, true]);
+      // one ladder: the pulse names the owner by the meter's word ("Steady 47", never "Watchful 47")
+      for (const score of [20, 40, 47, 50, 70]) expect(ownerWord(score).word).toBe(seatHeat(score).label);
+    }
+
+    // opening night: the meter's neutral 50 says so when he expects more than his read of the roster;
+    // between seasons on a warm seat it says what the next review needs
+    {
+      const l = inCharge(1);
+      const w = currentGoals(l)!.goals.find((g) => g.kind === 'wins')!;
+      w.target = Math.round(w.perGame! * 82) + 6;
+      expect(jobSecurity(l).line).toMatch(/^He expects more than his read of this roster: win \d+ games/);
+      const pre = camp(5);
+      pre.tenureStart = pre.season - 3;
+      pre.ownerMood.total = -0.3;
+      const js = jobSecurity(pre);
+      expect(js.heat).toBe('warm');
+      // (−0.5 at 40%: −0.3 × 0.6 + 0.4 g ≥ −0.5 → g ≥ −0.8)
+      expect(js.line).toMatch(/^Next review needs a season grade of −80 or better: about \d+ wins/);
     }
 
     // the owner's targets count Hard's edge on the court as the forecast does: his read is the forecast's
@@ -235,7 +278,7 @@ describe('the agenda', () => {
       expect(wins(n).edge).toBe(0);
       expect(wins(h).edge).toBeLessThan(-2);
       expect(wins(h).target).toBeLessThan(wins(n).target);
-      for (const x of [n, h]) expect(Math.abs(wins(x).perGame! * 82 - leagueForecast(x)!.teams[x.userTid].w)).toBeLessThan(5);
+      for (const x of [n, h]) expect(Math.abs(wins(x).perGame! * 82 - leagueForecast(x)!.teams[x.userTid].w)).toBeLessThan(1);
       const review = (edge?: number): OwnerReview => ({
         season: h.season - 1,
         tid: h.userTid,
@@ -258,6 +301,9 @@ describe('the agenda', () => {
       // the preseason says its figures are estimates; the owner speaks for himself about a rebuild
       expect(previewTitle(w)).toBe(`Win about ${w.target} games`);
       expect(goalsWhy({ ...og, missed: undefined, rebuild: { year: 1, of: 2 } })).toContain("I'll give you two seasons without the playoffs. After that, I want the play-in.");
+      // and his personality agrees with the mandate: a win-now owner setting rebuild goals says he'll take one
+      expect(personalityLine('win-now', { rebuild: { year: 1, of: 2 } })).toBe("Win-now · wants results, but he'll take a rebuild this season");
+      expect(personalityLine('win-now', {})).toBe('Win-now · wants results this season');
     }
 
     // a difficulty change, or job security off, waits for the next opening night (no dodging a review); on counts at once
@@ -284,11 +330,23 @@ describe('the agenda', () => {
       const ts = l.teams[l.userTid].seasons.find((s) => s.season === l.season)!;
       ts.won = 12;
       ts.lost = 38;
+      // one the forecast gives a real chance: with the postseason out of reach (2%), the wins its upper quarter reaches
+      {
+        const m = structuredClone(l);
+        const fc = structuredClone(leagueForecast(m)!);
+        const o = Object.assign(fc.teams[m.userTid], { w: 20, lo: 17, hi: 23, top6: 0, playIn: 0.02, reach: [0.01, 0, 0, 0, 0] });
+        const um = maybeUltimatum(m, fc)!;
+        expect(um).toMatchObject({ kind: 'wins' });
+        expect(um.target).toBeGreaterThan(12);
+        expect(um.target).toBeLessThanOrEqual(Math.floor(o.w + 0.674 * ((o.hi - o.lo) / 2.563)));
+        // a level it gives a quarter or better stands
+        o.playIn = 0.3;
+        const n = structuredClone(l);
+        const un = maybeUltimatum(n, fc);
+        if (un?.kind === 'postseason') expect(levelOdds(o, un.target)).toBeGreaterThanOrEqual(ULTIMATUM_ODDS);
+      }
       const u = maybeUltimatum(l);
       expect(u).not.toBeNull();
-      // never less than his floor: "win 10 games" is no ultimatum
-      const og = currentGoals(l)!;
-      if (u!.kind === 'wins') expect(u!.target).toBeGreaterThanOrEqual(Math.ceil(og.floor! * og.games));
       expect(currentGoals(l)!.ultimatum).toEqual(u);
       expect(jobSecurity(l).heat).toBe('hot');
       // the meter says it whatever the standing: hot, the ultimatum under the score
@@ -445,6 +503,21 @@ describe('the agenda', () => {
       expect(after.rebuild).toEqual({ year: 1, of: 2 });
       expect(l.ownerMood.total).toBeCloseTo(total - CONCEDE_COST, 2);
       expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
+      // the weight moved to the young players grades 0 at best (it spares the miss, it doesn't earn on top), and
+      // the cost stays off at the review, a first season's grade setting the standing or not
+      {
+        const youth = after.goals.find((g) => g.kind === 'youth')!;
+        expect(youth.conceded).toBeGreaterThan(0);
+        const own = (youth.weight - youth.conceded!) / youth.weight;
+        expect(gradeGoal(l, after, youth, youth.target * 5)).toBeCloseTo(YOUTH_TOP * own, 2);
+        expect(gradeGoal(l, after, youth, 0)).toBe(-1);
+        const r = structuredClone(l);
+        r.phase = 'playoffs';
+        curTeamSeason(r, r.userTid).playoffRound = -1;
+        ownerEvaluation(r);
+        const review = r.ownerReviews!.find((x) => x.season === r.season)!;
+        expect(review.total).toBeCloseTo(Math.max(-1, review.grade - CONCEDE_COST), 2);
+      }
       // with his patience for rebuilds used up, he won't hear it: the call is to keep pushing
       const m = inCharge(3);
       const reviewed = (season: number): OwnerReview => ({

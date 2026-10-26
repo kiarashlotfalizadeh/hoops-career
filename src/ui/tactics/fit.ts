@@ -2,9 +2,13 @@
 // for this roster (coachAI's fits, a tenth of a point a game each, calibrated against the engine),
 // against the playbook in use, in the same unit a change is measured in when it's made (editWatch); and
 // a fit broken into the parts it's made of, in points a game too, so its start and parts add up to what
-// it's worth against an average playbook.
-import type { FitTerm } from '../../core/ai/coachAI';
+// it's worth against an average playbook; and the hand-over sheet's line, what the user's own staff would
+// run (by that same read: StaffFor in coachAI) and its read against his.
+import type { League, Tactics } from '../../core/types';
+import { autoTactics, defPresetFit, fitRoster, offPresetFit, rosterProfile, type FitTerm } from '../../core/ai/coachAI';
 import { WORTH_MIN } from '../../core/ai/counterWorth';
+import { rosterSorted } from '../../core/league/helpers';
+import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 
 /** A read's tone: half a point a game or more either way reads as a gain or a cost, as a measured change does. */
 export const fitTone = (pts: number): '' | 'good' | 'bad' => (pts >= WORTH_MIN ? 'good' : pts <= -WORTH_MIN ? 'bad' : '');
@@ -49,4 +53,27 @@ export function shownFit(id: string, terms: FitTerm[], fits: Record<string, numb
     start: start10 / 10,
     parts: parts.map(({ term, v10 }) => ({ term, v: v10 / 10 })),
   };
+}
+
+/** The tactics the user's staff would put in for this roster (as the hand-over does). */
+export const userStaffTactics = (l: League): Tactics => {
+  const tm = l.teams[l.userTid];
+  return autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { links: true, user: true });
+};
+
+/**
+ * What the hand-over sheet says the staff would run: its playbooks and, by the staff's read (the style
+ * picker's, fully drilled), what they're worth a game against the user's at the ends where he runs one.
+ */
+export function handOverLine(l: League, staff: Tactics): string {
+  const t = l.teams[l.userTid].tactics;
+  const name = `${OFF_PRESETS.find((p) => p.id === staff.offPreset)?.name ?? 'their offense'} · ${DEF_PRESETS.find((p) => p.id === staff.defPreset)?.name ?? 'their defense'}`;
+  if (staff.offPreset === t.offPreset && staff.defPreset === t.defPreset) return `The staff would keep ${name}, with their own settings, roles and shape.`;
+  const pr = rosterProfile(fitRoster(rosterSorted(l, l.userTid)));
+  const off = offPresetFit(pr);
+  const def = defPresetFit(pr);
+  // (an end the user runs no playbook at reads as even: the read is of playbooks)
+  const vs = (fits: Record<string, number>, mine: string, theirs: string) => (fits[mine] === undefined ? 0 : fits[theirs] - fits[mine]);
+  const v = Math.round(vs(off, t.offPreset, staff.offPreset) + vs(def, t.defPreset, staff.defPreset)) / 10;
+  return `Staff would run ${name}: ${v === 0 ? 'about even with yours' : `${readText(v)} a game against yours`} (the staff's read, once drilled).`;
 }

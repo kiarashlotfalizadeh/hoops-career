@@ -13,7 +13,8 @@ import { Section } from '../components/ui';
 import { seatOf } from './seat';
 import './pulse.css';
 
-const TREND_WORD: Record<Trend, string> = { up: 'rising', down: 'falling', flat: 'steady' };
+// (flat isn't "steady": that's the meter's own word for a standing, see seatHeat)
+const TREND_WORD: Record<Trend, string> = { up: 'rising', down: 'falling', flat: 'holding' };
 
 /** Which way a mood is moving: an arrow, named for screen readers. */
 export function TrendMark({ trend }: { trend: Trend }) {
@@ -32,11 +33,11 @@ export function usePulse(league: League): { owner: Mood; fans: Mood } {
   return useLeagueMemo(() => pulseNow(league, js.score), [league, js.score]);
 }
 
-/** Today's line: "Owner pleased ↗ · Fans buzzing →", to Office → Owner. Nothing for a fired coach. */
+/** Today's line: "Owner Steady ↗ · Fans buzzing →", to Office → Owner. Nothing for a fired coach. */
 export function CoachPulse({ league }: { league: League }) {
   const p = usePulse(league);
   if (league.fired) return null;
-  const label = `The owner is ${p.owner.word} (${TREND_WORD[p.owner.trend]}); the fans are ${p.fans.word} (${TREND_WORD[p.fans.trend]})`;
+  const label = `Owner: ${p.owner.word} (${TREND_WORD[p.owner.trend]}); the fans are ${p.fans.word} (${TREND_WORD[p.fans.trend]})`;
   return (
     <Link to="/office/owner" className="fo-pulse" aria-label={label}>
       <span className="fo-pulse-part">
@@ -82,8 +83,9 @@ export function PulseChart({ owner, fans, labels, height = 110 }: { owner: numbe
 }
 
 /**
- * Office → Owner's pulse: the owner's mood and the fans', each with its direction, both through the
- * season, and the fans in a line about the city and the arena with how full it has been.
+ * Office → Owner's pulse: which way the owner's standing is moving (the meter above has its score and
+ * word) and the fans' mood with its direction, both through the season, and the fans in a line about
+ * the city and the arena with how full it has been.
  */
 export function PulseSection({ league }: { league: League }) {
   const p = usePulse(league);
@@ -96,7 +98,7 @@ export function PulseSection({ league }: { league: League }) {
     <Section title="Pulse" right={<span className="tiny dim">A point a week</span>}>
       <div className="card fo-pulse-card">
         <div className="fo-pulse-moods">
-          <MoodFig league={league} k="Owner" m={p.owner} cls="owner" />
+          <MoodFig league={league} k="Owner" m={p.owner} cls="owner" trendOnly />
           <MoodFig league={league} k="Fans" m={p.fans} cls="fans" />
         </div>
         {pts.length >= 2 && (
@@ -116,18 +118,18 @@ export function PulseSection({ league }: { league: League }) {
   );
 }
 
-function MoodFig({ league, k, m, cls }: { league: League; k: string; m: Mood; cls: string }) {
+/** A mood's figure: its word, direction and score (`trendOnly`: the direction and the move alone, for the owner under his meter). */
+function MoodFig({ league, k, m, cls, trendOnly }: { league: League; k: string; m: Mood; cls: string; trendOnly?: boolean }) {
+  const moved = m.delta && m.since !== undefined ? `${m.delta > 0 ? '+' : '−'}${Math.abs(m.delta)} since ${fmtDate(league.season, m.since)}` : '';
   return (
     <div className={`fo-pulse-fig ${cls}`}>
       <span className="over">
         <i aria-hidden="true" /> {k}
       </span>
       <span className="fo-pulse-word">
-        <span className={`tone-${m.tone}`}>{m.word}</span> <TrendMark trend={m.trend} />
+        {trendOnly ? <span className="dim2">{TREND_WORD[m.trend]}</span> : <span className={`tone-${m.tone}`}>{m.word}</span>} <TrendMark trend={m.trend} />
       </span>
-      <span className="tiny dim num">
-        {m.score} of 100{m.delta && m.since !== undefined ? ` · ${m.delta > 0 ? '+' : '−'}${Math.abs(m.delta)} since ${fmtDate(league.season, m.since)}` : ''}
-      </span>
+      <span className="tiny dim num">{trendOnly ? moved || 'This season' : `${m.score} of 100${moved ? ` · ${moved}` : ''}`}</span>
     </div>
   );
 }

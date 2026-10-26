@@ -1,11 +1,12 @@
 // What a decision that moves several drilled settings at once costs (Play through: the five action
 // weights; When a shot goes up: the glass and getting back): where the team drilled them, and what
-// each part of familiarity loses for the change until practice drills it. One line under the control,
-// as Lv has for a single setting.
+// learning the change costs a game until practice drills it, measured (learnCost.ts). One line under
+// the control, as Lv has for a single setting.
 import { FAM_DIMS, famDims, type FamDim } from '../../core/sim/familiarity';
 import { levelIndex } from '../../core/sim/tactics';
 import type { Familiarity, Tactics } from '../../core/types';
 import { habitValue, setHabit, type HabitKey } from './fam';
+import { learnInline, useLearnCost } from './learnCost';
 
 /** Tactics `t` with settings `keys` back where the team drilled them. */
 export function drilledAt(fam: Familiarity, t: Tactics, keys: HabitKey[]): Tactics {
@@ -26,26 +27,16 @@ export function habitsCost(fam: Familiarity, t: Tactics, keys: HabitKey[]): { di
   return FAM_DIMS.map((d) => ({ dim: d.id, cost: Math.max(0, at[d.id] - now[d.id]) })).filter((x) => x.cost >= 0.5);
 }
 
-/** "Drilled at Balanced · −4 actions & shots familiarity until it's drilled", under a control that moves `keys`. */
+/** "Drilled at Balanced · learning it costs about 0.4 a game at first (measured)", under a control that moves `keys`. */
 export function CostLine({ fam, t, keys, drilled }: { fam: Familiarity; t: Tactics; keys: HabitKey[]; drilled: (dt: Tactics) => string }) {
   const cost = habitsCost(fam, t, keys);
+  const at = drilledAt(fam, t, keys);
+  const learn = useLearnCost(at, cost ? t : null);
   if (!cost) return null;
   return (
     <div className="tx-lv-fam">
-      Drilled at <b>{drilled(drilledAt(fam, t, keys))}</b>
-      {cost.length > 0 && (
-        <>
-          {' '}
-          ·{' '}
-          {cost.map((c, i) => (
-            <span key={c.dim}>
-              {i > 0 && ', '}
-              <span className="bad">−{Math.round(c.cost)}</span> {FAM_DIMS.find((d) => d.id === c.dim)!.label.toLowerCase()}
-            </span>
-          ))}{' '}
-          familiarity until it&apos;s drilled
-        </>
-      )}
+      Drilled at <b>{drilled(at)}</b>
+      {learn && learnInline(learn)}
     </div>
   );
 }

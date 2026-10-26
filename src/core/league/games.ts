@@ -3,7 +3,7 @@
 import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
-import { autoRotation, autoTactics, rankedPresets } from '../ai/coachAI';
+import { autoRotation, autoTactics, presetScores, rankedPresets, staffPick } from '../ai/coachAI';
 import { addInbox, addNews, andList, inSeason, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
@@ -66,7 +66,13 @@ function benchTwoWays(rot: Rotation, players: Player[]) {
   rot.closers = rot.closers.filter((pid) => !twoWay.has(pid));
 }
 
-function bestPresetsChanged(team: Team, players: Player[]): boolean {
+function bestPresetsChanged(team: Team, players: Player[], user: boolean, sticky: boolean): boolean {
+  // (the user's staff, which picks by its read: what it would change to, in season only past STICK, so
+  // two close reads trading places don't refit it every day)
+  if (user) {
+    const sc = presetScores(team, players, { user });
+    return staffPick(sc.off, team.tactics.offPreset, sticky) !== team.tactics.offPreset || staffPick(sc.def, team.tactics.defPreset, sticky) !== team.tactics.defPreset;
+  }
   const best = rankedPresets(team, players);
   return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
 }
@@ -296,7 +302,7 @@ export function ensureRotation(league: League, tid: number) {
   const missingRoles = players.some((p) => team.tactics.offense.roles[p.pid] === undefined);
   // an assistant-run playbook follows the healthy roster: a long injury starting or ending can change
   // the best fit (the Tactics screen's fit scores count the same players)
-  const refit = (!isUser || !team.tactics.manual) && !stale && !missingRoles && bestPresetsChanged(team, players);
+  const refit = (!isUser || !team.tactics.manual) && !stale && !missingRoles && bestPresetsChanged(team, players, isUser, inSeason(league));
   if ((!isUser || !team.tactics.manual) && (stale || missingRoles || refit)) {
     // the user's staff-run playbook also carries the staff's changes from this season's evidence
     if (isUser) applyStaffTactics(league, tid);
@@ -366,8 +372,8 @@ export function buildSimInput(
     // prep); situational plans that switch to another tactic slot carry its changes. The assistant
     // adjusts at breaks unless switched off (Tactics: crunch time), whoever runs the tactics, leaving
     // alone the kinds that cost the user's side (ASSISTANT_SKIPS in engine/coach.ts: the team played
-    // carries `assistant` to say they're his): measured over 17,280 paired games, +0.47 ± 0.09 points
-    // a game against no adjustments (with every kind, as AI coaches make them: +0.31 ± 0.09)
+    // carries `assistant` to say they're his): about even against no adjustments, +0.05 ± 0.15 points
+    // a game over 28,160 paired games with injuries on (2026-10-26; the card says so without a number)
     const adjust = team.tactics.manage.assistantAdjusts !== false;
     const marked = adjust ? { assistant: true as const } : {};
     if (opp !== undefined && planFor(league, opp, game)) {

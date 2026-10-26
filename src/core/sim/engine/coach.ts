@@ -20,9 +20,10 @@ const SWITCH_PERD = 50;
  * games, 120 seeds each, injuries off; scratch round/gameday/adjust.mts, 2026-10-25), each kind kept
  * alone against none over 7,200 paired games, in points of margin: going from Drop to Hedge cost 1.9
  * a game where it was made, backing off the ball 0.35 and staying home on shooters 3.4 (on 36 games).
- * Over 17,280 paired games against no adjustments: with every kind, +0.31 ± 0.09 a game; without
- * these three, +0.47 ± 0.09 (the three together −0.16 ± 0.04). By shot value both read below even,
- * which leaves out the and-ones a change of coverage moves. AI coaches make all of them as before.
+ * Over 17,280 paired games against no adjustments (injuries off): with every kind, +0.31 ± 0.09 a game;
+ * without these three, +0.47 ± 0.09. Re-measured with injuries on (28,160 paired games over 32 team
+ * runs, 2026-10-26): +0.05 ± 0.15, about even, swinging from +0.64 to −0.37 by matchups. AI coaches
+ * make all of them as before.
  */
 const ASSISTANT_SKIPS = new Set(['hedge', 'backoff', 'home']);
 

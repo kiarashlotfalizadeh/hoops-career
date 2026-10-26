@@ -840,7 +840,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       label: "Tell the owner it's a rebuild",
       action: { kind: 'concede', id },
       blocked: blocked ?? undefined,
-      confirm: `The postseason goal becomes a development goal, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points.`,
+      confirm: `The postseason goal becomes a development goal that grades 0 at best: it spares you the miss but earns nothing on top. The season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points that stay off at his review.`,
     };
     const push: CallChoice = { label: 'Keep pushing', action: { kind: 'settle', id } };
     // (with the rebuild off the table, the answer is still buy or sell before the deadline)

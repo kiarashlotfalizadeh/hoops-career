@@ -152,6 +152,18 @@ a.ag-head:active {
   align-items: center;
   gap: 12px;
 }
+/* with a move of its own to offer: the text, then the move and keeping things under it */
+.guide-strip.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+.guide-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
 .guide-k {
   font-size: 12px;
   font-weight: 640;

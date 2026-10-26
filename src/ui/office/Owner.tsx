@@ -9,21 +9,25 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import { GRACE, seasonWeight, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
+import { GRACE, ULTIMATUM_ODDS, seasonWeight, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
+  CONCEDE_COST,
   FLOOR_GRADE,
+  FLOOR_MARGIN,
   ON_TRACK,
+  PAY_RAISE,
   PATIENCE_STEP,
   PAYROLL_SCALE,
-  PERSONALITY,
+  personalityLine,
   POSTSEASON,
   PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
   WIN_SCALE,
   YOUNG_AGE,
+  YOUTH_TOP,
   currentGoals,
   goalsWhy,
   ownerPersonality,
@@ -47,7 +51,6 @@ export default function Owner() {
   const league = useLeague();
   const tid = league.userTid;
   const js = useLeagueMemo(() => seatOf(league), [league]);
-  const who = PERSONALITY[ownerPersonality(league, tid)];
   const og = currentGoals(league);
   // before opening night: the goals the owner would set with today's roster
   const provisional = useLeagueMemo(() => (!og && !league.fired && league.phase === 'preseason' ? planOwnerGoals(league, tid) : null), [league, og, tid]);
@@ -62,7 +65,13 @@ export default function Owner() {
 
   return (
     <main className="page fo-page">
-      <PageHeader title="Owner" sub={league.fired ? undefined : `${who.label} · ${who.blurb}`} back backTo="/office" right={<GradingHelp league={league} />} />
+      <PageHeader
+        title="Owner"
+        sub={league.fired ? undefined : personalityLine(ownerPersonality(league, tid), shown)}
+        back
+        backTo="/office"
+        right={<GradingHelp league={league} />}
+      />
 
       <Seat league={league} js={js} seasonsIn={seasonsIn} />
 
@@ -219,7 +228,7 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
   // (js.line names the grace period itself when the seat is warm)
   // after the season's review the grace left starts with next season
   const done = isOff(league);
-  const left = done ? js.grace - 1 : js.grace;
+  const left = js.left;
   const graceSaid = !js.off && left > 0 && (js.heat === 'warm' || js.heat === 'hot');
   // (a new career's first season sets the standing outright: the grace isn't a free season, see seasonWeight)
   const sets = !done && seasonWeight(league) >= 1;
@@ -407,13 +416,17 @@ function GradingHelp({ league }: { league: League }) {
       k: 'Payroll',
       how: `Under his line is +15 (up to +30 with room to spare); over it costs 25, down to −100 at ${money(PAYROLL_SCALE * cap.luxuryTax)} over.`,
     },
-    { k: 'Development', how: `Minutes for players ${YOUNG_AGE} or under against his target: ±100 at half of it either way.` },
+    {
+      k: 'Development',
+      how: `Minutes for players ${YOUNG_AGE} or under against his target: −100 at half of it short; past it, +${Math.round(YOUTH_TOP * 100)} at most (the minutes are yours to hand out).`,
+    },
   ];
   return (
     <HelpSheet title="How the owner judges you">
       <p>
-        On opening night he sets three or four goals from your roster: a win total, a postseason goal (or, for a rebuild, minutes for the young players) and a money goal. After the
-        playoffs each is graded from −100 to +100; their weights make the season&apos;s grade.
+        On opening night he sets three or four goals from your roster: a win total (his read of the roster is the season forecast&apos;s), a postseason goal (or, for a rebuild,
+        minutes for the young players) and a money goal (a profit target from the league&apos;s standard ticket price and budgets). After the playoffs each is graded from −100 to
+        +100; their weights make the season&apos;s grade.
       </p>
       {rows.map((r) => (
         <p key={r.k}>
@@ -425,22 +438,25 @@ function GradingHelp({ league }: { league: League }) {
         meter reads where this season would leave it as it projects now: 0 to 100, the firing line at {Math.round(50 + 50 * FIRING_LINE)}.
       </p>
       <p>
-        <b>Grace.</b> On this difficulty he waits {grace} season{grace === 1 ? '' : 's'} before a review can fire you. Below the line after that, you&apos;re out.
+        <b>Grace.</b> On this difficulty he waits {grace} season{grace === 1 ? '' : 's'} before a review can fire you; a season played on another difficulty uses up its own share
+        of the wait. Below the line after that, you&apos;re out.
       </p>
       <p>
-        <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver. Meet it and you win back some standing; miss it and you&apos;re
-        fired.
+        <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver: one the forecast gives at least a{' '}
+        {Math.round(ULTIMATUM_ODDS * 100)}% chance. Meet it and you win back some standing; miss it and you&apos;re fired.
       </p>
       <p>
-        <b>Payroll and the floor.</b> A payroll in the league&apos;s top half raises the win target half-way to what a team paid like it should win. Whatever the plan, under a .
-        {Math.round(preset(league).winFloor * 1000)} pace is a failed season: it grades Poor or worse, whatever else went right.
+        <b>Payroll and the floor.</b> After your first season, a payroll of your own in the league&apos;s top half raises the win target toward what a team paid like it should win,
+        by {PAY_RAISE} wins at most. Whatever the plan, under a .{Math.round(preset(league).winFloor * 1000)} pace is a failed season (never closer than {FLOOR_MARGIN} wins under
+        his read): it grades Poor or worse, whatever else went right.
       </p>
       <p>
         <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row without the postseason (a
         rebuild, or a season that missed). After that he wants the play-in at least, the floor rises to .{Math.round((preset(league).winFloor + REBUILD_OVER_FLOOR) * 1000)}, and a
         season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best, {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the
-        postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you some standing and counts as
-        one.
+        postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you{' '}
+        {Math.round(CONCEDE_COST * 100)} points of standing, counts as one, and the postseason goal&apos;s weight goes to the young players&apos; minutes, where it can spare you
+        the miss but earns nothing on top.
       </p>
       <p>
         <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash, and he judges it the day the regular season&apos;s books close, tax paid: the playoff

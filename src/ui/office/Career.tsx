@@ -161,7 +161,7 @@ function JobLine({ league }: { league: League }) {
       <span className="grow fo-min0">
         <span className="bold">Job security · {js.label}</span>
         <span className="tiny dim fo-lc-job-l">
-          Owner {p.owner.word} <TrendMark trend={p.owner.trend} /> · Fans {p.fans.word} <TrendMark trend={p.fans.trend} />
+          Owner <TrendMark trend={p.owner.trend} /> · Fans {p.fans.word} <TrendMark trend={p.fans.trend} />
         </span>
       </span>
       <ChevronRight size={16} className="dim" aria-hidden="true" />

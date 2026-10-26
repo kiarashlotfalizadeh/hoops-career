@@ -196,6 +196,7 @@ export interface NightWorth {
   raw: number;
   se: number;
   win: number;
+  winSe: number;
   n: number;
   moves: number;
   top?: { op: number; pts: number; se: number };
@@ -302,7 +303,15 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
   opts.onProgress?.(total, total);
   const r = paired(all);
   const win = paired(allWin);
-  const out: NightWorth = { pts: round1(shrinkWorth(r.mean, r.se)), raw: round1(r.mean), se: round2(r.se), win: Math.round(win.mean * 1000) / 1000, n: r.n, moves: moves.length };
+  const out: NightWorth = {
+    pts: round1(shrinkWorth(r.mean, r.se)),
+    raw: round1(r.mean),
+    se: round2(r.se),
+    win: Math.round(win.mean * 1000) / 1000,
+    winSe: Math.round(win.se * 1000) / 1000,
+    n: r.n,
+    moves: moves.length,
+  };
   // (one move: the night's reading is its own)
   if (one.length > 1) {
     // the one that mattered most: the biggest reading, when it's clear of even and of the next one

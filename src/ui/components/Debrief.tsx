@@ -1,20 +1,24 @@
 // The staff's debrief at the top of a game's recap (the live final card and the report's Debrief
 // tab): the lead assistant's verdict, the edges that decided it in points, your game plan's counters
 // graded on what each was aimed at, your moves in a live game (what they were worth all together,
-// measured after the final by playing the night back with them and without, and what each did), and
-// what to do next time, the fix one tap away for the plan against this opponent or for every game
-// (or, for playing a step slow, the practice focus between games).
+// measured after the final by playing the night back with them and without, and what each did since),
+// and what to do next time: a fix one tap away for the plan against this opponent only when the staff
+// measured it a gain against them (else it's the staff's read), for every game only when measured a
+// gain where the bench calls it (or, for playing a step slow, the practice focus between games).
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameReport } from '../../core/analysis/gameReport';
-import { debrief, nightLine, seasonCoachingLine, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
+import { debrief, nightLine, sameChange, seasonCoachingLine, type DebriefAdvice, type PlanGrade } from '../../core/analysis/debrief';
 import { measuringNight } from '../live/tonight';
 import { leadAssistant } from '../../core/ai/assistant';
 import { applyPatch } from '../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
+import { counterCandidates } from '../../core/ai/advisor';
+import { worthCall } from '../../core/ai/counterWorth';
+import { counterItem, useCounterWorth, worthText } from '../games/matchup/useCounterWorth';
 import { shortName } from '../../core/league/helpers';
-import { useStore } from '../../state/store';
+import { useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
 import { PREP_META } from '../../core/sim/familiarity';
 import { Section, Tag } from './ui';
@@ -45,15 +49,14 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
   const opp = league.teams[d.opp];
   const nameOf = (pid: number) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`);
   const inPlan = new Set(planFor(league, d.opp)?.items.map((it) => it.id));
-  const apply = (a: DebriefAdvice, scope: 'plan' | 'always') => {
+  /** A change measured as a gain where the bench calls it, into your tactics for every game. */
+  const always = (a: DebriefAdvice) => {
     if (!a.patch) return;
-    const ok = act(scope === 'plan' ? 'Game plan' : 'Tactics', (l) => {
-      if (scope === 'always') {
-        const tm = l.teams[l.userTid];
-        tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, a.patch), tm.tactics), manual: true };
-      } else setPlanItem(l, d.opp, { id: a.id, label: a.label ?? a.title, group: a.group, patch: a.patch! });
+    const ok = act('Tactics', (l) => {
+      const tm = l.teams[l.userTid];
+      tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, a.patch), tm.tactics), manual: true };
     });
-    if (ok) useStore.getState().toast(scope === 'plan' ? `Plan vs ${opp.abbrev}: ${a.label}` : `Your tactics: ${a.label}`, 'good');
+    if (ok) useStore.getState().toast(`Your tactics: ${a.label}`, 'good');
   };
   /** A practice focus the advice asks for, from the next practice day. */
   const practice = (a: DebriefAdvice) => {
@@ -111,7 +114,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                   <div className="lv-mv-what">{g.label}</div>
                   <div className="lv-mv-line small dim2">
                     {g.line}
-                    {PLAN_NIGHT[g.night] ?? ''}
+                    {g.bridge ? ` ${g.bridge}` : (PLAN_NIGHT[g.night] ?? '')}
                   </div>
                 </div>
                 <span className={`lv-mv-v ${PLAN_CALL[g.call].tone}`}>
@@ -125,17 +128,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
       )}
 
       {res.moves && res.moves.length > 0 && (
-        <Section
-          title="Your moves"
-          right={
-            d.moves && (
-              <span className="gd-tally">
-                {d.moves.working > 0 && <Tag tone="good">{d.moves.working} working</Tag>}
-                {d.moves.notWorking > 0 && <Tag tone="bad">{d.moves.notWorking} not</Tag>}
-              </span>
-            )
-          }
-        >
+        <Section title="Your moves">
           {night ? (
             <div className={`gd-night tone-${night.tone}`}>
               <div className="gd-night-t">{night.text}</div>
@@ -169,21 +162,13 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                     )}
                   </div>
                 )}
-                {a.patch && (inPlan.has(a.id) || d.meetAgain || a.worth) && (
+                {a.patch && (d.meetAgain || a.worth) && (
                   <div className="gd-next-acts">
-                    {inPlan.has(a.id) ? (
-                      <Tag tone="good">In the plan vs {opp.abbrev}</Tag>
-                    ) : (
-                      d.meetAgain && (
-                        <button className="btn xs" disabled={simming} onClick={() => apply(a, 'plan')}>
-                          {a.label}: vs {opp.abbrev}
-                        </button>
-                      )
-                    )}
+                    {d.meetAgain && <PlanFix league={league} opp={d.opp} a={a} inPlan={inPlan} quiet={!!a.worth} />}
                     {/* (for every game only a change measured as a gain: one night's tags are no reason to change them all) */}
                     {a.worth && (
-                      <button className={`btn xs ${d.meetAgain ? 'text' : ''}`} disabled={simming} onClick={() => apply(a, 'always')}>
-                        {d.meetAgain ? 'For every game' : `${a.label}: every game`}
+                      <button className="btn xs" disabled={simming} onClick={() => always(a)}>
+                        {a.label}: every game
                       </button>
                     )}
                     {a.worth && <span className="lv-note-worth tiny">{a.worth}</span>}
@@ -201,4 +186,44 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
       )}
     </div>
   );
+}
+
+/**
+ * A next-time fix for the plan against this opponent: one tap only as the staff's counter that makes
+ * the same change (sameChange), measured a gain against them on the matchup page's games, with its
+ * number. Otherwise the staff's read, said as such, with nothing to tap (`quiet`: the row already
+ * carries a measured line, the bench's, so this one says nothing).
+ */
+function PlanFix({ league, opp, a, inPlan, quiet }: { league: League; opp: number; a: DebriefAdvice; inPlan: Set<string>; quiet: boolean }) {
+  const simming = useStore((s) => !!s.sim);
+  const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
+  const measuring = useCounterWorth(league, opp);
+  const abbrev = league.teams[opp].abbrev;
+  const base = league.teams[league.userTid].tactics;
+  const c = a.patch ? drafted.find((x) => sameChange(base, a.patch!, x.patch)) : undefined;
+  const w = c ? measuring?.worth?.get(c.id) : undefined;
+  if (inPlan.has(a.id) || (c && inPlan.has(c.id))) return <Tag tone="good">In the plan vs {abbrev}</Tag>;
+  if (c && w && worthCall(w) === 'gain') {
+    const add = () => {
+      if (act('Game plan', (l) => setPlanItem(l, opp, counterItem(c, w)))) useStore.getState().toast(`Plan vs ${abbrev}: ${c.label}`, 'good');
+    };
+    return (
+      <>
+        <button className="btn xs" disabled={simming} onClick={add}>
+          {c.label}: vs {abbrev}
+        </button>
+        <span className="lv-note-worth tiny">
+          Measured against {abbrev}: {worthText(w).text.toLowerCase()}
+        </span>
+      </>
+    );
+  }
+  if (quiet) return null;
+  const note =
+    c && measuring && !measuring.worth
+      ? `The staff is measuring it against ${abbrev}…`
+      : w
+        ? `${c!.label} measured against ${abbrev}: ${worthText(w).text.toLowerCase()}, so not one for the plan`
+        : `The staff's read (${a.label}): not measured against ${abbrev}`;
+  return <span className="lv-note-worth tiny">{note}</span>;
 }

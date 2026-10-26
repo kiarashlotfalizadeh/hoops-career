@@ -4,7 +4,8 @@
 // what the others are worth), not again each day. Kept for the session, so the matchup page's tabs
 // and a return to it read the same numbers.
 import { useEffect, useState } from 'react';
-import type { League } from '../../../core/types';
+import type { GamePlanItem, League } from '../../../core/types';
+import type { Candidate } from '../../../core/ai/advisor';
 import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
 import { effectiveTactics } from '../../../core/league/gamePlans';
 import { hashString } from '../../../core/random';
@@ -120,4 +121,16 @@ export function byWorth<T extends { id: string }>(list: T[], worth: Map<string, 
     return call === 'gain' ? 0 : call === 'even' ? 1 : 2;
   };
   return [...list].sort((a, b) => rank(a) - rank(b) || (worth.get(b.id)?.pts ?? 0) - (worth.get(a.id)?.pts ?? 0));
+}
+
+/** A staff counter as the plan's item, as its Add puts it in: with its measured worth (the win chance counts it) when that isn't even. */
+export function counterItem(c: Candidate, w: CounterWorth | undefined): GamePlanItem {
+  return {
+    id: c.id,
+    label: c.label,
+    group: c.group,
+    patch: c.patch,
+    ...(c.evidence ? { evidence: c.evidence } : {}),
+    ...(w && worthCall(w) !== 'even' ? { pts: w.pts } : {}),
+  };
 }

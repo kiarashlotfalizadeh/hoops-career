@@ -935,13 +935,16 @@ function checkEconomyOpening() {
     const takers = L.teams.filter((t) => t.tid !== u).map((t) => t.tid);
     const free = takers.filter((tid) => TR.teamDelta(L, { ...dump([]), b: { tid, pids: [], dpids: [] } }, tid) >= 0);
     if (free.length) bad('dead money taken for nothing', `${free.map((t) => L.teams[t].abbrev).join(', ')} take two seasons at ${sal} of it for nothing`);
-    // one season of it, with two firsts attached: some team takes it (about a first's worth of dead money, two firsts however late)
+    // one season of it, with two firsts attached: some team with the cap room for it takes it (about a
+    // first's worth of dead money, two firsts however late); a season where no team has the room, it
+    // costs a taker tax and apron money two firsts needn't cover
     host.contract = { start: cs, salaries: [sal] };
+    const room = takers.filter((tid) => cap.salaryCap - H.payroll(L, tid, cs) >= sal);
     const firsts = L.draftPicks
       .filter((d) => d.tid === u && d.round === 1 && d.season > L.season)
       .slice(0, 2)
       .map((d) => d.dpid);
-    if (firsts.length === 2 && !takers.some((tid) => TR.teamDelta(L, { ...dump(firsts), b: { tid, pids: [], dpids: [] } }, tid) >= 0))
+    if (firsts.length === 2 && room.length && !room.some((tid) => TR.teamDelta(L, { ...dump(firsts), b: { tid, pids: [], dpids: [] } }, tid) >= 0))
       bad('dead money no one absorbs for two firsts', `a season at ${sal}`);
     Object.assign(host, keep);
   }

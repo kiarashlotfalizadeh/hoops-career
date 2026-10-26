@@ -671,7 +671,7 @@ function seasonLever(league: League, tid: number): Alert | null {
  * a week of better games doesn't undo it. Only the user's games keep that accounting: AI teams get autoTactics.
  */
 export function staffTactics(league: League, tid: number): Tactics {
-  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), links: tid === league.userTid });
+  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), links: tid === league.userTid, user: tid === league.userTid });
   return t.manual || tid !== league.userTid ? t : seasonAdjust(league, tid, t);
 }
 

@@ -24,7 +24,8 @@
 import type { League } from '../types';
 import { CAP_FOR, addInbox, curTeamSeason, payroll, revenueScale } from './helpers';
 import { PROJECT_HOME_GAMES, seasonEndCash, teamTaxBill } from './finances';
-import { GRACE } from './jobSecurity';
+import { graceLeft } from './jobSecurity';
+import { forcedPayroll } from './ownerGoals';
 import { money } from '../format';
 
 export type BooksStage = 'warning' | 'ultimatum' | 'freeze' | 'final';
@@ -106,7 +107,8 @@ function allowedThisSeason(league: League, tid: number): number {
   const tax = CAP_FOR(league).luxuryTax;
   const own = g.line ?? Math.max(tax, g.target);
   const pay = curTeamSeason(league, tid).payroll || payroll(league, tid);
-  const upTo = Math.min(pay, g.target);
+  // (an inherited payroll's: what is still inherited of it, not the room its goal leaves on top, see PAYROLL_SLACK)
+  const upTo = Math.min(pay, g.target, g.line !== undefined ? forcedPayroll(league, tid) : Infinity);
   return teamTaxBill(league, tid, upTo) + Math.max(0, upTo - own);
 }
 
@@ -152,8 +154,7 @@ const AFTER_REVIEW: ReadonlySet<League['phase']> = new Set(['draftLottery', 'dra
 
 /** Whether the review that next reads the books can fire the coach: job security on and his grace period over (`next`: next season's review). */
 export function reviewCanFire(league: League, next = AFTER_REVIEW.has(league.phase)): boolean {
-  const seasons = league.season - (league.tenureStart ?? league.startSeason) + 1 + (next ? 1 : 0);
-  return league.settings.jobSecurity && seasons > GRACE[league.settings.difficulty];
+  return league.settings.jobSecurity && graceLeft(league, next) === 0;
 }
 
 /**

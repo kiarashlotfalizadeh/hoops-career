@@ -11,7 +11,7 @@ import { systemFamiliarity } from '../../../core/league/practice';
 import { freshFamiliarity, optionsOf, optValue } from '../../../core/sim/familiarity';
 import { teamPlayers } from '../../../core/league/helpers';
 import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
-import { byWorth, useCounterWorth, worthText } from './useCounterWorth';
+import { byWorth, counterItem, useCounterWorth, worthText } from './useCounterWorth';
 import { effectiveTactics, persistableTactics, planFor, setPlanItem } from '../../../core/league/gamePlans';
 import type { League } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
@@ -46,17 +46,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
         const tm = l.teams[l.userTid];
         // a star target or a matchup names this opponent's player: kept tactics go after each opponent's own star
         tm.tactics = { ...persistableTactics(applyPatch(tm.tactics, c.patch), tm.tactics), manual: true };
-      } else {
-        const w = worth?.get(c.id);
-        setPlanItem(l, opp, {
-          id: c.id,
-          label: c.label,
-          group: c.group,
-          patch: c.patch,
-          ...(c.evidence ? { evidence: c.evidence } : {}),
-          ...(w && worthCall(w) !== 'even' ? { pts: w.pts } : {}),
-        });
-      }
+      } else setPlanItem(l, opp, counterItem(c, worth?.get(c.id)));
     });
     if (ok) useStore.getState().toast(scope === 'game' ? `Plan vs ${them.abbrev}: ${c.label}` : `Your tactics: ${c.label}`, 'good');
   };

@@ -39,7 +39,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
         right={
           <Help title="What decided it">
             <p>Each figure is what that edge was worth to the final margin, in points: + went your way, − theirs.</p>
-            <p>They come from the engine&apos;s tracking of every tactical edge, the four factors and the stars&apos; nights.</p>
+            <p>They come from the engine&apos;s tracking of every tactical edge and the four factors.</p>
           </Help>
         }
       >

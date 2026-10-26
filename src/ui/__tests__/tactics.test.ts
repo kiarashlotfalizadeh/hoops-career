@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 import { DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from '../tactics/formation';
 import { PHASES, offHabit, phaseFam, phaseId } from '../tactics/fam';
 import { linkLine, plateAt, startersOf, strengthsOf } from '../tactics/partners';
-import { byFit, fitTone, readText, shownFit } from '../tactics/fit';
+import { byFit, fitTone, handOverLine, readText, shownFit, userStaffTactics } from '../tactics/fit';
+import { learnInline, learnText } from '../tactics/learnCost';
+import { defenseLabel } from '../../core/sim/playbooks';
 import { patchText, screenChanges, changesLine } from '../tactics/changes';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { hackThreshold, livePills, offPlan, resetToPlan, type PillContext } from '../live/pills';
@@ -210,6 +212,26 @@ describe('tactics in the UI', () => {
     // half a point a game either way reads as a gain or a cost, as a measured change does
     expect([fitTone(0.6), fitTone(0.5), fitTone(0.4), fitTone(-0.4), fitTone(-0.5)]).toEqual(['good', 'good', '', '', 'bad']);
     expect([readText(0.6), readText(-1.24), readText(0)]).toEqual(['+0.6', '−1.2', '0.0']);
+    {
+      // the hand-over names what the staff would run and its read against the user's; a learning cost
+      // reads in points a game, measured, or as too small to tell; a moved playbook reads as Custom
+      const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
+      const staff = userStaffTactics(l);
+      expect(handOverLine(l, staff)).toMatch(/^The staff would keep .+ · .+, with their own settings, roles and shape\.$/);
+      const t = l.teams[0].tactics;
+      const other = staff.defPreset === 'hedge' ? 'drop' : 'hedge';
+      l.teams[0].tactics = { ...t, defPreset: other, defense: applyPatch(t, { defense: { scheme: 'man' } }).defense, manual: true };
+      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+: \+\d\.\d a game against yours \(the staff's read, once drilled\)\.$/);
+      expect(defenseLabel(l.teams[0].tactics)).toMatch(/^Custom \(.+ base\)$/);
+      const w = (pts: number) => ({ progress: 1, worth: { id: 'learn', pts, raw: pts, se: 0.2 } });
+      expect([learnText(w(0.7)), learnText(w(0.2)), learnText({ progress: 0.4 }), learnText({ progress: 1, skip: 'camp' })]).toEqual([
+        'Learning it costs about 0.7 a game at first (measured)',
+        'Learning it costs too little to tell (measured)',
+        'Measuring what learning it costs…',
+        'Training camp drills it before opening night',
+      ]);
+      expect([learnInline(w(0.7)), learnInline({ progress: 1, skip: 'none' })]).toEqual([' · learning it costs about 0.7 a game at first (measured)', '']);
+    }
 
     // situational plans say what each template changes, in the Tactics screen words
     expect(patchText(SITUATION_TEMPLATES.protectLead.patch)).toBe(
