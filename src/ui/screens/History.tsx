@@ -21,6 +21,7 @@ import { slabVars } from '../teamColors';
 import { careerOnRecord } from '../../core/analysis/milestones';
 import { coachCareer, userCoach } from '../../core/league/coaches';
 import { chronicleOf } from '../../core/league/media/chronicle';
+import { franchiseTitles } from '../../core/league/media/past';
 import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { endText } from '../../core/league/legacyReview';
 import { fmtDate } from '../../core/league/helpers';
@@ -77,13 +78,17 @@ function Seasons({ league }: { league: League }) {
         : [],
     );
   }, [league]);
-  if (!list.length) {
+  const past = league.past;
+  if (!list.length && !past) {
     return <Poster over="Seasons" head="No champions yet" dek="Each season's champion and MVPs land here." />;
   }
   const name = (pid?: number) => (pid !== undefined && league.players[pid] ? shortName(league.players[pid]) : undefined);
   // the poster: the last champions, in their colours (the season's whole story is a tap away, on Awards)
   const last = list.find((a) => a.champion !== undefined);
-  const titles = last ? list.filter((a) => a.champion === last.champion).length : 0;
+  // (with the NBA's past, a franchise's titles in all; otherwise this league's)
+  const titles = last?.champion !== undefined ? (past ? franchiseTitles(league, last.champion, last.season + 1).n : list.filter((a) => a.champion === last.champion).length) : 0;
+  const titlesLabel = past ? 'titles' : 'titles in this league';
+  const reigning = !last && past ? past.finals.at(-1) : undefined;
   return (
     <>
       {last?.champion !== undefined && (
@@ -91,55 +96,131 @@ function Seasons({ league }: { league: League }) {
           league={league}
           tid={last.champion}
           over={`${seasonLabel(last.season)} champions${mine.has(last.season) ? ' · your title' : ''}`}
-          // (their count of titles here, once there's more than the one this slab is about)
+          // (their count of titles, once there's more than the one this slab is about)
           fig={titles > 1 ? titles : undefined}
-          figLabel={titles > 1 ? 'titles in this league' : undefined}
+          figLabel={titles > 1 ? titlesLabel : undefined}
         >
           {last.runnerUp !== undefined ? `def. ${league.teams[last.runnerUp].name}` : ''}
           {name(last.finalsMvp) ? `${last.runnerUp !== undefined ? ' · ' : ''}Finals MVP ${name(last.finalsMvp)}` : ''}
         </TitleSlab>
       )}
-      <div className="card flush list">
-        {list.map((a) => {
-          const champ = a.champion !== undefined ? league.teams[a.champion] : undefined;
-          const winners = [
-            name(a.mvp) && `MVP ${name(a.mvp)}`,
-            name(a.finalsMvp) && `Finals MVP ${name(a.finalsMvp)}`,
-            a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
-          ].filter(Boolean);
-          return (
-            <Link
-              key={a.season}
-              to={a.season === league.season && a.champion === undefined ? `/league/awards?aseason=${a.season}` : `/league/history?season=${a.season}`}
-              className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}
-            >
-              <span className="yr">{seasonLabel(a.season)}</span>
-              {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
-              <span className="lg-yr-t">
-                <span className="nm ellipsis">
-                  {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
-                  {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
-                  {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
+      {/* the league's first season: the real champions defend their title */}
+      {reigning && reigning[1] >= 0 && (
+        <TitleSlab
+          league={league}
+          tid={reigning[1]}
+          over={`${seasonLabel(reigning[0])} champions · defending`}
+          fig={franchiseTitles(league, reigning[1]).n > 1 ? franchiseTitles(league, reigning[1]).n : undefined}
+          figLabel="titles"
+        >
+          {reigning[2] >= 0 ? `def. ${league.teams[reigning[2]].name} ${reigning[3]}-${reigning[4]}` : ''}
+          {reigning[5] ? ` · Finals MVP ${reigning[5]}` : ''}
+        </TitleSlab>
+      )}
+      {list.length > 0 && (
+        <div className="card flush list">
+          {list.map((a) => {
+            const champ = a.champion !== undefined ? league.teams[a.champion] : undefined;
+            const winners = [
+              name(a.mvp) && `MVP ${name(a.mvp)}`,
+              name(a.finalsMvp) && `Finals MVP ${name(a.finalsMvp)}`,
+              a.cupWinner !== undefined && `Cup ${league.teams[a.cupWinner].abbrev}`,
+            ].filter(Boolean);
+            return (
+              <Link
+                key={a.season}
+                to={a.season === league.season && a.champion === undefined ? `/league/awards?aseason=${a.season}` : `/league/history?season=${a.season}`}
+                className={`lg-yr-row ${mine.has(a.season) ? 'me' : ''}`}
+              >
+                <span className="yr">{seasonLabel(a.season)}</span>
+                {champ ? <TeamLogo tid={champ.tid} size={34} decorative /> : <span className="lg-yr-none" />}
+                <span className="lg-yr-t">
+                  <span className="nm ellipsis">
+                    {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
+                    {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
+                    {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
+                  </span>
+                  {/* each award whole, wrapping between them rather than cutting a name short */}
+                  {winners.length > 0 && (
+                    <span className="sub">
+                      {/* (the separator outside the unbreakable award: a line can break after it) */}
+                      {winners.map((w, i) => (
+                        <Fragment key={i}>
+                          {i > 0 ? ' · ' : ''}
+                          <span className="nowrap">{w}</span>
+                        </Fragment>
+                      ))}
+                    </span>
+                  )}
                 </span>
-                {/* each award whole, wrapping between them rather than cutting a name short */}
+                <ChevronRight size={16} className="dim" aria-hidden="true" />
+              </Link>
+            );
+          })}
+        </div>
+      )}
+      {past && <PastSeasons league={league} />}
+    </>
+  );
+}
+
+/** Past seasons shown before "Show all": the last ten. */
+const PAST_SHOWN = 10;
+
+/**
+ * The NBA before this league (League.past): every Finals since 1947, newest first, with the Finals
+ * MVP and the MVP. Rows don't open (the league keeps no more of those seasons); the last ten, then
+ * all on a tap.
+ */
+function PastSeasons({ league }: { league: League }) {
+  const [all, setAll] = useState(false);
+  const past = league.past!;
+  const rows = [...past.finals].reverse();
+  const mvp = new Map(past.mvps);
+  return (
+    <Section title="Before this league" right={<span className="lg-sec-meta">Since {seasonLabel(past.finals[0][0])}</span>}>
+      <div className="card flush list">
+        {rows.slice(0, all ? rows.length : PAST_SHOWN).map(([season, champ, runner, w, l, fmvp, champAs, runnerAs]) => {
+          const t = champ >= 0 ? league.teams[champ] : undefined;
+          // (by the name they won it under: "Seattle SuperSonics")
+          const nm = champAs ?? t?.name ?? '';
+          const opp = runnerAs ?? (runner >= 0 ? league.teams[runner].name : '');
+          const winners = [fmvp && `Finals MVP ${fmvp}`, mvp.get(season) && `MVP ${mvp.get(season)}`].filter(Boolean);
+          return (
+            <div key={season} className="lg-yr-row lg-yr-past">
+              <span className="yr">{seasonLabel(season)}</span>
+              {t ? <TeamLogo tid={t.tid} size={34} decorative /> : <span className="lg-yr-none" />}
+              <span className="lg-yr-t">
+                <span className="nm">
+                  {nm}
+                  {opp && (
+                    <span className="dim">
+                      {' '}
+                      def. {opp} {w}-{l}
+                    </span>
+                  )}
+                </span>
                 {winners.length > 0 && (
                   <span className="sub">
-                    {/* (the separator outside the unbreakable award: a line can break after it) */}
-                    {winners.map((w, i) => (
+                    {winners.map((x, i) => (
                       <Fragment key={i}>
                         {i > 0 ? ' · ' : ''}
-                        <span className="nowrap">{w}</span>
+                        <span className="nowrap">{x}</span>
                       </Fragment>
                     ))}
                   </span>
                 )}
               </span>
-              <ChevronRight size={16} className="dim" aria-hidden="true" />
-            </Link>
+            </div>
           );
         })}
       </div>
-    </>
+      {!all && rows.length > PAST_SHOWN && (
+        <button className="btn sm ghost lg-showmore" onClick={() => setAll(true)}>
+          <ChevronDown size={15} /> All {rows.length} champions
+        </button>
+      )}
+    </Section>
   );
 }
 
@@ -168,7 +249,13 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
   const me = userCoach(league);
   const line = me ? coachCareer(league, me, new Map()).lines.find((l) => l.season === season) : undefined;
   const review = seasonReviewOf(league, season);
-  const titles = a.champion !== undefined ? league.awards.filter((x) => x.champion === a.champion && x.season <= season).length : 0;
+  // (with the NBA's past, a franchise's titles in all to that season; otherwise this league's)
+  const titles =
+    a.champion === undefined
+      ? 0
+      : league.past
+        ? franchiseTitles(league, a.champion, season + 1).n
+        : league.awards.filter((x) => x.champion === a.champion && x.season <= season).length;
   const stories = c?.stories ?? [];
   return (
     <>
@@ -183,7 +270,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
           tid={a.champion}
           over={`${seasonLabel(season)} champions`}
           fig={titles > 1 ? titles : undefined}
-          figLabel={titles > 1 ? 'titles in this league' : undefined}
+          figLabel={titles > 1 ? (league.past ? 'titles' : 'titles in this league') : undefined}
         >
           {a.runnerUp !== undefined ? `def. ${league.teams[a.runnerUp].name}` : ''}
         </TitleSlab>
@@ -359,7 +446,11 @@ function HallOfFame({ league }: { league: League }) {
           </>
         )}
       </Section>
-      {hof.length + retired.length > 0 && <div className="lg-note">Regular-season careers, figures per game; the badge is his peak OVR; every honour on his page.</div>}
+      {hof.length + retired.length > 0 && (
+        <div className="lg-note">
+          Regular-season careers, figures per game; the badge is his peak OVR in this league (none for a veteran who came with it); every honour on his page.
+        </div>
+      )}
     </>
   );
 }
@@ -378,9 +469,13 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
   const byTeam = new Map<number, number>();
   for (const s of p.stats) if (!s.playoffs && typeof s.tid === 'number' && league.teams[s.tid]) byTeam.set(s.tid, (byTeam.get(s.tid) ?? 0) + s.gp);
   const mainTid = [...byTeam.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  // the number he wore there (LeBron's 23 in Cleveland, not the 32 his last stop handed him)
+  const jersey = (mainTid !== undefined && (league.teams[mainTid].retired?.find((r) => r.pid === p.pid)?.jersey ?? p.jerseys?.[mainTid])) || p.jersey;
+  // his peak OVR only when he played his prime here: a veteran who came with the league peaked before it
+  const showPeak = !p.stats.some((s) => s.real);
   return (
     <Link to={`/player/${p.pid}`} className="lg-legend-row">
-      <Avatar p={{ ...p, tid: mainTid ?? -1 }} />
+      <Avatar p={{ ...p, tid: mainTid ?? -1, jersey }} />
       <span className="lg-legend-t">
         <span className="nm">
           <span className="ellipsis">
@@ -409,7 +504,7 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
         <AccoladeChips p={p} max={2} />
       </span>
       <span className="lg-legend-r">
-        <Ovr v={peak} size="sm" />
+        {showPeak && <Ovr v={peak} size="sm" />}
         {mainTid !== undefined && <TeamLogo tid={mainTid} size={22} />}
       </span>
     </Link>

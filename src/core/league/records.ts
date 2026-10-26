@@ -278,9 +278,12 @@ export function freezeRecordNames(league: League, p: Player) {
  * records in points, rebounds, assists and threes and its team scoring and winning margin, which
  * the GM hears about too. They're routine news (see addNews): the book keeps them for good.
  */
-export function recordNews(league: League, res: GameResult, notes: RecordNote[]) {
+export function recordNews(league: League, res: GameResult, notes0: RecordNote[]) {
   const book = league.records;
-  if (!book || res.season <= book.since || !notes.length) return;
+  if (!book) return;
+  // (in the book's first season only a night of BIG_NIGHT points is news: SGA's 67 made none)
+  const notes = res.season <= book.since ? notes0.filter(bigNight) : notes0;
+  if (!notes.length) return;
   const user = league.userTid;
   const ab = (tid: number) => league.teams[tid]?.abbrev ?? '?';
   const post = (n: RecordNote) => (n.book === 'post' ? 'playoff ' : '');
@@ -321,7 +324,7 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
       addNews(league, {
         kind: 'record',
         head: lg.team ? `The ${league.teams[first.tid]?.name ?? who} set a league record: ${what}` : `${who} sets a league record: ${what}`,
-        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game since ${seasonLabel(book.since)}.`,
+        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game ${res.season <= book.since ? 'in this league' : `since ${seasonLabel(book.since)}`}.`,
         tids: [first.tid, opp],
         pids: first.pid !== undefined ? [first.pid] : [],
         weight: 3,
@@ -347,6 +350,10 @@ export function recordNews(league: League, res: GameResult, notes: RecordNote[])
  * 55-point win. Lesser records stay the wire's line.
  */
 const REMARKABLE: Record<string, number> = { pts: 60, reb: 25, ast: 20, stl: 9, blk: 10, tpm: 13, 'team-pts': 160, 'team-tpm': 28, 'team-margin': 55 };
+/** Points in a game that are news from the league's first night: a record book that young still remembers a 60-point game. */
+export const BIG_NIGHT = 60;
+const bigNight = (n: RecordNote) => n.scope === 'league' && n.kind === 'record' && n.stat === 'pts' && !n.team && n.v >= BIG_NIGHT;
+
 const remarkable = (n: RecordNote) => n.v >= (REMARKABLE[n.team ? `team-${n.stat}` : n.stat] ?? Infinity);
 
 const partsList = (parts: string[]) => (parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`);
@@ -631,7 +638,12 @@ export interface HeldRecord {
 export function recordsHeld(league: League, res: GameResult): HeldRecord[] {
   const book = league.records;
   const kind = bookOf(res.type);
-  if (!book || !kind || res.season <= book.since) return [];
+  if (!book || !kind) return [];
+  // (the book's first season: only a night of BIG_NIGHT points, as with the news)
+  if (res.season <= book.since) {
+    const top = book.league[kind].players.pts?.[0];
+    return top && top[0] >= BIG_NIGHT && top[6] === res.gid && top[4] === res.season ? [{ scope: 'league', book: kind, stat: 'pts', tid: top[2], pid: top[1], v: top[0] }] : [];
+  }
   const out: HeldRecord[] = [];
   const top = <R>(list: R[] | undefined, key: (r: R) => RowKey) => {
     const k = list?.[0] !== undefined ? key(list[0]) : undefined;

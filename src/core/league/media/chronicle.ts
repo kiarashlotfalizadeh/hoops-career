@@ -17,8 +17,23 @@ const FAREWELLS_MAX = 4;
 /** A retirement's line is kept to this many characters (most are shorter): the save keeps the headline whole. */
 const DEK_MAX = 120;
 
-/** The kinds that never make the chronicle: the press's weekly opinions and previews, the injury wire. */
-const SKIP = new Set<NewsItem['kind']>(['power', 'preview', 'injury', 'rumor']);
+/** The kinds that never make the chronicle: the press's weekly opinions and previews, the injury wire, the weekly and monthly honors. */
+const SKIP = new Set<NewsItem['kind']>(['power', 'preview', 'injury', 'rumor', 'honor']);
+
+/** A losing streak's story ("Losing streak hits 5 for Clippers", "Clippers end 7-game skid"): a week's news, not a season's. */
+const STREAKY = /\bskid\b|losing streak|\bdrop \w+ straight\b/i;
+
+/**
+ * The user's team's stories, in the order a season remembers them: its records, then its playoff
+ * nights, then its awards and milestones, then the rest (a regular-season game last).
+ */
+function mineRank(league: League, s: ChronicleStory): number {
+  if (s.kind === 'record') return 5;
+  if (s.kind === 'game' && s.day > league.regularSeasonDays) return 4;
+  if (s.kind === 'award') return 3;
+  if (s.kind === 'milestone') return 2;
+  return s.kind === 'game' ? 0 : 1;
+}
 
 /**
  * How much a story says about its season, for choosing the few kept: its weight first (a front page
@@ -71,7 +86,7 @@ export function chronicleSeason(league: League, season = league.season, wrap?: n
   // (the earlier reading's stories, the farewells among them, stand: the news may not have them any more)
   for (const s of old?.stories ?? []) pool.set(s.id, s);
   for (const n of league.news) {
-    if (n.season !== season || !n.head || (n.weight ?? 1) < 2 || SKIP.has(n.kind)) continue;
+    if (n.season !== season || !n.head || (n.weight ?? 1) < 2 || SKIP.has(n.kind) || (n.kind === 'game' && STREAKY.test(n.head))) continue;
     pool.set(n.id, chronicleStory(n));
   }
   const all = [...pool.values()];
@@ -80,11 +95,15 @@ export function chronicleSeason(league: League, season = league.season, wrap?: n
   // (the wrap first, whoever it names)
   const wrapped = all.find((s) => s.id === pin);
   const rest = all.filter((s) => s !== wrapped && (s.kind !== 'retire' || isJerseyNight(s))).sort(bySize);
-  const mine = rest.filter((s) => aboutUser(league, s)).slice(0, MINE_MAX);
+  const mine = rest
+    .filter((s) => aboutUser(league, s))
+    .sort((a, b) => mineRank(league, b) - mineRank(league, a) || bySize(a, b))
+    .slice(0, MINE_MAX);
   // the league's, a few of a kind at most (a young record book's records, the nights of 60 points)
   const count = new Map<string, number>();
   const theirs = rest
-    .filter((s) => !aboutUser(league, s))
+    // (another team's game is the season's only on the front page: a close finish in January isn't)
+    .filter((s) => !aboutUser(league, s) && (s.kind !== 'game' || s.weight === 3))
     .filter((s) => {
       const n = (count.get(s.kind) ?? 0) + 1;
       count.set(s.kind, n);

@@ -40,3 +40,22 @@ export function RetiredBanners({ league, tid, small }: { league: League; tid: nu
     </div>
   );
 }
+
+/**
+ * A franchise's titles from before the league (a real league's past: League.past), as the banners
+ * over the court: the year, and the name it won under when that was another ("1979 SuperSonics").
+ */
+export function PastTitleBanners({ league, tid }: { league: League; tid: number }) {
+  const won = (league.past?.finals ?? []).filter((f) => f[1] === tid);
+  if (!won.length) return null;
+  return (
+    <div className="chips" aria-label={`${won.length} titles before this league`}>
+      {won.map((f) => (
+        <span key={f[0]} className="tag lg-gold lg-title-yr">
+          {f[0]}
+          {f[6] ? ` ${f[6].split(' ').slice(-1)[0]}` : ''}
+        </span>
+      ))}
+    </div>
+  );
+}

@@ -82,8 +82,12 @@ describe('the development watch', () => {
       devCheckIn(l, []);
       expect(dw.checks.length).toBe(1);
       expect(dw.checks[0].ovr[p.pid]).toBe(p.ovr);
-      // everyone else held: a check-in stays small
-      expect(Object.keys(dw.checks[0].ovr).length).toBe(1);
+      // everyone else held: a check-in stays small (but for a man a major injury has cost ratings for good: applyInjury)
+      expect(
+        Object.keys(dw.checks[0].ovr)
+          .map(Number)
+          .filter((pid) => pid !== p.pid && !l.players[pid].injury),
+      ).toEqual([]);
       expect(seasonMoves(l, p)).toEqual({ sinceOpening: p.ovr - before, sinceCheck: 0 });
       expect(seasonTrail(l, p).map((x) => x.ovr)).toEqual([before, p.ovr]);
     }

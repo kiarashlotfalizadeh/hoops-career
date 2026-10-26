@@ -4,7 +4,7 @@ import { playerAge } from '../playerGen';
 import { clamp } from '../random';
 import { addInbox, addNews, andList, curTeamSeason, playerName, seasonTotals, winPct } from './helpers';
 import { seasonLabel } from '../constants';
-import { awardLine } from './media/history';
+import { awardLine, awardPhrase } from './media/history';
 
 /** Hollinger's game score, for a box line or a season's totals. */
 export function gameScore(s: Pick<PlayerStats, 'pts' | 'fgm' | 'fga' | 'ftm' | 'fta' | 'orb' | 'drb' | 'ast' | 'stl' | 'blk' | 'tov' | 'pf'>): number {
@@ -272,7 +272,7 @@ function awardsStory(league: League, aw: SeasonAwards, coyAbbrev?: string) {
   const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
   const again = mvp ? awardLine(league, mvp, 'MVP', season) : null;
   const team = (p: Player) => league.teams[p.tid]?.name;
-  const head = mvp ? (again ? `${playerName(mvp)} wins ${again} MVP` : `${playerName(mvp)} is the MVP`) : `The ${seasonLabel(season)} awards`;
+  const head = mvp ? (again ? `${playerName(mvp)} wins ${awardPhrase(again, 'MVP')}` : `${playerName(mvp)} is the MVP`) : `The ${seasonLabel(season)} awards`;
   const line = (label: string, type: string, pid?: number) => {
     const p = pid !== undefined ? league.players[pid] : undefined;
     if (!p) return '';

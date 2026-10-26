@@ -1,25 +1,29 @@
 // The press's long memory: what a title, a series, an award or a meeting means against the league's
 // history in this save, read from what the save keeps for good (the awards, every team's seasons,
 // the record book, the chronicle's playoff series and stories). Every line is true as far as the
-// save knows: a real league opens without the NBA's past (no titles, MVPs or banners before its
-// first season), so nothing here says "first ever" of a franchise or a player the save can't see
-// whole. Repeats, dynasties and counts are said within the window they're counted in ("a third
-// title in four years"), droughts only when the last time is in the save ("a first series win since
+// save knows. A real league opens with the NBA's past (media/past.ts: every Finals since 1947, and
+// each player's real honours on his record), so a franchise's titles and a player's MVPs are counted
+// whole ("a first title since 1972-73", "his third MVP"); a save from before it, or a real league
+// without it, says nothing of "first ever" it can't see whole. A fictional league's past is its
+// own. Repeats, dynasties and counts are said within the window they're counted in ("a third title
+// in four years"), droughts only when the last time is on record ("a first series win since
 // 2031-32"). Nothing here draws from any random stream.
 import type { League, Player, ScheduledGame } from '../../types';
 import { seasonLabel } from '../../constants';
+import { ordinal } from '../../format';
 import { dayToDate } from '../helpers';
 import { REC_LABEL, REC_STATS, TEAM_REC_LABEL, TEAM_REC_STATS, gameMark, teamMark } from '../records';
+import { pastFinal, pastTitles } from './past';
 
 /** "two", "three" ... for counts in copy (ten and under). */
 const WORD = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 export const countWord = (n: number) => WORD[n] ?? String(n);
 const ORD = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
-export const ordWord = (n: number) => ORD[n] ?? `${n}th`;
+export const ordWord = (n: number) => ORD[n] ?? ordinal(n);
 
-/** The seasons a team won the title in this league, oldest first. */
+/** The seasons a team won the title, oldest first: the NBA's before the league (a real league's past) and this league's. */
 export function titleSeasons(league: League, tid: number): number[] {
-  return league.awards.filter((a) => a.champion === tid).map((a) => a.season);
+  return [...pastTitles(league, tid), ...league.awards.filter((a) => a.champion === tid).map((a) => a.season)];
 }
 
 /**
@@ -30,7 +34,9 @@ export function titleSeasons(league: League, tid: number): number[] {
 export function titleLine(league: League, tid: number, season: number, won0?: true): string | null {
   // (`won0`: the title just won, before the awards have it: the night of the Finals' last game)
   const won = [...new Set([...titleSeasons(league, tid).filter((s) => s <= season), ...(won0 ? [season] : [])])].sort((a, b) => a - b);
-  if (!won.includes(season) || won.length < 2) return null;
+  if (!won.includes(season)) return null;
+  // (the franchise's first, when every title it won is on record: an expansion team's, or the NBA's)
+  if (won.length < 2) return league.past ? 'the first title in franchise history' : null;
   let run = 1;
   while (won.includes(season - run)) run++;
   if (run >= 3) return run === 3 ? 'a three-peat' : `a ${countWord(run)}-peat`;
@@ -38,8 +44,16 @@ export function titleLine(league: League, tid: number, season: number, won0?: tr
   // within a window that starts at the first of them: "a third title in five years"
   const recent = won.filter((s) => s > season - 6);
   if (recent.length >= 3) return `a ${ordWord(recent.length)} title in ${countWord(season - recent[0] + 1)} years`;
+  // more than any other franchise has: "a record 19th title"
+  if (won.length >= 10 && league.teams.every((t) => t.tid === tid || titleSeasons(league, t.tid).filter((s) => s <= season).length < won.length))
+    return `a record ${ordinal(won.length)} title`;
   const prev = won.filter((s) => s < season).at(-1)!;
-  return season - prev >= 4 ? `a first title since ${seasonLabel(prev)}` : `a ${ordWord(won.length)} title in ${countWord(season - won[0] + 1)} years`;
+  if (season - prev >= 4) {
+    // (won under another name: "a first title since the 1978-79 SuperSonics")
+    const as = pastFinal(league, prev)?.[6];
+    return as ? `a first title since the ${seasonLabel(prev)} ${as.split(' ').slice(-1)[0]}` : `a first title since ${seasonLabel(prev)}`;
+  }
+  return `a ${ordWord(recent.length)} title in ${countWord(season - recent[0] + 1)} years`;
 }
 
 const ROUND_WORDS = ['', 'playoff berth', 'series win', 'trip to the conference finals', 'trip to the Finals', 'title'];
@@ -65,6 +79,25 @@ export function careerInSave(league: League, p: Player): boolean {
 }
 
 /**
+ * His honours are on his record whole: his career is all in this save, or the league opened with the
+ * NBA's past and every real season of his is from when its honours start (every current player's).
+ */
+export function honoursWhole(league: League, p: Player): boolean {
+  if (careerInSave(league, p)) return true;
+  const from = league.past?.honoursFrom;
+  return from !== undefined && !p.stats.some((s) => s.real && s.season < from);
+}
+
+/**
+ * An award's line with the award in it, where it reads: "his second straight MVP", "his third MVP in
+ * four seasons", "his first All-Star selection" (awardLine's "his third in four seasons" + "MVP").
+ */
+export function awardPhrase(line: string, noun: string): string {
+  const m = /^(his \w+(?: straight)?)( in .+)?$/.exec(line);
+  return m ? `${m[1]} ${noun}${m[2] ?? ''}` : `${line} ${noun}`;
+}
+
+/**
  * What an award means for the man who won it: "his second straight", "his third in four seasons",
  * or, with his whole career in the save, "his first" and "his fourth". `type` is the award's name on
  * his record ("MVP", "Defensive Player of the Year"). Null for a first that the save can't vouch for.
@@ -75,7 +108,7 @@ export function awardLine(league: League, p: Player, type: string, season: numbe
   let run = 1;
   while (won.includes(season - run)) run++;
   if (run >= 2) return run === 2 ? 'his second straight' : `his ${ordWord(run)} straight`;
-  const whole = careerInSave(league, p);
+  const whole = honoursWhole(league, p);
   if (won.length === 1) return whole ? 'his first' : null;
   const recent = won.filter((s) => s > season - 5);
   if (recent.length >= 2 && !whole) return `his ${ordWord(recent.length)} in ${countWord(season - recent[0] + 1)} seasons`;

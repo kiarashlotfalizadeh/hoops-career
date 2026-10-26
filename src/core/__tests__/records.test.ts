@@ -180,10 +180,23 @@ describe('the record book', () => {
       const before = l.news.length;
       const res = structuredClone(l.games.find((g) => g.type === 'regular')!);
       const star = res.home.players.find((b) => b.min > 0)!;
-      star.pts = 99;
+      // (a 60-point night is news even in the first season: BIG_NIGHT)
+      {
+        const x = structuredClone(l);
+        const big: GameResult = { ...structuredClone(res), gid: 999_003 };
+        big.home.players.find((b) => b.pid === star.pid)!.pts = 67;
+        recordNews(x, big, recordGame(x, big));
+        const told = x.news.slice(before).filter((n) => n.kind === 'record');
+        expect(told).toHaveLength(1);
+        expect(`${told[0].head ?? ''} ${told[0].text}`).toContain('67 points');
+        if (told[0].head) expect(told[0].text).toContain('the most in a game in this league');
+        expect(recordsHeld(x, big)).toEqual([expect.objectContaining({ scope: 'league', stat: 'pts', v: 67 })]);
+      }
+      star.pts = 59;
       const first: GameResult = { ...res, gid: 999_001 };
       recordNews(l, first, recordGame(l, first));
       expect(l.news.length).toBe(before);
+      expect(recordsHeld(l, first)).toEqual([]);
       // a season later the same night is news (a league record, and the franchise's isn't claimed twice)
       const next: GameResult = { ...structuredClone(first), gid: 999_002, season: l.season + 1 };
       next.home.players.find((b) => b.pid === star.pid)!.pts = 100;
@@ -307,7 +320,8 @@ describe('the record book', () => {
       const l = played(6);
       const res = structuredClone(l.games.find((g) => g.type === 'regular')!);
       const star = res.home.players.find((b) => b.min > 0)!;
-      star.pts = 99;
+      // (under BIG_NIGHT: a first season's 59 holds nothing yet)
+      star.pts = 59;
       const first: GameResult = { ...res, gid: 999_101 };
       recordGame(l, first);
       expect(recordsHeld(l, first)).toEqual([]);

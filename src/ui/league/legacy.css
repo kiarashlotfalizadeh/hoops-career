@@ -66,3 +66,22 @@
 .lg-season-link:active {
   background: var(--raised);
 }
+
+/* a season before the league (League.past): no page to open, so no chevron column */
+.lg-yr-row.lg-yr-past {
+  grid-template-columns: 62px 34px minmax(0, 1fr);
+}
+
+/* Today's preseason kicker: the years with this team (media/tenure.ts), his titles here as gold banners */
+.td-tenure {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.td-tenure p {
+  margin: 0;
+}
+.td-tenure .tag.td-tenure-b {
+  background: color-mix(in srgb, var(--tier-elite) 20%, transparent);
+  color: var(--tier-elite);
+}

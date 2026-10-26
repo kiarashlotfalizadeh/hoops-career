@@ -17,12 +17,13 @@ import { storyLink } from './today/front';
 import { isFrontPage } from '../state/simCore';
 import { currentGoals, ownerPersonality, personalityLine, resultText } from '../core/league/ownerGoals';
 import { GRACE } from '../core/league/jobSecurity';
-import { openStint, userCoach } from '../core/league/coaches';
+import { coachCareer, openStint, userCoach } from '../core/league/coaches';
+import { clincherLine, finalsStory, seriesArc, titleCount } from '../core/league/media/finals';
 import { reviewPath, seasonReviewOf } from '../core/league/legacy';
 import { endText, gradeWord } from '../core/league/legacyReview';
-import { awardLine } from '../core/league/media/history';
+import { awardLine, awardPhrase } from '../core/league/media/history';
 import { isCareerMarkStory } from '../core/league/media/marks';
-import { REC_LABEL, REC_STATS, TEAM_REC_STATS, gameMark, recordWhat, teamMark } from '../core/league/records';
+import { BIG_NIGHT, REC_LABEL, REC_STATS, TEAM_REC_STATS, gameMark, recordWhat, teamMark } from '../core/league/records';
 
 export type MomentKind =
   | 'clinch'
@@ -197,6 +198,8 @@ const MINOR: ReadonlySet<MomentKind> = new Set<MomentKind>(['allStar', 'record',
 const WAITS: ReadonlySet<MomentKind> = new Set<MomentKind>(['award', 'allStar', 'record', 'milestone', 'jersey', 'farewell', 'cup']);
 /** Days a moment can wait and still be news (the summer's are counted on its calendar too: the Finals to the draft is about two weeks). */
 export const WAIT_DAYS = 21;
+/** Moments that wait for the next sim however long it ran (within their season): a number going up, a farewell. */
+const KEEPS: ReadonlySet<MomentKind> = new Set<MomentKind>(['jersey', 'farewell']);
 /** The most that wait at once: the biggest. */
 const WAIT_MAX = 3;
 
@@ -207,7 +210,8 @@ const WAIT_MAX = 3;
  * Finals MVP or a legend's farewell takes the screen at the next step instead of never.
  */
 export function scheduleMoments(queued: Moment[], fresh: Moment[], waiting: Moment[], now: { season: number; day: number }): { show: Moment[]; wait: Moment[] } {
-  const live = (m: Moment) => m.season === undefined || (m.season === now.season && now.day - (m.day ?? now.day) <= WAIT_DAYS);
+  // (a banner night and a legend's farewell wait out a long sim: they're once in a career, not a week's news)
+  const live = (m: Moment) => m.season === undefined || (m.season === now.season && (KEEPS.has(m.kind) || now.day - (m.day ?? now.day) <= WAIT_DAYS));
   const pool = [...queued, ...fresh, ...waiting.filter(live)].filter((m, i, all) => all.findIndex((x) => x.key === m.key) === i);
   const show = pickMoments(pool);
   const wait = pool
@@ -255,7 +259,7 @@ function allStarMoment(league: League): Moment | null {
     sub:
       ps.length > 1
         ? `${andName(ps)} make the All-Star team.`
-        : `${name(first)} makes the All-Star team${again && again !== 'his first' ? `, ${again} selection` : again === 'his first' ? ' for the first time' : ''}.`,
+        : `${name(first)} makes the All-Star team${again && again !== 'his first' ? `, ${awardPhrase(again, 'selection')}` : again === 'his first' ? ' for the first time' : ''}.`,
     pid: first.pid,
     lines,
     link: '/league/awards',
@@ -287,7 +291,9 @@ function recordMoments(league: League): Moment[] {
   const book = league.records;
   const me = league.userTid;
   const season = league.season;
-  if (!book || season <= book.since) return [];
+  if (!book) return [];
+  // (in the book's first season every big night is "a record": only a night of BIG_NIGHT points is one)
+  const young = season <= book.since;
   const out: Moment[] = [];
   const since = seasonLabel(book.since);
   const seen = new Set<number>();
@@ -311,13 +317,21 @@ function recordMoments(league: League): Moment[] {
   };
   for (const stat of REC_STATS) {
     const r = book.league.reg.players[stat]?.[0];
-    if (!r || r[4] !== season || r[2] !== me) continue;
+    if (!r || r[4] !== season || r[2] !== me || (young && (stat !== 'pts' || r[0] < BIG_NIGHT))) continue;
     const m = gameMark(league, r);
-    push('league', `${m.v} ${REC_LABEL[stat][1]}`, m.gid, m.day, m.pid, 9, `${m.name} against the ${league.teams[m.opp]?.name}: the most in a game since ${since}.`);
+    push(
+      'league',
+      `${m.v} ${REC_LABEL[stat][1]}`,
+      m.gid,
+      m.day,
+      m.pid,
+      9,
+      `${m.name} against the ${league.teams[m.opp]?.name}: the most in a game ${young ? 'in this league' : `since ${since}`}.`,
+    );
   }
   for (const stat of TEAM_REC_STATS) {
     const r = book.league.reg.teams[stat]?.[0];
-    if (!r || r[3] !== season || r[1] !== me) continue;
+    if (!r || r[3] !== season || r[1] !== me || young) continue;
     const m = teamMark(r);
     const what = recordWhat({ stat, team: true, v: m.v });
     push(
@@ -332,7 +346,7 @@ function recordMoments(league: League): Moment[] {
   }
   const mine = book.teams[me]?.reg;
   const pts = mine?.players.pts?.[0];
-  if (pts && pts[4] === season && pts[0] >= FRANCHISE_POINTS) {
+  if (pts && pts[4] === season && pts[0] >= FRANCHISE_POINTS && !young) {
     const m = gameMark(league, pts);
     push('team', `${m.v} points`, m.gid, m.day, m.pid, 6, `${m.name} against the ${league.teams[m.opp]?.name}: the most for the ${league.teams[me].name} since ${since}.`);
   }
@@ -563,6 +577,80 @@ function jobMoments(league: League): Moment[] {
   return out;
 }
 
+/**
+ * The Finals as a moment, won or lost, told as it went (media/finals.ts): the headline for what it
+ * was (a three-peat, Game 7, a comeback from 3-1, a sweep), the night that ended it as the line under
+ * it, then what the title means against the franchise's history, the Finals MVP with his line, and
+ * the coach's count of titles. Null while the Finals go on.
+ */
+function finalsMoment(league: League): Moment | null {
+  const me = league.userTid;
+  const team = league.teams[me];
+  const f = finalsStory(league, me);
+  if (!f) return null;
+  const season = league.season;
+  const us = team.name;
+  const them = league.teams[f.opp]?.name ?? 'other side';
+  const g7 = f.w + f.l === 7;
+  const night = clincherLine(f, us, them);
+  const arc = seriesArc(f, us, them);
+  const over = `${seasonLabel(season)} · NBA Finals${f.last ? ` · Game ${f.last.n}` : ''}`;
+  if (!f.won) {
+    return {
+      key: `finals-lost-${season}`,
+      kind: 'series',
+      over,
+      title: g7 ? 'Lost in Game 7' : 'Runners-up',
+      sub: `The ${them} win the title, ${f.l}-${f.w}${f.w === 0 ? ', a sweep' : ''}.${night ? ` ${night}` : ''}`,
+      ...(arc && f.w > 0 ? { lines: [arc] } : {}),
+      link: '/league/playoffs',
+      linkLabel: 'The bracket',
+      season,
+      day: league.day,
+    };
+  }
+  const peat = /^a (three|four|five|six|seven|eight)-peat$/.exec(f.history ?? '');
+  // the headline: what the title was, in the words a fan would use
+  const title = peat
+    ? `${peat[1][0].toUpperCase()}${peat[1].slice(1)}-peat`
+    : f.history === 'back-to-back titles'
+      ? 'Back to back'
+      : f.down
+        ? `From ${f.down.at[1]}-${f.down.at[0]} down`
+        : g7
+          ? 'Game 7. Champions.'
+          : f.l === 0
+            ? 'A sweep. Champions.'
+            : 'Champions';
+  // (the series' arc, when the headline doesn't say it already)
+  const first = arc && (peat || f.history === 'back-to-back titles') ? arc : null;
+  const sub = [night ?? `The ${team.region} ${us} win the title, ${f.w}-${f.l} over the ${them}.`, night ? `A ${f.w}-${f.l} series over the ${them}.` : '']
+    .filter(Boolean)
+    .join(' ');
+  const coach = userCoach(league);
+  const titles = coach ? coachCareer(league, coach).titles : 0;
+  const mvp = f.mvp ? league.players[f.mvp.pid] : undefined;
+  const lines = [
+    first ?? '',
+    f.history && !peat && f.history !== 'back-to-back titles' ? f.history.charAt(0).toUpperCase() + f.history.slice(1) + '.' : '',
+    f.upset ? `${f.upset.champWins} wins in the regular season, against the ${f.upset.runnerWins}-win ${them}.` : '',
+    mvp && f.mvp ? `Finals MVP ${name(mvp)} · ${f.mvp.line}` : '',
+    titles >= 1 ? `${league.coachName}'s ${titles === 1 ? 'first title' : titleCount(titles)}.` : '',
+  ].filter(Boolean);
+  return {
+    key: `title-${season}`,
+    kind: 'title',
+    over,
+    title,
+    sub,
+    ...(mvp ? { pid: mvp.pid } : {}),
+    big: true,
+    lines: lines.slice(0, 4),
+    ...(f.last ? { link: `/game/${f.last.gid}`, linkLabel: `Game ${f.last.n} report` } : {}),
+    mail: mailOf(league, 'Owner', (x) => x === 'Champions'),
+  };
+}
+
 /** Every moment the league holds for the user's team right now, oldest kinds first. */
 export function currentMoments(league: League): Moment[] {
   const out: Moment[] = [];
@@ -595,19 +683,26 @@ export function currentMoments(league: League): Moment[] {
   }
 
   for (const s of league.playoffs) {
+    // a Finals lost: its own moment, told as the series went (see finalsMoment)
+    if (s.round === 4 && s.winner !== undefined && s.winner !== me && (s.high === me || s.low === me)) {
+      const m = finalsMoment(league);
+      if (m) out.push(m);
+    }
     if (s.winner !== me) continue;
     const opp = league.teams[s.high === me ? s.low : s.high];
     const [w, l] = s.high === me ? [s.highWins, s.lowWins] : [s.lowWins, s.highWins];
     if (s.round === 4)
-      out.push({
-        key: `title-${season}`,
-        kind: 'title',
-        over: `${seasonLabel(season)} · NBA Finals`,
-        title: 'Champions',
-        sub: `The ${team.region} ${nick} win the title, ${w}-${l} over the ${opp?.name ?? 'field'}.`,
-        big: true,
-        mail: mailOf(league, 'Owner', (x) => x === 'Champions'),
-      });
+      out.push(
+        finalsMoment(league) ?? {
+          key: `title-${season}`,
+          kind: 'title',
+          over: `${seasonLabel(season)} · NBA Finals`,
+          title: 'Champions',
+          sub: `The ${team.region} ${nick} win the title, ${w}-${l} over the ${opp?.name ?? 'field'}.`,
+          big: true,
+          mail: mailOf(league, 'Owner', (x) => x === 'Champions'),
+        },
+      );
     else
       out.push({
         key: `series-${season}-${s.id}`,

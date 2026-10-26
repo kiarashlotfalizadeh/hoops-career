@@ -14,7 +14,7 @@ import { careerOnRecord, careerTotals } from '../../analysis/milestones';
 import type { MediaState } from '../media';
 import { Voice, list, publish } from './voice';
 import { chronicleFarewell } from './chronicle';
-import { countWord } from './history';
+import { countWord, honoursWhole } from './history';
 
 /** The award points a career is weighed by here (the Hall's own: see hallOfFameScore in season.ts). */
 const AWARD_POINTS: Record<string, number> = { MVP: 12, 'Finals MVP': 6, 'Defensive Player of the Year': 4, 'All-Star': 2, Champion: 1.5 };
@@ -110,7 +110,7 @@ function farewell(league: League, m: MediaState, p: Player, lead: boolean) {
   const games = c.gp.toLocaleString('en-US');
   const dek = [
     whole ? `${pts} points in ${games} games` : `${pts} points in the ${plural(c.gp, 'game')} on record`,
-    honors ? `${honors}${p.stats.some((s) => s.real) ? ' in this league' : ''}` : '',
+    honors ? `${honors}${honoursWhole(league, p) ? '' : ' in this league'}` : '',
     p.hof ? 'Hall of Fame' : '',
   ]
     .filter(Boolean)

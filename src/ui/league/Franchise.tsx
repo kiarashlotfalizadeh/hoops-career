@@ -10,7 +10,8 @@ import { useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { Section, Statline } from '../components/ui';
 import { rosterNames } from '../stats';
-import { RetiredBanners } from './RetiredBanners';
+import { PastTitleBanners, RetiredBanners } from './RetiredBanners';
+import { pastTitles } from '../../core/league/media/past';
 import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
 import { userSeasonsWith } from '../../core/league/legacy';
@@ -34,7 +35,7 @@ export function FranchiseFigures({ league, tid, onSlab }: { league: League; tid:
           { k: 'Record', v: `${w}-${l}`, s: w + l ? winPctLabel(w, l) : undefined },
           { k: 'Playoffs', v: finished.filter((s) => s.playoffRound >= 1).length },
           // (gold on paper; on a team's slab every figure is white)
-          { k: 'Titles', v: titles, color: titles && !onSlab ? 'var(--tier-elite)' : undefined },
+          { k: 'Titles', v: titles + pastTitles(league, tid).length, s: league.past ? 'all-time' : undefined, color: titles && !onSlab ? 'var(--tier-elite)' : undefined },
         ]}
       />
     </div>
@@ -54,8 +55,9 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
   const myRec = [...mine.values()].reduce((a, l) => [a[0] + l.won, a[1] + l.lost], [0, 0]);
   return (
     <>
-      {(titles.length > 0 || (team.retired?.length ?? 0) > 0) && (
+      {(titles.length > 0 || (team.retired?.length ?? 0) > 0 || pastTitles(league, tid).length > 0) && (
         <Section title="Banners">
+          <PastTitleBanners league={league} tid={tid} />
           {titles.length > 0 && (
             <div className="chips">
               {titles.map((s) => (

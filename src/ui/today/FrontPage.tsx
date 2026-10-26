@@ -11,7 +11,7 @@ import { confStandings } from '../../core/league/standings';
 import { fmtDate } from '../../core/league/helpers';
 import { pct } from '../../core/analysis/odds';
 import { goalChance } from '../../core/league/ownerGoals';
-import { Avatar, Section, Statline } from '../components/ui';
+import { Avatar, Section, Statline, keep } from '../components/ui';
 import { madeAtt } from '../../core/format';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason } from '../../core/league/helpers';
@@ -23,6 +23,8 @@ import { TrendMark, usePulse } from '../office/Pulse';
 import { useForecast } from '../useForecast';
 import { headOf, lastResults, leadOf, leagueHeadlines, runOf, scoreText, storyLink, type Result } from './front';
 import { digestLine } from './digest';
+import { tenureOf } from '../../core/league/media/tenure';
+import '../league/legacy.css';
 
 /** What a news item is, over its headline. */
 export const NEWS_LABEL: Partial<Record<NewsItem['kind'], string>> = {
@@ -92,7 +94,7 @@ export function LeadStory({ league, lead }: { league: League; lead: Lead }) {
             Story <ChevronRight size={14} aria-hidden="true" />
           </span>
         </span>
-        <span className="td-lead-head">{headOf(n)}</span>
+        <span className="td-lead-head">{keep(headOf(n))}</span>
         {n.head && (
           <span className="td-lead-by">
             {p && <Avatar p={p} />}
@@ -162,8 +164,8 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
           </span>
         </span>
       </span>
-      {over && <span className="td-lead-kick over">{over}</span>}
-      <span className="td-lead-head">{story?.head ?? plainHead(league, r)}</span>
+      {over && <span className="td-lead-kick over">{keep(over)}</span>}
+      <span className="td-lead-head">{keep(story?.head ?? plainHead(league, r))}</span>
       {dek && <span className="td-lead-dek">{dek}</span>}
       {figs && <Statline items={figs} />}
     </Link>
@@ -475,4 +477,29 @@ export function useCupCell(league: League): { v: string; label: string } | null 
     if (!t || !row) return null;
     return { v: `${row.won}-${row.lost}`, label: `NBA Cup group ${t.group.id}: ${row.won}-${row.lost}, ${row.rank} of ${t.rows.length}` };
   }, [league]);
+}
+
+/**
+ * The weight of time, in the preseason: how long he has had the team and what the years added up to
+ * ("Year 7 with the Thunder · Two titles, one Finals loss. Defending champions."), his titles here as
+ * banners; in year one, the franchise's past (see media/tenure.ts). Nothing when there's nothing to say.
+ */
+export function TenureKicker({ league }: { league: League }) {
+  const t = useLeagueMemo(() => tenureOf(league), [league]);
+  if (!t) return null;
+  return (
+    <section className="card td-tenure" aria-label={t.over}>
+      <p className="over">{t.over}</p>
+      <p className="small">{t.line}</p>
+      {t.banners.length > 0 && (
+        <div className="chips">
+          {t.banners.map((s) => (
+            <span key={s} className="tag td-tenure-b">
+              {seasonLabel(s)}
+            </span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
 }

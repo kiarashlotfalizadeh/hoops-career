@@ -299,7 +299,11 @@ describe('the journey between screens', () => {
       expect(first.wait.some((x) => x.kind === 'story')).toBe(false);
       const next = scheduleMoments([], [], first.wait, at);
       expect(next.show).toEqual([first.wait[0]]);
-      expect(scheduleMoments([], [], first.wait, { season: l.season, day: 40 + WAIT_DAYS + 20 }).show).toEqual([]);
+      // (past WAIT_DAYS only a farewell or a banner night still waits: once in a career; never into the next season)
+      const late = scheduleMoments([], [], first.wait, { season: l.season, day: 40 + WAIT_DAYS + 20 });
+      expect(late.show.every((x) => x.kind === 'farewell' || x.kind === 'jersey')).toBe(true);
+      expect(late.wait.every((x) => x.kind === 'farewell' || x.kind === 'jersey')).toBe(true);
+      expect(scheduleMoments([], [], first.wait, { season: l.season + 1, day: 0 }).show).toEqual([]);
       // beside the job's own, a night's or a player's moment waits
       const verdict = { key: 'v', kind: 'verdict' as const, over: '', title: '', sub: '' };
       expect(pickMoments([one('record')[0], verdict]).map((x) => x.kind)).toEqual(['verdict']);

@@ -8,7 +8,8 @@
 // its career had already reached the first time it's read, so nothing old fires as new. Nothing here
 // draws from the league's random stream (phrasing comes from worldRng), and a game costs a few
 // lookups unless it's the user's.
-import type { GameResult, League, ScheduledGame } from '../types';
+import type { GameResult, League, Player, PlayerStats, ScheduledGame } from '../types';
+import { RETIRED } from '../types';
 import { GAME, seasonLabel } from '../constants';
 import { ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
@@ -738,6 +739,8 @@ export interface Trophy {
   tid: number;
   /** "2027-28 champions", "Coach of the Month, Dec 2027". */
   label: string;
+  /** Coaches of the Month: one piece for all of them, this many (the latest's month in `label`). */
+  n?: number;
 }
 
 /**
@@ -765,10 +768,20 @@ export function cabinet(league: League, k?: CoachCareer): Trophy[] {
       if (l) out.push({ kind: 'cup', season: a.season, tid: l.tid, label: `NBA Cup ${seasonLabel(a.season)}` });
     }
   }
-  for (const h of legacyOf(league).honors)
-    out.push({ kind: 'cotm', season: h.season, tid: h.tid, label: `Coach of the Month · ${fmtDate(h.season, Math.max(0, h.day - 3), { month: 'short', year: 'numeric' })}` });
+  // the Coaches of the Month as one piece ("14× Coach of the Month"): a month isn't a title's equal
+  const months = legacyOf(league).honors;
+  const h = months.at(-1);
+  if (h)
+    out.push({
+      kind: 'cotm',
+      season: h.season,
+      tid: h.tid,
+      label: `Coach of the Month · ${fmtDate(h.season, Math.max(0, h.day - 3), { month: 'short', year: 'numeric' })}`,
+      ...(months.length > 1 ? { n: months.length } : {}),
+    });
   const order: Record<Trophy['kind'], number> = { title: 0, cup: 1, conf: 2, coy: 3, cotm: 4 };
-  return out.sort((a, b) => b.season - a.season || order[a.kind] - order[b.kind]);
+  // (the months last, whenever the latest was)
+  return out.sort((a, b) => +(a.kind === 'cotm') - +(b.kind === 'cotm') || b.season - a.season || order[a.kind] - order[b.kind]);
 }
 
 // ---------------------------------------------------------------- among the league's coaches
@@ -793,4 +806,248 @@ export function userSeasonsWith(league: League, tid: number): Map<number, CoachS
   const me = userCoach(league);
   if (!me) return new Map();
   return new Map(me.stints.filter((s) => s.tid === tid).flatMap((s) => stintSeasons(league, s).map((l) => [l.season, l] as const)));
+}
+
+// ---------------------------------------------------------------- the GM's legacy
+
+/** One player the user drafted, and what he became. */
+export interface Draftee {
+  pid: number;
+  name: string;
+  /** The draft (its season) and the pick ("#5"). */
+  season: number;
+  pick: string;
+  /** The team he drafted him for. */
+  tid: number;
+  /** His best OVR so far, and now (absent once his record is gone). */
+  peak?: number;
+  /** His big honours since, biggest first ("2× All-Star, MVP"). */
+  honours: string;
+  /** Where he is now: a team's abbreviation, "Retired" or "Free agent". */
+  now: string;
+}
+
+/** A trade the user made, graded by what happened after it: what each side's players produced since. */
+export interface GradedTrade {
+  id: number;
+  season: number;
+  /** The team he made it for. */
+  tid: number;
+  /** Names that came and went (players), and the picks each way. */
+  got: string[];
+  gave: string[];
+  gotPicks: number;
+  gavePicks: number;
+  /** Since the trade: games and points by the players he got (for his team), and by those he gave (wherever they went). */
+  gotGames: number;
+  gotPts: number;
+  gaveGames: number;
+  gavePts: number;
+  /** Game score since, his side's minus theirs: how it is graded. */
+  net: number;
+  verdict: 'won' | 'lost' | 'even' | 'early';
+}
+
+/** A title of his and the players who won it: the Finals MVP and the two others who played the most. */
+export interface TitleTeam {
+  season: number;
+  tid: number;
+  fmvp?: string;
+  core: string[];
+}
+
+export interface GmLegacy {
+  drafted: Draftee[];
+  trades: GradedTrade[];
+  titles: TitleTeam[];
+  /** The honours his players won in his seasons with them: All-Star selections, MVPs, Finals MVPs, All-NBA. */
+  coached: { allStar: number; mvp: number; fmvp: number; allNba: number; names: string[] };
+  /** The press's read of his Hall of Fame case (see hofCase). */
+  hof: { status: 'in' | 'building' | 'not yet'; line: string };
+}
+
+/** A trade is graded once this many seasons have followed it (before that it's "early"). */
+const TRADE_SEASONS = 1;
+/** Game score (about a point of production each) one side must be ahead by to have won a trade, and by what share. */
+const TRADE_MARGIN = 400;
+const TRADE_SHARE = 1.25;
+
+const gmsc = (s: PlayerStats) => s.pts + 0.4 * s.fgm - 0.7 * s.fga - 0.4 * (s.fta - s.ftm) + 0.7 * s.orb + 0.3 * s.drb + s.stl + 0.7 * s.ast + 0.7 * s.blk - 0.4 * s.pf - s.tov;
+
+/** A player's regular-season production from a move on: lines of seasons after it, or that season's with `tid` (his new team), filtered by `keep`. */
+function since(p: Player | undefined, season: number, tid: number, keep: (s: PlayerStats) => boolean) {
+  let gp = 0;
+  let pts = 0;
+  let v = 0;
+  for (const s of p?.stats ?? []) {
+    if (s.playoffs || s.real || !(s.season > season || (s.season === season && s.tid === tid)) || !keep(s)) continue;
+    gp += s.gp;
+    pts += s.pts;
+    v += gmsc(s);
+  }
+  return { gp, pts, v };
+}
+
+const HONOUR_ORDER: [string, (t: string) => boolean][] = [
+  ['MVP', (t) => t === 'MVP'],
+  ['Finals MVP', (t) => t === 'Finals MVP'],
+  ['DPOY', (t) => t === 'Defensive Player of the Year'],
+  ['All-NBA', (t) => t.startsWith('All-NBA')],
+  ['All-Star', (t) => t === 'All-Star'],
+  ['ROY', (t) => t === 'Rookie of the Year'],
+];
+
+/** "2× All-Star, MVP": a player's big honours from a season on, biggest first, at most three. */
+function honoursSince(p: Player, from: number): string {
+  const out: string[] = [];
+  for (const [label, is] of HONOUR_ORDER) {
+    const n = p.awards.filter((a) => a.season >= from && is(a.type)).length;
+    if (n) out.push(n > 1 ? `${n}× ${label}` : label);
+  }
+  return out.slice(0, 3).join(', ');
+}
+
+/**
+ * Whether he coached team `tid` in `season` (a game or its playoff run), from his jobs. The legacy
+ * reads his seasons through it: a player's honour is his when the player was on his team that
+ * season.
+ */
+function coachedSeasons(league: League): Map<string, true> {
+  const me = userCoach(league);
+  const out = new Map<string, true>();
+  if (!me) return out;
+  for (const st of me.stints) for (const l of stintSeasons(league, st)) out.set(`${l.season}:${l.tid}`, true);
+  return out;
+}
+
+/**
+ * The press's read of a coach's Hall of Fame case, by the bar it holds (two titles, or 600 wins; one
+ * title with 400 wins or two Finals builds a case). Plainly the press's: no number behind it.
+ */
+export function hofCase(k: Pick<CoachCareer, 'won' | 'lost' | 'titles' | 'lines'>, coy: number): GmLegacy['hof'] {
+  const finals = k.lines.filter((l) => (l.round ?? 0) >= 4).length;
+  const pct = k.won + k.lost ? (k.won / (k.won + k.lost)).toFixed(3).replace(/^0/, '') : '.000';
+  const facts = [
+    k.titles ? plural(k.titles, 'title') : finals ? plural(finals, 'Finals trip') : 'no title yet',
+    `${k.won} wins (${pct})`,
+    ...(coy ? [`${coy === 1 ? 'a' : coy} Coach of the Year${coy > 1 ? ' awards' : ''}`] : []),
+  ].join(', ');
+  if (k.titles >= 2 || k.won >= 600) return { status: 'in', line: `${facts}. The press has him in.` };
+  if ((k.titles >= 1 && k.won >= 250) || finals >= 2 || k.won >= 400) return { status: 'building', line: `${facts}. The press's bar: two titles or 600 wins.` };
+  return { status: 'not yet', line: `${facts}. The press's bar: two titles or 600 wins.` };
+}
+
+/**
+ * The GM's side of the career: the players he drafted and what they became, his trades graded by
+ * what each side's players produced since (game score, regular seasons; picks aren't counted until
+ * they're players), his titles and who won them, the honours his players won with him, and his Hall
+ * of Fame case. Read from the transaction log (his moves are kept for good) and the players' records.
+ */
+export function gmLegacy(league: League, k: CoachCareer): GmLegacy {
+  const mine = coachedSeasons(league);
+  const drafted: Draftee[] = [];
+  const trades: GradedTrade[] = [];
+  for (const t of league.transactions ?? []) {
+    if (!t.user) continue;
+    if (t.kind === 'draft' && t.pid !== undefined && (mine.has(`${t.season}:${t.tids[0]}`) || mine.has(`${t.season + 1}:${t.tids[0]}`))) {
+      const p = league.players[t.pid];
+      const peak = p ? Math.max(p.ovr, ...p.ratingsHistory.filter((r) => r.season > t.season).map((r) => r.ovr)) : undefined;
+      drafted.push({
+        pid: t.pid,
+        name: t.name ?? (p ? `${p.firstName} ${p.lastName}` : '?'),
+        season: t.season,
+        pick: t.note ?? '',
+        tid: t.tids[0],
+        ...(peak !== undefined ? { peak } : {}),
+        honours: p ? honoursSince(p, t.season + 1) : '',
+        now: !p ? 'Retired' : p.tid === RETIRED ? 'Retired' : p.tid >= 0 ? league.teams[p.tid].abbrev : 'Free agent',
+      });
+    }
+    // (his side: the team he ran then, that season or, for a summer trade, the next)
+    const us = t.kind === 'trade' ? t.sides?.find((s) => mine.has(`${t.season}:${s.tid}`) || mine.has(`${t.season + 1}:${s.tid}`)) : undefined;
+    if (t.sides && us) {
+      const others = t.sides.filter((s) => s !== us);
+      // what he got: everything the other sides sent (to him, in a two-team deal)
+      const got = others.flatMap((s) => s.players);
+      let g = { gp: 0, pts: 0, v: 0 };
+      for (const x of got) {
+        const r = since(league.players[x.pid], t.season, us.tid, (s) => s.tid === us.tid);
+        g = { gp: g.gp + r.gp, pts: g.pts + r.pts, v: g.v + r.v };
+      }
+      let o = { gp: 0, pts: 0, v: 0 };
+      for (const x of us.players) {
+        const to = others.length === 1 ? others[0].tid : -2;
+        const r = since(league.players[x.pid], t.season, to, (s) => s.tid !== us.tid);
+        o = { gp: o.gp + r.gp, pts: o.pts + r.pts, v: o.v + r.v };
+      }
+      const net = Math.round(g.v - o.v);
+      const settled = league.season - t.season >= TRADE_SEASONS + (t.phase === 'regular' || t.phase === 'preseason' ? 0 : 1) || league.phase === 'draftLottery';
+      const verdict: GradedTrade['verdict'] = !settled
+        ? 'early'
+        : net >= TRADE_MARGIN && g.v >= TRADE_SHARE * Math.max(0, o.v)
+          ? 'won'
+          : -net >= TRADE_MARGIN && o.v >= TRADE_SHARE * Math.max(0, g.v)
+            ? 'lost'
+            : 'even';
+      if (!got.length && !us.players.length) continue;
+      trades.push({
+        id: t.id,
+        season: t.season,
+        tid: us.tid,
+        got: got.map((x) => x.name),
+        gave: us.players.map((x) => x.name),
+        gotPicks: others.reduce((a, s) => a + s.picks.length, 0),
+        gavePicks: us.picks.length,
+        gotGames: g.gp,
+        gotPts: g.pts,
+        gaveGames: o.gp,
+        gavePts: o.pts,
+        net,
+        verdict,
+      });
+    }
+  }
+  // his titles and the players who won them
+  const titles: TitleTeam[] = [];
+  for (const l of k.lines) {
+    if (l.round !== 5) continue;
+    const aw = league.awards.find((a) => a.season === l.season);
+    const fm = aw?.finalsMvp !== undefined ? league.players[aw.finalsMvp] : undefined;
+    const minutes = Object.values(league.players)
+      .map((p) => ({ p, min: p.stats.filter((s) => s.season === l.season && s.tid === l.tid && !s.playoffs).reduce((a, s) => a + s.min, 0) }))
+      .filter((x) => x.min > 0 && x.p !== fm)
+      .sort((a, b) => b.min - a.min);
+    titles.push({
+      season: l.season,
+      tid: l.tid,
+      ...(fm ? { fmvp: `${fm.firstName} ${fm.lastName}` } : {}),
+      core: minutes.slice(0, fm ? 2 : 3).map((x) => `${x.p.firstName} ${x.p.lastName}`),
+    });
+  }
+  // the honours his players won in his seasons with them (on his team at the season's end)
+  const coached = { allStar: 0, mvp: 0, fmvp: 0, allNba: 0, names: [] as string[] };
+  const star = new Map<string, number>();
+  for (const p of Object.values(league.players)) {
+    for (const a of p.awards) {
+      if (a.season < league.startSeason) continue;
+      const kind = a.type === 'All-Star' ? 'allStar' : a.type === 'MVP' ? 'mvp' : a.type === 'Finals MVP' ? 'fmvp' : a.type.startsWith('All-NBA') ? 'allNba' : null;
+      if (!kind) continue;
+      const line = [...p.stats].reverse().find((s) => s.season === a.season && !s.playoffs);
+      if (!line || !mine.has(`${a.season}:${line.tid}`)) continue;
+      coached[kind]++;
+      const nm = `${p.firstName} ${p.lastName}`;
+      star.set(nm, (star.get(nm) ?? 0) + (kind === 'mvp' ? 12 : kind === 'fmvp' ? 6 : kind === 'allNba' ? 4 : 2));
+    }
+  }
+  coached.names = [...star]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([n]) => n);
+  return {
+    drafted: drafted.sort((a, b) => (b.peak ?? 0) - (a.peak ?? 0) || a.season - b.season),
+    trades: trades.sort((a, b) => b.net - a.net),
+    titles: titles.reverse(),
+    coached,
+    hof: hofCase(k, k.coy.length),
+  };
 }

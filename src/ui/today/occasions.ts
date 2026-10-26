@@ -5,7 +5,7 @@
 import type { League, Player } from '../../core/types';
 import { allStarVote } from '../../core/league/awards';
 import { curTeamSeason, playerName } from '../../core/league/helpers';
-import { awardLine } from '../../core/league/media/history';
+import { awardLine, awardPhrase } from '../../core/league/media/history';
 import { stillAlive } from '../flow';
 import { lastResults } from './front';
 
@@ -64,7 +64,7 @@ export function allStarResults(l: League): { head: string; lines: string[]; mine
   const first = mine[0];
   const again = first ? awardLine(l, first, 'All-Star', l.season) : null;
   const head = mine.length
-    ? `${mine.length > 1 ? `${mine.length} All-Stars` : `${playerName(first)}${again && again !== 'his first' ? `, ${again} time` : ''}`} for the ${l.teams[me].name}`
+    ? `${mine.length > 1 ? `${mine.length} All-Stars` : `${playerName(first)}${again && again !== 'his first' ? `, ${awardPhrase(again, 'selection')}` : ''}`} for the ${l.teams[me].name}`
     : `${winner} wins the All-Star Game`;
   return { head, lines, mine };
 }

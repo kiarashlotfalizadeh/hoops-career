@@ -21,7 +21,7 @@ import { GlossarySheet } from '../components/Glossary';
 import { InstallRow } from '../components/InstallRow';
 import { Section, Sheet } from '../components/ui';
 import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
-import { AllStarHero, DigestRow, Headlines, LeadStory, SeasonEndHero, YourSeason, useLead } from './FrontPage';
+import { AllStarHero, DigestRow, Headlines, LeadStory, SeasonEndHero, TenureKicker, YourSeason, useLead } from './FrontPage';
 import { allStarPhase, seasonOver } from './occasions';
 import { PracticeRow, PracticeSheet } from './Practice';
 import { MessageSheet, markRead } from './messages';
@@ -131,6 +131,9 @@ export default function Today() {
   return (
     <main className="page td-page">
       {hero}
+
+      {/* the preseason: the weight of the years with this team */}
+      {league.phase === 'preseason' && <TenureKicker league={league} />}
 
       {needs.count > 0 && (
         <Section

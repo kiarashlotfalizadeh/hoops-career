@@ -27,6 +27,7 @@ import {
 } from './contracts';
 import { CAP_FOR, addInbox, playerName, standardRoster, teamPlayers } from './helpers';
 import type { RecStat } from './records';
+import { applyHistory, type HistoryData } from './media/past';
 import { teamStrategyUpdate } from './aiTrades';
 import { goalsWhy, planOwnerGoals, previewTitle } from './ownerGoals';
 import { fillRosters, trimRosters } from './freeAgency';
@@ -135,6 +136,8 @@ export interface SeedData {
   picksThrough?: number;
   /** When the schedule, picks, injuries and two-way contracts were fetched. */
   extrasAsOf?: string;
+  /** The NBA's past (src/data/history.json, loaded beside the seed): its Finals, MVPs and the players' real honours (see media/past.ts). */
+  history?: HistoryData;
 }
 
 export interface CreateOpts {
@@ -363,6 +366,8 @@ export function createLeague(opts: CreateOpts): League {
     const rostered = Object.values(league.players).filter((p) => p.tid >= 0);
     league.ovrScale = buildOvrScale(rostered.map((p) => ovrRaw(p.ratings)));
     assignJerseys(league, rng);
+    // the NBA's past: its champions and MVPs, and each player's real honours on his record
+    if (opts.seed.history) applyHistory(league, opts.seed.history);
   } else {
     // fictional league
     const taken = new Set<string>();
@@ -494,7 +499,7 @@ export function createLeague(opts: CreateOpts): League {
 }
 
 /** Raw OVR (ovrRaw) of the real 2026-27 rosters at each OVR_ANCHORS quantile, as the seed rates them. */
-const REAL_RAW_QUANTILES = [41.76, 44.38, 44.97, 46.24, 47.98, 50.01, 52.81, 56.58, 58.83, 61.72, 66.09];
+const REAL_RAW_QUANTILES = [41.04, 43.58, 44.86, 46.78, 48.59, 50.61, 53.13, 55.24, 58.73, 62.06, 66.6];
 
 /**
  * Generated talent moves every skill together, so a generated league spread overall ability more

@@ -26,7 +26,12 @@ import { pressGame } from '../league/media/nights';
 import { executeTrade } from '../league/trades';
 import { GRADES } from '../league/media/voice';
 import { CHRONICLE_STORIES, chronicleFarewell, chronicleOf, chronicleSeason } from '../league/media/chronicle';
-import { anniversaryOf, awardLine, droughtLine, rematchLine, titleLine } from '../league/media/history';
+import { anniversaryOf, awardLine, awardPhrase, droughtLine, honoursWhole, rematchLine, titleLine } from '../league/media/history';
+import { defendingChampion, franchiseTitles, type HistoryData } from '../league/media/past';
+import { hallOfFameScore } from '../league/season';
+import seedJson from '../../data/seed.json';
+import historyJson from '../../data/history.json';
+import type { SeedData } from '../league/create';
 import { emptyBook } from '../league/records';
 
 const DAYS = 46;
@@ -284,6 +289,64 @@ describe('the press', () => {
       const n = l.news.length;
       mediaDay(l);
       expect(l.news.length).toBe(n);
+    }
+
+    // a real league opens with the NBA's past (media/past.ts): its Finals and MVPs, and each player's
+    // real honours on his record, so the press counts them whole and a defending champion is named
+    {
+      const seed = { ...(seedJson as unknown as SeedData), history: historyJson as unknown as HistoryData };
+      const l = createLeague({ name: 'past', userTid: 20, coachName: 'c', settings: defaultSettings(), seed, rngSeed: 3 });
+      const who = (last: string) => Object.values(l.players).find((x) => x.lastName === last && x.real)!;
+      const lebron = who('James');
+      const count = (x: typeof lebron, type: string) => x.awards.filter((a) => a.type === type).length;
+      expect([count(lebron, 'MVP'), count(lebron, 'Finals MVP'), count(lebron, 'Champion'), count(lebron, 'All-Star')]).toEqual([4, 4, 4, 22]);
+      expect(lebron.awards.every((a) => a.season < l.season)).toBe(true);
+      expect(honoursWhole(l, lebron)).toBe(true);
+      // the Hall counts his career before the league once (preLeagueLegacy), not his honours again
+      const bare = structuredClone(l);
+      bare.players[lebron.pid].awards = [];
+      expect(hallOfFameScore(l, lebron)).toBeCloseTo(hallOfFameScore(bare, bare.players[lebron.pid]));
+      const team = (ab: string) => l.teams.find((t) => t.abbrev === ab)!.tid;
+      expect(defendingChampion(l)).toMatchObject({ tid: team('NYK'), season: l.season - 1, runner: team('SAS'), w: 4, l: 1, mvp: 'Jalen Brunson' });
+      expect(l.past!.finals[0]).toEqual([1947, team('GSW'), -1, 4, 1, '', 'Philadelphia Warriors', 'Chicago Stags']);
+      const win = (ab: string) => {
+        const x = structuredClone(l);
+        x.awards.push({ season: x.season, champion: team(ab), allNba: [], allDefense: [], allRookie: [], allStars: { E: [], W: [] } });
+        return titleLine(x, team(ab), x.season);
+      };
+      expect(win('OKC')).toBe('a second title in three years');
+      expect(win('NYK')).toBe('back-to-back titles');
+      expect(win('BOS')).toBe('a record 19th title');
+      expect(win('LAL')).toBe(`a first title since ${seasonLabel(2020)}`);
+      expect(win('CHA')).toBe('the first title in franchise history');
+      l.past!.finals = l.past!.finals.filter((f) => f[0] !== 2025);
+      expect(win('OKC')).toBe(`a first title since the ${seasonLabel(1979)} SuperSonics`);
+      expect(franchiseTitles(l, team('BOS'))).toMatchObject({ n: 18, last: 2024 });
+      // his MVPs counted whole, in words that read
+      const sga = who('Gilgeous-Alexander');
+      sga.awards.push({ season: l.season, type: 'MVP' });
+      expect(awardLine(l, sga, 'MVP', l.season)).toBe('his third straight');
+      expect(awardPhrase('his third straight', 'MVP')).toBe('his third straight MVP');
+      expect(awardPhrase('his third in four seasons', 'MVP')).toBe('his third MVP in four seasons');
+      // a fictional league has no past
+      expect(league.past).toBeUndefined();
+      expect(defendingChampion(league)).toBeNull();
+    }
+
+    // the chronicle keeps no losing streak and no weekly or monthly honour, and ranks the user's records first
+    {
+      const l = structuredClone(league);
+      const me = l.userTid;
+      const other = me === 1 ? 2 : 1;
+      publish(l, { kind: 'game', head: 'Losing streak hits 5 for the Others', dek: '.', tids: [other, me === 3 ? 4 : 3], pids: [], weight: 3 });
+      publish(l, { kind: 'honor', head: 'A rookie of the month', dek: '.', tids: [other], pids: [], weight: 2 });
+      for (let i = 0; i < 4; i++) publish(l, { kind: 'milestone', head: `Our milestone ${i}`, dek: '.', tids: [me], pids: [], weight: 3 });
+      publish(l, { kind: 'record', head: 'Our record night', dek: '.', tids: [me], pids: [], weight: 2 });
+      chronicleSeason(l, l.season);
+      const heads = chronicleOf(l, l.season)!.stories.map((x) => x.head);
+      expect(heads).not.toContain('Losing streak hits 5 for the Others');
+      expect(heads).not.toContain('A rookie of the month');
+      expect(heads).toContain('Our record night');
     }
 
     // pruning keeps the bodies of only the latest stories

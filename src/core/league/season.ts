@@ -36,6 +36,7 @@ import { allStarSaturday } from './allStarSaturday';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from './playoffs';
 import { confStandings } from './standings';
 import { aiChoose, draftUntilUser, ensureFuturePicks, finishDraft, generateDraftClass, nextPick, runLottery, draftPlayer } from './draft';
+import { prospectsDay } from './prospects';
 import {
   FA_DAYS,
   aiExtensions,
@@ -305,6 +306,8 @@ export function advanceDay(league: League) {
   // the owner's word on the books, the day their close projects into the red (in the weeks before the deadline)
   booksDaily(league);
   worldDay(league);
+  // the draft class's day: the user's scouts, its monthly moves and the combine (prospects.ts; its own streams)
+  prospectsDay(league);
 }
 
 function endRegularSeason(league: League) {
@@ -400,7 +403,8 @@ export function preLeagueLegacy(league: League, p: Player): number {
 
 /** Hall of Fame score: awards won in the league plus a real player's earlier career. */
 export function hallOfFameScore(league: League, p: Player): number {
-  const awards = p.awards.reduce((s, a) => s + (HOF_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0)), 0);
+  // (his real honours from before the league are on his record too: his earlier career counts once, below)
+  const awards = p.awards.reduce((s, a) => s + (a.season < league.startSeason ? 0 : (HOF_POINTS[a.type] ?? (a.type.startsWith('All-NBA') ? 4 : 0))), 0);
   return awards + preLeagueLegacy(league, p);
 }
 

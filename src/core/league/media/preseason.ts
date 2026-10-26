@@ -10,6 +10,7 @@ import { playerName } from '../helpers';
 import { worldRng } from '../world';
 import type { MediaState } from '../media';
 import { Voice, confName, f1, list, nth, perGame, poss, publish, rosters } from './voice';
+import { defendingChampion } from './past';
 
 /** Simulated seasons behind the predictions: once a season, so a sharper read is affordable. */
 const PRESEASON_SIMS = 500;
@@ -149,7 +150,12 @@ function leaguePreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[
     .sort((a, b) => b.d - a.d);
   const up = moves[0];
   const down = moves[moves.length - 1];
+  // the champions they're chasing (a real league's first season: the NBA's last)
+  const dc = defendingChampion(league);
   const body = [
+    dc && dc.season === league.season - 1
+      ? `The defending champions: the ${league.teams[dc.tid].name}${dc.runner >= 0 ? `, ${dc.w}-${dc.l} over the ${league.teams[dc.runner].name} in the Finals` : ''}${dc.mvp ? ` (Finals MVP ${dc.mvp})` : ''}.`
+      : '',
     `East: ${top('E')}.`,
     `West: ${top('W')}.`,
     up && up.d >= 6 ? `The biggest climb on paper: the ${league.teams[up.tid].name}, from ${up.was} wins to a projected ${pre.rows[up.tid].wins}.` : '',

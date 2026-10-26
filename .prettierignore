@@ -8,5 +8,6 @@ android
 ios
 public
 src/data/seed.json
+src/data/history.json
 package-lock.json
 .claude

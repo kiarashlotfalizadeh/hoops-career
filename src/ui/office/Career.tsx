@@ -7,13 +7,13 @@
 // and the league waits until he takes one.
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Award, ChevronRight, Crown, Flame, Medal, Sparkles, Trophy } from 'lucide-react';
+import { ArrowLeftRight, Award, ChevronRight, Crown, Flame, Landmark, Medal, Sparkles, Trophy } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { curTeamSeason, fmtDate, payroll } from '../../core/league/helpers';
 import { coachCareer, coyWinners, userCoach, type CoachCareer } from '../../core/league/coaches';
 import { seasonsInCharge } from '../../core/league/owner';
-import { cabinet, coachRanks, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
+import { cabinet, coachRanks, gmLegacy, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
 import { endText, gradeWord, type SeasonReview } from '../../core/league/legacyReview';
 import { DIFFICULTY } from '../../core/league/difficulty';
 import { agenda } from '../../core/league/agenda';
@@ -209,6 +209,8 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
         )}
       </Section>
 
+      <YourPlayers league={league} k={k} />
+
       <Section title="Signature wins">
         {lg.wins.length ? (
           <div className="card flush list">
@@ -289,7 +291,7 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
                     <div className="grow fo-min0">
                       <div className="lr-name">{seasonLabel(r.season)}</div>
                       <div className="lr-meta">
-                        {r.won}-{r.lost} · {r.fired ? 'fired' : endText(r).toLowerCase()}
+                        {r.won}-{r.lost} · {r.fired ? (r.round === 5 ? 'won the title · fired' : 'fired') : endText(r).toLowerCase()}
                         {playedOn(r) && ` · ${playedOn(r)}`}
                       </div>
                     </div>
@@ -304,6 +306,108 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
     </>
   );
 }
+
+/**
+ * The GM's side of the career (legacy.ts gmLegacy): his Hall of Fame case as the press reads it, the
+ * teams that won his titles, the players he drafted and what they became, his best and worst trades
+ * graded by what each side's players produced since, and the honours his players won with him.
+ */
+function YourPlayers({ league, k }: { league: League; k: CoachCareer }) {
+  const gm = useLeagueMemo(() => gmLegacy(league, k), [league, k]);
+  const best = gm.trades.find((t) => t.verdict === 'won');
+  const worst = [...gm.trades].reverse().find((t) => t.verdict === 'lost');
+  const c = gm.coached;
+  const honours = [c.mvp && `${c.mvp}× MVP`, c.fmvp && `${c.fmvp}× Finals MVP`, c.allNba && `${c.allNba}× All-NBA`, c.allStar && `${c.allStar}× All-Star`]
+    .filter(Boolean)
+    .join(', ');
+  const any = gm.drafted.length || gm.trades.length || gm.titles.length || honours;
+  return (
+    <Section title="Your legacy">
+      <div className="card flush list">
+        {k.seasons > 0 && (
+          <div className="listrow">
+            <Landmark size={20} className="fo-lc-ic" aria-hidden="true" />
+            <div className="grow fo-min0">
+              <div className="lr-name">Hall of Fame case</div>
+              <div className="lr-meta">{gm.hof.line}</div>
+            </div>
+            <span className={`tag ${gm.hof.status === 'in' ? 'good' : gm.hof.status === 'building' ? 'info' : ''}`}>
+              {gm.hof.status === 'in' ? 'In' : gm.hof.status === 'building' ? 'Building' : 'Not yet'}
+            </span>
+          </div>
+        )}
+        {gm.titles.slice(0, 3).map((t) => (
+          <div key={t.season} className="listrow">
+            <TeamLogo tid={t.tid} size={26} decorative />
+            <div className="grow fo-min0">
+              <div className="lr-name">{seasonLabel(t.season)} champions</div>
+              <div className="lr-meta">{[t.fmvp && `${t.fmvp} (Finals MVP)`, ...t.core].filter(Boolean).join(', ')}</div>
+            </div>
+          </div>
+        ))}
+        {gm.drafted.slice(0, 3).map((d) => (
+          <Link key={d.pid} to={`/player/${d.pid}`} className="listrow">
+            <Medal size={20} className="fo-lc-ic" aria-hidden="true" />
+            <div className="grow fo-min0">
+              <div className="lr-name ellipsis">{d.name}</div>
+              <div className="lr-meta">
+                Drafted {d.pick} in {d.season}
+                {d.honours ? ` · ${d.honours}` : ''} · {d.now}
+              </div>
+            </div>
+            {d.peak !== undefined && (
+              <span className="fo-lc-rec">
+                <span className="num bold">{d.peak}</span>
+                <span className="tiny dim">peak</span>
+              </span>
+            )}
+          </Link>
+        ))}
+        {[best, worst].map(
+          (t) =>
+            t && (
+              <div key={t.id} className="listrow">
+                <ArrowLeftRight size={20} className="fo-lc-ic" aria-hidden="true" />
+                <div className="grow fo-min0">
+                  <div className="lr-name">
+                    {t.verdict === 'won' ? 'Best trade' : 'Worst trade'}: {tradeText(t.got, t.gotPicks)} for {tradeText(t.gave, t.gavePicks)}
+                  </div>
+                  <div className="lr-meta">
+                    {seasonLabel(t.season)} · since: {t.gotPts.toLocaleString('en-US')} pts in {t.gotGames} games for you, {t.gavePts.toLocaleString('en-US')} in {t.gaveGames} for
+                    them
+                  </div>
+                </div>
+                <span className={`tag ${t.verdict === 'won' ? 'good' : 'bad'}`}>{t.verdict === 'won' ? 'Won it' : 'Lost it'}</span>
+              </div>
+            ),
+        )}
+        {honours && (
+          <div className="listrow">
+            <Award size={20} className="fo-lc-ic" aria-hidden="true" />
+            <div className="grow fo-min0">
+              <div className="lr-name">Your players' honours</div>
+              <div className="lr-meta">
+                {honours}
+                {c.names.length ? ` · ${c.names.join(', ')}` : ''}
+              </div>
+            </div>
+          </div>
+        )}
+        {!any && (
+          <div className="listrow">
+            <div className="lr-meta">The players you draft and trade for, and what they become, land here.</div>
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/** "Mikal Bridges and 2 picks": one side of a trade in a line. */
+const tradeText = (names: string[], picks: number) => {
+  const parts = [...names.slice(0, 2), ...(names.length > 2 ? [`${names.length - 2} more`] : []), ...(picks ? [plural(picks, 'pick')] : [])];
+  return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : (parts[0] ?? 'nothing');
+};
 
 /** The difficulty a season was played on, as the career records it ("Hard", "Easy, job security off"); empty for a season from before it was kept. */
 const playedOn = (r: SeasonReview) => (r.difficulty ? `${DIFFICULTY[r.difficulty].label}${r.jobSecurity === false ? ', job security off' : ''}` : '');
@@ -322,11 +426,11 @@ const TROPHY: Record<TrophyT['kind'], { icon: typeof Trophy; cls: string; name: 
 function TrophyTile({ league, t }: { league: League; t: TrophyT }) {
   const m = TROPHY[t.kind];
   const Icon = m.icon;
-  const when = t.kind === 'cotm' ? t.label.replace('Coach of the Month · ', '') : seasonLabel(t.season);
+  const when = t.kind === 'cotm' ? `${t.n ? 'latest ' : ''}${t.label.replace('Coach of the Month · ', '')}` : seasonLabel(t.season);
   return (
     <div className={`fo-cab-t ${m.cls}`}>
       <Icon size={t.kind === 'title' ? 30 : 24} aria-hidden="true" />
-      <span className="fo-cab-n">{m.name}</span>
+      <span className="fo-cab-n">{t.n ? `${t.n}× ${m.name}` : m.name}</span>
       <span className="fo-cab-s num">
         {when} · {league.teams[t.tid]?.abbrev}
       </span>
