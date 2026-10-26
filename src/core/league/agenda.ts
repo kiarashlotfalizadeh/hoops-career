@@ -3,8 +3,8 @@
 // over or under its limits on opening night, an offer sheet on one of his restricted free agents,
 // a coach without a team, his pick on the clock); the Continue bar waits on them and names the first.
 // Optional items (the staff's calls, see calls.ts: a star hurt, the playoff odds gone, the owner's
-// floor in danger, the trade deadline, a playoff series starting or going against him, a losing
-// skid, the books in the red, the week's call; offers, one
+// floor in danger, the trade deadline, a playoff series starting, a losing skid gone on, the books
+// in the red, a week's trade-off, the one the last sim stopped for first; offers, one
 // item each, 10-day contracts running out, job offers, the guided first week) never block. Each
 // item can be settled where it stands: the staff's suggestion and any quick choices are
 // AgendaActions that resolveAgenda carries out, and `to` opens the screen that has the whole
@@ -468,8 +468,9 @@ export function agenda(league: League): AgendaItem[] {
       to: '/office/owner',
     });
 
-  // the staff's calls: what the season needs an answer to now
-  for (const c of staffCalls(league)) {
+  // the staff's calls: what the season needs an answer to now, the one the last sim stopped for first (that day)
+  const stop = league.stopCall?.season === league.season && league.stopCall.day === league.day ? league.stopCall.id : null;
+  for (const c of staffCalls(league).sort((x, y) => Number(y.id === stop) - Number(x.id === stop))) {
     const wrap = (x: CallChoice): AgendaChoice => ({ ...x, action: { kind: 'call', call: x.action } });
     items.push({ ...c, required: false, suggestion: c.suggestion && wrap(c.suggestion), choices: c.choices?.map(wrap) });
   }

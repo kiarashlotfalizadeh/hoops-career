@@ -2,13 +2,15 @@
 // spent on (balanced, tactical drills, opponent prep, recovery), one row on Today that opens its sheet
 // (the four focuses, what each does, and what the team knows of what it plays). The matchup page's
 // briefing reads the same for tonight's tactics (its game plan on top) and offers the focus that
-// answers a gap, one tap away.
+// answers a gap, one tap away. A focus the week's call put in says so ("this week": it comes out at
+// the week's end, see weekCall.ts).
 import type { League, PrepFocus } from '../../core/types';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import { PREP_META, famLabel } from '../../core/sim/familiarity';
 import { famReadout, type FamReadout } from '../../core/ai/advisor';
 import { andList, shortName } from '../../core/league/helpers';
+import { weekHolds } from '../../core/league/weekCall';
 import { ChevronRight } from 'lucide-react';
 import { Bar, Chips, Sheet } from '../components/ui';
 import './today.css';
@@ -73,6 +75,7 @@ export function PracticeRow({ league, onOpen }: { league: League; onOpen: () => 
       <span className="grow td-mrow-k">Practice</span>
       <span className="td-mrow-v">
         {PREP_META[r.prep].label}
+        {weekHolds(league) && <span> · this week</span>}
         {low && <span className="td-mrow-warn"> · System {Math.round(r.overall)}%</span>}
       </span>
       <ChevronRight size={18} className="dim" aria-hidden="true" />

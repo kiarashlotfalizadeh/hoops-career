@@ -25,6 +25,7 @@ import { cancelWorth, measureChanges, measureCounters } from '../../state/simCli
 import { useStore, useVersion } from '../../state/store';
 import { act, touch } from '../../state/actions';
 import { resolveAgenda } from '../../core/league/agenda';
+import { inLane } from '../tactics/worthLane';
 
 /** Counters the staff's plan holds at most (the Preview's briefing proposes as many). */
 const PLAN_MAX = 3;
@@ -102,6 +103,8 @@ let simEnded = 0;
  * up to half a second in), and one reading the card has its number a few seconds later.
  */
 const SETTLE_MS = 1500;
+/** How long a measurement another one stopped waits before it's run again. */
+const RETRY_MS = 1000;
 
 /** A sim starting stops a measurement in flight (the two share the worker: the sim would wait on it); its row asks again after. */
 function watchSims() {
@@ -130,16 +133,24 @@ function pump() {
     tell();
   };
   const { league, m } = next;
-  const run =
+  // (in the worker's lane: the staff's background measuring of his changes waits for it, rather than stopping it)
+  const run = inLane(() =>
     m.kind === 'counters'
       ? measureCounters(league, m.opp, m.gid, progress).then((out) => (out ? countersWorth(league, m, out) : null))
-      : measureChanges(m.base ? withChange(league, m.base) : league, m.opp, m.gid, [m.change], progress).then((out) => (out?.[0] ? changeWorth(league, m, out[0]) : null));
+      : measureChanges(m.base ? withChange(league, m.base) : league, m.opp, m.gid, [m.change], progress).then((out) => (out?.[0] ? changeWorth(league, m, out[0]) : null)),
+  );
+  let again = 0;
   run
     .then(
       (w) => {
+        // stopped by a newer measurement (the matchup page's) or a sim: measured again shortly while
+        // its row still shows (before, it waited for the row to show again, and a card sat "Measuring")
+        if (!w) {
+          if (rows.has(next.tag)) again = RETRY_MS;
+          else asked.delete(next.tag);
+          return;
+        }
         asked.delete(next.tag);
-        // (stopped by a newer measurement: asked again when its row next shows)
-        if (!w) return;
         settled.add(next.tag);
         const now = useStore.getState().league;
         if (now && now.id === league.id && !useStore.getState().sim) touch((l) => storeWorth(l, m.key, w));
@@ -154,7 +165,7 @@ function pump() {
       current = null;
       tell();
       // (the next on the next tick: what the store holds now is what's asked next)
-      setTimeout(pump, 0);
+      setTimeout(pump, again);
     });
 }
 

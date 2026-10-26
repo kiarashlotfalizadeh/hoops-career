@@ -26,6 +26,7 @@ import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
 import { plural } from '../format';
 import { courtEdge } from './difficulty';
+import { userYouth } from './youthLean';
 
 export function wearPerf(p: Player) {
   return 1 - clamp(p.wear - 40, 0, 60) / 1200; // up to -5% when badly worn down
@@ -49,7 +50,7 @@ function playedYesterday(league: League, tid: number, day: number): boolean {
  * Two-way players are deep bench: last in the order with no planned minutes (their share goes to
  * the standard players), unless the team is down to fewer than nine healthy standard players.
  */
-function benchTwoWays(rot: Rotation, players: Player[]) {
+export function benchTwoWays(rot: Rotation, players: Player[]) {
   const twoWay = new Set(players.filter((p) => p.contract.twoWay).map((p) => p.pid));
   if (!twoWay.size || players.filter((p) => !p.contract.twoWay && !p.injury).length < 9) return;
   rot.order = [...rot.order.filter((pid) => !twoWay.has(pid)), ...rot.order.filter((pid) => twoWay.has(pid))];
@@ -109,6 +110,8 @@ export function applyStaffTactics(league: League, tid: number) {
  * teams under 25 wins 1.6 a season (the NBA's 2023-24 to 2025-26: 5-6) and a win SD of 10.5 (13).
  */
 export function youthMovement(league: League, tid: number): number {
+  // (the user's team turns to its young players only when he says so, or his staff does: see weekCall.ts)
+  if (tid === league.userTid) return userYouth(league);
   if (tid === league.userTid || league.phase !== 'regular' || league.day < YOUTH_FROM) return 0;
   return dayStandings(league).youth.get(tid) ?? 0;
 }
@@ -223,19 +226,30 @@ export function youthLean(age: number): number {
 
 /**
  * A full youth movement's veterans sit some nights: the 30-and-ups every other night, the
- * 28-and-ups and its two best players 24 or older every third (load management, a sore knee).
+ * 28-and-ups and its two best players 24 or older every third (load management, a sore knee), but
+ * never so many that fewer than YOUTH_DRESSED healthy standard players dress: a rebuilder with eight
+ * hurt had sat its three best healthy players too and sent out nine, three of them two-ways, who
+ * lost by 77 (and another such night by 86).
  */
 export function restVeterans(league: League, players: Player[], day: number, rest: number[]) {
   const best = players
     .filter((p) => playerAge(p, league.season) >= 24 && !p.contract.twoWay)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
     .slice(0, 2);
+  let dressed = players.filter((p) => !p.contract.twoWay && !p.injury && !rest.includes(p.pid)).length;
   for (const p of players) {
     const age = playerAge(p, league.season);
     if (rest.includes(p.pid) || (age < 28 && !best.includes(p))) continue;
-    if ((p.pid + day) % (age >= 30 ? 2 : 3) === 0) rest.push(p.pid);
+    if ((p.pid + day) % (age >= 30 ? 2 : 3) !== 0) continue;
+    const counts = !p.contract.twoWay && !p.injury;
+    if (counts && dressed <= YOUTH_DRESSED) continue;
+    rest.push(p.pid);
+    if (counts) dressed--;
   }
 }
+
+/** The fewest healthy standard players a youth movement's nights off leave dressed (see restVeterans). */
+const YOUTH_DRESSED = 10;
 
 /**
  * A team that has locked up its conference's top seed saves its stars for the playoffs, as NBA

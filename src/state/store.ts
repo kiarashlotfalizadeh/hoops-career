@@ -7,6 +7,7 @@ import { estimateTotal, loopSetting, targetDone, type SimProgress, type SimStop,
 import { checkpointSimRun, simLeague, stopSimRun, taskLeague } from './simClient';
 import { buildDigest, digestMark, type Digest, type DigestMark } from '../ui/today/digest';
 import { newCall, openCallIds } from '../core/league/calls';
+import { staffPicksSince } from '../core/league/weekCall';
 import { userGameOnDay } from '../core/league/games';
 import { billingFor } from '../core/analysis/gameStory';
 
@@ -319,6 +320,10 @@ export const useStore = create<AppState>((set, get) => ({
       if (runToken !== token) return;
       const d = digestFor(mark);
       if (stop && toast && d.digest && d.digestOpen) d.digest = { ...d.digest, stop: { text: toast[0], tone: toast[1], to: toast[2] ?? '/', ...(call ? { call } : {}) } };
+      // a short sim has no digest: what the staff did on its own in it is said here (the newest of it)
+      const lm = get().league;
+      const picks = !toast && !d.digest && lm ? staffPicksSince(lm, mark.season, mark.day) : [];
+      if (picks.length) toast = [`The staff: ${picks.at(-1)}`, 'neutral', '/'];
       set({ sim: null, stopRequested: false, v: get().v + 1, ...d });
       if (toast && !(stop && d.digest && d.digestOpen)) get().toast(...toast);
       void get().save();

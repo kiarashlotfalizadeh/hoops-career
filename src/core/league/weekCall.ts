@@ -1,62 +1,97 @@
-// The staff's call for the week: each week of the regular season, one small decision chosen by what's
-// at stake in it, with the staff's pick and its number. The week's big game (its billing, else the
-// strongest team on the week's schedule): the staff's best counter for it, measured over paired games
-// of that game (see counterWorth.ts) when the card is shown, against keeping the plan as it is. Or the
-// week's practice: tactical drills while the system is still short (after a new playbook or new
-// players), recovery for a heavy week on worn legs (see practice.ts), the familiarity and the wear it
-// makes worked out exactly from the practice and wear models, and what that's worth in the week's
-// last game measured the same way. A week has one card: the stakes rank them (a billed big game
-// first; else the practice when it's called for; else the strongest opponent's game), and a game
-// whose counters measure as no gain gives way to the week's next-biggest game (WEEK_GAMES of them),
-// then the practice, or to no card: a call is a choice. (Over the real league about three opponents
-// in four have a counter that measures as a gain: 6 of 8 in a probe of OKC's October.)
+// The staff's week: each week of the regular season, the staff looks at what's at stake in it, measures
+// what it would change in paired games (see counterWorth.ts) and makes its picks. A pick that's best on
+// every measured count is the staff's to make: it goes in without a word and the digest says it
+// (staffPicksSince). Only a week whose options win on different counts that the user has to weigh
+// opens a card, and a sim stops for it. A call is a choice: one whose honest answer is always the same
+// isn't one.
 //
-// "Unanswered, the staff does it": the practice from the morning after the card opened, the counter
-// on game day if it was measured (a sim that runs past a card doesn't measure: it never puts in a
-// counter it hasn't measured); what the staff did on its own goes in League.staffPicks for the digest
-// (staffPicksSince). A practice focus put in for the week comes out at its end. The card expires at
-// the week's end or once its game is played. Nothing here draws from the league's random stream, and
-// in a sim it's one plan a week and a look each morning.
+// What the staff looks at, planned on the week's first morning (planWeek):
+// - the week's big game (a billed night: a rivalry, Christmas, a revenge game...): its best counter,
+//   measured on that game. A counter changes one game's plan and costs nothing after it (the base
+//   system's own familiarity barely moves for one night), so a gain goes in and is listed.
+// - the practice: tactical drills while the system is short (FAM_DRILL), recovery for a heavy week on
+//   worn legs (WEAR_HEAVY). Drills build the system twice as fast as the everyday balance at no cost
+//   to the legs (PREP_META), so on their own they go in without a word. They become a choice when the
+//   week also has a big game with a counter: opponent prep drills the counter for that game (worth
+//   points that night) while the system builds at a quarter of drills' pace (worth points in the games
+//   after). Recovery against the system the same way: the legs in the week's last game against the
+//   system in the first game after it. Both sides are measured, each on its own game, with the
+//   familiarity and wear the practice and wear models give for each (projectFoci); the card opens only
+//   when each side wins its own game by WORTH_MIN, else the side that does goes in.
+// - the young players, for a team whose owner asks for their minutes (a youth goal) and is behind on
+//   them: the staff's rotation leaning to them for YOUTH_GAMES games, as an AI team's youth movement
+//   does (see youthLean.ts), the minutes it adds worked out from the rotation, what that does to the
+//   owner's goal from his grading, and its cost measured on the week's first game. Free (inside
+//   WORTH_MIN), it goes in; costing points, it's a card: the owner's goal against the wins.
+//   (Minutes also count in development, but only through a season's average crossing 15 or 25 a game
+//   for a player 25 or under: see progression.ts. A few weeks rarely moves that, so it isn't counted.)
+// One card a week at most: the practice's, else the young players'. Unanswered by the morning after it
+// opened, the staff goes with its lean (each card says which and why: the staff's read, not a
+// measurement). The practice it put in comes out at the week's end; the young players' lean at its
+// last game.
+//
+// The measuring runs before any sim decides to stop (simCore.ts's runSim: in the worker, on a budget,
+// see callMeasure.ts), so long sims and short ones make the same picks and no card appears to vanish.
+// Nothing here draws from the league's random stream.
 //
 // Not calls, because the engine says there's nothing to choose: resting a star on a back-to-back, a
 // minutes cap, recovery in most weeks. Wear only costs over 40 (wearPerf), and over a simulated season
 // a rotation's minutes-weighted wear stayed under 10 (its most-worn player under 40) for a contender,
 // a middle team and a bad one, while a night off for a star measured about −9 points that night
 // (Gilgeous-Alexander, 2027). A call whose honest answer is always "play him" isn't a choice.
-import type { Familiarity, League, Player, PrepFocus, ScheduledGame } from '../types';
+import type { Familiarity, GamePlan, League, Player, PrepFocus, Rotation, ScheduledGame } from '../types';
 import { curTeamSeason, fmtDate, teamPlayers } from './helpers';
 import { PREP_META, freshFamiliarity, practiceDay } from '../sim/familiarity';
 import { systemFamiliarity } from './practice';
 import { billingsFor } from '../analysis/gameStory';
-import { setPlanItem } from './gamePlans';
+import { itemGroup, planFor, planMade, setPlanItem } from './gamePlans';
 import { guideOpen } from './agenda';
-import { worthFresh } from './calls';
-import type { LeagueChange } from '../ai/counterWorth';
+import { worthSig, type CallCard, type CallMeasure, type CallWorth } from './calls';
+import { WORTH_MIN, type LeagueChange } from '../ai/counterWorth';
+import { autoRotation } from '../ai/coachAI';
+import { benchTwoWays, ensureRotation, youthLean } from './games';
+import { currentGoals, goalResult, gradeGoal, YOUNG_AGE } from './ownerGoals';
+import { playerAge } from '../playerGen';
+import { winChance } from '../analysis/winProb';
 
 /** Days in a week of calls: week `w` of the regular season runs from day 7w to day 7w + 6. */
 export const WEEK_DAYS = 7;
 /**
- * System familiarity (the screens' figure) under which tactical drills for the week are a call: below
- * it the team plays a step slow on every possession (see FLUID in familiarity.ts), and a week of drills
- * moves it several points; above it, a week of drills moves it one or two.
+ * System familiarity (the screens' figure) under which tactical drills for the week are the staff's
+ * pick: below it the team plays a step slow on every possession (see FLUID in familiarity.ts), and a
+ * week of drills moves it several points; above it, a week of drills moves it one or two.
  */
 export const FAM_DRILL = 85;
 /**
- * The rotation's wear (minutes-weighted, 0-100) at which a heavy week makes recovery a call: wear
- * only costs over 40 (see wearPerf), and a recovery week takes about six points off every player.
+ * The rotation's wear (minutes-weighted, 0-100) at which a heavy week makes recovery worth weighing:
+ * wear only costs over 40 (see wearPerf), and a recovery week takes about six points off every player.
  */
 export const WEAR_HEAVY = 45;
 /** The user's games left in a week (or a back-to-back in it) that make it heavy. */
 export const HEAVY_GAMES = 4;
-/** The week's games whose counters the staff measures at most, the biggest first: one with no gain gives way to the next. */
-export const WEEK_GAMES = 2;
+/** The week's big games the staff measures counters for (the biggest: a sim measures on a budget). */
+export const WEEK_GAMES = 1;
+/** How far the staff's rotation leans to the young players when he says so (an AI team's youth movement, 0 to 1: see games.ts). */
+export const YOUTH_LEVEL = 0.75;
+/** Minutes a game the lean has to add for the young players (YOUNG_AGE or under) to be worth asking about. */
+export const YOUTH_ADD = 8;
+/** His games the young players' lean holds; turned down, his games before the staff asks again. */
+export const YOUTH_GAMES = 10;
+/**
+ * How many games the staff counts a better-drilled system for, against one night's prep or rest: the
+ * gap a week of drills makes closes as the games teach the system (each closes about a tenth of what's
+ * left, see GAME_GROW), so it pays for a couple of nights. Only the staff's lean reads it.
+ */
+const FAR_CARRY = 2;
 /** What the staff did on its own kept, newest last. */
 const PICKS_KEPT = 30;
 /** A season's day as the staff's calls read it (the wear models' daily recovery and a game's wear a minute: see season.ts and games.ts). */
 const DAILY_REST = 0.75;
 const WEAR_A_MINUTE = 0.06;
 
-export type WeekKind = 'game' | 'practice';
+export type WeekKind = 'game' | 'practice' | 'youth';
+/** What the week's card is about, when it has one. */
+export type WeekAsk = 'practice' | 'youth';
 
 /** One of the week's big games: its id, the opponent, its billing tag, and whether the opponent is one of the league's best. */
 export interface WeekGame {
@@ -66,23 +101,38 @@ export interface WeekGame {
   top?: boolean;
 }
 
+/** A practice put in for the week: each focus through its day, then `from` again. */
+export interface PracticeHold {
+  steps: [PrepFocus, number][];
+  from: PrepFocus;
+}
+
 /** The week's call, planned on its first morning (League.weekCall). */
 export interface WeekCall {
   season: number;
   week: number;
   /** The user's team it was planned for (a coach who changes jobs mid-week starts the new team's week fresh). */
   tid: number;
-  /** The day it was planned (a card's "unanswered" counts from it). */
+  /** The day it was planned. */
   day: number;
-  /** What it can be about, in the order the stakes rank them: the card is the first with a real choice left (see weekKind). */
+  /** What the staff looks at this week. */
   kinds: WeekKind[];
-  /** The week's big games, the biggest first (at most WEEK_GAMES): the card is about the first still with a real choice in it. */
+  /** The week's big game (at most WEEK_GAMES): its counter is measured. */
   games?: WeekGame[];
-  /** The practice the staff would hold for the week: the focus, the one it replaces, why, and the game its worth is measured on (the week's last). */
+  /** The practice the staff would hold for the week: the focus, the one it replaces, why, and the week's last game. */
   focus?: { to: PrepFocus; from: PrepFocus; why: 'drills' | 'recovery'; gid: number; opp: number };
-  /** How it was answered: the staff's option ('staff'), things kept as they were ('kept'), the staff's own pick ('auto'), or gone by unmeasured ('lapsed'). */
+  /** The young players' lean the staff would put in: the minutes a game it adds them, the game it's measured on, and its last day. */
+  youth?: { add: number; gid: number; opp: number; until: number };
+  /** The staff has made its picks: what's best on every count went in, and a choice left opened the card (`ask`). */
+  decided?: boolean;
+  /** What the card is about, and the day it opened. */
+  ask?: WeekAsk;
+  asked?: number;
+  /** How the card was answered: the staff's option ('staff'), the other one ('kept'), the staff's lean unanswered ('auto'), or gone by ('lapsed'). */
   taken?: 'staff' | 'kept' | 'auto' | 'lapsed';
-  /** The practice focus it put in, to come out at the week's end. */
+  /** The practice the staff put in (and how it goes on), to come out at the week's end. */
+  hold?: PracticeHold;
+  /** The practice focus in place from it now (one he changes is his). */
   set?: PrepFocus;
 }
 
@@ -91,7 +141,7 @@ export interface StaffPick {
   season: number;
   day: number;
   text: string;
-  /** A call that went by in a sim without being measured (nothing changed): the digest counts these in one line. */
+  /** A week's big game that was played before the staff could measure it (nothing changed): the digest counts these in one line. */
   lapsed?: boolean;
 }
 
@@ -102,8 +152,10 @@ export function weekOf(league: League, day = league.day): number | null {
 
 /** The week's call's id. */
 export const weekId = (season: number, week: number) => `week:${season}:${week}`;
-/** Whether a call id is a weekly call's (a long sim passes them: see runSim). */
+/** Whether a call id is a weekly call's. */
 export const isWeekId = (id: string) => id.startsWith('week:');
+/** The last day of a week. */
+const weekEnd = (wc: Pick<WeekCall, 'week'>) => wc.week * WEEK_DAYS + WEEK_DAYS - 1;
 
 /** The user's regular-season games still to play from `from` through `to`, in order. */
 function gamesIn(league: League, from: number, to: number): ScheduledGame[] {
@@ -136,13 +188,14 @@ function rotationWear(players: Pick<Player, 'pid' | 'wear'>[], minutes: Record<n
 }
 
 /**
- * The week's big games, the biggest first: by billing (a rivalry, a showdown, Christmas, a revenge
- * game), then by the opponent's record; only each opponent's next meeting (what its counters are
- * measured for); at most WEEK_GAMES.
+ * The week's big games, the biggest first: billed ones (a rivalry, a showdown, Christmas, a revenge
+ * game), by their billing and then the opponent's record; only each opponent's next meeting (what its
+ * counters are measured for); at most WEEK_GAMES. A week without a billed night has none: the staff's
+ * plan for an ordinary night is its playbook. (Measuring every week's strongest opponent as well
+ * doubled a season's sim time for about a third of a win.)
  */
 function bigGames(league: League, games: ScheduledGame[]): WeekGame[] {
   const seen = new Set<number>();
-  // the league's best by record: the top six, once each has ten games behind it, are one of the league's best
   const order = league.teams.map((t) => t.tid).sort((a, b) => winShare(league, b) - winShare(league, a));
   const played = (tid: number) => curTeamSeason(league, tid).won + curTeamSeason(league, tid).lost;
   const top = new Set(order.slice(0, 6).filter((tid) => played(tid) >= 10));
@@ -153,6 +206,7 @@ function bigGames(league: League, games: ScheduledGame[]): WeekGame[] {
     seen.add(opp);
     const b = billingsFor(league, g)[0];
     const weight = b && b.weight >= 2 ? b.weight : 0;
+    if (!weight) continue;
     ranked.push({ g, weight, tag: weight ? b!.tag : undefined, share: winShare(league, opp) });
   }
   return ranked
@@ -166,8 +220,8 @@ function bigGames(league: League, games: ScheduledGame[]): WeekGame[] {
 
 /**
  * The practice the staff would hold this week: tactical drills while the system is under FAM_DRILL;
- * with it known, recovery for a heavy week (HEAVY_GAMES or a back-to-back) on worn legs (WEAR_HEAVY);
- * only in place of the everyday balance (a focus he picked is his), and with a game left to measure it on.
+ * recovery for a heavy week (HEAVY_GAMES or a back-to-back) on worn legs (WEAR_HEAVY); only in place
+ * of the everyday balance (a focus he picked is his), and with a game left to measure it on.
  */
 function weekPractice(league: League, games: ScheduledGame[]): WeekCall['focus'] | undefined {
   const last = games.at(-1);
@@ -175,20 +229,93 @@ function weekPractice(league: League, games: ScheduledGame[]): WeekCall['focus']
   const me = league.userTid;
   const team = league.teams[me];
   const from = team.prep ?? 'balanced';
-  // (a focus he picked himself is his: the staff only proposes one in place of the everyday balance)
   if (from !== 'balanced') return undefined;
   const fam = systemFamiliarity(league, me).overall;
   const b2b = games.some((g, i) => i > 0 && g.day - games[i - 1].day === 1);
   const heavy = games.length >= HEAVY_GAMES || b2b;
-  const to: PrepFocus | null = fam < FAM_DRILL ? 'system' : heavy && rotationWear(teamPlayers(league, me), team.rotation.minutes) >= WEAR_HEAVY ? 'recovery' : null;
+  const worn = heavy && rotationWear(teamPlayers(league, me), team.rotation.minutes) >= WEAR_HEAVY;
+  const to: PrepFocus | null = worn ? 'recovery' : fam < FAM_DRILL ? 'system' : null;
   if (!to) return undefined;
   return { to, from, why: to === 'system' ? 'drills' : 'recovery', gid: last.gid, opp: oppOf(league, last) };
 }
 
+// ---------------------------------------------------------------- the young players
+
+/** The user's healthy players, as his staff's rotation would plan them. */
+const healthy = (league: League) => teamPlayers(league, league.userTid);
+
+/** The staff's rotation for the user's team with the young players' lean at `level` (as games.ts's ensureRotation plans it). */
+export function leanedRotation(league: League, level: number): Rotation {
+  const players = healthy(league);
+  const rot = autoRotation(players, league.teams[league.userTid].rotation, { lean: (p) => level * youthLean(playerAge(p, league.season)), maxMinutes: 38 - 8 * level });
+  if (level < 1) benchTwoWays(rot, players);
+  return rot;
+}
+
+/** Minutes a game a rotation gives the players the owner's youth goal counts (YOUNG_AGE or under). */
+function youngPerGame(league: League, rot: Pick<Rotation, 'minutes'>): number {
+  return healthy(league)
+    .filter((p) => playerAge(p, league.season) <= YOUNG_AGE && !(p.injury && p.injury.gamesRemaining > 0))
+    .reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+}
+
+/** His regular-season games left. */
+const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid)).length;
+
 /**
- * The week's call as the staff plans it on the week's first morning (pure: nothing stored). None in
- * the first week of a new coach's first season while the guide is open (its checklist plans the
- * opener), or in a week with no games of his left.
+ * The owner's youth goal as the young players' lean would move it: his minutes so far, where they're
+ * on pace for with the rotation as it is and with the lean for YOUTH_GAMES games, and his grade on the
+ * goal each way (−1..1); null without such a goal.
+ */
+export function youthOutlook(league: League, add: number) {
+  const og = currentGoals(league);
+  const g = og?.goals.find((x) => x.kind === 'youth');
+  if (!og || !g) return null;
+  const now = goalResult(league, og, g);
+  const left = gamesLeft(league);
+  const base = Math.round(now + youngPerGame(league, league.teams[league.userTid].rotation) * left);
+  const lean = Math.round(base + add * Math.min(YOUTH_GAMES, left));
+  return { og, g, now, base, lean, grade: [gradeGoal(league, og, g, base), gradeGoal(league, og, g, lean)] as const };
+}
+
+/**
+ * The young players' lean the staff would put in this week: for a team whose owner has a youth goal
+ * it's on pace to miss, with the staff running the rotation, nothing leaning already and no "no" from
+ * him in the last YOUTH_GAMES games, when the lean adds YOUTH_ADD minutes a game or more.
+ */
+function weekYouth(league: League, games: ScheduledGame[]): WeekCall['youth'] | undefined {
+  const me = league.userTid;
+  const first = games[0];
+  if (!first || league.teams[me].rotation.manual) return undefined;
+  const y = league.youthLean;
+  if (y && y.season === league.season && y.tid === me && league.day <= y.until) return undefined;
+  const add = Math.round(youngPerGame(league, leanedRotation(league, YOUTH_LEVEL)) - youngPerGame(league, league.teams[me].rotation));
+  if (add < YOUTH_ADD) return undefined;
+  const o = youthOutlook(league, add);
+  if (!o || o.base >= o.g.target) return undefined;
+  return { add, gid: first.gid, opp: oppOf(league, first), until: youthUntil(league) };
+}
+
+/** The day of his YOUTH_GAMES-th game from today (or his last). */
+function youthUntil(league: League): number {
+  const ahead = gamesIn(league, league.day, Infinity);
+  return (ahead[YOUTH_GAMES - 1] ?? ahead.at(-1))?.day ?? league.day;
+}
+
+/** Put the young players' lean in (his answer, or the staff's own pick), or note his "no" so it isn't asked again for a while. */
+function putYouth(league: League, how: 'staff' | 'auto' | 'kept') {
+  const until = youthUntil(league);
+  league.youthLean = { season: league.season, tid: league.userTid, from: league.day, until, level: how === 'kept' ? 0 : YOUTH_LEVEL, how };
+  // (in from tonight: the staff's rotation is otherwise planned again each morning)
+  if (how !== 'kept' && !league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
+}
+
+// ---------------------------------------------------------------- planning the week
+
+/**
+ * The week as the staff plans it on its first morning (pure: nothing stored). None in the first week
+ * of a new coach's first season while the guide is open (its checklist plans the opener), or in a
+ * week with no games of his left.
  */
 export function planWeek(league: League, week: number): WeekCall {
   const call: WeekCall = { season: league.season, week, tid: league.userTid, day: league.day, kinds: [] };
@@ -197,11 +324,11 @@ export function planWeek(league: League, week: number): WeekCall {
   if (!games.length) return call;
   const big = bigGames(league, games);
   const focus = weekPractice(league, games);
+  const youth = weekYouth(league, games);
   if (big.length) call.games = big;
   if (focus) call.focus = focus;
-  // the stakes: a billed big game first; else the practice when it's called for; the counters for the strongest opponent after
-  const billed = !!big[0]?.tag;
-  call.kinds = [...(billed ? (['game'] as const) : []), ...(focus ? (['practice'] as const) : []), ...(big.length && !billed ? (['game'] as const) : [])];
+  if (youth) call.youth = youth;
+  call.kinds = [...(big.length ? (['game'] as const) : []), ...(focus ? (['practice'] as const) : []), ...(youth ? (['youth'] as const) : [])];
   return call;
 }
 
@@ -213,123 +340,456 @@ export function currentWeek(league: League): WeekCall | null {
   return wc && wc.season === league.season && wc.week === w && wc.tid === league.userTid ? wc : planWeek(league, w);
 }
 
-/** Where the measurement for a kind of the week's call is kept (see calls.ts's storeWorth): a game's by its id. */
-export const weekWorthId = (wc: Pick<WeekCall, 'season' | 'week'>, kind: WeekKind, gid?: number) => `${weekId(wc.season, wc.week)}|${kind}${gid !== undefined ? `:${gid}` : ''}`;
+/** Where the measurement for a part of the week's call is kept (see calls.ts's storeWorth): a game's by its id. */
+export const weekWorthId = (wc: Pick<WeekCall, 'season' | 'week'>, kind: WeekKind | 'near' | 'far', gid?: number) =>
+  `${weekId(wc.season, wc.week)}|${kind}${gid !== undefined ? `:${gid}` : ''}`;
 
-/**
- * The big game the week's card is about: the first of them whose counters haven't measured as no gain
- * (unless his plan for them changed since: then it's measured again), or null once that one is played
- * (the call came and went with it).
- */
-export function weekGame(league: League, wc: WeekCall): WeekGame | null {
-  const x = gameOf(league, wc);
-  return x && !x.gone ? x.wg : null;
+/** The week's call stored for this week and this team (the one a sim works on), if it is. */
+function storedWeek(league: League): WeekCall | null {
+  const w = weekOf(league);
+  const wc = league.weekCall;
+  return w !== null && !league.fired && wc && wc.season === league.season && wc.week === w && wc.tid === league.userTid ? wc : null;
 }
 
-/** The week's game as weekGame finds it, `gone` once it was played (the week's call came and went with it: the practice doesn't take its place). */
-function gameOf(league: League, wc: WeekCall): { wg: WeekGame; gone: boolean } | null {
-  for (const wg of wc.games ?? []) {
-    const g = league.schedule.find((x) => x.gid === wg.gid);
-    if (!g) continue;
-    // (measured as no gain: passed over, played or not)
-    const w = league.callWorth?.[weekWorthId(wc, 'game', wg.gid)];
-    if (w && !w.items?.length && w.gid === g.gid && (g.played || worthFresh(league, w, wg.opp, g))) continue;
-    return { wg, gone: !!g.played };
-  }
-  return null;
-}
-
-/**
- * The kind the week's card is about: the first of its kinds still with a real choice in it (the
- * games: one left whose counters haven't measured as no gain; the practice: its game still to play
- * and the focus not in place already), or null.
- */
-export function weekKind(league: League, wc: WeekCall): WeekKind | null {
-  if (wc.taken) return null;
-  const me = league.teams[league.userTid];
-  for (const k of wc.kinds ?? []) {
-    if (k === 'game') {
-      const x = gameOf(league, wc);
-      if (x?.gone) return null;
-      if (x) return k;
-      continue;
-    }
-    if (k === 'practice') {
-      const g = wc.focus && league.schedule.find((x) => x.gid === wc.focus!.gid);
-      if (!g || g.played || (me.prep ?? 'balanced') === wc.focus!.to) continue;
-      return k;
-    }
-  }
-  return null;
-}
-
-/** The week's call's id when its card is open now (what a sim checks each day: cheap). */
-export function openWeekId(league: League): string | null {
-  const wc = currentWeek(league);
-  return wc && wc.kinds?.length && !league.callsDone?.includes(weekId(wc.season, wc.week)) && weekKind(league, wc) ? weekId(wc.season, wc.week) : null;
-}
+const done = (league: League, wc: WeekCall) => !!league.callsDone?.includes(weekId(wc.season, wc.week));
 
 // ---------------------------------------------------------------- the practice, worked out
 
-/** The team as it will stand on the morning of day `to` with `focus` held until then: its familiarity and each player's wear. */
-export function projectPractice(league: League, focus: PrepFocus, to: number): { fam: Familiarity; wear: Record<number, number> } {
+/**
+ * The team as it will stand on the morning of day `to` with its practice at each step's focus through
+ * that step's day (then `rest` after them): its familiarity and each player's wear.
+ */
+export function projectFoci(league: League, steps: [PrepFocus, number][], rest: PrepFocus, to: number): { fam: Familiarity; wear: Record<number, number> } {
   const me = league.userTid;
   const team = league.teams[me];
   const roster = teamPlayers(league, me);
-  const t = { ...team, prep: focus, fam: structuredClone(team.fam ?? freshFamiliarity(team, roster)) };
+  const t = { ...team, prep: rest, fam: structuredClone(team.fam ?? freshFamiliarity(team, roster)) };
   const wear: Record<number, number> = {};
   for (const p of roster) wear[p.pid] = p.wear;
   const playing = new Set(league.schedule.filter((g) => g.day >= league.day && g.day < to && (g.home === me || g.away === me)).map((g) => g.day));
-  const rest = PREP_META[focus].rest;
   const load = team.practice === 'intense' ? 1.15 : team.practice === 'light' ? 0.9 : 1;
   for (let d = league.day; d < to; d++) {
-    // a game day's minutes (the rotation's plan), else a practice at the focus; the focus's rest and the day's every day
+    t.prep = steps.find(([, through]) => d <= through)?.[0] ?? rest;
+    // a game day's minutes (the rotation's plan), else a practice at the day's focus; the focus's rest and the day's every day
     if (playing.has(d)) for (const p of roster) wear[p.pid] = Math.min(100, wear[p.pid] + (team.rotation.minutes[p.pid] ?? 0) * WEAR_A_MINUTE * load);
     else practiceDay(t, roster);
-    for (const p of roster) wear[p.pid] = Math.max(0, wear[p.pid] - rest - DAILY_REST);
+    for (const p of roster) wear[p.pid] = Math.max(0, wear[p.pid] - PREP_META[t.prep].rest - DAILY_REST);
   }
   return { fam: t.fam, wear };
 }
 
-/** The latest practiceOutlook, by league and what it read (the Continue bar draws the agenda on every render). */
-const outlooks = new WeakMap<League, { key: string; value: ReturnType<typeof workOutlook> }>();
-
-/**
- * The week's practice as the staff works it out: the team on the morning of the game it's measured on
- * with the focus it has and with the staff's (exact, from the models), and the two as changes for
- * measureChanges: `base` laid over the league, `change` measured against it.
- */
-export function practiceOutlook(league: League, f: NonNullable<WeekCall['focus']>) {
-  const key = `${league.season}|${league.day}|${league.games.length}|${league.userTid}|${f.gid}|${f.to}|${f.from}`;
-  const hit = outlooks.get(league);
-  if (hit?.key === key) return hit.value;
-  const value = workOutlook(league, f);
-  outlooks.set(league, { key, value });
-  return value;
+/** The team as it stands on the morning of day `to` with `focus` held until then (the week's practice card's figures). */
+export function projectPractice(league: League, focus: PrepFocus, to: number) {
+  return projectFoci(league, [[focus, to]], focus, to);
 }
 
-function workOutlook(league: League, f: NonNullable<WeekCall['focus']>) {
+/**
+ * The week's practice choice when it is one to weigh: `near` wins the near game (opponent prep for the
+ * week's big game, its counter drilled; or recovery for the week's last game), `far` the first game
+ * after it (drills, or the everyday balance against recovery), each as steps through the week.
+ */
+export interface PracticeTrade {
+  why: 'prep' | 'recovery';
+  from: PrepFocus;
+  near: PracticeHold;
+  far: PracticeHold;
+  gNear: ScheduledGame;
+  oppNear: number;
+  gFar: ScheduledGame;
+  oppFar: number;
+  /** The plan for the near game with the staff's counter in it (opponent prep drills it). */
+  plan?: GamePlan;
+}
+
+function practiceTrade(league: League, wc: WeekCall): PracticeTrade | null {
+  const f = wc.focus;
+  if (!f) return null;
   const me = league.userTid;
-  const g = league.schedule.find((x) => x.gid === f.gid)!;
-  const roster = teamPlayers(league, me);
-  const minutes = league.teams[me].rotation.minutes;
-  const side = (focus: PrepFocus, id: string) => {
-    const p = projectPractice(league, focus, g.day);
-    const change: LeagueChange = { id, teams: { [me]: { fam: p.fam, prep: focus } }, players: Object.fromEntries(roster.map((x) => [x.pid, { wear: p.wear[x.pid] }])) };
-    return { change, wear: rotationWear(roster, minutes, p.wear) };
-  };
-  const a = side(f.from, 'base');
-  const b = side(f.to, 'focus');
-  const fam = (c: LeagueChange) => systemFamiliarity({ ...league, teams: league.teams.map((t) => (t.tid === me ? { ...t, ...c.teams![me] } : t)) }, me).overall;
+  const end = weekEnd(wc);
+  const after = (day: number) => gamesIn(league, day + 1, Infinity)[0];
+  if (f.why === 'recovery') {
+    const gNear = league.schedule.find((x) => x.gid === f.gid);
+    const gFar = gNear && after(gNear.day);
+    if (!gNear || gNear.played || !gFar) return null;
+    const short = systemFamiliarity(league, me).overall < FAM_DRILL;
+    return {
+      why: 'recovery',
+      from: f.from,
+      near: { steps: [['recovery', end]], from: f.from },
+      far: { steps: short ? [['system', end]] : [], from: f.from },
+      gNear,
+      oppNear: f.opp,
+      gFar,
+      oppFar: oppOf(league, gFar),
+    };
+  }
+  // drills: a choice only against prep for a big game whose counter measured as a gain
+  const wg = wc.games?.[0];
+  const gNear = wg && league.schedule.find((x) => x.gid === wg.gid);
+  const item = wg && league.callWorth?.[weekWorthId(wc, 'game', wg.gid)]?.items?.[0];
+  const gFar = gNear && after(gNear.day);
+  if (!wg || !gNear || gNear.played || !item || !gFar) return null;
+  const plan = planFor(league, wg.opp, gNear);
+  const items = [...(plan?.items ?? []).filter((x) => itemGroup(x) !== itemGroup(item)), item];
   return {
-    g,
-    base: a.change,
-    change: b.change,
-    fam: [fam(a.change), fam(b.change)] as const,
-    wear: [a.wear, b.wear] as const,
-    now: systemFamiliarity(league, me).overall,
-    wearNow: rotationWear(roster, minutes),
+    why: 'prep',
+    from: f.from,
+    near: {
+      steps: [
+        ['opponent', gNear.day],
+        ['system', end],
+      ],
+      from: f.from,
+    },
+    far: { steps: [['system', end]], from: f.from },
+    gNear,
+    oppNear: wg.opp,
+    gFar,
+    oppFar: oppOf(league, gFar),
+    plan: { ...plan, oppTid: wg.opp, items, scope: plan?.scope ?? 'next' },
   };
+}
+
+/** A practice hold as a change for measureChanges: the team as it will stand on game `g`'s morning, its practice that day as the steps have it. */
+function holdChange(league: League, h: PracticeHold, g: ScheduledGame, id: string, plan?: GamePlan, opp?: number): LeagueChange {
+  const me = league.userTid;
+  const p = projectFoci(league, h.steps, h.from, g.day);
+  const prep = h.steps.find(([, through]) => g.day <= through)?.[0] ?? h.from;
+  return {
+    id,
+    teams: { [me]: { fam: p.fam, prep } },
+    players: Object.fromEntries(teamPlayers(league, me).map((x) => [x.pid, { wear: p.wear[x.pid] }])),
+    ...(plan && opp !== undefined ? { gamePlans: { [opp]: plan } } : {}),
+  };
+}
+
+/** The system's familiarity and the rotation's wear on game `g`'s morning under a hold (the card's figures). */
+function holdFigures(league: League, h: PracticeHold, g: ScheduledGame) {
+  const me = league.userTid;
+  const p = projectFoci(league, h.steps, h.from, g.day);
+  const team = league.teams[me];
+  const fam = systemFamiliarity({ ...league, teams: league.teams.map((t) => (t.tid === me ? { ...t, fam: p.fam } : t)) }, me).overall;
+  return { fam: Math.round(fam), wear: Math.round(rotationWear(teamPlayers(league, me), team.rotation.minutes, p.wear)) };
+}
+
+/** Put a practice in for the week (his answer or the staff's pick): today's step now, the rest each morning (stepPractice). */
+function holdPractice(league: League, wc: WeekCall, h: PracticeHold) {
+  wc.hold = h;
+  const team = league.teams[league.userTid];
+  const want = h.steps.find(([, through]) => league.day <= through)?.[0] ?? h.from;
+  team.prep = want;
+  wc.set = want;
+}
+
+/** The practice in place is the one the week's call put in (his answer or the staff's own pick), until it comes out at the week's end. */
+export function weekHolds(league: League): boolean {
+  const wc = storedWeek(league);
+  return !!wc?.hold && !!wc.set && league.teams[league.userTid].prep === wc.set;
+}
+
+/** Each morning: the practice the staff put in moves to the day's step, unless he has changed it since (then it's his). */
+function stepPractice(league: League, wc: WeekCall) {
+  const team = league.teams[league.userTid];
+  if (!wc.hold || !wc.set || team.prep !== wc.set) return;
+  const want = wc.hold.steps.find(([, through]) => league.day <= through)?.[0] ?? wc.hold.from;
+  if (want === wc.set) return;
+  team.prep = want;
+  wc.set = want;
+}
+
+// ---------------------------------------------------------------- what's still to measure, and the picks
+
+/** A measurement stands for game `gid` (the week's are taken once: the staff decides on them that morning). */
+const kept = (league: League, key: string, gid: number): CallWorth | null => {
+  const w = league.callWorth?.[key];
+  return w && w.gid === gid ? w : null;
+};
+
+/**
+ * What the week's picks still wait on: the big game's counters first (opponent prep is only weighed
+ * for a gain), then the practice's two sides, then the young players' lean. Empty once the week is
+ * decided (or there's nothing to decide).
+ */
+export function weekNeeds(league: League): CallMeasure[] {
+  const wc = storedWeek(league);
+  if (!wc || wc.decided || wc.taken || done(league, wc)) return [];
+  const me = league.userTid;
+  const wg = wc.games?.[0];
+  const g = wg && league.schedule.find((x) => x.gid === wg.gid);
+  // (a plan he has for them already is his answer: the staff doesn't touch it)
+  const his = wg && g ? planFor(league, wg.opp, g) : undefined;
+  if (wg && g && !g.played && !(his && planMade(his))) {
+    const key = weekWorthId(wc, 'game', wg.gid);
+    if (!kept(league, key, g.gid)) return [{ kind: 'counters', key, opp: wg.opp, gid: g.gid, sig: worthSig(league, wg.opp, g), max: 1 }];
+  }
+  const out: CallMeasure[] = [];
+  const tr = practiceTrade(league, wc);
+  if (tr) {
+    const near = weekWorthId(wc, 'near', tr.gNear.gid);
+    const far = weekWorthId(wc, 'far', tr.gFar.gid);
+    if (!kept(league, near, tr.gNear.gid))
+      out.push({
+        kind: 'change',
+        key: near,
+        opp: tr.oppNear,
+        gid: tr.gNear.gid,
+        sig: worthSig(league, tr.oppNear, tr.gNear, 'near'),
+        base: holdChange(league, tr.far, tr.gNear, 'far', tr.plan, tr.oppNear),
+        change: holdChange(league, tr.near, tr.gNear, 'near', tr.plan, tr.oppNear),
+      });
+    if (!kept(league, far, tr.gFar.gid))
+      out.push({
+        kind: 'change',
+        key: far,
+        opp: tr.oppFar,
+        gid: tr.gFar.gid,
+        sig: worthSig(league, tr.oppFar, tr.gFar, 'far'),
+        base: holdChange(league, tr.near, tr.gFar, 'near'),
+        change: holdChange(league, tr.far, tr.gFar, 'far'),
+      });
+  }
+  const y = wc.youth;
+  const yg = y && league.schedule.find((x) => x.gid === y.gid);
+  if (y && yg && !yg.played && !kept(league, weekWorthId(wc, 'youth'), yg.gid))
+    out.push({
+      kind: 'change',
+      key: weekWorthId(wc, 'youth'),
+      opp: y.opp,
+      gid: yg.gid,
+      sig: worthSig(league, y.opp, yg, 'youth'),
+      change: { id: 'youth', teams: { [me]: { rotation: leanedRotation(league, YOUTH_LEVEL) } } },
+    });
+  return out;
+}
+
+/** "+1.4", "−0.3". */
+const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+
+/** A measured worth in a game as the cards say it: "+1.2 pts (≈ +4% to win)", or inside brackets "+1.2 pts, ≈ +4% to win". */
+export function ptsWin(pts: number, inner = false): string {
+  const w = Math.round((winChance(pts) - 0.5) * 100);
+  const win = `≈ ${w > 0 ? '+' : '−'}${Math.abs(w)}% to win`;
+  return `${signed(pts)} pts${w ? (inner ? `, ${win}` : ` (${win})`) : ''}`;
+}
+
+/** Wins over `games` games at `pts` a game: what a measured worth comes to. */
+export const winsOf = (pts: number, games: number) => games * (winChance(pts) - 0.5);
+
+/** The practice's two measured sides: what `near` wins its game by, and `far` its. */
+function tradeWorth(league: League, wc: WeekCall, tr: PracticeTrade) {
+  const near = kept(league, weekWorthId(wc, 'near', tr.gNear.gid), tr.gNear.gid)?.pts;
+  const far = kept(league, weekWorthId(wc, 'far', tr.gFar.gid), tr.gFar.gid)?.pts;
+  return near === undefined || far === undefined ? null : { near, far };
+}
+
+/** The practice the staff leans to when each side wins its own game: the near game's edge against the far one's, counted for FAR_CARRY games. */
+const practiceLean = (w: { near: number; far: number }) => (w.near >= w.far * FAR_CARRY ? 'near' : 'far');
+
+/** The young players' lean as the owner's grading reads it: what it adds on his youth goal against what its cost in wins takes off his wins goal (weighted as he weighs them). */
+function youthLeans(league: League, add: number, pts: number): boolean {
+  const o = youthOutlook(league, add);
+  if (!o) return false;
+  const gain = (o.grade[1] - o.grade[0]) * o.g.weight;
+  const wins = o.og.goals.find((x) => x.kind === 'wins');
+  const lost = -winsOf(pts, Math.min(YOUTH_GAMES, gamesLeft(league)));
+  const cost = wins ? (gradeGoal(league, o.og, wins, wins.target) - gradeGoal(league, o.og, wins, wins.target - lost)) * wins.weight : 0;
+  return gain >= cost;
+}
+
+const label = (f: PrepFocus) => PREP_META[f].label;
+
+/** Words for a practice put in: "Tactical drills through Sunday", "Opponent prep through Friday, then Tactical drills". */
+function holdText(league: League, h: PracticeHold): string {
+  const day = (d: number) => fmtDate(league.season, d, { weekday: 'long' });
+  return h.steps.map(([f, through], i) => (i ? `then ${label(f)} through ${day(through)}` : `${label(f)} through ${day(through)}`)).join(', ');
+}
+
+/**
+ * The staff's picks for the week, once what they wait on is measured (weekNeeds empty): the big game's
+ * counter in if it measured as a gain; the practice side that wins (drills on their own); the young
+ * players' lean if it costs nothing measurable. A practice whose sides each win their own game, or a
+ * lean that costs points, is a choice: the card opens (one a week, the practice's first).
+ */
+export function weekDecide(league: League) {
+  const wc = storedWeek(league);
+  if (!wc || wc.decided || wc.taken || done(league, wc) || weekNeeds(league).length) return;
+  wc.decided = true;
+  const wg = wc.games?.[0];
+  const g = wg && league.schedule.find((x) => x.gid === wg.gid);
+  const item = wg && g && !g.played ? kept(league, weekWorthId(wc, 'game', wg.gid), g.gid)?.items?.[0] : undefined;
+  if (wg && g && item) {
+    setPlanItem(league, wg.opp, item);
+    notePick(
+      league,
+      `${wg.tag ? `${wg.tag} ` : ''}${vsAt(league, g)} ${whenText(league, g.day)}: the staff put in ${item.label}, ${ptsWin(item.pts ?? 0)} against them (measured).`,
+    );
+  }
+  const tr = practiceTrade(league, wc);
+  const tw = tr && tradeWorth(league, wc, tr);
+  if (tr && tw && tw.near >= WORTH_MIN && tw.far >= WORTH_MIN) {
+    wc.ask = 'practice';
+  } else if (tr && tw && tw.near >= WORTH_MIN) {
+    holdPractice(league, wc, tr.near);
+    notePick(
+      league,
+      `Practice: ${holdText(league, tr.near)} (${ptsWin(tw.near, true)} ${vsAt(league, tr.gNear)} ${whenText(league, tr.gNear.day)}, measured; nothing measurable lost after it).`,
+    );
+  } else if (wc.focus?.why === 'drills' || (tr && tr.far.steps.length)) {
+    // drills build the system twice as fast as the balance at no cost to the legs: the staff's to put in
+    const h: PracticeHold = tr?.far.steps.length ? tr.far : { steps: [['system', weekEnd(wc)]], from: wc.focus!.from };
+    const now = Math.round(systemFamiliarity(league, league.userTid).overall);
+    holdPractice(league, wc, h);
+    notePick(league, `Practice: ${holdText(league, h)} (the system at ${now}%, building twice as fast as at Balanced).`);
+  }
+  const y = wc.youth;
+  const yw = y && kept(league, weekWorthId(wc, 'youth'), y.gid);
+  if (y && yw && yw.pts !== undefined) {
+    if (yw.pts <= -WORTH_MIN) {
+      if (!wc.ask) wc.ask = 'youth';
+    } else {
+      putYouth(league, 'auto');
+      const o = youthOutlook(league, y.add);
+      notePick(
+        league,
+        `The young players: about ${y.add} more minutes a game until ${fmtDate(league.season, league.youthLean!.until)}, for the owner's goal${o ? ` (on pace for ${o.lean.toLocaleString('en-US')} of his ${o.g.target.toLocaleString('en-US')} minutes, ${o.base.toLocaleString('en-US')} without)` : ''}; ${yw.pts >= WORTH_MIN ? `it measured as a gain (${ptsWin(yw.pts, true)})` : `it costs nothing measurable (${ptsWin(yw.pts, true)})`}.`,
+      );
+    }
+  }
+  if (wc.ask) wc.asked = league.day;
+}
+
+// ---------------------------------------------------------------- the card
+
+/** "vs BOS", "@ BOS". */
+export const vsAt = (league: League, g: Pick<ScheduledGame, 'home' | 'away'>) => `${g.home === league.userTid ? 'vs' : '@'} ${league.teams[oppOf(league, g)].abbrev}`;
+
+/** "Friday", or "tonight". */
+export const whenText = (league: League, day: number) => (day === league.day ? 'tonight' : `on ${fmtDate(league.season, day, { weekday: 'long' })}`);
+
+/** The week's card's id when it's open now (what a sim checks each day: cheap). */
+export function openWeekId(league: League): string | null {
+  const wc = storedWeek(league);
+  return wc && wc.decided && wc.ask && !wc.taken && !done(league, wc) ? weekId(wc.season, wc.week) : null;
+}
+
+/** What the week's card is about, if it's open (staffCalls draws it). */
+export function weekKind(league: League, wc: WeekCall | null = storedWeek(league)): WeekAsk | null {
+  return wc && wc.decided && wc.ask && !wc.taken && !done(league, wc) ? wc.ask : null;
+}
+
+/** The week's card (calls.ts's staffCalls draws it with the rest), when it's open. */
+export function weekCard(league: League): CallCard | null {
+  const wc = storedWeek(league);
+  const ask = wc && weekKind(league, wc);
+  if (!wc || !ask) return null;
+  const id = weekId(wc.season, wc.week);
+  const tomorrow = 'Unanswered, the staff goes with its lean tomorrow.';
+  if (ask === 'practice') {
+    const tr = practiceTrade(league, wc);
+    const tw = tr && tradeWorth(league, wc, tr);
+    if (!tr || !tw) return null;
+    const nearF = holdFigures(league, tr.near, tr.gNear);
+    const farF = holdFigures(league, tr.far, tr.gNear);
+    const nearL = holdFigures(league, tr.near, tr.gFar);
+    const farL = holdFigures(league, tr.far, tr.gFar);
+    const them = league.teams[tr.oppNear].abbrev;
+    const at = `${vsAt(league, tr.gNear)} ${whenText(league, tr.gNear.day)}`;
+    const later = `${vsAt(league, tr.gFar)} ${whenText(league, tr.gFar.day)}`;
+    const lean = practiceLean(tw);
+    const near: CallCard['suggestion'] = { label: tr.why === 'prep' ? `Prep for ${them}` : 'Recovery this week', action: { kind: 'weekPrep', id, focus: tr.near.steps[0][0] } };
+    const far: CallCard['suggestion'] = {
+      label: tr.far.steps.length ? 'Drill the system' : `Keep ${label(tr.from)}`,
+      action: tr.far.steps.length ? { kind: 'weekPrep', id, focus: tr.far.steps[0][0] } : { kind: 'settle', id },
+    };
+    const nearWhy =
+      tr.why === 'prep' ? `Prep: ${ptsWin(tw.near)} ${at}, the staff's counter drilled.` : `Recovery: ${ptsWin(tw.near)} ${at}, the legs at ${nearF.wear} not ${farF.wear}.`;
+    const farWhy = `${tr.far.steps.length ? 'Drills' : label(tr.from)}: ${ptsWin(tw.far)} ${later}, the system at ${farL.fam}% not ${nearL.fam}%.`;
+    const why = lean === 'near' ? `its edge ${tr.why === 'prep' ? 'against them' : 'that night'} is the bigger one` : 'the system pays for more than one night';
+    return {
+      id,
+      kind: 'week',
+      title: tr.why === 'prep' ? `Prep for ${them}, or drill the system?` : 'Rest the legs, or build the system?',
+      line: `${nearWhy} ${farWhy} Both measured. The staff leans ${lean === 'near' ? near.label.toLowerCase() : far.label.toLowerCase()}: ${why}. ${tomorrow}`,
+      tone: 'info',
+      to: '/team/tactics',
+      suggestion: lean === 'near' ? near : far,
+      choices: [lean === 'near' ? far : near],
+    };
+  }
+  const y = wc.youth!;
+  const yw = kept(league, weekWorthId(wc, 'youth'), y.gid);
+  const o = youthOutlook(league, y.add);
+  if (!yw || yw.pts === undefined || !o) return null;
+  const left = Math.min(YOUTH_GAMES, gamesLeft(league));
+  const lost = -winsOf(yw.pts, left);
+  const leans = youthLeans(league, y.add, yw.pts);
+  const play: CallCard['suggestion'] = { label: 'Play the young players', action: { kind: 'youthLean', id } };
+  const keep: CallCard['suggestion'] = { label: 'Keep the rotation', action: { kind: 'settle', id } };
+  const n = (x: number) => x.toLocaleString('en-US');
+  const at = vsAt(
+    league,
+    league.schedule.find((x) => x.gid === y.gid)!,
+  );
+  return {
+    id,
+    kind: 'week',
+    title: `${y.add} more minutes a game for the young players?`,
+    line: `It costs ${Math.abs(yw.pts).toFixed(1)} pts a game (≈ −${Math.round((0.5 - winChance(yw.pts)) * 100)}% to win, measured ${at}): about ${lost.toFixed(1)} wins over ${left} games. It adds ${n(o.lean - o.base)} of the owner's minutes: on pace for ${n(o.lean)} of his ${n(o.g.target)}, not ${n(o.base)}. The staff leans ${leans ? 'play them: the owner counts the minutes for more' : 'keep it: the owner counts the wins for more'}. ${tomorrow}`,
+    tone: 'info',
+    to: '/office/owner',
+    suggestion: leans ? play : keep,
+    choices: [leans ? keep : play],
+  };
+}
+
+/** The week's card answered (calls.ts's resolveCall): `focus` for a practice, `youth` for the young players' lean, nothing for things as they were. */
+export function answerWeek(league: League, a: { focus?: PrepFocus; youth?: boolean }): { ok: boolean; text: string } {
+  const wc = storedWeek(league);
+  const ask = wc && weekKind(league, wc);
+  if (!wc || !ask) return { ok: false, text: 'That week is over.' };
+  if (ask === 'practice' && a.focus) {
+    const tr = practiceTrade(league, wc);
+    const h = tr && (tr.near.steps[0]?.[0] === a.focus ? tr.near : tr.far);
+    if (!tr || !h) return { ok: false, text: 'That week is over.' };
+    holdPractice(league, wc, h);
+    wc.taken = practiceLean(tradeWorth(league, wc, tr) ?? { near: 0, far: 0 }) === (h === tr.near ? 'near' : 'far') ? 'staff' : 'kept';
+    return { ok: true, text: `Practice: ${holdText(league, h)}.` };
+  }
+  if (ask === 'youth' && a.youth) {
+    putYouth(league, 'staff');
+    wc.taken = 'staff';
+    return { ok: true, text: `The young players get their minutes until ${fmtDate(league.season, league.youthLean!.until)}.` };
+  }
+  if (ask === 'youth') putYouth(league, 'kept');
+  wc.taken = 'kept';
+  return { ok: true, text: '' };
+}
+
+/** The staff's lean on an open card, put in unanswered (weekDaily). */
+function takeLean(league: League, wc: WeekCall) {
+  if (wc.ask === 'practice') {
+    const tr = practiceTrade(league, wc);
+    const tw = tr && tradeWorth(league, wc, tr);
+    if (tr && tw) {
+      const h = practiceLean(tw) === 'near' ? tr.near : tr.far;
+      if (h.steps.length) holdPractice(league, wc, h);
+      notePick(
+        league,
+        `Practice: ${h.steps.length ? holdText(league, h) : `${label(tr.from)} kept`}, the staff's lean on a card you left (${ptsWin(practiceLean(tw) === 'near' ? tw.near : tw.far, true)} in its game, measured).`,
+      );
+    }
+  } else if (wc.ask === 'youth' && wc.youth) {
+    const yw = kept(league, weekWorthId(wc, 'youth'), wc.youth.gid);
+    const leans = !!yw && yw.pts !== undefined && youthLeans(league, wc.youth.add, yw.pts);
+    putYouth(league, leans ? 'auto' : 'kept');
+    notePick(
+      league,
+      leans
+        ? `The young players: about ${wc.youth.add} more minutes a game until ${fmtDate(league.season, league.youthLean!.until)}, the staff's lean on a card you left.`
+        : "The young players: the rotation kept, the staff's lean on a card you left.",
+    );
+  }
+  wc.taken = 'auto';
 }
 
 // ---------------------------------------------------------------- each morning
@@ -341,25 +801,12 @@ export function notePick(league: League, text: string, lapsed = false) {
   league.staffPicks = picks.slice(-PICKS_KEPT);
 }
 
-/** The practice focus a call puts in for the week (the card's choice, or the staff's own). */
-export function holdPractice(league: League, wc: WeekCall) {
-  const team = league.teams[league.userTid];
-  team.prep = wc.focus!.to;
-  wc.set = wc.focus!.to;
-}
-
-/** "vs BOS", "@ BOS". */
-export const vsAt = (league: League, g: Pick<ScheduledGame, 'home' | 'away'>) => `${g.home === league.userTid ? 'vs' : '@'} ${league.teams[oppOf(league, g)].abbrev}`;
-
-/** "Friday", or "tonight". */
-export const whenText = (league: League, day: number) => (day === league.day ? 'tonight' : `on ${fmtDate(league.season, day, { weekday: 'long' })}`);
-
 /**
  * Each morning of the season (callsDaily): a week that's over takes out the practice its call put in
- * (if it's still the focus) and the next week's call is planned; then a call still unanswered when it
- * matters is the staff's to make: the practice from the morning after the card opened, the counter on
- * game day if it was measured (a card measured is a card shown); a big game that came and went
- * unmeasured is noted as gone by, nothing changed.
+ * (if it's still the focus) and the next week is planned; the practice put in moves to the day's step;
+ * a card left unanswered past the morning after it opened is the staff's lean; a big game played
+ * before the staff could measure it (a live game the morning the week began) is noted as gone by.
+ * The picks themselves wait on the measuring (weekNeeds, weekDecide: a sim runs them each morning).
  */
 export function weekDaily(league: League) {
   if (league.fired) return;
@@ -367,58 +814,30 @@ export function weekDaily(league: League) {
   const old = league.weekCall;
   if (old && (w === null || old.season !== league.season || old.week !== w || old.tid !== league.userTid)) {
     const team = league.teams[old.tid ?? league.userTid];
-    if (old.set && team?.prep === old.set) team.prep = old.focus!.from;
+    if (old.set && team?.prep === old.set) team.prep = old.hold?.from ?? old.focus?.from ?? 'balanced';
     league.weekCall = undefined;
   }
   if (w === null) return;
   const wc = (league.weekCall ??= planWeek(league, w));
-  if (wc.taken || league.callsDone?.includes(weekId(wc.season, wc.week))) return;
-  const kind = weekKind(league, wc);
-  // its big game came and went unanswered (a sim ran past it, or it was played without a word): nothing changed
-  const at = !kind && wc.kinds?.includes('game') ? gameOf(league, wc) : null;
-  if (at?.gone) {
-    wc.taken = 'lapsed';
-    const g = league.schedule.find((x) => x.gid === at.wg.gid)!;
-    // (measured, its card was shown: he let it go; unmeasured, a sim ran past it)
-    const seen = !!league.callWorth?.[weekWorthId(wc, 'game', at.wg.gid)];
-    notePick(league, seen ? `${vsAt(league, g)}: the staff's counter went unanswered, and your plan stood.` : vsAt(league, g), !seen);
+  stepPractice(league, wc);
+  if (wc.taken || done(league, wc)) return;
+  if (!wc.decided) {
+    const wg = wc.games?.[0];
+    const g = wg && league.schedule.find((x) => x.gid === wg.gid);
+    if (wg && g?.played && !kept(league, weekWorthId(wc, 'game', wg.gid), g.gid)) {
+      // (the rest of the week is still the staff's to decide: without the game, nothing waits on it)
+      wc.games = [];
+      notePick(league, vsAt(league, g), true);
+    }
     return;
   }
-  if (kind === 'practice' && league.day > wc.day) {
-    const f = wc.focus!;
-    holdPractice(league, wc);
-    wc.taken = 'auto';
-    const why = f.why === 'drills' ? `the system was at ${Math.round(systemFamiliarity(league, league.userTid).overall)}%` : 'a heavy week on worn legs';
-    const m = league.callWorth?.[weekWorthId(wc, 'practice')];
-    const worth =
-      m && m.gid === f.gid && m.pts !== undefined
-        ? `measured at about ${m.pts >= 0 ? '+' : '−'}${Math.abs(m.pts).toFixed(1)} a game in the week's last game`
-        : 'its worth not measured';
-    notePick(league, `Practice: ${PREP_META[f.to].label} for the rest of the week (${why}; the staff's call, ${worth}).`);
-    return;
-  }
-  // the morning of the game, if the card was measured since it opened (one nobody has seen isn't the staff's to answer)
-  const wg = kind === 'game' && league.day > wc.day ? weekGame(league, wc) : null;
-  const g = wg && league.schedule.find((x) => x.gid === wg.gid);
-  if (!wg || !g || g.day !== league.day) return;
-  // measured on his plan as it was: a plan of his own since was his answer
-  const m = league.callWorth?.[weekWorthId(wc, 'game', wg.gid)];
-  if (!m) return;
-  const item = worthFresh(league, m, wg.opp, g) ? m.items?.[0] : undefined;
-  if (!item) {
-    wc.taken = 'kept';
-    return;
-  }
-  setPlanItem(league, wg.opp, item);
-  wc.taken = 'auto';
-  notePick(league, `${wg.tag ? `${wg.tag} ` : ''}${vsAt(league, g)}: the staff put in ${item.label}, measured at about +${(item.pts ?? 0).toFixed(1)} a game against them.`);
+  if (wc.ask && league.day > (wc.asked ?? wc.day)) takeLean(league, wc);
 }
 
 /**
  * What the staff did on its own in a sim that started on `day` of `season` (a digest's stretch), as
- * lines: each pick, then one line for the weekly calls that went by unmeasured (a sim doesn't stop to
- * measure them). A pick is made in a sim's mornings, so the one on the morning it started was the
- * sim before's.
+ * lines: each pick, then one line for the week's big games played before it could measure them. A
+ * pick is made in a sim's mornings, so the one on the morning it started was the sim before's.
  */
 export function staffPicksSince(league: League, season: number, day: number): string[] {
   const picks = (league.staffPicks ?? []).filter((p) => p.season > season || (p.season === season && p.day > day));
@@ -426,15 +845,7 @@ export function staffPicksSince(league: League, season: number, day: number): st
   const lapsed = picks.filter((p) => p.lapsed);
   if (lapsed.length)
     out.push(
-      `${lapsed.length === 1 ? `The week's big game (${lapsed[0].text}) went` : `${lapsed.length} weeks' big games (${lapsed.map((p) => p.text).join(', ')}) went`} by in the sim: the staff doesn't put in counters it hasn't measured, so your plan stood.`,
+      `${lapsed.length === 1 ? `The week's big game (${lapsed[0].text}) was` : `${lapsed.length} weeks' big games (${lapsed.map((p) => p.text).join(', ')}) were`} played before the staff could measure ${lapsed.length === 1 ? 'it' : 'them'}, so your plan stood.`,
     );
   return out;
-}
-
-/** The week's call answered (calls.ts's resolveCall): 'staff' for the staff's option, 'kept' for things as they were. */
-export function answerWeek(league: League, how: 'staff' | 'kept') {
-  const wc = currentWeek(league);
-  if (!wc) return;
-  league.weekCall = wc;
-  wc.taken = how;
 }

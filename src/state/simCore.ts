@@ -6,8 +6,8 @@ import { faAdvance, finishDraftPhase, newSeason, regularGamesLeft, simDay, start
 import { userGameOnDay } from '../core/league/games';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { billingFor } from '../core/analysis/gameStory';
-import { openCallIds } from '../core/league/calls';
-import { isWeekId } from '../core/league/weekCall';
+import { dueId, openCallIds } from '../core/league/calls';
+import { staffMorning } from '../core/league/callMeasure';
 import { markOffersSeen } from '../core/league/proposals';
 
 export type SimTarget =
@@ -131,13 +131,15 @@ export interface SimHooks {
 }
 
 /**
- * Play days until `target` (or a stop): the league in hand moves on in place. Under `stopOnNews`, a
- * sim stops early (except one of a set number of days) for what needs an answer: an important
- * unread message, a staff call that wasn't open when it started (or came due since: see
- * openCallIds; each playoff series of his once, the morning it starts, and each morning after a loss
- * that has him behind; the week's call only a week's sim), or the morning of one of his biggest games
- * (with a setting of its own). Stopping early changes nothing that's played: the next sim carries on
- * from the same day.
+ * Play days until `target` (or a stop): the league in hand moves on in place. Each morning (and the
+ * one it starts on) the staff measures what its picks and the open cards wait on and makes its picks
+ * (staffMorning: whatever the sim's length or settings, so a long sim and a short one make the same
+ * ones). Under `stopOnNews`, a sim stops early (except one of a set number of days) for what needs an
+ * answer: an important unread message, a staff call that wasn't open when it started (or came due
+ * since: see openCallIds; each playoff series of his once, the morning it starts; the week's card
+ * when the week poses a trade-off), with its numbers in, or the morning of one of his biggest games
+ * (with a setting of its own). The call it stopped for is kept (League.stopCall: Needs you leads with
+ * it). Stopping early changes nothing that's played: the next sim carries on from the same day.
  */
 export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {}): Promise<{ days: number; stop: SimStop }> {
   // (it starts from a screen whose Needs you lists every open offer: their dates stand from here)
@@ -155,21 +157,39 @@ export async function runSim(l: League, target: SimTarget, hooks: SimHooks = {})
   const callsBefore = new Set(stops ? openCallIds(l) : []);
   // (a sim to the next game, or to a big night, stops there anyway)
   const bigGames = stops && loopSetting(l, 'stopForBigGames') && target.kind !== 'untilUserGame' && target.kind !== 'bigNight';
-  const weekly = target.kind === 'week';
   const every = hooks.checkpointDays ?? 20;
   let days = 0;
+  /** The staff's morning: its measuring said on the progress bar, a stop asked for meanwhile honoured. */
+  const morning = () =>
+    staffMorning(l, {
+      cancelled: hooks.shouldStop,
+      between: hooks.yieldDay,
+      onMeasure: () => hooks.progress?.({ label: 'The staff is measuring', done: days, total: Math.max(total, days) }),
+    });
+  /** A call opened since the sim started (or come due): it stops the sim, and Needs you leads with it. */
+  const called = () => {
+    const id = openCallIds(l).find((x) => !callsBefore.has(x));
+    if (id === undefined) return false;
+    l.stopCall = { id: id.endsWith(dueId('')) ? id.slice(0, -dueId('').length) : id, season: l.season, day: l.day };
+    return true;
+  };
+  // (the morning it starts on first: a live game, a phase change or a change of his since the last sim can leave it to do)
+  if (!(await morning())) return { days, stop: 'stopped' };
+  if (stops && called()) return { days, stop: 'call' };
   for (;;) {
     if (hooks.shouldStop?.()) return { days, stop: 'stopped' };
     simDay(l);
     days++;
     hooks.progress?.({ label: 'Simulating', done: days, total: Math.max(total, days) });
-    if (targetDone(l, target, startDay, startPhase)) return { days, stop: 'target' };
+    if (!(await morning())) return { days, stop: 'stopped' };
+    if (targetDone(l, target, startDay, startPhase)) {
+      if (stops) called();
+      return { days, stop: 'target' };
+    }
     if ((l.fired && !firedBefore) || (ultimatum() !== undefined && ultimatum() !== ultimatumBefore)) return { days, stop: 'news' };
     // smart stop: big news for your team during a long sim (routine injuries just land in the inbox)
     if (stops && days > 1 && bigNews() > newsBefore) return { days, stop: 'news' };
-    // (the week's call stops a week's sim, the one it opens at the end of; a longer one passes it,
-    // the staff makes its pick, and the digest says so; a sim to the next game ends on its morning anyway)
-    if (stops && openCallIds(l).some((id) => !callsBefore.has(id) && (weekly || !isWeekId(id)))) return { days, stop: 'call' };
+    if (stops && called()) return { days, stop: 'call' };
     if (bigGames && bigNightToday(l)) return { days, stop: 'bigGame' };
     if (days % every === 0) await hooks.checkpoint?.(l);
     await hooks.yieldDay?.();

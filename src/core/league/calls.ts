@@ -2,28 +2,31 @@
 // Today with the staff's call one tap away (see agenda.ts for how cards are drawn and settled). A
 // star goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
 // trade for a long absence before the deadline, with what he's worth measured and where his minutes
-// go); the playoff odds under 5% two weeks running for a team the owner expects in the postseason
+// go; no cover when he measures as no real loss); the playoff odds under 5% two weeks running for a team the owner expects in the postseason
 // (the call: tell him it's a rebuild, before the deadline); a team on pace under the owner's win
 // floor, now and three games ago (the call: chase it with a trade, or tell him it's a development
 // year, before the deadline); the deadline's last five days (the call: the staff's best deal, buying
 // or selling as the odds say, a look for one, or standing pat); the morning a playoff series or a
 // play-in game of his starts, and each morning after a loss that has him behind in a series (the
 // call: the staff's measured counters for it, a plan of his own, or the plan as it is); a losing
-// skid, four straight or six of eight, for any team (the call: the staff's measured counter for the
-// next game, or riding it out); the books: their close heading into the red in the weeks before the
-// deadline, or a step the owner took on them at his review (the call: the budgets down to the league
-// standard, tickets priced where the gate peaks, or salary shed while deals can be made); and each
-// week of the regular season, the week's call (see weekCall.ts: its big game or its practice). A
+// skid that has gone on (eight straight, then ten, then every four more: the call, a trade while deals
+// can be made, or riding it out, with what's behind it); the books: their close heading into the red
+// in the weeks before the deadline, or a step the owner took on them at his review (the call: the
+// budgets down to the league standard, tickets priced where the gate peaks, or salary shed while
+// deals can be made); and the week's card, when the week poses a trade-off (see weekCall.ts). A
 // reading that moves week to week (the odds, the pace) is a call only once two readings agree: one
 // bad week isn't. A call is only a call with a real choice in it: one whose only answer is "OK"
-// isn't opened (the digest has the news); one whose choice waits on the staff's measuring (`measure`:
-// the screen runs it in the sim worker as the card shows, and storeWorth keeps the numbers) is open
-// while it measures. A long sim stops the day a new one opens (the week's call only stops a week's
-// sim: see runSim), and once more for one still open as its due date nears (see openCallIds), and
-// for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
-// remembered (League.callsDone) so it doesn't come back. Nothing here draws from the league's random
-// stream.
-import type { GamePlanItem, League, PlayInGame, PlayoffSeries, Player, PrepFocus, ScheduledGame } from '../types';
+// isn't opened (the digest has the news), and one whose honest answer is always the same is the
+// staff's to make: a skid's first counters (four straight, or six of eight) and the adjustment each
+// morning he's behind in a series go in without a card, measured, with what's behind the slide said
+// in the digest's line (staffPicks), as the week's big game's counter does. The numbers a card needs
+// are measured before a sim stops for it (simCore.ts's runSim, on a budget: callMeasure.ts), and
+// otherwise as the card shows (src/ui/today/staffPlan.ts); storeWorth keeps them. A long sim stops
+// the day a new one opens, once more for one still open as its due date nears (see openCallIds),
+// and for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
+// remembered (League.callsDone) so it doesn't come back. A star's injury card left unanswered for
+// INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
+import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, PrepFocus, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
 import { fmtDate, playerName, revenueScale, standardRoster } from './helpers';
 import { confStandings } from './standings';
@@ -47,23 +50,8 @@ import { hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { WORTH_MIN, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
 import { counterCandidates } from '../ai/advisor';
-import { PREP_META } from '../sim/familiarity';
-import {
-  answerWeek,
-  currentWeek,
-  holdPractice,
-  isWeekId,
-  openWeekId,
-  practiceOutlook,
-  vsAt,
-  weekDaily,
-  weekGame,
-  weekId,
-  weekKind,
-  weekWorthId,
-  whenText,
-  WEEK_DAYS,
-} from './weekCall';
+import { buildGameReport, type Factor } from '../analysis/gameReport';
+import { answerWeek, isWeekId, notePick, openWeekId, ptsWin, vsAt, weekCard, weekDaily } from './weekCall';
 
 /** A star: one of the team's three best players by OVR. */
 export const STAR_RANK = 3;
@@ -123,6 +111,15 @@ export const SKID_OF = 8;
 /** Games after a skid's call before another skid can be one (the same slide isn't asked about every night). */
 export const SKID_GAP = 8;
 /**
+ * Straight losses at which a skid's call comes again, a step up (the first comes at SKID_STRAIGHT):
+ * then every SKID_EVERY more. A slide that goes on gets a card from the second step (a trade, while
+ * deals can be made), with what's behind it.
+ */
+export const SKID_STEPS = [8, 10] as const;
+export const SKID_EVERY = 4;
+/** His games a star's injury card stays open unanswered before the staff rides it out (the card's own call). */
+export const INJURY_AGE = 3;
+/**
  * Losses in the stretch over what his record says (the stretch's games at his loss rate, the record
  * blended with five wins and five losses so a 1-3 start isn't the norm) that make it a skid: a bad
  * team losing six of eight is having its season, not a skid. A .650 team's four straight is 2.4 over;
@@ -148,6 +145,12 @@ export interface SkidCall {
   of: number;
   /** His average margin over them (absent when their results aren't kept). */
   margin?: number;
+  /** Which step of the slide it is: 1 the first, 2 at SKID_STEPS[0] straight, and so on. */
+  rung?: number;
+  /** What's behind it, in words (the box scores' biggest edge against him, his stars out): the staff's read. */
+  diag?: string;
+  /** The staff's counters for the next game are measured and in (or measured as no gain), in words. */
+  put?: string;
 }
 
 /**
@@ -211,15 +214,16 @@ export function storeWorth(league: League, key: string, w: CallWorth) {
 
 /**
  * What a counters measurement comes to for a call (the screen or a script passes counterWorth's
- * readings): the gains, the best first and one per game-plan group, at most the call's `max` (with
- * more than one, a series' plan, the groups his plan already settles left to it, as the Preview's
- * "Use the staff's plan" makes it); and the best reading when none is a gain.
+ * readings): the gains, the best first and one per game-plan group, at most the call's `max`, the
+ * groups his plan already settles left to it (as the Preview's "Use the staff's plan" makes it); and
+ * the best reading when none is a gain.
  */
 export function countersWorth(league: League, m: Extract<CallMeasure, { kind: 'counters' }>, worths: CounterWorth[]): CallWorth {
   const by = new Map(worths.map((w) => [w.id, w]));
   const cands = counterCandidates(league, league.userTid, m.opp).filter((c) => by.has(c.id));
   const g = league.schedule.find((x) => x.gid === m.gid);
-  const taken = new Set(m.max > 1 ? (planFor(league, m.opp, g)?.items ?? []).map(itemGroup) : []);
+  // (the groups a plan for them settles already are left to it: the staff's own picks never replace his)
+  const taken = new Set((planFor(league, m.opp, g)?.items ?? []).map(itemGroup));
   const item = (c: (typeof cands)[number]): GamePlanItem => ({
     id: c.id,
     label: c.label,
@@ -399,10 +403,62 @@ function skidOpen(league: League): SkidCall | null {
   return g && !g.played ? s : null;
 }
 
+/** The step a run of `n` straight losses is at: 1 from SKID_STRAIGHT, 2 and 3 at SKID_STEPS, one more every SKID_EVERY after. */
+export function skidRung(n: number): number {
+  const [a, b] = SKID_STEPS;
+  return n >= b ? 3 + Math.floor((n - b) / SKID_EVERY) : n >= a ? 2 : n >= SKID_STRAIGHT ? 1 : 0;
+}
+
+/** What each kind of edge in a game report is, in a skid's words (shots falling below their looks apart: that's luck). */
+const CAUSE: Record<Factor['category'] | 'luck', string> = {
+  tactics: 'the matchups',
+  shooting: 'worse looks than theirs',
+  luck: "shots that didn't fall (luck, not the plan)",
+  turnovers: 'turnovers',
+  rebounding: 'the glass',
+  fouls: 'free throws',
+  pace: 'the pace',
+  fatigue: 'tired legs',
+  stars: 'their stars',
+};
+
+/**
+ * What's behind a run of the user's results, in words, as the staff reads the box scores: his margin
+ * over them, the kind of edge that went against him most (the game reports' factors added up by kind,
+ * shots falling below their looks counted apart as the luck they are, a game's worth, when it's a
+ * point a game or more), and his stars out now. Not a measurement: the line says it's the staff's read.
+ */
+export function slideDiagnosis(league: League, results: GameResult[]): string {
+  const me = league.userTid;
+  const parts: string[] = [];
+  if (results.length) {
+    const margin = results.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / results.length;
+    parts.push(margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game` : `Even on points (${signed(margin)} a game): the close ones went the other way`);
+    const sum = new Map<keyof typeof CAUSE, number>();
+    for (const r of results)
+      for (const f of buildGameReport(league, r)?.factors ?? []) {
+        const k = f.luck ? 'luck' : f.category;
+        sum.set(k, (sum.get(k) ?? 0) + f.pts);
+      }
+    const worst = [...sum.entries()].sort((a, b) => a[1] - b[1])[0];
+    if (worst && worst[1] / results.length <= -1) parts.push(`the box scores point to ${CAUSE[worst[0]]} (${signed(worst[1] / results.length)} a game, the staff's read)`);
+  }
+  const out = standardRoster(league, me)
+    .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+    .slice(0, STAR_RANK)
+    .filter((p) => p.injury && p.injury.gamesRemaining > 0);
+  if (out.length) parts.push(`${out.map((p) => playerName(p)).join(' and ')} ${out.length > 1 ? 'are' : 'is'} out`);
+  return parts.length ? `${capitalize(parts.join('; '))}.` : '';
+}
+
+/** The user's last `n` regular-season results this season. */
+const lastResults = (league: League, n: number) =>
+  league.games.filter((r) => r.season === league.season && r.type === 'regular' && (r.home.tid === league.userTid || r.away.tid === league.userTid)).slice(-n);
+
 /**
  * Each morning of the regular season: a losing skid (SKID_STRAIGHT straight, or SKID_LOST of the last
  * SKID_OF, SKID_EXCESS past his record) opens its call, about the next game, unless one opened in the
- * last SKID_GAP games.
+ * last SKID_GAP games; a run of straight losses that goes on opens it again at each step (skidRung).
  */
 function skidDaily(league: League) {
   if (league.phase !== 'regular' || league.fired) return;
@@ -411,17 +467,22 @@ function skidDaily(league: League) {
   if (!ts) return;
   const gp = ts.won + ts.lost;
   const rate = (ts.lost + 5) / (gp + 10);
-  const straight = -ts.streak >= SKID_STRAIGHT && -ts.streak * (1 - rate) >= SKID_EXCESS;
+  const run = Math.max(0, -ts.streak);
+  const straight = run >= SKID_STRAIGHT && run * (1 - rate) >= SKID_EXCESS;
   const lostOf = ts.lastTen.length >= SKID_OF ? ts.lastTen.slice(-SKID_OF).filter((x) => !x).length : 0;
   if (!straight && (lostOf < SKID_LOST || lostOf - SKID_OF * rate < SKID_EXCESS)) return;
+  const rung = straight ? skidRung(run) : 1;
   const prev = league.skidCall;
-  if (prev && prev.season === league.season && prev.tid === me && gp - prev.gp < SKID_GAP) return;
+  const mine = prev && prev.season === league.season && prev.tid === me;
+  // (the same run of losses: only a step up opens it again; another slide waits SKID_GAP games)
+  const sameRun = mine && straight && gp - prev.gp < run;
+  if (sameRun ? rung <= (prev.rung ?? 1) : mine && gp - prev.gp < SKID_GAP) return;
   const next = league.schedule
     .filter((g) => !g.played && g.type === 'regular' && g.day >= league.day && (g.home === me || g.away === me))
     .reduce<ScheduledGame | undefined>((a, g) => (!a || g.day < a.day || (g.day === a.day && g.gid < a.gid) ? g : a), undefined);
   if (!next) return;
-  const of = straight ? -ts.streak : SKID_OF;
-  const res = league.games.filter((r) => r.season === league.season && r.type === 'regular' && (r.home.tid === me || r.away.tid === me)).slice(-of);
+  const of = straight ? run : SKID_OF;
+  const res = lastResults(league, of);
   const margin = res.length ? res.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / res.length : undefined;
   league.skidCall = {
     season: league.season,
@@ -433,7 +494,23 @@ function skidDaily(league: League) {
     lost: straight ? of : lostOf,
     of,
     ...(margin !== undefined ? { margin } : {}),
+    rung,
+    diag: slideDiagnosis(league, res),
   };
+}
+
+/** A skid's title: "8 straight losses", "6 losses in 8". */
+const skidTitle = (s: SkidCall) => (s.lost === s.of ? `${s.of} straight losses` : `${s.lost} losses in ${s.of}`);
+
+/** Counters the staff measures for a skid's next game: one, two from its second step. */
+const skidMax = (s: SkidCall) => ((s.rung ?? 1) > 1 ? 2 : 1);
+
+/** Counters the staff puts in when he's behind in a series: one, two down two games, three facing elimination. */
+const behindMax = (w: number, l: number) => (l === 3 ? 3 : l - w >= 2 ? 2 : 1);
+
+/** A skid's card stands: its second step or later, its counters decided, while deals can still be made (a trade is the bigger change). */
+function skidCard(league: League, s: SkidCall | null): s is SkidCall {
+  return !!s && (s.rung ?? 1) > 1 && !!s.put && !tradingClosedReason(league);
 }
 
 /** The ids of the calls that may be open now, before asking whether each has a real choice in it. */
@@ -442,8 +519,6 @@ function candidateIds(league: League): string[] {
   const ids: string[] = [];
   const series = seriesStart(league);
   if (series && !planSet(league, series)) ids.push(series.id);
-  const behind = seriesBehind(league);
-  if (behind) ids.push(behind.id);
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') for (const s of hurtStars(league)) ids.push(s.id);
   if (oddsCall(league)) ids.push(oddsId(league));
   if (floorCall(league)) ids.push(floorId(league));
@@ -454,7 +529,7 @@ function candidateIds(league: League): string[] {
   if (b && !settled(league, booksId(league))) ids.push(booksId(league));
   else if (b && b.stage !== 'warning' && b.season < league.season && warnWindow(league) && booksOutlook(league).judged < 0) ids.push(booksDueId(league));
   const skid = skidOpen(league);
-  if (skid) ids.push(skidId(skid));
+  if (skidCard(league, skid)) ids.push(skidId(skid));
   // (last: what a sim says it stopped for is the first new one, and the week's is the least of them)
   const week = openWeekId(league);
   if (week) ids.push(week);
@@ -570,16 +645,85 @@ export function planDeadlineCall(league: League): DeadlineCall {
 }
 
 /**
- * Each morning of the season: the week's call planned, what it put in taken out at its end, and the
- * staff's own pick made for one unanswered when it matters (see weekDaily); a losing skid's call
- * opened (skidDaily); and the deadline's call worked out the day its card opens.
+ * Each morning of the season: the week planned, what it put in taken out at its end, and the staff's
+ * lean on a card left unanswered (see weekDaily); a losing skid's call opened (skidDaily); a star's
+ * injury card left unanswered ridden out (ageInjuries); and the deadline's call worked out the day its
+ * card opens. The picks that wait on measuring are made by staffDecide once it's done (callMeasure.ts).
  */
 export function callsDaily(league: League) {
   if (league.fired) return;
   weekDaily(league);
   skidDaily(league);
+  ageInjuries(league);
   if (!deadlineOpen(league) || league.deadlineCall?.season === league.season) return;
   league.deadlineCall = planDeadlineCall(league);
+}
+
+/** A star's injury card left unanswered for INJURY_AGE of his games: the staff rides it out (his minutes are spread meanwhile), and says so. */
+function ageInjuries(league: League) {
+  if (league.phase !== 'regular' && league.phase !== 'playin' && league.phase !== 'playoffs') return;
+  for (const { p, id } of hurtStars(league)) {
+    if (settled(league, id) || p.injury!.gamesTotal - p.injury!.gamesRemaining < INJURY_AGE) continue;
+    settleCall(league, id);
+    notePick(league, `${playerName(p)} out: the card went unanswered for ${INJURY_AGE} games, so the staff rode it out.`);
+  }
+}
+
+// ---------------------------------------------------------------- the staff's own picks
+
+/**
+ * What the calls' picks still wait on, measured before a sim decides whether to stop (see
+ * callMeasure.ts): a skid's counters for its next game, the adjustment for a series game he's behind
+ * in, and the numbers on any card open now (a star's worth, a series' plan).
+ */
+export function callNeeds(league: League): CallMeasure[] {
+  if (league.fired) return [];
+  const out = new Map<string, CallMeasure>();
+  const s = skidOpen(league);
+  const sg = s && !s.put ? league.schedule.find((x) => x.gid === s.gid) : undefined;
+  if (s && sg && !(league.callWorth?.[skidId(s)]?.gid === sg.gid)) out.set(skidId(s), countersFor(league, skidId(s), s.opp, sg, skidMax(s)).measure);
+  const b = seriesBehind(league);
+  if (b && !settled(league, b.id) && !(league.callWorth?.[b.id]?.gid === b.g.gid)) out.set(b.id, countersFor(league, b.id, b.opp, b.g, behindMax(b.w, b.l)).measure);
+  if (candidateIds(league).some((id) => !isWeekId(id))) for (const c of staffCalls(league, { skipWeek: true })) if (c.measure) out.set(c.measure.key, c.measure);
+  return [...out.values()];
+}
+
+/**
+ * The calls whose honest answer is always the staff's, made once measured: a skid's counters for its
+ * next game (and what's behind the slide said), and the adjustment each morning he's behind in a
+ * series (one counter, two down two games, three facing elimination). In the digest's lines.
+ */
+export function callsDecide(league: League) {
+  if (league.fired) return;
+  const s = skidOpen(league);
+  const sg = s && !s.put ? league.schedule.find((x) => x.gid === s.gid) : undefined;
+  const sw = s && sg && league.callWorth?.[skidId(s)];
+  if (s && sg && sw && sw.gid === sg.gid) {
+    const items = sw.items ?? [];
+    for (const it of items) setPlanItem(league, s.opp, it);
+    s.put = items.length
+      ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${gameText(league, sg)}, measured.`
+      : `Nothing the staff measured for ${gameText(league, sg)} beats your plan.`;
+    notePick(league, `${skidTitle(s)}: ${s.diag ? `${s.diag} ` : ''}${s.put}`);
+  }
+  const b = seriesBehind(league);
+  const bw = b && !settled(league, b.id) ? league.callWorth?.[b.id] : undefined;
+  if (b && bw && bw.gid === b.g.gid) {
+    const items = bw.items ?? [];
+    for (const it of items) setPlanItem(league, b.opp, it);
+    settleCall(league, b.id);
+    const games = league.games.filter((r) => r.season === league.season && r.type === 'playoffs' && r.seriesId === b.series.id);
+    const diag = slideDiagnosis(league, games);
+    const game = `Game ${b.w + b.l + 1}`;
+    notePick(
+      league,
+      `${seriesLabel(b.series)}: down ${b.l}-${b.w} to ${league.teams[b.opp].abbrev}. ${diag ? `${diag} ` : ''}${
+        items.length
+          ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${game}, measured.`
+          : `Nothing the staff measured for ${game} beats your plan.`
+      }`,
+    );
+  }
 }
 
 // ---------------------------------------------------------------- the cards
@@ -620,8 +764,10 @@ export type CallAction =
   | { kind: 'trade'; id: string; offer: TradeOffer }
   | { kind: 'budgetCut'; id: string }
   | { kind: 'ticketPrice'; id: string; price: number }
-  /** The week's practice: `focus` until the week's end (it comes out then: see weekDaily). */
-  | { kind: 'weekPrep'; id: string; focus: PrepFocus };
+  /** The week's practice: the side of its card whose first focus is `focus` (it comes out at the week's end: see weekCall.ts). */
+  | { kind: 'weekPrep'; id: string; focus: PrepFocus }
+  /** The week's card on the young players: the staff's rotation leans to them (see youthLean.ts). */
+  | { kind: 'youthLean'; id: string };
 
 export interface CallChoice {
   label: string;
@@ -741,40 +887,16 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     });
   }
 
-  // behind in a series after a loss: the staff's adjustment for tonight, measured
-  const behind = seriesBehind(league);
-  if (behind && open.has(behind.id)) {
-    const { id, opp, g, series, w, l } = behind;
-    const abbrev = league.teams[opp].abbrev;
-    const { measure, worth } = countersFor(league, id, opp, g, 1);
-    const best = worth?.items?.[0];
-    const plan: CallChoice = { label: 'Plan the game', action: { kind: 'open', id }, to: `/games/${opp}?tab=plan` };
-    const keep: CallChoice = { label: 'Keep the plan', action: { kind: 'settle', id } };
-    cards.push({
-      id,
-      kind: 'series',
-      title: `${seriesLabel(series)}: down ${l}-${w} to ${abbrev}`,
-      line: `Game ${w + l + 1} tonight${l === 3 ? ': a loss ends the season' : ''}. ${
-        !worth
-          ? 'The staff is measuring its counters against them for it.'
-          : best
-            ? `The staff's adjustment: ${best.label}, ${worthWords(best.pts ?? 0)} against them (measured on tonight's game).`
-            : 'Nothing the staff measured beats your plan against them: keep it, or plan your own.'
-      }`,
-      tone: l === 3 ? 'bad' : 'warn',
-      to: `/games/${opp}`,
-      suggestion: best ? { label: 'Make the adjustment', action: { kind: 'staffPlan', id, opp, items: [best] } } : plan,
-      choices: best ? [plan, keep] : [keep],
-      ...(worth ? {} : { measure }),
-    });
-  }
-
   // a rebuild, or an owner who wants minutes for the young: cover is a young player, or none
   const young = team.strategy === 'rebuild' || !!currentGoals(league)?.goals.some((g) => g.kind === 'youth');
   for (const { p, id } of hurtStars(league)) {
     if (!open.has(id)) continue;
+    // (measured once an injury: what he's worth doesn't turn on the night)
+    const worth = league.callWorth?.[id] ?? null;
+    // measured as no real loss: cover can't win back what isn't lost (the staff never calls for more than its own read)
+    const missed = !worth || (worth.pts ?? 0) >= WORTH_MIN;
     const any = tenDayCover(league, p.pos);
-    const cover = any && (!young || playerAge(any, league.season) <= YOUNG_COVER) ? any : null;
+    const cover = missed && any && (!young || playerAge(any, league.season) <= YOUNG_COVER) ? any : null;
     const manual = team.rotation.manual;
     const out = p.injury!.gamesRemaining;
     // a trade for cover is a real answer to a long absence while deals can still be made
@@ -790,8 +912,6 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const mins = minutesOf(league, p.pid);
     const g = nextGame(league);
     const opp = g && (g.home === me ? g.away : g.home);
-    // (measured once an injury: what he's worth doesn't turn on the night)
-    const worth = league.callWorth?.[id] ?? null;
     const measure: CallMeasure | undefined =
       g && opp !== undefined && !worth
         ? {
@@ -820,9 +940,11 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
           ? `The staff's call: a 10-day for cover while he's out. ${manual ? 'Your rotation is set by hand: his minutes need a home.' : `${to || 'The staff spreads his minutes'} meanwhile.`}`
           : manual
             ? "The staff's call: hand them the rotation while he's out, so his minutes go where they should."
-            : young && any
-              ? `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}: a veteran on a 10-day would only take them from the young players.`
-              : `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}; a trade is the other way.`),
+            : !missed
+              ? `The staff's call: ride it out; the team measures about as well without him. ${to || 'His minutes go to the healthy players'}.`
+              : young && any
+                ? `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}: a veteran on a 10-day would only take them from the young players.`
+                : `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}; a trade is the other way.`),
       tone: 'bad',
       to: trade ? '/office/trade' : '/team',
       pids: [p.pid],
@@ -1013,98 +1135,25 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       choices: [levers[1]?.c, shed, noted].filter((x): x is CallChoice => !!x && x !== suggestion),
     });
   }
-  // a losing skid: the staff's measured change for the next game, or riding it out
+  // a skid that has gone on: what's behind it, the counters the staff put in, and a trade while deals can be made
   const skid = skidOpen(league);
-  let skidCard: CallCard | null = null;
-  if (skid && open.has(skidId(skid))) {
+  if (skidCard(league, skid) && open.has(skidId(skid))) {
     const id = skidId(skid);
-    const g = league.schedule.find((x) => x.gid === skid.gid)!;
-    const { measure, worth } = countersFor(league, id, skid.opp, g, 1);
-    const best = worth?.items?.[0];
-    const near = !best && worth?.best && worthCall({ pts: worth.best.pts ?? 0 }) !== 'cost' ? worth.best : undefined;
-    const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
-    const how =
-      skid.margin === undefined
-        ? ''
-        : skid.margin < 0
-          ? `Outscored by ${(-skid.margin).toFixed(1)} a game in them. `
-          : `Even on points in them (${signed(skid.margin)} a game): the close ones went the other way. `;
-    skidCard = {
+    cards.push({
       id,
       kind: 'skid',
-      title: skid.lost === skid.of ? `${skid.of} straight losses` : `${skid.lost} losses in ${skid.of}`,
-      line: `${
-        !worth
-          ? `The staff is measuring its counters for ${gameText(league, g)}.`
-          : best
-            ? `The staff's change for ${gameText(league, g)}: ${best.label}, ${worthWords(best.pts ?? 0)} against them (measured).`
-            : `Nothing the staff measured for ${gameText(league, g)} is a clear fix${near ? ` (its best, ${near.label}, is too close to say)` : ''}: its call is to ride it out.`
-      }${how ? ` ${how.trim()}` : ''}`,
+      title: skidTitle(skid),
+      line: `${skid.diag ? `${skid.diag} ` : ''}${skid.put} The staff's call: look for a trade; counters alone haven't turned it. Deals until ${fmtDate(league.season, league.tradeDeadlineDay)}.`,
       tone: 'warn',
       to: `/games/${skid.opp}?tab=plan`,
-      ...(best
-        ? { suggestion: { label: 'Make the change', action: { kind: 'staffPlan', id, opp: skid.opp, items: [best] } }, choices: [ride] }
-        : { suggestion: ride, choices: near ? [{ label: `Try ${near.label}`, action: { kind: 'staffPlan', id, opp: skid.opp, items: [near] } }] : [] }),
-      ...(worth ? {} : { measure, measuring: true }),
-    };
-    cards.push(skidCard);
+      suggestion: { label: 'Look for a trade', action: { kind: 'settle', id }, to: '/office/trade' },
+      choices: [{ label: 'Ride it out', action: { kind: 'settle', id } }],
+    });
   }
 
-  // the week's call: its big game's counter, or its practice
-  const wc = opts.skipWeek ? null : currentWeek(league);
-  const wid = wc && weekId(wc.season, wc.week);
-  const kind = wc && wid && open.has(wid) ? weekKind(league, wc) : null;
-  const gm = wc && kind === 'game' ? weekGame(league, wc) : null;
-  if (wc && wid && gm && !(skidCard && skid?.gid === gm.gid)) {
-    const g = league.schedule.find((x) => x.gid === gm.gid)!;
-    const them = league.teams[gm.opp];
-    const { measure, worth } = countersFor(league, weekWorthId(wc, 'game', gm.gid), gm.opp, g, 1);
-    const best = worth?.items?.[0];
-    const where = `${vsAt(league, g)} ${whenText(league, g.day)}`;
-    // a bigger game before it whose counters measured as no gain: said, so the card's change of subject reads
-    const passed = (wc.games ?? []).slice(0, (wc.games ?? []).indexOf(gm)).map((x) => league.teams[x.opp].abbrev);
-    const before = passed.length ? ` (Against ${passed.join(' and ')}, nothing it measured beats your plan.)` : '';
-    cards.push({
-      id: wid,
-      kind: 'week',
-      title: gm.tag ? `${gm.tag}: ${where}` : gm.top ? `The week's big one: ${where}` : `This week: ${where}`,
-      // (unanswered, the staff puts it in on game day's morning: a game today has had its morning)
-      line: best
-        ? `The staff's counter: ${best.label}, ${worthWords(best.pts ?? 0)} against them (measured).${g.day > league.day && g.day > wc.day ? ' Unanswered, the staff puts it in on game day.' : ''}${before}`
-        : `The staff is measuring its counters against the ${them.name}.${before}`,
-      tone: 'info',
-      to: `/games/${gm.opp}?tab=plan`,
-      ...(best ? { suggestion: { label: 'Put it in', action: { kind: 'staffPlan', id: wid, opp: gm.opp, items: [best] } } } : {}),
-      choices: [{ label: 'Keep your plan', action: { kind: 'settle', id: wid } }],
-      ...(worth ? {} : { measure, measuring: true }),
-    });
-  } else if (wc && wid && kind === 'practice') {
-    const f = wc.focus!;
-    const o = practiceOutlook(league, f);
-    const sig = worthSig(league, f.opp, o.g, `${league.day}:${f.to}`);
-    const stored = league.callWorth?.[weekWorthId(wc, 'practice')];
-    const worth = stored && stored.gid === f.gid && stored.sig === sig ? stored : null;
-    const until = fmtDate(league.season, wc.week * WEEK_DAYS + WEEK_DAYS - 1, { weekday: 'long' });
-    const label = PREP_META[f.to].label;
-    const at = gameText(league, o.g);
-    const games = league.schedule.filter((x) => !x.played && x.type === 'regular' && x.day >= league.day && x.day <= o.g.day && (x.home === me || x.away === me));
-    const nights = o.g.day - league.day + 1;
-    const facts =
-      f.why === 'drills'
-        ? `the system ${Math.round(o.fam[1])}% with drills, ${Math.round(o.fam[0])}% at ${PREP_META[f.from].label}`
-        : `the rotation's wear ${Math.round(o.wear[1])} with recovery, ${Math.round(o.wear[0])} at ${PREP_META[f.from].label} (${Math.round(o.wearNow)} now), the system ${Math.round(o.fam[1])}% against ${Math.round(o.fam[0])}%`;
-    cards.push({
-      id: wid,
-      kind: 'week',
-      title: f.why === 'drills' ? `The system is at ${Math.round(o.now)}%` : `${plural(games.length, 'game')} in ${nights} nights`,
-      line: `The staff's call: ${label} until ${until}, ${worth ? `${worthWords(worth.pts ?? 0)} ${at} (measured)` : `its worth ${at} being measured`}. By then ${facts}. Unanswered, the staff sets it tomorrow.`,
-      tone: 'info',
-      to: '/team/tactics',
-      suggestion: { label: `${label} this week`, action: { kind: 'weekPrep', id: wid, focus: f.to } },
-      choices: [{ label: `Keep ${PREP_META[f.from].label}`, action: { kind: 'settle', id: wid } }],
-      ...(worth ? {} : { measure: { kind: 'change', key: weekWorthId(wc, 'practice'), opp: f.opp, gid: f.gid, sig, base: o.base, change: o.change } }),
-    });
-  }
+  // the week's card: a trade-off the staff measured both sides of (see weekCall.ts)
+  const week = opts.skipWeek ? null : weekCard(league);
+  if (week && open.has(week.id)) cards.push(week);
 
   // a call is a choice: one whose only answer is to carry on isn't opened (one measuring its choice is, meanwhile)
   return cards.filter((c) => c.measuring || [c.suggestion, ...(c.choices ?? [])].some((x) => x && !x.blocked && (x.action.kind !== 'settle' || x.to)));
@@ -1115,6 +1164,8 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
   let r: { ok: boolean; text: string };
   switch (a.kind) {
     case 'settle':
+      // (the week's card answered with things as they were: see answerWeek)
+      if (isWeekId(a.id)) answerWeek(league, {});
       r = { ok: true, text: '' };
       break;
     case 'open':
@@ -1177,29 +1228,14 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       Object.assign(league.teams[league.userTid].budget, { ticketPrice: a.price, priceSet: true });
       r = { ok: true, text: `Tickets priced at $${a.price}.` };
       break;
-    case 'weekPrep': {
-      const wc = currentWeek(league);
-      if (!wc?.focus || weekId(wc.season, wc.week) !== a.id) {
-        r = { ok: false, text: 'That week is over.' };
-        break;
-      }
-      league.weekCall = wc;
-      holdPractice(league, wc);
-      r = { ok: true, text: `Practice: ${PREP_META[a.focus].label} until ${fmtDate(league.season, wc.week * WEEK_DAYS + WEEK_DAYS - 1, { weekday: 'long' })}.` };
+    case 'weekPrep':
+      r = answerWeek(league, { focus: a.focus });
       break;
-    }
+    case 'youthLean':
+      r = answerWeek(league, { youth: true });
+      break;
   }
-  if (r.ok) {
-    settleCall(league, a.id);
-    // the week's call answered (or a skid's about the same game: its card stood in for it)
-    const wc = currentWeek(league);
-    const sk = league.skidCall;
-    const same = a.id.startsWith('skid:') && !!sk && skidId(sk) === a.id && !!wc && weekKind(league, wc) === 'game' && weekGame(league, wc)?.gid === sk.gid;
-    if (wc && (isWeekId(a.id) || same)) {
-      answerWeek(league, a.kind === 'settle' ? 'kept' : 'staff');
-      if (same) settleCall(league, weekId(wc.season, wc.week));
-    }
-  }
+  if (r.ok) settleCall(league, a.id);
   return r;
 }
 
