@@ -51,6 +51,8 @@ import {
   marketSalary,
   payrollBudget,
   playerPrefs,
+  keepCeiling,
+  aiTopLine,
   teamCore,
   preferredYears,
   releaseDeadMoney,
@@ -140,7 +142,8 @@ function resignPlan(league: League, t: Team, agrees: (p: Player) => boolean = ()
     const ask = askingContract(league, p, t.tid);
     // without full Bird rights his team can only pay him so much (see resignLimit): above it he walks
     if (ask.amount > resignLimit(league, p, t.tid)) continue;
-    const budget = payrollBudget(cap, t, v, { core: top.has(p.pid), young: playerAge(p, next) <= 28 }) + (v >= 80 ? cap.salaryCap * RESIGN_STAR_ROOM : 0);
+    // (and never past the second apron: see payrollBudget)
+    const budget = Math.min(aiTopLine(cap), payrollBudget(cap, t, v, { core: top.has(p.pid), young: playerAge(p, next) <= 28 }) + (v >= 80 ? cap.salaryCap * RESIGN_STAR_ROOM : 0));
     const worth = v >= 70 || (v >= 66 && committed < 11);
     const needed = core.has(p.pid) || committed < 13;
     // (past 35 only a veteran still playing at 78+, for the year he asks)
@@ -443,38 +446,39 @@ const MARQUEE_DAYS = 3;
 /** The free-agency day (1-3) a top free agent nobody has the user's offer out to decides on: a hash of the league, season and player. */
 const marqueeDay = (league: League, p: Player) => 1 + (hashString(`${league.id}:${league.season}:${p.pid}:market`) % MARQUEE_DAYS);
 
-/**
- * A star (worth 82+) holds his price in the summer: no cut at all before day 15 (space can still
- * open up, and his old team can still bring him back, see faInterest), then 15% a cut down to 60%
- * of his value at most, whatever teams can pay now; from day 25, with the summer's money nearly
- * spent, he takes what is left like anyone (see faDay). A star no team could pay 60% of his value
- * once the marquee days are over doesn't hold: he takes the best money there is (a mid-level from
- * a contender, as a rule) before it's spent on others, rather than the minimum a month in (80+
- * free agents signing for about the minimum: 3.1 → 2.6 a summer; 50 seasons a side).
- */
-const STAR_HOLD = { value: 82, day: 15, floor: 0.6, late: 25 };
+/** A free agent worth this much is a top free agent (see marqueeFA); one his old team won't let walk for nothing (see birdRoom). */
+const MARQUEE_VALUE = 78;
+/** A star: worth this much, his old team counts him as core in its re-signing budget (see birdRoom). */
+const STAR_VALUE = 82;
 
 /**
- * A good free agent's price (80+ OVR, see SUMMER_FLOOR) softens slowly over the summer instead (a
- * star's from STAR_HOLD.day): GOOD_FA_CUT at each five-day cut, never under his floor, whatever teams can pay just then (a
- * team's space or exception bids on him once his price comes within 90% of it, as the user's offer
- * must: see faInterest). By the market's last days he asks about 80% of his value, and his old team
- * brings him back there when nobody else paid it (see aiLateReturns). Cut 15% at a time down to
- * the most anyone could still pay, with the summer's cap space spent in its first days, these
- * prices crashed: over three simulated summers of the real league the median 80+ free agent signed
- * for 57% of his market value (23 of 45 under 60%), so a team that waited a few days signed stars
- * at half price.
+ * A free agent nobody has signed in the summer market's first days (the top ones' decision days, see
+ * marqueeDay) lowers his price every day after, by SUMMER_STEP, toward what the market's money would
+ * pay him (see marketMoneyMap: an AI team's cap space or exception, or his old team on his Bird
+ * rights, at his interest in it, the best players served first). Never under that: while a team can
+ * pay his price he holds it, and the day his price comes within its reach (90%, as the user's offer
+ * must, see faInterest) it bids and he signs. So the top of the market clears in its first week or
+ * so, near his value where a team has the room or his rights, a mid-level where only that is left,
+ * and a player only goes cheap when the money is gone; a team with room that waits gets no discount,
+ * since the AI teams see each new price first. Held to 75% of his value for 20 days and 60% after
+ * (SUMMER_FLOOR, whatever teams could pay), the top ten free agents of a summer of the real league
+ * signed on day 30 as a rule (25 of 60 back with their old teams as the market closed, at a fifth to
+ * a third of their value when their Bird rights were short; six seasons of two seeds), and their old
+ * teams paid past every budget to bring them back; cut straight to the most anyone could pay every
+ * five days, rotation players worth $8-10M went for the minimum by day 10.
  */
-const GOOD_FA_CUT = 0.04;
+const SUMMER_STEP = 0.15;
 
 /**
  * What his old team would still pay a free agent to bring him back on his Bird rights, over the
  * cap: what those rights allow (see resignLimit) and its re-signing budget leave (see
- * payrollBudget: a star, or a player who'd be among its three best, counts as core), when it wants
- * him and has the spot. A top free agent weighs it among his bids (see faInterest); anyone else
- * signs when his price comes down to it (see aiSign), though a rebuilder doesn't bring back a
- * veteran of 29 or older that way. Null for a restricted free agent (his team holds his rights
- * another way) and outside the summer market.
+ * payrollBudget: a star, or a player who'd be among its three best, counts as core; a player worth
+ * 78+ up to keepCeiling, since a team doesn't let a player that good walk for nothing), when it
+ * wants him and has the spot. A top free agent weighs it among his bids on his decision day (see
+ * faInterest), so a team keeps its good free agents in the market's first days rather than when it
+ * closes; anyone else signs when his price comes down to it (see aiSign), though a rebuilder
+ * doesn't bring back a veteran of 29 or older that way. Null for a restricted free agent (his team
+ * holds his rights another way) and outside the summer market.
  */
 function birdRoom(league: League, p: Player, season: number, memo?: Map<number, WantRead>): { tid: number; room: number } | null {
   if (league.phase !== 'freeAgency' || p.rfa) return null;
@@ -484,7 +488,8 @@ function birdRoom(league: League, p: Player, season: number, memo?: Map<number, 
   if (!aiWants(league, t, p, season, memo) || (t.strategy === 'rebuild' && playerAge(p, season) >= 29 && !marqueeFA(league, p))) return null;
   const v = valueScore(league, p);
   const better = regularRoster(league, old).filter((x) => valueScore(league, x) > v).length;
-  const budget = payrollBudget(CAP_FOR(league, season), t, v, { core: v >= STAR_HOLD.value || better < 3, young: playerAge(p, season) <= 28 });
+  const cap = CAP_FOR(league, season);
+  const budget = Math.max(payrollBudget(cap, t, v, { core: v >= STAR_VALUE || better < 3, young: playerAge(p, season) <= 28 }), v >= MARQUEE_VALUE ? keepCeiling(cap, t) : 0);
   return { tid: old, room: Math.min(resignLimit(league, p, old), budget - payroll(league, old, season)) };
 }
 
@@ -513,6 +518,81 @@ function aiMarquee(league: League, today: number) {
   }
 }
 
+/** An AI team with money for a free agent beyond the minimum: the most it could pay one (cap space, or an exception), and the value a newcomer must have to take a spot (see swapBar). */
+type Buyer = { t: Team; room: number; bar: number };
+
+/**
+ * The AI teams that could pay a free agent more than the minimum now: a roster spot (or a player
+ * he'd clearly beat for one), and cap space or an exception (one into the tax only for a contender,
+ * see aiSign).
+ */
+function marketBuyers(league: League, season = contractSeason(league)): Buyer[] {
+  const cap = CAP_FOR(league, season);
+  return league.teams.flatMap((t) => {
+    if (t.tid === league.userTid) return [];
+    const cut = swapCandidate(league, t.tid, season);
+    if (regularRoster(league, t.tid).length >= CAP.rosterMax && !cut) return [];
+    const ex = bestExceptionRoom(league, t.tid, season);
+    const room = Math.max(capSpace(league, t.tid, season), t.strategy === 'contend' ? ex : Math.min(ex, cap.luxuryTax - payroll(league, t.tid, season)));
+    return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
+  });
+}
+
+const moneyCache = new WeakMap<League, { key: string; money: Map<number, number> }>();
+
+/**
+ * What the market's money would pay each free agent now, as a price from the market (what he asks a
+ * team moves with his interest in it, up to 10% either way, see askingContract). The best players
+ * first, each takes the smallest room left among the AI teams that would sign him that covers his
+ * price (see marketBuyers; a team pays one of them), or the biggest when none does; his old team's
+ * on his Bird rights when that's more takes no team's room (see birdRoom), nor does a player worth
+ * about the minimum. Counting every team's room for every player, a rotation player's price held at
+ * a mid-level only one team had, and half of them were still unsigned when the market closed.
+ */
+function marketMoneyMap(league: League): Map<number, number> {
+  const key = `${league.season}:${league.phase}:${league.day}:${league.faDay}:${league.nextTxnId ?? 0}:${league.faBids?.length ?? 0}`;
+  const hit = moneyCache.get(league);
+  if (hit?.key === key) return hit.money;
+  const season = contractSeason(league);
+  const cap = CAP_FOR(league, season);
+  const buyers = marketBuyers(league, season);
+  const used = new Set<number>();
+  const money = new Map<number, number>();
+  const appeal = (tid: number, p: Player) => Math.min(1.1, Math.max(0.9, teamAppeal(league, tid, p)));
+  const pool = freeAgents(league)
+    .filter((p) => !p.waivers && !p.rfa?.sheet)
+    .map((p) => ({ p, v: valueScore(league, p) }))
+    .sort((a, b) => b.v - a.v || a.p.pid - b.p.pid);
+  for (const { p, v } of pool) {
+    const bird = birdRoom(league, p, season);
+    const own = bird ? bird.room * appeal(bird.tid, p) : 0;
+    const need = askingContract(league, p).amount;
+    // (a rebuilder doesn't pay a veteran of 29 or older past the minimum, see aiSign)
+    const old = playerAge(p, season) >= 29;
+    const open = buyers.filter((b) => !used.has(b.t.tid) && v >= b.bar && !(old && b.t.strategy === 'rebuild'));
+    const covers = open.filter((b) => b.room >= need).sort((a, b) => a.room - b.room)[0];
+    const pick = covers ?? open.sort((a, b) => b.room - a.room)[0];
+    const theirs = pick ? pick.room * appeal(pick.t.tid, p) : 0;
+    if (pick && theirs > own && need > (p.experience >= 3 ? cap.vetMin : cap.minContract) * 1.5) used.add(pick.t.tid);
+    money.set(p.pid, Math.max(own, theirs));
+  }
+  moneyCache.set(league, { key, money });
+  return money;
+}
+
+/**
+ * The most the market's money would pay a free agent now (see marketMoneyMap): his price comes down
+ * toward it, never under it (see faDay); 0 when nobody would pay him past the minimum.
+ */
+export function marketMoney(league: League, p: Player): number {
+  return marketMoneyMap(league).get(p.pid) ?? 0;
+}
+
+/** The summer market's first days, when prices hold and the top free agents decide (see marqueeDay); prices come down from the day after (see SUMMER_STEP). */
+export const MARKET_HOLD_DAYS = MARQUEE_DAYS;
+/** How much a free agent's summer price comes down each day after the market's first days, toward what the market's money would pay him. */
+export const MARKET_STEP = SUMMER_STEP;
+
 /**
  * One day of free agency: AI teams make offers, players accept the best fit, open two-way slots
  * go to young minimum-level players, and unsigned players cut their price every 5 days: by 15%, or
@@ -539,48 +619,35 @@ export function faDay(league: League, rng: Rng, intensity = 1, today = league.fa
   // cap space got as many good players as anyone, and every roster ended up about as deep.
   const order = { contend: 0, retool: 1, rebuild: 2 };
   const ai = rng.shuffle(league.teams.filter((t) => t.tid !== league.userTid)).sort((a, b) => order[a.strategy] - order[b.strategy]);
-  // price cuts come first, so AI teams get the first look at a new price. Buyers are the teams with
-  // a roster spot, or a player he'd clearly beat for one, and money beyond the minimum.
-  const buyers = ai.flatMap((t) => {
-    const cut = swapCandidate(league, t.tid, season);
-    if (regularRoster(league, t.tid).length >= CAP.rosterMax && !cut) return [];
-    // (only a contender pays an exception into the tax, see aiSign)
-    const ex = bestExceptionRoom(league, t.tid, season);
-    const room = Math.max(capSpace(league, t.tid, season), t.strategy === 'contend' ? ex : Math.min(ex, cap.luxuryTax - payroll(league, t.tid, season)));
-    return room > 0 ? [{ t, room, bar: cut ? swapBar(league, cut) : -Infinity }] : [];
-  });
-  // what a player asks a team moves with his interest in it, up to 10% either way (see askingContract);
-  // his old team can also pay him on his Bird rights (see birdRoom)
-  const asks = (tid: number, p: Player, room: number) => room * Math.min(1.1, Math.max(0.9, teamAppeal(league, tid, p)));
-  const roomFor = (p: Player) => {
-    const bird = birdRoom(league, p, season);
-    return Math.max(0, bird ? asks(bird.tid, p, bird.room) : 0, ...buyers.filter((b) => valueScore(league, p) >= b.bar).map((b) => asks(b.t.tid, p, b.room)));
-  };
+  // price cuts come first, so AI teams get the first look at a new price
+  const allotted = marketMoneyMap(league);
+  const roomFor = (p: Player) => allotted.get(p.pid) ?? 0;
+  const summer = league.phase === 'freeAgency';
   for (const p of freeAgents(league)) {
     // (a restricted free agent who has signed an offer sheet is waiting on his team, not the market)
     if (p.faDays === undefined || p.rfa?.sheet) continue;
+    const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
+    const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
+    const years = Math.min(3, p.asking?.years ?? preferredYears(league, p));
+    // in the summer his price holds through the market's first days, then comes down a step a day
+    // toward what the market's money would pay him (see SUMMER_STEP and marketMoneyMap)
+    if (summer && !p.rfa) {
+      if (today <= MARQUEE_DAYS) continue;
+      const money = roomFor(p);
+      const amount = money >= ask ? ask : Math.max(ask * (1 - SUMMER_STEP), money);
+      p.asking = { amount: Math.max(min, Math.round(amount / 10) * 10), years };
+      p.faDays = 1;
+      continue;
+    }
     // (saves from before the 5-day clock can still be counting down from 30)
     p.faDays = Math.min(p.faDays, FA_PRICE_CUT_DAYS) - (offseason ? 1 : FA_PRICE_CUT_DAYS);
     if (p.faDays > 0) continue;
-    const ask = Math.min(p.asking?.amount ?? Infinity, marketSalary(league, p));
-    const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
-    // (a star nobody could pay most of his value once the first days have passed takes the best
-    // money there is, an exception from a contender as a rule, rather than wait for it to be spent)
-    const room = offseason && league.faDay >= MARQUEE_DAYS ? roomFor(p) : Infinity;
-    const star = offseason && valueScore(league, p) >= STAR_HOLD.value && league.faDay < STAR_HOLD.late && room >= marketSalary(league, p) * STAR_HOLD.floor;
-    // (a good free agent's softens slowly, and never under his summer floor: see GOOD_FA_CUT)
-    const floor = summerFloor(league, p);
-    const cut =
-      offseason && p.ovr >= SUMMER_FLOOR.ovr
-        ? valueScore(league, p) >= STAR_HOLD.value && league.faDay < STAR_HOLD.day
-          ? ask
-          : Math.max(ask * (1 - GOOD_FA_CUT), floor)
-        : !star
-          ? Math.min(ask * 0.85, roomFor(p))
-          : league.faDay < STAR_HOLD.day
-            ? ask
-            : Math.max(ask * 0.85, marketSalary(league, p) * STAR_HOLD.floor);
-    p.asking = { amount: Math.max(min, Math.round(Math.max(cut, floor) / 10) * 10), years: Math.min(3, p.asking?.years ?? preferredYears(league, p)) };
+    // in season (and a restricted free agent in the summer) every five days: by 15%, or down to what
+    // the market's money would pay him; in the summer only when it couldn't pay his price, and never
+    // below it
+    const money = roomFor(p);
+    const cut = !offseason ? Math.min(ask * 0.85, money) : money >= ask ? ask : Math.max(ask * 0.85, money);
+    p.asking = { amount: Math.max(min, Math.round(Math.max(cut, summerFloor(league, p)) / 10) * 10), years };
     p.faDays = FA_PRICE_CUT_DAYS;
   }
   // the top free agents whose day it is pick among the AI teams' bids, then the rest of the market moves
@@ -803,7 +870,7 @@ export const BID_FLOOR = 0.9;
  */
 export function marqueeFA(league: League, p: Player): boolean {
   if (league.phase !== 'freeAgency' || p.tid !== FREE_AGENT || p.waivers || p.rfa) return false;
-  return valueScore(league, p) >= 78 || askingContract(league, p).amount >= CAP_FOR(league, contractSeason(league)).salaryCap * MARQUEE_ASK;
+  return valueScore(league, p) >= MARQUEE_VALUE || askingContract(league, p).amount >= CAP_FOR(league, contractSeason(league)).salaryCap * MARQUEE_ASK;
 }
 
 export const pendingBid = (league: League, pid: number): FaBid | undefined => league.faBids?.find((b) => b.pid === pid);
@@ -941,20 +1008,24 @@ function aiWants(league: League, t: Team, p: Player, season: number, memo?: Map<
 /**
  * The market closes: a free agent worth 78+ still unsigned whose old team holds his Bird rights
  * goes back to it, as a holdout ends, on a deal of two years at most at his price now (within what
- * his rights allow), when it wants him and has the spot (see aiWants): past its budget even, since
- * nobody else could pay him and a team doesn't let a player that good walk for nothing.
+ * his rights allow), when it wants him, has the spot (see aiWants) and stays within what it would
+ * pay to keep him (keepCeiling): a team doesn't let a player that good walk for nothing, but it
+ * doesn't go past the second apron for him either (brought back past every budget, the top free
+ * agents took AI payrolls to 1.8× the cap).
  */
 export function aiLateReturns(league: League) {
   if (league.phase !== 'freeAgency') return;
   const season = contractSeason(league);
   const left = freeAgents(league)
-    .filter((p) => !p.rfa && !p.waivers && valueScore(league, p) >= 78)
+    .filter((p) => !p.rfa && !p.waivers && valueScore(league, p) >= MARQUEE_VALUE)
     .sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid);
   for (const p of left) {
     const old = seasonTid(p, league.season);
     if (old === null || old === league.userTid || releasedBy(league, p, old) || !aiWants(league, league.teams[old], p, season)) continue;
     const ask = askingContract(league, p, old);
-    signPlayer(league, p, old, Math.min(ask.amount, resignLimit(league, p, old)), Math.min(2, ask.years), { start: season, bird: true });
+    const amount = Math.min(ask.amount, resignLimit(league, p, old));
+    if (payroll(league, old, season) + amount > keepCeiling(CAP_FOR(league, season), league.teams[old])) continue;
+    signPlayer(league, p, old, amount, Math.min(2, ask.years), { start: season, bird: true });
   }
 }
 
@@ -976,19 +1047,23 @@ export function faInterest(league: League, p: Player, memo?: Map<number, WantRea
   for (const t of league.teams) {
     if (t.tid === league.userTid || releasedBy(league, p, t.tid) || !aiWants(league, t, p, season, memo)) continue;
     const ask = askingContract(league, p, t.tid);
-    // his old team can still bring him back on his Bird rights, over the cap (see birdRoom)
-    if (bird && t.tid === bird.tid && ask.amount <= bird.room) {
-      out.push({ tid: t.tid, amount: ask.amount, years: ask.years, route: 'min', bird: true, utility: offerUtility(league, p, t.tid, ask.amount, ask.years, prefs) });
+    // his old team can still bring him back on his Bird rights, over the cap (see birdRoom; his price
+    // came down to its room at his interest in it, so within a rounding of it)
+    if (bird && t.tid === bird.tid && ask.amount <= bird.room + 100) {
+      const amount = Math.max(Math.min(ask.amount, Math.floor(bird.room / 10) * 10), Math.min(ask.amount, CAP_FOR(league, season).vetMin));
+      out.push({ tid: t.tid, amount, years: ask.years, route: 'min', bird: true, utility: offerUtility(league, p, t.tid, amount, ask.years, prefs) });
       continue;
     }
     let amount = ask.amount;
     let route = aiRoute(league, t.tid, amount, season, p, ask.years);
+    // (a rebuilder pays a veteran of 29 or older the minimum at most, see aiSign)
+    if (route !== 'min' && t.strategy === 'rebuild' && playerAge(p, season) >= 29) continue;
     // a good free agent's price a little past what a team can pay: it bids the most its cap space or
     // best exception reaches, when that's at least 90% of his price (the least he considers from the
     // user, see bidFloor) and his summer floor (see SUMMER_FLOOR); he weighs it against the others
     const need = Math.max(floor, ask.amount * BID_FLOOR);
     // (the mid-level is the biggest exception: past it only cap space can reach, and that's checked first)
-    if (!route && floor > 0 && need <= Math.max(exceptionAmount(league, 'mle', season), CAP_FOR(league, season).salaryCap - payroll(league, t.tid, season))) {
+    if (!route && need <= Math.max(exceptionAmount(league, 'mle', season), CAP_FOR(league, season).salaryCap - payroll(league, t.tid, season))) {
       const most = Math.floor(Math.min(ask.amount, Math.max(capSpace(league, t.tid, season), bestExceptionRoom(league, t.tid, season))) / 50) * 50;
       if (most >= need) {
         amount = most;

@@ -171,7 +171,36 @@ export function marketSalary(league: League, p: Player): number {
   let s = valueScore(league, p);
   const a = age(league, p);
   if (a >= 30) s += (a - 29) * 1.1 * STAR_AGE_PAY * clamp((p.ovr - 75) / 10, 0, 1);
+  // the market pays for the role he has shown: past what his minutes say, a quarter of his value counts
+  const mpg = roleMpg(league, p);
+  if (mpg !== null) {
+    const shown = ROLE_PAY.base + ROLE_PAY.perMin * mpg;
+    if (s > shown) s = shown + (s - shown) * ROLE_PAY.keep;
+  }
   return salaryForScore(league, s, p.experience);
+}
+
+/**
+ * What a player's minutes say he is worth on the market (a value score, see valueScore): ROLE_PAY.base
+ * plus ROLE_PAY.perMin a minute a game, so 20 minutes say 80 and 30 say 89, and only what his value
+ * has past that is discounted (to ROLE_PAY.keep). A two-way the staff played 3.7 minutes a game in 21
+ * games asked $23.1M a season on his 80 OVR; the NBA pays a player who hasn't played like a prospect.
+ */
+export const ROLE_PAY = { base: 62, perMin: 0.9, keep: 0.25 };
+
+/** Minutes a game he played in his latest regular season of 15+ games (this one or the last), or null without one. */
+export function roleMpg(league: League, p: Player): number | null {
+  for (const season of [league.season, league.season - 1]) {
+    let gp = 0;
+    let min = 0;
+    for (const s of p.stats)
+      if (s.season === season && !s.playoffs) {
+        gp += s.gp;
+        min += s.min;
+      }
+    if (gp >= 15) return min / gp;
+  }
+  return null;
 }
 
 /** Fair annual salary ($K) for a value score, within the minimum and max for his years in the league. */
@@ -418,12 +447,18 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
  */
 export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6 };
 
-/** The least a free agent's price comes down to in the summer market and the preseason (see SUMMER_FLOOR), $K; 0 for anyone else, and in season. */
+/**
+ * The least a free agent's price comes down to for any one team in the summer market and the
+ * preseason (see SUMMER_FLOOR), $K; 0 for anyone else, and in season. None once the market has
+ * brought his own price under it (the money there is couldn't pay it: see faDay's SUMMER_STEP): his
+ * price is then what teams can pay, each at his interest in it, as the price cut counted it.
+ */
 export function summerFloor(league: League, p: Player): number {
   if (p.tid !== FREE_AGENT || p.ovr < SUMMER_FLOOR.ovr || p.waivers) return 0;
   const summer = league.phase === 'freeAgency';
   if (!summer && league.phase !== 'preseason') return 0;
-  return marketSalary(league, p) * (summer && league.faDay < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late);
+  const floor = marketSalary(league, p) * (summer && league.faDay < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late);
+  return p.asking && p.asking.amount < floor - 10 ? 0 : floor;
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {
@@ -717,8 +752,10 @@ export function summerRoster(league: League, tid: number): number {
  * its young stars, `core`, see teamCore) it keeps at almost any price its strategy allows: a
  * contender up to the first apron, a retooling team up to the tax line, a rebuilder its young core
  * (28 or under) up to the tax line; a star worth 86+ up to the second apron, and a young one (28
- * or under) on any team to 10% of the cap past it: a franchise keeps its young star and sheds
- * salary around him later (see dumpDeal).
+ * or under) on any team as well: a franchise keeps its young star and sheds salary around him later
+ * (see dumpDeal). Nothing past aiTopLine, just under the second apron: with 10% of the cap past it
+ * for young stars, and veterans brought back past every budget when free agency closed, AI payrolls
+ * climbed to 1.4-1.8× the cap (four or five teams past the second apron a season, OKC at 1.93×).
  * Anyone else: a good young player (80+, 28 or under), an asset to keep and trade later rather
  * than let walk, to the first apron on a contender and the tax line elsewhere; otherwise a
  * contender up to a little under the tax line (a starter worth 80+ to the line), a retooling team
@@ -729,10 +766,11 @@ export function summerRoster(league: League, tid: number): number {
  */
 export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: number, who: { core: boolean; young: boolean } = { core: false, young: true }): number {
   const star = v >= 86;
+  const top = aiTopLine(cap);
   if (who.core) {
-    if (star && who.young) return cap.secondApron + cap.salaryCap * 0.1;
-    if (t.strategy === 'contend') return star ? cap.secondApron : cap.firstApron;
-    if (t.strategy === 'retool') return star ? cap.secondApron : cap.luxuryTax;
+    if (star && who.young) return top;
+    if (t.strategy === 'contend') return star ? top : cap.firstApron;
+    if (t.strategy === 'retool') return star ? top : cap.luxuryTax;
     if (who.young) return cap.luxuryTax;
   }
   const mid = (cap.salaryCap + cap.luxuryTax) / 2;
@@ -742,6 +780,25 @@ export function payrollBudget(cap: ReturnType<typeof CAP_FOR>, t: Team, v: numbe
   if (t.strategy === 'retool') return v >= 80 ? under : mid;
   return v >= 82 ? mid : cap.salaryCap * (who.young ? 0.95 : 0.85);
 }
+
+/**
+ * How far an AI team goes to keep a good free agent of its own (worth 78+) on his Bird rights rather
+ * than let him walk for nothing: a contender to the second apron, a retooling team to the first, a
+ * rebuilder to the tax line (see birdRoom and aiLateReturns). Nothing an AI team takes on by choice
+ * goes past the second apron (see payrollBudget); a team past it sheds salary (see aiTaxDumps).
+ */
+export function keepCeiling(cap: ReturnType<typeof CAP_FOR>, t: Team): number {
+  return t.strategy === 'contend' ? aiTopLine(cap) : t.strategy === 'retool' ? cap.firstApron : cap.luxuryTax;
+}
+
+/**
+ * The most payroll an AI team commits to by choice: AI_APRON_ROOM of the cap under the second
+ * apron, so the draft picks it signs, the minimum deals that fill its roster and its players'
+ * raises don't take it over (budgeted to the apron itself, two or three teams a season opened past
+ * it).
+ */
+export const aiTopLine = (cap: ReturnType<typeof CAP_FOR>) => cap.secondApron - cap.salaryCap * AI_APRON_ROOM;
+export const AI_APRON_ROOM = 0.03;
 
 /** A team's core for its payroll budget (see payrollBudget): its three most valuable players, and any young star (25 or younger, worth 82+). */
 export function teamCore(league: League, tid: number): Set<number> {

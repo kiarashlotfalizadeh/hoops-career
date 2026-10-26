@@ -101,9 +101,9 @@ export function aiToAiTrade(league: League, rng: Rng) {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return;
   const n = draws(rng, aiTradeRate(league));
   for (let i = 0; i < n; i++) aiTradeOnce(league, rng);
-  // the taxpayers' last calls (see aiTaxDumps)
+  // the taxpayers' calls (see aiTaxDumps): once summer signings can be traded, and the last ones
   const left = league.tradeDeadlineDay - league.day;
-  if (left === 7 || left === 0) aiTaxDumps(league, rng);
+  if (left === 7 || left === 0 || league.day === DEC_15) aiTaxDumps(league, rng);
 }
 
 /**
@@ -157,6 +157,18 @@ function draftNightRoom(league: League, deal: TradeOffer): boolean {
 
 // ---------------------------------------------------------------- sales: a veteran for youth and picks
 
+/**
+ * An AI team doesn't trade away a player it got in a trade in the last AI_RETRADE_DAYS days (the
+ * NBA's two-month wait before a traded player's salary can be combined, as a front office's
+ * patience): without it, 16 of 104 players traded in a season moved twice or more, some three
+ * times in 40 days, and the news read as noise (round-2 front-office review).
+ */
+export const AI_RETRADE_DAYS = 60;
+
+/** Did he come to his team in a trade in the last AI_RETRADE_DAYS days (see AI_RETRADE_DAYS)? */
+export const justTraded = (league: League, p: Player) =>
+  p.tradedFrom?.season === league.season && p.tradedFrom.day !== undefined && league.day - p.tradedFrom.day < AI_RETRADE_DAYS;
+
 /** A retooling team this far under .500 (with 20 games played) is out of it: its veterans are for sale. */
 const FADING = { games: 20, pct: 0.45 };
 
@@ -179,7 +191,7 @@ export function sellable(league: League, tid: number): Player[] {
   const ts = curTeamSeason(league, tid);
   const fading = league.phase === 'regular' && ts.won + ts.lost >= FADING.games && winPct(ts) < FADING.pct;
   return roster.filter((p) => {
-    if (untradeable(league, p) || p.ovr < 70) return false;
+    if (untradeable(league, p) || justTraded(league, p) || p.ovr < 70) return false;
     const a = age(league, p);
     const r = rank.get(p.pid)!;
     const leaving = p.ovr >= 80 && a >= 26 && contractExp(p.contract) === cs && !p.contract.next && !!extensionRefusal(league, p);
@@ -268,7 +280,7 @@ const STAR_TARGET = 85;
 export function aiPackage(league: League, buyer: number, seller: number, vet: Player): TradeOffer | null {
   const sal = (p: Player) => capSalary(league, p.pid);
   // nothing the rules hold back: a recent signing, or an asset the seller traded away this season
-  const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && untradeable(league, a));
+  const movable = (a: Player | DraftPick) => !tradedAwayBy(league, a, seller) && !('pid' in a && (untradeable(league, a) || justTraded(league, a)));
   const roster = tradeRoster(league, buyer).sort((x, y) => y.ovr - x.ovr);
   // (for a star, 85+, only its two best: a contender gives up its third-best player to land one)
   const avail = roster.slice(vet.ovr >= STAR_TARGET ? 2 : 3).filter((p) => p.ovr < vet.ovr && movable(p));
@@ -326,7 +338,20 @@ export function aiPackage(league: League, buyer: number, seller: number, vet: Pl
     } else if (pkg.length < maxPkg && sellerFits(x)) pkg.push(x);
   }
   const deal = offer();
-  return sellerYes() && teamDelta(league, deal, buyer) >= 0 && !validateTrade(league, deal).length ? deal : null;
+  return sellerYes() && teamDelta(league, deal, buyer) >= 0 && !pastSecondApron(league, deal, buyer) && !validateTrade(league, deal).length ? deal : null;
+}
+
+/**
+ * Would this deal take team `tid` past the second apron, or further past it? AI teams don't buy
+ * their way past it (the repeater tax, the frozen first and the lost tools aren't worth a player to
+ * a front office minding its owner's money); a team past it can still shed salary.
+ */
+export function pastSecondApron(league: League, deal: TradeOffer, tid: number): boolean {
+  const s = contractSeason(league);
+  const sal = (pids: number[]) => pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
+  const [mine, other] = deal.a.tid === tid ? [deal.a, deal.b] : [deal.b, deal.a];
+  const net = sal(other.pids) - sal(mine.pids);
+  return net > 0 && capPayroll(league, tid, s) + net > CAP_FOR(league, s).secondApron;
 }
 
 // ---------------------------------------------------------------- salary dumps
@@ -356,14 +381,19 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
   const givers: typeof over = [];
   while (givers.length < 3 && over.length) givers.push(over.splice(rng.weighted(over.map((x) => 1 / (1 + x.over / (cap.salaryCap * 0.05)))), 1)[0]);
   for (const { t, over } of givers) {
-    const roster = tradeRoster(league, t.tid).filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p));
+    const roster = tradeRoster(league, t.tid).filter((p) => capSalary(league, p.pid) > 0 && !untradeable(league, p) && !justTraded(league, p));
     // what it won't give up to get under: its eight best; a retooling team its five best; a
-    // rebuilder only its three best and its young players (25 or under, worth 70+)
+    // rebuilder only its three best and its young players (25 or under, worth 70+). Past the first
+    // apron a contender keeps its six best; past the second, a contender its five best and anyone
+    // else its three: a team that far over moves a rotation player rather than stay there
     const ranked = [...roster].sort((a, b) => valueScore(league, b) - valueScore(league, a));
+    const pay = capPayroll(league, t.tid, s);
+    const past = pay > cap.secondApron;
     const keep = new Set(
-      (t.strategy === 'rebuild' ? ranked.filter((p, i) => i < 3 || (age(league, p) <= 25 && valueScore(league, p) >= 70)) : ranked.slice(0, t.strategy === 'retool' ? 5 : 8)).map(
-        (p) => p.pid,
-      ),
+      (t.strategy === 'rebuild'
+        ? ranked.filter((p, i) => i < 3 || (!past && age(league, p) <= 25 && valueScore(league, p) >= 70))
+        : ranked.slice(0, past ? (t.strategy === 'contend' ? 5 : 3) : t.strategy === 'retool' ? 5 : pay > cap.firstApron ? 6 : 8)
+      ).map((p) => p.pid),
     );
     const under = roster.filter((p) => !keep.has(p.pid) && capSalary(league, p.pid) >= over).sort((a, b) => tradeValue(league, a) - tradeValue(league, b))[0];
     // a step toward the line: the least valuable contract outside the ones it keeps that a taker
@@ -378,22 +408,24 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
     ];
     if (!tries.length && worst) tries.push({ bad: worst, saves: over });
     for (const { bad, saves } of tries) {
-      const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && !tradedAwayBy(league, bad, x.tid))).slice(0, 6);
+      const takers = rng.shuffle(ai.filter((x) => x.tid !== t.tid && !tradedAwayBy(league, bad, x.tid))).slice(0, past ? ai.length : 6);
       const sal = capSalary(league, bad.pid);
       for (const x of takers) {
         const taker = (o: TradeOffer) => teamDelta(league, o, x.tid) >= 0;
         const deal = dumpPackage(league, t.tid, x.tid, bad, taker);
-        if (deal && teamDelta(league, deal, t.tid) >= 0) return deal;
+        if (deal && teamDelta(league, deal, t.tid) >= 0 && !pastSecondApron(league, deal, x.tid)) return deal;
         // for a cheaper player back: the taker's least valuable one whose salary still leaves the giver
         // under the line (or a step closer) and lets the taker match the salary it takes in
         const swap = (b: Player): TradeOffer => ({ a: { tid: x.tid, pids: [b.pid], dpids: [] }, b: { tid: t.tid, pids: [bad.pid], dpids: [] } });
         const back = tradeRoster(league, x.tid)
-          .filter((p) => capSalary(league, p.pid) > 0 && capSalary(league, p.pid) <= sal - saves && !untradeable(league, p) && !tradedAwayBy(league, p, t.tid))
+          .filter(
+            (p) => capSalary(league, p.pid) > 0 && capSalary(league, p.pid) <= sal - saves && !untradeable(league, p) && !justTraded(league, p) && !tradedAwayBy(league, p, t.tid),
+          )
           .sort((a, b) => tradeValue(league, a) - tradeValue(league, b))
           .find((p) => salaryMatchGap(league, swap(p), 'a') === 0);
         if (!back) continue;
         const shed = dumpPackage(league, t.tid, x.tid, bad, taker, [back]);
-        if (shed && teamDelta(league, shed, t.tid) >= 0) return shed;
+        if (shed && teamDelta(league, shed, t.tid) >= 0 && !pastSecondApron(league, shed, x.tid)) return shed;
       }
     }
   }
@@ -401,10 +433,13 @@ function dumpDeal(league: League, rng: Rng, only?: number): TradeOffer | null {
 }
 
 /**
- * A team over the tax line that isn't contending, or a contender past the second apron, works at
+ * A team over the tax line that isn't contending, or a contender past the first apron, works at
  * getting under it when the deals are there: on the summer market's third day (while some cap
- * space is still open), in the preseason, and a week before the deadline and on deadline day, it
- * tries up to two salary dumps (see dumpDeal), the second while it is still over.
+ * space is still open), in the preseason, on December 15, and a week before the deadline
+ * and on deadline day, it tries up to two salary dumps (see dumpDeal), the second while it is
+ * still over; a team past the second apron up to three, offered to every other team. With only
+ * contenders past the second apron working at it, and six takers asked, 10-16 teams paid the tax a
+ * season and two or three opened past the second apron.
  */
 export function aiTaxDumps(league: League, rng: Rng) {
   if (tradingClosedReason(league)) return;
@@ -412,9 +447,9 @@ export function aiTaxDumps(league: League, rng: Rng) {
   const cap = CAP_FOR(league, s);
   for (const t of league.teams) {
     if (t.tid === league.userTid) continue;
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const pay = capPayroll(league, t.tid, s);
-      if (pay <= cap.luxuryTax || (t.strategy === 'contend' && pay <= cap.secondApron)) break;
+      if (pay <= cap.luxuryTax || (t.strategy === 'contend' && pay <= cap.firstApron) || (i === 2 && pay <= cap.secondApron)) break;
       const deal = withHoldsMemo(() => dumpDeal(league, rng, t.tid));
       if (!deal) break;
       executeTrade(league, deal);

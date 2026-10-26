@@ -23,6 +23,7 @@ import {
   extensionRefusal,
   injuryShare,
   marketSalary,
+  roleMpg,
   onWaivers,
   releaseDeadMoney,
   releasePlayer,
@@ -83,7 +84,7 @@ import { gameFinances } from '../league/finances';
 import { takeOverTeam } from '../league/owner';
 import { txnLine, txnText } from '../league/transactions';
 import { CAP } from '../constants';
-import { contractExp, extensionStart, salaryFor } from '../playerGen';
+import { blankStats, contractExp, extensionStart, salaryFor } from '../playerGen';
 import type { League, Player } from '../types';
 import { FREE_AGENT } from '../types';
 
@@ -164,7 +165,7 @@ function agreed(l: League, p: Player, years: number): number {
 function tradedThisSeason(l: League, p: Player, to: number) {
   const from = p.tid;
   executeTrade(l, { a: { tid: from, pids: [p.pid], dpids: [] }, b: { tid: to, pids: [], dpids: [] } });
-  expect(p.tradedFrom).toEqual({ tid: from, season: l.season });
+  expect(p.tradedFrom).toEqual({ tid: from, season: l.season, day: l.day });
 }
 
 const tradeBack = (l: League, p: Player, from: number, to: number) =>
@@ -800,7 +801,7 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     const [stay, go] = standardRoster(l, U);
     for (const p of [stay, go]) p.tradedFrom = { tid: AI, season: l.season };
     signPlayer(l, stay, U, 10_000, 2, { news: false, start: l.season + 1 });
-    expect(stay.tradedFrom).toEqual({ tid: AI, season: l.season });
+    expect(stay.tradedFrom).toMatchObject({ tid: AI, season: l.season });
     go.tid = FREE_AGENT;
     signPlayer(l, go, 2, 10_000, 2, { news: false, start: l.season + 1 });
     expect(go.tradedFrom).toBeUndefined();
@@ -817,6 +818,19 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(convertTwoWay(l, tw.pid).ok).toBe(true);
     expect(tw.contract.start).toBe(l.season + 1);
     expect(signedThisSummer(l).map((p) => p.pid)).toEqual([fa.pid]);
+  }
+
+  // the market pays for the role he has shown (ROLE_PAY): an 80 the staff played 3.7 minutes a game in
+  // 21 games asks a bench player's money, not star money; at 32 minutes a game he asks his full price
+  {
+    const l = talksLeague();
+    const p = freeAgent(l, 80, 25);
+    const full = marketSalary(l, p);
+    p.stats.push({ ...blankStats(l.season, AI, false), gp: 21, min: 78 });
+    expect(roleMpg(l, p)).toBeCloseTo(3.7, 1);
+    expect(marketSalary(l, p)).toBeLessThan(0.05 * CAP_FOR(l, l.season).salaryCap);
+    p.stats[p.stats.length - 1] = { ...blankStats(l.season, AI, false), gp: 60, min: 60 * 32 };
+    expect(marketSalary(l, p)).toBe(full);
   }
 }, 120_000);
 

@@ -28,6 +28,7 @@ import {
   PREF_KEYS,
   SUMMER_FLOOR,
   askingContract,
+  summerFloor,
   capSpace,
   convertTwoWay,
   decideTeamOption,
@@ -55,6 +56,8 @@ import {
 } from '../league/contracts';
 import {
   BID_FLOOR,
+  MARKET_HOLD_DAYS,
+  MARKET_STEP,
   bidFloor,
   bidStanding,
   capHolds,
@@ -62,6 +65,7 @@ import {
   faDay,
   faInterest,
   fillRosters,
+  marketMoney,
   marqueeFA,
   offerBlockedReason,
   offerRoute,
@@ -223,7 +227,8 @@ function young(l: League, p: Player, tid: number, o: { ovr?: number; age?: numbe
   p.contract = { start: l.season - 1, salaries: [o.final ?? 3000, o.final ?? 3000], ...(o.pick ? { rookie: true } : {}) };
   p.draft = { year: l.season - 3, round: o.pick ? 1 : 2, pick: o.pick ?? 40, tid };
   p.stats = p.stats.filter((s) => s.season !== l.season);
-  if (o.played !== false) statsLine(p, l.season, tid, false).gp = 60;
+  // (a rotation player's minutes: the market pays for the role he has shown, see roleMpg)
+  if (o.played !== false) Object.assign(statsLine(p, l.season, tid, false), { gp: 60, min: 60 * 26 });
   if (tid >= 0 && !l.teams[tid].rotation.order.includes(p.pid)) l.teams[tid].rotation.order.push(p.pid);
   return p;
 }
@@ -446,7 +451,9 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     expect(convertTwoWay(l, twoWayRoster(l, U)[0].pid).reason).toMatch(/No open roster spot \(21\)/);
   }
 
-  // a star holds his price over the first days of free agency, and takes the best money there is when no team could pay most of his value
+  // a top free agent holds his price through the market's first days; then, no team able to pay it,
+  // it comes down a step a day toward the most a team could pay him, never below it, and he signs
+  // where that money is, at about it (see SUMMER_STEP)
   {
     const l = txLeague();
     l.phase = 'freeAgency';
@@ -454,81 +461,90 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     for (const t of l.teams) overCap(l, t.tid);
     const star = shape(l, freeAgents(l)[0], 88, 27);
     star.contract = { start: l.season, salaries: [0] };
+    // (a starter's minutes: the market pays for the role he has shown, see roleMpg)
+    star.stats = [];
+    Object.assign(statsLine(star, l.season, 1, false), { gp: 70, min: 70 * 32 });
+    // (his old team let him go: no Bird rights to bring him back on)
+    star.released = { tid: 1, season: l.season };
+    star.asking = undefined;
     star.asking = askingContract(l, star);
     star.faDays = 1;
     const start = star.asking.amount;
     const rng = new Rng(4);
     faDay(l, rng, 0, 1);
     expect(star.asking.amount).toBe(start);
-    // every team over the cap and no exception near his price: from day 15 it softens a little at a
-    // time and holds his summer floor (no half-price star because nobody could pay him), and a team
-    // whose cap space reaches 90% of it bids that (see faInterest)
-    l.faDay = 15;
-    star.faDays = 1;
-    faDay(l, rng, 0, 16);
+    // (over the cap everywhere: a mid-level is the most anyone has)
+    const money = marketMoney(l, star);
+    expect(money).toBeGreaterThan(0);
+    expect(money).toBeLessThan(start * BID_FLOOR);
+    l.faDay = MARKET_HOLD_DAYS;
+    faDay(l, rng, 0, MARKET_HOLD_DAYS + 1);
     expect(star.tid).toBe(FREE_AGENT);
-    expect(star.asking!.amount).toBeGreaterThanOrEqual(Math.min(start * 0.96, marketSalary(l, star) * SUMMER_FLOOR.early) - 10);
-    expect(star.asking!.amount).toBeLessThan(start);
-    const rich = l.teams.find((t) => t.tid !== U)!;
-    for (const p of standardRoster(l, rich.tid).slice(5)) releasePlayer(l, p, { news: false });
-    rich.deadMoney = [];
-    for (const p of standardRoster(l, rich.tid)) shape(l, p, 70, 27, CAP_FOR(l, contractSeason(l)).vetMin, 2);
-    const bid = faInterest(l, star).find((o) => o.tid === rich.tid);
-    expect(bid?.amount).toBeGreaterThanOrEqual(star.asking!.amount * BID_FLOOR - 50);
-  }
-
-  // an 80+ free agent's summer price softens slowly and holds a floor (75% of his market value for
-  // 20 days, 60% after), whatever teams can pay, for the user too (a contender's ring-chase discount
-  // included); a team whose mid-level comes within 90% of his price bids it
-  {
-    const l = txLeague();
-    l.phase = 'freeAgency';
-    l.faDay = 0;
-    for (const t of l.teams) overCap(l, t.tid);
-    const p = shape(l, freeAgents(l)[0], 81, 31);
-    p.contract = { start: l.season, salaries: [0] };
-    p.asking = askingContract(l, p);
-    p.faDays = 1;
-    const m = marketSalary(l, p);
-    const rng = new Rng(3);
-    for (let d = 1; d < 20 && p.tid === FREE_AGENT; d++) {
+    expect(Math.abs(star.asking!.amount - start * (1 - MARKET_STEP))).toBeLessThan(20);
+    for (let d = MARKET_HOLD_DAYS + 1; d < 25 && star.tid === FREE_AGENT; d++) {
+      const most = marketMoney(l, star);
       l.faDay = d;
       faDay(l, rng, 0, d + 1);
-      if (p.tid === FREE_AGENT) {
-        expect(p.asking!.amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 10);
-        expect(askingContract(l, p, U).amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
-      }
+      if (star.tid === FREE_AGENT) expect(star.asking!.amount).toBeGreaterThanOrEqual(most - 20);
     }
-    if (p.tid === FREE_AGENT) {
-      l.faDay = 25;
-      p.faDays = 1;
-      faDay(l, rng, 0, 26);
-    }
-    // signed at a team's price within reach, or still holding at least 60%
-    const now = p.tid === FREE_AGENT ? p.asking!.amount : p.contract.salaries[0];
-    expect(now).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.late - 50);
+    expect(star.tid).toBeGreaterThanOrEqual(0);
+    expect(star.contract.salaries[0]).toBeGreaterThanOrEqual(money * BID_FLOOR * 0.9);
+    expect(star.contract.salaries[0]).toBeLessThan(start * 0.5);
   }
 
-  // cuts prices every 5 days until the market can pay, and the market clears (T1)
+  // an 80+ free agent's summer floor (75% of his value) holds a keen team's or a ring chaser's ask
+  // until the market itself brings his price under it; then each team asks his price at its
+  // interest in it, as the price cut counted it
+  {
+    const l = txLeague();
+    l.phase = 'freeAgency';
+    l.faDay = 0;
+    const p = shape(l, freeAgents(l)[0], 81, 31);
+    p.contract = { start: l.season, salaries: [0] };
+    p.stats = [];
+    Object.assign(statsLine(p, l.season, 1, false), { gp: 70, min: 70 * 30 });
+    p.asking = undefined;
+    p.asking = askingContract(l, p);
+    const m = marketSalary(l, p);
+    l.teams[2].strategy = 'contend';
+    expect(Math.abs(summerFloor(l, p) - m * SUMMER_FLOOR.early)).toBeLessThan(1);
+    for (const t of l.teams) expect(askingContract(l, p, t.tid).amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
+    p.asking = { amount: Math.round(m * 0.5), years: 2 };
+    expect(summerFloor(l, p)).toBe(0);
+    // (a 31-year-old takes less from a contender: see ringChase)
+    expect(askingContract(l, p, 2).amount).toBeLessThan(p.asking.amount);
+  }
+
+  // a rotation player's summer price holds through the market's first days, then comes down a step a
+  // day toward what the market's money would pay him (never below it), on a deal of three years at
+  // most, and the market clears (T1)
   {
     const l = txLeague();
     l.phase = 'freeAgency';
     l.faDay = 0;
     for (const t of l.teams) overCap(l, t.tid);
-    // (a player under star level, no top free agent: a star holds his price a while, see above)
     const star = shape(l, freeAgents(l)[0], 76, 27);
     star.contract = { start: l.season, salaries: [0] };
+    star.stats = [];
+    Object.assign(statsLine(star, l.season, 1, false), { gp: 70, min: 70 * 26 });
+    star.asking = undefined;
     star.asking = askingContract(l, star);
     star.faDays = 5;
     const start = star.asking.amount;
     const rng = new Rng(4);
-    for (let d = 0; d < 4; d++) faDay(l, rng, 0);
+    for (let d = 1; d <= MARKET_HOLD_DAYS; d++) faDay(l, rng, 0, d);
     expect(star.asking.amount).toBe(start);
-    faDay(l, rng, 0);
-    // nobody can pay more than the mid-level (at his interest in the team), so that's where his price goes
-    expect(star.asking.amount).toBeLessThanOrEqual(Math.max(...l.teams.map((t) => mleRoom(l, t.tid) * teamAppeal(l, t.tid, star))) + 10);
-    expect(star.asking.years).toBeLessThanOrEqual(3);
-    for (let d = 0; d < 10 && star.tid === FREE_AGENT; d++) faDay(l, rng);
+    const money = marketMoney(l, star);
+    l.faDay = MARKET_HOLD_DAYS;
+    faDay(l, rng, 0, MARKET_HOLD_DAYS + 1);
+    if (star.tid === FREE_AGENT) {
+      expect(star.asking.amount).toBeGreaterThanOrEqual(Math.min(start, money) - 20);
+      expect(star.asking.years).toBeLessThanOrEqual(3);
+    }
+    for (let d = MARKET_HOLD_DAYS + 1; d < 20 && star.tid === FREE_AGENT; d++) {
+      l.faDay = d;
+      faDay(l, rng, 1, d + 1);
+    }
     expect(star.tid).toBeGreaterThanOrEqual(0);
   }
 
@@ -555,8 +571,11 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     fa.experience = 5;
     fa.asking = { amount: 20_000, years: 3 };
     fa.faDays = 1;
-    faDay(l, new Rng(2), 0);
-    expect(fa.asking.amount).toBe(vetMin);
+    // (nobody's money for him: past the market's first days his price comes down a full step)
+    expect(marketMoney(l, fa)).toBe(0);
+    l.faDay = MARKET_HOLD_DAYS;
+    faDay(l, new Rng(2), 0, MARKET_HOLD_DAYS + 1);
+    expect(fa.asking.amount).toBe(Math.round((Math.min(20_000, marketSalary(l, fa)) * (1 - MARKET_STEP)) / 10) * 10);
   }
 
   // a full AI roster adds a clearly better free agent: a swap in season, a camp body in the summer (T1)
@@ -577,7 +596,12 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
       for (let d = 0; d < 10 && fa.tid === FREE_AGENT; d++) faDay(l, rng);
       expect(fa.tid).toBeGreaterThanOrEqual(0);
       // in season the weakest cheap player goes now; in the summer the cuts wait for opening night
-      expect(standardRoster(l, fa.tid).length).toBe(phase === 'regular' ? CAP.rosterMax : CAP.rosterMax + 1);
+      // (camp can hold others the team signed meanwhile: nobody is released)
+      if (phase === 'regular') expect(standardRoster(l, fa.tid).length).toBe(CAP.rosterMax);
+      else {
+        expect(standardRoster(l, fa.tid).length).toBeGreaterThanOrEqual(CAP.rosterMax + 1);
+        expect((l.transactions ?? []).some((t) => (t.kind === 'release' || t.kind === 'waive') && t.tids.includes(fa.tid))).toBe(false);
+      }
     }
   }
 

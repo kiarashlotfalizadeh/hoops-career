@@ -33,6 +33,8 @@ import {
   marketSalary,
   mleRoom,
   payrollBudget,
+  aiTopLine,
+  keepCeiling,
   playerMax,
   releasePlayer,
   releasedBy,
@@ -434,14 +436,15 @@ describe('the CBA', () => {
       ).toBe(true);
     }
 
-    // AI teams pay a young star past the second apron, a contender's 80+ starter to the tax line, and a rebuilder's veteran less than its young players
+    // AI teams pay a young star up to just under the second apron (never past it), a contender's 80+ starter to the tax line, and a rebuilder's veteran less than its young players
     {
       const l = league();
       const cap = CAP_FOR(l, l.season);
       const t = l.teams[AI];
       for (const strategy of ['contend', 'retool', 'rebuild'] as const) {
         t.strategy = strategy;
-        expect(payrollBudget(cap, t, 88, { core: true, young: true })).toBe(cap.secondApron + cap.salaryCap * 0.1);
+        expect(payrollBudget(cap, t, 88, { core: true, young: true })).toBe(aiTopLine(cap));
+        expect(aiTopLine(cap)).toBeLessThan(cap.secondApron);
       }
       t.strategy = 'contend';
       expect(payrollBudget(cap, t, 84, { core: true, young: false })).toBe(cap.firstApron);
@@ -478,21 +481,37 @@ describe('the CBA', () => {
       expect(bid()).toBeUndefined();
     }
 
-    // a good free agent nobody could pay goes back to his old team on his Bird rights as the market closes, past its budget even; not to a team that released him
+    // a good free agent nobody could pay goes back to his old team on his Bird rights as the market
+    // closes (and bids on them in the market, see birdRoom), within what it pays to keep one
+    // (keepCeiling: never past the second apron); not to a
+    // team that released him
     {
       const l = league();
       l.phase = 'freeAgency';
       const s = contractSeason(l);
+      const cap = CAP_FOR(l, s);
+      l.teams[AI].strategy = 'contend';
       const p = onTheMarket(l, 0, 4);
       const q = onTheMarket(l, 1, 4);
       q.released = { tid: AI, season: l.season };
       const anchor = standardRoster(l, AI)[0];
-      anchor.contract = { start: l.season, salaries: [anchor.contract.salaries[0] ?? 1_000, CAP_FOR(l, s).secondApron] };
+      const books = (pay: number) => {
+        anchor.contract = { start: l.season, salaries: [anchor.contract.salaries[0] ?? 1_000, 0] };
+        anchor.contract.salaries[1] = pay - payroll(l, AI, s);
+      };
+      books(cap.secondApron);
+      expect(faInterest(l, p).some((o) => o.tid === AI)).toBe(false);
+      aiLateReturns(l);
+      expect(p.tid).toBe(FREE_AGENT);
+      books(cap.salaryCap);
+      // (and in the market's first days it bids his price on them, as his decision day comes)
+      expect(faInterest(l, p).find((o) => o.tid === AI)?.bird).toBe(true);
       aiLateReturns(l);
       expect(p.tid).toBe(AI);
       expect(p.contract.start).toBe(s);
       expect(p.contract.salaries.length).toBeLessThanOrEqual(2);
       expect(p.contract.salaries[0]).toBe(Math.min(askingContract(l, { ...p, tid: FREE_AGENT, contract: { start: l.season, salaries: [0] } }, AI).amount, resignLimit(l, p, AI)));
+      expect(payroll(l, AI, s)).toBeLessThanOrEqual(keepCeiling(cap, l.teams[AI]));
       expect(q.tid).toBe(FREE_AGENT);
     }
 

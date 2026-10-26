@@ -52,6 +52,13 @@ export function setUntouchable(league: League, pid: number, on: boolean) {
 
 // ---------------------------------------------------------------- open offers
 
+/**
+ * An AI team's own offer still stands when the deal has drifted this share of what it sends against
+ * it since (an injury's share of the season left, a pick's projection): offers are made at or just
+ * over even, so a day's drift turned them down at once.
+ */
+const STANDS_DRIFT = 0.03;
+
 /** Why an offer can't be taken now (it expired, the rules or the other GM's mind changed), or null. */
 export function proposalError(league: League, p: Proposal): string | null {
   if (p.offer.a.tid !== league.userTid) return 'That offer was made to another team.';
@@ -60,7 +67,9 @@ export function proposalError(league: League, p: Proposal): string | null {
   if (errors.length) return errors[0];
   const asked = p.offer.a.pids.find((pid) => isUntouchable(league, pid));
   if (asked !== undefined) return `You made ${playerName(league.players[asked])} untouchable.`;
-  return evaluateTrade(league, p.offer).accept ? null : `The ${league.teams[p.tid].name} have changed their minds.`;
+  // (its own offer stands through a small drift in values as the days pass: STANDS_DRIFT of what it sends)
+  const ev = evaluateTrade(league, p.offer);
+  return ev.accept || (ev.ok && !ev.parts.tooManyFirsts && ev.delta >= -STANDS_DRIFT * Math.abs(ev.valueOut)) ? null : `The ${league.teams[p.tid].name} have changed their minds.`;
 }
 
 /** An offer whose mail is still unread stands at least this many days more, up to OFFER_MAX_DAYS days after it was made. */

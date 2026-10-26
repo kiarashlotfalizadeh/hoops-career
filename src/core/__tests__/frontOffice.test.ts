@@ -15,7 +15,7 @@ import { createLeague, defaultSettings, type SeedData } from '../league/create';
 import { CAP_FOR, addInbox, contractSeason, curTeamSeason, freeAgents, payroll, standardRoster, statsLine, teamPlayers, teamSeason, winPct } from '../league/helpers';
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { bidFloor, faDay, marqueeFA, offerUtility, userBid } from '../league/freeAgency';
-import { aiPackage, sellable } from '../league/aiTrades';
+import { AI_RETRADE_DAYS, aiPackage, justTraded, sellable } from '../league/aiTrades';
 import { buildSimInput, restForPlayoffs, restVeterans, seedLocked, youthLean, youthMovement, youthNews } from '../league/games';
 import { ownerEvaluation, takeOverTeam } from '../league/owner';
 import { activeCoach, candidateScore, coachCareer, openStint, profileOf, registryProblems, userCoach, type CarouselMoves } from '../league/coaches';
@@ -76,7 +76,8 @@ function ownFreeAgent(l: League, tid: number): Player {
   p.contract = { start: l.season - 2, salaries: [8_000, 8_000, 8_000] };
   p.birdSince = l.season - 2;
   p.joinedSeason = l.season - 2;
-  statsLine(p, l.season, tid, false).gp = 70;
+  // (a rotation player's minutes: the market pays for the role he has shown, see roleMpg)
+  Object.assign(statsLine(p, l.season, tid, false), { gp: 70, min: 70 * 24 });
   p.asking = undefined;
   p.asking = askingContract(l, p);
   return p;
@@ -217,6 +218,12 @@ describe('AI front offices', () => {
     // a rebuilder sells its best player once he's 28, and keeps a 27-year-old franchise player
     {
       const old = shop('rebuild', 15, 15, { ovr: 85, age: 28 });
+      expect(sellable(old.l, R).map((p) => p.pid)).toContain(old.best.pid);
+      // ...but not one it got in a trade in the last 60 days (AI_RETRADE_DAYS), nor another team's package with him
+      old.best.tradedFrom = { tid: (R + 1) % 30, season: old.l.season, day: old.l.day - 10 };
+      expect(justTraded(old.l, old.best)).toBe(true);
+      expect(sellable(old.l, R).map((p) => p.pid)).not.toContain(old.best.pid);
+      old.best.tradedFrom.day = old.l.day - AI_RETRADE_DAYS;
       expect(sellable(old.l, R).map((p) => p.pid)).toContain(old.best.pid);
       const young = shop('rebuild', 15, 15, { ovr: 85, age: 27 });
       expect(sellable(young.l, R).map((p) => p.pid)).not.toContain(young.best.pid);

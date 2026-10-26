@@ -172,8 +172,8 @@ it('help and the finder: "what would make this work?", counter-offers, value tie
     const l = txLeague(11);
     l.phase = 'regular';
     l.teams[AI].strategy = 'retool';
-    // we're over the cap, asking for a $12M player while sending nothing
-    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: CAP_FOR(l).salaryCap });
+    // we're over the cap (not near an apron), asking for a $12M player while sending nothing
+    l.teams[U].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: Math.max(0, CAP_FOR(l).salaryCap - payroll(l, U)) + 1_000 });
     const target = shape(l, standardRoster(l, AI)[0], 74, 27, 12_000);
     const ask = offer([], [target.pid]);
     expect(salaryMatchGap(l, ask, 'a')).toBeGreaterThan(0);
@@ -661,8 +661,11 @@ it("AI deals: offers to the user, AI-to-AI trades, the deadline's ramp, rumors a
       const before: League = structuredClone(l);
       const logged = l.transactions?.length ?? 0;
       aiToAiTrade(l, new Rng(i + 1));
-      // (a team over 15 waives its end of the bench after the deal: those go to free agency, not the other side)
-      const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid && p.tid >= 0);
+      // (each side's players as the log has them: a team over 15 waives its end of the bench after the
+      // deal, a player it just took in among them, and he is in free agency now, not on the other side)
+      const log = (l.transactions ?? []).slice(logged).find((t) => t.kind === 'trade');
+      const sent = new Set(log?.sides?.flatMap((x) => x.players.map((q) => q.pid)) ?? []);
+      const moved = Object.values(l.players).filter((p) => before.players[p.pid]?.tid !== p.tid && (p.tid >= 0 || sent.has(p.pid)));
       const picks = l.draftPicks.filter((d) => before.draftPicks.find((x) => x.dpid === d.dpid)!.tid !== d.tid);
       if (!moved.length) continue;
       // a day that brought two deals can't be told apart from its moves: each is checked on a day of its own

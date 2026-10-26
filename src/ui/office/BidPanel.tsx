@@ -3,8 +3,8 @@
 // matters to him.
 import { Check, Gavel, Minus, TriangleAlert, X } from 'lucide-react';
 import type { Player } from '../../core/types';
-import { PREF_KEYS, type PlayerPrefs, appealTerms, playerPrefs, willSign } from '../../core/league/contracts';
-import { bidDecideDay, bidRivals, bidStanding, pendingBid, withdrawBid } from '../../core/league/freeAgency';
+import { PREF_KEYS, type PlayerPrefs, appealTerms, askingContract, playerPrefs, willSign } from '../../core/league/contracts';
+import { MARKET_HOLD_DAYS, MARKET_STEP, bidDecideDay, bidRivals, bidStanding, marketMoney, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
@@ -29,6 +29,11 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   const rivals = offers.map((o) => league.teams[o.tid].abbrev);
   const best = offers[0];
   const atAsk = willSign(league, p, tid, amount, years).ok;
+  // the market's read: the most an AI team could pay him now, against his price (see marketMoney)
+  const room = useLeagueMemo(() => (league.phase === 'freeAgency' ? marketMoney(league, p) : null), [league, p]);
+  const ask = askingContract(league, p).amount;
+  const dry = room !== null && room < ask * 0.9;
+  const drops = league.faDay < MARKET_HOLD_DAYS ? `From day ${MARKET_HOLD_DAYS + 2} his price drops` : 'His price drops';
 
   // fit of your team for each priority: yes, no, or neither
   const fit: Record<keyof PlayerPrefs, { ok: boolean | null; note: string }> = {
@@ -50,6 +55,14 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
       <Callout icon={<Gavel size={18} className="dim" />}>
         <b>He weighs offers and decides {when}.</b>{' '}
         {rivals.length ? `Bidding: ${rivals.slice(0, 2).join(', ')}${rivals.length > 2 ? `, +${rivals.length - 2}` : ''}.` : 'No other team is bidding yet.'}
+        {dry && (
+          <div className="small dim2">
+            {room! > 0
+              ? `No other team can pay his ask: the most one could is about ${moneyExact(Math.round(room! / 100) * 100)}.`
+              : 'No other team has room for him past the minimum.'}{' '}
+            {drops} {Math.round(MARKET_STEP * 100)}% a day toward it, and he signs where the money is.
+          </div>
+        )}
         {bid && (
           <div className="fo-bid-mine">
             <span className="small dim2">

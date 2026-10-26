@@ -50,6 +50,8 @@ import {
   tradeRoster,
   untradeableReason,
   validateTrade,
+  CORNERSTONE,
+  USER_RELIEF_SHARE,
   type TradeOffer,
   type TradeSide,
 } from '../league/trades';
@@ -63,6 +65,7 @@ import { CAP } from '../constants';
 import { contractExp } from '../playerGen';
 import { Rng } from '../random';
 import type { DraftPick, League, Player } from '../types';
+import { consensusView } from '../league/prospects';
 import { FREE_AGENT } from '../types';
 
 const U = 0;
@@ -106,9 +109,6 @@ function shape(l: League, p: Player, ovr: number, age: number, salary?: number, 
   p.birdSince = l.season - 4;
   return p;
 }
-
-/** This season's prospects still on the board, most valuable first. */
-const prospectsBy = (l: League) => prospects(l, l.season).sort((a, b) => valueScore(l, b) - valueScore(l, a));
 
 const offer = (give: number[], get: number[], giveDp: number[] = [], getDp: number[] = [], tid = AI): TradeOffer => ({
   a: { tid: U, pids: give, dpids: giveDp },
@@ -275,6 +275,31 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(evaluateTrade(l, offer([p.pid], [])).delta).toBeLessThan(under - 2);
   }
 
+  // a taxpayer sells the user a good player at a discount, not for his salary's worth of relief:
+  // the relief counts for a quarter of his value at most (USER_RELIEF_SHARE), and a franchise player
+  // going out counts CORNERSTONE times as much; the dock says both
+  {
+    const l = txLeague();
+    l.phase = 'regular';
+    const cap = CAP_FOR(l);
+    const [star, ...rest] = standardRoster(l, AI);
+    shape(l, star, 85, 24, Math.round(cap.salaryCap * 0.2), 3);
+    for (const p of rest) shape(l, p, 74, 28, cap.vetMin * 3, 2);
+    // far past the second apron, and the user with room for him
+    for (const p of standardRoster(l, U)) p.contract = { start: l.season, salaries: [cap.minContract] };
+    l.teams[U].deadMoney = [];
+    l.teams[AI].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: cap.secondApron + 20_000 - payroll(l, AI) });
+    const v = tradeValue(l, star);
+    const ev = evaluateTrade(l, offer([], [star.pid]));
+    expect(ev.parts.reliefKind).toBe('discount');
+    expect(-ev.parts.money).toBeLessThanOrEqual(v * USER_RELIEF_SHARE + 0.01);
+    expect(ev.parts.reliefFull!).toBeGreaterThan(-ev.parts.money);
+    expect(ev.delta).toBeLessThanOrEqual(-(CORNERSTONE - USER_RELIEF_SHARE) * v + 1);
+    const notes = ev.notes.map((n) => n.text);
+    expect(notes.some((t) => /saves them .* in luxury tax, but they take 25% off a good player's value for it at most/.test(t))).toBe(true);
+    expect(notes.some((t) => /^They build around .*: he counts 30% more to them$/.test(t))).toBe(true);
+  }
+
   // discounts injured players by the share of the season they miss, most for contenders (T9)
   {
     const l = txLeague();
@@ -351,11 +376,16 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     l.day = dateToDay(l.season, 5, 25);
     runLottery(l, new Rng(3));
     l.phase = 'draft';
+    // (as the league reads the class: a prospect's true ratings are hidden, see consensusView)
+    const read = (p: Player) => valueScore(l, consensusView(l, p));
     for (const dp of l.draftPicks.filter((d) => d.season === l.season && d.round === 1 && d.pick! <= 3).sort((a, b) => a.pick! - b.pick!)) {
       const value = pickValue(l, dp);
-      const best = prospectsBy(l)[0];
+      const best = prospects(l, l.season).sort((a, b) => read(b) - read(a))[0];
+      const seen = consensusView(l, best);
       draftPlayer(l, dp, best.pid);
-      expect(tradeValue(l, best) / value).toBeCloseTo(1, 1);
+      const ratio = tradeValue(l, { ...best, ovr: seen.ovr, pot: seen.pot }) / value;
+      expect(ratio).toBeGreaterThan(0.9);
+      expect(ratio).toBeLessThan(1.1);
     }
   }
 
@@ -479,7 +509,7 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(texts(l, offer([p.pid], []))).toContain('Taking on $20.0M takes them to $24.0M over the tax line');
     // and shedding salary over the line saves them tax
     const theirs = shapeAt(l, standardRoster(l, AI)[0], 70, 27, 15_000);
-    expect(texts(l, offer([], [theirs.pid])).some((t) => /^Shedding \$15\.0M saves them \$[\d.]+M in luxury tax$/.test(t))).toBe(true);
+    expect(texts(l, offer([], [theirs.pid])).some((t) => /^Shedding \$15\.0M saves them \$[\d.]+M in luxury tax/.test(t))).toBe(true);
   }
 
   // gives a rebuilder's and a contender's view of picks for a veteran
@@ -755,6 +785,9 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     l.phase = 'regular';
     const cap = CAP_FOR(l);
     // AI over the cap (not near an apron) sends a $12M player for a $4M one to a team with room: an $8M exception
+    // (the payrolls set after the players' salaries)
+    const big = shape(l, standardRoster(l, AI)[0], 72, 27, 12_000);
+    const small = shape(l, standardRoster(l, U)[0], 70, 27, 4_000);
     for (const [t, amount] of [
       [U, cap.salaryCap - 20_000],
       [AI, cap.salaryCap + 10_000],
@@ -762,8 +795,6 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
       l.teams[t].deadMoney = [];
       l.teams[t].deadMoney.push({ pid: -1, name: 'x', season: l.season, amount: amount - payroll(l, t) });
     }
-    const big = shape(l, standardRoster(l, AI)[0], 72, 27, 12_000);
-    const small = shape(l, standardRoster(l, U)[0], 70, 27, 4_000);
     const deal = offer([small.pid], [big.pid]);
     expect(validateTrade(l, deal)).toEqual([]);
     executeTrade(l, deal);

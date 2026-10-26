@@ -908,6 +908,8 @@ function bidOnStar(): number | null {
 
 /** 80+ free agents' summer signings this run: salary against the market value he had when the market opened. */
 const faTally: { ratio: number; name: string; back: boolean }[] = [];
+/** A top free agent still unsigned when the market closes, as the top-ten tally counts him. */
+const FA_CLOSED = 99;
 
 /**
  * Opening night: dead money carries its cost, and picks are priced from projected strength. A
@@ -962,26 +964,33 @@ function checkEconomyOpening() {
 }
 
 /**
- * A summer day of free agency: no 80+ free agent's price under his summer floor, and each 80+
- * signing (with a team other than the one bringing him back on Bird rights it can't stretch) at
- * SUMMER_FLOOR.late of his market value or more. `pool`: the free agents before the day, with their
- * market values as the market opened.
+ * A summer day of free agency: each 80+ signing tallied against the market value he had when the
+ * market opened (`pool`), and the day the top ten signed (`top`: pid → the day, -1 while unsigned).
+ * (His price comes down toward what a team could pay him, never below it, see marketMoney: a trade
+ * after the day's prices can raise that, so the tally checks the outcome, see 'stalled' below.)
  */
-function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number | null }>) {
-  for (const p of H.freeAgents(L))
-    if (p.ovr >= C.SUMMER_FLOOR.ovr && !p.waivers && p.asking && p.asking.amount < C.summerFloor(L, p) - 60)
-      bad('80+ free agent priced under his summer floor', `${nm(p.pid)} ${p.asking.amount} < ${Math.round(C.summerFloor(L, p))}`);
+function checkFaPrices(pool: Map<number, { m: number; ovr: number; tid: number | null }>, top: Map<number, number>) {
+  for (const [pid, d] of top) if (d < 0 && L.players[pid].tid >= 0) top.set(pid, L.faDay);
   for (const [pid, x] of pool) {
     const p = L.players[pid];
     if (p.tid < 0 || x.ovr < C.SUMMER_FLOOR.ovr) continue;
     pool.delete(pid);
     const sal = salaryFor(p, L.season + 1);
-    // (his old team on Bird rights that can't pay more: a non- or early-Bird limit under his floor)
-    const capped = p.tid === x.tid && sal >= C.resignLimit(L, p, p.tid) - 60;
     faTally.push({ ratio: sal / x.m, name: H.playerName(p), back: p.tid === x.tid });
-    if (sal < x.m * C.SUMMER_FLOOR.late - 60 && !capped && !p.contract.twoWay)
-      bad('80+ free agent signed under his summer floor', `${nm(pid)} ${sal} vs market ${Math.round(x.m)} -> ${L.teams[p.tid].abbrev}`);
   }
+}
+
+/**
+ * Opening night: no AI team at 1.5× the cap (the second apron is 1.344×; AI payrolls stop under it,
+ * see aiTopLine, and a team past it sheds salary, see aiTaxDumps, though with no room in the league a
+ * contract can take a season to move; the first season's opening is the real league's own books).
+ * Before the round-2 market work AI payrolls reached 1.5-1.9× the cap.
+ */
+function checkAprons(first: boolean) {
+  const cap = H.CAP_FOR(L);
+  const over = L.teams.filter((t) => t.tid !== L.userTid && H.payroll(L, t.tid) >= cap.salaryCap * 1.5);
+  if (!first && over.length)
+    bad('AI payroll well past the second apron on opening night', over.map((t) => `${t.abbrev} ${(H.payroll(L, t.tid) / cap.salaryCap).toFixed(2)}x`).join(', '));
 }
 
 /**
@@ -1035,6 +1044,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     check();
     const extended = Object.values(L.players).filter((p) => p.contract.next).length;
     checkOpeningNight();
+    checkAprons(s === 0);
+    const capNow = H.CAP_FOR(L);
+    const openPays = L.teams.filter((t) => t.tid !== L.userTid).map((t) => H.payroll(L, t.tid) / capNow.salaryCap);
     checkEconomyOpening();
     checkCalendar(!(opts.realCalendar && s === 0));
     let accepted = '';
@@ -1139,7 +1151,15 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
         !L.transactions?.some((t) => t.pid === pid && t.phase === 'freeAgency')
       )
         faPool.delete(pid);
-    checkFaPrices(faPool);
+    // the top ten free agents as the market opens (its value then), and the day each signs
+    const top = new Map(
+      [...faPool]
+        .filter(([pid]) => L.players[pid].tid === -1 && !L.players[pid].rfa)
+        .sort((a, b) => b[1].m - a[1].m)
+        .slice(0, 10)
+        .map(([pid]) => [pid, -1] as [number, number]),
+    );
+    checkFaPrices(faPool, top);
     check();
     checkOptions(true);
     // one withdrawn when there are two or more: an unrestricted free agent, his hold gone (not one
@@ -1159,7 +1179,7 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       const sheets = sheetSnapshot();
       const rfas = rfaSnapshot();
       S.faAdvance(L, 1);
-      checkFaPrices(faPool);
+      checkFaPrices(faPool, top);
       for (const [pid, s] of sheetSnapshot()) sheets.set(pid, s);
       decideUserSheets();
       const x = settledSheets(sheets, next);
@@ -1185,6 +1205,12 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       .map((p) => ({ p, ...p.rfa! }));
     const rfas = rfaSnapshot();
     const summerRoutes = routeUse(L.season + 1);
+    // the top of the market moves: its ten best free agents sign in the market's first days as a
+    // rule, and few are left for their old teams to take back as it closes
+    const days = [...top.values()].map((d) => (d < 0 ? FA_CLOSED : d)).sort((a, b) => a - b);
+    const left = days.filter((d) => d === FA_CLOSED).length;
+    const midDay = days[Math.floor(days.length / 2)] ?? 0;
+    if (days.length >= 8 && (midDay > 10 || left > 3)) bad('top of the free-agent market stalled', `median day ${midDay}, ${left} of ${days.length} unsigned at the close`);
     if (!S.newSeason(L)) bad('new season refused', '');
     // rotation-level free agents nobody signed this summer
     const unsigned = H.freeAgents(L).filter((p) => C.valueScore(L, p) >= 66).length;
@@ -1207,6 +1233,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
       `-> ${label}${L.season}: preseason rosters ${Math.min(...sz)}-${Math.max(...sz)}, players ${Object.keys(L.players).length}, strategies ${['contend', 'retool', 'rebuild'].map((x) => L.teams.filter((t) => t.strategy === x).length).join('/')}, trades ${trades}, offers ${offers}${accepted ? ` (took a ${accepted})` : ''}, extensions ${extended}, buyouts ${buyouts}, waiver claims ${claims}, bid ${bid}, taxpayers ${taxpayers}, save ${(JSON.stringify(L).length / 1e6).toFixed(2)}MB`,
     );
     console.log(`   restricted free agency: ${rfaLine}`);
+    console.log(
+      `   market: top-10 free agents signed by day ${midDay} (median), ${left} unsigned at the close; AI payrolls at opening night up to ${Math.max(...openPays).toFixed(2)}x the cap, ${openPays.filter((x) => x * capNow.salaryCap > capNow.secondApron).length} past the second apron`,
+    );
     const ratios = faTally.map((x) => x.ratio).sort((a, b) => a - b);
     console.log(
       `   80+ free agents so far: ${ratios.length} signed, median ${ratios.length ? Math.round(ratios[Math.floor(ratios.length / 2)] * 100) : '-'}% of market value, ${ratios.filter((x) => x < C.SUMMER_FLOOR.late).length} under ${C.SUMMER_FLOOR.late * 100}% (${faTally.filter((x) => x.ratio < C.SUMMER_FLOOR.late && x.back).length} back with Bird rights capped)`,

@@ -4,6 +4,7 @@ import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX } from '../../core/league/helpers';
 import { EXCEPTIONS, SUMMER_FLOOR, WAIVER_DAYS, exceptionAmount, twoWaySalary, type Exception } from '../../core/league/contracts';
 import { FA_DAYS } from '../../core/league/season';
+import { MARKET_HOLD_DAYS, MARKET_STEP } from '../../core/league/freeAgency';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
 import { HARDSHIP_OUT, TEN_DAYS } from '../../core/league/tenDay';
 import { HelpSheet } from './common';
@@ -55,10 +56,11 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
         team signs one so you can match or let him go. Unsigned at the close, a restricted free agent plays a season on his qualifying offer.
       </p>
       <p>
-        <b>Timing.</b> The summer market lasts {FA_DAYS} days and opens for every team at once: AI teams sign their first wave on day 1 too. Unsigned players cut their price every
-        few days (a star holds his for two weeks first), and stay available in season. A good player ({SUMMER_FLOOR.ovr}+ OVR) comes down slowly and never under{' '}
-        {pct(SUMMER_FLOOR.early)} of his market value in the summer's first {SUMMER_FLOOR.day} days, {pct(SUMMER_FLOOR.late)} after that and through the preseason: waiting a few
-        days doesn't buy a star at half price, and AI teams bid their cap space or mid-level once his price comes within reach.
+        <b>Timing.</b> The summer market lasts {FA_DAYS} days and opens for every team at once: AI teams sign their first wave on day 1 too. Prices hold for the first{' '}
+        {MARKET_HOLD_DAYS} days. Then a player no team can pay drops his price {pct(MARKET_STEP)} a day toward what the money left would pay him (cap space, an exception, or his
+        old team on his Bird rights; the best players are served first), never below it. AI teams see each new price first, so waiting buys no discount: he signs where the money
+        is. A good player ({SUMMER_FLOOR.ovr}+ OVR) never asks one team less than {pct(SUMMER_FLOOR.early)} of his value while the market could pay that. The unsigned stay
+        available in season.
       </p>
       <p>
         <b>Waivers.</b> A player released in season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, worst record first, and take over his

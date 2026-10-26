@@ -30,6 +30,8 @@ import {
 } from './helpers';
 import {
   type Strategy,
+  FIRST_VALUE,
+  contractBurden,
   hardCapLine,
   leaveTeam,
   marketSalary,
@@ -47,6 +49,7 @@ import { teamTaxBill } from './finances';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
+import { consensusView } from './prospects';
 import { money, moneyExact } from '../format';
 import { freezeTradeReason } from './books';
 import { type PickProjection, pickProjection } from '../analysis/odds';
@@ -102,6 +105,8 @@ export interface AssetView {
   own: number;
   /** Changed hands this season, so it's worth its neutral value to everyone. */
   flipped: boolean;
+  /** The sending team's cornerstone (see cornerstoneOf): it counts CORNERSTONE times as much going out. */
+  cornerstone?: boolean;
 }
 
 /** How one team's verdict on a deal adds up (see judge). */
@@ -116,8 +121,11 @@ export interface VerdictParts {
   /** Value of the cash coming in and going out. */
   cashIn: number;
   cashOut: number;
-  /** Value of the luxury tax and cap room the deal costs (negative: what it saves). */
+  /** Value of the luxury tax and cap room the deal costs (negative: what it saves, at most `reliefCap`'s). */
   money: number;
+  /** What the salary relief would have counted for, uncapped, when it was held to what dumping that salary costs (`dump`, see reliefCap) or, with the user, to a discount on the good players sent (`discount`, see userReliefCap). */
+  reliefFull?: number;
+  reliefKind?: 'dump' | 'discount';
   /** Salary coming in and going out, and cap payroll before and after the deal ($K). */
   salaryIn: number;
   salaryOut: number;
@@ -153,6 +161,8 @@ function classProspects(league: League): { v: number; market: number }[] {
   const hit = classCache.get(league);
   if (hit?.key === key) return hit.prospects;
   const list = prospects(league, league.season)
+    // (as the league reads them: a prospect's true ratings are hidden, see consensusView)
+    .map((p) => consensusView(league, p))
     .map((p) => ({ v: Math.exp((valueScore(league, p) - 60) / 6), market: marketSalary(league, p) }))
     .sort((a, b) => b.v - a.v);
   classCache.set(league, { key, prospects: list });
@@ -501,7 +511,31 @@ export function tradedAwayBy(league: League, a: Player | DraftPick, tid: number)
 function tradedAway(league: League, a: Player | DraftPick, tid: number): NonNullable<Player['tradedFrom']> {
   const t = a.tradedFrom;
   const also = t?.season === league.season ? [t.tid, ...(t.also ?? [])].filter((x) => x !== tid) : [];
-  return also.length ? { tid, season: league.season, also } : { tid, season: league.season };
+  return also.length ? { tid, season: league.season, also, day: league.day } : { tid, season: league.season, day: league.day };
+}
+
+/**
+ * What a team's cornerstone counts for going out, over what he'd count for otherwise: a team builds
+ * around its franchise player, and a few good players don't replace him. With depth only discounted
+ * (see DEPTH), Minnesota took Ty Jerome, Cam Spencer and Cameron Boozer for Anthony Edwards (round-2
+ * front-office review).
+ */
+export const CORNERSTONE = 1.3;
+/** A cornerstone is 26 or younger and worth this much (see cornerstoneOf). */
+const CORNERSTONE_VALUE = 82;
+
+const cornerCache = new WeakMap<League, { key: string; by: Map<number, number | null> }>();
+
+/** A team's cornerstone: its most valuable player, when he is 26 or younger and worth 82+; null when it has none. */
+export function cornerstoneOf(league: League, tid: number): number | null {
+  const key = `${league.season}:${league.phase}:${league.day}:${league.nextTxnId ?? 0}`;
+  let hit = cornerCache.get(league);
+  if (hit?.key !== key) cornerCache.set(league, (hit = { key, by: new Map() }));
+  if (hit.by.has(tid)) return hit.by.get(tid)!;
+  const best = standardRoster(league, tid).sort((a, b) => valueScore(league, b) - valueScore(league, a) || a.pid - b.pid)[0];
+  const pid = best && playerAge(best, league.season) <= 26 && valueScore(league, best) >= CORNERSTONE_VALUE ? best.pid : null;
+  hit.by.set(tid, pid);
+  return pid;
 }
 
 /** A player as team `tid` sees him in a deal (with the user unless `aiDeal`). */
@@ -510,7 +544,11 @@ function playerView(league: League, p: Player, tid: number, incoming: boolean, a
   const strategy = league.teams[tid].strategy;
   const own = strategy === 'retool' ? neutral : tradeValue(league, p, strategy);
   const f = flipped(league, p);
-  return { kind: 'player', id: p.pid, value: f ? neutral : lens(own, neutral, incoming, aiDeal), neutral, own, flipped: f };
+  const value = f ? neutral : lens(own, neutral, incoming, aiDeal);
+  // (its cornerstone going out counts for more: see CORNERSTONE)
+  if (!incoming && value > 0 && p.tid === tid && cornerstoneOf(league, tid) === p.pid)
+    return { kind: 'player', id: p.pid, value: value * CORNERSTONE, neutral, own, flipped: f, cornerstone: true };
+  return { kind: 'player', id: p.pid, value, neutral, own, flipped: f };
 }
 
 /** A draft pick as team `tid` sees it in a deal (with the user unless `aiDeal`). */
@@ -588,8 +626,13 @@ export const MAX_FIRSTS_OUT = 2;
  */
 const TAX_VALUE: Record<Strategy, number> = { contend: 0.5, retool: 0.75, rebuild: 1 };
 const ROOM_VALUE: Record<Strategy, number> = { contend: 0.02, retool: 0.04, rebuild: 0.1 };
-/** What crossing an apron costs a team in a deal (lost tools: see the apron rules), and what getting back under one is worth. */
-const APRON_VALUE = { first: 2, second: 4 };
+/**
+ * What crossing an apron costs a team in a deal (lost tools: see the apron rules), and what getting
+ * back under one is worth. Past the second, a team can't combine salaries or send cash, its far
+ * first is frozen and it has no exception but the minimum: about half a first. At 4, contenders past
+ * it found no dump worth making and stayed there all season.
+ */
+const APRON_VALUE = { first: 2, second: 8 };
 /**
  * Crossing the tax line costs more than the tax itself: a team under it shares in the league's tax
  * pot (see assessLuxuryTax), so a deal that takes a team over (or back under) moves about 5% of the
@@ -630,7 +673,14 @@ function nextPayroll(league: League, tid: number, s: number): number {
  * and the dollars behind it. A contract running past this season adds next season's tax on the
  * team's committed payroll then, at NEXT_TAX_WEIGHT: a burden is dearer to a team it keeps in the tax.
  */
-function moneyCost(league: League, tid: number, inSal: number, outSal: number, inNext = 0, outNext = 0): { value: number; payBefore: number; payAfter: number; taxCost: number } {
+function moneyCost(
+  league: League,
+  tid: number,
+  inSal: number,
+  outSal: number,
+  inNext = 0,
+  outNext = 0,
+): { value: number; lines: number; payBefore: number; payAfter: number; taxCost: number } {
   const s = contractSeason(league);
   const cap = CAP_FOR(league, s);
   const before = capPayroll(league, tid, s);
@@ -649,10 +699,57 @@ function moneyCost(league: League, tid: number, inSal: number, outSal: number, i
   }
   return {
     value: ((taxCost + NEXT_TAX_WEIGHT * nextTax) * TAX_VALUE[strategy] + (room(before) - room(after)) * ROOM_VALUE[strategy]) / 1000 + over(after) - over(before),
+    lines: over(after) - over(before),
     payBefore: before,
     payAfter: after,
     taxCost,
   };
+}
+
+/**
+ * Salary relief counts for what it saves a team (its tax, its room, an apron), but no more than what
+ * shedding that salary costs on the market: the price of a salary dump (a first-round pick per
+ * DUMP_PER_FIRST of the cap, see contractBurden, at a neutral lens) on the salary shed this season
+ * and, at NEXT_TAX_WEIGHT, next season, as the tax savings count them. A team past the tax still
+ * sells a good player at a discount to get under it, as the NBA's do, but not at a fire-sale price:
+ * counting its whole tax bill (Orlando saving $48.1M by sending Jalen Suggs out was worth 48 value
+ * to it), a team with cap room took an 85-rated 25-year-old for about a third of his value and sold
+ * him on at once for three firsts' worth more (the round-2 front-office review).
+ */
+function reliefCap(league: League, salaryIn: number, salaryOut: number, inNext: number, outNext: number): number {
+  const shed = Math.max(0, salaryOut - salaryIn) + NEXT_TAX_WEIGHT * Math.max(0, outNext - inNext);
+  return contractBurden(league, shed, 'retool');
+}
+
+/**
+ * In a deal with the user, relief (all of it: the tax, the room, the lines crossed) counts for no
+ * more than the burden of the contracts the team sends (what they're overpaid, see valueParts) and
+ * USER_RELIEF_SHARE of the value of the good players it sends: a taxpayer sells the user a good
+ * player at a discount, not for what his salary costs it. Priced at the dump rate alone (reliefCap),
+ * Miami would still have let a team with room have Bam Adebayo (worth 69) for about 15. Among AI
+ * teams the dump rate holds: their dumps are how taxpayers get under the tax and the aprons.
+ */
+export const USER_RELIEF_SHARE = 0.25;
+
+function userReliefCap(league: League, pids: number[]): number {
+  let burden = 0;
+  let good = 0;
+  for (const pid of pids) {
+    const p = league.players[pid];
+    if (!p) continue;
+    const v = valueParts(league, p, 'retool');
+    burden += v.burden;
+    good += Math.max(0, v.player - v.burden);
+  }
+  return burden + USER_RELIEF_SHARE * good;
+}
+
+/** A value in first-round picks, as the dock says it: "half a first", "a first", "two firsts". */
+function asFirsts(v: number): string {
+  const n = Math.max(0.5, Math.round((v / FIRST_VALUE) * 2) / 2);
+  if (n === 0.5) return 'half a first';
+  if (n === 1) return 'a first';
+  return `${Number.isInteger(n) ? (['two', 'three', 'four', 'five'][n - 2] ?? n) : n} firsts`;
 }
 
 /**
@@ -708,7 +805,25 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const salaryIn = sideSalary(league, other);
   const salaryOut = sideSalary(league, mine);
   const next = contractSeason(league) + 1;
-  const money = moneyCost(league, tid, salaryIn, salaryOut, sideSalary(league, other, next), sideSalary(league, mine, next));
+  const inNext = sideSalary(league, other, next);
+  const outNext = sideSalary(league, mine, next);
+  const money = moneyCost(league, tid, salaryIn, salaryOut, inNext, outNext);
+  // (the tax and room it saves count up to what shedding that salary costs on the market, see
+  // reliefCap; getting back under the tax line or an apron counts on top)
+  const saved = -(money.value - money.lines);
+  const most = saved > 0 ? reliefCap(league, salaryIn, salaryOut, inNext, outNext) : Infinity;
+  let reliefFull = saved > most ? -money.value : undefined;
+  let reliefKind: VerdictParts['reliefKind'] = reliefFull !== undefined ? 'dump' : undefined;
+  if (reliefFull !== undefined) money.value = money.lines - most;
+  // (with the user, all of it no more than a discount on the good players it sends: see userReliefCap)
+  if (!aiDeal && money.value < 0) {
+    const cap = userReliefCap(league, mine.pids);
+    if (-money.value > cap) {
+      reliefFull ??= -money.value;
+      reliefKind = 'discount';
+      money.value = -cap;
+    }
+  }
   const cut = cutCost(league, tid, mine.pids, other.pids);
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
   const valueOut = playersOut + picksOut + cashOut;
@@ -733,6 +848,7 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
     cashIn,
     cashOut,
     money: money.value,
+    ...(reliefFull !== undefined ? { reliefFull, reliefKind } : {}),
     salaryIn,
     salaryOut,
     payBefore: money.payBefore,
@@ -1248,6 +1364,8 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
   }
 
   if (x.depthApplied && matters(x.depthLoss)) add('bad', "Depth doesn't add up to talent for them", x.depthLoss);
+  const corner = x.outgoing.find((a) => a.cornerstone);
+  if (corner) add('bad', `They build around ${nameOf(corner)}: he counts ${Math.round((CORNERSTONE - 1) * 100)}% more to them`, corner.value - corner.value / CORNERSTONE);
   if (x.cuts > 0 && matters(x.cut)) add('bad', `They'd have to waive ${x.cuts === 1 ? 'a player' : `${x.cuts} players`} to get down to ${CAP.rosterMax}`, x.cut);
 
   if (matters(x.money)) {
@@ -1264,7 +1382,15 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
     else
       add(
         'good',
-        x.taxCost < 0 ? `Shedding ${money(Math.abs(net))} saves them ${money(Math.abs(x.taxCost))} in luxury tax` : `Shedding ${money(Math.abs(net))} frees up cap room for them`,
+        x.taxCost < 0
+          ? `Shedding ${money(Math.abs(net))} saves them ${money(Math.abs(x.taxCost))} in luxury tax${
+              x.reliefKind === 'discount'
+                ? `, but they take ${Math.round(USER_RELIEF_SHARE * 100)}% off a good player's value for it at most`
+                : x.reliefKind === 'dump'
+                  ? `, but they count only what dumping that salary would cost them (about ${asFirsts(-x.money)})`
+                  : ''
+            }`
+          : `Shedding ${money(Math.abs(net))} frees up cap room for them`,
         -x.money,
       );
   }
