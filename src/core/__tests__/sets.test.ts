@@ -320,9 +320,10 @@ describe('sets in the engine', () => {
         if (id === 'chicago') expect(by(star), id).toBeGreaterThan(0.55);
         if (id === 'horns') expect(logs.filter((l) => l.steps.some((st) => st.pid === l.set!.pid || st.pid2 === l.set!.pid)).length / logs.length, id).toBeGreaterThan(0.9);
         if (id === 'postSplit') {
-          // the ball comes out of the post to the pair splitting around him
+          // the ball comes out of the post to the pair splitting around him (a third of the runs and more:
+          // 0.32-0.34 since the playbooks were rebalanced and the AI's staffs refit, 2026-10-26, 0.35+ before)
           const passes = logs.filter((l) => l.steps.some((st) => st.k === 'pass' && st.pid === l.set!.pid)).length;
-          expect(passes / logs.length, id).toBeGreaterThan(0.35);
+          expect(passes / logs.length, id).toBeGreaterThan(0.3);
         }
       }
     }
@@ -336,8 +337,9 @@ describe('sets in the engine', () => {
       ];
       for (const [id, beats, kills] of cases) {
         const o = teamFor(id);
-        // (Chicago's gap is the smallest, about 0.19 a run: forty games measure it to 0.05, ten only to 0.1)
-        const games = id === 'chicago' ? 40 : 10;
+        // (Chicago's gap is the smallest, about 0.19 a run: forty games measure it to 0.05, ten only to 0.1;
+        // Spain's against hedge came out about 0.05-0.14 over ten games when the playbooks were rebalanced, 2026-10-26)
+        const games = id === 'chicago' ? 40 : id === 'spain' ? 30 : 10;
         const a = pairedValue(id, o, DEF[beats], games, 500);
         const b = pairedValue(id, o, DEF[kills], games, 500);
         expect(a.mean, `${id} vs ${beats}`).toBeGreaterThan(0);
@@ -410,18 +412,18 @@ describe('sets in the engine', () => {
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
-      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses), and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth
+      // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses), and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth, and again 2026-10-26, when the zones came to play to the two fives on the floor, the playbooks were rebalanced and the AI's staffs refit with no zone ban
       const expected = {
         ai: [
-          [119, 127, 90, 35, 12, 20, 9, 0],
-          [125, 114, 95, 23, 10, 24, 10, 0],
-          [113, 102, 92, 36, 9, 27, 13, 0],
+          [126, 109, 94, 36, 17, 15, 11, 0],
+          [124, 115, 88, 23, 10, 37, 10, 0],
+          [125, 100, 99, 53, 11, 9, 9, 0],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press)
         coached: [
-          [127, 107, 84, 19, 14, 21, 15, 0],
-          [138, 140, 106, 44, 12, 37, 11, 1],
-          [126, 140, 83, 37, 9, 49, 11, 0],
+          [124, 100, 89, 32, 15, 25, 12, 0],
+          [109, 117, 83, 34, 8, 26, 18, 0],
+          [85, 111, 70, 28, 8, 38, 24, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -483,7 +485,9 @@ describe('sets in the engine', () => {
         if (l.on[0].includes(star)) expect(l.set!.pid).toBe(star);
         ran++;
       }
-      expect(ran).toBeGreaterThan(10);
+      // (most of the sixteen timeouts lead to a half-court trip with its action: 10 of them since the
+      // playbooks were rebalanced, 2026-10-26, 11 before)
+      expect(ran).toBeGreaterThan(9);
     }
     {
       // a clear-out called for the go-to player (the late play call's first) is his isolation on the

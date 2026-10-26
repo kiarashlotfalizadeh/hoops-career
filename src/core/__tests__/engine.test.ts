@@ -527,13 +527,14 @@ describe('engine rules', () => {
       type G = { q: number; clock: number; T: [T, T]; checkSubs(t: unknown): void; eases(t: unknown): boolean; step(): boolean; drainLogs(): { steps: { k: string }[] }[] };
       const sim = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
       for (const t of sim.T) t.gLine = 1;
-      sim.q = 3;
-      // (4:00 left in the third: too soon for any lead to decide it)
+      // (4:00 left in the second: too soon for any lead to decide it)
+      sim.q = 2;
       sim.clock = 240;
       sim.T[0].score = 90;
       sim.T[1].score = 50;
       for (const t of sim.T) sim.checkSubs(t);
       expect(sim.T.some((t) => t.garbage)).toBe(false);
+      sim.q = 3;
       // 31 up with 2:50 left in the third (the line is 30.2 with 14:50 of regulation left)
       sim.clock = 170;
       sim.T[1].score = 59;

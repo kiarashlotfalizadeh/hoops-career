@@ -121,7 +121,7 @@ export const possessionMethods = {
     // ---- transition
     const push = 0.55 + 0.9 * (off.t.offense.transition / 100);
     let transP = (K.transitionBase[ctx] ?? 0) * push;
-    transP *= 1 + (off.speed - def.speed) / 120;
+    transP *= 1 + (off.speed - def.speed) / K.runSpeed.often;
     const getBack = 1.25 - 0.5 * (def.t.defense.getBack / 100) + levExtra(0.25 - 0.5 * (def.t.defense.getBack / 100));
     transP *= getBack;
     // crashing the offensive glass leaves you exposed (the defense crashed on its last

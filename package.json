@@ -30,7 +30,8 @@
     "real-check": "tsx scripts/real-check.ts",
     "smoke": "node scripts/qa/smoke.mjs",
     "invariants": "tsx scripts/league-invariants.ts",
-    "star-check": "tsx scripts/star-check.ts"
+    "star-check": "tsx scripts/star-check.ts",
+    "style-gate": "tsx scripts/style-gate.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

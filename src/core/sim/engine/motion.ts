@@ -135,7 +135,7 @@ export const motionMethods = {
           : drivers[this.rng.weighted(drivers.map((p) => Math.pow(Math.max(5, p.c.create) / 50, 2.5) * p.freedom * p.td * p.tu * Math.sqrt(p.tcr) * this.touch(def, off, p)))];
         if (this.record) this.cur!.steps.push({ k: 'drive', pid: dr.pid });
         const d = this.defOf(def, dr);
-        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? -lev(zone.drive) : 0);
+        const dAdv = (dr.c.create - d.c.perDef * this.dq(d)) / 20 + advOpen + (zone ? this.zoneHide(def, d) - lev(zone.drive) : 0);
         // (Hammer's baseline drive is run to kick it to the corner)
         const kickP = play ? 0.75 + lev(help * 0.15) : 0.45 + dr.c.passing / 200 + lev(help * 0.15);
         if (this.rng.chance(clamp(kickP, 0.2, play ? 0.9 : 0.8))) {

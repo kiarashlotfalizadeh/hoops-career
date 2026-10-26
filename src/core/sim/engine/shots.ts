@@ -443,7 +443,7 @@ export const shotsMethods = {
     }
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: sh.pid });
     const d = s.contest ?? this.defOf(def, sh);
-    const adv = (sh.c.create - d.c.perDef * this.dq(d)) / 20 + Math.max(0, s.open) * 0.6;
+    const adv = (sh.c.create - d.c.perDef * this.dq(d)) / 20 + Math.max(0, s.open) * 0.6 + this.zoneHide(def, d);
     const r = this.rng.next();
     const pMid = (0.15 * sh.tm) / (0.15 * sh.tm + 0.85);
     const zone: ShotZone = r < pMid ? 'mid' : this.rimOr(sh, 0.65);

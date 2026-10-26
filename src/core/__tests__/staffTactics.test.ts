@@ -68,8 +68,8 @@ describe('the staff acts on the season', () => {
       expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true, { sticky: true, links: true, user: true }));
     }
     {
-      // the user's own staff picks by its read, the style picker's top (no coach's lean, the zone not
-      // barred); AI staffs keep their coach's lean and bases; in season a staff keeps what it runs
+      // the user's own staff picks by its read, the style picker's top (no coach's lean); AI staffs keep
+      // their coach's lean; in season a staff keeps what it runs
       // until another reads STICK better
       const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
       const pr = rosterProfile(fitRoster(teamPlayers(l, 0)));
@@ -80,6 +80,8 @@ describe('the staff acts on the season', () => {
         expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([r.off[0], r.def[0]]);
       }
       expect(rankedPresets(l.teams[0], teamPlayers(l, 0), { user: true }).def[0]).toBe(top(defPresetFit(pr)));
+      // (no defense is barred for AI staffs: the zone is in every staff's read, its coach's or not)
+      for (const t of l.teams.slice(1, 6)) expect(rankedPresets(t, teamPlayers(l, t.tid)).def).toContain('zone');
       expect([staffPick({ a: 10, b: 17 }, 'a', true), staffPick({ a: 10, b: 18 }, 'a', true), staffPick({ a: 10, b: 17 }, 'a')]).toEqual(['a', 'b', 'b']);
     }
     {

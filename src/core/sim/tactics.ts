@@ -65,7 +65,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Give the star the ball',
     description: 'Your best creator runs high pick-and-rolls and isolations while four teammates space the floor.',
     bestFor: 'One elite creator (high handling, passing and pull-up shooting) surrounded by shooters.',
-    values: { pace: 44, transition: 45, actions: { pnr: 66, iso: 66, post: 18, handoff: 42, motion: 50 }, threePoint: 68, rimAttack: 60, crashBoards: 55, huntMismatch: true },
+    values: { pace: 44, transition: 45, actions: { pnr: 66, iso: 66, post: 18, handoff: 42, motion: 50 }, threePoint: 64, rimAttack: 60, crashBoards: 55, huntMismatch: true },
   },
   {
     id: 'fiveOut',
@@ -73,7 +73,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Spacing, cutting, sharing',
     description: 'Constant movement, dribble handoffs and backdoor cuts with five shooters. Generates open threes.',
     bestFor: 'Many good shooters and passers; no need for a dominant creator.',
-    values: { pace: 58, transition: 60, actions: { pnr: 58, iso: 18, post: 10, handoff: 62, motion: 88 }, threePoint: 84, rimAttack: 55, crashBoards: 42, huntMismatch: false },
+    values: { pace: 58, transition: 60, actions: { pnr: 58, iso: 18, post: 10, handoff: 62, motion: 88 }, threePoint: 80, rimAttack: 55, crashBoards: 42, huntMismatch: false },
   },
   {
     id: 'hub',
@@ -89,7 +89,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Seven seconds or less',
     description: 'Push after every stop, shoot early threes, attack before the defense sets.',
     bestFor: 'Fast, athletic rosters with shooting and good conditioning.',
-    values: { pace: 88, transition: 92, actions: { pnr: 60, iso: 28, post: 10, handoff: 38, motion: 60 }, threePoint: 80, rimAttack: 66, crashBoards: 45, huntMismatch: false },
+    values: { pace: 88, transition: 66, actions: { pnr: 60, iso: 28, post: 10, handoff: 38, motion: 60 }, threePoint: 72, rimAttack: 66, crashBoards: 45, huntMismatch: false },
   },
   {
     id: 'grind',
@@ -97,7 +97,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Slow it down, pound it inside',
     description: 'Low possession count, post-ups and isolations, and relentless offensive rebounding.',
     bestFor: 'Big, physical rosters short on shooting.',
-    values: { pace: 28, transition: 32, actions: { pnr: 58, iso: 45, post: 58, handoff: 30, motion: 38 }, threePoint: 42, rimAttack: 72, crashBoards: 72, huntMismatch: false },
+    values: { pace: 28, transition: 32, actions: { pnr: 58, iso: 45, post: 58, handoff: 30, motion: 38 }, threePoint: 56, rimAttack: 72, crashBoards: 66, huntMismatch: false },
   },
 ];
 

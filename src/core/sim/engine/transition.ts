@@ -30,7 +30,10 @@ export const transitionMethods = {
     this.impact('press_break', off.side, pBroken * 0.75 * (K.runOutPts + 0.6 * K.transAdvPts));
     const r = this.rng.next();
     if (r < pTO) {
-      this.turnover(off, def, h, this.stealer(def), 'press');
+      // (a trap's steal is his like any other: past his second of the night it comes less often, see
+      // K.stealCap, and a press turnover that isn't a steal is a ten-second call or one thrown away;
+      // crediting every one to the trapper had a ball hawk on a pressing team at 3.25 a game in 25 minutes)
+      this.turnover(off, def, h, this.stealBy(this.stealer(def), 1), 'press');
       return 'to';
     }
     if (r < pTO + pBroken) return 'broken';
@@ -55,7 +58,7 @@ export const transitionMethods = {
     const h = off.on[this.rng.weighted(ws)];
     this.tick(this.rng.uniform(3, 6.5));
     if (this.record) this.cur!.steps.push({ k: 'transition', pid: h.pid });
-    let adv = (off.speed - def.speed) / 25 + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
+    let adv = (off.speed - def.speed) / K.runSpeed.edge + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
     adv -= lev((def.t.defense.getBack - 50) / 100);
     // fewer defenders back when they crashed the glass
     adv += this.crashRunOut(def, ctx);

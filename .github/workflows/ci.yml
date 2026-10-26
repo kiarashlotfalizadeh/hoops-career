@@ -48,7 +48,25 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Star check (four leagues of eight seasons; no leader over 39 a game or 74-point night, one season at most over 73 wins)
+      - name: Star check (four leagues of eight seasons; no leader over 39 a game or 81-point night, one season at most over 73 wins)
         run: npm run star-check
         env:
           QUIET: '1'
+  # no dominant setup: every playbook and shape for every team of the real league against every other
+  # team (paired games on fixed seeds), and the staff's picks; fails if one is best for or picked by more
+  # than 12 of the 30 teams (scripts/style-gate.ts). In a job of its own, one process per core (about 2
+  # minutes on four local cores, 3-4 on the runner's)
+  styles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Style gate (no playbook best for or picked by more than 12 of 30 teams, no shape best for more than 14)
+        run: npm run style-gate

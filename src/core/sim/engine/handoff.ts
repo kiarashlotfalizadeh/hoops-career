@@ -38,7 +38,13 @@ export const handoffMethods = {
       if (play || !this.cur.set) this.cur.label = play ? play.label : `${finish === 'offscreen' ? 'Off-ball screen' : 'Handoff'}: ${B.name} to ${Sh.name}`;
       this.cur.steps.push(...(play ? this.handoffSetSteps(play.cast) : [{ k: 'handoff' as const, pid: B.pid, pid2: Sh.pid }]));
     }
-    let adv = (Sh.c.offBall * Sh.perf - (D.c.perDef * 0.6 + D.c.helpD * 0.4) * this.dq(D)) / 22 + (B.r.str + B.r.hgt - 100) / 200 + this.rng.normal(0, 0.55) + open;
+    // (the hub's read: the keep, the give or the back-cut, as well as he passes, K.hubRead)
+    let adv =
+      (Sh.c.offBall * Sh.perf - (D.c.perDef * 0.6 + D.c.helpD * 0.4) * this.dq(D)) / 22 +
+      (B.r.str + B.r.hgt - 100) / 200 +
+      (B.c.passing - K.hubRead.at) / K.hubRead.per +
+      this.rng.normal(0, 0.55) +
+      open;
     adv += this.blowBy(def, Sh, 'handoff') - this.chaseCatch(def, off, Sh, 'handoff');
     const tags: [string, number][] = [];
     const zd = this.zone(def);

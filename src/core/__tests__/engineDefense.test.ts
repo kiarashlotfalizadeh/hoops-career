@@ -278,33 +278,33 @@ describe('engine defense', () => {
       // the fingerprints from before that, and again when the late game, crunch-time touches, home court and the
       // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
       // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter and AI coaches came to play their own defenses, and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and the zone games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all of them when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
+      // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
       const expected: Record<string, number[][]> = {
         default: [
-          [119, 127, 90, 35, 12, 20, 9, 0],
-          [125, 114, 95, 23, 10, 24, 10, 0],
-          [113, 102, 92, 36, 9, 27, 13, 0],
+          [126, 109, 94, 36, 17, 15, 11, 0],
+          [124, 115, 88, 23, 10, 37, 10, 0],
+          [125, 100, 99, 53, 11, 9, 9, 0],
         ],
         zone23: [
-          [116, 119, 85, 50, 7, 33, 13, 0],
-          [121, 94, 91, 29, 13, 19, 9, 0],
-          [113, 122, 88, 42, 8, 23, 13, 0],
+          [123, 109, 87, 43, 12, 23, 11, 0],
+          [118, 105, 91, 23, 11, 27, 13, 0],
+          [118, 102, 101, 42, 14, 16, 10, 0],
         ],
         zone32: [
-          [119, 108, 91, 34, 11, 19, 8, 0],
-          [126, 101, 93, 14, 14, 32, 9, 0],
-          [116, 110, 87, 37, 5, 27, 12, 0],
+          [127, 105, 80, 36, 6, 20, 9, 0],
+          [135, 114, 88, 18, 11, 35, 6, 0],
+          [114, 105, 97, 45, 13, 17, 7, 0],
         ],
         double: [
-          [113, 99, 82, 34, 8, 25, 14, 0],
-          [119, 107, 87, 22, 11, 33, 11, 0],
-          [119, 96, 96, 41, 12, 13, 14, 0],
+          [133, 122, 89, 42, 10, 21, 9, 0],
+          [124, 110, 88, 18, 13, 22, 11, 0],
+          [122, 103, 101, 40, 9, 13, 5, 0],
         ],
-        // (the first game's box score is the default one: it hacks nobody, and the possession-paired streams bring
-        // the couple of trips the mismatch hunt changes back to the same team lines)
+        // (the first game hacks nobody: the couple of trips the mismatch hunt changes are all it changes)
         hunt: [
-          [130, 113, 90, 45, 13, 18, 8, 0],
-          [129, 116, 89, 23, 10, 21, 11, 0],
-          [111, 112, 92, 36, 7, 28, 15, 0],
+          [126, 113, 92, 40, 14, 17, 8, 0],
+          [125, 119, 85, 19, 10, 35, 12, 0],
+          [123, 106, 100, 51, 13, 8, 7, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -345,41 +345,42 @@ describe('engine defense', () => {
       // game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
       // every tactical edge at its 1x size, game after game; all of them again when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter: a decision's looks counting by who takes them, the coverages' and the zone's sizes, the press centred on the league's handlers; and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer; and most of them when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all of them when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
+      // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
       const expected: Record<string, number[][]> = {
         default: [
-          [118, 109, 84, 35, 7, 25, 7, 0],
-          [130, 117, 86, 25, 8, 32, 16, 0],
-          [125, 115, 92, 37, 8, 16, 13, 0],
+          [123, 112, 87, 31, 12, 37, 7, 0],
+          [122, 99, 91, 24, 12, 23, 11, 0],
+          [124, 106, 97, 32, 15, 20, 13, 0],
         ],
         zone23: [
-          [119, 103, 77, 44, 11, 20, 14, 0],
-          [117, 108, 98, 18, 20, 31, 11, 0],
-          [118, 93, 95, 44, 13, 12, 12, 0],
+          [125, 104, 80, 40, 11, 17, 10, 0],
+          [127, 105, 87, 24, 9, 19, 8, 0],
+          [113, 101, 88, 45, 11, 16, 12, 0],
         ],
         zone32: [
-          [106, 105, 80, 30, 8, 31, 13, 0],
-          [110, 113, 87, 19, 9, 28, 11, 0],
-          [120, 103, 89, 31, 8, 18, 13, 0],
+          [119, 104, 84, 35, 12, 15, 12, 0],
+          [115, 107, 97, 21, 13, 26, 8, 0],
+          [112, 99, 93, 32, 12, 18, 8, 0],
         ],
         box1: [
-          [110, 102, 84, 45, 11, 29, 12, 0],
-          [126, 117, 91, 24, 13, 37, 8, 0],
-          [123, 109, 89, 42, 7, 15, 14, 0],
+          [119, 116, 86, 39, 13, 23, 13, 0],
+          [132, 123, 87, 28, 14, 28, 10, 0],
+          [103, 94, 97, 42, 15, 16, 10, 0],
         ],
         double: [
-          [123, 110, 84, 32, 11, 22, 7, 0],
-          [135, 114, 92, 24, 12, 13, 10, 0],
-          [126, 109, 100, 28, 14, 20, 6, 0],
+          [134, 120, 87, 45, 10, 26, 7, 0],
+          [131, 105, 90, 15, 14, 21, 10, 0],
+          [123, 106, 98, 36, 11, 15, 7, 0],
         ],
         pressure: [
-          [122, 107, 100, 38, 14, 42, 7, 0],
-          [141, 145, 93, 25, 8, 41, 20, 0],
-          [130, 103, 94, 23, 14, 18, 15, 0],
+          [135, 123, 89, 42, 11, 30, 11, 0],
+          [144, 145, 91, 25, 10, 40, 20, 0],
+          [136, 105, 103, 36, 15, 22, 8, 0],
         ],
         hunting: [
-          [120, 103, 93, 45, 20, 27, 9, 0],
-          [130, 129, 86, 24, 7, 23, 11, 0],
-          [125, 106, 103, 35, 16, 18, 7, 0],
+          [119, 122, 82, 40, 8, 28, 9, 0],
+          [128, 115, 87, 28, 7, 19, 10, 0],
+          [133, 123, 96, 44, 9, 24, 9, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {

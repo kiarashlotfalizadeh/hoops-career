@@ -28,7 +28,7 @@ import type { Composites } from '../../ratings';
 import type { FinishType } from '../log';
 import type { Cast, Slot } from '../sets';
 import type { LinkId } from '../links';
-import { K } from './constants';
+import { K, type ZoneK } from './constants';
 
 export interface Box {
   sec: number;
@@ -206,6 +206,8 @@ export interface ST {
   guardOf: Map<number, SP>;
   lineupKey: string;
   ls: LineupStat | null;
+  /** The zone this five plays against the five on the floor (GameSim.zone), by scheme and both lineups. */
+  zk?: { key: string; z: ZoneK };
   cap: Record<ActionType, number>;
   /** The lineup decision's inputs when the staff last looked (see subSignature). */
   subSig: number[];

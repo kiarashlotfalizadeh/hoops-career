@@ -147,7 +147,7 @@ export const pnrMethods = {
       }
     } else if (cov === 'hedge') {
       const k = K.cov.hedge;
-      const recover = (dS.r.spd - S.r.spd) / 60 + (dS.r.diq - 50) / 150;
+      const recover = (dS.r.spd - S.r.spd) / K.cov.hedge.speed + (dS.r.diq - 50) / 150;
       advH -= lev(k.stall);
       this.impact('hedge_stall', def.side, lev(k.stall) * 0.08, H.pid);
       rollOpen += lev(k.roll - recover);
@@ -183,9 +183,9 @@ export const pnrMethods = {
         kickOpen += lev(k.kick);
         tagsKick.push(['ice_corner', lev(k.kick)]);
       }
-      toExtra += lev(0.006);
+      toExtra += lev(k.to);
     } else if (zone) {
-      advH -= lev(zone.pnr);
+      advH -= lev(zone.pnr) - this.zoneHide(def, dH);
       this.impact('zone_paint', def.side, lev(zone.pnrTag));
       // the back line is waiting for the roller, as a drop big is
       rollOpen -= lev(zone.roll);

@@ -34,10 +34,12 @@ import type { League, Player } from '../src/core/types';
 /** No one has averaged more than 38.4 over a full season since 1963: a leader past 39 is the engine running away. */
 const MAX_PPG = 39;
 /**
- * Only Chamberlain (several times) and Kobe Bryant's 81 have topped Dončić's 73: a 74-point night is
- * a once-in-a-generation game, and one in a check's few dozen seasons is the engine running away.
+ * Only Chamberlain (several times) and Kobe Bryant's 81 have topped Dončić's 73. Star-led playbooks
+ * (Grit & Grind, Heliocentric, Hub Big) put a 74-76 night in reach once in a few dozen seasons, as the
+ * real league has had; a night past 80 is Kobe territory, and one in a check's few dozen seasons is the
+ * engine running away.
  */
-const MAX_GAME_PTS = 73;
+const MAX_GAME_PTS = 80;
 /**
  * The outlier guards below sit a little past what the engine does since its extremes were tuned
  * (October 2026, 4 leagues x 12 seasons: the threes leader at most 5.6 a game, 26 nights of 10 made

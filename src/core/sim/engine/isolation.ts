@@ -42,7 +42,7 @@ export const isolationMethods = {
     }
     const zd = this.zone(def);
     if (zd) {
-      adv -= lev(zd.iso);
+      adv -= lev(zd.iso) - this.zoneHide(def, D);
       this.impact('zone_paint', def.side, lev(zd.isoTag), A.pid);
     }
     adv -= this.wallEdge(def, D, 'iso', A.pid);

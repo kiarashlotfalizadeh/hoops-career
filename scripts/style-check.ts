@@ -1,36 +1,26 @@
 // Style check: whether the staff's fits say what the engine says each style is worth. Every offensive
-// playbook, defensive playbook and shape for every team of the real league, fully drilled, against
-// every other team (paired games: the same seeds for each configuration), by shot-value margin a game
-// (every attempt as likely to fall, a fouled miss at what its free throws were worth, plus the free throws
-// made: as counterWorth measures). Prints, for
-// each part:
+// playbook, defensive playbook and shape for every team of a league, fully drilled, against every
+// other team (scripts/style-measure.ts: paired games, by shot-value margin a game). Prints, for each part:
 // - r: the fit's points a game against the measured worth, both against the team's average option,
-//   over every team and option (the target is 0.6 or more), and within each option across teams;
-// - for the playbooks, the staff's pick (presetScores, the coach's lean included) against the best
-//   measured option for each team, and how many teams each playbook is best for and picked by (the
-//   league's style spread);
+//   over every team and option (targets: defense 0.85, offense and shapes 0.6), and within each option
+//   across teams;
+// - for the playbooks, how many teams each is best for and picked by (an AI staff's pick, its coach's
+//   lean included, and the user's own staff's, by its read alone), and the picks' cost against the best:
+//   the league's style spread (scripts/style-gate.ts holds it in CI);
 // - for the shapes, how often the fit's sign against four-out is right where it says 0.2 or more.
-// The fits were fitted to a run of this over 90 real and fictional rosters (2026-10); run it again
+// The fits were fitted to runs of this over the real league and fictional ones (2026-10); run it again
 // after an engine or playbook change, and refit coachAI's OFF_FIT/DEF_FIT/SHAPE_FIT if r falls.
-// Usage: npx tsx scripts/style-check.ts [games per opponent, default 6] [parts: off,def,shape] [seed]
-import { readFileSync } from 'node:fs';
-import { createLeague, defaultSettings } from '../src/core/league/create';
-import { startRegularSeason } from '../src/core/league/season';
-import { buildSimInput } from '../src/core/league/games';
-import { teamPlayers } from '../src/core/league/helpers';
-import { GameSim } from '../src/core/sim/engine';
-import { Rng } from '../src/core/random';
-import { freshFamiliarity } from '../src/core/sim/familiarity';
-import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../src/core/sim/tactics';
-import { defPresetFit, fitRoster, offPresetFit, presetScores, rosterProfile, shapeFits } from '../src/core/ai/coachAI';
-import { OFF_SHAPES, type Tactics } from '../src/core/types';
+// Usage: tsx scripts/style-check.ts [games per opponent on each seed set, default 6] [parts: off,def,shape]
+// [seed sets, comma-separated, default 9001] [league: real, or a fictional league's rng seed] [processes, default 4]
+// (STYLE_JSON=<file> also writes every row, the roster profiles included, for refitting.)
+import { writeFileSync } from 'node:fs';
+import { bestOf, measureLeague, tally, type Part, type StyleRow } from './style-measure';
 
 const k = Number(process.argv[2] ?? 6);
-const parts = (process.argv[3] ?? 'off,def,shape').split(',');
-const seedBase = Number(process.argv[4] ?? 9001);
-const L = createLeague({ name: 'Style', userTid: 0, coachName: 'C', settings: defaultSettings(), seed: JSON.parse(readFileSync('src/data/seed.json', 'utf8')), rngSeed: 7 });
-L.id = 'style-check';
-startRegularSeason(L);
+const parts = (process.argv[3] ?? 'off,def,shape').split(',') as Part[];
+const seeds = (process.argv[4] ?? '9001').split(',').map(Number);
+const league = !process.argv[5] || process.argv[5] === 'real' ? 'real' : Number(process.argv[5]);
+const jobs = Number(process.argv[6] ?? 4);
 
 const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
 const corr = (x: number[], y: number[]) => {
@@ -46,81 +36,22 @@ const corr = (x: number[], y: number[]) => {
   return a / Math.sqrt(b * c);
 };
 
-/** Each option's worth for team `tid`, against its average option, in points a game. */
-function measure(tid: number, options: [string, Tactics][]): Record<string, number> {
-  const team = L.teams[tid];
-  const ps = teamPlayers(L, tid);
-  const base = buildSimInput(L, tid, 1, 'regular');
-  const opps = L.teams.filter((o) => o.tid !== tid).map((o) => buildSimInput(L, o.tid, 1, 'regular'));
-  const runs: Record<string, number[]> = {};
-  for (const [id, tactics] of options) {
-    const tm = { ...team, tactics };
-    const me = { ...base, team: tm, fam: freshFamiliarity(tm, ps, 100), adjust: true };
-    const xs: number[] = [];
-    for (const o of opps)
-      for (let g = 0; g < k; g++) {
-        const rng = new Rng((seedBase + tid * 7919 + o.team.tid * 104729 + Math.imul(g + 1, 2654435761)) >>> 0);
-        const home = g % 2 === 0;
-        const sim = new GameSim(home ? me : o, home ? o : me, { rng, type: 'regular', injuries: false });
-        const r = sim.simToEnd();
-        const x = r.xShots!;
-        const f = sim.xFouledMiss;
-        const v = [x[0].pts + f[0] + r.home.t.ftm, x[1].pts + f[1] + r.away.t.ftm];
-        xs.push(home ? v[0] - v[1] : v[1] - v[0]);
-      }
-    runs[id] = xs;
-  }
-  const ids = Object.keys(runs);
-  const avg = mean(ids.map((id) => mean(runs[id])));
-  return Object.fromEntries(ids.map((id) => [id, mean(runs[id]) - avg]));
-}
-
 const t0 = performance.now();
+const dump: Record<string, StyleRow[]> = {};
 for (const part of parts) {
-  const rows: { abbrev: string; meas: Record<string, number>; fit: Record<string, number>; staff?: string; cur: string }[] = [];
-  for (const team of L.teams) {
-    const ps = teamPlayers(L, team.tid);
-    const t = team.tactics;
-    let options: [string, Tactics][];
-    let fit: Record<string, number>;
-    if (part === 'off' || part === 'def') {
-      const presets = part === 'off' ? OFF_PRESETS : DEF_PRESETS;
-      options = presets.map((p) => {
-        const x = cloneTactics(t);
-        if (part === 'off') [x.offense, x.offPreset] = [applyOffPreset(x.offense, p.id), p.id];
-        else [x.defense, x.defPreset] = [applyDefPreset(x.defense, p.id), p.id];
-        return [p.id, x];
-      });
-      const pr = rosterProfile(fitRoster(ps));
-      fit = part === 'off' ? offPresetFit(pr) : defPresetFit(pr);
-    } else {
-      options = OFF_SHAPES.map((s) => {
-        const x = cloneTactics(t);
-        if (s === 'fourOut') delete x.offense.shape;
-        else x.offense.shape = s;
-        return [s, x];
-      });
-      fit = shapeFits(fitRoster(ps), t, team.rotation.order);
-    }
-    const sc = part === 'shape' ? undefined : presetScores(team, ps)[part as 'off' | 'def'];
-    const staff = sc && Object.entries(sc).sort((a, b) => b[1] - a[1])[0][0];
-    rows.push({
-      abbrev: team.abbrev,
-      meas: measure(team.tid, options),
-      fit,
-      staff,
-      cur: part === 'off' ? t.offPreset : part === 'def' ? t.defPreset : (t.offense.shape ?? 'fourOut'),
-    });
-  }
+  const rows = await measureLeague({ part, k, seeds, league, jobs });
+  dump[part] = rows;
   const ids = Object.keys(rows[0].meas);
   // fit points are a tenth of a point a game; both against the team's average option
-  const rel = (r: (typeof rows)[number]) => {
+  const rel = (r: StyleRow) => {
     const m = mean(ids.map((id) => r.fit[id]));
     return Object.fromEntries(ids.map((id) => [id, (r.fit[id] - m) / 10]));
   };
   const x = rows.flatMap((r) => ids.map((id) => rel(r)[id]));
   const y = rows.flatMap((r) => ids.map((id) => r.meas[id]));
-  console.log(`\n== ${part}: ${rows.length} teams × ${ids.length} options, ${(L.teams.length - 1) * k} games each (${((performance.now() - t0) / 1000).toFixed(0)}s)`);
+  console.log(
+    `\n== ${part}: ${rows.length} teams × ${ids.length} options, ${(rows.length - 1) * k * seeds.length} games each, league ${league}, seeds ${seeds.join(',')} (${((performance.now() - t0) / 1000).toFixed(0)}s)`,
+  );
   console.log(`r(fit, measured) over every team and option: ${corr(x, y).toFixed(2)}`);
   console.log(
     `within each option across teams: ${ids
@@ -134,14 +65,19 @@ for (const part of parts) {
       .join(' · ')}`,
   );
   console.log(`measured worth against the team's average option: ${ids.map((id) => `${id} ${mean(rows.map((r) => r.meas[id])).toFixed(2)}`).join(' · ')}`);
-  const best = (r: (typeof rows)[number]) => ids.reduce((a, id) => (r.meas[id] > r.meas[a] ? id : a), ids[0]);
-  const count = (f: (r: (typeof rows)[number]) => string) => JSON.stringify(rows.reduce<Record<string, number>>((a, r) => ({ ...a, [f(r)]: (a[f(r)] ?? 0) + 1 }), {}));
-  console.log(`best for: ${count(best)}`);
+  console.log(`a team's standard error, a game: ${mean(rows.flatMap((r) => ids.map((id) => r.se[id]))).toFixed(2)}`);
+  console.log(`best for: ${JSON.stringify(tally(rows, bestOf))}`);
   if (part !== 'shape') {
-    console.log(`the staff picks: ${count((r) => r.staff!)}; the league plays: ${count((r) => r.cur)}`);
     console.log(
-      `the staff's pick under the best, a game: ${mean(rows.map((r) => r.meas[best(r)] - r.meas[r.staff!])).toFixed(2)} (the pick is the best for ${rows.filter((r) => best(r) === r.staff).length} of ${rows.length})`,
+      `an AI staff picks: ${JSON.stringify(tally(rows, (r) => r.staff))}; the user's staff: ${JSON.stringify(tally(rows, (r) => r.user))}; the league plays: ${JSON.stringify(tally(rows, (r) => r.cur))}`,
     );
+    for (const [who, f] of [
+      ['an AI staff', (r: StyleRow) => r.staff!],
+      ["the user's staff", (r: StyleRow) => r.user!],
+    ] as const)
+      console.log(
+        `${who}'s pick under the best, a game: ${mean(rows.map((r) => r.meas[bestOf(r)] - r.meas[f(r)])).toFixed(2)} (the pick is the best for ${rows.filter((r) => bestOf(r) === f(r)).length} of ${rows.length})`,
+      );
   } else {
     const said = rows.flatMap((r) =>
       ids.filter((id) => id !== 'fourOut' && Math.abs(r.fit[id] - r.fit.fourOut) >= 2).map((id) => Math.sign(r.fit[id] - r.fit.fourOut) === Math.sign(r.meas[id] - r.meas.fourOut)),
@@ -150,6 +86,7 @@ for (const part of parts) {
   }
   for (const r of rows)
     console.log(
-      `  ${r.abbrev.padEnd(4)} ${ids.map((id) => `${id} ${r.meas[id] >= 0 ? '+' : ''}${r.meas[id].toFixed(1)}/${(rel(r)[id] >= 0 ? '+' : '') + rel(r)[id].toFixed(1)}`).join('  ')}${r.staff ? `  staff: ${r.staff}` : ''}`,
+      `  ${r.abbrev.padEnd(4)} ${ids.map((id) => `${id} ${r.meas[id] >= 0 ? '+' : ''}${r.meas[id].toFixed(1)}/${(rel(r)[id] >= 0 ? '+' : '') + rel(r)[id].toFixed(1)}`).join('  ')}${r.staff ? `  AI: ${r.staff} · user: ${r.user}` : ''}`,
     );
 }
+if (process.env.STYLE_JSON) writeFileSync(process.env.STYLE_JSON, JSON.stringify(dump));

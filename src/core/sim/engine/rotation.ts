@@ -36,7 +36,7 @@ export const rotationMethods = {
     return this.q < 3 ? Infinity : this.q === 3 ? this.clock + GAME.quarterSec : this.clock;
   },
 
-  /** The lead that decides the game for this coach right now (see K.garbage): none before 3:00 left in the third quarter. */
+  /** The lead that decides the game for this coach right now (see K.garbage): none before the third quarter. */
   garbageLine(this: GameSim, t: ST): number {
     const left = this.regLeft();
     return left > K.garbage.start ? Infinity : t.gLine * (K.garbage.from + K.garbage.per * Math.sqrt(left / 60));

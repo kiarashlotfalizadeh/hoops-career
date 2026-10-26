@@ -191,11 +191,12 @@ describe('tactics model', () => {
 
       // says what the engine says (the fast version of scripts/style-check.ts, which fitted them): paired
       // games by shot value, fully drilled (partnerships and all, as the fits were measured), against a
-      // spread of opponents. Pace & Space beats Grit & Grind, the playbooks the fits set furthest apart,
-      // for most rosters, by about what the fits say on average (Heliocentric against Hub Big, which they
-      // read at about 0.4, measures about 0.1 on the engine since a shooter's threes level off: too close
-      // for a check this size); full-court chaos pays the team with the quickest hands far more than the
-      // one with the slowest, as its steals term says
+      // spread of opponents. Pace & Space beats Hub Big, the playbooks the fits set furthest apart, for
+      // most rosters, by about what the fits say on average (Grit & Grind against Pace & Space, which they
+      // read about even since the playbooks were rebalanced, 2026-10-26, had been the check; forty games an
+      // opponent, as ten had one roster in three read the wrong way round on the games' noise); full-court
+      // chaos pays the team with the quickest hands far more than the one with the slowest, as its steals
+      // term says
       {
         for (const t of league.teams) ensureRotation(league, t.tid);
         const worth = (tid: number, a: Tactics, b: Tactics, n: number) => {
@@ -238,8 +239,8 @@ describe('tactics model', () => {
         const fitOf = (tid: number) => rosterProfile(fitRoster(teamPlayers(league, tid)));
         // (AI teams: the user's team in a new league runs what he hasn't set yet)
         const seven = [3, 7, 10, 14, 17, 21, 25];
-        const pace = seven.map((tid) => worth(tid, off(tid, 'grind'), off(tid, 'paceSpace'), 10));
-        const said = seven.map((tid) => (offPresetFit(fitOf(tid)).paceSpace - offPresetFit(fitOf(tid)).grind) / 10);
+        const pace = seven.map((tid) => worth(tid, off(tid, 'hub'), off(tid, 'paceSpace'), 40));
+        const said = seven.map((tid) => (offPresetFit(fitOf(tid)).paceSpace - offPresetFit(fitOf(tid)).hub) / 10);
         const avg = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
         expect(pace.filter((x) => x > 0).length).toBeGreaterThanOrEqual(5);
         expect(avg(pace)).toBeGreaterThan(0.4 * avg(said));

@@ -349,12 +349,38 @@ describe('engine tactics', () => {
       }
       expect(benched).toBe(8);
     }
+    // zones: play to the two fives on the floor (K.zoneFit), not a blanket gain: taller walls with length
+    // and against a five with no one to flash to the high post, wider open looks against ball movement and
+    // narrower with long closeouts, a softer glass against a five that crashes, and weak on-ball defenders
+    // hidden (good ones wasted)
+    {
+      type Five = { on: { r: { hgt: number }; c: { passing: number; midShot: number; orb: number; perDef: number }; energy: number; perf: number }[]; passQ: number };
+      const five = (hgt: number, passing: number, midShot: number, orb: number, passQ: number): Five => ({
+        on: Array.from({ length: 5 }, () => ({ r: { hgt }, c: { passing, midShot, orb, perDef: 50 }, energy: 1, perf: 1 })),
+        passQ,
+      });
+      const sim = new GameSim(side(0), side(1), opts(1, false)) as unknown as { zoneFor(z: typeof K.zone.zone23, def: Five, off: Five): typeof K.zone.zone23 };
+      const z = K.zone.zone23;
+      const avg = five(46.5, 60, 74, 47, 63);
+      const at = (def: Five, off: Five) => sim.zoneFor(z, def, off);
+      const even = at(avg, avg);
+      // (an average five against an average five plays the table)
+      expect(even.iso).toBeCloseTo(z.iso, 5);
+      expect(even.swing).toBeCloseTo(z.swing, 5);
+      expect(even.glassTag).toBeCloseTo(z.glassTag, 5);
+      expect(at(five(52, 60, 74, 47, 63), avg).drive).toBeGreaterThan(even.drive * 1.25);
+      expect(at(five(52, 60, 74, 47, 63), avg).swing).toBeLessThan(even.swing);
+      expect(at(avg, five(46.5, 75, 85, 47, 63)).post).toBeLessThan(even.post * 0.75);
+      expect(at(avg, five(46.5, 60, 74, 47, 72)).swing).toBeGreaterThan(even.swing * 1.3);
+      expect(at(avg, five(46.5, 60, 74, 53, 63)).glassTag).toBeGreaterThan(even.glassTag * 1.5);
+    }
     // zones: plays the 2-3 from its table
     {
       // (the table from before the per-scheme ones, with the back line on the roller and a firmer post
       // defense for less of a glass cost since the late-2026 polish: man-to-man had beaten the 2-3 even
       // against post-up teams; its walls doubled when the big decisions were made to matter, as its open
       // threes came to count by who takes them)
+      // (its looks at the arc and its glass made bigger 2026-10-26, as the table came to scale with the two fives on the floor: K.zoneFit)
       expect(K.zone.zone23).toEqual({
         roll: 0.5,
         pnr: 0.6,
@@ -364,22 +390,23 @@ describe('engine tactics', () => {
         post: 0.9,
         postTag: 0.09,
         drive: 0.6,
-        kick: 0.2,
-        pop: 0.15,
-        handoff: 0.1,
+        kick: 0.38,
+        pop: 0.28,
+        handoff: 0.18,
         cutW: 0.25,
         cut: 0.2,
         swingW: 1.35,
-        swing: 0.22,
+        swing: 0.48,
         corner: 0.45,
-        glass: 1.07,
-        glassTag: 0.07,
+        glass: 1.13,
+        glassTag: 0.13,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
       // much: the tactical-leverage check in engineDefense.test.ts plays them at 1x leverage and gets the ones from before that; and again when the
       // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter, and when crunch time came to need a game still in reach and the AI's rotations floored their two best players' minutes, and the third game when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all four when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
+      // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban)
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -387,10 +414,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [103, 122, 86, 89, 41, 33, 10, 10],
-        [120, 124, 86, 82, 43, 28, 10, 5],
-        [102, 114, 93, 100, 40, 51, 13, 10],
-        [112, 122, 84, 94, 44, 33, 7, 11],
+        [113, 126, 103, 88, 57, 38, 18, 16],
+        [115, 103, 92, 86, 44, 42, 18, 17],
+        [110, 112, 99, 100, 50, 56, 19, 8],
+        [102, 109, 84, 90, 41, 31, 10, 20],
       ]);
     }
 

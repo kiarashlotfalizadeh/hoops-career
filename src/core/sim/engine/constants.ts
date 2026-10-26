@@ -146,9 +146,13 @@ export const K = {
    * and the run-outs crashing gives up about 0.4 (1.8, 4.7), while the low side's saved run-outs and
    * set defense measured as tagged (0.8 and 0.9, 1.4 and 1.6). The effects interact, so the factors
    * fit the whole dial: going to 0 tagged -1.07 where it measured -0.14, and to 100 -0.80 where it
-   * measured +0.05; these bring both within 0.1.
+   * measured +0.05; these bring both within 0.1. Refit 2026-10-26 (0.75 → 0.49, 0.6 → 0.29) on the
+   * ratings that count three-point volume, with the playbooks rebalanced (the four teams now crash at
+   * 42-55 and push more): over the same ten seed sets going to 0 measured +0.65 ± 0.23 where it tagged
+   * -0.15, and to 100 +0.79 ± 0.25 where it tagged +0.42 (a board is worth less, and a run-out given
+   * up more, against the league's fives as they shoot now).
    */
-  crashTag: { orb: 0.75, leak: 0.6 },
+  crashTag: { orb: 0.49, leak: 0.29 },
   /**
    * Switching off-ball screens: the edge it takes off the man coming off a handoff or a screen, and off
    * motion's ball movement; and the offensive boards it gives up (a guard switched onto a big can't
@@ -198,11 +202,14 @@ export const K = {
    */
   easeBig: { from: 27, span: 12, x: 0.08 },
   /**
-   * Garbage time (see wantsGarbage): with `start` seconds of regulation left or fewer (from 3:00 left
-   * in the third quarter), a lead of `from` + `per`·√(minutes left) decides a game for a coach at the
-   * league's line (30 with three minutes left in the third, 28.5 at the start of the fourth, 23 with
-   * five minutes left, 18 with one), times his own `patience` tonight (a range, drawn per game: some
-   * coaches empty the bench sooner). Both benches finish it, until the lead is back under the line
+   * Garbage time (see wantsGarbage): with `start` seconds of regulation left or fewer (from the start
+   * of the third quarter), a lead of `from` + `per`·√(minutes left) decides a game for a coach at the
+   * league's line (34.5 at the half, 30 with three minutes left in the third, 28.5 at the start of the
+   * fourth, 23 with five minutes left, 18 with one), times his own `patience` tonight (a range, drawn
+   * per game: some coaches empty the bench sooner). (`start` was 900, 3:00 left in the third, until
+   * 2026-10-26: a 70-win team 45 up at the half played its starters on through the third quarter, and
+   * star-check's seasons had nights decided by 74-86; from the half, the worst of one such matchup's
+   * 3,000 nights came down from 78 to 68.) Both benches finish it, until the lead is back under the line
    * less `exit`: the reserves next in line, the first `depth` of them sitting it out some nights
    * (drawn), and the deepest end of the bench for the last `late` seconds (a range, drawn), a tired
    * one spelled by a rested reserve. The team up big eases off (eases): `slow` more seconds walking it
@@ -217,7 +224,7 @@ export const K = {
    * of their real lines in the first season (2.0-2.4 before).
    */
   garbage: {
-    start: 900,
+    start: 1440,
     from: 14,
     per: 4.2,
     patience: [0.9, 1.15] as [number, number],
@@ -337,16 +344,16 @@ export const K = {
       post: 0.9,
       postTag: 0.09,
       drive: 0.6,
-      kick: 0.2,
-      pop: 0.15,
-      handoff: 0.1,
+      kick: 0.38,
+      pop: 0.28,
+      handoff: 0.18,
       cutW: 0.25,
       cut: 0.2,
       swingW: 1.35,
-      swing: 0.22,
+      swing: 0.48,
       corner: 0.45,
-      glass: 1.07,
-      glassTag: 0.07,
+      glass: 1.13,
+      glassTag: 0.13,
     },
     zone32: {
       roll: 0.08,
@@ -413,6 +420,22 @@ export const K = {
     },
   } as Record<Exclude<DefScheme, 'man'>, ZoneK>,
   /**
+   * What a zone's table is worth against these five, from this five (GameSim.zone scales it per pair of
+   * lineups): a zone's walls (the edges it takes off the ball-screen, isolations, post-ups, drives and
+   * cuts) stand taller with length (the five's average height rating against `hgt`) and come down
+   * against a five with someone to flash to the middle and make the play from the high post or the short
+   * corner (its best at passing and mid-range, half each, against `mid`); the looks it leaves at the arc
+   * open wider the better the ball moves (the five's passQ against `pass`) and narrower the longer its
+   * closeouts; its softer glass is softer still against a five that crashes it (average offensive
+   * rebounding against `orb`). Each as a share of the table's size a rating point, inside [min, max].
+   * And a zone hides its weak on-ball defenders and wastes its good ones: the handler's edge on his man
+   * counts `hide` of the man's on-ball defense as `hideAt` instead (an isolation, a ball-screen, a drive).
+   * So the 2-3 is a weapon for long fives short of on-ball defenders against fives that can't shoot, pass
+   * or rebound, and a loser the other way, as an NBA zone is, not a blanket gain (2026-10-26: it was the
+   * best defense for 22 of the real league's 30 rosters, +1.3 a game over a roster's average).
+   */
+  zoneFit: { hgt: 46.5, wallLen: 0.06, mid: 67, wallMid: 0.035, pass: 63, arcPass: 0.04, arcLen: 0.03, orb: 47, glassOrb: 0.12, min: 0.35, max: 1.8, hide: 0.5, hideAt: 50 },
+  /**
    * A junk defense's chaser top-locking his man off the ball (on top of the fewer touches and late
    * catches): his weight as a kick-out target, the openness taken off his catch-and-shoot threes, the
    * edge lost coming off screens and handoffs, and what a defender caught high gives back on his
@@ -470,20 +493,24 @@ export const K = {
    * The ball-screen coverages' room (openness, at 1x) on the pick-and-roll's looks: drop's big sags
    * (the handler's pull-ups open, his drive and the roll taken away, more so by a rim protector:
    * a step of `rim` per `rimProt` of his over 50; a popping screener open), hedge's show (the
-   * handler stalled, the roll and the rotation's kick-out left open as the big recovers), ice's
+   * handler stalled, the roll and the rotation's kick-out left open as the big recovers, the sooner by
+   * a step per `speed` of quickness the big has on the screener), ice's
    * sideline (the middle's pull-ups, drives and rolls taken away, the weak side's corner given up),
    * the switch's scramble (the edge a handler gets on the switched big, on top of the matchup, and
    * `speed` more per 50 of quickness he has on him) and the slip (a screener who rolls well slips it
    * before the switch `slip` of the time, a roll at `slipOpen`: a switch had killed the roll outright,
-   * and against ice switching everything had become a free point a game).
+   * and against ice switching everything had become a free point a game). (2026-10-26: a drop's wall
+   * came to lean twice as much on the rim protector, `rimProt` 200 → 100, and a hedge's recovery half
+   * again as much on the big's feet, `speed` 60 → 40, so Drop pays a rim protector and Hedge a mobile
+   * big, as their playbooks say, rather than each paying nearly every roster alike.)
    * The blitz's and a star double's trap: the handler's passing over 55 that's a step of escape (the
    * turnovers it forces and the 4-on-3 behind it). `help`: how far the help comes at a setting
    * (help's room on drives and kick-outs, and its pull on the rim's contests, grow with it).
    */
   cov: {
-    drop: { pull: 0.7, rim: 0.7, rimProt: 200, roll: 0.6, pop: 0.7 },
-    hedge: { stall: 0.4, roll: 0.45, kick: 0.35 },
-    ice: { pull: 0.35, rim: 0.3, roll: 0.1, kick: 0.42 },
+    drop: { pull: 0.85, rim: 0.7, rimProt: 100, roll: 0.6, pop: 0.7 },
+    hedge: { stall: 0.4, roll: 0.45, kick: 0.35, speed: 40 },
+    ice: { pull: 0.35, rim: 0.3, roll: 0.1, kick: 0.6, to: 0 },
     switch: { scramble: 0.2, speed: 0.5, slip: 0.15, slipOpen: 0.3 },
     blitz: { escape: 50 },
     double: { escape: 40 },
@@ -577,6 +604,21 @@ export const K = {
    */
   giftExp: 0.65,
   /**
+   * The open floor rewards the faster five: run-outs come more often by one per `often` points of speed
+   * the runners have over the defenders (their fives' average speed ratings), and land with one unit of
+   * edge per `edge` points. So pushing (Pace & Space) pays a fast roster and costs a slow one (2026-10-26:
+   * was 120 and 25, when pushing paid nearly every roster alike and Pace & Space was the best offense for
+   * half of a fictional league's rosters).
+   */
+  runSpeed: { often: 30, edge: 14 },
+  /**
+   * A handoff's hub reads the play (keeps it, gives it, hits the back-cut) as well as he passes: one unit of
+   * the shooter's edge per `per` points of his passing over `at`. So a passing big is what makes Hub Big's
+   * handoff-heavy offense work (2026-10-26: before it, a hub's passing moved nothing, and Hub Big measured the
+   * same for a roster with an elite passing big as for one with none).
+   */
+  hubRead: { at: 55, per: 60 },
+  /**
    * Past 1x leverage the doubled edges move the league's averages (the coverages, pressure, switching
    * and crashing AI coaches play), so these base rates move back by this share per unit of leverage
    * past 1, keeping AI-vs-AI games on their 2025-26 averages: the offense's taste for threes, shooting
@@ -592,9 +634,11 @@ export const K = {
    * measures on the engine with blowouts and old stars tamed: the league went from Hub Big to
    * Five-Out and Pace & Space, and from blitzing and pressing to icing and hedging, which had sent
    * threes 9% over, fouls 8% under, free throws 9%, turnovers 7% and steals 9% under (two seasons,
-   * rng 7 and 11). Now within 3% (rng 7, 11 and 23).
+   * rng 7 and 11). Now within 3% (rng 7, 11 and 23). Threes −0.2 → −0.12 on 2026-10-26, when the 2-3
+   * zone was retuned and the playbooks rebalanced (Pace & Space and Five-Out shoot fewer threes, Grit &
+   * Grind more, and fewer staffs run the two): threes had fallen 4-6% under (rng 7, 11 and 23).
    */
-  recenter: { three: -0.2, foul: -0.04, orb: -0.15, tov: -0.12, blk: 0 },
+  recenter: { three: -0.12, foul: -0.04, orb: -0.15, tov: -0.12, blk: 0 },
   /**
    * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
    * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,
@@ -614,12 +658,18 @@ export const K = {
    * weigh more on the offensive glass (glassW), everyone else's drives find a crowded paint (`crowd`,
    * more by `waste` for each point of a big's spacing over `inside`, shooting wasted under the
    * basket), and post-ups are easier to get. Tactical edges (at the leverage). Measured in
-   * scripts/system-impact.ts: each is a trade that pays for some rosters and costs others.
+   * scripts/system-impact.ts: each is a trade that pays for some rosters and costs others. (Retuned
+   * 2026-10-26, five-out's exposure 0.75 → 0.55 and its rim 0.18 → 0.2, horns' spacing −1.5 → −2.2 and
+   * turnovers −0.005 → 0, the double post's crowd 0.07 → 0.14, when the ratings came to count
+   * three-point volume and the league's fives shot less: the double post had become the best shape for
+   * 17 of the real league's 30 rosters and horns a small gain for nearly all of them. A shape's worth
+   * leans on how the whole league shoots: on the ratings before that change five-out is the best shape
+   * for 12 rosters, on the ratings since for 7.)
    */
   shape: {
-    fiveOut: { rim: 0.18, exposed: 0.75, post: 0.6, glass: -0.02 },
-    horns: { space: -1.5, pnr: 1.0, handoff: 1.0, handoffW: 0.03, motion: 0.95, tov: -0.005 },
-    twoIn: { inside: 25, crowd: 0.07, waste: 0.002, bigs: 0.04, post: 1.15, glassW: 1.04 },
+    fiveOut: { rim: 0.2, exposed: 0.55, post: 0.6, glass: -0.02 },
+    horns: { space: -2.2, pnr: 1.0, handoff: 1.0, handoffW: 0.03, motion: 0.95, tov: 0 },
+    twoIn: { inside: 25, crowd: 0.14, waste: 0.002, bigs: 0.04, post: 1.15, glassW: 1.04 },
   },
   /**
    * Out-of-possession roles (DEF_ROLE_META): the point-of-attack stopper's edge against the

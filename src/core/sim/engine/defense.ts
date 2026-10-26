@@ -193,8 +193,51 @@ export const defenseMethods = {
     const s = def.t.defense.scheme;
     if (s === 'man') return null;
     // a junk defense whose chased players are all on the bench plays man-to-man
-    if ((s === 'box1' || s === 'tri2') && !this.chased(def, this.T[1 - def.side]).length) return null;
-    return K.zone[s];
+    const off = this.T[1 - def.side];
+    if ((s === 'box1' || s === 'tri2') && !this.chased(def, off).length) return null;
+    // (scaled to the two fives on the floor: K.zoneFit)
+    const key = `${s}|${def.lineupKey}|${off.lineupKey}`;
+    if (def.zk?.key !== key) def.zk = { key, z: this.zoneFor(K.zone[s], def, off) };
+    return def.zk.z;
+  },
+
+  /** A zone's table against these five from this five (K.zoneFit): its walls by length and the middle, its open looks by ball movement and closeouts, its glass by their crashing. */
+  zoneFor(this: GameSim, z: ZoneK, def: ST, off: ST): ZoneK {
+    const f = K.zoneFit;
+    const avg = (t: ST, g: (p: SP) => number) => t.on.reduce((a, p) => a + g(p), 0) / Math.max(1, t.on.length);
+    const len = avg(def, (p) => p.r.hgt) - f.hgt;
+    const mid = Math.max(0, ...off.on.map((p) => (p.c.passing + p.c.midShot) / 2)) - f.mid;
+    const wall = clamp(1 + f.wallLen * len - f.wallMid * mid, f.min, f.max);
+    const arc = clamp(1 + f.arcPass * (off.passQ - f.pass) - f.arcLen * len, f.min, f.max);
+    const glass = clamp(1 + f.glassOrb * (avg(off, (p) => p.c.orb) - f.orb), f.min, f.max);
+    // (an open look widens with the arc's factor; a closeout's contest, a negative, tightens against it)
+    const open = (v: number) => (v >= 0 ? v * arc : v * (2 - arc));
+    return {
+      roll: z.roll * wall,
+      pnr: z.pnr * wall,
+      pnrTag: z.pnrTag * wall,
+      iso: z.iso * wall,
+      isoTag: z.isoTag * wall,
+      post: z.post * wall,
+      postTag: z.postTag * wall,
+      drive: z.drive * wall,
+      kick: open(z.kick),
+      pop: open(z.pop),
+      handoff: open(z.handoff),
+      cutW: z.cutW * wall,
+      cut: z.cut * wall,
+      swingW: 1 + (z.swingW - 1) * arc,
+      swing: open(z.swing),
+      corner: z.corner,
+      glass: 1 + (z.glass - 1) * glass,
+      glassTag: z.glassTag * glass,
+    };
+  },
+
+  /** A zone's hiding of a weak on-ball defender (and wasting of a good one): the handler's extra edge on his man (K.zoneFit.hide), 0 out of a zone. */
+  zoneHide(this: GameSim, def: ST, d: SP): number {
+    if (!this.zone(def)) return 0;
+    return (K.zoneFit.hide * (d.c.perDef * this.dq(d) - K.zoneFit.hideAt)) / 20;
   },
 
   /** The scheme played now: the one set, or man-to-man while a junk defense has nobody to chase. */
