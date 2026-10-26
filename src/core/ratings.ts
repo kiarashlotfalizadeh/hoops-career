@@ -23,9 +23,15 @@ export const RATING_META: RatingMeta[] = [
   { key: 'ath', label: 'Explosiveness', short: 'EXP', group: 'Physical', help: 'Vertical pop. Finishing above the rim, lobs, blocks and offensive boards.' },
   { key: 'str', label: 'Strength', short: 'STR', group: 'Physical', help: 'Holding position in the post, finishing through contact, screening.' },
   { key: 'end', label: 'Stamina', short: 'STA', group: 'Physical', help: 'How long he can play before fatigue erodes his performance. Fatigue also raises injury risk.' },
-  { key: 'ins', label: 'Finishing', short: 'FIN', group: 'Scoring', help: 'Converting at the rim: layups, dunks, finishing through contests.' },
+  { key: 'ins', label: 'Finishing', short: 'FIN', group: 'Scoring', help: 'Converting at the rim, volume counted: layups, dunks, finishing through contests.' },
   { key: 'mid', label: 'Mid-range', short: 'MID', group: 'Scoring', help: 'Pull-ups, floaters and mid-range jumpers. Key against drop coverage.' },
-  { key: 'tp', label: 'Three-point', short: '3P', group: 'Scoring', help: 'Three-point accuracy. Shooters also create spacing that opens driving lanes for teammates.' },
+  {
+    key: 'tp',
+    label: 'Three-point',
+    short: '3P',
+    group: 'Scoring',
+    help: 'Three-point shooting, volume counted: 40% on 11 a game beats 45% on three. Shooters also open driving lanes for teammates.',
+  },
   { key: 'ft', label: 'Free throws', short: 'FT', group: 'Scoring', help: 'Free throw accuracy. Low values invite intentional fouls late in games.' },
   { key: 'drw', label: 'Drawing fouls', short: 'DRW', group: 'Scoring', help: 'Getting to the line on drives and post-ups.' },
   { key: 'post', label: 'Post play', short: 'PST', group: 'Scoring', help: 'Back-to-basket scoring and footwork. Feasts on smaller switched defenders.' },
@@ -99,7 +105,9 @@ export function composites(r: Ratings): Composites {
     offBall: 0.5 * r.tp + 0.25 * r.spd + 0.25 * r.oiq,
     passing: 0.62 * r.pas + 0.25 * r.oiq + 0.13 * r.hnd,
     ballSec: 0.45 * r.hnd + 0.35 * r.oiq + 0.2 * r.pas,
-    foulDraw: 0.6 * r.drw + 0.2 * r.str + 0.2 * r.ins,
+    // (finishing is not in it: a finisher's trips to the line come with his shots at the rim, so the
+    // rating that says how often he gets there is drawing fouls)
+    foulDraw: 0.75 * r.drw + 0.25 * r.str,
     perDef: 0.45 * r.perD + 0.22 * r.spd + 0.15 * r.diq + 0.1 * r.hgt + 0.08 * r.ath,
     intDef: 0.38 * r.intD + 0.25 * r.hgt + 0.17 * r.str + 0.12 * r.diq + 0.08 * r.ath,
     rimProt: 0.42 * r.blk + 0.28 * r.hgt + 0.15 * r.ath + 0.15 * r.intD,
@@ -114,57 +122,58 @@ export function composites(r: Ratings): Composites {
 
 // ---------------------------------------------------------------- overall
 
-// OVR weights, fitted (non-negative, anchored to a hand-built prior) so that real players'
-// calibrated ratings predict their impact: half three-season regressed box plus-minus, half
-// RAPM from NBA.com lineup data, plus the minutes and usage coaches gave them. Guards are
-// judged mostly on feel, creation, size and defense; bigs on feel, passing, defense, rebounding
-// and finishing. Box-score volume a lineup would get anyway (steals, offensive boards) carries
-// little weight; RAPM is what lifts real defenders.
+// OVR weights, fitted (non-negative, a ridge toward the previous weights: scripts/data/ovrFit.ts) so
+// that real players' calibrated ratings predict what fans read in an overall: a blend of his projected
+// impact (points per 100 his team gains with him on the floor), his production (box creation a game)
+// and his role (the minutes coaches gave him), see scripts/data/reputation.ts OVR_TARGET. Impact alone
+// crowned efficient low-usage shooters (Kennard an 87 "All-Star") and sank high-usage stars (Jaylen
+// Brown and LeBron 81). Guards are judged mostly on feel, creation, size and defense; bigs on feel,
+// passing, defense, rebounding and finishing.
 const OVR_GUARD: Ratings = {
-  hgt: 0.09,
-  spd: 0.02,
-  ath: 0.015,
-  str: 0.04,
-  end: 0.031,
-  ins: 0.015,
-  mid: 0.03,
-  tp: 0.04,
-  ft: 0.035,
-  drw: 0.025,
+  hgt: 0.125,
+  spd: 0.061,
+  ath: 0.048,
+  str: 0.057,
+  end: 0.111,
+  ins: 0.017,
+  mid: 0.015,
+  tp: 0.026,
+  ft: 0.047,
+  drw: 0.002,
   post: 0,
-  hnd: 0.09,
-  pas: 0.055,
-  oiq: 0.2,
-  perD: 0.095,
-  intD: 0.045,
-  blk: 0,
-  stl: 0.005,
-  diq: 0.095,
-  oreb: 0,
-  dreb: 0.027,
+  hnd: 0.109,
+  pas: 0.04,
+  oiq: 0.128,
+  perD: 0.062,
+  intD: 0.014,
+  blk: 0.013,
+  stl: 0.006,
+  diq: 0.023,
+  oreb: 0.019,
+  dreb: 0.03,
 };
 const OVR_BIG: Ratings = {
-  hgt: 0.065,
-  spd: 0.049,
-  ath: 0.019,
-  str: 0.043,
-  end: 0.031,
-  ins: 0.041,
-  mid: 0.01,
-  tp: 0.041,
-  ft: 0.025,
-  drw: 0.029,
-  post: 0.031,
-  hnd: 0.047,
-  pas: 0.071,
-  oiq: 0.152,
-  perD: 0.055,
-  intD: 0.05,
-  blk: 0.011,
+  hgt: 0.081,
+  spd: 0.055,
+  ath: 0.028,
+  str: 0.039,
+  end: 0.066,
+  ins: 0.033,
+  mid: 0.017,
+  tp: 0.03,
+  ft: 0.027,
+  drw: 0.025,
+  post: 0.047,
+  hnd: 0.064,
+  pas: 0.065,
+  oiq: 0.125,
+  perD: 0.044,
+  intD: 0.033,
+  blk: 0.012,
   stl: 0,
-  diq: 0.093,
-  oreb: 0.004,
-  dreb: 0.055,
+  diq: 0.066,
+  oreb: 0.009,
+  dreb: 0.056,
 };
 
 /** Per-attribute OVR weights for this body type (the guard/big blend ovrRaw uses). */

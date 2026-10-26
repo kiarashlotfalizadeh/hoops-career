@@ -143,6 +143,8 @@ export function pbpFeatures(b?: PbpAgg) {
       midPct: N,
       rimShare: N,
       midShare: N,
+      rimVol: N,
+      midVol: N,
       unast: N,
       pullupShare: N,
       driveShare: N,
@@ -174,6 +176,10 @@ export function pbpFeatures(b?: PbpAgg) {
     midPct: bayes(b.fgm.mid, b.fga.mid, 0.42, 50),
     rimShare: fga ? b.fga.rim / fga : N,
     midShare: fga ? b.fga.mid / fga : N,
+    // shot volume by zone (log of 1 + attempts per 36): a finisher's and a shooter's rating is how well
+    // and how often (calibrate.ts's VOLUME_TRADE)
+    rimVol: Math.log1p(per36(b.fga.rim)),
+    midVol: Math.log1p(per36(b.fga.mid)),
     unast: fgm ? 1 - b.astFgm / fgm : N,
     pullupShare: fga ? b.pullup / fga : N,
     driveShare: fga ? b.drive / fga : N,
@@ -243,6 +249,11 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
   const f = features(a) as Record<string, number>;
   const rel = reliability(a.wMin);
   const z = (k: string) => zScore(f[k], pop.mean[k], pop.sd[k], rel);
+  // a zone's make rate counts by its own attempts (shrunk percentages have a narrow spread, so a center's
+  // 30 mid-range shots at 55% would otherwise read as the league's best mid-range shooting)
+  const shots = (n: number) => n / (n + 150);
+  const zMid = a.pbp ? z('midPct') * shots(a.pbp.fga.mid) : 0;
+  const zRim = a.pbp ? z('rimPct') * shots(a.pbp.fga.rim) : 0;
   // NBA.com play-by-play profile available: shot zones, creation, true rebound rates, defense, RAPM
   const has = Number.isFinite(f.rimPct);
   const h = heightToRating(bio.heightIn || 79);
@@ -266,8 +277,9 @@ export function deriveRatings(a: Agg, bio: Bio, pop: PopStats, seedKey: string):
     // (so one promoted can carry mid-20s minutes) but keeps their order, so stamina still says
     // who has carried a big role (the rotation AI also remembers last season's minutes)
     end: staminaFromMinutes(a.mpg, age),
-    ins: has ? 50 + 10 * z('rimPct') + 3 * z('ftr') + 2 * z('dunkRate') + 3 * hz : 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
-    mid: has ? 48 + 9 * z('midPct') + 4 * z('paintPct') + 3 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
+    ins: has ? 50 + 9 * zRim + 4 * z('rimVol') + 2 * z('ftr') + 2 * z('dunkRate') + 3 * hz : 50 + 9 * z('fg2Pct') + 4 * z('ftr') + 4 * hz,
+    // (mid-range shots only: a center's hooks and floaters are his finishing, not a jumper)
+    mid: has ? 48 + 8 * zMid + 5 * z('midVol') + 2 * z('pullupShare') + 3 * z('ftPct') - 2 * hz : 48 + 9 * z('ftPct') + 4 * z('tpa36') + 4 * z('usg') - 3 * hz,
     tp: 47 + 11 * z('fg3Pct') + 11 * z('tpa36'),
     ft: clamp((a.ftPct - 0.42) / 0.0052, 1, 100),
     hnd: has

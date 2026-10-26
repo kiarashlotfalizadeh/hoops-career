@@ -117,7 +117,8 @@ type TendKey = (typeof TEND_KEYS)[number];
  */
 const TEND_MODEL: Record<TendKey, { b: [number, number, number, number]; sd: number; lo: number; hi: number }> = {
   use: { b: [0.285, 0.208, 0.398, -0.288], sd: 0.79, lo: 0.1, hi: 25 },
-  three: { b: [-0.22, -0.352, 0.263, -0.119], sd: 1.13, lo: 0.02, hi: 5 },
+  // (hi 10: the calibration lets a big who shoots a few threes on a low rating go that far, scripts/data/calibrate.ts THREE_TEND_MAX)
+  three: { b: [-0.22, -0.352, 0.263, -0.119], sd: 1.13, lo: 0.02, hi: 10 },
   drive: { b: [-0.347, 0.039, -0.11, -0.012], sd: 0.78, lo: 0.15, hi: 5 },
   pass: { b: [0.374, 0.253, -0.375, 0.071], sd: 0.51, lo: 0.25, hi: 6 },
   blk: { b: [0.225, 0.068, 0.016, -0.278], sd: 0.35, lo: 0.15, hi: 6 },

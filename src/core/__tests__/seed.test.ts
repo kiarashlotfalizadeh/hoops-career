@@ -13,6 +13,7 @@ import { RATING_KEYS, inferPos } from '../ratings';
 import { BBREF_TO_TID } from '../teams';
 import { Rng } from '../random';
 import { DRAFT_PROSPECT, FREE_AGENT, POSITIONS, type Pos } from '../types';
+import { reputationCheck } from '../../../scripts/data/reputation';
 
 const seed = seedJson as unknown as SeedData;
 const real = seed.players.length > 0;
@@ -35,6 +36,13 @@ describe('real-player seed', () => {
         // efficient bench bigs no longer outrank stars
         const kessler = players.find((p) => p.bbrefId === 'kesslwa01');
         if (kessler) expect(kessler.ovr).toBeLessThan(88);
+        // and the way fans rate it: Curry the best shooter, Giannis at the line, the MVP field on top, role
+        // shooters below the stars in OVR and in the market (scripts/data/reputation.ts; real-check prints them)
+        expect(
+          reputationCheck(structuredClone(league))
+            .filter((a) => !a.ok)
+            .map((a) => `${a.name}: ${a.detail}`),
+        ).toEqual([]);
         // a seed built with each player's projected impact carries it: each player is calibrated to be worth on
         // the floor what it says (scripts/data/calibrate.ts), so his ratings, and the OVR they add up to, follow it
         const projected = players.filter((p) => p.proj && p.proj.mpg >= 15);

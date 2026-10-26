@@ -35,7 +35,7 @@ import {
   type RosterRow,
 } from './parse';
 import { PROSPECT_HINTS, aggregate, deriveRatings, popStats, prospectRatings, type Agg } from './derive';
-import { VALUE_BAND, calibrate, valueWeights, type CalibReport, type ValueTarget } from './calibrate';
+import { VALUE_BAND, calibrate, valueWeights, type CalibReport, type StyleTarget, type ValueTarget } from './calibrate';
 import { IMPACT_SEASONS, buildNbaProfile } from './nba/build';
 import { profilesByBbref, type PbpAgg } from './nba/profile';
 import { NBA_RAW } from './nba/fetch';
@@ -444,10 +444,10 @@ async function main() {
     const i = players.findIndex((sp) => sp.id === p.bbrefId);
     if (i >= 0) pidByIdx.set(i, p.pid);
   }
-  const tmap = new Map<number, { agg: Agg; rel: number }>();
+  const tmap = new Map<number, StyleTarget>();
   for (const t of targets) {
     const pid = pidByIdx.get(t.idx);
-    if (pid !== undefined) tmap.set(pid, { agg: t.agg, rel: t.rel });
+    if (pid !== undefined) tmap.set(pid, { agg: t.agg, rel: t.rel, from: { ...league.players[pid].ratings } });
   }
   // value targets: every player's projected impact, moving the skills his derived ratings say carry it
   const value = new Map<number, ValueTarget>();

@@ -192,6 +192,94 @@ export function simulateBatch(league: League, gamesPerTeam: number, seed: number
 
 const ln = (a: number, b: number) => Math.log((a + 0.05) / (b + 0.05));
 
+/**
+ * The usage-efficiency trade-off, which the engine leaves out: a shooter who takes three times the
+ * threes takes them against tighter defense, off the dribble and late in the clock, so the same
+ * percentage on more of them is the better shooter (and a 47% on two a game from a role player is
+ * not a 99). Each zone's make-rate target gets `x` per unit of log volume over the league's
+ * (attempt-weighted, so the league's makes stay where they were), at most ±`cap`: the ratings rank
+ * shooters, finishers and foul-drawers the way their volume and efficiency together do, and the
+ * engine, which lacks the trade-off, plays a high-volume player a little above his percentage and a
+ * low-volume one a little below. Free throws per shot scale by exp(x × log volume over the league's).
+ */
+export const VOLUME_TRADE: Record<'three' | 'rim' | 'mid' | 'ftr', { x: number; cap: number; low?: number }> = {
+  // (a big who takes two threes a game loses at most 2.5 points of percentage, or his threes dry up)
+  three: { x: 0.07, cap: 0.05, low: 0.025 },
+  rim: { x: 0.035, cap: 0.04 },
+  mid: { x: 0.04, cap: 0.04 },
+  ftr: { x: 0.3, cap: 0.4 },
+};
+/** The most a three-point tendency goes to: a big who shoots a few threes on a low rating needs a lot of it. */
+export const THREE_TEND_MAX = 10;
+/** Free throws per shot: shrunk toward the league's rate by `k` field-goal attempts. */
+const FTR_PRIOR = { p: 0.245, k: 150 };
+/** Attempts of shrinkage toward the league's rate on the rim and mid-range make-rate targets (play-by-play). */
+const ZONE_PRIOR = { rim: { p: 0.655, k: 100 }, mid: { p: 0.42, k: 80 } };
+
+/** Per-36 volume of a player's zone (log of 1 + attempts per 36). */
+const logVol = (att: number, mins: number) => Math.log1p((att / Math.max(1, mins)) * 36);
+
+/** The league's attempt-weighted mean log volume of each zone over the targets (see VOLUME_TRADE). */
+function volumeRefs(targets: Map<number, StyleTarget>) {
+  const acc = { three: [0, 0], rim: [0, 0], mid: [0, 0], ftr: [0, 0] };
+  const add = (k: keyof typeof acc, v: number, w: number) => {
+    acc[k][0] += v * w;
+    acc[k][1] += w;
+  };
+  for (const { agg } of targets.values()) {
+    const p = agg.per36;
+    add('three', Math.log1p(p.fg3a), (p.fg3a * agg.wMin) / 36);
+    add('ftr', Math.log1p(p.fta), (p.fta * agg.wMin) / 36);
+    const b = agg.pbp;
+    if (b && b.mins >= 60) {
+      add('rim', logVol(b.fga.rim, b.mins), (b.fga.rim / b.mins) * agg.wMin);
+      add('mid', logVol(b.fga.mid, b.mins), (b.fga.mid / b.mins) * agg.wMin);
+    }
+  }
+  const ref = {
+    three: acc.three[0] / (acc.three[1] || 1),
+    rim: acc.rim[0] / (acc.rim[1] || 1),
+    mid: acc.mid[0] / (acc.mid[1] || 1),
+    ftr: acc.ftr[0] / (acc.ftr[1] || 1),
+    ftrNorm: 1,
+  };
+  // (free throws scale by a factor, whose free-throw-weighted mean is over 1: divided back out)
+  let fw = 0;
+  let fs = 0;
+  for (const { agg } of targets.values()) {
+    const w = (agg.per36.fta * agg.wMin) / 36;
+    fw += w;
+    fs += w * ftrFactor(Math.log1p(agg.per36.fta), ref.ftr, 1);
+  }
+  ref.ftrNorm = fw ? fs / fw : 1;
+  return ref;
+}
+
+/** His free throws per shot target's volume factor (see VOLUME_TRADE), the league's mean factor divided out. */
+function ftrFactor(v: number, ref: number, norm: number) {
+  return Math.exp(clamp(VOLUME_TRADE.ftr.x * (v - ref), -VOLUME_TRADE.ftr.cap, VOLUME_TRADE.ftr.cap)) / norm;
+}
+
+/** A player's style target: his real line (aggregated stat seasons), how much his sample counts, and his ratings as his evidence derived them. */
+export interface StyleTarget {
+  agg: Agg;
+  rel: number;
+  from?: Ratings;
+}
+
+/**
+ * Attempts (recency-weighted, all stat seasons) at which a zone's make rate counts for half against his
+ * derived rating: below that, a hot or cold handful of shots moves his rating only part of the way, and
+ * the rest of each pass pulls it back toward what his evidence derived (a center's 30 mid-range shots
+ * at 55% are not a 99). Free throws per shot by his field-goal attempts.
+ */
+export const SHOT_SAMPLE = { tp: 150, mid: 120, ins: 120, drw: 400 };
+/** How far each pass pulls a thin-sample zone rating back toward its derived value (times the damping and his share of doubt). */
+const SAMPLE_PULL = 0.5;
+
+/** A zone's volume adjustment to its make-rate target (see VOLUME_TRADE). */
+const volAdj = (k: 'three' | 'rim' | 'mid', v: number, ref: number) => clamp(VOLUME_TRADE[k].x * (v - ref), -(VOLUME_TRADE[k].low ?? VOLUME_TRADE[k].cap), VOLUME_TRADE[k].cap);
+
 export interface CalibReport {
   iter: number;
   players: number;
@@ -218,7 +306,9 @@ export interface ValueTarget {
  */
 export function valueWeights(r: Ratings): Pick<ValueTarget, 'defW'> {
   const inside = clamp(0.5 + (r.intD + r.blk + r.hgt - r.perD - r.stl - r.spd) / 120, 0.15, 0.85);
-  return { defW: { diq: 1, perD: 1.4 * (1 - inside), intD: 1.4 * inside, blk: 0.6 * inside } };
+  // (shot blocking is his box score's, like steals: the blocks he gets pin it, and fans read it as his
+  // blocks; a rim protector the engine values above his impact gives it back in interior defense)
+  return { defW: { diq: 1, perD: 1.4 * (1 - inside), intD: 1.7 * inside } };
 }
 
 /**
@@ -272,11 +362,11 @@ export function valueStep(r: Ratings, t: Pick<ValueTarget, 'defW' | 'from'>, mis
   shiftValue(r, t.from, moves);
 }
 
-const VALUE_SKILLS: RatingKey[] = ['oiq', 'diq', 'perD', 'intD', 'blk'];
+const VALUE_SKILLS: RatingKey[] = ['oiq', 'diq', 'perD', 'intD'];
 
 export function calibrate(
   league: League,
-  targets: Map<number, { agg: Agg; rel: number }>,
+  targets: Map<number, StyleTarget>,
   value: Map<number, ValueTarget>,
   passes: { games: number; damp: number }[],
   log = console.log,
@@ -301,6 +391,8 @@ export function calibrate(
   }
   const threeTrend = rfga > 0 && b3a > 0 ? clamp(r3a / rfga / (b3a / bfga), 0.95, 1.08) : 1;
   log(`  three-point trend factor ${threeTrend.toFixed(3)}`);
+  const vref = volumeRefs(targets);
+  log(`  volume references (log 1 + per 36): three ${vref.three.toFixed(2)}, rim ${vref.rim.toFixed(2)}, mid ${vref.mid.toFixed(2)}, free throws ${vref.ftr.toFixed(2)}`);
   passes.forEach((pass, iter) => {
     for (const b of batches) b.w *= VALUE_DECAY;
     const stints: Stint[] = [];
@@ -332,11 +424,12 @@ export function calibrate(
         blk: s.blk * k,
         pf: s.pf * k,
       };
+      const wm0 = t.agg.wMin / 36;
       const tgt = {
         use: real.fga + 0.44 * real.fta + real.tov,
         tpar: real.fga ? Math.min(0.97, (real.fg3a / real.fga) * threeTrend) : 0,
-        ftr: real.fga ? real.fta / real.fga : 0,
-        fg3: t.agg.fg3Pct,
+        ftr: real.fga ? ((real.fta * wm0 + FTR_PRIOR.p * FTR_PRIOR.k) / (real.fga * wm0 + FTR_PRIOR.k)) * ftrFactor(Math.log1p(real.fta), vref.ftr, vref.ftrNorm) : 0,
+        fg3: t.agg.fg3Pct + volAdj('three', Math.log1p(real.fg3a), vref.three),
         fg2: t.agg.fg2Pct,
         ast: real.ast,
         tov: real.tov,
@@ -351,10 +444,14 @@ export function calibrate(
       // usage responds sublinearly (a star's share saturates), so step harder than for rates
       tend.use = clamp(tend.use * Math.exp(ln(tgt.use, sim.use) * 1.7 * d), 0.1, 25);
       if (tgt.tpar < 0.02) tend.three = clamp(tend.three * 0.6, 0.02, 3);
-      else tend.three = clamp(tend.three * Math.exp(ln(tgt.tpar * 10, sim.tpar * 10) * 0.8 * d), 0.02, 5);
+      else tend.three = clamp(tend.three * Math.exp(ln(tgt.tpar * 10, sim.tpar * 10) * 0.8 * d), 0.02, THREE_TEND_MAX);
       const r = p.ratings;
-      r.drw += clamp(16 * ln(tgt.ftr * 10, sim.ftr * 10) * d, -8, 8);
-      if (real.fg3a >= 0.8 && s.fg3a >= 25) r.tp += clamp(((tgt.fg3 - sim.fg3) / 0.002) * 0.45 * d, -8, 8);
+      // (each zone's step counts by its sample, see SHOT_SAMPLE; the rest pulls toward his derived rating)
+      const wm = t.agg.wMin / 36;
+      const relOf = (n: number, k: number) => n / (n + k);
+      const relS = { tp: relOf(real.fg3a * wm, SHOT_SAMPLE.tp), drw: relOf(real.fga * wm, SHOT_SAMPLE.drw), mid: 0, ins: 0 };
+      r.drw += relS.drw * clamp(16 * ln(tgt.ftr * 10, sim.ftr * 10) * d, -8, 8);
+      if (real.fg3a >= 0.8 && s.fg3a >= 25) r.tp += relS.tp * clamp(((tgt.fg3 - sim.fg3) / 0.002) * 0.45 * d, -8, 8);
       const b = t.agg.pbp;
       const bFga = b ? b.fga.rim + b.fga.paint + b.fga.mid + b.fga.c3 + b.fga.ab3 : 0;
       if (b && bFga >= 60 && s.fga >= 40) {
@@ -362,7 +459,13 @@ export function calibrate(
         zoneCount.n++;
         const bFgm = b.fgm.rim + b.fgm.paint + b.fgm.mid + b.fgm.c3 + b.fgm.ab3;
         const simFgm = s.fg2 + s.fg3;
-        const zt = { rim: b.fga.rim / bFga, mid: b.fga.mid / bFga, unast: bFgm ? 1 - b.astFgm / bFgm : 0.5, rimPct: (b.fgm.rim + 0.655 * 60) / (b.fga.rim + 60) };
+        const zr = ZONE_PRIOR.rim;
+        const zt = {
+          rim: b.fga.rim / bFga,
+          mid: b.fga.mid / bFga,
+          unast: bFgm ? 1 - b.astFgm / bFgm : 0.5,
+          rimPct: (b.fgm.rim + zr.p * zr.k) / (b.fga.rim + zr.k) + volAdj('rim', logVol(b.fga.rim, b.mins), vref.rim),
+        };
         const zs = { rim: s.rimA / s.fga, mid: s.midA / s.fga, unast: simFgm ? 1 - s.astM / simFgm : 0.5, rimPct: s.rimA ? s.rimM / s.rimA : zt.rimPct };
         for (const k of ['rim', 'mid', 'unast', 'rimPct'] as const) err[k] += Math.abs(zt[k] - zs[k]);
         tend.drive = clamp(tend.drive * Math.exp(ln(zt.rim * 10, zs.rim * 10) * 0.9 * d), 0.15, 5);
@@ -370,22 +473,37 @@ export function calibrate(
         tend.create = clamp((tend.create ?? 1) * Math.exp(ln(zt.unast * 10, zs.unast * 10) * 1.2 * d), 0.15, 5);
         const t3 = b.fga.c3 + b.fga.ab3;
         if (t3 >= 30 && s.fg3a >= 25) tend.corner = clamp((tend.corner ?? 1) * Math.exp(ln((b.fga.c3 / t3) * 10, (s.c3A / s.fg3a) * 10) * 0.8 * d), 0.1, 6);
-        if (s.rimA >= 20) r.ins += clamp(((zt.rimPct - zs.rimPct) / 0.0028) * 0.45 * d, -8, 8);
-        const midT = (b.fgm.mid + 0.42 * 50) / (b.fga.mid + 50);
-        if (s.midA >= 15 && b.fga.mid >= 15) r.mid += clamp(((midT - s.midM / s.midA) / 0.0035) * 0.45 * d, -8, 8);
-        // floaters and short paint shots: what rim and mid leave over
+        relS.ins = relOf(b.fga.rim, SHOT_SAMPLE.ins);
+        relS.mid = relOf(b.fga.mid, SHOT_SAMPLE.mid);
+        if (s.rimA >= 20) r.ins += relS.ins * clamp(((zt.rimPct - zs.rimPct) / 0.0028) * 0.45 * d, -8, 8);
+        const zm = ZONE_PRIOR.mid;
+        const midT = (b.fgm.mid + zm.p * zm.k) / (b.fga.mid + zm.k) + volAdj('mid', logVol(b.fga.mid, b.mins), vref.mid);
+        if (s.midA >= 15 && b.fga.mid >= 15) r.mid += relS.mid * clamp(((midT - s.midM / s.midA) / 0.0035) * 0.45 * d, -8, 8);
+        // floaters and short paint shots: what rim and mid leave over. Their mid-range half goes to his
+        // mid-range only as far as he takes mid-range shots (a center's hooks are not a jumper): what it
+        // leaves on his short shots is a few hundredths of a point a game
         const paintT = (b.fgm.paint + 0.45 * 50) / (b.fga.paint + 50);
         const sPaintA = s.fg2a - s.rimA - s.midA;
         const sPaintM = s.fg2 - s.rimM - s.midM;
         if (sPaintA >= 20 && b.fga.paint >= 20) {
           const step = clamp(((paintT - sPaintM / sPaintA) / 0.003) * 0.3 * d, -5, 5);
           r.ins += step * 0.5;
-          r.mid += step * 0.5;
+          r.mid += step * 0.5 * clamp((2 * b.fga.mid) / (b.fga.mid + b.fga.paint), 0, 1);
         }
       } else if (real.fg2a >= 1.5 && s.fg2a >= 25) {
         const step = clamp(((tgt.fg2 - sim.fg2) / 0.0028) * 0.45 * d, -8, 8);
         r.ins += step;
         r.mid += step * 0.35;
+      }
+      if (t.from) {
+        const from = t.from;
+        const pull = (k: 'tp' | 'mid' | 'ins' | 'drw', rel: number) => (r[k] += (1 - rel) * SAMPLE_PULL * d * (from[k] - r[k]));
+        pull('tp', relS.tp);
+        pull('drw', relS.drw);
+        if (b && bFga >= 60) {
+          pull('mid', relS.mid);
+          pull('ins', relS.ins);
+        }
       }
       // playmaking, ball security, glass and defensive events: visible ratings stay as derived
       // from the real rate stats; hidden tendencies absorb role and opportunity

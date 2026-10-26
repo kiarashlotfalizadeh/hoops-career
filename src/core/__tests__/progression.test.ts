@@ -159,16 +159,17 @@ describe('player development', () => {
       expect(spread()).toBeLessThan(widened - (widened - (q(0.85) - q(0.15))) * 0.4);
     }
 
-    // fictional leagues are spread like the real league was before its calibration to the projection's value
-    // (REAL_RAW_QUANTILES), so development and aging move OVR about as much there: the value calibration spread
-    // the real league's raw OVR about half as wide again, most of it by rating its deep bench below average
+    // fictional leagues are spread like the real league (REAL_RAW_QUANTILES), so development and aging move OVR
+    // about as much there (with OVR weighted on feel and defense, the value calibration had spread the real league
+    // half as wide again, and fictional leagues were held to 0.6-0.8 of it; weighted on impact, production and role
+    // as fans read it, the calibration hardly widens it)
     {
       const fict = createLeague({ name: 'f', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 7 });
       // raw OVR from the 15th to the 85th percentile
       const at = (q: number) => OVR_ANCHORS.findIndex(([x]) => x === q);
       const span = (x: League) => x.ovrScale.raw[at(0.85)] - x.ovrScale.raw[at(0.15)];
-      expect(span(fict) / span(l)).toBeGreaterThan(0.6);
-      expect(span(fict) / span(l)).toBeLessThan(0.8);
+      expect(span(fict) / span(l)).toBeGreaterThan(0.85);
+      expect(span(fict) / span(l)).toBeLessThan(1.1);
       // a season at 21 and at 35, the same players in each league
       const year = (x: League, age: number) => {
         const rostered = Object.values(x.players).filter((p) => p.tid >= 0);

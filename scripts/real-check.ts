@@ -14,6 +14,7 @@ import type { Player } from '../src/core/types';
 import { K, engineDiag, resetEngineDiag } from '../src/core/sim/engine';
 import { awardLadder } from '../src/core/league/awards';
 import { SEASON_WEIGHT } from './data/derive';
+import { reputationCheck } from './data/reputation';
 
 const seedPath = process.argv[2] ?? process.env.HC_SEED ?? 'src/data/seed.json';
 const rngSeed = Number(process.argv[3] ?? process.env.RNG ?? 7);
@@ -22,6 +23,8 @@ if (process.env.EDGE) K.tacticEdge = Number(process.env.EDGE);
 const seed: SeedData = JSON.parse(readFileSync(seedPath, 'utf8'));
 console.log(`seed ${seedPath} · rng ${rngSeed}`);
 const league = createLeague({ name: 'Check', userTid: 0, coachName: 'Check', settings: defaultSettings(), seed, rngSeed });
+// fans' certainties about the seed's ratings, before a game is played (printed at the end; seed.test.ts fails on a miss)
+const anchors = reputationCheck(league);
 // AI teams cut to 15 at creation, the user's team doesn't: release its lowest-rated standard contracts (two-way deals don't count)
 const roster = standardRoster(league, 0).sort((a, b) => a.ovr - b.ovr);
 while (standardRoster(league, 0).length > CAP.rosterMax) releasePlayer(league, roster.shift()!, { news: false });
@@ -429,3 +432,8 @@ if (T) {
     );
   }
 }
+
+const missed = anchors.filter((a) => !a.ok);
+console.log(`\nReputation anchors: ${anchors.length - missed.length} of ${anchors.length} hold`);
+for (const a of anchors) console.log(`  ${a.ok ? 'ok  ' : 'MISS'} ${a.name}: ${a.detail}`);
+if (missed.length) process.exitCode = 1;

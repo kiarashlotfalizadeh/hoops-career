@@ -395,7 +395,9 @@ describe('the game files and the value target', () => {
     const bw = valueWeights(big);
     expect(ww.defW.perD!).toBeGreaterThan(ww.defW.intD!);
     expect(bw.defW.intD!).toBeGreaterThan(bw.defW.perD!);
-    expect(bw.defW.blk!).toBeGreaterThan(ww.defW.blk!);
+    // (shot blocking is his box score's, like steals: value never moves it, a big's interior defense takes it)
+    expect(bw.defW.blk).toBeUndefined();
+    expect(bw.defW.intD!).toBeGreaterThan(ww.defW.intD!);
     // a value step lifts his feel and defense by the miss and moves no skill his real line pins but
     // the scoring ones that give back what feel adds to his own scoring
     const before = { ...wing, ins: 60, mid: 60, tp: 60 };
