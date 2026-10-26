@@ -11,6 +11,7 @@ import type { OwnerGoals, OwnerReview } from './league/ownerGoals';
 import type { Books } from './league/books';
 import type { CallWorth, DeadlineCall, SkidCall } from './league/calls';
 import type { StaffPick, WeekCall } from './league/weekCall';
+import type { YouthLean } from './league/youthLean';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PossLog } from './sim/log';
 
@@ -194,6 +195,12 @@ export interface DraftInfo {
   tid: number | null;
   /** Original team abbrev for real seeded draftees. */
   teamAbbrev?: string;
+  /**
+   * How the room read him on draft night (see prospects.ts): the consensus OVR and POT and his rank
+   * on the big board, and (his own picks only) the user's staff's OVR and POT. What a later draft
+   * grade compares his career with. Absent for drafts before scouting.
+   */
+  read?: { ovr: number; pot: number; rank?: number; staff?: { ovr: number; pot: number } };
 }
 
 export interface Player {
@@ -236,7 +243,7 @@ export interface Player {
   /** The team that last released (waived or bought out) him, and the season: it can't sign him again that season. */
   released?: { tid: number; season: number };
   /** The team that last traded him away, and when (`also`: the others that traded him away that season): he can't go back to them that season. */
-  tradedFrom?: { tid: number; season: number; also?: number[] };
+  tradedFrom?: { tid: number; season: number; also?: number[]; /** The season day of that trade (older saves don't have it). */ day?: number };
   /** Signed as a free agent or re-signed: he can't be traded before this season day (NBA: December 15, or three months after signing). */
   tradeLock?: { season: number; day: number };
   experience: number; // NBA seasons completed
@@ -410,9 +417,29 @@ export interface Tendencies {
 
 export interface ProspectInfo {
   rank: number; // consensus big board rank
+  /** His rank when the class arrived (the preseason), for his stock's move since (absent: classes before scouting). */
+  rank0?: number;
+  /** His college or overseas season, month by month (see prospects.ts): a hot or cold month, or an injury, and the OVR it moved. */
+  moves?: { day: number; kind: 'hot' | 'cold' | 'hurt'; d: number }[];
   combine?: CombineResults;
   /** Short scouting blurb. */
   blurb: string;
+}
+
+/** The user's scouting of a draft class (see src/core/league/prospects.ts). */
+export interface ScoutingState {
+  /** The draft (season) it's about: a new class starts it over. */
+  season: number;
+  /** Prospects the user sent scouts to (up to SCOUT_SLOTS); the staff fill the free places themselves. */
+  list: number[];
+  /** Days of scouting each prospect has had, by pid. */
+  looks: Record<number, number>;
+  /** The class's monthly moves done this season (of STOCK_DAYS). */
+  moves: number;
+  /** The combine is in. */
+  combine?: boolean;
+  /** The season's games have begun: the board as it opened is set (each prospect's rank0). */
+  opened?: boolean;
 }
 
 export interface CombineResults {
@@ -1523,6 +1550,10 @@ export interface League {
   callWorth?: Record<string, CallWorth>;
   /** What the staff did on its own with calls a sim ran past, newest last (see weekCall.ts): the digest says it. */
   staffPicks?: StaffPick[];
+  /** The user's young players' turn, or the stretch the staff doesn't ask about it again (see youthLean.ts, weekCall.ts). */
+  youthLean?: YouthLean;
+  /** The staff call the last sim stopped for (see simCore.ts's runSim): Needs you leads with it that day. */
+  stopCall?: { id: string; season: number; day: number };
   fired?: boolean;
   /** Free-agency day counter (0..30). */
   faDay: number;
@@ -1530,6 +1561,8 @@ export interface League {
   faBids?: FaBid[];
   /** User's draft board ordering (pids). */
   draftBoard?: number[];
+  /** The user's scouts on this season's class (see prospects.ts); absent: nobody sent yet, the staff's own shortlist. */
+  scouting?: ScoutingState;
   /** Season the league was started. */
   startSeason: number;
   /**
@@ -1544,6 +1577,12 @@ export interface League {
    * player's highs are this league's alone.
    */
   realHighs?: boolean;
+  /**
+   * The NBA's past before a real league's first season (see media/past.ts): every Finals since 1947
+   * and every MVP, and the season from which its players' real honours are whole (they're on their
+   * records, Player.awards). Absent for a fictional league (no past) and for a save from before it.
+   */
+  past?: LeaguePast;
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
   /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */
@@ -1772,3 +1811,22 @@ export interface GamePlan {
 export const FREE_AGENT = -1;
 export const DRAFT_PROSPECT = -2;
 export const RETIRED = -3;
+
+/**
+ * A Finals before the league began: [season, champion's tid, runner-up's tid (-1: a franchise long
+ * gone), the champion's wins, the runner-up's, the Finals MVP's name ('' before 1969), the champion's
+ * name then and the runner-up's (when the franchise went by another)].
+ */
+export type PastFinal = [season: number, champ: number, runner: number, w: number, l: number, mvp: string, champAs?: string | null, runnerAs?: string | null];
+
+/** The NBA's past a real league opens with (League.past). */
+export interface LeaguePast {
+  /** Its last season (the one before the league's first). */
+  through: number;
+  /** Real players' honours are on their records whole from this season (every current player's career). */
+  honoursFrom: number;
+  /** Every Finals, oldest first. */
+  finals: PastFinal[];
+  /** Every MVP: [season, name]. */
+  mvps: [season: number, name: string][];
+}
