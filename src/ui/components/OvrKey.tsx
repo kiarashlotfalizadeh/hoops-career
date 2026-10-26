@@ -33,7 +33,7 @@ export function OvrSheet({ open, onClose, ovr, pot }: { open: boolean; onClose: 
         {OVR_TIERS.map((t, i) => (
           <li key={t.tone} className={t === mine ? 'on' : undefined} aria-current={t === mine ? 'true' : undefined}>
             {/* a badge of the band, as a player's is drawn */}
-            <span className="ok-sw" style={{ ['--tier' as string]: `var(--tier-${t.tone})` }} aria-hidden="true">
+            <span className={`ok-sw t-${t.tone}`} style={{ ['--tier' as string]: `var(--tier-${t.tone})` }} aria-hidden="true">
               {Number.isFinite(t.min) ? t.min : OVR_TIERS[i - 1].min - 1}
             </span>
             <span className="ok-span num">{span(i)}</span>
@@ -61,7 +61,7 @@ export function OvrKey() {
       <button type="button" className="ok-key" aria-haspopup="dialog" onClick={() => setOpen(true)} aria-label="OVR tiers: what the badge colours mean">
         <span className="ok-key-k">OVR</span>
         {OVR_TIERS.map((t, i) => (
-          <span key={t.tone} className="ok-chip" style={{ ['--tier' as string]: `var(--tier-${t.tone})` }}>
+          <span key={t.tone} className={`ok-chip t-${t.tone}`} style={{ ['--tier' as string]: `var(--tier-${t.tone})` }}>
             {Number.isFinite(t.min) ? `${t.min}${i === 0 ? '+' : ''}` : `<${OVR_TIERS[i - 1].min}`}
           </span>
         ))}

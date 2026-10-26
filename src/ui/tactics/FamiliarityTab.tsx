@@ -52,7 +52,10 @@ export function FamiliarityTab({ sys, players }: { sys: SystemFamiliarity; playe
                 <b>{d.label}:</b> {d.help}
               </p>
             ))}
-            <p>The games to fluid assume a balanced practice focus; tactical drills build it about twice as fast.</p>
+            <p>
+              The word beside each figure is its band (<Term id="fambands">Fluid, Familiar, Learning, Awkward, New</Term>). The games to fluid assume a balanced practice focus;
+              tactical drills build it about twice as fast.
+            </p>
           </Help>
         }
       >

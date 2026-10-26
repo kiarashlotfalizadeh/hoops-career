@@ -19,6 +19,22 @@
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier) 28%, transparent);
   line-height: 1;
 }
+/* the badge's weight by tier, so the ladder reads without its hue (a colour-blind player, a grey
+   screenshot): the top two solid with a white figure, the middle two on their wash, the bench a
+   grey figure with a hairline, the fringe a light grey figure on its own */
+.ovr.t-elite,
+.ovr.t-star {
+  color: #fff;
+  background: var(--tier);
+  box-shadow: none;
+}
+.ovr.t-low {
+  background: transparent;
+}
+.ovr.t-bad {
+  background: transparent;
+  box-shadow: none;
+}
 .ovr.sm {
   min-width: 29px;
   height: 23px;
@@ -34,10 +50,15 @@
   letter-spacing: -0.03em;
   border-radius: var(--radius-sm);
 }
-/* on a slab the tint would muddy the team colour: white card stock instead */
-.slab .ovr {
+/* on a slab the tint would muddy the team colour: white card stock instead (the top two keep their
+   solid tier, the rest white with the figure in the tier) */
+.slab .ovr:not(.t-elite):not(.t-star) {
   background: #fff;
   box-shadow: none;
+}
+.slab .ovr.t-elite,
+.slab .ovr.t-star {
+  box-shadow: 0 0 0 2px #fff;
 }
 .pot {
   font-family: var(--mono);

@@ -159,3 +159,20 @@
   line-height: 1.42;
   color: var(--text-2);
 }
+/* the key's chips and the ladder's swatches carry the badges' weights (badges.css): solid, washed, ringed, plain */
+.ok-chip.t-elite,
+.ok-chip.t-star,
+.ok-sw.t-elite,
+.ok-sw.t-star {
+  color: #fff;
+  background: var(--tier);
+}
+.ok-chip.t-low,
+.ok-sw.t-low {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tier) 28%, transparent);
+}
+.ok-chip.t-bad,
+.ok-sw.t-bad {
+  background: transparent;
+}

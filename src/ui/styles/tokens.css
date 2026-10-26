@@ -112,19 +112,25 @@
   --brand: #c33724;
   --accent-2: #b57a00;
   /* signals, deep enough to read on paper: 4.5:1 as text on every ground and as a tag (its 12% wash) */
+  /* (--bad and --warn sit a step darker than a plain red and orange, so neither reads as the elite
+     tier's gold for a red-green colour-blind player: ΔE2000 ≥ 7 under Machado's protan, deutan and tritan) */
   --good: #106e40;
-  --bad: #b22b22;
-  --warn: #8b5300;
+  --bad: #9a1f1e;
+  --warn: #7f4a00;
   --info: #1b60ae;
-  /* rating tiers (OVR), gold > violet > blue > green > grey > light grey: the figure in its tier's
-     colour on a wash of it, like a printed tint. Each keeps 4.5:1 on its wash and every ground, and
-     under a white figure (a tactics grade) */
-  --tier-elite: #835b00;
-  --tier-star: #6744cc;
-  --tier-good: #1764b8;
-  --tier-avg: #167343;
-  --tier-low: #57534b;
-  --tier-bad: #68645b;
+  /* rating tiers (OVR), gold > violet > blue > teal > grey > light grey. Told apart without hue: the
+     badge's weight steps down (a solid gold, a solid deep violet, a blue and a teal on their washes, a
+     grey with a hairline, a light grey on its own: .ovr.t-*) and each pair of neighbours is at least
+     7 L* apart; none is a signal's colour (teal, not --good's green; gold lighter than --warn). Each
+     keeps 4.5:1 on its wash, on every ground and under a white figure (a solid badge, a tactics grade).
+     Minimum ΔE2000 between any two tiers under protan/deutan/tritan simulation: 6.8 (was 2.7); between
+     a tier and --good/--bad/--warn: 6.7 (was 0.5). */
+  --tier-elite: #8d6300;
+  --tier-star: #442f8a;
+  --tier-good: #025d88;
+  --tier-avg: #00504f;
+  --tier-low: #5a5752;
+  --tier-bad: #6d6a67;
   /* the floor: maple boards, a second board tone and the seams between them (the live court's
      floor in live/Court.tsx MAPLE, the tactics board) */
   --maple: #dcae76;

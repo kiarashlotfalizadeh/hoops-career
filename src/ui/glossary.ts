@@ -1,5 +1,9 @@
 // The game's jargon in plain words, for the Glossary sheet and inline <Term> links. One or two
-// sentences each, true to how the engine plays it.
+// sentences each, true to how the engine plays it. The playbooks and the roles are read from the
+// engine's own descriptions (PLAYBOOK_TERMS, ROLE_TERMS), so their entries never drift from the game.
+import { DEF_PRESETS, DEF_ROLE_META, OFF_PRESETS } from '../core/sim/tactics';
+import { ROLE_META } from '../core/ratings';
+import { FLUID } from '../core/sim/familiarity';
 
 export type GlossaryGroup = 'Offense' | 'Defense' | 'Numbers' | 'Contracts' | 'Roster' | 'The game';
 
@@ -74,7 +78,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   },
   {
     id: 'junk',
-    term: 'Box-and-one, triangle-and-two',
+    term: 'Junk defense (box-and-one, triangle-and-two)',
     group: 'Defense',
     text: 'A zone behind one or two chasers who face-guard the other team’s main creators. Good against a one- or two-man offense whose others can’t shoot.',
   },
@@ -337,6 +341,117 @@ export const GLOSSARY: GlossaryEntry[] = [
     group: 'The game',
     text: 'The Staff tab in a live game: your lead assistant’s read of it, the calls he wants from you with his pick first, and your moves with what each has done since (their points a trip since the change, against before it). Your substitutes are under Lineup.',
   },
+
+  // the measuring and the words around it
+  {
+    id: 'measured',
+    term: 'Measured',
+    group: 'The game',
+    text: 'A number the staff got by playing the same games twice on the same seeds, once each way, then shrinking the gap toward zero by how noisy it is. A number that isn’t measured is labelled as the staff’s read. “It worked” only ever comes from a measurement, never from the win-loss record.',
+  },
+  {
+    id: 'counter',
+    term: 'Counter',
+    group: 'The game',
+    text: 'A change the staff would make for one opponent (a coverage, a matchup, a set to run or take away), with what it’s worth measured before you see it. Add it to the game plan for the next game, the series or the season; it never changes your playbook.',
+  },
+  {
+    id: 'luck',
+    term: 'Luck (the luck line)',
+    group: 'The game',
+    text: 'How far the shots fell above or below what the looks were worth (the shooter, how open, the contest). It decides nights, but there’s nothing to change for it: a plan controls the looks, not whether they drop.',
+  },
+  {
+    id: 'keys',
+    term: 'Keys to the game',
+    group: 'The game',
+    text: 'Three numbers to hit tonight, read from both teams’ season: what they do best to take away, what they give up to go after, the player they run through. Tracked live at the breaks and graded with the result.',
+  },
+  {
+    id: 'fambands',
+    term: 'Fluid, Familiar, Learning, Awkward, New',
+    group: 'The game',
+    text: `How well your team knows something, in a word: Fluid at ${FLUID} and up (played as drawn up), Familiar from 80, Learning from 60, Awkward from 40, New under that.`,
+  },
+  {
+    id: 'custom',
+    term: 'Custom (a playbook’s base)',
+    group: 'The game',
+    text: 'A playbook whose settings have moved, by you or by the staff acting on the season: “Custom (Drop base)” is the Drop & Protect identity with changes. Instructions shows what moved, with Put back.',
+  },
+  {
+    id: 'archetype',
+    term: 'Archetype (Heliocentric Creator, Rim Protector…)',
+    group: 'Roster',
+    text: 'The tag under a player’s name: what his ratings make him. It suggests a role, but his role is what your tactic asks of him (Team → Tactics), and the two can differ.',
+  },
+  {
+    id: 'closer',
+    term: 'Closer',
+    group: 'Roster',
+    text: 'One of the five the rotation puts back on the floor for the end of a close game, whatever the minutes plan says. Set them in Team → Rotation; the late play call is built around your best one.',
+  },
+  {
+    id: 'sta',
+    term: 'STA (stamina)',
+    group: 'Roster',
+    text: 'How long a player lasts before fatigue costs his shooting and defense. A low one wants shorter stints; Rotation’s stint plan rests him for it.',
+  },
+  {
+    id: 'impact',
+    term: 'Impact',
+    group: 'Numbers',
+    text: 'What a player is worth on the floor, in points per 100 possessions against an average player: his teams’ lineups over seven seasons and his box score, built the way the public impact metrics are. A real player’s ratings make him worth that in the engine.',
+  },
+  {
+    id: 'per',
+    term: 'PER (player efficiency)',
+    group: 'Numbers',
+    text: 'Everything a player does in the box score, per minute and adjusted for pace, on a scale where the league average is 15.',
+  },
+  {
+    id: 'ws',
+    term: 'Win shares (WS)',
+    group: 'Numbers',
+    text: 'The wins a player’s offense and defense account for, worked out from the box score as Basketball Reference does. Per 48 minutes, about .100 is an average player.',
+  },
+  { id: 'gb', term: 'GB (games back)', group: 'Numbers', text: 'How far a team trails the leader: the difference in wins plus the difference in losses, halved.' },
+  {
+    id: 'playin',
+    term: 'Play-in',
+    group: 'The game',
+    text: 'Seeds 7 to 10 in each conference play for the last two playoff spots: 7 hosts 8 (the winner is the 7th seed), 9 hosts 10 (the loser is out), then the loser of the first game hosts the winner of the second for the 8th seed.',
+  },
+  {
+    id: 'billing',
+    term: 'Big nights (billing)',
+    group: 'The game',
+    text: 'What makes a game more than a date, shown in front of its line: opening night, Christmas, a Cup knockout, a rivalry, a revenge game (a good player’s first meeting with the team that let him go, or yours with a team you left), a streak on the line, a milestone in reach.',
+  },
+  {
+    id: 'roles',
+    term: 'Roles (offense)',
+    group: 'Offense',
+    text: 'A player’s job in possession, set on the tactics board: Primary Creator, Secondary Scorer, Playmaker, Movement Shooter, Slasher, Rim Runner, Stretch Big, Post Hub, Playmaking Hub or Glue Guy. Each has its own entry here; the stars on the board are how well he suits his.',
+  },
+  ...playbookTerms(),
+  ...roleTerms(),
 ];
+
+/** The offensive playbooks and the defensive identities, each in the engine's own description. */
+function playbookTerms(): GlossaryEntry[] {
+  return [
+    ...OFF_PRESETS.map((p) => ({ id: `pb-${p.id}`, term: `${p.name} (offensive playbook)`, group: 'Offense' as const, text: p.description })),
+    ...DEF_PRESETS.map((p) => ({ id: `pb-${p.id}`, term: `${p.name} (defensive identity)`, group: 'Defense' as const, text: p.description })),
+  ];
+}
+
+/** A player's roles at each end, each in the engine's own words. */
+function roleTerms(): GlossaryEntry[] {
+  return [
+    ...Object.entries(ROLE_META).map(([id, m]) => ({ id: `role-${id}`, term: `${m.label} (role)`, group: 'Offense' as const, text: m.help })),
+    ...Object.entries(DEF_ROLE_META).map(([id, m]) => ({ id: `drole-${id}`, term: `${m.label} (defensive role)`, group: 'Defense' as const, text: m.help })),
+  ];
+}
 
 export const glossaryEntry = (id: string) => GLOSSARY.find((g) => g.id === id);

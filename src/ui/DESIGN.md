@@ -26,7 +26,7 @@ Five tabs, one per role. Every screen belongs to exactly one (`tabFor` in `nav.t
 | **Today**  | What needs you now    | The agenda (decisions waiting), the staff's top advice, the next game at a glance, the inbox (`/inbox`), settings (`/settings`), god mode (`/god`), the glossary                                                                                                                                                                                                        |
 | **Team**   | Who plays and how     | Your roster with its views (players, ratings, stats, contracts) at `/team`; rotation `/team/rotation`; tactics (Tactic A/B/C, the board with shape and roles at both ends, instructions by phase, players' roles, familiarity and practice, game management, the system report, saved playbooks) `/team/tactics`; lineups `/team/lineups`; your players' pages; compare |
 | **Games**  | When and against whom | Your schedule and results (`/games`); one **Matchup** page per opponent (`/games/:tid`: scouting, the game plan with the staff's counters, matchups, and on game day the preview with the staff's briefing; its slab carries the plan's state); the live game (`/live`); game reports (`/game/:gid`, opening on the staff's debrief)                                    |
-| **League** | Everyone else         | Standings and odds, the schedule around the league, stats, ratings, playoffs, the Cup, awards, news, other teams' pages (`/teams/:tid`), other players' pages, history (`/league/history`: seasons, records, Hall of Fame, coaches)                                                                                                                                     |
+| **League** | Everyone else         | Five tabs: Standings (the odds, the lottery inside Odds), Playoffs (the Cup a row in it while it's on), Stats (ratings too), Scores (the schedule around the league) and News; Awards and History (`/league/history`: seasons, records, Hall of Fame, coaches) are links in its header; other teams' pages (`/teams/:tid`), other players' pages                        |
 | **Office** | The GM's desk         | The cap sheet and exceptions, trade (`/office/trade`), free agents, re-signing, the draft, picks, finances, the owner and job security (`/office/owner`), your career and job offers (`/office/career`)                                                                                                                                                                 |
 
 Rules that follow from it:
@@ -137,30 +137,30 @@ world (no people layer: no morale, personalities or player conversations, by the
 
 ## Tokens (theme.css `:root`)
 
-| Token                                           | Use                                                                                                                                                                               |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--bg` `--bg-2`                                 | the paper; a recessed track (a `Segmented`)                                                                                                                                       |
-| `--raised`                                      | white card stock: cards, tables, list grounds                                                                                                                                     |
-| `--surface` `--surface-2` `--surface-3`         | pressed rows, level buttons, tracks, tags (paper tones, darker each step)                                                                                                         |
-| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a chip's ring, a table's foot / strong ink rule                                                                                                         |
-| `--text` `--text-2` `--text-dim`                | ink / secondary / labels and meta (all 4.5:1 on paper, card and `--surface-2`)                                                                                                    |
-| `--ink` `--ink-2` `--paper-ink`                 | the controls' ink (a primary pill, a ring, the dock) / pressed / text on ink                                                                                                      |
-| `--on` `--on-ink`                               | a chosen option: a chip, a level (solid ink, white text)                                                                                                                          |
-| `--accent` `--accent-ink`                       | your team's colour as a fill on paper (a switch that's on, progress) / ink on it                                                                                                  |
-| `--accent-text`                                 | links and "go there" text: your team's colour, darkened to read on paper                                                                                                          |
-| `--team-night` `--team-night-ink`               | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                    |
-| `--brand`                                       | red-orange, only for what needs you: the inbox count, live                                                                                                                        |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper                                                                                                           |
-| `--tier-*`                                      | OVR tiers (via `ovrColor`), text colours that read on white                                                                                                                       |
-| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                                       |
-| `--font` `--display` `--head` `--mono`          | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                            |
-| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                                                 |
-| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (32), head to content (12), in a card (18)                                                                                                               |
-| `--row-min` `--row-py` `--row-px`               | a list row: 54px tall at least, its padding                                                                                                                                       |
-| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                                       |
-| `--radius-xs` … `--radius-xl`, `--radius-pill`  | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment |
-| `--shadow-card` `--shadow` `--shadow-float`     | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                  |
-| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                                              |
+| Token                                           | Use                                                                                                                                                                                                 |
+| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bg` `--bg-2`                                 | the paper; a recessed track (a `Segmented`)                                                                                                                                                         |
+| `--raised`                                      | white card stock: cards, tables, list grounds                                                                                                                                                       |
+| `--surface` `--surface-2` `--surface-3`         | pressed rows, level buttons, tracks, tags (paper tones, darker each step)                                                                                                                           |
+| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a chip's ring, a table's foot / strong ink rule                                                                                                                           |
+| `--text` `--text-2` `--text-dim`                | ink / secondary / labels and meta (all 4.5:1 on paper, card and `--surface-2`)                                                                                                                      |
+| `--ink` `--ink-2` `--paper-ink`                 | the controls' ink (a primary pill, a ring, the dock) / pressed / text on ink                                                                                                                        |
+| `--on` `--on-ink`                               | a chosen option: a chip, a level (solid ink, white text)                                                                                                                                            |
+| `--accent` `--accent-ink`                       | your team's colour as a fill on paper (a switch that's on, progress) / ink on it                                                                                                                    |
+| `--accent-text`                                 | links and "go there" text: your team's colour, darkened to read on paper                                                                                                                            |
+| `--team-night` `--team-night-ink`               | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                                      |
+| `--brand`                                       | red-orange, only for what needs you: the inbox count, live                                                                                                                                          |
+| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper; `--bad` and `--warn` a step darker than a plain red and orange, so neither reads as the gold tier to a colour-blind player |
+| `--tier-*`                                      | OVR tiers (via `ovrColor`), gold > violet > blue > teal > grey > light grey: text colours that read on white, on their wash and under a white figure                                                |
+| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                                                         |
+| `--font` `--display` `--head` `--mono`          | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                                              |
+| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                                                                   |
+| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (32), head to content (12), in a card (18)                                                                                                                                 |
+| `--row-min` `--row-py` `--row-px`               | a list row: 54px tall at least, its padding                                                                                                                                                         |
+| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                                                         |
+| `--radius-xs` … `--radius-xl`, `--radius-pill`  | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment                   |
+| `--shadow-card` `--shadow` `--shadow-float`     | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                                    |
+| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                                                                |
 
 Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
 tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the
@@ -170,7 +170,9 @@ Figures are written by `src/core/format.ts`, the same way on every screen and in
 `money` ("$12.3M"), `moneySigned` ("+$1.2M"), `moneyExact` (to the $10K for minimums, two-ways and
 cash: "$1.27M"), `plural` ("1 game", "5 games"), `rankOf` ("7th of 30"), `madeAtt` ("34-90", in
 tables and sentences alike), `injuryName` and `outFor` ("Torn meniscus · out 8 games"). Don't
-write a new inline formatter.
+write a new inline formatter. On screen a record, a series or a made-attempted never breaks at its
+hyphen: `keepFigures` (`core/format.ts`) for a string, `keep` (`components/ui.tsx`) for any node
+(display only: compare and store the plain string).
 
 **One word for one thing** (the vocabulary every screen uses):
 
@@ -191,8 +193,12 @@ write a new inline formatter.
 | Dates            | `fmtDate`: "Feb 11", "Wed, Feb 11"; a year only outside this season; never an all-caps long weekday          |
 | Owner numbers    | job security out of 100 (50 = goals met exactly); grades −100..+100 (0 = met exactly)                        |
 
-**Colour that means "how good" has one order everywhere**: gold > violet > blue > green > light
-grey > grey (the OVR tiers; a badge is the figure in its tier's colour on a faint wash of it). Ratings: 85+ gold, 75+ blue, 64+ green, under 64 grey (`ratingTone`,
+**Colour that means "how good" has one order everywhere**: gold > violet > blue > teal > grey >
+light grey (the OVR tiers). A badge differs by weight as well as colour, so the ladder reads without
+its hue (a colour-blind player, a grey screenshot): the top two solid with a white figure, the middle
+two the figure on a wash of its tier, the bench a grey figure with a hairline, the fringe a light grey
+figure on its own (`.ovr.t-*`, `styles/badges.css`). Average is teal, never `--good`'s green, and
+gold, orange (`--warn`) and red (`--bad`) separate by lightness. Ratings: 85+ gold, 75+ blue, 64+ teal, under 64 grey (`ratingTone`,
 in a table and a bar alike); percentiles 85th+/65th+/35th+/below likewise (`skillColor`). Red is for
 losses and warnings, never a low rating; trade value tiers are plain text. One game's screens put
 the away team on the left and the home team on the right, as the final does; shot charts draw each
@@ -229,6 +235,9 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   tracking -0.03em. Stat figures: `--mono`, 500-600, tracking -0.03 to -0.06em. Both tabular.
   Never in capitals-only words: a figure's label sits beside it in sentence case.
 - Names in rows 15.5px at 680. Nothing in the text cut above 760.
+- A headline with a word too long for a phone ("Timberwolves" at 29px) steps down a size, two for a
+  very long one, rather than break the word: `fitHead` (`components/ui.tsx`, with `longWord`), which
+  also keeps its figures whole.
 
 ## Components and classes
 
@@ -254,7 +263,7 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   under it, named in a column header (`.list-divider.list-h`) that says the order; colour bands are
   explained in the section's Help. A control's reference setting (the playbook's own) carries a dot
   (`Levels mark`).
-- **Badge colours come from `OVR_TIERS`** (`core/ratings.ts`), one colour per tier name. A list or
+- **Badge colours come from `OVR_TIERS`** (`core/ratings.ts`), one colour and one weight per tier name. A list or
   table of badges carries `OvrKey` under it; a player's own badge opens the ladder. Attribute
   ratings use `ratingTone` everywhere, with `RatingKey` under a ratings table.
 - Figures: `Statline` for 2-4 figures in a row; `Kpi` tiles only for a grid of many.
@@ -262,7 +271,7 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   one row of tabs per screen; a boxed `Segmented` under it at most: a recessed pill track with the
   option that's on as a white card), `Chips` (ink-ring pills; a chosen chip is solid ink), `.tag` (a
   printed tint in sentence case; a tone colours the word and its wash), `Ovr` (the figure in mono,
-  in its tier's colour on a tint of it), `Avatar`, buttons (all pills: `.btn` an ink ring,
+  at its tier's colour and weight: solid, tinted, hairline or plain), `Avatar`, buttons (all pills: `.btn` an ink ring,
   `.primary` solid ink, `.ghost` a quieter ring, `.text` a link-like action, `.danger` and `.good`
   washed in their signal, `.sm`, `.xs`, `.block`, `.big`).
 - `Help` ("?" opening a sheet) and `More` (an expander) carry every explanation. `Toggle`'s `help`
@@ -372,7 +381,9 @@ graphics package); the console under it is paper and card stock like every other
   at most three headline decisions (one control may move several settings: Play through sets the five
   action weights, When a shot goes up the glass and getting back) and a Fine-tune with every setting
   apart; partnerships have no control of their own: roles, the shape and the rotation make them, and
-  the board draws them.
+  the board draws them. The hero carries the A/B/C switch as a small "A ▾" beside the style's name
+  and the mentality as one row; the board's heading is its in/out-of-possession switch. At most two
+  rows of controls on a phone.
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

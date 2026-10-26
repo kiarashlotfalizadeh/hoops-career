@@ -527,3 +527,66 @@
   color: var(--accent-text);
   border-top: 1px solid var(--line);
 }
+
+/* the tactic switch: the active one's letter and a chevron, beside the style it runs; the three in a sheet */
+.tx-slotpick {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 38px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 1px var(--line-3);
+  color: var(--text-2);
+}
+.tx-slotpick::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+}
+.tx-slotpick .tx-slot-l {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.tx-slotpick:active {
+  background: var(--surface);
+}
+.tx-slots-note {
+  margin: 0 0 12px;
+}
+.tx-slot-row {
+  gap: 12px;
+}
+.tx-slot-row.on {
+  background: color-mix(in srgb, var(--team) 10%, transparent);
+}
+
+/* the board's head is its end: In possession / Out of possession, the Help beside it */
+.tx-boardsec-h {
+  flex: 1;
+  min-width: 0;
+}
+.tx-boardsec > .sec-h {
+  align-items: center;
+  gap: 10px;
+}
+.tx-hero-mv {
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 620;
+}
+/* the style's name keeps its words whole: a long one ("Heliocentric") prints a size down (fitHead),
+   and where the name and Change can't share the line, Change drops under the name */
+.tx-hero-off {
+  overflow-wrap: break-word;
+}
+.tx-hero-style .tx-hero-pick {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+.tx-hero-style .tx-hero-pick > .grow {
+  flex: 1 1 auto;
+  min-width: min(100%, min-content);
+}

@@ -10,6 +10,7 @@ import { PosterSlab, shortName, teamAbbrev } from '../shared';
 import { seasonLabel } from '../../../core/constants';
 import { qualifier, type StatRow } from './rows';
 import { Foot } from '../Views';
+import { Term } from '../../components/Glossary';
 
 interface Cat {
   key: string;
@@ -19,12 +20,14 @@ interface Cat {
   fmt: (v: number) => string;
   /** Who it ranks beyond the qualifiers (the foot says so). */
   min?: (r: StatRow) => boolean;
+  /** Its glossary entry: the head opens it. */
+  term?: string;
 }
 
 /** Leaders in the all-in-one numbers: regular seasons only (a season played here has none in the playoffs). */
 const ADV_CATS: Cat[] = [
-  { key: 'ws', label: 'Win shares', unit: 'WS', get: (r) => r.adv?.ws ?? -Infinity, fmt: f1 },
-  { key: 'per', label: 'Player efficiency', unit: 'PER', get: (r) => r.adv?.per ?? -Infinity, fmt: f1 },
+  { key: 'ws', label: 'Win shares', unit: 'WS', get: (r) => r.adv?.ws ?? -Infinity, fmt: f1, term: 'ws' },
+  { key: 'per', label: 'Player efficiency', unit: 'PER', get: (r) => r.adv?.per ?? -Infinity, fmt: f1, term: 'per' },
 ];
 
 const CATS: Cat[] = [
@@ -132,7 +135,7 @@ function LeaderBlock({ league, cat, top, all }: { league: League; cat: Cat; top:
   return (
     <section className="lg-lead">
       <div className="lg-lead-h">
-        <h3>{cat.label}</h3>
+        <h3>{cat.term ? <Term id={cat.term}>{cat.label}</Term> : cat.label}</h3>
         <Link to={all} className="card-link lg-lead-all" aria-label={`All players by ${cat.label.toLowerCase()}`}>
           All <ChevronRight size={14} aria-hidden="true" />
         </Link>

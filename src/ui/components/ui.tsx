@@ -1,11 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInRouterContext, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
 import type { Player } from '../../core/types';
-import { ovrColor } from '../../core/ratings';
+import { ovrColor, ovrTier } from '../../core/ratings';
 import { LEVEL_VALUES, levelIndex, type LevelNames } from '../../core/sim/tactics';
 import { FRANCHISES } from '../../core/teams';
+import { keepFigures } from '../../core/format';
 import { useBack } from '../nav';
 import { jerseyKit } from '../teamColors';
 import { useTeamLook } from './TeamLogo';
@@ -58,7 +59,8 @@ export function activateOnKey(fn: () => void) {
 export function Ovr({ v, size = '' }: { v: number; size?: '' | 'sm' | 'lg' }) {
   return (
     // the colour of the figure it shows: an 88.6 average reads 89, an elite gold
-    <span className={`ovr ${size}`} style={{ ['--tier' as string]: ovrColor(Math.round(v)) }}>
+    // (its tier's class sets the badge's weight, so a tier reads without its hue: solid, washed, ringed, plain)
+    <span className={`ovr ${size} t-${ovrTier(Math.round(v)).tone}`} style={{ ['--tier' as string]: ovrColor(Math.round(v)) }}>
       {Math.round(v)}
     </span>
   );
@@ -648,6 +650,26 @@ export function More({ label = 'More', children }: { label?: ReactNode; children
   );
 }
 
+/** Text on the screen with its figures kept whole ("48-5" never breaks at the hyphen); anything else as is. */
+export const keep = (n: ReactNode): ReactNode => (typeof n === 'string' ? keepFigures(n) : n);
+
+/**
+ * Whether a headline has a word too long for its size on a phone ("Timberwolves" at 29px): its
+ * class steps the size down a notch (`.long-word`), so a word never breaks in the middle.
+ */
+export const longWord = (n: ReactNode, max = 10) => typeof n === 'string' && n.split(/[\s/]+/).some((w) => w.length > max);
+
+/** A headline's text, fitted: its figures kept whole and, with a word too long for a phone, a size down (two for a very long one). */
+export const fitHead = (n: ReactNode, max = 10): ReactNode =>
+  typeof n === 'string' && longWord(n, max) ? (
+    // (--w, the longest word's length, lets a screen fit it to its own column: team-page.css)
+    <span className={`long-word${longWord(n, max + 2) ? ' xlong' : ''}`} style={{ '--w': Math.max(...n.split(/[\s/]+/).map((w) => w.length)) } as CSSProperties}>
+      {keep(n)}
+    </span>
+  ) : (
+    keep(n)
+  );
+
 /** Figures in a row, hairlines between them: an overline label, the value in scoreboard type, an optional line under it. */
 export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: ReactNode; color?: string }[] }) {
   return (
@@ -655,8 +677,15 @@ export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: R
       {items.map((it, i) => (
         <div key={i}>
           <div className="k">{it.k}</div>
+          {/* a figure is never broken over two lines: one too long for its column steps its size down to fit (--len) */}
           <div className="v" style={it.color ? { color: it.color } : undefined}>
-            {typeof it.v === 'string' || typeof it.v === 'number' ? <CountUp value={String(it.v)} /> : it.v}
+            {typeof it.v === 'string' || typeof it.v === 'number' ? (
+              <span className="v-fit" style={{ '--len': String(it.v).length } as CSSProperties}>
+                <CountUp value={String(it.v)} />
+              </span>
+            ) : (
+              it.v
+            )}
           </div>
           {it.s && <div className="s">{it.s}</div>}
         </div>

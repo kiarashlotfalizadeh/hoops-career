@@ -33,6 +33,13 @@ export const rankOf = (n: number, of: number) => `${ordinal(n)} of ${of}`;
 /** Made-attempted, as a box score writes it, in tables and sentences alike: "34-90". */
 export const madeAtt = (made: number, att: number) => `${made}-${att}`;
 
+/**
+ * Text for the screen with its figures kept whole: a record, a series or a made-attempted ("48-5",
+ * "1-0", "11-16") never breaks at its hyphen on a narrow line (an invisible word joiner after it).
+ * For display only: compare and store the plain string.
+ */
+export const keepFigures = (s: string) => s.replace(/(\d)-(?=\d)/g, '$1-⁠');
+
 /** An injury's name in sentence case, acronyms and names kept: "Torn Meniscus" and "torn meniscus" → "Torn meniscus", "MCL Sprain" → "MCL sprain", "ruptured achilles" → "Ruptured Achilles". */
 export function injuryName(name: string): string {
   const keep = (w: string) => /^[A-Z]{2,}$/.test(w) || /^achilles$/i.test(w);

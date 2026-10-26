@@ -7,9 +7,10 @@ import { f0, f1, finalLabel, fmtClock, gamesMemo, ordinal, ordinalSuffix, p0, p1
 import { compareCells, fmtNum } from '../components/ui';
 import { applyAccent, contrast } from '../teamColors';
 import { FRANCHISES } from '../../core/teams';
+import { keepFigures } from '../../core/format';
 
 describe('display helpers', () => {
-  it('read numbers, clocks and finals, sort table cells, build box minutes, starters and season lines, and keep colours readable', () => {
+  it('read numbers, clocks and finals, sort table cells, build box minutes, starters and season lines, and keep colours readable', async () => {
     // ordinals: 1st, 2nd, 3rd and the teens as "th" (scouting percentiles printed "52th")
     const cases: [number, string][] = [
       [1, '1st'],
@@ -172,6 +173,16 @@ describe('display helpers', () => {
         expect(contrast(set['--team-text'], '#121212') >= 1.5 || set['--team-link-line'] === 'underline', f.abbrev).toBe(true);
       }
       globalThis.document = was;
+    }
+    {
+      // the OVR tiers read as text on white, on the paper and under a white figure (a solid badge); figures in text never break at a hyphen
+      // (read from the file: the test runner doesn't load CSS)
+      const fs = (await import('node:fs' as string)) as { readFileSync: (path: URL, enc: 'utf8') => string };
+      const tokens = fs.readFileSync(new URL('../styles/tokens.css', import.meta.url), 'utf8');
+      const tiers = [...tokens.matchAll(/--tier-(\w+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]] as const);
+      expect(tiers.map(([k]) => k)).toEqual(['elite', 'star', 'good', 'avg', 'low', 'bad']);
+      for (const [k, c] of tiers) for (const ground of ['#ffffff', '#f3efe7']) expect(contrast(c, ground), `${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      expect(keepFigures('won 107-98 to lead 1-0, 48-5 · a two-way deal')).toBe('won 107-\u206098 to lead 1-\u20600, 48-\u20605 · a two-way deal');
     }
   });
 });

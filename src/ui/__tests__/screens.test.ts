@@ -18,6 +18,7 @@ import { seasonOutcome } from '../league/shared';
 import { editOf as playerEdit, formOf as playerForm } from '../god/PlayerEditor';
 import { editOf as teamEdit, formOf as teamForm } from '../god/TeamEditor';
 import { blockOffers } from '../office/tradeBlock';
+import { GLOSSARY, glossaryEntry } from '../glossary';
 
 const seed = seedJson as unknown as SeedData;
 
@@ -77,6 +78,18 @@ describe('screen logic', () => {
       expect(search(index, 'cap')[0]).toMatchObject({ kind: 'screen', to: '/office' });
       expect(search(index, 'depth chart')[0]).toMatchObject({ kind: 'screen', to: '/team/rotation' });
       expect(search(index, 'drop').some((e) => e.kind === 'term' && e.termId === 'drop')).toBe(true);
+      {
+        // the glossary: one entry per id, the core jargon in it, and every <Term id> on a screen resolves
+        const ids = GLOSSARY.map((g) => g.id);
+        expect(new Set(ids).size).toBe(ids.length);
+        for (const id of ['counter', 'luck', 'keys', 'fambands', 'measured', 'per', 'ws', 'closer', 'sta', 'gb', 'playin', 'roles', 'pb-helio', 'role-glue', 'drole-poa'])
+          expect(glossaryEntry(id), id).toBeTruthy();
+        expect(search(index, 'luck').some((e) => e.kind === 'term' && e.termId === 'luck')).toBe(true);
+        const sources = import.meta.glob<string>('../**/*.tsx', { query: '?raw', import: 'default', eager: true });
+        const used = Object.values(sources).flatMap((src) => [...src.matchAll(/<Term id="([\w-]+)"/g)].map((m) => m[1]));
+        expect(used.length).toBeGreaterThan(20);
+        expect(used.filter((id) => !glossaryEntry(id))).toEqual([]);
+      }
       expect(search(index, 'next game')[0]).toMatchObject({ kind: 'screen', to: '/preview' });
       expect(search(index, 'draft order')[0]).toMatchObject({ kind: 'screen', to: '/league/standings?view=lottery' });
       expect(search(index, 'injured')[0]).toMatchObject({ kind: 'screen', to: '/league/news?kind=injury' });

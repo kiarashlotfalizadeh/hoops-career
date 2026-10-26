@@ -17,7 +17,8 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 0;
+  /* (never narrower than the headline's longest word: the figure drops under it first) */
+  min-width: min(100%, min-content);
 }
 .lg-poster-t > .over {
   margin: 0;
@@ -123,7 +124,7 @@
   font-size: 36px;
   line-height: 0.96;
   letter-spacing: -0.04em;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   text-wrap: balance;
 }
 /* the giant figure (a series, a final's score, a scoring average) with what it was beside it */

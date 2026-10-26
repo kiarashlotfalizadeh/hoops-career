@@ -180,8 +180,12 @@ export default function Rotation() {
                       {/* an injured player's line is his injury: his figures wait for his return */}
                       <div className="tm-rmeta">
                         {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
-                        {/* a closer says so in words beside his position: no tag on every starter */}
-                        <span className="ellipsis">{p.injury ? injuryName(p.injury.type) : `${p.pos}${closers.includes(pid) ? ' · closer' : ''}`}</span>
+                        {/* the starters close unless you say otherwise: only a change from that says so ("closer" off the bench, "sits late" in the five) */}
+                        <span className="ellipsis">
+                          {p.injury
+                            ? injuryName(p.injury.type)
+                            : `${p.pos}${closers.includes(pid) && !startSet.has(pid) ? ' · closer' : !closers.includes(pid) && startSet.has(pid) && closers.length ? ' · sits late' : ''}`}
+                        </span>
                         {p.contract.twoWay && (
                           <Tag>
                             2W<span className="sr-only"> (two-way)</span>
@@ -289,7 +293,8 @@ function RotationHelp() {
         fatigue, injuries and blowouts change it in the game.
       </p>
       <p>
-        Closers finish the 4th quarter and overtime when healthy. Players who rest on back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury risk.
+        <Term id="closer">Closers</Term> finish the 4th quarter and overtime when healthy. <Term id="sta">STA</Term> is stamina: a low one wants shorter stints. Players who rest on
+        back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury risk.
       </p>
       <p>The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+).</p>
     </Help>

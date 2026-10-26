@@ -6,11 +6,8 @@
   z-index: 20;
   /* edge to edge across the page's gutters, which grow past a landscape notch */
   margin: -6px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
-  /* solid fallback first: iOS before 16.2 has no color-mix */
+  /* opaque: a page's own switch scrolling under it once showed through as ghost text */
   background: var(--bg);
-  background: color-mix(in srgb, var(--bg) 94%, transparent);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-bottom: 1px solid var(--line);
 }
 .lg-tabs .seg.tabs {
@@ -59,4 +56,40 @@
 }
 .lg-tabs-more:active {
   color: var(--text);
+}
+
+/* the header's two links (Awards, History): the record of what's been won, beside the hub's title */
+.lg-ph-links {
+  display: flex;
+  gap: 6px;
+  align-self: center;
+}
+.lg-ph-links .btn.on {
+  background: var(--on);
+  color: var(--on-ink);
+  box-shadow: none;
+}
+/* the tab row's five fit a 360px phone: the tabs share out the width rather than scroll */
+@media (max-width: 479px) {
+  .lg-tabs .seg.tabs button {
+    flex: 1 0 auto;
+    padding: 0 8px;
+  }
+  .lg-tabs .seg.tabs > button:first-child {
+    padding-left: max(8px, calc(var(--gut-l) - 4px));
+  }
+}
+@media (max-width: 374px) {
+  .lg-tabs .seg.tabs button {
+    padding: 0 6px;
+    font-size: 14px;
+  }
+}
+.lg-cuplink {
+  min-height: var(--row-min);
+}
+.lg-cuplink > .grow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }

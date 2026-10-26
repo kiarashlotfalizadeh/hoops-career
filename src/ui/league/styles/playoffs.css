@@ -260,6 +260,8 @@ a.bk-fcard:active {
   line-height: 1.12;
   letter-spacing: -0.026em;
   max-width: 100%;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 .bk-fconf {
   font-family: var(--mono);

@@ -7,7 +7,7 @@ import { ChevronRight } from 'lucide-react';
 import type { League, NewsItem } from '../../../core/types';
 import { frontPage, latestPower, seasonHonors } from '../../../core/league/media';
 import { useLeagueMemo } from '../../../state/store';
-import { Section } from '../../components/ui';
+import { Section, keep } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { aboutUser } from '../../../core/league/media/voice';
 import { KIND_ONE } from './kinds';
@@ -66,7 +66,7 @@ function Lead({ league, n, to }: { league: League; n: NewsItem; to: string }) {
         {KIND_ONE[n.kind]} · {newsDate(league, n)}
       </span>
       <span className="lg-fp-head">{n.head}</span>
-      <span className="lg-fp-dek">{n.text}</span>
+      <span className="lg-fp-dek">{keep(n.text)}</span>
       <span className="lg-fp-read">
         Read <ChevronRight size={14} aria-hidden="true" />
       </span>

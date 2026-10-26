@@ -1,4 +1,4 @@
-// Team → Tactics' hero: the plan in use, all in one group. Your three tactics as a row of pills, the
+// Team → Tactics' hero: the plan in use, all in one group. Your three tactics behind the active one's letter, the
 // style the active one runs (its offensive playbook as the headline, the defensive identity under it,
 // a tap from the picker), how well the team knows it as one figure, its two strengths and two
 // weaknesses from the system report (they move as you edit, so every lever shows what it buys and
@@ -13,9 +13,11 @@ import { famLabel } from '../../core/sim/familiarity';
 import { SLOT_LETTERS, activeSlot, slotName } from '../../core/sim/slots';
 import { QUALITY_META, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
 import { ordinal } from '../stats';
-import { Help, Sheet, Toggle } from '../components/ui';
+import { Help, Sheet, Toggle, fitHead } from '../components/ui';
 import { Term } from '../components/Glossary';
-import { SlotBar, StyleSheet } from './SlotBar';
+import { MentalityDial, SlotBar, StyleSheet } from './SlotBar';
+import { MENTALITY_META } from '../../core/sim/tactics';
+import { ChevronRight } from 'lucide-react';
 import { GradeBadge } from './SystemReport';
 import { famTone } from './formation';
 import { strengthsOf } from './partners';
@@ -43,6 +45,7 @@ export function TacticsHero({
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
   const [style, setStyle] = useState(false);
+  const [ment, setMent] = useState(false);
   // handing his own tactics back to the staff replaces them: asked first, with a way to keep them
   const [handOver, setHandOver] = useState(false);
   const toStaff = (keep = false) =>
@@ -94,7 +97,7 @@ export function TacticsHero({
             <span className="sr-only">
               Tactic {SLOT_LETTERS[slot]}, {slotName(team, slot)}:{' '}
             </span>
-            <b>{offName}</b> · {defName} on defense
+            <b>{offName}</b> · {defName} on defense{t.mentality ? ` · ${MENTALITY_META[t.mentality].label}` : ''}
           </span>
           <span className={`tx-hero-fv num ${famTone(fam)}`}>
             <span className="sr-only">Familiarity </span>
@@ -108,11 +111,11 @@ export function TacticsHero({
   }
   return (
     <section className="card tx-hero" aria-label="Your tactic">
-      <SlotBar />
       <div className="tx-hero-style">
+        <SlotBar />
         <button className="tx-hero-pick" aria-haspopup="dialog" onClick={() => setStyle(true)}>
           <span className="grow">
-            <span className="tx-hero-off">{offName}</span>
+            <span className="tx-hero-off">{fitHead(offName, 9)}</span>
             <span className="tx-hero-def">
               {defName} on defense
               {t.manual && t.playbook ? ` · from ${t.playbook.name}` : ''}
@@ -129,7 +132,21 @@ export function TacticsHero({
               yours; make a change and they measure it on your next games.
             </p>
             <p>
-              <b>Familiarity:</b> how well your team knows the tactic (<Term id="familiarity">familiarity</Term>). A new style costs it until it&apos;s drilled.
+              Yours: <Term id={`pb-${t.offPreset}`}>{offenseLabel(t) === 'Custom' ? 'your offense' : offName}</Term> and <Term id={`pb-${t.defPreset}`}>{defName}</Term>
+              {offName.startsWith('Custom') || defName.startsWith('Custom') ? (
+                <>
+                  {' '}
+                  (<Term id="custom">custom</Term>: moved from the playbook&apos;s settings)
+                </>
+              ) : null}
+              .
+            </p>
+            <p>
+              <b>Familiarity:</b> how well your team knows the tactic (<Term id="familiarity">familiarity</Term>), in a word (<Term id="fambands">Fluid, Familiar…</Term>). A new
+              style costs it until it&apos;s drilled.
+            </p>
+            <p>
+              <b>Mentality:</b> how much risk your team plays with on top of every setting (<Term id="mentality">mentality</Term>).
             </p>
             <p>
               <b>Strengths and weaknesses:</b> your system&apos;s two best and two worst grades against the league&apos;s systems. They move as you change a setting; Analysis has
@@ -147,6 +164,20 @@ export function TacticsHero({
         <span className="tx-hero-fl">{famLabel(fam)}</span>
         <span className="sr-only">. By phase on Analysis.</span>
       </button>
+      {/* the mentality plays on top of every setting: the tactic's own, so it sits with the style (its dial a tap away) */}
+      <button className="tx-hero-fam tx-hero-ment" aria-haspopup="dialog" onClick={() => setMent(true)}>
+        <span className="tx-hero-k">Mentality</span>
+        <span className="grow tx-hero-mv">{MENTALITY_META[t.mentality ?? 0].label}</span>
+        <ChevronRight size={16} className="dim" aria-hidden="true" />
+      </button>
+      <Sheet open={ment} onClose={() => setMent(false)} title="Mentality">
+        <div className="col" style={{ gap: 16 }}>
+          <MentalityDial t={t} />
+          <button className="btn block" onClick={() => setMent(false)}>
+            Done
+          </button>
+        </div>
+      </Sheet>
       <button className="tx-sw" onClick={() => onAnalysis('report')}>
         <span className="tx-sw-col">
           <span className="tx-hero-k">Strengths</span>

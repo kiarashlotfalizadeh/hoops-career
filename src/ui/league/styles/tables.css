@@ -119,6 +119,25 @@
   color: var(--text);
   white-space: nowrap;
 }
+.lg-tbl-row .nm.long {
+  font-stretch: 86%;
+  letter-spacing: -0.02em;
+}
+.lg-tbl-row .nm-a {
+  display: none;
+}
+@media (max-width: 399px) {
+  .lg-tbl-row .nm.long .nm-f {
+    display: none;
+  }
+  .lg-tbl-row .nm.long .nm-a {
+    display: inline;
+  }
+}
+/* an abbreviation ("HOU → OKC") is never cut: the arrow's figures close up first */
+.lg-tbl-row .lead .lg-conf {
+  letter-spacing: -0.05em;
+}
 .lg-tbl-row .lead > :not(.nm) {
   flex: none;
 }

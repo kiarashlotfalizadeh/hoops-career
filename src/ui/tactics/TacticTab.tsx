@@ -2,7 +2,7 @@
 // scheme put them, each with his role and how he suits it, the partnerships between them drawn on
 // the floor), the Partnerships card that names them, the bench as a short list, and your saved
 // playbooks as one row. A tap on any player opens his sheet (both roles, shot freedom, glass duty,
-// screens). The style and the assistant's switch are the hero's; the mentality is on Instructions.
+// screens). The style, the mentality and the assistant's switch are the hero's.
 import { useMemo, useState } from 'react';
 import type { Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';

@@ -21,7 +21,7 @@ import { fmtDate, playerName } from '../../core/league/helpers';
 import { finalLabel, ordinal } from '../stats';
 import { streakText } from '../games/series';
 import { Fold } from '../games/occasion';
-import { gameTime, madeAtt } from '../../core/format';
+import { gameTime, keepFigures, madeAtt } from '../../core/format';
 import { Avatar, Section, Tag } from './ui';
 import { Debrief } from './Debrief';
 import { TeamLogo } from './TeamLogo';
@@ -182,7 +182,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                           {pog && <span className="gd-star-k">Player of the game</span>}
                           <span className="gd-star-name ellipsis">{nameOf(line.pid, line.name)}</span>
                           <span className="gd-star-line num">
-                            {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${madeAtt(line.fgm, line.fga)} FG` : ''}
+                            {line.pts} pts · {line.orb + line.drb} reb · {line.ast} ast{pog ? ` · ${keepFigures(madeAtt(line.fgm, line.fga))} FG` : ''}
                           </span>
                         </span>
                         {/* (your own carry your team's wash) */}

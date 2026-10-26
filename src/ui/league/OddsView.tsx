@@ -1,8 +1,11 @@
+import { Link } from 'react-router-dom';
+import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
 import { FORECAST_SIMS, pct, type Forecast, type TeamOdds } from '../../core/analysis/odds';
 import { fmtDate } from '../../core/league/helpers';
 import { LineChart } from '../components/charts';
 import { Help, Section } from '../components/ui';
+import { Term } from '../components/Glossary';
 import { Poster, confName, confOrder, teamPath, useQueryParam } from './shared';
 import { Foot } from './Views';
 import { TeamRow, TeamTable } from './Table';
@@ -31,6 +34,7 @@ export function OddsView({ league }: { league: League }) {
         />
       )}
       <Trail league={league} />
+      <ForecastLink to="lottery" />
       {confOrder(first).map((c, i) => (
         <Section key={c} title={`${confName(c)}${f.preseason ? ' · preseason forecast' : ''}`} right={i === 0 ? <OddsHelp /> : undefined}>
           <TeamTable cols={[54, 58, 44, 48, 54, 50, 50]} head={['Proj', 'Playoffs', 'Title', 'Top 6', 'Play-in', 'Conf F', 'Finals']}>
@@ -62,6 +66,7 @@ export function LotteryView({ league }: { league: League }) {
           fig={{ v: pct(best.pick1, best.clinched), k: 'chance at No. 1' }}
         />
       )}
+      <ForecastLink to="odds" />
       <TeamTable cols={[54, 46, 50, 44, 56]} head={['Proj', 'No. 1', 'Top 4', 'Avg', 'Lottery']}>
         {rows.map((t, i) => (
           <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />
@@ -69,6 +74,19 @@ export function LotteryView({ league }: { league: League }) {
       </TeamTable>
       <Foot help={<OddsHelp />}>Each team&apos;s own first-round pick · → its owner now</Foot>
     </div>
+  );
+}
+
+/** The forecast's other half, one row away: the playoff odds from the lottery and the lottery from the odds. */
+function ForecastLink({ to }: { to: 'odds' | 'lottery' }) {
+  return (
+    <Link to={`/league/standings?view=${to}`} replace className="card listrow clickable lg-cuplink">
+      <span className="grow">
+        <span className="lr-name">{to === 'lottery' ? 'Draft lottery' : 'Playoff odds'}</span>
+        <span className="lr-meta">{to === 'lottery' ? 'Each team’s chance at the No. 1 pick' : 'Every team’s chance to make it and go deep'}</span>
+      </span>
+      <ChevronRight size={18} className="dim" aria-hidden="true" />
+    </Link>
   );
 }
 
@@ -80,9 +98,9 @@ function OddsHelp() {
   return (
     <Help title="Season forecast">
       <p className="lg-p">
-        The rest of the season is played out {FORECAST_SIMS.toLocaleString('en-US')} times, game by game on the real schedule, then the play-in, the playoffs and the lottery draw.
-        Each team&apos;s strength is its net rating this season, weighed against what its roster is worth (injured players count from when they&apos;re back) until enough games are
-        in, and it&apos;s uncertain, more so early on.
+        The rest of the season is played out {FORECAST_SIMS.toLocaleString('en-US')} times, game by game on the real schedule, then the <Term id="playin">play-in</Term>, the
+        playoffs and the lottery draw. Each team&apos;s strength is its net rating this season, weighed against what its roster is worth (injured players count from when
+        they&apos;re back) until enough games are in, and it&apos;s uncertain, more so early on.
       </p>
       <p className="lg-p">
         Proj is the projected record, its 10th-90th percentile of wins under it. Playoffs counts the play-in&apos;s winners. Swipe the table for the rest of the rounds.
@@ -148,7 +166,8 @@ function LotteryRow({ league, f, t, rank }: { league: League; f: Forecast; t: Te
       me={t.tid === league.userTid}
       rank={rank}
       tid={t.tid}
-      name={league.teams[t.tid].name}
+      // (a traded pick reads "LAC → OKC": the two abbreviations fit beside the figures where a name and its owner can't)
+      name={owner ? league.teams[t.tid].abbrev : league.teams[t.tid].name}
       after={
         owner ? (
           <span className="lg-conf" aria-hidden="true">

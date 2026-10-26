@@ -37,6 +37,21 @@ h4 {
   line-height: 1.1;
   text-wrap: balance;
 }
+/* a headline breaks between words, never inside one ("Timberwolve / s") unless one word alone is
+   wider than the line; a word too long for the size (`fitHead`) prints a notch smaller instead */
+h1,
+h2,
+h3,
+.head {
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+.long-word {
+  font-size: 0.84em;
+}
+.long-word.xlong {
+  font-size: 0.74em;
+}
 /* a page's title and a sheet's: the headline cut, sentence case */
 h1,
 h2 {

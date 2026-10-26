@@ -2,7 +2,7 @@
 // tactics A, B and C, the style the active one runs, how well the team knows it, its strengths and
 // weaknesses from the system report, the assistant's switch), then four sections as one row of chips,
 // each its own module in src/ui/tactics: Tactic (the board with your five, their partnerships and the
-// bench; your saved playbooks), Instructions (the mentality and the three phases of play), Match
+// bench; your saved playbooks), Instructions (the three phases of play; the mentality is the hero's), Match
 // (crunch time, situations and the late-game rules) and Analysis (the system report, familiarity and
 // the season). Advice in core links here by the old section ids (playbook, roles, players, offense,
 // defense, manage, insights, report, familiarity), which open the section that now holds them. The

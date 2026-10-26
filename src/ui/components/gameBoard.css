@@ -1,0 +1,32 @@
+/* The one-line game board (a report's or a matchup's later tabs): a team's abbreviation is three
+   letters and never gives way to an ellipsis ("L… 94 – 118 L…" once); on a narrow phone the marks
+   step aside first, then the band tightens. */
+.gd-board.compact .gd-bd-who {
+  min-width: max-content;
+}
+.gd-board.compact .gd-bd-nm {
+  overflow: visible;
+  text-overflow: clip;
+}
+@media (max-width: 419px) {
+  .gd-board.compact {
+    column-gap: 8px;
+    padding: 6px 12px;
+  }
+  .gd-board.compact .gd-bd-id > :not(.gd-bd-who) {
+    display: none;
+  }
+}
+
+/* the full board: a middling name ("Grizzlies") fits beside the pill from 380px; under it the
+   abbreviation takes its place, as a long one's does under 600px (gameday.css) */
+@media (min-width: 380px) and (max-width: 599px) {
+  .gd-bd-nm.short.of-mid {
+    display: none;
+  }
+}
+@media (max-width: 379px) {
+  .gd-bd-nm.mid {
+    display: none;
+  }
+}

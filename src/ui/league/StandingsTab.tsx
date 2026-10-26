@@ -26,9 +26,10 @@ export function StandingsTab({ league }: { league: League }) {
   const view: View = raw === 'odds' && omode === 'lottery' ? 'lottery' : raw;
   return (
     <>
+      {/* five chips, which fit a 360px phone: the lottery is the forecast's other half, a row inside Odds */}
       <ViewChips
         label="Standings view"
-        value={view}
+        value={view === 'lottery' ? 'odds' : view}
         onChange={setView}
         options={[
           { id: 'E', label: 'East' },
@@ -36,7 +37,6 @@ export function StandingsTab({ league }: { league: League }) {
           { id: 'league', label: 'League' },
           { id: 'power', label: 'Power' },
           { id: 'odds', label: 'Odds' },
-          { id: 'lottery', label: 'Lottery' },
         ]}
       />
       {view === 'odds' && <OddsView league={league} />}
@@ -65,7 +65,7 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
         ) : (
           <>
             <span className="lg-keys" aria-hidden="true">
-              <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
+              <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> clinched play-in <b className="lg-clinch e">e</b> out
             </span>
             <span className="lg-foot-sep">swipe for splits</span>
           </>
@@ -108,8 +108,9 @@ function StandingsHelp() {
   return (
     <Help title="Seeds and tiebreakers">
       <p className="lg-p">
-        Seeds 1-6 in each conference make the playoffs; 7-10 go to the play-in. <b className="lg-clinch x">x</b> clinched a playoff spot, <b className="lg-clinch p">p</b> clinched
-        at least the play-in, <b className="lg-clinch e">e</b> eliminated. Swipe the table for home, away and conference records and point differential.
+        Seeds 1-6 in each conference make the playoffs; 7-10 go to the <Term id="playin">play-in</Term>. <Term id="gb">GB</Term> is games behind the leader.{' '}
+        <b className="lg-clinch x">x</b> clinched a playoff spot, <b className="lg-clinch p">p</b> clinched at least the play-in, <b className="lg-clinch e">e</b> eliminated. Swipe
+        the table for home, away and conference records and point differential.
       </p>
       <p className="lg-p">
         Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the

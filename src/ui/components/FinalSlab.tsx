@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameStory } from '../../core/analysis/gameStory';
-import { Avatar, CountUp, Statline } from './ui';
+import { Avatar, CountUp, Statline, fitHead, keep } from './ui';
 import { madeAtt } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
@@ -18,6 +18,7 @@ import { finalLabel } from '../stats';
 import { TeamLogo } from './TeamLogo';
 import { QuarterTable } from './gameBlocks';
 import './gameday.css';
+import './gameBoard.css';
 
 /** "NBA Cup · Final", "West R1 · Game 3", "NBA Finals · Game 7", "Playoffs" (an older season's), "Play-In", "Regular season". */
 export function gameTypeLabel(league: League, g: GameResult): string {
@@ -101,8 +102,9 @@ export function GameBoard({
             <span className="gd-bd-nm">{t.abbrev}</span>
           ) : (
             <>
-              <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : ''}`}>{t.name}</span>
-              {t.name.length > 9 && <span className="gd-bd-nm short">{t.abbrev}</span>}
+              {/* (a long name gives way below 600px, a middling one ("Pacers", "Grizzlies") below 380px) */}
+              <span className={`gd-bd-nm${t.name.length > 9 ? ' long' : t.name.length > 5 ? ' mid' : ''}`}>{t.name}</span>
+              {t.name.length > 5 && <span className={`gd-bd-nm short${t.name.length > 9 ? '' : ' of-mid'}`}>{t.abbrev}</span>}
             </>
           )}
           {s.sub && <span className="gd-bd-sub num">{s.sub}</span>}
@@ -194,14 +196,13 @@ export function FinalSlab({
         home={{ tid: home.tid, fig: fig(res.home.pts), lost: res.home.pts < res.away.pts }}
         over={[`${res.ot ? finalLabel(res.ot) : 'Final'} · ${fmtDate(res.season, res.day, { weekday: 'short', month: 'short', day: 'numeric' })}`, occasion]}
         mid={
+          // (a one-line board has no room for "Won by 24" beside both teams: it reads "W +24", the box score's way)
           us ? (
-            <span className={`gd-bd-pill ${won ? 'w' : 'l'}`}>
-              {won ? 'Won' : 'Lost'} by {by}
+            <span className={`gd-bd-pill ${won ? 'w' : 'l'}`} aria-label={`${won ? 'Won' : 'Lost'} by ${by}`}>
+              {compact ? `${won ? 'W +' : 'L −'}${by}` : `${won ? 'Won' : 'Lost'} by ${by}`}
             </span>
           ) : (
-            <span className="gd-bd-pill">
-              {(res.home.pts > res.away.pts ? home : away).abbrev} by {by}
-            </span>
+            <span className="gd-bd-pill">{`${(res.home.pts > res.away.pts ? home : away).abbrev} ${compact ? '+' : 'by '}${by}`}</span>
           )
         }
       />
@@ -232,8 +233,8 @@ function StoryBlock({ league, res, story, moment }: { league: League; res: GameR
     : [];
   return (
     <div className="gd-sb">
-      <h2 className={`gd-sb-head${moment ? ' rise' : ''}`}>{story.head}</h2>
-      {story.dek && <p className="gd-sb-dek">{story.dek}</p>}
+      <h2 className={`gd-sb-head${moment ? ' rise' : ''}`}>{fitHead(story.head)}</h2>
+      {story.dek && <p className="gd-sb-dek">{keep(story.dek)}</p>}
       {hero && (line || story.heroLine) && (
         <div className="gd-sb-pog">
           <Link to={`/player/${hero.pid}`} className="gd-sb-hero">
@@ -252,7 +253,7 @@ function StoryBlock({ league, res, story, moment }: { league: League; res: GameR
       {story.means.length > 0 && (
         <ul className="gd-sb-means" aria-label="What it means">
           {story.means.map((m) => (
-            <li key={m}>{m}</li>
+            <li key={m}>{keep(m)}</li>
           ))}
         </ul>
       )}

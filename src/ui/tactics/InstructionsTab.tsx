@@ -1,13 +1,12 @@
-// Tactics → Instructions, as Football Manager 26 groups them: the mentality, then the three phases of
-// play (in possession, in transition, out of possession) as one switch, each with how well the team
-// knows it. Under the chosen phase, the style it starts from, its three headline decisions, and
+// Tactics → Instructions, as Football Manager 26 groups them: the three phases of play (in possession,
+// in transition, out of possession) as one switch at the section's head, each with how well the team
+// knows it (the mentality, played on top of all three, is the tactic's own: the hero's). Under the chosen phase, the style it starts from, its three headline decisions, and
 // Fine-tune with the rest; in possession, the set package as its own card. Each control says what it
 // costs against what's drilled.
 import type { Player, Tactics } from '../../core/types';
 import { famLabel } from '../../core/sim/familiarity';
 import type { SystemFamiliarity } from '../../core/league/practice';
 import { Segmented } from '../components/ui';
-import { MentalityDial } from './SlotBar';
 import { PlaybookLine } from './PlaybookLine';
 import { IN_POSS_FINE, IN_TRANS_FINE, InPossession, InPossessionFine, InPossessionHelp, InTransition, InTransitionFine, InTransitionHelp } from './OffenseTab';
 import { OUT_POSS_FINE, OutOfPossession, OutOfPossessionFine, OutOfPossessionHelp } from './DefenseTab';
@@ -22,7 +21,6 @@ export function InstructionsTab({ t, players, sys, phase, setPhase }: { t: Tacti
   const fam = useFam();
   return (
     <>
-      <MentalityDial t={t} />
       <div className="col tx-phasebody">
         <div className="tx-phaseseg">
           <Segmented

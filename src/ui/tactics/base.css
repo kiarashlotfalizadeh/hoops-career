@@ -247,3 +247,10 @@
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 }
+/* the four sections fit one line on a 360px phone (no chip cut at the edge): they share the width */
+@media (max-width: 479px) {
+  .tx-tabs .chip {
+    flex: 1 0 auto;
+    padding: 0 10px;
+  }
+}

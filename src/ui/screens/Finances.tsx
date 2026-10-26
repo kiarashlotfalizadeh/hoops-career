@@ -27,6 +27,7 @@ import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline,
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
 import { money, moneySigned, moneyExact, plural } from '../../core/format';
 import { FROZEN_BUDGET, booksOf, booksOutlook } from '../../core/league/books';
+import './finances.css';
 
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
@@ -96,7 +97,7 @@ function Overview({ team }: { team: Team }) {
   return (
     <>
       <div className="fo-capsheet fo-statement">
-        <div className="fo-pay">
+        <div className="fo-pay fo-fin-hero">
           <div className="grow">
             <div className="over">Cash</div>
             <div className="fo-pay-v num" style={team.cash < 0 ? { color: 'var(--bad)' } : undefined}>
@@ -104,15 +105,26 @@ function Overview({ team }: { team: Team }) {
             </div>
           </div>
           {/* where the regular season's books close, tax paid (bar what he signed off on): the one figure the owner's review reads (the playoff gates come after) */}
+          {/* (on a phone it stacks under Cash: a long caption beside the giant figure once printed over it) */}
           {(end.left > 0 || ts.closeCash !== undefined) && (
-            <div className="right">
-              <div className="over">{isOffseason(league) ? `Books close ${shortSeason(league.season + 1)}` : end.left > 0 ? 'Books close' : 'Books closed'}</div>
+            <div className="right fo-books">
+              <div className="over fo-books-h">
+                {isOffseason(league) ? `Books close ${shortSeason(league.season + 1)}` : end.left > 0 ? 'Books close' : 'Books closed'}
+                {end.tax > 0 && books.sanctioned > 0 && (
+                  <HelpSheet title="The tax he signed off on">
+                    <p>
+                      This season's tax is {money(end.tax)}. The owner signed off on {money(books.sanctioned)} of it, so that part doesn't count against you when he reads the
+                      books.
+                    </p>
+                  </HelpSheet>
+                )}
+              </div>
               <div className="fo-pay-v2" style={{ color: books.judged < 0 ? 'var(--bad)' : undefined }}>
                 {money(books.judged)}
               </div>
               <div className="tiny dim">
                 {end.left > 0 ? 'projected' : 'the owner reads this'}
-                {end.tax > 0 ? `, after ${money(end.tax)} tax${books.sanctioned > 0 ? `; the ${money(books.sanctioned)} he signed off on doesn't count` : ''}` : ''}
+                {end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}
               </div>
             </div>
           )}

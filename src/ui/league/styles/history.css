@@ -117,6 +117,11 @@
 .lg-fr-figs .statline {
   grid-template-columns: repeat(4, minmax(max-content, 1fr));
 }
+/* (sized by their content: no shrink-to-fit container, which would size them to nothing) */
+.lg-frfig .statline > *,
+.lg-fr-figs .statline > * {
+  container-type: normal;
+}
 .lg-strip .lg-frfig .statline .v {
   font-size: 22px;
 }

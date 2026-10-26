@@ -17,6 +17,7 @@ import type { League } from '../../../core/types';
 import { useLeagueMemo, useStore } from '../../../state/store';
 import { act } from '../../../state/actions';
 import { Help, Section, Tag } from '../../components/ui';
+import { Term } from '../../components/Glossary';
 import { changesLine, screenChanges } from '../../tactics/changes';
 
 /** Counters shown before "more": the ones the numbers back come first. */
@@ -69,9 +70,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       right={
         <Help title="Counters">
           <p>
-            The staff drafts these from their roster, their playbook and, once they have played enough games, their numbers. Then it plays your next game against them a few hundred
-            times with and without each one: the number is the points a game it adds (Even: too close to call). Gains come first; a counter in your plan counts in the win chance at
-            its number.
+            A <Term id="counter">counter</Term> is a change aimed at one opponent. The staff drafts these from their roster, their playbook and, once they have played enough games,
+            their numbers. Then it plays your next game against them a few hundred times with and without each one: the number is the points a game it adds (Even: too close to
+            call). Gains come first; a counter in your plan counts in the win chance at its number.
           </p>
           <p>
             One the team hasn&apos;t drilled costs familiarity tonight (a step slow where it&apos;s new): each says how much before you add it. Adding one replaces any item of the

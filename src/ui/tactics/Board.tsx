@@ -129,7 +129,22 @@ export function Board({
 
   return (
     <Section
-      title="Tactics board"
+      className="tx-boardsec"
+      // the board's end is its head (a row of its own once stacked a fourth row of controls over the board)
+      title={
+        <div className="tx-boardsec-h">
+          <h3 className="sr-only">Tactics board</h3>
+          <Segmented
+            value={side}
+            onChange={setSide}
+            label="Phase on the board"
+            options={[
+              { id: 'in', label: 'In possession' },
+              { id: 'out', label: 'Out of possession' },
+            ]}
+          />
+        </div>
+      }
       right={
         <Help title="Tactics board">
           <p>
@@ -137,8 +152,9 @@ export function Board({
             and each player&apos;s <Term id="defroles">defensive role</Term>.
           </p>
           <p>
-            ★ is how well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he
-            knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
+            Each plays a <Term id="roles">role</Term> at each end (Primary Creator, Rim Runner, Glue Guy…; <Term id="defroles">defensive roles</Term> out of possession). ★ is how
+            well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he knows his
+            pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
           </p>
           <p>
             A line joins two players whose roles make a <Term id="partnership">partnership</Term> at that end: the heavier and darker, the more of it they play (it grows with their{' '}
@@ -148,15 +164,6 @@ export function Board({
         </Help>
       }
     >
-      <Segmented
-        value={side}
-        onChange={setSide}
-        label="Phase on the board"
-        options={[
-          { id: 'in', label: 'In possession' },
-          { id: 'out', label: 'Out of possession' },
-        ]}
-      />
       {/* the board as one printed object: the formation's pickers, the floor, the row to the bench */}
       <div className="card flush tx-boardcard">
         <div className="tx-formation">

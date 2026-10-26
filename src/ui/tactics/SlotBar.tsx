@@ -1,10 +1,10 @@
-// The Tactics hero's tactic switch, as Football Manager keeps it: your three tactics (A, B and C) as
-// one row of pills (how well the team knows each is in its sheet). A tap opens its sheet: make it the active
+// The Tactics hero's tactic switch, as Football Manager keeps it: your three tactics (A, B and C) behind
+// the active one's letter, beside the style (a list sheet with how well the team knows each). A tap on one opens its sheet: make it the active
 // one (what every game plays), rename it, overwrite or clear it; an empty one offers a copy of the
 // current tactic or a fresh style. Then the mentality: a dial from very cautious to very aggressive, played on top of every
 // setting.
 import { useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { ChevronDown, Plus } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { League, Mentality, Tactics } from '../../core/types';
@@ -45,36 +45,59 @@ export function SlotBar() {
   const team = league.teams[league.userTid];
   const slots = useLeagueMemo(() => slotsOf(league), [league]);
   const active = activeSlot(team);
+  const [list, setList] = useState(false);
   const [menu, setMenu] = useState<number | null>(null);
   const [style, setStyle] = useState(false);
   const open = menu !== null ? slots[menu] : null;
+  const cur = slots[active];
   return (
     <>
-      {/* the three as one row of pills; a tap opens its sheet (with how well the team knows it)
-          (make it the active one, start, overwrite, rename or clear it) */}
-      <div className="tx-slots" role="group" aria-label="Your tactics">
-        {slots.map((s) => {
-          const on = s.i === active;
-          return (
-            <button
-              key={s.i}
-              className={`tx-slot${on ? ' on' : ''}${s.t ? '' : ' vacant'}`}
-              aria-current={on ? 'true' : undefined}
-              aria-haspopup="dialog"
-              aria-label={`Tactic ${SLOT_LETTERS[s.i]}, ${s.name}${on ? ', active' : ''}${s.t && s.fam !== null ? `, ${Math.round(s.fam)}% familiar` : ', empty: set up'}`}
-              onClick={() => setMenu(s.i)}
-            >
-              <span className="tx-slot-l" aria-hidden="true">
-                {SLOT_LETTERS[s.i]}
-              </span>
-              <span className="tx-slot-n ellipsis" aria-hidden="true">
-                {s.t ? s.name : 'Set up'}
-              </span>
-              {!s.t && <Plus size={14} className="tx-slot-plus" aria-hidden="true" />}
-            </button>
-          );
-        })}
-      </div>
+      {/* the active tactic's letter, beside its style: a tap lists the three (a row of pills once took
+          a whole row above the screen's sections) */}
+      <button className="tx-slotpick" aria-haspopup="dialog" aria-label={`Tactic ${SLOT_LETTERS[active]}, ${cur.name}. Your three tactics`} onClick={() => setList(true)}>
+        <span className="tx-slot-l" aria-hidden="true">
+          {SLOT_LETTERS[active]}
+        </span>
+        <ChevronDown size={14} aria-hidden="true" />
+      </button>
+      <Sheet open={list} onClose={() => setList(false)} title="Your tactics">
+        <p className="small dim2 tx-slots-note">The active one is what every game plays; a situational plan (Match) can switch to another for a situation.</p>
+        <div className="card flush list tx-slots-list">
+          {slots.map((s) => {
+            const on = s.i === active;
+            return (
+              <button
+                key={s.i}
+                className={`listrow clickable tx-slot-row${on ? ' on' : ''}`}
+                aria-haspopup="dialog"
+                aria-current={on ? 'true' : undefined}
+                onClick={() => {
+                  setList(false);
+                  setMenu(s.i);
+                }}
+              >
+                <span className="tx-slot-l" aria-hidden="true">
+                  {SLOT_LETTERS[s.i]}
+                </span>
+                <span className="grow">
+                  <span className="lr-name ellipsis">
+                    {s.t ? s.name : 'Empty'}
+                    {on && <span className="sr-only">, active</span>}
+                  </span>
+                  <span className="lr-meta ellipsis">{s.t ? `${on ? 'Active · ' : ''}${playbookLabel(s.t)}` : 'Set it up'}</span>
+                </span>
+                {s.t && s.fam !== null ? (
+                  <span className={`tx-bench-f num ${famTone(s.fam)}`}>
+                    {Math.round(s.fam)}%<span className="sr-only"> familiar</span>
+                  </span>
+                ) : (
+                  <Plus size={16} className="tx-slot-plus" aria-hidden="true" />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </Sheet>
       <Sheet open={!!open} onClose={() => setMenu(null)} title={open ? `Tactic ${SLOT_LETTERS[open.i]}` : 'Tactic'}>
         {open && (
           <SlotMenu

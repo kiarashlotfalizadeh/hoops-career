@@ -4,6 +4,7 @@
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { TeamLogo } from '../components/TeamLogo';
+import { useLeague } from '../../state/store';
 
 /**
  * A table: `cols` are the figure columns' widths, `head` their labels after the team's. On a phone
@@ -70,12 +71,22 @@ export function TeamRow({
   children: ReactNode;
   className?: string;
 }) {
+  const abbrev = useLeague().teams[tid]?.abbrev;
   return (
     <Link to={to} className={`lg-tbl-row ${me ? 'me' : ''} ${className}`}>
       <span className="lead">
         <span className="rk">{rank}</span>
         <TeamLogo tid={tid} size={26} decorative />
-        <span className="nm">{name}</span>
+        {/* (a long name, "Timberwolves", sets condensed rather than lose its end to an ellipsis, and on
+            a narrow phone gives way to its abbreviation) */}
+        {typeof name === 'string' && name.length > 10 ? (
+          <span className="nm long">
+            <span className="nm-f">{name}</span>
+            <span className="nm-a">{abbrev}</span>
+          </span>
+        ) : (
+          <span className="nm">{name}</span>
+        )}
         {after}
         <span className="sr-only">{spoken}</span>
       </span>
