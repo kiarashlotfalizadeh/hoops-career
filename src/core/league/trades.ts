@@ -49,8 +49,9 @@ import { teamTaxBill } from './finances';
 import { capPayroll, withHoldsMemo } from './freeAgency';
 import { numberTeam } from './jerseys';
 import { logTrade } from './transactions';
-import { consensusView } from './prospects';
+import { leagueBoard, revealOutlook } from './prospects';
 import { money, moneyExact } from '../format';
+import { Rng, hashString, mix32 } from '../random';
 import { freezeTradeReason } from './books';
 import { type PickProjection, pickProjection } from '../analysis/odds';
 
@@ -150,23 +151,81 @@ export const findPick = (league: League, dpid: number) => league.draftPicks.find
 
 // ---------------------------------------------------------------- draft pick value
 
-/** Expected score of the player taken at overall slot `k` (1-60) of a class nobody has seen yet. */
-const futureSlotScore = (k: number) => 85 - 2.2 * Math.log(k) - 0.25 * (k - 1);
+/**
+ * Expected score of the player taken at overall slot `k` (1-60) of a class nobody has seen yet:
+ * fitted to what a class's picks are priced at on draft night (see classTakes; over 56 simulated
+ * drafts, #1 about 55, #15 about 15, #30 about 6), so a pick doesn't jump or drop when its class
+ * arrives. The curve before it priced the first pick of a later class at 75, as an 88 read.
+ */
+const futureSlotScore = (k: number) => 83.5 - 1.9 * Math.log(k) - 0.22 * (k - 1);
 
-const classCache = new WeakMap<League, { key: string; prospects: { v: number; market: number }[] }>();
+const classCache = new WeakMap<League, { key: string; takes: { v: number; market: number }[] }>();
 
-/** This season's prospects still on the board, best first: their trade value and market salary. */
-function classProspects(league: League): { v: number; market: number }[] {
+/** Drafts of the rest of the class the league's expectation averages over (see classTakes). */
+const TAKE_DRAWS = 200;
+/** A team's whim on the night and its nudge toward need, one standard deviation on the draft score (draft.ts's DRAFT_NOISE and draftScore's need). */
+const TAKE_WHIM = Math.hypot(0.8, 0.7);
+/** How much a team's pick leans toward the room's board, a place on it (draftScore's lean toward the consensus rank). */
+const TAKE_LEAN = 0.04;
+
+const drawCache = new WeakMap<League, Map<number, Float64Array>>();
+
+/** A prospect's place on each draw's board for the night (see classTakes), a standard normal a draw: the same all season. */
+function takeDraws(league: League, pid: number): Float64Array {
+  let by = drawCache.get(league);
+  if (!by) drawCache.set(league, (by = new Map()));
+  let z = by.get(pid);
+  if (!z) {
+    const rng = new Rng(mix32(hashString(`${league.id}:take:${pid}`)));
+    z = Float64Array.from({ length: TAKE_DRAWS }, () => rng.normal(0, 1));
+    by.set(pid, z);
+  }
+  return z;
+}
+
+/**
+ * This season's draft as the league expects it to go, from the next pick on: what the player taken
+ * with each is worth, his trade value and market salary, once draft night shows his ratings. Each
+ * team takes the best on its own board, which strays from the league's (leagueBoard) by as much as
+ * the boards do from one another, plus its whim and its needs, so the n-th pick gets about the n-th
+ * prospect on the boards and now and then one further down; what he turns out to be is what the
+ * boards' read lets the league expect (see revealOutlook). A prospect who slides keeps the picks
+ * after him worth what he is. Priced at the best prospect left by the room's read instead, every
+ * pick on the clock was worth 1.3-1.6 times the player it became, flat for picks on end where the
+ * room's best went untaken (front-office review, round 3): a team sold its pick on the clock and
+ * bought the player back cheaper.
+ */
+function classTakes(league: League): { v: number; market: number }[] {
   const key = `${league.season}:${league.phase}:${league.day}:${league.draftPicks.length}`;
   const hit = classCache.get(league);
-  if (hit?.key === key) return hit.prospects;
-  const list = prospects(league, league.season)
-    // (as the league reads them: a prospect's true ratings are hidden, see consensusView)
-    .map((p) => consensusView(league, p))
-    .map((p) => ({ v: Math.exp((valueScore(league, p) - 60) / 6), market: marketSalary(league, p) }))
-    .sort((a, b) => b.v - a.v);
-  classCache.set(league, { key, prospects: list });
-  return list;
+  if (hit?.key === key) return hit.takes;
+  const { reads, prior } = leagueBoard(league, league.season);
+  const items = prospects(league, league.season).map((p) => {
+    const r = reads.get(p.pid)!;
+    let v = 0;
+    let market = 0;
+    for (const [q, w] of revealOutlook(p, r, prior)) {
+      v += w * Math.exp((valueScore(league, q) - 60) / 6);
+      market += w * marketSalary(league, q);
+    }
+    // where the boards have him, leaning toward his place on the room's: a team's pick strays from
+    // it by as much as the boards do from one another, and by its whim
+    return { pid: p.pid, v, market, board: r.score - TAKE_LEAN * (p.prospect?.rank ?? 50), sd: Math.hypot(r.spread, TAKE_WHIM) };
+  });
+  const n = Math.min(items.length, 2 * league.teams.length);
+  const takes = Array.from({ length: n }, () => ({ v: 0, market: 0 }));
+  const z = items.map((x) => takeDraws(league, x.pid));
+  for (let d = 0; d < TAKE_DRAWS; d++) {
+    // one board for the night a draw, each prospect's place on it a fixed draw (so a pick made
+    // takes him out of every draw and leaves the rest where they were)
+    const night = items.map((x, i) => ({ x, s: x.board + x.sd * z[i][d] })).sort((a, b) => b.s - a.s);
+    for (let j = 0; j < n; j++) {
+      takes[j].v += night[j].x.v / TAKE_DRAWS;
+      takes[j].market += night[j].x.market / TAKE_DRAWS;
+    }
+  }
+  classCache.set(league, { key, takes });
+  return takes;
 }
 
 /** Where a pick may land in its round, as its value projects it, and what each slot is worth. */
@@ -192,24 +251,24 @@ const PLACE_KEEP = 0.75;
 
 /**
  * A pick's outlook: what the player taken there would be worth once drafted, his rookie-scale
- * surplus included (the prospect ranked at its slot in this season's class, in later classes the
- * player a slot usually brings), discounted by the time to its draft: up to 15% over the last year
- * (who will be there, and how he turns out) and 7% for each year before that. Unknown slots come
- * from the original team's projected strength (see pickProjection): in the next draft to be
- * ordered, its chance at each slot, the lottery's draw included; in a later one, a spread of
- * outcomes around its expected place regressed toward the middle (PLACE_KEEP a season), wider each
- * year out. On opening night every first used to be priced at the middle's value (the record of
+ * surplus included (in this season's class the player the boards would take there, see
+ * classTakes; in later classes the player a slot usually brings), discounted by the time to its
+ * draft: up to 15% over the last year (who will be there, and how he turns out) and 7% for each
+ * year before that. Unknown slots come from the original team's projected strength (see
+ * pickProjection): in the next draft to be ordered, its chance at each slot, the lottery's draw
+ * included; in a later one, a spread of outcomes around its expected place regressed toward the
+ * middle (PLACE_KEEP a season), wider each year out. On opening night every first used to be priced at the middle's value (the record of
  * 0-0 projected .500), so the worst team's first sold for a contender's.
  */
 function outlook(league: League, dp: DraftPick): Outlook {
   const yearsOut = dp.season - league.season;
-  const cls = yearsOut === 0 ? classProspects(league) : [];
+  const cls = yearsOut === 0 ? classTakes(league) : [];
   const years = Math.max(0, yearsOut + (dateToDay(league.season, 5, 25) - league.day) / 365);
   const discount = years <= 1 ? 1 - 0.15 * years : 0.85 * Math.pow(0.93, years - 1);
   const known = dp.pick !== undefined;
   const slot = (inRound: number) => {
     const overall = (dp.round - 1) * 30 + inRound;
-    // during the draft the next pick gets the best prospect left
+    // during the draft: the picks still to be made before it
     const idx = known ? league.draftPicks.filter((d) => d.season === dp.season && d.pick !== undefined && (d.round - 1) * 30 + d.pick < overall).length : overall - 1;
     const p = cls[idx] ?? { v: Math.exp((futureSlotScore(overall) - 60) / 6), market: salaryForScore(league, futureSlotScore(overall), 0) };
     const rookie = rookieContract(league, inRound, dp.round, league.season + 1);
@@ -296,10 +355,11 @@ export function swapOutlook(league: League, own: DraftPick, other: DraftPick): {
 
 /**
  * Trade value of a draft pick (see outlook): it keeps its value from one season into the next, and
- * on the clock is worth the player it becomes. A top-N protected pick held by another team is worth
- * nothing in the slots where it would stay home. A swap riding on a first moves value between the
- * two picks: the one holding the right is worth what the swap is expected to gain it, the one
- * subject to it that much less (a team holding both is worth the two picks).
+ * on the clock is worth what the player the boards would take with it can be expected to be. A
+ * top-N protected pick held by another team is worth nothing in the slots where it would stay home.
+ * A swap riding on a first moves value between the two picks: the one holding the right is worth
+ * what the swap is expected to gain it, the one subject to it that much less (a team holding both
+ * is worth the two picks).
  */
 export function pickValue(league: League, dp: DraftPick): number {
   const base = ownValue(league, dp);

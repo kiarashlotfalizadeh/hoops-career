@@ -13,7 +13,8 @@ import { agenda } from '../../core/league/agenda';
 import { CAP } from '../../core/constants';
 import { RETIRED, type GameResult, type League, type PlayoffSeries } from '../../core/types';
 import { matchScore, normalize, search, searchIndex } from '../search';
-import { defaultTeam, rosterLine, seedRosterSizes } from '../newLeague';
+import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews } from '../newLeague';
+import { ownerPersonality, planOwnerGoals } from '../../core/league/ownerGoals';
 import { seasonOutcome } from '../league/shared';
 import { editOf as playerEdit, formOf as playerForm } from '../god/PlayerEditor';
 import { editOf as teamEdit, formOf as teamForm } from '../god/TeamEditor';
@@ -165,6 +166,24 @@ describe('screen logic', () => {
     expect(rosterLine(CAP.rosterMax)).toBe(`${CAP.rosterMax} players`);
     expect(rosterLine(CAP.rosterMax - 2)).toBe(`${CAP.rosterMax - 2} players · 2 open spots`);
     expect(rosterLine(CAP.rosterMin - 1)).toBe(`${CAP.rosterMin - 1} players · 1 to sign before opening night`);
+    // and what each owner asks on day one, from the league it previews with the id and seed Start
+    // career creates with: the goals and the owner the user gets, whichever team he takes (a
+    // fictional league's rosters ranked as well)
+    {
+      const made = { id: 'lg_preview_1', rngSeed: 11 };
+      const make = (userTid: number) => createLeague({ name: 'p', userTid, coachName: 'c', settings: defaultSettings(), seed: null, ...made });
+      const teams = teamPreviews(make(0));
+      expect(new Set(Object.values(teams).map((t) => t.rank)).size).toBe(30);
+      for (const tid of [7, 21]) {
+        const own = make(tid);
+        const og = planOwnerGoals(own, tid)!;
+        expect(own.id).toBe(made.id);
+        expect(teams[tid].who).toBe(ownerPersonality(own, tid));
+        expect(teams[tid].wins).toBe(og.goals.find((g) => g.kind === 'wins')!.target);
+        expect(teams[tid].level).toBe(og.goals.find((g) => g.kind === 'postseason')?.target ?? 0);
+      }
+      expect(ownerLine({ wins: 32, level: 0, who: 'builder' })).toBe('Owner: 32 wins · rebuild · builder');
+    }
 
     // seasonOutcome: a series winner waiting for the next round is still in it, not out in it
     {

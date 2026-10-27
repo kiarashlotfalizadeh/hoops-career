@@ -22,6 +22,22 @@ export function simDecided(sim: { q: number; clock: number; T: readonly { score:
   return at.q >= 4 && !closeGame({ ...at, ball: null, sides: sim.T }, edge);
 }
 
+/**
+ * Your starters hurt and out for the game since the sim's `from`-th injury: a skip ahead stops for the
+ * first of them (useLiveGame.skip), with his line over the court, so the coach sees it as it happens.
+ */
+export function hurtStarters(
+  sim: { injuries: readonly { pid: number; tid: number }[]; T: readonly { team: { tid: number }; players: readonly { pid: number; starter: boolean }[] }[] },
+  side: 0 | 1,
+  from: number,
+): number[] {
+  const t = sim.T[side];
+  return sim.injuries
+    .slice(from)
+    .filter((i) => i.tid === t.team.tid && t.players.some((p) => p.pid === i.pid && p.starter))
+    .map((i) => i.pid);
+}
+
 /** A side this likely to win in the fourth quarter or overtime: the screen offers the final (FinalOffer). */
 export const SEALED_WIN = 0.98;
 

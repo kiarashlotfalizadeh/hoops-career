@@ -50,7 +50,7 @@ import { useNeedsYou } from './today/needs';
 import { NeedsSheet, OpenCalls } from './today/NeedsList';
 import { agenda, CALL_KINDS } from '../core/league/agenda';
 import { todayRoutes } from './routes/today';
-import { teamRoutes } from './routes/team';
+import { screenKey, teamRoutes } from './routes/team';
 import { gamesRoutes } from './routes/games';
 import { leagueRoutes } from './routes/league';
 import { officeRoutes } from './routes/office';
@@ -630,7 +630,7 @@ function GameShell() {
     <div className="app">
       <TopBar />
       <SaveBanner />
-      <ErrorBoundary scope="screen" key={loc.pathname} resetKey={loc.key}>
+      <ErrorBoundary scope="screen" key={screenKey(loc.pathname)} resetKey={loc.key}>
         <Suspense fallback={<Waiting />}>
           <Routes>
             {todayRoutes}

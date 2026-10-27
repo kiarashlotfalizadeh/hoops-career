@@ -16,6 +16,14 @@ export interface YouthLean {
   level: number;
   /** Put in by his answer ('staff') or the staff's own pick ('auto'), or turned down ('kept': nothing leans, the call waits until `until`). */
   how: 'staff' | 'auto' | 'kept';
+  /** What it was for (the owner's youth goal, or the draft), what it measured at when it went in (points a game, shrunk), and the young players' minutes a game the rotation planned without it. */
+  why?: 'goal' | 'draft';
+  pts?: number;
+  young?: number;
+  /** Put in from a card (his answer or the staff's lean on one he left): its games played, it's measured again. */
+  card?: true;
+  /** Its games played, the staff measured it again on the last of them and the digest said what it came to (weekCall.ts's youthPayoff). */
+  paid?: true;
 }
 
 /** The lean on the user's rotation today (0: none). */

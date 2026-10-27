@@ -428,3 +428,13 @@
     background: var(--surface);
   }
 }
+/* what the owner asks on day one, under the roster line */
+.nl-pick-owner {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+}
+.nl-pick-owner.dim {
+  color: var(--text-dim);
+}

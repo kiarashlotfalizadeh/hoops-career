@@ -1,32 +1,6 @@
-/* Instructions' and Match's own controls: the phase switch, a control's label with its ⓘ, the
+/* Instructions' and Match's own controls: a control's label with its ⓘ, the
    cards that open (Fine-tune, More rules), the hunt and big-man notes, the set package's row and its
    checkbox rows, and picker rows that open a sheet of choices. */
-/* the three phases: one switch, each phase's name over how well the team knows it */
-.tx-phaseseg .seg button {
-  flex: 1 1 auto;
-  height: 48px;
-  padding: 0 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-width: 0;
-}
-.tx-phaseseg-n {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  line-height: 1.1;
-}
-.tx-phaseseg-v {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
 .tx-phasebody {
   gap: 10px;
 }

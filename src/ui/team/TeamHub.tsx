@@ -1,7 +1,8 @@
-// The Team hub: your team in one place. Its poster (the team's slab: the name, the record, the
-// roster spots and payroll), then its sections as sticky page tabs with their own paths
-// (/team, /team/rotation, /team/tactics, /team/lineups, /team/growth: the development report), each
-// the screen it names.
+// The Team hub: your team in one place. Its poster on the roster (the team's slab: the name, the
+// record, the roster spots and payroll), then its sections as sticky page tabs with their own paths
+// (/team, /team/rotation, /team/tactics and the paths under it, /team/lineups, /team/growth: the
+// development report), each the screen it names. The other sections open on their tabs: the top bar
+// already names the team and its record, so the section's own first block leads.
 import { Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -34,13 +35,12 @@ const SECTIONS: { id: Section; label: string }[] = [
 ];
 
 /**
- * The team's poster: its slab, in your colours. The city and the season as a kicker, the name in the
- * headline cut and the record as the one big figure (where it stands under it), then the roster
- * spots and the payroll in mono across its foot (the only place Team shows money; it's in full in the
- * Office). On the other sections it's a slim band (the mark and the name: the top bar has the record), so
- * the section's own first block leads. Who runs the rotation and the tactics is their own tab's switch.
+ * The team's poster over the roster: its slab, in your colours. The city and the season as a kicker,
+ * the name in the headline cut and the record as the one big figure (where it stands under it), then
+ * the roster spots and the payroll in mono across its foot (the only place Team shows money; it's in
+ * full in the Office). Who runs the rotation and the tactics is their own tab's switch.
  */
-function TeamHeader({ league, slim }: { league: League; slim: boolean }) {
+function TeamHeader({ league }: { league: League }) {
   const t = league.teams[league.userTid];
   // between seasons, next season's contracts count, as on every Office desk (rosterSpots)
   const s0 = capSeason(league);
@@ -52,43 +52,35 @@ function TeamHeader({ league, slim }: { league: League; slim: boolean }) {
   const conf = t.conf === 'E' ? 'East' : 'West';
   const gp = ts.won + ts.lost;
   return (
-    <header className={`slab tm-hh${slim ? ' slim no-court' : ''}`}>
-      {!slim && (
-        <div className="tm-hh-over over">
-          <TeamLogo tid={t.tid} size={22} decorative />
-          <span className="ellipsis">
-            {t.region} · {seasonLabel(league.season)}
-          </span>
-        </div>
-      )}
-      <div className="tm-hh-main">
-        {slim && <TeamLogo tid={t.tid} size={34} decorative />}
-        <h1 className="tm-hh-name">{t.name}</h1>
-        {/* (the slim band leaves the record to the top bar, which always shows it) */}
-        {!slim && (
-          <div className="tm-hh-rec">
-            <span className="tm-hh-wl" aria-label={`Record ${ts.won} and ${ts.lost}`}>
-              {ts.won}-{ts.lost}
-            </span>
-            <span className="tm-hh-rank">{gp ? `${ordinal(rank)} in the ${conf}` : 'No games yet'}</span>
-          </div>
-        )}
+    <header className="slab tm-hh">
+      <div className="tm-hh-over over">
+        <TeamLogo tid={t.tid} size={22} decorative />
+        <span className="ellipsis">
+          {t.region} · {seasonLabel(league.season)}
+        </span>
       </div>
-      {!slim && (
-        <div className="tm-hh-figs">
-          <div className="tm-hh-fig">
-            <span className="tm-hh-v" style={r.color ? { color: r.color } : undefined}>
-              {r.v}
-            </span>
-            {/* what the count is, or what's pressing about it: "1 to cut", "+3 expiring" */}
-            <span className="tm-hh-k">{r.color ? r.s : `${r.k}${r.s ? ` · ${r.s}` : ''}`}</span>
-          </div>
-          <div className="tm-hh-fig">
-            <span className="tm-hh-v">{money(pay)}</span>
-            <span className="tm-hh-k">Payroll{off}</span>
-          </div>
+      <div className="tm-hh-main">
+        <h1 className="tm-hh-name">{t.name}</h1>
+        <div className="tm-hh-rec">
+          <span className="tm-hh-wl" aria-label={`Record ${ts.won} and ${ts.lost}`}>
+            {ts.won}-{ts.lost}
+          </span>
+          <span className="tm-hh-rank">{gp ? `${ordinal(rank)} in the ${conf}` : 'No games yet'}</span>
         </div>
-      )}
+      </div>
+      <div className="tm-hh-figs">
+        <div className="tm-hh-fig">
+          <span className="tm-hh-v" style={r.color ? { color: r.color } : undefined}>
+            {r.v}
+          </span>
+          {/* what the count is, or what's pressing about it: "1 to cut", "+3 expiring" */}
+          <span className="tm-hh-k">{r.color ? r.s : `${r.k}${r.s ? ` · ${r.s}` : ''}`}</span>
+        </div>
+        <div className="tm-hh-fig">
+          <span className="tm-hh-v">{money(pay)}</span>
+          <span className="tm-hh-k">Payroll{off}</span>
+        </div>
+      </div>
     </header>
   );
 }
@@ -98,11 +90,12 @@ export default function TeamHub() {
   const { tab } = useParams();
   const nav = useNavigate();
   const section = SECTIONS.find((s) => s.id === tab)?.id ?? 'roster';
+  const team = league.teams[league.userTid];
   // a change to the tactics or rotation is measured by the staff when the user leaves (or taps Done on Tactics)
   useTeamEditWatch();
   return (
     <main className="page tm-hub">
-      <TeamHeader league={league} slim={section !== 'roster'} />
+      {section === 'roster' ? <TeamHeader league={league} /> : <h1 className="sr-only">{`${team.name}: ${SECTIONS.find((s) => s.id === section)!.label}`}</h1>}
       <TabBar value={section} options={SECTIONS} onChange={(s) => nav(s === 'roster' ? '/team' : `/team/${s}`, { replace: true })} label="Team sections" />
       <Suspense fallback={null}>
         {section === 'roster' && <Roster />}

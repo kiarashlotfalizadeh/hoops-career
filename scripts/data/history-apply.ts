@@ -11,7 +11,8 @@
 // titles). Read from what is on disk: the honours from the Awards column of the per-game and advanced
 // pages (2003-04 on, every current player's whole career), the Finals and the rings from the game
 // files' playoff box scores (1996-97 on), and before them a small hand-written table of public facts
-// (OLD_FINALS, OLD_MVPS). Nothing is fetched.
+// (OLD_FINALS, OLD_MVPS). Nothing is fetched. Last, the record book's past (src/data/records.json:
+// the best single games since 1996-97, see records-apply.ts).
 // Needs the Basketball Reference pages data:fetch caches (no NBA.com data).
 // Usage: npm run data:history
 import { createReadStream, existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -24,6 +25,7 @@ import { seasonLabel } from '../../src/core/constants';
 import type { SeedData } from '../../src/core/league/create';
 import { FRANCHISES } from '../../src/core/teams';
 import type { HistoryData, HistoryFinal } from '../../src/core/league/media/past';
+import { writeRecords } from './records-apply';
 
 const RAW = process.env.HC_RAW_DIR ?? join(process.cwd(), 'data', 'raw');
 const OUT = process.env.HC_SEED_OUT ?? join(process.cwd(), 'src', 'data', 'seed.json');
@@ -426,3 +428,4 @@ async function writeHistory() {
 
 applyCareers();
 await writeHistory();
+await writeRecords();

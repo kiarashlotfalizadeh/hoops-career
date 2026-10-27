@@ -8,14 +8,15 @@
 //   assists, boards, stocks, less turnovers) and role (the minutes coaches gave him),
 // and the weights are the non-negative ones closest to the old (a ridge toward them) that predict it
 // from his calibrated ratings, guards' and bigs' separately (blended by size as ovrRaw blends them),
-// scaled so the league's raw OVR keeps its mean.
+// scaled so the league's raw OVR keeps its mean, with a big's defensive weights held at or above
+// OVR_BIG_FLOOR (reputation.ts).
 //
 // Usage: HC_REPORT=<report.json> node_modules/.bin/tsx scripts/data/build-seed.ts, then
 //        node_modules/.bin/tsx scripts/data/ovrFit.ts <report.json>
 import { readFileSync } from 'node:fs';
 import { RATING_KEYS, buildOvrScale, ovrRaw, toDisplay } from '../../src/core/ratings';
 import type { Ratings } from '../../src/core/types';
-import { OVR_TARGET, ovrTarget, type ReportRow } from './reputation';
+import { OVR_BIG_FLOOR, OVR_TARGET, ovrTarget, type ReportRow } from './reputation';
 
 const path = process.argv[2] ?? process.env.HC_REPORT;
 if (!path) throw new Error('usage: ovrFit.ts <report.json>');
@@ -61,7 +62,8 @@ for (let it = 0; it < 4000; it++) {
       num += xij * (y[i] - pred);
       den += xij * xij;
     }
-    w[j] = Math.max(0, num / den);
+    // (a big's defensive skills no lower than fans read them, OVR_BIG_FLOOR, in ovrRaw's units)
+    w[j] = Math.max(j >= n ? (OVR_BIG_FLOOR[RATING_KEYS[j - n]] ?? 0) / 0.94 : 0, num / den);
   }
   if (it % 500 === 499) {
     const res = X.reduce((a, x, i) => a + (x.reduce((s, v, k) => s + v * w[k], 0) - y[i]) ** 2, 0);

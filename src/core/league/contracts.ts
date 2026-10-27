@@ -71,7 +71,7 @@ const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, reb
  * expiring deal in 2019), and a big multi-year overpay costs two firsts or more. So DUMP_PER_FIRST of
  * the cap (18%: $29.7M on 2026-27's $165M) of salary over what he's worth, summed over the seasons
  * still to be paid, costs FIRST_VALUE, the value of a typical first a year out (a mid-round one: see
- * pickValue; the league's median next-year first measured 13.9 on opening night). Cap-relative, so it
+ * pickValue; the league's median next-year first measured 13.1 on opening night). Cap-relative, so it
  * holds as the cap grows. Overpay and underpay aren't mirror images: the surplus of a cheap deal is
  * room under the cap and the tax (SURPLUS_VALUE), which a capped-out team can't spend, while every
  * dollar of a burden is owed, waived or not. At SURPLUS_VALUE's 0.1 per $1M a 77 OVR 27-year-old on
@@ -82,7 +82,7 @@ const SURPLUS_VALUE: Record<Strategy, number> = { contend: 0.1, retool: 0.1, reb
  * trades.ts's moneyCost).
  */
 export const DUMP_PER_FIRST = 0.18;
-export const FIRST_VALUE = 14;
+export const FIRST_VALUE = 13;
 const BURDEN_LENS: Record<Strategy, number> = { contend: 0.8, retool: 1, rebuild: 1.2 };
 
 /** A team option on the contract's last season that is still to be decided: not guaranteed money. */

@@ -21,7 +21,7 @@ import * as TR from '../src/core/league/trades';
 import { makeItWork } from '../src/core/league/tradeHelp';
 import * as P from '../src/core/league/proposals';
 import { openStint, registryProblems, userCoach } from '../src/core/league/coaches';
-import { contractExp, extensionStart, salaryFor } from '../src/core/playerGen';
+import { contractExp, extensionStart, playerAge, salaryFor } from '../src/core/playerGen';
 import { CAP, seasonLabel } from '../src/core/constants';
 import { arenaCapacity, aiTicketPrice, attendanceFor, MERCH_PER_GAME, LOCAL_TV_PER_GAME } from '../src/core/league/finances';
 import { booksOutlook, sanctionedTax } from '../src/core/league/books';
@@ -1217,9 +1217,15 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     // rule, and few are left for their old teams to take back as it closes. One still unsigned whose
     // summer floor no AI team's cap space or exception can pay at the close is priced out, not
     // stalled: the floors keep him from signing for scraps (see SUMMER_FLOOR), and his price comes
-    // down in season
+    // down in season. A rebuilder's money doesn't count for a veteran of 27 or more: its spots past
+    // 13 players go to its young ones (see freeAgency.ts aiSign), and a summer roster is past 13
     const pays = (pid: number) =>
-      L.teams.some((t) => t.tid !== L.userTid && Math.max(C.capSpace(L, t.tid, L.season + 1), C.bestExceptionRoom(L, t.tid, L.season + 1)) >= C.summerFloor(L, L.players[pid]));
+      L.teams.some(
+        (t) =>
+          t.tid !== L.userTid &&
+          !(t.strategy === 'rebuild' && playerAge(L.players[pid], L.season + 1) >= 27) &&
+          Math.max(C.capSpace(L, t.tid, L.season + 1), C.bestExceptionRoom(L, t.tid, L.season + 1)) >= C.summerFloor(L, L.players[pid]),
+      );
     const pricedOut = [...top].filter(([pid, d]) => d < 0 && !pays(pid)).length;
     const days = [...top]
       .filter(([pid, d]) => d >= 0 || pays(pid))

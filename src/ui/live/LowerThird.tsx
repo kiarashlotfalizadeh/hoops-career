@@ -5,7 +5,8 @@ import type { CSSProperties } from 'react';
 import type { GameType, League } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { careerOnRecord, careerTotals } from '../../core/analysis/milestones';
-import { bookOf } from '../../core/league/records';
+import { bookFrom, bookOf, pastMark, youngBook } from '../../core/league/records';
+import { seasonLabel } from '../../core/constants';
 import type { Graphic, PlayerBefore } from './graphics';
 
 /** How long a graphic stays up (real time). */
@@ -30,11 +31,13 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
       high.set(b.pid, h);
     }
   }
-  // scoring records count once the book has a season behind it, as in the news
+  // scoring records count once the book has a season behind it (a real league's from day one: it
+  // opens with the NBA's marks), as in the news
   const book = league.records;
   const kind = bookOf(type);
   // (a list with nothing on it yet has no record to break)
-  const lists = book && kind && league.season > book.since ? { league: book.league[kind].players.pts?.[0]?.[0], kind } : null;
+  const lists = book && kind && !youngBook(book, league.season) ? { league: book.league[kind].players.pts?.[0]?.[0], kind } : null;
+  const reach = book?.from !== undefined && kind ? { since: `since ${seasonLabel(bookFrom(book))}`, allTime: pastMark(kind, 'pts')?.v } : {};
   const out = new Map<number, PlayerBefore>();
   for (const t of sim.T) {
     const tid = t.team.tid;
@@ -54,7 +57,7 @@ export function playersBefore(league: League, sim: GameSim, type: GameType = 're
         ...(h ? { high: { ...h, career: whole && p.experience === 0 } } : {}),
         ...(c ? { career: { pts: c.pts, reb: c.reb, ast: c.ast } } : {}),
         ...(best ? { best } : {}),
-        ...(lists && team ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post' } } : {}),
+        ...(lists && team ? { records: { team: franchise, teamName: team.name, league: lists.league, playoffs: lists.kind === 'post', ...reach } } : {}),
       });
     }
   }

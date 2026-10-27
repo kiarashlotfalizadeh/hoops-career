@@ -16,7 +16,7 @@ import { seasonLabel } from '../constants';
 import { madeAtt, ordinal, plural } from '../format';
 import { FRANCHISES } from '../teams';
 import { careerTotals, markText, milestonesIn, newsworthy, type MilestoneStat } from './milestones';
-import { REC_LABEL, gameMark, recordsHeld, recordWhat, type HeldRecord, type RecStat } from '../league/records';
+import { REC_LABEL, bookFrom, gameMark, recordReach, recordsHeld, recordWhat, type HeldRecord, type RecStat } from '../league/records';
 import { winChance } from './winProb';
 import { billingStorylines } from './storylines';
 import { SETS } from '../sim/sets';
@@ -620,9 +620,13 @@ function dekOf(league: League, f: Facts, cat: string): string {
   // the record its headline leads with: what it beat
   if (cat.startsWith('rec-') && f.record) {
     const rc = f.record;
-    const since = league.records ? seasonLabel(league.records.since) : '';
+    // (a real league's book reaches back to 1996-97: a league record says whether it's the most ever)
+    const since = league.records ? seasonLabel(bookFrom(league.records)) : '';
     const most = rc.team ? (rc.stat === 'margin' ? 'the biggest win' : `the most ${rc.stat === 'pts' ? 'points' : 'threes'}`) : `the most ${REC_LABEL[rc.stat as RecStat][1]}`;
-    const where = rc.scope === 'league' ? `in a game since ${since}` : `in a game for the ${f.team.name} since ${since}`;
+    const where =
+      rc.scope === 'league'
+        ? `in a game ${recordReach(league, { book: 'reg', stat: rc.stat, team: rc.team, v: rc.v }, f.res.season)}`
+        : `in a game for the ${f.team.name} since ${since}`;
     const prev =
       rc.prev && rc.prev.v < rc.v ? ` The old mark was ${rc.prev.v}, by ${rc.prev.name}${rc.prev.season !== f.res.season ? ` in ${seasonLabel(rc.prev.season)}` : ''}.` : '';
     out.push(rc.who ? `${f.full(rc.who)} had ${nightWords(rc.who)}: ${most} ${where}.${prev}` : `${most.replace(/^./, (c) => c.toUpperCase())} ${where}.`);

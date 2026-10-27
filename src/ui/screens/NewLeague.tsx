@@ -17,7 +17,7 @@ import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
-import { defaultTeam, rosterLine, seedRosterSizes } from '../newLeague';
+import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -83,8 +83,14 @@ export default function NewLeague() {
     }
     return out;
   }, [seed]);
-  // real rosters only: a fictional league's players are generated when it is created
-  const teamInfo = kind === 'real' ? seedInfo : null;
+  // the league Start career creates: its id and random seed, drawn once, so the team step can build it
+  // first to preview each owner's day-one asks (and a fictional league's rosters) as you'll get them
+  const [made] = useState(() => ({ id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }));
+  const [preview, setPreview] = useState<{ key: string; teams: Record<number, TeamPreview> } | null>(null);
+  const previewKey = `${kind}:${settings.difficulty}:${settings.injuries}`;
+  const previewTeams = preview?.key === previewKey ? preview.teams : null;
+  // real rosters' top three from the seed at once; a fictional league's once its preview is built
+  const teamInfo = kind === 'real' ? seedInfo : previewTeams;
 
   // where each roster stands before opening night (real rosters: a fictional league's are generated at the start)
   const rosterSize = useMemo(() => (seed && kind === 'real' ? seedRosterSizes(seed) : null), [seed, kind]);
@@ -96,7 +102,11 @@ export default function NewLeague() {
       .sort((a, b) => seedInfo[b].strength - seedInfo[a].strength);
     return Object.fromEntries(ids.map((id, i) => [id, i + 1])) as Record<number, number>;
   }, [seedInfo]);
-  const rank = teamInfo ? seedRank : null;
+  const fictionalRank = useMemo(
+    () => (previewTeams && kind === 'fictional' ? Object.fromEntries(Object.entries(previewTeams).map(([t, x]) => [t, x.rank])) : null),
+    [previewTeams, kind],
+  );
+  const rank = kind === 'real' ? (teamInfo ? seedRank : null) : fictionalRank;
   // the pick before the user makes one: a mid-table team with a legal roster under the tax (none: the step asks)
   const fallback = useMemo(() => (seed && seedRank ? defaultTeam(seed, seedRank) : null), [seed, seedRank]);
   const tid: number | null = tidParam === null ? fallback : tidParam !== '' && FRANCHISES[Number(tidParam)] ? Number(tidParam) : null;
@@ -105,6 +115,27 @@ export default function NewLeague() {
   const conf = confPick ?? (tid !== null ? FRANCHISES[tid].conf : 'E');
   const asked = sp.get('step');
   const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
+
+  // the preview: the league as Start career creates it, with the settings so far (the difficulty moves
+  // the asks), built while the first step is read (in two tasks, the league then the owners' reads:
+  // about 0.6 s of work on a slow phone), so the team step usually has it as it opens
+  const needPreview = step !== 'setup' && preview?.key !== previewKey && (kind === 'fictional' || !!seed);
+  useEffect(() => {
+    if (!needPreview) return;
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const t1 = setTimeout(() => {
+      try {
+        const l = createLeague({ name: 'Preview', userTid: fallback ?? 0, coachName: 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
+        t2 = setTimeout(() => setPreview({ key: previewKey, teams: teamPreviews(l) }), 0);
+      } catch (e) {
+        console.error(e);
+      }
+    }, 120);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [needPreview, previewKey, fallback, settings, kind, seed, made]);
   const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
   // back through the history (the main menu is behind the first step), and without any (a deep link or
   // a reload) to the step before, or the main menu in place of this screen
@@ -125,7 +156,7 @@ export default function NewLeague() {
     }
     await new Promise((r) => setTimeout(r, 30));
     try {
-      const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null });
+      const l = createLeague({ name: name.trim() || 'My League', userTid: tid!, coachName: coach.trim() || 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
       setLeague(l);
       // if it fails, play on: the save banner says so and offers a backup, and later saves retry
       await useStore.getState().save();
@@ -220,7 +251,8 @@ export default function NewLeague() {
                 <span className="nl-pick-region">{f.region}</span>
                 {f.name}
               </span>
-              <span className="nl-pick-sub">{kind === 'fictional' ? 'New players, generated at the start' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
+              <span className="nl-pick-sub">{kind === 'fictional' ? 'Generated players' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
+              <span className={`nl-pick-owner ${previewTeams ? '' : 'dim'}`}>{previewTeams?.[tid] ? ownerLine(previewTeams[tid]) : 'Owner: reading the roster…'}</span>
               {(teamInfo?.[tid] || rank) && (
                 <span className="nl-pick-foot">
                   {teamInfo?.[tid] && (

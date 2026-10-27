@@ -1599,6 +1599,12 @@ export interface League {
    * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Analysis's "Since you changed it".
    */
   tacticEdits?: TacticEdit[];
+  /**
+   * The user's team as the open Team visit found it (see ui/tactics/editWatch.ts), kept in the save so
+   * a change made before the app closes is still recorded: a league that loads with one records the
+   * change since, as leaving would have (state/persistence.ts). Absent outside a visit.
+   */
+  editVisit?: { tactics: Tactics; rotation: Rotation };
   /** First season of the user's current job (owner grace period); defaults to startSeason. */
   tenureStart?: number;
   /** This season's NBA Cup (absent for leagues whose conferences can't split into groups of five). */

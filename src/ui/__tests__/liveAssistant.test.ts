@@ -22,8 +22,8 @@ import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
-import { CALL_DRAFTS, callDrafts, callQuietLine, readingLine } from '../live/calls';
-import { measureCalls, measureChange } from '../../state/liveWorth';
+import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, readingLine, stopAfter } from '../live/calls';
+import { CALL_CONFIRM_MIN, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { fitPlayers, playOptions } from '../live/plays';
 import { SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
@@ -451,13 +451,82 @@ describe('the live assistant and the bench', () => {
       expect(m.tried).toBe(drafts.length);
       if (m.pick !== null) expect(m.reading!.raw).toBeGreaterThanOrEqual(2 * m.reading!.se);
       if (m.reading) expect(Math.abs(m.reading.pts)).toBeLessThanOrEqual(Math.abs(m.reading.raw) + 0.05);
+      // (a crunch-time call clears on the result and the margin both)
+      if (m.pick !== null && m.by === 'win') expect(m.reading!.win).toBeGreaterThanOrEqual(2 * m.reading!.winSe);
       // a change that changes nothing reads even, and the staff says so when nothing clears
       const same = (await measureChange(g.sim, 0, { kind: 'none' }, { kind: 'tactics', tactics: g.sim.baseTactics(0) }, { games: 8 }))!;
       expect([same.raw, same.win, same.n]).toEqual([0, 0, 8]);
       expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Measured 4 changes from Q2 3:10: none clears the noise. Nothing to change.');
       // (a call judged by the margin: the win chance beside it would be raw and picked on its noise)
-      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.015 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
-      expect(readingLine({ pts: 0.3, band: 0.4, win: 0.06, winSe: 0.02 }, 'win')).toBe('+6% to win (±2), +0.3 to the margin (±0.4)');
+      expect(readingLine({ pts: 1.4, band: 0.5 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
+      expect(readingLine({ pts: 0.3, band: 0.1 }, 'win')).toBe('+0.3 to the margin (±0.1), and clear on the win chance too');
+      // a stop the game will come to is measured from a copy played on to it: the very spot the game gets
+      // to (the same possessions, the same reading); its budget starts only once the game is there, and
+      // a budget run out plays the device floor, never fewer
+      const seen = noStops();
+      seen.mid = g.sim.q;
+      const ahead = nextStop(g.sim, 0, { ...seen }, 80)!;
+      expect(ahead.k).toBeGreaterThan(0);
+      let k = 0;
+      let prio = 0;
+      while (k < ahead.k) {
+        const timeouts: [number, number] = [g.sim.T[0].timeouts, g.sim.T[1].timeouts];
+        let got: PossLog[] = [];
+        while (!got.length && k < ahead.k) {
+          g.sim.step();
+          k++;
+          got = g.sim.drainLogs();
+          g.logs.push(...got);
+        }
+        prio = stopAfter(g.sim, 0, timeouts, seen);
+      }
+      expect(prio).toBe(ahead.prio);
+      expect(ahead.logs).toEqual(g.logs.slice(-ahead.logs.length));
+      // (the copy keeps no shot chart: nothing the staff drafts from reads it)
+      const sides = (x: GameSim) => snapshot(x).sides.map((d) => ({ ...d, players: d.players.map((p) => ({ ...p, streak: 0 })) }));
+      expect([ahead.sim.q, ahead.sim.clock, sides(ahead.sim)]).toEqual([g.sim.q, g.sim.clock, sides(g.sim)]);
+      const draftsAt = (x: GameSim) =>
+        callDrafts({ ...staffInput(g, { atBreak: x.clock <= 0.05 }), view: snapshot(x, g.logs.length), subFor: (pid) => benchFor(x, 0, pid) }, x).map((d) => [d.id, d.choice]);
+      expect(draftsAt(ahead.sim)).toEqual(draftsAt(g.sim));
+      const from = draftsAt(g.sim).map(([, c]) => c as LiveChoice);
+      const there = await measureCalls(g.sim, 0, from, { screen: 6, confirm: 12 });
+      expect(await measureCalls(ahead.sim, 0, from, { screen: 6, confirm: 12, due: () => Infinity })).toEqual(there);
+      const late = (await measureCalls(g.sim, 0, from, { screen: 40, confirm: 200, due: () => 0 }))!;
+      if (late.reading) expect(late.reading.n).toBe(CALL_CONFIRM_MIN);
+    }
+
+    // crunch time (the last six minutes of a game in reach): every dead ball is a stop, and there the staff
+    // drafts a timeout and fresh legs for your most tired player, whoever makes the subs; a live ball
+    // (their defensive board, a steal) isn't a stop, and a period's end is one once
+    {
+      const g = game();
+      play(g, 120);
+      const s = g.sim;
+      Object.assign(s, { q: 4, clock: 200 });
+      s.T[0].score = s.T[1].score = 90;
+      const tired = s.T[0].on[0];
+      tired.energy = 0.05;
+      const seen = noStops();
+      const to: [number, number] = [s.T[0].timeouts, s.T[1].timeouts];
+      Object.assign(s, { ctx: 'made' });
+      expect(deadBall(s)).toBe(true);
+      expect(stopAfter(s, 0, to, seen)).toBe(1);
+      expect(stopAfter(s, 0, to, seen)).toBe(1);
+      Object.assign(s, { ctx: 'dreb' });
+      expect(stopAfter(s, 0, to, seen)).toBe(0);
+      Object.assign(s, { ctx: 'made' });
+      s.T[0].score = 120;
+      expect(stopAfter(s, 0, to, seen)).toBe(0);
+      s.T[0].score = 90;
+      const input = staffInput(g, { manualSubs: false, subFor: (pid) => benchFor(s, 0, pid) });
+      const drafts = callDrafts(input, s);
+      expect(drafts.length).toBeLessThanOrEqual(CALL_DRAFTS_CRUNCH);
+      expect(drafts.find((d) => d.id === 'crunch-to')?.choice).toEqual({ kind: 'timeout' });
+      const sub = drafts.find((d) => d.id === `crunch-sub-${tired.pid}`);
+      expect(sub?.choice).toMatchObject({ kind: 'sub', out: tired.pid });
+      expect(callDrafts({ ...input, timeoutPending: true }, s).some((d) => d.choice.kind === 'timeout')).toBe(false);
+      Object.assign(s, { clock: 0 });
+      expect([stopAfter(s, 0, to, seen), stopAfter(s, 0, to, seen)]).toEqual([2, 0]);
     }
 
     // the game read in a sentence: the score early, then the biggest edges in the box score

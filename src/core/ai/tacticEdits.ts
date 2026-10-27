@@ -366,7 +366,7 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
     from: `${lead.name}, lead assistant`,
     subject: `Since you changed it: ${call === 'gain' ? `it worked, +${n} a game` : call === 'cost' ? `it cost ${n} a game` : 'too close to say'}`,
     body: `${shortWhat(e)}${e.what.includes(' · ') ? ' and more' : ''}. ${body}`,
-    link: '/team/tactics?tab=analysis',
+    link: '/team/tactics/analysis',
     tone: call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral',
   });
 }

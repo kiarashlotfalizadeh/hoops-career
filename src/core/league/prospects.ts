@@ -9,7 +9,8 @@
 // The class lives through the season: a hot or a cold month, now and then an injury (each a real
 // change to his ratings) on STOCK_DAYS, then the combine in May. The consensus board is re-ranked
 // after each, and the big movers make the news. AI teams draft by their own reads (draft.ts), the
-// mock and trade values by the consensus, the user's staff by theirs.
+// mock by the consensus, the user's staff by theirs; the picks' trade values by what the teams'
+// boards, averaged, let the league expect each prospect to be (leagueBoard, revealOutlook).
 //
 // Nothing here draws on the league's random stream: every draw is seeded by the league, the season
 // and what it's for.
@@ -129,7 +130,7 @@ export function mystery(league: League, p: Player): number {
   return (p.college ? 0.85 : 1.3) * (0.7 + 0.6 * u);
 }
 
-/** The league's read of a prospect: what the big board, the mock and trade values go by. Anyone else: his ratings. */
+/** The league's read of a prospect: what the big board and the mock go by (picks are priced by the teams' boards: see leagueBoard). Anyone else: his ratings. */
 export function consensusRead(league: League, p: Player): Read {
   if (p.tid !== DRAFT_PROSPECT) return truth(p);
   const sc = consensusSigma(league) * mystery(league, p);
@@ -185,11 +186,96 @@ export function seenPlayer(league: League, p: Player | undefined): Player | unde
   return { ...p, ovr: r.ovr, pot: r.pot, ratings: r.ovr === p.ovr ? p.ratings : shiftToOvr(p.ratings, r.ovr, league.ovrScale) };
 }
 
-/** A prospect at the consensus's read (OVR and POT), for what the league prices by it: trade values, contracts. Anyone else as he is. */
+/** A prospect at the consensus's read (OVR and POT), for what the league goes by before his ratings show: a two-way deal for a second-rounder, the undrafted who get a free-agent chance. Anyone else as he is. */
 export function consensusView(league: League, p: Player): Player {
   if (p.tid !== DRAFT_PROSPECT) return p;
   const r = consensusRead(league, p);
   return { ...p, ovr: Math.round(r.ovr), pot: Math.round(Math.max(r.ovr, r.pot)) };
+}
+
+/** A class's draft scores as the league can expect them before any read: their middle and their spread (variance) once the reads' error is taken out. */
+export interface ClassPrior {
+  mu: number;
+  tau2: number;
+}
+
+/** How much a read's error moves the draft score (POT 0.65, OVR 0.35: see readWith). */
+const SCORE_SHARE = 0.65 * POT_SHARE + 0.35 * OVR_SHARE;
+
+/** The league's board for a prospect: the AI front offices' reads of him averaged (`sd`: the error left in that), and how far they stray from one another (`spread`, on the draft score). */
+export interface BoardRead extends Read {
+  spread: number;
+}
+
+/**
+ * The league's board for draft `year`'s class: every AI front office's read of each prospect,
+ * averaged. Each corrects part of the room's error (the same part, as they see the same player)
+ * and adds its own (which partly cancels across 29 of them), so the boards know a little more than
+ * the room: a prospect the room has too high, the teams' boards have lower, and he goes later. A
+ * prospect taken already is read as he was on draft night (no ratings move until the summer), so
+ * the class doesn't sink as its best go. Its prior (see revealOutlook): the reads' spread less
+ * their error.
+ */
+export function leagueBoard(league: League, year: number): { reads: Map<number, BoardRead>; prior: ClassPrior } {
+  const sigma = consensusSigma(league);
+  const teams = league.teams.filter((t) => t.tid !== league.userTid).map((t) => ({ tid: t.tid, ...precision(league, t.tid, -1) }));
+  const n = Math.max(1, teams.length);
+  const qBar = teams.reduce((a, t) => a + t.q, 0) / n;
+  const s2Bar = teams.reduce((a, t) => a + t.s * t.s, 0) / n;
+  const reads = new Map<number, BoardRead>();
+  for (const p of Object.values(league.players)) {
+    if (p.draft.year !== year || (p.tid !== DRAFT_PROSPECT && p.draft.round === 0)) continue;
+    const m = mystery(league, p);
+    const sc = sigma * m;
+    const room = sc * consensusZ(league, p.pid);
+    let ovr = 0;
+    let pot = 0;
+    const scores = teams.map((t) => {
+      const r = readWith(p, (1 - t.q) * room + m * t.s * fixedNormal(`${league.id}:read:${t.tid}:${p.pid}`), 0);
+      ovr += r.ovr / n;
+      pot += r.pot / n;
+      return r.score;
+    });
+    const score = scores.reduce((a, x) => a + x, 0) / n;
+    const spread = Math.sqrt(scores.reduce((a, x) => a + (x - score) ** 2, 0) / n);
+    reads.set(p.pid, { ovr, pot, score, sd: Math.hypot((1 - qBar) * sc, m * Math.sqrt(s2Bar / n)), spread });
+  }
+  const all = [...reads.values()];
+  const k = Math.max(1, all.length);
+  const mu = all.reduce((a, r) => a + r.score, 0) / k;
+  const spread = all.reduce((a, r) => a + (r.score - mu) ** 2, 0) / k;
+  return { reads, prior: { mu, tau2: Math.max(4, spread - all.reduce((a, r) => a + (SCORE_SHARE * r.sd) ** 2, 0) / k) } };
+}
+
+/** Gauss-Hermite points for an expectation over a standard normal: [z, weight]. */
+const NODES: [number, number][] = [
+  [-2.856970014, 0.011257411],
+  [-1.35562618, 0.222075922],
+  [0, 0.533333333],
+  [1.35562618, 0.222075922],
+  [2.856970014, 0.011257411],
+];
+
+/**
+ * What the league can expect a prospect to turn out, from its read of him (`r`, see leagueBoard):
+ * draft night shows his ratings, so a team pricing a pick before it goes by the truth the read
+ * implies. A read is the truth plus an error, so the one that stands out from its class most likely
+ * ran high, the more so the harder he is to read (see mystery): it shrinks toward the class
+ * (`prior`), with the doubt left over. Returns him at a few points of that, with their weights (they
+ * sum to 1). Priced at the room's read instead, the top of every class went at its reads (an 88
+ * shown on a 75): the first picks on the clock at twice the player each became.
+ */
+export function revealOutlook(p: Player, r: Read, prior: ClassPrior): [Player, number][] {
+  const k = SCORE_SHARE * r.sd * r.sd;
+  const d = prior.tau2 + SCORE_SHARE * k;
+  // the read's error given the read: its middle, and how far either way it may still be
+  const mid = (k * (r.score - prior.mu)) / d;
+  const sd = r.sd * Math.sqrt(prior.tau2 / d);
+  return NODES.map(([z, w]) => {
+    const err = mid + sd * z;
+    const ovr = r.ovr - OVR_SHARE * err;
+    return [{ ...p, ovr, pot: Math.max(ovr, r.pot - POT_SHARE * err) }, w];
+  });
 }
 
 // ---------------------------------------------------------------- the user's scouts

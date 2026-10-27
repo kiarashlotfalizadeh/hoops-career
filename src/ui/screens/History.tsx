@@ -1,19 +1,20 @@
 // League → History (/league/history): the seasons and their champions (the user's titles marked),
 // each a page of its own (?season=: its champion, its stories as the league's memory kept them, its
-// winners, his season), each franchise's history (?tid=, his seasons with it marked), the record
-// book, the Hall of Fame and the coaches (his row marked). A season's winners in full are on the
-// Awards tab; this is the league's memory.
+// playoff bracket, its standings, its scoring, rebounding and assist leaders, its winners, his
+// season), each franchise's history (?tid=, his seasons with it marked), the record book, the Hall
+// of Fame and the coaches (his row marked). A season's winners in full are on the Awards tab; this
+// is the league's memory.
 import { Fragment, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, ChevronRight, Crown } from 'lucide-react';
-import type { League, Player } from '../../core/types';
+import type { League, Player, PlayoffSeries } from '../../core/types';
 import { RETIRED } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Ovr, Section } from '../components/ui';
 import { ViewChips } from '../league/Views';
-import { AccoladeChips, Poster, TitleSlab, accoladeScore, careerTotals, shortName, useQueryParam, useSetParams } from '../league/shared';
+import { AccoladeChips, Poster, TitleSlab, accoladeScore, careerTotals, confName, confOrder, shortName, useQueryParam, useSetParams } from '../league/shared';
 import { RecordBook } from '../league/RecordBook';
 import { CoachesView } from '../league/Coaches';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
@@ -24,7 +25,9 @@ import { chronicleOf } from '../../core/league/media/chronicle';
 import { franchiseTitles } from '../../core/league/media/past';
 import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { endText } from '../../core/league/legacyReview';
-import { fmtDate } from '../../core/league/helpers';
+import { fmtDate, seasonTotals } from '../../core/league/helpers';
+import { qualifies } from '../../core/league/records';
+import { Bracket, FinalsCard, seriesSlots } from '../league/PlayoffsTab';
 import { keepFigures } from '../../core/format';
 import { KIND_ONE } from '../league/news/kinds';
 import '../league/news/news.css';
@@ -138,7 +141,13 @@ function Seasons({ league }: { league: League }) {
                 <span className="lg-yr-t">
                   <span className="nm ellipsis">
                     {champ ? champ.name : a.season === league.season ? 'In progress' : 'No champion'}
-                    {champ && a.runnerUp !== undefined && <span className="dim"> def. {league.teams[a.runnerUp].abbrev}</span>}
+                    {champ && a.runnerUp !== undefined && (
+                      <span className="dim">
+                        {' '}
+                        def. {league.teams[a.runnerUp].abbrev}
+                        {finalsScore(league, a.season, champ.tid) && ` ${finalsScore(league, a.season, champ.tid)}`}
+                      </span>
+                    )}
                     {mine.has(a.season) && <span className="tag lg-gold lg-yr-you">Your title</span>}
                   </span>
                   {/* each award whole, wrapping between them rather than cutting a name short */}
@@ -258,6 +267,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
         ? franchiseTitles(league, a.champion, season + 1).n
         : league.awards.filter((x) => x.champion === a.champion && x.season <= season).length;
   const stories = c?.stories ?? [];
+  const score = a.champion !== undefined ? finalsScore(league, season, a.champion) : undefined;
   return (
     <>
       <div className="lg-season-top">
@@ -273,7 +283,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
           fig={titles > 1 ? titles : undefined}
           figLabel={titles > 1 ? (league.past ? 'titles' : 'titles in this league') : undefined}
         >
-          {a.runnerUp !== undefined ? `def. ${league.teams[a.runnerUp].name}` : ''}
+          {a.runnerUp !== undefined ? keepFigures(`def. ${league.teams[a.runnerUp].name}${score ? ` ${score}` : ''}`) : ''}
         </TitleSlab>
       ) : (
         <Poster over={seasonLabel(season)} head="No champion" />
@@ -283,7 +293,8 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
           <div className="card lg-chron">
             <div className="lg-fp-hls">
               {stories.map((x) => {
-                const tid = x.tids.find((t) => t === league.userTid) ?? x.tids[0];
+                // (the story's own team: its first, whoever the user is)
+                const tid = x.tids[0];
                 const body = (
                   <>
                     <span className="lg-fp-hl-head">{x.head}</span>
@@ -309,6 +320,9 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
           <div className="card empty">The league kept no stories from this season: its memory starts with the seasons played in this version.</div>
         )}
       </Section>
+      <SeasonPlayoffs league={league} season={season} />
+      <SeasonStandings league={league} season={season} />
+      <SeasonLeaders league={league} season={season} />
       {winners.length > 0 && (
         <Section
           title="Winners"
@@ -345,6 +359,168 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
         </Section>
       )}
     </>
+  );
+}
+
+/** The champion's Finals in games ("4-2"), from the chronicle's series (the playoffs while they're on). */
+function finalsScore(league: League, season: number, champ: number): string | undefined {
+  const f = seasonSeries(league, season).find((s) => s.round === 4);
+  if (!f) return undefined;
+  const [w, l] = f.high === champ ? [f.highWins, f.lowWins] : [f.lowWins, f.highWins];
+  return `${w}-${l}`;
+}
+
+/**
+ * A season's playoff series as the bracket draws them: the playoffs while they're on, then the
+ * chronicle's (kept in the order they were drawn: each round's East, then West, the Finals last), each
+ * team with its seed that season.
+ */
+function seasonSeries(league: League, season: number): PlayoffSeries[] {
+  if (season === league.season && league.playoffs.length) return league.playoffs;
+  const seedOf = (tid: number) => league.teams[tid]?.seasons.find((x) => x.season === season)?.seed ?? 0;
+  const at = new Map<string, number>();
+  return (chronicleOf(league, season)?.series ?? []).map(([round, high, low, highWins, lowWins]) => {
+    const conf = round === 4 ? 'F' : (league.teams[high]?.conf ?? 'E');
+    const key = `${conf}${round}`;
+    const i = at.get(key) ?? 0;
+    at.set(key, i + 1);
+    const done = Math.max(highWins, lowWins) >= 4;
+    return {
+      id: `${key}-${i}`,
+      round,
+      conf,
+      high,
+      low,
+      highSeed: seedOf(high),
+      lowSeed: seedOf(low),
+      highWins,
+      lowWins,
+      ...(done ? { winner: highWins > lowWins ? high : low } : {}),
+    };
+  });
+}
+
+/** A past season's bracket: both conferences (one at a time on a phone, as on Playoffs) and the Finals. */
+function SeasonPlayoffs({ league, season }: { league: League; season: number }) {
+  const userConf = league.teams[league.userTid].conf;
+  const [conf, setConf] = useQueryParam<'E' | 'W'>('conf', userConf, ['E', 'W']);
+  const series = useLeagueMemo(() => seasonSeries(league, season), [league, season]);
+  if (!series.some((s) => s.round === 1)) return null;
+  return (
+    <>
+      <div className="bk-only-narrow">
+        <ViewChips
+          label="Conference"
+          value={conf}
+          onChange={setConf}
+          options={[
+            { id: 'E', label: 'East' },
+            { id: 'W', label: 'West' },
+          ]}
+        />
+      </div>
+      <div className="bk-panel-wrap">
+        {confOrder(conf).map((c) => (
+          <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
+            <Section title={`${confName(c)} playoffs`}>
+              <div className="card bk-card">
+                <Bracket league={league} slots={seriesSlots(series, c)} />
+              </div>
+            </Section>
+          </div>
+        ))}
+      </div>
+      <FinalsCard league={league} finals={series.find((s) => s.round === 4)} />
+    </>
+  );
+}
+
+/** A season's standings from each team's stored season, both conferences side by side (best record first, the playoff teams marked). */
+function SeasonStandings({ league, season }: { league: League; season: number }) {
+  const rows = useLeagueMemo(
+    () =>
+      league.teams
+        .map((t) => ({ t, s: t.seasons.find((x) => x.season === season) }))
+        .filter((r): r is { t: (typeof league.teams)[number]; s: NonNullable<typeof r.s> } => !!r.s && r.s.won + r.s.lost > 0)
+        .sort((a, b) => b.s.won / (b.s.won + b.s.lost) - a.s.won / (a.s.won + a.s.lost) || (a.s.seed ?? 99) - (b.s.seed ?? 99)),
+    [league, season],
+  );
+  if (!rows.length) return null;
+  return (
+    <Section title="Standings">
+      <div className="card lg-st2">
+        {(['E', 'W'] as const).map((c) => (
+          <div key={c} className="lg-st2-col" role="table" aria-label={`${confName(c)}ern Conference standings`}>
+            <div className="lg-st2-h" role="row">
+              <span role="columnheader">{confName(c)}</span>
+              <span role="columnheader">W-L</span>
+            </div>
+            {rows
+              .filter((r) => r.t.conf === c)
+              .map((r, i) => (
+                <div key={r.t.tid} role="row" className={`lg-st2-row ${r.s.playoffRound >= 1 ? '' : 'out'} ${r.t.tid === league.userTid ? 'me' : ''}`}>
+                  <span role="cell" className="rk">
+                    {i + 1}
+                  </span>
+                  <span role="cell" className="nm">
+                    <TeamLogo tid={r.t.tid} size={16} decorative />
+                    {r.t.abbrev}
+                  </span>
+                  <span role="cell" className="wl num">
+                    {r.s.won}-{r.s.lost}
+                  </span>
+                </div>
+              ))}
+          </div>
+        ))}
+      </div>
+      <div className="lg-note">Teams that missed the playoffs are dimmed.</div>
+    </Section>
+  );
+}
+
+const LEAD_STATS = [
+  ['pts', 'Points'],
+  ['reb', 'Rebounds'],
+  ['ast', 'Assists'],
+] as const;
+
+/** A season's per-game leaders in points, rebounds and assists (the regular season; qualified as the league's leaders are, see records.ts qualifies). */
+function SeasonLeaders({ league, season }: { league: League; season: number }) {
+  const leaders = useLeagueMemo(() => {
+    const games = (tid: number) => {
+      const s = league.teams[tid]?.seasons.find((x) => x.season === season);
+      return s ? s.won + s.lost : 82;
+    };
+    const rows: { p: Player; tid: number; pts: number; reb: number; ast: number }[] = [];
+    for (const p of Object.values(league.players)) {
+      const lines = p.stats.filter((s) => !s.real && !s.playoffs && s.season === season && s.gp > 0);
+      if (!lines.length) continue;
+      const s = lines.length === 1 ? lines[0] : seasonTotals(p, season, false);
+      if (!s || !qualifies(s, 'ppg', Math.max(...lines.map((x) => games(x.tid))), false)) continue;
+      rows.push({ p, tid: lines[lines.length - 1].tid, pts: s.pts / s.gp, reb: (s.orb + s.drb) / s.gp, ast: s.ast / s.gp });
+    }
+    return LEAD_STATS.map(([k, label]) => ({ k, label, top: [...rows].sort((a, b) => b[k] - a[k])[0] })).filter((x) => !!x.top);
+  }, [league, season]);
+  if (!leaders.length) return null;
+  return (
+    <Section title="Leaders" right={<span className="lg-sec-meta">Per game</span>}>
+      <div className="card flush list">
+        {leaders.map(({ k, label, top }) => (
+          <Link key={k} to={`/player/${top.p.pid}`} className="lg-rec">
+            <span className="k">{label}</span>
+            <span className="who">
+              <span className="nm">
+                <TeamLogo tid={top.tid} size={16} decorative />
+                <span className="ellipsis">{shortName(top.p)}</span>
+              </span>
+            </span>
+            <span className="v num">{top[k].toFixed(1)}</span>
+            <ChevronRight size={15} className="dim" aria-hidden="true" />
+          </Link>
+        ))}
+      </div>
+    </Section>
   );
 }
 

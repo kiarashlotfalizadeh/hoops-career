@@ -29,7 +29,7 @@ await page.getByText('Start career').click();
 await page.waitForTimeout(2000);
 await page.goto(`${base}/#/tactics`);
 await shot('10-tactics', true);
-await page.goto(`${base}/#/tactics?tab=defense`);
+await page.goto(`${base}/#/team/tactics/instructions?phase=outPoss`);
 await shot('11-tactics-def', true);
 await page.goto(`${base}/#/rotation`);
 await shot('12-rotation', true);

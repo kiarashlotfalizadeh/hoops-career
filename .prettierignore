@@ -9,5 +9,6 @@ ios
 public
 src/data/seed.json
 src/data/history.json
+src/data/records.json
 package-lock.json
 .claude

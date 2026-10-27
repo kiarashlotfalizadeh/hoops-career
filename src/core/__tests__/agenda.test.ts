@@ -18,8 +18,9 @@ import { legacyOf } from '../league/legacy';
 import { ownerEvaluation } from '../league/owner';
 import {
   CONCEDE_COST,
-  FLOOR_EASE,
+  EASE_EDGE,
   YOUTH_TOP,
+  floorCap,
   currentGoals,
   floorDanger,
   goalsWhy,
@@ -526,7 +527,16 @@ describe('the agenda', () => {
       const floor = og.floor!;
       const total = l.ownerMood.total;
       expect(resolveAgenda(l, both.find((c) => c.label === "Tell him it's a development year")!.action).ok).toBe(true);
-      expect(currentGoals(l)!.floor).toBeCloseTo(floor - FLOOR_EASE, 3);
+      // the floor stays, its cap lifted by what telling him cost and EASE_EDGE as the season counts: a
+      // season that ends well under it anyway stands EASE_EDGE ahead of chasing, one that clears it
+      // CONCEDE_COST behind (dropping the floor 8 wins had stood a rebuilder's 12-70 at −27 to −48)
+      expect(currentGoals(l)!.floor).toBe(floor);
+      {
+        const eased = currentGoals(l)!;
+        const n = Math.floor(floor * eased.games) - 8;
+        expect((floorCap(eased, n, eased.games) - floorCap({ floor }, n, eased.games)) * seasonWeight(l) - CONCEDE_COST).toBeCloseTo(EASE_EDGE, 2);
+        expect(floorCap(eased, Math.ceil(floor * eased.games), eased.games)).toBe(1);
+      }
       expect(currentGoals(l)!.goals.some((g) => g.kind === 'youth')).toBe(true);
       expect(l.ownerMood.total).toBeCloseTo(total - CONCEDE_COST, 2);
       // the part of the win goal it moved to the young players keeps the win goal's miss: the kids'
@@ -1095,13 +1105,19 @@ describe('the agenda', () => {
       if (m?.kind !== 'change') throw new Error('not a change');
       storeWorth(l, m.key, changeWorth(l, m, { id: 'x', pts, raw: pts, se: 0.4 }));
     };
-    /** The Nuggets in their first season in charge (their schedule has billed nights from week 5 on, before a game is played). */
-    const nuggets = () => {
+    /** The Nuggets in their first season in charge (their schedule has billed nights from week 5 on, before a game is played); `short`: their system barely known. */
+    const nuggets = (short = false) => {
       const l = camp(7);
       while (standardRoster(l, 7).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, 7))[0], { news: false });
       startRegularSeason(l);
       setOwnerGoals(l, true);
       l.tenureStart = l.season;
+      if (short)
+        l.teams[7].fam = freshFamiliarity(
+          l.teams[7],
+          Object.values(l.players).filter((p) => p.tid === 7),
+          55,
+        );
       return l;
     };
     /** The first week from `from` on with a billed game: the league on its first morning, the week planned. */
@@ -1116,24 +1132,37 @@ describe('the agenda', () => {
       throw new Error('no billed week');
     };
 
-    // a billed night: the staff's counter measured before anything opens; a gain goes in without a card (its one count), and is said
+    // a billed night: its counter is measured only in a week of drills, where it can make the practice a choice (on its own a one-night
+    // pick worth a tenth of a win a season: the sim's time isn't spent on it); measured before anything opens, a gain goes in without a card
     {
-      const l = nuggets();
+      const l = nuggets(true);
       const wc = billedWeek(l);
       const wg = wc.games![0];
+      // (the same week with the system known: nothing measured for the night, nothing put in)
+      const known = nuggets();
+      known.day = l.day;
+      callsDaily(known);
+      expect(known.weekCall!.games ?? []).toEqual([]);
+      expect(staffNeeds(known).some((m) => m.kind === 'counters')).toBe(false);
+      staffDecide(known);
+      expect(known.gamePlans?.[wg.opp]?.items ?? []).toEqual([]);
       const need = staffNeeds(l);
       expect(need[0]).toMatchObject({ kind: 'counters', key: weekWorthId(wc, 'game', wg.gid), max: 1 });
       expect(card(l)).toBeUndefined();
       expect(openCallIds(l).some(isWeekId)).toBe(false);
       const none = structuredClone(l);
       const best = measured(l, need[0], 1.4);
+      // (prep for the night measured as the only gain: no choice, it goes in with the counter)
+      const [near, far] = staffNeeds(l);
+      changed(l, near, 0.9);
+      changed(l, far, 0.1);
       staffDecide(l);
       expect(l.gamePlans![wg.opp].items.map((x) => x.id)).toEqual([best.id]);
       expect(card(l)).toBeUndefined();
       expect(openCallIds(l).some(isWeekId)).toBe(false);
-      expect(staffPicksSince(l, l.season, l.day - 1)).toEqual([
+      expect(staffPicksSince(l, l.season, l.day - 1)).toContainEqual(
         expect.stringMatching(new RegExp(`the staff put in ${esc(best.label)}, \\+1\\.4 pts \\(≈ \\+\\d+% to win\\) against them \\(measured\\)\\.$`)),
-      ]);
+      );
       // no gain: nothing changes, no card
       measured(none, staffNeeds(none)[0], 0.2);
       staffDecide(none);
@@ -1144,14 +1173,9 @@ describe('the agenda', () => {
 
     // the system barely known: drills on their own go in without a card; against prep for a billed night, each side measured on its own game
     {
-      const l = nuggets();
+      const l = nuggets(true);
       const me = l.userTid;
       const team = l.teams[me];
-      team.fam = freshFamiliarity(
-        team,
-        Object.values(l.players).filter((p) => p.tid === me),
-        55,
-      );
       const wc = billedWeek(l);
       expect(wc.focus).toMatchObject({ to: 'system', from: 'balanced', why: 'drills' });
       const abbrev = l.teams[wc.games![0].opp].abbrev;
@@ -1257,6 +1281,49 @@ describe('the agenda', () => {
       l.weekCall = undefined;
       callsDaily(l);
       expect((l.weekCall as League['weekCall'])!.youth).toBeUndefined();
+    }
+
+    // after the deadline with the postseason out of reach: the young players' minutes against the draft (his own first as the forecast
+    // reads the standings), wins that don't move the pick buying nothing; once the lean's games are played it's measured again, and said
+    {
+      const l = camp(29);
+      startRegularSeason(l);
+      setOwnerGoals(l, true);
+      const og = currentGoals(l)!;
+      og.goals = og.goals.filter((g) => g.kind !== 'youth');
+      l.day = (Math.floor(l.tradeDeadlineDay / 7) + 1) * 7;
+      l.oddsTrail = { season: l.season, tid: l.userTid, pts: [[l.day - 1, 20, 0]] };
+      callsDaily(l);
+      expect(l.weekCall!.youth).toMatchObject({ why: 'draft' });
+      const answer = (x: League, pts: number) => {
+        for (const m of staffNeeds(x)) changed(x, m, pts);
+        staffDecide(x);
+      };
+      const flat = structuredClone(l);
+      answer(flat, -0.6);
+      expect(card(flat)).toBeUndefined();
+      expect(flat.youthLean).toMatchObject({ how: 'kept', level: 0 });
+      expect(staffPicksSince(flat, flat.season, flat.day - 1).at(-1)).toMatch(
+        /^The young players: the rotation kept\. Their minutes measured −0\.6 pts .*which leave your pick where it is/,
+      );
+      answer(l, -6);
+      const c = card(l)!;
+      expect(c.line).toMatch(
+        /^It costs 6\.0 pts a game .* Your own first, as the forecast reads the standings: a top-four pick \d+%, not \d+%; about No\. \d+, not No\. \d+\. The staff leans /,
+      );
+      expect(c.to).toBe('/office/draft');
+      expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Play the young players')!.action).ok).toBe(true);
+      const y = l.youthLean!;
+      expect(y).toMatchObject({ how: 'staff', why: 'draft', pts: -6 });
+      expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
+      for (const g of l.schedule) if (g.type === 'regular' && g.day >= y.from && g.day <= y.until && (g.home === l.userTid || g.away === l.userTid)) g.played = true;
+      const again = staffNeeds(l).find((m) => m.key.endsWith('|again'))!;
+      expect(again.kind === 'change' && again.base?.teams?.[l.userTid].rotation).toBeTruthy();
+      answer(l, -1.1);
+      expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
+        /^Your call on \w+ \d+, the young players' minutes for the draft: measured again on its last game \((vs|@) [A-Z]{3}\), −1\.1 pts \(≈ −\d+% to win\); −6\.0 pts when it went in\. They played 0 minutes in its \d+ games, where the rotation without it planned about [\d,]+\.$/,
+      );
+      expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
     }
 
     // a losing skid, a winning team's too: the first step's counter is the staff's, measured, the slide said; a bad team losing
@@ -1366,7 +1433,7 @@ describe('the agenda', () => {
 
     // a week's sim and a month's make the same picks (measured in the sim, on its budget), and neither stops for a week with one answer
     {
-      const l = nuggets();
+      const l = nuggets(true);
       l.settings.stopOnNews = true;
       const wc = billedWeek(l);
       const wg = wc.games![0];

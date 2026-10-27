@@ -147,6 +147,12 @@ export interface CreateOpts {
   settings: Settings;
   seed?: SeedData | null;
   rngSeed?: number;
+  /**
+   * The league's id (made from the clock, or from `rngSeed` and the name, otherwise): New League's
+   * team step previews the league it builds with the id and seed it then creates with, so the owners
+   * it shows (see ownerPersonality) and the rosters are the ones the user gets.
+   */
+  id?: string;
   /** Cut AI rosters to 15 at creation (default). The seed builder keeps everyone to calibrate them. */
   preseasonCuts?: boolean;
 }
@@ -293,10 +299,12 @@ export function createLeague(opts: CreateOpts): League {
   const rng = new Rng(rngSeed);
   const season = START_SEASON;
   const teams = FRANCHISES.map((_, tid) => makeTeam(tid, season, rng));
+  // a league made from a given seed (tests and scripts) gets an id from it, so the streams drawn from
+  // the id (opponents' game plans, AI extensions, the carousel...) play out the same on every run
+  // (drawn with a given id too, so it doesn't move the rest of the stream)
+  const madeId = `lg_${opts.rngSeed !== undefined ? `s${rngSeed.toString(36)}${(hashString(opts.name) >>> 0).toString(36)}` : Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`;
   const league: League = {
-    // a league made from a given seed (tests and scripts) gets an id from it, so the streams drawn from
-    // the id (opponents' game plans, AI extensions, the carousel...) play out the same on every run
-    id: `lg_${opts.rngSeed !== undefined ? `s${rngSeed.toString(36)}${(hashString(opts.name) >>> 0).toString(36)}` : Date.now().toString(36)}_${Math.floor(rng.next() * 1e6).toString(36)}`,
+    id: opts.id ?? madeId,
     name: opts.name,
     version: SAVE_VERSION,
     created: Date.now(),

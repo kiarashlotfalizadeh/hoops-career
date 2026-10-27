@@ -173,7 +173,7 @@ export function InTransitionFine({ t, fam, players }: Props & { players: Player[
     <>
       <Lv label="Crash the offensive glass" k="crashBoards" level="crashBoards" t={t} fam={fam} mark={pv.crashBoards} set={(tt, x) => void (tt.offense.crashBoards = x)} />
       <Lv label="Transition defense" k="getBack" level="getBack" t={t} fam={fam} mark={dv.getBack} set={(tt, x) => void (tt.defense.getBack = x)} />
-      <Link to="/team/tactics?tab=tactic" className="tx-hunt">
+      <Link to="/team/tactics" className="tx-hunt">
         <span className="grow">
           {crash.length || back.length ? (
             <>

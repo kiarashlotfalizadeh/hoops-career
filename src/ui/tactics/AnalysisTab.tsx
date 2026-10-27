@@ -1,10 +1,10 @@
-// Tactics → Analysis: one section with three views behind a switch, not three walls stacked: the
+// Tactics → Analysis: one section with three views behind its heading (the switch), not three walls stacked: the
 // system report (strengths and weaknesses, then every grade), familiarity (by phase, the practice
 // focus, the players) and the season (what your tactics won and gave up, how teams see you).
 import type { Player } from '../../core/types';
 import type { SystemReport } from '../../core/analysis/system';
 import type { SystemFamiliarity } from '../../core/league/practice';
-import { Segmented } from '../components/ui';
+import { HeadSwitch } from './HeadSwitch';
 import { ReportTab } from './ReportTab';
 import { FamiliarityTab } from './FamiliarityTab';
 import { InsightsTab } from './InsightsTab';
@@ -29,7 +29,8 @@ export function AnalysisTab({
 }) {
   return (
     <>
-      <Segmented
+      <h3 className="sr-only">Analysis</h3>
+      <HeadSwitch
         value={view}
         onChange={setView}
         label="Analysis"

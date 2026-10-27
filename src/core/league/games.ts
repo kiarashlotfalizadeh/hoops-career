@@ -218,13 +218,23 @@ export function youthLean(age: number): number {
  * 28-and-ups and its two best players 24 or older every third (load management, a sore knee), but
  * never so many that fewer than YOUTH_DRESSED healthy standard players dress: a rebuilder with eight
  * hurt had sat its three best healthy players too and sent out nine, three of them two-ways, who
- * lost by 77 (and another such night by 86).
+ * lost by 77 (and another such night by 86). Nor more than YOUTH_TOP_REST of its five best healthy
+ * players on one night (the league's participation rules): a rebuilder with three 87-90 veterans
+ * sat all of them on some nights, scored 53 and lost by 78.
  */
 export function restVeterans(league: League, players: Player[], day: number, rest: number[]) {
   const best = players
     .filter((p) => playerAge(p, league.season) >= 24 && !p.contract.twoWay)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
     .slice(0, 2);
+  const top = new Set(
+    players
+      .filter((p) => !p.contract.twoWay && !p.injury)
+      .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+      .slice(0, 5)
+      .map((p) => p.pid),
+  );
+  let topOut = rest.filter((pid) => top.has(pid)).length;
   let dressed = players.filter((p) => !p.contract.twoWay && !p.injury && !rest.includes(p.pid)).length;
   for (const p of players) {
     const age = playerAge(p, league.season);
@@ -232,10 +242,15 @@ export function restVeterans(league: League, players: Player[], day: number, res
     if ((p.pid + day) % (age >= 30 ? 2 : 3) !== 0) continue;
     const counts = !p.contract.twoWay && !p.injury;
     if (counts && dressed <= YOUTH_DRESSED) continue;
+    if (top.has(p.pid) && topOut >= YOUTH_TOP_REST) continue;
     rest.push(p.pid);
     if (counts) dressed--;
+    if (top.has(p.pid)) topOut++;
   }
 }
+
+/** The most of a youth movement's five best healthy players its nights off sit at once (see restVeterans). */
+const YOUTH_TOP_REST = 2;
 
 /** The fewest healthy standard players a youth movement's nights off leave dressed (see restVeterans). */
 const YOUTH_DRESSED = 10;

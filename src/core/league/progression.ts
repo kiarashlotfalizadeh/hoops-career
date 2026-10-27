@@ -206,6 +206,50 @@ function lateVolume(p: Player, age: number) {
 }
 
 /**
+ * A season's three-point volume past THREE_SHARE of his team's shots while he was on the floor
+ * brings his three-point tendency down for the next, by (THREE_SHARE / share)^THREE_EXP (about what
+ * takes the share back to it). In the seed's 1,354 real seasons of 1,500+ minutes since 2004 only
+ * Harden (0.201) and Curry (0.200) passed 0.19, the 99th percentile is 0.170 and the specialists top
+ * out at 0.177 (Clarkson, Robinson, Hield). The sim's specialists went past it as the years went
+ * on: a low-usage shooter's usage settles toward his level's (followTendencies) while his tendency
+ * for threes, fitted for his old role, stays, and a young shooter's volume grows with his skill on a
+ * tendency fitted for a worse one (Hauser at 0.20 by 33, Dëmin 12.3 a game by 24): role players led
+ * the league in threes on 5.2-5.9 a game.
+ */
+const THREE_SHARE = 0.18;
+const THREE_EXP = 1.5;
+function threeVolume(p: Player, statsSeason: number) {
+  const st = seasonTotals(p, statsSeason);
+  if (!st || !p.tend || st.teamFga < 400) return;
+  const share = st.tpa / st.teamFga;
+  if (share > THREE_SHARE) p.tend.three = Math.round(Math.max(0.02, p.tend.three * Math.pow(THREE_SHARE / share, THREE_EXP)) * 1000) / 1000;
+}
+
+/**
+ * A season using more than USE_SHARE of his team's possessions while he was on the floor (shots, a
+ * share of free throws, turnovers) brings his usage tendency down for the next, by (USE_SHARE /
+ * share)^USE_EXP (his share answers his tendency well under one for one, see starUsage.ts). In the
+ * seed's 1,354 real seasons of 1,500+ minutes since 2004 the 99th percentile is 0.36 and the 99.5th
+ * 0.374 (Dončić 0.377 in 2025-26; only Westbrook's 0.408 and Harden's 0.406 past 0.39), and the top
+ * scorers' seasons ran to 36.1 (Harden) and otherwise 34.3 at most. The sim's stars climbed past it as
+ * their real teammates gave way to generated ones (whose usage is their level's, while theirs was
+ * fitted against the real ones): Edwards 0.32 at 25 to 0.39 from 28 and Mitchell 0.33 to 0.42 at 32,
+ * with seasons of 35-39 points a game (over 64 seasons, eight leagues of eight: two leagues with 4
+ * and 2 seasons of a 35-point scorer; with this at 0.37 and squared, 3 and 4, Edwards at 35-37 on
+ * 36-37%; at 0.35 and cubed, one league with 2 and none elsewhere). The first season, played on the
+ * real lines, is untouched.
+ */
+const USE_SHARE = 0.35;
+const USE_EXP = 3;
+function usageVolume(p: Player, statsSeason: number) {
+  const st = seasonTotals(p, statsSeason);
+  const team = st ? st.teamFga + 0.44 * st.teamFta + st.teamTov : 0;
+  if (!st || !p.tend || team < 1000) return;
+  const share = (st.fga + 0.44 * st.fta + st.tov) / team;
+  if (share > USE_SHARE) p.tend.use = Math.round(Math.max(0.1, p.tend.use * Math.pow(USE_SHARE / share, USE_EXP)) * 1000) / 1000;
+}
+
+/**
  * Share of a year's gain an attribute still takes near the top of the scale: all of it up to
  * CEILING_FROM, then less the closer it is to 100 (a fifth at most from 96 up).
  */
@@ -415,6 +459,8 @@ export function annualProgression(league: League, rng: Rng): { pid: number; delt
     // one, from before this summer's development
     followTendencies(p, p.ratingsHistory[p.ratingsHistory.length - 1]?.ovr ?? before.get(p.pid) ?? p.ovr, rng);
     lateVolume(p, playerAge(p, league.season));
+    threeVolume(p, league.season - 1);
+    usageVolume(p, league.season - 1);
     p.ratingsHistory.push({ season: league.season, ovr: p.ovr, pot: p.pot, r: { ...p.ratings } });
     if (p.ratingsHistory.length > 25) p.ratingsHistory.shift();
     // older snapshots only chart OVR: full ratings on every one grew the save by a few hundred KB a season

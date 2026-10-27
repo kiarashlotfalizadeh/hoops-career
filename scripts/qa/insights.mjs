@@ -35,7 +35,7 @@ async function run(viewport, prefix) {
     await page.waitForTimeout(400);
     if (!(await play(page, 'Quick sim this game'))) await play(page, 'Sim to next game');
   }
-  await page.goto(`${base}/#/tactics?tab=insights`);
+  await page.goto(`${base}/#/team/tactics/analysis?view=season`);
   await shot('insights');
   await page.goto(`${base}/#/rotation`);
   await shot('rotation');

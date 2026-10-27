@@ -651,6 +651,9 @@
   flex-direction: column;
   gap: 8px;
 }
+.lv-skip p {
+  margin: 2px 4px 0;
+}
 .lv-final-go {
   display: grid;
   grid-auto-flow: column;

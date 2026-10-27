@@ -16,9 +16,10 @@
 
 import type { BoxLine, GameResult, GameType, League, Player, PlayerStats, TeamSeason } from '../types';
 import { RETIRED } from '../types';
-import { addInbox, addNews, playerName, seasonTotals } from './helpers';
+import { addInbox, addNews, dateToDay, playerName, seasonTotals } from './helpers';
 import { realCareerOnRecord } from '../analysis/milestones';
 import { seasonLabel } from '../constants';
+import { plural } from '../format';
 
 /** The player stats the book keeps single-game marks for. */
 export const REC_STATS = ['pts', 'reb', 'ast', 'stl', 'blk', 'tpm'] as const;
@@ -80,6 +81,12 @@ export interface RecordShelf {
 export interface RecordBook {
   /** The first season the book covers: the league's first, or, for a save from before the book, the season it was read back in (see backfillRecords). */
   since: number;
+  /**
+   * In a real league, the first season of the NBA's single games the book opened with (1997: every
+   * game since 1996-97, from the game files: see seedRecords). Its lists then reach back that far;
+   * career highs and the "first season" rule still go by `since`.
+   */
+  from?: number;
   league: { reg: RecordShelf; post: RecordShelf };
   /** Each franchise's, by tid. */
   teams: Record<number, { reg: RecordShelf; post: RecordShelf }>;
@@ -281,8 +288,9 @@ export function freezeRecordNames(league: League, p: Player) {
 export function recordNews(league: League, res: GameResult, notes0: RecordNote[]) {
   const book = league.records;
   if (!book) return;
-  // (in the book's first season only a night of BIG_NIGHT points is news: SGA's 67 made none)
-  const notes = res.season <= book.since ? notes0.filter(bigNight) : notes0;
+  seasonMarkNews(league, res);
+  // (in the book's first season only a night of BIG_NIGHT points is news: SGA's 67 made none; a book opened with the NBA's games is past that)
+  const notes = youngBook(book, res.season) ? notes0.filter(bigNight) : notes0;
   if (!notes.length) return;
   const user = league.userTid;
   const ab = (tid: number) => league.teams[tid]?.abbrev ?? '?';
@@ -303,7 +311,8 @@ export function recordNews(league: League, res: GameResult, notes0: RecordNote[]
     const opp = first.tid === res.home.tid ? res.away.tid : res.home.tid;
     // a stat that set or tied the league's record names the number once: a franchise record set with a share of the league's goes with it
     const shown = list.filter((n) => n.scope === 'league' || !list.some((m) => m.scope === 'league' && m.stat === n.stat));
-    const whose = (n: RecordNote) => `${n.scope === 'league' ? 'league' : (league.teams[n.tid]?.name ?? 'franchise')} ${post(n)}record`;
+    // (how far back it reaches: "a Bulls record since 1996-97", in a league that has the NBA's past)
+    const whose = (n: RecordNote) => `${n.scope === 'league' ? 'league' : (league.teams[n.tid]?.name ?? 'franchise')} ${post(n)}record${recordSpan(league, n)}`;
     const parts = shown.map((n) => {
       const also = n.kind === 'tie' && list.find((m) => m.scope === 'team' && m.stat === n.stat && m.kind === 'record');
       return `${recordWhat(n)} (${n.kind === 'tie' ? `tying the ${whose(n)}${also ? `, a ${whose(also)}` : ''}` : `a ${whose(n)}`})`;
@@ -321,10 +330,20 @@ export function recordNews(league: League, res: GameResult, notes0: RecordNote[]
     if (lg && !userGame && remarkable(lg)) {
       const what = recordWhat({ stat: lg.stat, team: lg.team, v: lg.v });
       const oppName = league.teams[opp]?.name ?? ab(opp);
+      const span = recordSpan(league, lg);
+      const teamName = league.teams[first.tid]?.name ?? who;
+      // (a real league's record short of the NBA's older one is the most since 1996-97, and says whose stands)
+      const head = span
+        ? lg.team
+          ? `The ${teamName} put up ${what}, the most${span}`
+          : `${who} scores ${what}, the most${span}`
+        : lg.team
+          ? `The ${teamName} set a league record: ${what}`
+          : `${who} sets a league record: ${what}`;
       addNews(league, {
         kind: 'record',
-        head: lg.team ? `The ${league.teams[first.tid]?.name ?? who} set a league record: ${what}` : `${who} sets a league record: ${what}`,
-        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game ${res.season <= book.since ? 'in this league' : `since ${seasonLabel(book.since)}`}.`,
+        head,
+        text: `${lg.team ? `Against the ${oppName}` : `For the ${league.teams[first.tid]?.name ?? ab(first.tid)} against the ${oppName}`}: the most in a game ${recordReach(league, lg, res.season)}${pastMarkWords(league, lg)}.`,
         tids: [first.tid, opp],
         pids: first.pid !== undefined ? [first.pid] : [],
         weight: 3,
@@ -340,6 +359,118 @@ export function recordNews(league: League, res: GameResult, notes0: RecordNote[]
         link: '/league/history?view=records',
       });
   }
+}
+
+/**
+ * How far back a record reaches, said after "a league record" or "a Bulls record": nothing in a
+ * fictional league (its book is its whole history) or for a real league's record past the NBA's
+ * all-time mark; else " since 1996-97" (" since 2026-27" in a book from before the NBA's games were in
+ * it): every franchise record, and a league record short of an older mark (82 points would be the
+ * most since 1996-97, not Wilt Chamberlain's 100).
+ */
+export function recordSpan(league: League, n: Pick<RecordNote, 'scope' | 'book' | 'stat' | 'team' | 'v'>): string {
+  const book = league.records;
+  if (!book || !league.past) return '';
+  const since = ` since ${seasonLabel(bookFrom(book))}`;
+  if (n.scope === 'team' || book.from === undefined) return since;
+  const past = pastMark(n.book, n.stat, n.team);
+  return past && n.v < past.v ? since : '';
+}
+
+/**
+ * Where a league record stands, said after "the most in a game": "in league history" (a real
+ * league's past the NBA's all-time mark), "since 1996-97" (short of it), "in this league" (a young
+ * book's), or since the book began (a fictional league's, or a book from before the NBA's games).
+ */
+export function recordReach(league: League, n: Pick<RecordNote, 'book' | 'stat' | 'team' | 'v'>, season = league.season): string {
+  const book = league.records;
+  if (!book || youngBook(book, season)) return 'in this league';
+  const span = recordSpan(league, { ...n, scope: 'league' });
+  return span ? span.trim() : book.from !== undefined ? 'in league history' : `since ${seasonLabel(book.since)}`;
+}
+
+/** ", past Kobe Bryant's 81 in 2005-06" (the mark it beat), and when an older record still stands, whose: a league record's front page. */
+function pastMarkWords(league: League, n: RecordNote): string {
+  const book = league.records!;
+  const kind = n.book;
+  const label = (season: number) => seasonLabel(season);
+  let out = '';
+  if (n.team) {
+    const prev = (book.league[kind].teams[n.stat as TeamRecStat] ?? []).map(teamMark).find((m) => m.v < n.v);
+    if (prev) out += `, past ${prev.v} by the ${league.teams[prev.tid]?.name ?? '?'} in ${label(prev.season)}`;
+  } else {
+    const prev = (book.league[kind].players[n.stat as RecStat] ?? []).map((r) => gameMark(league, r)).find((m) => m.v < n.v);
+    if (prev) out += `, past ${prev.name}'s ${prev.v} in ${label(prev.season)}`;
+  }
+  const past = book.from !== undefined ? pastMark(kind, n.stat, n.team) : undefined;
+  if (past && n.v < past.v) out += `. The record is still ${past.who ? `${past.who}'s ${past.v} for the ${past.as}` : `${past.v}, by the ${past.as},`} in ${label(past.season)}`;
+  return out;
+}
+
+/**
+ * A season's marks as they're reached, for any team (the user's too: his front page is his moment):
+ * the wins that equal or pass the most in a regular season (a real league's past the 73-9 Warriors and
+ * the 72-10 Bulls: 72 is level with the Bulls, 73 with the Warriors, 74 the most ever; this league's own
+ * finished seasons count too), and a winning streak that equals or passes the Lakers' 33 (a real
+ * league's). Each is reached once in a season: a win adds one.
+ */
+function seasonMarkNews(league: League, res: GameResult) {
+  if (res.type !== 'regular') return;
+  const won = res.home.pts > res.away.pts ? res.home : res.away;
+  const lost = won === res.home ? res.away : res.home;
+  const tid = won.tid;
+  const team = league.teams[tid];
+  const ts = team?.seasons.find((x) => x.season === res.season);
+  if (!ts) return;
+  const user = league.userTid;
+  const left = Math.max(0, 82 - ts.won - ts.lost);
+  const score = `${won.pts}-${lost.pts} over the ${league.teams[lost.tid]?.name ?? '?'}`;
+  const tell = (head: string, text: string) => {
+    addNews(league, { kind: 'record', head, text, tids: [tid], pids: [], weight: 3 });
+    if (tid === user) addInbox(league, { from: 'Media Relations', subject: head, body: text, tone: 'good', link: '/league/history?view=records' });
+  };
+  if (ts.won >= 70) {
+    const bar = winsBar(league, res.season);
+    const top = bar[0];
+    const second = bar.find((b) => b.won < (top?.won ?? 0));
+    const them = (b: WinsMark) => `the ${seasonLabel(b.season)} ${b.as} (${b.won}-${b.lost})`;
+    const tail = left ? ` ${plural(left, 'game')} left.` : ' The regular season is over.';
+    if (top && ts.won === top.won + 1)
+      tell(`${ts.won} wins: the ${team.name} pass the record`, `No. ${ts.won} came ${score}: the most wins in a season in league history, past ${them(top)}.${tail}`);
+    else if (top && ts.won === top.won)
+      tell(`${ts.won} wins: the ${team.name} tie the record`, `No. ${ts.won} came ${score}, level with ${them(top)} for the most wins in a season in league history.${tail}`);
+    else if (second && ts.won === second.won)
+      tell(`${ts.won} wins for the ${team.name}`, `No. ${ts.won} came ${score}, level with ${them(second)}. Only ${them(top!)} won more.${tail}`);
+  }
+  const streak = ALL_TIME_TEAM.streak;
+  if (league.past && (ts.streak === streak.v || ts.streak === streak.v + 1)) {
+    const lakers = `the ${seasonLabel(streak.season)} ${streak.as} (${streak.v})`;
+    if (ts.streak === streak.v)
+      tell(
+        `${ts.streak} straight: the ${team.name} match the record`,
+        `The run reached ${ts.streak} with ${score}, level with ${lakers}, the longest winning streak in league history.`,
+      );
+    else tell(`${ts.streak} straight: the longest winning streak ever`, `The ${team.name} made it ${ts.streak} in a row with ${score}, past ${lakers}.`);
+  }
+}
+
+/** A season's wins on the record: the NBA's or this league's. */
+export interface WinsMark {
+  won: number;
+  lost: number;
+  tid?: number;
+  /** The team's name then: "Golden State Warriors". */
+  as: string;
+  season: number;
+}
+
+/** The most wins in a regular season, most first (earlier first among equals): a real league's NBA past (the 73-9 Warriors, the 72-10 Bulls) and this league's finished seasons of 70 or more before `season`. */
+export function winsBar(league: League, season = league.season): WinsMark[] {
+  const tidOf = new Map(league.teams.map((t) => [t.abbrev, t.tid]));
+  const out: WinsMark[] = league.past ? ALL_TIME_TEAM.wins.map((w) => ({ won: w.won, lost: w.lost, tid: tidOf.get(w.team), as: w.as, season: w.season })) : [];
+  for (const t of league.teams)
+    for (const s of t.seasons) if (s.season < season && s.won >= 70) out.push({ won: s.won, lost: s.lost, tid: t.tid, as: `${t.region} ${t.name}`, season: s.season });
+  return out.sort((a, b) => b.won - a.won || a.season - b.season);
 }
 
 /**
@@ -640,7 +771,7 @@ export function recordsHeld(league: League, res: GameResult): HeldRecord[] {
   const kind = bookOf(res.type);
   if (!book || !kind) return [];
   // (the book's first season: only a night of BIG_NIGHT points, as with the news)
-  if (res.season <= book.since) {
+  if (youngBook(book, res.season)) {
     const top = book.league[kind].players.pts?.[0];
     return top && top[0] >= BIG_NIGHT && top[6] === res.gid && top[4] === res.season ? [{ scope: 'league', book: kind, stat: 'pts', tid: top[2], pid: top[1], v: top[0] }] : [];
   }
@@ -675,3 +806,145 @@ export function recordWhat(r: Pick<HeldRecord, 'stat' | 'team' | 'v'>): string {
   if (r.team) return r.stat === 'margin' ? `${an ? 'an' : 'a'} ${r.v}-point win` : `${r.v} ${r.stat === 'pts' ? 'points' : 'threes'}`;
   return `${r.v} ${REC_LABEL[r.stat as RecStat][1]}`;
 }
+
+// ---------------------------------------------------------------- the NBA before the league
+
+/** A player's night as records.json keeps it: the number, his NBA.com person id, his team and the opponent (today's franchise codes), the season, the date (yyyymmdd) and NBA.com's game id. */
+export type SeedMarkRow = [v: number, nbaId: number, team: string, opp: string, season: number, date: number, gid: number];
+/** A team's night as records.json keeps it, with the final score. */
+export type SeedTeamRow = [v: number, team: string, opp: string, season: number, date: number, gid: number, pts: number, oppPts: number];
+export interface SeedShelf {
+  players: Partial<Record<RecStat, SeedMarkRow[]>>;
+  teams: Partial<Record<TeamRecStat, SeedTeamRow[]>>;
+}
+
+/** src/data/records.json (written by scripts/data/records-apply.ts): the book's lists from every NBA game since 1996-97. */
+export interface RecordsData {
+  /** The first season the files cover, and the last before the league. */
+  from: number;
+  through: number;
+  league: { reg: SeedShelf; post: SeedShelf };
+  /** By franchise code. */
+  teams: Record<string, { reg: SeedShelf; post: SeedShelf }>;
+  /** The listed players' names, by NBA.com person id. */
+  names: Record<number, string>;
+}
+
+/**
+ * Open a real league's book with the NBA's single games since 1996-97 (records.json): the league's
+ * lists and each franchise's, as long as the book keeps them, so a 60-point night in its first week
+ * is measured against Kobe Bryant's 81. A player still in the league is linked by his NBA.com id;
+ * one long gone carries his name, under a pid of his own below zero (-his NBA.com id), and every such
+ * night a game id below zero (no game in this league to open). Once only: a book that has them keeps them.
+ */
+export function seedRecords(league: League, data: RecordsData) {
+  const book = (league.records ??= emptyBook(league.startSeason));
+  if (book.from !== undefined) return;
+  const tidOf = new Map(league.teams.map((t) => [t.abbrev, t.tid]));
+  const pidOf = new Map<number, number>();
+  for (const p of Object.values(league.players)) if (p.nbaId) pidOf.set(p.nbaId, p.pid);
+  const before = league.startSeason;
+  const day = (season: number, d: number) => dateToDay(season, (Math.floor(d / 100) % 100) - 1, d % 100);
+  const fill = (to: RecordShelf, from: SeedShelf, keep: number) => {
+    for (const stat of REC_STATS)
+      for (const [v, nba, team, opp, season, d, gid] of from.players[stat] ?? []) {
+        const tid = tidOf.get(team);
+        const o = tidOf.get(opp);
+        if (tid === undefined || o === undefined || season >= before) continue;
+        const pid = pidOf.get(nba);
+        const row: MarkRow = pid !== undefined ? [v, pid, tid, o, season, day(season, d), -gid] : [v, -nba, tid, o, season, day(season, d), -gid, data.names[nba] || 'Unknown'];
+        insertMark((to.players[stat] ??= []), row, keep, markKey);
+      }
+    for (const stat of TEAM_REC_STATS)
+      for (const [v, team, opp, season, d, gid, pts, oppPts] of from.teams[stat] ?? []) {
+        const tid = tidOf.get(team);
+        const o = tidOf.get(opp);
+        if (tid === undefined || o === undefined || season >= before) continue;
+        insertMark((to.teams[stat] ??= []), [v, tid, o, season, day(season, d), -gid, pts, oppPts], keep, teamKey);
+      }
+  };
+  for (const kind of ['reg', 'post'] as const) {
+    fill(book.league[kind], data.league[kind], KEEP.league[kind]);
+    for (const [code, t] of Object.entries(data.teams)) {
+      const tid = tidOf.get(code);
+      if (tid !== undefined) fill(franchise(book, tid)[kind], t[kind], KEEP.team[kind]);
+    }
+  }
+  book.from = data.from;
+}
+
+/** The first season the book's single games reach back to: 1996-97 in a real league's (the NBA's games), else its own first. */
+export const bookFrom = (book: RecordBook) => book.from ?? book.since;
+
+/**
+ * A book in its first season with nothing before it: every big night would be "a record" (see
+ * BIG_NIGHT). A book opened with the NBA's games isn't young.
+ */
+export const youngBook = (book: RecordBook, season: number) => book.from === undefined && season <= book.since;
+
+/** A record from before the game files (1996-97), public record: the number, who, his franchise today and its name then, the season. */
+export interface PastMark {
+  v: number;
+  who?: string;
+  team: string;
+  as: string;
+  season: number;
+  /** A team's night: the final score. */
+  score?: [number, number];
+}
+
+/**
+ * The single-game records older than the game files, the NBA's all-time marks (a record since
+ * 1996-97 is the all-time one where none is listed: Klay Thompson's 14 threes, the Grizzlies' 73-point
+ * win). Team marks are keyed `team-<stat>`.
+ */
+export const ALL_TIME: Record<BookKind, Partial<Record<RecStat | `team-${TeamRecStat}`, PastMark>>> = {
+  reg: {
+    pts: { v: 100, who: 'Wilt Chamberlain', team: 'GSW', as: 'Philadelphia Warriors', season: 1962 },
+    reb: { v: 55, who: 'Wilt Chamberlain', team: 'GSW', as: 'Philadelphia Warriors', season: 1961 },
+    ast: { v: 30, who: 'Scott Skiles', team: 'ORL', as: 'Orlando Magic', season: 1991 },
+    stl: { v: 11, who: 'Larry Kenon', team: 'SAS', as: 'San Antonio Spurs', season: 1977 },
+    blk: { v: 17, who: 'Elmore Smith', team: 'LAL', as: 'Los Angeles Lakers', season: 1974 },
+    'team-pts': { v: 186, team: 'DET', as: 'Detroit Pistons', season: 1984, score: [186, 184] },
+  },
+  post: {
+    pts: { v: 63, who: 'Michael Jordan', team: 'CHI', as: 'Chicago Bulls', season: 1986 },
+    reb: { v: 41, who: 'Wilt Chamberlain', team: 'PHI', as: 'Philadelphia 76ers', season: 1967 },
+    ast: { v: 24, who: 'Magic Johnson', team: 'LAL', as: 'Los Angeles Lakers', season: 1984 },
+    'team-pts': { v: 157, team: 'BOS', as: 'Boston Celtics', season: 1990, score: [157, 128] },
+  },
+};
+
+/** The NBA's single-game record from before the game files, if it's older than theirs. */
+export const pastMark = (kind: BookKind, stat: RecStat | TeamRecStat, team?: boolean): PastMark | undefined =>
+  ALL_TIME[kind][team ? (`team-${stat as TeamRecStat}` as const) : (stat as RecStat)];
+
+/** The NBA's single-season records (regular season, public record), for the all-time list beside this league's. */
+export const ALL_TIME_SEASON: Partial<Record<SeasonStat, PastMark>> = {
+  ppg: { v: 50.4, who: 'Wilt Chamberlain', team: 'GSW', as: 'Philadelphia Warriors', season: 1962 },
+  rpg: { v: 27.2, who: 'Wilt Chamberlain', team: 'GSW', as: 'Philadelphia Warriors', season: 1961 },
+  apg: { v: 14.5, who: 'John Stockton', team: 'UTA', as: 'Utah Jazz', season: 1990 },
+  spg: { v: 3.67, who: 'Alvin Robertson', team: 'SAS', as: 'San Antonio Spurs', season: 1986 },
+  bpg: { v: 5.56, who: 'Mark Eaton', team: 'UTA', as: 'Utah Jazz', season: 1985 },
+  pts: { v: 4029, who: 'Wilt Chamberlain', team: 'GSW', as: 'Philadelphia Warriors', season: 1962 },
+  tpm: { v: 402, who: 'Stephen Curry', team: 'GSW', as: 'Golden State Warriors', season: 2016 },
+};
+
+/** A team's season as the NBA's records keep it. */
+export interface PastTeamSeason {
+  won: number;
+  lost: number;
+  team: string;
+  as: string;
+  season: number;
+}
+
+/** The NBA's best regular seasons (the two over 70 wins), its worst, and its longest winning streak (public record). */
+export const ALL_TIME_TEAM: { wins: PastTeamSeason[]; worst: PastTeamSeason; streak: { v: number; team: string; as: string; season: number } } = {
+  wins: [
+    { won: 73, lost: 9, team: 'GSW', as: 'Golden State Warriors', season: 2016 },
+    { won: 72, lost: 10, team: 'CHI', as: 'Chicago Bulls', season: 1996 },
+  ],
+  worst: { won: 7, lost: 59, team: 'CHA', as: 'Charlotte Bobcats', season: 2012 },
+  streak: { v: 33, team: 'LAL', as: 'Los Angeles Lakers', season: 1972 },
+};

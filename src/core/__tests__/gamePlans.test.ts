@@ -425,5 +425,27 @@ describe('game plans', () => {
       expect(me.tactics.offense.pace).toBe(64);
       expect(l.tacticEdits![0].closed).toBe('reverted');
     }
+    {
+      // a save made while the Team screens were open (the app closed, reloaded or put away before the
+      // visit ended) loads with its change recorded, as leaving would have, and the visit gone; a visit
+      // with nothing changed records nothing, and a damaged one goes
+      const l = fresh();
+      toGameDay(l);
+      const me = l.teams[l.userTid];
+      l.editVisit = structuredClone({ tactics: me.tactics, rotation: me.rotation });
+      const pace = me.tactics.offense.pace;
+      me.tactics.offense.pace = pace > 50 ? 20 : 90;
+      const back = migrate(structuredClone(l));
+      expect(back.editVisit).toBeUndefined();
+      expect(back.tacticEdits!.map((e) => e.diff)).toEqual([[['tactics.offense.pace', pace, me.tactics.offense.pace]]]);
+      expect(back.tacticEdits![0].ahead).toHaveLength(EDIT_AHEAD);
+      expect(editPlan(back, back.tacticEdits![0], 'made').plan).toBeTruthy();
+      me.tactics.offense.pace = pace;
+      const still = migrate(structuredClone(l));
+      expect([still.editVisit, still.tacticEdits ?? []]).toEqual([undefined, []]);
+      const bad = structuredClone(l) as unknown as { editVisit: unknown };
+      bad.editVisit = { tactics: 3 };
+      expect(migrate(bad).editVisit).toBeUndefined();
+    }
   }, 120_000);
 });

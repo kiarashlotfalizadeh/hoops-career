@@ -9,6 +9,9 @@ import type { GameResult, League } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION, seasonLabel } from '../core/constants';
 import { migrate as checkSave, obj } from './saveCheck';
 import { resultMark } from './simCore';
+import { recordEdit } from '../core/ai/tacticEdits';
+import { teamPlayers } from '../core/league/helpers';
+import { rosterNames } from '../ui/stats';
 
 // what a loaded save must look like lives in saveCheck.ts; screens and the backup import it from here
 export { isLeague, OldSaveError } from './saveCheck';
@@ -28,7 +31,21 @@ export function migrate(x: unknown, notALeague?: string): League {
     const ok = obj(p) && (p.difficulty === undefined || DIFFICULTIES.includes(p.difficulty)) && (p.jobSecurity === undefined || p.jobSecurity === false);
     if (!ok) delete league.settings.pending;
   }
+  settleVisit(league);
   return league;
+}
+
+/**
+ * A league saved while its Team screens were open (see ui/tactics/editWatch.ts): the app closed, or
+ * was reloaded or put away, before the visit ended. Its change since the visit started is recorded
+ * now, as leaving would have, and the staff measures it next; until a save, each load records it the
+ * same way from the copy on the device.
+ */
+function settleVisit(league: League) {
+  const before = league.editVisit;
+  if (!before) return;
+  delete league.editVisit;
+  recordEdit(league, before, rosterNames(teamPlayers(league, league.userTid)));
 }
 
 export interface LeagueMeta {

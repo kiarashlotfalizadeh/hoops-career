@@ -298,9 +298,10 @@ export function cancelWorth() {
   void remote?.cancelWorth();
 }
 
-/** Live measurements: the next one's id, and those given up in this thread (no worker). */
+/** Live measurements: the next one's id, those given up in this thread (no worker), and when those measured ahead are due. */
 let liveIds = 0;
 const localGone = new Set<number>();
+const localDue = new Map<number, number>();
 
 /**
  * What each choice is worth from where the live game `sim` stands, against the first (see
@@ -347,20 +348,30 @@ export async function measureCallsLive(
   confirm: number,
   id: number,
   progress: (done: number, total: number) => void = () => {},
+  /** Its budget once the game is at its spot, and whether it's measured ahead of it (no limit until reachLive). */
+  budgetMs?: number,
+  ahead = false,
 ): Promise<CallsMeasured | null> {
   const r = ensure();
-  const local = (s: GameSim) =>
-    measureCalls(s, side, changes, {
+  const local = (s: GameSim) => {
+    if (ahead) localDue.set(id, Infinity);
+    return measureCalls(s, side, changes, {
       by,
       confirm,
+      budgetMs,
+      due: ahead ? () => localDue.get(id) ?? Infinity : undefined,
       onProgress: progress,
       between: () => new Promise<void>((res) => setTimeout(res, 0)),
       cancelled: () => localGone.has(id),
-    }).finally(() => localGone.delete(id));
+    }).finally(() => {
+      localGone.delete(id);
+      localDue.delete(id);
+    });
+  };
   if (!r) return local(forkSim(sim));
   const copy = forkSim(sim);
   try {
-    return await guarded(() => r.liveCalls(simState(copy), side, changes, by, confirm, id, Comlink.proxy(progress)));
+    return await guarded(() => r.liveCalls(simState(copy), side, changes, by, confirm, id, Comlink.proxy(progress), budgetMs, ahead));
   } catch (e) {
     if (e instanceof WorkerUnavailable) return local(copy);
     throw e;
@@ -391,6 +402,12 @@ export const nextLiveId = () => ++liveIds;
 export function cancelLive(id: number) {
   localGone.add(id);
   void remote?.cancelLive(id);
+}
+
+/** The game got to the spot the staff's measurement `id` was started ahead for (measureCallsLive's `ahead`): it has `budgetMs` from now. */
+export function reachLive(id: number, budgetMs: number) {
+  if (localDue.has(id)) localDue.set(id, Date.now() + budgetMs);
+  void remote?.liveReach(id, budgetMs);
 }
 
 /**

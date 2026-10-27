@@ -58,6 +58,65 @@
   color: var(--text-dim);
 }
 
+/* a past season's standings: both conferences side by side, a phone's width too */
+.lg-st2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 14px;
+  padding: 10px var(--row-px) 8px;
+}
+.lg-st2-h {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 4px 5px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--text-dim);
+}
+.lg-st2-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+  padding: 0 4px;
+  font-size: 13.5px;
+}
+.lg-st2-row .rk {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lg-st2-row .nm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 620;
+}
+.lg-st2-row .wl {
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: -0.02em;
+}
+.lg-st2-row.out {
+  color: var(--text-dim);
+}
+.lg-st2-row.out .nm {
+  font-weight: 500;
+}
+.lg-st2-row.me {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--team-text) 11%, transparent);
+}
+/* a season's leaders, one line each, as the record book's */
+a.lg-rec {
+  color: inherit;
+  text-decoration: none;
+}
+
 /* a franchise's finished season opens its page */
 .lg-season-link {
   color: inherit;

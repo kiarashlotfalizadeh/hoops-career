@@ -143,7 +143,7 @@ export const possessionMethods = {
     if (this.clock > 2 && this.rng.chance(clamp(transP, 0, 0.85))) {
       // each setting's share of the run-outs, at K.runOutPts per run-out over a half-court trip
       if (!pressBroken) {
-        this.impact('transition', o, (K.runOutPts * (push - 1)) / push);
+        this.impact('transition', o, ((K.runOutPts * (push - 1)) / push) * (push < 1 ? K.walkUpTag : 1));
         this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack + lev((def.t.defense.getBack - 50) / 100) * K.transAdvPts);
         if (leak !== 1) this.impact('crash_leak', o, ((K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts) * (crashLeak > 0 ? K.crashTag.leak : 1));
       }

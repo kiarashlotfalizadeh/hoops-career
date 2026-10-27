@@ -11,8 +11,9 @@
 // MAX_WINS, or more than OLD_LEADER_ALLOWANCE allows have a player 36 or older leading the league in
 // points or threes; or when the seasons average more than MAX_LONG_INJURIES absences of 60+ games or
 // MAX_ACHILLES Achilles ruptures. It also measures the league's shape against the NBA's (the longest
-// streak, 70-win teams, one franchise's share of the titles, the threes leader and 10-three nights,
-// overtime, foul-outs): see SHAPE_FAILS for which of those fail it and which print as WATCH lines.
+// streak, with a season's past MAX_STREAK_EVER failing it outright, 70-win teams, one franchise's
+// share of the titles, the threes leader and 10-three nights, overtime, foul-outs): see SHAPE_FAILS
+// for which of those fail it and which print as WATCH lines.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
 //   TEAM=<abbrev>: the user's team where a league names none, Orlando by default; DIFFICULTY=easy|normal|hard)
 import { readFileSync } from 'node:fs';
@@ -36,12 +37,14 @@ import type { League, Player } from '../src/core/types';
 /** No one has averaged more than 38.4 over a full season since 1963: a leader past 39 is the engine running away. */
 const MAX_PPG = 39;
 /**
- * Past 73 the real league has only Chamberlain's 100 and 78 and Kobe Bryant's 81, so a 74-76 night is
- * past nearly all of history. What justifies the cap at 80 (73 until October 2026) is the rate: the
- * real league has had a 70-point night about once in eight seasons since 1980 (Robinson, Bryant,
- * Booker, Mitchell, Embiid, Dončić), the engine about once in 32 (this check's 32 seasons: Dončić's
- * 76, in a star-led playbook). A night past 80 is past Kobe, and one in a check's few dozen seasons is
- * the engine running away.
+ * Past 73 the real league has only Chamberlain's 100 and 78, Kobe Bryant's 81 and Bam Adebayo's 83
+ * (March 2026), so a 74-80 night is past nearly all of history. What justifies the cap at 80 (73
+ * until October 2026) is the rate: the real league has had a 70-point night about once in six
+ * seasons since 1980 (Robinson; Bryant, Booker, Lillard, Mitchell, Embiid, Dončić and Adebayo in
+ * src/data/records.json since 1997), the engine about once in 32 (this check's 32 seasons in October
+ * 2026: Dončić's 76, in a star-led playbook). A night past 80 belongs with Bryant's and Adebayo's,
+ * twice in the real league's last 46 seasons, and one in a check's few dozen seasons is the engine
+ * running away.
  */
 const MAX_GAME_PTS = 80;
 /**
@@ -51,10 +54,12 @@ const MAX_GAME_PTS = 80;
  * check's own 32 seasons 6.0, 18, 2.7, 65 and 171), at or a little past the NBA's records (5.1
  * threes, about 2.7 steals, a 73-point margin, about 160 points in regulation): they catch the
  * engine running away again. Before the tuning the same seasons had 8.2 threes, 93 ten-three
- * nights, 3.6 steals, an 89-point margin and 191 points.
+ * nights, 3.6 steals, an 89-point margin and 191 points. The threes' two came down (6.2 and 30)
+ * with the threes' volume ceilings (K.threeUse.contest, progression.ts threeVolume): over 64
+ * seasons (eight leagues of eight) the leader at most 5.9 and 16 ten-three nights in a season.
  */
 const MAX_TPM = 6.2;
-const MAX_TPM10 = 30;
+const MAX_TPM10 = 25;
 const MAX_STL = 3.2;
 const MAX_MARGIN = 73;
 const MAX_TEAM_PTS = 180;
@@ -86,29 +91,36 @@ const MAX_WINS = 73;
 const BEST_RECORD_ALLOWANCE = 20;
 /**
  * The league's shape (round-3 review, sim F1, F4, F7, F8). The NBA record streak is 33 and a
- * season's longest usually runs 12-16: at most 28 in nine seasons of ten. 70 wins came three times
- * in 78 seasons: a 70-win team in at most one season in eight. No franchise wins more than half a
- * league's titles. Curry's record is 5.1 made threes a game: the leader at most 5.2 in three
- * seasons of four, and about a dozen 10-three nights a season at most. Overtime in TARGETS.otRate
- * of games, within OT_TOLERANCE. Foul-outs well under half the 170-256 the review measured. The
- * engine wasn't tuned for these yet, and a guard fails the check (SHAPE_FAILS) only once the engine
- * holds it with room to spare; the rest print as WATCH lines with the measured value and the target.
- * Measured October 2026 (this check's 32 seasons, then again with the round's other changes): streaks
- * of 28 or less in 91% and 88% of seasons (median 19 and 17, max 36 and 33); a 70-win team in 6 and 3
- * seasons; the most titles by one franchise 4 of 8 (OKC) and 3 of 8; the threes leader at 5.2 or less
- * in 53% and 44%; 15.2 and 13.9 10-three nights; overtime in 3.1% and 3.0% of games; 202 and 203
- * foul-outs. None holds with room to spare: all are WATCH lines for now.
+ * season's longest usually runs 12-16: at most 28 in nine seasons of ten, and none past
+ * MAX_STREAK_EVER. 70 wins came three times in 78 seasons: a 70-win team in at most one season in
+ * eight. One franchise winning most titles: the review saw the Thunder win 9 of 12; no franchise
+ * may win more than MAX_TITLE_POOL of every title the check gives out, nor more than half of a
+ * league's in more than one league (5 of 8 is a lottery even for the real league's best team: a
+ * 40% favourite all eight years gets there about one league in six, as the Bulls' 6 of 8 did; two
+ * leagues of it is a default champion). Curry's record is 5.1 made threes a
+ * game: the leader at most 5.2 in three seasons of four, and about a dozen 10-three nights a season
+ * at most. Overtime in TARGETS.otRate of games, within OT_TOLERANCE. Foul-outs well under half the
+ * 170-256 the review measured. A guard fails the check (SHAPE_FAILS) once the engine holds it; the
+ * rest print as WATCH lines with the measured value and the target. Measured October 2026 over 64
+ * seasons (eight leagues of eight, the opening-night seed), before and after the threes' volume
+ * ceilings: streaks of 28 or less in 95% and 97% of seasons (at most 45 and 41, a 73-9 Thunder the
+ * user had kept together at 1.9 times the cap and a 70-12 one in the first season); a 70-win team in
+ * 3 seasons both times; the most titles by one franchise in a league 4 of 8 and 3 of 8, the
+ * Thunder's 10 and 13 of the 64 in all; the threes leader at 5.2 or less in 64% and 86%; 15.2 and
+ * 10.7 10-three nights; overtime in 3.1% of games both times; 202 and 207 foul-outs. Overtime and
+ * foul-outs need engine work of their own and stay WATCH lines.
  */
 const MAX_STREAK = 28;
+const MAX_STREAK_EVER = 35;
 const STREAK_SHARE = 0.9;
 const SEVENTY_ALLOWANCE = 8;
-const MAX_TITLE_SHARE = 0.5;
+const MAX_TITLE_POOL = 1 / 3;
 const TPM_LEADER = 5.2;
 const TPM_LEADER_SHARE = 0.75;
 const TPM10_TARGET = 12;
 const OT_TOLERANCE = 0.008;
 const MAX_FOUL_OUTS = 130;
-const SHAPE_FAILS = { streak: false, seventy: false, titles: false, tpm: false, tpm10: false, ot: false, foulOuts: false };
+const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: true, tpm: true, tpm10: true, ot: false, foulOuts: false };
 /**
  * The leagues CI plays: four different runs from the same opening night, one of them with the user
  * running the Thunder, the opening night's best team (a user keeps his core together, as AI front
@@ -231,7 +243,9 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     const top = [...new Set(champs)].map((c) => ({ c, n: champs.filter((x) => x === c).length })).sort((a, b) => b.n - a.n)[0] ?? { c: '-', n: 0 };
     return { seed, ...top, of: champs.length, share: top.n / Math.max(1, champs.length) };
   });
-  const titleTop = [...titles].sort((a, b) => b.share - a.share)[0];
+  const dynasties = titles.filter((x) => x.share > 0.5);
+  const champs = all.filter((r) => r.champ !== '-').map((r) => r.champ);
+  const pool = [...new Set(champs)].map((c) => ({ c, n: champs.filter((x) => x === c).length })).sort((a, b) => b.n - a.n)[0] ?? { c: '-', n: 0 };
   const tpmShare = all.filter((r) => r.tpm.pg <= TPM_LEADER).length / all.length;
   const ot = mean((r) => r.otRate);
   const shape = [
@@ -241,14 +255,22 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
       text: `longest streak ${MAX_STREAK} or less in ${pct(streakShare)} of seasons (target ${pct(STREAK_SHARE)}+; median ${mid(streaks)}, max ${streaks[streaks.length - 1]})`,
     },
     {
+      fail: SHAPE_FAILS.streakEver,
+      ok: streaks[streaks.length - 1] <= MAX_STREAK_EVER,
+      text: `no streak past ${MAX_STREAK_EVER} (the longest ${streaks[streaks.length - 1]}${all
+        .filter((r) => r.streak.games > MAX_STREAK_EVER)
+        .map((r) => `; ${at(r)} ${r.streak.team} ${r.streak.games}`)
+        .join('')})`,
+    },
+    {
       fail: SHAPE_FAILS.seventy,
       ok: seventy.length <= seventyAllowed,
       text: `${seventy.length} of ${all.length} seasons with a 70-win team (target ${seventyAllowed}, one in ${SEVENTY_ALLOWANCE})${seventy.length ? `: ${seventy.map((r) => `${at(r)} ${r.best.team} ${r.best.won}-${r.best.lost}`).join(', ')}` : ''}`,
     },
     {
       fail: SHAPE_FAILS.titles,
-      ok: titleTop.share <= MAX_TITLE_SHARE,
-      text: `most titles by one franchise in a league ${titles.map((x) => `${x.c} ${x.n} of ${x.of} (rng ${x.seed})`).join(', ')} (target ${pct(MAX_TITLE_SHARE)} or less)`,
+      ok: pool.n <= MAX_TITLE_POOL * champs.length && dynasties.length <= 1,
+      text: `most titles by one franchise ${pool.c} ${pool.n} of ${champs.length} (target a third or less); in a league ${titles.map((x) => `${x.c} ${x.n} of ${x.of} (rng ${x.seed})`).join(', ')} (more than half in one league at most)`,
     },
     {
       fail: SHAPE_FAILS.tpm,
@@ -271,7 +293,7 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
       text: `${mean((r) => r.foulOuts).toFixed(0)} foul-outs a season (target ${MAX_FOUL_OUTS} or less; max ${max((r) => r.foulOuts)})`,
     },
   ];
-  for (const g of shape.filter((x) => !x.fail)) console.log(`  WATCH (not failing, ${g.ok ? 'met' : 'missed'}): ${g.text}`);
+  for (const g of shape) console.log(`  ${g.fail ? 'SHAPE' : 'WATCH (not failing'}${g.fail ? ` (${g.ok ? 'met' : 'missed'})` : `, ${g.ok ? 'met' : 'missed'})`}: ${g.text}`);
   for (const g of shape.filter((x) => x.fail)) if (!g.ok) failures.push(g.text);
   if (mean((r) => r.injuries.sixty) > MAX_LONG_INJURIES) failures.push(`${mean((r) => r.injuries.sixty).toFixed(1)} absences of 60+ games a season (max ${MAX_LONG_INJURIES})`);
   if (mean((r) => r.injuries.achilles) > MAX_ACHILLES) failures.push(`${mean((r) => r.injuries.achilles).toFixed(1)} Achilles ruptures a season (max ${MAX_ACHILLES})`);

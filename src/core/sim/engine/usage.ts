@@ -47,6 +47,7 @@ export const usageMethods = {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
       const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - lev(K.chaseCap) : p.useCap;
       if (share > cap) w *= Math.exp(-p.useDamp * (share - cap));
+      if (share > K.useCeil.level) w *= Math.exp(-K.useCeil.damp * (share - K.useCeil.level));
     }
     // even a heliocentric offense moves the ball: past ~2/3 of his team's actions, others get it
     if (p.b.tActs >= 20) {

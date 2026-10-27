@@ -10,14 +10,16 @@
 // draft), a promising one played again on fresh seeds (see counterWorth.ts). That reads a counter to
 // about ±1.0 a game (±0.7 replayed) where a card's own 240 read it to ±0.45; every reading is shrunk
 // toward even by its noise before it's called a gain, so the smaller budget makes the staff more
-// cautious, not less honest. A measurement is 80 to 240 paired games; about ten a season (the week's
-// billed nights, a skid's steps, a star's injury) put about half again on a season's sim time
-// (CPU against the season's own days, 2026-10-26, DEN: +57% at 48 games, +52% at 40, +41% at 48 games
-// and one counter).
+// cautious, not less honest. A measurement is 80 to 240 paired games. The week's billed nights were
+// measured every week for a one-night counter worth about a tenth of a win a season, 40% of the
+// measuring (OKC, 2026-10-27: 9.2 of 22.5 seconds against 14 for the season's own days); now only in
+// a week of drills (weekCall.ts). What's left: a skid's steps, a starter's injury, the young players'
+// lean and its second reading, the deadline's deal, the series, and the staff's playbook change
+// (staffLever.ts, the biggest).
 import type { League } from '../types';
 import { counterWorth, measureChanges, withChange, type WorthOpts } from '../ai/counterWorth';
 import { callNeeds, callsDecide, changeWorth, countersWorth, storeWorth, type CallMeasure, type CallWorth } from './calls';
-import { weekDecide, weekNeeds } from './weekCall';
+import { payoffNeeds, weekDecide, weekNeeds, youthPayoff } from './weekCall';
 import { leverMorning } from './staffLever';
 
 /** Paired games a configuration plays in a sim's measurement. */
@@ -40,12 +42,13 @@ export async function measureCall(league: League, m: CallMeasure, opts: WorthOpt
 
 /** What the staff's picks and the open cards wait on this morning, each once. */
 export function staffNeeds(league: League): CallMeasure[] {
-  const all = [...weekNeeds(league), ...callNeeds(league)];
+  const all = [...weekNeeds(league), ...callNeeds(league), ...payoffNeeds(league)];
   return all.filter((m, i) => all.findIndex((x) => x.key === m.key) === i);
 }
 
 /** The staff's picks, with what they wait on measured. */
 export function staffDecide(league: League) {
+  youthPayoff(league);
   weekDecide(league);
   callsDecide(league);
 }

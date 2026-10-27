@@ -211,7 +211,7 @@
   stroke-width: 0.7;
 }
 /* a player token: a printed card on the floor, white card stock with his name in ink, the role under
-   it and how he suits it in stars; centred on its spot but never past the court's edges (half a card
+   it and how he suits it as one figure; centred on its spot but never past the court's edges (half a card
    in from each) */
 .tx-floor-p {
   --hh: 1.95em;
@@ -272,27 +272,31 @@
   text-overflow: ellipsis;
   max-width: 100%;
 }
+/* the role and how he suits it on one line: the role gives way first, the figure stays whole (12px
+   at the least, as every label on the board) */
 .tx-floor-r {
-  font-size: 0.8em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.35em;
+  font-size: max(12px, 0.84em);
   font-weight: 560;
   font-stretch: 82%;
   color: var(--text-2);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   max-width: 100%;
 }
 .tx-floor-s {
-  font-size: 0.77em;
-  line-height: 1.2;
-  letter-spacing: 1px;
+  flex: none;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+.tx-floor-s i {
+  font-style: normal;
   color: var(--tier-elite);
 }
-.tx-floor-s .dim {
-  color: var(--surface-3);
-}
 .tx-floor-best {
-  font-size: 0.75em;
+  font-size: max(12px, 0.75em);
   color: var(--warn);
   white-space: nowrap;
   overflow: hidden;

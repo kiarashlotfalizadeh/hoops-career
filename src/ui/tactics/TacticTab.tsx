@@ -1,9 +1,10 @@
-// Tactics → Tactic, where the screen opens: the tactics board (your five where the shape and the
-// scheme put them, each with his role and how he suits it, the partnerships between them drawn on
-// the floor), the Partnerships card that names them, the bench as a short list, and your saved
-// playbooks as one row. A tap on any player opens his sheet (both roles, shot freedom, glass duty,
-// screens). The style, the mentality and the assistant's switch are the hero's.
-import { useMemo, useState } from 'react';
+// Tactics → Tactic, where the screen opens: the tactics board first (your five where the shape and
+// the scheme put them, each with his role and how he suits it, the partnerships between them drawn on
+// the floor), then the rest of the plan (the screen's: the mentality, strengths and weaknesses, the
+// assistant's switch), the Partnerships card that names the links, the bench as a short list, and
+// your saved playbooks as one row. A tap on any player opens his sheet (both roles, shot freedom,
+// glass duty, screens). The style is the line over the sections.
+import { useMemo, useState, type ReactNode } from 'react';
 import type { Player } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { LINK_NAMED, lineupLinks } from '../../core/sim/links';
@@ -23,7 +24,7 @@ import { useFam } from './useFam';
 
 const NO_ORDER: number[] = [];
 
-export function TacticTab({ players, side, setSide }: { players: Player[]; side: BoardSide; setSide: (s: BoardSide) => void }) {
+export function TacticTab({ players, side, setSide, children }: { players: Player[]; side: BoardSide; setSide: (s: BoardSide) => void; children?: ReactNode }) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   const t = team.tactics;
@@ -67,6 +68,7 @@ export function TacticTab({ players, side, setSide }: { players: Player[]; side:
         />
       </div>
       <div className="tx-tactic-side">
+        {children}
         <PartnershipsCard
           players={players}
           links={links}

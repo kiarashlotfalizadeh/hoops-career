@@ -7,6 +7,8 @@ import type { League, Player, RatingKey } from '../../src/core/types';
 import { attrDisplay, tierLabel } from '../../src/core/ratings';
 import { marketSalary, tradeValue } from '../../src/core/league/contracts';
 import { CAP_FOR } from '../../src/core/league/helpers';
+import historyJson from '../../src/data/history.json';
+import type { HistoryData } from '../../src/core/league/media/past';
 
 /** A player's row in a build's report (build-seed.ts with HC_REPORT). */
 export interface ReportRow {
@@ -28,6 +30,17 @@ export interface ReportRow {
  */
 export const OVR_TARGET = { impact: 0.38, production: 0.42, role: 0.2, minMinutes: 1000 };
 
+/**
+ * The least each of a big's defensive skills counts in his OVR (ovrFit.ts holds the fitted big weights
+ * at or above these). A fit on the calibrated ratings alone gives a centre's blocks almost nothing: the
+ * value calibration takes the engine's credit for a rim protector's blocks and boards back out of his
+ * interior and team defense, so a high-block centre looks average everywhere else, and bench bigs with
+ * the same blocks but a reserve's role pull the weight to zero. Gobert, an All-Defensive first-teamer
+ * worth +2.6 a hundred, came out a 77 "Rotation" player. Fans judge a centre on his rim protection and
+ * his glass; these floors are that read.
+ */
+export const OVR_BIG_FLOOR: Partial<Record<RatingKey, number>> = { blk: 0.06, intD: 0.07, dreb: 0.07, diq: 0.07 };
+
 /** Box creation per 36: points, assists, boards and stocks, less turnovers. */
 export const production36 = (p: Record<string, number>) => p.pts + 0.7 * p.ast + 0.3 * (p.orb + p.drb) + 0.6 * (p.stl + p.blk) - 0.7 * p.tov;
 
@@ -46,6 +59,19 @@ export function ovrTarget(rows: ReportRow[]): Map<string, number> {
 }
 
 const plain = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** Whether his real honours (history.json: "DEF1:2017-2022,2024;DPOY:2018") include `type` in `season`. */
+function honoured(p: Player, type: string, season: number): boolean {
+  const code = p.bbrefId ? (historyJson as unknown as HistoryData).players[p.bbrefId] : undefined;
+  const runs = code?.split(';').find((part) => part.startsWith(`${type}:`));
+  return !!runs
+    ?.slice(type.length + 1)
+    .split(',')
+    .some((r) => {
+      const [a, b] = r.split('-').map(Number);
+      return season >= a && season <= (b || a);
+    });
+}
 
 export interface Anchor {
   name: string;
@@ -162,6 +188,28 @@ export function reputationCheck(league: League): Anchor[] {
     blockers.every((p) => d(p, 'blk') >= 82),
     list(blockers, (p) => d(p, 'blk')),
   );
+  // (the voters' read of defense, from the real honours history.json carries: what a box score and a
+  // lineup sample miss, a season of watching every night sees. Where the lineups disagree, the card
+  // follows what he is worth on the floor: Draymond Green at 36 and Lu Dort, first-teamers in 2024-25,
+  // project below average, -1.7 and +0.2 a hundred, and rating them 80 would mean giving them defense
+  // their lineups don't show, which the engine would then play)
+  const voted = (type: string, seasons: number[]) => rostered.filter((p) => seasons.some((s) => honoured(p, type, s)));
+  const allDef = voted('DEF1', [league.season - 1, league.season - 2]);
+  const backed = allDef.filter((p) => (p.proj?.tot ?? 0) >= 1);
+  check(
+    'every All-Defensive first-teamer of the last two seasons his lineups back (projected impact +1 or better) is a starter or better (78+)',
+    allDef.length >= 8 && backed.length >= 6 && backed.every((p) => p.ovr >= 78),
+    `${list(backed, (p) => p.ovr)}; not backed: ${list(
+      allDef.filter((p) => !backed.includes(p)),
+      (p) => `${p.ovr} (${(p.proj?.tot ?? 0).toFixed(1)})`,
+    )}`,
+  );
+  const dpoy = voted('DPOY', [league.season - 1]);
+  check(
+    'the reigning Defensive Player of the Year rates 82+',
+    dpoy.length === 1 && dpoy.every((p) => p.ovr >= 82),
+    list(dpoy, (p) => p.ovr),
+  );
 
   // ---- overall
   const mvp = ['Nikola Jokic', 'Shai Gilgeous-Alexander', 'Giannis Antetokounmpo', 'Luka Doncic', 'Victor Wembanyama'].map(P);
@@ -198,6 +246,17 @@ export function reputationCheck(league: League): Anchor[] {
     'every 25-point scorer (33+ minutes) is 86+',
     scorers.every((p) => p.ovr >= 86),
     list(scorers, (p) => p.ovr),
+  );
+  // (a coach who gave him under 20 minutes a night saw something a hot bench sample doesn't show; a
+  // season lost to injury, under 20 games, is no verdict on his role)
+  const benchStars = rostered.filter((p) => {
+    const r = real(p);
+    return r.gp >= 20 && r.mpg < 20 && r.mpg * r.gp < 1500 && p.ovr >= 80;
+  });
+  check(
+    'no player under 20 minutes a game last season (20+ games) rates 80+ without 1,500 minutes',
+    benchStars.length === 0,
+    benchStars.length ? list(benchStars, (p) => `${p.ovr} (${real(p).mpg.toFixed(1)} MPG)`) : 'none',
   );
   const tiers: Record<string, number> = {};
   for (const p of rostered) tiers[tierLabel(p.ovr)] = (tiers[tierLabel(p.ovr)] ?? 0) + 1;

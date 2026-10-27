@@ -365,6 +365,10 @@ describe('live game', () => {
       lg.simTo('quarter');
       expect(lg.sim.q).toBe(2);
       expect(lg.sim.clock).toBeLessThanOrEqual(0.05);
+      // and stops sooner, on the first possession something calls for it (a starter of yours hurt: useLiveGame.skip)
+      const steps = lg.steps;
+      lg.simTo('quarter', () => lg.steps >= steps + 3);
+      expect(lg.steps).toBe(steps + 3);
       fresh();
     }
 

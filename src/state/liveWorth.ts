@@ -203,16 +203,31 @@ export const CALL_SCREEN = 64;
 /** Continuations the best is played again on fresh seeds: the reading shown, and whether it clears. */
 export const CALL_CONFIRM = 320;
 /**
- * The most a stop's measurement takes on the device, in ms (the screen gets the first two fifths): on a
- * slow phone a stop early in the game would take longer than this, and it stops at the time (never
- * below CALL_SCREEN_MIN / CALL_CONFIRM_MIN), its reading as wide as the games it played. A desktop
- * plays all of them well inside it (about 8 s at the end of the first quarter, 2.5 s at the end of the third).
+ * The most a stop's measurement takes on the device once the game is there, in ms (the screen gets the
+ * first two fifths): on a slow phone a stop early in the game would take longer than this, and it stops
+ * at the time (never below CALL_SCREEN_MIN / CALL_CONFIRM_MIN), its reading as wide as the games it
+ * played. A desktop plays all of them well inside it (about 8 s at the end of the first quarter, 2.5 s
+ * at the end of the third). A stop the screen sees coming is measured from before the game gets there
+ * (useStaffCall's look ahead), and that time comes free: the budget only starts at the spot.
  */
 export const CALL_BUDGET_MS = 12_000;
+/** A stop where play waits (a break, your timeout's huddle): the coach is reading the report, so the measurement has longer. */
+export const CALL_BREAK_MS = 30_000;
 export const CALL_SCREEN_MIN = 16;
 export const CALL_CONFIRM_MIN = 96;
 /** Late, with only a few minutes left, a continuation costs little and the result is the question: more of them. */
 export const CALL_CONFIRM_LATE = 480;
+/**
+ * In crunch time, judged by the result (a point or two of win chance: a coin's worth of noise at 480),
+ * the screen and the confirmation both go wider: over 163 crunch-time stops of 18 close games (scratch
+ * p1/live crunch.mts, 2026-10-27) 64 and 480 called at 9% of stops, 160 and 1,600 at 19%: about 4 s a
+ * stop on a desktop. A call there clears on the margin and the result both, and says the margin: on
+ * fresh seeds (282 stops of 30 games, each call re-measured on 2,000) it called at 13% of stops, shown
+ * +0.37 to the margin against a true +0.36 ± 0.03; in 36 games with every call taken, +0.72 against
+ * +0.78 ± 0.11 over all its calls. Its win chance isn't said: still +3.4% raw against a true +2.8.
+ */
+export const CALL_SCREEN_CRUNCH = 160;
+export const CALL_CONFIRM_CRUNCH = 1600;
 /**
  * How far the true worth of the staff's best change spreads either side of even, in points of the
  * rest of the game's margin: what a reading is shrunk toward even by (shrinkWorth's rule with the
@@ -223,10 +238,13 @@ export const CALL_CONFIRM_LATE = 480;
  */
 export const CALL_SPREAD = 0.6;
 
+const shrinkTo = (spread: number) => (raw: number, se: number) => (raw * spread ** 2) / (spread ** 2 + se ** 2);
+const bandOf = (spread: number) => (se: number) => (se * spread) / Math.sqrt(spread ** 2 + se ** 2);
+
 /** A reading shrunk toward even by the share of it that can be noise, with the live calls' spread. */
-export const shrinkCall = (raw: number, se: number) => (raw * CALL_SPREAD ** 2) / (CALL_SPREAD ** 2 + se ** 2);
+export const shrinkCall = (raw: number, se: number) => shrinkTo(CALL_SPREAD)(raw, se);
 /** How uncertain a shrunk reading still is (its posterior standard deviation): narrower than the reading's own noise. */
-export const shrunkSe = (se: number) => (se * CALL_SPREAD) / Math.sqrt(CALL_SPREAD ** 2 + se ** 2);
+export const shrunkSe = (se: number) => bandOf(CALL_SPREAD)(se);
 
 /** How a continuation ended for `side`: the margin in points and by shot value, and the result. */
 function endOf(sim: GameSim, side: 0 | 1): Ending & { x: number } {
@@ -246,8 +264,8 @@ async function spotDiffs(
   salt: number,
   opts: BranchOpts,
   done: { n: number; total: number },
-  /** A clock time (ms) past which no more continuations are started, once `min` of them are played. */
-  until = Infinity,
+  /** A clock time (ms) past which no more continuations are started, once `min` of them are played (read as it goes: it can be set late). */
+  until: number | (() => number) = Infinity,
   min = games,
 ) {
   const base = salt ? mix32((spotSeed(sim) ^ salt) >>> 0) : spotSeed(sim);
@@ -260,7 +278,7 @@ async function spotDiffs(
       if (opts.cancelled?.()) return null;
       // (out of time on a slow device: the reading stands on the games played, its noise wider for it;
       // a stop decided by the clock, never by the readings, keeps them honest)
-      if (i >= min && Date.now() > until) break;
+      if (i >= min && Date.now() > (typeof until === 'number' ? until : until())) break;
     }
     const seed = branchSeed(base, i);
     let first: (Ending & { x: number }) | null = null;
@@ -286,11 +304,27 @@ export interface CallReading {
   se: number;
   /** The shrunk reading's own uncertainty (shrunkSe): the ± shown beside it. */
   band: number;
-  /** Points of win chance (0-1) and its standard error. */
+  /**
+   * Points of win chance (0-1) as measured, and its standard error: what a crunch-time call clears on
+   * besides the margin, never shown (see measureCalls).
+   */
   win: number;
   winSe: number;
   /** Continuations it was read on, each way. */
   n: number;
+}
+
+/** A confirmed reading (`x` by shot value, `w` the result) as the staff says it: each shrunk toward even by its noise. */
+function readingOf(x: Paired, w: Paired): CallReading {
+  return {
+    pts: round1(shrinkCall(x.mean, x.se)),
+    raw: round2(x.mean),
+    se: round2(x.se),
+    band: round2(shrunkSe(x.se)),
+    win: round3(w.mean),
+    winSe: round3(w.se),
+    n: x.n,
+  };
 }
 
 /** What the staff's measurement found: the change it proposes (`pick`, an index into the changes) when one clears, and the best one's confirmed reading either way. */
@@ -316,17 +350,25 @@ export async function measureCalls(
   sim: GameSim,
   side: 0 | 1,
   changes: LiveChoice[],
-  opts: BranchOpts & { by?: 'pts' | 'win'; screen?: number; confirm?: number; budgetMs?: number } = {},
+  opts: BranchOpts & {
+    by?: 'pts' | 'win';
+    screen?: number;
+    confirm?: number;
+    budgetMs?: number;
+    /** When the budget runs out (a clock time, ms), read as it goes: for a stop measured ahead, Infinity until the game gets there. Default: `budgetMs` from now. */
+    due?: () => number;
+  } = {},
 ): Promise<CallsMeasured | null> {
   const by = opts.by ?? 'pts';
   const t0 = Date.now();
   const budget = opts.budgetMs ?? CALL_BUDGET_MS;
-  const screen = opts.screen ?? CALL_SCREEN;
+  const due = opts.due ?? (() => t0 + budget);
+  const screen = opts.screen ?? (by === 'win' ? CALL_SCREEN_CRUNCH : CALL_SCREEN);
   const confirm = opts.confirm ?? CALL_CONFIRM;
   const out: CallsMeasured = { pick: null, best: null, reading: null, tried: changes.length, by };
   if (!changes.length) return out;
   const done = { n: 0, total: screen * (changes.length + 1) + confirm * 2 };
-  const first = await spotDiffs(sim, side, [{ kind: 'none' }, ...changes], screen, 0, opts, done, t0 + 0.4 * budget, Math.min(screen, CALL_SCREEN_MIN));
+  const first = await spotDiffs(sim, side, [{ kind: 'none' }, ...changes], screen, 0, opts, done, () => due() - 0.6 * budget, Math.min(screen, CALL_SCREEN_MIN));
   if (!first) return null;
   // the best as screened: the most margin (late, the most win chance, then margin), above even
   const score = (k: number) => {
@@ -339,22 +381,18 @@ export async function measureCalls(
     return out;
   }
   const best = order[0];
-  const again = await spotDiffs(sim, side, [{ kind: 'none' }, changes[best]], confirm, 0x63616c6c, opts, done, t0 + budget, Math.min(confirm, CALL_CONFIRM_MIN));
+  const again = await spotDiffs(sim, side, [{ kind: 'none' }, changes[best]], confirm, 0x63616c6c, opts, done, due, Math.min(confirm, CALL_CONFIRM_MIN));
   if (!again) return null;
   opts.onProgress?.(done.total, done.total);
   const x = paired(again[1].x);
   const w = paired(again[1].win);
   out.best = best;
-  out.reading = {
-    pts: round1(shrinkCall(x.mean, x.se)),
-    raw: round2(x.mean),
-    se: round2(x.se),
-    band: round2(shrunkSe(x.se)),
-    win: Math.round(w.mean * 1000) / 1000,
-    winSe: Math.round(w.se * 1000) / 1000,
-    n: x.n,
-  };
-  const clears = by === 'win' ? w.mean > 0 && clearOf(w.mean, w.se) && x.mean > -SAY_Z * x.se : x.mean > 0 && clearOf(x.mean, x.se);
+  out.reading = readingOf(x, w);
+  // (in crunch time it must clear on the result and on the margin both: cleared on the win chance alone,
+  // 16 calls in games where every earlier call was taken read +2.6% to win against a true +0.2 ± 0.3;
+  // what's said is the margin, shrunk, which holds in games followed or not: CALL_SCREEN_CRUNCH)
+  const clearX = x.mean > 0 && clearOf(x.mean, x.se);
+  const clears = by === 'win' ? clearX && w.mean > 0 && clearOf(w.mean, w.se) : clearX;
   if (clears) out.pick = best;
   return out;
 }
@@ -369,17 +407,7 @@ export async function measureChange(sim: GameSim, side: 0 | 1, before: LiveChoic
   const d = await spotDiffs(sim, side, [before, after], games, 0x6c657672, opts, done, Date.now() + CALL_BUDGET_MS, Math.min(games, CALL_CONFIRM_MIN));
   if (!d) return null;
   opts.onProgress?.(done.total, done.total);
-  const x = paired(d[1].x);
-  const w = paired(d[1].win);
-  return {
-    pts: round1(shrinkCall(x.mean, x.se)),
-    raw: round2(x.mean),
-    se: round2(x.se),
-    band: round2(shrunkSe(x.se)),
-    win: Math.round(w.mean * 1000) / 1000,
-    winSe: Math.round(w.se * 1000) / 1000,
-    n: x.n,
-  };
+  return readingOf(paired(d[1].x), paired(d[1].win));
 }
 
 // ------------------------------------------------------------ the night's moves, after the final
@@ -526,3 +554,4 @@ export async function nightWorth(tip: GameSim, side: 0 | 1, ops: LiveOp[], opts:
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 const round2 = (x: number) => Math.round(x * 100) / 100;
+const round3 = (x: number) => Math.round(x * 1000) / 1000;

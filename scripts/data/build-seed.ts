@@ -401,6 +401,7 @@ async function main() {
   console.log(
     `careers: ${players.filter((p) => p.stats.some((s) => s.season < STAT_SEASONS[0])).length} players with seasons before ${seasonLabel(STAT_SEASONS[0])}; numbers at former franchises for ${players.filter((p) => p.jerseys).length}`,
   );
+  roleShrink(players, aggs);
   const unlisted = players.filter((p) => p.team && !p.proj);
   console.log(
     `impact: ${players.filter((p) => p.proj).length} seed players with a value target${unlisted.length ? `; under contract without one (too few NBA possessions: leveled by minutes or draft slot): ${unlisted.length}, ${unlisted.filter((p) => p.stats.some((s) => s.real && s.gp > 0)).length} of them with NBA games` : ''}`,
@@ -485,6 +486,9 @@ async function main() {
     players[idx].ratings = Object.fromEntries(RATING_KEYS.map((k) => [k, Math.round(lp.ratings[k] * 10) / 10])) as unknown as Ratings;
     if (lp.tend) players[idx].tend = Object.fromEntries(Object.entries(lp.tend).map(([k, v]) => [k, r3(v as number)])) as unknown as Tendencies;
   }
+  // (the settle refits a leveled bench player's value toward his target, which lifts him back over the
+  // level his minutes give him: he goes back down to it)
+  rehitBench(players, levelTargets);
   // how far value moved each skill from the evidence, and how many it took to the edge of the band
   const projected = [...pidByIdx].filter(([idx, pid]) => value.has(pid) && players[idx].team);
   const moved = (k: RatingKey) => projected.map(([idx, pid]) => players[idx].ratings[k] - value.get(pid)!.from[k]);
@@ -563,6 +567,8 @@ async function main() {
         adv: a?.adv ?? null,
         per36: a?.per36 ?? null,
         rapm: a?.pbp ? { o: a.pbp.rapmO, d: a.pbp.rapmD, poss: a.pbp.rapmPoss } : null,
+        // (his defense in the play-by-play: matchup points saved per 100, and shots at the rim he faced and allowed)
+        pbpDef: a?.pbp ? { md: a.pbp.mdSaved, mdPoss: a.pbp.mdPoss, oppFga: a.pbp.oppFga, rimA: a.pbp.oppRimA, rimM: a.pbp.oppRimM, blkRim: a.pbp.blkRim, mins: a.pbp.mins } : null,
         proj: p.proj ?? null,
         evidence: evidence.get(p.id) ?? null,
         ratings: p.ratings,
@@ -590,6 +596,66 @@ function seedHighs(h: BoxData['highs'][number] | undefined, codes: Map<number, s
   return Object.keys(out).length ? out : undefined;
 }
 
+/**
+ * How far a bench player's value target goes toward what players at his position and minutes are
+ * worth: none from ROLE_SHRINK.full minutes a game up, rising to `max` at `low` and below.
+ */
+export const ROLE_SHRINK = { full: 26, low: 12, max: 0.9 };
+
+/**
+ * Pull bench players' value targets toward their role. A bench big's impact reads his minutes
+ * against other benches (his blocks and boards a hundred possessions run high there, and the box
+ * prior his lineup sample is shrunk toward reads them), so Paul Reed at 14 minutes a night came out
+ * worth more than Gobert. The coach who kept him at 14 saw what that sample doesn't: each target
+ * below a regular's minutes goes part of the way toward the line of impact on minutes fitted, at his
+ * position (centres, forwards, guards), on the players with full samples. A regular's minutes say
+ * little more than that he plays, so his target stays his own.
+ */
+function roleShrink(players: SeedPlayer[], aggs: Map<string, Agg>) {
+  const group = (p: SeedPlayer) => (p.pos === 'C' ? 'C' : p.pos === 'PF' || p.pos === 'SF' ? 'F' : 'G');
+  const lines = new Map<string, { off: (m: number) => number; def: (m: number) => number }>();
+  for (const g of ['C', 'F', 'G']) {
+    const fit = players.filter((p) => p.proj && group(p) === g && (aggs.get(p.id)?.rawMin ?? 0) >= 2500);
+    const line = (k: 'off' | 'def') => {
+      const xs = fit.map((p) => p.proj!.mpg);
+      const ys = fit.map((p) => p.proj![k]);
+      const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+      const my = ys.reduce((a, b) => a + b, 0) / ys.length;
+      const b = xs.reduce((a, x, i) => a + (x - mx) * (ys[i] - my), 0) / xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+      return (m: number) => my + b * (m - mx);
+    };
+    lines.set(g, { off: line('off'), def: line('def') });
+  }
+  const at = (g: string, m: number) => `${lines.get(g)!.off(m).toFixed(1)}/${lines.get(g)!.def(m).toFixed(1)}`;
+  let n = 0;
+  for (const p of players) {
+    const pr = p.proj;
+    if (!pr) continue;
+    // (his role is last season's minutes when he played a season's worth, else the minutes behind his impact)
+    const mpg = lastMpg(p) ?? pr.mpg;
+    const s = ROLE_SHRINK.max * clamp((ROLE_SHRINK.full - mpg) / (ROLE_SHRINK.full - ROLE_SHRINK.low), 0, 1);
+    if (s <= 0) continue;
+    const l = lines.get(group(p))!;
+    pr.off = r1(pr.off + s * (l.off(mpg) - pr.off));
+    pr.def = r1(pr.def + s * (l.def(mpg) - pr.def));
+    pr.tot = r1(pr.off + pr.def);
+    n++;
+  }
+  console.log(
+    `role: ${n} bench players' value targets pulled toward their role (impact at 14 / 28 minutes: centres ${at('C', 14)} / ${at('C', 28)}, forwards ${at('F', 14)} / ${at('F', 28)}, guards ${at('G', 14)} / ${at('G', 28)})`,
+  );
+}
+
+/** His minutes a game last regular season, when he played 20 games or more. */
+function lastMpg(p: SeedPlayer): number | null {
+  const last = p.stats.filter((x) => x.real && x.season === SEED_SEASON - 1 && !x.playoffs);
+  const gp = last.reduce((a, x) => a + x.gp, 0);
+  return gp >= 20 ? last.reduce((a, x) => a + x.min, 0) / gp : null;
+}
+
+/** Minutes a game under which a player with a value target is still leveled by his minutes (levelPlayers). */
+const BENCH_MPG = 20;
+
 /** Display OVR expected from draft slot and reputation alone (no NBA sample). */
 function priorOvr(sp: SeedPlayer): number {
   const age = SEED_SEASON - sp.bornYear;
@@ -612,7 +678,8 @@ function priorOvr(sp: SeedPlayer): number {
  * stretch counts for less than three full seasons. Targets are fixed on first sight; later
  * passes only re-hit them as the display scale moves. Before calibration this is where every
  * small sample starts; after it, a player with a value target keeps the level his value
- * calibration gave him.
+ * calibration gave him, unless he played under BENCH_MPG minutes a game (over the three seasons or
+ * the last) and his minutes say less.
  */
 function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Map<string, number>, calibrated: boolean) {
   const scaleNow = () => buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
@@ -628,9 +695,13 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
     console.log(`leveling: OVR ≈ ${my.toFixed(1)} + ${slope.toFixed(2)} × (MPG − ${mx.toFixed(1)}) on ${fitRows.length} reliable players`);
     for (const p of players) {
       const a = aggs.get(p.id);
-      if (!a || a.rawMin < 400 || targets.has(p.id) || p.proj) continue;
+      // (a bench player with a value target is leveled too, but only down: his blocks, boards and steals
+      // a hundred possessions came against other benches, and his box-derived skills read them as a
+      // starter's, so Toppin, Sharpe and Robert Williams rated 80 on 17-19 minutes a night)
+      if (!a || a.rawMin < 400 || targets.has(p.id) || (p.proj && a.mpg >= BENCH_MPG && (lastMpg(p) ?? BENCH_MPG) >= BENCH_MPG)) continue;
       const rel = a.rawMin / (a.rawMin + 500);
-      targets.set(p.id, Math.round(rel * disp(p) + (1 - rel) * (my + slope * (a.mpg - mx))));
+      const t = Math.round(rel * disp(p) + (1 - rel) * (my + slope * (a.mpg - mx)));
+      if (!p.proj || t < disp(p)) targets.set(p.id, t);
     }
   } else {
     for (const p of players) {
@@ -654,6 +725,19 @@ function levelPlayers(players: SeedPlayer[], aggs: Map<string, Agg>, targets: Ma
     scale = scaleNow();
   }
   console.log(`leveling: ${targets.size} targets, ${moved} still moving on the last pass`);
+}
+
+/** Back down to his leveled OVR, a bench player with a value target the settle lifted over it (levelPlayers). */
+function rehitBench(players: SeedPlayer[], targets: Map<string, number>) {
+  const scale = buildOvrScale(players.filter((p) => p.team).map((p) => ovrRaw(p.ratings)));
+  let n = 0;
+  for (const p of players) {
+    const t = targets.get(p.id);
+    if (!p.proj || t === undefined || toDisplay(ovrRaw(p.ratings), scale) <= t) continue;
+    p.ratings = shiftToOvr(p.ratings, t, scale);
+    n++;
+  }
+  console.log(`leveling: ${n} bench players back to the level their minutes give them`);
 }
 
 /**

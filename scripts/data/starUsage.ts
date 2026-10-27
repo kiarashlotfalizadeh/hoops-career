@@ -11,7 +11,7 @@
 // ratings' volume trade-off, calibrate.ts VOLUME_TRADE, the best shooters reach their points on fewer
 // shots, and the league fell 7-9% short of its threes), and everyone's drawing fouls by the same few
 // points until it goes to the line as often as the real one.
-import type { SeedData } from '../../src/core/league/create';
+import type { SeedData, SeedPlayer } from '../../src/core/league/create';
 import { createLeague, defaultSettings } from '../../src/core/league/create';
 import { startRegularSeason, simDay } from '../../src/core/league/season';
 import { standardRoster } from '../../src/core/league/helpers';
@@ -60,6 +60,16 @@ const add = (a: Rate, s: Rate): Rate => ({
 });
 /** Rating points of drawing fouls per unit of log free-throw rate missed (calibrate.ts steps it the same way). */
 const DRW_GAIN = 16;
+/**
+ * Rating points of drawing fouls per unit of log free throws a shot a player misses by: a shooting
+ * foul's chance goes with his foul-drawing composite to the 0.9 (shots.ts), three quarters of it
+ * drawing fouls, so at a composite of 70 a point of drawing fouls moves his rate about 1%.
+ */
+const FT_GAIN = 80;
+/** How far over his real free throws a shot (in log) a player goes before his drawing fouls comes down. */
+const FT_NOISE = 0.05;
+/** Shots of shrinkage toward the league's free throws a shot, on each player's real and simulated rates. */
+const FT_PRIOR = { p: 0.27, k: 100 };
 
 function realRates(seed: SeedData): Map<string, Rate> {
   const out = new Map<string, Rate>();
@@ -111,6 +121,9 @@ export function tuneStarUsage(seed: SeedData, log = console.log) {
   // 2025-26 lines go to the line 23.5 times a game, against TARGETS' 21.8)
   const realLeague = { tpa: TARGETS.tpa / 240, fta: TARGETS.fta / 240, stl: TARGETS.stl / 240, blk: TARGETS.blk / 240 };
   let run = 0;
+  // (each player's drawing fouls as the calibration left it, moved with the league's steps below: the
+  // ceiling his own free-throw step comes back up to)
+  const drwCap = new Map(seed.players.map((p) => [p.id, p.ratings.drw]));
   PASSES.forEach((pass, i) => {
     const sim = new Map<string, Rate>();
     for (let s = 0; s < pass.seasons; s++) for (const [id, r] of playSeason(seed, 7 + run++)) sim.set(id, add(sim.get(id) ?? ZERO, r));
@@ -119,6 +132,12 @@ export function tuneStarUsage(seed: SeedData, log = console.log) {
     let miss3 = 0;
     // (players at or over their real threes a minute: the league's factor below doesn't lift them)
     const atThrees = new Set<string>();
+    // each fitted player's trips to the line a shot against his real rate: his own drawing fouls steps by
+    // how far he misses it (the league's level is the step below, a few percent under the seed's lines).
+    // The calibration fits it in its own games, and in a season the app plays the best drawers came out
+    // apart from their lines: Gilgeous-Alexander at 0.55-0.63 a shot for his real 0.47
+    // (the Thunder 27% over their players' real free throws), Avdija and Reaves 0.37-0.40 for 0.49-0.57
+    const ftFit: { p: SeedPlayer; want: number; got: number }[] = [];
     for (const [id, r] of real) {
       const p = byId.get(id);
       const s = sim.get(id);
@@ -135,6 +154,21 @@ export function tuneStarUsage(seed: SeedData, log = console.log) {
       miss3 += Math.abs(got3 - want3) * 36;
       if (got3 >= want3) atThrees.add(id);
       if (r.tpa >= 40) p.tend.three = Math.round(clamp(p.tend.three * Math.pow((want3 + 0.005) / (got3 + 0.005), pass.gain * 0.8), 0.02, THREE_TEND_MAX) * 1000) / 1000;
+      if (r.fga >= 200 && s.fga >= 100) {
+        ftFit.push({ p, want: (r.fta + FT_PRIOR.k * FT_PRIOR.p) / (r.fga + FT_PRIOR.k), got: (s.fta + FT_PRIOR.k * FT_PRIOR.p) / (s.fga + FT_PRIOR.k) });
+      }
+    }
+    let missFt = 0;
+    for (const { p, want, got } of ftFit) {
+      missFt += Math.abs(got - want);
+      // (past a season's noise, and never over where the calibration put him: a drawer under his rate is
+      // mostly one the scale's top can't lift further, Avdija at 92 for 0.40 a shot against his 0.57, and
+      // lifting the rest only reorders the ratings; one stepped down too far comes back up to it)
+      const miss = Math.log(want / got);
+      if (Math.abs(miss) > FT_NOISE) {
+        const step = clamp(FT_GAIN * (miss - Math.sign(miss) * FT_NOISE) * pass.gain * 0.8, -12, 12);
+        p.ratings.drw = Math.round(clamp(Math.min(drwCap.get(p.id)!, p.ratings.drw + step), 1, 100) * 10) / 10;
+      }
     }
     // the league's threes and trips to the line: everyone's three-point tendency by the same factor and
     // drawing fouls by the same step, so each player's share and the ratings' order stay as calibrated
@@ -148,13 +182,14 @@ export function tuneStarUsage(seed: SeedData, log = console.log) {
     for (const p of seed.players) {
       if (p.tend && !(three > 1 && atThrees.has(p.id))) p.tend.three = Math.round(clamp(p.tend.three * three, 0.02, THREE_TEND_MAX) * 1000) / 1000;
       p.ratings.drw = Math.round(clamp(p.ratings.drw + drwStep, 1, 100) * 10) / 10;
+      drwCap.set(p.id, drwCap.get(p.id)! + drwStep);
       // (within the calibration's bounds, which the game's tendencies keep: playerGen.ts TEND_MODEL)
       if (p.tend?.stl !== undefined) p.tend.stl = Math.round(clamp(p.tend.stl * stl, 0.2, 5) * 1000) / 1000;
       if (p.tend?.blk !== undefined) p.tend.blk = Math.round(clamp(p.tend.blk * blk, 0.15, 6) * 1000) / 1000;
     }
     const pct = (x: number, y: number) => `${x >= y ? '+' : ''}${((x / y - 1) * 100).toFixed(1)}%`;
     log(
-      `  season pass ${i + 1}: ${n} players · mean miss ${(miss / Math.max(1, n)).toFixed(2)} points per 36, ${(miss3 / Math.max(1, n)).toFixed(2)} threes per 36; league threes ${pct(lg.tpa, realLeague.tpa)} (tendencies ×${three.toFixed(3)}), free throws ${pct(lg.fta, realLeague.fta)} (drawing fouls ${drwStep >= 0 ? '+' : ''}${drwStep.toFixed(1)}), steals ${pct(lg.stl, realLeague.stl)}, blocks ${pct(lg.blk, realLeague.blk)}`,
+      `  season pass ${i + 1}: ${n} players · mean miss ${(miss / Math.max(1, n)).toFixed(2)} points per 36, ${(miss3 / Math.max(1, n)).toFixed(2)} threes per 36, ${(missFt / Math.max(1, ftFit.length)).toFixed(3)} free throws a shot; league threes ${pct(lg.tpa, realLeague.tpa)} (tendencies ×${three.toFixed(3)}), free throws ${pct(lg.fta, realLeague.fta)} (drawing fouls ${drwStep >= 0 ? '+' : ''}${drwStep.toFixed(1)}), steals ${pct(lg.stl, realLeague.stl)}, blocks ${pct(lg.blk, realLeague.blk)}`,
     );
   });
 }

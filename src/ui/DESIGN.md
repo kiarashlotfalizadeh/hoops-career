@@ -382,9 +382,10 @@ graphics package); the console under it is paper and card stock like every other
   at most three headline decisions (one control may move several settings: Play through sets the five
   action weights, When a shot goes up the glass and getting back) and a Fine-tune with every setting
   apart; partnerships have no control of their own: roles, the shape and the rotation make them, and
-  the board draws them. The hero carries the A/B/C switch as a small "A ▾" beside the style's name
-  and the mentality as one row; the board's heading is its in/out-of-possession switch. At most two
-  rows of controls on a phone.
+  the board draws them. Each section is its own path under the Team tabs (`/team/tactics/:sub`), so
+  a phone shows one row of tabs and one switch over the content; over each, one line holds the style
+  with its familiarity and the A/B/C switch as a small "A ▾", and a section's own switch is its
+  heading (`HeadSwitch`: the board's in/out of possession, the phase, the view).
 - Inbox mail: a subject that says what happened and a one-line summary; detail below it. **Mail is
   for what changes a plan**: what a screen already shows (a short injury, "the season starts")
   doesn't get mail. One mail per pitch or event: a repeat replaces its earlier mail.

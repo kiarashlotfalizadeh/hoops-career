@@ -22,7 +22,7 @@ import {
 } from '../live/atmosphere';
 import { feedRows } from '../live/useAtmosphere';
 import { isKey, type KeyContext } from '../live/keyPlays';
-import { sealedGame, simDecided, skipChoices } from '../live/skip';
+import { hurtStarters, sealedGame, simDecided, skipChoices } from '../live/skip';
 import { pickHighlights, playValue } from '../../core/analysis/highlights';
 import { teamComparison } from '../components/gameBlocks';
 import { createLeague, defaultSettings } from '../../core/league/create';
@@ -440,6 +440,34 @@ describe('the story of a live game', () => {
       expect(sealedGame({ q: 4, clock: 400, ball: 0, sides: T(120, 85) }, 0)).toBe(true);
       expect(sealedGame({ q: 4, clock: 400, ball: 0, sides: T(100, 96) }, 0)).toBe(false);
       expect(sealedGame({ q: 2, clock: 400, ball: 0, sides: T(70, 30) }, 0)).toBe(false);
+      // a skip stops for your starters hurt along the way: not a bench player's, not theirs, not one hurt before it
+      const team = (tid: number, starters: number[], bench: number[]) => ({
+        team: { tid },
+        players: [...starters.map((pid) => ({ pid, starter: true })), ...bench.map((pid) => ({ pid, starter: false }))],
+      });
+      const hurt = (injuries: { pid: number; tid: number }[]) => ({ injuries, T: [team(5, [1, 2], [3]), team(9, [11], [12])] });
+      expect(hurtStarters(hurt([{ pid: 2, tid: 5 }]), 0, 0)).toEqual([2]);
+      expect(
+        hurtStarters(
+          hurt([
+            { pid: 3, tid: 5 },
+            { pid: 11, tid: 9 },
+          ]),
+          0,
+          0,
+        ),
+      ).toEqual([]);
+      expect(
+        hurtStarters(
+          hurt([
+            { pid: 1, tid: 5 },
+            { pid: 2, tid: 5 },
+          ]),
+          0,
+          1,
+        ),
+      ).toEqual([2]);
+      expect(hurtStarters(hurt([{ pid: 11, tid: 9 }]), 1, 0)).toEqual([11]);
     }
 
     // highlights value a dunk over a layup, an and-one over both, and a block for the defense

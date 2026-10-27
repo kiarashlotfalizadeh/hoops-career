@@ -321,7 +321,7 @@ export default function Live() {
       applyTactics(a.apply, undefined, { measured: call });
       useStore.getState().toast(`${a.label}: from the next possession.`, 'good');
     } else if (a.kind === 'sub') (stop ? subAtStop : substitute)(a.out, a.in);
-    else if (a.kind === 'timeout') s.callTimeout(call ? a.label : 'stop the run');
+    else if (a.kind === 'timeout') s.callTimeout(call ? 'staff call' : 'stop the run');
     else setCview('lineup');
     if (call) s.staff.took(a.label);
     s.setDismissed((d) => [...d, n.id]);

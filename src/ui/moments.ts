@@ -23,7 +23,7 @@ import { reviewPath, seasonReviewOf } from '../core/league/legacy';
 import { endText, gradeWord } from '../core/league/legacyReview';
 import { awardLine, awardPhrase } from '../core/league/media/history';
 import { isCareerMarkStory } from '../core/league/media/marks';
-import { BIG_NIGHT, REC_LABEL, REC_STATS, TEAM_REC_STATS, gameMark, recordWhat, teamMark } from '../core/league/records';
+import { BIG_NIGHT, REC_LABEL, REC_STATS, TEAM_REC_STATS, bookFrom, gameMark, recordReach, recordSpan, recordWhat, teamMark, youngBook } from '../core/league/records';
 
 export type MomentKind =
   | 'clinch'
@@ -294,10 +294,10 @@ function recordMoments(league: League): Moment[] {
   const me = league.userTid;
   const season = league.season;
   if (!book) return [];
-  // (in the book's first season every big night is "a record": only a night of BIG_NIGHT points is one)
-  const young = season <= book.since;
+  // (in the book's first season every big night is "a record": only a night of BIG_NIGHT points is one; a book with the NBA's games is past that)
+  const young = youngBook(book, season);
   const out: Moment[] = [];
-  const since = seasonLabel(book.since);
+  const since = seasonLabel(bookFrom(book));
   const seen = new Set<number>();
   const push = (scope: 'league' | 'team', what: string, gid: number, day: number, pid: number | undefined, rank: number, line: string) => {
     if (seen.has(gid)) return;
@@ -328,7 +328,7 @@ function recordMoments(league: League): Moment[] {
       m.day,
       m.pid,
       9,
-      `${m.name} against the ${league.teams[m.opp]?.name}: the most in a game ${young ? 'in this league' : `since ${since}`}.`,
+      `${m.name} against the ${league.teams[m.opp]?.name}: the most in a game ${recordReach(league, { book: 'reg', stat, v: m.v }, season)}.`,
     );
   }
   for (const stat of TEAM_REC_STATS) {
@@ -343,7 +343,7 @@ function recordMoments(league: League): Moment[] {
       m.day,
       undefined,
       8,
-      `${m.score[0]}-${m.score[1]} over the ${league.teams[m.opp]?.name}: a league record since ${since}.`,
+      `${m.score[0]}-${m.score[1]} over the ${league.teams[m.opp]?.name}: a league record${recordSpan(league, { scope: 'league', book: 'reg', stat, team: true, v: m.v })}.`,
     );
   }
   const mine = book.teams[me]?.reg;

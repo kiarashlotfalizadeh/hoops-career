@@ -1,7 +1,8 @@
 // The tactics board, Football Manager's way with a basketball court: the starting five (the rotation's
 // first five) where the formation puts them, in possession by the offensive shape, out of possession
-// by the defensive scheme. Each plate is a player with his role at that end, how well he suits it (★)
-// and a dot for how well he knows his role pair; a tap opens his player sheet. Lines join the
+// by the defensive scheme. Each plate is a player with his role at that end, how well he suits it (one
+// figure: his stars of five, as his sheet shows them) and a dot for how well he knows his role pair; a
+// tap opens his player sheet. The board's heading is its end, the switch between them. Lines join the
 // partners whose roles link at that end (heavier the more of it the engine plays), a red dashed one
 // the bigs who crowd the paint. Over the court, the formation's picker (the shape, or the scheme and
 // coverage) with each choice's fit for this roster and how well the team knows it.
@@ -17,9 +18,10 @@ import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
 import { LINK_META, type Clash, type Link } from '../../core/sim/links';
-import { Help, Section, Segmented } from '../components/ui';
+import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
+import { HeadSwitch } from './HeadSwitch';
 import { tweak } from './edit';
 import { BOARD_H, DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from './formation';
 import { linkKey, linkLine, linksOnSide, plateAt } from './partners';
@@ -64,13 +66,6 @@ const fitClass = (v: number) => (v >= 5 ? 'good' : v <= -5 ? 'bad' : '');
 
 /** First sentence of a line of help. */
 const first = (s: string) => s.split(/(?<=\.)\s/)[0];
-
-const stars = (n: number) => (
-  <>
-    {'★'.repeat(n)}
-    <span className="dim">{'★'.repeat(5 - n)}</span>
-  </>
-);
 
 export function Board({
   t,
@@ -130,8 +125,9 @@ export function Board({
     const v = famOf(key);
     return (
       <>
+        {/* (how well the team knows this choice: "known", as the overall familiarity is the hero's) */}
         <span className={famTone(v)}>
-          {Math.round(v)}% {famLabel(v).toLowerCase()}
+          {Math.round(v)}% known<span className="sr-only">, {famLabel(v).toLowerCase()}</span>
         </span>
         {extra && <> · {extra}</>}
       </>
@@ -145,7 +141,7 @@ export function Board({
       title={
         <div className="tx-boardsec-h">
           <h3 className="sr-only">Tactics board</h3>
-          <Segmented
+          <HeadSwitch
             value={side}
             onChange={setSide}
             label="Phase on the board"
@@ -163,9 +159,9 @@ export function Board({
             and each player&apos;s <Term id="defroles">defensive role</Term>.
           </p>
           <p>
-            Each plays a <Term id="roles">role</Term> at each end (Primary Creator, Rim Runner, Glue Guy…; <Term id="defroles">defensive roles</Term> out of possession). ★ is how
-            well he suits his role at that end (★★★★★ the best); an amber edge means another role suits him clearly better (two stars or more). The dot is how well he knows his
-            pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
+            Each plays a <Term id="roles">role</Term> at each end (Primary Creator, Rim Runner, Glue Guy…; <Term id="defroles">defensive roles</Term> out of possession). The figure
+            (4★) is how well he suits his role at that end against the league&apos;s rotation players at it, out of five; an amber edge means another role suits him clearly better
+            (two stars or more). The dot is how well he knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
           </p>
           <p>
             A line joins two players whose roles make a <Term id="partnership">partnership</Term> at that end: the heavier and darker, the more of it they play (it grows with their{' '}
@@ -190,8 +186,8 @@ export function Board({
               }
               help={
                 <>
-                  Where your five stand in the half court. The figure is the staff&apos;s read of what the shape is worth a game for this roster against 4-out, 1-in, once drilled;
-                  the % is how well your team knows it. Change it and the staff measures it on your next games.
+                  Where your five stand in the half court, whatever the playbook: any playbook runs from any shape. The figure is the staff&apos;s read of what the shape is worth a
+                  game for this roster against 4-out, 1-in, once drilled; the % is how well your team knows it. Change it and the staff measures it on your next games.
                 </>
               }
               options={[...OFF_SHAPES]
@@ -215,7 +211,7 @@ export function Board({
                 }))}
               note={
                 shape === 'fourOut' ? (
-                  <>The baseline shape · {famSub('shape:fourOut')}</>
+                  <>The default, whatever the playbook · {famSub('shape:fourOut')}</>
                 ) : (
                   <>
                     <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> a game vs 4-out · {famSub(`shape:${shape}`)}
@@ -327,9 +323,12 @@ export function Board({
                   <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
                   <span className="ellipsis">{nameOf(r.p.pid)}</span>
                 </span>
-                <span className="tx-floor-r">{role}</span>
-                <span className="tx-floor-s" aria-hidden="true">
-                  {stars(fit)}
+                <span className="tx-floor-r">
+                  <span className="ellipsis">{role}</span>
+                  <span className="tx-floor-s num" aria-hidden="true">
+                    {fit}
+                    <i>★</i>
+                  </span>
                 </span>
                 {r.p.injury && <span className="tx-floor-best">Injured</span>}
               </button>

@@ -1,7 +1,8 @@
 // The record book: single-game marks kept best first (a tie stays with whoever set it first), the
 // league's and each franchise's lists agreeing with the box scores they came from, career highs,
 // a book read back from the stored results for a save from before it, single-season and career
-// records read from the stats kept for good, and record news only once a full season is behind it.
+// records read from the stats kept for good, and record news only once a full season is behind it;
+// a real league's book opened with the NBA's games since 1996-97, and the seasons that match its best.
 import 'fake-indexeddb/auto';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { testLeague } from '../../state/__tests__/fixtures';
@@ -29,7 +30,11 @@ import {
   mayHoldSeasonRecord,
   teamMark,
   type MarkRow,
+  type RecordsData,
 } from '../league/records';
+import { applyHistory, type HistoryData } from '../league/media/past';
+import historyJson from '../../data/history.json';
+import recordsJson from '../../data/records.json';
 import { blankStats } from '../playerGen';
 import type { GameResult, League } from '../types';
 import seedJson from '../../data/seed.json';
@@ -208,6 +213,60 @@ describe('the record book', () => {
       if (userGame) expect(news[0].text).toContain('100 points (a league record)');
       else expect(news[0]).toMatchObject({ head: expect.stringContaining('sets a league record: 100 points'), weight: 3 });
       expect(`${news[0].head ?? ''} ${news[0].text}`).not.toContain('Knicks record');
+    }
+
+    // a real league's book opens with the NBA's games since 1996-97 (records.json): its records are
+    // measured against them, say how far back they reach, and the 73-9 Warriors' season has its moment
+    {
+      const real = played(6);
+      applyHistory(real, { ...(historyJson as unknown as HistoryData), records: recordsJson as unknown as RecordsData });
+      const book = real.records!;
+      expect(book.from).toBe((recordsJson as unknown as RecordsData).from);
+      expect(book.since).toBe(real.startSeason);
+      const pts = book.league.reg.players.pts!.map((r) => gameMark(real, r));
+      expect(pts[0].v).toBeGreaterThanOrEqual(81);
+      expect(pts.find((m) => m.name === 'Kobe Bryant')).toMatchObject({ v: 81, pid: expect.any(Number) });
+      // (a player long gone carries his name under a pid below zero; one still playing is linked)
+      expect(pts.filter((m) => m.season < real.startSeason).every((m) => m.pid < 0 === !real.players[m.pid])).toBe(true);
+      expect(pts.some((m) => real.players[m.pid])).toBe(true);
+      // a save keeps it (the save check takes every row)
+      expect(migrate(structuredClone(real)).records!.league.reg.players.pts![0]).toEqual(book.league.reg.players.pts![0]);
+      // the book isn't young: a 60-point night in the first week is no league record, and a franchise's says "since 1996-97"
+      const res = structuredClone(real.games.find((g) => g.type === 'regular' && g.home.tid !== real.userTid && g.away.tid !== real.userTid)!);
+      const star = res.home.players.find((b) => b.min > 0)!;
+      const night = (pts: number, gid: number) => {
+        const x = structuredClone(real);
+        const g: GameResult = { ...structuredClone(res), gid };
+        g.home.players.find((b) => b.pid === star.pid)!.pts = pts;
+        const before = x.news.length;
+        recordNews(x, g, recordGame(x, g));
+        return x.news.slice(before).filter((n) => n.kind === 'record');
+      };
+      const sixty = night(60, 999_201);
+      expect(sixty.every((n) => !n.head && !n.text.includes('league record') && n.text.includes('record since 1996-97'))).toBe(true);
+      // past Bam Adebayo's 83 but short of Wilt Chamberlain's 100: the most since 1996-97, and the record still his
+      const ninety = night(90, 999_202);
+      expect(ninety[0]).toMatchObject({ head: expect.stringContaining('scores 90 points, the most since 1996-97'), weight: 3 });
+      expect(ninety[0].text).toContain("The record is still Wilt Chamberlain's 100 for the Philadelphia Warriors in 1961-62");
+      expect(night(101, 999_203)[0]).toMatchObject({ head: expect.stringContaining('sets a league record: 101 points') });
+      // the wins that equal or pass the most in a season, and the streak that equals the Lakers' 33
+      const wins = (won: number, streak = 1) => {
+        const x = structuredClone(real);
+        const g = structuredClone(res);
+        g.home.pts = g.away.pts + 5;
+        Object.assign(
+          x.teams[g.home.tid].seasons.find((s) => s.season === g.season)!,
+          { won, lost: 9, streak },
+        );
+        const before = x.news.length;
+        recordNews(x, g, []);
+        return x.news.slice(before).map((n) => `${n.head} ${n.text}`);
+      };
+      expect(wins(71)).toEqual([]);
+      expect(wins(72)[0]).toContain('level with the 1995-96 Chicago Bulls (72-10). Only the 2015-16 Golden State Warriors (73-9) won more');
+      expect(wins(73)[0]).toMatch(/^73 wins: the .+ tie the record/);
+      expect(wins(74)[0]).toMatch(/^74 wins: the .+ pass the record.*past the 2015-16 Golden State Warriors \(73-9\)/);
+      expect(wins(40, 33)[0]).toContain('level with the 1971-72 Los Angeles Lakers (33)');
     }
 
     // what one game did to the book

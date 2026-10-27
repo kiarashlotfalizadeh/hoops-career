@@ -781,11 +781,11 @@ describe('injuries, wear and development', () => {
       l.teams[U].tactics.manual = true;
       const mine = structuredClone(l.teams[U].tactics);
       const before = l.teams.map((t) => t.tactics.offPreset + t.tactics.defPreset);
-      // every team loses its two best players for a month
+      // every team loses its four best players for a month
       for (const t of l.teams)
         for (const p of teamPlayers(l, t.tid)
           .sort((a, b) => b.ovr - a.ovr)
-          .slice(0, 2))
+          .slice(0, 4))
           p.injury = { type: 'Calf Strain', gamesRemaining: 30, gamesTotal: 30, severity: 'moderate' };
       for (const t of l.teams) ensureRotation(l, t.tid);
       for (const t of l.teams.filter((x) => x.tid !== U)) {

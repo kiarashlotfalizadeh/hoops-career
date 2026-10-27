@@ -6,25 +6,32 @@
 // isn't one.
 //
 // What the staff looks at, planned on the week's first morning (planWeek):
-// - the week's big game (a billed night: a rivalry, Christmas, a revenge game...): its best counter,
-//   measured on that game. A counter changes one game's plan and costs nothing after it (the base
-//   system's own familiarity barely moves for one night), so a gain goes in and is listed.
 // - the practice: tactical drills while the system is short (FAM_DRILL), recovery for a heavy week on
 //   worn legs (WEAR_HEAVY). Drills build the system twice as fast as the everyday balance at no cost
 //   to the legs (PREP_META), so on their own they go in without a word. They become a choice when the
-//   week also has a big game with a counter: opponent prep drills the counter for that game (worth
-//   points that night) while the system builds at a quarter of drills' pace (worth points in the games
+//   week also has a big game (a billed night: a rivalry, Christmas, a revenge game...) whose best
+//   counter measures as a gain on it: opponent prep drills the counter for that game (worth points
+//   that night) while the system builds at a quarter of drills' pace (worth points in the games
 //   after). Recovery against the system the same way: the legs in the week's last game against the
 //   system in the first game after it. Both sides are measured, each on its own game, with the
 //   familiarity and wear the practice and wear models give for each (projectFoci); the card opens only
-//   when each side wins its own game by WORTH_MIN, else the side that does goes in.
-// - the young players, for a team whose owner asks for their minutes (a youth goal) and is behind on
-//   them: the staff's rotation leaning to them for YOUTH_GAMES games, as an AI team's youth movement
-//   does (see youthLean.ts), the minutes it adds worked out from the rotation, what that does to the
-//   owner's goal from his grading, and its cost measured on the week's first game. Free (inside
-//   WORTH_MIN), it goes in; costing points, it's a card: the owner's goal against the wins.
-//   (Minutes also count in development, but only through a season's average crossing 15 or 25 a game
-//   for a player 25 or under: see progression.ts. A few weeks rarely moves that, so it isn't counted.)
+//   when each side wins its own game by WORTH_MIN, else the side that does goes in. The big game's
+//   counter is measured only in a drills week, where it can make that choice: on its own it's a
+//   one-night pick worth about a tenth of a win a season (round-3 review: the billed nights' silent
+//   counters were 40% of the staff's measuring), so a week with the system known leaves the night to
+//   the user's plan (the Preview has the staff's counters, measured as it shows).
+// - the young players, as an AI team's youth movement leans to them (see youthLean.ts): the minutes a
+//   game the staff's rotation leaning to them for YOUTH_GAMES games adds, worked out from the rotation,
+//   with its cost measured on the week's first game. Two horizons it can be for:
+//   - the owner's minutes (a youth goal he's behind on): what it does to the goal from his grading;
+//   - the draft (after the deadline, the postseason out of reach: odds under LOTTERY_OUT): what the
+//     wins it costs do to his own first-round pick, as the forecast reads the standings
+//     (lotteryOutlook).
+//   Free (inside WORTH_MIN), it goes in; costing points, it's a card: the owner's goal or the pick
+//   against the wins. (Minutes also count in development, but only through a season's average
+//   crossing 15 or 25 a game for a player 25 or under: see progression.ts. A few weeks rarely moves
+//   that, so it isn't counted.) A lean a card put in is measured again on the last of its games once
+//   they're played, and the digest says what it came to (youthPayoff): a measurement, never the record.
 // One card a week at most: the practice's, else the young players'. Unanswered by the morning after it
 // opened, the staff goes with its lean (each card says which and why: the staff's read, not a
 // measurement). The practice it put in comes out at the week's end; the young players' lean at its
@@ -38,8 +45,13 @@
 // minutes cap, recovery in most weeks. Wear only costs over 40 (wearPerf), and over a simulated season
 // a rotation's minutes-weighted wear stayed under 10 (its most-worn player under 40) for a contender,
 // a middle team and a bad one, while a night off for a star measured about −9 points that night
-// (Gilgeous-Alexander, 2027). A call whose honest answer is always "play him" isn't a choice.
+// (Gilgeous-Alexander, 2027). A call whose honest answer is always "play him" isn't a choice. Nor is
+// learning a change to the playbook: a coverage or a habit the staff changes plays about as well the
+// first night as once it's drilled (24 of 24 of the staff's changes for a contender over a season,
+// 2026-10: within a quarter of a point a game), so a change that measures as a gain is a gain tonight
+// too, and the staff makes it (staffLever.ts).
 import type { Familiarity, GamePlan, League, Player, PrepFocus, Rotation, ScheduledGame } from '../types';
+import type { YouthLean } from './youthLean';
 import { curTeamSeason, fmtDate, teamPlayers } from './helpers';
 import { PREP_META, freshFamiliarity, practiceDay } from '../sim/familiarity';
 import { systemFamiliarity } from './practice';
@@ -53,6 +65,9 @@ import { benchTwoWays, ensureRotation, youthLean } from './games';
 import { currentGoals, goalResult, gradeGoal, YOUNG_AGE } from './ownerGoals';
 import { playerAge } from '../playerGen';
 import { winChance } from '../analysis/winProb';
+import { lotteryMatrix, pct, pickProjection } from '../analysis/odds';
+import { LOTTERY_ODDS } from './draft';
+import { Rng, hashString } from '../random';
 
 /** Days in a week of calls: week `w` of the regular season runs from day 7w to day 7w + 6. */
 export const WEEK_DAYS = 7;
@@ -77,6 +92,25 @@ export const YOUTH_LEVEL = 0.75;
 export const YOUTH_ADD = 8;
 /** His games the young players' lean holds; turned down, his games before the staff asks again. */
 export const YOUTH_GAMES = 10;
+/**
+ * The postseason odds (tenths of a percent, the weekly trail's latest point) under which, after the
+ * deadline, the young players' minutes are weighed against the draft: the season's out of reach.
+ */
+export const LOTTERY_OUT = 100;
+/** Standings drawn for the pick's two readings (pickProjection's own count), each the same both ways. */
+const LOTTERY_DRAWS = 400;
+/**
+ * How far the wins a lean costs have to move his pick for the draft to weigh against them: its
+ * chance of the top four by this much (a share), or its expected slot by this many places. Less, and
+ * the wins buy nothing in the draft: the rotation stays as it is.
+ */
+const LOTTERY_MOVE = 0.02;
+const LOTTERY_SLOTS = 0.25;
+/**
+ * What the wins a lean costs may take off the owner's grade on his wins goal (−1..1, weighted as he
+ * weighs it) for the staff to lean to the pick: under it the goal is out of reach (or made) either way.
+ */
+const LOTTERY_GRADE = 0.02;
 /**
  * How many games the staff counts a better-drilled system for, against one night's prep or rest: the
  * gap a week of drills makes closes as the games teach the system (each closes about a tenth of what's
@@ -121,8 +155,12 @@ export interface WeekCall {
   games?: WeekGame[];
   /** The practice the staff would hold for the week: the focus, the one it replaces, why, and the week's last game. */
   focus?: { to: PrepFocus; from: PrepFocus; why: 'drills' | 'recovery'; gid: number; opp: number };
-  /** The young players' lean the staff would put in: the minutes a game it adds them, the game it's measured on, and its last day. */
-  youth?: { add: number; gid: number; opp: number; until: number };
+  /**
+   * The young players' lean the staff would put in: the minutes a game it adds them, the game it's
+   * measured on, its last day, and what it's for (the owner's youth goal; the draft once the
+   * postseason is out of reach; a call planned before there was a draft one is the goal's).
+   */
+  youth?: { add: number; gid: number; opp: number; until: number; why?: 'goal' | 'draft' };
   /** The staff has made its picks: what's best on every count went in, and a choice left opened the card (`ask`). */
   decided?: boolean;
   /** What the card is about, and the day it opened. */
@@ -278,10 +316,54 @@ export function youthOutlook(league: League, add: number) {
   return { og, g, now, base, lean, grade: [gradeGoal(league, og, g, base), gradeGoal(league, og, g, lean)] as const };
 }
 
+/** The postseason out of reach, after the deadline: the user's odds at the weekly trail's latest point under LOTTERY_OUT. */
+function seasonOut(league: League): boolean {
+  const t = league.oddsTrail;
+  const last = t && t.season === league.season && t.tid === league.userTid ? t.pts.at(-1) : undefined;
+  return league.phase === 'regular' && league.day > league.tradeDeadlineDay && !!last && last[1] < LOTTERY_OUT;
+}
+
 /**
- * The young players' lean the staff would put in this week: for a team whose owner has a youth goal
- * it's on pace to miss, with the staff running the rotation, nothing leaning already and no "no" from
- * him in the last YOUTH_GAMES games, when the lean adds YOUTH_ADD minutes a game or more.
+ * The user's own first-round pick as the forecast reads the standings (pickProjection's projected
+ * win% and spread for every team), as it stands and with `lost` fewer wins this season: its chance of
+ * a top-four pick and its expected slot each way, on the same LOTTERY_DRAWS standings (each drawn
+ * once, the user's lower by the wins: paired), through the lottery's odds. Null when the pick isn't
+ * his or the projection is for another draft.
+ */
+export function lotteryOutlook(league: League, lost: number): { top4: [number, number]; pick: [number, number] } | null {
+  const me = league.userTid;
+  const own = league.draftPicks.some((d) => d.season === league.season && d.round === 1 && d.originalTid === me && d.tid === me);
+  const pp = pickProjection(league);
+  if (!own || pp.season !== league.season) return null;
+  const n = league.teams.length;
+  const m = Math.min(LOTTERY_ODDS.length, n);
+  const lot = lotteryMatrix(m);
+  const rng = new Rng(hashString(`${league.id}:${league.season}:${league.day}:lottery-lean`));
+  const top4 = [0, 0];
+  const pick = [0, 0];
+  const at = new Float64Array(n);
+  for (let d = 0; d < LOTTERY_DRAWS; d++) {
+    for (let t = 0; t < n; t++) at[t] = pp.pct[t] + pp.sd[t] * rng.normal();
+    for (const [i, shift] of [0, lost / 82].entries()) {
+      const mine = at[me] - shift;
+      // (worst first; a tie goes the user's way: the lottery splits it)
+      let place = 0;
+      for (let t = 0; t < n; t++) if (t !== me && at[t] < mine) place++;
+      if (place < m) {
+        const row = lot[place];
+        top4[i] += row[0] + row[1] + row[2] + row[3];
+        pick[i] += row.reduce((a, p, k) => a + p * (k + 1), 0);
+      } else pick[i] += place + 1;
+    }
+  }
+  return { top4: [top4[0] / LOTTERY_DRAWS, top4[1] / LOTTERY_DRAWS], pick: [pick[0] / LOTTERY_DRAWS, pick[1] / LOTTERY_DRAWS] };
+}
+
+/**
+ * The young players' lean the staff would put in this week: with the staff running the rotation,
+ * nothing leaning already and no "no" from him in the last YOUTH_GAMES games, when the lean adds
+ * YOUTH_ADD minutes a game or more; for a team whose owner has a youth goal it's on pace to miss, or
+ * one out of the postseason's reach after the deadline (the draft).
  */
 function weekYouth(league: League, games: ScheduledGame[]): WeekCall['youth'] | undefined {
   const me = league.userTid;
@@ -292,8 +374,9 @@ function weekYouth(league: League, games: ScheduledGame[]): WeekCall['youth'] | 
   const add = Math.round(youngPerGame(league, leanedRotation(league, YOUTH_LEVEL)) - youngPerGame(league, league.teams[me].rotation));
   if (add < YOUTH_ADD) return undefined;
   const o = youthOutlook(league, add);
-  if (!o || o.base >= o.g.target) return undefined;
-  return { add, gid: first.gid, opp: oppOf(league, first), until: youthUntil(league) };
+  const why = o && o.base < o.g.target ? 'goal' : seasonOut(league) && lotteryOutlook(league, 0) ? 'draft' : null;
+  if (!why) return undefined;
+  return { add, gid: first.gid, opp: oppOf(league, first), until: youthUntil(league), why };
 }
 
 /** The day of his YOUTH_GAMES-th game from today (or his last). */
@@ -303,9 +386,21 @@ function youthUntil(league: League): number {
 }
 
 /** Put the young players' lean in (his answer, or the staff's own pick), or note his "no" so it isn't asked again for a while. */
-function putYouth(league: League, how: 'staff' | 'auto' | 'kept') {
+function putYouth(league: League, how: 'staff' | 'auto' | 'kept', wc?: WeekCall, card = false) {
   const until = youthUntil(league);
-  league.youthLean = { season: league.season, tid: league.userTid, from: league.day, until, level: how === 'kept' ? 0 : YOUTH_LEVEL, how };
+  const y = wc?.youth;
+  const pts = y && kept(league, weekWorthId(wc, 'youth'), y.gid)?.pts;
+  league.youthLean = {
+    season: league.season,
+    tid: league.userTid,
+    from: league.day,
+    until,
+    level: how === 'kept' ? 0 : YOUTH_LEVEL,
+    how,
+    ...(y ? { why: y.why ?? 'goal', young: Math.round(youngPerGame(league, league.teams[league.userTid].rotation)) } : {}),
+    ...(pts !== undefined ? { pts } : {}),
+    ...(card ? { card: true as const } : {}),
+  };
   // (in from tonight: the staff's rotation is otherwise planned again each morning)
   if (how !== 'kept' && !league.teams[league.userTid].rotation.manual) ensureRotation(league, league.userTid);
 }
@@ -322,8 +417,9 @@ export function planWeek(league: League, week: number): WeekCall {
   if (league.phase !== 'regular' || (week === 0 && guideOpen(league))) return call;
   const games = gamesIn(league, league.day, week * WEEK_DAYS + WEEK_DAYS - 1);
   if (!games.length) return call;
-  const big = bigGames(league, games);
   const focus = weekPractice(league, games);
+  // (the big game's counter only where it can make the practice a choice: see the top of the file)
+  const big = focus?.why === 'drills' ? bigGames(league, games) : [];
   const youth = weekYouth(league, games);
   if (big.length) call.games = big;
   if (focus) call.focus = focus;
@@ -585,8 +681,29 @@ function tradeWorth(league: League, wc: WeekCall, tr: PracticeTrade) {
 /** The practice the staff leans to when each side wins its own game: the near game's edge against the far one's, counted for FAR_CARRY games. */
 const practiceLean = (w: { near: number; far: number }) => (w.near >= w.far * FAR_CARRY ? 'near' : 'far');
 
-/** The young players' lean as the owner's grading reads it: what it adds on his youth goal against what its cost in wins takes off his wins goal (weighted as he weighs them). */
-function youthLeans(league: League, add: number, pts: number): boolean {
+/** The wins a lean measured at `pts` a game costs over its games. */
+const leanLost = (league: League, pts: number) => -winsOf(pts, Math.min(YOUTH_GAMES, gamesLeft(league)));
+
+/**
+ * What the wins a lean costs take off the owner's grade on his wins goal where the forecast has the
+ * season ending (weighted as he weighs it): about nothing when the goal is out of reach either way.
+ */
+function winsGradeCost(league: League, lost: number): number {
+  const og = currentGoals(league);
+  const wins = og?.goals.find((x) => x.kind === 'wins');
+  if (!og || !wins) return 0;
+  const w = pickProjection(league).pct[league.userTid] * 82;
+  return (gradeGoal(league, og, wins, w) - gradeGoal(league, og, wins, w - lost)) * wins.weight;
+}
+
+/**
+ * The young players' lean as the staff weighs it: for the owner's goal, what it adds on his youth goal
+ * against what its cost in wins takes off his wins goal (weighted as he weighs them); for the draft,
+ * the pick's when the wins it costs don't move his grade (LOTTERY_GRADE).
+ */
+function youthLeans(league: League, y: NonNullable<WeekCall['youth']>, pts: number): boolean {
+  if (y.why === 'draft') return winsGradeCost(league, leanLost(league, pts)) < LOTTERY_GRADE;
+  const add = y.add;
   const o = youthOutlook(league, add);
   if (!o) return false;
   const gain = (o.grade[1] - o.grade[0]) * o.g.weight;
@@ -644,20 +761,105 @@ export function weekDecide(league: League) {
   }
   const y = wc.youth;
   const yw = y && kept(league, weekWorthId(wc, 'youth'), y.gid);
+  // (for the draft, wins that don't move the pick buy nothing: the rotation as it is, and not asked again for a while)
+  const draft = y?.why === 'draft' && yw && yw.pts !== undefined && yw.pts <= -WORTH_MIN;
+  const lo = draft ? lotteryOutlook(league, leanLost(league, yw.pts!)) : null;
+  const moves = !!lo && (lo.top4[1] - lo.top4[0] >= LOTTERY_MOVE || lo.pick[0] - lo.pick[1] >= LOTTERY_SLOTS);
   if (y && yw && yw.pts !== undefined) {
-    if (yw.pts <= -WORTH_MIN) {
+    if (draft && !moves) {
+      putYouth(league, 'kept', wc);
+      notePick(
+        league,
+        `The young players: the rotation kept. Their minutes measured ${ptsWin(yw.pts)}, about ${leanLost(league, yw.pts).toFixed(1)} wins, which leave your pick where it is as the forecast reads it${lo ? ` (a top-four pick ${pct(lo.top4[0])})` : ''}.`,
+      );
+    } else if (yw.pts <= -WORTH_MIN) {
       if (!wc.ask) wc.ask = 'youth';
     } else {
       // (read before the lean goes in: "without" is the rotation as it was)
       const o = youthOutlook(league, y.add);
-      putYouth(league, 'auto');
+      putYouth(league, 'auto', wc);
+      const what =
+        y.why === 'draft'
+          ? ', the postseason out of reach'
+          : `, for the owner's goal${o ? ` (on pace for ${o.lean.toLocaleString('en-US')} of his ${o.g.target.toLocaleString('en-US')} minutes, ${o.base.toLocaleString('en-US')} without)` : ''}`;
       notePick(
         league,
-        `The young players: about ${y.add} more minutes a game until ${fmtDate(league.season, league.youthLean!.until)}, for the owner's goal${o ? ` (on pace for ${o.lean.toLocaleString('en-US')} of his ${o.g.target.toLocaleString('en-US')} minutes, ${o.base.toLocaleString('en-US')} without)` : ''}; ${yw.pts >= WORTH_MIN ? `it measured as a gain (${ptsWin(yw.pts, true)})` : `it costs nothing measurable (${ptsWin(yw.pts, true)})`}.`,
+        `The young players: about ${y.add} more minutes a game until ${fmtDate(league.season, league.youthLean!.until)}${what}; ${yw.pts >= WORTH_MIN ? `it measured as a gain (${ptsWin(yw.pts, true)})` : `it costs nothing measurable (${ptsWin(yw.pts, true)})`}.`,
       );
     }
   }
   if (wc.ask) wc.asked = league.day;
+}
+
+// ---------------------------------------------------------------- the young players' turn, measured again
+
+/** Where the second measurement of a lean is kept. */
+const payoffKey = (y: Pick<YouthLean, 'season' | 'from'>) => `youth:${y.season}:${y.from}|again`;
+
+/** A lean a card put in (his answer, or the staff's lean on one he left) whose games have all been played, still to be measured again: it, and its games. */
+function payoffDue(league: League): { y: YouthLean; games: ScheduledGame[] } | null {
+  const y = league.youthLean;
+  if (league.fired || !y || !y.card || y.how === 'kept' || y.paid || y.season !== league.season || y.tid !== league.userTid) return null;
+  const me = league.userTid;
+  const games = league.schedule
+    .filter((g) => g.type === 'regular' && g.day >= y.from && g.day <= y.until && (g.home === me || g.away === me))
+    .sort((a, b) => a.day - b.day || a.gid - b.gid);
+  return games.length && games.every((g) => g.played) ? { y, games } : null;
+}
+
+/**
+ * The lean measured again once its games are played (staffMorning runs it with the rest): on the last
+ * of them, the rotation leaning as it did against the staff's as it plans now, with the rosters as
+ * they stand. What the choice came to is a measurement, never the record.
+ */
+export function payoffNeeds(league: League): CallMeasure[] {
+  const due = payoffDue(league);
+  if (!due) return [];
+  const g = due.games.at(-1)!;
+  const key = payoffKey(due.y);
+  if (league.callWorth?.[key]?.gid === g.gid) return [];
+  const me = league.userTid;
+  // (both rotations planned now: the morning after its last game the staff's may still be the leaned one)
+  return [
+    {
+      kind: 'change',
+      key,
+      opp: oppOf(league, g),
+      gid: g.gid,
+      sig: worthSig(league, oppOf(league, g), g, 'again'),
+      base: { id: 'base', teams: { [me]: { rotation: leanedRotation(league, 0) } } },
+      change: { id: 'youth', teams: { [me]: { rotation: leanedRotation(league, due.y.level) } } },
+    },
+  ];
+}
+
+/**
+ * Once measured again, the digest's line for the lean: whose call it was, what it measured at then
+ * and now, and the young players' minutes in its games (the box scores) against what the rotation
+ * planned without it.
+ */
+export function youthPayoff(league: League) {
+  const due = payoffDue(league);
+  const g = due?.games.at(-1);
+  const w = due && league.callWorth?.[payoffKey(due.y)];
+  if (!due || !g || !w || w.gid !== g.gid || w.pts === undefined) return;
+  const { y, games } = due;
+  const me = league.userTid;
+  let mins = 0;
+  for (const r of league.games)
+    if (r.season === league.season && games.some((x) => x.gid === r.gid))
+      for (const b of (r.home.tid === me ? r.home : r.away).players) {
+        const p = league.players[b.pid];
+        if (p && playerAge(p, league.season) <= YOUNG_AGE) mins += b.min;
+      }
+  const who = y.how === 'staff' ? 'Your call' : "The staff's lean on a card you left";
+  const then = y.pts !== undefined ? `; ${signed(y.pts)} pts when it went in` : '';
+  const planned = y.young !== undefined ? `, where the rotation without it planned about ${Math.round(y.young * games.length).toLocaleString('en-US')}` : '';
+  notePick(
+    league,
+    `${who} on ${fmtDate(league.season, y.from)}, the young players' minutes${y.why === 'draft' ? ' for the draft' : " for the owner's goal"}: measured again on its last game (${vsAt(league, g)}), ${ptsWin(w.pts)}${then}. They played ${Math.round(mins).toLocaleString('en-US')} minutes in its ${games.length} games${planned}.`,
+  );
+  league.youthLean = { ...y, paid: true };
 }
 
 // ---------------------------------------------------------------- the card
@@ -720,11 +922,10 @@ export function weekCard(league: League): CallCard | null {
   }
   const y = wc.youth!;
   const yw = kept(league, weekWorthId(wc, 'youth'), y.gid);
-  const o = youthOutlook(league, y.add);
-  if (!yw || yw.pts === undefined || !o) return null;
+  if (!yw || yw.pts === undefined) return null;
   const left = Math.min(YOUTH_GAMES, gamesLeft(league));
-  const lost = -winsOf(yw.pts, left);
-  const leans = youthLeans(league, y.add, yw.pts);
+  const lost = leanLost(league, yw.pts);
+  const leans = youthLeans(league, y, yw.pts);
   const play: CallCard['suggestion'] = { label: 'Play the young players', action: { kind: 'youthLean', id } };
   const keep: CallCard['suggestion'] = { label: 'Keep the rotation', action: { kind: 'settle', id } };
   const n = (x: number) => x.toLocaleString('en-US');
@@ -732,13 +933,28 @@ export function weekCard(league: League): CallCard | null {
     league,
     league.schedule.find((x) => x.gid === y.gid)!,
   );
+  const cost = `It costs ${Math.abs(yw.pts).toFixed(1)} pts a game (≈ −${Math.round((0.5 - winChance(yw.pts)) * 100)}% to win, measured ${at}): about ${lost.toFixed(1)} wins over ${left} games.`;
+  let gain: string;
+  let why: string;
+  if (y.why === 'draft') {
+    const lo = lotteryOutlook(league, lost);
+    if (!lo) return null;
+    // (the pick as the forecast reads it: its odds, not a measurement, and said so)
+    gain = `Your own first, as the forecast reads the standings: a top-four pick ${pct(lo.top4[1])}, not ${pct(lo.top4[0])}; about No. ${Math.round(lo.pick[1])}, not No. ${Math.round(lo.pick[0])}.`;
+    why = leans ? "play them: the owner's wins goal is out of reach either way" : 'keep it: the owner still counts these wins';
+  } else {
+    const o = youthOutlook(league, y.add);
+    if (!o) return null;
+    gain = `It adds ${n(o.lean - o.base)} of the owner's minutes: on pace for ${n(o.lean)} of his ${n(o.g.target)}, not ${n(o.base)}.`;
+    why = leans ? 'play them: the owner counts the minutes for more' : 'keep it: the owner counts the wins for more';
+  }
   return {
     id,
     kind: 'week',
     title: `${y.add} more minutes a game for the young players?`,
-    line: `It costs ${Math.abs(yw.pts).toFixed(1)} pts a game (≈ −${Math.round((0.5 - winChance(yw.pts)) * 100)}% to win, measured ${at}): about ${lost.toFixed(1)} wins over ${left} games. It adds ${n(o.lean - o.base)} of the owner's minutes: on pace for ${n(o.lean)} of his ${n(o.g.target)}, not ${n(o.base)}. The staff leans ${leans ? 'play them: the owner counts the minutes for more' : 'keep it: the owner counts the wins for more'}. ${tomorrow}`,
+    line: `${cost} ${gain} The staff leans ${why}. ${tomorrow}`,
     tone: 'info',
-    to: '/office/owner',
+    to: y.why === 'draft' ? '/office/draft' : '/office/owner',
     suggestion: leans ? play : keep,
     choices: [leans ? keep : play],
   };
@@ -758,11 +974,11 @@ export function answerWeek(league: League, a: { focus?: PrepFocus; youth?: boole
     return { ok: true, text: `Practice: ${holdText(league, h)}.` };
   }
   if (ask === 'youth' && a.youth) {
-    putYouth(league, 'staff');
+    putYouth(league, 'staff', wc, true);
     wc.taken = 'staff';
     return { ok: true, text: `The young players get their minutes until ${fmtDate(league.season, league.youthLean!.until)}.` };
   }
-  if (ask === 'youth') putYouth(league, 'kept');
+  if (ask === 'youth') putYouth(league, 'kept', wc, true);
   wc.taken = 'kept';
   return { ok: true, text: '' };
 }
@@ -782,8 +998,8 @@ function takeLean(league: League, wc: WeekCall) {
     }
   } else if (wc.ask === 'youth' && wc.youth) {
     const yw = kept(league, weekWorthId(wc, 'youth'), wc.youth.gid);
-    const leans = !!yw && yw.pts !== undefined && youthLeans(league, wc.youth.add, yw.pts);
-    putYouth(league, leans ? 'auto' : 'kept');
+    const leans = !!yw && yw.pts !== undefined && youthLeans(league, wc.youth, yw.pts);
+    putYouth(league, leans ? 'auto' : 'kept', wc, true);
     notePick(
       league,
       leans

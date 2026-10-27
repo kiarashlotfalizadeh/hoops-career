@@ -159,12 +159,6 @@
   flex: none;
   color: var(--text-dim);
 }
-/* the style: the offensive playbook as the headline, the defensive identity under it */
-.tx-hero-style {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .tx-hero-pick {
   flex: 1;
   min-width: 0;
@@ -181,21 +175,6 @@
   flex-direction: column;
   gap: 4px;
 }
-.tx-hero-off {
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 900;
-  font-size: 23px;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  text-wrap: balance;
-}
-.tx-hero-def {
-  font-size: 14px;
-  color: var(--text-2);
-  /* (wraps: "Custom (Hedge base) on defense" is what's played, cut short it isn't) */
-  text-wrap: balance;
-}
 .tx-hero-pick > .btn {
   flex: none;
   pointer-events: none;
@@ -203,33 +182,35 @@
 .tx-hero-pick:active > .btn {
   background: var(--surface-3);
 }
-/* one line on the sections after Tactic: the slot, the style, how well it's known, Change */
+/* the line over every section: the slot's letter (its own switch), the style, how well it's known, Change */
 .tx-hero.compact {
-  padding: 8px 10px 8px 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
 }
 .tx-hero.compact .tx-hero-pick {
   gap: 10px;
   min-height: 44px;
 }
-.tx-hero.compact .tx-slot-l {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 .tx-hero-line {
   flex: 1;
   min-width: 0;
   font-size: 14px;
+  line-height: 1.3;
   color: var(--text-2);
+  /* (two lines at most: a long custom style wraps rather than loses its name) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
 }
 .tx-hero-line b {
   color: var(--text);
   font-weight: 760;
 }
-.tx-hero-r {
-  flex: none;
-  display: flex;
-}
-/* one familiarity figure: a label, its bar, the figure and its word (a tap: Analysis → Familiarity) */
+/* a row of the plan: a label in mono, its value (the mentality, a tap: its dial) */
 .tx-hero-fam {
   display: flex;
   align-items: center;
@@ -246,10 +227,6 @@
   font-weight: 500;
   color: var(--text-dim);
 }
-.tx-hero-fam .tx-fambar {
-  height: 4px;
-  min-width: 40px;
-}
 .tx-hero-fv {
   flex: none;
   font-family: var(--mono);
@@ -257,11 +234,6 @@
   font-size: 15px;
   font-weight: 600;
   line-height: 1;
-}
-.tx-hero-fl {
-  flex: none;
-  font-size: 13px;
-  color: var(--text-2);
 }
 /* the two strengths and two weaknesses, side by side over a hairline (a tap: Analysis → Report) */
 .tx-sw {
@@ -577,16 +549,64 @@
   font-size: 14px;
   font-weight: 620;
 }
-/* the style's name keeps its words whole: a long one ("Heliocentric") prints a size down (fitHead),
-   and where the name and Change can't share the line, Change drops under the name */
-.tx-hero-off {
-  overflow-wrap: break-word;
+/* a heading that is its block's switch (HeadSwitch): the one that's on in the heading's ink and cut,
+   the others beside it quieter; it scrolls sideways on a narrow phone rather than wrap */
+.tx-hsw {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
-.tx-hero-style .tx-hero-pick {
-  flex-wrap: wrap;
-  row-gap: 8px;
+.tx-hsw-opts {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.tx-hero-style .tx-hero-pick > .grow {
-  flex: 1 1 auto;
-  min-width: min(100%, min-content);
+.tx-hsw-opts::-webkit-scrollbar {
+  display: none;
+}
+.tx-hsw-b {
+  flex: none;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 0;
+  font-family: var(--head);
+  /* (three phases fit a 360px phone's line) */
+  font-size: clamp(14px, 4vw, 17px);
+  font-weight: 640;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text-dim);
+  transition: color var(--dur-fast) ease;
+}
+.tx-hsw-b.on {
+  color: var(--text);
+  font-weight: 880;
+}
+.tx-hsw-b:not(.on):active {
+  color: var(--text);
+}
+.tx-hsw-b:focus-visible {
+  outline: 2px solid var(--accent-text);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .tx-hsw-b:not(.on):hover {
+    color: var(--text-2);
+  }
+}
+.tx-hsw-v {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }

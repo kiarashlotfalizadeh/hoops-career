@@ -387,12 +387,19 @@ const editIntact = (e: unknown) =>
 const storyIntact = (s: unknown) => obj(s) && int(s.id) && int(s.day) && str(s.head) && nums(s.tids) && nums(s.pids);
 
 /**
- * What the staff measured and the league remembers: the tactics edits and their checks, the week's
- * and a skid's call, the calls' measured numbers, the staff's own picks and the seasons' chronicle.
+ * What the staff measured and the league remembers: the tactics edits and their checks (and the team
+ * as an open Team visit found it), the week's and a skid's call, the calls' measured numbers, the
+ * staff's own picks and the seasons' chronicle.
  * A damaged one goes (a call is planned again, an edit is no longer checked, a season is forgotten).
  */
 function migrateReadings(x: League) {
   if (x.tacticEdits !== undefined) x.tacticEdits = Array.isArray(x.tacticEdits) ? x.tacticEdits.filter(editIntact) : [];
+  // the team as an open Team visit found it: out of shape, it goes (the change since is not recorded)
+  if (x.editVisit !== undefined) {
+    const v = x.editVisit as unknown;
+    if (!(obj(v) && isTactics(v.tactics) && obj(v.rotation) && nums(v.rotation.order) && numValues(v.rotation.minutes))) delete x.editVisit;
+    else cleanTactics(v.tactics);
+  }
   if (x.weekCall !== undefined && !(obj(x.weekCall) && int(x.weekCall.season) && int(x.weekCall.week) && int(x.weekCall.tid) && Array.isArray(x.weekCall.kinds))) delete x.weekCall;
   if (x.skidCall !== undefined && !(obj(x.skidCall) && int(x.skidCall.season) && int(x.skidCall.tid) && int(x.skidCall.gid) && int(x.skidCall.opp))) delete x.skidCall;
   if (x.callWorth !== undefined && !(record(x.callWorth) && Object.values(x.callWorth).every((c) => obj(c) && int(c.gid) && num(c.sig)))) delete x.callWorth;

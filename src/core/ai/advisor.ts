@@ -760,7 +760,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'alert',
       title: `${worst.name.charAt(0).toUpperCase()}${worst.name.slice(1)} is new to us (${pct(worst.v)})`,
       body: `We play it a step slow until it's drilled: about ${plural(left, 'game')} to fluid at a balanced focus, fewer with ${PREP_META.system.label.toLowerCase()}. Stick with it rather than changing again mid-stretch, or go back to what we know.`,
-      link: '/team/tactics?tab=analysis&view=familiarity',
+      link: '/team/tactics/analysis?view=familiarity',
       fix: drills(),
     });
   } else if (r.overall < 80) {
@@ -770,7 +770,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'alert',
       title: `Still learning the system: ${pct(r.overall)}`,
       body: `${famLabel(r.overall)} so far, the ${end} most of all: a step slow until it's drilled. ${r.prep === 'system' ? 'The drills are on: give them time, and keep the changes for later.' : `${PREP_META.system.label} between games build it about twice as fast; changing it again starts over.`}`,
-      link: '/team/tactics?tab=analysis&view=familiarity',
+      link: '/team/tactics/analysis?view=familiarity',
       fix: drills(),
     });
   } else if (r.learning.length) {
@@ -781,7 +781,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'neutral',
       title: `${andList(names)} ${one ? 'is' : 'are'} still learning the system`,
       body: `A new player is a step behind in what we run until he knows it; games and practice teach it. ${r.prep === 'system' ? 'The tactical drills are teaching it about twice as fast.' : `${PREP_META.system.label} teach it about twice as fast.`}`,
-      link: '/team/tactics?tab=analysis&view=familiarity',
+      link: '/team/tactics/analysis?view=familiarity',
       fix: drills(),
     });
   } else if (r.prep === 'system' && r.overall >= FLUID - 3) {
@@ -790,7 +790,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       tone: 'good',
       title: `The system is fluid (${pct(r.overall)})`,
       body: `The tactical drills have done their job. ${PREP_META.balanced.label} practice keeps it there; ${PREP_META.opponent.label.toLowerCase()} drills each game plan for its game.`,
-      link: '/team/tactics?tab=analysis&view=familiarity',
+      link: '/team/tactics/analysis?view=familiarity',
       fix: { kind: 'prep', focus: 'balanced', label: PREP_META.balanced.label },
     });
   }

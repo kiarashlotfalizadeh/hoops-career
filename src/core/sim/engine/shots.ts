@@ -80,7 +80,8 @@ export const shotsMethods = {
   /**
    * How much of his three-point tendency a shooter keeps tonight: all of it until his threes pass
    * K.threeUse.level of his team's shots while he's on the floor, then less (the defense runs him off
-   * the line and the ball finds others), as K.useLevel levels off a player's share of the possessions.
+   * the line and the ball finds others, and the ones he still takes are tougher: K.threeUse.contest),
+   * as K.useLevel levels off a player's share of the possessions.
    */
   threeDamp(this: GameSim, p: SP): number {
     const over = p.b.tpa / p.b.tFga - K.threeUse.level;
@@ -224,6 +225,9 @@ export const shotsMethods = {
     const open = clamp(s.open + over + mine + shape + link + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
+    // (a shooter past his share of the threes gets tougher ones from a man defense, or from the chaser
+    // of a junk defense that is after him; a zone's open looks stay open: see K.threeUse.contest)
+    if (three && sh.b.tFga >= K.threeUse.from && (!this.zone(def) || this.lock(def, off, sh))) p -= K.threeUse.contest * Math.max(0, sh.b.tpa / sh.b.tFga - K.threeUse.level);
     // contesting defender quality
     const c = s.contest;
     let stopper = 0;

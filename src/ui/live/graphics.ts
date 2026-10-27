@@ -36,8 +36,10 @@ export interface PlayerBefore {
    * The points records he's playing for tonight (see records.ts), once the book has a season behind
    * it: his franchise's (named by its team name) and the league's, in tonight's book (regular season
    * or playoffs). A list with nothing on it yet (a franchise's first postseason) has no record to break.
+   * A real league's book reaches back to the NBA's game files: `since` says how far ("since 1996-97"),
+   * and `allTime` is the older NBA mark that still stands (past it, the record is the league's history).
    */
-  records?: { team?: number; teamName: string; league?: number; playoffs: boolean };
+  records?: { team?: number; teamName: string; league?: number; playoffs: boolean; since?: string; allTime?: number };
 }
 
 export interface GraphicInput {
@@ -137,12 +139,19 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
             id: `rec-l-${b.pid}`,
             kind: 'record',
             tag: `League ${post}record`,
-            text: `${name}: ${b.pts} points, the most in a ${post}game in league history`,
+            text: `${name}: ${b.pts} points, the most in a ${post}game ${rec.since && (rec.allTime === undefined || b.pts <= rec.allTime) ? rec.since : 'in league history'}`,
             side,
             priority: 98,
           });
         else if (team !== undefined && b.pts > team)
-          add({ id: `rec-t-${b.pid}`, kind: 'record', tag: 'Franchise record', text: `${name}: ${b.pts} points, a ${rec.teamName} ${post}record`, side, priority: 96 });
+          add({
+            id: `rec-t-${b.pid}`,
+            kind: 'record',
+            tag: 'Franchise record',
+            text: `${name}: ${b.pts} points, a ${rec.teamName} ${post}record${rec.since ? ` ${rec.since}` : ''}`,
+            side,
+            priority: 96,
+          });
         else if (rec.team !== undefined && q >= 4 && b.pts >= rec.team - 4 && rec.team >= 40)
           add({
             id: `rec-w-${b.pid}`,

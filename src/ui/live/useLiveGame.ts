@@ -23,10 +23,11 @@ import { fmtClock, periodLabel, rosterNames } from '../stats';
 import { jerseyColors } from '../teamColors';
 import { buildScript, type Script } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
-import { closeGame, crunchTime, foulLimit, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
+import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
-import { MID_STOP_SEC, callNote, callQuietLine } from './calls';
+import { benchFor, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
+import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
 import { liveSlots } from './familiar';
 import { slotLabel } from '../../core/sim/slots';
 import { isKey } from './keyPlays';
@@ -35,7 +36,7 @@ import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from 
 import { playersBefore } from './LowerThird';
 import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
-import { simDecided, type SkipTo } from './skip';
+import { hurtStarters, simDecided, type SkipTo } from './skip';
 import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Status } from './session';
 import { stakesOf, useAtmosphere } from './useAtmosphere';
 import { measureTonight } from './tonight';
@@ -149,8 +150,11 @@ export function useLiveGame() {
   /** The staff's live voice: what it measured at the last stop in play, and the coach's last change as measured (useStaffCall). */
   const staff = useStaffCall();
   const { stop: staffMeasure, reset: staffReset, hush: staffHush } = staff;
-  /** The run of theirs the staff last stopped for (where it started), and the period whose end it measured from. */
-  const staffSeen = useRef({ run: -1, q: 0, mid: 0 });
+  const { busy: staffBusy } = staff;
+  /** The stops the staff has measured from tonight (see stopAfter). */
+  const staffSeen = useRef(noStops());
+  /** The possession of the last "none clears" beat over the court (crunch time's: see NONE_BEAT). */
+  const beatAt = useRef(-Infinity);
   const [announce, setAnnounce] = useState('');
   const mounted = useRef(true);
   useEffect(() => {
@@ -183,20 +187,11 @@ export function useLiveGame() {
 
   const nameOf = useMemo(() => (game ? simNames(league, game.sim) : () => ''), [game, league]);
 
-  /**
-   * Who the staff would send in for one of your players: a rested bench player, the same size if
-   * possible, and never one in foul trouble (at the staff's limit for the period, the next one's at a
-   * break): sending him in only brings the next sub, or a foul-out.
-   */
+  /** Who the staff would send in for one of your players (calls.ts benchFor). */
   const subFor = useCallback(
     (pid: number) => {
       const sim = liveRef.current?.sim;
-      const t = sim?.T[userSide];
-      if (!sim || !t) return undefined;
-      const out = t.byId.get(pid);
-      const limit = foulLimit(sim.atBuzzer() ? sim.q + 1 : sim.q, t.t.manage.foulTrouble);
-      const score = (p: (typeof t.players)[number]) => (p.big === out?.big ? 100 : 0) + p.c.create + p.c.helpD + p.energy * 40;
-      return t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit).sort((a, b) => score(b) - score(a))[0]?.pid;
+      return sim ? benchFor(sim, userSide, pid) : undefined;
     },
     [userSide],
   );
@@ -271,38 +266,51 @@ export function useLiveGame() {
   loopHelpers.current = { alertInput, nameOf, teams: [home, away] as const, graphicFor, graphicsDue };
 
   /**
-   * A stop in play (`prio` 2: a period's end; 1: a timeout of either side, a run of theirs): the staff
-   * drafts its changes from the game as the sim stands now and measures them in the worker (useStaffCall).
+   * A stop in play (`prio` 2: a period's end; 1: the others, see stopAfter): the staff drafts its changes
+   * from the game as the sim stands now and measures them in the worker (useStaffCall); with `ahead`, a
+   * stop the game will come to (nextStop: the game played on to it, and the logs of the possessions
+   * on the way). Where play waits for the coach (a break, his own timeout's huddle) it has longer.
    */
   const staffStop = useCallback(
-    (lg: LiveGame, prio: number) => {
+    (lg: LiveGame, prio: number, ahead?: { sim: GameSim; k: number; logs: PossLog[] }, timeouts?: [number, number]) => {
       const l = useStore.getState().league;
-      const input = l && loopHelpers.current.alertInput(snapshot(lg.sim, lg.logs.length));
-      if (!l || !input || lg.over) return;
-      const tactics = lg.sim.baseTactics(lg.userSide);
+      const sim = ahead?.sim ?? lg.sim;
+      const logs = ahead ? [...lg.logs, ...ahead.logs] : lg.logs;
+      const base = l && loopHelpers.current.alertInput(snapshot(sim, logs.length));
+      if (!l || !base || lg.over) return;
+      const side = lg.userSide;
+      const tactics = sim.baseTactics(side);
       const sl = liveSlots(l, lg, tactics);
       const team = l.teams[l.userTid];
       const slots = sl.slots.flatMap((x) => (x.tactics && x.i !== sl.cur ? [{ i: x.i, label: `Tactic ${slotLabel(team, x.i)}`, tactics: x.tactics, fam: x.fam }] : []));
-      staffMeasure(lg, { ...input, atBreak: lg.sim.clock <= 0.05, timeoutPending: lg.sim.atBuzzer(), logs: lg.logs }, slots, prio);
+      const input = {
+        ...base,
+        tactics,
+        atBreak: sim.clock <= 0.05,
+        timeoutPending: sim.atBuzzer(),
+        logs,
+        recent: recentLevers(lg.marks, logs, side),
+        subFor: (pid: number) => benchFor(sim, side, pid),
+      };
+      const waits = (prio === 2 && sim.clock <= 0.05 && breakAfter(opts.current.breaks, sim.q)) || (!!timeouts && sim.T[side].timeouts < timeouts[side]);
+      staffMeasure(lg, input, slots, prio, waits ? CALL_BREAK_MS : CALL_BUDGET_MS, ahead && { sim: ahead.sim, steps: lg.steps + ahead.k });
     },
     [staffMeasure],
   );
   /**
-   * After a possession: a timeout either side took, a run of theirs reaching 8-0, or the middle of a
-   * period (its first trip under MID_STOP_SEC, where a broadcast takes its timeout) is a stop the staff
-   * measures from.
+   * After a possession (`timeouts`: each side's left before it): a stop the staff measures from
+   * (stopAfter: a period's end, a timeout, a run of theirs, the middle of a period, a dead ball in crunch
+   * time). Then, with nothing in flight, the next stop a few possessions on is measured from now.
    */
   const staffAfter = useCallback(
     (lg: LiveGame, timeouts: [number, number]) => {
-      const s = lg.sim;
-      const them = s.T[1 - lg.userSide];
-      const run = them.run >= 8 && staffSeen.current.run !== them.score - them.run;
-      if (run) staffSeen.current.run = them.score - them.run;
-      const mid = s.clock <= MID_STOP_SEC && s.clock > 0.05 && staffSeen.current.mid !== s.q;
-      if (mid) staffSeen.current.mid = s.q;
-      if (run || mid || s.T[0].timeouts < timeouts[0] || s.T[1].timeouts < timeouts[1]) staffStop(lg, 1);
+      const prio = stopAfter(lg.sim, lg.userSide, timeouts, staffSeen.current);
+      if (prio) staffStop(lg, prio, undefined, timeouts);
+      if (lg.over || staffBusy(lg)) return;
+      const next = nextStop(lg.sim, lg.userSide, staffSeen.current, LOOK_AHEAD);
+      if (next) staffStop(lg, next.prio, next, next.timeouts);
     },
-    [staffStop],
+    [staffStop, staffBusy],
   );
   /** A period's end (a break or not): the staff measures from it, once. */
   const staffBreak = useCallback(
@@ -378,7 +386,8 @@ export function useLiveGame() {
       stoppedFor.current = new Set();
       setStopCall(null);
       staffReset();
-      staffSeen.current = { run: -1, q: 0, mid: 0 };
+      staffSeen.current = noStops();
+      beatAt.current = -Infinity;
       viewRef.current = lg ? snapshot(lg.sim, lg.logs.length) : null;
       setView(viewRef.current);
       setEvents([]);
@@ -734,10 +743,15 @@ export function useLiveGame() {
     setIntro(false);
     // a timeout called just before the skip is taken along the way: no huddle at the other end
     huddleNext.current = false;
+    // one of your starters hurt along the way stops it there (not the final: that's the rest at once)
+    const side = lg.userSide;
+    const from = lg.sim.injuries.length;
+    const hurtNow = () => hurtStarters(lg.sim, side, from).length > 0;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
-    if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to);
+    if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to, to === 'end' ? undefined : hurtNow);
+    const hurt = to === 'end' ? [] : hurtStarters(lg.sim, side, from);
     // clutch time in a game decided by then has no finish to watch: on to the final
-    const decided = to === 'clutch' && !lg.over && simDecided(lg.sim, lg.edge);
+    const decided = to === 'clutch' && !hurt.length && !lg.over && simDecided(lg.sim, lg.edge);
     if (decided) {
       const [h, a] = lg.sim.T;
       const lead = h.score >= a.score ? h : a;
@@ -756,18 +770,33 @@ export function useLiveGame() {
     setToPending(false);
     ticker.set(s.clock, [s.T[0].score, s.T[1].score], true);
     if (lg.over) return finish();
+    // stopped for a starter hurt: his line goes up over the court, and the game waits for the coach
+    const hurtLines = hurt.map((pid) =>
+      eventBanner({ id: `skip-inj-${pid}`, kind: 'injury', side, pid, text: `${loopHelpers.current.nameOf(pid)} is hurt and out for the game.`, at: s.elapsed }),
+    );
+    if (hurtLines.length) setAnnounce(`Skip stopped: ${hurtLines.map((b) => `${b.title} is hurt and out for the game`).join('. ')}.`);
     if (s.clock <= 0.05) {
       // a real break: subs and tactic changes made now apply from the next period's first possession
       brokeAt.current = s.q;
+      // (the court steps aside at a break: his line comes up over the report)
+      for (const b of hurtLines) useStore.getState().toast(`${b.title} is hurt and out for the game.`, 'bad');
       return enterBreak(lg);
     }
     // clutch time: the court picks up from here (saved there, like a break)
     edit(() => void lg.checkpoint());
     // (and the staff measures from it, as at a break)
-    if (to === 'clutch') staffStop(lg, 2);
+    if (to === 'clutch' || hurt.length) staffStop(lg, 2);
     const [h, a] = s.T;
-    if (to === 'clutch') setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setAtBreak(false);
+    if (hurt.length) {
+      queueBanner(hurtLines);
+      haptic('warning');
+      setScript(null);
+      setPaused(true);
+      ff.current.waiting = true;
+      return;
+    }
+    if (to === 'clutch') setAnnounce(`Clutch time: ${fmtClock(s.clock)} left in ${periodLabel(s.q)}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     setPaused(false);
     nextPossession();
   };
@@ -868,11 +897,22 @@ export function useLiveGame() {
     return c && !dismissed.includes(c.id) ? [c, ...own.filter((n) => n.id !== (staffCall?.state === 'call' ? staffCall.draft.id : ''))] : own;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, tick, dismissed, over, alertInput, staffCall]);
-  // a call that lands goes up over the court once, with its number
+  // a call that lands goes up over the court once, with its number; in crunch time, so does the staff
+  // measuring and finding nothing to change (now and then): the bench is silent on purpose, and says so
   useEffect(() => {
-    if (staffCall?.state !== 'call' || over) return;
-    const n = callNote(staffCall);
-    queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
+    if (over || !staffCall) return;
+    if (staffCall.state === 'call') {
+      beatAt.current = -Infinity;
+      const n = callNote(staffCall);
+      queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
+      return;
+    }
+    if (staffCall.state !== 'none' || staffCall.steps === undefined || staffCall.m?.by !== 'win') return;
+    const steps = staffCall.steps;
+    if (steps - beatAt.current < NONE_BEAT) return;
+    beatAt.current = steps;
+    const line = callQuietLine(staffCall)?.replace(/ Nothing to change\.$/, '');
+    if (line) queueBanner([{ id: `none-${steps}`, tone: 'info', kicker: 'Staff call', title: 'Nothing to change', line }]);
   }, [staffCall, over, queueBanner]);
 
   return {
@@ -967,6 +1007,15 @@ export interface StopCall {
   /** 'last': the last possession, your ball. */
   kind?: 'last';
 }
+
+/**
+ * Possessions ahead the staff looks for its next stop, to measure it from before the game gets there:
+ * about two minutes of the game clock, 15 seconds of play at 2× (a look costs the screen a copy of the
+ * game and those possessions played, a millisecond or two on a desktop).
+ */
+export const LOOK_AHEAD = 8;
+/** Possessions between crunch time's "none clears" beats over the court (about a minute of the game clock). */
+const NONE_BEAT = 4;
 
 /** The last possession's stop: once a period (the end of regulation and of each overtime is a last possession of its own). */
 const lastId = (q: number) => `last-${q}`;

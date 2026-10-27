@@ -1,16 +1,19 @@
-// Team → Tactics, Football Manager's way. One hero holds the plan in use (tactics/Hero: your three
-// tactics A, B and C, the style the active one runs, how well the team knows it, its strengths and
-// weaknesses from the system report, the assistant's switch), then four sections as one row of chips,
-// each its own module in src/ui/tactics: Tactic (the board with your five, their partnerships and the
-// bench; your saved playbooks), Instructions (the three phases of play; the mentality is the hero's), Match
-// (crunch time, situations and the late-game rules) and Analysis (the system report, familiarity and
-// the season). Advice in core links here by the old section ids (playbook, roles, players, offense,
-// defense, manage, insights, report, familiarity), which open the section that now holds them. The
-// hero's strengths and weaknesses move as you change a setting, so every lever shows what it buys and
-// what it costs. Edits save as they're made; while this visit has any, a compact dock says what they
-// did to the grades and offers Undo and Done (which hands the Continue bar back, and has the staff
-// measure the change over the next games: tactics/editWatch.ts).
+// Team → Tactics, Football Manager's way. Four sections with their own paths under the hub's tabs,
+// one boxed switch: Tactic (/team/tactics: the board with your five, their partnerships and the
+// bench, then the rest of the plan and your saved playbooks), Instructions (/team/tactics/instructions:
+// the three phases of play), Match (/team/tactics/match: crunch time, situations and the late-game
+// rules) and Analysis (/team/tactics/analysis: the system report, familiarity and the season), each
+// its own module in src/ui/tactics. Over each, one line holds the plan in use (tactics/Hero: your
+// three tactics A, B and C, the style the active one runs, how well the team knows it); a section's
+// own switch (the board's end, the phase, the view) is its heading. Advice in core links here by the
+// old ?tab= ids (playbook, roles, players, offense, defense, manage, insights, report, familiarity),
+// which open the section that now holds them. The plan's strengths and weaknesses move as you change
+// a setting, so every lever shows what it buys and what it costs. Edits save as they're made; while
+// this visit has any, a compact dock says what they did to the grades and offers Undo and Done (which
+// hands the Continue bar back, and has the staff measure the change over the next games:
+// tactics/editWatch.ts).
 import { useMemo, useState } from 'react';
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Check, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { rosterSorted } from '../../core/league/helpers';
@@ -18,9 +21,10 @@ import { systemFamiliarity } from '../../core/league/practice';
 import { QUALITY_META, gradeChanges, systemReport } from '../../core/analysis/system';
 import { AssistantCards } from '../components/Assistant';
 import { GuideStrip } from '../components/GuideStrip';
-import { useQueryParam, useSetParams } from '../league/shared';
+import { Segmented } from '../components/ui';
+import { useQueryParam } from '../league/shared';
 import { tacticsSig, undoTo, visitStart } from '../tactics/edit';
-import { TacticsHero } from '../tactics/Hero';
+import { TacticCard, TacticsHero } from '../tactics/Hero';
 import { TacticTab } from '../tactics/TacticTab';
 import { InstructionsTab } from '../tactics/InstructionsTab';
 import { MatchTab } from '../tactics/MatchTab';
@@ -53,18 +57,39 @@ const OLD: Record<OldTab, Tab> = {
   report: 'analysis',
   familiarity: 'analysis',
 };
-const ALL_IDS = [...TABS.map((x) => x.id), ...(Object.keys(OLD) as OldTab[])];
+/** A section's path. */
+export const tacticsPath = (tab: Tab) => (tab === 'tactic' ? '/team/tactics' : `/team/tactics/${tab}`);
+
+/**
+ * A link by the old ?tab= ids: the section's path, its other params kept (an old Defense link opens
+ * Instructions out of possession, an old Familiarity or Insights one Analysis at that view).
+ */
+function OldLink({ raw, search }: { raw: string; search: string }) {
+  const q = new URLSearchParams(search);
+  q.delete('tab');
+  if (raw === 'defense' && !q.has('phase')) q.set('phase', 'outPoss');
+  if ((raw === 'familiarity' || raw === 'insights') && !q.has('view')) q.set('view', raw === 'familiarity' ? 'familiarity' : 'season');
+  const tab = (OLD as Record<string, Tab>)[raw] ?? (TABS.some((x) => x.id === raw) ? (raw as Tab) : 'tactic');
+  const qs = q.toString();
+  return <Navigate to={`${tacticsPath(tab)}${qs ? `?${qs}` : ''}`} replace />;
+}
 
 export default function Tactics() {
+  const { search } = useLocation();
+  const old = new URLSearchParams(search).get('tab');
+  if (old !== null) return <OldLink raw={old} search={search} />;
+  return <TacticsScreen />;
+}
+
+function TacticsScreen() {
   const league = useLeague();
-  const [raw, setTab] = useQueryParam<Tab | OldTab>('tab', 'tactic', ALL_IDS);
-  const tab: Tab = (OLD as Record<string, Tab>)[raw] ?? (raw as Tab);
-  // a link to the old Defense section opens Instructions out of possession (and an old phase reads as its new one)
-  const [rawPhase, setPhase] = useQueryParam<string>('phase', raw === 'defense' ? 'outPoss' : 'inPoss');
+  const nav = useNavigate();
+  const { sub } = useParams();
+  const tab: Tab = TABS.find((x) => x.id === sub)?.id ?? 'tactic';
+  const [rawPhase, setPhase] = useQueryParam<string>('phase', 'inPoss');
+  // (an old phase reads as its new one)
   const phase: Phase = phaseId(rawPhase);
-  // an old Familiarity or Insights link opens Analysis at that view
-  const [view, setView] = useQueryParam<AnalysisView>('view', raw === 'familiarity' ? 'familiarity' : raw === 'insights' ? 'season' : 'report', ANALYSIS_VIEWS);
-  const setParams = useSetParams();
+  const [view, setView] = useQueryParam<AnalysisView>('view', 'report', ANALYSIS_VIEWS);
   const [side, setSide] = useQueryParam<BoardSide>('side', 'in', ['in', 'out']);
   const team = league.teams[league.userTid];
   const t = team.tactics;
@@ -83,25 +108,31 @@ export default function Tactics() {
   const report = useMemo(() => (changed ? systemReport(league, league.userTid, t, base.others) : base), [changed, sig, base, league]); // eslint-disable-line react-hooks/exhaustive-deps
   const moved = changed ? gradeChanges(base, report) : [];
 
-  return (
+  // the staff's advice and the first-hour guide: under the board on Tactic (the board leads the page), over the other sections
+  const advice = (
     <>
-      {/* the hero: the plan in use (its slot, its style, how well it's known, its strengths and weaknesses, who runs it) */}
-      <fieldset className="tx-fieldset" disabled={simming}>
-        <TacticsHero report={report} was={base} fam={sys.overall} onAnalysis={(v) => setParams({ tab: 'analysis', view: v === 'report' ? null : v })} compact={tab !== 'tactic'} />
-      </fieldset>
       <GuideStrip step="playbook" keep="Keep this playbook" />
       <AssistantCards league={league} areas={['tactics']} max={2} />
-      {/* the sections: one row of chips */}
-      <div className="tx-tabs" role="group" aria-label="Tactics sections">
-        {TABS.map((x) => (
-          <button key={x.id} className={`chip ${tab === x.id ? 'on' : ''}`} aria-pressed={tab === x.id} onClick={() => setTab(x.id)}>
-            {x.label}
-          </button>
-        ))}
-      </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* the sections: the one boxed switch under the hub's tabs, each its own path */}
+      <Segmented value={tab} options={TABS} onChange={(x) => nav(tacticsPath(x), { replace: true })} label="Tactics sections" />
+      {/* the plan in use, one line: its slot, its style, how well it's known */}
+      <fieldset className="tx-fieldset" disabled={simming}>
+        <TacticsHero fam={sys.overall} />
+      </fieldset>
+      {tab !== 'tactic' && advice}
 
       <fieldset className="tx-fieldset" disabled={simming}>
-        {tab === 'tactic' && <TacticTab players={players} side={side} setSide={setSide} />}
+        {tab === 'tactic' && (
+          <TacticTab players={players} side={side} setSide={setSide}>
+            {advice}
+            <TacticCard report={report} was={base} onAnalysis={() => nav(tacticsPath('analysis'), { replace: true })} />
+          </TacticTab>
+        )}
         {tab === 'instructions' && <InstructionsTab t={t} players={players} sys={sys} phase={phase} setPhase={setPhase} />}
         {tab === 'match' && <MatchTab t={t} players={players} />}
         {tab === 'analysis' && <AnalysisTab view={view} setView={setView} report={report} was={changed ? base : undefined} sys={sys} players={players} />}

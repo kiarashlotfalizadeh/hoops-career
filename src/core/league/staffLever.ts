@@ -318,7 +318,7 @@ export function leverCard(league: League): Alert | null {
     title: `${r.label}: measured ${signed(r.pts)} a game`,
     body: `${measuredLine(words, r, 'your', false)} (measured ${fmtDate(league.season, r.day)}).`,
     // (the Instructions phase the change is made in)
-    link: `/team/tactics?tab=instructions${patch.defense ? '&phase=outPoss' : ''}`,
+    link: `/team/tactics/instructions${patch.defense ? '?phase=outPoss' : ''}`,
     fix: { kind: 'patch', patch, label: r.label },
   };
 }

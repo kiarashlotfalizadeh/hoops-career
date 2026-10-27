@@ -112,6 +112,34 @@ describe('player development', () => {
       expect(mean((p, q) => q.tend!.create! / p.tend!.create!)).toBeLessThan(0.97);
     }
 
+    // a season of threes past 18% of his team's shots on the floor brings a shooter's three-point
+    // tendency down for the next ((0.18 / share)^1.5: 0.61 at a quarter of them); one under it keeps his
+    {
+      const c = structuredClone(l);
+      const shooters = ps.filter((p) => p.tend && p.ratings.tp > 60 && (p.stats.find((s) => s.season === c.season - 1 && !s.playoffs)?.teamFga ?? 0) >= 2000).slice(0, 40);
+      expect(shooters.length).toBe(40);
+      const heavy = shooters.filter((_, i) => i % 2 === 0);
+      for (const p of heavy) for (const s of c.players[p.pid].stats) if (s.season === c.season - 1 && !s.playoffs) s.tpa = Math.round(0.25 * s.teamFga);
+      const light = shooters.filter((p, i) => i % 2 === 1 && p.stats.filter((s) => s.season === c.season - 1 && !s.playoffs).every((s) => s.tpa < 0.17 * s.teamFga));
+      annualProgression(c, new Rng(12));
+      const ratio = (xs: typeof ps) => xs.reduce((a, p) => a + c.players[p.pid].tend!.three / p.tend!.three, 0) / xs.length;
+      expect(ratio(heavy)).toBeLessThan(0.75);
+      expect(ratio(heavy)).toBeLessThan(0.75 * ratio(light));
+    }
+
+    // ...and a season using more than 35% of his team's possessions on the floor brings his usage
+    // tendency down for the next ((0.35 / share)^3: 0.66 at 40%)
+    {
+      const c = structuredClone(l);
+      const stars = ps.filter((p) => p.tend && (p.stats.find((s) => s.season === c.season - 1 && !s.playoffs)?.teamFga ?? 0) >= 2000).slice(0, 20);
+      for (const p of stars)
+        for (const s of c.players[p.pid].stats)
+          if (s.season === c.season - 1 && !s.playoffs) Object.assign(s, { fga: Math.round(0.4 * (s.teamFga + 0.44 * s.teamFta + s.teamTov)), fta: 0, tov: 0 });
+      annualProgression(c, new Rng(13));
+      const ratio = stars.reduce((a, p) => a + c.players[p.pid].tend!.use / p.tend!.use, 0) / stars.length;
+      expect(ratio).toBeLessThan(0.8);
+    }
+
     // the hidden development arc is the same every summer for a player in a league, differs between leagues, and moves a young player's course
     {
       const p = Object.values(l.players).find((x) => x.tid >= 0)!;

@@ -592,7 +592,10 @@ const fitSum = (terms: Record<string, FitTerm[]>): Record<string, number> => Obj
  * OFF_PRESETS): Heliocentric pays a lead creator, Five-Out a roster of passers with no one creator,
  * Hub Big passers too (and is still the weakest for nearly every roster), Grit & Grind pays size and
  * costs a post scorer it would only feed (he scores in any playbook), and Pace & Space is about as good
- * for every roster (nothing about a roster moved it more than the games' noise).
+ * for every roster (nothing about a roster moved it more than the games' noise). Pace & Space's base
+ * came down 1.5 → 0.3 (2026-10-27) when a shooter past his share of the shots came to get tougher
+ * threes (K.threeUse.contest): its shooters pass that share most, and its measured worth over Hub on
+ * tacticsModel's seven rosters fell from 0.34 to 0.16-0.23 (the fit said 0.61).
  */
 const OFF_FIT: Record<string, FitModel> = {
   balanced: { base: -0.4, terms: [] },
@@ -612,7 +615,7 @@ const OFF_FIT: Record<string, FitModel> = {
       ['bigPassing', 0.04, 45],
     ],
   },
-  paceSpace: { base: 1.5, terms: [] },
+  paceSpace: { base: 0.3, terms: [] },
   grind: {
     base: 0,
     terms: [

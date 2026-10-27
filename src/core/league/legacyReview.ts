@@ -11,7 +11,7 @@ import { coachCareer, userCoach } from './coaches';
 import { confStandings } from './standings';
 import { SEASON_GAMES, currentGoals, leagueOutlook } from './ownerGoals';
 import { teamSeasonRecords } from './records';
-import { REC_LABEL, REC_STATS, TEAM_REC_STATS, recordWhat } from './records';
+import { REC_LABEL, REC_STATS, TEAM_REC_STATS, recordSpan, recordWhat, youngBook } from './records';
 import { playerAge } from '../playerGen';
 import { bestWinOf, legacyOf, type PulsePoint, type SignatureWin } from './legacy';
 import { fanScore } from './legacyPulse';
@@ -177,18 +177,25 @@ function recordsSet(league: League, season: number, tid: number): string[] {
   if (book) {
     for (const stat of REC_STATS) {
       const top = book.league.reg.players[stat]?.[0];
-      if (top && top[4] === season && top[2] === tid) out.push(`League record: ${top[0]} ${REC_LABEL[stat][1] ?? REC_LABEL[stat][0].toLowerCase()} by ${name(top[1], top[7])}`);
+      if (top && top[4] === season && top[2] === tid)
+        out.push(
+          `League record${recordSpan(league, { scope: 'league', book: 'reg', stat, v: top[0] })}: ${top[0]} ${REC_LABEL[stat][1] ?? REC_LABEL[stat][0].toLowerCase()} by ${name(top[1], top[7])}`,
+        );
     }
     for (const stat of TEAM_REC_STATS) {
       const top = book.league.reg.teams[stat]?.[0];
-      if (top && top[3] === season && top[1] === tid) out.push(`League record: ${recordWhat({ stat, team: true, v: top[0] })} in a game`);
+      if (top && top[3] === season && top[1] === tid)
+        out.push(`League record${recordSpan(league, { scope: 'league', book: 'reg', stat, team: true, v: top[0] })}: ${recordWhat({ stat, team: true, v: top[0] })} in a game`);
     }
     const mine = book.teams[tid];
-    if (mine && book.since < season) {
+    // (a franchise's book says how far back it reaches in a real league: "since 1996-97")
+    if (mine && !youngBook(book, season)) {
       for (const stat of REC_STATS) {
         const top = mine.reg.players[stat]?.[0];
         if (top && top[4] === season && !out.some((x) => x.includes(name(top[1], top[7])) && x.startsWith('League')))
-          out.push(`Franchise record: ${top[0]} ${REC_LABEL[stat][1] ?? REC_LABEL[stat][0].toLowerCase()} by ${name(top[1], top[7])}`);
+          out.push(
+            `Franchise record${recordSpan(league, { scope: 'team', book: 'reg', stat, v: top[0] })}: ${top[0]} ${REC_LABEL[stat][1] ?? REC_LABEL[stat][0].toLowerCase()} by ${name(top[1], top[7])}`,
+          );
       }
     }
   }

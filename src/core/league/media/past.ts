@@ -4,8 +4,10 @@
 // press's "his third MVP" read true from day one, and the league opens with a defending champion.
 // Written by `npm run data:history` (scripts/data/history-apply.ts) to src/data/history.json from what
 // the build has on disk, loaded with the seed (seedLoader.ts) and applied once at creation
-// (create.ts). A fictional league has no past: its first champion is its first.
+// (create.ts), with the record book's single games since 1996-97 (records.json, see records.ts). A
+// fictional league has no past: its first champion is its first.
 import type { League, PastFinal } from '../../types';
+import { seedRecords, type RecordsData } from '../records';
 
 /** A Finals as history.json keeps it: like PastFinal, with franchise codes ('' a franchise long gone) in place of tids. */
 export type HistoryFinal = [season: number, champ: string, runner: string, w: number, l: number, mvp: string, champAs?: string | null, runnerAs?: string | null];
@@ -18,6 +20,8 @@ export interface HistoryData {
   mvps: [number, string][];
   /** By Basketball Reference id: "AS:2005-2026;MVP:2009,2010" (codes in CODE_TYPE). */
   players: Record<string, string>;
+  /** The record book's single games since 1996-97 (src/data/records.json, loaded beside it: see records.ts seedRecords). */
+  records?: RecordsData;
 }
 
 /** history.json's honour codes to the award's name on a player's record. */
@@ -76,6 +80,8 @@ export function applyHistory(league: League, data: HistoryData) {
     real.sort((a, b) => a.season - b.season);
     p.awards = [...real, ...p.awards.filter((a) => a.season >= before)];
   }
+  // the record book opens with the NBA's games since 1996-97
+  if (data.records) seedRecords(league, data.records);
 }
 
 /** The seasons a franchise won the title before the league began, oldest first (none for a fictional league). */

@@ -22,7 +22,7 @@
 // Nothing here draws from the league's random stream.
 
 import type { League, Player, Team, TeamSeason } from '../types';
-import { canBeFired, levelOdds, maybeUltimatum } from './jobSecurity';
+import { canBeFired, levelOdds, maybeUltimatum, seasonWeight } from './jobSecurity';
 import { clamp, hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { playerAge, salaryFor } from '../playerGen';
@@ -129,8 +129,13 @@ export interface OwnerGoals {
   rebuild?: { year: number; of: number; over?: true };
   /** A season he asks to compete in after seasons without the postseason, short of his allowance: how many, of how many he allows (the rebuild clock is running). */
   missed?: { seasons: number; of: number };
-  /** He lowered the floor this season when told it was a development year (see easeFloor). */
+  /** He was told this season was a development year (see easeFloor). */
   eased?: true;
+  /**
+   * What telling him lifted the floor's cap by (see floorCap, easeLift); absent in goals eased before
+   * it was, whose `floor` the development year had lowered instead.
+   */
+  easeLift?: number;
   /** What telling him the season was a rebuild (or a development year) cost the standing (CONCEDE_COST each): the review keeps it off, whatever the season's grade (see ownerEvaluation). */
   cost?: number;
 }
@@ -510,10 +515,11 @@ export function lastWinsTarget(league: League, tid: number): number | undefined 
 }
 
 /** The grade a season with this regular-season record can have at most: under the floor, FLOOR_GRADE and lower (none above it: 1). */
-export function floorCap(og: Pick<OwnerGoals, 'floor'>, won: number, games: number): number {
+export function floorCap(og: Pick<OwnerGoals, 'floor' | 'easeLift'>, won: number, games: number): number {
   if (og.floor === undefined || games < FLOOR_GAMES) return 1;
   const pct = won / games;
-  return pct >= og.floor ? 1 : Math.max(-1, FLOOR_GRADE - FLOOR_SLOPE * (og.floor - pct));
+  // (a development year lifts it, the floor where it was: see easeLift)
+  return pct >= og.floor ? 1 : Math.min(1, Math.max(-1, FLOOR_GRADE - FLOOR_SLOPE * (og.floor - pct)) + (og.easeLift ?? 0));
 }
 
 /** Each team's payroll rank in the league (1: the highest), by tid. */
@@ -986,8 +992,13 @@ function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins
 
 // ---------------------------------------------------------------- the floor in danger
 
-/** How far the owner lowers this season's floor when told it's a development year (once a season). */
-export const FLOOR_EASE = 0.1;
+/**
+ * What a development year comes out ahead of chasing the floor by, in the owner's standing, for a
+ * season that ends under the floor all the same (and its cost behind for one that clears it): the
+ * floor had dropped 10 points of win% instead, and a rebuilding Kings season that ended 12-70 under a
+ * 15-win floor stood at −27 eased and −48 chased (the review, round 3: a free grade, not a choice).
+ */
+export const EASE_EDGE = 0.03;
 /** The share of the wins goal's weight a development year moves to playing the young players. */
 const EASE_WEIGHT = 0.4;
 
@@ -1024,15 +1035,24 @@ export function easeFloorBlockedReason(league: League): string | null {
 }
 
 /**
+ * The lift a development year told now gives the floor's cap (see floorCap): its cost and EASE_EDGE,
+ * as the season counts in the standing (see seasonWeight). The floor stays where it was, so the
+ * season's grade under it comes back to what telling him cost and a little more, never past it.
+ */
+export function easeLift(league: League): number {
+  return Math.round(((CONCEDE_COST + EASE_EDGE) / seasonWeight(league)) * 100) / 100;
+}
+
+/**
  * The user tells the owner this is a development year (easeFloorBlockedReason has passed): the
- * floor drops FLOOR_EASE for this season, EASE_WEIGHT of the wins goal goes to playing the young
- * players (still graded on the wins' miss: see OwnerGoal.fromWins), the season counts on the rebuild
- * clock, and the standing takes CONCEDE_COST at once.
+ * floor's cap rises by easeLift for this season (the floor stays), EASE_WEIGHT of the wins goal goes
+ * to playing the young players (still graded on the wins' miss: see OwnerGoal.fromWins), the season
+ * counts on the rebuild clock, and the standing takes CONCEDE_COST at once.
  */
 export function easeFloor(league: League) {
   const og = currentGoals(league)!;
-  og.floor = Math.max(0, Math.round((og.floor! - FLOOR_EASE) * 1000) / 1000);
   og.eased = true;
+  og.easeLift = easeLift(league);
   const wins = og.goals.find((g) => g.kind === 'wins');
   if (wins) {
     const moved = Math.round(wins.weight * EASE_WEIGHT * 100) / 100;
@@ -1044,7 +1064,7 @@ export function easeFloor(league: League) {
   addInbox(league, {
     from: 'Owner',
     subject: 'A development year',
-    body: `Fine: play the kids and take the lottery odds. Under ${Math.ceil(og.floor * og.games)} wins is still a failed season, and it costs you with me. The kids' minutes don't make up for the losses: the win goal's miss still counts. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild.`,
+    body: `Fine: play the kids and take the lottery odds. Under ${Math.ceil(og.floor! * og.games)} wins is still a failed season: I'll grade it ${grade100(Math.min(1, FLOOR_GRADE + og.easeLift))} at best, not ${grade100(FLOOR_GRADE)}, and telling me costs you now. The kids' minutes don't make up for the losses: the win goal's miss still counts. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild.`,
     tone: 'neutral',
     link: '/office/owner',
   });

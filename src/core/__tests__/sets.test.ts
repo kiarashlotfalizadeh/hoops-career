@@ -413,17 +413,18 @@ describe('sets in the engine', () => {
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
       // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses), and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth, and again 2026-10-26, when the zones came to play to the two fives on the floor, the playbooks were rebalanced and the AI's staffs refit with no zone ban
+      // (all of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones: K.threeUse.contest; and again for K.useCeil)
       const expected = {
         ai: [
-          [126, 109, 94, 36, 17, 15, 11, 0],
-          [124, 115, 88, 23, 10, 37, 10, 0],
-          [125, 100, 99, 53, 11, 9, 9, 0],
+          [115, 100, 87, 37, 13, 14, 15, 0],
+          [122, 113, 82, 18, 6, 26, 13, 0],
+          [114, 99, 100, 40, 7, 24, 6, 0],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press)
         coached: [
-          [124, 100, 89, 32, 15, 25, 12, 0],
-          [109, 117, 83, 34, 8, 26, 18, 0],
-          [85, 111, 70, 28, 8, 38, 24, 0],
+          [134, 102, 80, 37, 11, 17, 12, 0],
+          [117, 114, 79, 33, 8, 26, 15, 0],
+          [95, 109, 75, 32, 11, 31, 19, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

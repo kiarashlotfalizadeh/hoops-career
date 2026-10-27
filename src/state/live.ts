@@ -188,9 +188,9 @@ export class LiveGame {
   /**
    * Fast-forward to the end of the period ('quarter': from a break, the next one), halftime, clutch
    * time (5:00 left in the fourth quarter) or the end of the game. Already past halftime or clutch
-   * time, nothing is played.
+   * time, nothing is played. `until`: stop sooner, after the first possession it's true for.
    */
-  simTo(cond: 'quarter' | 'half' | 'clutch' | 'end'): PossLog[] {
+  simTo(cond: 'quarter' | 'half' | 'clutch' | 'end', until?: () => boolean): PossLog[] {
     const out: PossLog[] = [];
     const s = this.sim;
     if ((cond === 'half' && (s.q > 2 || (s.q === 2 && s.clock <= 0.05))) || (cond === 'clutch' && s.q >= 4 && s.clock <= CLUTCH_SEC)) return out;
@@ -202,7 +202,7 @@ export class LiveGame {
     try {
       do {
         out.push(...this.step());
-      } while (!s.over && guard++ < 1000 && !done());
+      } while (!s.over && guard++ < 1000 && !done() && !until?.());
     } finally {
       this.quiet = false;
     }

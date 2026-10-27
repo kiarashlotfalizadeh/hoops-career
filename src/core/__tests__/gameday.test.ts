@@ -703,10 +703,10 @@ describe('game day', () => {
       const news = l.news.filter((n) => n.kind === 'milestone' && n.text.includes('career'));
       expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('scored his 10,000th career point.'))).toBe(scored(a));
       const rebounded = (p: Player) => (lineOf(res, p.pid)?.orb ?? 0) + (lineOf(res, p.pid)?.drb ?? 0) > 0;
-      expect(rebounded(a)).toBe(true);
-      expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('grabbed his 7,500th career rebound.'))).toBe(true);
+      // (when he got one: a guard can go a night without a board)
+      expect(news.some((n) => n.pids[0] === a.pid && n.text.endsWith('grabbed his 7,500th career rebound.'))).toBe(rebounded(a));
       // and the recap names it too
-      expect(marks.some((m) => m.pid === a.pid && m.stat === 'reb' && m.mark === 7500)).toBe(true);
+      expect(marks.some((m) => m.pid === a.pid && m.stat === 'reb' && m.mark === 7500)).toBe(rebounded(a));
       // 1,000 is for the recap, not the news
       expect(news.some((n) => n.pids[0] === b.pid)).toBe(false);
       // a later game doesn't move it: the recap counts back from his total now
@@ -733,7 +733,8 @@ describe('game day', () => {
       const stories = storylines(l, g);
       const text = stories.map((s) => s.text);
       expect(text).toContain(`${traded.lastName} faces the ${l.teams[opp].name} for the first time since he left (his team until ${seasonLabel(l.season - 1)}).`);
-      expect(text).toContain(`${kid.lastName} needs 6 points for 1,000 in his career (he averages 15.1).`);
+      // (by his full name when another player in the game shares his last name)
+      expect(text.some((t) => [kid.lastName, `${kid.firstName} ${kid.lastName}`].some((n) => t === `${n} needs 6 points for 1,000 in his career (he averages 15.1).`))).toBe(true);
       // (a postseason night doesn't count toward a career's regular-season totals)
       expect(storylines(l, { ...g, type: 'playoffs' }).some((s) => s.kind === 'milestone')).toBe(false);
       expect(text).toContain(`The ${l.teams[opp].name} have won 5 straight.`);

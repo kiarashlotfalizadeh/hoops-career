@@ -10,12 +10,14 @@ import { clamp } from '../random';
  * Net rating per point of a roster's worth (rosterWorth) above the league's: what the season
  * forecast's talent prior counts. Fitted with the engine weights below (ridge) over 156 simulated
  * seasons from opening night (32 real-league and 20 fictional leagues, three seasons each: 4,680
- * team seasons): 2.18, the fit explaining 72% of the real league's final net ratings and 75% of the
- * fictional ones', each league left out of the fit in turn. OVR alone, every player there for every
+ * team seasons): 2.13, the fit explaining 70% of the real league's final net ratings and 74% of the
+ * fictional ones', each league left out of the fit in turn (refit 2026-10-27 on the OVR weights that
+ * hold a big's rim protection and glass at fans' floor, ratings.ts, and the seed built with them: the
+ * last fit's weights explained 71.6% of those seasons in all, this one 72.2%). OVR alone, every player there for every
  * game, had explained 61% and 69%, and missed the same rosters by 4-6 net points (10-15 wins) in
  * every league: under the Thunder and the Cavaliers, over the Kings, the 76ers and the Wizards.
  */
-export const ROSTER_NET = 2.18;
+export const ROSTER_NET = 2.13;
 /** Minutes by OVR rank in a typical rotation (240 in all), for what a roster is worth with its injured players out or back. */
 const SLOTS = [35, 34, 32, 30, 28, 24, 20, 16, 12, 9];
 /**
@@ -31,37 +33,38 @@ export const AVAILABLE = 0.78;
 /**
  * What the engine gets from a player beyond his OVR, in OVR points: per point of each rating over
  * 50, and per OVR point past 85 and 90 (a star's games are worth more than a straight line of OVR
- * says, by about 0.8 points an OVR point past 85). OVR is the fans' read of a real player (impact,
- * production and role: see ratings.ts); the games value defensive feel, interior defense, passing
- * and the offensive glass more than it does, and stamina, size and the mid-range less. Fitted with
- * ROSTER_NET (above).
+ * says, by about 0.9 points an OVR point past 85, about 0.3 past 90). OVR is the fans' read of a real
+ * player (impact, production and role: see ratings.ts); the games value defensive feel, passing and
+ * the offensive glass more than it does, and stamina, shot blocking and free throws less (with a
+ * big's blocks, boards and defense counting more in OVR since the refit, interior defense and the
+ * defensive glass need less of a correction than before). Fitted with ROSTER_NET (above).
  */
 const ENGINE: Partial<Record<RatingKey, number>> = {
-  hgt: -0.046,
-  spd: 0.021,
-  ath: 0.005,
-  str: 0.005,
-  end: -0.095,
-  ins: 0.025,
-  mid: -0.033,
-  tp: 0.022,
-  ft: -0.018,
-  drw: -0.005,
-  post: -0.024,
-  hnd: 0.001,
-  pas: 0.034,
-  oiq: 0.025,
-  perD: 0.013,
-  intD: 0.04,
-  blk: -0.025,
-  stl: 0.004,
-  diq: 0.119,
+  hgt: -0.006,
+  spd: 0.014,
+  ath: 0,
+  str: -0.006,
+  end: -0.12,
+  ins: 0.03,
+  mid: -0.017,
+  tp: 0.027,
+  ft: -0.036,
+  drw: 0,
+  post: -0.016,
+  hnd: 0.007,
+  pas: 0.064,
+  oiq: 0.037,
+  perD: 0.022,
+  intD: 0.016,
+  blk: -0.043,
+  stl: 0.01,
+  diq: 0.107,
   oreb: 0.049,
-  dreb: -0.036,
+  dreb: -0.023,
 };
 const STAR_STEPS: [ovr: number, perPoint: number][] = [
-  [85, 0.809],
-  [90, -0.183],
+  [85, 0.899],
+  [90, -0.593],
 ];
 
 /** A player's worth on the floor in OVR points: his OVR, read the way the engine plays it (see ENGINE). */

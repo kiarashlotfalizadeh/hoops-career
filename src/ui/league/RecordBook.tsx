@@ -1,7 +1,9 @@
 // History → Records: the league's and each franchise's record book, one line per record (who holds
 // it and the mark), its whole list a tap away. Single games come from the book kept as games are
-// played (League.records); single seasons and careers from the stats every player and team keeps
-// for good. Only seasons played in this league count.
+// played (League.records: in a real league it opened with the NBA's games since 1996-97); single
+// seasons and careers from the stats every player and team keeps for good, this league's seasons
+// only. A real league's book ends with the all-time records: the NBA's older marks (Wilt
+// Chamberlain's 100, the 73-9 Warriors) beside this league's best.
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
@@ -10,6 +12,8 @@ import { useLeagueMemo } from '../../state/store';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
 import {
+  ALL_TIME_SEASON,
+  ALL_TIME_TEAM,
   CAREER_LABEL,
   KEEP,
   REC_LABEL,
@@ -18,13 +22,17 @@ import {
   TEAM_REC_LABEL,
   TEAM_REC_STATS,
   TEAM_SEASON_LABEL,
+  bookFrom,
   careerLeaders,
   gameMark,
+  pastMark,
   seasonRecords,
   teamMark,
   teamSeasonRecords,
+  winsBar,
   type CareerStat,
   type GameMark,
+  type PastMark,
   type SeasonStat,
   type TeamMark,
   type TeamSeasonStat,
@@ -184,7 +192,65 @@ function useBook(league: League, tid: number | undefined, post: boolean) {
         })),
       };
     });
-    return { game, season, team, career, keep: tid !== undefined ? KEEP.team[kind] : KEEP.league[kind] };
+    // a real league's all-time records: the NBA's older mark where it still stands, else the book's
+    const past = (m: PastMark, v: string, label: string): Line => ({
+      key: `past-${label}`,
+      who: <Who name={m.who ?? m.as} />,
+      sub: `${seasonLabel(m.season)}${m.who ? ` · ${m.as}` : m.score ? ` · ${m.score[0]}-${m.score[1]}` : ''}`,
+      v,
+    });
+    const allTime: Rec[] = [];
+    // (only beside a book opened with the NBA's games: an older save's book can't say whose marks since 1996-97 are the record)
+    if (league.past && league.records?.from !== undefined && tid === undefined) {
+      for (const r of game) {
+        const [g, stat] = r.id.split('-') as ['g' | 't', string];
+        const m = pastMark(kind, stat as never, g === 't');
+        const top = r.lines[0];
+        const stands = m && (!top || m.v >= Number(top.v.replace('+', '')));
+        // (one game's, a season's average and a season's total side by side: each says which)
+        if (stands || top) allTime.push({ ...r, id: `a-${r.id}`, label: g === 'g' ? `${r.label} in a game` : r.label, lines: [stands ? past(m, String(m.v), r.id) : top] });
+      }
+      if (!post) {
+        for (const r of season.filter((x) => ['s-ppg', 's-rpg', 's-apg', 's-pts', 's-tpm'].includes(x.id))) {
+          const stat = r.id.slice(2) as SeasonStat;
+          const m = ALL_TIME_SEASON[stat]!;
+          const top = seasonRecords(league, stat, { n: 1 })[0];
+          const label = stat === 'pts' || stat === 'tpm' ? `${r.label} in a season` : SEASON_STAT_LABEL[stat];
+          allTime.push({ ...r, id: `a-${r.id}`, label, lines: !top || m.v >= top.v ? [past(m, fmtSeason(stat, m.v), r.id)] : r.lines.slice(0, 1) });
+        }
+        const best = winsBar(league, ['preseason', 'regular'].includes(league.phase) ? league.season : league.season + 1)[0];
+        const w = ALL_TIME_TEAM.wins[0];
+        allTime.push({
+          id: 'a-wins',
+          label: 'Best record',
+          title: 'Best record',
+          lines: [
+            best && best.season >= league.startSeason && best.tid !== undefined
+              ? { key: 'a-wins', to: teamPath(best.tid), who: <Who tid={best.tid} decorative name={best.as} />, sub: seasonLabel(best.season), v: `${best.won}-${best.lost}` }
+              : past({ v: w.won, team: w.team, as: w.as, season: w.season }, `${w.won}-${w.lost}`, 'wins'),
+          ],
+        });
+        const worst = teamSeasonRecords(league, 'losses', { n: 1 })[0];
+        const x = ALL_TIME_TEAM.worst;
+        allTime.push({
+          id: 'a-losses',
+          label: 'Worst record',
+          title: 'Worst record',
+          lines: [
+            worst && worst.v > x.lost / (x.won + x.lost)
+              ? {
+                  key: 'a-losses',
+                  to: teamPath(worst.tid),
+                  who: <Who tid={worst.tid} decorative name={`${league.teams[worst.tid].region} ${league.teams[worst.tid].name}`} />,
+                  sub: seasonLabel(worst.season),
+                  v: `${worst.won}-${worst.lost}`,
+                }
+              : past({ v: x.won, team: x.team, as: x.as, season: x.season }, `${x.won}-${x.lost}`, 'losses'),
+          ],
+        });
+      }
+    }
+    return { game, season, team, career, allTime, keep: tid !== undefined ? KEEP.team[kind] : KEEP.league[kind] };
   }, [league, tid, post]);
 }
 
@@ -195,18 +261,23 @@ export function RecordBook({ league }: { league: League }) {
   const tid = scope !== 'league' && league.teams[Number(scope)] ? Number(scope) : undefined;
   const book = useBook(league, tid, post === 'post');
   const since = league.records?.since ?? league.startSeason;
-  const sections: [string, Rec[], string][] = [
-    ['Single game', book.game, 'No games in the book yet.'],
-    [post === 'post' ? 'Playoff run' : 'Season', book.season, 'No qualifying seasons yet.'],
-    ['Team season', book.team, 'Starts when a regular season is over.'],
-    [tid !== undefined ? 'With the franchise' : 'Career', book.career, 'No games yet.'],
+  // (a real league's single games reach back to 1996-97: the NBA's from the game files)
+  const from = league.records ? bookFrom(league.records) : since;
+  // in a real league, what counts only this league's seasons says so
+  const ours = league.past ? `Since ${seasonLabel(league.startSeason)}` : undefined;
+  const sections: [string, Rec[], string, string?][] = [
+    ['Single game', book.game, 'No games in the book yet.', from < since ? `Since ${seasonLabel(from)}` : undefined],
+    [post === 'post' ? 'Playoff run' : 'Season', book.season, 'No qualifying seasons yet.', ours],
+    ['Team season', book.team, 'Starts when a regular season is over.', ours],
+    [tid !== undefined ? 'With the franchise' : 'Career', book.career, 'No games yet.', league.past ? 'Players in this league' : undefined],
+    ['All-time', book.allTime, '', "The NBA's and this league's"],
   ];
   const bare = sections.every(([, recs]) => recs.every((r) => !r.lines.length));
   return (
     <>
       {/* the poster: whose book it is, and its first record's mark (a single game's points) */}
       <Poster
-        over={`${post === 'post' ? 'Playoffs' : 'Regular season'} · since ${seasonLabel(since)}`}
+        over={`${post === 'post' ? 'Playoffs' : 'Regular season'} · since ${seasonLabel(from)}`}
         head={tid !== undefined ? `${league.teams[tid].name} records` : 'League records'}
         fig={book.game[0]?.lines[0] ? { v: book.game[0].lines[0].v, k: book.game[0].label } : undefined}
       >
@@ -237,28 +308,40 @@ export function RecordBook({ league }: { league: League }) {
       </Poster>
       {/* a book with nothing in it yet is one line, not four empty sections */}
       {bare && <div className="card empty">{post === 'post' ? 'No playoff games in the book yet.' : 'No games in the book yet: records land here as they are set.'}</div>}
-      {sections.map(([title, recs, empty], i) =>
+      {sections.map(([title, recs, empty, meta], i) =>
         recs.length && !bare ? (
           <Section
             key={title}
             title={title}
             right={
               i === 0 ? (
-                <Help title="The record book">
-                  <p className="lg-p">
-                    Since {seasonLabel(since)}, this league&apos;s seasons only; careers count the real seasons before it too, for a player whose whole career is on record. Single
-                    games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
-                  </p>
-                  <p className="lg-p">
-                    Per-game and percentage season records need 70% of the team&apos;s games (and 300 field goals, 82 threes or 125 free throws made); a playoff run, half the
-                    team&apos;s playoff games. Team seasons count once the regular season is over.
-                  </p>
-                </Help>
+                <span className="lg-rec-h">
+                  {meta && <span className="lg-sec-meta">{meta}</span>}
+                  <Help title="The record book">
+                    <p className="lg-p">
+                      {from < since
+                        ? `Single games since ${seasonLabel(from)}: the NBA's, from every game since then, and this league's. Seasons since ${seasonLabel(since)}, this league's only; careers count the players in this league, with the real seasons before it for a player whose whole career is on record. All-time: the NBA's records from before ${seasonLabel(from)} where they still stand, beside this league's best.`
+                        : `Since ${seasonLabel(since)}, this league's seasons only; careers count the real seasons before it too, for a player whose whole career is on record.`}{' '}
+                      Single games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
+                    </p>
+                    <p className="lg-p">
+                      Per-game and percentage season records need 70% of the team&apos;s games (and 300 field goals, 82 threes or 125 free throws made); a playoff run, half the
+                      team&apos;s playoff games. Team seasons count once the regular season is over.
+                    </p>
+                  </Help>
+                </span>
+              ) : meta ? (
+                <span className="lg-sec-meta">{meta}</span>
               ) : undefined
             }
           >
             <div className="card flush list">
-              {recs.every((r) => !r.lines.length) ? <div className="empty">{empty}</div> : recs.map((r) => <RecordRow key={r.id} r={r} onOpen={() => setOpen(r)} />)}
+              {recs.every((r) => !r.lines.length) ? (
+                <div className="empty">{empty}</div>
+              ) : (
+                // (an all-time record is the one line: there's no list behind it)
+                recs.map((r) => <RecordRow key={r.id} r={r} onOpen={r.id.startsWith('a-') ? undefined : () => setOpen(r)} />)
+              )}
             </div>
           </Section>
         ) : null,
@@ -294,8 +377,8 @@ export function RecordBook({ league }: { league: League }) {
   );
 }
 
-/** A record on one line: what, who holds it, the mark. It opens the whole list. */
-function RecordRow({ r, onOpen }: { r: Rec; onOpen: () => void }) {
+/** A record on one line: what, who holds it, the mark. It opens the whole list (an all-time record has none). */
+function RecordRow({ r, onOpen }: { r: Rec; onOpen?: () => void }) {
   const top = r.lines[0];
   if (!top)
     return (
@@ -304,14 +387,20 @@ function RecordRow({ r, onOpen }: { r: Rec; onOpen: () => void }) {
         <span className="who dim">—</span>
       </div>
     );
-  return (
-    <button className="lg-rec" onClick={onOpen} aria-haspopup="dialog">
+  const cells = (
+    <>
       <span className="k">{r.label}</span>
       <span className="who">
         {top.who}
         <span className="sub ellipsis">{top.sub}</span>
       </span>
       <span className="v num">{top.v}</span>
+    </>
+  );
+  if (!onOpen) return <div className="lg-rec">{cells}</div>;
+  return (
+    <button className="lg-rec" onClick={onOpen} aria-haspopup="dialog">
+      {cells}
       <ChevronRight size={15} className="dim" aria-hidden="true" />
     </button>
   );

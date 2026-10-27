@@ -31,6 +31,8 @@ let checkpointAsked = false;
 let worthRun = 0;
 /** The live game's measurements given up (a huddle or a sheet closed), by the id each was started with. */
 const liveGone = new Set<number>();
+/** The staff's measurements started ahead of their spot (by id): when each must be done by, once the game is there (liveReach); none yet, no limit. */
+const liveDue = new Map<number, number>();
 /** A season sim is running: the night's moves, measured after a final, wait for it (it's the one the user is waiting on). */
 let simming = false;
 /** Wait between chunks of a background measurement while a sim runs. */
@@ -225,21 +227,41 @@ const api = {
   cancelLive(id: number) {
     liveGone.add(id);
   },
+  /** The game got to the spot a staff measurement was started ahead for: it has `budgetMs` from now. */
+  liveReach(id: number, budgetMs: number) {
+    if (liveDue.has(id)) liveDue.set(id, Date.now() + budgetMs);
+  },
   /**
    * The staff's call from where a live game stands (see measureCalls in liveWorth.ts): each drafted
-   * change against the game as it stands, the best played again on fresh seeds. cancelLive(id) stops it.
+   * change against the game as it stands, the best played again on fresh seeds, in `budgetMs`. One
+   * measured `ahead` of the game (from a copy played on to the spot) has no limit until liveReach says
+   * the game is there. cancelLive(id) stops it.
    */
-  async liveCalls(state: SimState, side: 0 | 1, changes: LiveChoice[], by: 'pts' | 'win', confirm: number, id: number, progress: (done: number, total: number) => void) {
+  async liveCalls(
+    state: SimState,
+    side: 0 | 1,
+    changes: LiveChoice[],
+    by: 'pts' | 'win',
+    confirm: number,
+    id: number,
+    progress: (done: number, total: number) => void,
+    budgetMs?: number,
+    ahead = false,
+  ) {
+    if (ahead) liveDue.set(id, Infinity);
     try {
       return await measureCalls(simFromState(state), side, changes, {
         by,
         confirm,
+        budgetMs,
+        due: ahead ? () => liveDue.get(id) ?? Infinity : undefined,
         onProgress: (d, t) => void progress(d, t),
         between: () => new Promise<void>((r) => setTimeout(r, 0)),
         cancelled: () => liveGone.has(id),
       });
     } finally {
       liveGone.delete(id);
+      liveDue.delete(id);
       (progress as unknown as Comlink.ProxyMarked & { [Comlink.releaseProxy]?: () => void })[Comlink.releaseProxy]?.();
     }
   },

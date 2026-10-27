@@ -1,9 +1,12 @@
 // New League's roster facts, read from the seed before the league exists, so the team step can say
-// where a roster stands without building a league.
+// where a roster stands without building a league; and what each team's owner asks on day one, read
+// from the league the step builds to preview (see teamPreviews).
 import type { SeedData } from '../core/league/create';
+import type { League } from '../core/types';
 import { CAP } from '../core/constants';
 import { BBREF_TO_TID } from '../core/teams';
 import { buildOvrScale, ovrRaw, toDisplay } from '../core/ratings';
+import { leagueOutlook, ownerPersonality, planOwnerGoals, type OwnerPersonality } from '../core/league/ownerGoals';
 
 /**
  * Standard contracts each team opens camp with, as createLeague builds them: two-way deals don't
@@ -83,4 +86,49 @@ export function seedRanks(seed: SeedData): Record<number, number> {
     .map(Number)
     .sort((a, b) => strength(b) - strength(a));
   return Object.fromEntries(ids.map((id, i) => [id, i + 1]));
+}
+
+/** A team as the team step previews it from a built league: its owner's day-one asks, and its roster's strength rank and best three. */
+export interface TeamPreview {
+  /** The win goal and the postseason level (0: none, a rebuild) he would set on day one, and who he is. */
+  wins: number;
+  level: number;
+  who: OwnerPersonality;
+  rank: number;
+  top: { name: string; ovr: number }[];
+}
+
+/**
+ * Every team as the team step previews it, from `league` (built with the id and random seed Start
+ * career then uses, so the rosters and owners are the ones the user gets): each owner's goals as he
+ * would set them on day one (planOwnerGoals, from one outlook of the league: what the welcome mail
+ * then lists, a win or so off for the team the preview's user had, whose cuts are the user's own),
+ * and each roster's strength rank by the average OVR of its eight best, as seedRanks reads the real ones.
+ */
+export function teamPreviews(league: League): Record<number, TeamPreview> {
+  const outlook = leagueOutlook(league);
+  const by: Record<number, { name: string; ovr: number }[]> = {};
+  for (const p of Object.values(league.players)) if (p.tid >= 0 && !p.contract.twoWay) (by[p.tid] ??= []).push({ name: `${p.firstName[0]}. ${p.lastName}`, ovr: p.ovr });
+  for (const list of Object.values(by)) list.sort((a, b) => b.ovr - a.ovr);
+  const strength = (t: number) => (by[t] ?? []).slice(0, 8).reduce((a, x) => a + x.ovr, 0) / Math.max(1, Math.min(8, by[t]?.length ?? 0));
+  const order = league.teams.map((t) => t.tid).sort((a, b) => strength(b) - strength(a));
+  const out: Record<number, TeamPreview> = {};
+  for (const t of league.teams) {
+    const og = planOwnerGoals(league, t.tid, outlook);
+    out[t.tid] = {
+      wins: og?.goals.find((g) => g.kind === 'wins')?.target ?? 0,
+      level: og?.goals.find((g) => g.kind === 'postseason')?.target ?? 0,
+      who: ownerPersonality(league, t.tid),
+      rank: order.indexOf(t.tid) + 1,
+      top: (by[t.tid] ?? []).slice(0, 3),
+    };
+  }
+  return out;
+}
+
+const ASK = ['rebuild', 'play-in', 'playoffs', 'win a round', 'conf. finals', 'Finals', 'title'];
+
+/** The owner's day-one asks in a line that fits a phone's poster: "Owner: 32 wins · rebuild · builder". */
+export function ownerLine(p: Pick<TeamPreview, 'wins' | 'level' | 'who'>): string {
+  return `Owner: ${p.wins} wins · ${ASK[p.level] ?? ASK[0]} · ${p.who}`;
 }

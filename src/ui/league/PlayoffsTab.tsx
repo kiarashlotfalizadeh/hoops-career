@@ -14,7 +14,7 @@ import { ViewChips } from './Views';
 import { Poster, TitleSlab, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
 
 /** A bracket slot: a real series, a projected matchup, or empty. */
-interface Slot {
+export interface Slot {
   series?: PlayoffSeries;
   high?: number;
   low?: number;
@@ -57,11 +57,14 @@ function seedMap(league: League, conf: 'E' | 'W'): (number | undefined)[] {
   return out;
 }
 
+/** A conference's bracket from its series (the season's, or a past one's: see History's season page), by round. */
+export function seriesSlots(list: PlayoffSeries[], conf: 'E' | 'W'): Slot[][] {
+  const byId = new Map(list.map((s) => [s.id, s]));
+  return [[0, 1, 2, 3].map((i) => fromSeries(byId.get(`${conf}1-${i}`))), [0, 1].map((i) => fromSeries(byId.get(`${conf}2-${i}`))), [fromSeries(byId.get(`${conf}3-0`))]];
+}
+
 function confSlots(league: League, conf: 'E' | 'W'): Slot[][] {
-  const byId = new Map(league.playoffs.map((s) => [s.id, s]));
-  if (league.playoffs.some((s) => s.conf === conf)) {
-    return [[0, 1, 2, 3].map((i) => fromSeries(byId.get(`${conf}1-${i}`))), [0, 1].map((i) => fromSeries(byId.get(`${conf}2-${i}`))), [fromSeries(byId.get(`${conf}3-0`))]];
-  }
+  if (league.playoffs.some((s) => s.conf === conf)) return seriesSlots(league.playoffs, conf);
   const seeds = seedMap(league, conf);
   const r1 = R1_PAIRS.map(([h, l]) => ({
     high: seeds[h],
@@ -219,7 +222,8 @@ function ChampionSlab({ league, season, tid, runnerUp, result, fmvp }: { league:
   );
 }
 
-function Bracket({ league, slots, onOpen }: { league: League; slots: Slot[][]; onOpen: (s: PlayoffSeries) => void }) {
+/** A conference's bracket; its series open their sheet (`onOpen`) when the season still has their games. */
+export function Bracket({ league, slots, onOpen }: { league: League; slots: Slot[][]; onOpen?: (s: PlayoffSeries) => void }) {
   const [r1, r2, r3] = slots;
   const card = (s: Slot, key: string) => <SeriesCard key={key} league={league} s={s} onOpen={onOpen} />;
   return (
@@ -252,7 +256,7 @@ function Bracket({ league, slots, onOpen }: { league: League; slots: Slot[][]; o
   );
 }
 
-function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s: PlayoffSeries) => void }) {
+function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen?: (s: PlayoffSeries) => void }) {
   const known = s.high !== undefined || s.low !== undefined || s.tbdHigh || s.tbdLow;
   if (!known) {
     return (
@@ -299,7 +303,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
     </>
   );
   const cls = `bk-s ${me ? 'me' : ''} ${live ? 'live' : ''}`;
-  if (s.series) {
+  if (s.series && onOpen) {
     const ser = s.series;
     return (
       <button
@@ -314,7 +318,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen: (s
   return <div className={cls}>{body}</div>;
 }
 
-function FinalsCard({ league, finals, onOpen }: { league: League; finals?: PlayoffSeries; onOpen: (s: PlayoffSeries) => void }) {
+export function FinalsCard({ league, finals, onOpen }: { league: League; finals?: PlayoffSeries; onOpen?: (s: PlayoffSeries) => void }) {
   const side = (tid: number | undefined, wins: number, conf: string) => (
     <div className={`side ${finals?.winner !== undefined && finals.winner !== tid ? 'lose' : ''}`}>
       {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
@@ -343,7 +347,7 @@ function FinalsCard({ league, finals, onOpen }: { league: League; finals?: Playo
         </span>
       }
     >
-      {finals ? (
+      {finals && onOpen ? (
         <button className="card bk-fcard" onClick={() => onOpen(finals)} aria-label={`${seriesLabel(finals)}: series details`}>
           {body}
         </button>

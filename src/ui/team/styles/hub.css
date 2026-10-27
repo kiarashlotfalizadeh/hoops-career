@@ -117,23 +117,3 @@
     left: 12px;
   }
 }
-/* the slim band over the other sections: the mark, the name and the record on one line */
-.tm-hh.slim {
-  padding: 12px 18px 12px 14px;
-  border-radius: var(--radius);
-}
-.tm-hh.slim .tm-hh-main {
-  align-items: center;
-}
-.tm-hh.slim .tm-hh-main > :first-child {
-  flex: none;
-}
-.tm-hh.slim .tm-hh-name {
-  font-size: 26px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tm-hh.slim .tm-hh-wl {
-  font-size: 40px;
-}

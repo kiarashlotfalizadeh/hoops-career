@@ -75,6 +75,15 @@ export const K = {
   useLevel: 0.32,
   usageDamp: 9,
   /**
+   * ...and past `level` it falls by exp(-damp) per unit more: a season's share past it is beyond all
+   * but two real seasons of 1,354 since 2004 (Westbrook's 0.408 and Harden's 0.406; the 99.5th
+   * percentile is 0.374). The soft levelling alone held the first season, its stars fitted against
+   * their real teammates, but once the generated players who replace those teammates (with their
+   * level's usage) took the floor a star's share jumped in a summer: Edwards 0.32 to 0.40 and Mitchell
+   * 0.31 to 0.39, with seasons of 34-39 points a game.
+   */
+  useCeil: { level: 0.38, damp: 25 },
+  /**
    * A shooter's three-point volume levels off past `level` of his team's shots while he's on the
    * floor (see threeDamp; from `from` of them on), his three-point tendency falling by exp(-damp) per
    * unit of share over it, as useLevel levels off his share of the possessions. The real league's
@@ -89,8 +98,18 @@ export const K = {
    * the AI's staffs were refit (2026-10-25) and the league went to Five-Out and Pace & Space, whose
    * shooters had the leader back to 6.2 a game and 35 ten-three nights in a season: now 5.1 (6.2 at
    * most) and 13 (26), over star-check's 32 seasons.
+   *
+   * `contest`: past `level` the threes he still gets are tougher, by this much make probability per
+   * unit of share over it (the defense is running him off the line). The real league's 8+ attempt
+   * shooters made 37.4% of them in 2025-26, and the sim had them at 39.4-40.4% on the same volume
+   * (the 6-8 a game band within 0.7 of its 38.8%): its threes leader at 5.2 or less in 64% of 64
+   * seasons (eight leagues of eight, star-check), 15 ten-three nights a season, most of them 10 of
+   * 13-16. With it and the season's volume ceiling (progression.ts, threeVolume): 86% and 10.7 (and
+   * 81% and 11.3 in star-check's own 32 seasons on the October 2026 ratings rebuild). A zone's open
+   * looks are left out (nobody is running him off the line there): at every share it took the 2-3's
+   * and box-and-one's measured worth with it (tacticsModel, engineDefense).
    */
-  threeUse: { from: 15, level: 0.18, damp: 15 },
+  threeUse: { from: 15, level: 0.18, damp: 15, contest: 1 },
   /**
    * A three-point shooter's skill (c3 or pu3) counts in full up to `from`, at `keep` of it to `top` and
    * at `keepTop` past that. The real league's shooting was fitted to the engine before the big
@@ -310,6 +329,15 @@ export const K = {
   orbPts: 1.6,
   toPts: 1.45,
   runOutPts: 0.15,
+  /**
+   * What the transition setting's tag counts of the run-outs a team gives up by walking it up (push
+   * under 1; pushing counts in full). Over engineBalance's ten seed sets against ice, transition 0
+   * measured -0.89 ± 0.23 a game on the opening-night seed and -0.33 ± 0.23 on the October 2026
+   * ratings rebuild's, both tagged -1.20 (transition 100: +0.14 and +0.52 ± 0.21, tagged +0.60): the
+   * run-outs a team stops making are worth less than the ones it adds, as the half-court trips it
+   * plays instead are its better ones. At half, -0.6.
+   */
+  walkUpTag: 0.5,
   /**
    * Crunch time: how much more often the ball finds the go-to player, and how much more his best action
    * is run; and the same for the staff's own go-to (the best scorer on the floor) when nobody is named.

@@ -559,6 +559,12 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+/* his starters hurt, under the game's line */
+.td-next-out {
+  margin-top: 2px;
+  white-space: normal;
+  color: var(--bad);
+}
 /* the chance to win: the box score's figure, big, its label under it */
 .td-next-win {
   flex: none;

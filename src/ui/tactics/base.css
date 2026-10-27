@@ -163,22 +163,6 @@
   transform: scale(0.97);
   background: var(--surface);
 }
-/* the four sections as one row of chips (it scrolls past the gutter if it must) */
-.tx-tabs {
-  display: flex;
-  gap: 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  margin: 0 calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l));
-  padding: 3px var(--gut-r) 3px var(--gut-l);
-  scroll-padding: 0 var(--gut-l);
-}
-.tx-tabs::-webkit-scrollbar {
-  display: none;
-}
-.tx-tabs .chip {
-  flex: none;
-}
 /* how teams see you: the rank grid, the play types, what they'll attack */
 .tx-seen {
   gap: 10px;
@@ -249,12 +233,5 @@
   .tx-set-pick:not(:disabled):hover,
   .tx-q-top:hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
-  }
-}
-/* the four sections fit one line on a 360px phone (no chip cut at the edge): they share the width */
-@media (max-width: 479px) {
-  .tx-tabs .chip {
-    flex: 1 0 auto;
-    padding: 0 10px;
   }
 }

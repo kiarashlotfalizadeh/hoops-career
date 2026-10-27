@@ -1,5 +1,6 @@
 // The staff's live voice: at a stop in play (a period's end, the middle of a period, a timeout of either
-// side, a run of theirs) it drafts the few changes the game in front of it suggests and measures them
+// side, a run of theirs, and in crunch time every dead ball: stopAfter) it drafts the few changes the
+// game in front of it suggests and measures them
 // from where the game stands (state/liveWorth.ts measureCalls: each played out from this spot, the best
 // played again on fresh seeds), and proposes the best one only when that reading clears its noise, with
 // its number. None clears: it says so in a line, and calls nothing. The drafts come from the game: the
@@ -7,16 +8,18 @@
 // their run), then the defense's big levers the way the game points (the scheme, the coverage on their
 // ball screens, a double or your best defender on their hot scorer, the help, the pressure), one of
 // theirs in foul trouble, the penalty, the mentality and the pace toward the score's need, your other
-// tactics (B or C), a cold shooter given less rope; and when you make the subs, the sub the bench would
-// make. Pure.
+// tactics (B or C), a cold shooter given less rope; when you make the subs, the sub the bench would
+// make; and in crunch time a timeout and fresh legs for your most tired player, whoever makes the subs
+// (the staff plays through legs there: the measurement says when that's wrong). Pure.
 
 import type { Tactics } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { cloneTactics, COVERAGE_META, MENTALITY_META, SCHEME_META } from '../../core/sim/tactics';
 import { optValue } from '../../core/sim/familiarity';
-import { CALL_CONFIRM, CALL_CONFIRM_LATE, type CallsMeasured, type LiveChoice } from '../../state/liveWorth';
-import { tacticsDiff, crunchTime, DECIDED_WIN, LEVER_TRIPS } from './alerts';
-import { winProb } from '../../core/analysis/winProb';
+import { CALL_CONFIRM, CALL_CONFIRM_CRUNCH, CALL_CONFIRM_LATE, forkSim, type CallsMeasured, type LiveChoice } from '../../state/liveWorth';
+import type { PossLog } from '../../core/sim/log';
+import { tacticsDiff, crunchTime, foulLimit, DECIDED_WIN, LEVER_TRIPS } from './alerts';
+import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
 import { signed } from '../stats';
@@ -24,6 +27,8 @@ import { OPT, replaceWith } from './familiar';
 
 /** Most changes measured at a stop (the brief's three to five: what the game suggests, the likeliest first). */
 export const CALL_DRAFTS = 5;
+/** In crunch time, with a timeout and a sub among them: a few minutes left cost little to play out. */
+export const CALL_DRAFTS_CRUNCH = 7;
 /** The middle of a period: its first trip under this many seconds is a stop the staff measures from (the broadcast's timeout). */
 export const MID_STOP_SEC = 360;
 /** Trips a change the coach turned down is left alone before the staff measures it again. */
@@ -42,6 +47,86 @@ export interface CallDraft {
   apply?: (t: Tactics) => void;
 }
 
+/** The stops the staff has measured from tonight (useLiveGame keeps one): the run of theirs it last stopped for (where it started), the period whose end and whose middle it took. */
+export interface StopSeen {
+  run: number;
+  q: number;
+  mid: number;
+}
+export const noStops = (): StopSeen => ({ run: -1, q: 0, mid: 0 });
+
+/** The ball is dead (a make, a foul, a ball out of bounds, a timeout): not a steal or a defensive board being run out, where only the side with it may stop play. */
+export const deadBall = (sim: GameSim) => sim.mayCallTimeout((1 - sim.poss) as 0 | 1);
+
+/**
+ * Whether the game as `sim` stands after a possession is a stop the staff measures from, and how much
+ * it weighs (0: none): 2 a period's end; 1 a timeout either side took (`timeouts`: each side's left
+ * before the possession), a run of theirs reaching 8-0, the middle of a period (its first trip under
+ * MID_STOP_SEC, where a broadcast takes its timeout), and in crunch time (the engine's: the last six
+ * minutes of a game in reach) every dead ball, where a close finish is decided. Each period end,
+ * middle and run is a stop once (`seen`, marked).
+ */
+export function stopAfter(sim: GameSim, side: 0 | 1, timeouts: readonly [number, number], seen: StopSeen): number {
+  if (sim.over) return 0;
+  if (sim.clock <= 0.05) {
+    if (seen.q === sim.q) return 0;
+    seen.q = sim.q;
+    return 2;
+  }
+  const them = sim.T[1 - side];
+  const run = them.run >= 8 && seen.run !== them.score - them.run;
+  if (run) seen.run = them.score - them.run;
+  const mid = sim.clock <= MID_STOP_SEC && seen.mid !== sim.q;
+  if (mid) seen.mid = sim.q;
+  const crunch = coreCrunch(sim.q, sim.clock, sim.T[0].score - sim.T[1].score) && deadBall(sim);
+  return run || mid || crunch || sim.T[0].timeouts < timeouts[0] || sim.T[1].timeouts < timeouts[1] ? 1 : 0;
+}
+
+/**
+ * The next stop the game comes to if nothing is changed, within `ahead` possessions (null: none so
+ * soon): a copy of the game played on, each possession as the Live screen plays it (its steps up to one
+ * with a log) and checked as stopAfter checks it. The engine draws each possession from the game's
+ * seed and the possessions played, so the copy plays the very possessions the game will: the copy at
+ * the stop is the game there, its possessions' logs with it.
+ */
+export function nextStop(sim: GameSim, side: 0 | 1, seen: StopSeen, ahead: number): { sim: GameSim; k: number; prio: number; logs: PossLog[]; timeouts: [number, number] } | null {
+  if (sim.over) return null;
+  const s = forkSim(sim);
+  // (recorded, for the logs the staff's notes read)
+  s.record = true;
+  s.opts = { ...s.opts, record: true };
+  const mine = { ...seen };
+  const logs: PossLog[] = [];
+  let k = 0;
+  for (let n = 0; n < ahead && !s.over; n++) {
+    const timeouts: [number, number] = [s.T[0].timeouts, s.T[1].timeouts];
+    let got: PossLog[] = [];
+    let guard = 0;
+    while (!got.length && !s.over && guard++ < 5) {
+      s.step();
+      k++;
+      got = s.drainLogs();
+      logs.push(...got);
+    }
+    const prio = stopAfter(s, side, timeouts, mine);
+    if (prio) return { sim: s, k, prio, logs, timeouts };
+  }
+  return null;
+}
+
+/**
+ * Who the staff would send in for player `pid` of `side`: a rested bench player, the same size if
+ * possible, and never one in foul trouble (at the staff's limit for the period, the next one's at a
+ * break): sending him in only brings the next sub, or a foul-out.
+ */
+export function benchFor(sim: GameSim, side: 0 | 1, pid: number): number | undefined {
+  const t = sim.T[side];
+  const out = t.byId.get(pid);
+  const limit = foulLimit(sim.atBuzzer() ? sim.q + 1 : sim.q, t.t.manage.foulTrouble);
+  const score = (p: (typeof t.players)[number]) => (p.big === out?.big ? 100 : 0) + p.c.create + p.c.helpD + p.energy * 40;
+  return t.players.filter((p) => !p.on && p.out === 0 && p.energy > 0.75 && p.fouls < limit).sort((a, b) => score(b) - score(a))[0]?.pid;
+}
+
 /** Why the staff measures nothing now, if it doesn't: the game is decided, or the period's last seconds. */
 export function callQuiet(sim: GameSim, edge: number): 'decided' | 'late' | 'over' | null {
   if (sim.over) return 'over';
@@ -55,8 +140,9 @@ export function callQuiet(sim: GameSim, edge: number): 'decided' | 'late' | 'ove
 /** What the staff's call is judged by: late in a close game the result (a point of margin isn't the question), else the margin. */
 export const callBy = (v: StaffInput['view']): 'pts' | 'win' => (crunchTime(v) ? 'win' : 'pts');
 
-/** Continuations the best change is confirmed on: more when only a few minutes are left (each costs little then). */
-export const confirmGames = (v: Pick<StaffInput['view'], 'q' | 'clock'>) => (v.q >= 4 && v.clock <= 360 ? CALL_CONFIRM_LATE : CALL_CONFIRM);
+/** Continuations the best change is confirmed on: more when only a few minutes are left (each costs little then), most in crunch time (judged by the result). */
+export const confirmGames = (v: Pick<StaffInput['view'], 'q' | 'clock' | 'sides'>) =>
+  crunchTime(v) ? CALL_CONFIRM_CRUNCH : v.q >= 4 && v.clock <= 360 ? CALL_CONFIRM_LATE : CALL_CONFIRM;
 
 /**
  * The changes the staff measures now, the likeliest first, at most CALL_DRAFTS (the order above: the
@@ -93,6 +179,30 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
   const me = view.sides[side];
   const them = view.sides[1 - side];
   const margin = me.score - them.score;
+  const crunch = crunchTime(view);
+
+  // crunch time: a timeout (legs back, their run stopped, the play after it), and fresh legs for your
+  // most tired player, the staff's own line under which it would sit him anywhere else (it plays through
+  // them now): whoever makes the subs, the measurement says whether either is worth it from here
+  if (crunch) {
+    const left = `${Math.floor(view.clock / 60)}:${String(Math.floor(view.clock % 60)).padStart(2, '0')} left`;
+    const say = margin > 0 ? `Up ${margin}, ${left}` : margin < 0 ? `Down ${-margin}, ${left}` : `Level, ${left}`;
+    if (me.timeouts > 0 && !input.atBreak && !input.timeoutPending && !skip.has('crunch-to') && !out.some((x) => x.choice.kind === 'timeout'))
+      out.push({ id: 'crunch-to', label: 'Timeout', why: them.run >= 6 ? `${say}, ${them.run}-0 to them` : say, choice: { kind: 'timeout' } });
+    const tired = me.on
+      .map((pid) => me.players.find((p) => p.pid === pid))
+      .filter((p) => !!p && p.out === 0 && p.energy < t.manage.fatigueSub)
+      .sort((a, b) => a!.energy - b!.energy)[0];
+    const fresh = tired && input.subFor(tired.pid);
+    const id = tired ? `crunch-sub-${tired.pid}` : '';
+    if (tired && fresh !== undefined && !skip.has(id) && !out.some((x) => x.choice.kind === 'sub'))
+      out.push({
+        id,
+        label: `${names(fresh)} for ${names(tired.pid)}`,
+        why: `${names(tired.pid)} at ${Math.round(tired.energy * 100)}% energy`,
+        choice: { kind: 'sub', out: tired.pid, in: fresh },
+      });
+  }
   const ours = sim.T[side];
   const d = t.defense;
   const man = d.scheme === 'man';
@@ -192,7 +302,7 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
   const cold = me.players.filter((p) => avail(me, p) && p.fga >= 8 && (t.offense.freedom[p.pid] ?? 0) > 0 && p.fgm / p.fga < 0.34).sort((a, b) => a.fgm / a.fga - b.fgm / b.fga)[0];
   if (cold) addTactics(`rope-${cold.pid}`, `Less rope for ${names(cold.pid)}`, `${names(cold.pid)} ${cold.fgm} of ${cold.fga}`, (x) => void (x.offense.freedom[cold.pid] = 0));
 
-  return out.slice(0, CALL_DRAFTS);
+  return out.slice(0, crunch ? CALL_DRAFTS_CRUNCH : CALL_DRAFTS);
 }
 
 /** Where a call was measured from, in a few words: "Q3 6:12", "the end of Q2", "halftime". */
@@ -205,22 +315,23 @@ export function spotLabel(q: number, clock: number): string {
 }
 
 /**
- * A measured reading as the staff says it: "+1.4 to the margin (±0.5)", "+4% to win (±2), +0.3 to the
- * margin (±0.4)": the margin shrunk toward even by its noise, with what's left of its uncertainty
- * (CallReading.band); the win chance only for a call judged by it. Beside a call judged by the margin
- * the win chance would be raw, and picked for clearing its noise: over 28 such calls it read +7.4%
- * against a true +4.3% (round-3 game-day review), so it isn't said.
+ * A measured reading as the staff says it: "+1.4 to the margin (±0.5)": the margin shrunk toward even by
+ * its noise, with what's left of its uncertainty (CallReading.band). A crunch-time call also cleared on
+ * the result, and says so without a figure: picked for clearing its noise the win chance reads high (over
+ * 28 calls judged by the margin it read +7.4% against a true +4.3%, round-3 game-day review; over 16
+ * crunch-time calls in games where every call was taken, +2.6% against +0.2), and no one shrink held in
+ * games followed and not (scratch p1/live, 2026-10-27).
  */
-export function readingLine(r: { pts: number; band: number; win: number; winSe: number }, by: 'pts' | 'win'): string {
+export function readingLine(r: { pts: number; band: number }, by: 'pts' | 'win'): string {
   const margin = `${signed(r.pts, 1)} to the margin (±${r.band.toFixed(1)})`;
-  return by === 'win' ? `${signed(r.win * 100, 0)}% to win (±${(r.winSe * 100).toFixed(0)}), ${margin}` : margin;
+  return by === 'win' ? `${margin}, and clear on the win chance too` : margin;
 }
 
 /** What the staff found at the last stop: measuring, a call (with its number), or none that clears. */
 export type StaffCall =
   | { state: 'measuring'; tried: number; at: string; done?: number }
   | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number }
-  | { state: 'none'; tried: number; at: string; m?: CallsMeasured };
+  | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
 /** The call as a bench note: the change on its button, why the staff looked, and the number that backs it. */
 export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
@@ -233,7 +344,7 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
     tone: 'good',
     title: a.why,
     text: `${readingLine(r, by)}. Measured from ${c.at}, ${r.n} replays each way.`,
-    fig: by === 'win' ? { v: `${signed(r.win * 100, 0)}%`, unit: 'to win' } : { v: signed(r.pts, 1), unit: 'pts' },
+    fig: { v: signed(r.pts, 1), unit: 'pts' },
     actions: [
       a.choice.kind === 'timeout'
         ? { kind: 'timeout', label: a.label }

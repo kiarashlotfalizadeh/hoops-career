@@ -9,7 +9,7 @@ import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
-import { keepFigures, ordinal, outFor } from '../../core/format';
+import { keepFigures, ordinal, outFor, plural } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
@@ -57,6 +57,23 @@ function outText(league: League, s: SidePreview): string {
   ];
   // two names keep a side to a line or so; the matchup page has the rest
   return all.slice(0, 2).join(', ') + (all.length > 2 ? ` +${all.length - 2} more` : '');
+}
+
+/**
+ * The user's starters who are hurt, the longest out first: "Out: Davis 5 games, Sarr 3" (empty when
+ * none is). His starters are the five with the most starts this season (the most minutes, then the
+ * best, before there are any), so a starter who went down is still one.
+ */
+export function startersOut(league: League): string {
+  const me = league.userTid;
+  const ps = teamPlayers(league, me);
+  const line = (p: (typeof ps)[number]) => p.stats.find((s) => s.season === league.season && s.tid === me && !s.playoffs);
+  const five = [...ps].sort((a, b) => (line(b)?.gs ?? 0) - (line(a)?.gs ?? 0) || (line(b)?.min ?? 0) - (line(a)?.min ?? 0) || b.ovr - a.ovr || a.pid - b.pid).slice(0, 5);
+  const out = five.filter((p) => p.injury && p.injury.gamesRemaining > 0).sort((a, b) => b.injury!.gamesRemaining - a.injury!.gamesRemaining);
+  if (!out.length) return '';
+  const names = rosterNames(ps);
+  const games = (n: number, first: boolean) => (n > 82 ? 'for the season' : first ? plural(n, 'game') : `${n}`);
+  return `Out: ${out.map((p, i) => `${names(p.pid) || p.lastName} ${games(p.injury!.gamesRemaining, !i)}`).join(', ')}`;
 }
 
 /** Days to the trade deadline while it's a week or less away (0: today), or null. */
@@ -212,11 +229,13 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
   // the preview's chance to win (from the home side), turned to ours
   const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
   const win = Math.round((g.home === me ? proj.win : 1 - proj.win) * 100);
+  // (his starters hurt: the game's own preview names them on game day, this row the days before)
+  const out = useLeagueMemo(() => startersOut(league), [league]);
   return (
     <Link
       to={`/games/${opp}`}
       className="card td-next"
-      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}, ${win}% chance to win. Matchup`}
+      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}, ${win}% chance to win.${out ? ` ${out}.` : ''} Matchup`}
     >
       <TeamLogo tid={opp} size={40} decorative />
       <span className="grow">
@@ -226,6 +245,7 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
         <span className="td-next-m">
           {whenLabel(league, g.day)} · {bills[0]?.tag ?? kindOf(league, g)} · {r.won}-{r.lost}
         </span>
+        {out && <span className="td-next-m td-next-out">{out}</span>}
       </span>
       <span className="td-next-win">
         <span className="td-next-pct">{win}%</span>

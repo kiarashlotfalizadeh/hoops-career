@@ -15,7 +15,6 @@ import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperTex
 import { seasonEndCash } from '../../core/league/finances';
 import {
   CONCEDE_COST,
-  FLOOR_EASE,
   FLOOR_GRADE,
   FLOOR_MARGIN,
   HOLD_OVER_READ,
@@ -466,8 +465,9 @@ function GradingHelp({ league }: { league: League }) {
         season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best, {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the
         postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you{' '}
         {Math.round(CONCEDE_COST * 100)} points of standing, counts as one, and the postseason goal&apos;s weight goes to the young players&apos; minutes, where it can spare you
-        the miss but earns nothing on top. Heading under his floor, you can tell him it&apos;s a development year: the floor drops {Math.round(FLOOR_EASE * 82)} wins for the same
-        cost, and part of the win goal goes to the young players&apos; minutes, still graded on the win goal&apos;s miss.
+        the miss but earns nothing on top. Heading under his floor, you can tell him it&apos;s a development year for the same cost: the floor stays, but a season that ends under
+        it grades high enough to win the cost back and a little more (one that clears it just pays it), and part of the win goal goes to the young players&apos; minutes, still
+        graded on the win goal&apos;s miss.
       </p>
       <p>
         <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash, and he judges it the day the regular season&apos;s books close, tax paid: the playoff

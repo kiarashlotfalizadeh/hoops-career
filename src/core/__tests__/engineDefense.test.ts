@@ -279,32 +279,33 @@ describe('engine defense', () => {
       // staff's substitutions were polished, and when the AI's playbooks were recalibrated and the league's rates
       // recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, which the AI coaches' adjustments read, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter and AI coaches came to play their own defenses, and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and the zone games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all of them when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
+      // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
       const expected: Record<string, number[][]> = {
         default: [
-          [126, 109, 94, 36, 17, 15, 11, 0],
-          [124, 115, 88, 23, 10, 37, 10, 0],
-          [125, 100, 99, 53, 11, 9, 9, 0],
+          [115, 100, 87, 37, 13, 14, 15, 0],
+          [122, 113, 82, 18, 6, 26, 13, 0],
+          [114, 99, 100, 40, 7, 24, 6, 0],
         ],
         zone23: [
-          [123, 109, 87, 43, 12, 23, 11, 0],
-          [118, 105, 91, 23, 11, 27, 13, 0],
-          [118, 102, 101, 42, 14, 16, 10, 0],
+          [118, 115, 89, 43, 14, 22, 12, 0],
+          [129, 114, 94, 23, 14, 29, 11, 0],
+          [109, 97, 92, 42, 6, 9, 11, 0],
         ],
         zone32: [
-          [127, 105, 80, 36, 6, 20, 9, 0],
-          [135, 114, 88, 18, 11, 35, 6, 0],
-          [114, 105, 97, 45, 13, 17, 7, 0],
+          [121, 107, 82, 31, 11, 26, 8, 0],
+          [137, 123, 95, 18, 8, 33, 8, 0],
+          [112, 98, 98, 30, 11, 24, 9, 0],
         ],
         double: [
-          [133, 122, 89, 42, 10, 21, 9, 0],
-          [124, 110, 88, 18, 13, 22, 11, 0],
-          [122, 103, 101, 40, 9, 13, 5, 0],
+          [127, 124, 89, 42, 6, 22, 8, 0],
+          [125, 119, 91, 29, 10, 31, 8, 0],
+          [117, 91, 103, 39, 10, 19, 5, 0],
         ],
         // (the first game hacks nobody: the couple of trips the mismatch hunt changes are all it changes)
         hunt: [
-          [126, 113, 92, 40, 14, 17, 8, 0],
-          [125, 119, 85, 19, 10, 35, 12, 0],
-          [123, 106, 100, 51, 13, 8, 7, 0],
+          [121, 105, 88, 37, 10, 17, 9, 0],
+          [128, 111, 85, 23, 8, 29, 12, 0],
+          [112, 107, 98, 35, 10, 21, 8, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -346,41 +347,42 @@ describe('engine defense', () => {
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size (the pressure, double and hunting games: a trap's and a press's turnovers at 1x moved with them), and the 3-2 zone and box-and-one games when a game's last shot started going up with time to spare: what this pins is that 1x leverage plays
       // every tactical edge at its 1x size, game after game; all of them again when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter: a decision's looks counting by who takes them, the coverages' and the zone's sizes, the press centred on the league's handlers; and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer; and most of them when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all of them when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
+      // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
       const expected: Record<string, number[][]> = {
         default: [
-          [123, 112, 87, 31, 12, 37, 7, 0],
-          [122, 99, 91, 24, 12, 23, 11, 0],
-          [124, 106, 97, 32, 15, 20, 13, 0],
+          [129, 119, 80, 34, 12, 24, 9, 0],
+          [121, 101, 94, 23, 13, 18, 12, 0],
+          [129, 125, 117, 35, 15, 35, 9, 1],
         ],
         zone23: [
-          [125, 104, 80, 40, 11, 17, 10, 0],
-          [127, 105, 87, 24, 9, 19, 8, 0],
-          [113, 101, 88, 45, 11, 16, 12, 0],
+          [123, 103, 79, 43, 6, 19, 8, 0],
+          [119, 107, 92, 26, 12, 21, 7, 0],
+          [119, 101, 91, 51, 12, 13, 13, 0],
         ],
         zone32: [
-          [119, 104, 84, 35, 12, 15, 12, 0],
-          [115, 107, 97, 21, 13, 26, 8, 0],
-          [112, 99, 93, 32, 12, 18, 8, 0],
+          [117, 105, 86, 37, 13, 15, 9, 0],
+          [118, 106, 92, 21, 10, 18, 7, 0],
+          [118, 102, 96, 35, 14, 24, 11, 0],
         ],
         box1: [
-          [119, 116, 86, 39, 13, 23, 13, 0],
-          [132, 123, 87, 28, 14, 28, 10, 0],
-          [103, 94, 97, 42, 15, 16, 10, 0],
+          [121, 102, 83, 39, 8, 24, 14, 0],
+          [128, 114, 88, 27, 9, 21, 8, 0],
+          [90, 87, 103, 33, 22, 10, 10, 0],
         ],
         double: [
-          [134, 120, 87, 45, 10, 26, 7, 0],
-          [131, 105, 90, 15, 14, 21, 10, 0],
-          [123, 106, 98, 36, 11, 15, 7, 0],
+          [115, 117, 87, 42, 11, 22, 14, 0],
+          [126, 111, 95, 20, 16, 11, 10, 0],
+          [110, 94, 87, 23, 11, 21, 19, 0],
         ],
         pressure: [
-          [135, 123, 89, 42, 11, 30, 11, 0],
-          [144, 145, 91, 25, 10, 40, 20, 0],
-          [136, 105, 103, 36, 15, 22, 8, 0],
+          [126, 123, 84, 48, 8, 28, 16, 0],
+          [133, 136, 88, 22, 9, 33, 19, 0],
+          [127, 114, 107, 29, 10, 30, 10, 0],
         ],
         hunting: [
-          [119, 122, 82, 40, 8, 28, 9, 0],
-          [128, 115, 87, 28, 7, 19, 10, 0],
-          [133, 123, 96, 44, 9, 24, 9, 0],
+          [128, 113, 77, 49, 7, 17, 10, 0],
+          [126, 116, 90, 31, 12, 15, 12, 0],
+          [121, 111, 107, 39, 21, 13, 7, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -435,9 +437,13 @@ describe('engine defense', () => {
       // (about +2.4 and -1.9 per 100 at 1x here, +4.9 and -8.2 at 2x: a gap 3.1 times as wide)
       expect(r2.delta).toBeGreaterThan(r1.delta);
       expect(w2.delta).toBeLessThan(w1.delta - 1);
-      const ratio = (r2.delta - w2.delta) / (r1.delta - w1.delta);
-      expect(ratio).toBeGreaterThan(1.5);
-      expect(ratio).toBeLessThan(3.6);
+      // (the gaps, each within two of its standard errors: these two fictional rosters' minutes follow their
+      // OVRs, and when the OVR weights were refit, team 4's moved by up to ten minutes a man and the gap at
+      // 1x came out 0.5 ± 0.9 in 500 games, 1.8 ± 0.5 in 1,500, so a bare ratio over it was mostly noise)
+      const [gap1, gap2] = [r1.delta - w1.delta, r2.delta - w2.delta];
+      const se = (k: number) => 2 * Math.hypot(Math.hypot(r2.se, w2.se), k * Math.hypot(r1.se, w1.se));
+      expect(gap2).toBeGreaterThan(1.5 * gap1 - se(1.5));
+      expect(gap2).toBeLessThan(3.6 * gap1 + se(3.6));
     } finally {
       K.tacticEdge = EDGE;
     }

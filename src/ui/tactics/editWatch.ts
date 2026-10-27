@@ -10,6 +10,10 @@
 // One measurement at a time, and never over one the user is waiting on (the matchup page's counters,
 // worthLane.ts): a change whose measurement was stopped stays in the ledger unmeasured and is picked
 // up again when the lane is free or the Team screens open.
+//
+// The snapshot is kept in the league too while the Team screens are open (League.editVisit, saved with
+// the edit itself), so a change made before the app closes, reloads or is put away is never lost: a
+// league that loads with one records the change since then (state/persistence.ts), measured here next.
 import { useEffect, useSyncExternalStore } from 'react';
 import type { League, TacticEdit } from '../../core/types';
 import {
@@ -61,6 +65,8 @@ export const useEditWatch = () => useSyncExternalStore(subscribe, () => state);
 
 /** What a change is measured from: the user's team as the Team screens found it, or as the last change recorded left it. */
 let snap: { id: string; part: TeamPart } | null = null;
+/** The Team screens are open: the snapshot goes in the league as well, saved with the next change. */
+let visiting = false;
 /** Changes the user stopped measuring this session (they stay in the ledger, unmeasured). */
 const stopped = new Set<number>();
 let stopAsked = false;
@@ -76,6 +82,8 @@ const namesFor = (l: League) => rosterNames(teamPlayers(l, l.userTid));
 /** Keep the user's team as it is now as what the next change is measured from. */
 export function snapTeam(l: League) {
   snap = { id: l.id, part: partOf(l) };
+  // (in place, not a change of its own: it only matters once an edit is saved with it)
+  if (visiting) l.editVisit = structuredClone(snap.part);
 }
 
 /** Record the change since the snapshot (as `at` says the team was, for one made before a sim), and start measuring it. */
@@ -171,7 +179,7 @@ async function kick(): Promise<void> {
     const call = editCall(kind === 'made' ? saved.worth : saved.check);
     const tone = call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral';
     put({ last: { id: e.id, kind, line, tone } });
-    useStore.getState().toast(line, tone, '/team/tactics?tab=analysis');
+    useStore.getState().toast(line, tone, '/team/tactics/analysis');
   }
   again = false;
   void kick();
@@ -187,6 +195,7 @@ onLaneIdle(() => void kick());
  */
 export function useTeamEditWatch() {
   useEffect(() => {
+    visiting = true;
     const l = useStore.getState().league;
     if (l) snapTeam(l);
     let before: EditAt | null = null;
@@ -207,6 +216,9 @@ export function useTeamEditWatch() {
     return () => {
       unsub();
       settle();
+      visiting = false;
+      const lo = useStore.getState().league;
+      if (lo) delete lo.editVisit;
     };
   }, []);
 }

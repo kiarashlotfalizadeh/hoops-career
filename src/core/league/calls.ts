@@ -1,6 +1,6 @@
 // The staff's calls: the moments in a season that need the user's answer, each a Needs-you card on
 // Today with the staff's call one tap away (see agenda.ts for how cards are drawn and settled). A
-// star goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
+// starter (one of the five best) goes down for ten games or more (the call: a 10-day for cover, the staff's rotation, or a
 // trade for a long absence before the deadline, with what he's worth measured and where his minutes
 // go; no cover when he measures as no real loss); the playoff odds under 5% two weeks running for a team the owner expects in the postseason
 // (the call: tell him it's a rebuild, before the deadline); a team on pace under the owner's win
@@ -38,9 +38,10 @@ import {
   CONCEDE_COST,
   easeFloor,
   easeFloorBlockedReason,
+  easeLift,
   floorDanger,
-  FLOOR_EASE,
   floorCap,
+  FLOOR_GRADE,
   gradeGoal,
   ownerProgress,
   patienceCap,
@@ -68,9 +69,16 @@ import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, type Factor } from '../analysis/gameReport';
 import { answerWeek, isWeekId, notePick, openWeekId, ptsWin, vsAt, weekCard, weekDaily, winsOf } from './weekCall';
 
-/** A star: one of the team's three best players by OVR. */
+/** A star: one of the team's three best players by OVR (a skid's read names them out). */
 export const STAR_RANK = 3;
-/** Games out that make a star's injury a call. */
+/**
+ * A starter: one of the team's five best players by OVR, whose injury can be a call. Each of them out
+ * for long is a real loss more often than not (measured: no card when he isn't), and a team loses
+ * four to six players a season to 10-game absences: with the three best only, a contender's whole
+ * regular season had one injury card or none (round-3 review).
+ */
+export const STARTER_RANK = 5;
+/** Games out that make a starter's injury a call. */
 export const STAR_OUT = 10;
 /** The playoff odds (tenths of a percent, as League.oddsTrail keeps them) under which the season is a call. */
 export const ODDS_LOW = 50;
@@ -327,13 +335,13 @@ function oddsNow(league: League): { now: number; low: number; best: number } | n
 }
 
 /**
- * The user's stars out for STAR_OUT games or more, each with the id of his call (one per injury). Not
+ * The user's starters (STARTER_RANK) out for STAR_OUT games or more, each with the id of his call (one per injury). Not
  * one out past the regular season's end once the team's place is settled (clinched or eliminated):
  * there's nothing left for cover to win.
  */
 function hurtStars(league: League): { p: Player; id: string }[] {
   const roster = standardRoster(league, league.userTid).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid);
-  const hurt = roster.slice(0, STAR_RANK).filter((p) => p.injury && p.injury.gamesTotal >= STAR_OUT && p.injury.gamesRemaining > 2);
+  const hurt = roster.slice(0, STARTER_RANK).filter((p) => p.injury && p.injury.gamesTotal >= STAR_OUT && p.injury.gamesRemaining > 2);
   if (!hurt.length || league.phase !== 'regular' || league.day <= league.tradeDeadlineDay) return hurt.map((p) => ({ p, id: `injury:${p.pid}:${p.injuryCount}` }));
   const me = league.teams[league.userTid];
   const left = league.schedule.filter((g) => g.type === 'regular' && !g.played && (g.home === me.tid || g.away === me.tid)).length;
@@ -409,29 +417,37 @@ function projectedSeasonGrade(league: League, og: NonNullable<ReturnType<typeof 
   return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, frozenBooksOutlook(league)?.cap ?? 1);
 }
 
+/** The forecast's wins at its 10th, 30th, 50th, 70th and 90th percentiles, as z-scores of its spread. */
+const WIN_QUANTILES = [-1.2816, -0.5244, 0, 0.5244, 1.2816];
+
 /**
  * What the floor call's two answers come to in his standing with the owner at his review (the staff's
  * read, from the forecast, the same record either way): chasing it, the season graded with the goals
  * as they stand; a development year, with the goals as easeFloor leaves them (a view: nothing here
  * changes), its concession's cost off in full. Each as the change from his standing now, the season
- * weighed as the review weighs it (see seasonWeight); and the wins the forecast projects. Null without
- * goals or a forecast.
+ * weighed as the review weighs it (see seasonWeight), averaged over the forecast's spread of wins
+ * (the floor's cap is a cliff: a projection a win over it says nothing of the seasons that end
+ * under it); and the wins the forecast projects. Null without goals or a forecast.
  */
 export function floorStanding(league: League): { chase: number; ease: number; wins: number } | null {
   const og = currentGoals(league);
   const fc = leagueForecast(league);
-  if (!og || !fc) return null;
+  const f = fc?.teams[league.userTid];
+  if (!og || !fc || !f) return null;
   const view: League = { ...league, ownerGoals: structuredClone(og), ownerMood: { ...league.ownerMood }, inbox: [...league.inbox] };
   easeFloor(view);
   const w = seasonWeight(league);
   const s = league.ownerMood.total;
+  const sd = Math.max(0.5, (f.hi - f.lo) / 2.563);
+  const at = WIN_QUANTILES.map((z): Forecast => ({ ...fc, teams: fc.teams.map((t) => (t === f ? { ...t, w: f.w + z * sd } : t)) }));
   // (as the review sets it: the grade weighed in, what concessions cost kept off: see owner.ts)
   const review = (l: League) => {
     const o = currentGoals(l)!;
     const cost = o.cost ?? 0;
-    return Math.max(-1, Math.min(1, projectedSeasonGrade(l, o, fc) * w + (l.ownerMood.total + cost) * (1 - w) - cost)) - s;
+    const one = (x: Forecast) => Math.max(-1, Math.min(1, projectedSeasonGrade(l, o, x) * w + (l.ownerMood.total + cost) * (1 - w) - cost)) - s;
+    return at.reduce((a, x) => a + one(x), 0) / at.length;
   };
-  return { chase: review(league), ease: review(view), wins: Math.round(fc.teams[league.userTid].w) };
+  return { chase: review(league), ease: review(view), wins: Math.round(f.w) };
 }
 
 /** Standing as the cards say it, in points: "−4", "+2". */
@@ -1299,14 +1315,13 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
   if (floor && open.has(floorId(league))) {
     const id = floorId(league);
     const blocked = easeFloorBlockedReason(league);
-    const og = currentGoals(league)!;
     // (a buy before the deadline: Find, better than the fifth best; with nobody to find, the call is the development year or nothing)
     const chase = findLook(league, id, 'Chase the floor', fifthBest(league) + 1);
     const ease: CallChoice = {
       label: "Tell him it's a development year",
       action: { kind: 'easeFloor', id },
       blocked: blocked ?? undefined,
-      confirm: `His floor drops to ${Math.ceil(Math.max(0, og.floor! - FLOOR_EASE) * og.games)} wins, part of the win goal becomes minutes for the young players, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points.`,
+      confirm: `Under ${floor.floorWins} wins is still a failed season, but it grades ${standingPts(Math.min(1, FLOOR_GRADE + easeLift(league)))} at best instead of ${standingPts(FLOOR_GRADE)}. Part of the win goal becomes minutes for the young players, still graded on its miss, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points now.`,
     };
     // the lean: whichever answer leaves his standing higher at the review, as the forecast reads the season
     const st = blocked ? null : floorStanding(league);

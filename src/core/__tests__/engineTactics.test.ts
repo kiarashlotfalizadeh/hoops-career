@@ -407,6 +407,7 @@ describe('engine tactics', () => {
       // late game, crunch-time touches, home court and the staff's substitutions were polished, and when the AI's
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter, and when crunch time came to need a game still in reach and the AI's rotations floored their two best players' minutes, and the third game when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all four when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban)
+      // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -414,10 +415,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [113, 126, 103, 88, 57, 38, 18, 16],
-        [115, 103, 92, 86, 44, 42, 18, 17],
-        [110, 112, 99, 100, 50, 56, 19, 8],
-        [102, 109, 84, 90, 41, 31, 10, 20],
+        [95, 122, 94, 94, 50, 35, 12, 19],
+        [122, 119, 95, 89, 45, 40, 16, 13],
+        [99, 120, 93, 96, 50, 50, 14, 7],
+        [115, 117, 82, 84, 44, 27, 8, 12],
       ]);
     }
 

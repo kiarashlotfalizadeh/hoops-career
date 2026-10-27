@@ -321,6 +321,23 @@ describe('AI front offices', () => {
         for (const pid of rest) rested.set(pid, (rested.get(pid) ?? 0) + 1);
       }
       for (const p of vets) expect(rested.get(p.pid)).toBe(3);
+      // ...but never more than two of its five best on one night, however many of them are veterans
+      {
+        const old = ps.map((p) => ({ ...p, bornYear: L.season - 31 }));
+        const top = new Set(
+          old
+            .filter((p) => !p.contract.twoWay && !p.injury)
+            .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
+            .slice(0, 5)
+            .map((p) => p.pid),
+        );
+        for (let d = 0; d < 6; d++) {
+          const rest: number[] = [];
+          restVeterans(L, old, L.day + d, rest);
+          expect(rest.filter((pid) => top.has(pid)).length).toBeLessThanOrEqual(2);
+          expect(rest.length).toBeGreaterThan(2);
+        }
+      }
       // the engine gets the rest list on a game night
       const input = buildSimInput(L, t.tid, L.day, 'regular');
       const tonight: number[] = [];

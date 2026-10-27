@@ -143,6 +143,8 @@ describe('the Continue loop', () => {
     // a call that was open when the sim started, or that he settled, or a short absence, or no stops at all, plays on
     for (const set of ['open', 'settled', 'short', 'off'] as const) {
       const l = stopping(`call-${set}`);
+      // (only the injury made here: one of his other five best hurt in the week is a call of its own)
+      l.settings.injuries = false;
       if (set === 'off') l.settings.stopOnNews = false;
       const star = best(l);
       if (set === 'open') hurt(star, 40);
@@ -160,7 +162,7 @@ describe('the Continue loop', () => {
           },
         },
       );
-      expect(out.stop, set).toBe('target');
+      expect(out.stop, `${set}: ${openCallIds(l).join()}`).toBe('target');
     }
 
     // a sim of a set number of days never stops for it, but a call that opened on the way is still said at its end
