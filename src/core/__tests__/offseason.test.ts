@@ -473,15 +473,19 @@ describe('the summer', () => {
       expect(l.inbox[0].day).toBeLessThanOrEqual(l.day);
     }
 
-    // free agents lower their asking price as the market dries up
+    // free agents lower their asking price as the market dries up (one under 72: a 72+ holds his
+    // summer floor through the preseason, see SUMMER_FLOOR)
     {
       const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 8 });
-      const fa = freeAgents(league).sort((a, b) => b.ovr - a.ovr)[0];
+      const fa = freeAgents(league)
+        .filter((p) => p.ovr < 72 && askingContract(league, p).amount > CAP_FOR(league).vetMin)
+        .sort((a, b) => b.ovr - a.ovr)[0];
       const before = askingContract(league, fa).amount;
       fa.faDays = 1;
       // nobody signs him: run a day with no AI activity
       faDay(league, new Rng(2), 0);
-      if (fa.tid === -1 && before > CAP_FOR(league).minContract) expect(askingContract(league, fa).amount).toBeLessThan(before);
+      expect(fa).toBeDefined();
+      if (fa.tid === -1) expect(askingContract(league, fa).amount).toBeLessThan(before);
     }
 
     // offseason contracts are priced against next season's cap

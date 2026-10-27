@@ -125,6 +125,10 @@
 .tx-note .tx-dot {
   margin: 0 2px 1px 0;
 }
+/* the staff's change in force: who moved what, when, what it measured */
+.tx-move .tx-note {
+  color: var(--text-2);
+}
 
 /* ------------------------------------------------------------ the assistant's switch, the changes dock */
 /* this visit's edits: one compact line over the tab bar */

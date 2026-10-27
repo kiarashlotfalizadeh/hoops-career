@@ -22,7 +22,7 @@ import { neutralSite } from '../../core/league/games';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 import { gameStoryFor } from '../../core/analysis/gameStory';
 import { GameTop, nightTitle, useBillings } from './occasion';
-import { Empty, Help, PageHeader } from '../components/ui';
+import { Empty, Help, PageHeader, keep } from '../components/ui';
 import { GameBoard, type BoardSide } from '../components/FinalSlab';
 import { ordinal } from '../stats';
 import { TabBar, useQueryParam } from '../league/shared';
@@ -258,7 +258,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
           {h2h.total > 0 && (
             <span className="mu-hero-ss">
               {h2h.won + h2h.lost ? 'Season ' : ''}
-              <span className="num">{sp.record}</span>
+              <span className="num">{keep(sp.record)}</span>
               {sp.left && ` · ${sp.left}`}
               {h2h.last && (
                 <>

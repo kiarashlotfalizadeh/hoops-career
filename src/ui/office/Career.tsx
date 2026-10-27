@@ -32,7 +32,7 @@ import { seatOf } from './seat';
 import '../screens/start.css';
 import './office.css';
 import './legacy.css';
-import { money, ordinal, plural } from '../../core/format';
+import { keepFigures, money, ordinal, plural } from '../../core/format';
 import { seasonCoachingRead } from '../../core/analysis/debrief';
 
 const pct = (w: number, l: number) => (w + l ? (w / (w + l)).toFixed(3).replace(/^0/, '') : '—');
@@ -256,7 +256,7 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
               <div className="lr-meta">
                 {plural(k.playoffs, 'trip')} · series {series[0]}-{series[1]}
                 {post && post[0] + post[1] > 0
-                  ? ` · games ${post[0]}-${post[1]}${firstCoached !== undefined && lg.since > firstCoached ? ` since ${seasonLabel(lg.since)}` : ''}`
+                  ? keepFigures(` · games ${post[0]}-${post[1]}${firstCoached !== undefined && lg.since > firstCoached ? ` since ${seasonLabel(lg.since)}` : ''}`)
                   : ''}
               </div>
             </div>
@@ -587,7 +587,7 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
               >
                 <TeamLogo tid={x.tid} size={28} decorative />
                 <span className="nl-team-name">{x.name}</span>
-                <span className="nl-team-sub num">{me ? (league.fired ? 'Fired' : 'Yours') : `${ts.won}-${ts.lost}`}</span>
+                <span className="nl-team-sub num">{me ? (league.fired ? 'Fired' : 'Yours') : keepFigures(`${ts.won}-${ts.lost}`)}</span>
               </button>
             );
           })}

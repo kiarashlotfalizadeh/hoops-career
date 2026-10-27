@@ -168,6 +168,8 @@ export interface ST {
   byId: Map<number, SP>;
   on: SP[];
   plan: number[][];
+  /** In the playoffs: the regular-season plan (the whole bench, no extra minutes for the five) the coach goes back to in a lopsided second half (see lopsided). */
+  planReg?: number[][];
   score: number;
   qs: number[];
   timeouts: number;

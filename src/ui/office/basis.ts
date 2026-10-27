@@ -5,7 +5,7 @@ import type { League, Phase, Player } from '../../core/types';
 import { CAP } from '../../core/constants';
 import { contractExp } from '../../core/playerGen';
 import { CAP_FOR, rosterMaxNow, standardRoster, teamPlayers, twoWayRoster } from '../../core/league/helpers';
-import { money, moneyExact } from '../../core/format';
+import { keepFigures, money, moneyExact } from '../../core/format';
 
 export const OFFSEASON_PHASES: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
 
@@ -14,8 +14,8 @@ export const isOffseason = (l: League) => OFFSEASON_PHASES.includes(l.phase);
 /** The season new contracts/trades count against: next season during the offseason. */
 export const capSeason = (l: League) => (isOffseason(l) ? l.season + 1 : l.season);
 
-/** "26-27" style short season label. */
-export const shortSeason = (season: number) => `${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`;
+/** "26-27" style short season label, for the screen (kept whole: it never breaks at its hyphen). */
+export const shortSeason = (season: number) => keepFigures(`${String((season - 1) % 100).padStart(2, '0')}-${String(season % 100).padStart(2, '0')}`);
 
 /**
  * A team's standard roster on one basis for every desk: the season its money is about (next

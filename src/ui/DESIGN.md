@@ -150,7 +150,7 @@ world (no people layer: no morale, personalities or player conversations, by the
 | `--accent-text`                                 | links and "go there" text: your team's colour, darkened to read on paper                                                                                                                            |
 | `--team-night` `--team-night-ink`               | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                                      |
 | `--brand`                                       | red-orange, only for what needs you: the inbox count, live                                                                                                                                          |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper; `--bad` and `--warn` a step darker than a plain red and orange, so neither reads as the gold tier to a colour-blind player |
+| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper; `--bad` a deep red, `--warn` an ochre a step lighter, the gold tier lighter again: the three part for colour-blind players |
 | `--tier-*`                                      | OVR tiers (via `ovrColor`), gold > violet > blue > teal > grey > light grey: text colours that read on white, on their wash and under a white figure                                                |
 | `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                                                         |
 | `--font` `--display` `--head` `--mono`          | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                                              |
@@ -172,7 +172,8 @@ cash: "$1.27M"), `plural` ("1 game", "5 games"), `rankOf` ("7th of 30"), `madeAt
 tables and sentences alike), `injuryName` and `outFor` ("Torn meniscus · out 8 games"). Don't
 write a new inline formatter. On screen a record, a series or a made-attempted never breaks at its
 hyphen: `keepFigures` (`core/format.ts`) for a string, `keep` (`components/ui.tsx`) for any node
-(display only: compare and store the plain string).
+(display only: compare and store the plain string). The lint rule `hoops/keep-figures` flags a join
+written into the markup without it.
 
 **One word for one thing** (the vocabulary every screen uses):
 

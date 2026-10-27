@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { GameType, League } from '../../core/types';
 import { GAME } from '../../core/constants';
-import { gameTime, madeAtt } from '../../core/format';
+import { gameTime, keepFigures, madeAtt } from '../../core/format';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
 import { Card, Chips, Section, Segmented } from '../components/ui';
@@ -208,7 +208,7 @@ function ShotsTab({
           { id: '0', label: abbrevs[0] },
         ]}
       />
-      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${madeAtt(made, shots.length)} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
+      <Card title={`${shooter === null ? abbrevs[team] : nameOf(shooter)} · ${keepFigures(madeAtt(made, shots.length))} FG${period ? ` in ${periodLabel(period)}` : ''}`}>
         {/* (the period narrows the chart: a filter on the card, not another row of controls over it) */}
         <div className="lv-sh-q">
           <Chips label="Period" value={period} onChange={setPeriod} options={[{ id: 0, label: 'All' }, ...periods]} />
@@ -232,8 +232,8 @@ function ShotsTab({
                   onClick={() => setShooter(shooter === r.pid ? null : r.pid)}
                 >
                   <span className="grow ellipsis">{nameOf(r.pid)}</span>
-                  <span className="num">{madeAtt(r.fgm, r.fga)}</span>
-                  <span className="num dim2">{madeAtt(r.tpm, r.tpa)}</span>
+                  <span className="num">{keepFigures(madeAtt(r.fgm, r.fga))}</span>
+                  <span className="num dim2">{keepFigures(madeAtt(r.tpm, r.tpa))}</span>
                 </button>
               ))}
             </div>

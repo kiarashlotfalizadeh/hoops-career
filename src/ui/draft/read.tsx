@@ -7,16 +7,17 @@ import { DRAFT_PROSPECT } from '../../core/types';
 import { scoutList, seenRange, stockMove } from '../../core/league/prospects';
 import { Ovr } from '../components/ui';
 import { OvrPot } from '../office/common';
+import { keepFigures } from '../../core/format';
 
-/** "74" over "POT 80-86": the staff's read (a player off the board: his OVR and POT). */
+/** "74" over "POT 80-86": the staff's read, its badge hollow with a dashed edge (a player off the board: his OVR and POT). */
 export function ReadOvrPot({ league, p }: { league: League; p: Player }) {
   if (p.tid !== DRAFT_PROSPECT) return <OvrPot p={p} />;
   const r = seenRange(league, p);
   return (
-    <div className="fo-ovrstack dn-read" aria-label={`Staff read: OVR ${r.ovrLo} to ${r.ovrHi}, POT ${r.potLo} to ${r.potHi}`}>
+    <div className="fo-ovrstack dn-read staff-read" aria-label={`Staff read: OVR ${r.ovrLo} to ${r.ovrHi}, POT ${r.potLo} to ${r.potHi}`}>
       <Ovr v={r.ovr} size="sm" />
       <span className="pot" aria-hidden="true">
-        <span className="pot-k">POT</span> {r.potLo === r.potHi ? r.pot : `${r.potLo}-${r.potHi}`}
+        <span className="pot-k">POT</span> {r.potLo === r.potHi ? r.pot : keepFigures(`${r.potLo}-${r.potHi}`)}
       </span>
     </div>
   );

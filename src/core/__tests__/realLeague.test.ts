@@ -18,6 +18,7 @@ import { CAP_FOR, curTeamSeason, freeAgents, payroll, revenueScale, standardRost
 import { askingContract, releasePlayer, valueScore } from '../league/contracts';
 import { userOffer } from '../league/freeAgency';
 import { FIRING_LINE, ownerEvaluation, takeOverTeam } from '../league/owner';
+import { levelOdds } from '../league/jobSecurity';
 import {
   forcedPayroll,
   CROWN_GRADE,
@@ -27,7 +28,9 @@ import {
   FLOOR_GAMES,
   FLOOR_GRADE,
   FLOOR_SLOPE,
+  HOLD_OVER_READ,
   PATIENCE_STEP,
+  POSTSEASON_ODDS,
   REVIEWS_KEPT,
   WIN_SCALE,
   WIN_SLIDE,
@@ -336,19 +339,26 @@ describe('two seasons of the real league', () => {
         outlook.filter(
           (o) => o.tid !== tid && l.teams[o.tid].conf === l.teams[tid].conf && (o.final > outlook[tid].final || (o.final === outlook[tid].final && o.talent > outlook[tid].talent)),
         ).length;
-      const pays = l.teams.map((x) => payroll(l, x.tid));
-      const payRankOf = (tid: number) => 1 + pays.filter((q, i) => i !== tid && (q > pays[tid] || (q === pays[tid] && i < tid))).length;
       for (const og of all) {
         const t = l.teams[og.tid];
         const post = goal(og, 'postseason');
         const r = rank(og.tid);
-        // (a payroll in the league's top half is no rebuild: the play-in at least)
-        const paidToWin = payRankOf(og.tid) <= 15;
-        if ((t.strategy === 'rebuild' || r >= 11) && !paidToWin) {
+        // (every payroll here is one a new coach would inherit: none is a plan to win, whatever its
+        // rank, so a rebuild stays one; a payroll of the coach's own is, below)
+        // the strategy and the rank say how far he'd ask, the season forecast how far he can: never a
+        // level it gives less than POSTSEASON_ODDS (Minnesota on Hard had been asked to win a round at 9%)
+        const odds = outlook[og.tid].odds!;
+        let most = 5;
+        while (most > 0 && levelOdds(odds, most) < POSTSEASON_ODDS) most--;
+        const want = t.strategy === 'rebuild' || r >= 11 ? 0 : r <= 4 || t.strategy === 'contend' ? 3 : r <= 8 ? 2 : 1;
+        if (Math.min(want, most) === 0) {
           expect(post, t.abbrev).toBeUndefined();
           expect(goal(og, 'youth'), t.abbrev).toBeDefined();
-        } else if (r <= 4 || t.strategy === 'contend') expect(post!.target, t.abbrev).toBeGreaterThanOrEqual(3);
-        else expect(post!.target, t.abbrev).toBe(r <= 8 ? 2 : 1);
+        } else if (want >= 3) {
+          expect(post!.target, t.abbrev).toBeGreaterThanOrEqual(Math.min(3, most));
+          expect(post!.target, t.abbrev).toBeLessThanOrEqual(most);
+        } else expect(post!.target, t.abbrev).toBe(Math.min(want, most));
+        if (post) expect(levelOdds(odds, post.target), t.abbrev).toBeGreaterThanOrEqual(POSTSEASON_ODDS);
         const pay = payroll(l, og.tid);
         if (pay <= line * 0.94) expect(goal(og, 'profit'), t.abbrev).toBeDefined();
         // the tax line is his limit (a win-now owner's the first apron), or the payroll a coach would
@@ -388,9 +398,12 @@ describe('two seasons of the real league', () => {
         m.userTid = tid;
         // (in charge long enough that the contracts are his, not inherited)
         m.tenureStart = m.season - 10;
-        const raised = goal(planOwnerGoals(m, tid, mo)!, 'wins')!;
+        const plan = planOwnerGoals(m, tid, mo)!;
+        const raised = goal(plan, 'wins')!;
         expect(raised.payRank).toBe(rankOf(tid));
         expect(raised.target - mo[tid].pct * 82).toBeLessThanOrEqual(PAY_RAISE + 2.5);
+        // and a payroll of his own in the top half is no rebuild: the play-in at least, whatever the label
+        expect(goal(plan, 'postseason')?.target ?? 0).toBeGreaterThanOrEqual(1);
       }
       // the stronger the roster, the higher the bar: targets follow the talent
       const byTalent = [...all].sort((a, b) => outlook[a.tid].talent - outlook[b.tid].talent);
@@ -476,8 +489,42 @@ describe('two seasons of the real league', () => {
       });
       l.ownerReviews = [last(82)];
       const held = planOwnerGoals(l, tid, outlook)!;
-      expect(goal(held, 'wins')).toMatchObject({ target: Math.min(base + 12 - WIN_SLIDE, Math.round(82 * 0.88)), held: base + 12 });
-      expect(goalsWhy(held).some((x) => x.startsWith(`Last season I asked for ${base + 12} wins.`))).toBe(true);
+      // (and never more than HOLD_OVER_READ over his read: a Wizards coach on Hard had been held to 30 on a 16-win read)
+      const read = outlook[tid].pct * 82;
+      const target = Math.min(base + 12 - WIN_SLIDE, Math.round(read + HOLD_OVER_READ), Math.round(82 * 0.88));
+      expect(goal(held, 'wins')).toMatchObject({ target, held: base + 12 });
+      expect(target).toBeLessThan(base + 12 - WIN_SLIDE);
+      expect(goalsWhy(held)).toContain(`Last season I asked for ${base + 12} wins. I'm holding the bar at ${target}, ${target - Math.round(read)} over my read of this roster.`);
+      // a smaller hold says the rule, and names what the coach himself traded or let go since, not what aged or walked
+      {
+        const m = structuredClone(l);
+        m.ownerReviews = [{ ...last(82), goals: [{ kind: 'wins', title: '', target: base + 4, weight: 1, result: 0, grade: 0 }] }];
+        expect(goalsWhy(planOwnerGoals(m, tid, outlook)!)).toContain(`Last season I asked for ${base + 4} wins. I don't lower the bar by more than ${WIN_SLIDE} in a season.`);
+        const star = standardRoster(m, tid).sort((a, b) => b.ovr - a.ovr)[0];
+        const other = (tid + 1) % 30;
+        const name = `${star.firstName} ${star.lastName}`;
+        star.tid = other;
+        m.transactions = [
+          {
+            id: 1,
+            season: m.season - 1,
+            day: 60,
+            phase: 'regular',
+            kind: 'trade',
+            tids: [tid, other],
+            user: true,
+            sides: [
+              { tid, players: [{ pid: star.pid, name }], picks: [] },
+              { tid: other, players: [], picks: [] },
+            ],
+          },
+        ];
+        const g = goal(planOwnerGoals(m, tid, outlook)!, 'wins')!;
+        expect(g.gone).toEqual([name]);
+        expect(goalsWhy(planOwnerGoals(m, tid, outlook)!)).toContain(
+          `Last season I asked for ${base + 4} wins. Since then you've traded or let go ${name}, and that doesn't lower the bar by more than ${WIN_SLIDE}.`,
+        );
+      }
       // a mid-season start's prorated target doesn't hold up a full season's
       l.ownerReviews = [last()];
       expect(goal(planOwnerGoals(l, tid, outlook)!, 'wins')!.target).toBe(base);

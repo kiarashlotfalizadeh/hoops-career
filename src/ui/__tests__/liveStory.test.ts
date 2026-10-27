@@ -22,7 +22,7 @@ import {
 } from '../live/atmosphere';
 import { feedRows } from '../live/useAtmosphere';
 import { isKey, type KeyContext } from '../live/keyPlays';
-import { skipChoices } from '../live/skip';
+import { sealedGame, simDecided, skipChoices } from '../live/skip';
 import { pickHighlights, playValue } from '../../core/analysis/highlights';
 import { teamComparison } from '../components/gameBlocks';
 import { createLeague, defaultSettings } from '../../core/league/create';
@@ -426,6 +426,20 @@ describe('the story of a live game', () => {
       expect(choiceIds(skipChoices(1, false, { q: 1, clock: 0 }))).toEqual(['quarter', 'half', 'clutch', 'end']);
       expect(choiceIds(skipChoices(4, false, { q: 4, clock: 280 }))).toEqual(['quarter', 'end']);
       expect(choiceIds(skipChoices(5, false, { q: 5, clock: 290 }))).toEqual(['quarter', 'end']);
+      // a fourth quarter already decided has no clutch time to skip to (closeGame), and the final says so;
+      // a lead that big early in the fourth is decided, the same lead in the third isn't yet
+      const T = (h: number, a: number) => [{ score: h }, { score: a }];
+      expect(simDecided({ q: 4, clock: 600, T: T(110, 80) }, 0)).toBe(true);
+      expect(simDecided({ q: 4, clock: 600, T: T(100, 96) }, 0)).toBe(false);
+      expect(simDecided({ q: 3, clock: 300, T: T(90, 60) }, 0)).toBe(false);
+      expect(simDecided({ q: 3, clock: 0, T: T(120, 70) }, 0)).toBe(true);
+      const decided = skipChoices(4, false, { q: 4, clock: 600 }, true);
+      expect(choiceIds(decided)).toEqual(['quarter', 'end']);
+      expect(decided[1].sub).toMatch(/decided/);
+      // and the court offers the final only once one side is 98% to win it
+      expect(sealedGame({ q: 4, clock: 400, ball: 0, sides: T(120, 85) }, 0)).toBe(true);
+      expect(sealedGame({ q: 4, clock: 400, ball: 0, sides: T(100, 96) }, 0)).toBe(false);
+      expect(sealedGame({ q: 2, clock: 400, ball: 0, sides: T(70, 30) }, 0)).toBe(false);
     }
 
     // highlights value a dunk over a layup, an and-one over both, and a block for the defense

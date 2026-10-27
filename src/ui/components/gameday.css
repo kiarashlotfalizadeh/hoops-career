@@ -1173,6 +1173,18 @@ table.stats .bx-team td {
 .gd-night.tone-bad .gd-night-t {
   color: var(--bad);
 }
+/* the players hurt in the game, under the edges that decided it */
+.gd-hurt {
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+.gd-hurt b {
+  color: var(--bad);
+}
+/* the moves' raw counts, labelled as such under the measured verdict */
+.gd-raw {
+  margin: -4px 0 6px;
+}
 /* the first nights' word on luck against the plan, under the edges that decided it */
 .gd-frame {
   margin: 0;

@@ -10,7 +10,9 @@
 // 35-point scorer; when more seasons than BEST_RECORD_ALLOWANCE allows end with a record better than
 // MAX_WINS, or more than OLD_LEADER_ALLOWANCE allows have a player 36 or older leading the league in
 // points or threes; or when the seasons average more than MAX_LONG_INJURIES absences of 60+ games or
-// MAX_ACHILLES Achilles ruptures.
+// MAX_ACHILLES Achilles ruptures. It also measures the league's shape against the NBA's (the longest
+// streak, 70-win teams, one franchise's share of the titles, the threes leader and 10-three nights,
+// overtime, foul-outs): see SHAPE_FAILS for which of those fail it and which print as WATCH lines.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
 //   TEAM=<abbrev>: the user's team where a league names none, Orlando by default; DIFFICULTY=easy|normal|hard)
 import { readFileSync } from 'node:fs';
@@ -20,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay, startDraft, finishDraftPhase, startFreeAgency, newSeason, autoDraftUserPick } from '../src/core/league/season';
 import { playerName, standardRoster, freeAgents } from '../src/core/league/helpers';
-import { CAP, TARGETS } from '../src/core/constants';
+import { CAP, GAME, TARGETS } from '../src/core/constants';
 import { standings } from '../src/core/league/standings';
 import { nextPick } from '../src/core/league/draft';
 import { expiringPlayers, userOffer, userResign } from '../src/core/league/freeAgency';
@@ -34,10 +36,12 @@ import type { League, Player } from '../src/core/types';
 /** No one has averaged more than 38.4 over a full season since 1963: a leader past 39 is the engine running away. */
 const MAX_PPG = 39;
 /**
- * Only Chamberlain (several times) and Kobe Bryant's 81 have topped Dončić's 73. Star-led playbooks
- * (Grit & Grind, Heliocentric, Hub Big) put a 74-76 night in reach once in a few dozen seasons, as the
- * real league has had; a night past 80 is Kobe territory, and one in a check's few dozen seasons is the
- * engine running away.
+ * Past 73 the real league has only Chamberlain's 100 and 78 and Kobe Bryant's 81, so a 74-76 night is
+ * past nearly all of history. What justifies the cap at 80 (73 until October 2026) is the rate: the
+ * real league has had a 70-point night about once in eight seasons since 1980 (Robinson, Bryant,
+ * Booker, Mitchell, Embiid, Dončić), the engine about once in 32 (this check's 32 seasons: Dončić's
+ * 76, in a star-led playbook). A night past 80 is past Kobe, and one in a check's few dozen seasons is
+ * the engine running away.
  */
 const MAX_GAME_PTS = 80;
 /**
@@ -81,6 +85,31 @@ const MAX_WINS = 73;
  */
 const BEST_RECORD_ALLOWANCE = 20;
 /**
+ * The league's shape (round-3 review, sim F1, F4, F7, F8). The NBA record streak is 33 and a
+ * season's longest usually runs 12-16: at most 28 in nine seasons of ten. 70 wins came three times
+ * in 78 seasons: a 70-win team in at most one season in eight. No franchise wins more than half a
+ * league's titles. Curry's record is 5.1 made threes a game: the leader at most 5.2 in three
+ * seasons of four, and about a dozen 10-three nights a season at most. Overtime in TARGETS.otRate
+ * of games, within OT_TOLERANCE. Foul-outs well under half the 170-256 the review measured. The
+ * engine wasn't tuned for these yet, and a guard fails the check (SHAPE_FAILS) only once the engine
+ * holds it with room to spare; the rest print as WATCH lines with the measured value and the target.
+ * Measured October 2026 (this check's 32 seasons, then again with the round's other changes): streaks
+ * of 28 or less in 91% and 88% of seasons (median 19 and 17, max 36 and 33); a 70-win team in 6 and 3
+ * seasons; the most titles by one franchise 4 of 8 (OKC) and 3 of 8; the threes leader at 5.2 or less
+ * in 53% and 44%; 15.2 and 13.9 10-three nights; overtime in 3.1% and 3.0% of games; 202 and 203
+ * foul-outs. None holds with room to spare: all are WATCH lines for now.
+ */
+const MAX_STREAK = 28;
+const STREAK_SHARE = 0.9;
+const SEVENTY_ALLOWANCE = 8;
+const MAX_TITLE_SHARE = 0.5;
+const TPM_LEADER = 5.2;
+const TPM_LEADER_SHARE = 0.75;
+const TPM10_TARGET = 12;
+const OT_TOLERANCE = 0.008;
+const MAX_FOUL_OUTS = 130;
+const SHAPE_FAILS = { streak: false, seventy: false, titles: false, tpm: false, tpm10: false, ot: false, foulOuts: false };
+/**
  * The leagues CI plays: four different runs from the same opening night, one of them with the user
  * running the Thunder, the opening night's best team (a user keeps his core together, as AI front
  * offices over the tax don't: that league is where 77-5 seasons came from).
@@ -112,6 +141,9 @@ interface SeasonReport {
   otRate: number;
   close: number;
   topMin: [number, number];
+  /** The champion (abbrev, '-' if the playoffs didn't finish) and the regular season's foul-outs. */
+  champ: string;
+  foulOuts: number;
 }
 
 const quiet = !!process.env.QUIET;
@@ -189,6 +221,58 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
   console.log(
     `  OT ${(100 * mean((r) => r.otRate)).toFixed(1)}%, by 3 or less ${(100 * mean((r) => r.close)).toFixed(1)}%, top-two MPG ${mean((r) => r.topMin[0]).toFixed(1)}/${mean((r) => r.topMin[1]).toFixed(1)}, injuries ${mean((r) => r.injuries.perTeam).toFixed(1)}/team-season, 10+ games ${mean((r) => r.injuries.ten).toFixed(1)}/season (${(mean((r) => r.injuries.ten) / 30).toFixed(1)}/team), 60+ games ${mean((r) => r.injuries.sixty).toFixed(1)}/season (max ${max((r) => r.injuries.sixty)}), Achilles ${mean((r) => r.injuries.achilles).toFixed(1)} (max ${max((r) => r.injuries.achilles)}), ACL ${mean((r) => r.injuries.acl).toFixed(1)}`,
   );
+  // the league's shape (sim F1, F4, F7, F8): FAIL guards where the engine holds them with room to
+  // spare, WATCH lines (printed, never failing) for the gaps the engine still has
+  const streakShare = all.filter((r) => r.streak.games <= MAX_STREAK).length / all.length;
+  const seventy = all.filter((r) => r.best.won >= 70);
+  const seventyAllowed = Math.floor(all.length / SEVENTY_ALLOWANCE);
+  const titles = [...new Set(all.map((r) => r.seed))].map((seed) => {
+    const champs = all.filter((r) => r.seed === seed && r.champ !== '-').map((r) => r.champ);
+    const top = [...new Set(champs)].map((c) => ({ c, n: champs.filter((x) => x === c).length })).sort((a, b) => b.n - a.n)[0] ?? { c: '-', n: 0 };
+    return { seed, ...top, of: champs.length, share: top.n / Math.max(1, champs.length) };
+  });
+  const titleTop = [...titles].sort((a, b) => b.share - a.share)[0];
+  const tpmShare = all.filter((r) => r.tpm.pg <= TPM_LEADER).length / all.length;
+  const ot = mean((r) => r.otRate);
+  const shape = [
+    {
+      fail: SHAPE_FAILS.streak,
+      ok: streakShare >= STREAK_SHARE,
+      text: `longest streak ${MAX_STREAK} or less in ${pct(streakShare)} of seasons (target ${pct(STREAK_SHARE)}+; median ${mid(streaks)}, max ${streaks[streaks.length - 1]})`,
+    },
+    {
+      fail: SHAPE_FAILS.seventy,
+      ok: seventy.length <= seventyAllowed,
+      text: `${seventy.length} of ${all.length} seasons with a 70-win team (target ${seventyAllowed}, one in ${SEVENTY_ALLOWANCE})${seventy.length ? `: ${seventy.map((r) => `${at(r)} ${r.best.team} ${r.best.won}-${r.best.lost}`).join(', ')}` : ''}`,
+    },
+    {
+      fail: SHAPE_FAILS.titles,
+      ok: titleTop.share <= MAX_TITLE_SHARE,
+      text: `most titles by one franchise in a league ${titles.map((x) => `${x.c} ${x.n} of ${x.of} (rng ${x.seed})`).join(', ')} (target ${pct(MAX_TITLE_SHARE)} or less)`,
+    },
+    {
+      fail: SHAPE_FAILS.tpm,
+      ok: tpmShare >= TPM_LEADER_SHARE,
+      text: `threes leader ${TPM_LEADER} a game or less in ${pct(tpmShare)} of seasons (target ${pct(TPM_LEADER_SHARE)}+; mean ${mean((r) => r.tpm.pg).toFixed(2)})`,
+    },
+    {
+      fail: SHAPE_FAILS.tpm10,
+      ok: mean((r) => r.tpm10) <= TPM10_TARGET,
+      text: `10-three nights ${mean((r) => r.tpm10).toFixed(1)} a season (target ${TPM10_TARGET} or less; max ${max((r) => r.tpm10)})`,
+    },
+    {
+      fail: SHAPE_FAILS.ot,
+      ok: Math.abs(ot - TARGETS.otRate) <= OT_TOLERANCE,
+      text: `OT in ${(100 * ot).toFixed(1)}% of games (target ${(100 * TARGETS.otRate).toFixed(1)}% ± ${(100 * OT_TOLERANCE).toFixed(1)})`,
+    },
+    {
+      fail: SHAPE_FAILS.foulOuts,
+      ok: mean((r) => r.foulOuts) <= MAX_FOUL_OUTS,
+      text: `${mean((r) => r.foulOuts).toFixed(0)} foul-outs a season (target ${MAX_FOUL_OUTS} or less; max ${max((r) => r.foulOuts)})`,
+    },
+  ];
+  for (const g of shape.filter((x) => !x.fail)) console.log(`  WATCH (not failing, ${g.ok ? 'met' : 'missed'}): ${g.text}`);
+  for (const g of shape.filter((x) => x.fail)) if (!g.ok) failures.push(g.text);
   if (mean((r) => r.injuries.sixty) > MAX_LONG_INJURIES) failures.push(`${mean((r) => r.injuries.sixty).toFixed(1)} absences of 60+ games a season (max ${MAX_LONG_INJURIES})`);
   if (mean((r) => r.injuries.achilles) > MAX_ACHILLES) failures.push(`${mean((r) => r.injuries.achilles).toFixed(1)} Achilles ruptures a season (max ${MAX_ACHILLES})`);
   if (failures.length) {
@@ -223,6 +307,7 @@ function seasonGames(league: League, season: number) {
   let ot = 0;
   let close = 0;
   let tpm10 = 0;
+  let foulOuts = 0;
   const box = (g: League['games'][number]) => `${league.teams[g.away.tid]?.abbrev} ${g.away.pts} @ ${league.teams[g.home.tid]?.abbrev} ${g.home.pts}`;
   // (every game that counts, the playoffs too, not the All-Star Game; scores in regulation, as an overtime adds its own)
   for (const g of league.games.filter((x) => x.season === season && x.type !== 'allstar')) {
@@ -239,6 +324,7 @@ function seasonGames(league: League, season: number) {
       for (const b of side.players) {
         if (b.pts > game.pts) game = { name: b.name, pts: b.pts };
         if (b.tpm >= 10) tpm10++;
+        if (b.pf >= GAME.foulOut) foulOuts++;
       }
       const won = side.pts > (side === g.home ? g.away : g.home).pts;
       const n = won ? (run.get(side.tid) ?? 0) + 1 : 0;
@@ -247,7 +333,7 @@ function seasonGames(league: League, season: number) {
     }
   }
   const n = Math.max(1, games.length);
-  return { game, streak, astPerGame: ast / Math.max(1, 2 * games.length), margin, score, otRate: ot / n, close: close / n, tpm10 };
+  return { game, streak, astPerGame: ast / Math.max(1, 2 * games.length), margin, score, otRate: ot / n, close: close / n, tpm10, foulOuts };
 }
 
 /** One league, start to finish: prints its seasons and returns what the thresholds look at. */
@@ -306,7 +392,7 @@ function playLeague(spec: string): SeasonReport[] {
       .sort((a, b) => b.ppg - a.ppg);
     const lead = rows[0];
     const over30 = rows.filter((x) => x.ppg >= 30).length;
-    const { game, streak, astPerGame, margin, score, otRate, close, tpm10 } = seasonGames(league, season);
+    const { game, streak, astPerGame, margin, score, otRate, close, tpm10, foulOuts } = seasonGames(league, season);
     const perGame = (k: 'tpm' | 'stl') =>
       Object.values(league.players)
         .map((p) => {
@@ -338,6 +424,7 @@ function playLeague(spec: string): SeasonReport[] {
     const table = [...standings(league)].sort((a, b) => b.won - a.won);
     const abbrev = (tid: number) => league.teams[tid]?.abbrev ?? '-';
     const best = { team: abbrev(table[0].tid), won: table[0].won, lost: table[0].lost };
+    const champ = abbrev(league.teams.find((t) => t.seasons.find((x) => x.season === season)?.playoffRound === 5)?.tid ?? -1);
     reports.push({
       season,
       leader: { name: lead ? playerName(lead.p) : '-', ppg: lead?.ppg ?? 0 },
@@ -355,6 +442,8 @@ function playLeague(spec: string): SeasonReport[] {
       otRate,
       close,
       topMin,
+      champ,
+      foulOuts,
     });
     console.log(
       `${season}: ${rows
@@ -366,7 +455,7 @@ function playLeague(spec: string): SeasonReport[] {
         .join(', ')} · streak ${abbrev(streak.tid)} ${streak.games}`,
     );
     console.log(
-      `  3PM ${tpm.name} ${tpm.pg.toFixed(2)} (${tpm.age}), ${tpm10} 10-three nights · STL ${stl.name} ${stl.pg.toFixed(2)} · margin ${margin.pts} (${margin.text}) · score ${score.pts} (${score.text}) · OT ${pct(otRate)}, by 3 or less ${pct(close)} · top-two MPG ${topMin[0].toFixed(1)}/${topMin[1].toFixed(1)} · injuries ${injuries.perTeam.toFixed(1)}/team, ${injuries.ten} of 10+, ${injuries.sixty} of 60+ (${injuries.achilles} Achilles, ${injuries.acl} ACL)`,
+      `  3PM ${tpm.name} ${tpm.pg.toFixed(2)} (${tpm.age}), ${tpm10} 10-three nights · STL ${stl.name} ${stl.pg.toFixed(2)} · margin ${margin.pts} (${margin.text}) · score ${score.pts} (${score.text}) · OT ${pct(otRate)}, by 3 or less ${pct(close)} · top-two MPG ${topMin[0].toFixed(1)}/${topMin[1].toFixed(1)} · ${foulOuts} foul-outs · champion ${champ} · injuries ${injuries.perTeam.toFixed(1)}/team, ${injuries.ten} of 10+, ${injuries.sixty} of 60+ (${injuries.achilles} Achilles, ${injuries.acl} ACL)`,
     );
     if (!quiet) {
       const best5 = Object.values(league.players)

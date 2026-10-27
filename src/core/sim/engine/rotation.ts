@@ -57,6 +57,16 @@ export const rotationMethods = {
   },
 
   /**
+   * A playoff game running away in the second half: a lead (either way) within `playoffs` of the
+   * coach's garbage line (see K.garbage). His playoff rotation (the shortened eight, the five's extra
+   * minutes) is for a game in reach; in one like this he plays his regular-season rotation, and past
+   * the line the bench finishes it as in the regular season.
+   */
+  lopsided(this: GameSim, t: ST): boolean {
+    return !!t.planReg && Math.abs(this.T[0].score - this.T[1].score) >= this.garbageLine(t) - K.garbage.playoffs;
+  },
+
+  /**
    * The team leads a decided game (see wantsGarbage) and eases off: it walks the ball up, runs less,
    * hunts fewer threes and stops pressing full court (K.garbage), whoever is on the floor.
    */
@@ -103,7 +113,7 @@ export const rotationMethods = {
       return desired;
     }
     if (this.q <= 4) {
-      const slot = t.plan[this.planSlot()] ?? [];
+      const slot = (this.lopsided(t) ? t.planReg! : t.plan)[this.planSlot()] ?? [];
       desired = slot.map((pid) => t.byId.get(pid)!).filter((p) => p && avail(p));
     } else {
       // overtime: closers / best players with energy
@@ -181,7 +191,7 @@ export const rotationMethods = {
   subSignature(this: GameSim, t: ST): number[] {
     const fl = t.t.manage.fatigueSub;
     // (a blowout, or one getting back within reach, changes the lineup now, not at the next minute mark)
-    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.crunch() ? 1 : 0, this.wantsGarbage(t) ? 1 : 0];
+    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.crunch() ? 1 : 0, this.wantsGarbage(t) ? 1 : 0, this.lopsided(t) ? 1 : 0];
     for (const p of t.players) {
       const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;
       sig.push(p.out + 4 * state + 16 * p.fouls + (this.capped(p) ? 1024 : 0) + (t.hacked.size && (t.hacked.get(p.pid) ?? 0) >= 2 ? 2048 : 0));

@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Zap } from 'lucide-react';
 import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { fmtClock, periodLabel } from '../stats';
@@ -35,7 +35,8 @@ export function gameContext(league: League, g: ScheduledGame, gameNo?: number): 
  * timeouts left and team fouls, both labelled), the scores, the period and the clock as the court animates them
  * (`ticker`), a run, the sliver of each team's chance to win (`wpHome`, unless switched off) with
  * the momentum standing thicker on it, and the night's other scores under it; everything but the clock and
- * score as of the possession the court last finished drawing (`view`). In clutch time it says so.
+ * score as of the possession the court last finished drawing (`view`). In clutch time it says so, and
+ * with Key plays on (the court draws only those), so does its top line.
  * The final is the final card's (FinalSlab).
  */
 export function ScoreBug({
@@ -50,6 +51,7 @@ export function ScoreBug({
   run: night,
   momentum = 0,
   clutch,
+  keyPlays,
   onLeave,
   children,
 }: {
@@ -69,6 +71,8 @@ export function ScoreBug({
   momentum?: number;
   /** Clutch time: the last five minutes within five. */
   clutch?: boolean;
+  /** Key plays on: the court fast-forwards to the next key play (Playback's chip). */
+  keyPlays?: boolean;
   /** A bottom line under it (the night's other scores). */
   children?: ReactNode;
   /** The way out: the game waits where it is, to be resumed from the Continue bar or its Matchup page. */
@@ -135,6 +139,11 @@ export function ScoreBug({
             <ChevronLeft size={14} aria-hidden="true" /> Leave
           </button>
           <span className={`ellipsis${context ? '' : ' lv-lb-live'}`}>{context ?? 'Live'}</span>
+          {keyPlays && (
+            <span className="lv-lb-kp">
+              <Zap size={11} aria-hidden="true" /> Key plays
+            </span>
+          )}
         </div>
       ) : (
         context && <div className="lv-lb-ctx ellipsis">{context}</div>

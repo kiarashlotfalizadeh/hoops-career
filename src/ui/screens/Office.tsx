@@ -27,7 +27,7 @@ import { Bar, Section, Sheet, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
-import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, isOffseason, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
+import { CapBar, HelpSheet, capRoomFig, capSeason, contractsUp, floorText, isOffseason, payStatus, rosterFig, rosterSpots, shortSeason, taxFig } from '../office/common';
 import { overallPick, pickProjection } from '../league/shared';
 import { lotterySeen, picksText } from '../draft/common';
 import { useFlowRunner } from '../useFlow';
@@ -331,6 +331,8 @@ function CapCard({ league }: { league: League }) {
             </span>
           )}
         </span>
+        {/* (under the salary floor the difference is paid at the season's end anyway) */}
+        {floorText(pay, cap) && <span className="fo-capslab-floor">{floorText(pay, cap)}</span>}
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title={`${shortSeason(s0)} cap sheet`}>
         <CapSheet league={league} />

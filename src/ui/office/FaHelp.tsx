@@ -2,7 +2,7 @@
 import type { League } from '../../core/types';
 import { CAP, seasonLabel } from '../../core/constants';
 import { CAP_FOR, OFFSEASON_ROSTER_MAX, TWO_WAY_MAX } from '../../core/league/helpers';
-import { EXCEPTIONS, SUMMER_FLOOR, WAIVER_DAYS, exceptionAmount, twoWaySalary, type Exception } from '../../core/league/contracts';
+import { EXCEPTIONS, ROTATION_FLOOR, SUMMER_FLOOR, WAIVER_DAYS, exceptionAmount, twoWaySalary, type Exception } from '../../core/league/contracts';
 import { FA_DAYS } from '../../core/league/season';
 import { MARKET_HOLD_DAYS, MARKET_STEP } from '../../core/league/freeAgency';
 import { COOL_FA, COOL_SEASON, LOWBALL } from '../../core/league/negotiation';
@@ -58,9 +58,12 @@ export function FaHelp({ league, s, space, exceptions }: { league: League; s: nu
       <p>
         <b>Timing.</b> The summer market lasts {FA_DAYS} days and opens for every team at once: AI teams sign their first wave on day 1 too. Prices hold for the first{' '}
         {MARKET_HOLD_DAYS} days. Then a player no team can pay drops his price {pct(MARKET_STEP)} a day toward what the money left would pay him (cap space, an exception, or his
-        old team on his Bird rights; the best players are served first), never below it. AI teams see each new price first, so waiting buys no discount: he signs where the money
-        is. A good player ({SUMMER_FLOOR.ovr}+ OVR) never asks one team less than {pct(SUMMER_FLOOR.early)} of his value while the market could pay that. The unsigned stay
-        available in season.
+        old team on his Bird rights; the best players are served first), or straight to his floor (below) when that money can't pay more. AI teams see each new price first. A good
+        player ({SUMMER_FLOOR.ovr}+ OVR) never comes down under {pct(SUMMER_FLOOR.early)} of his value through day {SUMMER_FLOOR.day}, or {pct(SUMMER_FLOOR.late)} after it and
+        through the preseason (or the mid-level, when that pays him {pct(SUMMER_FLOOR.mle)} of it or more); a rotation player ({ROTATION_FLOOR.ovr}-{SUMMER_FLOOR.ovr - 1}) under{' '}
+        {pct(ROTATION_FLOOR.early)}, then {pct(ROTATION_FLOOR.late)}. Past day {SUMMER_FLOOR.day}, one held at his floor takes a one-year deal there from a team with the room or an
+        exception, or goes back to his old team at about it as the market closes. The unsigned stay available in season, when prices come down every week (an {SUMMER_FLOOR.ovr}+
+        player's never under {pct(SUMMER_FLOOR.hold)} of his value).
       </p>
       <p>
         <b>Waivers.</b> A player released in season with guaranteed money left spends {WAIVER_DAYS} days on waivers. Teams can claim him, worst record first, and take over his

@@ -108,7 +108,14 @@ export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[];
     <div className="lv-mv card flush list">
       {list.map((m, i) => (
         <div key={`${m.q}-${m.clock}-${i}`} className="lv-mv-row">
-          <span className="lv-mv-when num">{m.clock <= 0 ? (m.q === 2 ? 'Half' : `End ${periodLabel(m.q)}`) : `${periodLabel(m.q)} ${fmtClock(m.clock)}`}</span>
+          {/* (under a minute with its minute, "Q4 0:06": a "Q4 6.0" reads as 6:00; a move's clock is whole seconds) */}
+          <span className="lv-mv-when num">
+            {m.clock <= 0
+              ? m.q === 2
+                ? 'Half'
+                : `End ${periodLabel(m.q)}`
+              : `${periodLabel(m.q)} ${m.clock < 60 ? `0:${String(Math.round(m.clock)).padStart(2, '0')}` : fmtClock(m.clock)}`}
+          </span>
           <div className="grow lv-mv-tx">
             <div className="lv-mv-what">
               {m.by === 'staff' && (

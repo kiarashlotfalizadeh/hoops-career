@@ -241,28 +241,47 @@ export function runTask(l: League, op: TaskOp): TaskResult {
  * A season of results is most of a league (about 8 MB of 10 by the playoffs), so the worker keeps
  * its own copy and only what changed crosses over: the results both sides already share (`keep`,
  * from the start of the list) and the rest. Results are only ever added, except at a new season,
- * which replaces them with copies without their play-by-play, so a game id and whether it still has
- * its play-by-play say whether two lists agree.
+ * which replaces them with copies without their play-by-play; and a recorded result can still change
+ * (see resultMark). So a game id and its mark say whether two lists agree.
  */
 export interface GamesDelta {
   keep: number;
   tail: GameResult[];
 }
 
-/** What a list of results is, for comparing: [game id, has play-by-play] each. */
-export type GamesSig = [number, boolean][];
+/**
+ * What a result is as far as a change after it's recorded goes: how many of its fields are set. A
+ * result changes only by gaining or losing one: an older game of the user's drops its play-by-play,
+ * a live game's moves get their measured worth (movesWorth) once the final is in, maybe after a save
+ * or a sim. Either one changes the count, so a copy made before it (the worker's, the device's) is
+ * known to be out of date and goes again.
+ */
+export function resultMark(g: GameResult): number {
+  let n = 0;
+  for (const k in g) if (g[k as keyof GameResult] !== undefined) n++;
+  return n;
+}
 
-export const gamesSig = (games: readonly GameResult[]): GamesSig => games.map((g) => [g.gid, !!g.pbp]);
+/** What a list of results is, for comparing: [game id, mark] each. */
+export type GamesSig = [number, number][];
+
+export const gamesSig = (games: readonly GameResult[]): GamesSig => games.map((g) => [g.gid, resultMark(g)]);
 
 /** What `games` adds to or changes from a list whose signature is `base`. */
 export function diffGames(base: GamesSig | null, games: readonly GameResult[]): GamesDelta {
   let keep = 0;
-  if (base) while (keep < base.length && keep < games.length && base[keep][0] === games[keep].gid && base[keep][1] === !!games[keep].pbp) keep++;
+  if (base) while (keep < base.length && keep < games.length && base[keep][0] === games[keep].gid && base[keep][1] === resultMark(games[keep])) keep++;
   return { keep, tail: games.slice(keep) };
 }
 
+/** What the worker says when a delta was made against results it doesn't hold: they go again whole. */
+export const LOST_RESULTS = 'The sim worker lost track of the results.';
+
 /** `base` brought up to date with a delta made against it. */
 export const applyGames = (base: readonly GameResult[], d: GamesDelta): GameResult[] => base.slice(0, d.keep).concat(d.tail);
+
+/** The signature of a list brought up to date with a delta, from the list's signature (taken when it was sent: the list may have changed since). */
+export const applySig = (base: GamesSig, d: GamesDelta): GamesSig => base.slice(0, d.keep).concat(gamesSig(d.tail));
 
 /** The league without its results, for the trip across. */
 export const withoutGames = (l: League): League => ({ ...l, games: [] });

@@ -3,12 +3,12 @@
 // matters to him.
 import { Check, Gavel, Minus, TriangleAlert, X } from 'lucide-react';
 import type { Player } from '../../core/types';
-import { PREF_KEYS, type PlayerPrefs, appealTerms, askingContract, playerPrefs, willSign } from '../../core/league/contracts';
-import { MARKET_HOLD_DAYS, MARKET_STEP, bidDecideDay, bidRivals, bidStanding, marketMoney, pendingBid, withdrawBid } from '../../core/league/freeAgency';
+import { PREF_KEYS, SUMMER_FLOOR, type PlayerPrefs, appealTerms, askingContract, floorAmounts, playerPrefs, willSign } from '../../core/league/contracts';
+import { MARKET_HOLD_DAYS, bidDecideDay, bidRivals, bidStanding, marketMoney, pendingBid, withdrawBid } from '../../core/league/freeAgency';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Callout, Line, forYears } from './common';
-import { moneyExact } from '../../core/format';
+import { money, moneyExact } from '../../core/format';
 
 const LABEL: Record<keyof PlayerPrefs, string> = { winning: 'Winning', money: 'Money', role: 'Playing time', market: 'Market' };
 
@@ -33,7 +33,23 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   const room = useLeagueMemo(() => (league.phase === 'freeAgency' ? marketMoney(league, p) : null), [league, p]);
   const ask = askingContract(league, p).amount;
   const dry = room !== null && room < ask * 0.9;
-  const drops = league.faDay < MARKET_HOLD_DAYS ? `From day ${MARKET_HOLD_DAYS + 2} his price drops` : 'His price drops';
+  const drops = league.faDay < MARKET_HOLD_DAYS ? `From day ${MARKET_HOLD_DAYS + 2} his price comes down` : 'His price comes down';
+  // how far it can drop: his summer floor, through its day and after (see SUMMER_FLOOR), the one number that holds whatever the others spend
+  const floors = floorAmounts(league, p);
+  const early = league.faDay < SUMMER_FLOOR.day;
+  const toward = `${drops} toward what the money left would pay him`;
+  // (a floor the mid-level caps stays where it is past the floor's day: see floorAmounts)
+  const then =
+    floors && floors.late < floors.early - 50 ? `through day ${SUMMER_FLOOR.day}, then ${money(floors.late)} on a one-year deal` : `(a one-year deal past day ${SUMMER_FLOOR.day})`;
+  const floorLine = !floors
+    ? `${toward}.`
+    : early
+      ? ask <= floors.early + 50
+        ? `He's at his floor: ${money(floors.early)} ${then}.`
+        : `${toward}, never under ${money(floors.early)} ${then}.`
+      : ask <= floors.late + 50
+        ? `He's at his floor, ${money(floors.late)}, on a one-year deal.`
+        : `${toward}, never under ${money(floors.late)}: there he takes a one-year deal.`;
 
   // fit of your team for each priority: yes, no, or neither
   const fit: Record<keyof PlayerPrefs, { ok: boolean | null; note: string }> = {
@@ -58,9 +74,9 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         {dry && (
           <div className="small dim2">
             {room! > 0
-              ? `No other team can pay his ask: the most one could is about ${moneyExact(Math.round(room! / 100) * 100)}.`
-              : 'No other team has room for him past the minimum.'}{' '}
-            {drops} {Math.round(MARKET_STEP * 100)}% a day toward it, and he signs where the money is.
+              ? `No other team can pay his ask now: the most one could is about ${moneyExact(Math.round(room! / 100) * 100)}.`
+              : 'No other team has room for him past the minimum now.'}{' '}
+            {floorLine}
           </div>
         )}
         {bid && (

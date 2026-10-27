@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import type { BoxLine, TeamBox } from '../../core/types';
 import { signed, wholeMinutes } from '../stats';
-import { injuryName, madeAtt } from '../../core/format';
+import { injuryName, keepFigures, madeAtt } from '../../core/format';
 import './gameday.css';
 
 /** The columns after the player's name: the abbreviation and what it stands for. */
@@ -121,9 +121,9 @@ export function BoxScore({
                     <td>{p.stl}</td>
                     <td>{p.blk}</td>
                     <td>{p.tov}</td>
-                    <td>{madeAtt(p.fgm, p.fga)}</td>
-                    <td>{madeAtt(p.tpm, p.tpa)}</td>
-                    <td>{madeAtt(p.ftm, p.fta)}</td>
+                    <td>{keepFigures(madeAtt(p.fgm, p.fga))}</td>
+                    <td>{keepFigures(madeAtt(p.tpm, p.tpa))}</td>
+                    <td>{keepFigures(madeAtt(p.ftm, p.fta))}</td>
                     <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
                     <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{signed(p.pm, 0)}</td>
                   </tr>
@@ -138,9 +138,9 @@ export function BoxScore({
                 <td>{t.stl}</td>
                 <td>{t.blk}</td>
                 <td>{t.tov}</td>
-                <td>{madeAtt(t.fgm, t.fga)}</td>
-                <td>{madeAtt(t.tpm, t.tpa)}</td>
-                <td>{madeAtt(t.ftm, t.fta)}</td>
+                <td>{keepFigures(madeAtt(t.fgm, t.fga))}</td>
+                <td>{keepFigures(madeAtt(t.tpm, t.tpa))}</td>
+                <td>{keepFigures(madeAtt(t.ftm, t.fta))}</td>
                 <td>{t.pf}</td>
                 <td />
               </tr>

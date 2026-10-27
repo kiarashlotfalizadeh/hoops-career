@@ -156,7 +156,9 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
         </div>
       )}
       <div className="moment-body">
-        <div className="moment-mark">{p ? <Avatar p={p} size="lg" /> : <TeamLogo tid={tid} size={112} decorative />}</div>
+        <div className="moment-mark">
+          {p ? <Avatar p={m.jersey !== undefined ? { ...p, jersey: m.jersey, tid } : p} size="lg" /> : <TeamLogo tid={tid} size={112} decorative />}
+        </div>
         <div className="moment-over">{m.over}</div>
         <h2 id="moment-title" className="moment-title">
           {m.title}

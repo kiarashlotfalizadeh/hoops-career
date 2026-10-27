@@ -9,6 +9,7 @@ import type { DefenseTactics, OffenseTactics, Tactics } from '../../core/types';
 import { plural } from '../../core/format';
 import { tweak } from './edit';
 import type { Phase } from './fam';
+import { StaffMoveNote } from './StaffMoveNote';
 
 /** The preset the user's offense or defense comes from. */
 export const offPresetOf = (t: Tactics): OffPreset => OFF_PRESETS.find((p) => p.id === t.offPreset) ?? OFF_PRESETS[0];
@@ -45,16 +46,19 @@ export function PlaybookLine({ phase, help }: { phase: Phase; help?: ReactNode }
   const name = phase === 'inPoss' ? offPresetOf(t).name : phase === 'outPoss' ? defPresetOf(t).name : 'your style';
   const moved = useLeagueMemo(() => tacticsChanges(asStyle(t, phase), t).length, [t, phase]);
   return (
-    <div className="tx-pbline">
-      <span className="grow tx-note">
-        {moved ? `${plural(moved, 'setting')} moved from ${name}` : `As ${name} has it`} · <i className="tx-dot" aria-hidden="true" /> its own setting
-      </span>
-      {help}
-      {moved > 0 && (
-        <button className="btn xs" onClick={() => tweak((tt) => putBack(tt, phase))}>
-          Put back
-        </button>
-      )}
-    </div>
+    <>
+      <StaffMoveNote only={phase} />
+      <div className="tx-pbline">
+        <span className="grow tx-note">
+          {moved ? `${plural(moved, 'setting')} moved from ${name}` : `As ${name} has it`} · <i className="tx-dot" aria-hidden="true" /> its own setting
+        </span>
+        {help}
+        {moved > 0 && (
+          <button className="btn xs" onClick={() => tweak((tt) => putBack(tt, phase))}>
+            Put back
+          </button>
+        )}
+      </div>
+    </>
   );
 }

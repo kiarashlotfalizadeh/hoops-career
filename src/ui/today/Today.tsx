@@ -135,7 +135,7 @@ export default function Today() {
       {/* the preseason: the weight of the years with this team */}
       {league.phase === 'preseason' && <TenureKicker league={league} />}
 
-      {needs.count > 0 && (
+      {needs.rows > 0 && (
         <Section
           title="Needs you"
           right={
@@ -144,9 +144,11 @@ export default function Today() {
                 All {needs.count} <ChevronRight size={14} aria-hidden="true" />
               </button>
             ) : (
-              <span className="td-count num" aria-hidden="true">
-                {needs.count}
-              </span>
+              needs.count > 0 && (
+                <span className="td-count num" aria-hidden="true">
+                  {needs.count}
+                </span>
+              )
             )
           }
         >

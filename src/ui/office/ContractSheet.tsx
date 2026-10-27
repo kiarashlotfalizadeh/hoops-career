@@ -56,7 +56,7 @@ import { ExtendBody } from './ExtendBody';
 import { BidPanel } from './BidPanel';
 import { type Reply, TalkPanel } from './TalkPanel';
 import { compareHref, counterpart } from '../compare';
-import { money, moneyExact } from '../../core/format';
+import { keepFigures, money, moneyExact } from '../../core/format';
 import { freezeResignReason, freezeSigningReason } from '../../core/league/books';
 import { salaryFor } from '../../core/playerGen';
 
@@ -282,7 +282,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           yearsNote={
             <>
               Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants: about 3% on his price.
-              {sheet ? ` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.` : ''}
+              {sheet ? keepFigures(` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.`) : ''}
               {mode === 'resign' && birdTier(league, p) !== 'full'
                 ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
                 : ''}

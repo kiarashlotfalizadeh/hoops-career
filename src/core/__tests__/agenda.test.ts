@@ -7,12 +7,12 @@
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
-import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, resolveAgenda, showGuide } from '../league/agenda';
+import { agenda, agendaBlocker, cutOrder, GUIDE_STEPS, guideDone, guideFinished, guideOpen, guideStepOpen, guideStepTitle, resolveAgenda, showGuide } from '../league/agenda';
 import { canStartRegularSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
-import { ULTIMATUM_ODDS, canBeFired, jobSecurity, levelOdds, maybeUltimatum, seatHeat, ultimatumVerdict } from '../league/jobSecurity';
+import { ULTIMATUM_ODDS, canBeFired, jobSecurity, levelOdds, maybeUltimatum, seasonWeight, seatHeat, ultimatumVerdict } from '../league/jobSecurity';
 import { ownerWord } from '../league/legacyPulse';
 import { legacyOf } from '../league/legacy';
 import { ownerEvaluation } from '../league/owner';
@@ -23,7 +23,9 @@ import {
   currentGoals,
   floorDanger,
   goalsWhy,
+  CROWN_GRADE,
   gradeGoal,
+  gradeOwnerGoals,
   lastWinsTarget,
   ownerProgress,
   personalityLine,
@@ -33,7 +35,22 @@ import {
 } from '../league/ownerGoals';
 import { requestSetting } from '../league/difficulty';
 import { leagueForecast, pct } from '../analysis/odds';
-import { DEADLINE_DAYS, DUE_SOON, FLOOR_AGO, callsDaily, changeWorth, countersWorth, dueId, openCallIds, storeWorth } from '../league/calls';
+import {
+  DEADLINE_DAYS,
+  DUE_SOON,
+  FLOOR_AGO,
+  ODDS_FIRST_GAMES,
+  callsDaily,
+  changeWorth,
+  concedeStanding,
+  countersWorth,
+  dealGoals,
+  dueId,
+  floorStanding,
+  openCallIds,
+  planDeadlineCall,
+  storeWorth,
+} from '../league/calls';
 import { isWeekId, staffPicksSince } from '../league/weekCall';
 import { schedulePlayoffDay, seriesLabel } from '../league/playoffs';
 import { setPlanItem } from '../league/gamePlans';
@@ -149,7 +166,7 @@ describe('the agenda', () => {
       const l = camp(5);
       expect(guideOpen(l)).toBe(true);
       const card = () => agenda(l).find((i) => i.kind === 'guide');
-      expect(card()).toMatchObject({ required: false, title: `Your first week · 0 of ${GUIDE_STEPS.length} done`, to: '/team/rotation' });
+      expect(card()).toMatchObject({ required: false, title: `Your first games · 0 of ${GUIDE_STEPS.length} done`, to: '/team/rotation' });
       expect(card()!.steps!.map((x) => [x.done, x.next])).toEqual([
         [false, true],
         [false, false],
@@ -163,13 +180,15 @@ describe('the agenda', () => {
       // keeping the staff's rotation on its screen is a choice
       resolveAgenda(l, { kind: 'guide', step: 'rotation' });
       expect(guideStepOpen(l, 'rotation')).toBe(false);
-      expect(card()!.title).toBe('Your first week · 1 of 4 done');
+      expect(card()!.title).toBe('Your first games · 1 of 4 done');
       expect(card()!.steps![1].next).toBe(true);
       // editing the playbook counts as picking one
       l.teams[l.userTid].tactics.manual = true;
       expect(guideDone(l).has('playbook')).toBe(true);
-      // a plan with a counter in it does the third; a plan used up on the night keeps it done
+      // a plan with a counter in it does the third (the staff's own silent counter doesn't: it isn't his); a plan used up on the night keeps it done
       const opp = card()!.steps![2].to.match(/\/games\/(\d+)/)![1];
+      l.gamePlans = { [+opp]: { oppTid: +opp, items: [{ id: 'x', label: 'Pack the paint', patch: {}, staff: true }] } };
+      expect(guideDone(l).has('scout')).toBe(false);
       l.gamePlans = { [+opp]: { oppTid: +opp, items: [{ id: 'x', label: 'Pack the paint', patch: {} }] } };
       expect(guideDone(l).has('scout')).toBe(true);
       expect(card()!.steps![2].title).toBe('Plan for your opener');
@@ -179,7 +198,7 @@ describe('the agenda', () => {
       resolveAgenda(l, { kind: 'hideGuide' });
       expect(card()).toBeUndefined();
       showGuide(l);
-      expect(card()!.title).toBe('Your first week · 3 of 4 done');
+      expect(card()!.title).toBe('Your first games · 3 of 4 done');
       // a live game simmed to its end coaches nothing (its highlights are kept all the same), nor do the staff's own calls in it
       const move = (by?: 'staff') => ({ kind: 'tactics' as const, q: 1, clock: 300, text: 'x', end: 'def' as const, before: {} as never, after: {} as never, ...(by && { by }) });
       l.reel = { gid: 0, plays: [] };
@@ -190,7 +209,14 @@ describe('the agenda', () => {
       expect(guideDone(l).has('coach')).toBe(true);
       // with all four done, the guide's last card says how a normal week goes, once ("Got it" puts it away for good)
       expect(guideOpen(l)).toBe(false);
-      expect(card()).toMatchObject({ id: 'guide:done', title: 'Your first week · all 4 done', tone: 'good' });
+      expect(card()).toMatchObject({ id: 'guide:done', title: 'Your first games · all 4 done', tone: 'good' });
+      // it waits on nothing: Needs you shows it, but doesn't count it
+      {
+        const { needsYouOf } = await import('../../ui/today/needs');
+        const n = needsYouOf(l);
+        expect(n.items.some((i) => i.id === 'guide:done')).toBe(true);
+        expect(n.rows - n.count).toBe(1);
+      }
       expect(card()!.line).toMatch(/play or sim to the next game.*the staff's counter \(Matchup → Plan\).*Once a month the owner checks his goals \(Office → Owner\)/);
       // and the staff's note says it in three lines, once (the card then points to it)
       guideFinished(l);
@@ -204,8 +230,18 @@ describe('the agenda', () => {
       l.games = l.games.filter((g) => g.gid >= 0);
       delete l.reel;
       showGuide(l);
-      // it's for the first weeks of the first season only
+      // it's for the first weeks of the first season only; once the opener is played the plan step is for the next game,
+      // and no AI team's offer lands on those weeks (they're the guide's)
       startRegularSeason(l);
+      expect(guideStepTitle(l, 'scout')).toBe('Plan for your opener');
+      curTeamSeason(l, l.userTid).won = 1;
+      expect(guideStepTitle(l, 'scout')).toBe('Plan for your next game');
+      {
+        const { aiProposals, openProposals } = await import('../league/proposals');
+        l.proposals = [];
+        for (l.day = 1; l.day < 21; l.day++) aiProposals(l);
+        expect(openProposals(l)).toEqual([]);
+      }
       l.day = 30;
       expect(guideOpen(l)).toBe(false);
     }
@@ -224,8 +260,8 @@ describe('the agenda', () => {
       const l = camp(5, { teaching: false });
       expect(guideOpen(l)).toBe(false);
       expect(agenda(l).some((i) => i.kind === 'guide')).toBe(false);
-      expect(l.inbox.some((m) => m.subject === 'Your first week')).toBe(false);
-      expect(camp(5).inbox.some((m) => m.subject === 'Your first week')).toBe(true);
+      expect(l.inbox.some((m) => m.subject === 'Your first games')).toBe(false);
+      expect(camp(5).inbox.some((m) => m.subject === 'Your first games')).toBe(true);
       l.settings.teaching = true;
       expect(guideOpen(l)).toBe(true);
     }
@@ -268,6 +304,22 @@ describe('the agenda', () => {
       expect(js.heat).toBe('warm');
       // (−0.5 at 40%: −0.3 × 0.6 + 0.4 g ≥ −0.5 → g ≥ −0.8)
       expect(js.line).toMatch(/^Next review needs a season grade of −80 or better: about \d+ wins/);
+      // past his rebuild allowance, missing the postseason caps the season at −40 whatever the record:
+      // the line leads with the postseason ("about 4 wins" had been said to a coach no record could save)
+      const out = structuredClone(pre);
+      out.ownerMood.total = -0.6;
+      const missed = (season: number): OwnerReview => ({
+        season,
+        tid: out.userTid,
+        goals: [{ kind: 'youth', title: '', target: 1, weight: 1, result: 0, grade: 0 }],
+        grade: 0,
+        total: -0.6,
+      });
+      out.ownerReviews = [missed(out.season - 2), missed(out.season - 1)];
+      // (−0.5 − 0.6 × −0.6 = −0.14 at 40%: g ≥ −0.35, over the cap's −0.40)
+      expect(jobSecurity(out).line).toMatch(
+        /^Next review needs a season grade of −35 or better: to (reach the play-in|make the playoffs|win a playoff round), (and about \d+ wins|whatever your record)\./,
+      );
     }
 
     // the owner's targets count Hard's edge on the court as the forecast does: his read is the forecast's
@@ -424,8 +476,29 @@ describe('the agenda', () => {
       expect(card()).toBeUndefined();
       // a long one before the deadline: a trade is the other answer, made on the trade screen
       best().injury = null;
-      hurt(25);
-      expect(card()!.choices!.find((c) => c.label === 'Look for a trade')).toMatchObject({ to: '/office/trade' });
+      const long = hurt(25);
+      const look = card()!.choices!.find((c) => c.label === 'Look for a trade')!;
+      // (Find at his position, better than the fifth best, the salary he can take back: not a blank builder)
+      expect(look.to).toBe(`/office/trade?tab=find&pos=${long.pos}&minOvr=${standardRoster(l, me).sort((a, b) => b.ovr - a.ovr)[4].ovr + 1}`);
+      // the look doesn't settle it: a trade of his from there on does
+      {
+        const m = structuredClone(l);
+        expect(resolveAgenda(m, look.action).ok).toBe(true);
+        expect(agenda(m).some((i) => i.kind === 'injury')).toBe(true);
+        const id = `injury:${long.pid}:${long.injuryCount}`;
+        expect(openCallIds(m)).toContain(id);
+        m.transactions = [...(m.transactions ?? []), { id: m.nextTxnId ?? 1, season: m.season, day: m.day, phase: m.phase, kind: 'trade', tids: [me, 0], user: true }];
+        expect(openCallIds(m)).not.toContain(id);
+        callsDaily(m);
+        expect(m.callsDone).toContain(id);
+      }
+      // measured as no real loss: no trade to look for, and riding it out is the only answer: no card,
+      // and when it ages the digest doesn't blame an unanswered card
+      storeWorth(l, `injury:${long.pid}:${long.injuryCount}`, { gid: 0, sig: 0, day: l.day, pts: 0.1, raw: 0.1, se: 0.4 });
+      expect(card()).toBeUndefined();
+      long.injury!.gamesRemaining -= 3;
+      callsDaily(l);
+      expect(l.staffPicks!.at(-1)!.text).toBe(`${playerName(long)} out: the staff spread his minutes (nothing else to choose).`);
     }
 
     // a team on pace under the owner's win floor, before the deadline: chase it, or tell him it's a development year
@@ -440,13 +513,34 @@ describe('the agenda', () => {
       ts.lastTen = Array(10).fill(0);
       const card = () => agenda(l).find((i) => i.kind === 'floor');
       expect(card()!.title).toMatch(/^On pace for \d+ wins: under the owner's floor$/);
-      expect(card()!.suggestion).toMatchObject({ label: 'Chase the floor', to: '/office/trade' });
+      // the lean is the answer his review projects higher (the meter's read, the same record either way), with both numbers
+      const st = floorStanding(l)!;
+      expect(card()!.line).toMatch(
+        /Chasing it: [−+]\d+ to your standing at his review; a development year: [−+]\d+, its cost included \(the forecast's read: about \d+ wins either way\)\./,
+      );
+      const both = [card()!.suggestion!, ...card()!.choices!];
+      expect(card()!.suggestion!.label).toBe(st.ease > st.chase ? "Tell him it's a development year" : 'Chase the floor');
+      expect(both.find((c) => c.label === 'Chase the floor')).toMatchObject({ to: expect.stringMatching(/^\/office\/trade\?tab=find&minOvr=\d+$/) });
+      // (each the meter's projected review: a development year carries its cost)
+      expect(st.ease).toBeLessThan(st.chase + 0.5);
       const floor = og.floor!;
       const total = l.ownerMood.total;
-      expect(resolveAgenda(l, card()!.choices![0].action).ok).toBe(true);
+      expect(resolveAgenda(l, both.find((c) => c.label === "Tell him it's a development year")!.action).ok).toBe(true);
       expect(currentGoals(l)!.floor).toBeCloseTo(floor - FLOOR_EASE, 3);
       expect(currentGoals(l)!.goals.some((g) => g.kind === 'youth')).toBe(true);
       expect(l.ownerMood.total).toBeCloseTo(total - CONCEDE_COST, 2);
+      // the part of the win goal it moved to the young players keeps the win goal's miss: the kids'
+      // minutes don't make up for the losses (easing had been worth +48 to a rebuilder's season grade)
+      {
+        const eased = currentGoals(l)!;
+        const youth = eased.goals.find((g) => g.kind === 'youth')!;
+        const wins = eased.goals.find((g) => g.kind === 'wins')!;
+        expect(youth.fromWins).toBeGreaterThan(0);
+        const wg = gradeGoal(l, eased, wins, wins.target - 14);
+        const own = youth.weight - youth.conceded!;
+        expect(gradeGoal(l, eased, youth, youth.target * 5, wg)).toBeCloseTo((own * YOUTH_TOP + (youth.conceded! - youth.fromWins!) * 0 + youth.fromWins! * wg) / youth.weight, 1);
+        expect(gradeGoal(l, eased, youth, youth.target * 5, 0.5)).toBeCloseTo((own * YOUTH_TOP) / youth.weight, 1);
+      }
       expect(card()).toBeUndefined();
       // on pace to clear it, or after the deadline, there's no call
       const m = inCharge(1);
@@ -472,6 +566,8 @@ describe('the agenda', () => {
       const l = inCharge(1);
       const og = currentGoals(l)!;
       if (!og.goals.some((g) => g.kind === 'postseason')) og.goals.push({ kind: 'postseason', title: 'Make the playoffs', target: 2, weight: 0 });
+      // (past the first season's ODDS_FIRST_GAMES: before them a newcomer's slump is the staff's plain read, not a rebuild call)
+      Object.assign(curTeamSeason(l, l.userTid), { won: 3, lost: 14 });
       l.oddsTrail = { season: l.season, tid: l.userTid, pts: [[6, 400, 10]] };
       expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
       // one week under 5% is a dip, not a call: it takes two in a row
@@ -481,6 +577,11 @@ describe('the agenda', () => {
       expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
       l.oddsTrail.pts.push([34, 30, 0]);
       l.day = 35;
+      {
+        const m = structuredClone(l);
+        Object.assign(curTeamSeason(m, m.userTid), { won: 1, lost: ODDS_FIRST_GAMES - 2 });
+        expect(agenda(m).some((i) => i.kind === 'odds')).toBe(false);
+      }
       const card = agenda(l).find((i) => i.kind === 'odds')!;
       // (they count the play-in too: the postseason's odds)
       expect(card.title).toBe('Postseason odds down to 3%');
@@ -492,10 +593,27 @@ describe('the agenda', () => {
       l.day = l.tradeDeadlineDay - DUE_SOON;
       expect(crisis()).toEqual([card.id, dueId(card.id)]);
       l.day = 35;
-      expect(card.suggestion!.label).toBe("Tell the owner it's a rebuild");
+      // the staff's lean is the answer that leaves his standing higher, as the forecast reads the season, with both numbers
+      {
+        const st = concedeStanding(l)!;
+        const post = og.goals.find((g) => g.kind === 'postseason')!;
+        expect(st.concede).toBe(-CONCEDE_COST);
+        expect(st.push).toBeLessThanOrEqual(0);
+        expect(st.push).toBeGreaterThanOrEqual(-seasonWeight(l) * post.weight - 1e-9);
+        expect(card.line).toMatch(/^Pushing on: [−+]\d+ to your standing with him, the forecast's read \(.+ to reach his goal\); telling him now: −10 at once/);
+        expect(card.suggestion!.label).toBe(st.concede > st.push ? "Tell the owner it's a rebuild" : 'Keep pushing');
+        // a goal one level out costs little missed (−35 on his weight): push; one three levels out costs it all: tell him
+        const m = structuredClone(l);
+        const mp = currentGoals(m)!.goals.find((g) => g.kind === 'postseason')!;
+        Object.assign(mp, { target: 1, weight: 0.3 });
+        expect(agenda(m).find((i) => i.kind === 'odds')!.suggestion!.label).toBe('Keep pushing');
+        Object.assign(mp, { target: 4, weight: 1 });
+        expect(agenda(m).find((i) => i.kind === 'odds')!.suggestion!.label).toBe("Tell the owner it's a rebuild");
+      }
       const total = l.ownerMood.total;
       const weights = og.goals.reduce((a, g) => a + g.weight, 0);
-      expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
+      const tell = [card.suggestion!, ...card.choices!].find((c) => c.label === "Tell the owner it's a rebuild")!;
+      expect(resolveAgenda(l, tell.action).ok).toBe(true);
       const after = currentGoals(l)!;
       expect(after.goals.some((g) => g.kind === 'postseason')).toBe(false);
       expect(after.goals.some((g) => g.kind === 'youth')).toBe(true);
@@ -529,6 +647,7 @@ describe('the agenda', () => {
       });
       m.ownerReviews = [reviewed(m.season - 2), reviewed(m.season - 1)];
       setOwnerGoals(m, true);
+      Object.assign(curTeamSeason(m, m.userTid), { won: 3, lost: 14 });
       expect(currentGoals(m)!.goals.some((g) => g.kind === 'postseason')).toBe(true);
       m.oddsTrail = {
         season: m.season,
@@ -581,6 +700,45 @@ describe('the agenda', () => {
         const theirs = call.offer!.b.pids;
         expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
         expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);
+        // its numbers: measured on his next game against someone else (the deal and the staff's rotation for it, against
+        // its rotation now), what the players coming cost, then what the forecast reads it adds to the odds
+        const ms = card.measure!;
+        if (ms.kind !== 'change') throw new Error('not a change');
+        expect(ms).toMatchObject({ key: card.id, base: { id: 'staff' }, change: { id: 'deal' } });
+        expect(ms.opp).not.toBe(call.offer!.b.tid);
+        expect(call.oddsGain).toEqual(expect.any(Number));
+        expect(card.line).toMatch(/The staff is measuring the deal\./);
+        for (const pid of theirs) expect(card.line).toContain(`${playerName(l.players[pid])}: ${l.season - l.players[pid].bornYear}, $`);
+        {
+          const m = structuredClone(l);
+          storeWorth(m, ms.key, changeWorth(m, ms, { id: 'deal', pts: 1.2, raw: 1.3, se: 0.4 }));
+          const c = agenda(m).find((i) => i.kind === 'deadline')!;
+          expect(c.measure).toBeUndefined();
+          expect(c.line).toMatch(/With the deal: about \+1\.2 a game \(measured (vs|@) [A-Z]{3}\), about \+\d\.\d wins over the \d+ games left/);
+          expect(c.suggestion!.confirm).toMatch(/^You send .+; the .+ send .+\. With the deal: about \+1\.2 a game/);
+          // a buy that measures as no gain is his to take, not the staff's call
+          if (odds > 500) {
+            storeWorth(m, ms.key, changeWorth(m, ms, { id: 'deal', pts: 0.2, raw: 0.3, se: 0.4 }));
+            const f = agenda(m).find((i) => i.kind === 'deadline')!;
+            expect([f.suggestion!.label, f.choices![0].label]).toEqual(['Stand pat', c.suggestion!.label]);
+            expect(f.line).toMatch(/The staff's call: stand pat; the best buy it found doesn't measure as a gain\. .+With the deal: too close to say/);
+          }
+        }
+        // a buy never costs one of the owner's money or youth goals: with a profit goal and no room in it, a deal that adds salary isn't the call
+        if (odds > 500) {
+          const m = structuredClone(l);
+          const og = currentGoals(m)!;
+          og.goals = [
+            ...og.goals.filter((g) => g.kind !== 'profit' && g.kind !== 'payroll'),
+            { kind: 'profit', title: 'Turn a profit', target: 0, weight: 0.3, perGame: 0, end: 0 },
+          ];
+          const prof = og.goals.at(-1)!;
+          prof.target = ownerProgress(m, og).find((x) => x.goal === prof)!.projected;
+          const re = planDeadlineCall(m);
+          if (re.offer) expect(dealGoals(m, re.offer).some((d) => d.kind === 'profit' && d.with < d.target && d.with < d.now)).toBe(false);
+          // (the staff's first pick, had it added salary, is one it passes over now)
+          if (dealGoals(m, call.offer!).some((d) => d.kind === 'profit' && d.with < d.now)) expect(re.offer).not.toEqual(call.offer);
+        }
         expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
         for (const pid of theirs) expect(l.players[pid].tid).toBe(tid);
       } else {
@@ -742,6 +900,37 @@ describe('the agenda', () => {
         booksReview(m);
         expect(m.inbox.filter((x) => x.subject === 'The books: a warning').length).toBe(1);
       }
+      // the size of the hole counts: past the debt limit and deeper than last season's close, no ultimatum
+      // first but the freeze, and no title lifts the season (a passive Thunder coach had closed $1.07B in
+      // the red on a title and heard "I'm thrilled")
+      {
+        const m = structuredClone(l);
+        m.tenureStart = m.season - 1;
+        const mts = curTeamSeason(m, m.userTid);
+        mts.closeCash = -DEBT_LIMIT * scale - 30_000;
+        expect(booksVerdict(m)).toMatchObject({ stage: 'freeze', past: true, debt: true });
+        // a title on a losing record: graded as the goals graded it, the crown's lift gone
+        const og = currentGoals(m)!;
+        const wins = og.goals.find((g) => g.kind === 'wins')!;
+        Object.assign(mts, { won: wins.target - 15, lost: 82 - wins.target + 15, playoffRound: 5, revenue: 100_000, expenses: 1_000_000 });
+        const graded = gradeOwnerGoals(m, og);
+        expect(graded).toMatchObject({ crowned: 'title', grade: CROWN_GRADE.title });
+        expect(graded.uncrowned).toBeLessThan(CROWN_GRADE.title);
+        ownerEvaluation(m);
+        expect(m.ownerReviews!.at(-1)).toMatchObject({ grade: graded.uncrowned, held: 'debt', said: `We won, and it cost me ${money(900_000)}.` });
+        expect(m.books).toMatchObject({ stage: 'freeze', debt: true });
+        const frozenMail = m.inbox.find((x) => x.subject === 'The budget is frozen')!;
+        expect(frozenMail.important).toBe(true);
+        expect(frozenMail.body).toMatch(/^The books closed \$[\d.]+M in the red, past the \$[\d.]+M I'll carry\. A hole that size doesn't get an ultimatum first\./);
+        expect(m.inbox.find((x) => x.subject === 'Season review')!.body).toMatch(/^We won, and it cost me \$900\.0M\. Season grade/);
+        // a hole he took over, no deeper than last season's close, climbs the ladder as before
+        const n = structuredClone(l);
+        n.tenureStart = n.season - 1;
+        curTeamSeason(n, n.userTid).closeCash = -DEBT_LIMIT * scale - 30_000;
+        n.teams[n.userTid].seasons.push({ ...structuredClone(curTeamSeason(n, n.userTid)), season: n.season - 1, closeCash: -DEBT_LIMIT * scale - 60_000 });
+        expect(booksVerdict(n)).toMatchObject({ stage: 'ultimatum', past: true });
+        expect(booksVerdict(n)!.debt).toBeUndefined();
+      }
       l.tenureStart = l.season - 1;
       expect(booksVerdict(l)).toMatchObject({ close: -2_000, stage: 'ultimatum' });
       booksReview(l);
@@ -880,7 +1069,7 @@ describe('the agenda', () => {
     const { freshFamiliarity } = await import('../sim/familiarity');
     const { runSim } = await import('../../state/simCore');
     const { staffDecide, staffNeeds } = await import('../league/callMeasure');
-    const { weekWorthId, YOUTH_ADD } = await import('../league/weekCall');
+    const { weekWorthId, YOUTH_ADD, youthOutlook } = await import('../league/weekCall');
     const { userYouth } = await import('../league/youthLean');
     const { ensureRotation } = await import('../league/games');
     const card = (l: League) => agenda(l).find((i) => i.kind === 'week');
@@ -1039,9 +1228,14 @@ describe('the agenda', () => {
         staffDecide(x);
       };
       const free = structuredClone(l);
+      const was = youthOutlook(free, wc.youth!.add)!;
       answer(free, -0.2);
       expect(card(free)).toBeUndefined();
       expect(userYouth(free)).toBeGreaterThan(0);
+      // the digest's "without" is the rotation as it was before the lean went in (not counting the lean twice)
+      expect(staffPicksSince(free, free.season, free.day - 1).at(-1)).toContain(
+        `${was.lean.toLocaleString('en-US')} of his 99,999 minutes, ${was.base.toLocaleString('en-US')} without`,
+      );
       const young = (x: League) =>
         Object.values(x.players)
           .filter((p) => p.tid === x.userTid && x.season - p.bornYear <= 23)
@@ -1097,7 +1291,19 @@ describe('the agenda', () => {
       measured(l, next, 0.2);
       staffDecide(l);
       const s = agenda(l).find((i) => i.kind === 'skid')!;
-      expect(s).toMatchObject({ title: '8 straight losses', suggestion: { label: 'Look for a trade', to: '/office/trade' }, choices: [{ label: 'Ride it out' }] });
+      expect(s).toMatchObject({
+        title: '8 straight losses',
+        suggestion: { label: 'Look for a trade', to: expect.stringMatching(/^\/office\/trade\?tab=find&minOvr=\d+$/) },
+        choices: [{ label: 'Ride it out' }],
+      });
+      // the call follows what's behind it: shots that didn't fall (and nobody out) ride it out, the trade the other way
+      {
+        const m = structuredClone(l);
+        m.skidCall!.luck = true;
+        const r = agenda(m).find((i) => i.kind === 'skid')!;
+        expect([r.suggestion!.label, ...r.choices!.map((c) => c.label)]).toEqual(['Ride it out', 'Look for a trade']);
+        expect(r.line).toMatch(/The staff's call: ride it out; the box scores say the shots will come back/);
+      }
       expect(s.line).toMatch(
         /Nothing the staff measured for \w+ (vs|@) [A-Z]{3} beats your plan\. The staff's call: look for a trade; counters alone haven't turned it\. Deals until /,
       );
@@ -1107,6 +1313,26 @@ describe('the agenda', () => {
       expect(l.skidCall!.gp).toBe(24);
       l.day = l.tradeDeadlineDay + 1;
       expect(agenda(l).some((i) => i.kind === 'skid')).toBe(false);
+    }
+
+    // a newcomer's first slump (three under .500 in his first 5-20 games): one plain line from the staff, once, that pulls apart
+    // the luck, the games missed hurt and the rest, with the forecast's wins; no odds call before ODDS_FIRST_GAMES
+    {
+      const l = camp(29);
+      while (standardRoster(l, 29).length > CAP.rosterMax) releasePlayer(l, cutOrder(l, standardRoster(l, 29))[0], { news: false });
+      startRegularSeason(l);
+      for (const p of standardRoster(l, 29)
+        .sort((a, b) => b.ovr - a.ovr)
+        .slice(0, 4))
+        p.injury = { type: 'Torn ACL', gamesRemaining: 82, gamesTotal: 82, severity: 'severe' };
+      const ts = curTeamSeason(l, 29);
+      while (ts.won + ts.lost < 12) simDay(l);
+      const lines = (l.staffPicks ?? []).filter((x) => / as the staff reads it: /.test(x.text));
+      expect(lines).toHaveLength(1);
+      expect(lines[0].text).toMatch(
+        /^\d+-\d+, as the staff reads it: (outscored by|even on points).+\. (About \d+\.\d a game of it is shots that didn't fall|The shots fell about as their looks were worth).+missed \d+ games? hurt.+The forecast, which counts all of it, has you at about \d+ wins\.$/,
+      );
+      expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
     }
 
     // behind in a series: the staff's adjustment goes in each such morning without a card (one counter, three facing elimination), and is said

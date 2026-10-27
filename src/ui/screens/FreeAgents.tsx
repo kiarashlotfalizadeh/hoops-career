@@ -18,7 +18,7 @@ import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } fro
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Chips, Empty, PageHeader, Section, Segmented, Sheet, Statline } from '../components/ui';
-import { Callout, capRoomFig, capSeason, rosterFig, shortSeason } from '../office/common';
+import { Callout, capRoomFig, capSeason, floorText, rosterFig, shortSeason } from '../office/common';
 import { Term } from '../components/Glossary';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
 import { ContractSheet } from '../office/ContractSheet';
@@ -154,6 +154,8 @@ export default function FreeAgents() {
         <div className="fo-room-v num">{room.v}</div>
         {/* (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too) */}
         <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend on free agents' : 'sign for the minimum or with an exception'}</div>
+        {/* (under the salary floor the difference is paid at the season's end anyway: money to spend) */}
+        {floorText(pay, cap) && <div className="fo-room-floor small">{floorText(pay, cap)}</div>}
         <Statline
           items={[
             // (in the offseason up to 21 can sign: past 15, cut down by opening night)

@@ -12,7 +12,7 @@ import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecor
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
 import { OutcomeTag, PosterSlab, ordinal, seasonOutcome, teamPath, useQueryParam } from './shared';
-import { plural } from '../../core/format';
+import { keepFigures, plural } from '../../core/format';
 
 interface Row {
   r: CoachRecord;
@@ -177,7 +177,7 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
           {best ? ` · ${best}` : ''}
         </span>
       </span>
-      <span className="num bold">{j.won + j.lost ? `${j.won}-${j.lost}` : '—'}</span>
+      <span className="num bold">{j.won + j.lost ? keepFigures(`${j.won}-${j.lost}`) : '—'}</span>
     </div>
   );
 }

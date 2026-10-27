@@ -438,27 +438,52 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
  * A good free agent (80+ OVR) doesn't sell himself short in the summer: his price comes down no
  * further than SUMMER_FLOOR.early of his market value through the market's first SUMMER_FLOOR.day
  * days, and SUMMER_FLOOR.late of it after that and through the preseason, whatever a team's appeal
- * or a contender's ring (see askingContract), and whatever the teams can still pay (see faDay). The
- * price used to come down every five days to the most any team that wanted him could still pay,
- * with the summer's cap space spent in its first days: over three simulated summers of the real
- * league the median 80+ free agent signed for 57% of his market value, and 23 of 45 for under 60%
- * (Ty Jerome, an 89, on a $13.7M mid-level; Harrison Barnes, an 83, for the minimum), so a team
- * with room that waited a few days signed stars at half price and traded them on as bargains.
+ * or a contender's ring (see askingContract), and whatever the teams can still pay (see faDay); a
+ * rotation player (ROTATION_FLOOR, 72-79) no further than half of it, and 40% after. Past the
+ * floor's day, one held at it takes a one-year deal there (a prove-it deal: see faDay) from any
+ * team with the room or an exception, or goes back to his old team at it as the market closes (see
+ * aiLateReturns). An 80+ player the mid-level pays SUMMER_FLOOR.mle of his value or more takes it:
+ * his floor stops there, so a team's mid-level can buy him as the NBA's does (a floor just past it
+ * left the 80-82s unsigned all summer). One the summer leaves unsigned holds SUMMER_FLOOR.hold of
+ * his value in season (one released in season doesn't: a buyout is a minimum deal), so a star no
+ * team could pay waits for one that can rather than go to a mid-level for a quarter of his value in
+ * the season's first weeks (ten did over four seasons of one seed without it). The price used to
+ * come down to whatever the money left could pay, and the floor let go of it the day the market
+ * couldn't pay it: over four summers of two seeds, 10 of about 30 80+ free agents (each seed) signed for
+ * under 55% of their value (Ty Jerome, an 86 worth $45.5M, for $4.3M on day 17) and about half of
+ * those rated 72-79 for about the minimum by days 9-13, so a team with room that waited signed
+ * starters for nothing. With the floors: no 80+ under 55%, in a summer or after, and no 72-79 under
+ * 35% in a summer (in season his price comes down 15% a week, see faDay).
  */
-export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6 };
+export const SUMMER_FLOOR = { ovr: 80, early: 0.75, day: 20, late: 0.6, mle: 0.55, hold: 0.55 };
+/** A rotation player's summer floor (72-79 OVR): see SUMMER_FLOOR. */
+export const ROTATION_FLOOR = { ovr: 72, early: 0.5, late: 0.4 };
+
+/** His summer floor's shares of his market value (see SUMMER_FLOOR), or null under 72 OVR. */
+export const floorTier = (p: Player): { early: number; late: number } | null => (p.ovr >= SUMMER_FLOOR.ovr ? SUMMER_FLOOR : p.ovr >= ROTATION_FLOOR.ovr ? ROTATION_FLOOR : null);
+
+/** His summer floor through SUMMER_FLOOR.day (`early`), after it (`late`) and an 80+ player's in season (`hold`, 0 under 80), $K, or null under 72 OVR (see SUMMER_FLOOR). */
+export function floorAmounts(league: League, p: Player): { early: number; late: number; hold: number } | null {
+  const f = floorTier(p);
+  if (!f) return null;
+  const m = marketSalary(league, p);
+  const star = p.ovr >= SUMMER_FLOOR.ovr;
+  const mle = exceptionAmount(league, 'mle');
+  const most = star && mle >= m * SUMMER_FLOOR.mle ? mle : Infinity;
+  return { early: Math.min(m * f.early, most), late: Math.min(m * f.late, most), hold: star ? Math.min(m * SUMMER_FLOOR.hold, most) : 0 };
+}
 
 /**
  * The least a free agent's price comes down to for any one team in the summer market and the
- * preseason (see SUMMER_FLOOR), $K; 0 for anyone else, and in season. None once the market has
- * brought his own price under it (the money there is couldn't pay it: see faDay's SUMMER_STEP): his
- * price is then what teams can pay, each at his interest in it, as the price cut counted it.
+ * preseason, and an 80+ player the summer left unsigned in the regular season (see SUMMER_FLOOR),
+ * $K; 0 for anyone else (under 72 OVR, on waivers, released this season), and after the regular season.
  */
 export function summerFloor(league: League, p: Player): number {
-  if (p.tid !== FREE_AGENT || p.ovr < SUMMER_FLOOR.ovr || p.waivers) return 0;
-  const summer = league.phase === 'freeAgency';
-  if (!summer && league.phase !== 'preseason') return 0;
-  const floor = marketSalary(league, p) * (summer && league.faDay < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late);
-  return p.asking && p.asking.amount < floor - 10 ? 0 : floor;
+  if (p.tid !== FREE_AGENT || p.waivers) return 0;
+  const a = league.phase === 'freeAgency' || league.phase === 'preseason' || league.phase === 'regular' ? floorAmounts(league, p) : null;
+  if (!a) return 0;
+  if (league.phase === 'regular') return p.released?.season === league.season ? 0 : a.hold;
+  return league.phase === 'freeAgency' && league.faDay < SUMMER_FLOOR.day ? a.early : a.late;
 }
 
 export function willSign(league: League, p: Player, tid: number, amount: number, years: number): { ok: boolean; reason: string } {

@@ -114,6 +114,18 @@ describe('game plans', () => {
       expect(l.gamePlans).toBeUndefined();
     }
     {
+      // a plan used up ticks the guide's plan step only when it was his: the staff's silent counter isn't
+      const l = fresh();
+      l.onboarding = { done: [] };
+      const game = { gid: 1, day: l.day, home: l.userTid, away: 3, type: 'regular' as const };
+      setPlanItem(l, 3, { id: 'cov-ice', label: 'Ice', patch: { defense: { pnr: 'ice' } }, staff: true });
+      consumePlans(l, game);
+      expect(l.onboarding.done).toEqual([]);
+      setPlanItem(l, 3, { id: 'cov-ice', label: 'Ice', patch: { defense: { pnr: 'ice' } } });
+      consumePlans(l, game);
+      expect(l.onboarding.done).toEqual(['scout']);
+    }
+    {
       // never keeps tonight's game-specific settings in the saved tactics
       const l = fresh();
       const t = l.teams[l.userTid].tactics;

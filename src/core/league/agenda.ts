@@ -21,7 +21,7 @@ import { autoDraftUserPick, continueDraft } from './season';
 import { nextPick } from './draft';
 import { userGameOnDay } from './games';
 import { money, plural } from '../format';
-import { planMade } from './gamePlans';
+import { planByUser } from './gamePlans';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
@@ -165,7 +165,7 @@ export function guideDone(league: League): Set<GuideStep> {
   const t = league.teams[league.userTid];
   if (t.rotation.manual) done.add('rotation');
   if (t.tactics.manual) done.add('playbook');
-  if (Object.values(league.gamePlans ?? {}).some(planMade)) done.add('scout');
+  if (Object.values(league.gamePlans ?? {}).some(planByUser)) done.add('scout');
   if (!done.has('coach') && league.games.some((r) => r.moves?.some((m) => m.by !== 'staff'))) done.add('coach');
   return done;
 }
@@ -176,8 +176,19 @@ export function guideStepDone(league: League, step: GuideStep) {
   if (!o.done.includes(step)) o.done.push(step);
 }
 
+/** The guide's title: it runs through the first three weeks, so "Your first games". */
+export const GUIDE_TITLE = 'Your first games';
+
+/** A step's title as it reads now: the plan step is for the opener until it's played, then for the next game. */
+export function guideStepTitle(league: League, step: GuideStep): string {
+  const s = GUIDE_STEPS.find((x) => x.step === step)!;
+  if (step !== 'scout') return s.title;
+  const ts = league.teams[league.userTid].seasons.find((x) => x.season === league.season);
+  return league.phase === 'regular' && ts && ts.won + ts.lost > 0 ? 'Plan for your next game' : s.title;
+}
+
 /** The guide's weeks: the user's first season, from the preseason through its first three weeks, unless he put it away (or teaching is off). */
-function guideWeeks(league: League): boolean {
+export function guideWeeks(league: League): boolean {
   const o = league.onboarding;
   if (!o || o.hidden || league.settings.teaching === false) return false;
   if (league.season !== league.startSeason) return false;
@@ -245,7 +256,7 @@ function guideItems(league: League): AgendaItem[] {
         id: 'guide:done',
         kind: 'guide',
         required: false,
-        title: `Your first week · all ${GUIDE_STEPS.length} done`,
+        title: `${GUIDE_TITLE} · all ${GUIDE_STEPS.length} done`,
         // (Today shows two lines of it: the staff's note has all three)
         line: noted ? `${GUIDE_WEEK[0]} More in the staff's note.` : GUIDE_WEEK.join(' '),
         ...(noted ? { to: '/inbox' } : {}),
@@ -259,11 +270,11 @@ function guideItems(league: League): AgendaItem[] {
       id: 'guide',
       kind: 'guide',
       required: false,
-      title: `Your first week · ${done.size} of ${GUIDE_STEPS.length} done`,
+      title: `${GUIDE_TITLE} · ${done.size} of ${GUIDE_STEPS.length} done`,
       line: `Next: ${next.line}`,
       tone: 'info',
       to: guideStepTo(league, next.step),
-      steps: GUIDE_STEPS.map((s) => ({ title: s.title, done: done.has(s.step), to: guideStepTo(league, s.step), next: s === next })),
+      steps: GUIDE_STEPS.map((s) => ({ title: guideStepTitle(league, s.step), done: done.has(s.step), to: guideStepTo(league, s.step), next: s === next })),
       choices: [{ label: 'Hide the guide', action: { kind: 'hideGuide' } }],
     },
   ];
@@ -557,8 +568,8 @@ export function startGuide(league: League) {
   if (league.settings.teaching === false) return;
   addInbox(league, {
     from: 'Assistant Coach',
-    subject: 'Your first week',
-    body: "Four choices for your first week: your rotation, your playbook, a plan for the opener, and a game coached live. Today keeps the checklist; each one ticks off when you've made the call, not when you've looked.",
+    subject: GUIDE_TITLE,
+    body: "Four choices for your first games: your rotation, your playbook, a plan for the opener, and a game coached live. Today keeps the checklist; each one ticks off when you've made the call, not when you've looked.",
     tone: 'good',
     link: '/',
   });

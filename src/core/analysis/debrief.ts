@@ -6,17 +6,17 @@
 // Pure: it reads the stored result and the report built from it.
 
 import type { GameResult, KeyGrade, League, PrepFocus, Tactics, TacticsPatch } from '../types';
-import { madeAtt, plural } from '../format';
-import { playerName } from '../league/helpers';
+import { gameTime, madeAtt, plural } from '../format';
+import { playerName, shortName } from '../league/helpers';
 import { playTypeBaselines } from './playTypes';
 import { leagueThreePct } from '../ai/opponentPlan';
 import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
-import { buildGameReport, decidingFactors, type GameReport, type Factor } from './gameReport';
+import { buildGameReport, decidingFactors, leverNet, type GameReport, type Factor } from './gameReport';
 import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
 import { famReadout, impactCounter } from '../ai/advisor';
-import { applyPatch, cloneTactics, tacticsDiff, emptyPatch } from '../sim/tactics';
-import { CALL_WORTH, callBelowEven, callKey, callWorth, worthLine } from './callWorth';
+import { TACTIC_LEVELS, applyPatch, cloneTactics, levelName, tacticsDiff, emptyPatch } from '../sim/tactics';
+import { CALL_WORTH, callCosts, callKey, callWorth, worthLine } from './callWorth';
 
 export interface DebriefAdvice {
   id: string;
@@ -65,8 +65,14 @@ export function sameChange(base: Tactics, advice: TacticsPatch, counter: Tactics
   return a.size > 0 && [...a].every(([k, v]) => c.get(k) === v);
 }
 
-/** A change the bench measured as a cost under any of its calls ("Stay home" off hot spot-ups): not next time's fix either. */
-const labelCosts = (label: string) => Object.keys(CALL_WORTH).some((k) => k.endsWith(`>${label}`) && callBelowEven(k));
+/**
+ * A change the bench measured as a cost under any of its calls (the switches to Hedge off Drop): not
+ * next time's fix either. A cost beyond its noise, as the live bench drops a call (callCosts): one
+ * below even inside it ("Stay home" off hot spot-ups, −0.5 ± 0.47 on 14 calls) is too close to say,
+ * and the live staff, measuring from the spot, found Stay home a gain (+0.74 true over 21 calls,
+ * round-3 game-day review).
+ */
+const labelCosts = (label: string) => Object.keys(CALL_WORTH).some((k) => k.endsWith(`>${label}`) && callCosts(k));
 
 /** How one counter of the game plan went (see planGrades). */
 export interface PlanGrade {
@@ -101,6 +107,8 @@ export interface Debrief {
   plan: PlanGrade[];
   /** Said on a coach's first games: one night's shooting is luck, a plan shows over a stretch. */
   frame?: string;
+  /** His players hurt in the game, and for how long: "Davis (out 5 games), Sarr (out 3 games)". */
+  hurt?: string;
   /** The opponent, and whether the teams meet again this season (a plan against them would be played). */
   opp: number;
   meetAgain: boolean;
@@ -124,7 +132,6 @@ const OFFENSE_FIXES: Record<string, { label: string; patch: TacticsPatch }> = {
 /** What a missed key asks of the next game against a team like this one, by the key's id (see keys.ts). */
 const KEY_ADVICE: Record<string, string> = {
   glass: 'Their second chances came off your glass: bodies back on the shot, fewer gambles for the ball.',
-  arc: 'Their threes decided too much: stay home on their shooters (less help), or run their best one off the line.',
   line: 'They lived at the line: play cleaner (less physicality), above all against their drivers.',
   getback: 'They ran on you: sprint back in transition and crash less.',
   paint: 'They owned the paint: pack it in, or keep your rim protector on the floor longer.',
@@ -137,11 +144,47 @@ const KEY_ADVICE: Record<string, string> = {
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
 
+/** Help levels that stay home on shooters ("Never help", "Stay home"). */
+const HOME = new Set(TACTIC_LEVELS.help.slice(0, 2));
+
+/**
+ * Whether the user's defense stayed home on shooters tonight, as the night played it: the help he
+ * tipped off with (his tactics, a game plan counter that stays home or packs the paint), then each
+ * live move that changed it. `most`: for at least half the game; `from`: when it last went in, when
+ * that was after the tip ("the end of Q1", "Q3 4:12"). Null when it never did.
+ */
+export function stayedHome(league: League, res: GameResult, side: 0 | 1): { most: boolean; from?: string } | null {
+  const me = side === 0 ? res.home.tid : res.away.tid;
+  let home = HOME.has(levelName('help', league.teams[me]?.tactics.defense.help ?? 50));
+  for (const u of res.plan ?? []) {
+    if (/stay home|never help/i.test(u.label)) home = true;
+    else if (/pack the paint|wall off/i.test(u.label)) home = false;
+  }
+  const total = 2880 + res.ot * 300;
+  const sec = (q: number, clock: number) => (q <= 4 ? q * 720 - clock : 2880 + (q - 4) * 300 - clock);
+  let at = 0;
+  let kept = 0;
+  let from: string | undefined;
+  for (const m of res.moves ?? []) {
+    const to = m.kind === 'tactics' ? /Help defense: [^·]*?→ ([^·]+?)\s*(?:·|$)/.exec(m.text)?.[1] : undefined;
+    if (!to) continue;
+    const t = sec(m.q, m.clock);
+    if (home) kept += t - at;
+    at = t;
+    home = HOME.has(to);
+    if (home) from = m.clock <= 0 ? (m.q === 2 ? 'halftime' : `the end of Q${m.q}`) : gameTime(m.q, m.clock);
+  }
+  if (home) kept += total - at;
+  if (kept <= 0) return null;
+  return { most: kept >= total / 2, ...(home && from ? { from } : {}) };
+}
+
 /**
  * A missed key's word for next time. A threes key counts makes, so it can be missed on the looks
  * (we didn't take them, they got open ones) or on the night's shooting: the second is luck, and is
  * told that way. The looks are what the attempts were worth as taken (GameResult.xShots), or in an
- * older result the attempts at the league's three-point percentage.
+ * older result the attempts at the league's three-point percentage. It knows the plan the night was
+ * played with: a defense that already stayed home on shooters isn't told to (stayedHome).
  */
 export function keyAdvice(league: League, k: KeyGrade, res: GameResult, side: 0 | 1): string {
   const [us, them] = side === 0 ? [res.home, res.away] : [res.away, res.home];
@@ -152,8 +195,13 @@ export function keyAdvice(league: League, k: KeyGrade, res: GameResult, side: 0 
   if (k.id === 'arc' && (x ? x[1].tpm : them.t.tpa * lg) <= k.target + 0.5)
     return `They made ${madeAtt(them.t.tpm, them.t.tpa)} from three, more than their looks were worth on a normal night: that part was luck, not your plan.`;
   // (the looks themselves beat the key: that's the plan's to fix, and said as looks, not makes)
-  if (k.id === 'arc' && x)
-    return `They got looks worth ${x[1].tpm.toFixed(0)} made threes (the key was ${k.target} or fewer): stay home on their shooters (less help), or run their best one off the line.`;
+  if (k.id === 'arc') {
+    const home = stayedHome(league, res, side);
+    const looks = x ? `They got looks worth ${x[1].tpm.toFixed(0)} made threes (the key was ${k.target} or fewer)` : 'Their threes decided too much';
+    if (home?.most) return `Stay home was in, and ${looks.charAt(0).toLowerCase()}${looks.slice(1)} anyway: run their best shooter off the line (Matchups) instead.`;
+    if (home?.from) return `${looks}: stay home on their shooters from the start (it went in at ${home.from}), or run their best one off the line.`;
+    return `${looks}: stay home on their shooters (less help), or run their best one off the line.`;
+  }
   return KEY_ADVICE[k.id] ?? '';
 }
 
@@ -244,8 +292,9 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
         : m <= 3
           ? say('lclose', ['A close one, and it got away.', `We lost by ${m}.`, 'It came down to the last few plays, and they made them.'])
           : say('l', [`They beat us by ${m}.`, `A ${m}-point loss.`, `We came up ${m} short.`]);
-  // the biggest edge that went the winner's way (as the deciding edges tell them: a setting that only won back what it cost didn't win it)
-  const top = decidingFactors(report.factors, report.factors.length).find((f) => f.pts > 0 === won);
+  // the biggest edge that went the winner's way (as the deciding edges tell them: a setting that only
+  // won back what it cost didn't win it, and a cost of ours that our setting more than won back didn't lose it)
+  const top = decidingFactors(report.factors, report.factors.length).find((f) => f.pts > 0 === won && !f.paid);
   const why: Partial<Record<Factor['category'], string[]>> = {
     shooting: won ? ['We shot it better.', "Our shots fell and theirs didn't."] : ['They shot it better.', "Their shots fell and ours didn't."],
     turnovers: won ? ['Their turnovers decided it.', 'We won the turnover battle.'] : ['Our turnovers decided it.', 'We gave it away too often.'],
@@ -255,6 +304,9 @@ export function verdict(res: GameResult, side: 0 | 1, report: GameReport): strin
     pace: won ? ['Our pace wore them down.'] : ['Their pace hurt us.'],
     fatigue: won ? ['Their legs went before ours.'] : ['Our legs went before theirs.'],
   };
+  // a cost of one of our own settings (more than it won back) is ours, not their game plan's
+  const own = !won && top?.category === 'tactics' && top.key ? leverNet(res.impacts, top.key, side) : null;
+  if (own) why.tactics = [`Our ${own.what} cost us more than it won back.`];
   // shots falling above or below their looks is told as the luck it was, not as something to fix
   if (top?.luck) why.shooting = [luckLine(res, side, won)];
   else if (res.xShots)
@@ -515,6 +567,20 @@ export function seasonCoachingRead(league: League, season = league.season, tid =
   return { worth: sgn1(c.pts), clear: Math.abs(c.raw) >= 2 * c.se && Math.abs(c.pts) >= 0.05, pm: `±${Math.max(0.1, c.se).toFixed(1)}`, games: c.games };
 }
 
+/**
+ * The user's players hurt in a game (GameResult.hurt), each with the games he's out as things stand:
+ * "Davis (out 5 games), Sarr (out 3 games)", one back already "(back now)". Undefined: none, or an
+ * older result that didn't keep them.
+ */
+export function hurtLine(league: League, res: GameResult): string | undefined {
+  const parts = (res.hurt ?? []).flatMap((pid) => {
+    const p = league.players[pid];
+    if (!p) return [];
+    return [`${shortName(league, p)} (${p.injury ? `out ${plural(p.injury.gamesRemaining, 'game')}` : 'back now'})`];
+  });
+  return parts.length ? parts.join(', ') : undefined;
+}
+
 /** The coach's games so far with his team this season (tonight's included). */
 const gamesIn = (league: League, res: GameResult, me: number) =>
   league.games.filter((g) => g.season === res.season && g.day <= res.day && (g.home.tid === me || g.away.tid === me)).length;
@@ -571,9 +637,9 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       if (seen.has(fix.label)) continue;
       seen.add(fix.label);
       // (a counter that measured as a cost where the bench calls it, off this edge or another, isn't
-      // next time's fix either: the switch to Hedge off a Drop their handlers pulled up over, Stay home)
+      // next time's fix either: the switch to Hedge off a Drop their handlers pulled up over)
       const key = callKey(`imp-${f.key}`, fix.label);
-      if (callBelowEven(key) || labelCosts(fix.label)) continue;
+      if (callCosts(key) || labelCosts(fix.label)) continue;
       const after = cloneTactics(tactics);
       fix.apply(after);
       const patch = tacticsDiff(tactics, after);
@@ -621,5 +687,6 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const frame = first
     ? `${lucky ? "One night's shooting swings a game either way: the report calls that luck. " : ''}A plan shows over a stretch of games, not one night${plan.length ? ': yours is graded on what the staff measured each counter worth over many games, with tonight beside it' : ''}.`
     : undefined;
-  return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, opp, meetAgain };
+  const hurt = hurtLine(league, res);
+  return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, ...(hurt && { hurt }), opp, meetAgain };
 }

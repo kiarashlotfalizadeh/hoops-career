@@ -113,8 +113,8 @@ export function userProjectedNet(league: Pick<League, 'players' | 'teams' | 'use
 /**
  * Points a game the difficulty gives the user's team (under 0, takes from it) in each of his games.
  * Flat on Easy; on Hard it grows with his team's projected strength (courtGrowth): an average
- * roster's opponents play 2 points a game better, the opening night's Thunder's (+9 by this measure,
- * a 66-win team) 4.2, a juggernaut's 5, while a lottery team's play 1 better. Over 24 opening
+ * roster's opponents play 2 points a game better, the opening night's Thunder's (+11 by this measure
+ * since the forecast's roster worth was refit, a 66-win team) 4.8, a juggernaut's 5, while a lottery team's play 1 better. Over 24 opening
  * seasons each, Hard against Normal cost the Thunder 8 wins (66.5 to 58.5), the Lakers (average) 2.7
  * and the Nets (20 wins) 1.8; at a flat 2 points it had cost them 3.3, 2.0 and 4.5: the contender,
  * whose wins were safest, felt it least.

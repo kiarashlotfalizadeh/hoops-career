@@ -4,7 +4,7 @@
 // moves it would make for the next period, what's deciding the game), who's tired or in foul trouble
 // going into it and the keys; the rest of the game so far (the score by quarter and the scorers, the
 // battle of play types, the teams side by side, both coaches' moves) sits behind one switch under it.
-// The huddle is the short version for a timeout: late in the game the play call first (built around
+// The huddle is the short version for a timeout: late in a close game the play call first (built around
 // your closer, each play measured from where the game stands against no call, best first:
 // usePlayWorth), then who to sub and the staff's top move; the last possession of a close game stops
 // for the same play call without one. The staff's call says what it measured from this spot (calls.ts),
@@ -23,7 +23,7 @@ import { Section, Segmented } from '../components/ui';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
 import { KeysLive } from '../components/GameKeys';
 import { fmtClock, periodLabel, signed } from '../stats';
-import { foulLimit } from './alerts';
+import { closeGame, foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
 import type { StaffAction, StaffNote } from './staff';
@@ -409,11 +409,11 @@ function PlayCall({
 }
 
 /**
- * Your timeout ('timeout'): late in the game the play call first, built around your closer; then the
- * staff's read and top move, who to sub and the keys (earlier, the play out of it at the foot). The last
- * possession ('last': the game stopped for it, no timeout taken): the situation, the play call (shouted
- * from the bench), a timeout to take if one is left, and who to sub. The score and the clock are on the
- * scorebug; Resume is on the bench bar.
+ * Your timeout ('timeout'): late in a close game (closeGame) the play call first, built around your
+ * closer; then the staff's read and top move, who to sub and the keys (earlier, or in a decided game,
+ * the play out of it at the foot). The last possession ('last': the game stopped for it, no timeout
+ * taken): the situation, the play call (shouted from the bench), a timeout to take if one is left, and
+ * who to sub. The score and the clock are on the scorebug; Resume is on the bench bar.
  */
 export function Huddle(
   props: Common & {
@@ -432,8 +432,8 @@ export function Huddle(
   const deciding = useDeciding(props.league, view, tactics).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
-  // late in the game the play out of the timeout is yours to call
-  const late = kind === 'last' || (view.q >= 4 && view.clock <= CLUTCH_SEC);
+  // late in a close game the play out of the timeout is yours to call (decided, there's none worth calling)
+  const late = kind === 'last' || (view.q >= 4 && view.clock <= CLUTCH_SEC && closeGame(view, pendingLive(props.league)?.edge ?? 0));
   const five = view.sides[side].on;
   const plays = useMemo(() => (late && closer !== undefined ? playOptions(props.league, five, tactics, closer) : []), [late, props.league, five, tactics, closer]);
   // (in a huddle the sim is where the court is: the options are measured from there)

@@ -3,8 +3,8 @@
 // a tap from the picker), how well the team knows it as one figure, its two strengths and two
 // weaknesses from the system report (they move as you edit, so every lever shows what it buys and
 // what it costs), and the assistant's switch. The style reads as the team plays it: a playbook whose
-// settings have moved (by the user, or by the staff acting on the season's evidence) is "Custom (Drop
-// base)", as Matchup → Plan names it.
+// settings have moved (by the user, or by the staff on a change it measured, which StaffMoveNote
+// names under it with Undo) is "Custom (Drop base)", as Matchup → Plan names it.
 import { useState } from 'react';
 import { edit } from '../../state/actions';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
@@ -22,6 +22,7 @@ import { GradeBadge } from './SystemReport';
 import { famTone } from './formation';
 import { strengthsOf } from './partners';
 import { handOverLine, userStaffTactics } from './fit';
+import { StaffMoveNote } from './StaffMoveNote';
 
 const ORDER: Grade[] = ['F', 'D', 'C', 'C+', 'B', 'B+', 'A', 'A+'];
 
@@ -155,6 +156,8 @@ export function TacticsHero({
           </Help>
         </span>
       </div>
+      {/* the staff's measured change to the playbook it runs, named with its author, date and Undo */}
+      <StaffMoveNote />
       <button className="tx-hero-fam" onClick={() => onAnalysis('familiarity')}>
         <span className="tx-hero-k">Familiarity</span>
         <span className="tx-fambar grow" aria-hidden="true">

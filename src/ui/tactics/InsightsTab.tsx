@@ -1,76 +1,105 @@
-// Tactics → Analysis → Season: what your tactics have won and given up this season (each effect in
-// points a game, with the fix for what hurts) in one list, and how teams see you: your scouting
-// report as an opponent reads it.
+// Tactics → Analysis → Season: the engine's tally of your season (each setting's trade-off netted on
+// one row, each other effect it tracks on its own, in points a game) and how teams see you: your
+// scouting report as an opponent reads it. The tally is what happened, never advice: it isn't a
+// counterfactual (it has read a coverage as the worse one where paired games found it the better), so
+// it says nothing about what a change would win. The staff measures that in paired games before it
+// suggests or makes one (staffLever.ts).
 import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
 import { scoutData, SCOUT_MIN_GAMES } from '../../core/analysis/scouting';
 import { scoutTeam, seasonLevers } from '../../core/ai/advisor';
-import { IMPACT_TEXT, impactAdvice, impactSentence, leverNet } from '../../core/analysis/gameReport';
+import { IMPACT_TEXT, LEVER_GAINS, impactSentence, leverNet } from '../../core/analysis/gameReport';
 import { Help, More, Section, Segmented } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { plural } from '../../core/format';
 import { PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
 import { seasonImpacts, strongerSides } from '../seasonAnalysis';
 
+/** Rows shown before "more". */
+const SHOWN = 4;
+/** Points a game a row has to come to (either way, or in what it gave up and won back) to be listed. */
+const LISTED = 0.3;
+
+/** One row of the tally: a setting netted, or another effect. */
+interface TallyRow {
+  id: string;
+  v: number;
+  title: string;
+  /** A setting's two sides. */
+  sides?: string;
+}
+
+const signed = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
+
 export function InsightsTab() {
   const league = useLeague();
   // the games the effects were tracked in, whether or not any effect is big enough to list
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
-  const imps = strongerSides(effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= 0.3));
-  // the three biggest each way, two more a tap away
+  const levers = useLeagueMemo(() => seasonLevers(league, league.userTid), [league]);
   const [more, setMore] = useState(false);
-  const helpAll = imps.filter((x) => x.forUser).slice(0, 5);
-  const hurtAll = imps.filter((x) => !x.forUser).slice(0, 5);
-  const helping = more ? helpAll : helpAll.slice(0, 3);
-  const hurting = more ? hurtAll : hurtAll.slice(0, 3);
-  const hidden = helpAll.length + hurtAll.length - helping.length - hurting.length;
-  // each setting's whole trade-off this season (what it gave up and won back): a cost a setting more
-  // than wins back is no reason to change it
-  const levers = useLeagueMemo(() => new Map(seasonLevers(league, league.userTid).map((l) => [l.what, l])), [league]);
-  const row = (x: { key: string; perGame: number; forUser: boolean }) => {
-    const lever = x.forUser ? undefined : levers.get(leverNet([], x.key, 0)?.what ?? '');
-    const paid = !!lever && lever.won > 0.05 && lever.net > -0.5;
-    // no "go to Hedge" once you already play Hedge, nor a change for a setting that pays its way
-    const advice = x.forUser || paid ? undefined : impactAdvice(x.key, league.teams[league.userTid].tactics);
-    const net = paid ? `It wins ${lever.won.toFixed(1)} back: ${lever.net >= 0 ? '+' : '−'}${Math.abs(lever.net).toFixed(1)} a game all told, so it stays.` : undefined;
-    const X = x.forUser ? 'your team' : 'the opposition';
-    const Y = x.forUser ? 'the opposition' : 'your team';
-    return (
-      <div key={`${x.key}${x.forUser}`} className="tx-imp">
-        <span className={`tx-imp-v num ${x.forUser ? 'good' : 'bad'}`}>
-          {x.forUser ? '+' : '−'}
-          {x.perGame.toFixed(1)}
-        </span>
-        <span className="grow">
-          <span className="tx-imp-t">{impactSentence(x.key, X, Y)}</span>
-          {(advice ?? net) && <span className="tx-imp-a">{advice ?? net}</span>}
-        </span>
-      </div>
-    );
-  };
+  // your settings, each on one row: what it gave up against what it won back
+  const settings: TallyRow[] = levers
+    .filter((l) => l.lost + l.won >= LISTED)
+    .map((l) => ({ id: l.what, v: l.net, title: l.what.charAt(0).toUpperCase() + l.what.slice(1), sides: `gave up ${l.lost.toFixed(1)}, won ${l.won.toFixed(1)} back` }))
+    .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
+  // every other effect: the opponents' settings, and what isn't a trade-off (a side of one of yours is in its row above)
+  const yours = (x: { key: string; forUser: boolean }) => (x.forUser ? LEVER_GAINS.has(x.key) : !!leverNet([], x.key, 0));
+  const others: TallyRow[] = strongerSides(effects.filter((x) => IMPACT_TEXT[x.key] && x.perGame >= LISTED && !yours(x))).map((x) => ({
+    id: `${x.key}${x.forUser}`,
+    v: x.forUser ? x.perGame : -x.perGame,
+    title: impactSentence(x.key, x.forUser ? 'your team' : 'the opposition', x.forUser ? 'the opposition' : 'your team'),
+  }));
+  const hidden = Math.max(0, settings.length - SHOWN) + Math.max(0, others.length - SHOWN);
+  const cut = (xs: TallyRow[]) => (more ? xs : xs.slice(0, SHOWN));
+  const row = (x: TallyRow) => (
+    <div key={x.id} className="tx-imp">
+      <span className={`tx-imp-v num ${x.v >= 0 ? 'good' : 'bad'}`}>{signed(x.v)}</span>
+      <span className="grow">
+        <span className="tx-imp-t">{x.title}</span>
+        {x.sides && <span className="tx-imp-s">{x.sides}</span>}
+      </span>
+    </div>
+  );
   return (
     <>
       {games > 0 ? (
-        <Section title="What your tactics did" right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}>
+        <Section
+          title={
+            <h3>
+              The engine&apos;s tally
+              <Help title="The engine's tally">
+                <p>
+                  What the engine counted in your games this season, in points a game: each of your settings on one row, what it gave up netted against what it won back, then every
+                  other effect it tracks.
+                </p>
+                <p>
+                  It&apos;s what happened, not what a change would win: a tally isn&apos;t the same games played the other way, and it has read a coverage as the worse one where
+                  the games played both ways found it the better. Before the staff suggests or makes a change, they measure it that way (<Term id="measured">measured</Term>).
+                </p>
+              </Help>
+            </h3>
+          }
+          right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}
+        >
           <div className="card flush list">
             <div className="list-divider list-h" aria-hidden="true">
-              <span>Working</span>
+              <span>Your settings, net</span>
             </div>
-            {helping.length ? helping.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
+            {settings.length ? cut(settings).map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
             <div className="list-divider list-h" aria-hidden="true">
-              <span>Hurting you</span>
+              <span>Other effects</span>
             </div>
-            {hurting.length ? hurting.map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
+            {others.length ? cut(others).map(row) : <div className="tx-empty">Nothing stands out yet.</div>}
           </div>
-          {hidden > 0 && (
+          {!more && hidden > 0 && (
             <button className="btn sm tx-imp-more" onClick={() => setMore(true)}>
               {hidden} more
             </button>
           )}
         </Section>
       ) : (
-        <div className="tx-empty">What your tactics win and give up comes in after your first games.</div>
+        <div className="tx-empty">The engine&apos;s tally of your season comes in after your first games.</div>
       )}
       <SeenBy league={league} />
     </>

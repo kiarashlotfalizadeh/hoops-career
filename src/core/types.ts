@@ -12,6 +12,7 @@ import type { Books } from './league/books';
 import type { CallWorth, DeadlineCall, SkidCall } from './league/calls';
 import type { StaffPick, WeekCall } from './league/weekCall';
 import type { YouthLean } from './league/youthLean';
+import type { StaffLever } from './league/staffLever';
 import type { HighRow, RecStat, RecordBook } from './league/records';
 import type { PossLog } from './sim/log';
 
@@ -747,6 +748,8 @@ export interface TeamSeason {
   closeCash?: number;
   /** What the owner's payroll goal signed off on for the user's team this season ($K: the luxury tax up to its line, and the payroll the coach inherited past it), set at his review: the books don't count it against the coach (see books.ts sanctionedTax). */
   signedOff?: number;
+  /** What the staff and facilities budgets ran under the league's standard this regular season ($K, each game's share): money the owner's profit goal doesn't count (see ownerGoals.ts ownerProfit). */
+  trimmed?: number;
   /** Team totals for advanced team stats. */
   t: TeamTotals;
   o: TeamTotals; // opponent totals
@@ -1550,8 +1553,12 @@ export interface League {
   callWorth?: Record<string, CallWorth>;
   /** What the staff did on its own with calls a sim ran past, newest last (see weekCall.ts): the digest says it. */
   staffPicks?: StaffPick[];
+  /** The staff's measured changes to the user's playbook in season, and its readings of them (see staffLever.ts). */
+  staffLever?: StaffLever;
   /** The user's young players' turn, or the stretch the staff doesn't ask about it again (see youthLean.ts, weekCall.ts). */
   youthLean?: YouthLean;
+  /** A call's look for a trade the user took (see calls.ts): a trade of his from transaction `txn` on settles it. */
+  callLook?: { id: string; txn: number };
   /** The staff call the last sim stopped for (see simCore.ts's runSim): Needs you leads with it that day. */
   stopCall?: { id: string; season: number; day: number };
   fired?: boolean;
@@ -1790,6 +1797,8 @@ export interface GamePlanItem {
   evidence?: string;
   /** Points a game the staff measured it worth when it went in (see counterWorth.ts): the projection counts it. */
   pts?: number;
+  /** The staff put it in on its own, measured (a silent pick: see calls.ts, weekCall.ts): not a plan of the user's (the guide doesn't count it). */
+  staff?: true;
 }
 
 /** How long a game plan lasts: the next game against that opponent, the current playoff series, or the rest of the season. */

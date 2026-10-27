@@ -98,7 +98,7 @@ export function LeadStory({ league, lead }: { league: League; lead: Lead }) {
         {n.head && (
           <span className="td-lead-by">
             {p && <Avatar p={p} />}
-            <span className="td-lead-dek">{n.text}</span>
+            <span className="td-lead-dek">{keep(n.text)}</span>
           </span>
         )}
       </Link>
@@ -166,7 +166,7 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
       </span>
       {over && <span className="td-lead-kick over">{keep(over)}</span>}
       <span className="td-lead-head">{keep(story?.head ?? plainHead(league, r))}</span>
-      {dek && <span className="td-lead-dek">{dek}</span>}
+      {dek && <span className="td-lead-dek">{keep(dek)}</span>}
       {figs && <Statline items={figs} />}
     </Link>
   );

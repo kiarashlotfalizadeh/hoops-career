@@ -3,7 +3,7 @@
 // pick's grade against the big board.
 import type { DraftPick, League, Player } from '../../core/types';
 import { andList } from '../../core/league/helpers';
-import { ordinal, rankOf } from '../../core/format';
+import { keepFigures, ordinal, rankOf } from '../../core/format';
 import { overallPick } from '../league/shared';
 import { pickLabel, pickRange } from '../../core/league/trades';
 
@@ -69,7 +69,7 @@ export const projText = (n: number) => `proj. #${n}`;
 export function pickProjText(league: League, d: DraftPick): string | undefined {
   const r = pickRange(league, d);
   if (!r) return undefined;
-  return r.lo === r.hi ? projText(r.lo) : `proj. #${r.lo}-${r.hi}`;
+  return r.lo === r.hi ? projText(r.lo) : keepFigures(`proj. #${r.lo}-${r.hi}`);
 }
 
 /** Each pick's expected overall slot by the same projection (see pickRange), for ordering pick lists; undefined once its slot is set. */

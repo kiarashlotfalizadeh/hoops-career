@@ -9,6 +9,7 @@ import { Check, ChevronRight, ListFilter } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
+import { keepFigures } from '../../core/format';
 import { neutralSite } from '../../core/league/games';
 import { gameProjection } from '../../core/analysis/preview';
 import { Sheet } from '../components/ui';
@@ -142,7 +143,7 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       : '';
   const rec = (tid: number) => {
     const ts = curTeamSeason(league, tid);
-    return `${ts.won}-${ts.lost}`;
+    return keepFigures(`${ts.won}-${ts.lost}`);
   };
   const chance = (v: number) => (
     <>
@@ -164,13 +165,13 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
         {/* the poster's headline: what the night is billed as, or on an ordinary night who's next */}
         <div className="gs-next-bill">
           <h2 className={`gs-next-h w${bill ? bill.weight : 1}`}>{bill ? bill.tag : nightTitle(league, g, neutral)}</h2>
-          {bill && <div className="gs-next-l">{bill.line}</div>}
+          {bill && <div className="gs-next-l">{keepFigures(bill.line)}</div>}
         </div>
         {series && <SeriesStrip league={league} seriesId={series.id} />}
         <div className="gs-next-foot">
           <span className="grow gs-next-facts">
             <span className={plan.set ? 'gs-next-plan set' : 'gs-next-plan'}>{plan.text}</span>
-            {seriesLine && <span className="gs-next-ss">{seriesLine}</span>}
+            {seriesLine && <span className="gs-next-ss">{keepFigures(seriesLine)}</span>}
           </span>
           <Link to={`/games/${opp}`} className="btn sm gs-next-go" aria-label={`Matchup: the ${t.name}`}>
             Matchup <ChevronRight size={15} aria-hidden="true" />
@@ -205,7 +206,7 @@ function SeriesStrip({ league, seriesId }: { league: League; seriesId: string })
           {games.map((r, i) => (
             <Link key={r.gid} to={`/game/${r.gid}`} className={`gn-ss-g ${won(r) ? 'w' : 'l'}`} aria-label={`Game ${i + 1}: ${won(r) ? 'won' : 'lost'} ${score(r)}`}>
               <span className="gn-ss-n">G{i + 1}</span>
-              <span className="num">{score(r)}</span>
+              <span className="num">{keepFigures(score(r))}</span>
             </Link>
           ))}
         </div>
@@ -258,7 +259,7 @@ function ByOpponent({ league, right }: { league: League; right?: ReactNode }) {
           return (
             <Link key={t.tid} to={`/games/${t.tid}`} className="gs-row gs-opp-row">
               <span className="gs-date">
-                <span className="d num gs-opp-rec">{ss.won + ss.lost ? `${ss.won}-${ss.lost}` : '0-0'}</span>
+                <span className="d num gs-opp-rec">{keepFigures(ss.won + ss.lost ? `${ss.won}-${ss.lost}` : '0-0')}</span>
               </span>
               <TeamLogo tid={t.tid} size={28} decorative />
               <span className="gs-opp">

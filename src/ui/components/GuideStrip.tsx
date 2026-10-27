@@ -2,7 +2,7 @@
 // set (keeping it is a choice too). Opening the screen ticks nothing: a change made here, or that tap,
 // does (see guideDone).
 import type { GuideStep } from '../../core/league/agenda';
-import { GUIDE_STEPS, guideStepOpen } from '../../core/league/agenda';
+import { GUIDE_STEPS, guideStepOpen, guideStepTitle } from '../../core/league/agenda';
 import { useLeague, useStore } from '../../state/store';
 import { runAgenda } from './Agenda';
 import './agenda.css';
@@ -22,9 +22,9 @@ export function GuideStrip({ step, keep, line, act }: { step: GuideStep; keep: s
     <div className={`card guide-strip${act ? ' stacked' : ''}`} role="note" aria-label="First-week guide">
       <div className="grow">
         <div className="guide-k">
-          First week · {i + 1} of {GUIDE_STEPS.length}
+          First games · {i + 1} of {GUIDE_STEPS.length}
         </div>
-        <div className="guide-t">{s.title}</div>
+        <div className="guide-t">{guideStepTitle(league, step)}</div>
         <div className="guide-l">{line ?? s.line}</div>
       </div>
       {act ? (

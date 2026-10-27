@@ -493,6 +493,8 @@ export function decidingFactors(factors: Factor[], n = 3): Factor[] {
 
 /** Every effect that is a setting's cost, each lever's first cost first. */
 export const LEVER_KEYS = LEVERS.flatMap((l) => l.costs);
+/** Effects that are what a setting won back (its trade-off's other side: 'drop_rim:d' for drop coverage). */
+export const LEVER_GAINS: ReadonlySet<string> = new Set(LEVERS.flatMap((l) => l.gains));
 
 /**
  * What the setting behind an effect against `side` traded that night: the points it gave the other

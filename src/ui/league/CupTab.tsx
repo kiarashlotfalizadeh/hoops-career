@@ -9,7 +9,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section } from '../components/ui';
 import { Foot, ViewChips } from './Views';
 import { Poster, TitleSlab, confName, confOrder, teamPath, useQueryParam } from './shared';
-import { plural } from '../../core/format';
+import { keepFigures, plural } from '../../core/format';
 import { signed } from '../stats';
 
 /** "Dec 4–11", or "Nov 28 – Dec 3" across months. */
@@ -125,7 +125,7 @@ export function CupTab({ league }: { league: League }) {
       </div>
       <Foot help={<CupHelp league={league} />}>
         {seeds
-          ? `${cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.`
+          ? keepFigures(`${cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.`)
           : 'How the Cup works'}
       </Foot>
     </>

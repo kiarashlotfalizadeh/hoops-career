@@ -176,13 +176,29 @@ describe('display helpers', () => {
     }
     {
       // the OVR tiers read as text on white, on the paper and under a white figure (a solid badge); figures in text never break at a hyphen
+      // (the lint rule hoops/keep-figures, eslint.config.js, flags a join written into the markup without it)
       // (read from the file: the test runner doesn't load CSS)
-      const fs = (await import('node:fs' as string)) as { readFileSync: (path: URL, enc: 'utf8') => string };
+      const fs = (await import('node:fs' as string)) as { readFileSync: (path: URL, enc: 'utf8') => string; readdirSync: (path: URL, o: { recursive: true }) => unknown[] };
       const tokens = fs.readFileSync(new URL('../styles/tokens.css', import.meta.url), 'utf8');
       const tiers = [...tokens.matchAll(/--tier-(\w+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]] as const);
       expect(tiers.map(([k]) => k)).toEqual(['elite', 'star', 'good', 'avg', 'low', 'bad']);
       for (const [k, c] of tiers) for (const ground of ['#ffffff', '#f3efe7']) expect(contrast(c, ground), `${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
       expect(keepFigures('won 107-98 to lead 1-0, 48-5 · a two-way deal')).toBe('won 107-\u206098 to lead 1-\u20600, 48-\u20605 · a two-way deal');
+      // the signals read as text on every ground, and --bad, --warn and the elite gold stand apart by
+      // lightness, the one thing every colour-blindness (and a grey screenshot) keeps: a red-green
+      // colour-blind player saw --bad and --warn as one brown (ΔE2000 3.1 under deutan)
+      const sig = Object.fromEntries([...tokens.matchAll(/--(good|bad|warn|info): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]]));
+      for (const [k, c] of Object.entries(sig))
+        for (const ground of ['#ffffff', '#f3efe7', '#e7e1d4']) expect(contrast(c, ground), `--${k} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      const lStar = (c: string) => 116 * Math.cbrt(0.05 * contrast(c, '#000000') - 0.05) - 16;
+      const gold = tiers.find(([k]) => k === 'elite')![1];
+      expect(lStar(sig.warn) - lStar(sig.bad), '--warn above --bad').toBeGreaterThanOrEqual(6);
+      expect(lStar(gold) - lStar(sig.warn), 'the gold above --warn').toBeGreaterThanOrEqual(6);
+
+      // sentence case everywhere (DESIGN): no stylesheet sets text in tracked-out capitals
+      const css = fs.readdirSync(new URL('..', import.meta.url), { recursive: true }).filter((f): f is string => typeof f === 'string' && f.endsWith('.css'));
+      expect(css.length).toBeGreaterThan(20);
+      for (const f of css) expect(fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8'), f).not.toMatch(/text-transform:\s*uppercase/);
     }
   });
 });

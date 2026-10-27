@@ -167,8 +167,6 @@ a.ag-head:active {
 .guide-k {
   font-size: 12px;
   font-weight: 640;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--accent-text);
 }
 .guide-t {

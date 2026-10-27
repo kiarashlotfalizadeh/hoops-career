@@ -520,6 +520,34 @@ describe('engine rules', () => {
       sim.checkSubs(t);
       expect(t.subLock.size).toBe(0);
     }
+    // a playoff game running away goes back to the regular-season rotation (K.garbage.playoffs): up 18
+    // with 12:00 left (the line 28.5, minus 12) but not up 5, and never in the regular season
+    {
+      type T = { score: number; gLine: number; plan: number[][]; planReg?: number[][] };
+      type G = { q: number; clock: number; elapsed: number; T: [T, T]; lopsided(t: unknown): boolean; desiredLineup(t: unknown): { pid: number }[] };
+      const po = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'playoffs', injuries: false }) as unknown as G;
+      const reg = new GameSim(side(6), side(7), { rng: new Rng(8), type: 'regular', injuries: false }) as unknown as G;
+      for (const sim of [po, reg]) {
+        for (const t of sim.T) t.gLine = 1;
+        sim.q = 4;
+        sim.clock = 720;
+        sim.elapsed = 2160;
+        sim.T[0].score = 100;
+        sim.T[1].score = 82;
+      }
+      expect(po.T[0].planReg).toBeDefined();
+      expect(po.T[0].planReg).not.toEqual(po.T[0].plan);
+      expect(po.lopsided(po.T[0])).toBe(true);
+      expect(
+        po
+          .desiredLineup(po.T[0])
+          .map((p) => p.pid)
+          .sort(),
+      ).toEqual([...po.T[0].planReg![36]].sort());
+      expect(reg.lopsided(reg.T[0])).toBe(false);
+      po.T[1].score = 95;
+      expect(po.lopsided(po.T[0])).toBe(false);
+    }
     // a third-quarter rout: both benches finish it, the team up big eases off, and a team up 20 calls off its press
     {
       type S = { pid: number; on: boolean; starter: boolean };

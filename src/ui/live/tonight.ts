@@ -2,8 +2,10 @@
 // game kept it) played on the same seed to the first move, and from there the rest of the night over
 // and over with every move made where it was and without them (nightWorth in state/liveWorth.ts), in
 // the worker behind any sim. The reading goes on the game's result (GameResult.movesWorth), so the
-// report reads it rather than measuring it again; a game left before it's in keeps none.
-import type { CoachMove, GameResult, LiveOp, MovesWorth } from '../../core/types';
+// report reads it rather than measuring it again; a game left before it's in keeps none. It often
+// lands after the result was saved, or during a sim: it then waits for the sim, and the result is
+// saved again (its mark changed: see resultMark in state/simCore.ts).
+import type { CoachMove, GameResult, League, LiveOp, MovesWorth } from '../../core/types';
 import { edit } from '../../state/actions';
 import { useStore } from '../../state/store';
 import { measureNight } from '../../state/simClient';
@@ -44,12 +46,30 @@ export function measureTonight(lg: LiveGame) {
         moves: w.moves,
         ...(w.top && move && { top: { text: move.text, pts: w.top.pts, se: w.top.se } }),
       };
-      // (only into the league it was played in, while it's the one open)
-      if (useStore.getState().league !== league) return;
-      edit((l) => {
-        const g = l.games.find((x) => x.gid === res.gid);
-        if (g) g.movesWorth = worth;
-      });
+      keepWorth(league, res, worth);
     })
     .catch((e: unknown) => console.warn("The night's moves could not be measured:", e));
+}
+
+/**
+ * Put the reading on the game's result in the open league, if it's the league the game was played in
+ * (a sim since hands back a copy of it, with the same id): once no sim is running, as a change of
+ * its own is refused meanwhile.
+ */
+function keepWorth(league: League, res: GameResult, worth: MovesWorth) {
+  const st = useStore.getState();
+  if (st.league?.id !== league.id) return;
+  if (st.sim) {
+    const off = useStore.subscribe((s) => {
+      if (s.sim) return;
+      off();
+      keepWorth(league, res, worth);
+    });
+    return;
+  }
+  edit((l) => {
+    const g = l.games.find((x) => x.gid === res.gid && x.season === res.season);
+    // (the same game: not one played again after an older save of the league was opened)
+    if (g && g.home.pts === res.home.pts && g.away.pts === res.away.pts) g.movesWorth = worth;
+  });
 }

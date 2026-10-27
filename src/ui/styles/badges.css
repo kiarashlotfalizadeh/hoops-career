@@ -60,6 +60,15 @@
 .slab .ovr.t-star {
   box-shadow: 0 0 0 2px #fff;
 }
+/* the staff's read of a prospect (the middle of a range, not a measured rating): hollow, the figure in
+   its tier on a dashed edge of it, whatever the tier's usual weight */
+.staff-read .ovr.ovr {
+  color: var(--tier);
+  background: transparent;
+  box-shadow: none;
+  outline: 1.5px dashed var(--tier);
+  outline-offset: -1.5px;
+}
 .pot {
   font-family: var(--mono);
   font-size: 12px;

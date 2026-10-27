@@ -84,6 +84,10 @@ export function capRoomFig(space: number): { k: ReactNode; v: string; color: str
 /** Cap room in a phrase: "$12.0M in cap space", "$51.2M over the cap". */
 export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in cap space` : `${money(-space)} over the cap`);
 
+/** The salary floor, when the payroll is under it: the shortfall is paid at the season's end all the same (see assessLuxuryTax), so it's money to spend. */
+export const floorText = (pay: number, cap: { minPayroll: number }) =>
+  pay < cap.minPayroll ? `${money(cap.minPayroll - pay)} under the salary floor: you pay it anyway at season's end.` : null;
+
 /** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
 /** The tax figure for a payroll: the bill over the line (`bill`, its brackets counted, see luxuryTaxBill), or the room under it. */
 export function taxFig(pay: number, line: number, bill: number): { k: ReactNode; v: string; s: string; color?: string } {

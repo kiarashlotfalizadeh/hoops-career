@@ -11,7 +11,7 @@ import { ROLE_META, archetype } from '../../core/ratings';
 import { rosterSorted } from '../../core/league/helpers';
 import { LINK_META, linkState, linksByRole, lineupLinks, type Link } from '../../core/sim/links';
 import { DEF_ROLES, type DefRole, type GlassDuty, type OffRole, type Player, type ShotFreedom, type Tactics } from '../../core/types';
-import { fitStars, defRoleFits, miscast, roleFits } from '../../core/analysis/system';
+import { betterFit, defRoleFits, roleFits, roleScale, roleStars } from '../../core/analysis/system';
 import { DEF_ROLE_META, GLASS_META, defRoleOf } from '../../core/sim/tactics';
 import { NATURAL_PAIR, NEW_KNOW, NEW_PAIR, famLabel, FLUID, knowOf, roleFam } from '../../core/sim/familiarity';
 import { teamFam } from '../tactics/fam';
@@ -25,9 +25,8 @@ import '../tactics/links.css';
 
 type Side = 'off' | 'def';
 
-/** Stars for a fit, the empty ones dimmed. */
-export function Stars({ v, label }: { v: number; label?: string }) {
-  const n = fitStars(v);
+/** Stars for a fit (`n`, against the league's rotation players at the role: roleStars), the empty ones dimmed. */
+export function Stars({ n, label }: { n: number; label?: string }) {
   return (
     <span className="tm-role-stars" role="img" aria-label={label ?? `${n} of 5`}>
       {'★'.repeat(n)}
@@ -53,6 +52,8 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
   const natural = archetype(p.ratings).role;
   const offFits = roleFits(p);
   const defFits = defRoleFits(p);
+  const scale = useLeagueMemo(() => roleScale(league), [league]);
+  const stars = (s: Side, r: string, v: number) => roleStars((s === 'off' ? scale.off : scale.def)[r as OffRole & DefRole], v);
   const busy = useStore((s) => !!s.sim);
   const edit = (label: string, fn: (tt: Tactics) => void) =>
     act(label, (l) => {
@@ -68,7 +69,7 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
   const fits: Record<string, number> = side === 'off' ? offFits : defFits;
   const cur = side === 'off' ? offRole : defRole;
   // a role that suits him clearly better than the one he plays (two stars or more: one is within the fits' noise)
-  const better = miscast(fits, cur);
+  const better = side === 'off' ? betterFit(scale.off, offFits, offRole) : betterFit(scale.def, defFits, defRole);
   const glass = (t.offense.glass?.[p.pid] ?? 0) as GlassDuty;
   // the five he'd play with: the starters, him among them (a bench player as if he joined them)
   const roster = useLeagueMemo(() => rosterSorted(league, league.userTid), [league]);
@@ -89,13 +90,13 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
         <div className="tm-ed-pair">
           <span className="over">In possession</span>
           <span className="tm-ed-role">
-            {ROLE_META[offRole].label} <Stars v={offFits[offRole]} />
+            {ROLE_META[offRole].label} <Stars n={stars('off', offRole, offFits[offRole])} />
           </span>
         </div>
         <div className="tm-ed-pair">
           <span className="over">Out of possession</span>
           <span className="tm-ed-role">
-            {DEF_ROLE_META[defRole].label} <Stars v={defFits[defRole]} />
+            {DEF_ROLE_META[defRole].label} <Stars n={stars('def', defRole, defFits[defRole])} />
           </span>
         </div>
         <div className="tm-ed-fam">
@@ -170,7 +171,7 @@ export function RoleEditor({ p, onDone, side: initial = 'off' }: { p: Player; on
                     <span className="ellipsis">{meta.label}</span>
                     {r === better && <span className="tag good">Better fit</span>}
                     {side === 'off' && r === natural && <span className="tag">Natural</span>}
-                    <Stars v={fits[r]} label={`${fitStars(fits[r])} of 5 for it`} />
+                    <Stars n={stars(side, r, fits[r])} label={`${stars(side, r, fits[r])} of 5 for it`} />
                   </span>
                   <span className="tm-role-opt-h">{meta.help}</span>
                   {side === 'off' && byRole[r as OffRole] && <span className="tm-role-links">{byRole[r as OffRole]!.map((l) => linkWith(l, p.pid, nameOf)).join(' · ')}</span>}

@@ -103,6 +103,12 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
         </div>
       )}
 
+      {d.hurt && (
+        <p className="gd-hurt small">
+          <b>Hurt tonight:</b> {d.hurt}.
+        </p>
+      )}
+
       {d.frame && <p className="gd-frame small dim2">{d.frame}</p>}
 
       {d.plan.length > 0 && (
@@ -140,6 +146,8 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
           ) : (
             measuringNight(res.gid) && <div className="gd-night small dim">The staff is playing the night back with your moves and without them…</div>
           )}
+          {/* (beside a measured verdict, each move's counts read as what they are) */}
+          {night && <div className="gd-raw tiny dim2">Below, each move’s trips since and before it, as counted: raw, not measured.</div>}
           <MovesList moves={res.moves} abbrevs={abbrevs} nameOf={nameOf} />
         </Section>
       )}

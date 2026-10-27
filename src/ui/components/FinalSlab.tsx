@@ -107,7 +107,7 @@ export function GameBoard({
               {t.name.length > 5 && <span className={`gd-bd-nm short${t.name.length > 9 ? '' : ' of-mid'}`}>{t.abbrev}</span>}
             </>
           )}
-          {s.sub && <span className="gd-bd-sub num">{s.sub}</span>}
+          {s.sub && <span className="gd-bd-sub num">{keep(s.sub)}</span>}
         </span>
       </>
     );

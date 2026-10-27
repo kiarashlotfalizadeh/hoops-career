@@ -7,7 +7,7 @@ import { winChance } from '../../analysis/winProb';
 import { ROSTER_NET } from '../../analysis/odds';
 import { netOf, tsOf } from './voice';
 
-/** Minutes by OVR rank in a typical rotation, as the season forecast weighs a roster. */
+/** Minutes by OVR rank in a typical rotation (the press's own rough read; the season forecast weighs a roster by `rosterWorth`). */
 const SLOTS = [35, 34, 32, 30, 28, 24, 20, 16, 12, 9];
 
 /** Minutes-weighted OVR of a team's best ten healthy players (`roster` sorted best first). */

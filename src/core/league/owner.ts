@@ -7,7 +7,7 @@ import { autoTactics } from '../ai/coachAI';
 import { defaultTactics } from '../sim/tactics';
 import { swapJobs } from './coaches';
 import { REVIEWS_KEPT, currentGoals, goalsRecord, gradeOwnerGoals, resultText, setOwnerGoals, type OwnerGoalKind, type OwnerReview } from './ownerGoals';
-import { booksLine, booksReview, booksVerdict } from './books';
+import { DEBT_LIMIT, booksLine, booksReview, booksVerdict } from './books';
 import { money } from '../format';
 import { canBeFired, seasonWeight, ULTIMATUM_MET, ultimatumVerdict } from './jobSecurity';
 
@@ -104,10 +104,11 @@ export function ownerEvaluation(league: League) {
   let floored = false;
   let impatient = false;
   let crowned: 'title' | 'run' | undefined;
+  let uncrowned = 0;
   if (og) {
     let f: true | undefined;
     let p: true | undefined;
-    ({ goals, grade, floored: f, impatient: p, crowned } = gradeOwnerGoals(league, og));
+    ({ goals, grade, uncrowned, floored: f, impatient: p, crowned } = gradeOwnerGoals(league, og));
     floored = !!f;
     impatient = !!p;
     for (const k of ['wins', 'playoffs', 'money', 'youth'] as const) {
@@ -123,8 +124,12 @@ export function ownerEvaluation(league: League) {
     parts.money = ownerMoneyScore(league, profit(league, tid));
     grade = parts.wins * 0.4 + parts.playoffs * 0.4 + parts.money * 0.2;
   }
-  // the books under the freeze, closed in the red: no title lifts the season past their cap
+  // the books closed past the debt limit: no title lifts the season (a passive Thunder coach lost
+  // $883.5M in a season and heard "I'm thrilled", the review found, round 3); under the freeze, closed
+  // in the red: no title lifts it past their cap
   const books = booksVerdict(league);
+  const debtHeld = !!books?.past && !!crowned && uncrowned < grade;
+  if (debtHeld) grade = uncrowned;
   const booksText = booksLine(books, grade);
   if (books?.cap !== undefined) grade = Math.min(grade, books.cap);
   const prev = league.ownerMood;
@@ -149,16 +154,24 @@ export function ownerEvaluation(league: League) {
   const fired = fireable && (total < FIRING_LINE || verdict === 'missed' || !!books?.fire);
   // the books in the red: a warning becomes an ultimatum, an ultimatum a freeze, a freeze deeper in the red a final warning (none for a coach he fires)
   if (!fired) booksReview(league, books);
-  const held = booksText ? 'books' : impatient ? 'patience' : floored ? 'floor' : undefined;
-  // his first words on it: why he fired the coach, or how he feels
+  const held = booksText ? 'books' : debtHeld ? 'debt' : impatient ? 'patience' : floored ? 'floor' : undefined;
+  // his first words on it: why he fired the coach, how he feels, or, past the debt limit, what it cost him
   const feeling = total > 0.4 ? 'thrilled' : total > 0.1 ? 'pleased' : total > -0.2 ? 'patient, for now' : 'concerned';
+  const loss = -profit(league, tid);
+  const debt = books?.past
+    ? crowned === 'title'
+      ? loss > 0
+        ? `We won, and it cost me ${money(loss)}.`
+        : `We won, but the books closed ${money(-books.close)} in the red.`
+      : `The books closed ${money(-books.close)} in the red. I can't carry that.`
+    : null;
   const said = fired
     ? verdict === 'missed'
       ? `I told you at the break: ${og!.ultimatum!.text.toLowerCase()}. It didn't happen. We are going in a different direction.`
       : books?.fire
         ? `The books closed ${money(-books.close)} in the red, deeper again under the freeze. I told you what that meant, and winning doesn't pay for it. We are going in a different direction.`
         : 'The results have not been good enough. We are going in a different direction.'
-    : `I'm ${feeling}.`;
+    : (debt ?? `I'm ${feeling}.`);
   const review: OwnerReview = {
     season: league.season,
     tid,
@@ -173,8 +186,8 @@ export function ownerEvaluation(league: League) {
   };
   league.ownerReviews = [...(league.ownerReviews ?? []).filter((r) => r.season !== league.season), review].slice(-REVIEWS_KEPT);
   const lines = goals.map((g) => `${g.title} — ${resultText(g, g.result)} (${fmt(g.grade)})`);
-  // (a title is what the season is remembered for, unless the books under the freeze hold it down)
-  if (crowned && booksText) lines.push(crowned === 'title' ? 'We won the title.' : 'Two rounds further than I asked for.');
+  // (a title is what the season is remembered for, unless the books hold it down)
+  if (crowned && (booksText || debtHeld)) lines.push(crowned === 'title' ? 'We won the title.' : 'Two rounds further than I asked for.');
   else if (crowned)
     lines.push(
       crowned === 'title' ? 'We won the title. Nothing else this season takes that away.' : 'Two rounds further than I asked for. That is what I will remember about this season.',
@@ -184,7 +197,13 @@ export function ownerEvaluation(league: League) {
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
   }
   if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't: nothing else saves this season's grade.`);
+  if (debtHeld && books)
+    lines.push(`The books closed ${money(-books.close)} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry: no result lifts a season like that.`);
   if (booksText) lines.push(booksText);
+  // budgets cut under the league's standard: what they saved isn't profit he asked for (see ownerProfit)
+  const trimmed = curTeamSeason(league, tid).trimmed ?? 0;
+  if (og?.goals.some((g) => g.kind === 'profit') && trimmed >= 500 * revenueScale(league))
+    lines.push(`The staff and facilities budgets ran ${money(trimmed)} under the league's standard. That isn't profit I asked for, so it doesn't count.`);
   if (fired) {
     league.fired = true;
     addInbox(league, {
@@ -203,7 +222,7 @@ export function ownerEvaluation(league: League) {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [`I'm ${feeling}. Season grade ${fmt(grade)}, overall standing ${fmt(total)} (both −100 to +100; 0 is my goals met exactly).`, ...lines, answered, warning]
+      ? [`${debt ?? `I'm ${feeling}.`} Season grade ${fmt(grade)}, overall standing ${fmt(total)} (both −100 to +100; 0 is my goals met exactly).`, ...lines, answered, warning]
           .filter(Boolean)
           .join('\n')
       : `I'm ${feeling}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,

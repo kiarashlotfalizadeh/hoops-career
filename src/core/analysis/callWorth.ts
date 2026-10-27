@@ -38,12 +38,12 @@ const w = (pts: number, ptsSe: number, win: number, winSe: number, n: number, by
  * roll man punishes a hedge (+2.2 a game, 7 points of win chance) or their switch hunting works, the
  * post double, a timeout to stop a run (even) and the late fouls (+1.4 points of win chance down late,
  * judged by the result: fouling costs a little margin by design). Dropped: attacking the defender
- * we're beating, leaning into or away from our own play types, the switches to Hedge off Drop, staying
- * home on spot-ups and sprinting back off a hot transition game, resting the starters in a decided game
- * with the coach's switch for it off (2.3 points of margin in 396 blowouts, never a result: his starters
- * are his call), and (with the staff making the subs) sitting a player with five fouls or a gassed
+ * we're beating, leaning into or away from our own play types, the switches to Hedge off Drop, resting
+ * the starters in a decided game with the coach's switch for it off (2.3 points of margin in 396
+ * blowouts, never a result: his starters are his call), and (with the staff making the subs) sitting a player with five fouls or a gassed
  * closer in a close fourth quarter: the staff's own crunch-time rule plays through both, and the
- * measurement agrees with it.
+ * measurement agrees with it. Below even but inside their noise, so places to look, not costs
+ * (callCosts): staying home on spot-ups and sprinting back off a hot transition game.
  */
 export const CALL_WORTH: Record<string, CallWorth> = {
   'imp-hedge_roll:o>Go to Drop': w(2.2, 0.19, 0.074, 0.008, 203),
@@ -59,6 +59,7 @@ export const CALL_WORTH: Record<string, CallWorth> = {
   cold: w(-0.1, 0.13, -0.007, 0.009, 73),
   'imp-drop_pullup:o>Switch to Hedge': w(-1.6, 0.17, -0.048, 0.009, 121),
   'pt-pnrBH>Switch to Hedge': w(-1.3, 0.27, -0.041, 0.012, 52),
+  // (inside its noise, so not a cost: the live staff, measuring it from the spot, found it +0.74 a call)
   'pt-spotup>Stay home': w(-0.5, 0.47, -0.014, 0.03, 14),
   'pt-transition>Sprint back': w(-0.1, 0.25, 0, 0.017, 13),
   tired: w(-0.1, 0.03, -0.005, 0.003, 666, 'win'),
@@ -111,17 +112,6 @@ export function callCosts(key: string): boolean {
   if (!m) return false;
   const { v, se } = callShrunk(m);
   return v < 0 && -v >= 2 * se;
-}
-
-/**
- * Whether a call's reading is below even at all, noise or not: the debrief's "Next time" one-tap is
- * offered only for a fix that hasn't measured as a loss (a bench look inside its noise is measured from
- * the spot live; a one-tap for next game isn't).
- */
-export function callBelowEven(key: string): boolean {
-  const m = callWorth(key);
-  if (!m) return false;
-  return m.by === 'win' ? m.win < 0 : m.pts < 0;
 }
 
 /**

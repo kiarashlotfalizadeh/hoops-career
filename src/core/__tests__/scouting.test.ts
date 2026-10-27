@@ -432,11 +432,43 @@ describe('scouting and the staff', () => {
       res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
       expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
       expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')).toBeUndefined();
-      // nor is Stay home off their kick-out threes: the bench measured staying home as a cost (off hot spot-ups)
+      // Stay home off their kick-out threes is: the bench's reading of it (off hot spot-ups) is below even
+      // only inside its noise, not a cost; with no measure where it's called, not an every-game one-tap
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
       res.impacts = [im('help_kick:o', them, 3)];
       expect(buildGameReport(league, res)!.factors.find((f) => f.key === 'help_kick:o')).toBeTruthy();
-      expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.label === 'Stay home')).toBe(false);
+      const home = debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.label === 'Stay home');
+      expect([!!home?.patch, home?.worth]).toEqual([true, undefined]);
+      // a loss whose top edge is our own setting's cost: ours, never "their game plan"; one the setting
+      // more than won back didn't lose it at all
+      {
+        const lost = structuredClone(res);
+        const [us, them2] = me === 0 ? [lost.home, lost.away] : [lost.away, lost.home];
+        us.pts = them2.pts - 4;
+        lost.ot = 0;
+        league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'zone23' } });
+        lost.impacts = [im('zone_3pt:o', them, 25), im('zone_paint:d', me, 2)];
+        const head = debrief(league, lost, buildGameReport(league, lost)!).headline;
+        expect(head).toMatch(/Our zone defense cost us more than it won back\.$/);
+        lost.impacts = [im('zone_glass:o', them, 25), im('zone_paint:d', me, 25.1)];
+        expect(debrief(league, lost, buildGameReport(league, lost)!).headline).not.toMatch(/tactical battle|game plan won/);
+        league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'man' } });
+      }
+      // his players hurt in it, and for how long
+      {
+        const hurt = structuredClone(res);
+        const pid = (me === 0 ? hurt.home : hurt.away).players[0].pid;
+        hurt.hurt = [pid];
+        const p = league.players[pid];
+        const was = p.injury;
+        p.injury = { type: 'Sprained Ankle', gamesRemaining: 5, gamesTotal: 5, severity: 'minor' };
+        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)} (out 5 games)`);
+        p.injury = null;
+        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)} (back now)`);
+        p.injury = was;
+        hurt.hurt = [];
+        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBeUndefined();
+      }
       // a fix goes in the plan only as the staff counter making the same change (measured against them on
       // the matchup page): the same settings moved the same way, the counter maybe moving more
       const t = league.teams[0].tactics;
@@ -514,6 +546,24 @@ describe('scouting and the staff', () => {
       const arc = { id: 'arc', title: 'Run them off the line', goal: '', dir: 'max' as const, target: them.t.tpm - 3, value: them.t.tpm, met: false };
       res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm - 4 });
       expect(keyAdvice(league, arc, res, me)).toMatch(/that part was luck/);
+      // missed on the looks: it knows the plan played, and never asks for the Stay home that was already in
+      res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
+      league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
+      expect(keyAdvice(league, arc, res, me)).toMatch(/: stay home on their shooters \(less help\)/);
+      res.plan = [{ label: 'Stay home on shooters', end: 'def' }];
+      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in, and they got looks worth \d+ made threes .* anyway: run their best shooter off the line/);
+      const move = {
+        kind: 'tactics' as const,
+        end: 'def' as const,
+        before: { us: { poss: 0, pts: 0 }, them: { poss: 0, pts: 0 } },
+        after: { us: { poss: 0, pts: 0 }, them: { poss: 0, pts: 0 } },
+      };
+      res.plan = undefined;
+      res.moves = [{ ...move, q: 3, clock: 252, text: 'Help defense: Balanced → Stay home' }];
+      expect(keyAdvice(league, arc, res, me)).toMatch(/stay home on their shooters from the start \(it went in at Q3 4:12\)/);
+      res.moves = [{ ...move, q: 1, clock: 0, text: 'Pick-and-roll coverage: Drop → Hedge · Help defense: Balanced → Stay home' }];
+      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in/);
+      res.moves = undefined;
     }
     // a free-throw gap against a physical defense comes with its lever; played clean, it says where it came from
     {

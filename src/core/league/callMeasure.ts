@@ -18,6 +18,7 @@ import type { League } from '../types';
 import { counterWorth, measureChanges, withChange, type WorthOpts } from '../ai/counterWorth';
 import { callNeeds, callsDecide, changeWorth, countersWorth, storeWorth, type CallMeasure, type CallWorth } from './calls';
 import { weekDecide, weekNeeds } from './weekCall';
+import { leverMorning } from './staffLever';
 
 /** Paired games a configuration plays in a sim's measurement. */
 export const SIM_GAMES = 40;
@@ -66,5 +67,6 @@ export async function staffMorning(league: League, opts: WorthOpts & { onMeasure
     staffDecide(league);
   }
   staffDecide(league);
-  return true;
+  // (the staff's measured change to the user's playbook, every couple of weeks: staffLever.ts)
+  return leverMorning(league, opts);
 }

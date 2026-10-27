@@ -205,15 +205,15 @@ export function spotLabel(q: number, clock: number): string {
 }
 
 /**
- * A measured reading as the staff says it: "+1.4 to the margin (±0.5)", "+4% to win (±2)": the margin
- * shrunk toward even by its noise, with what's left of its uncertainty (CallReading.band); the win
- * chance as measured, said only when it's clear of its own noise (or what the call is judged by).
+ * A measured reading as the staff says it: "+1.4 to the margin (±0.5)", "+4% to win (±2), +0.3 to the
+ * margin (±0.4)": the margin shrunk toward even by its noise, with what's left of its uncertainty
+ * (CallReading.band); the win chance only for a call judged by it. Beside a call judged by the margin
+ * the win chance would be raw, and picked for clearing its noise: over 28 such calls it read +7.4%
+ * against a true +4.3% (round-3 game-day review), so it isn't said.
  */
 export function readingLine(r: { pts: number; band: number; win: number; winSe: number }, by: 'pts' | 'win'): string {
   const margin = `${signed(r.pts, 1)} to the margin (±${r.band.toFixed(1)})`;
-  const winClear = Math.abs(r.win) >= 2 * r.winSe && r.win !== 0;
-  const win = `${signed(r.win * 100, 0)}% to win`;
-  return by === 'win' ? `${win} (±${(r.winSe * 100).toFixed(0)}), ${margin}` : winClear ? `${margin}, ${win}` : margin;
+  return by === 'win' ? `${signed(r.win * 100, 0)}% to win (±${(r.winSe * 100).toFixed(0)}), ${margin}` : margin;
 }
 
 /** What the staff found at the last stop: measuring, a call (with its number), or none that clears. */

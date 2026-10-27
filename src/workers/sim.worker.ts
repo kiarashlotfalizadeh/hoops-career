@@ -1,7 +1,20 @@
 import * as Comlink from 'comlink';
 import type { GameResult, League, LiveOp } from '../core/types';
 import { counterWorth, measureChanges, type LeagueChange } from '../core/ai/counterWorth';
-import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type GamesDelta, type GamesSig, type SimProgress, type SimTarget, type TaskOp } from '../state/simCore';
+import {
+  applyGames,
+  diffGames,
+  gamesSig,
+  LOST_RESULTS,
+  runSim,
+  runTask,
+  withoutGames,
+  type GamesDelta,
+  type GamesSig,
+  type SimProgress,
+  type SimTarget,
+  type TaskOp,
+} from '../state/simCore';
 import { measureChoices, nightWorth, simFromState, type LiveChoice, type SimState } from '../state/liveWorth';
 import { measureCalls, measureChange } from '../state/liveWorth';
 
@@ -51,10 +64,14 @@ const yieldDay = () =>
  */
 const CHECKPOINT_MS = 5000;
 
-/** The league to work on: `core` with the cached results brought up to date by `delta`. */
+/**
+ * The league to work on: `core` with the cached results brought up to date by `delta`. A delta made
+ * against results this worker doesn't hold is refused before anything is done (the main thread
+ * sends them whole and asks again: see simClient's withGames).
+ */
 function open(core: League, delta: GamesDelta): League {
   const base = cache?.id === core.id ? cache.games : [];
-  if (base.length < delta.keep) throw new Error('The sim worker lost track of the results.');
+  if (base.length < delta.keep) throw new Error(LOST_RESULTS);
   return { ...core, games: applyGames(base, delta) };
 }
 

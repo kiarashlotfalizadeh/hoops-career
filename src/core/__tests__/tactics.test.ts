@@ -28,7 +28,7 @@ import {
 import { activeSlot, clearSlot, copyToSlot, renameSlot, slotLabel, slotPatch, slotTactics, switchSlot, withSlotPlans } from '../sim/slots';
 import { solveMatchups } from '../sim/matchups';
 import { autoDefRoles, autoRoles, autoShape, autoTactics, partnerRoles, shapeFits } from '../ai/coachAI';
-import { DEF_QUALITIES, OFF_QUALITIES, defRoleFits, fitStars, gradeChanges, gradeOf, miscast, roleFits, systemReport } from '../analysis/system';
+import { DEF_QUALITIES, OFF_QUALITIES, betterFit, defRoleFits, fitStars, gradeChanges, gradeOf, miscast, roleFits, roleScale, roleStars, systemReport } from '../analysis/system';
 import { IMPACT_TEXT } from '../analysis/gameReport';
 import { impactCounter, teamAlerts } from '../ai/advisor';
 import { Rng } from '../random';
@@ -309,6 +309,27 @@ describe('roles, partnerships and the system', () => {
     expect(miscast(fits, 'creator')).toBeNull();
     expect(miscast(fits, 'scorer')).toBeNull();
     expect(miscast(fits, 'shooter')).toBe('creator');
+    // never Hidden: its fit is how poor a defender he is, not a role he'd play better in
+    expect(miscast<string>({ standard: 35, poa: 40, stopper: 38, anchor: 20, roamer: 36, hide: 75 }, 'standard')).toBeNull();
+    {
+      // the screens' stars rank a fit against the league's rotation players at that role: each team's
+      // best players read three stars or more at their best role, and the flag never shows fewer stars
+      const scale = roleScale(league);
+      const best = league.teams.map((t) => [...teamPlayers(league, t.tid)].sort((a, b) => b.ovr - a.ovr)[0]);
+      for (const p of best) {
+        const f = roleFits(p);
+        const r = (Object.keys(f) as (keyof typeof f)[]).reduce((a, b) => (f[b] > f[a] ? b : a));
+        expect(roleStars(scale.off[r], f[r])).toBeGreaterThanOrEqual(3);
+      }
+      expect([roleStars([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 5), roleStars([10, 20, 30, 40, 50, 60, 70, 80, 90, 100], 95)]).toEqual([1, 5]);
+      for (const t of league.teams.slice(0, 6))
+        for (const p of teamPlayers(league, t.tid)) {
+          const df = defRoleFits(p);
+          const b = betterFit(scale.def, df, 'standard');
+          expect(b).not.toBe('hide');
+          if (b) expect(roleStars(scale.def[b], df[b])).toBeGreaterThan(roleStars(scale.def.standard, df.standard));
+        }
+    }
     // and the staff leaves nobody that way, but for the lead creator
     for (const team of league.teams) {
       const ps = teamPlayers(league, team.tid);

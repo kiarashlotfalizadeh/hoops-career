@@ -125,6 +125,8 @@ function Overview({ team }: { team: Team }) {
               <div className="tiny dim">
                 {end.left > 0 ? 'projected' : 'the owner reads this'}
                 {end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}
+                {/* (the tax he signed off on, out of it: fixed on opening night, so a salary-neutral trade doesn't take it back) */}
+                {books.sanctioned > 0 ? `; his ${money(books.sanctioned)} sign-off doesn't count` : ''}
               </div>
             </div>
           )}

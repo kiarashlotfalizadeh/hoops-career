@@ -455,8 +455,9 @@ describe('the live assistant and the bench', () => {
       const same = (await measureChange(g.sim, 0, { kind: 'none' }, { kind: 'tactics', tactics: g.sim.baseTactics(0) }, { games: 8 }))!;
       expect([same.raw, same.win, same.n]).toEqual([0, 0, 8]);
       expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Measured 4 changes from Q2 3:10: none clears the noise. Nothing to change.');
-      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.015 }, 'pts')).toBe('+1.4 to the margin (±0.5), +4% to win');
-      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.03 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
+      // (a call judged by the margin: the win chance beside it would be raw and picked on its noise)
+      expect(readingLine({ pts: 1.4, band: 0.5, win: 0.04, winSe: 0.015 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
+      expect(readingLine({ pts: 0.3, band: 0.4, win: 0.06, winSe: 0.02 }, 'win')).toBe('+6% to win (±2), +0.3 to the margin (±0.4)');
     }
 
     // the game read in a sentence: the score early, then the biggest edges in the box score

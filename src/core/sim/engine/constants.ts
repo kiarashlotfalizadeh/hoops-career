@@ -221,7 +221,14 @@ export const K = {
    * minutes in games decided by 30 or more (25.8 before) and a team's best starter 28.2 (31.7); over
    * a season each team's two best players give up about half a minute a game (star-check's 31.8/30.0,
    * 32.5/30.5 before), and the real league's top 20 scorers still land within 1.7-2.4 points a game
-   * of their real lines in the first season (2.0-2.4 before).
+   * of their real lines in the first season (2.0-2.4 before). In the playoffs the same line decides
+   * a game (the bench came in as often and as early: 83% of games up 20 after three, 9.2 minutes
+   * left; 81% and 8.6 in the regular season), but the playoff rotation (the eight, the five's extra
+   * minutes) played on until then: a lead within `playoffs` of the line (either way, from the half)
+   * sends a coach back to his regular-season rotation (see lopsided). Over 1,500 paired games, the
+   * winner's three busiest starters in a playoff win by 25+ play 28.9 minutes (29.3 before; 26.6 in
+   * the regular season, the rest the playoff rotation's first half), 2.6 of them in the fourth
+   * quarter of a game up 20 after three (2.8; 2.6), and 38.1 in a game decided by 5 or less, as before.
    */
   garbage: {
     start: 1440,
@@ -229,6 +236,7 @@ export const K = {
     per: 4.2,
     patience: [0.9, 1.15] as [number, number],
     exit: 8,
+    playoffs: 12,
     depth: 2,
     late: [150, 330] as [number, number],
     slow: 3,

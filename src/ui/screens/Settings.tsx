@@ -24,6 +24,7 @@ import { DifficultyPicker } from '../components/DifficultyPicker';
 import { BrandMark } from '../components/BrandMark';
 import { GLOSSARY } from '../glossary';
 import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../settingsOptions';
+import { clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import './settings.css';
 
 const SPEEDS = LIVE_SPEEDS.map((s) => ({ id: String(s.id), label: s.label }));
@@ -46,6 +47,8 @@ export default function Settings() {
   const [coach, setCoach] = useState(league.coachName);
   const [sheet, setSheet] = useState<null | 'delete' | 'unsaved' | 'glossary'>(null);
   const [busy, setBusy] = useState(false);
+  // (a setting of this device's, as the live screen's clutch-time offer keeps it)
+  const [slowClose, setSlowClose] = useState(clutchSlowAlways);
   // settings wait for a sim (it plays on a copy of the league); leaving or deleting mid-sim would strand it
   const simming = useStore((s) => !!s.sim);
   const saveProblem = useStore((s) => s.saveProblem);
@@ -219,6 +222,15 @@ export default function Settings() {
                 <span className="set-label">Speed</span>
                 <Segmented label="Live game speed" value={String(st.liveSpeed || 1)} onChange={(v) => set('liveSpeed', Number(v))} options={SPEEDS} />
               </div>
+              <Toggle
+                on={slowClose}
+                onChange={(v) => {
+                  setClutchSlowAlways(v);
+                  setSlowClose(v);
+                }}
+                label="Slow close finishes to 1×"
+                help="Clutch time (the last five minutes, within five) drops to 1× by itself. Off: it's offered. On this device."
+              />
               <div className="set-inline">
                 <span className="set-label row">
                   Breaks

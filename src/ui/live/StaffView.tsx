@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { CoachMove, GameResult } from '../../core/types';
 import type { GameKey } from '../../core/analysis/keys';
-import { madeAtt } from '../../core/format';
+import { keepFigures, madeAtt } from '../../core/format';
 import { Section, Toggle } from '../components/ui';
 import { KeysLive } from '../components/GameKeys';
 import type { Drawn } from './drawn';
@@ -134,7 +134,7 @@ function Watch({
       </span>
       <span className="lv-watch-t grow">
         <span className="lv-watch-n">
-          <span className="dim2">Watching</span> {nameOf(p.pid)} <span className="dim num">{madeAtt(p.fgm, p.fga)}</span>
+          <span className="dim2">Watching</span> {nameOf(p.pid)} <span className="dim num">{keepFigures(madeAtt(p.fgm, p.fga))}</span>
         </span>
         <span className="lv-watch-l small dim">
           {watch.defender !== undefined ? `${nameOf(watch.defender)} is on him` : them.on.includes(p.pid) ? 'The staff picks his matchup' : 'On the bench'}

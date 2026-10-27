@@ -1,5 +1,5 @@
 import type { Tactics } from '../../core/types';
-import { madeAtt } from '../../core/format';
+import { keepFigures, madeAtt } from '../../core/format';
 import type { DrawnPlayer } from './drawn';
 import { PlayerLine } from './MyPlayer';
 import { HACK_BELOW, hackThreshold } from './pills';
@@ -76,7 +76,7 @@ export function OppPlayer({
         </div>
         <div className="small">
           <b className="num">{ft}%</b> from the line
-          {p.fta > 0 ? <span className="dim num"> · {madeAtt(p.ftm, p.fta)} tonight</span> : null}
+          {p.fta > 0 ? <span className="dim num"> · {keepFigures(madeAtt(p.ftm, p.fta))} tonight</span> : null}
         </div>
         {hacking ? (
           <button className="btn block" onClick={() => apply((t) => stopHacking(t.manage))}>

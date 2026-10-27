@@ -24,6 +24,7 @@ import type { Tactics } from '../../core/types';
 import { famTone } from './formation';
 import { learnText, useLearnCost } from './learnCost';
 import '../screens/tactics.css';
+import { StaffMoveNote } from './StaffMoveNote';
 
 /** Each end's parts a playbook sets (its players' roles are the staff's, whichever it is). */
 const PARTS = { off: FAM_DIMS.filter((d) => d.end === 'off' && d.id !== 'roles'), def: FAM_DIMS.filter((d) => d.end === 'def') };
@@ -99,6 +100,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
           {held.name}: {readText(shownFit(held.id, terms[held.id], fits, cur!).vs)}).
         </p>
       )}
+      <StaffMoveNote only={kind} />
       <div className="card flush list wide2 tx-presets">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
           <span>Best for your roster first</span>

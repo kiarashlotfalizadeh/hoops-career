@@ -26,16 +26,31 @@
 // and for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
 // remembered (League.callsDone) so it doesn't come back. A star's injury card left unanswered for
 // INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
-import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, PrepFocus, ScheduledGame } from '../types';
+import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, PrepFocus, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
-import { fmtDate, playerName, revenueScale, standardRoster } from './helpers';
+import { fmtDate, payroll, playerName, revenueScale, standardRoster } from './helpers';
 import { confStandings } from './standings';
 import { money, plural } from '../format';
-import { currentGoals, concedeBlockedReason, concedeSeason, CONCEDE_COST, easeFloor, easeFloorBlockedReason, floorDanger, FLOOR_EASE } from './ownerGoals';
+import {
+  currentGoals,
+  concedeBlockedReason,
+  concedeSeason,
+  CONCEDE_COST,
+  easeFloor,
+  easeFloorBlockedReason,
+  floorDanger,
+  FLOOR_EASE,
+  floorCap,
+  gradeGoal,
+  ownerProgress,
+  patienceCap,
+  YOUNG_AGE,
+} from './ownerGoals';
+import { frozenBooksOutlook, seasonWeight } from './jobSecurity';
 import { tenDayBlockedReason, tenDayClosedReason, userTenDay, wantsTenDay } from './tenDay';
 import { booksOf, booksOutlook, deeperText, frozen, FROZEN_BUDGET, warnWindow } from './books';
 import { aiTicketPrice, attendanceFor, budgetCostPerSeason, seasonEndCash } from './finances';
-import { tradeTargets } from './tradeFinder';
+import { filterTargets, maxTakeBack, tradeTargets } from './tradeFinder';
 import { makeItWork } from './tradeHelp';
 import { packageFor } from './tradePackages';
 import { executeTrade, teamAccepts, tradingClosedReason, validateTrade, type TradeOffer } from './trades';
@@ -44,14 +59,14 @@ import { assetText, cleanProposals } from './proposals';
 import { ensureRotation, userGameOnDay } from './games';
 import { seriesLabel } from './playoffs';
 import { itemGroup, planFor, planMade, setPlanItem } from './gamePlans';
-import { playerAge } from '../playerGen';
-import { leagueForecast, pct } from '../analysis/odds';
+import { contractExp, playerAge, salaryFor } from '../playerGen';
+import { forecast, leagueForecast, pct, TRAIL_SIMS, type Forecast } from '../analysis/odds';
 import { hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
-import { WORTH_MIN, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
+import { WORTH_MIN, withChange, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
 import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, type Factor } from '../analysis/gameReport';
-import { answerWeek, isWeekId, notePick, openWeekId, ptsWin, vsAt, weekCard, weekDaily } from './weekCall';
+import { answerWeek, isWeekId, notePick, openWeekId, ptsWin, vsAt, weekCard, weekDaily, winsOf } from './weekCall';
 
 /** A star: one of the team's three best players by OVR. */
 export const STAR_RANK = 3;
@@ -70,6 +85,12 @@ export const ODDS_LOW = 50;
 export const ODDS_WEEKS = 2;
 /** ...for a team the owner expects in the postseason, or that was at least this likely to get there this season. */
 export const ODDS_WAS = 250;
+/**
+ * Games the user plays in his first season before the odds can be a call: a 0-7 start is where a
+ * newcomer is still learning the game, and a rebuild call then reads as the game giving up on him
+ * (the first slump gets the staff's plain read instead: see firstSlump).
+ */
+export const ODDS_FIRST_GAMES = 15;
 /**
  * The user's games back that the floor is read a second time from: on pace under it then and now,
  * so a team a game from the line isn't a call one night and gone the next. (The pace already blends
@@ -149,6 +170,8 @@ export interface SkidCall {
   rung?: number;
   /** What's behind it, in words (the box scores' biggest edge against him, his stars out): the staff's read. */
   diag?: string;
+  /** That biggest edge was shots that didn't fall (luck, not the plan), with none of his stars out: the call is to ride it out. */
+  luck?: true;
   /** The staff's counters for the next game are measured and in (or measured as no gain), in words. */
   put?: string;
 }
@@ -263,6 +286,8 @@ export interface DeadlineCall {
   offer?: TradeOffer;
   /** The playoff odds then, tenths of a percent. */
   odds: number;
+  /** What the deal adds to the postseason odds as the forecast reads the rosters with it (tenths of a percent; absent for no deal). */
+  oddsGain?: number;
 }
 
 const settled = (league: League, id: string) => !!league.callsDone?.includes(id);
@@ -272,6 +297,13 @@ export function settleCall(league: League, id: string) {
   const done = (league.callsDone ?? []).filter((x) => x !== id);
   done.push(id);
   league.callsDone = done.slice(-DONE_KEPT);
+  if (league.callLook?.id === id) delete league.callLook;
+}
+
+/** A trade of his since he took call `id`'s look for one (League.callLook): it answers the call. */
+function dealt(league: League, id: string): boolean {
+  const look = league.callLook;
+  return !!look && look.id === id && (league.transactions ?? []).some((t) => t.kind === 'trade' && t.user && t.id >= look.txn);
 }
 
 /**
@@ -322,6 +354,10 @@ const deadlineOpen = (league: League) => league.phase === 'regular' && league.da
 /** Whether the odds call stands: under ODDS_LOW for ODDS_WEEKS points running, for a team expected in the postseason, before the deadline. */
 function oddsCall(league: League): { now: number } | null {
   if (league.phase !== 'regular' || league.day > league.tradeDeadlineDay) return null;
+  if (league.season === league.startSeason) {
+    const ts = league.teams[league.userTid].seasons.find((x) => x.season === league.season);
+    if ((ts ? ts.won + ts.lost : 0) < ODDS_FIRST_GAMES) return null;
+  }
   const o = oddsNow(league);
   if (!o || o.low < ODDS_WEEKS) return null;
   const expected = !!currentGoals(league)?.goals.some((g) => g.kind === 'postseason');
@@ -338,6 +374,68 @@ function floorAgo(league: League, n: number): ReturnType<typeof floorDanger> {
   const teams = league.teams.map((t) => (t === team ? { ...t, seasons: t.seasons.map((s) => (s === ts ? then : s)) } : t));
   return floorDanger({ ...league, teams });
 }
+
+/**
+ * What the odds call's two answers come to in his standing with the owner, as his review grades the
+ * season (the staff's read, from the forecast, the rest of the season alike either way): pushing on,
+ * the postseason goal graded at each level by the forecast's chance of ending there, times its weight
+ * and the season's weight in the standing (see seasonWeight); telling him now, CONCEDE_COST off at once
+ * (the minutes the goal becomes taken as met: they grade 0 at best). `reach`: the forecast's chance of
+ * meeting the goal. Null without a postseason goal or a forecast.
+ */
+export function concedeStanding(league: League): { push: number; concede: number; reach: number } | null {
+  const og = currentGoals(league);
+  const post = og?.goals.find((g) => g.kind === 'postseason');
+  const f = leagueForecast(league)?.teams[league.userTid];
+  if (!og || !post || !f) return null;
+  // the chance of level L or better: 1 the play-in (a top-ten seed), 2 the playoffs, then each round won
+  const atLeast = (L: number) => (L <= 0 ? 1 : L === 1 ? Math.max(f.top6 + f.playIn, f.reach[0]) : L <= 6 ? f.reach[L - 2] : 0);
+  let e = 0;
+  for (let L = 0; L <= 6; L++) e += (atLeast(L) - atLeast(L + 1)) * gradeGoal(league, og, post, L);
+  return { push: seasonWeight(league) * post.weight * e, concede: -CONCEDE_COST, reach: atLeast(post.target) };
+}
+
+/**
+ * The season's grade as his review would give it with the results where they project (the forecast's
+ * record, as the job-security meter projects it: the goals graded at their projections, a development
+ * year's part keeping the wins' miss, under the floor's cap, the rebuild clock's and the books').
+ */
+function projectedSeasonGrade(league: League, og: NonNullable<ReturnType<typeof currentGoals>>, fc: Forecast): number {
+  const prog = ownerProgress(league, og, fc);
+  const wins = prog.find((p) => p.goal.kind === 'wins');
+  const wg = wins ? gradeGoal(league, og, wins.goal, wins.projected) : undefined;
+  const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected, wg), 0);
+  const post = prog.find((p) => p.goal.kind === 'postseason');
+  return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, frozenBooksOutlook(league)?.cap ?? 1);
+}
+
+/**
+ * What the floor call's two answers come to in his standing with the owner at his review (the staff's
+ * read, from the forecast, the same record either way): chasing it, the season graded with the goals
+ * as they stand; a development year, with the goals as easeFloor leaves them (a view: nothing here
+ * changes), its concession's cost off in full. Each as the change from his standing now, the season
+ * weighed as the review weighs it (see seasonWeight); and the wins the forecast projects. Null without
+ * goals or a forecast.
+ */
+export function floorStanding(league: League): { chase: number; ease: number; wins: number } | null {
+  const og = currentGoals(league);
+  const fc = leagueForecast(league);
+  if (!og || !fc) return null;
+  const view: League = { ...league, ownerGoals: structuredClone(og), ownerMood: { ...league.ownerMood }, inbox: [...league.inbox] };
+  easeFloor(view);
+  const w = seasonWeight(league);
+  const s = league.ownerMood.total;
+  // (as the review sets it: the grade weighed in, what concessions cost kept off: see owner.ts)
+  const review = (l: League) => {
+    const o = currentGoals(l)!;
+    const cost = o.cost ?? 0;
+    return Math.max(-1, Math.min(1, projectedSeasonGrade(l, o, fc) * w + (l.ownerMood.total + cost) * (1 - w) - cost)) - s;
+  };
+  return { chase: review(league), ease: review(view), wins: Math.round(fc.teams[league.userTid].w) };
+}
+
+/** Standing as the cards say it, in points: "−4", "+2". */
+const standingPts = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x * 100))}`;
 
 /**
  * Whether the floor call stands: on pace under the owner's floor now and FLOOR_AGO games ago, before
@@ -423,14 +521,16 @@ const CAUSE: Record<Factor['category'] | 'luck', string> = {
 };
 
 /**
- * What's behind a run of the user's results, in words, as the staff reads the box scores: his margin
- * over them, the kind of edge that went against him most (the game reports' factors added up by kind,
- * shots falling below their looks counted apart as the luck they are, a game's worth, when it's a
- * point a game or more), and his stars out now. Not a measurement: the line says it's the staff's read.
+ * What's behind a run of the user's results, as the staff reads the box scores: his margin over them,
+ * the kind of edge that went against him most (the game reports' factors added up by kind, shots
+ * falling below their looks counted apart as the luck they are, a game's worth, when it's a point a
+ * game or more), and his stars out now; in words, and whether it reads as luck alone (the biggest
+ * edge the shots that didn't fall, none of his stars out). Not a measurement: the line says it's the staff's read.
  */
-export function slideDiagnosis(league: League, results: GameResult[]): string {
+function slideRead(league: League, results: GameResult[]): { text: string; luck: boolean } {
   const me = league.userTid;
   const parts: string[] = [];
+  let luck = false;
   if (results.length) {
     const margin = results.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / results.length;
     parts.push(margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game` : `Even on points (${signed(margin)} a game): the close ones went the other way`);
@@ -441,15 +541,25 @@ export function slideDiagnosis(league: League, results: GameResult[]): string {
         sum.set(k, (sum.get(k) ?? 0) + f.pts);
       }
     const worst = [...sum.entries()].sort((a, b) => a[1] - b[1])[0];
-    if (worst && worst[1] / results.length <= -1) parts.push(`the box scores point to ${CAUSE[worst[0]]} (${signed(worst[1] / results.length)} a game, the staff's read)`);
+    if (worst && worst[1] / results.length <= -1) {
+      parts.push(`the box scores point to ${CAUSE[worst[0]]} (${signed(worst[1] / results.length)} a game, the staff's read)`);
+      luck = worst[0] === 'luck';
+    }
   }
-  const out = standardRoster(league, me)
+  const out = starsOut(league);
+  if (out.length) parts.push(`${out.map((p) => playerName(p)).join(' and ')} ${out.length > 1 ? 'are' : 'is'} out`);
+  return { text: parts.length ? `${capitalize(parts.join('; '))}.` : '', luck: luck && !out.length };
+}
+
+/** What's behind a run of the user's results, in words (see slideRead). */
+export const slideDiagnosis = (league: League, results: GameResult[]) => slideRead(league, results).text;
+
+/** The user's stars (his three best) out now. */
+const starsOut = (league: League) =>
+  standardRoster(league, league.userTid)
     .sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)
     .slice(0, STAR_RANK)
     .filter((p) => p.injury && p.injury.gamesRemaining > 0);
-  if (out.length) parts.push(`${out.map((p) => playerName(p)).join(' and ')} ${out.length > 1 ? 'are' : 'is'} out`);
-  return parts.length ? `${capitalize(parts.join('; '))}.` : '';
-}
 
 /** The user's last `n` regular-season results this season. */
 const lastResults = (league: League, n: number) =>
@@ -484,6 +594,7 @@ function skidDaily(league: League) {
   const of = straight ? run : SKID_OF;
   const res = lastResults(league, of);
   const margin = res.length ? res.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / res.length : undefined;
+  const read = slideRead(league, res);
   league.skidCall = {
     season: league.season,
     tid: me,
@@ -495,7 +606,8 @@ function skidDaily(league: League) {
     of,
     ...(margin !== undefined ? { margin } : {}),
     rung,
-    diag: slideDiagnosis(league, res),
+    diag: read.text,
+    ...(read.luck ? { luck: true as const } : {}),
   };
 }
 
@@ -533,7 +645,7 @@ function candidateIds(league: League): string[] {
   // (last: what a sim says it stopped for is the first new one, and the week's is the least of them)
   const week = openWeekId(league);
   if (week) ids.push(week);
-  return ids.filter((id) => !settled(league, id));
+  return ids.filter((id) => !settled(league, id) && !dealt(league, id));
 }
 
 const DUE = '~due';
@@ -593,11 +705,98 @@ function ticketLever(league: League): { price: number; gain: number } | null {
 // ---------------------------------------------------------------- the deadline's call
 
 /**
+ * A deal as the user's team would play it (a view of the league: nothing in it changes): the players
+ * moved and the staff's rotation for the roster it leaves him, against `base`, the staff's rotation
+ * for the roster he has (a deal is measured against the staff's own plan, not a lean or a rotation
+ * set by hand).
+ */
+export function dealChange(league: League, offer: TradeOffer): { change: LeagueChange; base: LeagueChange } {
+  const me = league.userTid;
+  const team = league.teams[me];
+  const players: Record<number, Partial<Player>> = {};
+  for (const pid of offer.a.pids) players[pid] = { tid: offer.b.tid };
+  for (const pid of offer.b.pids) players[pid] = { tid: me };
+  const roster = (moved: boolean) =>
+    Object.values(league.players).flatMap((p) => {
+      const tid = moved ? (players[p.pid]?.tid ?? p.tid) : p.tid;
+      return tid === me ? [{ ...p, tid }] : [];
+    });
+  return {
+    change: { id: 'deal', players, teams: { [me]: { rotation: autoRotation(roster(true), team.rotation) } } },
+    base: { id: 'staff', teams: { [me]: { rotation: autoRotation(roster(false), team.rotation) } } },
+  };
+}
+
+/** One of the owner's money or youth goals as a deal moves it: where it projects now and with the deal. */
+export interface DealGoal {
+  kind: 'profit' | 'payroll' | 'youth';
+  target: number;
+  now: number;
+  with: number;
+}
+
+/** His regular-season games left. */
+const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played && g.type === 'regular' && (g.home === league.userTid || g.away === league.userTid)).length;
+
+/**
+ * What a deal does to the owner's money and youth goals this season: the profit as it projects with
+ * the books' close moved by the deal (its salary for the games left, the tax), the payroll against his
+ * line, and the young players' minutes as the staff's rotation hands them out with it over the games left.
+ */
+export function dealGoals(league: League, offer: TradeOffer): DealGoal[] {
+  const og = currentGoals(league);
+  if (!og || league.phase !== 'regular') return [];
+  const me = league.userTid;
+  const { change, base } = dealChange(league, offer);
+  const view = withChange(league, change);
+  const young = (l: League, c: LeagueChange) => {
+    const rot = c.teams![me].rotation!;
+    return Object.values(l.players)
+      .filter((p) => p.tid === me && playerAge(p, l.season) <= YOUNG_AGE)
+      .reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
+  };
+  const out: DealGoal[] = [];
+  for (const p of ownerProgress(league, og)) {
+    const g = p.goal;
+    if (g.kind === 'profit') out.push({ kind: 'profit', target: g.target, now: p.projected, with: p.projected + seasonEndCash(view, me).end - seasonEndCash(league, me).end });
+    else if (g.kind === 'payroll') out.push({ kind: 'payroll', target: g.target, now: p.now, with: payroll(view, me) });
+    else if (g.kind === 'youth')
+      out.push({ kind: 'youth', target: g.target, now: p.projected, with: Math.round(p.projected + (young(view, change) - young(league, base)) * gamesLeft(league)) });
+  }
+  return out;
+}
+
+/** The deal costs a goal: it ends under the target (a payroll: over the line) and worse than without it. */
+const costsGoal = (d: DealGoal) => (d.kind === 'payroll' ? d.with > d.target && d.with > d.now : d.with < d.target && d.with < d.now);
+
+/** A goal as a deal moves it, in words: "profit on pace for $12.0M, not $25.5M (his goal $25.5M)". */
+function dealGoalText(d: DealGoal): string {
+  const n = (x: number) => x.toLocaleString('en-US');
+  const cash = (x: number) => (x < 0 ? `a ${money(-x)} loss` : money(x));
+  return d.kind === 'profit'
+    ? `profit on pace for ${cash(d.with)}, not ${cash(d.now)} (his goal ${cash(d.target)})`
+    : d.kind === 'payroll'
+      ? `payroll ${money(d.with)}, not ${money(d.now)} (his line ${money(d.target)})`
+      : `young players' minutes on pace for ${n(d.with)}, not ${n(d.now)} (his goal ${n(d.target)})`;
+}
+
+/** A player a deal brings in, with what he costs: "James Harden: 37, $96.5M over 3 seasons (a player option on the last)". */
+function contractText(league: League, p: Player): string {
+  const s = league.season;
+  const years = Math.max(1, contractExp(p.contract) - s + 1);
+  const total = Array.from({ length: years }, (_, i) => salaryFor(p, s + i)).reduce((a, x) => a + x, 0);
+  const option = p.contract.option && !p.contract.next ? ` (a ${p.contract.option} option on the last)` : '';
+  return `${playerName(p)}: ${playerAge(p, s)}, ${years === 1 ? `${money(total)}, expiring` : `${money(total)} over ${years} seasons${option}`}`;
+}
+
+/**
  * The staff's deadline call (once a season, the day its card opens): buy with the playoffs likely
  * (the best player better than the team's fifth best that his team would move for what "make it
- * work" says, the team's two most valuable players kept), sell with them unlikely or for a rebuilder
- * (the best package a contender sends for one of the veterans, 28 or older), hold otherwise or when
- * nothing works.
+ * work" says, the team's two most valuable players kept, and with an owner's youth goal its young
+ * players too; none that costs one of the owner's money or youth goals, see dealGoals), sell with them
+ * unlikely or for a rebuilder (the best package a contender sends for one of the veterans, 28 or
+ * older), hold otherwise or when nothing works. The deal's postseason odds are the forecast's read of
+ * the rosters with it and without it (the same simulated seasons), its worth a game measured as the card opens.
  */
 export function planDeadlineCall(league: League): DeadlineCall {
   const me = league.userTid;
@@ -608,10 +807,14 @@ export function planDeadlineCall(league: League): DeadlineCall {
   const roster = standardRoster(league, me);
   const works = (o: TradeOffer | null) => !!o && !validateTrade(league, o).length && teamAccepts(league, o, o.b.tid);
   if (mode === 'buy') {
-    const keep = [...roster]
-      .sort((a, b) => tradeValue(league, b) - tradeValue(league, a))
-      .slice(0, 2)
-      .map((p) => p.pid);
+    const youth = !!currentGoals(league)?.goals.some((g) => g.kind === 'youth');
+    const keep = [
+      ...[...roster]
+        .sort((a, b) => tradeValue(league, b) - tradeValue(league, a))
+        .slice(0, 2)
+        .map((p) => p.pid),
+      ...(youth ? roster.filter((p) => playerAge(p, league.season) <= YOUNG_AGE).map((p) => p.pid) : []),
+    ];
     const bar = [...roster].sort((a, b) => b.ovr - a.ovr)[4]?.ovr ?? 0;
     const targets = tradeTargets(league)
       .filter((t) => t.p.ovr > bar && t.avail !== 'franchise' && !t.p.injury)
@@ -619,7 +822,7 @@ export function planDeadlineCall(league: League): DeadlineCall {
       .slice(0, 6);
     for (const t of targets) {
       const ask = makeItWork(league, { a: { tid: me, pids: [], dpids: [] }, b: { tid: t.p.tid, pids: [t.p.pid], dpids: [] } }, keep);
-      if (works(ask.offer)) {
+      if (works(ask.offer) && !dealGoals(league, ask.offer!).some(costsGoal)) {
         call.offer = ask.offer!;
         break;
       }
@@ -641,6 +844,12 @@ export function planDeadlineCall(league: League): DeadlineCall {
       }
   }
   if (!call.offer) call.mode = mode === 'sell' || mode === 'buy' ? mode : 'hold';
+  else if (league.phase === 'regular') {
+    // (the same simulated seasons each way: the difference is the deal's, not the draw's)
+    const reach = (l: League) => forecast(l, { sims: TRAIL_SIMS })?.teams[me].reach[0];
+    const [without, withIt] = [reach(league), reach(withChange(league, dealChange(league, call.offer).change))];
+    if (without !== undefined && withIt !== undefined) call.oddsGain = Math.round((withIt - without) * 1000);
+  }
   return call;
 }
 
@@ -652,21 +861,91 @@ export function planDeadlineCall(league: League): DeadlineCall {
  */
 export function callsDaily(league: League) {
   if (league.fired) return;
+  // (a trade made from a call's look answers it for good)
+  if (league.callLook && dealt(league, league.callLook.id)) settleCall(league, league.callLook.id);
   weekDaily(league);
   skidDaily(league);
   ageInjuries(league);
+  firstSlump(league);
   if (!deadlineOpen(league) || league.deadlineCall?.season === league.season) return;
   league.deadlineCall = planDeadlineCall(league);
 }
 
-/** A star's injury card left unanswered for INJURY_AGE of his games: the staff rides it out (his minutes are spread meanwhile), and says so. */
+/**
+ * A star's injury card left unanswered for INJURY_AGE of his games: the staff rides it out (his
+ * minutes are spread meanwhile), and says so; one that never opened (nothing to choose: see staffCalls)
+ * was the staff's to make all along, and is said that way.
+ */
 function ageInjuries(league: League) {
   if (league.phase !== 'regular' && league.phase !== 'playin' && league.phase !== 'playoffs') return;
+  let shown: Set<string> | null = null;
   for (const { p, id } of hurtStars(league)) {
     if (settled(league, id) || p.injury!.gamesTotal - p.injury!.gamesRemaining < INJURY_AGE) continue;
+    // (read before the first is settled: a card with a real choice in it is one Needs you showed)
+    shown ??= new Set(staffCalls(league, { skipWeek: true }).map((c) => c.id));
+    const looked = league.callLook?.id === id;
     settleCall(league, id);
-    notePick(league, `${playerName(p)} out: the card went unanswered for ${INJURY_AGE} games, so the staff rode it out.`);
+    notePick(
+      league,
+      shown.has(id)
+        ? `${playerName(p)} out: ${looked ? 'no deal came of the look for a trade' : `the card went unanswered for ${INJURY_AGE} games`}, so the staff rode it out.`
+        : `${playerName(p)} out: the staff spread his minutes (nothing else to choose).`,
+    );
   }
+}
+
+/** A user's first season: the record that makes a start a slump the staff explains (at least this many games under .500), and the games it's read over. */
+export const SLUMP_UNDER = 3;
+export const SLUMP_GAMES: readonly [number, number] = [5, 20];
+
+/**
+ * The first slump of a user's first season (SLUMP_UNDER games under .500 within SLUMP_GAMES), once:
+ * one plain line from the staff that pulls apart what the box scores put down to luck (shots falling
+ * below their looks), the games his best players missed, and the rest (the matchups and the roster:
+ * what a plan can change), with the wins the forecast, which counts all of it, still has him at.
+ * The staff's read, in the digest.
+ */
+function firstSlump(league: League) {
+  if (league.phase !== 'regular' || league.season !== league.startSeason) return;
+  const id = `slump:${league.season}`;
+  const ts = league.teams[league.userTid].seasons.find((x) => x.season === league.season);
+  const gp = ts ? ts.won + ts.lost : 0;
+  if (!ts || settled(league, id) || gp < SLUMP_GAMES[0] || gp > SLUMP_GAMES[1] || ts.lost - ts.won < SLUMP_UNDER) return;
+  settleCall(league, id);
+  const me = league.userTid;
+  const res = lastResults(league, gp);
+  if (!res.length) return;
+  const margin = res.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / res.length;
+  const luck = res.reduce((a, r) => a + (buildGameReport(league, r)?.factors ?? []).filter((f) => f.luck).reduce((b, f) => b + f.pts, 0), 0) / res.length;
+  // the games his rotation (his eight best as the roster stands) sat out hurt
+  const best = new Set(
+    standardRoster(league, me)
+      .sort((x, y) => y.ovr - x.ovr || x.pid - y.pid)
+      .slice(0, 8)
+      .map((p) => p.pid),
+  );
+  const out = new Map<number, number>();
+  for (const r of res)
+    for (const b of (r.home.tid === me ? r.home : r.away).players) if (best.has(b.pid) && b.dnp?.startsWith('Injured')) out.set(b.pid, (out.get(b.pid) ?? 0) + 1);
+  const missed = [...out.entries()].sort((x, y) => y[1] - x[1] || x[0] - y[0]);
+  const names = missed.slice(0, 3).map(([pid]) => playerName(league.players[pid]));
+  const hurt = missed.length
+    ? `${names.join(missed.length > 3 ? ', ' : ' and ')}${missed.length > 3 ? ' and others' : ''} ${missed.length > 1 ? 'have' : 'has'} missed ${plural(
+        missed.reduce((a, x) => a + x[1], 0),
+        'game',
+      )} hurt${missed.length > 1 ? ' between them' : ''}`
+    : 'none of your rotation has missed a game hurt';
+  // (what the luck doesn't account for: the roster, the matchups and the games missed)
+  const rest = margin - Math.min(0, luck);
+  const fc = leagueForecast(league)?.teams[me];
+  notePick(
+    league,
+    `${ts.won}-${ts.lost}, as the staff reads it: ${margin < 0 ? `outscored by ${(-margin).toFixed(1)} a game` : `even on points (${signed(margin)} a game), the close ones gone the other way`}. ${
+      luck <= -1 ? `About ${(-luck).toFixed(1)} a game of it is shots that didn't fall (luck, not the plan)` : 'The shots fell about as their looks were worth: not luck'
+    }; ${hurt}; ${rest < -1 ? `the other ${(-rest).toFixed(1)} a game is the roster and the matchups, injuries included: that's what a plan or a move can change` : 'the rest is about even'}.${
+      fc ? ` The forecast, which counts all of it, has you at about ${Math.round(fc.w)} wins.` : ''
+    }`,
+  );
 }
 
 // ---------------------------------------------------------------- the staff's own picks
@@ -700,7 +979,8 @@ export function callsDecide(league: League) {
   const sw = s && sg && league.callWorth?.[skidId(s)];
   if (s && sg && sw && sw.gid === sg.gid) {
     const items = sw.items ?? [];
-    for (const it of items) setPlanItem(league, s.opp, it);
+    // (the staff's own picks: not a plan of his, as the guide counts them)
+    for (const it of items) setPlanItem(league, s.opp, { ...it, staff: true });
     s.put = items.length
       ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${gameText(league, sg)}, measured.`
       : `Nothing the staff measured for ${gameText(league, sg)} beats your plan.`;
@@ -710,7 +990,7 @@ export function callsDecide(league: League) {
   const bw = b && !settled(league, b.id) ? league.callWorth?.[b.id] : undefined;
   if (b && bw && bw.gid === b.g.gid) {
     const items = bw.items ?? [];
-    for (const it of items) setPlanItem(league, b.opp, it);
+    for (const it of items) setPlanItem(league, b.opp, { ...it, staff: true });
     settleCall(league, b.id);
     const games = league.games.filter((r) => r.season === league.season && r.type === 'playoffs' && r.seriesId === b.series.id);
     const diag = slideDiagnosis(league, games);
@@ -767,7 +1047,12 @@ export type CallAction =
   /** The week's practice: the side of its card whose first focus is `focus` (it comes out at the week's end: see weekCall.ts). */
   | { kind: 'weekPrep'; id: string; focus: PrepFocus }
   /** The week's card on the young players: the staff's rotation leans to them (see youthLean.ts). */
-  | { kind: 'youthLean'; id: string };
+  | { kind: 'youthLean'; id: string }
+  /**
+   * A look for a trade on the screen `to` opens (Trade → Find filtered for the need, or the trading
+   * block): the call stays open until a trade of his from it on (see dealt), or his other answer.
+   */
+  | { kind: 'look'; id: string };
 
 export interface CallChoice {
   label: string;
@@ -777,6 +1062,25 @@ export interface CallChoice {
   blocked?: string;
   tone?: 'good' | 'bad';
   confirm?: string;
+}
+
+/** The OVR of the user's fifth best: the bar a player bought has to clear. */
+const fifthBest = (league: League) => [...standardRoster(league, league.userTid)].sort((a, b) => b.ovr - a.ovr)[4]?.ovr ?? 0;
+
+/**
+ * A look on Trade → Find for a player over `minOvr` (at `pos`) whose salary the user can take back
+ * now, labelled `label`: only while deals can be made and someone there fits (a blank builder, or a
+ * list with nobody on it, isn't a choice). It doesn't settle its call: a trade of his from it on does.
+ */
+function findLook(league: League, id: string, label: string, minOvr: number, pos?: Pos): CallChoice | null {
+  if (tradingClosedReason(league)) return null;
+  const found = filterTargets(tradeTargets(league), { pos, minOvr, maxSalary: maxTakeBack(league, league.userTid) });
+  return found.length ? { label, action: { kind: 'look', id }, to: `/office/trade?tab=find${pos ? `&pos=${pos}` : ''}&minOvr=${minOvr}` } : null;
+}
+
+/** A look at what the trading block brings for `p` (the screen asks every team): only while deals can be made. */
+function blockLook(league: League, id: string, label: string, p: Player | undefined): CallChoice | null {
+  return p && !tradingClosedReason(league) ? { label, action: { kind: 'look', id }, to: `/office/trade?give=${p.pid}` } : null;
 }
 
 /** The best free agent who'd take a 10-day contract now, for cover (null when none can be signed). */
@@ -798,11 +1102,11 @@ function countersFor(league: League, key: string, opp: number, g: ScheduledGame,
   return { measure: { kind: 'counters', key, opp, gid: g.gid, sig, max }, worth: w && w.gid === g.gid && w.sig === sig ? w : null };
 }
 
-/** The user's next game from today (any opponent). */
-function nextGame(league: League): ScheduledGame | undefined {
+/** The user's next game from today (any opponent but `not`). */
+function nextGame(league: League, not?: number): ScheduledGame | undefined {
   const me = league.userTid;
   return league.schedule
-    .filter((g) => !g.played && g.day >= league.day && g.type !== 'allstar' && (g.home === me || g.away === me))
+    .filter((g) => !g.played && g.day >= league.day && g.type !== 'allstar' && (g.home === me || g.away === me) && g.home !== not && g.away !== not)
     .reduce<ScheduledGame | undefined>((a, g) => (!a || g.day < a.day || (g.day === a.day && g.gid < a.gid) ? g : a), undefined);
 }
 
@@ -899,10 +1203,13 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const cover = missed && any && (!young || playerAge(any, league.season) <= YOUNG_COVER) ? any : null;
     const manual = team.rotation.manual;
     const out = p.injury!.gamesRemaining;
-    // a trade for cover is a real answer to a long absence while deals can still be made
-    const trade = out >= TRADE_OUT && league.phase === 'regular' && league.day <= league.tradeDeadlineDay;
+    // a trade for cover is a real answer to a long absence while deals can still be made, for a star
+    // measured as a real loss: a look on Find at his position, better than the fifth best, salary he can take back
+    const look =
+      out >= TRADE_OUT && missed && league.phase === 'regular' && league.day <= league.tradeDeadlineDay
+        ? findLook(league, id, 'Look for a trade', fifthBest(league) + 1, p.pos)
+        : null;
     const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
-    const look: CallChoice = { label: 'Look for a trade', action: { kind: 'settle', id }, to: '/office/trade' };
     const suggestion: CallChoice = cover
       ? { label: `Sign ${playerName(cover)} to a 10-day`, action: { kind: 'tenDay', id, pid: cover.pid }, confirm: `${cover.pos} · ${cover.ovr} OVR, for ten days at the minimum.` }
       : manual
@@ -944,12 +1251,12 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
               ? `The staff's call: ride it out; the team measures about as well without him. ${to || 'His minutes go to the healthy players'}.`
               : young && any
                 ? `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}: a veteran on a 10-day would only take them from the young players.`
-                : `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}; a trade is the other way.`),
+                : `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}${look ? `; a trade is the other way (Find: a ${p.pos} better than your fifth best whose salary you can take back)` : ''}.`),
       tone: 'bad',
-      to: trade ? '/office/trade' : '/team',
+      to: look?.to ?? '/team',
       pids: [p.pid],
       suggestion,
-      choices: [...(suggestion === ride ? [] : [ride]), ...(trade ? [look] : [])],
+      choices: [...(suggestion === ride ? [] : [ride]), ...(look ? [look] : [])],
       ...(measure ? { measure } : {}),
     });
   }
@@ -966,19 +1273,25 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     };
     const push: CallChoice = { label: 'Keep pushing', action: { kind: 'settle', id } };
     // (with the rebuild off the table, the answer is still buy or sell before the deadline)
-    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: '/office/trade' };
+    const look = findLook(league, id, 'Look for a deal', fifthBest(league) + 1);
+    // the lean: whichever answer leaves his standing higher, as the forecast reads the season
+    const st = blocked ? null : concedeStanding(league);
+    const tell = !!st && st.concede > st.push;
+    const read = st
+      ? `Pushing on: ${standingPts(st.push)} to your standing with him, the forecast's read (${pct(st.reach)} to reach his goal); telling him now: ${standingPts(st.concede)} at once, and a season on his rebuild clock. `
+      : '';
     cards.push({
       id,
       kind: 'odds',
       title: `Postseason odds down to ${oddsText(odds.now)}`,
       line: blocked
         ? `The staff's call: keep pushing. ${blocked}`
-        : "The staff's call: tell the owner now, play the young players and sell veterans before the deadline, rather than miss his playoff goal.",
+        : `${read}The staff's call: ${tell ? 'tell the owner now, play the young players and sell veterans before the deadline' : 'keep pushing: missing his goal costs you less than telling him'}.`,
       tone: 'warn',
       to: '/office/owner',
       due: byDeadline,
       dueDay: league.tradeDeadlineDay,
-      ...(blocked ? { suggestion: push, choices: [look] } : { suggestion: concede, choices: [push] }),
+      ...(blocked ? { suggestion: push, choices: look ? [look] : [] } : tell ? { suggestion: concede, choices: [push] } : { suggestion: push, choices: [concede] }),
     });
   }
 
@@ -987,13 +1300,21 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const id = floorId(league);
     const blocked = easeFloorBlockedReason(league);
     const og = currentGoals(league)!;
-    const chase: CallChoice = { label: 'Chase the floor', action: { kind: 'settle', id }, to: '/office/trade' };
+    // (a buy before the deadline: Find, better than the fifth best; with nobody to find, the call is the development year or nothing)
+    const chase = findLook(league, id, 'Chase the floor', fifthBest(league) + 1);
     const ease: CallChoice = {
       label: "Tell him it's a development year",
       action: { kind: 'easeFloor', id },
       blocked: blocked ?? undefined,
       confirm: `His floor drops to ${Math.ceil(Math.max(0, og.floor! - FLOOR_EASE) * og.games)} wins, part of the win goal becomes minutes for the young players, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points.`,
     };
+    // the lean: whichever answer leaves his standing higher at the review, as the forecast reads the season
+    const st = blocked ? null : floorStanding(league);
+    const tell = !!st && st.ease > st.chase;
+    const play: CallChoice = { label: 'Play it out', action: { kind: 'settle', id } };
+    const read = st
+      ? `Chasing it: ${standingPts(st.chase)} to your standing at his review; a development year: ${standingPts(st.ease)}, its cost included (the forecast's read: about ${st.wins} wins either way). `
+      : '';
     cards.push({
       id,
       kind: 'floor',
@@ -1001,13 +1322,19 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       line: `Under ${floor.floorWins} wins he calls it a failed season, whatever else goes right. ${
         blocked
           ? `The staff's call: chase it before the deadline. ${blocked}`
-          : "The staff's call: decide now. Buy before the deadline to clear it, or tell him it's a development year and play the young players for the lottery."
+          : `${read}The staff's call: ${
+              tell
+                ? "tell him it's a development year and play the young players for the lottery"
+                : chase
+                  ? 'chase it: buy before the deadline to clear it'
+                  : 'play it out: nobody the staff can find on the market clears it'
+            }.`
       }`,
       tone: 'warn',
       to: '/office/owner',
       due: byDeadline,
       dueDay: league.tradeDeadlineDay,
-      ...(blocked ? { suggestion: chase } : { suggestion: chase, choices: [ease] }),
+      ...(blocked ? (chase ? { suggestion: chase } : {}) : tell ? { suggestion: ease, choices: chase ? [chase] : [play] } : { suggestion: chase ?? play, choices: [ease] }),
     });
   }
 
@@ -1024,22 +1351,54 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     // with no deal found, the need the staff was looking for: a player better than the fifth best
     // to buy (Trade → Find), the veteran a contender would pay most for to sell (the trading block)
     const roster = standardRoster(league, me);
-    const bar = [...roster].sort((x, y) => y.ovr - x.ovr)[4]?.ovr ?? 0;
+    const bar = fifthBest(league);
     const vet = roster.filter((p) => playerAge(p, league.season) >= 28 && p.ovr >= 70).sort((x, y) => tradeValue(league, y) - tradeValue(league, x) || x.pid - y.pid)[0];
-    const lookTo = call?.mode === 'buy' ? `/office/trade?tab=find&minOvr=${bar + 1}` : call?.mode === 'sell' && vet ? `/office/trade?give=${vet.pid}` : '/office/trade';
-    const look: CallChoice = { label: 'Look for a deal', action: { kind: 'settle', id }, to: lookTo };
+    const look = call?.mode === 'buy' ? findLook(league, id, 'Look for a deal', bar + 1) : call?.mode === 'sell' ? blockLook(league, id, 'Look for a deal', vet) : null;
     const none =
       call?.mode === 'buy'
-        ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one; Find lists who's out there.`
+        ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one${look ? "; Find lists who's out there" : ''}.`
         : call?.mode === 'sell'
-          ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet; the trading block shows who would.`
+          ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet${look ? '; the trading block shows who would' : ''}.`
           : 'stand pat. The team is where it is.';
+    // the deal's numbers: its worth a game measured on his next game against someone else (once, as
+    // its card opens), what the forecast reads it adds to the odds, what the players coming cost, and
+    // what it does to the owner's money and youth goals
+    const g = offer ? nextGame(league, offer.b.tid) : undefined;
+    const opp = g && (g.home === me ? g.away : g.home);
+    const worth = offer ? (league.callWorth?.[id] ?? null) : null;
+    const measure: CallMeasure | undefined =
+      offer && g && opp !== undefined && !worth
+        ? { kind: 'change', key: id, opp, gid: g.gid, sig: worthSig(league, opp, g, `deal:${offer.a.pids.join(',')}:${offer.b.pids.join(',')}`), ...dealChange(league, offer) }
+        : undefined;
+    const on = worth && league.schedule.find((x) => x.gid === worth.gid);
+    const games = gamesLeft(league);
+    const pts = worth?.pts;
+    const measured =
+      pts !== undefined && on
+        ? `With the deal: ${worthWords(pts)} (measured ${vsAt(league, on)})${Math.abs(pts) >= WORTH_MIN && games ? `, about ${signed(winsOf(pts, games))} wins over the ${games} games left` : ''}${
+            now && call?.oddsGain !== undefined && !now.clinched
+              ? `; postseason odds about ${pct(Math.min(1, Math.max(0, now.reach[0] + call.oddsGain / 1000)))} with it (the forecast's read)`
+              : ''
+          }. `
+        : offer
+          ? 'The staff is measuring the deal. '
+          : '';
+    const costs = offer ? offer.b.pids.map((pid) => contractText(league, league.players[pid])).join('; ') : '';
+    const goals = offer
+      ? dealGoals(league, offer)
+          .filter((d) => Math.abs(d.with - d.now) >= (d.kind === 'youth' ? 50 : 100))
+          .map(dealGoalText)
+          .join('; ')
+      : '';
+    const numbers = `${measured}${costs ? `${costs}. ` : ''}${goals ? `The owner's goals: ${goals}.` : ''}`.trim();
+    // a buy is the call only once it measures as a gain: one too close to say, or a cost, is his to take, not the staff's
+    const flat = call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
     const deal: CallChoice | null =
       offer && other
         ? {
             label: call!.mode === 'buy' ? `Trade for ${playerName(league.players[offer.b.pids[0]])}` : `Sell to ${other.abbrev}`,
             action: { kind: 'trade', id, offer },
-            confirm: `You send ${assetText(league, offer.a)}; the ${other.name} send ${assetText(league, offer.b)}.`,
+            confirm: `You send ${assetText(league, offer.a)}; the ${other.name} send ${assetText(league, offer.b)}. ${numbers}`.trim(),
           }
         : null;
     cards.push({
@@ -1048,12 +1407,13 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       title: left === 0 ? 'Trade deadline: today' : `Trade deadline in ${plural(left, 'day')}`,
       line:
         deal && other
-          ? `${odds}The staff's call: ${call!.mode === 'buy' ? 'buy' : 'sell'}. ${assetText(league, offer!.b)} from the ${other.name} for ${assetText(league, offer!.a)}.`
+          ? `${odds}The staff's call: ${flat ? "stand pat; the best buy it found doesn't measure as a gain" : call!.mode === 'buy' ? 'buy' : 'sell'}. ${assetText(league, offer!.b)} from the ${other.name} for ${assetText(league, offer!.a)}. ${numbers}`.trim()
           : `${odds}The staff's call: ${none}`,
       tone: 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
-      ...(deal ? { suggestion: deal, choices: [stand] } : { suggestion: stand, choices: [look] }),
+      ...(deal ? (flat ? { suggestion: stand, choices: [deal] } : { suggestion: deal, choices: [stand] }) : { suggestion: stand, choices: look ? [look] : [] }),
+      ...(measure ? { measure } : {}),
     });
   }
 
@@ -1080,7 +1440,17 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       save > 0 ? { label: 'Cut the budgets', action: { kind: 'budgetCut', id }, confirm: `Coaching, health and facilities go to the league standard (${FROZEN_BUDGET}).` } : null;
     // (no second tap: a price can be changed back on Finances)
     const price: CallChoice | null = ticket ? { label: `Price tickets at $${ticket.price}`, action: { kind: 'ticketPrice', id, price: ticket.price } } : null;
-    const shed: CallChoice | null = tradingClosedReason(league) ? null : { label: 'Shed salary', action: { kind: 'settle', id }, to: '/office/trade' };
+    // (salary out: the trading block for his biggest contract outside his two most valuable players)
+    const core = new Set(
+      [...standardRoster(league, me)]
+        .sort((x, y) => tradeValue(league, y) - tradeValue(league, x))
+        .slice(0, 2)
+        .map((x) => x.pid),
+    );
+    const dump = standardRoster(league, me)
+      .filter((x) => !core.has(x.pid))
+      .sort((x, y) => salaryFor(y, league.season) - salaryFor(x, league.season) || x.pid - y.pid)[0];
+    const shed = blockLook(league, id, 'Shed salary', dump);
     const noted: CallChoice = { label: 'Not now', action: { kind: 'settle', id } };
     // the staff's call: whichever of the budgets and the tickets brings more, else salary out
     const levers = [
@@ -1139,15 +1509,25 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
   const skid = skidOpen(league);
   if (skidCard(league, skid) && open.has(skidId(skid))) {
     const id = skidId(skid);
+    // the call follows what's behind it: shots that didn't fall ride it out (a trade doesn't fix luck);
+    // the matchups, the looks, a star out, a trade (the measured counters are in already)
+    const look = findLook(league, id, 'Look for a trade', fifthBest(league) + 1);
+    const ride: CallChoice = { label: 'Ride it out', action: { kind: 'settle', id } };
+    const deals = `Deals until ${fmtDate(league.season, league.tradeDeadlineDay)}.`;
     cards.push({
       id,
       kind: 'skid',
       title: skidTitle(skid),
-      line: `${skid.diag ? `${skid.diag} ` : ''}${skid.put} The staff's call: look for a trade; counters alone haven't turned it. Deals until ${fmtDate(league.season, league.tradeDeadlineDay)}.`,
+      line: `${skid.diag ? `${skid.diag} ` : ''}${skid.put} The staff's call: ${
+        skid.luck
+          ? `ride it out; the box scores say the shots will come back, and a trade doesn't change that.${look ? ` ${deals}` : ''}`
+          : look
+            ? `look for a trade; counters alone haven't turned it. ${deals}`
+            : 'ride it out; nobody the staff can find on the market is a fix.'
+      }`,
       tone: 'warn',
       to: `/games/${skid.opp}?tab=plan`,
-      suggestion: { label: 'Look for a trade', action: { kind: 'settle', id }, to: '/office/trade' },
-      choices: [{ label: 'Ride it out', action: { kind: 'settle', id } }],
+      ...(skid.luck || !look ? { suggestion: ride, choices: look ? [look] : [] } : { suggestion: look, choices: [ride] }),
     });
   }
 
@@ -1155,8 +1535,9 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
   const week = opts.skipWeek ? null : weekCard(league);
   if (week && open.has(week.id)) cards.push(week);
 
-  // a call is a choice: one whose only answer is to carry on isn't opened (one measuring its choice is, meanwhile)
-  return cards.filter((c) => c.measuring || [c.suggestion, ...(c.choices ?? [])].some((x) => x && !x.blocked && (x.action.kind !== 'settle' || x.to)));
+  // a call is a choice: one whose only answer is to carry on isn't opened (one measuring its choice is,
+  // meanwhile), nor is one whose other answer is a bare link (a look counts only where there's someone to find: see findLook)
+  return cards.filter((c) => c.measuring || [c.suggestion, ...(c.choices ?? [])].some((x) => x && !x.blocked && x.action.kind !== 'settle'));
 }
 
 /** Carry out a call's choice (resolveAgenda passes it here); the card is settled when it goes through. */
@@ -1170,6 +1551,10 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
       break;
     case 'open':
       // (nothing settled: the answer is made on the screen it opens)
+      return { ok: true, text: '' };
+    case 'look':
+      // (nothing settled: a trade made from here on does, see dealt; the id logTxn gives the next one)
+      league.callLook = { id: a.id, txn: league.nextTxnId ?? (league.transactions?.length ? league.transactions[league.transactions.length - 1].id + 1 : 1) };
       return { ok: true, text: '' };
     case 'staffPlan': {
       const abbrev = league.teams[a.opp].abbrev;

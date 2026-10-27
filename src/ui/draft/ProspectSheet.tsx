@@ -7,6 +7,7 @@ import { DRAFT_PROSPECT } from '../../core/types';
 import { fmtDate, playerName } from '../../core/league/helpers';
 import { SCOUT_SLOTS, combineIn, scoutDays, scoutList, seenRange, toggleScout } from '../../core/league/prospects';
 import { fmtHeight } from '../../core/ratings';
+import { keepFigures } from '../../core/format';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -45,9 +46,7 @@ function StaffRead({ league, p }: { league: League; p: Player }) {
   const status = me ? (me.auto ? "The staff's scouts are on him, near your pick" : 'Your scouts are on him') : days ? 'No scout on him now' : 'Not scouted yet';
   return (
     <div className="dn-scout">
-      <div className="fo-meta">
-        Staff read: OVR {r.ovrLo}-{r.ovrHi} · POT {r.potLo}-{r.potHi}
-      </div>
+      <div className="fo-meta">Staff read: {keepFigures(`OVR ${r.ovrLo}-${r.ovrHi} · POT ${r.potLo}-${r.potHi}`)}</div>
       <div className="tiny dim">
         {status}
         {days ? ` · ${days} ${days === 1 ? 'day' : 'days'} watched` : ''}. The more they watch, the narrower the range.
@@ -88,9 +87,9 @@ export function ProspectSheet({ pid, onClose, canDraft, onDraft }: { pid: number
               <div className="fo-prospect-first">{p.firstName}</div>
               <h2 className="fo-prospect-last">{p.lastName}</h2>
             </div>
-            <div className="fo-prospect-r">
+            <div className={`fo-prospect-r${r ? ' staff-read' : ''}`}>
               <Ovr v={r ? r.ovr : p.ovr} size="lg" />
-              <span className="pot">POT {r ? (r.potLo === r.potHi ? r.pot : `${r.potLo}-${r.potHi}`) : p.pot}</span>
+              <span className="pot">POT {r ? (r.potLo === r.potHi ? r.pot : keepFigures(`${r.potLo}-${r.potHi}`)) : p.pot}</span>
             </div>
           </div>
           <div className="fo-meta fo-wrap">

@@ -32,7 +32,7 @@ export function useStaffCall() {
   /** The measurement in flight: its id, how much its stop weighs (a period's end most), and the possession it started at. */
   const run = useRef<{ id: number; prio: number; steps: number } | null>(null);
   const changeRun = useRef(0);
-  /** Changes the coach turned down, by draft id, with the possession he did. */
+  /** Changes the coach turned down (with ×, or by leaving the call up to the next stop), by draft id, with the possession he did. */
   const declined = useRef(new Map<string, number>());
 
   /**
@@ -44,6 +44,9 @@ export function useStaffCall() {
     if (cur && (cur.prio > prio || (cur.prio === prio && lg.steps - cur.steps < MEASURE_HOLD))) return;
     if (cur) cancelLive(cur.id);
     run.current = null;
+    // a call still up at the next stop went untaken: it's turned down as × would (no banner for it stop after stop)
+    const up = callRef.current;
+    if (up?.state === 'call') declined.current.set(up.draft.id, lg.steps);
     const at = spotLabel(lg.sim.q, lg.sim.clock);
     // (a decided game has nothing to call; the period's last seconds leave the call up as it was)
     const quiet = callQuiet(lg.sim, lg.edge);

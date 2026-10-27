@@ -9,23 +9,27 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import { GRACE, ULTIMATUM_ODDS, seasonWeight, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
+import { GRACE, ULTIMATUM_ODDS, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { preset } from '../../core/league/difficulty';
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
   CONCEDE_COST,
+  FLOOR_EASE,
   FLOOR_GRADE,
   FLOOR_MARGIN,
+  HOLD_OVER_READ,
   ON_TRACK,
   PAY_RAISE,
   PATIENCE_STEP,
   PAYROLL_SCALE,
   personalityLine,
   POSTSEASON,
+  POSTSEASON_ODDS,
   PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
   WIN_SCALE,
+  WIN_SLIDE,
   YOUNG_AGE,
   YOUTH_TOP,
   currentGoals,
@@ -45,7 +49,7 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { Bar, More, PageHeader, Section, Tag } from '../components/ui';
 import { CenterBar, HelpSheet, fmtGrade } from './common';
 import './office.css';
-import { money } from '../../core/format';
+import { keepFigures, money } from '../../core/format';
 
 export default function Owner() {
   const league = useLeague();
@@ -143,7 +147,8 @@ export default function Owner() {
           )}
           {shown.from && !review && (
             <div className="tiny dim">
-              Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? `games after ${shown.from.won}-${shown.from.lost}` : 'rest of the season'} count.
+              Set when you took over: only the {shown.from.won + shown.from.lost > 0 ? keepFigures(`games after ${shown.from.won}-${shown.from.lost}`) : 'rest of the season'}{' '}
+              count.
             </div>
           )}
           {/* his reasons: what he pays for, the rebuild clock, the floor */}
@@ -311,6 +316,9 @@ function SeatMeter({ score }: { score: number }) {
       <span className="fo-meterbar-mid">
         <span>50: goals met</span>
       </span>
+      {/* the two ends named in the ladder's words, so the zones read without their colours (the hot seat is hatched too) */}
+      <span className="fo-meterbar-end lo">{seatHeat(0).label}</span>
+      <span className="fo-meterbar-end hi">{seatHeat(100).label}</span>
       <span className="fo-meterbar-pin" style={{ left: `${Math.max(1, Math.min(99, score))}%` }} />
     </div>
   );
@@ -346,6 +354,7 @@ const HELD = {
   floor: 'Under his floor: nothing else could lift this grade.',
   patience: 'Past his rebuild allowance and out of the postseason: nothing else could lift this grade.',
   books: 'The books closed in the red under the freeze: no result, a title included, could lift this grade past that.',
+  debt: "The books closed past his debt limit: a title couldn't lift this grade.",
 } as const;
 
 const redOrBlack = (x: number) => `${money(Math.abs(x))} in the ${x < 0 ? 'red' : 'black'}`;
@@ -410,7 +419,7 @@ function GradingHelp({ league }: { league: League }) {
     { k: 'Postseason', how: 'Reaching his goal is +30 and each round beyond it 30 more; each round short costs 35 (the play-in counts as one).' },
     {
       k: 'Profit',
-      how: `Every ${money((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${money(PROFIT_SCALE * scale)}).`,
+      how: `Every ${money((PROFIT_SCALE * scale) / 10)} above or below his target counts 10 (±100 at ${money(PROFIT_SCALE * scale)}). What staff and facilities budgets under the league standard save doesn't count.`,
     },
     {
       k: 'Payroll',
@@ -424,9 +433,9 @@ function GradingHelp({ league }: { league: League }) {
   return (
     <HelpSheet title="How the owner judges you">
       <p>
-        On opening night he sets three or four goals from your roster: a win total (his read of the roster is the season forecast&apos;s), a postseason goal (or, for a rebuild,
-        minutes for the young players) and a money goal (a profit target from the league&apos;s standard ticket price and budgets). After the playoffs each is graded from −100 to
-        +100; their weights make the season&apos;s grade.
+        On opening night he sets three or four goals from your roster: a win total (his read of the roster is the season forecast&apos;s), a postseason goal (never a round the
+        forecast gives less than a {Math.round(POSTSEASON_ODDS * 100)}% chance; for a rebuild, minutes for the young players instead) and a money goal (a profit target from the
+        league&apos;s standard ticket price and budgets). After the playoffs each is graded from −100 to +100; their weights make the season&apos;s grade.
       </p>
       {rows.map((r) => (
         <p key={r.k}>
@@ -447,8 +456,9 @@ function GradingHelp({ league }: { league: League }) {
       </p>
       <p>
         <b>Payroll and the floor.</b> After your first season, a payroll of your own in the league&apos;s top half raises the win target toward what a team paid like it should win,
-        by {PAY_RAISE} wins at most. Whatever the plan, under a .{Math.round(preset(league).winFloor * 1000)} pace is a failed season (never closer than {FLOOR_MARGIN} wins under
-        his read): it grades Poor or worse, whatever else went right.
+        by {PAY_RAISE} wins at most. Outside a rebuild the target falls at most {WIN_SLIDE} wins a season under last season&apos;s, but never sits more than {HOLD_OVER_READ} over
+        his read. Whatever the plan, under a .{Math.round(preset(league).winFloor * 1000)} pace is a failed season (never closer than {FLOOR_MARGIN} wins under his read): it grades
+        Poor or worse, whatever else went right.
       </p>
       <p>
         <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row without the postseason (a
@@ -456,14 +466,16 @@ function GradingHelp({ league }: { league: League }) {
         season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best, {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the
         postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you{' '}
         {Math.round(CONCEDE_COST * 100)} points of standing, counts as one, and the postseason goal&apos;s weight goes to the young players&apos; minutes, where it can spare you
-        the miss but earns nothing on top.
+        the miss but earns nothing on top. Heading under his floor, you can tell him it&apos;s a development year: the floor drops {Math.round(FLOOR_EASE * 82)} wins for the same
+        cost, and part of the win goal goes to the young players&apos; minutes, still graded on the win goal&apos;s miss.
       </p>
       <p>
         <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash, and he judges it the day the regular season&apos;s books close, tax paid: the playoff
         gates come after, his bonus rather than your cover. Heading into the red in the three weeks before the deadline, he warns you. Closed in the red at the review: an
         ultimatum; at the next, he freezes the budget: minimum deals only, no raises, no trade that takes on salary, the staff budgets at the league standard. A frozen season
         closed in the red grades {fmtGrade(FREEZE_GRADE)} at best, a title or not; deeper in the red than the season before, a final warning ({fmtGrade(BLEED_GRADE)} at best), and
-        deeper again (or deeper at all past {money(DEBT_LIMIT * scale)} in the red) gets you fired.
+        deeper again gets you fired. Past {money(DEBT_LIMIT * scale)} in the red no title lifts a season&apos;s grade; a close past it and deeper than the season before goes
+        straight to the freeze, and under the freeze it gets you fired.
       </p>
       <p>
         A win-now owner weighs the playoffs more and lets a contender pay some tax (up to the first apron); a builder cares about the young players; a frugal one wants more profit.

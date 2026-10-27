@@ -2,9 +2,9 @@
 // top six or the play-in), reach each round and win the title, and a lottery team's chances at the
 // top picks. The rest of the season is played out many times, game by game on the real schedule,
 // from each team's strength as the pre-game projection reads it (projection.ts: this season's net
-// rating regressed toward what its roster is worth, here counting injured players for the games
-// they'll be back for), with the strength itself uncertain (more so early in the season), then the
-// play-in, the 2-2-1-1-1 playoffs and the lottery's drawing. It runs on a stream of its own seeded
+// rating regressed toward what its roster is worth, worth.ts: its players as the engine plays them,
+// over the games each will be there for), with the strength itself uncertain (more so early in the
+// season), then the play-in, the 2-2-1-1-1 playoffs and the lottery's drawing. It runs on a stream of its own seeded
 // from the league and the day: a pure read of the league, the same on every screen and after a
 // reload, and nothing in it touches the league's random stream or knows how the games will go.
 
@@ -25,9 +25,12 @@ export const TRAIL_SIMS = 250;
 /**
  * Uncertainty in a team's true strength (net points per 100 possessions) before it has played: the
  * talent prior misses a season's final net by about this much. Each game played shrinks it as the
- * blend weighs the games (sd · √(PRIOR_GAMES / (gp + PRIOR_GAMES))).
+ * blend weighs the games (sd · √(PRIOR_GAMES / (gp + PRIOR_GAMES))). At it, opening night's 10th-90th
+ * percentile band held 81-83% of the real league's simulated seasons and 76-82% of fictional leagues',
+ * and the seasons spread as much as the forecast said, within 5% (scripts/forecast-check.ts, two runs
+ * of 16 leagues, October 2026); at 2.5 the real league's first seasons fell in it 85-88% of the time.
  */
-export const STRENGTH_SD = 2.5;
+export const STRENGTH_SD = 2.3;
 /** 2-2-1-1-1 from the higher seed's view, as the playoffs schedule it. */
 const HOME_PATTERN = [true, true, false, false, true, false, true];
 

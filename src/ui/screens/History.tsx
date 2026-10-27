@@ -25,6 +25,7 @@ import { franchiseTitles } from '../../core/league/media/past';
 import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { endText } from '../../core/league/legacyReview';
 import { fmtDate } from '../../core/league/helpers';
+import { keepFigures } from '../../core/format';
 import { KIND_ONE } from '../league/news/kinds';
 import '../league/news/news.css';
 import '../league/legacy.css';
@@ -113,7 +114,7 @@ function Seasons({ league }: { league: League }) {
           fig={franchiseTitles(league, reigning[1]).n > 1 ? franchiseTitles(league, reigning[1]).n : undefined}
           figLabel="titles"
         >
-          {reigning[2] >= 0 ? `def. ${league.teams[reigning[2]].name} ${reigning[3]}-${reigning[4]}` : ''}
+          {reigning[2] >= 0 ? keepFigures(`def. ${league.teams[reigning[2]].name} ${reigning[3]}-${reigning[4]}`) : ''}
           {reigning[5] ? ` · Finals MVP ${reigning[5]}` : ''}
         </TitleSlab>
       )}

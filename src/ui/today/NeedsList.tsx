@@ -64,7 +64,7 @@ export function NeedsSheet({ open, onClose }: { open: boolean; onClose: () => vo
   return (
     <Sheet open={open} onClose={onClose} title="Needs you">
       <div className="col td-bell">
-        {needs.count > 0 ? (
+        {needs.rows > 0 ? (
           <div className="td-needs" role="list" aria-label="Needs you">
             {needRows(league, needs, (m) => nav(`/inbox?m=${m.id}`))}
           </div>

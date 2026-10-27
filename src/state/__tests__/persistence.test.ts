@@ -114,6 +114,14 @@ describe('saves', () => {
       expect(n['put games']).toBe(1);
       vi.restoreAllMocks();
       expect((await loadLeague(l.id))!.games.find((x) => x.gid === g.gid)?.pbp).toBeUndefined();
+      // and one changed after it was saved (the night's moves measured once the final is in)
+      const worth = { pts: 0.5, raw: 0.6, se: 0.9, win: 0.01, winSe: 0.02, n: 120, moves: 2 };
+      g.movesWorth = worth;
+      const m = countWrites();
+      await saveLeague(l);
+      expect(m['put games']).toBe(1);
+      vi.restoreAllMocks();
+      expect((await loadLeague(l.id))!.games.find((x) => x.gid === g.gid)?.movesWorth).toEqual(worth);
       // the season rollover keeps only some results
       const kept = l.games.slice(10);
       l.games = kept;

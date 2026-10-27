@@ -30,6 +30,15 @@ export function budgetCostPerSeason(league: League, level: number) {
   return (5_000 + level * 200) * revenueScale(league);
 }
 
+/** The staff and facilities budgets every AI front office runs (see teamFactory): the league's standard. */
+export const STANDARD_BUDGET = 50;
+
+/** What a team's staff and facilities budgets run under the league's standard a season ($K): savings the owner's profit goal doesn't count. */
+export function budgetsTrimmed(league: League, team: Team): number {
+  const std = budgetCostPerSeason(league, STANDARD_BUDGET);
+  return (['coaching', 'health', 'facilities'] as const).reduce((a, k) => a + Math.max(0, std - budgetCostPerSeason(league, team.budget[k])), 0);
+}
+
 /** Games of a .500 record a team's win% is weighed with for the fans (none played: .500; it counts more as the season goes on). */
 const FAN_RECORD_PRIOR = 10;
 
@@ -120,6 +129,9 @@ export function gameFinances(league: League, team: Team, home: boolean, playoffs
     expenses += pay / 82;
     expenses += (budgetCostPerSeason(league, team.budget.coaching) + budgetCostPerSeason(league, team.budget.health) + budgetCostPerSeason(league, team.budget.facilities)) / 82;
     expenses += (OPERATIONS_PER_SEASON * scale) / 82;
+    // (budgets run under the standard: kept, so the owner's profit goal can leave them out)
+    const trimmed = budgetsTrimmed(league, team) / 82;
+    if (trimmed > 0) ts.trimmed = (ts.trimmed ?? 0) + trimmed;
   }
   ts.revenue += revenue;
   ts.expenses += expenses;

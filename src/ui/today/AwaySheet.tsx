@@ -9,7 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { agenda, CALL_KINDS } from '../../core/league/agenda';
-import { ordinal } from '../../core/format';
+import { keepFigures, ordinal } from '../../core/format';
 import { Avatar, Sheet } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { curTeamSeason } from '../../core/league/helpers';
@@ -96,7 +96,7 @@ function DigestBody({ d }: { d: Digest }) {
               <span className={`num dg-rec-v ${d.record.w > d.record.l ? 'good' : d.record.w < d.record.l ? 'bad' : ''}`}>
                 {d.record.w}-{d.record.l}
               </span>
-              <span className="dg-rec-k">in the stretch · now {`${ts.won}-${ts.lost}`}</span>
+              <span className="dg-rec-k">in the stretch · now {keepFigures(`${ts.won}-${ts.lost}`)}</span>
             </div>
           )}
           <div className="dg-moves">

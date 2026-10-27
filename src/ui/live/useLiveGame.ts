@@ -35,7 +35,7 @@ import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from 
 import { playersBefore } from './LowerThird';
 import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
-import type { SkipTo } from './skip';
+import { simDecided, type SkipTo } from './skip';
 import { FEED_MAX, FF_MS, breakAfter, eventBanner, userSetup, type Panel, type Status } from './session';
 import { stakesOf, useAtmosphere } from './useAtmosphere';
 import { measureTonight } from './tonight';
@@ -736,6 +736,14 @@ export function useLiveGame() {
     huddleNext.current = false;
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
     if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to);
+    // clutch time in a game decided by then has no finish to watch: on to the final
+    const decided = to === 'clutch' && !lg.over && simDecided(lg.sim, lg.edge);
+    if (decided) {
+      const [h, a] = lg.sim.T;
+      const lead = h.score >= a.score ? h : a;
+      useStore.getState().toast(`No clutch time tonight: ${lead.team.abbrev} up ${Math.abs(h.score - a.score)} with ${fmtClock(lg.sim.clock)} left. On to the final.`);
+      lg.simTo('end');
+    }
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     const s = lg.sim;
     if (!lg.over && s.clock <= 0.05 && s.q >= 4 && s.T[0].score !== s.T[1].score) lg.step();

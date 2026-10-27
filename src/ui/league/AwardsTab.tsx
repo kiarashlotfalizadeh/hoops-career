@@ -11,6 +11,7 @@ import { ViewChips } from './Views';
 import { f1, playerSeason } from '../stats';
 import { AllStarSaturday } from './AllStarSaturday';
 import { seasonHonors } from '../../core/league/media';
+import { keepFigures } from '../../core/format';
 import { HonorsList } from './news/Honors';
 import { Poster, PosterSlab, seasonTeam, shortName, statTid, teamAbbrev, teamPath, useQueryParam } from './shared';
 
@@ -259,7 +260,7 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
               <span className="nm ellipsis">{aw.coyCoach ?? (coyTeam.tid === league.userTid ? league.coachName : coyTeam.coach.name)}</span>
               <span className="sub ellipsis">
                 {coyTeam.region} {coyTeam.name}
-                {coyTs ? ` · ${coyTs.won}-${coyTs.lost}` : ''}
+                {coyTs ? keepFigures(` · ${coyTs.won}-${coyTs.lost}`) : ''}
               </span>
             </span>
             <span />
@@ -274,7 +275,9 @@ function MajorAwards({ league, aw }: { league: League; aw: SeasonAwards }) {
           // his night, not his season: the game's figures and its final
           line={
             aw.allStarGame?.mvp
-              ? `${aw.allStarGame.east > aw.allStarGame.west ? 'East' : 'West'} won ${Math.max(aw.allStarGame.east, aw.allStarGame.west)}-${Math.min(aw.allStarGame.east, aw.allStarGame.west)} · ${aw.allStarGame.mvp.pts} PTS · ${aw.allStarGame.mvp.reb} REB`
+              ? keepFigures(
+                  `${aw.allStarGame.east > aw.allStarGame.west ? 'East' : 'West'} won ${Math.max(aw.allStarGame.east, aw.allStarGame.west)}-${Math.min(aw.allStarGame.east, aw.allStarGame.west)} · ${aw.allStarGame.mvp.pts} PTS · ${aw.allStarGame.mvp.reb} REB`,
+                )
               : undefined
           }
         />
@@ -459,7 +462,7 @@ function RaceCard({ league, title, list, kind = 'off', right }: { league: League
                   {/* one line: the team, its record (for the MVP's team success) or his defence, and his scoring; the rest on his page */}
                   <span className="sub ellipsis">
                     {teamAbbrev(league, c.tid)}
-                    {kind === 'off' && ts ? `\u00a0${ts.won}-${ts.lost}` : ''} · {raceLine(c.p, league.season, kind)}
+                    {kind === 'off' && ts ? keepFigures(`\u00a0${ts.won}-${ts.lost}`) : ''} · {raceLine(c.p, league.season, kind)}
                   </span>
                 </span>
                 <span className="lg-race-v num">

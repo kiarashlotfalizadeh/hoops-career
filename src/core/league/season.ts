@@ -150,7 +150,7 @@ function periodic(league: League, rng: Rng) {
   if (d % 7 === 0) {
     for (const t of league.teams) {
       // assistant-managed teams re-fit their playbook to the healthy roster weekly; the user's staff
-      // also acts on what this season's games say a setting costs, and says so
+      // keeps the changes it measured and made (staffLever.ts)
       if (t.tactics.manual) continue;
       if (t.tid !== league.userTid) {
         t.tactics = autoTactics(t, teamPlayers(league, t.tid), true, { sticky: true });

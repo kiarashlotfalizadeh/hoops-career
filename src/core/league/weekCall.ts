@@ -618,7 +618,8 @@ export function weekDecide(league: League) {
   const g = wg && league.schedule.find((x) => x.gid === wg.gid);
   const item = wg && g && !g.played ? kept(league, weekWorthId(wc, 'game', wg.gid), g.gid)?.items?.[0] : undefined;
   if (wg && g && item) {
-    setPlanItem(league, wg.opp, item);
+    // (the staff's own pick: not a plan of his, as the guide counts them)
+    setPlanItem(league, wg.opp, { ...item, staff: true });
     notePick(
       league,
       `${wg.tag ? `${wg.tag} ` : ''}${vsAt(league, g)} ${whenText(league, g.day)}: the staff put in ${item.label}, ${ptsWin(item.pts ?? 0)} against them (measured).`,
@@ -647,8 +648,9 @@ export function weekDecide(league: League) {
     if (yw.pts <= -WORTH_MIN) {
       if (!wc.ask) wc.ask = 'youth';
     } else {
-      putYouth(league, 'auto');
+      // (read before the lean goes in: "without" is the rotation as it was)
       const o = youthOutlook(league, y.add);
+      putYouth(league, 'auto');
       notePick(
         league,
         `The young players: about ${y.add} more minutes a game until ${fmtDate(league.season, league.youthLean!.until)}, for the owner's goal${o ? ` (on pace for ${o.lean.toLocaleString('en-US')} of his ${o.g.target.toLocaleString('en-US')} minutes, ${o.base.toLocaleString('en-US')} without)` : ''}; ${yw.pts >= WORTH_MIN ? `it measured as a gain (${ptsWin(yw.pts, true)})` : `it costs nothing measurable (${ptsWin(yw.pts, true)})`}.`,

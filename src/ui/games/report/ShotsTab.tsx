@@ -2,7 +2,7 @@
 // charts draw it) under one key, with its field goals and how it shot at the rim, from the paint and
 // mid-range, and from three.
 import type { GameResult, League } from '../../../core/types';
-import { madeAtt } from '../../../core/format';
+import { keepFigures, madeAtt } from '../../../core/format';
 import { Section, Statline } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { ShotChart, ShotKey } from '../../components/charts';
@@ -41,7 +41,7 @@ export function ShotsTab({ g, league }: { g: GameResult; league: League }) {
                   <TeamLogo tid={t.tid} size={18} decorative /> {t.name}
                 </h3>
               }
-              right={<span className="small bold num">{madeAtt(made, mine.length)} FG</span>}
+              right={<span className="small bold num">{keepFigures(madeAtt(made, mine.length))} FG</span>}
             >
               <div className="card gv-shots">
                 <ShotChart shots={mine} color={kits[side]} keyed={false} />

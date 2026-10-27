@@ -13,7 +13,7 @@ import type { DefScheme, PnrCoverage, PressMode, Tactics } from '../../core/type
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META } from '../../core/sim/tactics';
 import { zScore } from '../../core/analysis/playTypes';
-import { madeAtt } from '../../core/format';
+import { keepFigures, madeAtt } from '../../core/format';
 import { Section, Segmented, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
@@ -302,7 +302,7 @@ export function PlanView({
                       {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
                     </span>
                     <span className="tiny dim2">
-                      {madeAtt(p.fgm, p.fga)}
+                      {keepFigures(madeAtt(p.fgm, p.fga))}
                       {on ? ` · ${nameOf(on.def)} on him: ${on.pts} on ${on.trips} trips` : ''}
                     </span>
                   </span>

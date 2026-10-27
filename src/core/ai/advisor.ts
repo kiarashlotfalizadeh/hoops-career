@@ -5,11 +5,12 @@ import type { ActionType, DefRole, DefScheme, League, OffRole, OffShape, Player,
 import { OFF_SHAPES, SET_IDS } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
-import { ACTION_META, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, cloneTactics, defRoleOf, isJunk, shapeOf, stopHacking, tacticsDiff } from '../sim/tactics';
+import { ACTION_META, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, cloneTactics, defRoleOf, isJunk, shapeOf, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, autoDefRoles, autoTactics, evaluateLineup, rosterProfile, shapeFits, sustainableMinutes } from './coachAI';
 import { FLUID, PREP_META, famLabel, freshFamiliarity, gamesTo, optValue, optionsOf } from '../sim/familiarity';
 import { systemFamiliarity } from '../league/practice';
-import { defRoleFits, fitStars, roleFits } from '../analysis/system';
+import { defRoleFits, fitStars, roleFits, roleScale, roleStars } from '../analysis/system';
+import { leverCard, withStaffMoves } from '../league/staffLever';
 import { CLASH_META, LINK_META, duoShare, lineupLinks, linksByRole, offRoleOf } from '../sim/links';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
@@ -595,10 +596,8 @@ export interface Alert {
 
 /** Games of this season's trade-offs before the staff reads a pattern into them. */
 const LEVER_GAMES = 8;
-/** Points a game a setting has to give away beyond what it wins back for the staff to want it changed. */
-const LEVER_COST = 0.6;
 
-/** One setting's trade-off over this season's games: what it gave away and won back, a game. */
+/** One setting's trade-off over this season's games, as the engine tallied it: what it gave away and won back, a game. */
 export interface SeasonLever {
   what: string;
   lost: number;
@@ -609,8 +608,12 @@ export interface SeasonLever {
 }
 
 /**
- * Every setting's trade-off over a team's stored games this season (the user's games keep the engine's
- * accounting of both sides of each setting), worst first; empty before LEVER_GAMES games.
+ * The engine's tally of every setting's trade-off over a team's stored games this season (the user's
+ * games keep its accounting of both sides of each setting), worst first; empty before LEVER_GAMES
+ * games. What happened, not a counterfactual: it can read a setting as the worse one where paired
+ * games find it the better (Drop against Switch, round-3 review). So it only orders where the staff
+ * looks for a change, which it then measures (staffLever.ts), and the Season view shows it as the
+ * tally. Nothing decides on it.
  */
 export function seasonLevers(league: League, tid: number): SeasonLever[] {
   const sums = new Map<string, { what: string; lost: number; won: number; key: string }>();
@@ -637,75 +640,19 @@ export function seasonLevers(league: League, tid: number): SeasonLever[] {
 }
 
 /**
- * The user's setting whose trade-off has cost the most this season (its effects against him less
- * what it won back, a game, over his stored games), when it's worth changing and the staff's counter
- * for it changes something: an alert with that counter as its fix.
- */
-function seasonLever(league: League, tid: number): Alert | null {
-  const tactics = league.teams[tid].tactics;
-  for (const e of seasonLevers(league, tid).filter((x) => x.net <= -LEVER_COST)) {
-    const counter = leverCounter(e.what, tactics);
-    if (!counter) continue;
-    const after = cloneTactics(tactics);
-    counter.apply(after);
-    const patch = tacticsDiff(tactics, after);
-    const what = e.what.charAt(0).toUpperCase() + e.what.slice(1);
-    return {
-      id: `lever-${e.what}`,
-      tone: 'alert',
-      title: `${what} is costing you`,
-      body: `It gives up ${e.lost.toFixed(1)} points a game and wins ${e.won.toFixed(1)} back (${e.games} games).`,
-      // (the Instructions phase the change is made in)
-      link: `/team/tactics?tab=instructions${patch.defense ? '&phase=outPoss' : ''}`,
-      fix: { kind: 'patch', patch, label: counter.label },
-    };
-  }
-  return null;
-}
-
-/**
  * The tactics the staff runs for a team it manages (tactics not the user's own): the playbook that
- * fits the roster (autoTactics), with the staff's change to each setting this season's games say is
- * giving away more than it wins back, as the trade-off card names it for the user's own tactics. A
- * change the staff made stays while the setting it moved off still reads as costing half as much, so
- * a week of better games doesn't undo it. Only the user's games keep that accounting: AI teams get autoTactics.
+ * fits the roster (autoTactics), and for the user's team the changes the staff measured as gains in
+ * paired games this season and made, while the playbook and identity they were made on stand
+ * (staffLever.ts: a change made by mail, with Undo). The engine's tally never changes them: it only
+ * says where to measure. AI staffs don't read the tally at all; they run their coach's fit.
  */
 export function staffTactics(league: League, tid: number): Tactics {
   const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), links: tid === league.userTid, user: tid === league.userTid });
-  return t.manual || tid !== league.userTid ? t : seasonAdjust(league, tid, t);
+  return t.manual || tid !== league.userTid ? t : withStaffMoves(league, t);
 }
 
-/**
- * What the staff changed in a playbook it runs that the season's evidence called for, between the
- * tactics it ran (`prev`) and the ones it runs now (`next`): each setting the games say was costing
- * the team that the new tactics no longer use, with what it cost a game.
- */
-export function staffLeverChanges(league: League, tid: number, prev: Tactics, next: Tactics): { what: string; label: string; lost: number; won: number; games: number }[] {
-  if (prev.manual || next.manual) return [];
-  return seasonLevers(league, tid)
-    .filter((e) => e.net <= -LEVER_COST / 2)
-    .flatMap((e) => {
-      const was = leverCounter(e.what, prev);
-      return was && !leverCounter(e.what, next) ? [{ what: e.what, label: was.label, lost: e.lost, won: e.won, games: e.games }] : [];
-    });
-}
-
-/** Tactics `t` (a copy) with the staff's change to each setting this season's games say is costing the team (see staffTactics). */
-export function seasonAdjust(league: League, tid: number, t: Tactics): Tactics {
-  const out = cloneTactics(t);
-  const prev = league.teams[tid].tactics;
-  for (const e of seasonLevers(league, tid)) {
-    if (!STAFF_LEVERS.has(e.what)) continue;
-    // in force already: the counter changes nothing in the tactics the staff ran last
-    const held = !prev.manual && !leverCounter(e.what, prev);
-    if (e.net > -LEVER_COST && !(held && e.net <= -LEVER_COST / 2)) continue;
-    leverCounter(e.what, out)?.apply(out);
-  }
-  return out;
-}
-
-/** The trade-offs the staff acts on by itself (each measured to win back more than it costs). */
-const STAFF_LEVERS = new Set([
+/** The trade-offs the staff measures a change to by itself, for the playbook it runs (each one's counter has measured as a gain somewhere). */
+export const STAFF_LEVERS = new Set([
   'drop coverage',
   'switching',
   'hedging',
@@ -725,7 +672,7 @@ const STAFF_LEVERS = new Set([
 ]);
 
 /** The staff's change for a setting's trade-off (named as leverNet names it): the counter to its first cost the tactics still give. */
-function leverCounter(what: string, t: Tactics): LiveCounter | undefined {
+export function leverCounter(what: string, t: Tactics): LiveCounter | undefined {
   for (const key of LEVER_KEYS) {
     if (leverNet([], key, 0)?.what !== what) continue;
     const c = impactCounter(key, t);
@@ -880,7 +827,7 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       id: `defrole-${role}`,
       tone: 'neutral',
       title: `${p.lastName} is a natural ${meta.label.toLowerCase()}`,
-      body: `Nobody in the starting five has the role, and he suits it (${'★'.repeat(fitStars(defRoleFits(p)[role]))}). ${meta.help}`,
+      body: `Nobody in the starting five has the role, and he suits it (${'★'.repeat(roleStars(roleScale(league).def[role], defRoleFits(p)[role]))}). ${meta.help}`,
       link: '/team/tactics',
       fix: { kind: 'patch', patch: { defense: { roles: { ...(t.defense.roles ?? {}), [p.pid]: role } } }, label: `Make him ${role === 'poa' ? 'POA stopper' : 'rim anchor'}` },
     });
@@ -973,12 +920,12 @@ export function teamAlerts(league: League, tid: number): Alert[] {
   const players = teamPlayers(league, tid);
   const healthy = players.filter((p) => !p.injury);
   const alerts: Alert[] = [];
-  // what the season's games say one of the user's settings costs more than it wins back (the engine's
-  // own accounting of both sides of it), with the staff's change for it. Not a playbook swap on its
-  // fit: over real rosters a playbook's fit doesn't predict what it's worth in the engine, and the
-  // swap the old card offered cost points as often as not. Only for tactics the user runs himself.
+  // a change to the user's own tactics the staff measured as a gain in paired games over his next
+  // games (staffLever.ts), with the change as its fix: the engine's tally only says where it looked.
+  // Not a playbook swap on its fit: over real rosters a playbook's fit doesn't predict what it's worth
+  // in the engine, and the swap the old card offered cost points as often as not.
   const inSeason = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
-  const lever = inSeason && team.tactics.manual ? seasonLever(league, tid) : null;
+  const lever = inSeason && tid === league.userTid ? leverCard(league) : null;
   if (lever) alerts.push(lever);
   const rot = team.rotation;
   // the five who start: the first healthy ones in the depth chart, as the engine and the Rotation screen have it

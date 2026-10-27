@@ -1,9 +1,10 @@
 // The night's atmosphere over the live court (see atmosphere.ts): the crowd's glow around the floor
 // in the home team's colour (louder, brighter; hushed, dark), clutch time's tighter frame, the
-// callout for a big moment, the crowd's line, and clutch time's offer to watch the finish at 1×.
+// callout for a big moment, the crowd's line, clutch time's offer to watch the finish at 1×, and a
+// decided game's offer of the final.
 // CSS does the moving (opacity only, cheap on a phone); reduced motion keeps it still.
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Flame, X } from 'lucide-react';
+import { FastForward, Flame, X } from 'lucide-react';
 import type { AtmoEvent } from './atmosphere';
 
 /** The crowd around the floor: `level` 0 (hushed) .. 4 (on its feet), in `color` (the home team's). */
@@ -63,6 +64,30 @@ export function ClutchOffer({ onSlow, onAlways, onClose }: { onSlow: () => void;
         Always
       </button>
       <button className="lv-slow-x" onClick={() => setUp(false)} aria-label="Keep the speed">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+/** A game decided in the fourth quarter (skip.ts sealedGame): the rest at once, from the court. */
+export function FinalOffer({ onSim, onClose }: { onSim: () => void; onClose: () => void }) {
+  const [up, setUp] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setUp(false), OFFER_MS);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (!up) onClose();
+  }, [up, onClose]);
+  if (!up) return null;
+  return (
+    <div className="lv-slow" role="group" aria-label="The game is decided">
+      <span className="lv-slow-t">Decided</span>
+      <button className="lv-slow-b" onClick={onSim}>
+        <FastForward size={13} aria-hidden="true" className="lv-slow-bi" /> Sim to final
+      </button>
+      <button className="lv-slow-x" onClick={() => setUp(false)} aria-label="Keep watching">
         <X size={14} />
       </button>
     </div>

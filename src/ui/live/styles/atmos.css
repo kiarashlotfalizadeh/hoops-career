@@ -288,6 +288,10 @@
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
 }
+.lv-slow-bi {
+  margin-right: 3px;
+  vertical-align: -2px;
+}
 .lv-slow-b::after,
 .lv-slow-x::after {
   content: '';

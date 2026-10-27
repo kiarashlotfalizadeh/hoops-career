@@ -204,6 +204,12 @@
   color: var(--text-2);
 }
 
+.fo-room-floor {
+  margin-top: 6px;
+  color: var(--warn);
+  font-weight: 600;
+}
+
 .fo-room > .statline {
   margin-top: 16px;
 }

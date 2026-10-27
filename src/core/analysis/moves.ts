@@ -36,7 +36,7 @@ const TIMEOUT_TRIPS = 8;
 export const MOVE_MIN_TRIPS = 15;
 /** ...and for a move whose stretch is over (see CoachMove.closed): it will never have more. */
 export const MOVE_CLOSED_TRIPS = 4;
-/** Trips on what it's aimed at before the move for that rate to be the baseline (a rate over two or three trips is noise, not one). */
+/** Trips before the move for a rate to be its baseline, on what it's aimed at or that end of the floor (a rate over two or three trips is noise, not one: "0.00 before"). */
 export const MOVE_MIN_BEFORE = 8;
 /**
  * Trips (each way) the stretch before a move reaches back at least, past the last move of its kind
@@ -323,5 +323,7 @@ export function moveRate(m: CoachMove): { now: number | null; was: number | null
     return { now: per(m.after), was, trips: Math.min(m.after.us.poss, m.after.them.poss), what };
   }
   const pick = (t: MoveTally) => (what === 'focus' ? t.focus : what === 'them' ? t.them : t.us);
-  return { now: ppp(pick(m.after)), was: ppp(pick(m.before)), trips: pick(m.after)?.poss ?? 0, what };
+  // (a move on the first few trips of the game has no stretch before it to speak of)
+  const before = pick(m.before);
+  return { now: ppp(pick(m.after)), was: (before?.poss ?? 0) >= MOVE_MIN_BEFORE ? ppp(before) : null, trips: pick(m.after)?.poss ?? 0, what };
 }

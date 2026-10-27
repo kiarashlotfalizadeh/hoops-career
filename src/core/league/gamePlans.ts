@@ -13,6 +13,9 @@ function liveSeries(league: League, opp: number) {
 /** Whether a plan asks for anything on the floor: a counter or a matchup. */
 export const planMade = (p: GamePlan) => p.items.length > 0 || Object.keys(p.matchups ?? {}).length > 0;
 
+/** Whether the user made a plan himself: a counter he put in (the staff's own silent picks aren't his), or a matchup. */
+export const planByUser = (p: GamePlan) => p.items.some((x) => !x.staff) || Object.keys(p.matchups ?? {}).length > 0;
+
 /** A plan still has something in it (a note alone counts). */
 const hasContent = (p: GamePlan) => planMade(p) || !!p.note;
 
@@ -132,9 +135,9 @@ export function consumePlans(league: League, g: ScheduledGame) {
   if (g.home === me || g.away === me) {
     const opp = g.home === me ? g.away : g.home;
     const p = plans[opp];
-    // the guided first week's plan step stays done once the plan it was done with is used up
+    // the guide's plan step stays done once the plan it was done with is used up (his plan: not the staff's silent counter)
     const o = league.onboarding;
-    if (p && o && planMade(p) && !o.done.includes('scout')) o.done.push('scout');
+    if (p && o && planByUser(p) && !o.done.includes('scout')) o.done.push('scout');
     if (p && (p.scope ?? 'next') === 'next') delete plans[opp];
   }
   for (const [k, p] of Object.entries(plans)) {

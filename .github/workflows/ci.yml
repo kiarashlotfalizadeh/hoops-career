@@ -70,3 +70,23 @@ jobs:
       - run: npm ci
       - name: Style gate (no playbook best for or picked by more than 12 of 30 teams, no shape best for more than 14)
         run: npm run style-gate
+  # the season forecast against the seasons it forecasts: ten real leagues and six fictional ones from
+  # opening night, two seasons each (scripts/forecast-check.ts); fails when its spread, its tails, its
+  # 10-90 band or a real team's mean miss break, or the default newcomer team's first season misses its
+  # owner's goals. One process per core (about 2 minutes on four local cores, 4-5 on the runner's)
+  forecast:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Forecast check (16 leagues of two seasons; slope 0.9-1.15, the band holding 72-90%, no real team systematically off)
+        run: npm run forecast-check
+        env:
+          QUIET: '1'

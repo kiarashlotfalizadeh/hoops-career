@@ -181,6 +181,8 @@ describe('the journey between screens', () => {
       l.playoffs = [decided('F', 4, 0, 16, 0)];
       const [m] = currentMoments(l);
       expect(m).toMatchObject({ kind: 'title', title: 'Champions', big: true });
+      // (the team's mark, not the Finals MVP's jersey)
+      expect(m.pid).toBeUndefined();
     }
 
     // keys stay the same, so only what is new since the last read shows
@@ -279,7 +281,8 @@ describe('the journey between screens', () => {
       expect(one('record')[0]).toMatchObject({ title: '62 points', pid: a.pid, link: '/game/777' });
       expect(one('record')[0].sub).toMatch(/the most in a game since/);
       expect(one('milestone')[0]).toMatchObject({ title: '10,000 points', sub: `${nm(b)}. He got there in his 600th game, in his 8th season.` });
-      expect(one('jersey')[0]).toMatchObject({ title: 'No. 7', pid: b.pid });
+      // (his jersey with the number going up on it, whatever he wore last)
+      expect(one('jersey')[0]).toMatchObject({ title: 'No. 7', pid: b.pid, jersey: '7' });
       expect(one('farewell')[0]).toMatchObject({ title: nm(gone), pid: gone.pid });
       expect(one('cup')[0]).toMatchObject({ title: 'Into the knockouts' });
       // (the career mark's and the farewell's news items are theirs, not a front-page story's)

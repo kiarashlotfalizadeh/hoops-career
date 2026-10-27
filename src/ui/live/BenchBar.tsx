@@ -1,6 +1,9 @@
 import { BarChart3, ClipboardList, Play, Timer, Users, Bot } from 'lucide-react';
 
-/** The console's views: the staff's (the report at a break, the huddle in a timeout), the game plan, the lineup and the stats. */
+/**
+ * The console's views: the staff's (the report at a break, the huddle in a timeout: its tab is Staff
+ * all game, the stop says what it is at its head), the game plan, the lineup and the stats.
+ */
 export type ConsoleView = 'staff' | 'plan' | 'lineup' | 'stats';
 
 const VIEWS: { id: ConsoleView; label: string; icon: typeof Bot }[] = [
@@ -70,7 +73,7 @@ export function BenchBar({
               <Icon size={20} />
               {id === 'staff' && calls > 0 && <span className="lv-bb-badge num">{calls}</span>}
             </span>
-            <span className="lv-bb-l">{id === 'staff' && stop ? (stop === 'break' ? 'Report' : 'Huddle') : label}</span>
+            <span className="lv-bb-l">{label}</span>
             {id === 'staff' && calls > 0 && <span className="sr-only">: {calls} calls waiting</span>}
           </button>
         ))}

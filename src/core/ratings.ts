@@ -290,7 +290,10 @@ export function potential(ovr: number, age: number, growth: number): number {
 /**
  * The OVR ladder, best first: each band's badge colour (the --tier-* tokens) and the tier names
  * inside it, so a badge's colour and a player's tier name always agree. Sized to the real league:
- * ~6 superstars (the MVP field), ~18 All-NBA, ~30 All-Stars, ~2 quality starters a team.
+ * ~6 superstars (the MVP field), ~18 All-NBA or better, an All-Star tier about the NBA's 24, ~1-2
+ * quality starters a team. All-Star starts at 86, where the reputation check
+ * (scripts/data/reputation.ts) puts every 25-point scorer: at 87 Curry and Jaylen Brown wore
+ * "Quality Starter".
  */
 export const OVR_TIERS: readonly { min: number; tone: 'elite' | 'star' | 'good' | 'avg' | 'low' | 'bad'; names: readonly (readonly [number, string])[] }[] = [
   {
@@ -305,7 +308,7 @@ export const OVR_TIERS: readonly { min: number; tone: 'elite' | 'star' | 'good' 
     min: 82,
     tone: 'star',
     names: [
-      [87, 'All-Star'],
+      [86, 'All-Star'],
       [82, 'Quality Starter'],
     ],
   },

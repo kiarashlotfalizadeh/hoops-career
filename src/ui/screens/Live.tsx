@@ -23,7 +23,7 @@ import { periodLabel } from '../stats';
 import { identityColor, matchupColors, matchupLooks, teamLook } from '../teamColors';
 import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
-import { skipChoices } from '../live/skip';
+import { sealedGame, simDecided, skipChoices } from '../live/skip';
 import { Court, courtFloor } from '../live/Court';
 import { drawnPlayer } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
@@ -57,7 +57,7 @@ import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
-import { CallOut, ClutchOffer, Crowd, CrowdLine, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
+import { CallOut, ClutchOffer, Crowd, CrowdLine, FinalOffer, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
 import '../live/live.css';
 
@@ -117,6 +117,16 @@ export default function Live() {
     } else setOffer(true);
   }, [clutch, game, speed, watchAt, s.atBreak]);
   const closeOffer = useCallback(() => setOffer(false), []);
+  // a game decided in the fourth quarter, as the court has drawn it: the final is offered (once a game)
+  const sealed = !!view && !!game && !over && sealedGame(view, game.edge);
+  const [finalOffer, setFinalOffer] = useState(false);
+  const finalOffered = useRef<number | null>(null);
+  useEffect(() => {
+    if (!sealed || !game || s.atBreak || finalOffered.current === game.game.gid) return;
+    finalOffered.current = game.game.gid;
+    setFinalOffer(true);
+  }, [sealed, game, s.atBreak]);
+  const closeFinalOffer = useCallback(() => setFinalOffer(false), []);
 
   // the first live game's coach marks (with teaching on, once on this device): the card up, if any
   const [tip, setTip] = useState<number | null>(() => (league.settings.teaching !== false && !coachMarksSeen() ? 0 : null));
@@ -242,7 +252,7 @@ export default function Live() {
   const neutral = neutralSite(game.game);
   const ffing = s.keyPlays && !script && !atBreak;
   // (the period being played, as the scorebug shows it: the drawn view still reads the one before on a period's first possession)
-  const skipTo = skipChoices(atBreak ? view.q + 1 : quarter, atBreak, sim);
+  const skipTo = skipChoices(atBreak ? view.q + 1 : quarter, atBreak, sim, simDecided(sim, game.edge));
   // the sim is at the period's buzzer while the court draws its last possession: no timeout then (the break is the stop)
   const buzzer = sim.atBuzzer();
   const jersey = (pid: number) => league.players[pid]?.jersey || '0';
@@ -274,8 +284,8 @@ export default function Live() {
     [...themSide.players].filter((p) => themSide.on.includes(p.pid)).sort((a, b) => (league.players[b.pid]?.ovr ?? 0) - (league.players[a.pid]?.ovr ?? 0))[0];
   const watch = watchP ? { pid: watchP.pid, defender: me.guardOf.get(watchP.pid)?.pid } : undefined;
 
-  // (a card only while the court plays: not over the intro, a break or a huddle)
-  const tipUp = tip !== null && !s.intro && !stop;
+  // (a card only while the court plays: not over the intro, a break, a huddle or a banner, the staff's call above all)
+  const tipUp = tip !== null && !s.intro && !stop && !s.banner;
   const canTimeout = me.timeouts > 0 && !atBreak && !toPending && !s.intro && !buzzer && !simBusy;
   const toState = toPending
     ? game.timeoutWaiting
@@ -508,6 +518,7 @@ export default function Live() {
           run={nightRun ? { abbrev: nightRun.side === 0 ? home.abbrev : away.abbrev, a: nightRun.a, b: nightRun.b } : undefined}
           momentum={night?.momentum}
           clutch={clutch}
+          keyPlays={s.keyPlays}
           onLeave={over ? undefined : leave}
         >
           {s.others.length > 0 && <ScoreTicker league={league} games={s.others} elapsed={view.elapsed} done={false} onOpen={() => setPanel('scores')} />}
@@ -547,7 +558,7 @@ export default function Live() {
             the playback controls, so clutch time's offer can step down under them */}
         {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? 'var(--accent)' : identityColor(home.colors)} clutch={clutch} />}
         {!s.intro && !atBreak && s.call && <CallOut ev={s.call} kit={callKit} />}
-        {!s.intro && !atBreak && s.crowdLine && !offer && <CrowdLine ev={s.crowdLine} level={crowd} />}
+        {!s.intro && !atBreak && s.crowdLine && !offer && !finalOffer && <CrowdLine ev={s.crowdLine} level={crowd} />}
         {offer && !atBreak && (
           <ClutchOffer
             onSlow={() => {
@@ -560,6 +571,15 @@ export default function Live() {
               setOffer(false);
             }}
             onClose={closeOffer}
+          />
+        )}
+        {finalOffer && !offer && !atBreak && (
+          <FinalOffer
+            onSim={() => {
+              setFinalOffer(false);
+              s.skip('end');
+            }}
+            onClose={closeFinalOffer}
           />
         )}
         {!atBreak && (script || ffing || s.graphic || s.banner) && (

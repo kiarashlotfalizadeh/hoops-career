@@ -41,6 +41,7 @@ import {
   threeSkill,
 } from '../league/allStarSaturday';
 import { playerAge } from '../playerGen';
+import { emptyRatings } from '../ratings';
 import { Rng } from '../random';
 import type { Dunk, League, Player, SeasonAwards } from '../types';
 
@@ -235,7 +236,12 @@ describe('a season played', () => {
     const outHalf = rosterWorth([p(1, 90, 20), ...team.slice(1)], 40);
     expect(outAll).toBeLessThan(outHalf);
     expect(outHalf).toBeLessThan(healthy);
-    expect(outHalf).toBeCloseTo((healthy + outAll) / 2, 6);
+    // (half way, but for who plays behind him in the games he misses)
+    expect(Math.abs(outHalf - (healthy + outAll) / 2)).toBeLessThan(0.05);
+    // a star's games count for more than a straight line of OVR, and the engine's read of the ratings counts too
+    expect(rosterWorth([p(1, 95), ...team.slice(1)], 40) - healthy).toBeGreaterThan(rosterWorth([p(1, 85), ...team.slice(1)], 40) - rosterWorth([p(1, 80), ...team.slice(1)], 40));
+    const feel = (diq: number) => ({ ...team[0], ratings: { ...emptyRatings(), diq } }) as Player;
+    expect(rosterWorth([feel(80), ...team.slice(1)], 40)).toBeGreaterThan(rosterWorth([feel(30), ...team.slice(1)], 40));
 
     // chances read the way the screens show them
     expect(pct(0.643)).toBe('64%');

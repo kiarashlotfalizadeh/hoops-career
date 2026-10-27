@@ -12,8 +12,10 @@ import { measureCalls, measureChange, type CallReading, type CallsMeasured } fro
 import type { SimWorkerApi } from '../workers/sim.worker';
 import {
   applyGames,
+  applySig,
   diffGames,
   gamesSig,
+  LOST_RESULTS,
   runSim,
   runTask,
   withoutGames,
@@ -104,8 +106,26 @@ function guarded<T>(call: () => Promise<T>): Promise<T> {
   });
 }
 
-/** What to send the worker for `l`: its results relative to what the worker holds. */
-const deltaFor = (l: League): GamesDelta => diffGames(held?.id === l.id ? held.sig : null, l.games);
+/**
+ * Run a worker call on `l`, sent without its results but with a delta against what the worker holds
+ * (`held`), and the signature of the list the worker opens: taken as it's sent, as `l`'s results can
+ * change while the worker works on them (a live game recorded meanwhile adds to the same list). If
+ * the worker has lost track of what it holds (a reply came back after a later call's), it says so
+ * before it does anything, and the call goes again with the results whole.
+ */
+async function withGames<T>(l: League, call: (core: League, delta: GamesDelta, sent: GamesSig) => Promise<T>): Promise<{ out: T; sent: GamesSig }> {
+  for (let whole = false; ; whole = true) {
+    const sent = gamesSig(l.games);
+    const delta = diffGames(!whole && held?.id === l.id ? held.sig : null, l.games);
+    try {
+      return { out: await guarded(() => call(withoutGames(l), delta, sent)), sent };
+    } catch (e) {
+      held = null;
+      if (whole || !(e instanceof Error) || e.message !== LOST_RESULTS) throw e;
+      console.warn('The sim worker lost track of the results: sending them whole.');
+    }
+  }
+}
 
 export interface SimRunHooks {
   progress: (p: SimProgress) => void;
@@ -135,23 +155,36 @@ export async function simLeague(l: League, target: SimTarget, hooks: SimRunHooks
     });
     return { league: copy, ...out };
   }
-  // main's results as the worker last saw them: each checkpoint adds to them
+  // main's results as the worker last saw them (and their signature): each checkpoint adds to them.
+  // What the worker holds between runs (`held`) only changes when the run ends
   let games = l.games;
+  let sig: GamesSig = [];
   const cb = Comlink.proxy({
     progress: (p: SimProgress) => {
       answered = true;
       hooks.progress(p);
     },
     checkpoint: async (core: League, d: GamesDelta) => {
+      const before = [games, sig] as const;
       games = applyGames(games, d);
-      held = { id: l.id, sig: gamesSig(games) };
-      await hooks.checkpoint({ ...core, games });
+      sig = applySig(sig, d);
+      try {
+        await hooks.checkpoint({ ...core, games });
+      } catch (e) {
+        // (one that didn't get through: the worker makes the next against what this side had before it)
+        [games, sig] = before;
+        throw e;
+      }
     },
   });
   try {
-    const out = await guarded(() => r.sim(withoutGames(l), deltaFor(l), target, cb));
+    const { out } = await withGames(l, (core, delta, sent) => {
+      games = l.games;
+      sig = sent;
+      return r.sim(core, delta, target, cb);
+    });
     games = applyGames(games, out.delta);
-    held = { id: l.id, sig: gamesSig(games) };
+    held = { id: l.id, sig: applySig(sig, out.delta) };
     return { league: { ...out.core, games }, days: out.days, stop: out.stop };
   } catch (e) {
     held = null;
@@ -168,9 +201,9 @@ export async function taskLeague(l: League, op: TaskOp): Promise<{ league: Leagu
     return { league: copy, result };
   }
   try {
-    const out = await guarded(() => r.task(withoutGames(l), deltaFor(l), op));
+    const { out, sent } = await withGames(l, (core, delta) => r.task(core, delta, op));
     const games = applyGames(l.games, out.delta);
-    held = { id: l.id, sig: gamesSig(games) };
+    held = { id: l.id, sig: applySig(sent, out.delta) };
     return { league: { ...out.core, games }, result: out.result };
   } catch (e) {
     held = null;
@@ -212,8 +245,9 @@ export async function measureCounters(l: League, opp: number, gid: number | unde
     return counterWorth(l, opp, game, { onProgress: progress, between: () => new Promise<void>((res) => setTimeout(res, 0)), cancelled: () => run !== localWorth });
   }
   try {
-    const out = await guarded(() => r.counterWorth(withoutGames(l), deltaFor(l), opp, gid, Comlink.proxy(progress)));
-    held = { id: l.id, sig: gamesSig(l.games) };
+    const { out, sent } = await withGames(l, (core, delta) => r.counterWorth(core, delta, opp, gid, Comlink.proxy(progress)));
+    // (the list as it was sent: a game recorded meanwhile isn't in the worker's copy)
+    held = { id: l.id, sig: sent };
     return out;
   } catch (e) {
     held = null;
@@ -248,8 +282,8 @@ export async function measureChanges(
     });
   }
   try {
-    const out = await guarded(() => r.measureChanges(withoutGames(l), deltaFor(l), opp, gid, changes, Comlink.proxy(progress), games));
-    held = { id: l.id, sig: gamesSig(l.games) };
+    const { out, sent } = await withGames(l, (core, delta) => r.measureChanges(core, delta, opp, gid, changes, Comlink.proxy(progress), games));
+    held = { id: l.id, sig: sent };
     return out;
   } catch (e) {
     held = null;

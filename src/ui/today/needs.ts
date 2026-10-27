@@ -23,7 +23,10 @@ export interface NeedsYou {
   /** Days to the deadline when its row shows (its mail or the staff's deadline call isn't in the list already). */
   deadline: number | null;
   backup: boolean;
+  /** What needs him, as the bell counts it: every row but the finished guide's "Got it" (it waits on nothing). */
   count: number;
+  /** Every row, that one included. */
+  rows: number;
 }
 
 /** Needs you's order: the staff's calls, what the league waits on, the first week's checklist, the rest. */
@@ -70,7 +73,8 @@ export function needsYouOf(league: League): NeedsYou {
   const d = deadlineIn(league);
   const deadline = d !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline') ? d : null;
   const backup = backupDue(league);
-  return { items, mail, deadline, backup, count: items.length + mail.length + (deadline !== null ? 1 : 0) + (backup ? 1 : 0) };
+  const rows = items.length + mail.length + (deadline !== null ? 1 : 0) + (backup ? 1 : 0);
+  return { items, mail, deadline, backup, count: rows - items.filter((i) => i.id === 'guide:done').length, rows };
 }
 
 export const useNeedsYou = (league: League) => useLeagueMemo(() => needsYouOf(league), [league]);

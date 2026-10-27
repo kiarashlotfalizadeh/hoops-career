@@ -5,6 +5,7 @@ import { applyPatch, pairedDelta, runLab, type TacticsPatch } from '../ai/lab';
 import { counterCandidates, liveCounter, scoutTeam, teamAlerts } from '../ai/advisor';
 import { buildGameReport, impactAdvice } from '../analysis/gameReport';
 import { buildSimInput, ensureRotation, playGame } from '../league/games';
+import { leverSig } from '../league/staffLever';
 import { FINISH_LABEL, type FinishType } from '../sim/log';
 import { cloneTactics } from '../sim/tactics';
 import type { GameResult, Tactics } from '../types';
@@ -145,7 +146,7 @@ describe('batch sims & reports', () => {
       expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
       league.teams[0].tactics = t;
     }
-    // flags the user's setting whose trade-off the season's games say he's losing, with the staff's change for it
+    // never flags a setting on the engine's tally alone: only a change measured in paired games, with the change as its fix
     {
       const team = league.teams[0];
       const [saved, games] = [team.tactics, league.games];
@@ -161,18 +162,30 @@ describe('batch sims & reports', () => {
       const lever = () => teamAlerts(league, 0).find((a) => a.id.startsWith('lever-'));
       team.tactics = { ...applyPatch(saved, { defense: { pressure: 40 } }), manual: true };
       season(10, 1.5, 0.3);
+      expect(lever()).toBeUndefined();
+      // measured on these tactics: a gain clear of the noise is a card, its number the measurement's
+      const t = team.tactics;
+      const at = (pts: number, raw: number, se: number) =>
+        (league.staffLever = {
+          season: league.season,
+          tid: 0,
+          last: league.day,
+          moves: [],
+          readings: [{ what: 'soft ball pressure', label: 'Pressure the ball', sig: leverSig(t, 'soft ball pressure'), day: league.day, pts, raw, se, games: 2 }],
+        });
+      at(1.3, 1.6, 0.7);
       const a = lever()!;
-      expect(a).toMatchObject({ title: 'Soft ball pressure is costing you', body: 'It gives up 1.5 points a game and wins 0.3 back (10 games).' });
+      expect(a.title).toBe('Pressure the ball: measured +1.3 a game');
+      expect(a.body).toMatch(/^Pressure against Balanced over your next two games, each played both ways on the same seeds \(measured /);
       expect(a.fix).toMatchObject({ kind: 'patch', label: 'Pressure the ball' });
       expect(applyPatch(team.tactics, (a.fix as { patch: TacticsPatch }).patch).defense.pressure).toBe(65);
-      // what it wins back covers it, or too few games to read, or the staff's own tactics: nothing to say
-      season(10, 1.5, 1.2);
+      // too close to say, or the staff's own tactics: nothing to say
+      at(0.4, 0.8, 0.7);
       expect(lever()).toBeUndefined();
-      season(5, 1.5, 0.3);
-      expect(lever()).toBeUndefined();
-      season(10, 1.5, 0.3);
+      at(1.3, 1.6, 0.7);
       team.tactics = { ...team.tactics, manual: false };
       expect(lever()).toBeUndefined();
+      league.staffLever = undefined;
       // and no playbook swap on its fit alone (it didn't predict what a playbook is worth)
       team.tactics = { ...applyPatch(saved), offPreset: 'grind', defPreset: 'chaos', manual: true };
       expect(teamAlerts(league, 0).some((x) => x.id === 'off-fit' || x.id === 'def-fit')).toBe(false);

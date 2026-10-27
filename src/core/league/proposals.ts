@@ -1,7 +1,8 @@
 // AI teams' trade offers to the user (proposals): real deals the offering team has already said yes
 // to, posted to the inbox and the Trade screen's Offers tab, where the user accepts, counters or
 // declines them. They come about once every ten days in season and every third day in the ten
-// before the deadline, one around opening night, for the user's first-round pick on draft night
+// before the deadline, one around opening night (none of these while a newcomer's guide runs: see
+// agenda.ts's guideWeeks), for the user's first-round pick on draft night
 // and, from taxpayers, as salary dumps when free agency opens. None is a fleecing: each is at worst
 // slightly against the user in neutral value. Offers draw on their own random stream (seeded by
 // the league, the date and the purpose), so the league's stream (games, injuries) never moves.
@@ -17,6 +18,7 @@ import { capSalary, evaluateTrade, executeTrade, pickLabel, tradedAwayBy, untrad
 import { dumpPackage, neutralBalance, packageFor } from './tradePackages';
 import { makeItWork } from './tradeHelp';
 import { plural } from '../format';
+import { guideWeeks } from './agenda';
 
 /** Offers open at once, at most (one per team). */
 export const MAX_OPEN = 4;
@@ -400,6 +402,8 @@ function kindsFor(rng: Rng): Proposal['kind'][] {
 /** In season, up to the deadline: an offer about once every ten days, every third day in the last ten. */
 export function aiProposals(league: League) {
   if (league.phase !== 'regular' || league.fired || league.day > league.tradeDeadlineDay) return;
+  // (a newcomer's first games are the guide's: no offer lands on them)
+  if (guideWeeks(league)) return;
   const rng = offerRng(league, 'offers');
   if (!rng.chance(league.tradeDeadlineDay - league.day < 10 ? 1 / 3 : 1 / 10)) return;
   makeOffer(league, rng, kindsFor(rng), league.tradeDeadlineDay);
@@ -407,7 +411,7 @@ export function aiProposals(league: League) {
 
 /** Around opening night a team calls with an offer. */
 export function openingProposal(league: League) {
-  if (league.phase !== 'regular' || league.fired) return;
+  if (league.phase !== 'regular' || league.fired || guideWeeks(league)) return;
   const rng = offerRng(league, 'opening');
   makeOffer(league, rng, rng.chance(0.6) ? ['buy', 'sell'] : ['sell', 'buy'], league.tradeDeadlineDay);
 }

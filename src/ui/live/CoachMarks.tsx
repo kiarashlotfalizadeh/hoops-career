@@ -1,6 +1,8 @@
 // The first live game's coach marks: three short cards, one at a time over the foot of the court
-// (never the scorebug), each gone at a tap: where speed and Skip ahead are, what Lineup and Staff
-// hold, and what a timeout does. With teaching on, once on this device: after the last, never again.
+// (never the scorebug), each gone at a tap or after a few seconds up: where speed and Skip ahead are,
+// what Lineup and Staff hold, and what a timeout does. They give way to a banner over the court (the
+// staff's call above all: Live.tsx). With teaching on, once on this device: after the last, never again.
+import { useEffect, useRef } from 'react';
 
 const SEEN_KEY = 'hc:live-tips';
 
@@ -28,8 +30,17 @@ export function markCoachMarksSeen() {
   }
 }
 
+/** How long a card stays up before the next takes its place (real time it's up: a banner over it starts it again). */
+export const TIP_MS = 7000;
+
 export function CoachMark({ step, onNext }: { step: number; onNext: () => void }) {
   const last = step === COACH_MARKS.length - 1;
+  const next = useRef(onNext);
+  next.current = onNext;
+  useEffect(() => {
+    const t = setTimeout(() => next.current(), TIP_MS);
+    return () => clearTimeout(t);
+  }, [step]);
   return (
     <button type="button" className="lv-tip" onClick={onNext} aria-live="polite">
       <span className="lv-tip-n num" aria-hidden="true">

@@ -319,6 +319,8 @@ describe('keys to the game and coach moves', () => {
         expect(moveRate(hot)).toEqual({ what: 'focus', now: 1.1, was: 2, trips: 20 });
         hot.before.focus = { poss: 3, pts: 6 };
         expect(moveRate(hot).what).toBe('them');
+        // (a move on the game's first trips: no "0.00 before" off two of them)
+        expect(moveRate({ ...m, before: { us: { poss: 2, pts: 0 }, them: { poss: 2, pts: 3 } } }).was).toBeNull();
       }
 
       // moves made together at a break are one move, measured from the break to the next one of

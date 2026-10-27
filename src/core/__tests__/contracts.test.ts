@@ -1259,8 +1259,9 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     rosterOf(l, AI, 13);
     const p = minGuy(l);
     // the best free agent who'd take the minimum, so the AI team short of healthy players takes him
+    // (a 79: an 80+ the summer left unsigned holds 55% of his value in season, see SUMMER_FLOOR)
     const atMin = () => {
-      p.ovr = p.pot = 80;
+      p.ovr = p.pot = 79;
       p.asking = { amount: CAP_FOR(l).vetMin, years: 1 };
     };
     expect(userTenDay(l, p.pid).ok).toBe(true);

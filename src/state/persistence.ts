@@ -8,6 +8,7 @@ import { openDB, type IDBPDatabase } from 'idb';
 import type { GameResult, League } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION, seasonLabel } from '../core/constants';
 import { migrate as checkSave, obj } from './saveCheck';
+import { resultMark } from './simCore';
 
 // what a loaded save must look like lives in saveCheck.ts; screens and the backup import it from here
 export { isLeague, OldSaveError } from './saveCheck';
@@ -71,20 +72,21 @@ export const isQuotaError = (e: unknown) => e instanceof DOMException && (e.name
 
 /**
  * What this window last read or wrote for a league object: the revision, and the results on disk
- * by game id (with whether each still had its play-by-play). Results are only ever added, apart
- * from an older game of the user's dropping its play-by-play, so that is all a save compares; a
- * copy of the league (one coming back from the sim worker) takes it over with `adoptSync`.
+ * by game id (with each one's mark: see resultMark). Results are only ever added, apart from one
+ * changing after it's recorded (an older game of the user's dropping its play-by-play, a live game's
+ * moves measured after the save), which changes its mark: that is all a save compares. A copy of the
+ * league (one coming back from the sim worker) takes it over with `adoptSync`.
  */
 interface Synced {
   rev: number | undefined;
-  games: Map<number, boolean>;
+  games: Map<number, number>;
 }
 const synced = new WeakMap<League, Synced>();
 
 /** Whether this league object came from the device or has been saved to it from this window. */
 export const onDevice = (league: League) => synced.has(league);
 
-const tracked = (league: League, rev: number | undefined): Synced => ({ rev, games: new Map(league.games.map((g) => [g.gid, !!g.pbp])) });
+const tracked = (league: League, rev: number | undefined): Synced => ({ rev, games: new Map(league.games.map((g) => [g.gid, resultMark(g)])) });
 
 /** A copy of a league (from the sim worker) takes over what this window knows the device holds for the original. */
 export function adoptSync(from: League, to: League) {
@@ -212,7 +214,7 @@ async function write(d: IDBPDatabase, league: League): Promise<boolean> {
   // checked inside the write transaction, so no other window can save in between
   if ((cur ? (cur.rev ?? 0) : undefined) !== prev?.rev) throw new SaveConflictError(!cur);
   const rev = (prev?.rev ?? 0) + 1;
-  const next = new Map<number, boolean>();
+  const next = new Map<number, number>();
   const ops: Promise<unknown>[] = [];
   try {
     league.version = SAVE_VERSION;
@@ -220,9 +222,10 @@ async function write(d: IDBPDatabase, league: League): Promise<boolean> {
     // a league this window didn't read (new or imported) replaces whatever results its id had
     if (!prev) ops.push(games.delete(gamesOf(league.id)));
     for (const g of league.games) {
-      // played results only change when an older game of yours drops its play-by-play
-      if (prev?.games.get(g.gid) !== !!g.pbp) ops.push(games.put(g, [league.id, g.gid]));
-      next.set(g.gid, !!g.pbp);
+      // new results, and those changed since they were stored (see resultMark)
+      const mark = resultMark(g);
+      if (prev?.games.get(g.gid) !== mark) ops.push(games.put(g, [league.id, g.gid]));
+      next.set(g.gid, mark);
     }
     for (const gid of prev?.games.keys() ?? []) if (!next.has(gid)) ops.push(games.delete([league.id, gid]));
     // (the snapshot's entry stays as it was: only a snapshot writes it)

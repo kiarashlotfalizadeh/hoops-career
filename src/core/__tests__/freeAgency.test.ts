@@ -26,6 +26,7 @@ import {
   FIRED_REASON,
   MLE_YEARS,
   PREF_KEYS,
+  ROTATION_FLOOR,
   SUMMER_FLOOR,
   askingContract,
   summerFloor,
@@ -99,6 +100,7 @@ import {
   userQualify,
   userWithdrawQualifying,
 } from '../league/rfa';
+import { walkAwayFor } from '../league/negotiation';
 import { validateTrade, type TradeOffer } from '../league/trades';
 import { draftPlayer, draftStandings, ensureFuturePicks } from '../league/draft';
 import { txnLine, txnText } from '../league/transactions';
@@ -452,8 +454,10 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
   }
 
   // a top free agent holds his price through the market's first days; then, no team able to pay it,
-  // it comes down a step a day toward the most a team could pay him, never below it, and he signs
-  // where that money is, at about it (see SUMMER_STEP)
+  // it comes down toward the most a team could pay him but never below his summer floor (75% of his
+  // value through day 20, 60% after on a one-year deal, see SUMMER_FLOOR), straight to it when that
+  // money is less: with only mid-levels left he goes unsigned rather than sign one at a fraction of
+  // his value
   {
     const l = txLeague();
     l.phase = 'freeAgency';
@@ -480,21 +484,24 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     l.faDay = MARKET_HOLD_DAYS;
     faDay(l, rng, 0, MARKET_HOLD_DAYS + 1);
     expect(star.tid).toBe(FREE_AGENT);
-    expect(Math.abs(star.asking!.amount - start * (1 - MARKET_STEP))).toBeLessThan(20);
+    const m = marketSalary(l, star);
+    expect(Math.abs(star.asking!.amount - m * SUMMER_FLOOR.early)).toBeLessThan(20);
     for (let d = MARKET_HOLD_DAYS + 1; d < 25 && star.tid === FREE_AGENT; d++) {
       const most = marketMoney(l, star);
       l.faDay = d;
       faDay(l, rng, 0, d + 1);
-      if (star.tid === FREE_AGENT) expect(star.asking!.amount).toBeGreaterThanOrEqual(most - 20);
+      if (star.tid === FREE_AGENT) expect(star.asking!.amount).toBeGreaterThanOrEqual(Math.min(most, m * SUMMER_FLOOR.late) - 20);
+      expect(star.asking!.amount).toBeGreaterThanOrEqual(m * (d < SUMMER_FLOOR.day ? SUMMER_FLOOR.early : SUMMER_FLOOR.late) - 20);
     }
-    expect(star.tid).toBeGreaterThanOrEqual(0);
-    expect(star.contract.salaries[0]).toBeGreaterThanOrEqual(money * BID_FLOOR * 0.9);
-    expect(star.contract.salaries[0]).toBeLessThan(start * 0.5);
+    expect(star.tid).toBe(FREE_AGENT);
+    expect(Math.abs(star.asking!.amount - m * SUMMER_FLOOR.late)).toBeLessThan(20);
+    // (past the floor's day, held at it, he asks a one-year deal, and no offer under it is considered)
+    expect(star.asking!.years).toBe(1);
+    expect(bidFloor(l, star, 1)).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.late - 50);
   }
 
-  // an 80+ free agent's summer floor (75% of his value) holds a keen team's or a ring chaser's ask
-  // until the market itself brings his price under it; then each team asks his price at its
-  // interest in it, as the price cut counted it
+  // an 80+ free agent's summer floor (75% of his value) holds a keen team's or a ring chaser's ask,
+  // whatever the market brought his own price down to; a rotation player's (72-79) is half his value
   {
     const l = txLeague();
     l.phase = 'freeAgency';
@@ -510,9 +517,18 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     expect(Math.abs(summerFloor(l, p) - m * SUMMER_FLOOR.early)).toBeLessThan(1);
     for (const t of l.teams) expect(askingContract(l, p, t.tid).amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
     p.asking = { amount: Math.round(m * 0.5), years: 2 };
+    expect(Math.abs(summerFloor(l, p) - m * SUMMER_FLOOR.early)).toBeLessThan(1);
+    // (a 31-year-old takes less from a contender, see ringChase, but not under his floor)
+    expect(askingContract(l, p, 2).amount).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
+    expect(walkAwayFor(l, p, 'fa', p.asking.years)).toBeGreaterThanOrEqual(m * SUMMER_FLOOR.early - 50);
+    shape(l, p, 76, 31);
+    const m2 = marketSalary(l, p);
+    expect(Math.abs(summerFloor(l, p) - m2 * ROTATION_FLOOR.early)).toBeLessThan(1);
+    l.faDay = SUMMER_FLOOR.day;
+    expect(Math.abs(summerFloor(l, p) - m2 * ROTATION_FLOOR.late)).toBeLessThan(1);
+    // (and none in season)
+    l.phase = 'regular';
     expect(summerFloor(l, p)).toBe(0);
-    // (a 31-year-old takes less from a contender: see ringChase)
-    expect(askingContract(l, p, 2).amount).toBeLessThan(p.asking.amount);
   }
 
   // a rotation player's summer price holds through the market's first days, then comes down a step a
@@ -566,7 +582,8 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     while (standardRoster(l, AI).length < CAP.rosterMax) signPlayer(l, freeAgents(l)[0], AI, vetMin, 2, { news: false, start: s });
     for (const p of standardRoster(l, AI)) shape(l, p, 85, 27, vetMin, 2);
     expect(CAP_FOR(l, s).salaryCap - payroll(l, AI, s)).toBeGreaterThan(30_000);
-    const fa = shape(l, freeAgents(l)[0], 75, 27);
+    // (a 71: no summer floor, see SUMMER_FLOOR)
+    const fa = shape(l, freeAgents(l)[0], 71, 27);
     fa.contract = { start: l.season, salaries: [0] };
     fa.experience = 5;
     fa.asking = { amount: 20_000, years: 3 };
@@ -588,8 +605,8 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
         while (standardRoster(l, t.tid).length < CAP.rosterMax)
           signPlayer(l, freeAgents(l).sort((a, b) => a.ovr - b.ovr)[0], t.tid, CAP_FOR(l, contractSeason(l)).vetMin, 1, { news: false, start: contractSeason(l) });
       }
-      // (a 79 on a minimum ask: an 80+ holds his summer floor, see SUMMER_FLOOR)
-      const fa = shape(l, freeAgents(l)[0], 79, 27);
+      // (a 71 on a minimum ask: a 72+ holds his summer floor, see SUMMER_FLOOR)
+      const fa = shape(l, freeAgents(l)[0], 71, 27);
       fa.contract = { start: l.season, salaries: [0] };
       fa.asking = { amount: CAP_FOR(l, contractSeason(l)).vetMin, years: 1 };
       const rng = new Rng(6);

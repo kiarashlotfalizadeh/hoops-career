@@ -12,7 +12,7 @@ import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
 import { ROLE_META, archetype } from '../../core/ratings';
 import { ALL_SCHEMES, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
 import { famLabel, optValue, roleFam } from '../../core/sim/familiarity';
-import { defRoleFits, fitStars, miscast, roleFits } from '../../core/analysis/system';
+import { betterFit, defRoleFits, roleFits, roleScale, roleStars, type RoleScale } from '../../core/analysis/system';
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
@@ -33,20 +33,30 @@ interface Row {
   p: Player;
   off: keyof typeof ROLE_META;
   def: (typeof DEF_ROLES)[number];
-  offFit: number;
-  defFit: number;
+  /** His stars in each, against the league's rotation players at that role (roleStars). */
+  offStars: number;
+  defStars: number;
   /** A role at each end that suits him clearly better (miscast: two stars or more), if there is one. */
   offBetter: keyof typeof ROLE_META | null;
   defBetter: (typeof DEF_ROLES)[number] | null;
   pair: number;
 }
 
-function rowOf(t: Tactics, fam: Familiarity, p: Player): Row {
+function rowOf(t: Tactics, fam: Familiarity, p: Player, scale: RoleScale): Row {
   const of = roleFits(p);
   const df = defRoleFits(p);
   const off = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
   const def = defRoleOf(t.defense, p.pid);
-  return { p, off, def, offFit: of[off], defFit: df[def], offBetter: miscast(of, off), defBetter: miscast(df, def), pair: roleFam(fam, t, p) };
+  return {
+    p,
+    off,
+    def,
+    offStars: roleStars(scale.off[off], of[off]),
+    defStars: roleStars(scale.def[def], df[def]),
+    offBetter: betterFit(scale.off, of, off),
+    defBetter: betterFit(scale.def, df, def),
+    pair: roleFam(fam, t, p),
+  };
 }
 
 /** A shape's fit as a tone: half a point a game or more either way shows. */
@@ -55,10 +65,10 @@ const fitClass = (v: number) => (v >= 5 ? 'good' : v <= -5 ? 'bad' : '');
 /** First sentence of a line of help. */
 const first = (s: string) => s.split(/(?<=\.)\s/)[0];
 
-const stars = (v: number) => (
+const stars = (n: number) => (
   <>
-    {'★'.repeat(fitStars(v))}
-    <span className="dim">{'★'.repeat(5 - fitStars(v))}</span>
+    {'★'.repeat(n)}
+    <span className="dim">{'★'.repeat(5 - n)}</span>
   </>
 );
 
@@ -93,7 +103,8 @@ export function Board({
   const team = league.teams[league.userTid];
   const nameOf = useMemo(() => rosterNames(players), [players]);
   const order = team.rotation?.order ?? NO_ORDER;
-  const rows = five.map((p) => rowOf(t, fam, p));
+  const scale = useLeagueMemo(() => roleScale(league), [league]);
+  const rows = five.map((p) => rowOf(t, fam, p, scale));
   const inPoss = side === 'in';
   const shape = shapeOf(t.offense);
   const spots = inPoss ? OFF_SPOTS[shape] : DEF_SPOTS[t.defense.scheme];
@@ -299,7 +310,7 @@ export function Board({
             const spot = placed.get(r.p.pid);
             if (!spot) return null;
             const role = inPoss ? ROLE_META[r.off].label : DEF_ROLE_META[r.def].short;
-            const fit = inPoss ? r.offFit : r.defFit;
+            const fit = inPoss ? r.offStars : r.defStars;
             const better = inPoss ? r.offBetter : r.defBetter;
             const off = !!better;
             const bestName = !better ? '' : inPoss ? ROLE_META[better as keyof typeof ROLE_META].label : DEF_ROLE_META[better as (typeof DEF_ROLES)[number]].label;
@@ -310,7 +321,7 @@ export function Board({
                 className={`tx-floor-p${off ? ' off' : ''}${clashed.has(r.p.pid) ? ' clash' : ''}`}
                 style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
                 onClick={() => onPick(r.p.pid)}
-                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fitStars(fit)} of 5 for it${off ? `; suits ${bestName} better` : ''}${clashed.has(r.p.pid) ? '; crowds the paint' : ''}; knows his roles ${Math.round(r.pair)}%`}
+                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}${clashed.has(r.p.pid) ? '; crowds the paint' : ''}; knows his roles ${Math.round(r.pair)}%`}
               >
                 <span className="tx-floor-n">
                   <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />

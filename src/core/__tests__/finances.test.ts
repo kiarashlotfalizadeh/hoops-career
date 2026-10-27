@@ -7,10 +7,12 @@ import {
   arenaCapacity,
   assessLuxuryTax,
   attendanceFor,
+  budgetCostPerSeason,
   gameFinances,
   luxuryTaxBill,
   MERCH_PER_GAME,
   NATIONAL_REVENUE,
+  profit,
   referencePrice,
   REVENUE_SHARING,
   shareRevenue,
@@ -24,7 +26,7 @@ import { OWNER_PROFIT_RANGE, OWNER_PROFIT_TARGET, ownerMoneyScore } from '../lea
 import { newSeason, simDay, startRegularSeason } from '../league/season';
 import { CAP, TAX_BRACKET_PCT } from '../constants';
 import { booksOutlook, booksReview, booksVerdict, sanctionedTax } from '../league/books';
-import { PAYROLL_SLACK, currentGoals, forcedPayroll, ownerProgress, planOwnerGoals, seasonBudget } from '../league/ownerGoals';
+import { PAYROLL_SLACK, currentGoals, forcedPayroll, goalResult, ownerProgress, planOwnerGoals, seasonBudget } from '../league/ownerGoals';
 import { releaseDeadMoney, releasePlayer, signPlayer } from '../league/contracts';
 import type { League } from '../types';
 
@@ -279,6 +281,36 @@ describe('finances (L1, L15)', () => {
       const pay = payroll(l, u);
       const upTo = Math.min(pay, forced);
       expect(sanctionedTax(l)).toBe(luxuryTaxBill(l, upTo, l.season, taxRepeater(l, u)) + upTo - g.line!);
+      // a trade of the inherited star for a player on the same salary leaves the sign-off where opening
+      // night set it (read off the contracts still inherited, it had gone from $61M to nothing)
+      {
+        const m = structuredClone(l);
+        const other = (u + 1) % m.teams.length;
+        const mine = m.players[star.pid];
+        const theirs = standardRoster(m, other)[0];
+        theirs.contract = { start: m.season, salaries: [salaryFor(mine, m.season)] };
+        const before = sanctionedTax(m);
+        [mine.tid, theirs.tid] = [other, u];
+        m.transactions = [
+          ...(m.transactions ?? []),
+          {
+            id: 9_999,
+            season: m.season,
+            day: m.day,
+            phase: m.phase,
+            kind: 'trade',
+            user: true,
+            tids: [u, other],
+            sides: [
+              { tid: u, players: [{ pid: mine.pid, name: 'a' }], picks: [] },
+              { tid: other, players: [{ pid: theirs.pid, name: 'b' }], picks: [] },
+            ],
+          },
+        ];
+        expect(payroll(m, u)).toBe(pay);
+        expect(forcedPayroll(m, u)).toBeLessThan(forced - 10_000);
+        expect(sanctionedTax(m)).toBe(before);
+      }
       // a signing of his own on top of it is his: the tax it adds isn't signed off
       const fa = freeAgents(l)[0];
       const before = sanctionedTax(l);
@@ -335,6 +367,25 @@ describe('finances (L1, L15)', () => {
       const proj = (x: League) => ownerProgress(x).find((g) => g.goal.kind === 'profit')!.projected;
       expect(proj(gamed)).toBeLessThan(proj(honest) - 10_000);
       expect(seasonBudget(honest, honest.userTid, true).op).toBeCloseTo(seasonBudget(honest, honest.userTid).op, -2);
+      // budgets cut under the standard: what they save isn't profit he asked for (every budget at 1 had
+      // banked the Bulls $29.6M a season and a profit grade of +87 against +13)
+      {
+        const cut = structuredClone(honest);
+        Object.assign(cut.teams[cut.userTid].budget, { coaching: 1, health: 1, facilities: 1 });
+        for (let d = 0; d < 5; d++) simDay(cut);
+        const ts = curTeamSeason(cut, cut.userTid);
+        expect(ts.won + ts.lost).toBeGreaterThan(0);
+        expect(ts.trimmed).toBeCloseTo(((ts.won + ts.lost) * 3 * (budgetCostPerSeason(cut, 50) - budgetCostPerSeason(cut, 1))) / 82, 0);
+        const og = currentGoals(cut)!;
+        expect(
+          goalResult(
+            cut,
+            og,
+            og.goals.find((g) => g.kind === 'profit')!,
+          ),
+        ).toBeCloseTo(profit(cut, cut.userTid) - ts.trimmed!, 3);
+        expect(ownerProgress(cut).find((g) => g.goal.kind === 'profit')!.text).toMatch(/, not counting \$[\d.]+M of budget cuts$/);
+      }
     }
   }, 180_000);
 });

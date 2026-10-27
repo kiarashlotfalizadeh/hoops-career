@@ -497,7 +497,7 @@
   }
 }
 /* the first live game's coach marks: a card of paper over the foot of the court, clear of the
-   scorebug, over the banners for the moment it's up; a tap takes it down */
+   scorebug; a banner takes its place while it's up (Live.tsx), a tap or a few seconds take it down */
 .lv-stage > .lv-tip {
   position: absolute;
   left: 10px;

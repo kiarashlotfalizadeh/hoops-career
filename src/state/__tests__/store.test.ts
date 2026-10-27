@@ -4,8 +4,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { problemOf, useStore } from '../store';
 import { loadLeague, SaveConflictError } from '../persistence';
-import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames } from '../simCore';
-import { simLeague, simLocally, taskLeague } from '../simClient';
+import { applyGames, diffGames, gamesSig, runSim, runTask, withoutGames, type GamesDelta } from '../simCore';
+import { cancelWorth, measureCounters, simLeague, simLocally, taskLeague } from '../simClient';
 import { newSeason, simDay } from '../../core/league/season';
 import { testLeague } from './fixtures';
 
@@ -51,8 +51,47 @@ class DeadWorker extends EventTarget {
   terminate() {}
 }
 
+/**
+ * The real sim worker, run in this thread: messages to it and back are copied and arrive a task
+ * later, as between threads. Its module listens on the global scope (stubbed for the scenario).
+ */
+class ThreadWorker extends EventTarget {
+  static inbox: ((e: MessageEvent) => void) | null = null;
+  static current: ThreadWorker | null = null;
+  /** What the main thread sent it (Comlink's messages). */
+  static sent: { path?: string[]; argumentList?: { value?: unknown }[] }[] = [];
+  constructor() {
+    super();
+    ThreadWorker.current = this;
+  }
+  postMessage(data: unknown, transfer: Transferable[] = []) {
+    const copy = structuredClone(data, { transfer });
+    ThreadWorker.sent.push(copy as (typeof ThreadWorker.sent)[number]);
+    setTimeout(() => ThreadWorker.inbox?.(new MessageEvent('message', { data: copy })), 0);
+  }
+  terminate() {}
+  static async start() {
+    vi.stubGlobal('Worker', ThreadWorker);
+    vi.stubGlobal('addEventListener', (type: string, fn: (e: MessageEvent) => void) => type === 'message' && (ThreadWorker.inbox = fn));
+    vi.stubGlobal('removeEventListener', () => {});
+    vi.stubGlobal('postMessage', (data: unknown, transfer: Transferable[] = []) => {
+      const copy = structuredClone(data, { transfer });
+      setTimeout(() => ThreadWorker.current?.dispatchEvent(new MessageEvent('message', { data: copy })), 0);
+    });
+    await import('../../workers/sim.worker');
+    simLocally(false);
+  }
+}
+
+// (a reply the in-thread worker sends after its scenario ended, as on a loaded machine, lands here
+// rather than on an unstubbed global: unstubAllGlobals restores this, not undefined)
+(globalThis as { postMessage?: unknown }).postMessage ??= () => {};
+
 /** Each scenario starts with no league open and nothing mocked but console.error (the failures below are on purpose). */
 function fresh() {
+  // (messages still on their way to or from the in-thread worker are dropped)
+  ThreadWorker.inbox = null;
+  ThreadWorker.current = null;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   simLocally(true);
@@ -297,6 +336,38 @@ describe('the store', () => {
       expect(l.games).not.toEqual([]);
       // (no-op outside free agency, but it still reports)
       expect(runTask(l, { kind: 'faAdvance', days: 1 })).toEqual({ done: true });
+    }
+
+    // the worker keeps its own copy of the results between runs: a measurement sent before a live
+    // game is recorded (the league's results added to in place) and answered after it doesn't leave
+    // the client thinking the worker has that game, so the next sim goes through (it failed with
+    // "lost track of the results" after watched playoff games)
+    {
+      await ThreadWorker.start();
+      const l = (await simLeague(testLeague('worker'), { kind: 'days', n: 2 }, { progress: () => {}, checkpoint: () => {} })).league;
+      const opp = l.schedule.find((g) => !g.played && (g.home === l.userTid || g.away === l.userTid))!;
+      const counters = measureCounters(l, opp.home === l.userTid ? opp.away : opp.home, opp.gid, () => {});
+      cancelWorth();
+      const before = l.games.length;
+      simDay(l);
+      expect(l.games.length).toBeGreaterThan(before);
+      await counters;
+      const warn = vi.spyOn(console, 'warn');
+      const out = await simLeague(l, { kind: 'days', n: 2 }, { progress: () => {}, checkpoint: () => {} });
+      expect(out.league.day).toBe(l.day + 2);
+      // (sent as a delta, not whole again)
+      expect(warn).not.toHaveBeenCalled();
+      expect(out.league.games.slice(0, l.games.length)).toEqual(l.games);
+      // a result changed after it went over (the night's moves measured) goes again
+      const g = out.league.games[0];
+      g.movesWorth = { pts: 1, raw: 1, se: 0.5, win: 0.02, n: 100, moves: 1 };
+      const t = await taskLeague(out.league, { kind: 'faAdvance', days: 1 });
+      const task = ThreadWorker.sent.filter((m) => m.path?.[0] === 'task').at(-1);
+      expect((task?.argumentList?.[1].value as GamesDelta).keep).toBe(0);
+      expect(t.league.games[0].movesWorth).toEqual(g.movesWorth);
+      // the worker going away (here: its error) drops it; the next run starts another
+      ThreadWorker.current!.dispatchEvent(new Event('error'));
+      fresh();
     }
 
     // a sim worker that cannot start: the sim runs in this thread instead, and so do later runs

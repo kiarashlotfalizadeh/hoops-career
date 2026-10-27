@@ -405,7 +405,12 @@ export function defRoleFits(p: Player): Record<DefRole, number> {
   };
 }
 
-/** A role fit as stars, one to five (a fit of 70 or more is five). */
+/**
+ * A role fit on the fits' own scale, one to five (a fit of 70 or more is five): what the staff's own
+ * rules compare (miscast, the AI's role picks). Not what the screens show: fits cluster at 45-65, so
+ * on this scale a 3x All-NBA big read two stars at his natural roles. The screens rank a fit against
+ * the league's rotation players at that role instead (roleStars).
+ */
 export const fitStars = (v: number) => Math.max(1, Math.min(5, Math.round((v - 30) / 10)));
 
 /**
@@ -416,10 +421,78 @@ export const fitStars = (v: number) => Math.max(1, Math.min(5, Math.round((v - 3
  */
 export const MISCAST_STARS = 2;
 
-/** His best role among `fits` when it's MISCAST_STARS or more ahead of the one he plays (`cur`), else null. */
+/**
+ * His best role among `fits` when it's MISCAST_STARS or more ahead of the one he plays (`cur`), else
+ * null. Never Hidden: its fit is how poor a defender he is, not a role he'd play better in.
+ */
 export function miscast<R extends string>(fits: Record<R, number>, cur: R): R | null {
-  const best = (Object.keys(fits) as R[]).reduce((a, r) => (fits[r] > fits[a] ? r : a), cur);
+  const best = (Object.keys(fits) as R[]).reduce((a, r) => (r !== 'hide' && fits[r] > fits[a] ? r : a), cur);
   return fitStars(fits[best]) - fitStars(fits[cur]) >= MISCAST_STARS ? best : null;
+}
+
+/** Players a team counts for the role scale: its best nine by OVR, injured or not (about the league's rotation players). */
+const SCALE_NINE = 9;
+
+/** Each role's fits over the league's rotation players, sorted low to high: what a fit's stars are read against (roleStars). */
+export interface RoleScale {
+  off: Record<OffRole, number[]>;
+  def: Record<DefRole, number[]>;
+}
+
+const scales = new WeakMap<League, { key: string; scale: RoleScale }>();
+
+/** The league's role scale (worked out once a day: the league changes in place). */
+export function roleScale(league: League): RoleScale {
+  const key = `${league.season}:${league.phase}:${league.day}`;
+  const memo = scales.get(league);
+  if (memo?.key === key) return memo.scale;
+  const off = {} as Record<OffRole, number[]>;
+  const def = {} as Record<DefRole, number[]>;
+  for (const t of league.teams) {
+    const nine = teamPlayers(league, t.tid)
+      .sort((a, b) => b.ovr - a.ovr)
+      .slice(0, SCALE_NINE);
+    for (const p of nine) {
+      for (const [r, v] of Object.entries(roleFits(p)) as [OffRole, number][]) (off[r] ??= []).push(v);
+      for (const [r, v] of Object.entries(defRoleFits(p)) as [DefRole, number][]) (def[r] ??= []).push(v);
+    }
+  }
+  for (const xs of [...Object.values(off), ...Object.values(def)]) xs.sort((a, b) => a - b);
+  const scale = { off, def };
+  scales.set(league, { key, scale });
+  return scale;
+}
+
+/** Shares of the league's rotation players a fit has to be ahead of for two, three, four and five stars. */
+const STAR_CUTS = [0.2, 0.45, 0.7, 0.9];
+
+/**
+ * A fit as the screens' stars, against the league's rotation players at that role (`scale`, sorted):
+ * five for its top fifth, four for the next, down to one for its bottom fifth. So a player's natural
+ * roles read three to five stars and a role he has no business in one or two (Towns, 2026-10: two
+ * stars as a Rim Runner on the fits' own scale, five on this one).
+ */
+export function roleStars(scale: number[] | undefined, v: number): number {
+  if (!scale?.length) return fitStars(v);
+  let lo = 0;
+  let hi = scale.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (scale[mid] < v) lo = mid + 1;
+    else hi = mid;
+  }
+  const pct = lo / scale.length;
+  return 1 + STAR_CUTS.filter((c) => pct >= c).length;
+}
+
+/**
+ * The role the screens flag as a better fit ("Better fit"): miscast by the staff's rule (two stars on
+ * the fits' scale, never Hidden) and ahead on the screens' stars too, so the flag never points at a
+ * role that shows no more stars than his own.
+ */
+export function betterFit<R extends string>(scale: Record<R, number[]>, fits: Record<R, number>, cur: R): R | null {
+  const best = miscast(fits, cur);
+  return best && roleStars(scale[best], fits[best]) > roleStars(scale[cur], fits[cur]) ? best : null;
 }
 
 /**

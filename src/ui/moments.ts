@@ -63,6 +63,8 @@ export interface Moment {
   sub: string;
   /** The player it's about, for his jersey; otherwise the team's mark is shown. */
   pid?: number;
+  /** The number on that jersey when it isn't his latest: the one going up on a banner night, in the team's colours. */
+  jersey?: string;
   /** Titles get confetti. */
   big?: boolean;
   /** Where "Read" goes (a story's page). */
@@ -435,6 +437,7 @@ function jerseyMoments(league: League): Moment[] {
       title: `No. ${r.jersey}`,
       sub: `${p ? name(p) : r.name}'s number goes up to the rafters before the home opener. Nobody wears it for the ${team.name} again.`,
       pid: r.pid,
+      jersey: r.jersey,
       ...(story ? { link: storyLink(story.id), story: story.id } : {}),
       season: league.season,
       day: opener.day,
@@ -643,7 +646,7 @@ function finalsMoment(league: League): Moment | null {
     over,
     title,
     sub,
-    ...(mvp ? { pid: mvp.pid } : {}),
+    // (the team's mark: the Finals MVP's number beside "A second title" reads as a count)
     big: true,
     lines: lines.slice(0, 4),
     ...(f.last ? { link: `/game/${f.last.gid}`, linkLabel: `Game ${f.last.n} report` } : {}),

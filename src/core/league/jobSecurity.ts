@@ -139,10 +139,12 @@ export function frozenBooksOutlook(league: League): { cap: number; deeper: boole
 function projectedGrade(league: League, og: OwnerGoals, fc?: Forecast | null): number | null {
   const prog = ownerProgress(league, og, fc);
   if (!prog.length) return null;
-  const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected), 0);
+  const wins = prog.find((p) => p.goal.kind === 'wins');
+  // (a development year's part of the young players' goal keeps the projected wins' miss)
+  const wg = wins ? gradeGoal(league, og, wins.goal, wins.projected) : undefined;
+  const sum = prog.reduce((a, p) => a + p.goal.weight * gradeGoal(league, og, p.goal, p.projected, wg), 0);
   // a record projected under his floor caps it, as the review will; so does a season past the
   // rebuild allowance projected out of the postseason, and books projected in the red under the freeze
-  const wins = prog.find((p) => p.goal.kind === 'wins');
   const post = prog.find((p) => p.goal.kind === 'postseason');
   const books = frozenBooksOutlook(league);
   return Math.min(sum, wins ? floorCap(og, wins.projected, og.games) : 1, post ? patienceCap(og, post.projected) : 1, books?.cap ?? 1);
@@ -226,10 +228,13 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
 /**
  * Between seasons, on a warm or hot seat: what the next review needs to keep the coach above the
  * firing line, when it can fire him ("Next review needs a season grade of −37 or better: about 31
- * wins and the play-in"). The grade from his standing and how much a season counts; in the preseason
- * the fewest wins from the goals he'd set today (see planOwnerGoals) that get there, the floor's cap
- * counted, his postseason goal named only when no record gets there without it. Null when that review can't fire him or no grade can
- * sink him.
+ * wins", or "...: to reach the play-in, and about 24 wins"). The grade from his standing and how much a season counts; in the preseason
+ * the fewest wins from the goals he'd set today (see planOwnerGoals) that get there, the floor's and
+ * the rebuild clock's caps counted, his postseason goal named only when no record gets there without
+ * it ("the play-in, whatever your record" when any record does with it). The rebuild clock's cap had
+ * been left out: "about 4 wins" to a coach whose season graded −60 at best without the play-in, and
+ * was fired at 11-71 (the review, round 3). Null when that review can't fire him or no grade can sink
+ * him.
  */
 function nextReviewNeeds(league: League, standing: number): string | null {
   const reviewed = REVIEWED.has(league.phase);
@@ -243,18 +248,22 @@ function nextReviewNeeds(league: League, standing: number): string | null {
   const wins = og?.goals.find((g) => g.kind === 'wins');
   if (!og || !wins) return `${head}.`;
   const post = og.goals.find((g) => g.kind === 'postseason');
-  // (the fewest wins whose season grade gets there, under the floor's cap too, the other goals on
-  // target and the postseason goal missed; only when no record gets there that way, with it met)
+  // (the fewest wins whose season grade gets there, under the floor's and the rebuild clock's caps
+  // too, the other goals on target and the postseason goal missed; only when no record gets there
+  // that way, with it met)
   const fewest = (met: boolean) => {
     const postGrade = post ? post.weight * (met ? 0.3 : Math.max(-1, -0.35 * post.target)) : 0;
-    for (let n = 0; n <= og.games; n++) if (Math.min(wins.weight * clamp((n - wins.target) / WIN_SCALE, -1, 1) + postGrade, floorCap(og, n, og.games)) >= need) return n;
+    const patience = patienceCap(og, met && post ? post.target : 0);
+    for (let n = 0; n <= og.games; n++) if (Math.min(wins.weight * clamp((n - wins.target) / WIN_SCALE, -1, 1) + postGrade, floorCap(og, n, og.games), patience) >= need) return n;
     return null;
   };
   const alone = fewest(false);
   if (alone === 0) return `${head}.`;
   if (alone !== null) return `${head}: about ${alone} wins.`;
   const n = fewest(true);
-  return n === null ? `${head}.` : `${head}: about ${n} wins and to ${post!.title.charAt(0).toLowerCase()}${post!.title.slice(1)}.`;
+  if (n === null || !post) return `${head}.`;
+  const goal = `${post.title.charAt(0).toLowerCase()}${post.title.slice(1)}`;
+  return n === 0 ? `${head}: to ${goal}, whatever your record.` : `${head}: to ${goal}, and about ${n} wins.`;
 }
 
 /** The least chance the season forecast must give an ultimatum: one it gives less is a firing announced, not a demand. */

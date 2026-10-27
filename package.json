@@ -31,7 +31,8 @@
     "smoke": "node scripts/qa/smoke.mjs",
     "invariants": "tsx scripts/league-invariants.ts",
     "star-check": "tsx scripts/star-check.ts",
-    "style-gate": "tsx scripts/style-gate.ts"
+    "style-gate": "tsx scripts/style-gate.ts",
+    "forecast-check": "tsx scripts/forecast-check.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.6.9",

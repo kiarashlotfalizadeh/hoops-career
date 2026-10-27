@@ -1,12 +1,13 @@
 // Office → Trade: the builder (a partner, the deal, both sides' assets and their GM's live reaction
 // in the dock), the finder, the trading block and the offers other teams make. This module holds the
 // deal and the tabs; each part lives in src/ui/trade/. Deep links: ?with=tid, ?give/get(dp)=ids,
-// ?proposal=id (an AI team's offer, in the builder), ?offer=id, ?tab=offers, ?tab=find&minOvr=N (the
-// finder with its OVR floor set) and ?give=pid alone (that player on the trading block).
+// ?proposal=id (an AI team's offer, in the builder), ?offer=id, ?tab=offers, ?tab=find&minOvr=N&pos=P (the
+// finder with its OVR floor and position set) and ?give=pid alone (that player on the trading block).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Ban } from 'lucide-react';
 import type { League } from '../../core/types';
+import { POSITIONS } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { playerName } from '../../core/league/helpers';
 import { capSalary, evaluateTrade, pickLabel, swapSeasons, salaryMatchGap, validateTrade, type TradeOffer } from '../../core/league/trades';
@@ -45,8 +46,13 @@ type Tab = 'build' | 'find' | 'block' | 'offers';
 
 /** The finder's OVR floor from ?minOvr=N: the highest of its filter's steps at or under N. */
 const minOvrOf = (params: URLSearchParams) => [85, 80, 75, 70].find((x) => x <= Number(params.get('minOvr'))) ?? 0;
+/** The finder's position from ?pos=P, else all. */
+const posOf = (params: URLSearchParams): FinderState['pos'] => POSITIONS.find((x) => x === params.get('pos')) ?? 'all';
 
-function readParams(league: League, params: URLSearchParams): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null; minOvr: number } {
+function readParams(
+  league: League,
+  params: URLSearchParams,
+): { partner: number; give: Sel; get: Sel; shop: number | null; tab: Tab; focus: number | null; minOvr: number; pos: FinderState['pos'] } {
   const user = league.userTid;
   // an offer from the agenda (?offer=id): the Offers tab, that offer first
   const focus = params.get('offer') !== null ? Number(params.get('offer')) : null;
@@ -62,6 +68,7 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
       tab: 'build',
       focus: null,
       minOvr: 0,
+      pos: 'all',
     };
   const w = params.get('with');
   const wt = w !== null ? Number(w) : NaN;
@@ -72,7 +79,7 @@ function readParams(league: League, params: URLSearchParams): { partner: number;
   // "Trade him" from the contracts list opens the trading block for that player
   const shop = w === null && give.pids.length === 1 && !give.dpids.length && !get.pids.length && !get.dpids.length ? give.pids[0] : null;
   const tab: Tab = pr !== null || focus !== null || params.get('tab') === 'offers' ? 'offers' : shop !== null ? 'block' : params.get('tab') === 'find' ? 'find' : 'build';
-  return { partner, give, get, shop, focus, tab, minOvr: minOvrOf(params) };
+  return { partner, give, get, shop, focus, tab, minOvr: minOvrOf(params), pos: posOf(params) };
 }
 
 export default function Trade() {
@@ -89,7 +96,7 @@ export default function Trade() {
   const [side, setSide] = useState<'theirs' | 'mine'>('theirs');
   // a turned-down deal and what they'd do instead; the finder's filters and the ask it last loaded
   const [counters, setCounters] = useState<{ base: TradeOffer; list: CounterOffer[] } | null>(null);
-  const [finder, setFinder] = useState<FinderState>(() => ({ ...FINDER_DEFAULT, minOvr: init.minOvr }));
+  const [finder, setFinder] = useState<FinderState>(() => ({ ...FINDER_DEFAULT, minOvr: init.minOvr, pos: init.pos }));
   const [ask, setAsk] = useState<Ask | null>(null);
   // a deal they'd take that you overpay for, or that moves a first, waits for a second tap
   const [confirm, setConfirm] = useState<TradeOffer | null>(null);
@@ -109,7 +116,7 @@ export default function Trade() {
     setShop(r.shop);
     setFocus(r.focus);
     setTab(r.tab);
-    if (r.tab === 'find') setFinder({ ...FINDER_DEFAULT, minOvr: r.minOvr });
+    if (r.tab === 'find') setFinder({ ...FINDER_DEFAULT, minOvr: r.minOvr, pos: r.pos });
     setAsk(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);

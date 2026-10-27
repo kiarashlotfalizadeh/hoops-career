@@ -11,7 +11,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Empty } from '../components/ui';
 import { OvrPot } from '../office/common';
 import { gradeTone, lotteryHidden, pickGrade, projText } from './common';
-import { ordinal } from '../../core/format';
+import { keepFigures, ordinal } from '../../core/format';
 import './draft-night.css';
 import { overallPick } from '../league/shared';
 import { OvrKey } from '../components/OvrKey';
@@ -72,7 +72,10 @@ export function BoardList({
     if (!mock || !r) return null;
     const where = r.med > 2 * league.teams.length ? 'Undrafted in most mocks' : r.lo === r.hi ? projText(r.med) : projText(r.lo) + `-${r.hi > 2 * league.teams.length ? '' : r.hi}`;
     const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
-    return { where: where.replace(/-$/, '+'), gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by your #${mine!.overall}` : null };
+    return {
+      where: keepFigures(where.replace(/-$/, '+')),
+      gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by your #${mine!.overall}` : null,
+    };
   };
   return (
     <div className="card flush">

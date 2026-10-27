@@ -5,7 +5,7 @@ import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { p0 } from '../stats';
-import { plural } from '../../core/format';
+import { keepFigures, plural } from '../../core/format';
 import { roundName, useGamesByGid, useQueryParam } from './shared';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 
@@ -156,7 +156,9 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
           <span className="ab">
             {league.teams[t.tid].abbrev}
             <span className="rec">
-              {series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : after?.get(t.tid) ? after.get(t.tid)!.join('-') : record(league, t.tid)}
+              {keepFigures(
+                series ? `${seriesWins(t.tid)}-${seriesWins(t.tid === g.home ? g.away : g.home)}` : after?.get(t.tid) ? after.get(t.tid)!.join('-') : record(league, t.tid),
+              )}
             </span>
           </span>
           <span className="sc">{t.pts ?? ''}</span>

@@ -190,7 +190,7 @@ export function reputationCheck(league: League): Anchor[] {
   );
   check(
     'role shooters are not All-Star tier, and Jerome not All-NBA',
-    shooters.every((p) => p.ovr < 87) && jerome.ovr < 89,
+    shooters.every((p) => p.ovr < 86) && jerome.ovr < 89,
     list([...shooters, jerome], (p) => p.ovr),
   );
   const scorers = regulars.filter((p) => real(p).ppg >= 25 && real(p).mpg >= 33);
@@ -204,10 +204,12 @@ export function reputationCheck(league: League): Anchor[] {
   const sup = tiers.Superstar ?? 0;
   const nba = sup + (tiers['All-NBA'] ?? 0);
   const as = nba + (tiers['All-Star'] ?? 0);
+  // (All-Star starts at 86, where the checks above put every 25-point scorer: the All-Star tier
+  // itself holds about the NBA's 24, and with the All-NBA tiers above it about 40)
   check(
-    'tiers are NBA-sized: 4-9 superstars, 14-22 All-NBA or better, 24-34 All-Stars or better',
-    sup >= 4 && sup <= 9 && nba >= 14 && nba <= 22 && as >= 24 && as <= 34,
-    `${sup} / ${nba} / ${as}`,
+    'tiers are NBA-sized: 4-9 superstars, 14-22 All-NBA or better, 18-30 All-Stars, 32-44 All-Stars or better',
+    sup >= 4 && sup <= 9 && nba >= 14 && nba <= 22 && as - nba >= 18 && as - nba <= 30 && as >= 32 && as <= 44,
+    `${sup} / ${nba} / ${as - nba} / ${as}`,
   );
 
   // ---- the market follows

@@ -28,6 +28,7 @@ import {
   playerMax,
   resignLimit,
   playerPrefs,
+  summerFloor,
   teamAppeal,
   valueScore,
 } from './contracts';
@@ -178,7 +179,9 @@ export function walkAwayDiscount(league: League, p: Player, kind: TalkKind): num
 export function walkAwayFor(league: League, p: Player, kind: TalkKind, years: number, option?: TalkTerms['option']): number {
   const ask = talkAsk(league, p, kind);
   const { min, max } = talkBounds(league, p, kind);
-  return clamp(ask.amount * (1 - walkAwayDiscount(league, p, kind)) * termsFactor(ask, years, option), min, max);
+  // (a free agent's summer floor holds in talks too: see SUMMER_FLOOR)
+  const floor = kind === 'fa' ? summerFloor(league, p) : 0;
+  return clamp(Math.max(ask.amount * (1 - walkAwayDiscount(league, p, kind)), floor) * termsFactor(ask, years, option), min, max);
 }
 
 /** When talks that broke down are on again, in words: "Jul 4", or "the preseason" for the rest of the summer. */

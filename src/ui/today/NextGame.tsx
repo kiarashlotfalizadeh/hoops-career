@@ -9,7 +9,7 @@ import type { League, ScheduledGame } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { liveInProgress } from '../../state/live';
 import { curTeamSeason, fmtDate, teamPlayers } from '../../core/league/helpers';
-import { ordinal, outFor } from '../../core/format';
+import { keepFigures, ordinal, outFor } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { matchupPreview, type SidePreview } from '../../core/analysis/preview';
 import { draftOrder } from '../../core/league/draft';
@@ -165,7 +165,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
         </div>
       </div>
       <h2 className="td-lead-head">{head}</h2>
-      {top && <p className="td-lead-dek">{top.line}</p>}
+      {top && <p className="td-lead-dek">{keepFigures(top.line)}</p>}
       {(tags.length > 0 || outs.length > 0) && (
         <div className="td-foot-s">
           {tags.length > 0 && (

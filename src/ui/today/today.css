@@ -355,8 +355,6 @@
   align-items: center;
   font-size: 12px;
   font-weight: 640;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--text-2);
 }
 .td-phase-gl {

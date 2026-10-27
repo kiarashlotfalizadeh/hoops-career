@@ -19,7 +19,7 @@ import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
 import { ordinal, useGamesByGid } from '../league/shared';
 import { gameTag, planSize } from './data';
-import { plural } from '../../core/format';
+import { keepFigures, plural } from '../../core/format';
 import './games.css';
 
 export type ScheduleFilter = 'all' | 'upcoming' | 'results' | 'home' | 'away' | 'cup' | 'post';
@@ -247,7 +247,7 @@ function MonthRows({ rows, all, records = true, ...p }: RowProps & { rows: Row[]
             {head && (
               <div className="list-divider gs-month">
                 <span>{month}</span>
-                {rec && <span className="num">{rec}</span>}
+                {rec && <span className="num">{keepFigures(rec)}</span>}
               </div>
             )}
             <GameRow r={r} {...p} />

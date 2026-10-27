@@ -66,7 +66,7 @@ export const crunchTime = (v: Pick<Drawn, 'q' | 'clock' | 'sides'>) => coreCrunc
  * possession): the fourth quarter or overtime, with neither side CLOSE_WIN to win it from the drawn
  * game (the score, the clock, the ball and the projection at tip-off, `edge`). A blowout never stops.
  */
-export function closeGame(v: Pick<Drawn, 'q' | 'clock' | 'ball' | 'sides'>, edge: number): boolean {
+export function closeGame(v: Pick<Drawn, 'q' | 'clock' | 'ball'> & { sides: readonly { score: number }[] }, edge: number): boolean {
   if (v.q < 4) return false;
   const p = winProb({ margin: v.sides[0].score - v.sides[1].score, q: v.q, clock: v.clock, ball: v.ball, edge });
   return p < CLOSE_WIN && p > 1 - CLOSE_WIN;

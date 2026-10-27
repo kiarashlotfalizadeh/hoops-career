@@ -10,7 +10,7 @@ import { LINK_NAMED, lineupLinks } from '../../core/sim/links';
 import { roleFam } from '../../core/sim/familiarity';
 import { ROLE_META, archetype } from '../../core/ratings';
 import { DEF_ROLE_META, defRoleOf } from '../../core/sim/tactics';
-import { defRoleFits, miscast, roleFits } from '../../core/analysis/system';
+import { betterFit, defRoleFits, roleFits, roleScale } from '../../core/analysis/system';
 import { Section, Sheet, Tag } from '../components/ui';
 import { RoleEditor } from '../components/RoleEditor';
 import { rosterNames } from '../stats';
@@ -103,6 +103,7 @@ function Bench({ players, bench, side, onPick }: { players: Player[]; bench: Pla
   const t = league.teams[league.userTid].tactics;
   const fam = useFam();
   const nameOf = useMemo(() => rosterNames(players), [players]);
+  const scale = useLeagueMemo(() => roleScale(league), [league]);
   if (!bench.length) return null;
   return (
     <Section title="Bench" right={<span className="tiny dim">Roles · knows them</span>}>
@@ -110,7 +111,7 @@ function Bench({ players, bench, side, onPick }: { players: Player[]; bench: Pla
         {bench.map((p) => {
           const off = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
           const def = defRoleOf(t.defense, p.pid);
-          const better = side === 'in' ? miscast(roleFits(p), off) : miscast(defRoleFits(p), def);
+          const better = side === 'in' ? betterFit(scale.off, roleFits(p), off) : betterFit(scale.def, defRoleFits(p), def);
           const pair = roleFam(fam, t, p);
           return (
             <button key={p.pid} className="listrow clickable tx-bench-r" aria-haspopup="dialog" onClick={() => onPick(p.pid)}>

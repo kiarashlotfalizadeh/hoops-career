@@ -350,6 +350,7 @@ export class GameSim {
     for (const p of t.players) p.cap = rot.caps[p.pid] || undefined;
     const plan = cachedPlan(planPlayers);
     for (const slot of plan) for (const pid of slot) t.byId.get(pid)!.planMin++;
+    if (this.opts.type === 'playoffs') t.planReg = cachedPlan(planInputs(src, rot));
     return plan;
   }
 
