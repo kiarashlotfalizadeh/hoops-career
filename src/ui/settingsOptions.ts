@@ -1,9 +1,6 @@
 // Settings choices that are also offered elsewhere (New League, the live game), defined once so the
 // screens always agree.
 import type { Settings } from '../core/types';
-import { COURT_RANGE, DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/league/difficulty';
-import { GRACE } from '../core/league/jobSecurity';
-import { FLOOR_MARGIN } from '../core/league/ownerGoals';
 
 /** The help line for teaching, the same in Settings and New League. */
 export const TEACHING_HELP = "The first-week guide on Today, its welcome mail and Today's Glossary link. Every ? and glossary word stays.";
@@ -33,54 +30,4 @@ export const LIVE_BREAKS: { id: NonNullable<Settings['liveBreaks']>; label: stri
   { id: 'quarters', label: 'Quarters' },
   { id: 'half', label: 'Halftime' },
   { id: 'off', label: 'None' },
-];
-
-/** The difficulty presets as picker options (the numbers live in core/league/difficulty.ts). */
-export const DIFFICULTY_OPTIONS: { id: Settings['difficulty']; label: string; help: string }[] = DIFFICULTIES.map((id) => ({
-  id,
-  label: DIFFICULTY[id].label,
-  help: DIFFICULTY[id].line,
-}));
-
-export const helpFor = <T extends string>(list: { id: T; help: string }[], id: T) => list.find((x) => x.id === id)?.help ?? '';
-
-/** A share of fair value as the difference from it: 0.88 → "−12%", 1 → "Fair". */
-const vsFair = (x: number) => (Math.abs(x - 1) < 0.005 ? 'Fair' : `${x < 1 ? '−' : '+'}${Math.round(Math.abs(x - 1) * 100)}%`);
-const PLANS: Record<'never' | 'sometimes' | 'always', string> = { never: 'None', sometimes: 'Half', always: 'All' };
-
-/**
- * What tells the presets apart, one column each, for the difficulty picker (Settings and New
- * League): the label over the column, the figure for a preset, and what it means.
- */
-export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficulty) => string; help: string }[] = [
-  { id: 'trade', label: 'Trade asks', value: (d) => vsFair(DIFFICULTY[d].tradeAsk), help: 'What AI GMs need back in a trade, against fair value (−12% means 12% less).' },
-  {
-    id: 'contract',
-    label: 'Contract asks',
-    value: (d) => vsFair(DIFFICULTY[d].contractAsk),
-    help: 'What your own players and free agents ask of you, against their market price.',
-  },
-  { id: 'plans', label: 'Opponent plans', value: (d) => PLANS[DIFFICULTY[d].opponentPlans], help: 'How many opposing coaches come in with a game plan against you.' },
-  {
-    id: 'court',
-    label: 'On court',
-    value: (d) => {
-      const x = DIFFICULTY[d];
-      if (!x.court) return 'Even';
-      const sign = x.court > 0 ? '+' : '−';
-      // (Hard's grows with your team: 1 to 5 points, the better the team, the more; the sign on both ends)
-      return x.courtGrowth ? `${sign}${Math.abs(x.court) * COURT_RANGE[0]} to ${sign}${Math.abs(x.court) * COURT_RANGE[1]}` : `${sign}${Math.abs(x.court)}`;
-    },
-    help: 'Points a game your team gets (+) or your opponents get (−) over what the rosters and tactics are worth, the way home court works. On Hard it grows with your team: the better your roster, the harder they play you.',
-  },
-  {
-    id: 'owner',
-    label: 'Owner waits',
-    value: (d) => `${GRACE[d]} yr${GRACE[d] === 1 ? '' : 's'}`,
-    // (what the presets change in the owner's asks, as ownerGoals.ts sets them: his win goal is his read of
-    // the roster with the edge on the court in it, so on Hard he asks fewer wins for the same roster, not
-    // more; the floor's win% is capped FLOOR_MARGIN wins under that read, so a weak roster's is the same
-    // on every preset. The review, round 4: "Hard .350" promised for a Wizards floor of about .280)
-    help: `Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season and accepts fewer rebuilding seasons in a row (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} ${DIFFICULTY[d].rebuildSeasons}`).join(', ')}). His win goal is what he reads your roster to win with the edge on the court counted in, so the same roster is asked for more wins on Easy and fewer on Hard. Under it sits a floor (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} .${Math.round(DIFFICULTY[d].winFloor * 1000)}`).join(', ')}): a season below it is a failed season whatever else went right. The floor moves with the edge like the goal and stays at least ${FLOOR_MARGIN} wins under his read, so a weak roster gets about the same floor on every preset. New League shows his asks for your team on the preset you pick.`,
-  },
 ];

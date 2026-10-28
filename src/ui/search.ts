@@ -46,8 +46,8 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   {
     title: 'Settings',
     to: '/settings',
-    meta: 'Difficulty, big moments, injuries, when sims stop',
-    also: 'options preferences difficulty big moments injuries job security sims pause away',
+    meta: 'Big moments, injuries, job security, when sims stop',
+    also: 'options preferences big moments injuries job security sims pause away',
   },
   {
     title: 'Live game settings',

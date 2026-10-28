@@ -1,13 +1,12 @@
 // What an AI coach prepares for a game against the user's team: at most two changes to his usual
 // tactics that answer what the user's team does best (a hot pick-and-roll, its shooting, its
 // running game, the player it runs its offense through...) or where it's weak (a starter to guard
-// a particular way, a poor perimeter defender to attack). Whether he prepares one depends on the
-// difficulty and his tactics rating, rolled from the game's id, never the league's random stream.
+// a particular way, a poor perimeter defender to attack). Whether he prepares one depends on his
+// tactics rating, rolled from the game's id, never the league's random stream.
 // What goes in it is read from the user's stored games before game day only, so the plan for a
 // game reads the same in the preview and the game itself, whatever else is played that
 // day. AI-vs-AI games never get one, so the league's numbers are unchanged.
 
-import { preset } from '../league/difficulty';
 import type { GameSim } from '../sim/engine';
 import type { League, Player, PnrCoverage, ScheduledGame, Tactics, TacticsPatch, Team, TeamBox } from '../types';
 import { Rng, clamp, hashString } from '../random';
@@ -44,13 +43,10 @@ export const OPP_PLAN_MAX = 2;
 const MIN_PT_POSS = 40;
 
 /**
- * The chance an AI coach game-plans for a game against the user: never on easy, every game on
- * hard, and on normal about half of them, more often the better he is at tactics.
+ * The chance an AI coach game-plans for a game against the user: about half of them, more often the
+ * better he is at tactics.
  */
 export function oppPlanChance(league: League, aiTid: number): number {
-  const d = preset(league).opponentPlans;
-  if (d === 'never') return 0;
-  if (d === 'always') return 1;
   return clamp(0.5 + (league.teams[aiTid].coach.tactics - 60) / 100, 0.15, 0.85);
 }
 

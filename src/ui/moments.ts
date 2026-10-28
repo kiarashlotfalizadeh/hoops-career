@@ -562,7 +562,6 @@ function jobMoments(league: League): Moment[] {
   if (stint && stint.tid === me) {
     // (in the words the Owner page uses, so a win-now owner taking a rebuild says so)
     const who = personalityLine(ownerPersonality(league, me), og ?? undefined).replace(' · ', ' owner: ');
-    const grace = GRACE[league.settings.difficulty];
     out.push({
       key: `hired-${me}-${stint.from}`,
       kind: 'hired',
@@ -571,7 +570,7 @@ function jobMoments(league: League): Moment[] {
       sub: `${who}.`,
       lines: [
         og ? `He wants: ${og.goals.map((g) => g.title.toLowerCase()).join('; ')}.` : 'He sets his goals on opening night, from the roster you open with.',
-        grace === 1 ? "He can't fire you in your first season." : `He can't fire you in your first ${grace} seasons.`,
+        `He can't fire you in your first ${GRACE} seasons.`,
       ],
       link: '/office/owner',
       linkLabel: 'Meet the owner',

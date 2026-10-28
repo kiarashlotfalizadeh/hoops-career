@@ -19,10 +19,6 @@
 .set-list:disabled .input {
   opacity: 0.45;
 }
-/* the difficulty rows run nearly to the card's edges: their text lines up with the other rows' */
-.set-list > .dif {
-  padding: 12px 6px 8px;
-}
 /* a change that waits for the next opening night: right under the setting, no rule between */
 .set-list > .set-pending {
   min-height: 0;

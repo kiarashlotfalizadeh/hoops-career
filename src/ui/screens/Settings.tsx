@@ -12,7 +12,7 @@ import { seasonLabel } from '../../core/constants';
 import { plural } from '../../core/format';
 import { deleteLeague } from '../../state/persistence';
 import { seasonsInCharge } from '../../core/league/owner';
-import { DIFFICULTY, chosenSetting, requestSetting } from '../../core/league/difficulty';
+import { GRACE, chosenJobSecurity, requestJobSecurity } from '../../core/league/jobSecurity';
 import { coachNameTaken, renameUserCoach } from '../../core/league/coaches';
 import { guideOpen, showGuide } from '../../core/league/agenda';
 import { edit } from '../../state/actions';
@@ -20,7 +20,6 @@ import { loopSetting, useLeague, useStore, type LoopSettings } from '../../state
 import { Help, More, PageHeader, Section, Segmented, Sheet, Toggle } from '../components/ui';
 import { GlossarySheet } from '../components/Glossary';
 import { TabBar } from '../league/shared';
-import { DifficultyPicker } from '../components/DifficultyPicker';
 import { BrandMark } from '../components/BrandMark';
 import { GLOSSARY } from '../glossary';
 import { LIVE_BREAKS, LIVE_SPEEDS, TEACHING_HELP, rememberTeaching } from '../settingsOptions';
@@ -130,10 +129,8 @@ export default function Settings() {
     nav('/');
   };
 
-  // a difficulty change, or job security off, waits for the next opening night (see requestSetting)
-  const chosen = chosenSetting(league);
+  // job security off waits for the next opening night (see requestJobSecurity)
   const from = league.phase === 'preseason' ? 'opening night' : 'next season';
-  const request = (k: 'difficulty' | 'jobSecurity', v: GameSettings['difficulty'] | boolean) => edit((l) => requestSetting(l, k, v));
 
   const seasonsIn = seasonsInCharge(league);
   const seasonsPlayed = league.season - league.startSeason + 1;
@@ -156,12 +153,6 @@ export default function Settings() {
         <>
           <Section title="Gameplay">
             <fieldset className="card flush set-list" disabled={simming}>
-              <DifficultyPicker value={chosen.difficulty} onChange={(d) => request('difficulty', d)} />
-              {st.pending?.difficulty && (
-                <div className="set-pending small" role="status">
-                  From {from}: {DIFFICULTY[st.pending.difficulty].label}. {DIFFICULTY[st.difficulty].label} until then, so a change can&apos;t dodge a season under way.
-                </div>
-              )}
               <Toggle
                 on={st.injuries}
                 onChange={(v) => set('injuries', v)}
@@ -169,10 +160,10 @@ export default function Settings() {
                 help="Fatigue, age and history raise the risk. Off stops new injuries; the hurt still heal."
               />
               <Toggle
-                on={chosen.jobSecurity}
-                onChange={(v) => request('jobSecurity', v)}
+                on={chosenJobSecurity(league)}
+                onChange={(v) => edit((l) => requestJobSecurity(l, v))}
                 label="Job security"
-                help={`After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals. Off, he never does: turning it off takes effect from the next opening night, so it can't dodge a review; on counts at once.`}
+                help={`After his grace period (${GRACE} seasons), the owner can fire you for a season short of his goals. Off, he never does: turning it off takes effect from the next opening night, so it can't dodge a review; on counts at once.`}
               />
               {st.pending?.jobSecurity === false && (
                 <div className="set-pending small" role="status">

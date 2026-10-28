@@ -392,7 +392,7 @@
 .nl-label {
   font-weight: 680;
 }
-/* the game's settings: the difficulty rows, then the switches, a hairline between each */
+/* the game's settings: the switches, a hairline between each */
 .nl-game {
   display: flex;
   flex-direction: column;
@@ -402,9 +402,6 @@
 }
 .nl-game > * + * {
   border-top: 1px solid var(--line);
-}
-.nl-game > .dif {
-  padding: 12px 6px 8px;
 }
 
 /* a step's call to action stays in thumb reach while the step scrolls under it */

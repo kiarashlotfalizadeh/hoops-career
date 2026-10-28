@@ -568,7 +568,6 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
   {
     const l = extLeague();
     l.phase = 'regular';
-    l.settings.difficulty = 'normal';
     const [a, b, c] = standardRoster(l, U);
     const mid = finalYear(l, a, 78, 27);
     const vet = finalYear(l, b, 78, 32);
@@ -582,9 +581,6 @@ it('negotiation and extensions: the ask, the walk-away price, counters and patie
     expect(extensionAsk(l, vet).amount).toBe(expected(vet, 0.95));
     expect(extensionAsk(l, star).amount).toBe(expected(star, 1.05));
     expect(extensionAsk(l, star).amount).toBeGreaterThan(extensionAsk(l, mid).amount);
-    // on a easy setting the user's own players ask 10% less
-    l.settings.difficulty = 'easy';
-    expect(extensionAsk(l, mid).amount).toBe(expected(mid, 0.9));
     // a veteran's extension runs four years at most
     expect(extensionAsk(l, finalYear(l, a, 78, 23)).years).toBeLessThanOrEqual(4);
   }

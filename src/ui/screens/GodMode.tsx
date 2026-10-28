@@ -93,7 +93,7 @@ export default function GodMode() {
                     Owner's confidence in you
                     <Help title="Owner's confidence">
                       Your standing with him, −100 to +100: Office → Owner&apos;s job-security meter reads it out of 100 (50 + half of it). With job security on, a review under −50
-                      fires you once his grace period is over (Difficulty sets how long).
+                      fires you once his grace period is over.
                     </Help>
                   </span>
                 }

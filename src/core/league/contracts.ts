@@ -7,7 +7,6 @@
 // walk-away price, counters, patience) are in negotiation.ts, 10-day contracts in tenDay.ts.
 
 import type { League, Player, SigningRoute, Team } from '../types';
-import { preset } from './difficulty';
 import { FREE_AGENT } from '../types';
 import { CAP, ROOKIE_SCALE, seasonLabel } from '../constants';
 import { Rng, clamp, hashString } from '../random';
@@ -428,7 +427,6 @@ export function askingContract(league: League, p: Player, tid?: number): Ask {
   const max = playerMax(league, p, cs, tid);
   if (!marked && market >= cap.maxContract(p.experience) * MAX_ASK) amount = max;
   else if (tid !== undefined) amount *= clamp(1 / teamAppeal(league, tid, p), ringChase(league, p, tid) ? 1 / RING_DISCOUNT : 1 / 1.1, 1 / 0.9);
-  if (tid === league.userTid) amount *= preset(league).contractAsk;
   // (a good free agent's summer price holds a floor, a ring chaser's and a keen team's discount included)
   amount = Math.max(amount, floor);
   return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
@@ -1577,7 +1575,6 @@ export function extensionAsk(league: League, p: Player): Ask {
     else if (a <= 27 && valueScore(league, p) >= 82) amount *= 1.05;
     if (p.tid >= 0) amount *= clamp(1 / teamAppeal(league, p.tid, p), 1 / 1.1, 1 / 0.9);
   }
-  if (p.tid === league.userTid) amount *= preset(league).contractAsk;
   return { amount: clamp(Math.round(amount / 50) * 50, min, max), years };
 }
 

@@ -5,20 +5,19 @@ import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { Fit, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
-import { DifficultyPicker } from '../components/DifficultyPicker';
 import { TEACHING_HELP, rememberTeaching, teachingDefault } from '../settingsOptions';
 import { slabVars } from '../teamColors';
 import './start.css';
 import { loadSeed } from '../../data/seedLoader';
 import type { SeedData } from '../../core/league/create';
 import { createLeague, defaultSettings } from '../../core/league/create';
-import { DIFFICULTY } from '../../core/league/difficulty';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
-import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, userOwnerPreview, type TeamPreview } from '../newLeague';
+import { GRACE } from '../../core/league/jobSecurity';
+import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -88,7 +87,6 @@ export default function NewLeague() {
   // first to preview each owner's day-one asks (and a fictional league's rosters) as you'll get them
   const [made] = useState(() => ({ id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }));
   const [preview, setPreview] = useState<{ key: string; teams: Record<number, TeamPreview> } | null>(null);
-  // (on Normal: the difficulty's edge on the court moves only the user's own owner, see userOwnerPreview)
   const previewKey = `${kind}:${settings.injuries}`;
   const previewTeams = preview?.key === previewKey ? preview.teams : null;
   // real rosters' top three from the seed at once; a fictional league's once its preview is built
@@ -118,10 +116,9 @@ export default function NewLeague() {
   const asked = sp.get('step');
   const step: Step = asked === 'team' || (asked === 'setup' && tid !== null) ? asked : asked === 'setup' ? 'team' : 'type';
 
-  // the preview: the league as Start career creates it, with the settings so far (the difficulty moves
-  // the asks), built while the first step is read (in two tasks, the league then the owners' reads:
+  // the preview: the league as Start career creates it, with the settings so far, built while the first step is read (in two tasks, the league then the owners' reads:
   // about 0.6 s of work on a slow phone), so the team step usually has it as it opens
-  const needPreview = step !== 'setup' && preview?.key !== previewKey && (kind === 'fictional' || !!seed);
+  const needPreview = preview?.key !== previewKey && (kind === 'fictional' || !!seed);
   useEffect(() => {
     if (!needPreview) return;
     let t2: ReturnType<typeof setTimeout> | undefined;
@@ -131,7 +128,7 @@ export default function NewLeague() {
           name: 'Preview',
           userTid: fallback ?? 0,
           coachName: 'Coach',
-          settings: { ...settings, difficulty: 'normal' },
+          settings,
           seed: kind === 'real' ? seed : null,
           ...made,
         });
@@ -145,34 +142,10 @@ export default function NewLeague() {
       clearTimeout(t2);
     };
   }, [needPreview, previewKey, fallback, settings, kind, seed, made]);
-  // the chosen team's owner on the chosen preset, as Start career makes him (the league built with that
-  // team as yours): on the last step, where the difficulty is picked, and again with each preset tapped;
-  // on the team step too once a preset other than Normal is picked (Back from the last step)
-  const [mine, setMine] = useState<{ key: string; owner: Pick<TeamPreview, 'wins' | 'level' | 'who'> } | null>(null);
-  const mineKey = `${kind}:${tid}:${settings.difficulty}:${settings.injuries}`;
-  const mineOwner = mine?.key === mineKey ? mine.owner : null;
-  const needMine = tid !== null && (step === 'setup' || (step === 'team' && settings.difficulty !== 'normal')) && mine?.key !== mineKey && (kind === 'fictional' || !!seed);
-  useEffect(() => {
-    if (!needMine || tid === null) return;
-    let t2: ReturnType<typeof setTimeout> | undefined;
-    const t1 = setTimeout(() => {
-      try {
-        const l = createLeague({ name: 'Preview', userTid: tid, coachName: 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
-        t2 = setTimeout(() => setMine({ key: mineKey, owner: userOwnerPreview(l) }), 0);
-      } catch (e) {
-        console.error(e);
-      }
-    }, 120);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-  }, [needMine, mineKey, tid, settings, kind, seed, made]);
-  // the owner line on a poster: the chosen team's own read when it's in, else on Normal the team step's preview
-  const presetLabel = DIFFICULTY[settings.difficulty].label;
-  const owner = (t: number, named: boolean) => {
-    const o = mineOwner ?? (settings.difficulty === 'normal' && !named ? previewTeams?.[t] : null);
-    return o ? ownerLine(o, named || settings.difficulty !== 'normal' ? presetLabel : undefined) : null;
+  // the owner line on a poster: the team step's preview, as Start career makes him
+  const owner = (t: number) => {
+    const o = previewTeams?.[t];
+    return o ? ownerLine(o) : null;
   };
   const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
   // back through the history (the main menu is behind the first step), and without any (a deep link or
@@ -292,9 +265,7 @@ export default function NewLeague() {
                 </Fit>
               </span>
               <span className="nl-pick-sub">{kind === 'fictional' ? 'Generated players' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
-              <span className={`nl-pick-owner ${owner(tid, false) ? '' : 'dim'}`}>
-                {owner(tid, false) ?? `Owner${settings.difficulty === 'normal' ? '' : ` on ${presetLabel}`}: reading the roster…`}
-              </span>
+              <span className={`nl-pick-owner ${owner(tid) ? '' : 'dim'}`}>{owner(tid) ?? 'Owner: reading the roster…'}</span>
               {(teamInfo?.[tid] || rank) && (
                 <span className="nl-pick-foot">
                   {teamInfo?.[tid] && (
@@ -376,8 +347,8 @@ export default function NewLeague() {
               </span>
             </span>
             {/* his asks on the preset picked below, again with each one tapped */}
-            <span className={`nl-pick-owner ${owner(tid, true) ? '' : 'dim'}`} aria-live="polite">
-              {owner(tid, true) ?? `Owner on ${presetLabel}: reading the roster…`}
+            <span className={`nl-pick-owner ${owner(tid) ? '' : 'dim'}`} aria-live="polite">
+              {owner(tid) ?? 'Owner: reading the roster…'}
             </span>
           </section>
           <Section title="You">
@@ -394,13 +365,12 @@ export default function NewLeague() {
           </Section>
           <Section title="Gameplay">
             <div className="card flush nl-game">
-              <DifficultyPicker value={settings.difficulty} onChange={(d) => setSettings({ ...settings, difficulty: d })} />
               <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Fatigue, age and history raise the risk." />
               <Toggle
                 on={settings.jobSecurity}
                 onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
                 label="Job security"
-                help="After his grace period (Difficulty sets how long), the owner can fire you for a season short of his goals."
+                help={`After his grace period (${GRACE} seasons), the owner can fire you for a season short of his goals.`}
               />
               <Toggle
                 on={settings.teaching !== false}

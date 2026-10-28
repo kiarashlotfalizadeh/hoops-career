@@ -55,9 +55,7 @@ function txLeague(rngSeed = 5): League {
 }
 
 function negLeague(rngSeed = 5): League {
-  const l = createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
-  l.settings.difficulty = 'normal';
-  return l;
+  return createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
 }
 
 function prLeague(rngSeed = 5, userTid = U): League {

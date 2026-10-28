@@ -9,8 +9,7 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import { GRACE, ULTIMATUM_ODDS, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
-import { preset } from '../../core/league/difficulty';
+import { GRACE, SEASON_WEIGHT, ULTIMATUM_ODDS, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
@@ -27,6 +26,8 @@ import {
   POSTSEASON_ODDS,
   PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
+  REBUILD_SEASONS,
+  WIN_FLOOR,
   WIN_SCALE,
   WIN_SLIDE,
   YOUNG_AGE,
@@ -410,9 +411,8 @@ function BooksCard({ league }: { league: League }) {
 function GradingHelp({ league }: { league: League }) {
   const scale = revenueScale(league);
   const cap = CAP_FOR(league);
-  const grace = GRACE[league.settings.difficulty];
   // what a season counts once the first one has set the standing (see seasonWeight)
-  const weight = Math.round(Math.min(0.6, Math.max(0.2, 0.4 * preset(league).ownerPressure)) * 100);
+  const weight = Math.round(SEASON_WEIGHT * 100);
   const rows: { k: string; how: string }[] = [
     { k: 'Wins', how: `Each win above or below his target counts ${Math.round(100 / WIN_SCALE)} (±100 at ${WIN_SCALE} wins either way).` },
     { k: 'Postseason', how: 'Reaching his goal is +30 and each round beyond it 30 more; each round short costs 35 (the play-in counts as one).' },
@@ -446,8 +446,7 @@ function GradingHelp({ league }: { league: League }) {
         meter reads where this season would leave it as it projects now: 0 to 100, the firing line at {Math.round(50 + 50 * FIRING_LINE)}.
       </p>
       <p>
-        <b>Grace.</b> On this difficulty he waits {grace} season{grace === 1 ? '' : 's'} before a review can fire you; a season played on another difficulty uses up its own share
-        of the wait. Below the line after that, you&apos;re out.
+        <b>Grace.</b> He waits {GRACE} seasons before a review can fire you. Below the line after that, you&apos;re out.
       </p>
       <p>
         <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver: one the forecast gives at least a{' '}
@@ -456,18 +455,17 @@ function GradingHelp({ league }: { league: League }) {
       <p>
         <b>Payroll and the floor.</b> After your first season, a payroll of your own in the league&apos;s top half raises the win target toward what a team paid like it should win,
         by {PAY_RAISE} wins at most. Outside a rebuild the target falls at most {WIN_SLIDE} wins a season under last season&apos;s, but never sits more than {HOLD_OVER_READ} over
-        his read. Whatever the plan, under a .{Math.round(preset(league).winFloor * 1000)} pace is a failed season (never closer than {FLOOR_MARGIN} wins under his read): it grades
-        Poor or worse, whatever else went right.
+        his read. Whatever the plan, under a .{Math.round(WIN_FLOOR * 1000)} pace is a failed season (never closer than {FLOOR_MARGIN} wins under his read): it grades Poor or
+        worse, whatever else went right.
       </p>
       <p>
-        <b>Rebuilds.</b> On this difficulty he accepts {preset(league).rebuildSeasons} season{preset(league).rebuildSeasons === 1 ? '' : 's'} in a row without the postseason (a
-        rebuild, or a season that missed). After that he wants the play-in at least, the floor rises to .{Math.round((preset(league).winFloor + REBUILD_OVER_FLOOR) * 1000)}, and a
-        season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best, {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the
-        postseason (the play-in counts) resets the clock. With the playoffs gone before the deadline, you can tell him it&apos;s a rebuild: it costs you{' '}
-        {Math.round(CONCEDE_COST * 100)} points of standing, counts as one, and the postseason goal&apos;s weight goes to the young players&apos; minutes, where it can spare you
-        the miss but earns nothing on top. Heading under his floor, you can tell him it&apos;s a development year for the same cost: the floor stays, but a season that ends under
-        it grades high enough to win the cost back and a little more (one that clears it just pays it), and part of the win goal goes to the young players&apos; minutes, still
-        graded on the win goal&apos;s miss.
+        <b>Rebuilds.</b> He accepts {REBUILD_SEASONS} seasons in a row without the postseason (a rebuild, or a season that missed). After that he wants the play-in at least, the
+        floor rises to .{Math.round((WIN_FLOOR + REBUILD_OVER_FLOOR) * 1000)}, and a season that misses the postseason anyway grades {fmtGrade(FLOOR_GRADE)} at best,{' '}
+        {Math.round(PATIENCE_STEP * 100)} lower each season it goes on. Only reaching the postseason (the play-in counts) resets the clock. With the playoffs gone before the
+        deadline, you can tell him it&apos;s a rebuild: it costs you {Math.round(CONCEDE_COST * 100)} points of standing, counts as one, and the postseason goal&apos;s weight goes
+        to the young players&apos; minutes, where it can spare you the miss but earns nothing on top. Heading under his floor, you can tell him it&apos;s a development year for the
+        same cost: the floor stays, but a season that ends under it grades high enough to win the cost back and a little more (one that clears it just pays it), and part of the win
+        goal goes to the young players&apos; minutes, still graded on the win goal&apos;s miss.
       </p>
       <p>
         <b>The books.</b> The luxury tax and every loss come out of the franchise&apos;s cash, and he judges it the day the regular season&apos;s books close, tax paid: the playoff

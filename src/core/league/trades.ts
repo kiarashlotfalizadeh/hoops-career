@@ -1,12 +1,11 @@
 // Trades: a deal and what it's worth. Validation (roster size, 125% salary matching when over the
-// cap, cap holds, the Stepien rule), AI valuation with team strategy and difficulty, deal terms
+// cap, cap holds, the Stepien rule), AI valuation with team strategy, deal terms
 // (protections, swaps, cash), the reasons behind a verdict, and carrying a deal out. Around it:
 // tradeHelp.ts ("what would make this work?", counter-offers), tradeFinder.ts (value tiers and
 // targets), tradePackages.ts (the best package for the user's assets), aiTrades.ts (AI front
 // offices and AI-to-AI deals); the AI's offers to the user are in proposals.ts.
 
 import type { DraftPick, League, Player, TeamSeason } from '../types';
-import { preset } from './difficulty';
 import { CAP, MATCH_MID_PCT, MATCH_SMALL_PCT, seasonLabel } from '../constants';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
 import {
@@ -137,8 +136,6 @@ export interface VerdictParts {
   /** Value of the players the team would have to waive to get down to 15 by opening night, and how many. */
   cut: number;
   cuts: number;
-  /** The difficulty's give: positive wants a premium, negative takes a little less than fair. */
-  slack: number;
   /** More players coming in than going out, so each extra one counts for less; `depthLoss` is the value that took off. */
   depthApplied: boolean;
   depthLoss: number;
@@ -842,10 +839,9 @@ interface Verdict {
 
 /**
  * One team's verdict on a deal: what it receives (net of the luxury tax and cap room it takes on
- * and the players it would have to waive) against what it sends. `generosity` below 1 accepts a
- * little less than fair value (easy difficulty), above 1 wants a premium.
+ * and the players it would have to waive) against what it sends.
  */
-function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): Verdict {
+function judge(league: League, offer: TradeOffer, tid: number): Verdict {
   const mine = offer.a.tid === tid ? offer.a : offer.b;
   const other = mine === offer.a ? offer.b : offer.a;
   const aiDeal = offer.a.tid !== league.userTid && offer.b.tid !== league.userTid;
@@ -887,16 +883,7 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
   const cut = cutCost(league, tid, mine.pids, other.pids);
   const valueIn = playersIn + picksIn + cashIn - (money.value + cut.value);
   const valueOut = playersOut + picksOut + cashOut;
-  let slack = (generosity - 1) * Math.abs(valueOut);
-  if (generosity < 1) {
-    // a casual GM's discount covers the other side's own assets, not ones it just traded for:
-    // passed along from team to team, it compounded 12% a trade (an 84 became a 93 in three hops)
-    // (what a team takes in is valued the same in any deal: aiDeal only changes what it sends)
-    const assets = incoming.map((x) => ({ v: x.kind === 'player' ? Math.max(0, x.value) : x.value, flipped: x.flipped }));
-    const total = assets.reduce((s, x) => s + x.v, 0);
-    if (total > 0) slack *= assets.reduce((s, x) => s + (x.flipped ? 0 : x.v), 0) / total;
-  }
-  const delta = valueIn - valueOut - slack;
+  const delta = valueIn - valueOut;
   const tooManyFirsts = mine.dpids.filter((d) => findPick(league, d)?.round === 1).length > MAX_FIRSTS_OUT;
   const parts: VerdictParts = {
     incoming,
@@ -916,7 +903,6 @@ function judge(league: League, offer: TradeOffer, tid: number, generosity = 1): 
     taxCost: money.taxCost,
     cut: cut.value,
     cuts: cut.count,
-    slack,
     depthApplied,
     depthLoss: depthApplied ? weighted(values(incoming, isPlayer), null) - playersIn : 0,
     flippedIn: incoming.filter((x) => x.flipped),
@@ -1283,9 +1269,7 @@ export function valueVerdict(ev: { delta: number; valueOut: number }): { gap: nu
 
 function evaluate(league: League, offer: TradeOffer): TradeEval {
   const errors = validateTrade(league, offer);
-  // on easy AIs accept slightly unfavorable deals; on hard they want a premium
-  const generosity = preset(league).tradeAsk;
-  const { delta, valueIn, valueOut, accept: likes, tooManyFirsts, parts } = judge(league, offer, offer.b.tid, generosity);
+  const { delta, valueIn, valueOut, accept: likes, tooManyFirsts, parts } = judge(league, offer, offer.b.tid);
   const accept = errors.length === 0 && likes;
   let message: string;
   if (errors.length) message = errors[0];
@@ -1325,8 +1309,7 @@ export function neutralSplit(parts: Pick<VerdictParts, 'incoming' | 'outgoing'>,
 /**
  * Short plain-English reasons behind side B's verdict, the ones that move it most first: its
  * strategy's view of the players and picks coming in, the tax and the waivers the deal costs it,
- * depth for talent, assets that changed hands this season, the two-firsts limit, the difficulty
- * deciding a close call, and a warning when side A (you) gives up much more neutral value than it
+ * depth for talent, assets that changed hands this season, the two-firsts limit, and a warning when side A (you) gives up much more neutral value than it
  * gets: the AI saying yes doesn't make it a good deal. Only what is true of this offer, and big
  * enough to matter.
  */
@@ -1411,9 +1394,8 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
       );
   }
 
-  // face value for anything that changed hands this season: no strategy premium, no easy-mode discount
-  const discount = Math.max(0, 1 - preset(league).tradeAsk);
-  const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral) + discount * Math.max(0, a.neutral)));
+  // face value for anything that changed hands this season: no strategy premium
+  const flips = x.flippedIn.filter((a) => matters(Math.max(0, Math.min(a.own, a.neutral * 1.15) - a.neutral)));
   if (flips.length) {
     const names = flips.length > 2 ? `${flips.slice(0, 2).map(nameOf).join(', ')} and ${flips.length - 2} more` : andList(flips.map(nameOf));
     add(
@@ -1454,11 +1436,6 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
         -x.money,
       );
   }
-
-  // the difficulty decides a close call
-  const fair = ev.valueIn - ev.valueOut;
-  if (x.slack > 0 && fair >= 0 && ev.delta < 0) add('info', 'Fair value, but on hard they want a premium', x.slack);
-  if (x.slack < 0 && fair < 0 && ev.delta >= 0) add('info', 'A little under fair value: on easy they take it', -x.slack);
 
   return notes.sort((a, b) => b.weight - a.weight).map(({ tone, text }) => ({ tone, text }));
 }

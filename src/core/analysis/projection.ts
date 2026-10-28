@@ -5,7 +5,6 @@
 
 import type { League } from '../types';
 import type { GameSim } from '../sim/engine';
-import { courtPoints } from '../league/difficulty';
 import { planFor } from '../league/gamePlans';
 
 /**
@@ -96,8 +95,7 @@ export function projectGame(league: League, sim: GameSim, neutral: boolean, rati
   const netAway = est(1);
   const paces = [row(0), row(1)].filter((r) => r.gp > 0).map((r) => r.pace);
   const pace = paces.length ? paces.reduce((a, b) => a + b, 0) / paces.length : 100;
-  // home court, and the difficulty's edge in a game of the user's (see courtPoints)
-  const edge = (neutral ? 0 : HOME_EDGE) + courtPoints(league, sim.T[0].tid, sim.T[1].tid);
+  const edge = neutral ? 0 : HOME_EDGE;
   // the user's game plan for tonight, at what the staff measured it worth
   const plan = planPoints(league, sim.T[0].tid, sim.T[1].tid);
   return { margin: projectMargin(netHome, netAway, pace, edge) + plan, netHome, netAway, edge, plan };

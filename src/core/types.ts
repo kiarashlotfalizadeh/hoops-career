@@ -1447,15 +1447,14 @@ export interface Dunker {
 }
 
 export interface Settings {
-  difficulty: 'easy' | 'normal' | 'hard';
   injuries: boolean;
   /** Can the owner fire you? */
   jobSecurity: boolean;
   /**
-   * Changes that wait for the next opening night (see applyPendingSettings): a new difficulty, and
-   * job security turned off, so neither can dodge a season's review once it's under way.
+   * Changes that wait for the next opening night (see applyPendingSettings): job security turned
+   * off, so it can't dodge a season's review once it's under way.
    */
-  pending?: { difficulty?: 'easy' | 'normal' | 'hard'; jobSecurity?: false };
+  pending?: { jobSecurity?: false };
   /** Auto-play speed for live game. */
   liveSpeed: number;
   /** Where a live game stops for a break with a period report (default 'quarters'). */
@@ -1691,14 +1690,13 @@ export interface LiveJournal {
   /** The projected home margin at tip-off (see GameResult.edge): absent in journals from before win probability. */
   edge?: number;
   /**
-   * The difficulty's edge on the court at tip-off (SimOptions.edge; null on Normal): a replay plays
-   * it as it was, whatever the difficulty is now. Absent in journals from before it was kept (read
-   * from today's difficulty).
+   * The edge on the court Easy or Hard gave at tip-off (SimOptions.edge), in journals from before
+   * the one difficulty: a replay plays it as it was. Absent (or null) otherwise.
    */
   court?: [number, number] | null;
   /**
    * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
-   * replay plays them as they were, whatever changed since (the difficulty, or the league's id on a
+   * replay plays them as they were, whatever changed since (the league's id on a
    * backup imported as a copy).
    */
   opp?: { tactics: Tactics; plan?: OppPlan };

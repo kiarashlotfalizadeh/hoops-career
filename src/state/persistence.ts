@@ -16,20 +16,20 @@ import { rosterNames } from '../ui/stats';
 // what a loaded save must look like lives in saveCheck.ts; screens and the backup import it from here
 export { isLeague, OldSaveError } from './saveCheck';
 
-const DIFFICULTIES: readonly unknown[] = ['easy', 'normal', 'hard'];
-
 /**
  * A save checked and brought up to date (see saveCheck.ts), and the owner's parts in shape: a setting
  * waiting for opening night that's damaged goes, as if it was never chosen (see applyPendingSettings).
- * Saves from before it load as they are: the owner's newer fields (a goal's edge on the court, his
- * words on a review, a season's difficulty) are optional, read as absent.
+ * A save from when there were three difficulties plays the one there is now: its preset, and a change
+ * of it waiting for opening night, go. Saves from before the owner's newer fields (his words on a
+ * review) load as they are: they're optional, read as absent.
  */
 export function migrate(x: unknown, notALeague?: string): League {
   const league = checkSave(x, notALeague);
+  delete (league.settings as { difficulty?: unknown }).difficulty;
   const p: unknown = league.settings.pending;
   if (p !== undefined) {
-    const ok = obj(p) && (p.difficulty === undefined || DIFFICULTIES.includes(p.difficulty)) && (p.jobSecurity === undefined || p.jobSecurity === false);
-    if (!ok) delete league.settings.pending;
+    if (obj(p) && p.jobSecurity === false) league.settings.pending = { jobSecurity: false };
+    else delete league.settings.pending;
   }
   // (a change recorded with a player who had left in it: what his leaving did goes, see cleanLeakedEdits)
   cleanLeakedEdits(league, rosterNames(teamPlayers(league, league.userTid)));

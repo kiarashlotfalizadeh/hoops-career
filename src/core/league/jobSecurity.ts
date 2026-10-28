@@ -2,13 +2,12 @@
 // (League.ownerMood.total, −1..1) moves at each season's review by that season's grade (see
 // ownerEvaluation); this reads where it would land if the season ends as it projects now, counted
 // in as the season is played (none of it on opening night, all of it at the review), so the meter
-// warms up as a season goes wrong instead of jumping at the review. The difficulty sets how many
-// seasons he waits before he can fire you and how far one season moves his standing. A coach on
+// warms up as a season goes wrong instead of jumping at the review. He waits GRACE seasons before
+// he can fire you, and one season moves his standing by SEASON_WEIGHT of its grade. A coach on
 // the hot seat at the All-Star break gets an ultimatum (a wins total or a postseason level within
 // reach): met, it buys him back some standing; missed, he's fired whatever else went right.
 import type { League } from '../types';
 import { clamp } from '../random';
-import { DIFFICULTY, preset } from './difficulty';
 import { FIRING_LINE, seasonsInCharge } from './owner';
 import {
   POSTSEASON,
@@ -55,18 +54,21 @@ export interface JobSecurity {
   off: boolean;
 }
 
-/** Seasons in charge the owner waits before a review can fire the coach, by difficulty. */
-export const GRACE: Record<League['settings']['difficulty'], number> = { easy: 3, normal: 2, hard: 1 };
+/** Seasons in charge the owner waits before a review can fire the coach. */
+export const GRACE = 2;
+
+/** How much a season's grade counts in his standing once his first season has set it. */
+export const SEASON_WEIGHT = 0.4;
 
 /**
  * How much this season's grade counts in his standing: a new career's first season sets it; after
  * that, and from the first season after a job change (when a review by another owner is on file:
- * the reputation he brought, see REPUTATION_CARRY, weighs against it rather than being wiped), 40%
- * at normal.
+ * the reputation he brought, see REPUTATION_CARRY, weighs against it rather than being wiped),
+ * SEASON_WEIGHT.
  */
 export function seasonWeight(league: League): number {
   const fresh = seasonsInCharge(league) <= 1 && !(league.ownerReviews ?? []).some((r) => r.tid !== league.userTid);
-  return fresh ? 1 : clamp(0.4 * preset(league).ownerPressure, 0.2, 0.6);
+  return fresh ? 1 : SEASON_WEIGHT;
 }
 
 /** The phases after the season's review: the review that comes next is next season's. */
@@ -74,23 +76,11 @@ const REVIEWED: ReadonlySet<League['phase']> = new Set(['draftLottery', 'draft',
 
 /**
  * Reviews before one can fire the coach, this season's first (0: this season's can; `next`: counted
- * from next season's, on the difficulty it will be played on). Each season of his tenure already
- * played uses up 1 / GRACE of the grace on the difficulty it was played on (the season review keeps
- * it), and never more grace is left than the difficulty in force gives from the start: a Hard
- * season graded −83 followed by a switch to Easy had bought two more seasons no review could fire
- * him in (the review, round 2).
+ * from next season's): GRACE less the seasons of his tenure already played.
  */
 export function graceLeft(league: League, next = false): number {
   const from = league.tenureStart ?? league.startSeason;
-  const upTo = league.season + (next ? 1 : 0);
-  const now = next ? (league.settings.pending?.difficulty ?? league.settings.difficulty) : league.settings.difficulty;
-  let used = 0;
-  for (let s = from; s < upTo; s++) {
-    const played = s === league.season ? league.settings.difficulty : league.legacy?.reviews.find((r) => r.season === s && r.tid === league.userTid)?.difficulty;
-    used += 1 / GRACE[played ?? now];
-  }
-  const fresh = GRACE[now] - (upTo - from);
-  return Math.max(0, Math.min(fresh, Math.ceil((1 - used) * GRACE[now] - 1e-9)));
+  return Math.max(0, GRACE - (league.season + (next ? 1 : 0) - from));
 }
 
 /** Whether this season's review can fire the coach (the grace period is over and job security is on). */
@@ -239,8 +229,7 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
 function nextReviewNeeds(league: League, standing: number): string | null {
   const reviewed = REVIEWED.has(league.phase);
   if (!league.settings.jobSecurity || graceLeft(league, reviewed) > 0) return null;
-  const d = reviewed ? (league.settings.pending?.difficulty ?? league.settings.difficulty) : league.settings.difficulty;
-  const w = reviewed ? clamp(0.4 * DIFFICULTY[d].ownerPressure, 0.2, 0.6) : seasonWeight(league);
+  const w = reviewed ? SEASON_WEIGHT : seasonWeight(league);
   const need = (FIRING_LINE - standing * (1 - w)) / w;
   if (need <= -1) return null;
   const head = `Next review needs a season grade of ${need > 0 ? '+' : need < 0 ? '−' : ''}${Math.abs(Math.ceil(need * 100))} or better`;
@@ -331,3 +320,29 @@ export function ultimatumVerdict(league: League, og: OwnerGoals | undefined): 'm
 
 /** What meeting an ultimatum is worth to the standing. */
 export const ULTIMATUM_MET = 0.15;
+
+// ---------------------------------------------------------------- changing it mid-career
+
+/**
+ * Job security switched in Settings. Turned off, it waits for the next opening night (Settings.pending,
+ * see applyPendingSettings), so it can't dodge a review or a firing; turned back on, it counts at once
+ * (and cancels the wait).
+ */
+export function requestJobSecurity(league: Pick<League, 'settings'>, on: boolean) {
+  const st = league.settings;
+  if (on) {
+    delete st.pending;
+    st.jobSecurity = true;
+  } else if (st.jobSecurity) st.pending = { jobSecurity: false };
+}
+
+/** What Settings shows as chosen: the change waiting for opening night, else what's in force. */
+export function chosenJobSecurity(league: Pick<League, 'settings'>): boolean {
+  return league.settings.pending?.jobSecurity ?? league.settings.jobSecurity;
+}
+
+/** On opening night (startRegularSeason, before the owner sets his goals): the change waiting in Settings takes effect. */
+export function applyPendingSettings(league: Pick<League, 'settings'>) {
+  if (league.settings.pending?.jobSecurity === false) league.settings.jobSecurity = false;
+  delete league.settings.pending;
+}

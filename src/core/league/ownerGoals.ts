@@ -1,13 +1,12 @@
 // The owner's goals for the user's season. On opening night the owner looks at the roster he has and
 // sets three or four goals for it, frozen for the season: a win total (what the season forecast
-// projects the roster to win, the difficulty's edge on the court in it, see leagueOutlook: the
+// projects the roster to win, see leagueOutlook: the
 // number the press's "projected for N wins" reads; after the coach's first season with the team
 // raised a little toward what a team with its payroll's league rank should win, and never under
-// the difficulty's win% floor, itself never closer than FLOOR_MARGIN wins under his read), a
+// a win% floor, WIN_FLOOR, itself never closer than FLOOR_MARGIN wins under his read), a
 // postseason goal from where that projects the team in its conference and its front office's
 // strategy (or a development goal for a rebuilder or a team projected out of the play-in: minutes
-// for players 23 or under, for as many seasons in a row without the postseason as the difficulty
-// gives a rebuild; after that, the play-in at least and a higher floor, and only reaching the
+// for players 23 or under, for REBUILD_SEASONS seasons in a row without the postseason; after that, the play-in at least and a higher floor, and only reaching the
 // postseason resets the clock), and a money goal (a profit from the season's budget at the league's
 // standard levers, or the luxury tax line for a team near or over it: a win-now owner's the first
 // apron). A season under the floor
@@ -26,7 +25,7 @@ import { canBeFired, levelOdds, maybeUltimatum, seasonWeight } from './jobSecuri
 import { clamp, hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { playerAge, salaryFor } from '../playerGen';
-import { MARGIN_SD, PRIOR_GAMES, phi } from '../analysis/projection';
+import { MARGIN_SD, phi } from '../analysis/projection';
 import { forecast, leagueForecast, type Forecast, type TeamOdds } from '../analysis/odds';
 import { ROSTER_NET, rosterWorth } from '../analysis/worth';
 import { CAP_FOR, addInbox, andList, payroll, revenueScale, standardRoster } from './helpers';
@@ -45,7 +44,6 @@ import {
 import { confStandings } from './standings';
 import { money } from '../format';
 import { CAP } from '../constants';
-import { preset, userCourtPoints } from './difficulty';
 
 export type OwnerPersonality = 'builder' | 'win-now' | 'frugal';
 export type OwnerGoalKind = 'wins' | 'postseason' | 'profit' | 'payroll' | 'youth';
@@ -102,12 +100,6 @@ export interface OwnerGoal {
    * 16-66 season, the review found, round 3).
    */
   fromWins?: number;
-  /**
-   * Wins: the wins the difficulty's edge on the court moved the owner's read by (under 0 on Hard:
-   * see userCourtPoints), counted in as the season forecast counts it. Absent in goals from before
-   * it was (their targets ignored it).
-   */
-  edge?: number;
 }
 
 /** The owner's goals for the user's season (League.ownerGoals), set on opening night or when he took over mid-season. */
@@ -200,6 +192,10 @@ export const PACE_PRIOR = 40;
 export const YOUTH_TOP = 0.3;
 /** Age (as of February 1 of the season) a development goal's players are at most. */
 export const YOUNG_AGE = 23;
+/** The least the owner's win goal asks, as a win% (and under FLOOR_MARGIN, see planOwnerGoals). */
+export const WIN_FLOOR = 0.3;
+/** Seasons in a row the owner accepts a rebuild (no postseason goal) before he wants the play-in. */
+export const REBUILD_SEASONS = 2;
 /** How far the floor rises once the owner's patience with a rebuild has run out. */
 export const REBUILD_OVER_FLOOR = 0.1;
 /** The most a season under the floor can grade, and how much lower each point of win% under it takes that. */
@@ -208,8 +204,8 @@ export const FLOOR_SLOPE = 3;
 /** Regular-season games played before the floor counts (a short stretch after a late takeover doesn't). */
 export const FLOOR_GAMES = 20;
 /**
- * Wins (over a full season) the floor stays under the owner's read of the roster at least: on Hard
- * the floor and the rebuild clock's rise had asked a Kings roster he read at 16 wins for 35 (the
+ * Wins (over a full season) the floor stays under the owner's read of the roster at least: the
+ * floor and the rebuild clock's rise had asked a Kings roster he read at 16 wins for 35 (the
  * review, round 2), a firing by design.
  */
 export const FLOOR_MARGIN = 6;
@@ -278,8 +274,6 @@ export interface TeamOutlook {
   talent: number;
   /** Expected win% in the games left: the season forecast's projection (see leagueOutlook). */
   pct: number;
-  /** The same without the difficulty's edge on the court (the user's team; anyone else's is `pct`). */
-  bare: number;
   /** Projected final win%: the record so far and the expectation for the games left. */
   final: number;
   /** The season forecast's odds for it (in season and the preseason; none in the summer's read). */
@@ -289,23 +283,10 @@ export interface TeamOutlook {
 /** Simulated seasons behind the owner's read: the press's predictions' count, so on opening night the two read the same forecast. */
 const OUTLOOK_SIMS = 500;
 
-/** The z for a probability (phi's inverse), by bisection: for taking the edge on the court back out of a forecast's win%. */
-function zOf(p: number): number {
-  let [lo, hi] = [-6, 6];
-  for (let i = 0; i < 50; i++) {
-    const mid = (lo + hi) / 2;
-    if (phi(mid) < p) lo = mid;
-    else hi = mid;
-  }
-  return (lo + hi) / 2;
-}
-
 /**
  * Every team's outlook from today (opening night: the whole season): the season forecast's projected
  * wins (odds.ts, the same simulated seasons the press's "projected for N wins" reads on opening
- * night), the user's with the difficulty's edge on the court in it as the forecast has it (on Hard
- * the owner asks what the roster should win against opponents who raise their game for it, not what
- * it would win on Normal). The owner's read and the forecast had been two models (his a planned
+ * night). The owner's read and the forecast had been two models (his a planned
  * rotation's OVR at the game projection's rate) and differed by 4-8 wins for a fifth of the league
  * (the review, round 2: the Nets 26 against 34, the 76ers 46 against 41). Outside the season (the
  * summer's "next season" read) the forecast's own prior instead: what the rosters are worth at its
@@ -323,23 +304,11 @@ export function leagueOutlook(league: League): TeamOutlook[] {
     return { tid: t.tid, won: ts?.won ?? 0, lost: ts?.lost ?? 0, left: games, talent: rosterWorth(rosters[t.tid], games || SEASON_GAMES) };
   });
   const avg = rows.reduce((a, r) => a + r.talent, 0) / Math.max(1, rows.length);
-  const court = userCourtPoints(league);
   return rows.map((r) => {
     const f: TeamOdds | undefined = fc?.teams[r.tid];
-    const user = r.tid === league.userTid;
-    let pct: number;
-    let bare: number;
-    if (f && r.left > 0) {
-      pct = clamp((f.w - r.won) / r.left, 0.005, 0.995);
-      // (the forecast counts the edge in the user's prior, less as his games so far weigh in: see odds.ts)
-      const gp = r.won + r.lost;
-      bare = user && court ? phi(zOf(pct) - (court * PRIOR_GAMES) / (gp + PRIOR_GAMES) / MARGIN_SD) : pct;
-    } else {
-      bare = phi((ROSTER_NET * (r.talent - avg)) / MARGIN_SD);
-      pct = user && court ? phi((ROSTER_NET * (r.talent - avg) + court) / MARGIN_SD) : bare;
-    }
+    const pct = f && r.left > 0 ? clamp((f.w - r.won) / r.left, 0.005, 0.995) : phi((ROSTER_NET * (r.talent - avg)) / MARGIN_SD);
     const g = r.won + r.lost + r.left;
-    return { ...r, pct, bare, final: g ? (r.won + pct * r.left) / g : pct, ...(f ? { odds: f } : {}) };
+    return { ...r, pct, final: g ? (r.won + pct * r.left) / g : pct, ...(f ? { odds: f } : {}) };
   });
 }
 
@@ -505,13 +474,12 @@ export function movedOut(league: League, tid: number): string[] {
 
 /**
  * Last season's full-season wins target for the user with team `tid` (none after a mid-season start,
- * a takeover, or a save from before reviews kept it; nor one set off the court edge's on Easy or
- * Hard before the owner counted it, see OwnerGoal.edge: an impossible ask doesn't hold up the next).
+ * a takeover, or a save from before reviews kept it).
  */
 export function lastWinsTarget(league: League, tid: number): number | undefined {
   const r = (league.ownerReviews ?? []).find((x) => x.tid === tid && x.season === league.season - 1);
   const g = r?.games === SEASON_GAMES ? r.goals.find((x) => x.kind === 'wins') : undefined;
-  return g && (g.edge !== undefined || !preset(league).court) ? g.target : undefined;
+  return g?.target;
 }
 
 /** The grade a season with this regular-season record can have at most: under the floor, FLOOR_GRADE and lower (none above it: 1). */
@@ -661,15 +629,12 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   const share = o.left / SEASON_GAMES;
   if (!opening) base.from = { day: league.day, won: ts?.won ?? 0, lost: ts?.lost ?? 0, profit: ownerProfit(league, tid), youth: youngMinutes(league, tid) };
   const goals = base.goals;
-  const diff = preset(league);
-  // the rebuild clock: seasons in a row this team has gone without the postseason under him, of the difficulty's allowance
+  // the rebuild clock: seasons in a row this team has gone without the postseason under him, of REBUILD_SEASONS
   const run = rebuildRun(league, tid);
-  const patienceOut = run >= diff.rebuildSeasons;
-  // (the floor moves with the edge on the court as the roster's read does: Hard's floor is a win% for
-  // a team its opponents raise their game against; and it stays FLOOR_MARGIN wins under his own read
-  // of the roster, so it marks a season gone wrong, never one his read says the roster can't reach)
-  const edgePct = o.pct - o.bare;
-  const floor = clamp(Math.round(Math.min(diff.winFloor + (patienceOut ? REBUILD_OVER_FLOOR : 0) + edgePct, o.pct - FLOOR_MARGIN / SEASON_GAMES) * 1000) / 1000, 0.1, 0.6);
+  const patienceOut = run >= REBUILD_SEASONS;
+  // (the floor stays FLOOR_MARGIN wins under his own read of the roster, so it marks a season gone
+  // wrong, never one his read says the roster can't reach)
+  const floor = clamp(Math.round(Math.min(WIN_FLOOR + (patienceOut ? REBUILD_OVER_FLOOR : 0), o.pct - FLOOR_MARGIN / SEASON_GAMES) * 1000) / 1000, 0.1, 0.6);
   base.floor = floor;
   // the payroll: the coach's own once he has had a season with the team and it isn't all still the
   // one he inherited (see forcedPayroll)
@@ -710,8 +675,8 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
   // than HOLD_OVER_READ over his read of the roster. The raise had held a first-season 76ers coach to
   // 52 wins on a 41-win forecast, "for the league's 2nd-highest payroll", while the same owner called
   // it the payroll he had inherited; the hold, a Wizards coach on Hard to 30 on a 16-win read.
-  // (what a team paid like it should win, against the same edge on the court as his own read)
-  const byRank = paidToWin ? (outlook.map((x) => (x.tid === tid ? o.bare : x.pct)).sort((a, b) => b - a)[payRank - 1] ?? o.bare) + edgePct : o.pct;
+  // (what a team paid like it should win)
+  const byRank = paidToWin ? (outlook.map((x) => x.pct).sort((a, b) => b - a)[payRank - 1] ?? o.pct) : o.pct;
   const pct = o.pct + Math.min(PAY_RAISE / SEASON_GAMES, 0.5 * Math.max(0, byRank - o.pct));
   const expected = o.pct * o.left;
   const last = level && opening ? lastWinsTarget(league, tid) : undefined;
@@ -726,16 +691,15 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     target: wins,
     weight: lean('wins'),
     perGame: o.pct,
-    edge: Math.round(edgePct * o.left * 10) / 10,
     ...(pct - o.pct >= 0.02 ? { payRank } : {}),
     ...(held ? { held: last } : {}),
     ...(gone.length ? { gone } : {}),
   });
   // a season without a postseason goal is a rebuild season, one of the allowance; past it, the
   // season competes, and missing the postseason anyway caps its grade (see patienceCap)
-  if (!level) base.rebuild = { year: run + 1, of: diff.rebuildSeasons };
-  else if (patienceOut && run > 0) base.rebuild = { year: run + 1, of: diff.rebuildSeasons, over: true };
-  else if (run > 0) base.missed = { seasons: run, of: diff.rebuildSeasons };
+  if (!level) base.rebuild = { year: run + 1, of: REBUILD_SEASONS };
+  else if (patienceOut && run > 0) base.rebuild = { year: run + 1, of: REBUILD_SEASONS, over: true };
+  else if (run > 0) base.missed = { seasons: run, of: REBUILD_SEASONS };
   if (level) goals.push({ kind: 'postseason', title: POSTSEASON[level].goal, target: level, weight: lean('postseason'), rank });
   // development: a rebuilder, a team projected out of the play-in, or a retooling team with young players in its rotation
   const youngPg = youngPerGame(league, tid);
@@ -927,7 +891,7 @@ export function concedeBlockedReason(league: League): string | null {
   if (league.day > league.tradeDeadlineDay) return "The deadline has passed: there's nothing left to sell. Play it out.";
   if (!og.goals.some((g) => g.kind === 'postseason')) return 'He already expects a rebuild this season.';
   const run = rebuildRun(league, og.tid);
-  const of = preset(league).rebuildSeasons;
+  const of = REBUILD_SEASONS;
   if (run >= of) return `He has given you ${run === 1 ? 'a season' : `${run} seasons`} without the postseason already: he wants the play-in.`;
   return null;
 }
@@ -943,7 +907,7 @@ export function concedeSeason(league: League) {
   const post = og.goals.find((g) => g.kind === 'postseason')!;
   addYouthWeight(league, og, post.weight);
   og.goals = og.goals.filter((g) => g !== post);
-  og.rebuild = { year: rebuildRun(league, og.tid) + 1, of: preset(league).rebuildSeasons };
+  og.rebuild = { year: rebuildRun(league, og.tid) + 1, of: REBUILD_SEASONS };
   chargeConcession(league, og);
   addInbox(league, {
     from: 'Owner',
@@ -1029,7 +993,7 @@ export function easeFloorBlockedReason(league: League): string | null {
   if (league.day > league.tradeDeadlineDay) return "The deadline has passed: there's nothing left to sell. Play it out.";
   if (og.eased) return 'He has eased the floor once this season already.';
   const run = rebuildRun(league, og.tid);
-  if (og.rebuild?.over || run >= preset(league).rebuildSeasons)
+  if (og.rebuild?.over || run >= REBUILD_SEASONS)
     return `He has given you ${run === 1 ? 'a season' : `${run} seasons`} without the postseason already: he wants wins, not patience.`;
   return null;
 }
@@ -1059,7 +1023,7 @@ export function easeFloor(league: League) {
     wins.weight = Math.round((wins.weight - moved) * 100) / 100;
     addYouthWeight(league, og, moved, true);
   }
-  og.rebuild ??= { year: rebuildRun(league, og.tid) + 1, of: preset(league).rebuildSeasons };
+  og.rebuild ??= { year: rebuildRun(league, og.tid) + 1, of: REBUILD_SEASONS };
   chargeConcession(league, og);
   addInbox(league, {
     from: 'Owner',
@@ -1331,7 +1295,7 @@ export function gradeOwnerGoals(
   const goals = og.goals.map((g) => {
     const result = goalResult(league, og, g);
     // (the plan's per-game numbers were for the in-season projection only)
-    return { kind: g.kind, title: g.title, target: g.target, weight: g.weight, result, grade: gradeGoal(league, og, g, result), ...(g.edge !== undefined ? { edge: g.edge } : {}) };
+    return { kind: g.kind, title: g.title, target: g.target, weight: g.weight, result, grade: gradeGoal(league, og, g, result) };
   });
   const sum = goals.reduce((a, g) => a + g.weight * g.grade, 0);
   const rec = goalsRecord(league, og);

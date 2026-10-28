@@ -1,19 +1,17 @@
 // Planning for an opponent. The user's side: the staff's read on guarding each of their players and on
 // which of their defenders to attack, the assistant's junk-defense and hunt counters (with the numbers
 // behind them) and the live one-tap fixes. The AI's side: coaches game-plan against the user's team
-// never on easy, about half the games on normal, every game on hard; only in games against the user;
+// about half the games, more often the better they are at tactics; only in games against the user;
 // the same plan for a game whatever is asked when (preview, Lab, live or simmed game, other games that
 // day); items that answer the user's measured strengths (a box-and-one on a one-man offense, a hunt, a
 // coverage change, how to guard a regular, never one who rests tonight); and the plan kept with the
-// user's game results only. And the difficulty's edge on the court: Hard's opponents play about two
-// points a game better against him, Easy gives him about one and a half.
+// user's game results only. No edge on the court either way.
 import { beforeAll, describe, expect, it } from 'vitest';
 import { testLeague, toGameDay, userGames } from '../../state/__tests__/fixtures';
 import { prepareLive } from '../../state/live';
 import { aiGamePlan, nextMeeting, oppPlanChance, oppPlanIn, preparesPlan, withOppPlan } from '../ai/opponentPlan';
 import { counterCandidates, impactCounter } from '../ai/advisor';
-import { buildSimInput, ensureRotation, playGame, tipoffEdge, userGameOnDay } from '../league/games';
-import { DIFFICULTY, courtEdge, courtPoints, userCourtPoints, userProjectedNet } from '../league/difficulty';
+import { buildSimInput, ensureRotation, playGame, userGameOnDay } from '../league/games';
 import { matchupPreview } from '../analysis/preview';
 import { simDay } from '../league/season';
 import { shortName, teamPlayers } from '../league/helpers';
@@ -23,11 +21,11 @@ import { applyPatch, cloneTactics, defaultTactics, hasCoachPlans, withoutCoachPl
 import { persistableTactics } from '../league/gamePlans';
 import { keptTactics } from '../../ui/live/keep';
 import { GameSim } from '../sim/engine';
-import { Rng, clamp } from '../random';
+import { Rng } from '../random';
 import type { PossLog } from '../sim/log';
 import type { League, Player, ScheduledGame } from '../types';
 
-// a real-league season a few days in (simmed on the default difficulty), then at `difficulty`
+// a real-league season a few days in
 const after: Record<number, League> = {};
 beforeAll(() => {
   const l = testLeague();
@@ -37,10 +35,31 @@ beforeAll(() => {
     if ([2, 6, 12, 14].includes(i)) after[i] = structuredClone(l);
   }
 }, 120_000);
-function leagueAt(difficulty: League['settings']['difficulty'], days: number): League {
-  const l = structuredClone(after[days]);
-  l.settings.difficulty = difficulty;
+const leagueAt = (days: number): League => structuredClone(after[days]);
+/**
+ * The same with every AI coach at the top of the tactics scale, so most of them (85%) game-plan
+ * for a game against the user: for the tests of what goes in a plan, which skip the games without one.
+ */
+function keenAt(days: number): League {
+  const l = leagueAt(days);
+  for (const tid of aiTeams(l)) l.teams[tid].coach.tactics = 99;
   return l;
+}
+/** Each AI team's next meeting with the user whose coach game-plans for it. */
+const plannedMeetings = (l: League) =>
+  aiTeams(l)
+    .map((opp) => ({ opp, g: nextMeeting(l, opp) }))
+    .filter((x): x is { opp: number; g: ScheduledGame } => !!x.g && preparesPlan(l, x.opp, x.g.gid));
+/** On to the next day the user plays a coach who game-plans for him. */
+function toPlannedGameDay(l: League) {
+  toGameDay(l);
+  for (let i = 0; i < 20; i++) {
+    const g = userGameOnDay(l, l.day)!;
+    if (preparesPlan(l, oppOf(l, g), g.gid)) return;
+    simDay(l);
+    toGameDay(l);
+  }
+  throw new Error('no planned game found');
 }
 const fresh = () => structuredClone(after[0]);
 
@@ -79,7 +98,7 @@ describe('planning for an opponent', () => {
   it('reads their players and whom to attack, counters a one-man offense or a weak link, keeps a junk defense with its opponent, and has a one-tap fix live', () => {
     {
       // reads each player's shooting from his games when there are enough, and says when they're last season's
-      const lg = leagueAt('easy', 14);
+      const lg = leagueAt(14);
       const them = projectedRotation(lg, 3, 8);
       expect(them.map((x) => guardLine(lg, x)).filter((a) => a.source === 'season').length).toBeGreaterThan(4);
       const q = structuredClone(them.find((x) => (x.stats.find((s) => s.season === lg.season && s.tid === 3 && !s.playoffs)?.gp ?? 0) >= 5)!);
@@ -109,7 +128,7 @@ describe('planning for an opponent', () => {
     }
     {
       // the assistant suggests a box-and-one on a one-man offense whose others can't shoot, with the numbers
-      const l = leagueAt('easy', 14);
+      const l = leagueAt(14);
       const opp = 3;
       const star = oneManTeam(l, opp);
       const box = counterCandidates(l, l.userTid, opp).find((c) => c.id === 'box-1');
@@ -123,7 +142,7 @@ describe('planning for an opponent', () => {
     }
     {
       // the assistant suggests attacking a real weak link
-      const l = leagueAt('easy', 2);
+      const l = leagueAt(2);
       const opp = 4;
       ensureRotation(l, opp);
       const rot = projectedRotation(l, opp, 8);
@@ -184,21 +203,22 @@ describe('planning for an opponent', () => {
     }
   }, 120_000);
 
-  it('lets AI coaches game-plan against the user by difficulty, the same plan wherever it is asked for, answering his strengths and never his resting players, and keeps it with his results only', () => {
+  it('lets AI coaches game-plan against the user by their tactics rating, the same plan wherever it is asked for, answering his strengths and never his resting players, and keeps it with his results only', () => {
     {
-      // never on easy, about half the games for an average coach on normal, every game on hard
-      const l = leagueAt('easy', 12);
+      // about half the games for an average coach, from 15% for the worst to 85% for the best
+      const l = leagueAt(12);
       const tid = aiTeams(l)[0];
-      expect(oppPlanChance(l, tid)).toBe(0);
-      for (const opp of aiTeams(l)) {
-        const g = nextMeeting(l, opp);
-        if (g) expect(aiGamePlan(l, opp, l.userTid, g)).toBeNull();
-      }
-      l.settings.difficulty = 'hard';
-      expect(oppPlanChance(l, tid)).toBe(1);
-      l.settings.difficulty = 'normal';
       l.teams[tid].coach.tactics = 60;
       expect(oppPlanChance(l, tid)).toBeCloseTo(0.5, 9);
+      l.teams[tid].coach.tactics = 20;
+      expect(oppPlanChance(l, tid)).toBeCloseTo(0.15, 9);
+      l.teams[tid].coach.tactics = 99;
+      expect(oppPlanChance(l, tid)).toBeCloseTo(0.85, 9);
+      // a coach who doesn't prepare one for a game has none
+      for (const opp of aiTeams(l)) {
+        const g = nextMeeting(l, opp);
+        if (g && !preparesPlan(l, opp, g.gid)) expect(aiGamePlan(l, opp, l.userTid, g)).toBeNull();
+      }
       // the better the coach, the more often: over many games the share follows the chance
       const share = (rating: number) => {
         l.teams[tid].coach.tactics = rating;
@@ -213,12 +233,10 @@ describe('planning for an opponent', () => {
     }
     {
       // the same plan every time it is asked for a game, and it draws nothing from the league
-      const l = leagueAt('hard', 12);
+      const l = keenAt(12);
       const rng = l.rng;
       let planned = 0;
-      for (const opp of aiTeams(l)) {
-        const g = nextMeeting(l, opp);
-        if (!g) continue;
+      for (const { opp, g } of plannedMeetings(l)) {
         const a = aiGamePlan(l, opp, l.userTid, g);
         expect(a).not.toBeNull();
         expect(aiGamePlan(structuredClone(l), opp, l.userTid, g)).toEqual(a);
@@ -229,12 +247,12 @@ describe('planning for an opponent', () => {
         expect(withOppPlan(l.teams[opp].tactics, a)).not.toEqual(l.teams[opp].tactics);
         planned++;
       }
-      expect(planned).toBeGreaterThan(20);
+      expect(planned).toBeGreaterThan(15);
       expect(l.rng).toBe(rng);
     }
     {
       // never applies in games between AI teams
-      const l = leagueAt('hard', 12);
+      const l = keenAt(12);
       const g = l.schedule.find((x) => !x.played && x.home !== l.userTid && x.away !== l.userTid)!;
       for (const [tid, opp] of [
         [g.home, g.away],
@@ -252,40 +270,36 @@ describe('planning for an opponent', () => {
       expect(played.length).toBeGreaterThan(1);
       for (const r of played) {
         const user = r.home.tid === l.userTid || r.away.tid === l.userTid;
-        if (user) expect(r.oppPlan?.length).toBeGreaterThan(0);
+        if (user) expect(!!r.oppPlan?.length).toBe(preparesPlan(l, r.home.tid === l.userTid ? r.away.tid : r.home.tid, r.gid));
         else expect(r.oppPlan).toBeUndefined();
       }
     }
     {
-      // on hard every game against the user brings a plan, kept with the result
-      const l = leagueAt('hard', 6);
+      // every game whose coach game-plans for it brings his plan, kept with the result; the others none
+      const l = keenAt(6);
       const before = userGames(l).length;
       for (let i = 0; i < 12; i++) simDay(l);
       const later = userGames(l).slice(before);
       expect(later.length).toBeGreaterThan(3);
+      const planned = later.filter((r) => preparesPlan(l, r.home.tid === l.userTid ? r.away.tid : r.home.tid, r.gid));
+      expect(planned.length).toBeGreaterThan(0);
       for (const r of later) {
-        expect(r.oppPlan?.length).toBeGreaterThan(0);
-        expect(r.oppPlan!.length).toBeLessThanOrEqual(2);
+        if (!planned.includes(r)) expect(r.oppPlan).toBeUndefined();
+        else {
+          expect(r.oppPlan?.length).toBeGreaterThan(0);
+          expect(r.oppPlan!.length).toBeLessThanOrEqual(2);
+        }
       }
-      // and none on easy
-      l.settings.difficulty = 'easy';
-      const n = userGames(l).length;
-      for (let i = 0; i < 6; i++) simDay(l);
-      for (const r of userGames(l).slice(n)) expect(r.oppPlan).toBeUndefined();
     }
     {
       // answers the user's measured strengths: a hot pick-and-roll ball handler gets a coverage change
-      const l = leagueAt('hard', 12);
+      const l = keenAt(12);
       // the user's stored games show his handlers scoring 1.5 points per pick-and-roll
       for (const r of userGames(l)) {
         const box = r.home.tid === l.userTid ? r.home : r.away;
         box.playTypes = { ...box.playTypes, pnrBH: { poss: 60, pts: 90 } };
       }
-      const g = nextMeeting(
-        l,
-        aiTeams(l).find((tid) => nextMeeting(l, tid))!,
-      )!;
-      const opp = oppOf(l, g);
+      const { opp, g } = plannedMeetings(l)[0];
       const d = l.teams[opp].tactics.defense;
       d.scheme = 'man';
       d.pnr = 'drop';
@@ -300,12 +314,10 @@ describe('planning for an opponent', () => {
     }
     {
       // an AI coach answers a one-man offense that can't shoot around him with a box-and-one on him
-      const l = leagueAt('hard', 14);
+      const l = keenAt(14);
       const star = oneManTeam(l, l.userTid);
       let found = 0;
-      for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
-        const g = nextMeeting(l, tid);
-        if (!g) continue;
+      for (const { opp: tid, g } of plannedMeetings(l)) {
         l.teams[tid].tactics.defense.scheme = 'man';
         const plan = aiGamePlan(l, tid, l.userTid, g);
         const box = plan?.items.find((it) => it.id === 'box1');
@@ -329,7 +341,7 @@ describe('planning for an opponent', () => {
     }
     {
       // AI coaches can attack the user's weakest perimeter defender, and zone a five of his that can't shoot, and play it in the game
-      const l = leagueAt('hard', 14);
+      const l = keenAt(14);
       ensureRotation(l, l.userTid);
       const rot = projectedRotation(l, l.userTid, 8);
       const sieve = rot[1];
@@ -339,9 +351,7 @@ describe('planning for an opponent', () => {
       Object.assign(brick.ratings, { tp: 5 });
       for (const s of brick.stats) if (s.season === l.season) s.tpa = s.tpm = 0;
       let hunts = 0;
-      for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
-        const g = nextMeeting(l, tid);
-        if (!g) continue;
+      for (const { opp: tid, g } of plannedMeetings(l)) {
         l.teams[tid].tactics.defense.scheme = 'man';
         l.teams[tid].tactics.defense.pnr = 'drop';
         const plan = aiGamePlan(l, tid, l.userTid, g);
@@ -358,9 +368,7 @@ describe('planning for an opponent', () => {
       // the five who play most can't shoot: some coaches pack it into a 2-3 zone (one item a group: in place of a coverage)
       for (const p of projectedRotation(l, l.userTid, 5)) Object.assign(p.ratings, { tp: 5, mid: 10 });
       let zones = 0;
-      for (const tid of l.teams.map((t) => t.tid).filter((t) => t !== l.userTid)) {
-        const g = nextMeeting(l, tid);
-        if (!g) continue;
+      for (const { opp: tid, g } of plannedMeetings(l)) {
         const zone = aiGamePlan(l, tid, l.userTid, g)?.items.find((it) => it.id === 'zone23');
         if (!zone) continue;
         zones++;
@@ -371,7 +379,7 @@ describe('planning for an opponent', () => {
     }
     {
       // AI coaches don't plan for a player of the user's who rests tonight
-      const l = leagueAt('hard', 14);
+      const l = keenAt(14);
       ensureRotation(l, l.userTid);
       const rot = projectedRotation(l, l.userTid, 8);
       const sieve = rot[1];
@@ -407,18 +415,20 @@ describe('planning for an opponent', () => {
       expect(b2b.size).toBeGreaterThan(0);
     }
     {
-      // leaves the user's counters reading their usual tactics
-      const l = leagueAt('easy', 12);
-      toGameDay(l);
+      // leaves the user's counters reading their usual tactics: the same whether his coach plans or not
+      const l = keenAt(12);
+      toPlannedGameDay(l);
       const opp = oppOf(l, userGameOnDay(l, l.day)!);
-      const casual = counterCandidates(l, l.userTid, opp);
-      l.settings.difficulty = 'hard';
-      expect(counterCandidates(l, l.userTid, opp)).toEqual(casual);
+      const planned = counterCandidates(l, l.userTid, opp);
+      l.teams[opp].coach.tactics = 0;
+      const g = userGameOnDay(l, l.day)!;
+      if (!preparesPlan(l, opp, g.gid)) expect(counterCandidates(l, l.userTid, opp)).toEqual(planned);
+      expect(aiGamePlan(l, opp, l.userTid, g) === null).toBe(!preparesPlan(l, opp, g.gid));
     }
     {
       // the preview, the Lab and the real game play the same opponent tactics, whatever else is played that day
-      const l = leagueAt('hard', 12);
-      toGameDay(l);
+      const l = keenAt(12);
+      toPlannedGameDay(l);
       const g = userGameOnDay(l, l.day)!;
       const opp = oppOf(l, g);
       ensureRotation(l, g.home);
@@ -446,8 +456,8 @@ describe('planning for an opponent', () => {
     }
     {
       // a simmed game keeps the plan it was played with
-      const l = leagueAt('hard', 12);
-      toGameDay(l);
+      const l = keenAt(12);
+      toPlannedGameDay(l);
       const g = userGameOnDay(l, l.day)!;
       ensureRotation(l, g.home);
       ensureRotation(l, g.away);
@@ -456,69 +466,10 @@ describe('planning for an opponent', () => {
       expect(res.oppPlan).toEqual(plan.items.map((x) => x.text));
     }
     {
-      // the difficulty's edge on the court, in his games only: on Hard his opponents play about 2
-      // points a game better, on Easy he gets about 1.5 (the same games, measured)
-      const l = leagueAt('normal', 12);
-      const me = l.userTid;
-      const [a, b] = aiTeams(l);
-      for (const d of ['easy', 'hard'] as const) {
-        l.settings.difficulty = d;
-        expect(courtEdge(l, a, b)).toBeUndefined();
-        expect(courtEdge(l, me, a)![0]).toBe(-courtEdge(l, me, a)![1]);
-        expect(courtEdge(l, a, me)).toEqual([...courtEdge(l, me, a)!].reverse());
-      }
-      l.settings.difficulty = 'normal';
-      expect(courtEdge(l, me, a)).toBeUndefined();
-      for (const t of l.teams) ensureRotation(l, t.tid);
-      const N = 600;
-      const margin = (d: League['settings']['difficulty']) => {
-        l.settings.difficulty = d;
-        let m = 0;
-        for (let i = 0; i < N; i++) {
-          const opp = aiTeams(l)[i % 29];
-          const [home, away] = i % 2 ? [me, opp] : [opp, me];
-          const sim = new GameSim(buildSimInput(l, home, l.day, 'regular', away), buildSimInput(l, away, l.day, 'regular', home), {
-            rng: new Rng(500 + i),
-            type: 'regular',
-            injuries: false,
-            edge: courtEdge(l, home, away),
-          });
-          sim.simToEnd();
-          const r = sim.result(1, l.season, l.day);
-          m += r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts;
-        }
-        return m / N;
-      };
-      const [easy, normal, hard] = (['easy', 'normal', 'hard'] as const).map(margin);
-      expect(hard - normal).toBeLessThan(-1);
-      expect(hard - normal).toBeGreaterThan(-3.5);
-      expect(easy - normal).toBeGreaterThan(0.5);
-      expect(easy - normal).toBeLessThan(2.8);
-      // the pre-game projection carries it, and the live game plays it
+      // no edge on the court in his games: the pre-game projection is home court and the rosters, and the live game plays none
+      const l = leagueAt(12);
       toGameDay(l);
-      const g = userGameOnDay(l, l.day)!;
-      l.settings.difficulty = 'normal';
-      const sim = new GameSim(buildSimInput(l, g.home, g.day, g.type, g.away, g), buildSimInput(l, g.away, g.day, g.type, g.home, g), { rng: new Rng(1), type: g.type });
-      const base = tipoffEdge(l, g, sim);
-      l.settings.difficulty = 'hard';
-      expect(tipoffEdge(l, g, sim)).toBeCloseTo(base + courtPoints(l, g.home, g.away), 1);
-      expect(courtPoints(l, me, g.home === me ? g.away : g.home)).toBe(userCourtPoints(l));
-      // Hard's edge grows with the user's team: 2 points for an average roster, more for a better
-      // one (up to 5), less for a worse one (down to 1); Easy's stays flat
-      const mine = teamPlayers(l, me);
-      const at = (lift: number) => {
-        for (const p of mine) p.ovr += lift;
-        const pts = userCourtPoints(l);
-        for (const p of mine) p.ovr -= lift;
-        return pts;
-      };
-      expect(at(0)).toBeCloseTo(clamp(-2 * (1 + DIFFICULTY.hard.courtGrowth * userProjectedNet(l)), -5, -1), 5);
-      expect(at(4)).toBeLessThan(at(0));
-      expect(at(30)).toBe(-5);
-      expect(at(-30)).toBe(-1);
-      expect(prepareLive(l)!.sim.opts.edge).toEqual(courtEdge(l, g.home, g.away));
-      l.settings.difficulty = 'easy';
-      expect(at(30)).toBe(at(-30));
+      expect(prepareLive(l)!.sim.opts.edge).toBeUndefined();
     }
   }, 180_000);
 });

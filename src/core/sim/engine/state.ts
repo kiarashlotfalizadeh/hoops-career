@@ -292,7 +292,7 @@ export interface SimOptions {
   record?: boolean;
   neutral?: boolean;
   injuries?: boolean;
-  /** Field-goal percentage added to each side's shots (home first): the difficulty's edge (see courtEdge). */
+  /** Field-goal percentage added to each side's shots (home first): the edge Easy and Hard gave, replayed from an old live game's journal (LiveJournal.court). */
   edge?: [number, number];
   /** Keep shot locations even when not recording play-by-play. */
   keepShots?: boolean;

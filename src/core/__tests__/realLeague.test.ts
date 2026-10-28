@@ -597,9 +597,6 @@ describe('two seasons of the real league', () => {
       const comp = planOwnerGoals(l, top, outlook)!;
       expect(comp).toMatchObject({ missed: { seasons: 1, of: 2 } });
       expect(goalsWhy(comp)).toContain("Last season went without the postseason, one of the 2 I'll allow. Miss it again and I want the play-in at least.");
-      l.ownerReviews = [reviewed(l.season - 2, false), reviewed(l.season - 1, false)];
-      l.settings.difficulty = 'easy';
-      expect(planOwnerGoals(l, tid, outlook)).toMatchObject({ rebuild: { year: 3, of: 3 }, floor: floorOf(0.25) });
     }
 
     // in season he reads the progress, warns once when the team falls off pace, and checks in once at the All-Star break
@@ -1025,8 +1022,8 @@ describe('two seasons of the real league', () => {
       expect(r.records.length).toBeLessThanOrEqual(4);
       expect(r.next!.wins).toBeGreaterThan(10);
       expect(r.next!.wins).toBeLessThan(72);
-      // the career keeps the difficulty the season was played on
-      expect(r).toMatchObject({ difficulty: l.settings.difficulty });
+      // the career keeps job security only when it was off
+      expect(r).not.toHaveProperty('jobSecurity');
       const verdict = l.inbox.find((m) => m.season === l.season && m.subject === 'Season review')!;
       // and the review keeps the owner's own first words, which his verdict opens with
       expect(verdict.body.startsWith(l.ownerReviews!.find((x) => x.season === l.season)!.said!)).toBe(true);

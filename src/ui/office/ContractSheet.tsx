@@ -141,7 +141,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const talks = bidding ? null : talkState(league, p, kind);
   const appeal = teamAppeal(league, tid, p);
   const ai = appealInfo(appeal);
-  // his ask from you against a neutral team's: interest and the difficulty setting both move it
+  // his ask from you against a neutral team's: his interest in the team moves it
   const vsNeutral = Math.round((askingContract(league, p, tid).amount / askingContract(league, p).amount - 1) * 100);
   const market = marketSalary(league, p);
   // your other pending offers on cap space hold their room, and so do the summer market's holds:

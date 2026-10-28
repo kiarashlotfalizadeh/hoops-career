@@ -1,8 +1,8 @@
 // What a team's players are worth on the floor: each one's worth to the engine (his OVR, read the way
 // the games play it), weighted by the minutes a typical rotation gives him over the games he'll be
 // there for (injured players out for the games they'll miss, everyone out for his share of the
-// games a rotation player misses). The season forecast's talent prior (odds.ts) and the
-// difficulty's edge on the court (difficulty.ts) both read a team's strength from it.
+// games a rotation player misses). The season forecast's talent prior (odds.ts) reads a team's
+// strength from it.
 import type { Player, RatingKey } from '../types';
 import { clamp } from '../random';
 

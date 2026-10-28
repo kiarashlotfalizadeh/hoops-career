@@ -15,7 +15,6 @@ import { coachCareer, coyWinners, userCoach, type CoachCareer } from '../../core
 import { seasonsInCharge } from '../../core/league/owner';
 import { cabinet, coachRanks, gmLegacy, legacyOf, reviewPath, type Milestone, type SignatureWin, type Trophy as TrophyT } from '../../core/league/legacy';
 import { endText, gradeWord, type SeasonReview } from '../../core/league/legacyReview';
-import { DIFFICULTY } from '../../core/league/difficulty';
 import { agenda } from '../../core/league/agenda';
 import type { JobOffer } from '../../core/league/jobs';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -78,10 +77,7 @@ function Profile({ league }: { league: League }) {
 
       <section className={`slab fo-career-slab${full ? '' : ' compact no-court'}`} aria-label="Your record">
         <div className="row between">
-          <span className="over">
-            {league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`} ·{' '}
-            {DIFFICULTY[league.settings.difficulty].label}
-          </span>
+          <span className="over">{league.fired ? `Last job: the ${team.name}` : seasonsIn < 1 ? `${team.name} · from next season` : `${team.name} · season ${seasonsIn}`}</span>
           {me && k && k.seasons > 0 && (
             <Link to={`/league/history?view=coaches&coach=${me.id}`} className="card-link">
               Season by season
@@ -409,8 +405,8 @@ const tradeText = (names: string[], picks: number) => {
   return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : (parts[0] ?? 'nothing');
 };
 
-/** The difficulty a season was played on, as the career records it ("Hard", "Easy, job security off"); empty for a season from before it was kept. */
-const playedOn = (r: SeasonReview) => (r.difficulty ? `${DIFFICULTY[r.difficulty].label}${r.jobSecurity === false ? ', job security off' : ''}` : '');
+/** A season played with job security off, as the career records it; empty otherwise. */
+const playedOn = (r: SeasonReview) => (r.jobSecurity === false ? 'job security off' : '');
 
 const bestText = (round: number) => (round === 5 ? 'Champion' : round === 4 ? 'Finals' : round === 3 ? 'Conf. finals' : round === 2 ? '2nd round' : '1st round');
 

@@ -15,7 +15,7 @@
 // share of the titles, the threes leader and 10-three nights, overtime, foul-outs): see SHAPE_FAILS
 // for which of those fail it and which print as WATCH lines.
 // Usage: npx tsx scripts/star-check.ts [seasons] [rngSeed[:TEAM],...]   (env QUIET=1: leaders only,
-//   TEAM=<abbrev>: the user's team where a league names none, Orlando by default; DIFFICULTY=easy|normal|hard)
+//   TEAM=<abbrev>: the user's team where a league names none, Orlando by default)
 import { readFileSync } from 'node:fs';
 import { fork } from 'node:child_process';
 import { availableParallelism } from 'node:os';
@@ -365,8 +365,7 @@ function playLeague(spec: string): SeasonReport[] {
   const t0 = performance.now();
   const userTid = team ? FRANCHISES.findIndex((f) => f.abbrev === team.toUpperCase()) : 19;
   if (userTid < 0) throw new Error(`${team} is no team in the seed`);
-  const settings = { ...defaultSettings(), ...(process.env.DIFFICULTY && { difficulty: process.env.DIFFICULTY as League['settings']['difficulty'] }) };
-  const league = createLeague({ name: 'Stars', userTid, coachName: 'Check', settings, seed, rngSeed });
+  const league = createLeague({ name: 'Stars', userTid, coachName: 'Check', settings: defaultSettings(), seed, rngSeed });
   league.id = `star_check_${rngSeed}`;
 
   // the real league's top 20 scorers of 2025-26 (40+ games), measured in the first simulated season

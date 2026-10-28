@@ -339,12 +339,19 @@ describe('reading a league', () => {
       expect(() => migrate({ id: 'x' })).toThrow('damaged');
     }
 
-    // a setting waiting for opening night loads as it was; a damaged one goes, as if never chosen
+    // a setting waiting for opening night loads as it was; a damaged one goes, as if never chosen; a save
+    // from when there were three difficulties plays the one there is now (its preset and a change of it go)
     {
       const l = testLeague('pending');
-      l.settings.pending = { difficulty: 'hard', jobSecurity: false };
-      expect(migrate(structuredClone(l)).settings.pending).toEqual({ difficulty: 'hard', jobSecurity: false });
-      (l.settings as { pending?: unknown }).pending = { difficulty: 'nightmare' };
+      const old = l.settings as { difficulty?: string; pending?: unknown };
+      old.difficulty = 'hard';
+      old.pending = { difficulty: 'easy', jobSecurity: false };
+      const m = migrate(structuredClone(l));
+      expect(m.settings).not.toHaveProperty('difficulty');
+      expect(m.settings.pending).toEqual({ jobSecurity: false });
+      old.pending = { difficulty: 'easy' };
+      expect(migrate(structuredClone(l)).settings.pending).toBeUndefined();
+      old.pending = 'nightmare';
       expect(migrate(structuredClone(l)).settings.pending).toBeUndefined();
     }
 

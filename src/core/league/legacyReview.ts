@@ -51,8 +51,7 @@ export interface SeasonReview {
   /** What the roster as it stands should win next season (the owner's read), unless he was fired. */
   next?: { wins: number };
   fired?: true;
-  /** The difficulty the season was played on (changes wait for opening night, so one a season), and job security when it was off; absent in reviews from before it was kept. */
-  difficulty?: League['settings']['difficulty'];
+  /** Job security when it was off for the season (changes wait for opening night, so one a season). */
   jobSecurity?: false;
 }
 
@@ -160,7 +159,6 @@ export function buildSeasonReview(league: League): SeasonReview | null {
     fans: fanScore(league, tid),
     ...(next ? { next } : {}),
     ...(league.fired ? { fired: true as const } : {}),
-    difficulty: league.settings.difficulty,
     ...(league.settings.jobSecurity ? {} : { jobSecurity: false as const }),
   };
 }

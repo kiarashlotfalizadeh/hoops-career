@@ -3,7 +3,7 @@
 // the odds gone two weeks running, the owner's floor in danger on two readings, the deadline, a
 // playoff series or play-in game starting, the books) among them, each only with a real choice in
 // it, and one still open coming due again before its deadline. The guided first week is one
-// checklist item. Job security: the meter, the grace period by difficulty, the ultimatum.
+// checklist item. Job security: the meter, the grace period, the ultimatum.
 import { describe, expect, it } from 'vitest';
 import seedJson from '../../data/seed.json';
 import { createLeague, defaultSettings, type SeedData } from '../league/create';
@@ -12,9 +12,19 @@ import { canStartRegularSeason, simDay, startRegularSeason } from '../league/sea
 import { CAP_FOR, curTeamSeason, fmtDate, playerName, revenueScale, standardRoster } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { CAP } from '../constants';
-import { ULTIMATUM_ODDS, canBeFired, jobSecurity, levelOdds, maybeUltimatum, seasonWeight, seatHeat, ultimatumVerdict } from '../league/jobSecurity';
+import {
+  ULTIMATUM_ODDS,
+  canBeFired,
+  chosenJobSecurity,
+  jobSecurity,
+  levelOdds,
+  maybeUltimatum,
+  requestJobSecurity,
+  seasonWeight,
+  seatHeat,
+  ultimatumVerdict,
+} from '../league/jobSecurity';
 import { ownerWord } from '../league/legacyPulse';
-import { legacyOf } from '../league/legacy';
 import { ownerEvaluation } from '../league/owner';
 import {
   CONCEDE_COST,
@@ -34,7 +44,6 @@ import {
   setOwnerGoals,
   type OwnerReview,
 } from '../league/ownerGoals';
-import { requestSetting } from '../league/difficulty';
 import { leagueForecast, pct } from '../analysis/odds';
 import {
   DEADLINE_DAYS,
@@ -91,8 +100,8 @@ const camp = (tid = 13, settings = {}): League => createLeague({ name: 'agenda',
 
 describe('the agenda', () => {
   /** A team in its first regular season with goals set, `tenure` seasons in charge. */
-  function inCharge(tenure: number, difficulty: League['settings']['difficulty'] = 'normal') {
-    const l = camp(5, { difficulty });
+  function inCharge(tenure: number) {
+    const l = camp(5);
     startRegularSeason(l);
     setOwnerGoals(l, true);
     l.tenureStart = l.season - tenure + 1;
@@ -270,26 +279,15 @@ describe('the agenda', () => {
       expect(guideOpen(l)).toBe(true);
     }
 
-    // job security reads a neutral standing as steady on opening night, and the grace period by difficulty
+    // job security reads a neutral standing as steady on opening night, and the grace period
     {
       const l = inCharge(1);
       const js = jobSecurity(l);
       expect(js).toMatchObject({ score: 50, heat: 'steady' });
       expect(js.off).toBe(false);
       expect([1, 2, 3].map((n) => canBeFired(inCharge(n)))).toEqual([false, false, true]);
-      expect([1, 2].map((n) => canBeFired(inCharge(n, 'hard')))).toEqual([false, true]);
-      expect([3, 4].map((n) => canBeFired(inCharge(n, 'easy')))).toEqual([false, true]);
       l.settings.jobSecurity = false;
       expect(jobSecurity(l).off).toBe(true);
-      // grace counts from the difficulty each season was played on: a Hard season and then Easy buys no more seasons
-      const easy = inCharge(2, 'easy');
-      const played = (d: League['settings']['difficulty']) => {
-        (easy.legacy ??= legacyOf(easy)).reviews = [
-          { season: easy.season - 1, tid: easy.userTid, won: 20, lost: 62, conf: 'E', round: -1, records: [], honors: [], difficulty: d },
-        ];
-        return canBeFired(easy);
-      };
-      expect([played('easy'), played('normal'), played('hard')]).toEqual([false, false, true]);
       // one ladder: the pulse names the owner by the meter's word ("Steady 47", never "Watchful 47")
       for (const score of [20, 40, 47, 50, 70]) expect(ownerWord(score).word).toBe(seatHeat(score).label);
     }
@@ -326,27 +324,19 @@ describe('the agenda', () => {
       );
     }
 
-    // the owner's targets count Hard's edge on the court as the forecast does: his read is the forecast's
-    // on every difficulty, and a target set before he counted it doesn't hold up next season's
+    // the owner's read is the forecast's, and last season's full-season target holds up the next
     {
-      const [n, h] = [inCharge(1), inCharge(1, 'hard')];
+      const n = inCharge(1);
       const wins = (x: League) => currentGoals(x)!.goals.find((g) => g.kind === 'wins')!;
-      expect(wins(n).edge).toBe(0);
-      expect(wins(h).edge).toBeLessThan(-2);
-      expect(wins(h).target).toBeLessThan(wins(n).target);
-      for (const x of [n, h]) expect(Math.abs(wins(x).perGame! * 82 - leagueForecast(x)!.teams[x.userTid].w)).toBeLessThan(1);
-      const review = (edge?: number): OwnerReview => ({
-        season: h.season - 1,
-        tid: h.userTid,
+      expect(Math.abs(wins(n).perGame! * 82 - leagueForecast(n)!.teams[n.userTid].w)).toBeLessThan(1);
+      const review = (): OwnerReview => ({
+        season: n.season - 1,
+        tid: n.userTid,
         games: 82,
         grade: 0,
         total: 0,
-        goals: [{ kind: 'wins', title: 'Win 70 games', target: 70, weight: 1, result: 50, grade: -1, ...(edge !== undefined ? { edge } : {}) }],
+        goals: [{ kind: 'wins', title: 'Win 70 games', target: 70, weight: 1, result: 50, grade: -1 }],
       });
-      h.ownerReviews = [review()];
-      expect(lastWinsTarget(h, h.userTid)).toBeUndefined();
-      h.ownerReviews = [review(-6)];
-      expect(lastWinsTarget(h, h.userTid)).toBe(70);
       n.ownerReviews = [review()];
       expect(lastWinsTarget(n, n.userTid)).toBe(70);
       // at 0-0 a goal over his own read is behind it already, not on track
@@ -362,19 +352,17 @@ describe('the agenda', () => {
       expect(personalityLine('win-now', {})).toBe('Win-now · wants results this season');
     }
 
-    // a difficulty change, or job security off, waits for the next opening night (no dodging a review); on counts at once
+    // job security off waits for the next opening night (no dodging a review); on counts at once
     {
       const l = camp(5);
-      requestSetting(l, 'difficulty', 'easy');
-      requestSetting(l, 'jobSecurity', false);
-      expect(l.settings).toMatchObject({ difficulty: 'normal', jobSecurity: true, pending: { difficulty: 'easy', jobSecurity: false } });
-      requestSetting(l, 'jobSecurity', true);
-      expect(l.settings.pending).toEqual({ difficulty: 'easy' });
-      startRegularSeason(l);
-      expect(l.settings.difficulty).toBe('easy');
+      requestJobSecurity(l, false);
+      expect(l.settings).toMatchObject({ jobSecurity: true, pending: { jobSecurity: false } });
+      expect(chosenJobSecurity(l)).toBe(false);
+      requestJobSecurity(l, true);
       expect(l.settings.pending).toBeUndefined();
-      requestSetting(l, 'difficulty', 'hard');
-      requestSetting(l, 'difficulty', 'easy');
+      requestJobSecurity(l, false);
+      startRegularSeason(l);
+      expect(l.settings.jobSecurity).toBe(false);
       expect(l.settings.pending).toBeUndefined();
     }
 

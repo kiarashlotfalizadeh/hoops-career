@@ -60,7 +60,6 @@ export function TradeHelp({ league, season }: { league: League; season: number }
       <p>
         <b>How AI GMs judge deals.</b> Ability, age, potential and contract: a bad contract counts against a package, and salary over the tax costs them. Contenders want help now;
         rebuilders pay more for youth and picks, less for veterans. A star is worth more than several lesser players, and players they'd have to waive count for nothing.
-        {league.settings.difficulty === 'easy' ? ' On easy they take a little less than fair value, but not for players or picks you got in a trade this season.' : ''}
       </p>
       {league.settings.godMode && (
         <p>

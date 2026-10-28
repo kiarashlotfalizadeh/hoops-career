@@ -75,7 +75,7 @@ import { booksDaily, closeBooks } from './books';
 import { callsDaily } from './calls';
 import { ownerEvaluation } from './owner';
 import { ownerCheckIn, setOwnerGoals } from './ownerGoals';
-import { applyPendingSettings } from './difficulty';
+import { applyPendingSettings } from './jobSecurity';
 import { coachingCarousel } from './coaches';
 import { makeJobOffers } from './jobs';
 import { clearAllPlans } from './gamePlans';
@@ -132,7 +132,7 @@ export function startRegularSeason(league: League): string[] {
   // short (OKC, four seasons, round 2026-10-25)
   for (const t of league.teams) if (t.tid !== league.userTid || !t.budget.priceSet) t.budget.ticketPrice = aiTicketPrice(league, t);
   aiExtensions(league);
-  // a difficulty or job-security change made in Settings since last season's opener takes effect now
+  // job security turned off in Settings since last season's opener takes effect now
   applyPendingSettings(league);
   league.phase = 'regular';
   league.day = 0;

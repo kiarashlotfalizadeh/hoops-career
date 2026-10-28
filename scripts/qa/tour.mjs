@@ -78,7 +78,7 @@ async function snap(pg, dir, name, route) {
   await pg.goto(`${base}/#${route}`);
   await pg.waitForTimeout(700);
   await pg.screenshot({ path: `${dir}/${name}.png`, fullPage: true });
-  // (Settings' radio groups change the league: its difficulty, its live-game defaults)
+  // (Settings' radio groups change the league: its live-game defaults)
   if (route.startsWith('/settings')) return;
   // every option of the screen's first tab bar (segmented bars are radio groups)
   const tabs = pg.locator('main [role=tablist], main [role=radiogroup]').first().locator('[role=tab], [role=radio]');

@@ -24,7 +24,6 @@ import { recapFacts } from '../analysis/quotes';
 import { recordGame, recordNews } from './records';
 import { numberTeam } from './jerseys';
 import { plural } from '../format';
-import { courtEdge } from './difficulty';
 import { userYouth } from './youthLean';
 
 export function wearPerf(p: Player) {
@@ -489,7 +488,6 @@ export function playGame(league: League, g: ScheduledGame, opts: PlayOpts = {}):
       keepShots: userGame,
       injuries: league.settings.injuries,
       neutral: neutralSite(g),
-      edge: courtEdge(league, g.home, g.away),
     });
     // (read before the game is played: the projection counts the players the plan has on the floor)
     if (userGame) edge = tipoffEdge(league, g, sim);

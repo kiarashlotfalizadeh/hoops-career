@@ -13,7 +13,7 @@ import { agenda } from '../../core/league/agenda';
 import { CAP } from '../../core/constants';
 import { RETIRED, type GameResult, type League, type PlayoffSeries } from '../../core/types';
 import { matchScore, normalize, search, searchIndex } from '../search';
-import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, userOwnerPreview } from '../newLeague';
+import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews } from '../newLeague';
 import { ownerPersonality, planOwnerGoals } from '../../core/league/ownerGoals';
 import { seasonOutcome } from '../league/shared';
 import { editOf as playerEdit, formOf as playerForm } from '../god/PlayerEditor';
@@ -183,17 +183,12 @@ describe('screen logic', () => {
         expect(teams[tid].level).toBe(og.goals.find((g) => g.kind === 'postseason')?.target ?? 0);
       }
       expect(ownerLine({ wins: 32, level: 0, who: 'builder' })).toBe('Owner: 32 wins · rebuild · builder');
-      // on another preset the edge on the court moves the user's own owner alone: the last step reads
-      // him from the league built with the chosen team (the review, round 4: the Thunder's poster said
-      // Normal's 65 wins, Today then Hard's 56)
+      // with one difficulty the poster's owner is the one you get: the league built with that team as yours asks the same
       {
-        const hard = createLeague({ name: 'p', userTid: 21, coachName: 'c', settings: { ...defaultSettings(), difficulty: 'hard' }, seed: null, ...made });
-        const og = planOwnerGoals(hard, 21)!;
-        const own = userOwnerPreview(hard);
-        expect(own.wins).toBe(og.goals.find((g) => g.kind === 'wins')!.target);
-        expect(own.level).toBe(og.goals.find((g) => g.kind === 'postseason')?.target ?? 0);
-        expect(own.wins).toBeLessThan(teams[21].wins);
-        expect(ownerLine(own, 'Hard')).toMatch(/^Owner on Hard: \d+ wins · /);
+        const mine = createLeague({ name: 'p', userTid: 21, coachName: 'c', settings: defaultSettings(), seed: null, ...made });
+        const og = planOwnerGoals(mine, 21)!;
+        expect(og.goals.find((g) => g.kind === 'wins')!.target).toBe(teams[21].wins);
+        expect(og.goals.find((g) => g.kind === 'postseason')?.target ?? 0).toBe(teams[21].level);
       }
     }
 

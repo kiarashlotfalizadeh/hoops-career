@@ -11,12 +11,11 @@
 import type { League, Player } from '../types';
 import { Rng, hashString, mix32 } from '../random';
 import { ROSTER_NET, rosterWorth } from './worth';
-import { userCourtPoints } from '../league/difficulty';
 import { HOME_EDGE, MARGIN_SD, PRIOR_GAMES, blendNet, leagueRatings, phi } from './projection';
 import { LOTTERY_ODDS } from '../league/draft';
 import { drawLot, finalsHomeCourt, standings } from '../league/standings';
 
-// (what a roster is worth lives in worth.ts, which the difficulty's edge on the court reads too)
+// (what a roster is worth lives in worth.ts)
 export { ROSTER_NET, rosterWorth };
 
 /** Simulated seasons in a forecast the screens show, and in the weekly point of the user's trail. */
@@ -127,9 +126,7 @@ function setup(league: League, fixed: { gid: number; homeWon: boolean } | undefi
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   const net = league.teams.map((t) => {
     const r = ratings.rows[t.tid];
-    // the user's prior carries the difficulty's edge on the court (his games so far already do)
-    const court = t.tid === league.userTid ? (userCourtPoints(league) * PRIOR_GAMES) / (r.gp + PRIOR_GAMES) : 0;
-    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET) + court;
+    return blendNet(r.gp ? r.net : 0, r.gp, worth[t.tid] - avg, ROSTER_NET);
   });
   const sd = ratings.rows.map((r) => spread * Math.sqrt(PRIOR_GAMES / (r.gp + PRIOR_GAMES)));
   const paces = ratings.rows.filter((r) => r.gp > 0).map((r) => r.pace);
@@ -560,7 +557,7 @@ export function lotteryMatrix(m: number): number[][] {
  * Where the picks of the next draft still to be ordered should land, team by team, from projected
  * strength rather than the record alone: the record so far plus the games left at the strength the
  * season forecast reads (this season's net rating blended with what the roster is worth, PRIOR_GAMES
- * a side, the user's with the difficulty's edge on the court), spread by the forecast's own
+ * a side), spread by the forecast's own
  * uncertainty (STRENGTH_SD, shrinking as games are played, and each game left a coin at that
  * strength). PICK_SIMS standings are drawn (on a stream of the league's id and the draft, never
  * the league's own), each ranked worst first; the non-playoff places (the 14 worst records, or the
@@ -615,12 +612,11 @@ function projectPicks(league: League): PickProjection {
   const avg = worth.reduce((a, w) => a + w, 0) / Math.max(1, n);
   const pct: number[] = [];
   const sd: number[] = [];
-  league.teams.forEach((t, tid) => {
+  league.teams.forEach((_, tid) => {
     const { won, gp, left } = rows[tid];
     const r = ratings.rows[tid];
     const played = done ? 0 : gp;
-    const court = t.tid === league.userTid ? (userCourtPoints(league) * PRIOR_GAMES) / (played + PRIOR_GAMES) : 0;
-    const net = blendNet(played && r.gp ? r.net : 0, played, worth[tid] - avg, ROSTER_NET) + court;
+    const net = blendNet(played && r.gp ? r.net : 0, played, worth[tid] - avg, ROSTER_NET);
     const z = net / MARGIN_SD;
     const p = phi(z);
     // a point of strength moves each game's chance by the normal's density there

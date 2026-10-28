@@ -833,7 +833,7 @@ function liveIntact(l: League, j: unknown): boolean {
   const u = j.user;
   if (!obj(u) || !isTactics(u.tactics) || !numValues(u.perf) || !nums(u.rest) || !num(u.injuryMult) || (u.play !== undefined && !nums(u.play))) return false;
   if (j.edge !== undefined && !num(j.edge)) return false;
-  // (the court edge at tip-off: a pair of numbers, or null on Normal)
+  // (the edge on the court Easy or Hard gave at tip-off, in a journal from before the one difficulty: a pair of numbers, or null)
   if (j.court !== undefined && j.court !== null && !(Array.isArray(j.court) && j.court.length === 2 && j.court.every(num))) return false;
   const r = u.rotation;
   if (!obj(r) || !nums(r.order) || !numValues(r.minutes) || !nums(r.closers) || !nums(r.restB2B) || !numValues(r.caps)) return false;

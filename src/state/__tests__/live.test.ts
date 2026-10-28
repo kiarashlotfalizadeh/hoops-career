@@ -22,7 +22,8 @@ import { snapshot, subsLine } from '../../ui/live/drawn';
 import { currentSlot, liveOpt, liveSlots, replaceWith, slotForGame, tipSlot, withMentalityOf } from '../../ui/live/familiar';
 import { resetToPlan } from '../../ui/live/pills';
 import type { PossLog } from '../../core/sim/log';
-import { oppPlanIn } from '../../core/ai/opponentPlan';
+import { oppPlanIn, preparesPlan } from '../../core/ai/opponentPlan';
+import { userGameOnDay } from '../../core/league/games';
 import { testLeague, toGameDay, userGames } from './fixtures';
 import { applyOp, forkSim, measureChoices, nightWorth, playOut, type LiveChoice } from '../liveWorth';
 
@@ -35,6 +36,19 @@ function goLive(l: League): LiveGame {
   return lg;
 }
 
+/**
+ * A dozen days in, so the other coaches have games of yours to plan against, every AI coach at the top of
+ * the tactics scale, on to the next game of yours whose coach game-plans for it.
+ */
+function toPlannedGame(l: League) {
+  for (let i = 0; i < 12; i++) simDay(l);
+  for (const t of l.teams) if (t.tid !== l.userTid) t.coach.tactics = 99;
+  toGameDay(l);
+  for (let g = userGameOnDay(l, l.day)!; !preparesPlan(l, g.home === l.userTid ? g.away : g.home, g.gid); g = userGameOnDay(l, l.day)!) {
+    simDay(l);
+    toGameDay(l);
+  }
+}
 const once = (l: League, gid: number) => l.games.filter((g) => g.gid === gid).length;
 
 /** Each scenario starts with no league open and no game in this session. */
@@ -821,13 +835,10 @@ describe('live game', () => {
       fresh();
     }
 
-    // plays the other coach's game plan again, and the result keeps it, on hard
+    // plays the other coach's game plan again, and the result keeps it
     {
       const l = testLeague('opp-plan');
-      // a dozen days in, so the other coaches have games of yours to plan against; on hard, every one does
-      for (let i = 0; i < 12; i++) simDay(l);
-      l.settings.difficulty = 'hard';
-      toGameDay(l);
+      toPlannedGame(l);
       const lg = goLive(l);
       const them = (1 - lg.userSide) as 0 | 1;
       const plan = oppPlanIn(lg.sim, them);
@@ -848,12 +859,10 @@ describe('live game', () => {
       fresh();
     }
 
-    // picks the game up with the other coach's plan as it tipped off, after a difficulty change or under a new league id
+    // picks the game up with the other coach's plan as it tipped off, after his tactics rating changed or under a new league id
     {
       const l = testLeague('opp-plan-keep');
-      for (let i = 0; i < 12; i++) simDay(l);
-      l.settings.difficulty = 'hard';
-      toGameDay(l);
+      toPlannedGame(l);
       const lg = goLive(l);
       const them = (1 - lg.userSide) as 0 | 1;
       const plan = oppPlanIn(lg.sim, them);
@@ -862,8 +871,8 @@ describe('live game', () => {
       for (let i = 0; i < 10; i++) lg.step();
       await useStore.getState().flush();
       const back = (await loadLeague(l.id))!;
-      // easy-mode coaches never plan, and a backup imported as a copy gets a new id (plans are drawn from it)
-      back.settings.difficulty = 'easy';
+      // a coach at the bottom of the scale plans less often, and a backup imported as a copy gets a new id (plans are drawn from it)
+      back.teams[lg.sim.T[them].tid].coach.tactics = 0;
       back.id = `${back.id}-copy`;
       useStore.getState().setLeague(back);
       const again = prepareLive(back)!;

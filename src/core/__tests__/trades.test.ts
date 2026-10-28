@@ -65,16 +65,13 @@ function txLeague(rngSeed = 5): League {
 }
 
 function negLeague(rngSeed = 5): League {
-  const l = createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
-  l.settings.difficulty = 'normal';
-  return l;
+  return createLeague({ name: `neg${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
 }
 
 function termsLeague(rngSeed = 5): League {
   const l = createLeague({ name: `terms${rngSeed}`, userTid: U, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed });
   // a fixed id: the lottery breaks ties on it
   l.id = `terms${rngSeed}`;
-  l.settings.difficulty = 'normal';
   l.phase = 'regular';
   l.day = 0;
   for (const t of l.teams) t.strategy = 'retool';
@@ -218,7 +215,6 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
   {
     const l = txLeague();
     l.phase = 'regular';
-    l.settings.difficulty = 'normal';
     const C = 2;
     l.teams[AI].strategy = 'rebuild';
     l.teams[C].strategy = 'contend';
@@ -401,24 +397,6 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(twice.message).toMatch(/twice/);
   }
 
-  // gives an easy-mode player's own assets the easy discount, but not ones he just traded for
-  {
-    const l = txLeague();
-    l.settings.difficulty = 'easy';
-    l.phase = 'regular';
-    l.teams[2].strategy = 'retool';
-    const vetMin = CAP_FOR(l).vetMin;
-    const mine = shape(l, standardRoster(l, U)[0], 80, 27, vetMin);
-    const better = shape(l, standardRoster(l, 2)[0], 80.4, 27, vetMin);
-    const deal: TradeOffer = { a: { tid: U, pids: [mine.pid], dpids: [] }, b: { tid: 2, pids: [better.pid], dpids: [] } };
-    // a few percent short of fair value: fine on easy from his own roster...
-    expect(tradeValue(l, better) / tradeValue(l, mine)).toBeLessThan(1.1);
-    expect(evaluateTrade(l, deal).accept).toBe(true);
-    // ...but once he arrived in a trade this season, flipping him on is judged at fair value
-    mine.tradedFrom = { tid: AI, season: l.season };
-    expect(evaluateTrade(l, deal).accept).toBe(false);
-  }
-
   // a player option is settled before he can be traded after the season; a team option is never a burden then
   {
     const l = txLeague();
@@ -483,7 +461,7 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
       const x = ev.parts;
       expect(ev.valueIn).toBeCloseTo(x.playersIn + x.picksIn - x.money - x.cut, 9);
       expect(ev.valueOut).toBeCloseTo(x.playersOut + x.picksOut, 9);
-      expect(ev.delta).toBeCloseTo(ev.valueIn - ev.valueOut - x.slack, 9);
+      expect(ev.delta).toBeCloseTo(ev.valueIn - ev.valueOut, 9);
       expect(x.incoming.map((a) => a.id)).toEqual(o.a.pids);
       expect(x.outgoing.map((a) => a.id)).toEqual(o.b.pids);
     }

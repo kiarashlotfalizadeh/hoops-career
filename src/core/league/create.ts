@@ -158,7 +158,7 @@ export interface CreateOpts {
 }
 
 export function defaultSettings(): Settings {
-  return { difficulty: 'normal', injuries: true, jobSecurity: true, liveSpeed: 2 };
+  return { injuries: true, jobSecurity: true, liveSpeed: 2 };
 }
 
 /**

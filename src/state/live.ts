@@ -16,7 +16,6 @@ import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
 import { reelOf } from '../core/analysis/highlights';
 import { coachMoves, slotMatcher, slotMoveName } from '../core/analysis/moves';
 import { shortName } from '../core/league/helpers';
-import { courtEdge } from '../core/league/difficulty';
 import { guideAfterLive } from '../core/league/agenda';
 import { forkSim } from './liveWorth';
 
@@ -134,8 +133,8 @@ export class LiveGame {
       keepShots: true,
       injuries,
       neutral: neutralSite(game),
-      // (the difficulty's edge as it was at tip-off: a replay after a change of difficulty is the same game)
-      edge: (from?.court === undefined ? courtEdge(league, game.home, game.away) : from.court) ?? undefined,
+      // (a journal from when Easy and Hard put an edge on the court plays it as it was: the same game)
+      edge: from?.court ?? undefined,
     });
     this.tip = forkSim(this.sim);
     this.planned = this.sim.baseTactics(this.userSide);
@@ -159,7 +158,6 @@ export class LiveGame {
         ...(mine.play?.length ? { play: [...mine.play] } : {}),
       },
       edge: this.edge,
-      court: courtEdge(league, game.home, game.away) ?? null,
       opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}) },
       steps: 0,
       q: this.sim.q,

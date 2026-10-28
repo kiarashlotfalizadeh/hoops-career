@@ -329,7 +329,7 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
   if (f.tid < 0) return <div className="empty">A free agent has no contract: he signs one when he joins a team.</div>;
   const cs = contractSeason(league);
   const hasDeal = underContract(league, p);
-  // joining a team without a deal, he signs what he asks of that team (your difficulty and its appeal count): that's the salary shown until one is typed
+  // joining a team without a deal, he signs what he asks of that team (its appeal counts): that's the salary shown until one is typed
   const ask = !hasDeal && f.tid !== p.tid ? askingContract(league, p, f.tid) : null;
   const amount = ask && !f.touched.amount ? (ask.amount / 1000).toFixed(1) : f.amount;
   const touch = (k: keyof ContractEdit, patch: Partial<Form>) => set({ ...patch, touched: { ...f.touched, [k]: true } });

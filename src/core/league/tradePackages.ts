@@ -1,7 +1,6 @@
 // Packages for the user's assets: the best offer each AI team would make for what the user puts
 // up, and how a deal balances in league-neutral value.
 import type { DraftPick, League, Player } from '../types';
-import { preset } from './difficulty';
 import { rosterMaxNow, standardRoster } from './helpers';
 import { tradeValue } from './contracts';
 import { withHoldsMemo } from './freeAgency';
@@ -16,7 +15,6 @@ import {
   cashValue,
   evaluateTrade,
   findPick,
-  flipped,
   frozenFirst,
   judgedPick,
   matchInfo,
@@ -102,11 +100,7 @@ function findPackage(league: League, tid: number, give: { pids: number[]; dpids:
       picks.map((d) => pickValueFor(league, d, tid, true)),
       PICK_DEPTH,
     );
-  // the easy-mode discount covers the user's own assets, not ones he got in a trade this season
-  const own = gives.filter((x) => !flipped(league, x)).length / gives.length;
-  const ask = preset(league).tradeAsk;
-  const gen = ask < 1 ? 1 - (1 - ask) * own : ask;
-  const budget = want / gen;
+  const budget = want;
   // after the season, only next season's contracts take a spot
   const max = rosterMaxNow(league);
   const stdOut = players.filter((p) => !p.contract.twoWay).length;
