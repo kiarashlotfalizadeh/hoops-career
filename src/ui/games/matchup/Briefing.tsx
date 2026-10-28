@@ -97,7 +97,7 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
           </div>
         ) : measuring && !worth ? (
           <div className="small dim" role="status">
-            The staff is still measuring each counter · {Math.round(measuring.progress * 100)}%
+            The staff is still measuring each counter · {Math.min(99, Math.floor(measuring.progress * 100))}%
           </div>
         ) : (
           <div className="small dim">

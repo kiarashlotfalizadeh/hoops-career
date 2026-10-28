@@ -1174,6 +1174,28 @@ export function resultText(g: Pick<OwnerGoal, 'kind' | 'target'>, result: number
   }
 }
 
+/** Games of the young players' minutes so far that weigh as much as the youth goal's own rate in its projection. */
+const YOUTH_PRIOR = 20;
+
+/**
+ * Where the youth goal's minutes project at the season's end (to the hundred): the minutes so far and,
+ * for the games left, their pace so far blended with the goal's own rate (the rotation's minutes for
+ * them when he set it and what young players gain over a season; YOUTH_PRIOR games of it). The one
+ * projection the Owner page and the staff's young-players card read (they had been two: "projected
+ * 5,300 · On track" on one, "on pace for 4,683 of his 5,300, not 4,003" on the other, the same
+ * morning: the review, round 4). Reads the league only.
+ */
+export function youthProjected(league: League, og: OwnerGoals, g: OwnerGoal): number {
+  const ts = league.teams[og.tid]?.seasons.find((s) => s.season === og.season);
+  const regular = og.season === league.season && (league.phase === 'regular' || league.phase === 'preseason');
+  const gp = (ts ? ts.won + ts.lost : 0) - (og.from ? og.from.won + og.from.lost : 0);
+  const left = regular ? Math.max(0, og.games - gp) : 0;
+  const now = goalResult(league, og, g);
+  const v = YOUTH_PRIOR / (gp + YOUTH_PRIOR);
+  const rate = gp ? (1 - v) * (now / gp) + v * (g.perGame ?? 0) : (g.perGame ?? 0);
+  return round100(now + left * rate);
+}
+
 /**
  * How each of the season's goals stands today: the result so far, where it projects (wins: the season
  * forecast's projected record when `fc` is given, as the screens pass it, so the owner's projection and
@@ -1263,9 +1285,7 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
         return { goal: g, now, projected: now, status, text, fill: clamp(now / g.target, 0, 1) };
       }
       case 'youth': {
-        const v = 20 / (gp + 20);
-        const rate = gp ? (1 - v) * (now / gp) + v * (g.perGame ?? 0) : (g.perGame ?? 0);
-        const projected = round100(now + left * rate);
+        const projected = youthProjected(league, og, g);
         const status: GoalStatus = now >= g.target ? 'met' : !regular ? 'missed' : projected >= g.target * 1.1 ? 'ahead' : projected >= g.target * 0.95 ? 'on track' : 'behind';
         const text =
           !regular || !left

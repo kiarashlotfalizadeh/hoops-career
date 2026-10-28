@@ -11,10 +11,12 @@ import { teamPlayers } from '../league/helpers';
 import { applyStaffTactics } from '../league/games';
 import {
   LEVER_AHEAD,
+  LEVER_EVERY,
   leverCard,
   leverClears,
   leverDecide,
   leverMorning,
+  leverReport,
   leverSig,
   moveLine,
   staffMoveNow,
@@ -22,6 +24,7 @@ import {
   withStaffMoves,
   type LeverReading,
 } from '../league/staffLever';
+import { staffPicksSince } from '../league/weekCall';
 import type { League, TacticImpact } from '../types';
 
 /** A fictional league a few weeks in, with every user game's trade-offs replaced by `impacts(side)`. */
@@ -137,6 +140,43 @@ describe('the staff acts on the season', () => {
       const n = l.staffLever!.readings.length;
       await leverMorning(l);
       expect(l.staffLever!.readings.length).toBe(n);
+    }
+    {
+      // a change that read short of the bar isn't measured again this season on the same tactics and
+      // roster: the next reading is the tally's next candidate, and each is said (the digest's staff report, Analysis's row)
+      const l = structuredClone(costlyLeague);
+      const t = l.teams[0].tactics;
+      t.offense.crashBoards = 80;
+      t.defense.pressure = 40;
+      put(l, reading(l, 'soft ball pressure', { pts: -0.6, raw: -0.8, se: 0.9 }));
+      expect(leverReport(l)).toMatchObject({
+        pts: -0.6,
+        title: l.staffLever!.readings[0].label,
+        meta: expect.stringMatching(/ · 6 games both ways · kept the playbook as it is$/),
+      });
+      {
+        const m = structuredClone(l);
+        m.staffLever!.readings[0].words = [['Ball pressure', 'Off the ball', 'Up on the ball']];
+        expect(leverReport(m)!.meta).toMatch(/kept Off the ball$/);
+      }
+      l.staffLever!.last = l.day - LEVER_EVERY;
+      await leverMorning(l);
+      const rs = l.staffLever!.readings;
+      expect(rs.map((r) => r.what)).toEqual(['soft ball pressure', 'crashing']);
+      expect(leverReport(l)!.title).toBe(rs[1].label);
+      if (!leverClears(rs[1])) {
+        expect(l.staffPicks!.at(-1)!.text).toMatch(
+          /^Staff report: .+ measured [+−]\d\.\d a game( against .+)? over our next \w+ games?, played both ways; (keeping|too close to call, so keeping) .+\.$/,
+        );
+        // (the digest says the latest, as one row)
+        const latest = l.staffPicks!.at(-1)!.text;
+        l.staffPicks!.splice(-1, 0, { season: l.season, day: l.day, text: 'Staff report: an earlier one.' });
+        expect(staffPicksSince(l, l.season, -1).filter((x) => x.startsWith('Staff report'))).toEqual([latest.replace('Staff report:', 'Staff report (the latest of 2):')]);
+        // nothing left to look at on these tactics: no reading
+        l.staffLever!.last = l.day - LEVER_EVERY;
+        await leverMorning(l);
+        expect(l.staffLever!.readings).toHaveLength(2);
+      }
     }
     {
       // leaves the user's own tactics, a quiet season and AI teams alone

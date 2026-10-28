@@ -362,7 +362,15 @@
   flex: none;
 }
 .nl-chosen .nl-pick-name {
+  min-width: 0;
   font-size: 34px;
+}
+/* the name as much smaller as its widest word needs to fit the poster whole (Fit) */
+.nl-pick-name .fit {
+  display: block;
+}
+.nl-chosen .nl-pick-owner {
+  margin-top: 14px;
 }
 .nl-chosen .nl-pick-over .btn {
   margin: -6px -6px 0 0;

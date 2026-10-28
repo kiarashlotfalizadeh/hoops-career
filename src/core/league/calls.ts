@@ -19,9 +19,10 @@
 // isn't opened (the digest has the news), and one whose honest answer is always the same is the
 // staff's to make: a skid's first counters (four straight, or six of eight) and the adjustment each
 // morning he's behind in a series go in without a card, measured, with what's behind the slide said
-// in the digest's line (staffPicks), as the week's big game's counter does. The numbers a card needs
-// are measured before a sim stops for it (simCore.ts's runSim, on a budget: callMeasure.ts), and
-// otherwise as the card shows (src/ui/today/staffPlan.ts); storeWorth keeps them. A long sim stops
+// in the digest's line (staffPicks), as the week's big game's counter does; a series whose counters
+// measure with none a gain isn't a call either (Today's hero and the digest say so). The numbers a
+// card needs are measured before a sim stops for it (simCore.ts's runSim, on a budget:
+// callMeasure.ts), and otherwise as the card shows (src/ui/today/staffPlan.ts); storeWorth keeps them. A long sim stops
 // the day a new one opens, once more for one still open as its due date nears (see openCallIds),
 // and for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
 // remembered (League.callsDone) so it doesn't come back. A star's injury card left unanswered for
@@ -358,6 +359,8 @@ const booksDueId = (league: League) => `books:${league.season}:close`;
 
 /** Whether the deadline's call is open: its last DEADLINE_DAYS days, deadline day included. */
 const deadlineOpen = (league: League) => league.phase === 'regular' && league.day <= league.tradeDeadlineDay && league.tradeDeadlineDay - league.day <= DEADLINE_DAYS;
+/** The deadline's call answered (stood pat, or a deal of his since): Today's deadline row has nothing left to say. */
+export const deadlineAnswered = (league: League) => settled(league, deadlineId(league)) || dealt(league, deadlineId(league));
 
 /** Whether the odds call stands: under ODDS_LOW for ODDS_WEEKS points running, for a team expected in the postseason, before the deadline. */
 function oddsCall(league: League): { now: number } | null {
@@ -489,6 +492,23 @@ function seriesStart(league: League): { id: string; opp: number; g: ScheduledGam
 function planSet(league: League, start: NonNullable<ReturnType<typeof seriesStart>>): boolean {
   const made = planFor(league, start.opp, start.g);
   return !!made && planMade(made) && (made.scope === 'series' || !!start.playIn);
+}
+
+/**
+ * A series (or play-in game) starting today whose counters the staff measured with none a gain: no
+ * call, as both its answers would be his playbook as it is (or his plan) for Game 1.
+ */
+function quietStart(league: League, start: NonNullable<ReturnType<typeof seriesStart>>): boolean {
+  const w = countersFor(league, start.id, start.opp, start.g, 3).worth;
+  return !!w && !w.items?.length;
+}
+
+/** Today's hero's line for a series of his starting tonight with nothing to change (quietStart), or null. */
+export function quietSeriesStart(league: League): string | null {
+  const start = seriesStart(league);
+  if (!start || !quietStart(league, start)) return null;
+  const made = planFor(league, start.opp, start.g);
+  return `None of the staff's counters measures as a gain against them: ${made && planMade(made) ? 'your plan stands' : 'your playbook as it is'}.`;
 }
 
 /**
@@ -646,7 +666,7 @@ function candidateIds(league: League): string[] {
   if (league.fired) return [];
   const ids: string[] = [];
   const series = seriesStart(league);
-  if (series && !planSet(league, series)) ids.push(series.id);
+  if (series && !planSet(league, series) && !quietStart(league, series)) ids.push(series.id);
   if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') for (const s of hurtStars(league)) ids.push(s.id);
   if (oddsCall(league)) ids.push(oddsId(league));
   if (floorCall(league)) ids.push(floorId(league));
@@ -1001,6 +1021,16 @@ export function callsDecide(league: League) {
       ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${gameText(league, sg)}, measured.`
       : `Nothing the staff measured for ${gameText(league, sg)} beats your plan.`;
     notePick(league, `${skidTitle(s)}: ${s.diag ? `${s.diag} ` : ''}${s.put}`);
+  }
+  // a series starting today with nothing to change: no card, a line in the digest (once)
+  const st = seriesStart(league);
+  if (st && !settled(league, st.id) && quietStart(league, st)) {
+    settleCall(league, st.id);
+    const made = planFor(league, st.opp, st.g);
+    notePick(
+      league,
+      `${st.series ? `${seriesLabel(st.series)} vs ${league.teams[st.opp].abbrev}, Game 1` : `Play-in vs ${league.teams[st.opp].abbrev}`}: none of the staff's counters measured as a gain against them, so ${made && planMade(made) ? 'your plan stands' : 'you play them with your playbook as it is'}.`,
+    );
   }
   const b = seriesBehind(league);
   const bw = b && !settled(league, b.id) ? league.callWorth?.[b.id] : undefined;
@@ -1369,11 +1399,16 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const bar = fifthBest(league);
     const vet = roster.filter((p) => playerAge(p, league.season) >= 28 && p.ovr >= 70).sort((x, y) => tradeValue(league, y) - tradeValue(league, x) || x.pid - y.pid)[0];
     const look = call?.mode === 'buy' ? findLook(league, id, 'Look for a deal', bar + 1) : call?.mode === 'sell' ? blockLook(league, id, 'Look for a deal', vet) : null;
+    // (with nowhere to look, there's nothing to do but stand pat: the call says so)
     const none =
       call?.mode === 'buy'
-        ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one${look ? "; Find lists who's out there" : ''}.`
+        ? look
+          ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one; Find lists who's out there.`
+          : `stand pat. Nobody the staff asked takes what you can send for a player better than your fifth best (${bar} OVR).`
         : call?.mode === 'sell'
-          ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet${look ? '; the trading block shows who would' : ''}.`
+          ? look
+            ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet; the trading block shows who would.`
+            : 'stand pat. No contender the staff asked bites on what you have to sell.'
           : 'stand pat. The team is where it is.';
     // the deal's numbers: its worth a game measured on his next game against someone else (once, as
     // its card opens), what the forecast reads it adds to the odds, what the players coming cost, and
@@ -1427,7 +1462,14 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       tone: 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
-      ...(deal ? (flat ? { suggestion: stand, choices: [deal] } : { suggestion: deal, choices: [stand] }) : { suggestion: stand, choices: look ? [look] : [] }),
+      // (the staff's call is the solid button: the deal, or the look for one, or standing pat)
+      ...(deal
+        ? flat
+          ? { suggestion: stand, choices: [deal] }
+          : { suggestion: deal, choices: [stand] }
+        : look
+          ? { suggestion: look, choices: [stand] }
+          : { suggestion: stand, choices: [] }),
       ...(measure ? { measure } : {}),
     });
   }

@@ -1,10 +1,11 @@
 // Browser smoke test for CI: serves the production build, coaches the opening-night game live
 // and plays the opening week of the real league on a phone viewport, opens every main screen
-// (phone and tablet), round-trips a backup export/import and picks a live game up after a reload.
+// (phone and tablet), checks the longest names on the hero slabs at 320-390px, round-trips a backup
+// export/import and picks a live game up after a reload.
 // Fails on any page error, console error or missing screen.
 // Usage: npm run build && npm run smoke (SMOKE_PORT picks the preview port, default 4179)
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
@@ -178,6 +179,64 @@ try {
       if (overflow > 2) fail.push(`horizontal overflow ${overflow}px on ${r} at ${w}px`);
     }
     step(`opened ${routes.length} screens at ${w}px`);
+  }
+
+  // the names on the hero slabs, fitted to their box (Fit, components/ui.tsx): the longest last names
+  // on the player page and Compare, your team's, and every team's page, at a small phone's 320px to
+  // 390px: never broken inside a word ("Antetokounmp / o", the review, round 4) nor past their box
+  {
+    const seed = JSON.parse(readFileSync(join('src', 'data', 'seed.json'), 'utf8'));
+    // (a real league's players take the seed's order: pid 1 is its first)
+    const longest = seed.players
+      .map((p, i) => ({ pid: i + 1, last: p.last, team: p.team }))
+      .filter((p) => p.team)
+      .sort((a, b) => b.last.length - a.last.length)
+      .slice(0, 6);
+    const heroes = [...longest.map((p) => `/player/${p.pid}`), `/compare?a=${longest[0].pid}&b=${longest[1].pid}`, '/team'];
+    const names = async (r, w) => {
+      await page
+        .locator('main .fit-w')
+        .first()
+        .waitFor({ timeout: 15_000 })
+        .catch(() => fail.push(`no fitted name on ${r} at ${w}px`));
+      // (fitted again once the type has loaded)
+      await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(ok))));
+      const bad = await page.evaluate(() => {
+        const out = [];
+        for (const f of document.querySelectorAll('main .fit')) {
+          const box = f.getBoundingClientRect();
+          for (const word of f.querySelectorAll('.fit-w')) {
+            const r = word.getBoundingClientRect();
+            const lines = new Set([...word.getClientRects()].filter((x) => x.width > 0).map((x) => Math.round(x.top))).size;
+            if (lines > 1 || r.right > box.right + 1 || r.left < box.left - 1 || r.right > innerWidth)
+              out.push(`"${word.textContent}" ${lines > 1 ? 'broken' : `${Math.round(r.width)}px in ${Math.round(box.width)}px`}`);
+          }
+        }
+        return out;
+      });
+      for (const b of bad) fail.push(`hero name ${b} on ${r} at ${w}px`);
+    };
+    for (const w of [320, 360, 390]) {
+      await page.setViewportSize({ width: w, height: 740 });
+      for (const r of heroes) {
+        await page.goto(`${base}/#${r}`);
+        await names(r, w);
+      }
+      // (the pids are the seed's order: a player page that isn't his says so instead of passing quietly)
+      await page.goto(`${base}/#/player/${longest[0].pid}`);
+      const shown = await page
+        .locator('main .tm-last')
+        .first()
+        .textContent({ timeout: 15_000 })
+        .catch(() => null);
+      if (shown !== longest[0].last) fail.push(`expected ${longest[0].last} at /player/${longest[0].pid}, got ${shown}`);
+    }
+    await page.setViewportSize({ width: 320, height: 640 });
+    for (let t = 0; t < 30; t++) {
+      await page.goto(`${base}/#/teams/${t}`);
+      await names(`/teams/${t}`, 320);
+    }
+    step(`fitted the hero names (${longest.map((p) => p.last).join(', ')} and every team) at 320-390px`);
   }
   await page.setViewportSize({ width: 390, height: 844 });
 

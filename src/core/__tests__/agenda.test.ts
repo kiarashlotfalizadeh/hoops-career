@@ -42,14 +42,17 @@ import {
   FLOOR_AGO,
   ODDS_FIRST_GAMES,
   callsDaily,
+  callsDecide,
   changeWorth,
   concedeStanding,
   countersWorth,
+  deadlineAnswered,
   dealGoals,
   dueId,
   floorStanding,
   openCallIds,
   planDeadlineCall,
+  quietSeriesStart,
   storeWorth,
 } from '../league/calls';
 import { isWeekId, staffPicksSince } from '../league/weekCall';
@@ -410,6 +413,22 @@ describe('the agenda', () => {
         expect(jobSecurity(m).score).toBeLessThan(32);
       }
       expect(agenda(l).find((i) => i.kind === 'ultimatum')?.title).toBe(`Owner: ${u!.text}`);
+      // settled, it leaves Today: met, or once the season's review is in, or out of season
+      {
+        const ult = (m: League) => agenda(m).some((i) => i.kind === 'ultimatum');
+        const met = structuredClone(l);
+        const mts = met.teams[met.userTid].seasons.find((s) => s.season === met.season)!;
+        if (u!.kind === 'wins') mts.won = 82;
+        else mts.playoffRound = 5;
+        expect(ultimatumVerdict(met, currentGoals(met))).toBe('met');
+        expect(ult(met)).toBe(false);
+        const reviewed = structuredClone(l);
+        reviewed.ownerReviews = [{ season: reviewed.season, tid: reviewed.userTid } as OwnerReview];
+        expect(ult(reviewed)).toBe(false);
+        const after = structuredClone(l);
+        after.phase = 'draft';
+        expect(ult(after)).toBe(false);
+      }
       // once only
       expect(maybeUltimatum(l)).toBeNull();
       // the season ends short of it: fired, whatever the rest says
@@ -753,14 +772,19 @@ describe('the agenda', () => {
         for (const pid of theirs) expect(l.players[pid].tid).toBe(tid);
       } else {
         expect(call.offer).toBeUndefined();
-        expect(card.suggestion!.label).toBe('Stand pat');
-        // no deal found: the call names the need, and the look goes where it's met (Find for a buyer, the block for a seller)
+        // no deal found: the call names the need, and the look, the staff's call and the solid button, goes where it's met (Find for a buyer, the block for a seller)
         expect(card.line).not.toMatch(/look yourself/);
         expect(card.line).toMatch(odds > 500 ? /buy a player better than your fifth best \(\d+ OVR\)/ : /^Postseason odds .+ The staff's call: sell/);
-        expect(card.choices![0]).toMatchObject({ label: 'Look for a deal', to: expect.stringMatching(odds > 500 ? /^\/office\/trade\?tab=find&minOvr=\d+$/ : /^\/office\/trade/) });
+        expect(card.suggestion!).toMatchObject({ label: 'Look for a deal', to: expect.stringMatching(odds > 500 ? /^\/office\/trade\?tab=find&minOvr=\d+$/ : /^\/office\/trade/) });
+        expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);
+        // (a look doesn't answer it: standing pat does)
         expect(resolveAgenda(l, card.suggestion!.action).ok).toBe(true);
+        expect(deadlineAnswered(l)).toBe(false);
+        expect(resolveAgenda(l, card.choices![0].action).ok).toBe(true);
       }
+      // answered, it's gone, and Today's deadline row with it
       expect(agenda(l).some((i) => i.kind === 'deadline')).toBe(false);
+      expect(deadlineAnswered(l)).toBe(true);
     }
 
     // the morning a play-in game or a playoff series of his starts: plan it (on the matchup page), or leave it to the staff; gone once it's under way
@@ -802,6 +826,22 @@ describe('the agenda', () => {
       schedulePlayoffDay(l);
       expect(card()).toMatchObject({ id: `series:${l.season}:${conf}1-0`, title: `${seriesLabel(l.playoffs[0])} vs ${abbrev}: Game 1 tonight` });
       expect(card()!.suggestion).toMatchObject({ label: 'Plan the series', to: `/games/${opp}?tab=plan` });
+      // measured with no counter a gain, it's no call (both answers are his playbook as it is): no stop; Today's hero says so, the digest once
+      {
+        const m = structuredClone(l);
+        const ms = card()!.measure!;
+        if (ms.kind !== 'counters') throw new Error('not counters');
+        storeWorth(m, ms.key, countersWorth(m, ms, []));
+        expect(agenda(m).some((i) => i.kind === 'series')).toBe(false);
+        expect(openCallIds(m)).not.toContain(`series:${m.season}:${conf}1-0`);
+        expect(quietSeriesStart(m)).toBe("None of the staff's counters measures as a gain against them: your playbook as it is.");
+        callsDecide(m);
+        callsDecide(m);
+        expect(staffPicksSince(m, m.season, m.day - 1)).toEqual([
+          `${seriesLabel(m.playoffs[0])} vs ${abbrev}, Game 1: none of the staff's counters measured as a gain against them, so you play them with your playbook as it is.`,
+        ]);
+        expect(quietSeriesStart(l)).toBeNull();
+      }
       // a plan from before the series still opens it (keep it, or review it); one set for the series answers it
       {
         const m = structuredClone(l);
@@ -1253,6 +1293,8 @@ describe('the agenda', () => {
       };
       const free = structuredClone(l);
       const was = youthOutlook(free, wc.youth!.add)!;
+      // (the card's "on pace for" is the Owner page's projection: one, see youthProjected)
+      expect(was.base).toBe(ownerProgress(free).find((p) => p.goal.kind === 'youth')!.projected);
       answer(free, -0.2);
       expect(card(free)).toBeUndefined();
       expect(userYouth(free)).toBeGreaterThan(0);

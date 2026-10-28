@@ -893,7 +893,7 @@ function tenDayStep() {
 function bidOnStar(): number | null {
   const u = L.userTid;
   const stars = H.freeAgents(L)
-    .filter((p) => FA.marqueeFA(L, p))
+    .filter((p) => FA.marqueeFA(L, p) && !FA.pendingBid(L, p.pid))
     .sort((a, b) => C.valueScore(L, b) - C.valueScore(L, a));
   for (const p of stars) {
     const a = C.askingContract(L, p, u);
@@ -901,6 +901,48 @@ function bidOnStar(): number | null {
     if ((lead !== null && lead > a.amount && FA.userBid(L, p.pid, lead, a.years).ok) || FA.userBid(L, p.pid, a.amount, a.years).ok) return p.pid;
   }
   return null;
+}
+
+/**
+ * A second offer each summer, one made to lose: the least a top free agent a rival leads will
+ * consider (see bidFloor), every other summer before bidOnStar's, one his old team leads on his
+ * Bird rights first. Losing it signs the rival's offer on his decision day (see decideBid), and that signing
+ * must hold his summer floor as every AI signing does (see checkFloorsKept): a Bird offer under it
+ * once signed RJ Barrett to TOR for 35% of his value.
+ */
+function bidToLose(): number | null {
+  const u = L.userTid;
+  const stars = H.freeAgents(L)
+    .filter((p) => FA.marqueeFA(L, p) && !FA.pendingBid(L, p.pid))
+    .map((p) => ({ p, years: C.askingContract(L, p, u).years, rivals: FA.bidRivals(L, p) }))
+    .map((x) => ({ ...x, floor: FA.bidFloor(L, x.p, x.years) }))
+    .filter((x) => !FA.bidStanding(L, x.p, x.floor, x.years, x.rivals).leads)
+    .sort((a, b) => +!a.rivals[0]?.bird - +!b.rivals[0]?.bird || C.valueScore(L, b.p) - C.valueScore(L, a.p));
+  for (const x of stars) if (FA.userBid(L, x.p.pid, x.floor, x.years).ok) return x.p.pid;
+  return null;
+}
+
+/** Every unrestricted free agent's summer floor before a day of free agency (pid → $K; see summerFloor), for checkFloorsKept. */
+const floorsNow = () =>
+  new Map(
+    H.freeAgents(L)
+      .flatMap((p) => (p.rfa ? [] : [[p.pid, C.summerFloor(L, p)] as [number, number]]))
+      .filter(([, f]) => f > 0),
+  );
+
+/**
+ * After a day of free agency: no one signed that day for under the floor he had that morning (less
+ * $150K of rounding: a price rounds to $50K, a Bird offer to its team's room), whoever signed him
+ * and however (the user's offer losing to a rival's, see bidToLose, included).
+ */
+function checkFloorsKept(floors: Map<number, number>) {
+  for (const [pid, floor] of floors) {
+    const p = L.players[pid];
+    if (p.tid < 0 || p.contract.twoWay) continue;
+    const sal = salaryFor(p, L.season + 1);
+    if (sal < floor - 150)
+      bad('signed under the floor he had that day', `${nm(pid)} -> ${L.teams[p.tid].abbrev} $${(sal / 1000).toFixed(2)}M, floor $${(floor / 1000).toFixed(2)}M, day ${L.faDay}`);
+  }
 }
 
 // ---------------------------------------------------------------- the economy's holes, kept shut
@@ -1177,6 +1219,8 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     if (mine.length >= 2 && w) {
       if (!R.userWithdrawQualifying(L, w.pid).ok || w.rfa || FA.capHolds(L, L.userTid).some((h) => h.p.pid === w.pid)) bad('qualifying offer not withdrawn', nm(w.pid));
     }
+    // (every other summer the losing bid goes first: the winning one's room leaves none for it)
+    const lose = L.season % 2 ? bidToLose() : null;
     const star = bidOnStar();
     const sheet = sheetOnRfa();
     negotiate();
@@ -1186,7 +1230,9 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     const day = () => {
       const sheets = sheetSnapshot();
       const rfas = rfaSnapshot();
+      const floors = floorsNow();
       S.faAdvance(L, 1);
+      checkFloorsKept(floors);
       checkFaPrices(faPool, top);
       for (const [pid, s] of sheetSnapshot()) sheets.set(pid, s);
       decideUserSheets();
@@ -1198,10 +1244,11 @@ function play(n: number, opts: { realCalendar: boolean; fire: boolean }) {
     for (let d = 0; d < 10 && !S.faOver(L); d++) day();
     check();
     if (L.faBids?.some((b) => b.decideDay < L.faDay)) bad('offer past its decision day', L.faBids.map((b) => `${nm(b.pid)} d${b.decideDay}`).join(', '));
-    const bid =
-      star === null
+    const went = (pid: number | null) =>
+      pid === null
         ? 'none'
-        : `${H.playerName(L.players[star])} ${L.players[star].tid >= 0 ? `-> ${L.teams[L.players[star].tid].abbrev}${L.players[star].tid === L.userTid ? '*' : ''}` : 'unsigned'}`;
+        : `${H.playerName(L.players[pid])} ${L.players[pid].tid >= 0 ? `-> ${L.teams[L.players[pid].tid].abbrev}${L.players[pid].tid === L.userTid ? '*' : ''}` : 'unsigned'}`;
+    const bid = `${went(star)}, floor bid ${went(lose)}`;
     for (let d = 0; d < 40 && !S.faOver(L); d++) day();
     if (S.faDayNumber(L) !== S.FA_DAYS || !S.faOver(L)) bad('free agency past its last day', String(L.faDay));
     decideUserSheets();

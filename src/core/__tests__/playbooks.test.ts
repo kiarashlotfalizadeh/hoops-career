@@ -259,6 +259,8 @@ describe('saved playbooks', () => {
       );
       expect(lines).toHaveLength(5);
       expect(playbookDiff(t, pb, roster(l))).toEqual([]);
+      // a player the names don't know has left: his settings went with him, no line with an empty name
+      expect(tacticsChanges(cur, t, (pid) => (pid === a ? '' : `#${pid}`)).map(changeText)).not.toEqual(expect.arrayContaining([expect.stringMatching(/role/)]));
     }
     {
       // carries parts of the tactics it has no name for (newer features) through a save and a load:

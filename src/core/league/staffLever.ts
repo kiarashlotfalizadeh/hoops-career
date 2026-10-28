@@ -15,10 +15,13 @@
 //   line and Undo on Tactics (a StaffMove: it holds while the playbook and identity it was made on
 //   do; undone, the staff doesn't make it again that season);
 // - he runs them himself: a card offers it with the number (leverCard, through teamAlerts).
-// Anything less changes nothing and says nothing. AI staffs don't read the tally at all: they run
-// their coach's fit (autoTactics). Nothing here draws from the league's random stream.
+// Anything less changes nothing, and isn't measured again that season on the same tactics and roster
+// (the next look is the tally's next candidate: round 4 found the same rejected change measured six
+// times a season); the staff says what it measured (the digest's staff report, and Tactics →
+// Analysis's row: leverReport). AI staffs don't read the tally at all: they run their coach's fit
+// (autoTactics). Nothing here draws from the league's random stream.
 import type { League, Tactics, TacticsPatch } from '../types';
-import { addInbox, fmtDate } from './helpers';
+import { addInbox, fmtDate, teamPlayers } from './helpers';
 import { hashString } from '../random';
 import { applyPatch, cloneTactics, tacticsDiff } from '../sim/tactics';
 import { tacticsChanges } from '../sim/playbooks';
@@ -26,7 +29,7 @@ import { WORTH_MIN, measureChanges, poolWorth, type WorthOpts } from '../ai/coun
 import { STAFF_LEVERS, leverCounter, seasonLevers, type Alert } from '../ai/advisor';
 import { gamesAhead } from '../ai/tacticEdits';
 import { leadAssistant } from '../ai/assistant';
-import { notePick } from './weekCall';
+import { STAFF_REPORT, notePick } from './weekCall';
 
 /**
  * The user's games ahead a change is measured on. A change that stays in plays every opponent, and
@@ -42,7 +45,10 @@ export const LEVER_PAIRS = 20;
  * again on a regular season's sim time, as much as the calls' measuring (callMeasure.ts) adds.
  */
 export const LEVER_EVERY = 28;
-/** Days a reading stands for the tactics it was measured on (a later one on other tactics is a new reading). */
+/**
+ * Days a reading that clears the bar stands for the tactics it was measured on (a later one on other
+ * tactics is a new reading). One that doesn't stands for the season, on those tactics and that roster.
+ */
 export const LEVER_STALE = 28;
 /**
  * Standard errors from even a reading has to be, besides WORTH_MIN, before the staff makes the change
@@ -51,7 +57,8 @@ export const LEVER_STALE = 28;
  * one time in fifty, and one worth two points a game most times).
  */
 export const LEVER_Z = 2;
-const KEPT = 8;
+/** Readings and moves kept: a season's (a reading every LEVER_EVERY days), so the ones that didn't clear stay ruled out all season. */
+const KEPT = 12;
 
 /** One measurement of a change the tally pointed at. */
 export interface LeverReading {
@@ -66,6 +73,10 @@ export interface LeverReading {
   raw: number;
   se: number;
   games: number;
+  /** Each setting it moved, as the Tactics screen names it: [label, from, to] (absent in readings from before). */
+  words?: [string, string, string][];
+  /** The roster it was measured on (rosterSig; absent in readings from before). */
+  roster?: number;
 }
 
 /** A change the staff made to the playbook it runs for the user, on a reading. */
@@ -123,6 +134,15 @@ export function leverSig(t: Tactics, what: string): number {
   return hashString(JSON.stringify({ ...t, manual: undefined, playbook: undefined }) + what);
 }
 
+/** What the user's roster comes to: a trade or a signing makes a change read short of the bar worth measuring again. */
+const rosterSig = (league: League) =>
+  hashString(
+    teamPlayers(league, league.userTid)
+      .map((p) => p.pid)
+      .sort((a, b) => a - b)
+      .join(','),
+  );
+
 /** Whether a reading clears the bar for a change that stays in: WORTH_MIN shrunk and LEVER_Z errors from even. */
 export const leverClears = (r: Pick<LeverReading, 'pts' | 'raw' | 'se'>) => r.pts >= WORTH_MIN && r.raw >= LEVER_Z * r.se;
 
@@ -131,11 +151,13 @@ const undone = (st: StaffLever, what: string, label: string) => st.moves.some((m
 
 /**
  * The change the staff measures next on tactics `t`: the counter to the trade-off the tally has worst
- * that the tactics play (the engine saw it at work) and that isn't measured on them lately. The
+ * that the tactics play (the engine saw it at work) and that isn't measured on them lately (one that
+ * cleared, within LEVER_STALE days) or at all this season on this roster (one that didn't). The
  * tally only orders the search: a setting it reads as paying its way is measured in its turn.
  */
 function candidate(league: League, t: Tactics) {
   const st = stateOf(league);
+  const roster = rosterSig(league);
   for (const e of seasonLevers(league, league.userTid)) {
     if (e.lost + e.won <= 0) continue;
     // (the staff makes only the changes it can stand behind on its own; the user is offered any)
@@ -143,9 +165,13 @@ function candidate(league: League, t: Tactics) {
     const c = leverCounter(e.what, t);
     if (!c || undone(st, e.what, c.label)) continue;
     const sig = leverSig(t, e.what);
-    if (st.readings.some((r) => r.sig === sig && league.day - r.day < LEVER_STALE)) continue;
     const after = cloneTactics(t);
     c.apply(after);
+    // (a change read short is the same change while it moves the same settings the same way, whatever
+    // else the staff's refits have moved since: the matchups and the like as players come and go)
+    const words = JSON.stringify(changeWords(league, t, after));
+    const short = (r: LeverReading) => r.what === e.what && r.label === c.label && (r.words ? JSON.stringify(r.words) === words : r.sig === sig) && (r.roster ?? roster) === roster;
+    if (st.readings.some((r) => (leverClears(r) ? r.sig === sig && league.day - r.day < LEVER_STALE : short(r)))) continue;
     return { what: e.what, label: c.label, sig, after };
   }
   return null;
@@ -157,15 +183,24 @@ function changeWords(league: League, a: Tactics, b: Tactics): [string, string, s
   return tacticsChanges(a, b, name).map((c) => [c.label, c.from, c.to]);
 }
 
+/** The one setting a change moves, when it moves one the screen names from and to. */
+const oneSetting = (words: [string, string, string][] | undefined) => (words?.length === 1 && words[0][1] && words[0][2] ? words[0] : null);
+/** A setting moved between named options ("Drop" to "Hedge"), not between levels shown as numbers. */
+const named = (w: [string, string, string]) => Number.isNaN(Number(w[1])) && Number.isNaN(Number(w[2]));
+
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
 const games = (n: number) => (n === 1 ? 'game' : `${['', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? n} games`);
 
-/** "Drop measured +1.1 a game against Switch over our next six games…": the reading, as the staff says it (`pts` false: without the number, under a title that has it). */
-function measuredLine(words: [string, string, string][], r: Pick<LeverReading, 'pts' | 'games'>, us: 'our' | 'your', pts = true): string {
-  const one = words.length === 1 && words[0][1] && words[0][2] ? words[0] : null;
+/**
+ * "Drop measured +1.1 a game against Switch over our next six games…": the reading, as the staff says
+ * it (`pts` false: without the number, under a title that has it; `brief`: the digest's few words).
+ */
+function measuredLine(words: [string, string, string][], r: Pick<LeverReading, 'pts' | 'games'>, us: 'our' | 'your', pts = true, brief = false): string {
+  const one = oneSetting(words);
   const worth = pts ? ` measured ${signed(r.pts)} a game` : '';
-  const head = one ? `${one[2]}${worth} against ${one[1]}` : `The change${worth}`;
-  return `${head} over ${us} next ${games(r.games)}, each played both ways on the same seeds`;
+  // (a level the screen shows as a number reads as the setting moved: "Crash boards 42 → 60")
+  const head = one ? (named(one) ? `${one[2]}${worth} against ${one[1]}` : `${one[0]} ${one[1]} → ${one[2]}${worth}`) : `The change${worth}`;
+  return `${head} over ${us} next ${games(r.games)}, ${brief ? 'played both ways' : 'each played both ways on the same seeds'}`;
 }
 
 /**
@@ -199,9 +234,41 @@ async function measureLever(league: League, opts: WorthOpts & { onMeasure?: () =
     parts.push({ w: 1 / ahead.length, raw: out[0].raw, se: out[0].se });
   }
   const w = poolWorth('lever', parts);
-  const r: LeverReading = { what: c.what, label: c.label, sig: c.sig, day: league.day, pts: w.pts, raw: w.raw, se: w.se, games: ahead.length };
+  const words = changeWords(league, team.tactics, c.after);
+  const r: LeverReading = { what: c.what, label: c.label, sig: c.sig, day: league.day, pts: w.pts, raw: w.raw, se: w.se, games: ahead.length, words, roster: rosterSig(league) };
   league.staffLever = { ...st, last: league.day, readings: [...st.readings, r].slice(-KEPT) };
+  // (one that clears is a change or a card, said there; one that doesn't changes nothing, and the staff says what it measured)
+  if (!leverClears(r)) {
+    const from = keptWords(words);
+    notePick(league, `${STAFF_REPORT} ${measuredLine(words, r, 'our', true, true)}; ${r.pts > 0 ? 'too close to call, so ' : ''}keeping ${from}.`);
+  }
   return true;
+}
+
+/** What a change read short of the bar left as it was: "Drop", or "the playbook as it is". */
+const keptWords = (words: [string, string, string][] | undefined) => {
+  const one = oneSetting(words);
+  return !one ? 'the playbook as it is' : named(one) ? one[1] : `${one[0].charAt(0).toLowerCase()}${one[0].slice(1)} at ${one[1]}`;
+};
+
+/**
+ * The staff's latest reading this season, as Tactics → Analysis lists it: the change, what it
+ * measured a game, and one line (when, on what, and what came of it). Null before the first.
+ */
+export function leverReport(league: League): { pts: number; title: string; meta: string } | null {
+  const st = stateOf(league);
+  const r = st.readings[st.readings.length - 1];
+  if (!r) return null;
+  const one = oneSetting(r.words);
+  const made = st.moves.some((m) => m.what === r.what && m.label === r.label && m.day >= r.day);
+  const came = made
+    ? one
+      ? `changed to ${named(one) ? one[2] : `${one[0].toLowerCase()} ${one[2]}`}`
+      : 'made the change'
+    : leverClears(r)
+      ? 'yours to make on Team'
+      : `kept ${keptWords(r.words)}`;
+  return { pts: r.pts, title: r.label, meta: `${fmtDate(league.season, r.day)} · ${r.games === 1 ? '1 game' : `${r.games} games`} both ways · ${came}` };
 }
 
 /**

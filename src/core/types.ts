@@ -694,6 +694,8 @@ export interface TacticEdit {
   told?: boolean;
   /** No longer checked: put back (the check's one tap), or every setting it moved changed again since. */
   closed?: 'reverted' | 'replaced';
+  /** The day it was put back (absent on saves from before it was kept). */
+  closedDay?: number;
 }
 
 export interface SavedPlaybook {

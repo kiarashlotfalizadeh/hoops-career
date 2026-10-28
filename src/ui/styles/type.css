@@ -38,7 +38,8 @@ h4 {
   text-wrap: balance;
 }
 /* a headline breaks between words, never inside one ("Timberwolve / s") unless one word alone is
-   wider than the line; a word too long for the size (`fitHead`) prints a notch smaller instead */
+   wider than the line; a name on a hero (`Fit`) is measured and printed as much smaller as its
+   widest word needs instead, each word kept whole (.fit-w) */
 h1,
 h2,
 h3,
@@ -46,11 +47,11 @@ h3,
   overflow-wrap: break-word;
   hyphens: manual;
 }
-.long-word {
-  font-size: 0.84em;
+.fit {
+  min-width: 0;
 }
-.long-word.xlong {
-  font-size: 0.74em;
+.fit-w {
+  white-space: nowrap;
 }
 /* a page's title and a sheet's: the headline cut, sentence case */
 h1,

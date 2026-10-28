@@ -1,6 +1,7 @@
 // The staff measuring the user's changes (core/ai/tacticEdits.ts), off the screen in the sim worker.
 // The Team screens (Roster, Rotation, Tactics, Lineups) keep the team as a visit found it; tapping
-// Done on Tactics, or leaving the Team screens, records what changed since as one change and starts
+// Done on Tactics, or leaving the Team screens, records what changed since as one change (what a
+// release, trade or signing meanwhile did to the team isn't the user's change and stays out) and starts
 // measuring it over the next few games (10-20 seconds on a phone, the progress on Tactics, which can
 // stop it). The result comes back as a line wherever the user is (a toast that opens Tactics →
 // Analysis) and stays in the ledger there. A change recorded while a sim was starting is recorded

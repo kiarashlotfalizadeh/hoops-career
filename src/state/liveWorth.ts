@@ -232,9 +232,11 @@ export const CALL_CONFIRM_CRUNCH = 1600;
  * How far the true worth of the staff's best change spreads either side of even, in points of the
  * rest of the game's margin: what a reading is shrunk toward even by (shrinkWorth's rule with the
  * live spread). Measured as the spread of the confirmed readings less their noise: 0.56 over 1,729
- * stops in 216 headless games of 27 teams (scratch round/ten/live calls.mts, 2026-10-26). Over those
- * games the staff called 1.13 changes a game, and taking every call against taking none, paired on
- * the same seeds, came out +2.2 ± 0.7 points of margin and +11 ± 3 points of win chance a game.
+ * stops in 216 headless games of 27 teams (scratch round/ten/live calls.mts, 2026-10-26). What taking
+ * the calls is worth a game is the calls' own truth, not a game-level tally: re-measured on 500 fresh
+ * seeds each, 118 calls in 36 games were truly worth +0.83 ± 0.10 a call followed, at 1.39 calls a game
+ * about +1.15 points and +3% win chance (round-4 game-day review, pol.mts, 2026-10-27; the +2.2 points
+ * and +11% once quoted here overstated it). No figure for it is said on any screen.
  */
 export const CALL_SPREAD = 0.6;
 
@@ -245,6 +247,30 @@ const bandOf = (spread: number) => (se: number) => (se * spread) / Math.sqrt(spr
 export const shrinkCall = (raw: number, se: number) => shrinkTo(CALL_SPREAD)(raw, se);
 /** How uncertain a shrunk reading still is (its posterior standard deviation): narrower than the reading's own noise. */
 export const shrunkSe = (se: number) => bandOf(CALL_SPREAD)(se);
+
+/**
+ * How far the true worth of a late play call spreads either side of even, in win chance (0-1): what the
+ * huddle's readings (measureChoices, CHOICE_GAMES each) are shrunk toward even by, as the calls are.
+ * Raw, the play listed first and read clear showed +10.8% to win against a true +8.0 ± 0.9 over 23 of 60
+ * last-possession spots, and two options read clear and good were truly below no call (round-4 game-day
+ * review, late.mts: each option read again on 1,600 fresh seeds). The options' true worth spreads 4.9
+ * points of win chance about even there (less their noise), and 4.9 again over 80 fresh spots of other
+ * teams; shrunk by it and read clear on the shrunk value (SAY_Z of its band), the first-listed clear play
+ * showed +8.0 against +8.0 on the review's spots and +7.6 against +8.9 on the fresh ones (raw: +9.9), and
+ * a clear gain that was truly a loss went from 2 to 1 on each (scratch now4/live, 2026-10-28).
+ */
+export const PLAY_SPREAD = 0.05;
+/**
+ * The same for a sub in crunch time against keeping him in (MyPlayer's chips): 2.8 points of win chance
+ * about even over 352 subs at 60 crunch-time dead balls (each sheet's bench read on 400 games as the
+ * chips are, then on 1,600 fresh seeds; scratch now4/live sub.mts, 2026-10-28). Raw, the chips read clear
+ * showed 7.0 points either way against a true 3.9, and 7 of 70 had the sign wrong; shrunk by 3 and read
+ * clear on the shrunk value, 4.0 against 4.0, and 3 of 46. The staff's own pick (benchFor) was truly
+ * worth −0.9 on average, below −2 at 13 of the 60; the one the shrunk readings favour, lit at 3, +2.0.
+ */
+export const SUB_SPREAD = 0.03;
+/** A choice's win-chance reading shrunk toward even by its noise (`spread`: PLAY_SPREAD, SUB_SPREAD), and how uncertain it still is. */
+export const shrinkChoice = (raw: number, se: number, spread: number) => ({ win: shrinkTo(spread)(raw, se), band: bandOf(spread)(se) });
 
 /** How a continuation ended for `side`: the margin in points and by shot value, and the result. */
 function endOf(sim: GameSim, side: 0 | 1): Ending & { x: number } {

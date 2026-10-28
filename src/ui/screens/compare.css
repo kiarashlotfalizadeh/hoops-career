@@ -140,17 +140,15 @@
   font-weight: 600;
   color: var(--text-2);
 }
-/* the headline cut, 22px, or smaller until the name's longest run (--run letters) fits the column */
+/* the headline cut, 22px, or as much smaller as the name's widest word needs to fit the column whole
+   (measured: `Fit`; a hyphenated one may wrap after its hyphen) */
 .cmp-last {
   font-family: var(--head);
   font-stretch: var(--head-w);
-  font-size: 20px;
-  font-size: clamp(14px, 100cqi / (var(--run, 8) * 0.66), 22px);
+  font-size: 22px;
   font-weight: 880;
   line-height: 1.04;
   letter-spacing: -0.035em;
-  /* a long one wraps (at its hyphen if it has one) rather than lose its end */
-  overflow-wrap: anywhere;
 }
 .cmp-name {
   color: var(--text);
@@ -396,7 +394,7 @@
     height: 56px;
   }
   .cmp-last {
-    font-size: clamp(16px, 100cqi / (var(--run, 8) * 0.66), 28px);
+    font-size: 28px;
   }
   .cmp-val {
     font-size: 18px;

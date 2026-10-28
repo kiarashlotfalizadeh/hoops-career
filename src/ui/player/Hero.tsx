@@ -14,7 +14,7 @@ import { FRANCHISES } from '../../core/teams';
 import { awardRaces } from '../../core/league/awards';
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { Statline, Tag, pct } from '../components/ui';
+import { Fit, Statline, Tag, pct } from '../components/ui';
 import { OvrSheet } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
@@ -34,14 +34,6 @@ const RACES = [
   ['roy', 'ROY'],
   ['smoy', '6MOY'],
 ] as const;
-
-/**
- * The letters in a name's longest unbreakable run ("Alexander-" in Alexander-Walker): the CSS sizes the
- * name so that run fits its column, rather than splitting it mid-word.
- */
-function longestRun(name: string): number {
-  return Math.max(1, ...(name.match(/[^\s-]+-?/g) ?? [name]).map((w) => w.length));
-}
 
 /** Where he is: his team, or free agent, prospect, retired. */
 function statusLine(league: League, p: Player): string {
@@ -197,9 +189,9 @@ function ActiveHero({ league, p }: { league: League; p: Player }) {
         </div>
         <div className="tm-names">
           <span className="tm-first">{p.firstName}</span>
-          <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+          <Fit as="h1" className="tm-last" min={18}>
             {p.lastName}
-          </h1>
+          </Fit>
         </div>
         <div className="tm-hero-figs">
           <Statline
@@ -291,9 +283,9 @@ function RetiredHero({ league, p }: { league: League; p: Player }) {
         </div>
         <div className="tm-names">
           <span className="tm-first">{p.firstName}</span>
-          <h1 className="tm-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+          <Fit as="h1" className="tm-last" min={18}>
             {p.lastName}
-          </h1>
+          </Fit>
         </div>
         <div className="tm-hero-figs">
           <Statline

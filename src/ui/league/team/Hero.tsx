@@ -10,7 +10,7 @@ import { confStandings } from '../../../core/league/standings';
 import { nextMeeting } from '../../../core/ai/opponentPlan';
 import { FRANCHISES } from '../../../core/teams';
 import { TeamLogo } from '../../components/TeamLogo';
-import { fitHead } from '../../components/ui';
+import { Fit } from '../../components/ui';
 import { ordinal } from '../../stats';
 import { OutcomeTag, seasonOutcome } from '../shared';
 import { useBack } from '../../nav';
@@ -50,7 +50,9 @@ export function TeamHero({ league, tid, onEdit, children }: { league: League; ti
             {team.region}
             {arena ? <span className="lg-team-arena"> · {arena}</span> : ''}
           </div>
-          <h1 className="lg-team-name">{fitHead(team.name, 8)}</h1>
+          <Fit as="h1" className="lg-team-name" min={18}>
+            {team.name}
+          </Fit>
         </div>
         <TeamLogo tid={tid} size={64} decorative />
       </div>

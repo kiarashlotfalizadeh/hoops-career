@@ -3,6 +3,7 @@
 import type { Settings } from '../core/types';
 import { COURT_RANGE, DIFFICULTIES, DIFFICULTY, type Difficulty } from '../core/league/difficulty';
 import { GRACE } from '../core/league/jobSecurity';
+import { FLOOR_MARGIN } from '../core/league/ownerGoals';
 
 /** The help line for teaching, the same in Settings and New League. */
 export const TEACHING_HELP = "The first-week guide on Today, its welcome mail and Today's Glossary link. Every ? and glossary word stays.";
@@ -76,6 +77,10 @@ export const DIFFICULTY_COLUMNS: { id: string; label: string; value: (d: Difficu
     id: 'owner',
     label: 'Owner waits',
     value: (d) => `${GRACE[d]} yr${GRACE[d] === 1 ? '' : 's'}`,
-    help: `Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season, accepts fewer rebuilding seasons in a row (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} ${DIFFICULTY[d].rebuildSeasons}`).join(', ')}) and a higher floor under his win goal (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} .${Math.round(DIFFICULTY[d].winFloor * 1000)}`).join(', ')}).`,
+    // (what the presets change in the owner's asks, as ownerGoals.ts sets them: his win goal is his read of
+    // the roster with the edge on the court in it, so on Hard he asks fewer wins for the same roster, not
+    // more; the floor's win% is capped FLOOR_MARGIN wins under that read, so a weak roster's is the same
+    // on every preset. The review, round 4: "Hard .350" promised for a Wizards floor of about .280)
+    help: `Seasons before the owner can fire you (with Job security on). A harder owner also loses patience faster after a bad season and accepts fewer rebuilding seasons in a row (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} ${DIFFICULTY[d].rebuildSeasons}`).join(', ')}). His win goal is what he reads your roster to win with the edge on the court counted in, so the same roster is asked for more wins on Easy and fewer on Hard. Under it sits a floor (${DIFFICULTIES.map((d) => `${DIFFICULTY[d].label} .${Math.round(DIFFICULTY[d].winFloor * 1000)}`).join(', ')}): a season below it is a failed season whatever else went right. The floor moves with the edge like the goal and stays at least ${FLOOR_MARGIN} wins under his read, so a weak roster gets about the same floor on every preset. New League shows his asks for your team on the preset you pick.`,
   },
 ];

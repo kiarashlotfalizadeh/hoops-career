@@ -1115,7 +1115,9 @@ export function faInterest(league: League, p: Player, memo?: Map<number, WantRea
  * faInterest), and his old team's on his Bird rights even when its budget can't reach his price
  * (what it can pay, see birdRoom), all scored by the same offerUtility as the user's. Without it, a
  * star who passed on the user's offer could take his old team's lower one a day later, once his
- * price had come down to it.
+ * price had come down to it. Never under his summer floor (see SUMMER_FLOOR), as no AI signing is:
+ * his price doesn't come down past it, and a Bird offer under it signed a rival for 35% of his
+ * value the day the user's offer lost (one that left him unsigned with no offer at all).
  */
 export function bidRivals(league: League, p: Player): FaOffer[] {
   const offers = faInterest(league, p);
@@ -1125,7 +1127,8 @@ export function bidRivals(league: League, p: Player): FaOffer[] {
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   if (!bird || offers.some((o) => o.tid === bird.tid)) return offers;
   const amount = Math.floor(bird.room / 50) * 50;
-  if (amount <= min) return offers;
+  // (within a rounding of it, as aiLateReturns and aiSign take it)
+  if (amount <= min || amount < summerFloor(league, p) - 50) return offers;
   const years = askingContract(league, p, bird.tid).years;
   offers.push({ tid: bird.tid, amount, years, route: 'min', bird: true, utility: offerUtility(league, p, bird.tid, amount, years) });
   return offers.sort((a, b) => b.utility - a.utility || a.tid - b.tid);
@@ -1134,7 +1137,9 @@ export function bidRivals(league: League, p: Player): FaOffer[] {
 /**
  * Where an offer from the user would stand against the offers he weighs now (see bidRivals): his
  * utility for it, whether it wins (with no rival offer, any he'll consider: his floor, see
- * bidFloor), and about what would lead the field (null when even the max wouldn't).
+ * bidFloor), and about what would lead the field today (null when even the max wouldn't), never
+ * under the least he'll consider from the user. Today's offers: a rival's can move by his decision
+ * day (its room spent or freed), so it's the staff's read, not a promise.
  */
 export function bidStanding(
   league: League,
@@ -1146,15 +1151,14 @@ export function bidStanding(
   const tid = league.userTid;
   const prefs = playerPrefs(league, p);
   const best = offers[0];
-  if (!best) {
-    const floor = bidFloor(league, p, years);
-    return { offers, leads: amount >= floor, toLead: floor };
-  }
+  const floor = bidFloor(league, p, years);
+  if (!best) return { offers, leads: amount >= floor, toLead: floor };
   const mine = offerUtility(league, p, tid, amount, years, prefs);
-  // the amount whose utility matches the best rival's (utility is a power of the amount)
-  const need = Math.ceil((amount * Math.pow(best.utility / mine, 1 / prefs.money)) / 50) * 50;
+  // the amount whose utility matches the best rival's (utility is a power of the amount), and
+  // nothing he wouldn't consider (a rival's low offer once led to a figure under the floor)
+  const need = Math.max(floor, Math.ceil((amount * Math.pow(best.utility / mine, 1 / prefs.money)) / 50) * 50);
   const max = CAP_FOR(league, contractSeason(league)).maxContract(p.experience);
-  return { offers, leads: mine >= best.utility, toLead: need <= max ? need : null };
+  return { offers, leads: amount >= floor && mine >= best.utility, toLead: need <= max ? need : null };
 }
 
 /**

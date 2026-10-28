@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInRouterContext, useLocation } from 'react-router-dom';
 import { ChevronDown, ChevronLeft, HelpCircle, X } from 'lucide-react';
@@ -617,7 +617,10 @@ export function PageHeader({ title, sub, back, backTo = '/', right }: { title: R
         </button>
       )}
       <div className="grow">
-        <h1>{title}</h1>
+        {/* (with controls beside it on a narrow phone, "League" a size down rather than "Leag / ue") */}
+        <Fit as="h1" min={20}>
+          {title}
+        </Fit>
         {sub && <div className="ph-sub">{sub}</div>}
       </div>
       {right}
@@ -654,21 +657,85 @@ export function More({ label = 'More', children }: { label?: ReactNode; children
 export const keep = (n: ReactNode): ReactNode => (typeof n === 'string' ? keepFigures(n) : n);
 
 /**
- * Whether a headline has a word too long for its size on a phone ("Timberwolves" at 29px): its
- * class steps the size down a notch (`.long-word`), so a word never breaks in the middle.
+ * A headline's words, each a run no line may break inside, with what parts them: a space, or "" after
+ * a hyphen between letters ("Gilgeous-" / "Alexander"; never inside a figure, "112-98", nor at a
+ * no-break space).
  */
-export const longWord = (n: ReactNode, max = 10) => typeof n === 'string' && n.split(/[\s/]+/).some((w) => w.length > max);
+const fitRuns = (s: string) =>
+  s
+    .trim()
+    .replace(/[ \t\r\n]+/g, ' ')
+    .replace(/(\p{L}-)(?=\p{L})/gu, '$1\n')
+    .split(/( +|\n)/)
+    .map((w) => (w === '\n' ? '' : w));
 
-/** A headline's text, fitted: its figures kept whole and, with a word too long for a phone, a size down (two for a very long one). */
-export const fitHead = (n: ReactNode, max = 10): ReactNode =>
-  typeof n === 'string' && longWord(n, max) ? (
-    // (--w, the longest word's length, lets a screen fit it to its own column: team-page.css)
-    <span className={`long-word${longWord(n, max + 2) ? ' xlong' : ''}`} style={{ '--w': Math.max(...n.split(/[\s/]+/).map((w) => w.length)) } as CSSProperties}>
-      {keep(n)}
-    </span>
-  ) : (
-    keep(n)
+/**
+ * A headline fitted to its box ("Antetokounmpo" on a phone's slab): printed at its CSS size, or as
+ * much smaller as its widest word needs to fit the line whole. Measured in the page, not guessed from
+ * a letter count ("Cunningham" is wider than its ten letters say), and kept fitted as the box resizes
+ * or the type loads; each word is unbreakable, so a name never splits in the middle (`.fit-w`).
+ * Text that isn't a string prints as is. `min` is the floor in pixels.
+ */
+export function Fit({
+  as: Tag = 'div',
+  className = '',
+  min = 12,
+  style,
+  children,
+}: {
+  as?: 'div' | 'span' | 'h1' | 'h2' | 'h3';
+  className?: string;
+  min?: number;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLElement | null>(null);
+  const text = typeof children === 'string' ? children : null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || text === null) return;
+    const fit = () => {
+      el.style.fontSize = '';
+      const cs = getComputedStyle(el);
+      const room = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      let widest = 0;
+      for (const w of el.querySelectorAll('.fit-w')) widest = Math.max(widest, w.getBoundingClientRect().width);
+      // (a 2% margin for the rounding of glyph widths at the smaller size)
+      if (room > 0 && widest > room) el.style.fontSize = `${Math.max(min, Math.floor(((parseFloat(cs.fontSize) * room) / widest) * 0.98 * 10) / 10)}px`;
+    };
+    fit();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
+    ro?.observe(el);
+    const fonts = typeof document !== 'undefined' ? document.fonts : undefined;
+    void fonts?.ready.then(fit);
+    fonts?.addEventListener?.('loadingdone', fit);
+    return () => {
+      ro?.disconnect();
+      fonts?.removeEventListener?.('loadingdone', fit);
+    };
+  }, [text, min]);
+  const words = text === null ? null : fitRuns(text);
+  return (
+    <Tag ref={ref as never} className={`fit ${className}`} style={style}>
+      {words
+        ? words.map((w, i) =>
+            i % 2 ? (
+              // a space stays a space (a line may end there); a hyphen's break is a <wbr>
+              w ? (
+                ' '
+              ) : (
+                <wbr key={i} />
+              )
+            ) : (
+              <span key={i} className="fit-w">
+                {w}
+              </span>
+            ),
+          )
+        : children}
+    </Tag>
   );
+}
 
 /** Figures in a row, hairlines between them: an overline label, the value in scoreboard type, an optional line under it. */
 export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: ReactNode; color?: string }[] }) {

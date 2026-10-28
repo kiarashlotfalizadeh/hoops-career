@@ -273,7 +273,8 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   const pkg = (v: unknown) => (Array.isArray(v) && v.length ? v.map((id) => (isSetId(id) ? SETS[id].short : String(id))).join(', ') : 'None');
   if (!same(a.offense.sets ?? [], b.offense.sets ?? [])) out.push({ label: 'Set package', from: pkg(a.offense.sets), to: pkg(b.offense.sets) });
   section(a as unknown as Record<string, unknown>, b as unknown as Record<string, unknown>, []);
-  const pids = (x: Record<number, unknown>, y: Record<number, unknown>) => [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number);
+  // (by player, for the players `nameOf` can name: one it can't has left the team, his settings with him)
+  const pids = (x: Record<number, unknown>, y: Record<number, unknown>) => [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number).filter((pid) => nameOf(pid));
   for (const pid of pids(a.offense.roles, b.offense.roles)) {
     const [x, y] = [a.offense.roles[pid], b.offense.roles[pid]];
     if (x !== y) out.push({ label: `${nameOf(pid)} (role)`, from: x ? ROLE_META[x].label : 'Auto', to: y ? ROLE_META[y].label : 'Auto' });
@@ -290,7 +291,7 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
     const [x, y] = [a.offense.glass?.[pid] ?? 0, b.offense.glass?.[pid] ?? 0];
     if (x !== y) out.push({ label: `${nameOf(pid)} (glass)`, from: GLASS_META[x].label, to: GLASS_META[y].label });
   }
-  const scr = (s: number[]) => (s.length ? s.map(nameOf).join(', ') : 'Auto');
+  const scr = (s: number[]) => s.map(nameOf).filter(Boolean).join(', ') || 'Auto';
   if (!same(a.offense.screeners, b.offense.screeners)) out.push({ label: 'Screeners', from: scr(a.offense.screeners), to: scr(b.offense.screeners) });
   return out;
 }

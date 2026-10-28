@@ -9,6 +9,7 @@
 import type { InboxMessage, League } from '../../core/types';
 import { agenda, CALL_KINDS, type AgendaItem } from '../../core/league/agenda';
 import { openProposals } from '../../core/league/proposals';
+import { deadlineAnswered } from '../../core/league/calls';
 import { fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { backupDue } from '../../state/backup';
@@ -20,7 +21,7 @@ export interface NeedsYou {
   items: AgendaItem[];
   /** Newest first. */
   mail: InboxMessage[];
-  /** Days to the deadline when its row shows (its mail or the staff's deadline call isn't in the list already). */
+  /** Days to the deadline when its row shows (its mail or the staff's deadline call isn't in the list already, and he hasn't answered the call). */
   deadline: number | null;
   backup: boolean;
   /** What needs him, as the bell counts it: every row but the finished guide's "Got it" (it waits on nothing). */
@@ -71,7 +72,8 @@ export function needsYouOf(league: League): NeedsYou {
   // (the welcome mail links home: it's the guide's)
   const mail = league.inbox.filter((m) => needsYou(m, open, league) && !decisionId(m) && m.link !== '/').sort((a, b) => b.season - a.season || b.day - a.day || b.id - a.id);
   const d = deadlineIn(league);
-  const deadline = d !== null && !league.fired && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline') ? d : null;
+  const deadline =
+    d !== null && !league.fired && !deadlineAnswered(league) && !mail.some((m) => m.link?.startsWith('/office/trade')) && !items.some((i) => i.kind === 'deadline') ? d : null;
   const backup = backupDue(league);
   const rows = items.length + mail.length + (deadline !== null ? 1 : 0) + (backup ? 1 : 0);
   return { items, mail, deadline, backup, count: rows - items.filter((i) => i.id === 'guide:done').length, rows };

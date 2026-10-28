@@ -8,7 +8,7 @@ import { seriesLabel } from '../../core/league/playoffs';
 import { seasonLabel } from '../../core/constants';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { Section, Sheet, fitHead } from '../components/ui';
+import { Section, Sheet, Fit } from '../components/ui';
 import { periodLabel } from '../stats';
 import { ViewChips } from './Views';
 import { Poster, TitleSlab, confName, confOrder, ordinal, roundName, useQueryParam } from './shared';
@@ -322,8 +322,10 @@ export function FinalsCard({ league, finals, onOpen }: { league: League; finals?
   const side = (tid: number | undefined, wins: number, conf: string) => (
     <div className={`side ${finals?.winner !== undefined && finals.winner !== tid ? 'lose' : ''}`}>
       {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
-      {/* (two lines before an ellipsis: "East champion", "Timberwolves" a size down) */}
-      <div className="bk-fname">{fitHead(tid !== undefined ? league.teams[tid].name : `${conf} champion`, 9)}</div>
+      {/* (two lines at most: "East champion"; "Timberwolves" as much smaller as it needs to fit whole) */}
+      <Fit className="bk-fname" min={11}>
+        {tid !== undefined ? league.teams[tid].name : `${conf} champion`}
+      </Fit>
       {tid !== undefined && <div className="bk-fconf">{conf}</div>}
       {finals && <div className="score">{wins}</div>}
     </div>

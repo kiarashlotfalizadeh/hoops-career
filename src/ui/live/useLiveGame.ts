@@ -153,8 +153,6 @@ export function useLiveGame() {
   const { busy: staffBusy } = staff;
   /** The stops the staff has measured from tonight (see stopAfter). */
   const staffSeen = useRef(noStops());
-  /** The possession of the last "none clears" beat over the court (crunch time's: see NONE_BEAT). */
-  const beatAt = useRef(-Infinity);
   const [announce, setAnnounce] = useState('');
   const mounted = useRef(true);
   useEffect(() => {
@@ -387,7 +385,6 @@ export function useLiveGame() {
       setStopCall(null);
       staffReset();
       staffSeen.current = noStops();
-      beatAt.current = -Infinity;
       viewRef.current = lg ? snapshot(lg.sim, lg.logs.length) : null;
       setView(viewRef.current);
       setEvents([]);
@@ -747,6 +744,10 @@ export function useLiveGame() {
     const side = lg.userSide;
     const from = lg.sim.injuries.length;
     const hurtNow = () => hurtStarters(lg.sim, side, from).length > 0;
+    // with your subs on, nobody makes them along a skip: the staff does (as in a simmed game), and hands
+    // them back where it stops. Without it a skip to clutch time played the starters 44 minutes of 53,
+    // one down to 20% energy (round-4 game-day review). Both changes go in the journal, so a replay agrees
+    const handed = lg.manualSubs && !!coach((g) => (g.setManualSubs(false), true));
     // the sim runs a possession ahead of the court: already at the buzzer, "End of quarter" stops at this break, not the next one
     if (!(to === 'quarter' && !atBreak && lg.sim.clock <= 0.05)) lg.simTo(to, to === 'end' ? undefined : hurtNow);
     const hurt = to === 'end' ? [] : hurtStarters(lg.sim, side, from);
@@ -761,6 +762,7 @@ export function useLiveGame() {
     // a decided game ends at the buzzer: no break before an overtime that won't be played
     const s = lg.sim;
     if (!lg.over && s.clock <= 0.05 && s.q >= 4 && s.T[0].score !== s.T[1].score) lg.step();
+    if (handed && !lg.over) coach((g) => g.setManualSubs(true));
     // (along a skip the night's moments go in the play-by-play, not over the court)
     flushFeed(false);
     atmoApi.clear();
@@ -872,9 +874,12 @@ export function useLiveGame() {
     return input ? liveAlerts(input).filter((s) => !dismissed.includes(s.id)) : [];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, tick, dismissed, over, alertInput]);
-  // the assistant's word goes up over the court once (see sayStaff)
+  // the assistant's word goes up over the court once (see sayStaff): legs, fouls, a run, what happened.
+  // Not his tactical reads (their play type running hot, their edge with the textbook answer, ours
+  // stalling): no number backs them, and a tactics change is the measured call's to make, so they wait
+  // in the Staff view's reads
   useEffect(() => {
-    if (!over) sayStaff(alerts);
+    if (!over) sayStaff(alerts.filter((a) => !TACTICS_READ.test(a.id)));
   }, [alerts, over, sayStaff]);
   /**
    * The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed.
@@ -897,22 +902,13 @@ export function useLiveGame() {
     return c && !dismissed.includes(c.id) ? [c, ...own.filter((n) => n.id !== (staffCall?.state === 'call' ? staffCall.draft.id : ''))] : own;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, tick, dismissed, over, alertInput, staffCall]);
-  // a call that lands goes up over the court once, with its number; in crunch time, so does the staff
-  // measuring and finding nothing to change (now and then): the bench is silent on purpose, and says so
+  // a call that lands goes up over the court once, with its number. A stop with nothing to change says
+  // nothing over the court (its line waits in the Staff view): in close finishes those stops outnumbered
+  // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
-    if (over || !staffCall) return;
-    if (staffCall.state === 'call') {
-      beatAt.current = -Infinity;
-      const n = callNote(staffCall);
-      queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
-      return;
-    }
-    if (staffCall.state !== 'none' || staffCall.steps === undefined || staffCall.m?.by !== 'win') return;
-    const steps = staffCall.steps;
-    if (steps - beatAt.current < NONE_BEAT) return;
-    beatAt.current = steps;
-    const line = callQuietLine(staffCall)?.replace(/ Nothing to change\.$/, '');
-    if (line) queueBanner([{ id: `none-${steps}`, tone: 'info', kicker: 'Staff call', title: 'Nothing to change', line }]);
+    if (over || staffCall?.state !== 'call') return;
+    const n = callNote(staffCall);
+    queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
   }, [staffCall, over, queueBanner]);
 
   return {
@@ -1014,8 +1010,9 @@ export interface StopCall {
  * game and those possessions played, a millisecond or two on a desktop).
  */
 export const LOOK_AHEAD = 8;
-/** Possessions between crunch time's "none clears" beats over the court (about a minute of the game clock). */
-const NONE_BEAT = 4;
+
+/** The alerts that are the staff's tactical reads (liveAlerts' ids): no banner over the court for them. */
+const TACTICS_READ = /^(imp|pt|mypt)-/;
 
 /** The last possession's stop: once a period (the end of regulation and of each overtime is a last possession of its own). */
 const lastId = (q: number) => `last-${q}`;

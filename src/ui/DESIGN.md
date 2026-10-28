@@ -236,9 +236,10 @@ Archivo, variable in width and weight, for words and big figures; IBM Plex Mono 
   tracking -0.03em. Stat figures: `--mono`, 500-600, tracking -0.03 to -0.06em. Both tabular.
   Never in capitals-only words: a figure's label sits beside it in sentence case.
 - Names in rows 15.5px at 680. Nothing in the text cut above 760.
-- A headline with a word too long for a phone ("Timberwolves" at 29px) steps down a size, two for a
-  very long one, rather than break the word: `fitHead` (`components/ui.tsx`, with `longWord`), which
-  also keeps its figures whole.
+- A name on a hero or slab, and a page's title, never breaks inside a word ("Antetokounmp / o"): `Fit`
+  (`components/ui.tsx`) prints it at its CSS size, or as much smaller as its widest word needs to fit
+  the box, measured in the page (a hyphenated name may still break after its hyphen). The smoke test
+  checks the longest names at 320-390px.
 
 ## Components and classes
 

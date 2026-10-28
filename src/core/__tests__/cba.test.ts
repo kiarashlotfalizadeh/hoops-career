@@ -45,9 +45,22 @@ import {
   spendRoute,
   summerRoster,
   teamAppeal,
+  summerFloor,
   valueScore,
 } from '../league/contracts';
-import { FA_YEARS, aiLateReturns, faInterest, offerBlockedReason, offerRoute, userExceptionRoom, userOffer, userResign } from '../league/freeAgency';
+import {
+  FA_YEARS,
+  aiLateReturns,
+  bidFloor,
+  bidRivals,
+  bidStanding,
+  faInterest,
+  offerBlockedReason,
+  offerRoute,
+  userExceptionRoom,
+  userOffer,
+  userResign,
+} from '../league/freeAgency';
 import { aiMatchVerdict, qualifyingOffer, resolveOfferSheets, setRfaHold, sheetDecisionBlocked, signOfferSheet, userDecideSheet } from '../league/rfa';
 import { aiPackage } from '../league/aiTrades';
 import { executeTrade, tradeRoster, validateTrade } from '../league/trades';
@@ -479,6 +492,18 @@ describe('the CBA', () => {
       // past its budget for him: no bid on his rights (and no space or exception to pay him with)
       books(cap.firstApron);
       expect(bid()).toBeUndefined();
+      // and what its budget leaves under his summer floor isn't an offer he weighs against the user's
+      // either (bidRivals): losing the user's floor bid to it signed RJ Barrett for 35% of his value
+      const floor = summerFloor(l, p);
+      books(keepCeiling(cap, t) - Math.round(floor / 2));
+      expect(bidRivals(l, p).some((o) => o.tid === AI)).toBe(false);
+      for (const o of bidRivals(l, p)) expect(o.amount).toBeGreaterThanOrEqual(floor - 50);
+      // (the lead it shows is never under what he'd consider from the user)
+      const ask = askingContract(l, p, U);
+      expect(bidStanding(l, p, ask.amount, ask.years).toLead ?? Infinity).toBeGreaterThanOrEqual(bidFloor(l, p, ask.years));
+      // just past his floor, it is
+      books(keepCeiling(cap, t) - floor - 500);
+      expect(bidRivals(l, p).find((o) => o.tid === AI)).toMatchObject({ bird: true });
     }
 
     // a good free agent nobody could pay goes back to his old team on his Bird rights as the market

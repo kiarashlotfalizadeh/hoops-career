@@ -1,7 +1,8 @@
 // The offer as the contract and extension sheets build it: the amount in scoreboard type with its
 // total, a slider with steppers, the quick amounts (the minimum, his ask, the max), then the years.
-// Against a stray drag: the slider stops at 1.5× his ask until widened, and an offer more than 10%
-// over his ask says what he'd sign for.
+// Against a stray drag or tap: the slider stops at 1.5× his ask until widened (the Max quick amount
+// waits for that too: one tap on it re-signed a minimum player at 20× his ask), and an offer more
+// than 10% over his ask says what he'd sign for.
 import { useState, type ReactNode } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { Range, shortSeason } from './common';
@@ -45,7 +46,7 @@ export function OfferControls({
 }) {
   const [wide, setWide] = useState(false);
   const top = Math.floor(maxAmt / STEP) * STEP;
-  // (a deliberate step past it, a quick amount or a figure from elsewhere widens it too)
+  // (a deliberate step past it or a figure from elsewhere widens it too)
   const near = Math.max(Math.ceil(minAmt / STEP) * STEP, Math.ceil((askAt * 1.5) / STEP) * STEP);
   const capped = !wide && near < top && amount <= near;
   const over = amount - askAt;
@@ -80,19 +81,22 @@ export function OfferControls({
           <button className={`chip ${amount === askAt ? 'on' : ''}`} onClick={() => set(askAt)}>
             His ask {moneyExact(askAt)}
           </button>
-          <button className={`chip ${amount === maxAmt ? 'on' : ''}`} onClick={() => set(maxAmt)}>
-            Max {moneyExact(maxAmt)}
-          </button>
+          {!capped && (
+            <button className={`chip ${amount === maxAmt ? 'on' : ''}`} onClick={() => set(maxAmt)}>
+              Max {moneyExact(maxAmt)}
+            </button>
+          )}
         </div>
-        {overAsk && over > askAt * 0.1 ? (
+        {overAsk && over > askAt * 0.1 && (
           <div className="tiny warn num">
             {moneyExact(over)} over his ask: he&apos;d sign for {moneyExact(askAt)}.
           </div>
-        ) : capped ? (
+        )}
+        {capped && (
           <button className="btn text tiny" onClick={() => setWide(true)}>
             The slider stops at {moneyExact(near)}, 1.5× his ask: widen it
           </button>
-        ) : null}
+        )}
       </div>
       <div className="fo-years">
         <div className="over">Years</div>

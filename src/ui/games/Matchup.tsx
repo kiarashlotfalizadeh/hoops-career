@@ -130,23 +130,21 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
   // the staff's counters for tonight still being measured: said on the button, so a quick tap doesn't skip the plan unseen
   const measuring = useCounterWorth(league, opp);
   const pending = !resume && !!measuring && !measuring.worth;
+  // (never "100%" while it's still at it: the last games round up before the reading lands)
+  const pct = pending ? Math.min(99, Math.floor(measuring!.progress * 100)) : 0;
   return (
     <div className="dockbar mu-dock" role="group" aria-label="Game day">
       <button
         className="btn primary big grow"
         disabled={simming}
         onClick={() => nav('/live')}
-        aria-label={
-          resume
-            ? `Resume the game against the ${name}`
-            : `Tip off against the ${name}${pending ? `. The staff is still measuring its counters: ${Math.round(measuring!.progress * 100)}%` : ''}`
-        }
+        aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}${pending ? `. The staff is still measuring its counters: ${pct}%` : ''}`}
       >
         <span className="mu-dock-tip">
           <span>
             <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
           </span>
-          {pending && <span className="mu-dock-sub">Staff still measuring · {Math.round(measuring!.progress * 100)}%</span>}
+          {pending && <span className="mu-dock-sub">Staff still measuring · {pct}%</span>}
         </span>
       </button>
       <button className="btn" disabled={simming} onClick={() => void quick()}>

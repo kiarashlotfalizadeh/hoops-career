@@ -692,6 +692,7 @@ export default function Live() {
       <Sheet open={panel === 'skip'} onClose={() => setPanel('none')} title="Skip ahead">
         <SkipSheet
           choices={skipTo}
+          manualSubs={me.manualSubs}
           onPick={(to) => {
             setPanel('none');
             s.skip(to);

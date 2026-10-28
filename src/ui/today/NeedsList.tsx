@@ -106,8 +106,9 @@ export function OpenCalls({ calls, picks = [] }: { calls: AgendaItem[]; picks?: 
       )}
       {picks.length > 0 && (
         <div className="card flush dg-list">
-          {picks.map((x) => (
-            <div key={x} className="dg-line">
+          {picks.map((x, i) => (
+            // (two readings can say the same words)
+            <div key={`${i}:${x}`} className="dg-line">
               {x}
             </div>
           ))}

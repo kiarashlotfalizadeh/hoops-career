@@ -16,6 +16,7 @@ import { capSeason, isOffseason, rosterFig, shortSeason } from '../office/basis'
 import '../screens/team.css';
 import { money } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
+import { Fit } from '../components/ui';
 import { ordinal } from '../stats';
 import { useTeamEditWatch } from '../tactics/editWatch';
 
@@ -60,7 +61,9 @@ function TeamHeader({ league }: { league: League }) {
         </span>
       </div>
       <div className="tm-hh-main">
-        <h1 className="tm-hh-name">{t.name}</h1>
+        <Fit as="h1" className="tm-hh-name" min={18}>
+          {t.name}
+        </Fit>
         <div className="tm-hh-rec">
           <span className="tm-hh-wl" aria-label={`Record ${ts.won} and ${ts.lost}`}>
             {ts.won}-{ts.lost}

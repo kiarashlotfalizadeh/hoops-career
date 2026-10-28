@@ -62,7 +62,7 @@ import { worthSig, type CallCard, type CallMeasure, type CallWorth } from './cal
 import { WORTH_MIN, type LeagueChange } from '../ai/counterWorth';
 import { autoRotation } from '../ai/coachAI';
 import { benchTwoWays, ensureRotation, youthLean } from './games';
-import { currentGoals, goalResult, gradeGoal, YOUNG_AGE } from './ownerGoals';
+import { currentGoals, goalResult, gradeGoal, YOUNG_AGE, youthProjected } from './ownerGoals';
 import { playerAge } from '../playerGen';
 import { winChance } from '../analysis/winProb';
 import { lotteryMatrix, pct, pickProjection } from '../analysis/odds';
@@ -302,7 +302,7 @@ const gamesLeft = (league: League) => league.schedule.filter((g) => !g.played &&
 
 /**
  * The owner's youth goal as the young players' lean would move it: his minutes so far, where they're
- * on pace for with the rotation as it is and with the lean for YOUTH_GAMES games, and his grade on the
+ * on pace for as the Owner page projects them and with the lean for YOUTH_GAMES games, and his grade on the
  * goal each way (−1..1); null without such a goal.
  */
 export function youthOutlook(league: League, add: number) {
@@ -311,7 +311,8 @@ export function youthOutlook(league: League, add: number) {
   if (!og || !g) return null;
   const now = goalResult(league, og, g);
   const left = gamesLeft(league);
-  const base = Math.round(now + youngPerGame(league, league.teams[league.userTid].rotation) * left);
+  // (where the Owner page projects them: one projection, see youthProjected)
+  const base = youthProjected(league, og, g);
   const lean = Math.round(base + add * Math.min(YOUTH_GAMES, left));
   return { og, g, now, base, lean, grade: [gradeGoal(league, og, g, base), gradeGoal(league, og, g, lean)] as const };
 }
@@ -1013,6 +1014,9 @@ function takeLean(league: League, wc: WeekCall) {
 // ---------------------------------------------------------------- each morning
 
 /** Note something the staff did on its own (the digest says it). */
+/** How the staff's report on a measured change it didn't make starts (staffLever.ts): the digest keeps the latest. */
+export const STAFF_REPORT = 'Staff report:';
+
 export function notePick(league: League, text: string, lapsed = false) {
   const picks = league.staffPicks ?? [];
   picks.push({ season: league.season, day: league.day, text, ...(lapsed ? { lapsed } : {}) });
@@ -1058,8 +1062,13 @@ export function weekDaily(league: League) {
  * pick is made in a sim's mornings, so the one on the morning it started was the sim before's.
  */
 export function staffPicksSince(league: League, season: number, day: number): string[] {
-  const picks = (league.staffPicks ?? []).filter((p) => p.season > season || (p.season === season && p.day > day));
-  const out = picks.filter((p) => !p.lapsed).map((p) => p.text);
+  const all = (league.staffPicks ?? []).filter((p) => p.season > season || (p.season === season && p.day > day));
+  // (the staff's monthly readings (staffLever.ts) as one row: the latest, Analysis lists it too)
+  const reports = all.filter((p) => p.text.startsWith(STAFF_REPORT));
+  const picks = all.filter((p) => !reports.includes(p) || p === reports[reports.length - 1]);
+  const out = picks
+    .filter((p) => !p.lapsed)
+    .map((p) => (reports.length > 1 && p.text.startsWith(STAFF_REPORT) ? `Staff report (the latest of ${reports.length}):${p.text.slice(STAFF_REPORT.length)}` : p.text));
   const lapsed = picks.filter((p) => p.lapsed);
   if (lapsed.length)
     out.push(

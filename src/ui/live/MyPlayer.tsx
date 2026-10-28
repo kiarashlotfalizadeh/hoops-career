@@ -8,9 +8,9 @@ import { fitPlayers } from './plays';
 import { pendingLive } from '../../state/live';
 import { CHOICE_GAMES } from '../../state/liveWorth';
 import { signed } from '../stats';
-import { measuresSubs, useSubWorth, type PlayReading } from './usePlayWorth';
+import { favoured, measuresSubs, useSubWorth, type PlayReading } from './usePlayWorth';
 
-/** A sub's reading against keeping him in, on its chip: its win chance, or even inside the noise. */
+/** A sub's reading against keeping him in, on its chip: its win chance (shrunk toward even), or even inside the noise. */
 function SubWorth({ r }: { r: PlayReading | null | undefined }) {
   if (r === undefined) return null;
   if (r === null) return <span className="lv-ps-sub-w dim">…</span>;
@@ -96,6 +96,10 @@ export function MyPlayer({
   const ins = subs.on && !subs.out ? subs.options.map((o) => o.pid) : [];
   const readings = useSubWorth(lg, pid, ins, ins.length > 0);
   const measured = ins.length > 0 && measuresSubs(lg);
+  // the staff's pick: where subs are measured, the one the readings favour once they're in (none while
+  // they're measured, or when none clears above keeping him in); elsewhere the bench's own (benchFor)
+  const top = favoured(readings);
+  const options = measured ? subs.options.map((o, i) => ({ ...o, staff: i === top })) : subs.options;
   return (
     <div className="lv-ps">
       <PlayerLine p={p} />
@@ -109,10 +113,10 @@ export function MyPlayer({
           <div className="over">
             <ArrowLeftRight size={12} aria-hidden="true" /> {subs.on ? 'Sub him out' : 'Put him in for'}
           </div>
-          {subs.options.length ? (
+          {options.length ? (
             <>
               <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
-                {subs.options.map((o, i) => (
+                {options.map((o, i) => (
                   <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
                     {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
                     {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
@@ -124,7 +128,7 @@ export function MyPlayer({
               <div className="tiny dim" aria-hidden="true">
                 Energy{subs.on ? '' : ' and fouls'}
                 {measured && ` · to win, against keeping him in (the rest of the game played ${CHOICE_GAMES} times each)`}
-                {subs.options.some((o) => o.staff) && (
+                {options.some((o) => o.staff) && (
                   <>
                     {' '}
                     · <Lightbulb size={11} className="accent-text" /> the staff&apos;s pick

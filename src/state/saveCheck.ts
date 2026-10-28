@@ -382,7 +382,8 @@ const editIntact = (e: unknown) =>
   e.diff.every((d) => Array.isArray(d) && str(d[0])) &&
   nums(e.ahead) &&
   (e.worth === undefined || worthIntact(e.worth)) &&
-  (e.check === undefined || worthIntact(e.check));
+  (e.check === undefined || worthIntact(e.check)) &&
+  (e.closedDay === undefined || int(e.closedDay));
 
 const storyIntact = (s: unknown) => obj(s) && int(s.id) && int(s.day) && str(s.head) && nums(s.tids) && nums(s.pids);
 

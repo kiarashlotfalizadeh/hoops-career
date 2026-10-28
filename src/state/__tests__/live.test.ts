@@ -393,6 +393,24 @@ describe('live game', () => {
       lg.simTo('end');
       expect(lg.over).toBe(true);
       fresh();
+      // with your subs on, nobody makes them along a skip: the Live screen hands them to the staff for it
+      // and back where it stops (useLiveGame.skip). Held, a starter plays all 43 minutes to clutch time (handed, 35 at most)
+      const most = (hand: boolean) => {
+        const l = testLeague('half');
+        toGameDay(l);
+        const g = goLive(l);
+        g.setManualSubs(true);
+        if (hand) g.setManualSubs(false);
+        g.simTo('clutch');
+        if (hand) g.setManualSubs(true);
+        expect(g.manualSubs).toBe(true);
+        const sec = Math.max(...g.sim.T[g.userSide].players.map((p) => p.b.sec));
+        fresh();
+        return sec;
+      };
+      const [held, handed] = [most(false), most(true)];
+      expect(held).toBeGreaterThan(40 * 60);
+      expect(handed).toBeLessThan(held - 5 * 60);
     }
 
     // keeps the tactics it tipped off with (game plan included) for "Reset to game plan"

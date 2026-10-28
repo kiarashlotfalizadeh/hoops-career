@@ -3,12 +3,13 @@
 // scouting report as an opponent reads it. The tally is what happened, never advice: it isn't a
 // counterfactual (it has read a coverage as the worse one where paired games found it the better), so
 // it says nothing about what a change would win. The staff measures that in paired games before it
-// suggests or makes one (staffLever.ts).
+// suggests or makes one (staffLever.ts): its latest reading heads the tally, a row.
 import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
 import { scoutData, SCOUT_MIN_GAMES } from '../../core/analysis/scouting';
 import { scoutTeam, seasonLevers } from '../../core/ai/advisor';
+import { leverReport } from '../../core/league/staffLever';
 import { IMPACT_TEXT, LEVER_GAINS, impactSentence, leverNet } from '../../core/analysis/gameReport';
 import { Help, More, Section, Segmented } from '../components/ui';
 import { Term } from '../components/Glossary';
@@ -37,6 +38,8 @@ export function InsightsTab() {
   // the games the effects were tracked in, whether or not any effect is big enough to list
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
   const levers = useLeagueMemo(() => seasonLevers(league, league.userTid), [league]);
+  // (the staff's latest measured change: what the tally sent it to look at, played both ways)
+  const report = useLeagueMemo(() => leverReport(league), [league]);
   const [more, setMore] = useState(false);
   // your settings, each on one row: what it gave up against what it won back
   const settings: TallyRow[] = levers
@@ -83,6 +86,14 @@ export function InsightsTab() {
           right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}
         >
           <div className="card flush list">
+            {report && (
+              <>
+                <div className="list-divider list-h" aria-hidden="true">
+                  <span>The staff measured</span>
+                </div>
+                {row({ id: 'lever', v: report.pts, title: report.title, sides: report.meta })}
+              </>
+            )}
             <div className="list-divider list-h" aria-hidden="true">
               <span>Your settings, net</span>
             </div>

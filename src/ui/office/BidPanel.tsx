@@ -101,7 +101,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         </Callout>
       ) : (
         <Callout tone="warn" icon={<TriangleAlert size={18} className="warn" />}>
-          <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
+          <b>{best ? `${league.teams[best.tid].abbrev}'s offer is ahead today.` : "No rival bids, so he'll hold out for his ask."}</b>{' '}
           {standing.toLead !== null ? (
             <button className="btn xs fo-lead" onClick={() => onAmount(standing.toLead!)}>
               {best ? 'Lead with' : 'Offer'} {moneyExact(standing.toLead)}
@@ -109,6 +109,8 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
           ) : (
             'Even a max offer would not top theirs now.'
           )}
+          {/* (today's offers, as bidStanding reads them: a rival's room can be spent or freed by his day) */}
+          {best && <div className="small dim2">Staff read of today&apos;s offers: theirs can change before he decides {when}.</div>}
         </Callout>
       )}
 

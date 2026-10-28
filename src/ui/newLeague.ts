@@ -126,9 +126,27 @@ export function teamPreviews(league: League): Record<number, TeamPreview> {
   return out;
 }
 
+/**
+ * The user's own owner as Start career makes him, from `league` built with the user's team and the
+ * settings picked so far (the same id and random seed): the difficulty's edge on the court moves his
+ * read of the roster for the user's team alone (see leagueOutlook), so teamPreviews' read of a team
+ * that isn't the preview's own is Normal's whatever the preset. One outlook: about 0.6 s on a slow phone.
+ */
+export function userOwnerPreview(league: League): Pick<TeamPreview, 'wins' | 'level' | 'who'> {
+  const og = planOwnerGoals(league, league.userTid);
+  return {
+    wins: og?.goals.find((g) => g.kind === 'wins')?.target ?? 0,
+    level: og?.goals.find((g) => g.kind === 'postseason')?.target ?? 0,
+    who: ownerPersonality(league, league.userTid),
+  };
+}
+
 const ASK = ['rebuild', 'play-in', 'playoffs', 'win a round', 'conf. finals', 'Finals', 'title'];
 
-/** The owner's day-one asks in a line that fits a phone's poster: "Owner: 32 wins · rebuild · builder". */
-export function ownerLine(p: Pick<TeamPreview, 'wins' | 'level' | 'who'>): string {
-  return `Owner: ${p.wins} wins · ${ASK[p.level] ?? ASK[0]} · ${p.who}`;
+/**
+ * The owner's day-one asks in a line that fits a phone's poster: "Owner: 32 wins · rebuild · builder",
+ * or with the preset they're for, "Owner on Hard: 29 wins · rebuild · builder".
+ */
+export function ownerLine(p: Pick<TeamPreview, 'wins' | 'level' | 'who'>, preset?: string): string {
+  return `Owner${preset ? ` on ${preset}` : ''}: ${p.wins} wins · ${ASK[p.level] ?? ASK[0]} · ${p.who}`;
 }

@@ -39,22 +39,28 @@ function EditRow({ e, league, measuring }: { e: TacticEdit; league: League; meas
   const left = Math.max(0, CHECK_AFTER - played);
   // the latest measurement leads: the check once there is one
   const w = e.check ?? e.worth;
+  const call = editCall(e.check);
+  const cost = e.check && `It cost ${Math.abs(e.check.pts).toFixed(1)} a game`;
   const meta = measuring
     ? 'The staff is measuring it…'
-    : e.check
-      ? `${{ gain: 'It worked', cost: 'It cost: want it back?', even: 'Too close to say' }[editCall(e.check)!]}, on the games played since`
-      : e.worth
-        ? `${madeShort(e)}${e.closed ? '' : ` · again in ${plural(left, 'game')}`}`
-        : e.closed
-          ? 'Not measured'
-          : 'Not measured yet: it will be next time you open Team';
-  const back = e.check && editCall(e.check) === 'cost' && !e.closed;
+    : e.check && e.closed === 'reverted'
+      ? `${cost} · put back${e.closedDay === undefined ? '' : ` ${fmtDate(e.season, e.closedDay)}`}`
+      : e.check && call === 'cost' && !e.closed
+        ? `${cost}: want it back?`
+        : e.check
+          ? `${call === 'gain' ? 'It worked' : call === 'cost' ? cost : 'Too close to say'}, on the games played since`
+          : e.worth
+            ? `${madeShort(e)}${e.closed ? '' : ` · again in ${plural(left, 'game')}`}`
+            : e.closed
+              ? 'Not measured'
+              : 'Not measured yet: it will be next time you open Team';
+  const back = e.check && call === 'cost' && !e.closed;
   return (
     <div className="listrow tx-edrow">
       <span className="grow tx-swrow-m">
         <span className="lr-name ellipsis">{e.what}</span>
         <span className={`lr-meta tx-edmeta ${e.check ? toneOf(e.check) : ''}`}>
-          {fmtDate(e.season, e.day)} · {e.closed === 'reverted' ? 'Put back · ' : ''}
+          {fmtDate(e.season, e.day)} · {e.closed === 'reverted' && !e.check ? 'Put back · ' : ''}
           {meta}
         </span>
       </span>

@@ -23,7 +23,7 @@
 import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } from '../types';
 import { tacticsChanges } from '../sim/playbooks';
 import { drilledAs, execution } from '../sim/familiarity';
-import { addInbox, teamPlayers } from '../league/helpers';
+import { addInbox, playerName, teamPlayers } from '../league/helpers';
 import { plural } from '../format';
 import { poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
 import { leadAssistant } from './assistant';
@@ -136,6 +136,43 @@ function compose(a: Diff, b: Diff): Diff {
   return [...m].filter(([, [f, t]]) => !same(f, t)).map(([p, [f, t]]) => [p, f, t]);
 }
 
+/** A player's own settings, by his pid: the ones a player leaving the team takes with him (leaveTeam). */
+const LEAVES_WITH = /^(?:rotation\.(?:minutes|caps)|tactics\.offense\.(?:roles|freedom))\.(\d+)$/;
+/** The lists a player leaving drops out of (and, for the order, one arriving is added at the end of). */
+const ROSTER_LISTS = new Set(['rotation.order', 'rotation.closers', 'rotation.restB2B']);
+
+/**
+ * `diff` without what the user's roster moves did to his team (a release, a trade, a signing), which
+ * he didn't do on the Tactics screens: a player who left takes his minutes, cap, role and shot freedom
+ * with him and drops out of the order, the closers and the rest days; one who came is at the end of
+ * the order. What's left is the user's own change. `on`: the players on the team now.
+ */
+export function withoutRosterMoves(diff: Diff, on: ReadonlySet<number>): Diff {
+  const out: Diff = [];
+  for (const [path, from, to] of diff) {
+    const own = LEAVES_WITH.exec(path);
+    if (own && to === undefined && !on.has(+own[1])) continue;
+    if (ROSTER_LISTS.has(path) && Array.isArray(from) && Array.isArray(to)) {
+      // (the list as the moves alone would have left it)
+      const was = [...from.filter((pid) => on.has(pid as number) || to.includes(pid)), ...(path === 'rotation.order' ? to.filter((pid) => !from.includes(pid)) : [])];
+      if (!same(was, to)) out.push([path, was, to]);
+      continue;
+    }
+    out.push([path, from, to]);
+  }
+  return out;
+}
+
+/** `part` with each of a change's settings set to what it was (`side` 1) or became (2). */
+function setAll(part: TeamPart, diff: Diff, side: 1 | 2): TeamPart {
+  const root = structuredClone(part) as unknown as Record<string, unknown>;
+  for (const d of diff) setPath(root, d[0], d[side]);
+  return root as unknown as TeamPart;
+}
+
+/** Two changes touch the same control: a setting both moved. */
+const sameControl = (a: Diff, b: Diff) => a.some(([p]) => b.some(([q]) => q === p));
+
 // ---------------------------------------------------------------- what it is, in words
 
 /** A rotation change in a few words: who starts, minutes that moved by two or more, the closers, rest and caps. */
@@ -205,34 +242,76 @@ export interface EditAt {
 /** The user's team as a change made now leaves it, today and the games ahead (what recordEdit reads by default). */
 export const editAt = (league: League): EditAt => ({ now: structuredClone(userPart(league)), day: league.day, ahead: gamesAhead(league).map((g) => g.gid) });
 
+/** `nameOf`, and for a player it doesn't know (one who has left the team since), his name from the league. */
+const namesWith = (league: League, nameOf: (pid: number) => string) => (pid: number) => {
+  const p = league.players[pid];
+  return nameOf(pid) || (p ? playerName(p) : '');
+};
+
 /**
  * Record the user's change from `before` to his team as it is now (or as `at` says it was: null when
- * nothing moved). A change on the same day as the last one, before a game, is the same change: the
- * two become one, measured again. Kept to EDITS_KEPT.
+ * nothing moved). What his roster moves did meanwhile isn't his change and stays out. A second
+ * change to the same setting on the same day as the last one, before a game, is the same change: the
+ * two become one, measured again; a change to anything else is a change of its own, so the first
+ * keeps its reading. Kept to EDITS_KEPT.
  */
 export function recordEdit(league: League, before: TeamPart, nameOf: (pid: number) => string, at?: EditAt): TacticEdit | null {
   const { now, day, ahead } = at ?? { now: userPart(league), day: league.day, ahead: gamesAhead(league).map((g) => g.gid) };
-  const diff = partDiff(before, now);
+  const on = new Set([...teamPlayers(league, league.userTid).map((p) => p.pid), ...now.rotation.order]);
+  const diff = withoutRosterMoves(partDiff(before, now), on);
   if (!diff.length) return null;
+  const name = namesWith(league, nameOf);
   const list = (league.tacticEdits = [...editsOf(league)]);
   const last = list[list.length - 1];
   // (no game of the user's between the two: one recorded later, after a sim, came before that day's game)
-  if (last && !last.closed && !last.check && last.season === league.season && last.day === day && (at || !playedSince(league, last).length)) {
+  if (last && !last.closed && !last.check && last.season === league.season && last.day === day && (at || !playedSince(league, last).length) && sameControl(last.diff, diff)) {
     const merged = compose(last.diff, diff);
     // (back where it started: nothing to measure any more)
     if (!merged.length) {
       list.pop();
       return null;
     }
-    const was = putBack(now, merged, teamPlayers(league, league.userTid)).part;
-    const e: TacticEdit = { id: last.id, season: league.season, day, what: editWords(was, now, nameOf), diff: merged, ahead };
+    const e: TacticEdit = { id: last.id, season: league.season, day, what: editWords(setAll(now, merged, 1), now, name), diff: merged, ahead };
     list[list.length - 1] = e;
     return e;
   }
-  const e: TacticEdit = { id: (last?.id ?? 0) + 1, season: league.season, day, what: editWords(before, now, nameOf), diff, ahead };
+  const e: TacticEdit = { id: (last?.id ?? 0) + 1, season: league.season, day, what: editWords(setAll(now, diff, 1), now, name), diff, ahead };
   list.push(e);
   while (list.length > EDITS_KEPT) list.shift();
   return e;
+}
+
+/** A change's words leaked an empty name: a player who had left by then (saves from before withoutRosterMoves). */
+const NAMELESS = /(?:^| · )\((?:role|shot freedom|defensive role|glass)\)/;
+
+/**
+ * A save from before roster moves stayed out of the ledger: a change recorded with a player who had
+ * left in it ("(role): Playmaker → Auto · Depth order") loses what his leaving did, and goes if
+ * that's all it was; the staff's note on it names him.
+ */
+export function cleanLeakedEdits(league: League, nameOf: (pid: number) => string) {
+  const list = editsOf(league);
+  if (!list.some((e) => NAMELESS.test(e.what))) return;
+  const name = namesWith(league, nameOf);
+  const now = userPart(league);
+  const on = new Set([...teamPlayers(league, league.userTid).map((p) => p.pid), ...now.rotation.order]);
+  const words = (diff: Diff) => {
+    const b = setAll(now, diff, 2);
+    return editWords(setAll(b, diff, 1), b, name);
+  };
+  league.tacticEdits = list.filter((e) => {
+    if (!NAMELESS.test(e.what)) return true;
+    // (the note's first setting, with the name it missed)
+    const old = shortWhat(e);
+    const named = words(e.diff)
+      .split(' · ')
+      .find((w) => w !== old && w.endsWith(old));
+    if (named) for (const m of league.inbox) if (m.link === '/team/tactics/analysis' && m.body.startsWith(old)) m.body = named + m.body.slice(old.length);
+    e.diff = withoutRosterMoves(e.diff, on);
+    if (!e.diff.length) return false;
+    e.what = words(e.diff);
+    return true;
+  });
 }
 
 // ---------------------------------------------------------------- measuring it
@@ -390,6 +469,7 @@ export function revertEdit(league: League, e: TacticEdit): boolean {
   if (e.diff.some(([p]) => p.startsWith('tactics.'))) team.tactics.manual = true;
   if (e.diff.some(([p]) => p.startsWith('rotation.'))) team.rotation.manual = true;
   e.closed = 'reverted';
+  e.closedDay = league.day;
   return true;
 }
 

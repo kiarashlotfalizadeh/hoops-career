@@ -23,6 +23,7 @@ import { rosterLine } from '../office/basis';
 import { billingTitle, useBillings } from '../games/occasion';
 import { gameProjection } from '../../core/analysis/preview';
 import { goalsWhy, planOwnerGoals, previewTitle } from '../../core/league/ownerGoals';
+import { quietSeriesStart } from '../../core/league/calls';
 
 /** The user's next game this season (today's included), if one is on the calendar. */
 export function nextGame(league: League): ScheduledGame | undefined {
@@ -140,6 +141,9 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   // the night's name as the headline on the paper ("Rivalry night in Denver"), its reason as the dek
   const top = bills[0];
   const head = top ? `${billingTitle(top)} ${home ? `vs the ${t.name}` : `in ${t.region}`}` : home ? `The ${t.name} in town` : `On the road in ${t.region}`;
+  // (a series or play-in game starting tonight whose counters measured no gain: no call stops for it, the staff says so here)
+  const quiet = useLeagueMemo(() => (g.day === league.day ? quietSeriesStart(league) : null), [league, g.day]);
+  const dek = top && quiet ? `${top.line.replace(/\.?$/, '.')} ${quiet}` : (top?.line ?? quiet ?? '');
   const win = pv?.projection.win;
   return (
     <section className="td-gameday" aria-label="Next game">
@@ -182,7 +186,7 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
         </div>
       </div>
       <h2 className="td-lead-head">{head}</h2>
-      {top && <p className="td-lead-dek">{keepFigures(top.line)}</p>}
+      {dek && <p className="td-lead-dek">{keepFigures(dek)}</p>}
       {(tags.length > 0 || outs.length > 0) && (
         <div className="td-foot-s">
           {tags.length > 0 && (

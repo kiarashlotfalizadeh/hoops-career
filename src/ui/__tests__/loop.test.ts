@@ -9,7 +9,7 @@ import { billingFor, type Billing } from '../../core/analysis/gameStory';
 import { addNews, standardRoster } from '../../core/league/helpers';
 import { userGameOnDay } from '../../core/league/games';
 import { runSim } from '../../state/simCore';
-import { newCall, openCallIds, settleCall } from '../../core/league/calls';
+import { newCall, openCallIds, settleCall, storeWorth, worthSig } from '../../core/league/calls';
 import { schedulePlayoffDay } from '../../core/league/playoffs';
 import { flowActions, nextBigNight } from '../flow';
 import { currentMoments, pickMoments, type Moment } from '../moments';
@@ -96,7 +96,8 @@ describe('the Continue loop', () => {
     }
 
     // a sim through the playoffs stops the morning each series of his starts (Game 1 on the calendar,
-    // a call: plan it or leave it to the staff), once: the next sim plays the series on
+    // a call: plan it or leave it to the staff) when a counter measures as a gain against them (pinned
+    // here; with none a gain it's no call: agenda.test), once: the next sim plays the series on
     {
       const l = stopping('series');
       const me = l.userTid;
@@ -120,6 +121,13 @@ describe('the Continue loop', () => {
               { id: `${conf}2-1`, round: 2, conf, high: a, low: b, highSeed: 2, lowSeed: 3, highWins: 0, lowWins: 0 },
             );
             schedulePlayoffDay(l);
+            const g = l.schedule.find((x) => x.seriesId === `${conf}2-0` && !x.played)!;
+            storeWorth(l, `series:${l.season}:${conf}2-0`, {
+              gid: g.gid,
+              sig: worthSig(l, opp, g),
+              day: l.day,
+              items: [{ id: 'zone23', label: 'Zone 2-3', patch: {}, pts: 0.8 }],
+            });
           },
         },
       );

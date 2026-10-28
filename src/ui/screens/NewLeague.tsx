@@ -4,7 +4,7 @@ import { Check, ChevronLeft } from 'lucide-react';
 import { FRANCHISES, BBREF_TO_TID } from '../../core/teams';
 import { ordinal, rankOf } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
-import { More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
+import { Fit, More, Ovr, Section, Segmented, Spinner, Toggle } from '../components/ui';
 import { DifficultyPicker } from '../components/DifficultyPicker';
 import { TEACHING_HELP, rememberTeaching, teachingDefault } from '../settingsOptions';
 import { slabVars } from '../teamColors';
@@ -12,12 +12,13 @@ import './start.css';
 import { loadSeed } from '../../data/seedLoader';
 import type { SeedData } from '../../core/league/create';
 import { createLeague, defaultSettings } from '../../core/league/create';
+import { DIFFICULTY } from '../../core/league/difficulty';
 import { buildOvrScale, ovrRaw, toDisplay } from '../../core/ratings';
 import { useStore } from '../../state/store';
 import type { Settings } from '../../core/types';
 import { UnsavedSheet } from '../components/UnsavedSheet';
 import { canGoBack } from '../nav';
-import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, type TeamPreview } from '../newLeague';
+import { defaultTeam, ownerLine, rosterLine, seedRosterSizes, teamPreviews, userOwnerPreview, type TeamPreview } from '../newLeague';
 
 type Step = 'type' | 'team' | 'setup';
 
@@ -87,7 +88,8 @@ export default function NewLeague() {
   // first to preview each owner's day-one asks (and a fictional league's rosters) as you'll get them
   const [made] = useState(() => ({ id: `lg_${Date.now().toString(36)}_${Math.floor(Math.random() * 1e6).toString(36)}`, rngSeed: Math.floor(Math.random() * 2 ** 32) >>> 0 }));
   const [preview, setPreview] = useState<{ key: string; teams: Record<number, TeamPreview> } | null>(null);
-  const previewKey = `${kind}:${settings.difficulty}:${settings.injuries}`;
+  // (on Normal: the difficulty's edge on the court moves only the user's own owner, see userOwnerPreview)
+  const previewKey = `${kind}:${settings.injuries}`;
   const previewTeams = preview?.key === previewKey ? preview.teams : null;
   // real rosters' top three from the seed at once; a fictional league's once its preview is built
   const teamInfo = kind === 'real' ? seedInfo : previewTeams;
@@ -125,7 +127,14 @@ export default function NewLeague() {
     let t2: ReturnType<typeof setTimeout> | undefined;
     const t1 = setTimeout(() => {
       try {
-        const l = createLeague({ name: 'Preview', userTid: fallback ?? 0, coachName: 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
+        const l = createLeague({
+          name: 'Preview',
+          userTid: fallback ?? 0,
+          coachName: 'Coach',
+          settings: { ...settings, difficulty: 'normal' },
+          seed: kind === 'real' ? seed : null,
+          ...made,
+        });
         t2 = setTimeout(() => setPreview({ key: previewKey, teams: teamPreviews(l) }), 0);
       } catch (e) {
         console.error(e);
@@ -136,6 +145,35 @@ export default function NewLeague() {
       clearTimeout(t2);
     };
   }, [needPreview, previewKey, fallback, settings, kind, seed, made]);
+  // the chosen team's owner on the chosen preset, as Start career makes him (the league built with that
+  // team as yours): on the last step, where the difficulty is picked, and again with each preset tapped;
+  // on the team step too once a preset other than Normal is picked (Back from the last step)
+  const [mine, setMine] = useState<{ key: string; owner: Pick<TeamPreview, 'wins' | 'level' | 'who'> } | null>(null);
+  const mineKey = `${kind}:${tid}:${settings.difficulty}:${settings.injuries}`;
+  const mineOwner = mine?.key === mineKey ? mine.owner : null;
+  const needMine = tid !== null && (step === 'setup' || (step === 'team' && settings.difficulty !== 'normal')) && mine?.key !== mineKey && (kind === 'fictional' || !!seed);
+  useEffect(() => {
+    if (!needMine || tid === null) return;
+    let t2: ReturnType<typeof setTimeout> | undefined;
+    const t1 = setTimeout(() => {
+      try {
+        const l = createLeague({ name: 'Preview', userTid: tid, coachName: 'Coach', settings, seed: kind === 'real' ? seed : null, ...made });
+        t2 = setTimeout(() => setMine({ key: mineKey, owner: userOwnerPreview(l) }), 0);
+      } catch (e) {
+        console.error(e);
+      }
+    }, 120);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [needMine, mineKey, tid, settings, kind, seed, made]);
+  // the owner line on a poster: the chosen team's own read when it's in, else on Normal the team step's preview
+  const presetLabel = DIFFICULTY[settings.difficulty].label;
+  const owner = (t: number, named: boolean) => {
+    const o = mineOwner ?? (settings.difficulty === 'normal' && !named ? previewTeams?.[t] : null);
+    return o ? ownerLine(o, named || settings.difficulty !== 'normal' ? presetLabel : undefined) : null;
+  };
   const setStep = (st: Step) => choose({ step: st === 'type' ? null : st }, true);
   // back through the history (the main menu is behind the first step), and without any (a deep link or
   // a reload) to the step before, or the main menu in place of this screen
@@ -249,10 +287,14 @@ export default function NewLeague() {
               </span>
               <span className="nl-pick-name">
                 <span className="nl-pick-region">{f.region}</span>
-                {f.name}
+                <Fit as="span" min={18}>
+                  {f.name}
+                </Fit>
               </span>
               <span className="nl-pick-sub">{kind === 'fictional' ? 'Generated players' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
-              <span className={`nl-pick-owner ${previewTeams ? '' : 'dim'}`}>{previewTeams?.[tid] ? ownerLine(previewTeams[tid]) : 'Owner: reading the roster…'}</span>
+              <span className={`nl-pick-owner ${owner(tid, false) ? '' : 'dim'}`}>
+                {owner(tid, false) ?? `Owner${settings.difficulty === 'normal' ? '' : ` on ${presetLabel}`}: reading the roster…`}
+              </span>
               {(teamInfo?.[tid] || rank) && (
                 <span className="nl-pick-foot">
                   {teamInfo?.[tid] && (
@@ -328,8 +370,14 @@ export default function NewLeague() {
               <TeamLogo tid={tid} size={52} decorative />
               <span className="nl-pick-name">
                 <span className="nl-pick-region">{f.region}</span>
-                {f.name}
+                <Fit as="span" min={18}>
+                  {f.name}
+                </Fit>
               </span>
+            </span>
+            {/* his asks on the preset picked below, again with each one tapped */}
+            <span className={`nl-pick-owner ${owner(tid, true) ? '' : 'dim'}`} aria-live="polite">
+              {owner(tid, true) ?? `Owner on ${presetLabel}: reading the roster…`}
             </span>
           </section>
           <Section title="You">

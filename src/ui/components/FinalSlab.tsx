@@ -9,7 +9,7 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import type { GameStory } from '../../core/analysis/gameStory';
-import { Avatar, CountUp, Statline, fitHead, keep } from './ui';
+import { Avatar, CountUp, Fit, Statline, keep } from './ui';
 import { madeAtt } from '../../core/format';
 import { cupLabel } from '../../core/league/cup';
 import { fmtDate } from '../../core/league/helpers';
@@ -233,7 +233,9 @@ function StoryBlock({ league, res, story, moment }: { league: League; res: GameR
     : [];
   return (
     <div className="gd-sb">
-      <h2 className={`gd-sb-head${moment ? ' rise' : ''}`}>{fitHead(story.head)}</h2>
+      <Fit as="h2" className={`gd-sb-head${moment ? ' rise' : ''}`} min={16}>
+        {story.head}
+      </Fit>
       {story.dek && <p className="gd-sb-dek">{keep(story.dek)}</p>}
       {hero && (line || story.heroLine) && (
         <div className="gd-sb-pog">

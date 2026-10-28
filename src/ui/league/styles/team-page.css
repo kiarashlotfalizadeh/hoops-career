@@ -249,13 +249,3 @@ button.lg-kvl:active {
 a.lg-h2h:active {
   background: var(--surface);
 }
-/* a long name fits the column beside the mark (the slab's padding and the mark take about 150px of a
-   phone): "Timberwolves" steps down until its one word fits, never breaking inside it */
-.lg-team-name .long-word {
-  font-size: min(0.84em, calc((100vw - 150px) / (var(--w, 10) * 0.68)));
-}
-@media (min-width: 640px) {
-  .lg-team-name .long-word {
-    font-size: 0.84em;
-  }
-}

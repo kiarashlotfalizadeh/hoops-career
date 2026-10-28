@@ -8,7 +8,9 @@ import { clearAllPlans, consumePlans, effectiveTactics, persistableTactics, plan
 import { buildSimInput, playGame, userGameOnDay } from '../league/games';
 import { migrate } from '../../state/persistence';
 import { LiveGame } from '../../state/live';
-import { teamPlayers } from '../league/helpers';
+import { playerName, teamPlayers } from '../league/helpers';
+import { releasePlayer } from '../league/contracts';
+import { rosterNames } from '../../ui/stats';
 import { GameSim } from '../sim/engine';
 import { situationFromTemplate } from '../sim/tactics';
 import { Rng } from '../random';
@@ -370,11 +372,15 @@ describe('game plans', () => {
       expect(e.diff).toEqual([['tactics.defense.pnr', was, cov]]);
       expect(e.what).toMatch(/→/);
       expect(e.ahead).toHaveLength(EDIT_AHEAD);
-      // a second change the same day, before a game, is the same change
-      me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
-      expect(recordEdit(l, before, (pid) => `#${pid}`)!.id).toBe(e.id);
-      expect(l.tacticEdits).toHaveLength(1);
-      expect(l.tacticEdits![0].diff.map(([p]) => p).sort()).toEqual(['tactics.defense.pnr', 'tactics.offense.pace']);
+      // a second change to the same setting the same day, before a game, is the same change
+      const cov2 = ['drop', 'blitz', 'hedge'].find((x) => x !== was && x !== cov) as typeof cov;
+      me.tactics.defense.pnr = cov2;
+      expect(recordEdit(l, structuredClone({ tactics: { ...me.tactics, defense: { ...me.tactics.defense, pnr: cov } }, rotation: me.rotation }), (pid) => `#${pid}`)!.id).toBe(
+        e.id,
+      );
+      expect(l.tacticEdits!.map((x) => x.diff)).toEqual([[['tactics.defense.pnr', was, cov2]]]);
+      me.tactics.defense.pnr = cov;
+      l.tacticEdits![0].diff = [['tactics.defense.pnr', was, cov]];
       const play = async (plan: NonNullable<ReturnType<typeof editPlan>['plan']>, games: number): Promise<GameReadings> => {
         const out: GameReadings = [];
         for (const g of plan.games)
@@ -401,6 +407,12 @@ describe('game plans', () => {
       expect(r.drilled).toBeDefined();
       saveMade(l, e.id, r, made.count);
       expect(madeLine(l.tacticEdits![0])).toMatch(/^This change/);
+      // a change to another setting that day is a change of its own: the first keeps its reading
+      const mid = structuredClone({ tactics: me.tactics, rotation: me.rotation });
+      me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
+      expect(recordEdit(l, mid, (pid) => `#${pid}`)!.id).toBe(e.id + 1);
+      expect(l.tacticEdits!.map((x) => x.diff.map(([p]) => p))).toEqual([['tactics.defense.pnr'], ['tactics.offense.pace']]);
+      expect(l.tacticEdits![0].worth).toEqual(expect.objectContaining({ pts: r.worth.pts }));
       // its check: once CHECK_AFTER of the user's games have been played since, on those games
       expect(checksDue(l)).toHaveLength(0);
       const mine = l.schedule.filter((g) => !g.played && (g.home === l.userTid || g.away === l.userTid)).slice(0, CHECK_AFTER);
@@ -423,7 +435,42 @@ describe('game plans', () => {
       expect(revertEdit(l, l.tacticEdits![0])).toBe(true);
       expect(me.tactics.defense.pnr).toBe(was);
       expect(me.tactics.offense.pace).toBe(64);
-      expect(l.tacticEdits![0].closed).toBe('reverted');
+      expect([l.tacticEdits![0].closed, l.tacticEdits![0].closedDay]).toEqual(['reverted', l.day]);
+    }
+    {
+      // a roster move isn't the user's change: a release on the Team screens takes the player's role,
+      // minutes and place in the order with him, and only what the user changed himself is recorded
+      // (by name, a player who has left since too); a save from before that names him and drops the rest
+      const l = fresh();
+      toGameDay(l);
+      const me = l.teams[l.userTid];
+      const roster = teamPlayers(l, l.userTid);
+      const gone = roster[roster.length - 1];
+      me.tactics.offense.roles[gone.pid] = 'creator';
+      me.rotation.minutes[gone.pid] = 12;
+      const before = structuredClone({ tactics: me.tactics, rotation: me.rotation });
+      releasePlayer(l, gone);
+      expect(recordEdit(l, before, rosterNames(teamPlayers(l, l.userTid)))).toBeNull();
+      const pace = me.tactics.offense.pace;
+      me.tactics.offense.pace = pace > 50 ? 20 : 90;
+      const e = recordEdit(l, before, rosterNames(teamPlayers(l, l.userTid)))!;
+      expect(e.diff).toEqual([['tactics.offense.pace', pace, me.tactics.offense.pace]]);
+      expect(e.what).not.toMatch(/\(role\)|Depth order/);
+      // the old way: the release in the ledger, its staff note with no name
+      const old = structuredClone(l);
+      const t = old.teams[old.userTid];
+      old.tacticEdits = [
+        {
+          ...e,
+          what: `(role): Primary Creator → Auto · Depth order · ${e.what}`,
+          diff: [['tactics.offense.roles.' + gone.pid, 'creator', undefined], ['rotation.order', [...t.rotation.order, gone.pid], t.rotation.order], ...e.diff],
+        },
+        { ...e, id: e.id + 1, what: '(role): Primary Creator → Auto', diff: [['tactics.offense.roles.' + gone.pid, 'creator', undefined]] },
+      ];
+      old.inbox.unshift({ ...old.inbox[0], id: 9999, body: "(role): Primary Creator → Auto and more. I've measured your change…", link: '/team/tactics/analysis' });
+      const back = migrate(structuredClone(old));
+      expect(back.tacticEdits!.map((x) => [x.diff, x.what])).toEqual([[e.diff, e.what]]);
+      expect(back.inbox.find((m) => m.id === 9999)!.body).toMatch(new RegExp(`^${playerName(gone)} \\(role\\): Primary Creator → Auto and more`));
     }
     {
       // a save made while the Team screens were open (the app closed, reloaded or put away before the

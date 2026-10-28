@@ -23,7 +23,8 @@ import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type Sta
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, readingLine, stopAfter } from '../live/calls';
-import { CALL_CONFIRM_MIN, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
+import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
+import { favoured, playReading } from '../live/usePlayWorth';
 import { fitPlayers, playOptions } from '../live/plays';
 import { SET_K, setFit } from '../../core/sim/sets';
 import { subOptions } from '../live/session';
@@ -663,6 +664,16 @@ describe('the live assistant and the bench', () => {
       pf.fouls = 1;
       expect(sheet()[0]).toMatchObject({ pid: first, line: expect.stringContaining('1 PF') });
       pf.fouls = 0;
+
+      // the play call's and the sub chips' readings are shrunk toward even by their noise, as the calls
+      // are, and say something only clear of what's left of it: one just past two standard errors raw is
+      // too close to say. The lightbulb goes on the best clear gain, and on none without one
+      const read = (win: number, winSe = 0.024) => playReading({ win, winSe, pts: 0, ptsSe: 1, n: 400 }, PLAY_SPREAD);
+      const big = read(0.108);
+      expect([big.clear, big.win > 0.08 && big.win < 0.095, big.winSe < 0.024]).toEqual([true, true, true]);
+      expect([clearOf(0.05, 0.024), read(0.05).clear, read(-0.05).clear]).toEqual([true, false, false]);
+      expect(favoured([read(0.05), big, read(0.2, 0.1)])).toBe(1);
+      expect([favoured([read(0.02), read(-0.12)]), favoured(null)]).toEqual([null, null]);
     }
 
     // the edge against you runs on from the one for you, a count keeping its figure

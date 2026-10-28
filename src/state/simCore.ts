@@ -136,8 +136,9 @@ export interface SimHooks {
  * (staffMorning: whatever the sim's length or settings, so a long sim and a short one make the same
  * ones). Under `stopOnNews`, a sim stops early (except one of a set number of days) for what needs an
  * answer: an important unread message, a staff call that wasn't open when it started (or came due
- * since: see openCallIds; each playoff series of his once, the morning it starts; the week's card
- * when the week poses a trade-off), with its numbers in, or the morning of one of his biggest games
+ * since: see openCallIds; each playoff series of his once, the morning it starts, when a counter
+ * measures as a gain; the week's card when the week poses a trade-off), with its numbers in, or the
+ * morning of one of his biggest games
  * (with a setting of its own). The call it stopped for is kept (League.stopCall: Needs you leads with
  * it). Stopping early changes nothing that's played: the next sim carries on from the same day.
  */

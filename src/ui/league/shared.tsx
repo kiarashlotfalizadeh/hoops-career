@@ -7,7 +7,7 @@ import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
 import { RATED_SEASONS } from '../../core/constants';
-import { Segmented, Sheet, fitHead, keep, scrollBehavior } from '../components/ui';
+import { Fit, Segmented, Sheet, keep, scrollBehavior } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import { HONOR_AWARDS } from '../../core/league/media/honors';
@@ -358,7 +358,9 @@ export function Poster({ over, head, dek, fig, children }: { over: ReactNode; he
     <header className={`lg-poster ${fig ? 'has-fig' : ''}`}>
       <div className="lg-poster-t">
         <p className="over">{over}</p>
-        <h2 className="lg-poster-h">{fitHead(head)}</h2>
+        <Fit as="h2" className="lg-poster-h" min={16}>
+          {typeof head === 'string' ? keep(head) : head}
+        </Fit>
         {dek && <p className="lg-poster-dek">{keep(dek)}</p>}
         {children}
       </div>
@@ -405,7 +407,9 @@ export function PosterSlab({
       </div>
       <div className="lg-title-id">
         {region && <div className="lg-title-region">{region}</div>}
-        <div className="lg-title-name">{fitHead(name)}</div>
+        <Fit className="lg-title-name" min={18}>
+          {typeof name === 'string' ? keep(name) : name}
+        </Fit>
       </div>
       {fig !== undefined && (
         <div className="lg-title-figrow">

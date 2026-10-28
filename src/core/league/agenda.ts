@@ -22,6 +22,7 @@ import { nextPick } from './draft';
 import { userGameOnDay } from './games';
 import { money, plural } from '../format';
 import { planByUser } from './gamePlans';
+import { ultimatumVerdict } from './jobSecurity';
 import { resolveCall, staffCalls, type CallAction, type CallChoice, type CallKind, type CallMeasure } from './calls';
 
 export type AgendaKind = 'fired' | 'cuts' | 'signings' | 'twoWays' | 'offerSheet' | 'draftPick' | 'tenDay' | 'tradeOffer' | 'jobOffers' | 'ultimatum' | 'guide' | CallKind;
@@ -466,9 +467,14 @@ export function agenda(league: League): AgendaItem[] {
       to: '/office/career',
     });
 
-  // the owner's ultimatum
-  const ult = league.ownerGoals?.season === league.season ? league.ownerGoals.ultimatum : undefined;
-  if (ult && league.settings.jobSecurity)
+  // the owner's ultimatum: in season, while it's still to meet (met, or once the review is in, it's settled)
+  const og = league.ownerGoals?.season === league.season && league.ownerGoals.tid === league.userTid ? league.ownerGoals : undefined;
+  const ult = og?.ultimatum;
+  const live =
+    (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') &&
+    ultimatumVerdict(league, og) !== 'met' &&
+    !(league.ownerReviews ?? []).some((r) => r.season === league.season && r.tid === league.userTid);
+  if (ult && live && league.settings.jobSecurity)
     items.push({
       id: 'ultimatum',
       kind: 'ultimatum',

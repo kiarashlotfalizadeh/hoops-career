@@ -13,7 +13,7 @@ import { askingContract, waiverSalary } from '../../core/league/contracts';
 import { playerAge, salaryFor } from '../../core/playerGen';
 import { FRANCHISES } from '../../core/teams';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Avatar, Bar, Empty, Help, PageHeader, Section, Segmented } from '../components/ui';
+import { Avatar, Bar, Empty, Fit, Help, PageHeader, Section, Segmented } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { PlayerPicker } from '../components/PlayerPicker';
 import { capSeason, contractEnd, forYears } from '../office/common';
@@ -46,7 +46,7 @@ function contractOf(league: League, p: Player): { main: string; sub?: string } {
   return { main: '—' };
 }
 
-/** The letters in a name's longest unbreakable run ("Alexander-"): the name is sized so it fits its column whole. */
+/** The letters in a name's longest unbreakable run ("Alexander-"): the strip's last names are sized by it. */
 function longestRun(name: string): number {
   return Math.max(1, ...(name.match(/[^\s-]+-?/g) ?? [name]).map((w) => w.length));
 }
@@ -99,9 +99,9 @@ function Head({ league, p, pid, onPick, side, look }: { league: League; p: Playe
       </div>
       <Link to={`/player/${p.pid}`} className="cmp-name">
         <span className="cmp-first ellipsis">{p.firstName || ' '}</span>
-        <span className="cmp-last" style={{ ['--run' as string]: longestRun(p.lastName) }}>
+        <Fit as="span" className="cmp-last" min={11}>
           {p.lastName}
-        </span>
+        </Fit>
       </Link>
       <div className="cmp-team">
         {team ? (
