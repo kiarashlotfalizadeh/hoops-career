@@ -101,8 +101,8 @@ function ScoutGuide({ league, opp }: { league: League; opp: number }) {
   const line = !worth
     ? undefined
     : best
-      ? `Add the staff's counter, ${best.label} (${worthText(worth.get(best.id)!).text.toLowerCase()}), or go in with no plan.`
-      : "None of the staff's counters beats your playbook tonight: go in with no plan.";
+      ? `${best.label} helps, ${worthText(worth.get(best.id)!).short}. Add it, or go in with no plan.`
+      : "None of the staff's counters beats your playbook tonight. Go in with no plan.";
   // (the measured counter is the step's move: Add does what the Counters card's Add does, and ticks the step)
   const add = best && {
     label: `Add ${best.label}`,
@@ -190,6 +190,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
   const side = (tid: number): BoardSide => {
     if (!proj) return { tid, fig: <span className="mu-rec">{rec(tid)}</span>, sub: rank(tid) };
     const win = tid === homeTid ? proj.win : 1 - proj.win;
+    // (as shown: 50% against 50% is neither side's)
     return {
       tid,
       fig: (
@@ -199,7 +200,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
         </>
       ),
       sub: rec(tid),
-      lost: win < 0.5,
+      lost: Math.round(win * 100) < 50,
     };
   };
   const where = g ? (neutralSite(g) ? 'Neutral floor' : g.home === me ? 'Home' : 'Away') : '';
@@ -236,10 +237,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
               </span>
             )}
             <Help title="Projection">
-              <p>
-                An estimate, not a simulation: each team&apos;s net rating this season, weighted toward what its rotation for the game is worth until enough games are in, at the
-                two teams&apos; pace, plus home court unless it&apos;s on a neutral floor. One game&apos;s margin swings well either side of it.
-              </p>
+              <p>From both teams&apos; net ratings, pace and home court, and early on their rotations. One game swings well either side of it.</p>
             </Help>
           </div>
         )}

@@ -5,14 +5,10 @@
 //
 // Measured twice, both times by measureChanges (counterWorth.ts), paired games on the same seeds:
 // - as it's made (the user taps Done, or leaves the Team screens with a change): over the user's next
-//   EDIT_AHEAD games, each played with the change and with the settings it replaced (tonight's
-//   familiarity included: a coverage the team hasn't drilled is played a step slow), pooled into one
-//   number a game. A change the team doesn't know yet is also played as it will be once it's drilled
-//   (the team knowing it as well as what it replaced: drilledAs), so the line can say what learning it
-//   costs tonight and that it fades.
+//   EDIT_AHEAD games, each played with the change and with the settings it replaced, pooled into one
+//   number a game.
 // - about CHECK_AFTER games later, on the games actually played since (those opponents, those floors,
-//   with tonight's rosters), with and without it, the old way known as well as the new one is now: so a
-//   verdict ("It worked: +0.9 a game over 12 games") is a measurement, never the record. A game's
+//   with tonight's rosters), with and without it: so a verdict ("Your change helped: +0.9 a game over 12 games") is a measurement, never the record. A game's
 //   margin has an SD of about 13: ten games of results can't tell a point a game from nothing, and
 //   paired replays can (12 games × 40 pairs each read to about ±0.5).
 // Both readings are pooled over the games and shrunk toward even as one (poolWorth), and read as a
@@ -22,7 +18,6 @@
 
 import type { League, Player, Rotation, ScheduledGame, Tactics, TacticEdit } from '../types';
 import { tacticsChanges } from '../sim/playbooks';
-import { drilledAs, execution } from '../sim/familiarity';
 import { addInbox, playerName, teamPlayers } from '../league/helpers';
 import { plural } from '../format';
 import { poolWorth, worthCall, type CounterWorth, type LeagueChange } from './counterWorth';
@@ -45,11 +40,6 @@ export const CHECK_GAMES = 480;
 export const CHECK_MIN_GAMES = 30;
 /** Changes the ledger keeps (the oldest goes first). */
 export const EDITS_KEPT = 6;
-/**
- * Points of familiarity (the five's execution, either end) a change has to cost before the staff also
- * plays it as it will be once drilled: below that, learning it costs a few hundredths of a point.
- */
-const DRILL_GAP = 2;
 
 /** The parts of the user's team a change moves. */
 export interface TeamPart {
@@ -60,8 +50,8 @@ export interface TeamPart {
 // ---------------------------------------------------------------- the settings a change moved
 
 type Diff = TacticEdit['diff'];
-/** Switches, not settings: who runs them, and the saved playbook they came from. */
-const IGNORED = new Set(['tactics.manual', 'tactics.playbook', 'rotation.manual']);
+/** Switches, not settings: who runs them. */
+const IGNORED = new Set(['tactics.manual', 'rotation.manual']);
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const copy = <T>(v: T): T => (v === undefined ? v : structuredClone(v));
@@ -325,7 +315,7 @@ export interface PlannedGame {
 
 export interface EditPlan {
   games: PlannedGame[];
-  /** What each game plays besides the team as it stands: the change taken out ('without'), and for a change still being learned, the team knowing it ('drilled'). */
+  /** What each game plays besides the team as it stands: the change taken out ('without'). */
   changes: LeagueChange[];
   /** Paired games each configuration plays, per game. */
   perGame: number;
@@ -353,7 +343,6 @@ function planGames(league: League, list: ScheduledGame[]): PlannedGame[] {
  */
 export function editPlan(league: League, e: TacticEdit, kind: 'made' | 'check'): { plan?: EditPlan; replaced?: boolean } {
   const me = league.userTid;
-  const team = league.teams[me];
   const roster = teamPlayers(league, me);
   const now = userPart(league);
   const back = putBack(now, e.diff, roster);
@@ -368,40 +357,20 @@ export function editPlan(league: League, e: TacticEdit, kind: 'made' | 'check'):
   const games = planGames(league, list);
   const [total, least] = kind === 'made' ? [EDIT_GAMES, EDIT_MIN_GAMES] : [CHECK_GAMES, CHECK_MIN_GAMES];
   const perGame = Math.max(least, Math.round(total / games.length));
-  const fam = team.fam;
-  const five = (r: Rotation) => roster.filter((p) => r.order.slice(0, 5).includes(p.pid));
   const without: LeagueChange = { id: 'without', teams: { [me]: { tactics: back.part.tactics, rotation: back.part.rotation } } };
-  const changes: LeagueChange[] = [without];
-  if (fam && kind === 'check') {
-    // the old way known as well as the new one is now: the verdict is the change, not the drilling since
-    without.teams![me].fam = drilledAs(fam, now.tactics, back.part.tactics, roster);
-  } else if (fam) {
-    const a = execution(fam, back.part.tactics, five(back.part.rotation));
-    const b = execution(fam, now.tactics, five(now.rotation));
-    if (Math.max(a.off - b.off, a.def - b.def) >= DRILL_GAP) changes.push({ id: 'drilled', teams: { [me]: { fam: drilledAs(fam, back.part.tactics, now.tactics, roster) } } });
-  }
-  return { plan: { games, changes, perGame, count: list.length } };
+  return { plan: { games, changes: [without], perGame, count: list.length } };
 }
 
 /** A game's readings from measureChanges, by change id. */
 export type GameReadings = { w: number; worth: CounterWorth[] }[];
 
-/**
- * A measurement's readings pooled into what the change is worth (the team as it stands against
- * 'without', so the sign is the change's), and for 'drilled', what it's worth once learned.
- */
-export function readEdit(readings: GameReadings): { worth: CounterWorth; drilled?: CounterWorth } {
-  const by = (id: string) => readings.map((r) => ({ w: r.w, x: r.worth.find((c) => c.id === id) }));
-  const out = by('without').map(({ w, x }) => ({ w, raw: -(x?.raw ?? 0), se: x?.se ?? 0 }));
-  const worth = poolWorth('edit', out);
-  const d = by('drilled');
-  if (!d.every((r) => r.x)) return { worth };
-  // drilled against the old way: what the team gains knowing it, plus the change tonight (the two readings' errors added)
-  const drilled = poolWorth(
-    'drilled',
-    d.map(({ w, x }, i) => ({ w, raw: x!.raw + out[i].raw, se: Math.hypot(x!.se, out[i].se) })),
-  );
-  return { worth, drilled };
+/** A measurement's readings pooled into what the change is worth (the team as it stands against 'without', so the sign is the change's). */
+export function readEdit(readings: GameReadings): { worth: CounterWorth } {
+  const out = readings.map((r) => {
+    const x = r.worth.find((c) => c.id === 'without');
+    return { w: r.w, raw: -(x?.raw ?? 0), se: x?.se ?? 0 };
+  });
+  return { worth: poolWorth('edit', out) };
 }
 
 /** Put a measurement as it's made on change `id` (still in the ledger). */
@@ -409,7 +378,7 @@ export function saveMade(league: League, id: number, r: ReturnType<typeof readEd
   const e = editsOf(league).find((x) => x.id === id);
   if (!e) return;
   const { pts, raw, se } = r.worth;
-  e.worth = { pts, raw, se, games, ...(r.drilled && { drilled: { pts: r.drilled.pts, raw: r.drilled.raw, se: r.drilled.se } }) };
+  e.worth = { pts, raw, se, games };
 }
 
 /** Changes still to measure as they were made, newest first. */
@@ -434,16 +403,16 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
   const lead = leadAssistant(league);
   const call = worthCall(w);
   const n = Math.abs(w.pts).toFixed(1);
-  const over = `the ${plural(games, 'game')} we've played since`;
+  const replayed = `I replayed the ${plural(games, 'game')} since, with your change and without it.`;
   const body =
     call === 'gain'
-      ? `I've measured your change on ${over}, each one replayed with it and without it: it's worth +${n} a game to us. It's working; I'd keep it.`
+      ? `${replayed} It helped: +${n} a game. I'd keep it.`
       : call === 'cost'
-        ? `I've measured your change on ${over}, each one replayed with it and without it: it's cost us ${n} a game. Team → Tactics → Analysis has it, with a tap to put it back.`
-        : `I've measured your change on ${over}, each one replayed with it and without it: it comes out within a few tenths of even, too close to say either way. Nothing to undo.`;
+        ? `${replayed} It hurt: −${n} a game. Put it back from Team → Tactics → Analysis.`
+        : `${replayed} It made no real difference either way. Nothing to undo.`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
-    subject: `Since you changed it: ${call === 'gain' ? `it worked, +${n} a game` : call === 'cost' ? `it cost ${n} a game` : 'too close to say'}`,
+    subject: call === 'gain' ? `Your change helped: +${n} a game` : call === 'cost' ? `Your change hurt: −${n} a game` : 'Your change made no real difference',
     body: `${shortWhat(e)}${e.what.includes(' · ') ? ' and more' : ''}. ${body}`,
     link: '/team/tactics/analysis',
     tone: call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral',
@@ -478,53 +447,49 @@ export function revertEdit(league: League, e: TacticEdit): boolean {
 const ahead = (n: number) => (n === 1 ? 'your next game' : `your next ${['', 'one', 'two', 'three', 'four', 'five'][n] ?? n}`);
 
 /**
- * The staff's line on a change as it's made: "This change: +1.2 a game over your next five
- * (measured)", "This change: even over your next five, too close to say", "This change costs 0.8 a
- * game over your next five (measured)". A change the team is still learning says too what it's worth
- * once drilled ("; +1.4 once drilled"): tonight's number includes the learning, which fades.
+ * The staff's line on a change as it's made, a verdict and one number: "Your change helps: +1.2 a
+ * game over your next five", "Your change hurts: −0.8 a game over your next five", "Your change makes
+ * no real difference over your next five".
  */
 export function madeLine(e: TacticEdit): string {
   const w = e.worth;
-  if (!w) return 'The staff is measuring this change.';
+  if (!w) return 'The staff is measuring your change.';
   const call = worthCall(w);
   const n = Math.abs(w.pts).toFixed(1);
   const over = ahead(w.games);
-  const head =
-    call === 'gain'
-      ? `This change: +${n} a game over ${over} (measured)`
-      : call === 'cost'
-        ? `This change costs ${n} a game over ${over} (measured)`
-        : `This change: even over ${over}, too close to say`;
-  const d = w.drilled;
-  if (!d || d.pts - w.pts < 0.3) return head;
-  const dc = worthCall(d);
-  if (dc === 'even' && call === 'even') return head;
-  const dn = Math.abs(d.pts).toFixed(1);
-  return `${head}; ${dc === 'gain' ? `+${dn}` : dc === 'cost' ? `still −${dn}` : 'about even'} once drilled`;
+  return call === 'gain'
+    ? `Your change helps: +${n} a game over ${over}.`
+    : call === 'cost'
+      ? `Your change hurts: −${n} a game over ${over}.`
+      : `Your change makes no real difference over ${over}.`;
 }
 
-const signedPts = (x: number) => `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+/** A reading's verdict in a word or three, for a row: "Helps", "Hurts", "No real change". */
+export const verdictWord = (w: Pick<CounterWorth, 'pts'>) => {
+  const call = worthCall(w);
+  return call === 'gain' ? 'Helps' : call === 'cost' ? 'Hurts' : 'No real change';
+};
 
-/** The same in a few words, for a row: "+1.2 a game over the next five", "Even over the next five, +0.9 once drilled". */
+/** The same in a few words, for a row: "Helps over the next five", "No real change over the next five". */
 export function madeShort(e: TacticEdit): string {
   const w = e.worth;
   if (!w) return '';
   const over = w.games === 1 ? 'the next game' : `the next ${['', 'one', 'two', 'three', 'four', 'five'][w.games] ?? w.games}`;
-  const call = worthCall(w);
-  const head = call === 'even' ? `Even over ${over}` : `${signedPts(w.pts)} a game over ${over}`;
-  const d = w.drilled;
-  if (!d || d.pts - w.pts < 0.3 || (call === 'even' && worthCall(d) === 'even')) return head;
-  return `${head}, ${worthCall(d) === 'even' ? 'even' : signedPts(d.pts)} once drilled`;
+  return `${verdictWord(w)} over ${over}`;
 }
 
-/** The check's verdict: "It worked: +0.9 a game over 12 games", "Too close to say over 12 games", "It cost: −0.6 a game over 12 games". */
+/** The check's verdict: "Your change helped: +0.9 a game over 12 games", "… hurt: −0.6 …", "… made no real difference over 12 games". */
 export function checkLine(e: TacticEdit): string {
   const c = e.check;
   if (!c) return '';
   const call = worthCall(c);
   const n = Math.abs(c.pts).toFixed(1);
   const over = `over ${plural(c.games, 'game')}`;
-  return call === 'gain' ? `It worked: +${n} a game ${over}` : call === 'cost' ? `It cost: −${n} a game ${over}` : `Too close to say: even ${over}`;
+  return call === 'gain'
+    ? `Your change helped: +${n} a game ${over}.`
+    : call === 'cost'
+      ? `Your change hurt: −${n} a game ${over}.`
+      : `Your change made no real difference ${over}.`;
 }
 
 /** The call of a reading, for its tone. */

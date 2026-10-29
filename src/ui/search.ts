@@ -73,7 +73,7 @@ const SCREENS: { title: string; to: string; meta: string; also?: string }[] = [
   {
     title: 'Tactics',
     to: '/team/tactics',
-    meta: 'Team · your system: the tactic, instructions, match plan, analysis',
+    meta: 'Team · the tactic, instructions, match and analysis',
     // a player's roles live on the Tactics board too: one entry, so one row
     also: 'playbook offense defense coverage sets system report grades undo instructions match analysis player roles role fit freedom screeners defensive glass',
   },

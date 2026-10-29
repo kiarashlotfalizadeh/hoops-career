@@ -49,9 +49,7 @@ import { useLiveGame } from '../live/useLiveGame';
 import { useBugHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
-import { liveOpt, liveSlots, tipSlot } from '../live/familiar';
-import { slotMatcher, slotMoveName } from '../../core/analysis/moves';
-import type { CallId, Tactics } from '../../core/types';
+import type { CallId } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
 import { HOT_STREAK } from '../live/OnCourt';
 import { changesLine, screenChanges } from '../tactics/changes';
@@ -69,7 +67,7 @@ export default function Live() {
   const [statsTab, setStatsTab] = useState<BoxTab | 'pbp'>('players');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
-  const { applyTactics, switchSlot, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
+  const { applyTactics, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
   const setBugEl = useBugHeight();
   const conRef = useRef<HTMLDivElement>(null);
 
@@ -81,22 +79,12 @@ export default function Live() {
     [game, s.tick],
   );
   const pills = useMemo(() => (game && view && tactics && !over ? quickPills(view, game.userSide, tactics, game.planned, nameOf) : []), [game, view, tactics, over, nameOf]);
-  // the coach's three tactics as tonight plays them, each with the team's familiarity with it, and the one in play
-  const slots = useMemo(() => (game && tactics ? liveSlots(league, game, tactics) : null), [league, game, tactics]);
-  // the night's moves as the court has drawn the game, each with what it has done since (a switch of tactic named as one)
-  const slotName = useMemo(() => {
-    if (!game) return undefined;
-    const match = slotMatcher(league, game.game);
-    return (t: Tactics) => {
-      const i = match(t);
-      return i === null ? null : slotMoveName(league, i);
-    };
-  }, [league, game]);
+  // the night's moves as the court has drawn the game, each with what it has done since
   const moves = useMemo(
-    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf, slotName, game.over && view.logs >= game.logs.length) : []),
+    () => (game && view ? coachMoves(game.marks, game.logs.slice(0, view.logs), game.userSide, nameOf, game.over && view.logs >= game.logs.length) : []),
     // (the marks grow with every move: tick)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [game, view, s.tick, nameOf, slotName],
+    [game, view, s.tick, nameOf],
   );
   const assistant = useMemo(() => leadAssistant(league), [league]);
   // the night's one watch pick, the preview's "Watch" (games/data.ts): the staff watches him all game
@@ -135,6 +123,14 @@ export default function Live() {
     markCoachMarksSeen();
     setTip(null);
   };
+  // the cards are the first quarter's: one skipped past it (a skip, a game picked up later) isn't
+  // shown at a close finish, or in the next game
+  const pastFirst = !!view && view.q > 1;
+  useEffect(() => {
+    if (tip === null || !pastFirst) return;
+    markCoachMarksSeen();
+    setTip(null);
+  }, [tip, pastFirst]);
 
   // the game stopped for a call on one of yours (a fifth foul, a closer out of legs): his sheet, with who can come in
   // (the last possession waits in the huddle instead)
@@ -185,7 +181,7 @@ export default function Live() {
     applyTactics(a.apply, n.title, { measured: call });
     if (call) s.staff.took(a.label);
     s.setDismissed((d) => [...d, n.id]);
-    useStore.getState().toast(`${assistant.last}: ${a.label}${call && n.fig ? ` (${n.fig.v} ${n.fig.unit}, measured)` : ''}`, 'good');
+    useStore.getState().toast(`${assistant.last}: ${a.label}${call && n.fig ? `, about ${n.fig.v} points` : ''}.`, 'good');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.notes, autonomy, over, simBusy]);
 
@@ -284,8 +280,9 @@ export default function Live() {
     [...themSide.players].filter((p) => themSide.on.includes(p.pid)).sort((a, b) => (league.players[b.pid]?.ovr ?? 0) - (league.players[a.pid]?.ovr ?? 0))[0];
   const watch = watchP ? { pid: watchP.pid, defender: me.guardOf.get(watchP.pid)?.pid } : undefined;
 
-  // (a card only while the court plays: not over the intro, a break, a huddle or a banner, the staff's call above all)
-  const tipUp = tip !== null && !s.intro && !stop && !s.banner;
+  // (a card only while the court plays the first quarter: not over the intro, a break, a huddle or a banner,
+  // the staff's call above all; past the first quarter the cards have had their moment: see the effect above)
+  const tipUp = tip !== null && quarter === 1 && !s.intro && !stop && !s.banner;
   const canTimeout = me.timeouts > 0 && !atBreak && !toPending && !s.intro && !buzzer && !simBusy;
   const toState = toPending
     ? game.timeoutWaiting
@@ -332,23 +329,8 @@ export default function Live() {
     s.setDismissed((d) => [...d, n.id]);
   };
   const changed = offPlan(tactics, game.planned) ? changesLine(screenChanges(game.planned, tactics, nameOf).slice(0, 3)) : '';
-  // the touchline: your three tactics, the mentality and (in Every setting) the shape, with what the team knows of each
-  const famOf = (key: string) => liveOpt(game, key);
-  const touchline = (shape: boolean) =>
-    slots && (
-      <Touchline
-        team={league.teams[league.userTid]}
-        slots={slots.slots}
-        cur={slots.cur}
-        onSwitch={switchSlot}
-        tactics={tactics}
-        planned={game.planned}
-        apply={applyTactics}
-        famOf={famOf}
-        shape={shape}
-        measured={s.staff.change}
-      />
-    );
+  // the touchline: the mentality and (in Every setting) the shape
+  const touchline = (shape: boolean) => <Touchline tactics={tactics} planned={game.planned} apply={applyTactics} shape={shape} measured={s.staff.change} />;
 
   const common = {
     league,
@@ -373,17 +355,7 @@ export default function Live() {
   const consoleBody = () => {
     if (cview === 'staff') {
       if (atBreak)
-        return (
-          <PeriodReport
-            {...common}
-            baselines={s.baselines}
-            colors={barColors}
-            oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items}
-            adjustments={sim.adjustments}
-            onSkip={() => setPanel('skip')}
-            story={story}
-          />
-        );
+        return <PeriodReport {...common} oppPlan={oppPlanIn(sim, (1 - userSide) as 0 | 1)?.items} adjustments={sim.adjustments} onSkip={() => setPanel('skip')} story={story} />;
       if (huddling)
         return (
           <Huddle
@@ -436,7 +408,6 @@ export default function Live() {
           onAll={() => s.setClipOpen(true)}
           abbrevs={abbrevs}
           touchline={touchline(false)}
-          famOf={famOf}
         />
       );
     if (cview === 'lineup')
@@ -472,7 +443,7 @@ export default function Live() {
             { id: 'team', label: 'Team' },
             { id: 'shots', label: 'Shots' },
             { id: 'flow', label: 'Flow' },
-            { id: 'pbp', label: 'Play-by-play' },
+            { id: 'pbp', label: 'Plays' },
           ]}
         />
         {statsTab !== 'pbp' ? (
@@ -557,7 +528,8 @@ export default function Live() {
         {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side); after
             the playback controls, so clutch time's offer can step down under them */}
         {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? 'var(--accent)' : identityColor(home.colors)} clutch={clutch} />}
-        {!s.intro && !atBreak && s.call && <CallOut ev={s.call} kit={callKit} />}
+        {/* (clutch time's offer says so itself: its callout waits while it's up) */}
+        {!s.intro && !atBreak && s.call && !(offer && s.call.kind === 'clutch') && <CallOut ev={s.call} kit={callKit} />}
         {!s.intro && !atBreak && s.crowdLine && !offer && !finalOffer && <CrowdLine ev={s.crowdLine} level={crowd} />}
         {offer && !atBreak && (
           <ClutchOffer
@@ -659,8 +631,6 @@ export default function Live() {
             nameOf={nameOf}
             q={view.q}
             touchline={touchline(true)}
-            famOf={famOf}
-            away={!!slots && slots.cur !== tipSlot(league, game)}
           />
         )}
       </Sheet>

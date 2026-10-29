@@ -26,10 +26,8 @@ import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
-import { benchFor, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
+import { benchFor, callBannerLine, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
-import { liveSlots } from './familiar';
-import { slotLabel } from '../../core/sim/slots';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
 import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from './graphics';
@@ -278,9 +276,6 @@ export function useLiveGame() {
       if (!l || !base || lg.over) return;
       const side = lg.userSide;
       const tactics = sim.baseTactics(side);
-      const sl = liveSlots(l, lg, tactics);
-      const team = l.teams[l.userTid];
-      const slots = sl.slots.flatMap((x) => (x.tactics && x.i !== sl.cur ? [{ i: x.i, label: `Tactic ${slotLabel(team, x.i)}`, tactics: x.tactics, fam: x.fam }] : []));
       const input = {
         ...base,
         tactics,
@@ -291,7 +286,7 @@ export function useLiveGame() {
         subFor: (pid: number) => benchFor(sim, side, pid),
       };
       const waits = (prio === 2 && sim.clock <= 0.05 && breakAfter(opts.current.breaks, sim.q)) || (!!timeouts && sim.T[side].timeouts < timeouts[side]);
-      staffMeasure(lg, input, slots, prio, waits ? CALL_BREAK_MS : CALL_BUDGET_MS, ahead && { sim: ahead.sim, steps: lg.steps + ahead.k });
+      staffMeasure(lg, input, prio, waits ? CALL_BREAK_MS : CALL_BUDGET_MS, ahead && { sim: ahead.sim, steps: lg.steps + ahead.k });
     },
     [staffMeasure],
   );
@@ -470,7 +465,7 @@ export function useLiveGame() {
     // the app was closed mid-game: say where it picked up (or that it couldn't)
     if (found?.resumed) {
       const s = found.sim;
-      if (found.resumed === 'restarted') useStore.getState().toast("Your game in progress couldn't be picked up where you left off, so it starts again from tip-off.", 'bad');
+      if (found.resumed === 'restarted') useStore.getState().toast("Your game couldn't be picked up where you left off. It starts again from the tip.", 'bad');
       else {
         const at = s.clock <= 0.05 ? `end of ${periodLabel(s.q)}` : gameTime(s.q, s.clock);
         // it went back to the last save (the app closed between saves): the possessions after it play again
@@ -907,8 +902,7 @@ export function useLiveGame() {
   // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
     if (over || staffCall?.state !== 'call') return;
-    const n = callNote(staffCall);
-    queueBanner([{ id: n.id + staffCall.steps, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: n.text }]);
+    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: callBannerLine(staffCall) }]);
   }, [staffCall, over, queueBanner]);
 
   return {
@@ -1053,7 +1047,7 @@ export function stopCalls(v: Drawn, lg: LiveGame, names: (pid: number) => string
     if (!p || p.out !== 0) continue;
     if (v.q >= 4 && p.fouls === 5 && !dismissed.includes(`fouls-${pid}-5`)) return [...out, { id: `fouls-${pid}`, pid, text: `${names(pid)} has 5 fouls. One more and he's out.` }];
     if (crunch && closers.has(pid) && p.energy < t.t.manage.fatigueSub && !dismissed.some((d) => d.startsWith(`tired-${pid}-`)))
-      return [...out, { id: `tired-${pid}-${v.q}`, pid, text: `${names(pid)} is gassed (${Math.round(p.energy * 100)}% energy).` }];
+      return [...out, { id: `tired-${pid}-${v.q}`, pid, text: `${names(pid)} is gassed, at ${Math.round(p.energy * 100)}% energy.` }];
   }
   return out;
 }

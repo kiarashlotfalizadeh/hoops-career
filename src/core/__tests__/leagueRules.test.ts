@@ -80,13 +80,13 @@ describe('trades, rosters and signings', () => {
       // in season the same 0-for-1 breaks the 15-man limit
       l.phase = 'regular';
       releasePlayer(l, fa, { news: false });
-      expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: ai, pids: [theirs[0].pid], dpids: [] } }).some((e) => e.includes('max 15'))).toBe(true);
+      expect(validateTrade(l, { a: { tid: U, pids: [], dpids: [] }, b: { tid: ai, pids: [theirs[0].pid], dpids: [] } }).some((e) => e.includes('most is 15'))).toBe(true);
       // ...and a 2-for-1 can't take a 13-man roster to 12
       while (standardRoster(l, U).length > CAP.rosterMin) releasePlayer(l, standardRoster(l, U).sort((a, b) => a.ovr - b.ovr)[0], { news: false });
       const two = standardRoster(l, U)
         .slice(0, 2)
         .map((p) => p.pid);
-      expect(validateTrade(l, { a: { tid: U, pids: two, dpids: [] }, b: { tid: ai, pids: [theirs[1].pid], dpids: [] } }).some((e) => e.includes('minimum 13'))).toBe(true);
+      expect(validateTrade(l, { a: { tid: U, pids: two, dpids: [] }, b: { tid: ai, pids: [theirs[1].pid], dpids: [] } }).some((e) => e.includes('minimum is 13'))).toBe(true);
     }
 
     // AI teams are trimmed to 15 before opening night, keeping big contracts (bugs 2, 7)
@@ -598,7 +598,7 @@ describe('awards and the All-Star break', () => {
       [curTeamSeason(l, U).won, curTeamSeason(l, U).lost] = [70, 12];
       for (const p of teamPlayers(l, U)) line(p, 10, 0, 6);
       expect(computeRegularSeasonAwards(l).coy).toBe(U);
-      expect(l.inbox[0].body).toBe('Your team collected hardware: Coach of the Year (you).');
+      expect(l.inbox[0].body).toBe('Your team collected hardware.\nYou: Coach of the Year.');
       const news = l.news[l.news.length - 1];
       expect(news.text).toContain(`COY ${l.coachName} (${l.teams[U].abbrev}).`);
       expect(news.tids).toContain(U);

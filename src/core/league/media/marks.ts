@@ -1,5 +1,5 @@
 // A career mark as a story: the wire's line when a player reaches a round career total (games.ts
-// writes it: "Stephen Curry (GSW) scored his 25,000th career point.") becomes the press's story
+// writes it: "Stephen Curry of the Warriors scored his 25,000th career point.") becomes the press's story
 // when the mark is a big one or the player is the user's: a headline, the night he got there and
 // what it means. The same news item is rewritten in place, so the night is told once.
 import type { League, NewsItem, ScheduledGame } from '../../types';
@@ -10,7 +10,7 @@ import { careerTotals } from '../../analysis/milestones';
 import type { MediaState } from '../media';
 import { Voice } from './voice';
 
-const MARK = /^(.+) \(([A-Z]{2,4})\) (?:scored|grabbed|handed out) his ([\d,]+)th career (point|rebound|assist)\.$/;
+const MARK = /^(.+) of the .+? (?:scored|grabbed|handed out) his ([\d,]+)th career (point|rebound|assist)\.$/;
 
 /** A career mark the press told as a story (see careerMarks): its moment is the mark's, not the front page's. */
 export const isCareerMarkStory = (n: Pick<NewsItem, 'kind' | 'head' | 'text'>) => n.kind === 'milestone' && !!n.head && MARK.test(n.text);
@@ -36,8 +36,8 @@ export function careerMarks(league: League, m: MediaState, g: ScheduledGame) {
     const x = MARK.exec(n.text);
     const p = league.players[n.pids[0]];
     if (!x || !p) continue;
-    const mark = Number(x[3].replace(/,/g, ''));
-    const stat = x[4];
+    const mark = Number(x[2].replace(/,/g, ''));
+    const stat = x[3];
     const mine = p.tid === league.userTid;
     const weight = weightFor(stat, mark, mine);
     if (weight < 2) continue;

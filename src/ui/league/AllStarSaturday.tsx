@@ -61,7 +61,9 @@ function ThreeCard({ league, three }: { league: League; three: ThreeShooter[] })
       title="Three-Point Contest"
       right={
         <Help title="Three-Point Contest">
-          <p className="lg-p">27 balls a round, 40 points at most: four racks of four plus a money ball, a rack of money balls, two deep threes. The top three go to the final.</p>
+          <p className="lg-p">Each round is 27 balls, worth 40 points at most.</p>
+          <p className="lg-p">Four racks hold four balls and a money ball. One rack is all money balls. Two deep threes finish it.</p>
+          <p className="lg-p">The top three go to the final.</p>
         </Help>
       }
     >
@@ -112,7 +114,8 @@ function DunkCard({ league, dunk }: { league: League; dunk: Dunker[] }) {
       title="Slam Dunk Contest"
       right={
         <Help title="Slam Dunk Contest">
-          <p className="lg-p">Five judges give each dunk 6-10. Two dunks a round, the top two to the final; ties go to a dunk-off.</p>
+          <p className="lg-p">Five judges score each dunk from 6 to 10. Each round is two dunks.</p>
+          <p className="lg-p">The top two go to the final. A tie goes to a dunk-off.</p>
         </Help>
       }
     >

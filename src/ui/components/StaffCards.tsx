@@ -45,7 +45,8 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
           <div className="lv-note-title">{note.title}</div>
           {note.text && <div className="lv-note-line">{note.text}</div>}
         </div>
-        {onDismiss && (
+        {/* a note with no moves closes from its corner; a call says Not now beside its moves */}
+        {onDismiss && !note.actions.length && (
           <button className="lv-note-x" onClick={onDismiss} aria-label={`Not now: ${note.title}`}>
             <X size={15} />
           </button>
@@ -60,6 +61,11 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
               {a.label}
             </button>
           ))}
+          {onDismiss && (
+            <button className="btn xs ghost" onClick={onDismiss} aria-label={`Not now: ${note.title}`}>
+              Not now
+            </button>
+          )}
           {note.worth && <span className="lv-note-worth tiny">{note.worth}</span>}
         </div>
       )}
@@ -67,7 +73,7 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
   );
 }
 
-/** What a move has done since, in a line: "SAS 0.91 a trip since (22 trips), 1.18 before". */
+/** What a move has done since, in a line: "SAS 0.91 a trip in 22 trips since, 1.18 before". */
 export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, nameOf: (pid: number) => string): string {
   // a play called: the one trip it ran on
   if (m.kind === 'play') {
@@ -81,8 +87,8 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
     const d = t.us.pts - t.them.pts;
     // (the rate before in words: "-0.80 a trip before" read as a figure with no subject)
     const was =
-      v.was === null ? '' : Math.abs(v.was) < 0.005 ? '; level before' : `; ${v.was > 0 ? 'outscoring them' : 'outscored'} by ${Math.abs(v.was).toFixed(2)} a trip before`;
-    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since (${signed(d, 0)})${was}.`;
+      v.was === null ? '' : Math.abs(v.was) < 0.005 ? ' Level before.' : ` ${v.was > 0 ? 'Outscoring them' : 'Outscored'} by ${Math.abs(v.was).toFixed(2)} a trip before.`;
+    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since, ${signed(d, 0)}.${was}`;
   }
   // one of theirs it was aimed at: his points and the trips he finished, since and before
   if (v.what === 'focus' && m.pid !== undefined) {
@@ -92,7 +98,7 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   }
   const team = m.end === 'off' || v.what === 'us' ? abbrevs.us : abbrevs.them;
   const who = v.what === 'focus' && m.aim ? `${team} ${m.aim}` : team;
-  const now = `${who} ${v.now.toFixed(2)} a trip since (${plural(v.trips, 'trip')})`;
+  const now = `${who} ${v.now.toFixed(2)} a trip in ${plural(v.trips, 'trip')} since`;
   return v.was !== null ? `${now}, ${v.was.toFixed(2)} before.` : `${now}.`;
 }
 

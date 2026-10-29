@@ -72,7 +72,7 @@ export function LotteryView({ league }: { league: League }) {
           <LotteryRow key={t.tid} league={league} f={f} t={t} rank={i + 1} />
         ))}
       </TeamTable>
-      <Foot help={<OddsHelp />}>Each team&apos;s own first-round pick · → its owner now</Foot>
+      <Foot help={<OddsHelp />}>Odds for each team&apos;s own 1st · → who owns it now</Foot>
     </div>
   );
 }
@@ -83,7 +83,7 @@ function ForecastLink({ to }: { to: 'odds' | 'lottery' }) {
     <Link to={`/league/standings?view=${to}`} replace className="card listrow clickable lg-cuplink">
       <span className="grow">
         <span className="lr-name">{to === 'lottery' ? 'Draft lottery' : 'Playoff odds'}</span>
-        <span className="lr-meta">{to === 'lottery' ? 'Each team’s chance at the No. 1 pick' : 'Every team’s chance to make it and go deep'}</span>
+        <span className="lr-meta">{to === 'lottery' ? 'Each team’s chance at the No. 1 pick' : 'Each team’s chance to make it and go deep'}</span>
       </span>
       <ChevronRight size={18} className="dim" aria-hidden="true" />
     </Link>
@@ -91,27 +91,26 @@ function ForecastLink({ to }: { to: 'odds' | 'lottery' }) {
 }
 
 function NoForecast() {
-  return <div className="card empty">The season is over: the forecast returns in the preseason.</div>;
+  return <div className="card empty">The season is over. The forecast returns in the preseason.</div>;
 }
 
 function OddsHelp() {
   return (
     <Help title="Season forecast">
       <p className="lg-p">
-        The rest of the season is played out {FORECAST_SIMS.toLocaleString('en-US')} times, game by game on the real schedule, then the <Term id="playin">play-in</Term>, the
-        playoffs and the lottery draw. Each team&apos;s strength is its net rating this season, weighed against what its roster is worth (injured players count from when
-        they&apos;re back) until enough games are in, and it&apos;s uncertain, more so early on.
+        The rest of the season is played {FORECAST_SIMS.toLocaleString('en-US')} times on the real schedule. Then come the <Term id="playin">play-in</Term>, the playoffs and the
+        lottery draw.
       </p>
       <p className="lg-p">
-        Proj is the projected record, its 10th-90th percentile of wins under it. Playoffs counts the play-in&apos;s winners. Swipe the table for the rest of the rounds.
+        A team&apos;s strength is its net rating, weighed against what its roster is worth. Injured players count from when they&apos;re back. The early weeks are the least
+        certain.
       </p>
+      <p className="lg-p">Proj is the projected record. Under it, the range of wins in 8 of 10 seasons. Playoffs counts the play-in&apos;s winners. Swipe for the later rounds.</p>
       <p className="lg-p">
-        The lottery is everyone not in the playoffs: the chances are for each team&apos;s own first-round pick, wherever it went in a trade (→ its owner now): first, in the top
-        four, and where it lands on average when it&apos;s in the lottery.
+        The lottery covers every team not in the playoffs. The odds are for each team&apos;s own 1st, wherever a trade sent it. An arrow names its owner now. Avg is its average
+        slot in the lottery.
       </p>
-      <p className="lg-p">
-        It knows nothing about how the games will actually go. 100% and — mean a place clinched or a team that&apos;s out; anything else rounds to &gt;99% or &lt;1%.
-      </p>
+      <p className="lg-p">100% means a place is clinched, and — a team that&apos;s out. Anything else rounds to &gt;99% or &lt;1%.</p>
     </Help>
   );
 }
@@ -134,11 +133,8 @@ function OddsRow({ league, t, rank }: { league: League; t: TeamOdds; rank: numbe
     >
       <span className="wl lg-proj" aria-hidden="true">
         {proj}
-        {t.lo !== t.hi && (
-          <span className="odds-range">
-            {t.lo}-{t.hi}
-          </span>
-        )}
+        {/* the wins it reaches in 8 seasons of 10, a range of wins ("30–44 W"), never a record */}
+        {t.lo !== t.hi && <span className="odds-range">{`${t.lo}–${t.hi}\u00a0W`}</span>}
       </span>
       <span className={`hi ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
         {pct(t.reach[0], t.clinched || t.out)}

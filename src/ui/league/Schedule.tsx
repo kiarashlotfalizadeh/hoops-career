@@ -118,21 +118,23 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
-/** "MIL 72% to win": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court), so the two never disagree. */
+/** "MIL 72%": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court), so the two never disagree. */
 function favorite(league: League, g: ScheduledGame): string {
   const { win } = gameProjection(league, g);
   const fav = win >= 0.5 ? g.home : g.away;
-  return `${league.teams[fav].abbrev} ${p0(Math.max(win, 1 - win))} to win`;
+  return `${league.teams[fav].abbrev} ${p0(Math.max(win, 1 - win))}`;
 }
 
 function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame; res?: GameResult; after?: Map<number, [number, number]> }) {
   const mine = g.home === league.userTid || g.away === league.userTid;
   const tag = gameTag(league, g);
   const done = !!res || !!g.played;
-  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag || 'Preview';
   // (the projection sets up the game as it will tip off: once per league change)
   const fav = useLeagueMemo(() => (done ? '' : favorite(league, g)), [league, g, done]);
-  const right = done ? tag : fav;
+  // a game to come leads with its favourite ("LAC 53% to win"), a final with its result; the right
+  // holds what kind of game it is (a Cup night, a playoff game), when it is one
+  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag ? fav : `${fav} to win`;
+  const right = tag;
   // a playoff card shows the series as it stood after this game (or going into it)
   const series =
     g.seriesId && g.type === 'playoffs'
@@ -147,8 +149,11 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
   const body = (
     <>
       <div className="lg-sb-st">
-        <span className={!done && mine ? 'live' : ''}>{status}</span>
-        {right && <span title={done ? undefined : 'The matchup projection: net ratings, tonight’s rotations and home court'}>{right}</span>}
+        <span className={!done && mine ? 'live' : ''} title={done ? undefined : 'Chance to win, from the matchup preview'}>
+          {status}
+          {!done && tag && <span className="sr-only"> to win</span>}
+        </span>
+        {right && <span>{right}</span>}
       </div>
       {lines.map((t) => (
         <div key={t.tid} className={`lg-sb-t ${winner !== undefined && winner !== t.tid ? 'lose' : ''}`}>

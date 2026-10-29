@@ -33,7 +33,7 @@ export function CombineView({ league, list, onOpen }: { league: League; list: Pl
     {
       key: 'pot',
       label: 'POT',
-      help: "Your staff's read of his ceiling: the range that holds it four times in five (sorted by its middle)",
+      help: "Your staff's read of his ceiling, the range that holds it four times in five. Sorted by its middle.",
       get: (p) => read.get(p.pid)?.pot ?? p.pot,
       fmt: (v, p) => {
         const r = read.get(p.pid);
@@ -43,10 +43,10 @@ export function CombineView({ league, list, onOpen }: { league: League; list: Pl
     { key: 'hgt', label: 'Height', help: 'Height without shoes', get: (p) => num(c(p).heightNoShoes), fmt: (_v, p) => fmtIn(c(p).heightNoShoes) },
     { key: 'wing', label: 'Wingspan', get: (p) => num(c(p).wingspan), fmt: (_v, p) => fmtIn(c(p).wingspan) },
     { key: 'reach', label: 'Reach', help: 'Standing reach', get: (p) => num(c(p).standingReach), fmt: (_v, p) => fmtIn(c(p).standingReach) },
-    { key: 'wt', label: 'Wt', help: 'Weight (lb)', get: (p) => num(c(p).weight) },
-    { key: 'vert', label: 'Vert', help: 'Max vertical (in)', get: (p) => num(c(p).maxVert), fmt: fmt((v) => `${v.toFixed(1)}"`) },
-    { key: 'lane', label: 'Lane', help: 'Lane agility (s, lower is better)', asc: true, get: (p) => num(c(p).laneAgility), fmt: fmt((v) => v.toFixed(2)) },
-    { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint (s, lower is better)', asc: true, get: (p) => num(c(p).sprint), fmt: fmt((v) => v.toFixed(2)) },
+    { key: 'wt', label: 'Wt', help: 'Weight in pounds', get: (p) => num(c(p).weight) },
+    { key: 'vert', label: 'Vert', help: 'Max vertical in inches', get: (p) => num(c(p).maxVert), fmt: fmt((v) => `${v.toFixed(1)}"`) },
+    { key: 'lane', label: 'Lane', help: 'Lane agility in seconds, lower is better', asc: true, get: (p) => num(c(p).laneAgility), fmt: fmt((v) => v.toFixed(2)) },
+    { key: 'sprint', label: '¾ Sprint', help: '3/4 court sprint in seconds, lower is better', asc: true, get: (p) => num(c(p).sprint), fmt: fmt((v) => v.toFixed(2)) },
     { key: 'shoot', label: 'Shoot', help: 'Shooting drill makes out of 25', get: (p) => num(c(p).shootingDrill), fmt: fmt((v) => `${v}/25`) },
   ];
   if (!list.length) return <Empty>No combine results for this class.</Empty>;

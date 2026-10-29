@@ -19,7 +19,7 @@
 // isn't opened (the digest has the news), and one whose honest answer is always the same is the
 // staff's to make: a skid's first counters (four straight, or six of eight) and the adjustment each
 // morning he's behind in a series go in without a card, measured, with what's behind the slide said
-// in the digest's line (staffPicks), as the week's big game's counter does; a series whose counters
+// in the digest's line (staffPicks); a series whose counters
 // measure with none a gain isn't a call either (Today's hero and the digest say so). The numbers a
 // card needs are measured before a sim stops for it (simCore.ts's runSim, on a budget:
 // callMeasure.ts), and otherwise as the card shows (src/ui/today/staffPlan.ts); storeWorth keeps them. A long sim stops
@@ -27,7 +27,7 @@
 // and for nothing else that doesn't need an answer. A card is settled by its call or a choice; it is
 // remembered (League.callsDone) so it doesn't come back. A star's injury card left unanswered for
 // INJURY_AGE of his games is ridden out. Nothing here draws from the league's random stream.
-import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, PrepFocus, ScheduledGame } from '../types';
+import type { GamePlanItem, GameResult, League, PlayInGame, PlayoffSeries, Player, Pos, ScheduledGame } from '../types';
 import { FREE_AGENT } from '../types';
 import { fmtDate, payroll, playerName, revenueScale, standardRoster } from './helpers';
 import { confStandings } from './standings';
@@ -68,7 +68,7 @@ import { autoRotation } from '../ai/coachAI';
 import { WORTH_MIN, withChange, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
 import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, type Factor } from '../analysis/gameReport';
-import { answerWeek, isWeekId, notePick, openWeekId, ptsWin, vsAt, weekCard, weekDaily, winsOf } from './weekCall';
+import { answerWeek, isWeekId, notePick, openWeekId, vsAt, weekCard, weekDaily, winsOf } from './weekCall';
 
 /** A star: one of the team's three best players by OVR (a skid's read names them out). */
 export const STAR_RANK = 3;
@@ -508,7 +508,7 @@ export function quietSeriesStart(league: League): string | null {
   const start = seriesStart(league);
   if (!start || !quietStart(league, start)) return null;
   const made = planFor(league, start.opp, start.g);
-  return `None of the staff's counters measures as a gain against them: ${made && planMade(made) ? 'your plan stands' : 'your playbook as it is'}.`;
+  return `None of the staff's counters helps against them. ${made && planMade(made) ? 'Your plan stands.' : 'You play them with your playbook as it is.'}`;
 }
 
 /**
@@ -547,7 +547,7 @@ export function skidRung(n: number): number {
 const CAUSE: Record<Factor['category'] | 'luck', string> = {
   tactics: 'the matchups',
   shooting: 'worse looks than theirs',
-  luck: "shots that didn't fall (luck, not the plan)",
+  luck: "shots that didn't fall",
   turnovers: 'turnovers',
   rebounding: 'the glass',
   fouls: 'free throws',
@@ -569,7 +569,7 @@ function slideRead(league: League, results: GameResult[]): { text: string; luck:
   let luck = false;
   if (results.length) {
     const margin = results.reduce((a, r) => a + (r.home.tid === me ? r.home.pts - r.away.pts : r.away.pts - r.home.pts), 0) / results.length;
-    parts.push(margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game` : `Even on points (${signed(margin)} a game): the close ones went the other way`);
+    parts.push(margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game.` : `Even on points at ${signed(margin)} a game. The close ones went the other way.`);
     const sum = new Map<keyof typeof CAUSE, number>();
     for (const r of results)
       for (const f of buildGameReport(league, r)?.factors ?? []) {
@@ -578,13 +578,13 @@ function slideRead(league: League, results: GameResult[]): { text: string; luck:
       }
     const worst = [...sum.entries()].sort((a, b) => a[1] - b[1])[0];
     if (worst && worst[1] / results.length <= -1) {
-      parts.push(`the box scores point to ${CAUSE[worst[0]]} (${signed(worst[1] / results.length)} a game, the staff's read)`);
       luck = worst[0] === 'luck';
+      parts.push(`The box scores point to ${CAUSE[worst[0]]}, ${signed(worst[1] / results.length)} a game by the staff's read.${luck ? " That's luck, not the plan." : ''}`);
     }
   }
   const out = starsOut(league);
-  if (out.length) parts.push(`${out.map((p) => playerName(p)).join(' and ')} ${out.length > 1 ? 'are' : 'is'} out`);
-  return { text: parts.length ? `${capitalize(parts.join('; '))}.` : '', luck: luck && !out.length };
+  if (out.length) parts.push(`${out.map((p) => playerName(p)).join(' and ')} ${out.length > 1 ? 'are' : 'is'} out.`);
+  return { text: parts.join(' '), luck: luck && !out.length };
 }
 
 /** What's behind a run of the user's results, in words (see slideRead). */
@@ -805,23 +805,23 @@ export function dealGoals(league: League, offer: TradeOffer): DealGoal[] {
 /** The deal costs a goal: it ends under the target (a payroll: over the line) and worse than without it. */
 const costsGoal = (d: DealGoal) => (d.kind === 'payroll' ? d.with > d.target && d.with > d.now : d.with < d.target && d.with < d.now);
 
-/** A goal as a deal moves it, in words: "profit on pace for $12.0M, not $25.5M (his goal $25.5M)". */
+/** A goal as a deal moves it, in a sentence: "Profit: $12.0M on pace with it, $25.5M without. The owner's goal: $25.5M." */
 function dealGoalText(d: DealGoal): string {
   const n = (x: number) => x.toLocaleString('en-US');
   const cash = (x: number) => (x < 0 ? `a ${money(-x)} loss` : money(x));
   return d.kind === 'profit'
-    ? `profit on pace for ${cash(d.with)}, not ${cash(d.now)} (his goal ${cash(d.target)})`
+    ? `Profit: ${cash(d.with)} on pace with it, ${cash(d.now)} without. The owner's goal: ${cash(d.target)}.`
     : d.kind === 'payroll'
-      ? `payroll ${money(d.with)}, not ${money(d.now)} (his line ${money(d.target)})`
-      : `young players' minutes on pace for ${n(d.with)}, not ${n(d.now)} (his goal ${n(d.target)})`;
+      ? `Payroll: ${money(d.with)} with it, ${money(d.now)} without. The owner's line: ${money(d.target)}.`
+      : `Young players' minutes: ${n(d.with)} on pace with it, ${n(d.now)} without. The owner's goal: ${n(d.target)}.`;
 }
 
-/** A player a deal brings in, with what he costs: "James Harden: 37, $96.5M over 3 seasons (a player option on the last)". */
+/** A player a deal brings in, with what he costs: "James Harden: 37, $96.5M over 3 seasons, a player option on the last". */
 function contractText(league: League, p: Player): string {
   const s = league.season;
   const years = Math.max(1, contractExp(p.contract) - s + 1);
   const total = Array.from({ length: years }, (_, i) => salaryFor(p, s + i)).reduce((a, x) => a + x, 0);
-  const option = p.contract.option && !p.contract.next ? ` (a ${p.contract.option} option on the last)` : '';
+  const option = p.contract.option && !p.contract.next ? `, a ${p.contract.option} option on the last` : '';
   return `${playerName(p)}: ${playerAge(p, s)}, ${years === 1 ? `${money(total)}, expiring` : `${money(total)} over ${years} seasons${option}`}`;
 }
 
@@ -924,8 +924,8 @@ function ageInjuries(league: League) {
     notePick(
       league,
       shown.has(id)
-        ? `${playerName(p)} out: ${looked ? 'no deal came of the look for a trade' : `the card went unanswered for ${INJURY_AGE} games`}, so the staff rode it out.`
-        : `${playerName(p)} out: the staff spread his minutes (nothing else to choose).`,
+        ? `${playerName(p)} out. ${looked ? 'No deal came of the look for a trade' : `The card went unanswered for ${INJURY_AGE} games`}, so the staff rode it out.`
+        : `${playerName(p)} out, so the staff spread his minutes. Nothing else to choose.`,
     );
   }
 }
@@ -976,11 +976,13 @@ function firstSlump(league: League) {
   const fc = leagueForecast(league)?.teams[me];
   notePick(
     league,
-    `${ts.won}-${ts.lost}, as the staff reads it: ${margin < 0 ? `outscored by ${(-margin).toFixed(1)} a game` : `even on points (${signed(margin)} a game), the close ones gone the other way`}. ${
-      luck <= -1 ? `About ${(-luck).toFixed(1)} a game of it is shots that didn't fall (luck, not the plan)` : 'The shots fell about as their looks were worth: not luck'
-    }; ${hurt}; ${rest < -1 ? `the other ${(-rest).toFixed(1)} a game is the roster and the matchups, injuries included: that's what a plan or a move can change` : 'the rest is about even'}.${
-      fc ? ` The forecast, which counts all of it, has you at about ${Math.round(fc.w)} wins.` : ''
-    }`,
+    [
+      `${ts.won}-${ts.lost}. ${margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game, as the staff reads it` : `Even on points at ${signed(margin)} a game, as the staff reads it, the close ones gone the other way`}.`,
+      luck <= -1 ? `About ${(-luck).toFixed(1)} a game of it is shots that didn't fall. That's luck, not the plan.` : 'The shots fell about as their looks were worth. Not luck.',
+      `${capitalize(hurt)}.`,
+      rest < -1 ? `The other ${(-rest).toFixed(1)} a game is the roster and the matchups, injuries included. A plan or a move can change that.` : 'The rest is about even.',
+      ...(fc ? [`The forecast, which counts all of it, has you at about ${Math.round(fc.w)} wins.`] : []),
+    ].join(' '),
   );
 }
 
@@ -1017,10 +1019,8 @@ export function callsDecide(league: League) {
     const items = sw.items ?? [];
     // (the staff's own picks: not a plan of his, as the guide counts them)
     for (const it of items) setPlanItem(league, s.opp, { ...it, staff: true });
-    s.put = items.length
-      ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${gameText(league, sg)}, measured.`
-      : `Nothing the staff measured for ${gameText(league, sg)} beats your plan.`;
-    notePick(league, `${skidTitle(s)}: ${s.diag ? `${s.diag} ` : ''}${s.put}`);
+    s.put = items.length ? putText(items, gameText(league, sg)) : `Nothing the staff measured for ${gameText(league, sg)} beats your plan.`;
+    notePick(league, `${skidTitle(s)}. ${s.diag ? `${s.diag} ` : ''}${s.put}`);
   }
   // a series starting today with nothing to change: no card, a line in the digest (once)
   const st = seriesStart(league);
@@ -1029,7 +1029,7 @@ export function callsDecide(league: League) {
     const made = planFor(league, st.opp, st.g);
     notePick(
       league,
-      `${st.series ? `${seriesLabel(st.series)} vs ${league.teams[st.opp].abbrev}, Game 1` : `Play-in vs ${league.teams[st.opp].abbrev}`}: none of the staff's counters measured as a gain against them, so ${made && planMade(made) ? 'your plan stands' : 'you play them with your playbook as it is'}.`,
+      `${st.series ? `${seriesLabel(st.series)} vs ${league.teams[st.opp].abbrev}, Game 1` : `Play-in vs ${league.teams[st.opp].abbrev}`}. None of the staff's counters helps against them, so ${made && planMade(made) ? 'your plan stands' : 'you play them with your playbook as it is'}.`,
     );
   }
   const b = seriesBehind(league);
@@ -1043,13 +1043,22 @@ export function callsDecide(league: League) {
     const game = `Game ${b.w + b.l + 1}`;
     notePick(
       league,
-      `${seriesLabel(b.series)}: down ${b.l}-${b.w} to ${league.teams[b.opp].abbrev}. ${diag ? `${diag} ` : ''}${
-        items.length
-          ? `The staff put in ${items.map((x) => `${x.label} (${ptsWin(x.pts ?? 0, true)})`).join(' and ')} for ${game}, measured.`
-          : `Nothing the staff measured for ${game} beats your plan.`
+      `${seriesLabel(b.series)}, down ${b.l}-${b.w} to ${league.teams[b.opp].abbrev}. ${diag ? `${diag} ` : ''}${
+        items.length ? putText(items, game) : `Nothing the staff measured for ${game} beats your plan.`
       }`,
     );
   }
+}
+
+/**
+ * What the staff put in for a game, as the digest says it: the counters and one measured number each,
+ * points a game (the chance to win they come to is the game's own business, on its pages).
+ * "The staff put in Drop for Friday vs BOS. It measured +1.1 pts.", "The staff put in Drop and
+ * Deny Brunson for Game 4: +1.1 and +0.4 pts, measured."
+ */
+function putText(items: GamePlanItem[], game: string): string {
+  if (items.length === 1) return `The staff put in ${items[0].label} for ${game}. It measured ${signed(items[0].pts ?? 0)} pts.`;
+  return `The staff put in ${items.map((x) => x.label).join(' and ')} for ${game}: ${items.map((x) => signed(x.pts ?? 0)).join(' and ')} pts, measured.`;
 }
 
 // ---------------------------------------------------------------- the cards
@@ -1059,7 +1068,10 @@ export interface CallCard {
   id: string;
   kind: CallKind;
   title: string;
+  /** The staff's call and its one number: the row's line. */
   line: string;
+  /** The reasons and the rest of the numbers, a tap down (the row's Why). */
+  detail?: string;
   tone: 'bad' | 'warn' | 'info';
   to?: string;
   due?: string;
@@ -1090,8 +1102,6 @@ export type CallAction =
   | { kind: 'trade'; id: string; offer: TradeOffer }
   | { kind: 'budgetCut'; id: string }
   | { kind: 'ticketPrice'; id: string; price: number }
-  /** The week's practice: the side of its card whose first focus is `focus` (it comes out at the week's end: see weekCall.ts). */
-  | { kind: 'weekPrep'; id: string; focus: PrepFocus }
   /** The week's card on the young players: the staff's rotation leans to them (see youthLean.ts). */
   | { kind: 'youthLean'; id: string }
   /**
@@ -1200,18 +1210,23 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const stakes = !playIn
       ? 'A plan set now holds for every game of the series.'
       : playIn.id.endsWith('-78')
-        ? "Win and you're the 7th seed; lose and there's one more game for the 8th."
+        ? "Win and you're the 7th seed. Lose and there's one more game for the 8th."
         : playIn.id.endsWith('-910')
-          ? 'Win and you play for the 8th seed; lose and the season is over.'
-          : "Win and you're the 8th seed; lose and the season is over.";
+          ? 'Win and you play for the 8th seed. Lose and the season is over.'
+          : "Win and you're the 8th seed. Lose and the season is over.";
     // the staff's counters for Game 1, measured as the card shows: its plan is the gains, each with its number
     const { measure, worth } = countersFor(league, id, opp, g, 3);
     const items = worth?.items ?? [];
     const staff = !worth
       ? 'The staff is measuring its counters against them.'
       : items.length
-        ? `The staff's plan: ${items.map((x) => `${x.label} (${signed(x.pts ?? 0)})`).join(', ')}, each measured on its own on tonight's game.`
-        : `None of the staff's counters measures as a gain against them: ${planned ? 'your plan stands' : 'your playbook as it is, or a plan of your own'}.`;
+        ? `The staff's plan: ${items.map((x) => x.label).join(', ')}.`
+        : "None of the staff's counters helps against them.";
+    // (the numbers a tap down: each counter measured on its own on tonight's game)
+    const detail = [
+      ...(items.length ? [`Each measured on its own on tonight's game: ${items.map((x) => `${x.label} ${signed(x.pts ?? 0)} a game`).join(', ')}.`] : []),
+      ...(planned ? ['Your plan against them is in place.'] : worth && !items.length ? ['Go with your playbook as it is, or a plan of your own.'] : []),
+    ].join('\n');
     // (opening the plan doesn't answer the call: a plan set for the series does, see planSet)
     const plan: CallChoice = {
       label: planned ? 'Review the plan' : series ? 'Plan the series' : 'Plan the game',
@@ -1222,8 +1237,8 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       id,
       kind: 'series',
       title: series ? `${seriesLabel(series)} vs ${abbrev}: Game 1 tonight` : `Play-in vs ${abbrev} tonight`,
-      // (the staff's numbers first: Today's row shows two lines)
-      line: `${staff} ${planned ? 'Your plan against them is in place. ' : ''}${stakes}`,
+      line: `${staff} ${stakes}`,
+      ...(detail ? { detail } : {}),
       tone: 'info',
       to: `/games/${opp}`,
       suggestion: plan,
@@ -1277,27 +1292,27 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
           }
         : undefined;
     const on = worth && league.schedule.find((x) => x.gid === worth.gid);
-    // (first: Today's row shows two lines)
-    const value =
-      worth && on
-        ? `Without him: ${worthWords(-(worth.pts ?? 0))} (measured on ${on.day >= league.day ? gameText(league, on) : `${fmtDate(league.season, on.day)} ${vsAt(league, on)}`}). `
-        : '';
-    const to = mins.to.length ? `His minutes go to ${mins.to.map((x) => playerName(x)).join(' and ')}` : '';
+    // the call and what he's worth on the row; where it was measured and where his minutes go a tap down
+    const value = worth && on ? ` Without him: ${worthWords(-(worth.pts ?? 0))}.` : '';
+    const where = worth && on ? `Measured on ${on.day >= league.day ? gameText(league, on) : `${fmtDate(league.season, on.day)} ${vsAt(league, on)}`}.` : '';
+    const to = mins.to.length ? `His minutes go to ${mins.to.map((x) => playerName(x)).join(' and ')}.` : 'His minutes go to the healthy players.';
+    const why = cover
+      ? manual
+        ? 'Your rotation is set by hand, so his minutes need a home.'
+        : to
+      : manual
+        ? 'Your rotation is set by hand. The staff would put his minutes where they should go.'
+        : !missed
+          ? `The team measures about as well without him. ${to}`
+          : young && any
+            ? `${to} A veteran on a 10-day would only take them from the young players.`
+            : `${to}${look ? ` A trade is the other way. Find lists ${p.pos}s better than your fifth best that fit your cap.` : ''}`;
     cards.push({
       id,
       kind: 'injury',
       title: `${playerName(p)} is out ${plural(out, 'game')}`,
-      line:
-        value +
-        (cover
-          ? `The staff's call: a 10-day for cover while he's out. ${manual ? 'Your rotation is set by hand: his minutes need a home.' : `${to || 'The staff spreads his minutes'} meanwhile.`}`
-          : manual
-            ? "The staff's call: hand them the rotation while he's out, so his minutes go where they should."
-            : !missed
-              ? `The staff's call: ride it out; the team measures about as well without him. ${to || 'His minutes go to the healthy players'}.`
-              : young && any
-                ? `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}: a veteran on a 10-day would only take them from the young players.`
-                : `The staff's call: ride it out. ${to || 'His minutes go to the healthy players'}${look ? `; a trade is the other way (Find: a ${p.pos} better than your fifth best whose salary you can take back)` : ''}.`),
+      line: `${cover ? "The staff's call: a 10-day for cover." : manual ? "The staff's call: hand them the rotation while he's out." : "The staff's call: ride it out."}${value}`,
+      detail: [where, why].filter(Boolean).join('\n'),
       tone: 'bad',
       to: look?.to ?? '/team',
       pids: [p.pid],
@@ -1315,7 +1330,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       label: "Tell the owner it's a rebuild",
       action: { kind: 'concede', id },
       blocked: blocked ?? undefined,
-      confirm: `The postseason goal becomes a development goal that grades 0 at best: it spares you the miss but earns nothing on top. The season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points that stay off at his review.`,
+      confirm: `The postseason goal grades 0 at best, and the season counts toward his rebuild limit. Your standing drops ${Math.round(CONCEDE_COST * 100)} points for good.`,
     };
     const push: CallChoice = { label: 'Keep pushing', action: { kind: 'settle', id } };
     // (with the rebuild off the table, the answer is still buy or sell before the deadline)
@@ -1323,8 +1338,12 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     // the lean: whichever answer leaves his standing higher, as the forecast reads the season
     const st = blocked ? null : concedeStanding(league);
     const tell = !!st && st.concede > st.push;
+    // (both answers' numbers a tap down)
     const read = st
-      ? `Pushing on: ${standingPts(st.push)} to your standing with him, the forecast's read (${pct(st.reach)} to reach his goal); telling him now: ${standingPts(st.concede)} at once, and a season on his rebuild clock. `
+      ? [
+          `Pushing on: ${standingPts(st.push)} to your standing with him. The forecast gives you ${pct(st.reach)} to reach his goal.`,
+          `Telling him now: ${standingPts(st.concede)} at once, and a season on his rebuild clock.`,
+        ].join('\n')
       : '';
     cards.push({
       id,
@@ -1332,7 +1351,10 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       title: `Postseason odds down to ${oddsText(odds.now)}`,
       line: blocked
         ? `The staff's call: keep pushing. ${blocked}`
-        : `${read}The staff's call: ${tell ? 'tell the owner now, play the young players and sell veterans before the deadline' : 'keep pushing: missing his goal costs you less than telling him'}.`,
+        : tell
+          ? "The staff's call: tell the owner now. Play the young players and sell veterans before the deadline."
+          : "The staff's call: keep pushing. Missing his goal costs you less than telling him.",
+      ...(read ? { detail: read } : {}),
       tone: 'warn',
       to: '/office/owner',
       due: byDeadline,
@@ -1351,30 +1373,31 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       label: "Tell him it's a development year",
       action: { kind: 'easeFloor', id },
       blocked: blocked ?? undefined,
-      confirm: `Under ${floor.floorWins} wins is still a failed season, but it grades ${standingPts(Math.min(1, FLOOR_GRADE + easeLift(league)))} at best instead of ${standingPts(FLOOR_GRADE)}. Part of the win goal becomes minutes for the young players, still graded on its miss, the season counts toward his rebuild limit, and your standing drops ${Math.round(CONCEDE_COST * 100)} points now.`,
+      confirm: `A failed season then grades ${standingPts(Math.min(1, FLOOR_GRADE + easeLift(league)))} at best, not ${standingPts(FLOOR_GRADE)}. It counts toward his rebuild limit. Your standing drops ${Math.round(CONCEDE_COST * 100)} points now.`,
     };
     // the lean: whichever answer leaves his standing higher at the review, as the forecast reads the season
     const st = blocked ? null : floorStanding(league);
     const tell = !!st && st.ease > st.chase;
     const play: CallChoice = { label: 'Play it out', action: { kind: 'settle', id } };
+    // (both answers' numbers a tap down, with what a development year changes)
     const read = st
-      ? `Chasing it: ${standingPts(st.chase)} to your standing at his review; a development year: ${standingPts(st.ease)}, its cost included (the forecast's read: about ${st.wins} wins either way). `
+      ? [
+          `Chasing it: ${standingPts(st.chase)} to your standing at his review. A development year: ${standingPts(st.ease)}, its cost included.`,
+          `The forecast reads about ${st.wins} wins either way.`,
+          ...(tell ? ['Part of the win goal becomes minutes for the young players. Play them for the lottery.'] : []),
+          ...(!tell && !chase ? ['Nobody the staff can find on the market clears it.'] : []),
+        ].join('\n')
       : '';
     cards.push({
       id,
       kind: 'floor',
       title: `On pace for ${floor.projected} wins: under the owner's floor`,
-      line: `Under ${floor.floorWins} wins he calls it a failed season, whatever else goes right. ${
+      line: `Under ${floor.floorWins} wins is a failed season, whatever else goes right. ${
         blocked
           ? `The staff's call: chase it before the deadline. ${blocked}`
-          : `${read}The staff's call: ${
-              tell
-                ? "tell him it's a development year and play the young players for the lottery"
-                : chase
-                  ? 'chase it: buy before the deadline to clear it'
-                  : 'play it out: nobody the staff can find on the market clears it'
-            }.`
+          : `The staff's call: ${tell ? "tell him it's a development year" : chase ? 'buy before the deadline to clear it' : 'play it out'}.`
       }`,
+      ...(read ? { detail: read } : {}),
       tone: 'warn',
       to: '/office/owner',
       due: byDeadline,
@@ -1403,11 +1426,11 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const none =
       call?.mode === 'buy'
         ? look
-          ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send for one; Find lists who's out there.`
-          : `stand pat. Nobody the staff asked takes what you can send for a player better than your fifth best (${bar} OVR).`
+          ? `buy a player better than your fifth best (${bar} OVR). Nobody the staff asked takes what you can send. Find lists who's out there.`
+          : `stand pat. Nothing you can send buys a player better than your fifth best (${bar} OVR).`
         : call?.mode === 'sell'
           ? look
-            ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet; the trading block shows who would.`
+            ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet. The trading block shows who would.`
             : 'stand pat. No contender the staff asked bites on what you have to sell.'
           : 'stand pat. The team is where it is.';
     // the deal's numbers: its worth a game measured on his next game against someone else (once, as
@@ -1423,32 +1446,31 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const on = worth && league.schedule.find((x) => x.gid === worth.gid);
     const games = gamesLeft(league);
     const pts = worth?.pts;
-    const measured =
-      pts !== undefined && on
-        ? `With the deal: ${worthWords(pts)} (measured ${vsAt(league, on)})${Math.abs(pts) >= WORTH_MIN && games ? `, about ${signed(winsOf(pts, games))} wins over the ${games} games left` : ''}${
-            now && call?.oddsGain !== undefined && !now.clinched
-              ? `; postseason odds about ${pct(Math.min(1, Math.max(0, now.reach[0] + call.oddsGain / 1000)))} with it (the forecast's read)`
-              : ''
-          }. `
-        : offer
-          ? 'The staff is measuring the deal. '
-          : '';
-    const costs = offer ? offer.b.pids.map((pid) => contractText(league, league.players[pid])).join('; ') : '';
-    const goals = offer
-      ? dealGoals(league, offer)
-          .filter((d) => Math.abs(d.with - d.now) >= (d.kind === 'youth' ? 50 : 100))
-          .map(dealGoalText)
-          .join('; ')
-      : '';
-    const numbers = `${measured}${costs ? `${costs}. ` : ''}${goals ? `The owner's goals: ${goals}.` : ''}`.trim();
     // a buy is the call only once it measures as a gain: one too close to say, or a cost, is his to take, not the staff's
     const flat = call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
+    // the deal's worth a game on the row; where it was measured, the wins, the odds, its contracts and the owner's goals a tap down
+    const measured = pts !== undefined && on ? `With the deal: ${worthWords(pts)}.` : offer ? 'The staff is measuring the deal.' : '';
+    const detail = offer
+      ? [
+          `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from the ${other?.name ?? league.teams[offer.b.tid].name} for ${assetText(league, offer.a)}.`,
+          ...(pts !== undefined && on
+            ? [`Measured ${vsAt(league, on)}${Math.abs(pts) >= WORTH_MIN && games ? `: about ${signed(winsOf(pts, games))} wins over the ${games} games left` : ''}.`]
+            : []),
+          ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched
+            ? [`Postseason odds with it: about ${pct(Math.min(1, Math.max(0, now.reach[0] + call.oddsGain / 1000)))}, as the forecast reads it.`]
+            : []),
+          ...offer.b.pids.map((pid) => `${contractText(league, league.players[pid])}.`),
+          ...dealGoals(league, offer)
+            .filter((d) => Math.abs(d.with - d.now) >= (d.kind === 'youth' ? 50 : 100))
+            .map(dealGoalText),
+        ].join('\n')
+      : '';
     const deal: CallChoice | null =
       offer && other
         ? {
             label: call!.mode === 'buy' ? `Trade for ${playerName(league.players[offer.b.pids[0]])}` : `Sell to ${other.abbrev}`,
             action: { kind: 'trade', id, offer },
-            confirm: `You send ${assetText(league, offer.a)}; the ${other.name} send ${assetText(league, offer.b)}. ${numbers}`.trim(),
+            confirm: `You send ${assetText(league, offer.a)}. The ${other.name} send ${assetText(league, offer.b)}. ${measured}`.trim(),
           }
         : null;
     cards.push({
@@ -1457,8 +1479,9 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       title: left === 0 ? 'Trade deadline: today' : `Trade deadline in ${plural(left, 'day')}`,
       line:
         deal && other
-          ? `${odds}The staff's call: ${flat ? "stand pat; the best buy it found doesn't measure as a gain" : call!.mode === 'buy' ? 'buy' : 'sell'}. ${assetText(league, offer!.b)} from the ${other.name} for ${assetText(league, offer!.a)}. ${numbers}`.trim()
+          ? `${odds}The staff's call: ${flat ? 'stand pat' : call!.mode === 'buy' ? `buy ${playerName(league.players[offer!.b.pids[0]])}` : `sell to the ${other.name}`}. ${measured}`.trim()
           : `${odds}The staff's call: ${none}`,
+      ...(detail ? { detail } : {}),
       tone: 'warn',
       to: '/office/trade',
       due: left === 0 ? 'Deals by the end of the day' : undefined,
@@ -1483,10 +1506,10 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const o = booksOutlook(league);
     // where the close is heading: this season's in season, next season's between seasons (none in the postseason: it has closed)
     const between = !['preseason', 'regular', 'playin', 'playoffs'].includes(league.phase);
-    const taxNote = p.tax <= 0 ? '' : o.sanctioned > 0 ? `, leaving out the ${money(o.sanctioned)} he signed off on` : `, after a ${money(p.tax)} luxury tax`;
+    const taxNote = p.tax <= 0 ? '' : o.sanctioned > 0 ? `That leaves out the ${money(o.sanctioned)} of tax he signed off on.` : `That's after a ${money(p.tax)} luxury tax.`;
     const heading =
       p.left > 0
-        ? `${between ? "next season's books project" : 'projected'} ${money(Math.abs(o.judged))} in the ${o.judged < 0 ? 'red' : 'black'}${between ? '' : " when the regular season's books close"}${taxNote}`
+        ? `${between ? "next season's books project" : 'projected'} ${money(Math.abs(o.judged))} in the ${o.judged < 0 ? 'red' : 'black'}${between ? '' : " when the regular season's books close"}`
         : '';
     const closed = money(-(b.close ?? team.cash));
     // the levers, each only when he can pull it now: the budgets (not under the freeze: it has cut
@@ -1526,25 +1549,41 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       gap > 0 && covers > 0
         ? covers >= gap
           ? `, enough to close the ${money(gap)} gap`
-          : `. It closes ${money(covers)} of the ${money(gap)} gap: on its own it won't change what happens ${between ? "when next season's books close" : 'when the books close'}${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
+          : `. It closes ${money(covers)} of the ${money(gap)} gap. On its own it won't change what happens ${between ? "when next season's books close" : 'when the books close'}${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
         : '';
+    // the call on the row; what it brings, and how much of the gap, a tap down
     const call =
       suggestion === cut
-        ? `cut the staff budgets to the league standard (saves ${money(save)}${between ? ' a season' : ' over the rest of the season'})${share}`
+        ? 'cut the staff budgets to the league standard'
         : suggestion === price
-          ? `price tickets at $${ticket!.price}, where the gate peaks (${money(ticket!.gain)} more over the home games left)${share}`
+          ? `price tickets at $${ticket!.price}`
           : suggestion === shed
-            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}${gap > 0 ? ` (${money(gap)} to find)` : ''}`
+            ? `shed salary${league.phase === 'regular' ? ' before the deadline' : ''}`
+            : '';
+    const brings =
+      suggestion === cut
+        ? `The cut saves ${money(save)}${between ? ' a season' : ' over the rest of the season'}${share}.`
+        : suggestion === price
+          ? `$${ticket!.price} is where the gate peaks: ${money(ticket!.gain)} more over the home games left${share}.`
+          : suggestion === shed && gap > 0
+            ? `${money(gap)} to find.`
             : '';
     const next = between ? "when next season's books close" : 'when the books close';
     // what digging deeper brings, in the Owner page's words (past the debt limit, or in the grace years)
     const deeper = deeperText(league, between);
+    const Heading = heading ? `${capitalize(heading)}.` : '';
     const lines: Record<typeof b.stage, string> = {
-      warning: `${capitalize(heading)}, and playoff money doesn't count. Still in the red then, and the owner gives you an ultimatum.`,
-      ultimatum: `${id === booksDueId(league) ? capitalize(heading) : `The books closed ${closed} in the red${heading ? `; ${heading}` : ''}`}. Still in the red ${next}, and he freezes the budget.`,
-      freeze: `Minimum deals only, no raises, no trade that takes on salary, until a season's books close in the black${heading ? `: ${heading}` : ''}. ${deeper}`,
-      final: `${deeper.slice(0, -1)}${heading ? `: ${heading}` : ''}.`,
+      warning: `${Heading} Still in the red then, and the owner gives you an ultimatum.`,
+      ultimatum: `${id === booksDueId(league) ? Heading : `The books closed ${closed} in the red.`} Still in the red ${next}, and he freezes the budget.`,
+      freeze: "Minimum deals only, no raises and no trades that add salary. It lasts until a season's books close in the black.",
+      final: deeper,
     };
+    const detail = [
+      ...(b.stage === 'freeze' ? [deeper] : []),
+      ...(heading && (b.stage === 'freeze' || b.stage === 'final' || (b.stage === 'ultimatum' && id !== booksDueId(league))) ? [Heading] : []),
+      ...(heading ? [`${b.stage === 'warning' ? "Playoff money doesn't count. " : ''}${taxNote}`.trim()] : []),
+      brings,
+    ].filter(Boolean);
     const titles: Record<typeof b.stage, string> = {
       warning: 'The books are heading into the red',
       ultimatum: "The owner's ultimatum: the books",
@@ -1555,7 +1594,8 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       id,
       kind: 'books',
       title: titles[b.stage],
-      line: `${lines[b.stage]}${call ? ` The staff's call: ${call}.` : ''}`,
+      line: `${lines[b.stage].trim()}${call ? ` The staff's call: ${call}.` : ''}`,
+      ...(detail.length ? { detail: detail.join('\n') } : {}),
       tone: 'bad',
       to: '/office/finances',
       suggestion,
@@ -1575,13 +1615,15 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       id,
       kind: 'skid',
       title: skidTitle(skid),
-      line: `${skid.diag ? `${skid.diag} ` : ''}${skid.put} The staff's call: ${
+      line: `The staff's call: ${
         skid.luck
-          ? `ride it out; the box scores say the shots will come back, and a trade doesn't change that.${look ? ` ${deals}` : ''}`
+          ? 'ride it out. The box scores say the shots will come back.'
           : look
-            ? `look for a trade; counters alone haven't turned it. ${deals}`
-            : 'ride it out; nobody the staff can find on the market is a fix.'
+            ? "look for a trade. Counters alone haven't turned it."
+            : 'ride it out. Nobody on the market is a fix.'
       }`,
+      // what's behind it, the counters the staff put in, and the window for a deal, a tap down
+      detail: [skid.diag, skid.put, skid.luck ? "A trade doesn't change the shots." : '', look ? deals : ''].filter(Boolean).join('\n'),
       tone: 'warn',
       to: `/games/${skid.opp}?tab=plan`,
       ...(skid.luck || !look ? { suggestion: ride, choices: look ? [look] : [] } : { suggestion: look, choices: [ride] }),
@@ -1621,7 +1663,7 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
         ok: true,
         text: items.length
           ? `The staff's plan vs ${abbrev}: ${items.map((x) => x.label).join(', ')}.`
-          : `The staff plays ${abbrev} with your playbook as it is: none of its counters measured as a gain.`,
+          : `The staff plays ${abbrev} with your playbook as it is. None of its counters measured as a gain.`,
       };
       break;
     }
@@ -1669,9 +1711,6 @@ export function resolveCall(league: League, a: CallAction): { ok: boolean; text:
     case 'ticketPrice':
       Object.assign(league.teams[league.userTid].budget, { ticketPrice: a.price, priceSet: true });
       r = { ok: true, text: `Tickets priced at $${a.price}.` };
-      break;
-    case 'weekPrep':
-      r = answerWeek(league, { focus: a.focus });
       break;
     case 'youthLean':
       r = answerWeek(league, { youth: true });

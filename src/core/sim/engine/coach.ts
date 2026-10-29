@@ -1,18 +1,15 @@
-// The coaches' side of a game, between possessions: the situational plan in effect (base tactics with
-// its patch on top), timeouts (who may call one in a live ball, the late-game limits, the staff's
-// automatic ones against a run, one asked for in the other side's live ball waiting for the dead ball)
-// and an AI coach's adjustments at the breaks, read from the tags the other side is cashing in.
+// The coaches' side of a game, between possessions: new base tactics from the bench, timeouts (who may
+// call one in a live ball, the late-game limits, the staff's automatic ones against a run, one asked
+// for in the other side's live ball waiting for the dead ball) and an AI coach's adjustments at the
+// breaks, read from the tags the other side is cashing in.
 
-import type { SituationalPlan, Tactics } from '../../types';
+import type { Tactics } from '../../types';
 import { archetype } from '../../ratings';
 import { GAME } from '../../constants';
 import type { FinishType } from '../log';
-import { MAX_SITUATIONS, applyPatch, cloneTactics, defRoleOf, withMentality } from '../tactics';
+import { cloneTactics, defRoleOf, withMentality } from '../tactics';
 import { type ST, ACTION_LIST, freedomMult } from './state';
 import type { GameSim } from './game';
-
-/** The on-ball defense every one of the five needs before a coach switches ball screens to break up a partnership. */
-const SWITCH_PERD = 50;
 
 /**
  * The adjustments the user's assistant doesn't make at the breaks of a simmed game (the side whose
@@ -28,53 +25,23 @@ const SWITCH_PERD = 50;
 const ASSISTANT_SKIPS = new Set(['hedge', 'backoff', 'home']);
 
 export const coachMethods = {
-  /** The first enabled situational plan whose trigger matches the game right now. */
-  situationFor(this: GameSim, t: ST): SituationalPlan | null {
-    const plans = t.base.situations;
-    if (!plans?.length) return null;
-    const lead = t.score - this.T[1 - t.side].score;
-    // overtime counts as the 4th quarter
-    const q = Math.min(this.q, 4);
-    for (const s of plans.slice(0, MAX_SITUATIONS)) {
-      const w = s.when;
-      if (!s.enabled || q < (w.fromQ ?? 1) || q > (w.untilQ ?? 4)) continue;
-      if ((w.maxClock !== undefined && this.clock > w.maxClock) || (w.minLead !== undefined && lead < w.minLead) || (w.maxLead !== undefined && lead > w.maxLead)) continue;
-      if (w.benchUnit && t.on.filter((p) => !p.starter).length < 3) continue;
-      return s;
-    }
-    return null;
-  },
-
-  /**
-   * Plays the situational plan that fits the game now (base tactics with its patch on top), when it
-   * changes or `rebase` brings new base tactics. No random draws: a team without situational plans
-   * plays exactly as before.
-   */
-  situate(this: GameSim, t: ST, rebase = false) {
-    const plan = this.situationFor(t);
-    const changed = (plan?.id ?? '') !== (t.sit?.id ?? '');
-    if (!changed && !rebase) return;
-    const before = JSON.stringify(t.t.defense);
+  /** Plays the team's base tactics (new ones from the bench), with the mentality's nudges on top. No random draws. */
+  rebase(this: GameSim, t: ST) {
     const shape = t.t.offense.shape;
-    t.drilled = plan ? applyPatch(t.base, plan.patch) : cloneTactics(t.base);
-    t.t = withMentality(t.drilled);
-    t.sit = plan && { id: plan.id, label: plan.label };
-    // (a role the tactics no longer set goes back to his archetype's, as at the tip: a plan's role
-    // doesn't outlast the plan)
+    t.t = withMentality(cloneTactics(t.base));
+    // (a role the tactics no longer set goes back to his archetype's, as at the tip)
     for (const p of t.players) {
       p.role = t.t.offense.roles[p.pid] ?? archetype(p.r).role;
       p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
       p.drole = defRoleOf(t.t.defense, p.pid);
       p.glass = t.t.offense.glass?.[p.pid] ?? 0;
     }
-    if (rebase || JSON.stringify(t.t.defense) !== before) this.refreshMatchups();
+    this.refreshMatchups();
     // (a new shape is new spacing for the five on the floor)
     if (t.t.offense.shape !== shape && t.on.length) {
       t.spacing = this.shapeSpacing(t);
       for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
     }
-    this.refreshFam(t);
-    if (changed) this.addPbp(t.side, plan ? `${t.team.abbrev} switches to its "${plan.label}" plan.` : `${t.team.abbrev} goes back to its base plan.`, 'other');
   },
 
   /** Whether the team on `side` may call a timeout now: in a dead ball, or with the ball in its hands. */
@@ -116,8 +83,7 @@ export const coachMethods = {
       const x = opp.pt[f];
       return x && x.poss >= 6 ? x.pts / x.poss : 0;
     };
-    // the change is decided on what is being played, and made to the base tactics too, so it
-    // outlasts a situational plan coming or going
+    // the change is decided on what is being played, and made to the base tactics too
     let what = '';
     /** Which kind of change it is (see ASSISTANT_SKIPS). */
     let kind = '';
@@ -150,11 +116,6 @@ export const coachMethods = {
       kind = 'unblitz';
       // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
       // so this is the 0.8 the coaches read before, the same games for them to react to)
-    } else if (d.pnr !== 'switch' && rate('link_twoMan:o') + rate('link_popMan:o') >= 0.3 && Math.min(...t.on.map((p) => p.c.perDef)) >= SWITCH_PERD) {
-      // a two-man game or a pick-and-pop they know cold: switching takes the screen, and the link, away
-      change = (x) => void (x.defense.pnr = 'switch');
-      what = 'switches ball screens to break up their two-man game';
-      kind = 'switch';
     } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.3 || rate('hedge_roll:o') >= 0.6)) {
       change = (x) => {
         x.defense.pnr = 'drop';
@@ -192,8 +153,6 @@ export const coachMethods = {
     if (!what || (t.team.assistant && ASSISTANT_SKIPS.has(kind))) return;
     change(t.t);
     change(t.base);
-    change(t.drilled);
-    this.refreshFam(t);
     // a hidden defender and chasers called off are new assignments
     if ((huntedD && weak) || junk) this.refreshMatchups();
     t.adjustedQ = this.q;

@@ -76,12 +76,12 @@ export function TalkPanel({
       </div>
       {st.firm ? (
         <div className="small warn">
-          He's had enough: only his ask now, {moneyExact(askAt)} for {yrs(years)}
-          {option ? ` with a ${option} option` : ''}, for the rest of the re-sign period.
+          He&apos;s had enough. Only his ask now, for the rest of the re-sign period: {moneyExact(askAt)} for {yrs(years)}
+          {option ? ` with a ${option} option` : ''}.
         </div>
       ) : (
         <div className="small dim2">
-          Offer his ask (<b className="num">{moneyExact(askAt)}</b> on these terms) and he signs. A little less may do; below that he counters.
+          Offer his ask, <b className="num">{moneyExact(askAt)}</b> on these terms, and he signs. A little less may do. Below that he counters.
         </div>
       )}
       {c && (
@@ -111,7 +111,7 @@ export function TalkPanel({
       {!st.firm && (
         <More label="How talks go">
           <p className="tiny dim">
-            {patienceText(st.patience)} A lowball (under {Math.round(LOWBALL * 100)}% of his ask) counts twice and costs some of his interest in you. If talks break down,{' '}
+            {patienceText(st.patience)} A lowball, under {Math.round(LOWBALL * 100)}% of his ask, counts twice and costs some of his interest in you. If talks break down,{' '}
             {breakdownRule(league, kind)}.
           </p>
         </More>

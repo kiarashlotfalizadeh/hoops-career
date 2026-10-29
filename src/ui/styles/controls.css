@@ -188,6 +188,45 @@
 .seg.tabs button.on:first-child::before {
   left: 0;
 }
+/* a hub's sticky page tabs (TabBar) fit five short tabs on a phone without scrolling: measured by
+   the row's own width (a desktop scrollbar takes 15px the viewport's width still counts), and a step
+   above the hubs' own tab rules (`:root`), which load later with their screens */
+.tabbar {
+  container-type: inline-size;
+}
+@container (max-width: 400px) {
+  :root .tabbar.lg-tabs .seg.tabs {
+    gap: 0;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button {
+    padding: 0 6px;
+    font-size: 14.5px;
+    letter-spacing: -0.03em;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button.on::before {
+    left: 6px;
+    right: 6px;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button:first-child {
+    padding-left: 12px;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button.on:first-child::before {
+    left: 12px;
+  }
+}
+@container (max-width: 340px) {
+  :root .tabbar.lg-tabs .seg.tabs > button {
+    padding: 0 4px;
+    font-size: 13px;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button.on::before {
+    left: 4px;
+    right: 4px;
+  }
+  :root .tabbar.lg-tabs .seg.tabs > button:first-child {
+    padding-left: 12px;
+  }
+}
 /* (the sticky page tabs pad their own row to the gutter: their first tab keeps its padding) */
 .lg-tabs .seg.tabs > button:first-child {
   padding-left: 12px;

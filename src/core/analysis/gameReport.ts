@@ -43,9 +43,6 @@ interface Tpl {
 const dropping = (t: Tactics) => t.defense.scheme === 'man' && t.defense.pnr === 'drop';
 /** Whether the tactics give anyone this out-of-possession role. */
 const hasRole = (t: Tactics, r: DefRole) => Object.values(t.defense.roles ?? {}).includes(r);
-/** A team a step slow in what it plays: the advice for both ends (practice is the fix, not another change). */
-const FAM_ADVICE =
-  'A system the team hasn’t drilled plays a step slow. Stick with it and drill it (Tactical drills, on Today) rather than changing it again, or go back to what the team knows until it’s learned.';
 
 /** Team nicknames are plural, so their possessive drops the extra s: "the Celtics" → "the Celtics'", "your team" → "your team's". */
 export const possessive = (x: string) => (x.endsWith('s') ? `${x}'` : `${x}'s`);
@@ -68,12 +65,12 @@ export const impactSentence = (key: string, X: string, Y: string, who = '') => {
 export const IMPACT_TEXT: Record<string, Tpl> = {
   'drop_pullup:o': {
     text: (X, _Y, w) => `${X} attacked drop coverage with pull-up jumpers${w}.`,
-    advice: 'Against elite pull-up shooters, try Hedge or Ice instead of Drop, or switch if your big can move.',
+    advice: 'Against elite pull-up shooters, go to Hedge or Ice. Switch if your big can move.',
     uses: dropping,
   },
   'drop_rim:d': {
     text: (X) => `${possessive(X)} drop coverage walled off the rim on pick-and-rolls.`,
-    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs (Instructions > In possession > Play through).',
+    advice: 'Against drop, lean on pull-up shooters, popping bigs and handoffs. In possession → Play through.',
   },
   'drop_pop:o': {
     text: (X, _Y, w) => `${possessive(X)} popping big punished the drop with open threes${w}.`,
@@ -82,39 +79,39 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'drop_handoff:o': {
     text: (X, _Y, w) => `${X} ran handoffs into the drop for clean looks${w}.`,
-    advice: 'Switching off-ball screens (Instructions > Out of possession > Fine-tune) neutralizes handoffs.',
+    advice: 'Switching off-ball screens takes handoffs away. Out of possession → Fine-tune.',
     uses: (t) => dropping(t) && !t.defense.switchOffBall,
   },
   'switch_mismatch:o': {
     text: (X, _Y, w) => `${X} hunted switches to get favorable matchups${w}.`,
-    advice: 'Stop switching when you have a slow big on the floor, or go to Drop/Ice coverage.',
+    advice: 'Stop switching with a slow big on the floor. Go to Drop or Ice.',
     uses: (t) => t.defense.scheme === 'man' && t.defense.pnr === 'switch',
   },
   'switch_mismatch:d': { text: (X) => `${X} switched screens without giving up real mismatches.` },
   'switch_deny:d': {
     text: (X) => `${possessive(X)} switching blew up off-ball screens and handoffs.`,
-    advice: 'Against a switching defense, isolate mismatches (Instructions > In possession > Fine-tune) and post up smaller defenders.',
+    advice: 'Against a switching defense, isolate mismatches and post up smaller defenders. In possession → Fine-tune.',
   },
   'switch_screen:d': {
-    text: (X) => `${possessive(X)} switches took away the screen on pick-and-rolls: no open roll man, no pull-up space.`,
-    advice: 'Against a switching defense, hunt the weakest defender (Instructions > In possession > Fine-tune) and post up smaller players.',
+    text: (X) => `${possessive(X)} switches took away the screen on pick-and-rolls: no roll man, no pull-up space.`,
+    advice: 'Against a switching defense, hunt the weakest defender and post up smaller players. In possession → Fine-tune.',
   },
   'hedge_stall:d': { text: (X) => `${possessive(X)} hedges stalled ball handlers on the pick-and-roll.` },
   'hedge_roll:o': {
     text: (X, _Y, w) => `${possessive(X)} roll men found space behind the hedge${w}.`,
-    advice: 'Slow bigs should not hedge; use Drop instead.',
+    advice: 'Slow bigs should not hedge. Use Drop instead.',
     uses: (t) => t.defense.scheme === 'man' && t.defense.pnr === 'hedge',
   },
   'hedge_roll:d': { text: (X) => `${possessive(X)} mobile bigs recovered to the roll man after hedging.` },
   'hedge_rotate:o': { text: (X) => `${X} found open shooters when the defense rotated behind its hedges.` },
   'blitz_to:d': {
     text: (X, _Y, w) => `${possessive(X)} traps forced turnovers${w}.`,
-    advice: 'Against blitzes, put your best passer in the pick-and-roll, or set screens with a big who can pass on the short roll.',
+    advice: 'Against blitzes, put your best passer in the pick-and-roll. Or screen with a big who passes.',
   },
   'blitz_4v3:o': {
     text: (X, _Y, w) => `${X} beat the blitz with quick passes into 4-on-3s${w}.`,
     // a Star plan double traps the star's ball screens too
-    advice: 'Stop trapping good passers: Hedge or Drop instead of Blitz, and no Star plan double (Instructions).',
+    advice: 'Stop trapping good passers: Hedge or Drop instead of Blitz, and no Star plan double.',
     uses: (t) => t.defense.scheme === 'man' && (t.defense.pnr === 'blitz' || t.defense.starPlan === 'double'),
   },
   'blitz_4v3:d': { text: (X) => `${possessive(X)} traps left the offense no clean outlet.` },
@@ -123,7 +120,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'press_to:o': { text: (X) => `${X} broke the press without turning it over.` },
   'ice_corner:o': {
     text: (X, Y, w) => `${X} found the weak-side corner when ${Y} iced ball screens${w}.`,
-    advice: 'Against a team that makes corner threes, take your coverage out of Ice: Drop or Switch.',
+    advice: 'Against a team that makes corner threes, take your coverage out of Ice. Drop or Switch.',
     uses: (t) => t.defense.scheme === 'man' && t.defense.pnr === 'ice',
   },
   'ice_corner:d': { text: (X) => `${possessive(X)} ice coverage left the corner to shooters who missed.` },
@@ -135,7 +132,7 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'switch_slip:d': { text: (X) => `${X} switched without getting caught by the slip.` },
   'zone_paint:d': {
     text: (X) => `${possessive(X)} zone clogged driving lanes and post-ups.`,
-    advice: 'Beat zones with Motion & cuts (Instructions > In possession > Play through), shooters in the corners and a high-post passer.',
+    advice: 'Beat zones with Motion & cuts, shooters in the corners and a high-post passer. In possession → Play through.',
   },
   'zone_3pt:o': {
     text: (X, _Y, w) => `${X} found open threes against the zone${w}.`,
@@ -145,21 +142,21 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'zone_3pt:d': { text: (X) => `${possessive(X)} 3-2 zone chased shooters off the arc.` },
   'zone_glass:o': {
     text: (X) => `${X} won second chances off the zone's loose box-outs.`,
-    advice: 'Zones struggle to box out; play man against strong rebounding teams.',
+    advice: 'Zones struggle to box out. Play man against strong rebounding teams.',
     uses: (t) => t.defense.scheme !== 'man',
   },
   'help_paint:d': {
     text: (X) => `${X} packed the paint and contested drives at the rim.`,
-    advice: 'Space the floor with more shooters, and raise Three-point emphasis (Instructions) to punish help.',
+    advice: 'Play more shooters, and move Shot profile toward threes to punish help.',
   },
   'help_paint:o': {
     text: (X, Y) => `${Y} stayed home on shooters, and ${X} drove into the open lanes.`,
-    advice: 'Raise Help defense (Instructions) against teams that live at the rim.',
+    advice: 'Raise Help defense against teams that live at the rim.',
     uses: (t) => t.defense.help < 50,
   },
   'help_kick:o': {
     text: (X, _Y, w) => `${X} punished heavy help with kick-out threes${w}.`,
-    advice: 'Lower Help defense (Instructions) to stay home on good shooting teams.',
+    advice: 'Lower Help defense to stay home on good shooting teams.',
     uses: (t) => t.defense.help > 50,
   },
   'help_kick:d': { text: (X) => `${X} helped less and left fewer shooters open for kick-outs.` },
@@ -170,22 +167,22 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'pressure_to:d': {
     text: (X) => `${possessive(X)} ball pressure forced turnovers.`,
-    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens (Instructions > In possession > Play through) against pressure.',
+    advice: 'Give the ball to your most secure handlers, or run more Handoffs & screens against pressure.',
   },
   'pressure_to:o': {
     text: (X, Y) => `${X} turned it over less with ${Y} sitting off the ball.`,
-    advice: 'Turn up Ball pressure (Instructions) against shaky ball handlers.',
+    advice: 'Turn up Ball pressure against shaky ball handlers.',
     uses: (t) => t.defense.pressure < 50,
   },
   'pressure_blowby:o': {
     text: (X, _Y, w) => `${possessive(X)} handlers blew by aggressive on-ball defenders${w}.`,
-    advice: 'Back off the Ball pressure (Instructions) against quick creators.',
+    advice: 'Back off the Ball pressure against quick creators.',
     uses: (t) => t.defense.pressure > 60,
   },
   'pressure_blowby:d': { text: (X) => `${X} gave ball handlers room and kept them in front.` },
   'pressure_foul:o': {
     text: (X, _Y, w) => `${X} drew reach-in fouls against aggressive ball pressure${w}.`,
-    advice: 'Lower Ball pressure (Instructions) once you are in the penalty.',
+    advice: 'Lower Ball pressure once you are in the penalty.',
     uses: (t) => t.defense.pressure > 60,
     cat: 'fouls',
   },
@@ -194,34 +191,34 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'press_to:d': { text: (X) => `${possessive(X)} full-court press created turnovers.` },
   'press_break:o': {
     text: (X) => `${X} broke the press for easy baskets.`,
-    advice: 'Your press is being broken. Turn it off against good ball-handling teams (Instructions > Transition > Full-court press).',
+    advice: 'Your press is being broken. Turn it off against good ball-handling teams. Transition → Full-court press.',
     uses: (t) => t.defense.press !== 'none',
   },
   'crash_orb:o': {
     text: (X) => `${X} crashed the glass and got second chances.`,
-    advice: 'Play a better defensive rebounder at center, and make them pay for crashing: push the ball off defensive rebounds (Instructions > Transition > After a stop).',
+    advice: 'Play a better defensive rebounder at center. Punish the crash by pushing off defensive rebounds. Transition → After a stop.',
   },
   'crash_orb:d': {
     text: (_X, Y) => `${Y} passed up second chances by staying off the offensive glass.`,
-    advice: 'Send more players to the offensive glass (Instructions > Transition > When a shot goes up).',
+    advice: 'Send more players to the offensive glass. Transition → When a shot goes up.',
     uses: (t) => t.offense.crashBoards < 45,
   },
   'crash_leak:o': {
     text: (X, Y) => `${X} got out in transition because ${Y} crashed the offensive glass.`,
-    advice: 'Crash the offensive glass less (Instructions) if you keep giving up run-outs.',
+    advice: 'Crash the offensive glass less if you keep giving up run-outs.',
     uses: (t) => t.offense.crashBoards > 60,
   },
   'crash_leak:d': { text: (X) => `${X} kept players back from the glass and gave up fewer run-outs.` },
   'getback:d': { text: (X) => `${possessive(X)} transition defense limited fast breaks.` },
   'getback:o': {
     text: (X, Y) => `${possessive(Y)} slow transition defense gave ${X} run-outs.`,
-    advice: 'Raise Transition defense (Instructions) against fast teams.',
+    advice: 'Raise Transition defense against fast teams.',
     uses: (t) => t.defense.getBack < 50,
   },
   'transition:o': { text: (X) => `${X} ran after stops for easy transition chances.`, cat: 'pace' },
   'transition:d': {
     text: (X, Y) => `${Y} walked the ball up, so ${X} got set on defense more often.`,
-    advice: 'Push the ball after stops and steals (Instructions > Transition > After a stop).',
+    advice: 'Push the ball after stops and steals. Transition → After a stop.',
     uses: (t) => t.offense.transition < 50,
     cat: 'pace',
   },
@@ -232,93 +229,82 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'double_kick:o': {
     text: (X, _Y, w) => `${X} punished double teams with open looks${w}.`,
     // doubles come from the Star plan, and from heavy help on drives and post-ups
-    advice: 'Stop doubling a good passer when his teammates can shoot: no Star plan double, less Help defense (Instructions).',
+    advice: 'Stop doubling a good passer when his teammates can shoot. No Star plan double, less help.',
     uses: (t) => t.defense.starPlan === 'double' || t.defense.help > 50,
   },
   'mismatch_post:o': { text: (X, _Y, w) => `${X} posted up smaller defenders${w}.` },
   'physicality:o': {
     text: (X) => `${X} drew fouls against an overly physical defense.`,
-    advice: 'Defend without fouling (a counter in the game plan) to cut down free throws.',
+    advice: 'Add Defend without fouling to the game plan to cut down free throws.',
     uses: (t) => t.defense.physicality > 50,
     cat: 'fouls',
   },
   'physicality:d': { text: (X) => `${possessive(X)} physical defense won more on contests than it gave away at the line.`, cat: 'fouls' },
   'clean_defense:o': {
     text: (X, Y) => `${X} got clean looks against ${possessive(Y)} foul-wary defense.`,
-    advice: 'A more physical defense (a playbook that plays one) contests harder.',
+    advice: 'A more physical defense contests harder. Pick a playbook that plays one.',
     uses: (t) => t.defense.physicality < 50,
     cat: 'fouls',
   },
   'clean_defense:d': { text: (X) => `${X} defended without contact and saved the free throws a physical defense gives up.`, cat: 'fouls' },
   'fatigue:d': {
     text: (_X, Y) => `${Y} wore down: tired legs cost them shooting accuracy.`,
-    advice: 'Shorten stints (Rotation), or raise "Sub out tired players at" (Tactics > Match) to sub tired players out sooner; heavy minutes cost shooting.',
+    advice: 'Shorten stints in Rotation, or sub tired players out sooner in Match. Heavy minutes cost shooting.',
     cat: 'fatigue',
   },
   'box_chase:d': {
-    text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, late catches, few clean looks${w}.`,
-    advice:
-      'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs and let the others attack the zone with ball movement (Instructions > In possession > Play through: Motion or Handoffs).',
+    text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, fewer clean looks${w}.`,
+    advice: 'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs. Let the others attack the zone with ball movement.',
     uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
   },
   'box_open:o': {
     text: (X, _Y, w) => `${X} found open threes and gaps against the junk defense${w}.`,
-    advice: 'The players your junk defense leaves to the zone are making it pay: go back to man-to-man (Instructions > Out of possession > Scheme).',
+    advice: 'The players your junk defense leaves are making it pay. Go back to man-to-man in Scheme.',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'box_beat:o': {
     text: (X, _Y, w) => `${possessive(X)} chased player beat a defender caught high, on the catch and backdoor${w}.`,
-    advice:
-      'Your chaser is getting beaten off the dribble and backdoor: chase him with a quicker defender (Matchups), or go back to man-to-man (Instructions > Out of possession > Scheme).',
+    advice: 'Your chaser is getting beaten off the dribble and backdoor. Chase with a quicker defender on Matchups, or go man-to-man.',
     uses: (t) => isJunk(t.defense.scheme),
   },
   'hunt:o': {
     text: (X, _Y, w) => `${X} hunted a weak link in the defense with isolations and ball screens${w}.`,
-    advice: 'Hide the defender they hunt on their weakest scorer (Matchups), or sub him out.',
+    advice: 'Hide the defender they hunt on their weakest scorer in Matchups, or sub him out.',
   },
   'hunt:d': {
     text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,
-    advice: 'Hunting one defender costs ball movement: keep it for a real weak link, or stop the hunt (Plan > Attack a defender).',
+    advice: 'Hunting one defender costs ball movement. Keep it for a real weak link, or stop it on the Plan.',
     uses: (t) => t.offense.huntTarget != null,
   },
   'foul_give:d': { text: (X) => `${possessive(X)} fouls to give broke up last-shot plays.` },
   'foul_give:o': {
     text: (X, _Y, w) => `${X} got free throws when a foul to give came on the shot${w}.`,
-    advice: 'A foul to give has to come before the shot: turn it off if it keeps sending them to the line (Tactics > Match).',
+    advice: 'A foul to give has to come before the shot. Turn it off in Match if it sends them to the line.',
     uses: (t) => !!t.manage.foulToGive,
     cat: 'fouls',
   },
   'hack:d': { text: (X, _Y, w) => `${possessive(X)} Hack-a-player paid off${w}.` },
-  // familiarity: a unit a step slow in tactics it hasn't drilled (see sim/familiarity.ts)
-  'fam_off:d': {
-    text: (X, Y, w) => `${Y} ran an offense it hasn't learned yet: a step slow, it settled for tougher shots and turned it over more against ${X}${w}.`,
-    advice: FAM_ADVICE,
-  },
-  'fam_def:o': {
-    text: (X, Y, w) => `${X} got cleaner looks against ${possessive(Y)} defense, a step slow in a scheme it hasn't drilled${w}.`,
-    advice: FAM_ADVICE,
-  },
   // the half-court shape
   'shape_glass:o': {
     text: (X) => `${possessive(X)} double post kept two bigs under the glass for second chances.`,
-    advice: 'Against two bigs inside, play your best defensive rebounders and keep bodies back to box out.',
+    advice: 'Against two bigs inside, play your best defensive rebounders and keep bodies back.',
     cat: 'rebounding',
   },
   'shape_glass:d': {
-    text: (X, Y) => `${Y} had nobody near the offensive glass out of the 5-Out, and ${X} cleaned up the misses.`,
-    advice: 'Five-out trades the offensive glass for room to drive: worth it only while the spacing pays (Tactic > Shape).',
+    text: (X, Y) => `${Y} left the offensive glass empty out of the 5-Out, and ${X} cleaned up.`,
+    advice: 'Five-out trades the offensive glass for room to drive. It pays only while the spacing does.',
     cat: 'rebounding',
   },
-  'shape_space:o': { text: (X, _Y, w) => `${possessive(X)} half-court shape opened the paint: more room at the rim for drives, cuts and bigs inside${w}.` },
+  'shape_space:o': { text: (X, _Y, w) => `${possessive(X)} half-court shape opened the paint for drives, cuts and bigs inside${w}.` },
   'shape_space:d': {
     text: (X, Y, w) => `${possessive(Y)} half-court shape crowded the paint, and ${X} walled off the rim${w}.`,
-    advice: 'Your shape is costing you room: play the one that suits the five on the floor (Tactic > Shape), five-out only with five who can shoot.',
+    advice: 'Your shape is costing you room. Play five-out only with five who can shoot. Tactic → Shape.',
   },
-  'shape_tov:o': { text: (X, _Y, w) => `${X} took care of the ball out of Horns, every trip starting from a set they know cold${w}.`, cat: 'turnovers' },
+  'shape_tov:o': { text: (X, _Y, w) => `${X} took care of the ball out of the Horns shape${w}.`, cat: 'turnovers' },
   // out-of-possession roles
   'role_poa:d': {
     text: (X, _Y, w) => `${possessive(X)} point-of-attack stopper stayed in front of the ball and forced turnovers${w}.`,
-    advice: 'Against a point-of-attack stopper, start the offense with someone else: more handoffs and off-ball screens, fewer isolations for the man he picks up.',
+    advice: 'Against a point-of-attack stopper, start the offense with someone else. Run more handoffs and off-ball screens.',
   },
   'role_stopper:d': {
     text: (X, _Y, w) => `${possessive(X)} wing stopper made every look tough for the scorer he guarded${w}.`,
@@ -326,37 +312,22 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   },
   'role_anchor:d': {
     text: (X, _Y, w) => `${possessive(X)} rim anchor contested everything at the rim${w}.`,
-    advice: 'Against a rim anchor, pull him out of the paint: more threes, and a big who can shoot so the man he leaves makes him pay.',
+    advice: 'Against a rim anchor, pull him out of the paint. Shoot more threes, with a big who can shoot.',
   },
   'role_anchor:o': {
     text: (X, Y, w) => `${X} made ${possessive(Y)} rim anchor pay for living in the paint${w}.`,
-    advice: 'The man your rim anchor leaves is making him pay: give the role to a big guarding a non-shooter, or make him a Position Defender (Tactic, on the board).',
+    advice: 'The man your rim anchor leaves is making him pay. Give the role to a big guarding a non-shooter, or make him a Position Defender.',
     uses: (t) => hasRole(t, 'anchor'),
   },
   'role_roam:d': { text: (X, _Y, w) => `${possessive(X)} roamer left a non-shooter to help, and walled off drives, cuts and rolls${w}.` },
   'role_roam:o': {
     text: (X, Y, w) => `${X} found the man ${possessive(Y)} roamer left, open on kick-outs${w}.`,
-    advice: 'Their kick-outs are finding the man your roamer leaves: roam off a player who can’t shoot, or make him a Position Defender (Tactic, on the board).',
+    advice: 'Their kick-outs find the man your roamer leaves. Roam off a non-shooter, or make him a Position Defender.',
     uses: (t) => hasRole(t, 'roamer'),
-  },
-  // partnerships (see sim/links.ts)
-  'link_twoMan:o': { text: (X, _Y, w) => `${possessive(X)} two-man game kept finding the roll man${w}.` },
-  'link_popMan:o': { text: (X, _Y, w) => `${X} ran their pick-and-pop in rhythm${w}.` },
-  'link_inOut:o': { text: (X, _Y, w) => `${possessive(X)} post hub found his shooters on the kick-out${w}.` },
-  'link_dho:o': { text: (X, _Y, w) => `${possessive(X)} hub and his runners worked the handoffs and backdoor cuts${w}.` },
-  'link_wall:d': {
-    text: (X, _Y, w) => `${possessive(X)} stopper sent the drives into his rim anchor${w}.`,
-    advice:
-      'Against a stopper and a rim anchor working together, start the offense away from the stopper (handoffs, off-ball screens) and pull the anchor out with a big who can shoot.',
-  },
-  'clash_crowd:d': {
-    text: (X, Y, w) => `${Y} had two bigs living in the paint, and ${X} packed it against everyone else's drives${w}.`,
-    advice: 'Two inside bigs crowd the paint out of this shape: play a Double Post (Tactic > Shape), make one of them a Stretch Big or Glue Guy, or stagger their minutes.',
-    uses: (t) => (t.offense.shape ?? 'fourOut') !== 'twoIn',
   },
   'hack:o': {
     text: (X, _Y, w) => `${X} made the free throws when intentionally fouled${w}.`,
-    advice: 'Hack-a-player only works against truly bad free-throw shooters: lower the Hack-a-player threshold (Tactics > Match) or drop the target from your game plan.',
+    advice: 'Hack-a-player only works on truly bad free-throw shooters. Lower its threshold in Match, or drop the target.',
     uses: (t) => hacks(t.manage),
   },
 };
@@ -397,15 +368,13 @@ for (const id of SET_IDS) {
   IMPACT_TEXT[`set_${id}:o`] = { text: SET_TEXT[id].o };
   IMPACT_TEXT[`set_${id}:d`] = {
     text: SET_TEXT[id].d,
-    advice: `${SETS[id].name} doesn't work against this defense: take it out of your set package (Instructions > In possession > Set package), or call something else.`,
-    uses: (t) => !!t.offense.sets?.includes(id),
+    advice: `${SETS[id].name} doesn't work against this defense. Call something else.`,
   };
 }
 // (a read always pays the defense)
 IMPACT_TEXT['set_read:d'] = {
-  text: (X, _Y, w) => `${X} read the sets they kept seeing: their looks came up covered and their passes got jumped${w}.`,
-  advice:
-    "Call each set a few times a game, not every trip: the more a defense sees one, the less open its look (better coaches read them faster). Your package drops a set once they're on it; a call runs it anyway.",
+  text: (X, _Y, w) => `${X} read the sets they kept seeing and jumped their passes${w}.`,
+  advice: 'Call each set a few times a game, not every trip. Defenses read the ones they keep seeing.',
 };
 
 /** "Halftime: the Thunder lead the Celtics 55-50. Biggest factor so far: …" (the factor that went the leader's way, the biggest one when tied). */
@@ -416,13 +385,14 @@ function partialHeadline(us: string, them: string, a: number, b: number, periods
 
 /**
  * A factor's title inside the headline's sentence: "Turnover battle: NYK 18, CLE 11." reads
- * "Turnover battle (NYK 18, CLE 11)" after the headline's own colon, and a team's "The" goes lower case.
+ * "turnover battle, NYK 18, CLE 11" after the headline's own colon (one colon to a sentence), and a
+ * team's "The" goes lower case.
  */
 const factorPhrase = (title: string) =>
   title
     .replace(/\.$/, '')
-    .replace(/: (.+)$/, ' ($1)')
-    .replace(/^The /, 'the ');
+    .replace(/: (.+)$/, ', $1')
+    .replace(/^(The|Turnover|Offensive|Free) /, (w) => w.toLowerCase());
 
 /**
  * Settings that trade one effect for another: what the other team got from the setting (`costs`)
@@ -533,7 +503,7 @@ function names(league: League, im: TacticImpact, max = 2) {
     .slice(0, max)
     .map(([pid]) => (league.players[+pid] ? shortName(league, league.players[+pid]) : undefined))
     .filter(Boolean);
-  return top.length ? ` (${top.join(', ')})` : '';
+  return top.length ? top.join(' and ') : '';
 }
 
 function fourFactors(t: TeamBox, o: TeamBox) {
@@ -622,10 +592,11 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const lv = benefitUser ? null : leverNet(res.impacts, im.key, userSide);
     const paid = !benefitUser && leverPaid(res.impacts, im.key, userSide);
     const won = benefitUser ? LEVERS.find((l) => l.gains.includes(im.key))?.what : undefined;
+    const who = names(league, im);
     factors.push({
-      title: impactSentence(im.key, X, Y, names(league, im)),
-      // (the report leads the row with what it was worth)
-      detail: paid ? `Over ${plural(im.count, 'play')}. Your ${lv!.what} won ${lv!.won.toFixed(1)} back.` : `Over ${plural(im.count, 'play')}.`,
+      title: impactSentence(im.key, X, Y),
+      // (the report leads the row with what it was worth; who was in it is the detail's)
+      detail: `Over ${plural(im.count, 'play')}${who ? `, mostly ${who}` : ''}.${paid ? ` Your ${lv!.what} won ${lv!.won.toFixed(1)} back.` : ''}`,
       pts: benefitUser ? im.pts : -im.pts,
       category: tpl.cat ?? 'tactics',
       advice: benefitUser || paid ? undefined : impactAdvice(im.key, tactics),
@@ -654,7 +625,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       const [hi, lo] = looks > 0 ? [xefg(xu, u.t.fga), xefg(xo, o.t.fga)] : [xefg(xo, o.t.fga), xefg(xu, u.t.fga)];
       factors.push({
         title: `The ${looks > 0 ? ut.name : ot.name} got the better looks: worth ${pct(hi)} eFG vs ${pct(lo)}.`,
-        detail: 'What the shots were worth as they were taken (the shooter, how open, the contest), before any of them fell.',
+        detail: 'What the shots were worth as taken, before any fell. That counts the shooter, how open he was and the contest.',
         pts: looks,
         category: 'shooting',
         topic: 'shooting',
@@ -666,8 +637,8 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       const dv = fo.efg - xefg(xo, o.t.fga);
       const [who, d] = Math.abs(du) >= Math.abs(dv) ? [ut.name, du] : [ot.name, dv];
       factors.push({
-        title: `${possessive(`The ${who}`)} shots ${d > 0 ? 'fell' : "didn't fall"}: ${ut.abbrev} ${pct(fu.efg)} eFG on looks worth ${pct(xefg(xu, u.t.fga))}, ${ot.abbrev} ${pct(fo.efg)} on ${pct(xefg(xo, o.t.fga))}.`,
-        detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)} (${madeAtt(u.t.tpm, u.t.tpa)} 3P) · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)} (${madeAtt(o.t.tpm, o.t.tpa)} 3P). Shots falling above or below what they were worth is luck: nothing to change for it.`,
+        title: `${possessive(`The ${who}`)} shots fell ${d > 0 ? 'above' : 'below'} their looks.`,
+        detail: `${ut.abbrev} shot ${pct(fu.efg)} eFG on looks worth ${pct(xefg(xu, u.t.fga))}, ${ot.abbrev} ${pct(fo.efg)} on ${pct(xefg(xo, o.t.fga))}. That part is luck, with nothing to change.`,
         pts: fell,
         category: 'shooting',
         topic: 'shotmaking',
@@ -678,7 +649,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
     const better = efgSwing > 0 ? ut.name : ot.name;
     factors.push({
       title: `The ${better} shot it better: eFG ${(Math.max(fu.efg, fo.efg) * 100).toFixed(1)}% vs ${(Math.min(fu.efg, fo.efg) * 100).toFixed(1)}%.`,
-      detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)} (${madeAtt(u.t.tpm, u.t.tpa)} 3P) · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)} (${madeAtt(o.t.tpm, o.t.tpa)} 3P)`,
+      detail: `${ut.abbrev} ${madeAtt(u.t.fgm, u.t.fga)}, ${madeAtt(u.t.tpm, u.t.tpa)} from three · ${ot.abbrev} ${madeAtt(o.t.fgm, o.t.fga)}, ${madeAtt(o.t.tpm, o.t.tpa)} from three.`,
       pts: efgSwing,
       category: 'shooting',
       topic: 'shooting',
@@ -692,7 +663,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       pts: tovSwing,
       category: 'turnovers',
       topic: 'turnovers',
-      advice: tovSwing < 0 ? 'Shift creation to your most secure ball handlers (Tactics → Players) or lower the pace.' : undefined,
+      advice: tovSwing < 0 ? 'Put the ball in your most secure handlers’ hands, or slow the pace.' : undefined,
     });
   }
   const orbSwing = (u.t.orb - o.t.orb) * 1.05;
@@ -704,10 +675,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       category: 'rebounding',
       topic: 'rebounding',
       // your own crashing only changes your own offensive boards
-      advice:
-        orbSwing < 0
-          ? 'Play better defensive rebounders, and avoid a zone against strong rebounding teams; to win the glass yourself, raise Crash the offensive glass (Instructions).'
-          : undefined,
+      advice: orbSwing < 0 ? 'Play better defensive rebounders, and no zone against strong rebounding teams. To win the glass yourself, crash harder.' : undefined,
     });
   }
   const ftSwing = (u.t.ftm - o.t.ftm) * 0.6;
@@ -722,10 +690,9 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       // a physical defense's lever, one tap away (as its own effect's is); played clean already, it came from who fouled whom
       ...(ftSwing < 0 &&
         (impactAdvice('physicality:o', tactics)
-          ? { key: 'physicality:o', advice: 'Play cleaner: defend without fouling (a counter in the game plan). It gives up a little on contests and sends them to the line less.' }
+          ? { key: 'physicality:o', advice: 'Play cleaner: add Defend without fouling to the game plan. It contests a little less and fouls less.' }
           : {
-              advice:
-                'Not from how physical you played: check who fouled in the box score, keep a foul-prone defender off their best driver (Matchups), or sit him in foul trouble.',
+              advice: 'Not from how physical you played. Check who fouled in the box score, and sit him in foul trouble.',
             })),
     });
   }

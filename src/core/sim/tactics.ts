@@ -10,8 +10,6 @@ import type {
   OffenseTactics,
   PnrCoverage,
   PressMode,
-  SituationTrigger,
-  SituationalPlan,
   StarPlan,
   Tactics,
   TacticsPatch,
@@ -38,7 +36,7 @@ export interface DefPreset {
 
 /**
  * The offensive playbooks. Their action mixes were set again in 2026-10 against what the engine says
- * each is worth (every playbook for 90 real and fictional rosters, fully drilled, against every other
+ * each is worth (every playbook for 90 real and fictional rosters against every other
  * team, paired games): as first written, Heliocentric beat the roster's average playbook by 1.5 a
  * game and was the best for 73 of 90 rosters whatever they had (its edge was its action mix: more
  * pick-and-roll, less motion, which pay nearly every roster), while Hub Big and Grit & Grind were
@@ -48,7 +46,13 @@ export interface DefPreset {
  * the best for a roster now depending on the roster (see the fits in core/ai/coachAI.ts). On the
  * engine as it plays since a shooter's three-point volume levels off, against the roster's average
  * playbook: Pace & Space +0.4, Five-Out +0.3, Heliocentric +0.1, Balanced 0.0, Hub Big −0.3, Grit &
- * Grind −0.5, and none the best for more than a third of the rosters.
+ * Grind −0.5, and none the best for more than a third of the rosters. Once partnerships and
+ * familiarity were deleted (2026-10-28), Five-Out read best for 20 of the real league's 30 rosters, so
+ * it was slowed (pace and transition 58/60 → 44/44) and takes fewer threes (80 → 70, still the most),
+ * and Pace & Space takes fewer threes (72 → 64), pushes a little less (66 → 63) and attacks the rim
+ * less (66 → 58). Against the roster's average playbook over the real league (two seed groups): Pace &
+ * Space +0.1, Five-Out +0.1, Balanced +0.1, Heliocentric 0.0, Grit & Grind 0.0, Hub Big −0.3, none the
+ * measured best for more than 11 of the 30.
  */
 export const OFF_PRESETS: OffPreset[] = [
   {
@@ -64,7 +68,7 @@ export const OFF_PRESETS: OffPreset[] = [
     name: 'Heliocentric',
     tagline: 'Give the star the ball',
     description: 'Your best creator runs high pick-and-rolls and isolations while four teammates space the floor.',
-    bestFor: 'One elite creator (high handling, passing and pull-up shooting) surrounded by shooters.',
+    bestFor: 'One elite creator surrounded by shooters. He handles, passes and shoots off the dribble.',
     values: { pace: 44, transition: 45, actions: { pnr: 66, iso: 66, post: 18, handoff: 42, motion: 50 }, threePoint: 64, rimAttack: 60, crashBoards: 55, huntMismatch: true },
   },
   {
@@ -72,14 +76,14 @@ export const OFF_PRESETS: OffPreset[] = [
     name: 'Five-Out Motion',
     tagline: 'Spacing, cutting, sharing',
     description: 'Constant movement, dribble handoffs and backdoor cuts with five shooters. Generates open threes.',
-    bestFor: 'Many good shooters and passers; no need for a dominant creator.',
-    values: { pace: 58, transition: 60, actions: { pnr: 58, iso: 18, post: 10, handoff: 62, motion: 88 }, threePoint: 80, rimAttack: 55, crashBoards: 42, huntMismatch: false },
+    bestFor: 'Many good shooters and passers, with no need for a dominant creator.',
+    values: { pace: 44, transition: 44, actions: { pnr: 58, iso: 18, post: 10, handoff: 62, motion: 88 }, threePoint: 70, rimAttack: 55, crashBoards: 42, huntMismatch: false },
   },
   {
     id: 'hub',
     name: 'Hub Big',
     tagline: 'Run it through the big',
-    description: 'Elbow and post touches for a playmaking big; guards cut and run off his handoffs.',
+    description: 'Elbow and post touches for a playmaking big. Guards cut and run off his handoffs.',
     bestFor: 'A center with elite passing and IQ.',
     values: { pace: 46, transition: 48, actions: { pnr: 60, iso: 20, post: 48, handoff: 72, motion: 52 }, threePoint: 56, rimAttack: 62, crashBoards: 55, huntMismatch: false },
   },
@@ -89,7 +93,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Seven seconds or less',
     description: 'Push after every stop, shoot early threes, attack before the defense sets.',
     bestFor: 'Fast, athletic rosters with shooting and good conditioning.',
-    values: { pace: 88, transition: 66, actions: { pnr: 60, iso: 28, post: 10, handoff: 38, motion: 60 }, threePoint: 72, rimAttack: 66, crashBoards: 45, huntMismatch: false },
+    values: { pace: 88, transition: 63, actions: { pnr: 60, iso: 28, post: 10, handoff: 38, motion: 60 }, threePoint: 64, rimAttack: 58, crashBoards: 45, huntMismatch: false },
   },
   {
     id: 'grind',
@@ -122,7 +126,7 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'blitz',
     name: 'Blitz the Ball',
     tagline: 'Take the ball out of his hands',
-    description: 'Trap the pick-and-roll ball handler and pressure passing lanes. Forces turnovers; gives up 4-on-3 chances when beaten. Off-ball screens are switched.',
+    description: 'Trap the pick-and-roll ball handler and pressure passing lanes. Forces turnovers, but gives up 4-on-3s when beaten. Off-ball screens are switched.',
     bestFor: 'Long, rangy defenders with high IQ vs a ball-dominant star with weak passing.',
     values: { scheme: 'man', pnr: 'blitz', help: 55, pressure: 74, press: 'none', getBack: 55, switchOffBall: true, physicality: 58 },
   },
@@ -131,15 +135,15 @@ export const DEF_PRESETS: DefPreset[] = [
     name: 'Ice & Contain',
     tagline: 'Force him baseline',
     description:
-      'Push side pick-and-rolls toward the sideline. Takes away the middle: pull-up jumpers, drives and the roll man, so the ball goes to the kick-out. Off-ball screens are switched.',
+      'Push side pick-and-rolls toward the sideline. Takes away pull-up jumpers, drives and the roll man. The ball goes to the kick-out instead. Off-ball screens are switched.',
     bestFor: 'Disciplined defenders vs drivers and pull-up shooters.',
-    values: { scheme: 'man', pnr: 'ice', help: 55, pressure: 52, press: 'none', getBack: 60, switchOffBall: true, physicality: 50 },
+    values: { scheme: 'man', pnr: 'ice', help: 60, pressure: 52, press: 'none', getBack: 60, switchOffBall: true, physicality: 50 },
   },
   {
     id: 'hedge',
     name: 'Hedge & Recover',
     tagline: 'Show and get back',
-    description: 'Big jumps out to stall the ball handler, then recovers. Requires mobile bigs; can expose the roll man. Off-ball screens are switched.',
+    description: 'Big jumps out to stall the ball handler, then recovers. Needs mobile bigs, and can leave the roll man open. Off-ball screens are switched.',
     bestFor: 'Mobile bigs with good IQ.',
     values: { scheme: 'man', pnr: 'hedge', help: 52, pressure: 56, press: 'none', getBack: 58, switchOffBall: true, physicality: 52 },
   },
@@ -147,15 +151,15 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'zone',
     name: '2-3 Zone',
     tagline: 'Pack it in',
-    description: 'Shrinks driving lanes and clogs the post, but leaves corner threes and the offensive glass vulnerable.',
+    description: 'Shrinks driving lanes and clogs the post. Leaves corner threes and the offensive glass open.',
     bestFor: 'Long lineups with a rim anchor vs poor-shooting, drive-heavy teams.',
-    values: { scheme: 'zone23', pnr: 'drop', help: 56, pressure: 48, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
+    values: { scheme: 'zone23', pnr: 'drop', help: 56, pressure: 44, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
   },
   {
     id: 'chaos',
     name: 'Full-Court Chaos',
     tagline: 'Press, trap, run',
-    description: 'Full-court press, ball pressure everywhere. Creates turnovers, but the press eats clock, gives up run-outs when broken and costs a lot of energy.',
+    description: 'Full-court press and ball pressure everywhere. Creates turnovers and eats clock. Gives up run-outs when broken, and costs a lot of energy.',
     bestFor: 'Deep, athletic benches with quick hands vs shaky ball handlers.',
     values: { scheme: 'man', pnr: 'hedge', help: 48, pressure: 80, press: 'always', getBack: 45, switchOffBall: true, physicality: 64 },
   },
@@ -168,7 +172,7 @@ export const LEVEL_VALUES = [0, 25, 50, 75, 100] as const;
 
 /**
  * Which of the five settings a value reads as: the nearest one. Presets, the staff's in-game
- * adjustments and situational nudges can land between them, and the engine plays the value itself.
+ * adjustments and game plans' nudges can land between them, and the engine plays the value itself.
  */
 export function levelIndex(v: number): number {
   return Math.round(clamp(v, 0, 100) / 25);
@@ -196,35 +200,35 @@ export const TACTIC_LEVELS: Record<LeveledTactic, LevelNames> = {
 export const levelName = (k: LeveledTactic, v: number) => TACTIC_LEVELS[k][levelIndex(v)];
 
 export const ACTION_META: Record<ActionType, { label: string; help: string }> = {
-  pnr: { label: 'Pick-and-roll', help: 'Ball screen for a creator; the screener rolls or pops. Coverage choice decides who gets open.' },
+  pnr: { label: 'Pick-and-roll', help: 'A ball screen for a creator, then the screener rolls or pops. The coverage decides who gets open.' },
   iso: { label: 'Isolation', help: 'Clear out for a one-on-one. Efficient only for elite creators or vs a mismatch.' },
-  post: { label: 'Post-up', help: 'Feed a big (or a switched mismatch) on the block. Draws doubles and fouls.' },
+  post: { label: 'Post-up', help: 'Feed a big or a switched mismatch on the block. Draws doubles and fouls.' },
   handoff: { label: 'Handoffs & screens', help: 'Dribble handoffs and off-ball screens to spring shooters. Strong vs drop and non-switching teams.' },
-  motion: { label: 'Motion & cuts', help: 'Ball movement, drive-and-kick and backdoor cuts. Needs passers and shooters; beats over-aggressive defenses.' },
+  motion: { label: 'Motion & cuts', help: 'Ball movement, drive-and-kick and backdoor cuts. Needs passers and shooters, and beats over-aggressive defenses.' },
 };
 
 export const COVERAGE_META: Record<PnrCoverage, { label: string; help: string }> = {
-  drop: { label: 'Drop', help: 'Big sags into the paint. Protects the rim and roll man; concedes pull-up jumpers.' },
+  drop: { label: 'Drop', help: 'Big sags into the paint. Protects the rim and the roll man, concedes pull-up jumpers.' },
   switch: { label: 'Switch', help: 'Defenders exchange assignments. No open roll man, but creates mismatches.' },
   hedge: { label: 'Hedge', help: 'Big shows high to slow the ball, then recovers. Balanced, but slow bigs leave the roller open.' },
-  blitz: { label: 'Blitz', help: 'Double-team the handler. Forces the ball out and creates turnovers; 4-on-3 behind it.' },
+  blitz: { label: 'Blitz', help: 'Double-team the handler. Forces the ball out and turnovers, but leaves a 4-on-3 behind it.' },
   ice: { label: 'Ice', help: 'Force the handler to the sideline. Takes away the middle: pull-up jumpers, drives and the roll.' },
 };
 
 export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
   man: { label: 'Man-to-man', help: 'Each defender has an assignment. Matchups matter.' },
-  zone23: { label: '2-3 Zone', help: 'Protects the paint against drives, cuts and post-ups; vulnerable to open (often corner) threes and offensive boards.' },
+  zone23: { label: '2-3 Zone', help: 'Protects the paint against drives, cuts and post-ups. Gives up open threes, often in the corner, and offensive boards.' },
   zone32: {
     label: '3-2 Zone',
-    help: 'Three defenders on the arc: ball movement finds far fewer open threes than against the 2-3, but the paint, post-ups, cuts and the offensive glass are softer. A choice against shooting teams, not against bigs and drivers.',
+    help: 'Three defenders on the arc: far fewer open threes than a 2-3. Softer inside, so play it against shooters, not bigs and drivers.',
   },
   box1: {
     label: 'Box-and-one',
-    help: 'One of your best perimeter defenders face-guards their main creator (fewer touches, late catches, few catch-and-shoot looks, a tiring chase) while the other four play a 2-2 zone. Everyone else gets more open threes and gaps, and the glass is softer: a weapon against one star with poor shooters around him, a loser against teams that shoot.',
+    help: 'One chaser face-guards their main creator while four play a 2-2 zone. Beats one star with poor shooters around him, loses to teams that shoot.',
   },
   tri2: {
     label: 'Triangle-and-two',
-    help: 'Two chasers face-guard their top two creators while three play a zone. Even more open threes for the other three and a weaker glass: only against two scorers surrounded by players who can’t shoot.',
+    help: 'Two chasers face-guard their top two creators while three play a zone. Only against two scorers surrounded by players who can’t shoot.',
   },
 };
 
@@ -259,12 +263,12 @@ export const PLAY_FOCI: PlayFocus[] = ['balanced', 'pnr', 'handoff', 'motion', '
 export const FOCUS_META: Record<PlayFocus, { label: string; help: string; actions: Record<ActionType, number> }> = {
   balanced: {
     label: 'Balanced',
-    help: 'A bit of everything, pick-and-roll first: the half court runs whatever the five on the floor run best.',
+    help: 'A bit of everything, pick-and-roll first. The half court runs what the five on the floor run best.',
     actions: { pnr: 58, iso: 35, post: 25, handoff: 52, motion: 55 },
   },
   pnr: {
     label: 'Pick-and-roll',
-    help: 'Ball screens for your handlers on most trips, the rest isolations: the creators carry it, and a handler with a roll man or a popping big makes it sing.',
+    help: 'Ball screens for your handlers on most trips, isolations on the rest. Best with a roll man or a popping big.',
     actions: { pnr: 82, iso: 45, post: 15, handoff: 35, motion: 40 },
   },
   handoff: {
@@ -274,17 +278,17 @@ export const FOCUS_META: Record<PlayFocus, { label: string; help: string; action
   },
   motion: {
     label: 'Motion',
-    help: 'Cuts, drive-and-kick and the extra pass, with almost no isolations: needs passers and shooters everywhere, and beats defenses that overplay.',
+    help: 'Cuts, drive-and-kick and the extra pass, with almost no isolations. Needs passers and shooters everywhere, and beats defenses that overplay.',
     actions: { pnr: 48, iso: 18, post: 10, handoff: 72, motion: 88 },
   },
   post: {
     label: 'Inside',
-    help: 'Post-ups and touches near the basket, with isolations to go with them: for a post scorer, a big who passes out of the double, and a slower game.',
+    help: 'Post-ups and touches near the basket, with isolations. For a post scorer, a big who passes out of doubles, and a slower game.',
     actions: { pnr: 45, iso: 45, post: 72, handoff: 30, motion: 40 },
   },
   iso: {
     label: 'Isolation',
-    help: 'Clear out for your scorers: efficient only for elite creators, or against a defender you can hunt. Little ball movement.',
+    help: 'Clear out for your scorers, with little ball movement. Efficient only for elite creators or against a weak defender.',
     actions: { pnr: 60, iso: 80, post: 25, handoff: 25, motion: 30 },
   },
 };
@@ -345,28 +349,28 @@ export const SHAPE_META: Record<OffShape, { label: string; short: string; help: 
   fourOut: {
     label: '4-Out, 1-In',
     short: '4-out',
-    help: 'Four on the arc, one big in the dunker spot. The league’s default: the man inside doesn’t have to shoot, and he’s where the misses fall.',
-    good: 'Hides a big who can’t shoot; normal glass',
+    help: 'Four on the arc, one big in the dunker spot. The league’s default: the big needn’t shoot, and misses fall to him.',
+    good: 'Hides a big who can’t shoot, with normal glass',
     bad: 'One help defender already in the paint',
   },
   fiveOut: {
     label: '5-Out',
     short: '5-out',
-    help: 'All five on the arc and the paint empty: drives, cuts and rolls get more room, so long as all five can shoot. Anyone who can’t is sagged off, and nobody is near the glass.',
+    help: 'All five on the arc, the paint empty: more room for drives, cuts and rolls. Anyone who can’t shoot gets sagged off, and nobody is near the glass.',
     good: 'More room for drives, cuts and rolls with five shooters',
-    bad: 'Non-shooters get sagged off; fewer offensive boards; no post game',
+    bad: 'Non-shooters sagged off, fewer offensive boards, no post game',
   },
   horns: {
     label: 'Horns',
     short: 'Horns',
-    help: 'Two bigs at the elbows, two shooters in the corners: every trip starts with a choice of ball screens and handoffs, out of a set the players know cold. Less ball movement, fewer turnovers.',
-    good: 'Better ball screens and handoffs; fewer turnovers',
-    bad: 'Less motion and cutting; a little less spacing',
+    help: 'Two bigs at the elbows, two shooters in the corners. Every trip starts with a ball screen or a handoff.',
+    good: 'Better ball screens and handoffs, fewer turnovers',
+    bad: 'Less motion and cutting, a little less spacing',
   },
   twoIn: {
     label: 'Double Post',
     short: 'Twin bigs',
-    help: 'Two bigs inside, three outside: post-ups, high-low passes and the offensive glass, at the cost of a crowded paint for everyone else’s drives.',
+    help: 'Two bigs inside, three outside: post-ups, high-low passes and the offensive glass. The paint is crowded for everyone else’s drives.',
     good: 'Post-ups and offensive boards',
     bad: 'Crowded paint: drives and spacing suffer',
   },
@@ -377,48 +381,48 @@ export const DEF_ROLE_META: Record<DefRole, { label: string; short: string; help
   poa: {
     label: 'Point-of-Attack Stopper',
     short: 'Point of attack',
-    help: 'Picks up their lead ball handler wherever he goes: harder to blow by and more turnovers forced on the ball, but the chase wears him down, and a big one can be beaten for speed.',
+    help: 'Picks up their lead ball handler everywhere: harder to blow by, more turnovers forced. The chase tires him, and a big man in it gets beaten for speed.',
   },
   stopper: {
     label: 'Wing Stopper',
     short: 'Stopper',
-    help: 'Takes their best scorer who isn’t the lead handler: fewer touches for him and tougher shots when he gets one. It’s tiring work.',
+    help: 'Takes their best scorer who isn’t the lead handler. Fewer touches and tougher shots for him, but it’s tiring work.',
   },
   anchor: {
     label: 'Rim Anchor',
     short: 'Anchor',
-    help: 'Guards their least dangerous big and lives in the paint, contesting everyone’s shots at the rim; if the man he leaves can shoot, he gets open looks.',
+    help: 'Guards their least dangerous big and contests every shot at the rim. If his man can shoot, he gets open looks.',
   },
   roamer: {
     label: 'Roamer',
     short: 'Roamer',
-    help: 'Guards their weakest shooter and roams off him into driving lanes, helping on everyone else’s drives, cuts and rolls. His man’s kick-outs come open, so it pays only against a player who can’t make them.',
+    help: 'Sags off their weakest shooter to help on drives, cuts and rolls. His man gets open kick-outs, so it pays only if that man can’t shoot.',
   },
   hide: {
     label: 'Hidden',
     short: 'Hidden',
-    help: 'Guards their least dangerous player, so a weak defender is out of the action as much as the matchups allow. No other duty.',
+    help: 'Guards their least dangerous player, keeping a weak defender out of the action. No other duty.',
   },
 };
 
 export const GLASS_META: Record<GlassDuty, { label: string; help: string }> = {
   [-1]: { label: 'Get back', help: 'Retreats on every shot: fewer offensive boards for him, fewer run-outs for them.' },
   0: { label: 'Team setting', help: 'Crashes or gets back as the team does.' },
-  1: { label: 'Crash', help: 'Goes to the glass on every shot: more offensive boards for him, and more run-outs for them when he doesn’t get it.' },
+  1: { label: 'Crash', help: 'Goes to the glass on every shot. More offensive boards for him, more run-outs for them.' },
 };
 
 /** The five mentalities, from very cautious (-2) to very aggressive (2). */
 export const MENTALITY_META: Record<Mentality, { label: string; help: string }> = {
   [-2]: {
     label: 'Very cautious',
-    help: 'Long possessions, nobody leaks or crashes, no gambles on defense: fewer turnovers and run-outs, fewer possessions. Protects a lead; can’t chase one.',
+    help: 'Long possessions, no leaking or crashing, no gambles on defense. Protects a lead but can’t chase one.',
   },
-  [-1]: { label: 'Cautious', help: 'A little slower and safer at both ends than your settings: fewer gambles, more bodies back.' },
+  [-1]: { label: 'Cautious', help: 'A little slower and safer at both ends: fewer gambles, more bodies back.' },
   0: { label: 'Balanced', help: 'Your settings as they are.' },
-  1: { label: 'Aggressive', help: 'A little faster and riskier at both ends than your settings: push, crash, pressure the ball.' },
+  1: { label: 'Aggressive', help: 'A little faster and riskier at both ends: push, crash, pressure the ball.' },
   2: {
     label: 'Very aggressive',
-    help: 'Run on everything, shoot early, crash the glass, get into the ball: more possessions and more variance, and more run-outs given up. For chasing a game, or an underdog looking for chaos.',
+    help: 'Run on everything, shoot early, crash and pressure: more possessions, more variance. For chasing a game, or an underdog looking for chaos.',
   },
 };
 
@@ -520,7 +524,6 @@ export function cloneTactics(t: Tactics): Tactics {
       roles: { ...t.offense.roles },
       freedom: { ...t.offense.freedom },
       screeners: [...t.offense.screeners],
-      ...(t.offense.sets && { sets: [...t.offense.sets] }),
       ...(t.offense.glass && { glass: { ...t.offense.glass } }),
     },
     defense: {
@@ -530,7 +533,6 @@ export function cloneTactics(t: Tactics): Tactics {
       ...(t.defense.roles && { roles: { ...t.defense.roles } }),
     },
     manage: t.manage.hackTargets ? { ...t.manage, hackTargets: [...t.manage.hackTargets] } : { ...t.manage },
-    ...(t.situations && { situations: t.situations.map(cloneSituation) }),
   };
 }
 
@@ -539,26 +541,18 @@ const COACH_MANAGE = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assi
 
 /** Whether tactics carry anything only the user's bench uses (see withoutCoachPlans). */
 export function hasCoachPlans(t: Tactics): boolean {
-  return (
-    !!t.situations ||
-    COACH_MANAGE.some((k) => t.manage[k] !== undefined && t.manage[k] !== null && t.manage[k] !== false) ||
-    t.offense.huntTarget != null ||
-    t.offense.sets !== undefined ||
-    t.defense.chase !== undefined
-  );
+  return COACH_MANAGE.some((k) => t.manage[k] !== undefined && t.manage[k] !== null && t.manage[k] !== false) || t.offense.huntTarget != null || t.defense.chase !== undefined;
 }
 
 /**
- * The tactics without what only the user's bench uses: situational plans, the crunch-time go-to
- * player and after-timeout play, hack targets, the foul to give, the assistant's adjustments, the set
- * package, and the game-specific hunt target and chase targets on tonight's opponents.
+ * The tactics without what only the user's bench uses: the crunch-time go-to player and
+ * after-timeout play, hack targets, the foul to give, the assistant's adjustments, and the
+ * game-specific hunt target and chase targets on tonight's opponents.
  * An AI coach who inherits a team (the user took over another) plays its playbook, not those.
  */
 export function withoutCoachPlans(t: Tactics): Tactics {
   const out = cloneTactics(t);
-  delete out.situations;
   for (const k of COACH_MANAGE) delete out.manage[k];
-  delete out.offense.sets;
   delete out.offense.huntTarget;
   delete out.defense.chase;
   return out;
@@ -581,11 +575,6 @@ export function withoutGameSpecific(t: Tactics, base?: Tactics): Tactics {
   delete out.offense.huntTarget;
   delete out.manage.hackTargets;
   return out;
-}
-
-/** A copy of a situational plan that shares nothing with it (patches are plain data). */
-export function cloneSituation(s: SituationalPlan): SituationalPlan {
-  return { ...s, when: { ...s.when }, patch: JSON.parse(JSON.stringify(s.patch)) as TacticsPatch };
 }
 
 /** Tactics with a patch applied (a copy): fixed values first, then the relative nudges, kept within 0..100. */
@@ -633,7 +622,7 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
   const patch: TacticsPatch = {};
   if ((a.mentality ?? 0) !== (b.mentality ?? 0)) patch.mentality = b.mentality ?? 0;
   const offense: NonNullable<TacticsPatch['offense']> = {};
-  // (both sides' keys: a set package taken off is a change too)
+  // (both sides' keys: a setting taken off is a change too)
   for (const k of new Set([...Object.keys(a.offense), ...Object.keys(b.offense)]) as Set<keyof OffenseTactics>) {
     if (k === 'actions' || k === 'huntTarget' || same(a.offense[k], b.offense[k])) continue;
     (offense as Record<string, unknown>)[k] = structuredClone(b.offense[k]);
@@ -658,80 +647,6 @@ export function tacticsDiff(a: Tactics, b: Tactics): TacticsPatch {
 
 /** A patch changes nothing. */
 export const emptyPatch = (p: TacticsPatch) => !p.offense && !p.defense && !p.manage && !p.nudge && p.mentality === undefined;
-// ---------------------------------------------------------------- situations
-
-/** A team plays at most this many situational plans (the first enabled one that matches applies). */
-export const MAX_SITUATIONS = 4;
-
-export type SituationTemplate = 'protectLead' | 'chasing' | 'secondUnit' | 'closeQ';
-
-/** Ready-made situational plans: relative changes, so each builds on whatever playbook is in place. */
-export const SITUATION_TEMPLATES: Record<SituationTemplate, { label: string; help: string; when: SituationTrigger; patch: TacticsPatch }> = {
-  protectLead: {
-    label: 'Protect a lead',
-    help: 'Last five minutes of the 4th (and overtime), up 1 to 12: slow it down, keep bodies back, no gambles or cheap fouls.',
-    when: { fromQ: 4, maxClock: 300, minLead: 1, maxLead: 12 },
-    patch: { nudge: { offense: { pace: -25, transition: -20, crashBoards: -20 }, defense: { getBack: 20, pressure: -10, physicality: -10 } } },
-  },
-  chasing: {
-    label: 'Chasing late',
-    help: 'Last six minutes, down 6 to 18: push the pace, hunt threes, pressure the ball and press after makes.',
-    when: { fromQ: 4, maxClock: 360, minLead: -18, maxLead: -6 },
-    patch: { defense: { press: 'afterMade' }, nudge: { offense: { pace: 25, transition: 20, threePoint: 15 }, defense: { pressure: 20 } } },
-  },
-  secondUnit: {
-    label: 'Second unit',
-    help: 'While three or more reserves are on the floor: a simpler offense (more pick-and-roll and ball movement, fewer isolations and post-ups) at a quicker pace.',
-    when: { benchUnit: true },
-    patch: { nudge: { offense: { pace: 10, transition: 10 }, actions: { pnr: 10, motion: 10, iso: -15, post: -10 } } },
-  },
-  closeQ: {
-    label: 'End of quarter',
-    help: 'Last 40 seconds of the 1st to 3rd quarters: hunt a mismatch for the last shots and avoid cheap fouls.',
-    when: { untilQ: 3, maxClock: 40 },
-    patch: { offense: { huntMismatch: true }, nudge: { actions: { iso: 20 }, defense: { physicality: -15 } } },
-  },
-};
-
-/** A new plan from a template, with an id not used yet in `existing`. */
-export function situationFromTemplate(key: SituationTemplate, existing: SituationalPlan[] = []): SituationalPlan {
-  const tpl = SITUATION_TEMPLATES[key];
-  let id: string = key;
-  for (let n = 2; existing.some((s) => s.id === id); n++) id = `${key}-${n}`;
-  return cloneSituation({ id, label: tpl.label, enabled: true, when: tpl.when, patch: tpl.patch });
-}
-
-const mmss = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, '0')}`;
-
-/** When a plan applies, in a few words: "Q4 & OT · last 5:00 · up 1-12", "Second unit on the floor". */
-export function situationText(w: SituationTrigger): string {
-  const parts: string[] = [];
-  const from = w.fromQ ?? 1;
-  const until = w.untilQ ?? 4;
-  // (the editor keeps these apart; a plan saved before it did would never apply, and says so)
-  if (from > until || (w.minLead !== undefined && w.maxLead !== undefined && w.minLead > w.maxLead) || (w.maxClock !== undefined && w.maxClock <= 0))
-    return "Never: these conditions can't all hold";
-  if (from >= 4) parts.push('Q4 & OT');
-  else if (from === until) parts.push(`Q${from}`);
-  else if (until >= 4) {
-    if (from > 1) parts.push(`from Q${from}`);
-  } else parts.push(`Q${from}-Q${until}`);
-  if (w.maxClock !== undefined) parts.push(`last ${mmss(w.maxClock)}`);
-  const lo = w.minLead;
-  const hi = w.maxLead;
-  if (lo !== undefined && hi !== undefined) {
-    if (lo >= 1) parts.push(lo === hi ? `up ${lo}` : `up ${lo}-${hi}`);
-    else if (hi <= -1) parts.push(lo === hi ? `down ${-hi}` : `down ${-hi}-${-lo}`);
-    else if (lo === -hi) parts.push(hi === 0 ? 'tied' : `within ${hi}`);
-    else parts.push(`margin ${lo > 0 ? '+' : ''}${lo} to ${hi > 0 ? '+' : ''}${hi}`);
-  } else if (lo !== undefined) parts.push(lo >= 1 ? `up ${lo}+` : lo === 0 ? 'tied or ahead' : `down ${-lo} or better`);
-  else if (hi !== undefined) parts.push(hi <= -1 ? `down ${-hi}+` : hi === 0 ? 'tied or behind' : `up ${hi} or less`);
-  if (w.benchUnit) parts.push('second unit on the floor');
-  if (!parts.length) return 'Whole game';
-  const text = parts.join(' · ');
-  return text[0].toUpperCase() + text.slice(1);
-}
-
 // ---------------------------------------------------------------- hack-a-player
 
 /**

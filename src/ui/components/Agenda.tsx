@@ -12,6 +12,7 @@ import { markOffersSeen, openProposals } from '../../core/league/proposals';
 import { useLeague, useStore } from '../../state/store';
 import { haptic } from '../../native';
 import { leaveToStaff, useCallWorth } from '../today/staffPlan';
+import { More } from './ui';
 import './agenda.css';
 
 /** The choice waiting on its second tap, if one is (the Continue bar won't run past it: see App.tsx). */
@@ -61,8 +62,9 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
           {item.title}
         </div>
         <div className="ag-line">
+          {/* (when it lapses first: a long line is cut on Today, a date never) */}
+          {item.due && <span className="ag-due">{item.due} · </span>}
           {item.line}
-          {item.due && <span className="ag-due"> · {item.due}</span>}
           {measuring !== null && !simming && (
             <span className="ag-due" role="status">
               {' '}
@@ -103,6 +105,16 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
         </Link>
       ) : (
         <div className="ag-head">{head}</div>
+      )}
+      {/* the staff's reasons and the rest of its numbers, a tap down */}
+      {item.detail && (
+        <More label="Why">
+          <div className="ag-detail">
+            {item.detail.split('\n').map((x, i) => (
+              <p key={i}>{x}</p>
+            ))}
+          </div>
+        </More>
       )}
       {choices.length > 0 && (
         <div className="ag-acts">

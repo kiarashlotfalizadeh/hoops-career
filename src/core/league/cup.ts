@@ -8,7 +8,7 @@
 
 import type { CupGroup, CupState, CupTie, League, ScheduledGame, Team } from '../types';
 import type { Rng } from '../random';
-import { addInbox, addNews, andList, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
+import { addInbox, addNews, dateToDay, dayToDate, fmtDate, playerName, teamName, teamPlayers, winPct } from './helpers';
 import { gameScore } from './awards';
 import { drawLot } from './standings';
 
@@ -324,14 +324,14 @@ function placeGames(league: League, pairs: { home: number; away: number }[], day
 }
 
 /** The user's games among `games`, for mail: "Dec 4 at home against the Boston Celtics and Dec 7 on the road against…". */
+/** The user's games in the knockout window, a line each: "Dec 5: home vs the New Orleans Pelicans". */
 function userFixtures(league: League, games: ScheduledGame[]): string {
   const user = league.userTid;
-  return andList(
-    games
-      .filter((g) => g.home === user || g.away === user)
-      .sort((a, b) => a.day - b.day)
-      .map((g) => `${fmtDate(league.season, g.day)} ${g.home === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[g.home === user ? g.away : g.home])}`),
-  );
+  return games
+    .filter((g) => g.home === user || g.away === user)
+    .sort((a, b) => a.day - b.day)
+    .map((g) => `${fmtDate(league.season, g.day)}: ${g.home === user ? 'home vs' : 'at'} the ${teamName(league.teams[g.home === user ? g.away : g.home])}`)
+    .join('\n');
 }
 
 function range(a: number, b: number) {
@@ -365,7 +365,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
   const nm = (tid: number) => league.teams[tid].abbrev;
   addNews(league, {
     kind: 'general',
-    text: `NBA Cup knockouts set. East: ${cup.seeds.E.map(nm).join(', ')}. West: ${cup.seeds.W.map(nm).join(', ')} (group winners, then the wild card).`,
+    text: `NBA Cup knockouts set. East: ${cup.seeds.E.map(nm).join(', ')}. West: ${cup.seeds.W.map(nm).join(', ')}. Group winners first, then the wild card.`,
     tids: [...cup.seeds.E, ...cup.seeds.W],
     pids: [],
   });
@@ -378,7 +378,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
     addInbox(league, {
       from: 'League Office',
       subject: 'NBA Cup: into the knockouts',
-      body: `You're the ${['1st', '2nd', '3rd', '4th'][seed - 1]} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 4 ? ' as the wild card' : ''}. Quarterfinal ${opp.high === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[other])}. Quarterfinals and semifinals count in the standings; the championship doesn't.`,
+      body: `You're the ${['1st', '2nd', '3rd', '4th'][seed - 1]} seed in the ${conf === 'E' ? 'East' : 'West'}${seed === 4 ? ' as the wild card' : ''}. Quarterfinal ${opp.high === user ? 'at home' : 'on the road'} against the ${teamName(league.teams[other])}. Quarterfinals and semifinals count in the standings. The championship doesn't.`,
       tone: 'good',
       link: '/league/cup',
     });
@@ -387,7 +387,7 @@ function seedKnockouts(league: League, cup: CupState, rng: Rng) {
     addInbox(league, {
       from: 'League Office',
       subject: 'NBA Cup: out in the group stage',
-      body: `You missed the knockout round. Your last two regular-season games are in the knockout window${mine ? `: ${mine}` : ''}.`,
+      body: `You missed the knockout round. Your last two regular-season games fall in its window.${mine ? `\n${mine}` : ''}`,
       tone: 'neutral',
       link: '/league/cup',
     });
@@ -458,7 +458,7 @@ function finishCup(league: League, cup: CupState, final: CupTie) {
     addInbox(league, {
       from: 'Owner',
       subject: 'NBA Cup champions!',
-      body: `First trophy of the season. ${mvpName} was named Cup MVP. The fans loved it; now let's carry it into the spring.`,
+      body: `First trophy of the season. ${mvpName} was named Cup MVP. The fans loved it. Now let's carry it into the spring.`,
       tone: 'good',
       link: '/league/cup',
     });
@@ -507,7 +507,7 @@ export function advanceCup(league: League, rng: Rng) {
       addInbox(league, {
         from: 'League Office',
         subject: 'NBA Cup: out in the quarterfinals',
-        body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game is in the knockout window${mine ? `: ${mine}` : ''}.`,
+        body: `The ${teamName(league.teams[out.winner!])} knocked you out of the Cup. Your last regular-season game falls in the knockout window.${mine ? `\n${mine}` : ''}`,
         tone: 'neutral',
         link: '/league/cup',
       });

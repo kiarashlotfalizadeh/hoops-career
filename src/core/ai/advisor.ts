@@ -1,17 +1,14 @@
 // The assistant coach: opponent scouting, counter-tactic candidates, and alerts about rotation and
 // tactics issues on your own team.
 
-import type { ActionType, DefRole, DefScheme, League, OffRole, OffShape, Player, PnrCoverage, PrepFocus, RatingKey, SetId, Tactics, TacticsPatch } from '../types';
-import { OFF_SHAPES, SET_IDS } from '../types';
+import type { ActionType, DefRole, League, Player, PnrCoverage, RatingKey, Tactics, TacticsPatch } from '../types';
+import { OFF_SHAPES } from '../types';
 import type { FinishType } from '../sim/log';
 import { attrDisplay, composites, ROLE_META } from '../ratings';
 import { ACTION_META, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, cloneTactics, defRoleOf, isJunk, shapeOf, stopHacking } from '../sim/tactics';
 import { CRAMPED_SPACING, autoDefRoles, autoTactics, evaluateLineup, rosterProfile, shapeFits, sustainableMinutes } from './coachAI';
-import { FLUID, PREP_META, famLabel, freshFamiliarity, gamesTo, optValue, optionsOf } from '../sim/familiarity';
-import { systemFamiliarity } from '../league/practice';
-import { defRoleFits, fitStars, roleFits, roleScale, roleStars } from '../analysis/system';
+import { defRoleFits, roleScale, roleStars } from '../analysis/system';
 import { leverCard, withStaffMoves } from '../league/staffLever';
-import { CLASH_META, LINK_META, duoShare, lineupLinks, linksByRole, offRoleOf } from '../sim/links';
 import { applyPatch } from '../sim/tactics';
 import { effectiveTactics, itemGroup, planFor } from '../league/gamePlans';
 import { scoutData } from '../analysis/scouting';
@@ -20,8 +17,6 @@ import { IMPACT_TEXT, LEVER_KEYS, leverNet } from '../analysis/gameReport';
 import { castThrees, leagueThreePct } from './opponentPlan';
 import { huntPick, ratingText } from '../analysis/guarding';
 import { defenseLabel, offenseLabel } from '../sim/playbooks';
-import { SETS } from '../sim/sets';
-import { plural } from '../format';
 
 /** A change the staff would make against one opponent (see counterCandidates). */
 export interface Candidate {
@@ -82,16 +77,16 @@ const HOLE_RATING: Record<string, RatingKey> = {
 function lineupHole(league: League, note: string, five: Player[], bench: Player[]): string {
   if (note === 'Too many bigs') {
     const bigs = five.filter((p) => p.ratings.hgt >= 60);
-    return `${bigs.length} bigs start (${andList(bigs.map((p) => shortName(league, p)))}): a wing in for one opens the floor.`;
+    return `${bigs.length} bigs start: ${andList(bigs.map((p) => shortName(league, p)))}. A wing in for one opens the floor.`;
   }
   const key = HOLE_RATING[note];
   if (!key) return 'Check the five on Rotation.';
   const best = (ps: Player[]) => [...ps].sort((a, b) => b.ratings[key] - a.ratings[key])[0];
   const top = best(five);
   const sub = best(bench);
-  const head = `Best in the five: ${shortName(league, top)} (${ratingText(top, key)}).`;
+  const head = `Best in the five: ${shortName(league, top)}, ${ratingText(top, key)}.`;
   return sub && sub.ratings[key] > top.ratings[key] + 3
-    ? `${head} ${shortName(league, sub)} (${ratingText(sub, key)}) is on the bench.`
+    ? `${head} ${shortName(league, sub)} is on the bench, ${ratingText(sub, key)}.`
     : `${head} Nobody on the bench does it better.`;
 }
 
@@ -129,7 +124,7 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
     // the five's three-point rating, as their Ratings tabs show it
     const five = cs.slice(0, 5);
     const tp = Math.round(five.reduce((a, x) => a + attrDisplay(x.p.ratings.tp), 0) / Math.max(1, five.length));
-    weaknesses.push(`Few shooters in their five (three-point ${tp} on average): pack the paint and dare them to shoot.`);
+    weaknesses.push(`Few shooters in their five, three-point ${tp} on average. Pack the paint and dare them to shoot.`);
   }
   if (security < 52 && !weaknesses.some((w) => w.startsWith('Loose with the ball'))) weaknesses.push('Loose with the ball: pressure and traps should force turnovers.');
   if (protector && protector.c.rimProt < 55) weaknesses.push('No real rim protection: attack the basket.');
@@ -137,14 +132,14 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   // (a switch on a ball screen leaves him on a guard; switching off-ball screens doesn't)
   if (man && t.defense.pnr === 'switch') {
     const slow = cs.filter((x) => slowBig(x.p));
-    if (slow.length) weaknesses.push(`Switching with a slow big (${shortName(league, slow[0].p)}): hunt that mismatch.`);
+    if (slow.length) weaknesses.push(`Switching with a slow big in ${shortName(league, slow[0].p)}. Hunt that mismatch.`);
   }
   if (man && t.defense.pnr === 'blitz') weaknesses.push('Blitzes ball screens: a good passing handler or short-roll big can carve up the 4-on-3.');
   // the weak link the staff's plan attacks (its "Attack" counter reads the same pick), so the two never disagree
   const hunt = huntPick(league, tid);
   if (hunt?.worth) {
     const who = league.players[hunt.pid];
-    if (who) weaknesses.push(`${shortName(league, who)} is their weakest perimeter defender (${hunt.perDef}, their rotation ${hunt.teamPerDef}): attack the man he guards.`);
+    if (who) weaknesses.push(`${shortName(league, who)} is their weakest perimeter defender: ${hunt.perDef}, their rotation ${hunt.teamPerDef}. Attack the man he guards.`);
   }
   const threats: Threat[] = [];
   if (creators[0]) {
@@ -155,14 +150,14 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
       // (his OVR is on the badge beside the name)
       why:
         role === 'creator'
-          ? `Primary creator (${ratingText(creators[0].p, 'hnd')}).`
-          : `Best shot creator, used as their ${ROLE_META[role].label.toLowerCase()} (${ratingText(creators[0].p, 'hnd')}).`,
+          ? `Primary creator, ${ratingText(creators[0].p, 'hnd')}.`
+          : `Best shot creator, ${ratingText(creators[0].p, 'hnd')}. They use him as their ${ROLE_META[role].label.toLowerCase()}.`,
     });
   }
   if (shooters[0] && shooters[0].p !== creators[0]?.p)
-    threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter (${ratingText(shooters[0].p, 'tp')}). Don't leave him open.` });
+    threats.push({ pid: shooters[0].p.pid, name: playerName(shooters[0].p), why: `Best shooter, ${ratingText(shooters[0].p, 'tp')}. Don't leave him open.` });
   if (protector && !threats.some((x) => x.pid === protector.p.pid))
-    threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint (${ratingText(protector.p, 'blk')}).` });
+    threats.push({ pid: protector.p.pid, name: playerName(protector.p), why: `Anchors the paint, ${ratingText(protector.p, 'blk')}.` });
   const summary = `${team.region} ${team.name}: ${offName} offense, ${defName} defense. Watch ${threats[0]?.name ?? 'their starters'}.`;
   return { tid, summary, offense, defense, threats, weaknesses };
 }
@@ -237,9 +232,9 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
   };
   if (top) {
     const pull = (top.c.pu3 + top.c.midShot) / 2;
-    cov('hedge', `${top.p.lastName} is a dangerous pull-up shooter; don't give him space.`, pull >= 60);
+    cov('hedge', `${top.p.lastName} is a dangerous pull-up shooter. Don't give him space.`, pull >= 60);
     cov('ice', `Keep ${top.p.lastName} out of the middle and off pull-up threes.`, pull >= 60);
-    cov('blitz', `${top.p.lastName} is a shaky passer; trap him and make others beat you.`, top.c.passing < 55);
+    cov('blitz', `${top.p.lastName} is a shaky passer. Trap him and make others beat you.`, top.c.passing < 55);
     cov('drop', 'Protect the rim and live with contested pull-ups.', top.c.passing >= 55);
     cov('switch', 'Switch everything to take away ball screens and handoffs.', true);
     // the player the numbers say they run through, else their best creator: doubled when he can't
@@ -251,7 +246,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       add({
         id: 'star-double',
         label: `Double-team ${star.lastName}`,
-        why: `${star.lastName} doesn't pass out of traps, and the ${opp.name} around him can't shoot (spacing ${Math.round(around)}).`,
+        why: `${star.lastName} doesn't pass out of traps. The ${opp.name} around him can't shoot, spacing ${Math.round(around)}.`,
         group: 'star',
         patch: { defense: { starPlan: 'double', starTarget: star.pid } },
       });
@@ -262,7 +257,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'zone23',
       label: '2-3 zone',
-      why: `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}): wall off the paint and let them fire from outside.`,
+      why: `The ${opp.name} can't shoot, spacing ${Math.round(spacing)}. Wall off the paint and let them fire away.`,
       group: 'coverage',
       patch: { defense: { scheme: 'zone23' } },
     });
@@ -270,7 +265,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'zone32',
       label: '3-2 zone',
-      why: `The ${opp.name} live on threes (spacing ${Math.round(spacing)}): run their shooters off the arc and make them win inside.`,
+      why: `The ${opp.name} live on threes, spacing ${Math.round(spacing)}. Run their shooters off the arc.`,
       group: 'coverage',
       patch: { defense: { scheme: 'zone32' } },
     });
@@ -285,7 +280,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
       label: 'Pack the paint',
       why:
         spacing < CRAMPED_SPACING + 4
-          ? `The ${opp.name} can't shoot (spacing ${Math.round(spacing)}). Sag off and protect the rim.`
+          ? `The ${opp.name} can't shoot, spacing ${Math.round(spacing)}. Sag off and protect the rim.`
           : `The ${opp.name} score inside. Sag off and protect the rim.`,
       group: 'help',
       patch: { defense: { help: 78 } },
@@ -294,7 +289,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'help-low',
       label: 'Stay home on shooters',
-      why: spacing >= 45 ? `The ${opp.name} space the floor well; don't over-help.` : `The ${opp.name} make open threes pay; don't over-help.`,
+      why: spacing >= 45 ? `The ${opp.name} space the floor well. Don't over-help.` : `The ${opp.name} make open threes pay. Don't over-help.`,
       group: 'help',
       patch: { defense: { help: 32 } },
     });
@@ -321,9 +316,9 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     out.push({
       id,
       label: `${SCHEME_META[scheme].label} on ${names.join(' and ')}`,
-      why: `Face-guard ${names.join(' and ')} with ${n === 2 ? 'two of your best perimeter defenders' : 'one of your best perimeter defenders'} and zone the rest: their shooters can't make the open threes it leaves. You play man-to-man while ${n === 2 ? 'neither is' : "he isn't"} on the floor.`,
+      why: `Face-guard ${names.join(' and ')} and zone the rest: their shooters can't punish it. You play man-to-man when ${n === 2 ? 'both are' : "he's"} off the floor.`,
       group: 'coverage',
-      evidence: `${chased.map((p) => `${p.name} uses ${Math.round(p.usg * 100)}% of their possessions`).join(', ')}; the rest make ${(cast.pct * 100).toFixed(1)}% of their threes (league ${(lgTp * 100).toFixed(1)}%).`,
+      evidence: `${chased.map((p) => `${p.name} uses ${Math.round(p.usg * 100)}% of their possessions`).join(', ')}. The rest make ${(cast.pct * 100).toFixed(1)}% of their threes, league ${(lgTp * 100).toFixed(1)}%.`,
       patch: { defense: { scheme, chase: chased.map((p) => p.pid) } },
     });
   }
@@ -331,7 +326,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'pressure-up',
       label: 'Turn up the pressure',
-      why: `Their ball handlers are loose with it (security ${Math.round(security)}): get into them.`,
+      why: `Their ball handlers are loose with it, security ${Math.round(security)}. Get into them.`,
       group: 'pressure',
       patch: { defense: { pressure: 82 } },
     });
@@ -339,7 +334,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'press-on',
       label: 'Press after makes',
-      why: 'Make their shaky handlers bring it up against full-court pressure (it costs your legs).',
+      why: 'Make their shaky handlers beat full-court pressure. It costs your legs.',
       group: 'press',
       patch: { defense: { press: 'afterMade' } },
     });
@@ -376,7 +371,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'vs-switch',
       label: 'Hunt mismatches',
-      why: `They switch ${od.pnr !== 'switch' ? 'off-ball screens' : od.switchOffBall ? 'everything' : 'ball screens'}; isolate the weakest defender.`,
+      why: `They switch ${od.pnr !== 'switch' ? 'off-ball screens' : od.switchOffBall ? 'everything' : 'ball screens'}. Isolate the weakest defender.`,
       group: 'actions-iso',
       patch: { offense: { huntMismatch: true }, nudge: { actions: { iso: 25, post: 15 } } },
     });
@@ -405,9 +400,9 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'hunt',
       label: `Attack ${who}`,
-      why: `${who} is their weakest perimeter defender (${hunt.perDef}, their rotation ${hunt.teamPerDef}): run isolations and ball screens at the man he guards. It costs some ball movement.`,
+      why: `${who} is their weakest perimeter defender. Run isolations and ball screens at his man, for less ball movement.`,
       group: 'hunt',
-      evidence: `${who} rates ${hunt.perDef} on perimeter defense; their rotation averages ${hunt.teamPerDef}.`,
+      evidence: `${who} rates ${hunt.perDef} on perimeter defense. Their rotation averages ${hunt.teamPerDef}.`,
       patch: { offense: { huntTarget: hunt.pid } },
     });
   }
@@ -434,7 +429,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'pace-up',
       label: 'Push the pace',
-      why: oppProfile.athleticism < 50 ? `The ${opp.name} are slow; run on them.` : `The ${opp.name} don't defend in transition; run on them.`,
+      why: oppProfile.athleticism < 50 ? `The ${opp.name} are slow. Run on them.` : `The ${opp.name} don't defend in transition. Run on them.`,
       group: 'pace',
       patch: { offense: { pace: 78, transition: 85 } },
     });
@@ -442,7 +437,7 @@ export function counterCandidates(league: League, userTid: number, oppTid: numbe
     add({
       id: 'crash',
       label: 'Crash the offensive glass',
-      why: oppProfile.size < 48 ? 'They are small; attack the offensive boards.' : "They don't finish defensive possessions with the rebound.",
+      why: oppProfile.size < 48 ? 'They are small. Attack the offensive boards.' : "They don't finish defensive possessions with the rebound.",
       group: 'crash',
       patch: { offense: { crashBoards: 78 } },
     });
@@ -527,7 +522,7 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   },
   'physicality:o': { label: 'Less physical', apply: (t) => void (t.defense.physicality = 35) },
   'clean_defense:o': { label: 'More physical', apply: (t) => void (t.defense.physicality = 60) },
-  'transition:d': { label: 'Push in transition', apply: (t) => void (t.offense.transition = 75) },
+  'transition:d': { label: 'Run after stops', apply: (t) => void (t.offense.transition = 75) },
   'hack:o': { label: 'Stop Hack-a-player', apply: (t) => stopHacking(t.manage) },
   'box_open:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
   'box_beat:o': { label: 'Go man-to-man', apply: (t) => void (t.defense.scheme = 'man') },
@@ -542,18 +537,7 @@ const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => vo
   'role_anchor:o': { label: 'No rim anchor', apply: (t) => dropRole(t, 'anchor') },
   'role_roam:o': { label: 'No roamer', apply: (t) => dropRole(t, 'roamer') },
   'foul_give:o': { label: 'No foul to give', apply: (t) => void (t.manage.foulToGive = false) },
-  // (two inside bigs: the shape built for them)
-  'clash_crowd:d': { label: 'Double post', apply: (t) => void (t.offense.shape = 'twoIn') },
-  // a set the defense takes away comes out of the package
-  ...Object.fromEntries(SET_IDS.map((id) => [`set_${id}:d`, { label: `Drop ${SETS[id].short}`, apply: (t: Tactics) => dropSet(t, id) }])),
 };
-
-/** Take a set out of the package (the package goes when it's empty). */
-function dropSet(t: Tactics, id: SetId) {
-  const left = (t.offense.sets ?? []).filter((x) => x !== id);
-  if (left.length) t.offense.sets = left;
-  else delete t.offense.sets;
-}
 
 /** Make everyone in an out-of-possession role a position defender. */
 function dropRole(t: Tactics, r: DefRole) {
@@ -581,9 +565,7 @@ export type AlertFix =
   | { kind: 'defPreset'; id: string; label: string }
   | { kind: 'coverage'; pnr: PnrCoverage; label: string }
   | { kind: 'restB2B'; pid: number; label: string }
-  | { kind: 'patch'; patch: TacticsPatch; label: string }
-  /** A practice focus between games (Team.prep). */
-  | { kind: 'prep'; focus: PrepFocus; label: string };
+  | { kind: 'patch'; patch: TacticsPatch; label: string };
 
 export interface Alert {
   id: string;
@@ -647,7 +629,7 @@ export function seasonLevers(league: League, tid: number): SeasonLever[] {
  * says where to measure. AI staffs don't read the tally at all; they run their coach's fit.
  */
 export function staffTactics(league: League, tid: number): Tactics {
-  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), links: tid === league.userTid, user: tid === league.userTid });
+  const t = autoTactics(league.teams[tid], teamPlayers(league, tid), true, { sticky: inSeason(league), user: tid === league.userTid });
   return t.manual || tid !== league.userTid ? t : withStaffMoves(league, t);
 }
 
@@ -681,55 +663,7 @@ export function leverCounter(what: string, t: Tactics): LiveCounter | undefined 
   return undefined;
 }
 
-// ---------------------------------------------------------------- familiarity, shape and roles
-
-/**
- * A discrete option ('scheme:zone23', 'pnr:blitz', 'shape:fiveOut', 'press:always') as the staff
- * names it in a sentence: "the 2-3 zone", "the blitz", "the 5-Out".
- */
-export function optionName(key: string): string {
-  const [k, v] = key.split(':');
-  if (k === 'scheme') return v === 'man' ? 'man-to-man' : `the ${(SCHEME_META[v as DefScheme]?.label ?? v).toLowerCase()}`;
-  if (k === 'pnr')
-    return ({ drop: 'drop coverage', switch: 'switching ball screens', hedge: 'the hedge', blitz: 'the blitz', ice: 'icing ball screens' } as Record<string, string>)[v] ?? v;
-  if (k === 'shape') return v === 'horns' ? 'Horns' : v === 'twoIn' ? 'the double post' : `the ${SHAPE_META[v as OffShape]?.label ?? v}`;
-  if (k === 'press') return v === 'always' ? 'the full-court press' : 'the press after makes';
-  return key;
-}
-
-/** An option the team knows less than this is a gamble the staff flags. */
-export const RISKY = 60;
-
-/** What the team knows of the tactics it plays (against `opp`, its game plan for them on top), and where it's short. */
-export interface FamReadout {
-  overall: number;
-  off: number;
-  def: number;
-  prep: PrepFocus;
-  /** The options the tactics play that the team knows less than RISKY, least known first; `plan`: tonight's plan brings it (not the system). */
-  risks: { key: string; name: string; v: number; plan: boolean }[];
-  /** Rotation players still learning the system (knowledge under 70), least first. */
-  learning: { pid: number; know: number }[];
-}
-
-export function famReadout(league: League, opp?: number, tid = league.userTid): FamReadout {
-  const team = league.teams[tid];
-  const base = team.tactics;
-  const t = opp !== undefined && tid === league.userTid ? effectiveTactics(league, opp) : base;
-  const sys = systemFamiliarity(league, tid, t);
-  const fam = team.fam ?? freshFamiliarity(team, teamPlayers(league, tid));
-  const was = new Set(optionsOf(base));
-  const risks = optionsOf(t)
-    .map((key) => ({ key, name: optionName(key), v: optValue(fam, key), plan: !was.has(key) }))
-    .filter((r) => r.v < RISKY)
-    .sort((a, b) => a.v - b.v);
-  const mins = team.rotation?.minutes ?? {};
-  const learning = sys.players
-    .filter((p) => (mins[p.pid] ?? 0) >= 12 && p.know < 70)
-    .sort((a, b) => a.know - b.know)
-    .map((p) => ({ pid: p.pid, know: p.know }));
-  return { overall: sys.overall, off: sys.off, def: sys.def, prep: team.prep ?? 'balanced', risks, learning };
-}
+// ---------------------------------------------------------------- shape and roles
 
 /**
  * Fit points (shapeFits: 10 is a point a game) a shape has to beat the one played by for the staff to
@@ -740,60 +674,13 @@ const SHAPE_EDGE = 5;
 const ROLE_OBVIOUS = 70;
 
 /**
- * The staff on the system as a whole: how well the team knows it (an option it plays that it hasn't
- * drilled, a system still being learned, new arrivals still learning it, or drills that have done
- * their job), with the practice focus that answers it; and, for tactics the user runs himself, a shape
- * that fits the roster clearly better and an obvious point-of-attack stopper or rim anchor not used.
+ * The staff on the system, for tactics the user runs himself: a shape that fits the roster clearly
+ * better and an obvious point-of-attack stopper or rim anchor not used.
  */
 function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] {
   const out: Alert[] = [];
   const team = league.teams[tid];
   const t = team.tactics;
-  const r = famReadout(league, undefined, tid);
-  const pct = (v: number) => `${Math.round(v)}%`;
-  const drills = (label = PREP_META.system.label): AlertFix | undefined => (r.prep === 'system' ? undefined : { kind: 'prep', focus: 'system', label });
-  const worst = r.risks.find((x) => !x.plan);
-  if (worst) {
-    const left = gamesTo(worst.v);
-    out.push({
-      id: `fam-opt-${worst.key}`,
-      tone: 'alert',
-      title: `${worst.name.charAt(0).toUpperCase()}${worst.name.slice(1)} is new to us (${pct(worst.v)})`,
-      body: `We play it a step slow until it's drilled: about ${plural(left, 'game')} to fluid at a balanced focus, fewer with ${PREP_META.system.label.toLowerCase()}. Stick with it rather than changing again mid-stretch, or go back to what we know.`,
-      link: '/team/tactics/analysis?view=familiarity',
-      fix: drills(),
-    });
-  } else if (r.overall < 80) {
-    const end = r.off < r.def ? 'offense' : 'defense';
-    out.push({
-      id: 'fam-system',
-      tone: 'alert',
-      title: `Still learning the system: ${pct(r.overall)}`,
-      body: `${famLabel(r.overall)} so far, the ${end} most of all: a step slow until it's drilled. ${r.prep === 'system' ? 'The drills are on: give them time, and keep the changes for later.' : `${PREP_META.system.label} between games build it about twice as fast; changing it again starts over.`}`,
-      link: '/team/tactics/analysis?view=familiarity',
-      fix: drills(),
-    });
-  } else if (r.learning.length) {
-    const names = r.learning.slice(0, 3).map((x) => `${shortName(league, league.players[x.pid])} (${pct(x.know)})`);
-    const one = r.learning.length === 1;
-    out.push({
-      id: 'fam-arrivals',
-      tone: 'neutral',
-      title: `${andList(names)} ${one ? 'is' : 'are'} still learning the system`,
-      body: `A new player is a step behind in what we run until he knows it; games and practice teach it. ${r.prep === 'system' ? 'The tactical drills are teaching it about twice as fast.' : `${PREP_META.system.label} teach it about twice as fast.`}`,
-      link: '/team/tactics/analysis?view=familiarity',
-      fix: drills(),
-    });
-  } else if (r.prep === 'system' && r.overall >= FLUID - 3) {
-    out.push({
-      id: 'fam-done',
-      tone: 'good',
-      title: `The system is fluid (${pct(r.overall)})`,
-      body: `The tactical drills have done their job. ${PREP_META.balanced.label} practice keeps it there; ${PREP_META.opponent.label.toLowerCase()} drills each game plan for its game.`,
-      link: '/team/tactics/analysis?view=familiarity',
-      fix: { kind: 'prep', focus: 'balanced', label: PREP_META.balanced.label },
-    });
-  }
   // the shape and the roles are the user's calls only when he runs the tactics himself
   if (!t.manual || starters.length < 5) return out;
   const players = teamPlayers(league, tid).filter((p) => !p.injury);
@@ -801,18 +688,15 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
   const cur = shapeOf(t.offense);
   const best = OFF_SHAPES.reduce((a, s) => (fits[s] > fits[a] ? s : a), cur);
   if (best !== cur && fits[best] - fits[cur] >= SHAPE_EDGE) {
-    const known = optValue(team.fam, `shape:${best}`);
     out.push({
       id: `shape-${best}`,
       tone: 'alert',
       title: `${SHAPE_META[best].label} fits this roster better`,
-      body: `My read: about ${((fits[best] - fits[cur]) / 10).toFixed(1)} points a game over the ${SHAPE_META[cur].label} with this rotation, once drilled: ${SHAPE_META[best].good.charAt(0).toLowerCase()}${SHAPE_META[best].good.slice(1)}.${known < FLUID ? ` We're ${pct(known)} familiar with it, so it takes some practice first.` : ''} Make the change and I'll measure it on our next games.`,
+      body: `Staff's read: about +${((fits[best] - fits[cur]) / 10).toFixed(1)} a game over ${SHAPE_META[cur].label}. ${SHAPE_META[best].good}.`,
       link: '/team/tactics',
       fix: { kind: 'patch', patch: { offense: { shape: best } }, label: `Play ${SHAPE_META[best].short}` },
     });
   }
-  const link = partnershipAlert(league, tid, starters);
-  if (link) out.push(link);
   const auto = autoDefRoles(players, team.rotation);
   const five = new Set(starters.map((p) => p.pid));
   for (const role of ['poa', 'anchor'] as const) {
@@ -827,92 +711,13 @@ function systemAlerts(league: League, tid: number, starters: Player[]): Alert[] 
       id: `defrole-${role}`,
       tone: 'neutral',
       title: `${p.lastName} is a natural ${meta.label.toLowerCase()}`,
-      body: `Nobody in the starting five has the role, and he suits it (${'★'.repeat(roleStars(roleScale(league).def[role], defRoleFits(p)[role]))}). ${meta.help}`,
+      body: `No starter has the role, and he suits it at ${'★'.repeat(roleStars(roleScale(league).def[role], defRoleFits(p)[role]))}. ${meta.help.split(/(?<=\.)\s/)[0]}`,
       link: '/team/tactics',
       fix: { kind: 'patch', patch: { defense: { roles: { ...(t.defense.roles ?? {}), [p.pid]: role } } }, label: `Make him ${role === 'poa' ? 'POA stopper' : 'rim anchor'}` },
     });
     break;
   }
   return out;
-}
-
-/** A link the staff calls worth a role change (its strength with the five as they know each other). */
-const LINK_WORTH = 0.6;
-/** Non-inside roles the staff would move a crowding big to. */
-const OUTSIDE_BIG: OffRole[] = ['stretch', 'hub', 'glue'];
-
-/**
- * The staff on the starting five's partnerships (see sim/links.ts), one thing at a time: two inside
- * bigs crowding the paint (with the role or the shape that ends it), a role change that would make a
- * strong partnership without miscasting anyone, or the five's best partnership still building after a
- * new arrival.
- */
-function partnershipAlert(league: League, tid: number, starters: Player[]): Alert | null {
-  const team = league.teams[tid];
-  const t = team.tactics;
-  const fam = team.fam ?? freshFamiliarity(team, teamPlayers(league, tid));
-  const name = (pid: number) => league.players[pid].lastName;
-  const { links, clashes } = lineupLinks(t, starters, fam);
-  const crowd = clashes.find((c) => c.id === 'crowd');
-  if (crowd) {
-    const bigs = crowd.pids.map((pid) => league.players[pid]);
-    // the big who loses least by moving outside, to his best outside role
-    const moves = bigs
-      .map((p) => {
-        const fits = roleFits(p);
-        const to = OUTSIDE_BIG.reduce((a, r) => (fits[r] > fits[a] ? r : a), OUTSIDE_BIG[0]);
-        return { p, to, loss: fitStars(fits[offRoleOf(t, p)]) - fitStars(fits[to]) };
-      })
-      .sort((a, b) => a.loss - b.loss);
-    const m = moves[0];
-    const fix: AlertFix =
-      m.loss <= 1
-        ? { kind: 'patch', patch: { offense: { roles: { ...t.offense.roles, [m.p.pid]: m.to } } }, label: `Make ${m.p.lastName} a ${ROLE_META[m.to].label}` }
-        : { kind: 'patch', patch: { offense: { shape: 'twoIn' } }, label: `Play ${SHAPE_META.twoIn.short}` };
-    return {
-      id: 'link-crowd',
-      tone: 'alert',
-      title: `${andList(bigs.map((p) => p.lastName))} crowd the paint`,
-      body: `${CLASH_META.crowd.help} ${m.loss <= 1 ? `${m.p.lastName} can play ${ROLE_META[m.to].label} and keep the paint open.` : `Neither plays outside well: the ${SHAPE_META.twoIn.label} is built for two bigs.`}`,
-      link: '/team/tactics',
-      fix,
-    };
-  }
-  // a role change that makes a strong partnership, the player no worse cast for it
-  const inLink = new Set(links.filter((l) => LINK_META[l.id].end === 'off').flatMap((l) => [l.a, l.b]));
-  let best: { pid: number; role: OffRole; s: number; with: number; id: keyof typeof LINK_META } | null = null;
-  for (const p of starters) {
-    if (inLink.has(p.pid)) continue;
-    const fits = roleFits(p);
-    const cur = fitStars(fits[offRoleOf(t, p)]);
-    for (const [role, ls] of Object.entries(linksByRole(t, starters, p.pid, fam)) as [OffRole, NonNullable<ReturnType<typeof linksByRole>[OffRole]>][]) {
-      if (role === offRoleOf(t, p) || fitStars(fits[role]) < cur) continue;
-      const l = ls[0];
-      if (l.strength >= LINK_WORTH && (!best || l.strength > best.s)) best = { pid: p.pid, role, s: l.strength, with: l.a === p.pid ? l.b : l.a, id: l.id };
-    }
-  }
-  if (best) {
-    return {
-      id: `link-make-${best.pid}`,
-      tone: 'neutral',
-      title: `${name(best.pid)} as a ${ROLE_META[best.role].label}: a ${LINK_META[best.id].label.toLowerCase()} with ${name(best.with)}`,
-      body: `${LINK_META[best.id].help} He suits the role at least as well as the one he plays.`,
-      link: '/team/tactics',
-      fix: { kind: 'patch', patch: { offense: { roles: { ...t.offense.roles, [best.pid]: best.role } } }, label: `Make him a ${ROLE_META[best.role].label}` },
-    };
-  }
-  // the five's best partnership, still building (a new arrival in it)
-  const top = links[0];
-  if (top && duoShare(top.understanding) < 0.7 && top.fit >= 60) {
-    return {
-      id: `link-building-${top.a}-${top.b}`,
-      tone: 'neutral',
-      title: `${name(top.a)} and ${name(top.b)} are still learning each other`,
-      body: `Their ${LINK_META[top.id].label.toLowerCase()} plays at ${Math.round(duoShare(top.understanding) * 100)}% of what it will once they know each other (understanding ${Math.round(top.understanding)}%). Minutes together build it.`,
-      link: '/team/tactics',
-    };
-  }
-  return null;
 }
 
 export function teamAlerts(league: League, tid: number): Alert[] {
@@ -955,7 +760,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         id: 'drop-noprot',
         tone: 'alert',
         title: 'Drop coverage without a rim protector',
-        body: 'Drop only works with a big who can contest at the rim. Consider Switch or Hedge.',
+        body: 'Drop only works with a big who can contest at the rim. Try Switch or Hedge.',
         link: '/team/tactics?side=out',
         fix: { kind: 'coverage', pnr: 'hedge', label: 'Hedge instead' },
       });
@@ -972,7 +777,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       });
     }
   }
-  // what the team knows of its system, the shape and the out-of-possession roles (in season: camp drills the system before it)
+  // the shape and the out-of-possession roles
   if (inSeason) alerts.push(...systemAlerts(league, tid, starters));
   // injured players' minutes count: the plan hands them to teammates before it rescales anything
   const total = players.reduce((a, p) => a + (rot.minutes[p.pid] ?? 0), 0);
@@ -981,7 +786,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       id: 'min-total',
       tone: 'alert',
       title: `Minutes add up to ${Math.round(total)}`,
-      body: `Minute targets${healthy.length < players.length ? ", injured players' included," : ''} are scaled to 240 automatically, so the actual split may differ from what you set.`,
+      body: `${healthy.length < players.length ? "Injured players' targets count too. " : ''}Games scale the targets to 240, so the split may differ from yours.`,
       link: '/team/rotation',
     });
   const best = [...healthy].sort((a, b) => b.ovr - a.ovr)[0];
@@ -995,7 +800,7 @@ export function teamAlerts(league: League, tid: number): Alert[] {
         id: 'star-min',
         tone: 'alert',
         title: m ? `${best.lastName} is only playing ${m} minute${m === 1 ? '' : 's'}` : `${best.lastName} isn't getting any minutes`,
-        body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should usually play 32-36 minutes.',
+        body: sustain < 32 ? `His stamina supports about ${sustain} minutes. Give him most of them.` : 'Your best player should play 32-36 minutes.',
         link: '/team/rotation',
       });
   }
@@ -1012,10 +817,10 @@ export function teamAlerts(league: League, tid: number): Alert[] {
       const lighter = cap ? `lowering his ${cap}-minute cap` : 'a hard minute cap';
       const ease =
         b2b && !rot.restB2B.includes(p.pid)
-          ? 'Rest him on back-to-backs (Rotation).'
+          ? 'Rest him on back-to-backs, on Rotation.'
           : b2b
-            ? `He already rests on back-to-backs: ${lighter} (Rotation) lightens his load further.`
-            : `${lighter.charAt(0).toUpperCase()}${lighter.slice(1)} (Rotation) lightens his load.`;
+            ? `He already rests on back-to-backs. ${lighter.charAt(0).toUpperCase()}${lighter.slice(1)} on Rotation lightens his load further.`
+            : `${lighter.charAt(0).toUpperCase()}${lighter.slice(1)} on Rotation lightens his load.`;
       alerts.push({
         id: `wear-${p.pid}`,
         tone: 'alert',

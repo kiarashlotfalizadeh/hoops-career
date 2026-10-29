@@ -211,7 +211,7 @@ export function OnTheClock({
           </button>
           {hasPicks && (
             <button className="btn sm" disabled={busy} onClick={onSimToMine}>
-              <Play size={15} fill="currentColor" /> Sim to my pick
+              <Play size={15} fill="currentColor" /> Sim to your pick
             </button>
           )}
           {canTrade && (

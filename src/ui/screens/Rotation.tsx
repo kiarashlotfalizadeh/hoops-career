@@ -1,6 +1,7 @@
 // Team → Rotation: a hero with the minutes the targets add up to and the assistant's switch, the
-// staff's advice on the rotation, the depth chart with each player's minute target (wear risks
-// marked on his row), and the stint plan the targets make. A player's sheet sets his spot, minutes, cap, closing and rest on back-to-backs.
+// staff's advice on the rotation, the depth chart with each player's minute target (wear marked on
+// his row's meta line), and the stint plan the targets make. A player's sheet sets his spot,
+// minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
 import { Fragment, useState, type ReactNode } from 'react';
 import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
@@ -108,9 +109,9 @@ export default function Rotation() {
       <section className="card tm-rhero" aria-label="Your rotation">
         <Statline
           items={[
-            { k: 'Targets', v: total, s: total === 240 ? 'of 240 min' : 'min, scaled to 240' },
-            { k: 'Starters', v: startMin, s: 'min, first five' },
-            { k: 'Bench', v: total - startMin, s: 'min, the rest' },
+            { k: 'Targets', v: total, s: total === 240 ? 'min' : 'scaled to 240' },
+            { k: 'Starters', v: startMin, s: 'min' },
+            { k: 'Bench', v: total - startMin, s: 'min' },
           ]}
         />
         {injuredMin > 0 && <div className="tm-rsum-note warn">{injuredMin} injured minutes go to the healthy players.</div>}
@@ -151,8 +152,8 @@ export default function Rotation() {
               const p = byId.get(pid)!;
               const m = rot.minutes[pid] ?? 0;
               const pg = playerSeason(p, league.season);
-              // wear, on its own line when he's worn down
-              const risks = p.wear >= WORN ? `wear ${Math.round(p.wear)}` : '';
+              // worn down: his wear on the meta line, in the warning's colour
+              const worn = !p.injury && p.wear >= WORN;
               return (
                 <Fragment key={pid}>
                   {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} help={i === 0 ? <RotationHelp /> : undefined} />}
@@ -182,9 +183,15 @@ export default function Rotation() {
                         {p.injury && <Tag tone="bad">Out {plural(p.injury.gamesRemaining, 'game')}</Tag>}
                         {/* the starters close unless you say otherwise: only a change from that says so ("closer" off the bench, "sits late" in the five) */}
                         <span className="ellipsis">
-                          {p.injury
-                            ? injuryName(p.injury.type)
-                            : `${p.pos}${closers.includes(pid) && !startSet.has(pid) ? ' · closer' : !closers.includes(pid) && startSet.has(pid) && closers.length ? ' · sits late' : ''}`}
+                          {p.injury ? (
+                            injuryName(p.injury.type)
+                          ) : (
+                            <>
+                              {p.pos}
+                              {worn && <span className="warn"> · wear {Math.round(p.wear)}</span>}
+                              {closers.includes(pid) && !startSet.has(pid) ? ' · closer' : !closers.includes(pid) && startSet.has(pid) && closers.length ? ' · sits late' : ''}
+                            </>
+                          )}
                         </span>
                         {p.contract.twoWay && (
                           <Tag>
@@ -205,7 +212,6 @@ export default function Rotation() {
                           </span>
                         </>
                       )}
-                      {risks && <div className="tm-rwarn warn">{risks.charAt(0).toUpperCase() + risks.slice(1)}</div>}
                       <span className="tm-rmin num">
                         {m}
                         <span className="sr-only"> minutes, his target</span>
@@ -220,15 +226,15 @@ export default function Rotation() {
             })}
           </div>
         </div>
-        <div className="tm-foot">MIN a game this season · STA stamina · tap a row for his target, cap and rest</div>
+        <div className="tm-foot">Tap a player to set his minutes, cap and rest.</div>
       </section>
 
       <Section
         title="Stint plan"
         right={
           <Help title="Stint plan">
-            When each player is planned on the floor, minute by minute through the four quarters, from your targets scaled to 240. The staff follows it at dead balls and adjusts
-            for fouls, fatigue, injuries and blowouts.
+            <p>Each player&apos;s planned minutes on the floor, quarter by quarter. It comes from your targets, scaled to 240.</p>
+            <p>The staff follows it at dead balls. Fouls, fatigue, injuries and blowouts change it.</p>
           </Help>
         }
       >
@@ -288,15 +294,15 @@ export default function Rotation() {
 function RotationHelp() {
   return (
     <Help title="How rotations work">
+      <p>The first five healthy players start. Your minute targets become the stint plan below, scaled to 240 minutes.</p>
       <p>
-        The first five healthy players start. The staff turns your minute targets into a stint plan (below), scaled to exactly 240 minutes, and follows it at dead balls. Fouls,
-        fatigue, injuries and blowouts change it in the game.
+        MIN is his minutes a game this season. <Term id="sta">STA</Term> is stamina: a low one wants shorter stints. <Term id="closer">Closers</Term> finish the 4th quarter and
+        overtime when healthy.
       </p>
       <p>
-        <Term id="closer">Closers</Term> finish the 4th quarter and overtime when healthy. <Term id="sta">STA</Term> is stamina: a low one wants shorter stints. Players who rest on
-        back-to-backs sit the second night, which lowers <Term id="wear">wear</Term> and injury risk.
+        Resting on back-to-backs sits him the second night, for less <Term id="wear">wear</Term> and injury risk. A row shows his wear from {WORN} up.
       </p>
-      <p>The arrow on a row swaps him with the player above. A row marks a worn-down player (wear {WORN}+).</p>
+      <p>The arrow on a row swaps him with the player above.</p>
     </Help>
   );
 }
@@ -427,7 +433,7 @@ function EditPlayer({
             help={
               !rot.closers.includes(p.pid) && rot.closers.length >= 5 && names(rot.closers[0])
                 ? `Ends the 4th and overtime. You have five: he replaces ${names(rot.closers[0])}.`
-                : 'Ends the 4th quarter and overtime (up to five).'
+                : 'Ends the 4th quarter and overtime. Five close at most.'
             }
           />
           <Toggle

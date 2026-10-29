@@ -1113,7 +1113,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     expect(p.waivers).toBeUndefined();
     const t = l.transactions!.at(-1)!;
     expect(t).toMatchObject({ kind: 'buyout', note: 'stretched', years: 5 });
-    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/\(the rest stretched over 5 seasons\)$/);
+    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/, the rest stretched over 5 seasons$/);
   }
 
   // a waiver claim takes over the contract and wipes the stretched dead money
@@ -1133,7 +1133,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     expect(deadOf(l, p.pid).length).toBe(6);
     const t = l.transactions!.at(-1)!;
     expect(t).toMatchObject({ kind: 'waive', note: 'stretched', years: 5, amount: 9_000 });
-    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/\(\$9\.0M in dead money, stretched over 5 seasons\)$/);
+    expect(txnText(l, txnLine(t, { tid: U }))).toMatch(/ · \$9\.0M in dead money, stretched over 5 seasons$/);
     l.day += 2;
     resolveWaivers(l);
     expect(p.tid).toBe(AI);
@@ -1208,7 +1208,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     // the log
     const t = l.transactions!.at(-1)!;
     expect(t).toMatchObject({ kind: 'tenDay', amount: pay });
-    expect(txnText(l, txnLine(t, { tid: U }))).toBe(`Signed ${p.firstName} ${p.lastName} to a 10-day contract ($${(pay / 1000).toFixed(1)}M)`);
+    expect(txnText(l, txnLine(t, { tid: U }))).toBe(`Signed ${p.firstName} ${p.lastName} to a 10-day contract · $${(pay / 1000).toFixed(1)}M`);
     // nine days on: his last day, and the inbox says so with the choices
     for (let i = 0; i < TEN_DAYS - 1; i++) {
       l.day++;
@@ -1216,7 +1216,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     }
     expect(tenDayLeft(l, p)).toBe(1);
     expect(l.inbox[0]).toMatchObject({ subject: `${p.firstName} ${p.lastName}'s 10-day contract ends tonight`, tenDay: p.pid });
-    expect(l.inbox[0].body).toMatch(/Sign him to a second 10-day .* for the rest of the season at his minimum .* or let him go/);
+    expect(l.inbox[0].body).toMatch(/Sign him to a second 10-day.* or for the rest of the season at .*Doing nothing lets him go/);
     l.day++;
     tenDayDaily(l);
     expect(p.tid).toBe(FREE_AGENT);
@@ -1239,7 +1239,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     expect(p.contract.salaries[0]).toBe(first + tenDayPay(l, p, TEN_DAYS));
     expect(p.tenDays).toEqual({ season: l.season, by: { [U]: 2 } });
     expect(l.transactions!.at(-1)).toMatchObject({ kind: 'tenDay', note: 'second' });
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-day contracts with you/);
+    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-days with you/);
     l.day = until + TEN_DAYS;
     tenDayDaily(l);
     expect(p.tid).toBe(FREE_AGENT);
@@ -1280,7 +1280,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     l.day = p.contract.tenDay!.until;
     tenDayDaily(l);
     atMin();
-    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-day contracts with you/);
+    expect(tenDayBlockedReason(l, U, p)).toMatch(/had his two 10-days with you/);
     expect(tenDayBlockedReason(l, AI, p) ?? '').not.toMatch(/had his two/);
   }
 
@@ -1338,7 +1338,7 @@ it('releases: waivers and buyouts (W10), the stretch provision, 10-day contracts
     const a = minGuy(l, 0);
     const b = minGuy(l, 1);
     expect(tenDaySpot(l, U)).toBeNull();
-    expect(tenDayBlockedReason(l, U, a)).toMatch(/hardship exception opens spots beyond 15 from 4 players out/);
+    expect(tenDayBlockedReason(l, U, a)).toMatch(/Hardship spots past 15 open with 4 players out 3\+ games/);
     const roster = standardRoster(l, U);
     for (const p of roster.slice(0, HARDSHIP_OUT)) out(p);
     // two games to go doesn't count

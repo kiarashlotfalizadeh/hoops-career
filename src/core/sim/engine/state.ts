@@ -4,30 +4,11 @@
 // fouls, calls from the bench, the sets run), the inputs a game takes, and the small types and helpers
 // the engine's modules share.
 
-import type {
-  ActionType,
-  CallId,
-  DefRole,
-  Familiarity,
-  GlassDuty,
-  LineupStat,
-  OffRole,
-  Player,
-  Pos,
-  Ratings,
-  SetId,
-  ShotZone,
-  Tactics,
-  Team,
-  TeamBox,
-  TeamTotals,
-  GameType,
-} from '../../types';
+import type { ActionType, CallId, DefRole, GlassDuty, LineupStat, OffRole, Player, Pos, Ratings, SetId, ShotZone, Tactics, Team, TeamBox, TeamTotals, GameType } from '../../types';
 import type { Rng } from '../../random';
 import type { Composites } from '../../ratings';
 import type { FinishType } from '../log';
 import type { Cast, Slot } from '../sets';
-import type { LinkId } from '../links';
 import { K, type ZoneK } from './constants';
 
 export interface Box {
@@ -220,25 +201,8 @@ export interface ST {
   adjust: number;
   /** Period of the coach's last adjustment (one per period). */
   adjustedQ: number;
-  /** The tactics the coach set; `t` is what is played: these, with the situational plan in effect on top, and the mentality's nudges. */
+  /** The tactics the coach set; `t` is what is played: these, with the mentality's nudges. */
   base: Tactics;
-  /** What the team drills of what it plays: `t` without the mentality (familiarity reads these). */
-  drilled: Tactics;
-  /** What the team knows of its tactics (none: fully drilled), and the familiarity penalty its five play at, on offense and defense (0 fluid, 1 knows nothing). */
-  fam?: Familiarity;
-  famOff: number;
-  famDef: number;
-  /**
-   * The five's partnerships (see src/core/sim/links.ts), refreshed with the familiarity: the offense's
-   * by passer and shooter (linkKey), the wall's by its stopper, and the bigs who crowd the paint.
-   * None (null) when there are none, and for a team without a record of what it knows (understanding
-   * lives there).
-   */
-  links: Map<number, { id: LinkId; s: number }> | null;
-  wall: Map<number, number> | null;
-  crowd: Set<number> | null;
-  /** The situational plan in effect. */
-  sit: { id: string; label: string } | null;
   /** Times each player has been hacked this period. */
   hacked: Map<number, number>;
   /** A play called for the side's next half-court trip this period (runSet): a set, or a clear-out isolation ('iso'). */
@@ -282,8 +246,6 @@ export interface SimTeamInput {
   play?: number[];
   /** A coach (AI, or the user's assistant in simmed games) who may adjust the game plan at quarter breaks and timeouts. */
   adjust?: boolean;
-  /** What the team knows of its tactics, in place of the team's own (a game plan it prepared for); none anywhere: fully drilled. */
-  fam?: Familiarity;
 }
 
 export interface SimOptions {
@@ -358,9 +320,6 @@ export const ACTION_LIST: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'moti
 
 /** No players (shared: never added to). */
 export const NONE: SP[] = [];
-
-/** A partnership's key in ST.links: the passer's pid and the shooter's, as one number. */
-export const linkKey = (a: number, b: number) => a * 1048576 + b;
 
 /** Usage multiplier for a player's shot freedom: green light (1), normal (0) or limited (-1). */
 export function freedomMult(fr: number) {

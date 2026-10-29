@@ -135,7 +135,7 @@ describe('planning for an opponent', () => {
       expect(box).toBeDefined();
       expect(box!.label).toBe(`Box-and-one on ${star.lastName}`);
       expect(box!.patch).toEqual({ defense: { scheme: 'box1', chase: [star.pid] } });
-      expect(box!.evidence).toMatch(/uses 38% of their possessions; the rest make 2\d\.\d% of their threes/);
+      expect(box!.evidence).toMatch(/uses 38% of their possessions\. The rest make 2\d\.\d% of their threes/);
       // the same percentages from players who can shoot by their ratings: no junk defense (it costs points then)
       for (const p of teamPlayers(l, opp)) if (p !== star) p.ratings.tp = Math.max(p.ratings.tp, 70);
       expect(counterCandidates(l, l.userTid, opp).some((c) => c.id === 'box-1')).toBe(false);
@@ -324,7 +324,7 @@ describe('planning for an opponent', () => {
         if (!box) continue;
         found++;
         expect(box.text).toBe(`plays a box-and-one on ${shortName(l, star)}`);
-        expect(box.why).toMatch(/uses 38% of your possessions, and the rest of your team makes 2\d\.\d% of its threes/);
+        expect(box.why).toMatch(/uses 38% of your possessions\. The rest of your team makes 2\d\.\d% of its threes/);
         const t = buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics;
         expect(t.defense).toMatchObject({ scheme: 'box1', chase: [star.pid] });
       }

@@ -1,7 +1,7 @@
 // Named offensive sets (src/core/sim/sets.ts): who each is for and the look it creates, its edges
 // against the defenses it beats and its weakness against those that kill it, defenses reading a set
-// a little better every run, the set package (user only: AI teams run none), after-timeout sets, and
-// the reports. Games that run no set play exactly as before.
+// a little better every run, after-timeout sets (user only: AI teams run none), and the reports.
+// Games that run no set play exactly as before.
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
@@ -11,8 +11,8 @@ import type { PossLog } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { Rng } from '../random';
 import { cloneTactics, hasCoachPlans, tacticsDiff, withoutCoachPlans, withoutGameSpecific } from '../sim/tactics';
-import { loadPlaybook, tacticsChanges, toPlaybook } from '../sim/playbooks';
-import { SETS, SET_IDS, SET_K, READ_ON_IT, castFor, fitsFloor, readAfter, readRate, setEdges, setFit, setLook, type DefRead, type FitPlayer } from '../sim/sets';
+import { tacticsChanges } from '../sim/playbooks';
+import { SETS, SET_IDS, SET_K, READ_ON_IT, castFor, readAfter, readRate, setEdges, setFit, setLook, type DefRead, type FitPlayer } from '../sim/sets';
 import { buildGameReport, setLineText, setLines } from '../analysis/gameReport';
 import { impactCounter } from '../ai/advisor';
 import type { CallId, SetId, Tactics } from '../types';
@@ -110,7 +110,7 @@ describe('the set library', () => {
   const edge = (id: SetId, d: Partial<DefRead>, mode?: 'pop' | 'elbow') => setEdges({ id, mode, c: shooter }, read(d));
   const sum = (e: Record<string, number | undefined>) => Object.values(e).reduce((a: number, x) => a + (x ?? 0), 0);
 
-  it('documents, edges, reads and casts every set, and goes with it around the game: playbooks, diffs, Keep changes, reports and the one-tap fix', () => {
+  it('documents, edges, reads and casts every set, and goes with it around the game: diffs, Keep changes and reports', () => {
     {
       // documents every set: its action, who it is for, its look, what beats it, its time and how fast it is read
       expect(SET_IDS).toHaveLength(7);
@@ -191,44 +191,23 @@ describe('the set library', () => {
       // what the team goes for: the look up, the rest down
       expect(setLook({ id: 'elevator' }).three).toBeGreaterThan(2);
       expect(setLook({ id: 'floppy' }, true).rim).toBeGreaterThan(setLook({ id: 'floppy' }).rim!);
-      // a package runs a set only for a player who fits it well, with the floor it needs
-      for (const id of SET_IDS) {
-        const c = fitsFloor(id, five);
-        if (c) expect(setFit(id, c.star)).toBeGreaterThanOrEqual(SET_K.fit);
-      }
     }
     {
-      // saved with playbooks, kept by tactics diffs and Keep changes, named in diffs, and never game-specific
+      // the after-timeout set is kept by tactics diffs and Keep changes, named in diffs, and never game-specific
       const a = cloneTactics(league.teams[0].tactics);
       const b = cloneTactics(a);
-      b.offense.sets = ['spain', 'floppy'];
       b.manage.ato = 'floppy';
       b.manage.atoPid = 77;
-      // copies share nothing
-      const c = cloneTactics(b);
-      c.offense.sets!.push('hammer');
-      expect(b.offense.sets).toEqual(['spain', 'floppy']);
-      // a diff adds and takes away a package
-      expect(tacticsDiff(a, b).offense?.sets).toEqual(['spain', 'floppy']);
-      const back = tacticsDiff(b, a);
-      expect('sets' in (back.offense ?? {})).toBe(true);
-      expect(applyPatchTactics(b, back).offense.sets).toBeUndefined();
-      // a set package and the after-timeout play's player are the coach's own: kept outside tonight's game
-      expect(withoutGameSpecific(b).offense.sets).toEqual(['spain', 'floppy']);
+      expect(tacticsDiff(a, b).manage).toMatchObject({ ato: 'floppy', atoPid: 77 });
+      expect(applyPatchTactics(a, tacticsDiff(a, b)).manage.ato).toBe('floppy');
+      // the after-timeout play's player is the coach's own: kept outside tonight's game
       expect(withoutGameSpecific(b).manage.atoPid).toBe(77);
-      // a playbook keeps them, and loading it brings them back (the player only while he's on the roster)
-      const pb = toPlaybook(b, { id: 'x', name: 'x', saved: { season: 1, day: 1 } });
-      expect(pb.offense.sets).toEqual(['spain', 'floppy']);
-      expect(loadPlaybook(a, pb, [77]).offense.sets).toEqual(['spain', 'floppy']);
-      expect(loadPlaybook(a, pb, [77]).manage.atoPid).toBe(77);
-      expect(loadPlaybook(a, pb, [5]).manage.atoPid ?? null).toBe(a.manage.atoPid ?? null);
       const changes = tacticsChanges(a, b, (pid) => `P${pid}`);
-      expect(changes).toContainEqual({ label: 'Set package', from: 'None', to: 'Spain, Floppy' });
       expect(changes).toContainEqual({ label: 'After-timeout play', from: '—', to: 'Floppy' });
       expect(changes).toContainEqual({ label: 'After-timeout play for', from: 'Best fit', to: 'P77' });
     }
     {
-      // the reports give each set's runs, points per possession and the run it was read by, and offer to drop one their defense kills
+      // the reports give each set's runs, points per possession and the run it was read by
       const res = {
         sets: [
           { t: 0 as const, id: 'elevator' as const, runs: 3, pts: 2, readAt: 3 },
@@ -251,13 +230,8 @@ describe('the set library', () => {
       const rep = buildGameReport(league, g, league.teams[o].tid)!;
       expect(rep.sets[0].id).toBe('floppy');
       expect(rep.sets[0].runs).toBeGreaterThan(5);
-      // the one-tap fix for a set their defense took away takes it out of the package
-      const t = cloneTactics(league.teams[0].tactics);
-      t.offense.sets = ['floppy', 'spain'];
-      const fix = impactCounter('set_floppy:d', t)!;
-      fix.apply(t);
-      expect(t.offense.sets).toEqual(['spain']);
-      expect(impactCounter('set_floppy:d', t)).toBeUndefined();
+      // a set their defense took away has no one-tap fix: the coach just calls something else
+      expect(impactCounter('set_floppy:d', cloneTactics(league.teams[0].tactics))).toBeUndefined();
     }
   });
 });
@@ -282,7 +256,7 @@ describe('sets in the engine', () => {
     return out;
   }
 
-  it('runs each set for its player and goes for its look, has its edge against the defenses it beats, is read every run, runs a package and after-timeout sets, and changes nothing when no set is run', () => {
+  it('runs each set for its player and goes for its look, has its edge against the defenses it beats, is read every run, runs after-timeout sets, and changes nothing when no set is run', () => {
     {
       // runs each set for the player it's queued for, records it on the possession, and goes for its look
       for (const id of SET_IDS) {
@@ -372,58 +346,26 @@ describe('sets in the engine', () => {
       expect(res.impacts!.find((im) => im.key === 'set_read:d' && im.t === 1)!.pts).toBeGreaterThan(3);
     }
     {
-      // runs a package now and then, for players who fit it, until the defense is on it, and never in late-game situations
-      const o = teamFor('floppy');
-      const t = cloneTactics(league.teams[o].tactics);
-      t.offense.sets = ['floppy', 'elevator', 'hammer', 'chicago'];
-      const coach = league.teams[9].coach?.tactics ?? 50;
-      const runs: Record<string, number> = {};
-      let games = 0;
-      for (let g = 0; g < 6; g++) {
-        const sim = new GameSim(side(o, undefined, t), side(9, MAN), opts(40 + g, true));
-        let prev: [number, number] = [0, 0];
-        while (sim.step())
-          for (const l of sim.drainLogs()) {
-            if (l.set && l.off === 0) {
-              runs[l.set.id] = (runs[l.set.id] ?? 0) + 1;
-              // the package ran it, for a player who fits it
-              const p = inn(sim).T[0].on.find((x) => x.pid === l.set!.pid) ?? (sim as unknown as { T: { players: SP[] }[] }).T[0].players.find((x) => x.pid === l.set!.pid)!;
-              expect(setFit(l.set.id, p)).toBeGreaterThanOrEqual(SET_K.fit);
-              // and only while their defense isn't on it yet
-              expect(readAfter(l.set.id, l.set.n - 1, coach)).toBeLessThan(READ_ON_IT);
-              // a fresh trip with time to run it: not the end of a period or a close game's last minutes
-              expect(l.clockStart).toBeGreaterThan(15);
-              expect(l.q >= 4 && l.clockStart <= 50 && Math.abs(prev[0] - prev[1]) <= 5).toBe(false);
-            }
-            prev = l.score;
-          }
-        games++;
-      }
-      const all = Object.values(runs).reduce((a, b) => a + b, 0) / games;
-      // four sets, each run once or twice before the defense is on it: a handful of trips a game
-      expect(all).toBeGreaterThan(4);
-      expect(all).toBeLessThan(10);
-      expect(Object.keys(runs).length).toBeGreaterThanOrEqual(3);
-    }
-    {
-      // plays games with no sets exactly as before: AI teams never run one, and an empty package draws nothing
+      // plays games with no sets exactly as before: AI teams never run one
       // box-score fingerprints taken from the engine before sets (the same games as engineDefense's default ones,
       // and a coached side with an after-timeout action, a go-to player and two timeouts), taken again
       // when side-out fouls started restarting the shot clock and timeouts started stopping play, and when
       // tactics were made to matter twice as much (K.tacticEdge), when the late game, crunch-time touches,
       // home court and the staff's substitutions were polished, and when the AI's playbooks were recalibrated
       // and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when the off-ball switches' tags were weighed by what they're worth, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the credit for assisted twos was trimmed to the NBA's rate, and when the big decisions were made to matter (K.matchup, the coverages' sizes, the AI coaches' own defenses), and when crunch time came to need a game still in reach, the AI's rotations floored their two best players' minutes and severe injuries were made rarer, and when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth, and again 2026-10-26, when the zones came to play to the two fives on the floor, the playbooks were rebalanced and the AI's staffs refit with no zone ban
-      // (all of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones: K.threeUse.contest; and again for K.useCeil)
+      // (all of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones: K.threeUse.contest; and again for K.useCeil;
+      // and again 2026-10-28, when the threes were recentred: K.recenter.three, and again that day, when Five-Out,
+      // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
       const expected = {
         ai: [
-          [115, 100, 87, 37, 13, 14, 15, 0],
+          [115, 114, 85, 38, 11, 17, 13, 0],
           [122, 113, 82, 18, 6, 26, 13, 0],
-          [114, 99, 100, 40, 7, 24, 6, 0],
+          [111, 106, 97, 43, 7, 16, 11, 0],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press)
         coached: [
-          [134, 102, 80, 37, 11, 17, 12, 0],
-          [117, 114, 79, 33, 8, 26, 15, 0],
+          [121, 106, 89, 32, 14, 20, 11, 0],
+          [113, 125, 77, 31, 7, 29, 16, 0],
           [95, 109, 75, 32, 11, 31, 19, 0],
         ],
       };
@@ -431,11 +373,6 @@ describe('sets in the engine', () => {
       const adj = (s: SimTeamInput) => ({ ...s, adjust: true });
       for (let g = 0; g < 3; g++) {
         expect(fp(new GameSim(adj(side(10 + g)), adj(side(20 + g)), { rng: new Rng(800 + g), type: 'regular', injuries: true }).simToEnd())).toEqual(expected.ai[g]);
-        // an empty package is no package
-        const empty = { ...league.teams[10 + g].tactics, offense: { ...league.teams[10 + g].tactics.offense, sets: [] } };
-        expect(fp(new GameSim(adj(side(10 + g, undefined, empty)), adj(side(20 + g)), { rng: new Rng(800 + g), type: 'regular', injuries: true }).simToEnd())).toEqual(
-          expected.ai[g],
-        );
         const home = adj(side(3 + g, { manage: { ato: 'pnr', goTo: league.teams[3 + g].rotation.order[0] } }));
         const sim = new GameSim(home, adj(side(13 + g)), { rng: new Rng(900 + g), type: 'regular', record: true, injuries: true });
         let i = 0;
@@ -445,19 +382,19 @@ describe('sets in the engine', () => {
         }
         expect(fp(sim.result())).toEqual(expected.coached[g]);
       }
-      // an AI coach on a team the user left with a package plays its playbook without it
+      // an AI coach on a team the user left with an after-timeout set plays its playbook without it
       const t = cloneTactics(league.teams[1].tactics);
-      t.offense.sets = ['floppy', 'spain'];
+      t.manage.ato = 'floppy';
       expect(hasCoachPlans(t)).toBe(true);
-      expect(withoutCoachPlans(t).offense.sets).toBeUndefined();
+      expect(withoutCoachPlans(t).manage.ato).toBeUndefined();
       const l2 = structuredClone(league);
       l2.teams[1].tactics = t;
       const input = buildSimInput(l2, 1, 1, 'regular', 2);
-      expect(input.team.tactics.offense.sets).toBeUndefined();
-      const withPkg = new GameSim(input, buildSimInput(l2, 2, 1, 'regular', 1), opts(5)).simToEnd();
+      expect(input.team.tactics.manage.ato).toBeUndefined();
+      const withAto = new GameSim(input, buildSimInput(l2, 2, 1, 'regular', 1), opts(5)).simToEnd();
       const without = new GameSim(buildSimInput(league, 1, 1, 'regular', 2), buildSimInput(league, 2, 1, 'regular', 1), opts(5)).simToEnd();
-      expect(JSON.stringify(withPkg)).toBe(JSON.stringify(without));
-      expect(withPkg.sets).toBeUndefined();
+      expect(JSON.stringify(withAto)).toBe(JSON.stringify(without));
+      expect(withAto.sets).toBeUndefined();
     }
     {
       // runs an after-timeout set for the player it names (the best fit when he sits)

@@ -1,20 +1,18 @@
 // The staff's debrief after one of the user's games: the verdict (the report's headline), the edges
 // that decided it, how the coach's moves in a live game went, and what to do next time: the
 // one-tap counter for each edge that went against him while his tactics still give it (as a patch,
-// for the plan against this opponent or for good), the practice focus when playing a step slow in
-// tactics the team hasn't drilled cost points, and a word on each key to the game he missed.
+// for the plan against this opponent or for good), and a word on each key to the game he missed.
 // Pure: it reads the stored result and the report built from it.
 
-import type { GameResult, KeyGrade, League, PrepFocus, Tactics, TacticsPatch } from '../types';
+import type { GameResult, KeyGrade, League, Tactics, TacticsPatch } from '../types';
 import { gameTime, madeAtt, plural } from '../format';
 import { playerName, shortName } from '../league/helpers';
 import { playTypeBaselines } from './playTypes';
 import { leagueThreePct } from '../ai/opponentPlan';
-import { PREP_META, famLabel, gamesTo } from '../sim/familiarity';
 import { buildGameReport, decidingFactors, leverNet, type GameReport, type Factor } from './gameReport';
 import { worthCall } from '../ai/counterWorth';
 import { pick } from './quotes';
-import { famReadout, impactCounter } from '../ai/advisor';
+import { impactCounter } from '../ai/advisor';
 import { TACTIC_LEVELS, applyPatch, cloneTactics, levelName, tacticsDiff, emptyPatch } from '../sim/tactics';
 import { CALL_WORTH, callCosts, callKey, callWorth, worthLine } from './callWorth';
 
@@ -28,8 +26,6 @@ export interface DebriefAdvice {
   label?: string;
   /** Game-plan group: it replaces the plan's item in the same group. */
   group?: string;
-  /** A practice focus to switch to between games (one tap, instead of a tactics change). */
-  prep?: PrepFocus;
   /**
    * The change measured as a gain where the bench calls it (callWorth.ts): what it's been worth, in a
    * line. Only a change with one is offered for every game. For the plan against this opponent it's
@@ -107,7 +103,7 @@ export interface Debrief {
   plan: PlanGrade[];
   /** Said on a coach's first games: one night's shooting is luck, a plan shows over a stretch. */
   frame?: string;
-  /** His players hurt in the game, and for how long: "Davis (out 5 games), Sarr (out 3 games)". */
+  /** His players hurt in the game, and for how long: "Davis, out 5 games · Sarr, out 3 games". */
   hurt?: string;
   /** The opponent, and whether the teams meet again this season (a plan against them would be played). */
   opp: number;
@@ -131,16 +127,16 @@ const OFFENSE_FIXES: Record<string, { label: string; patch: TacticsPatch }> = {
 
 /** What a missed key asks of the next game against a team like this one, by the key's id (see keys.ts). */
 const KEY_ADVICE: Record<string, string> = {
-  glass: 'Their second chances came off your glass: bodies back on the shot, fewer gambles for the ball.',
-  line: 'They lived at the line: play cleaner (less physicality), above all against their drivers.',
+  glass: 'Their second chances came off your glass. Bodies back on the shot, fewer gambles.',
+  line: 'They lived at the line. Play cleaner, above all against their drivers.',
   getback: 'They ran on you: sprint back in transition and crash less.',
-  paint: 'They owned the paint: pack it in, or keep your rim protector on the floor longer.',
+  paint: 'They owned the paint. Pack it in, or keep your rim protector on longer.',
   ball: 'Turnovers fed them: a slower pace, fewer risky passes, more secure handlers.',
   crash: 'You left points on your own glass: crash the offensive boards harder.',
   attack: 'You never got to the line: attack the rim more.',
   fly: "Their defense gave up threes and you didn't take them: more threes next time.",
-  pressure: 'Their handlers were loose and you let them be: more ball pressure, or a press after makes.',
-  star: 'Their scorer got his: put your best defender on him (Matchups), or double him if he can’t pass out of it (Star plan).',
+  pressure: 'Their handlers were loose and you let them be. More ball pressure, or press after makes.',
+  star: 'Their scorer got his. Put your best defender on him in Matchups, or double him with a Star plan.',
   share: 'The ball stuck: more motion and handoffs, fewer isolations.',
 };
 
@@ -191,16 +187,17 @@ export function keyAdvice(league: League, k: KeyGrade, res: GameResult, side: 0 
   const x = res.xShots && (side === 0 ? res.xShots : [res.xShots[1], res.xShots[0]]);
   const lg = leagueThreePct(league);
   if (k.id === 'fly' && (x ? x[0].tpm : us.t.tpa * lg) >= k.target - 0.5)
-    return `The threes were there and you took them (${madeAtt(us.t.tpm, us.t.tpa)}): they didn't fall. Keep taking them.`;
+    return `The threes were there and you took them, ${madeAtt(us.t.tpm, us.t.tpa)}. They didn't fall. Keep taking them.`;
   if (k.id === 'arc' && (x ? x[1].tpm : them.t.tpa * lg) <= k.target + 0.5)
-    return `They made ${madeAtt(them.t.tpm, them.t.tpa)} from three, more than their looks were worth on a normal night: that part was luck, not your plan.`;
+    return `They made ${madeAtt(them.t.tpm, them.t.tpa)} from three, more than their looks were worth. That part was luck.`;
   // (the looks themselves beat the key: that's the plan's to fix, and said as looks, not makes)
   if (k.id === 'arc') {
     const home = stayedHome(league, res, side);
-    const looks = x ? `They got looks worth ${x[1].tpm.toFixed(0)} made threes (the key was ${k.target} or fewer)` : 'Their threes decided too much';
-    if (home?.most) return `Stay home was in, and ${looks.charAt(0).toLowerCase()}${looks.slice(1)} anyway: run their best shooter off the line (Matchups) instead.`;
-    if (home?.from) return `${looks}: stay home on their shooters from the start (it went in at ${home.from}), or run their best one off the line.`;
-    return `${looks}: stay home on their shooters (less help), or run their best one off the line.`;
+    const looks = x ? `They got looks worth ${x[1].tpm.toFixed(0)} made threes, over the key's ${k.target}` : 'Their threes decided too much';
+    if (home?.most)
+      return `Stay home was in, and ${x ? `their looks were still worth ${x[1].tpm.toFixed(0)} made threes` : 'their threes still decided too much'}. Run their best shooter off the line in Matchups.`;
+    if (home?.from) return `${looks}. Stay home only went in at ${home.from}. Start with it, or run their best shooter off the line.`;
+    return `${looks}. Stay home on their shooters, or run their best one off the line.`;
   }
   return KEY_ADVICE[k.id] ?? '';
 }
@@ -214,49 +211,6 @@ const IMPACT_TOPIC: Record<string, string> = {
   'shape_glass:d': 'rebounding',
   'role_poa:d': 'turnovers',
 };
-
-/** The edges a team a step slow in its tactics gives away (see sim/familiarity.ts): practice answers them, not a tactics change. */
-const FAM_KEYS = new Set(['fam_off:d', 'fam_def:o']);
-/** Points playing a step slow has to cost before the staff talks practice. */
-const FAM_COST = 0.8;
-/** At or above this the system itself is learned: a cost came from tonight's plan instead. */
-const SYSTEM_KNOWN = 85;
-
-/**
- * The staff's word on practice when playing a step slow cost points: the system still being learned
- * (Tactical drills, and no more changes to it), or a game plan that asked for what the team hadn't
- * drilled (Opponent prep drills the plan for the game). Null when it cost little.
- */
-export function practiceAdvice(league: League, cost: number, planMeasured = false): DebriefAdvice | null {
-  if (cost < FAM_COST) return null;
-  const me = league.userTid;
-  const prep = league.teams[me].prep ?? 'balanced';
-  const r = famReadout(league);
-  const sys = r.overall;
-  const pts = `${cost.toFixed(1)} points`;
-  if (sys >= SYSTEM_KNOWN && !r.risks.length) {
-    // the system is drilled: what wasn't is what tonight changed (the game plan, another tactic)
-    return {
-      id: 'prep-opponent',
-      title: 'Drill the game plan',
-      // (a plan whose counters were measured: their worth was measured at the step slow they were played
-      // at, so the plan's number is already after this cost, not against it)
-      text: `Playing a step slow cost us ${pts}: tonight we played things we haven't drilled${planMeasured ? ", and the plan's measured worth is after that cost: drilled, it's worth more" : ''}. ${prep === 'opponent' ? 'Opponent prep has the next plan drilled for its game.' : `${PREP_META.opponent.label} drills the next game's plan for that game.`}`,
-      ...(prep !== 'opponent' && { prep: 'opponent' as const, label: PREP_META.opponent.label }),
-    };
-  }
-  const left = gamesTo(sys);
-  return {
-    id: 'prep-system',
-    title: prep === 'system' ? 'Stick with the system' : 'Drill the system',
-    text:
-      `Playing a step slow cost us ${pts}: we're ${Math.round(sys)}% familiar with what we play (${famLabel(sys).toLowerCase()}). ` +
-      (prep === 'system'
-        ? `Keep the drills going and don't change it again${left > 0 ? `: about ${left} game${left === 1 ? '' : 's'} to fluid` : ''}.`
-        : `${PREP_META.system.label} between games build it about twice as fast. Don't change it again until it's learned.`),
-    ...(prep !== 'system' && { prep: 'system' as const, label: PREP_META.system.label }),
-  };
-}
 
 /** A four-factor edge's advice row, when its card is already up top: what to do, not the figures again. */
 const DO_TITLE: Partial<Record<Factor['category'], string>> = {
@@ -338,21 +292,21 @@ export function luckLine(res: GameResult, side: 0 | 1, won: boolean): string {
       oursFell && theirsDidnt
         ? "Our shots fell and theirs didn't"
         : oursFell
-          ? 'Our shots fell above what our looks were worth'
+          ? 'Our shots fell above our looks'
           : theirsDidnt
             ? "Their shots didn't fall"
             : 'The shots fell our way';
-    return `${what}: the luck went our way.`;
+    return `${what}. The luck went our way.`;
   }
   const what =
     theirsFell && oursDidnt
       ? "Their shots fell and ours didn't"
       : theirsFell
-        ? 'Their shots fell above what their looks were worth'
+        ? 'Their shots fell above their looks'
         : oursDidnt
           ? "Our shots didn't fall"
           : 'The shots fell their way';
-  return `${what}: that part was luck, not the plan.`;
+  return `${what}. That part was luck, not the plan.`;
 }
 
 /** Trips on what a counter was aimed at before tonight reads as anything (fewer: "too few to tell"). */
@@ -430,7 +384,7 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
       ...x,
       call,
       ...(worth ? { worth } : {}),
-      ...(against && call === 'gain' && worth ? { bridge: `A bad night for it; over many games it's worth ${worth}.` } : {}),
+      ...(against && call === 'gain' && worth ? { bridge: `A bad night for it. Over many games it's worth ${worth}.` } : {}),
     });
     // one of theirs: his points tonight against his average coming in
     if (u.pid !== undefined) {
@@ -501,8 +455,8 @@ export function nightLine(res: GameResult, staff = false): { text: string; detai
   // (one play called: the call)
   const call = moves.length === 1 && moves[0].kind === 'play';
   const who = staff ? (call ? "The staff's call" : "The staff's moves") : call ? 'Your call' : 'Your moves';
-  const top = w.top && typeof w.top.text === 'string' ? ` The one that mattered most: ${w.top.text} (${sgn1(w.top.pts)}).` : '';
-  const detail = `The rest of the game from the first move, played ${w.n} times with ${plural(w.moves, 'move')} and without.${top}`;
+  const top = w.top && typeof w.top.text === 'string' ? ` Mattered most · ${w.top.text} · ${sgn1(w.top.pts)}.` : '';
+  const how = (pm: string) => `Measured to ${pm}. The rest of the game was played ${w.n} times, with ${plural(w.moves, 'move')} and without.${top}`;
   // by the win chance: late moves, or a reading clearer in it than in points (a reading from before its noise was kept is read by the points)
   const winSe = w.winSe;
   if (winSe !== undefined && Number.isFinite(winSe) && winSe > 0 && Number.isFinite(w.win)) {
@@ -512,8 +466,8 @@ export function nightLine(res: GameResult, staff = false): { text: string; detai
     if (late || (clearWin && zWin > Math.abs(w.raw) / Math.max(w.se, 1e-9))) {
       const pm = `about ±${Math.max(1, Math.round(winSe * 100))}%`;
       return {
-        text: clearWin ? `${who}: ${sgnPct(w.win)} to win tonight, measured (${pm})` : `${who}: too close to say tonight (${sgnPct(w.win)} to win, ${pm})`,
-        detail,
+        text: clearWin ? `${who} ${w.win > 0 ? 'helped' : 'hurt'}: ${sgnPct(w.win)} to win tonight` : `${who}: too close to say tonight, ${sgnPct(w.win)} to win`,
+        detail: how(pm),
         tone: !clearWin ? 'dim' : w.win > 0 ? 'good' : 'bad',
       };
     }
@@ -521,8 +475,8 @@ export function nightLine(res: GameResult, staff = false): { text: string; detai
   const pm = `about ±${Math.max(0.1, w.se).toFixed(1)}`;
   const clear = Math.abs(w.raw) >= 2 * w.se && Math.abs(w.pts) >= 0.05;
   return {
-    text: clear ? `${who} ${call ? 'was' : 'were'} worth ${sgn1(w.pts)} points tonight (${pm})` : `${who}: too close to say tonight (${sgn1(w.pts)}, ${pm})`,
-    detail,
+    text: clear ? `${who} ${w.pts > 0 ? 'helped' : 'hurt'}: about ${sgn1(w.pts)} points tonight` : `${who}: too close to say tonight, ${sgn1(w.pts)} points`,
+    detail: how(pm),
     tone: !clear ? 'dim' : w.pts > 0 ? 'good' : 'bad',
   };
 }
@@ -550,14 +504,14 @@ export function seasonCoaching(league: League, season = league.season, tid = lea
 }
 
 /**
- * "Your live coaching this season: +4.2 points over 9 games, measured (about ±2.7)": said clear of even
- * as a night is (the readings as measured, two standard errors), the shrunk sum shown. Null with fewer
+ * "Your live coaching this season: +4.2 points over 9 games": said clear of even as a night is (the
+ * readings as measured, two standard errors), the shrunk sum shown, its ± in `pm`. Null with fewer
  * than two games measured (one is the night's own line).
  */
 export function seasonCoachingLine(league: League, season = league.season, tid = league.userTid): string | null {
   const c = seasonCoachingRead(league, season, tid);
   if (!c) return null;
-  return `Your live coaching this season: ${c.clear ? `${c.worth} points` : `too close to say (${c.worth})`} over ${plural(c.games, 'game')}, measured (about ${c.pm})`;
+  return `Your live coaching this season: ${c.clear ? `${c.worth} points` : `too close to say, ${c.worth}`} over ${plural(c.games, 'game')}`;
 }
 
 /** The season's live coaching as the line reads it, in parts (Career's record row): its worth ("+4.2"), whether it's clear of even, its ± and the games. Null under two games. */
@@ -569,16 +523,16 @@ export function seasonCoachingRead(league: League, season = league.season, tid =
 
 /**
  * The user's players hurt in a game (GameResult.hurt), each with the games he's out as things stand:
- * "Davis (out 5 games), Sarr (out 3 games)", one back already "(back now)". Undefined: none, or an
+ * "Davis, out 5 games · Sarr, out 3 games", one back already "back now". Undefined: none, or an
  * older result that didn't keep them.
  */
 export function hurtLine(league: League, res: GameResult): string | undefined {
   const parts = (res.hurt ?? []).flatMap((pid) => {
     const p = league.players[pid];
     if (!p) return [];
-    return [`${shortName(league, p)} (${p.injury ? `out ${plural(p.injury.gamesRemaining, 'game')}` : 'back now'})`];
+    return [`${shortName(league, p)}, ${p.injury ? `out ${plural(p.injury.gamesRemaining, 'game')}` : 'back now'}`];
   });
-  return parts.length ? parts.join(', ') : undefined;
+  return parts.length ? parts.join(' · ') : undefined;
 }
 
 /** The coach's games so far with his team this season (tonight's included). */
@@ -601,25 +555,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const prev = league.games.filter((g) => g.season === res.season && g.gid !== res.gid && g.day < res.day && (g.home.tid === me || g.away.tid === me)).pop();
   const prevRep = prev?.impacts ? buildGameReport(league, prev) : null;
   const saidLast = new Set((prevRep?.factors ?? []).filter((f) => f.key && f.pts <= -0.8).map((f) => f.key!));
-  // playing a step slow (every play of it, the report's rows only show the big ones): one word on
-  // practice for both ends, where the first of them would have gone, or after the fixes
-  const famCostOf = (g: GameResult | undefined) => {
-    const s = g ? (g.home.tid === me ? 0 : 1) : side;
-    return (g?.impacts ?? []).filter((im) => im.t !== s && FAM_KEYS.has(im.key)).reduce((a, im) => a + im.pts, 0);
-  };
-  const famCost = famCostOf(res);
-  const fa = practiceAdvice(
-    league,
-    famCost,
-    (res.plan ?? []).some((u) => u.pts !== undefined),
-  );
-  // with the focus already the one it asks for, it's said once, not after every game of the stretch
-  const famAdvice = fa && !fa.prep && famCostOf(prev) >= FAM_COST ? null : fa;
   for (const f of report.factors) {
-    if (f.key && FAM_KEYS.has(f.key)) {
-      if (famAdvice && f.pts < 0 && !advice.includes(famAdvice)) advice.push(famAdvice);
-      continue;
-    }
     if (f.pts > -0.8) continue;
     if (f.key && saidLast.has(f.key) && !decided.includes(f)) continue;
     const fix = f.key ? impactCounter(f.key, tactics) : undefined;
@@ -664,7 +600,6 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       advice.push({ id: `adv-${f.title}`, title: title.replace(/\.$/, ''), text: f.advice });
     }
   }
-  if (famAdvice && !advice.includes(famAdvice)) advice.splice(Math.min(advice.length, 3), 0, famAdvice);
   for (const k of res.keys ?? []) {
     if (k.met !== false || advice.length >= 5) continue;
     const text = keyAdvice(league, k, res, side);
@@ -684,9 +619,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
   const first = league.settings.teaching !== false && league.season === league.startSeason && gamesIn(league, res, me) <= FRAME_GAMES;
   // (the luck half only on a night luck decided)
   const lucky = decided.some((f) => f.luck);
-  const frame = first
-    ? `${lucky ? "One night's shooting swings a game either way: the report calls that luck. " : ''}A plan shows over a stretch of games, not one night${plan.length ? ': yours is graded on what the staff measured each counter worth over many games, with tonight beside it' : ''}.`
-    : undefined;
+  const frame = first ? `${lucky ? "One night's shooting is luck. " : ''}A plan shows over a stretch of games, not one night.` : undefined;
   const hurt = hurtLine(league, res);
   return { headline: verdict(res, side, report), decided, moves, advice: advice.slice(0, 5), plan, frame, ...(hurt && { hurt }), opp, meetAgain };
 }

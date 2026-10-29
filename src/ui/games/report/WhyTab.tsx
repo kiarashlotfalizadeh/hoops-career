@@ -1,5 +1,5 @@
 // The game report's Why, for one of your games: what decided it (each edge in points of the final
-// margin, biggest first, with the staff's fix where there is one), the four factors side by side (away
+// margin, biggest first, a row each that opens on its detail and the staff's fix), the four factors side by side (away
 // on the left, as the final reads),
 // every player's grade, both benches' adjustments, and one tap down the play types, your sets, your
 // lineups and the momentum swings.
@@ -38,8 +38,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
         title="What decided it"
         right={
           <Help title="What decided it">
-            <p>Each figure is what that edge was worth to the final margin, in points: + went your way, − theirs.</p>
-            <p>They come from the engine&apos;s tracking of every tactical edge and the four factors.</p>
+            <p>Each figure is what that edge was worth to the final margin. Plus went your way, minus theirs.</p>
           </Help>
         }
       >
@@ -111,8 +110,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
               title="Your sets"
               right={
                 <Help title="Sets">
-                  <p>The possessions each set opened, second chances included.</p>
-                  <p>Read by: the run by which their defense had taken a good part of its look away.</p>
+                  <p>The possessions each set opened, second chances included. Read by: the run their defense had it covered by.</p>
                 </Help>
               }
             >
@@ -162,24 +160,30 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
   );
 }
 
-/** What decided it, biggest first, each worth so many points of the margin: the first few, the rest a tap away. */
+/**
+ * What decided it, biggest first, each worth so many points of the margin: the first few, the rest a
+ * tap away. A row is its figure and what happened; it opens on the detail and the staff's fix.
+ */
 function Factors({ factors }: { factors: GameReport['factors'] }) {
   const [all, setAll] = useState(false);
   const shown = all ? factors : factors.slice(0, FACTORS_SHOWN);
   return (
     <div className="card flush list">
       {shown.map((f, i) => (
-        <div key={i} className="gv-factor">
-          <span className={`gv-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>
-            {signed(f.pts)}
-            <span className="gv-pts-u">pts</span>
-          </span>
-          <div className="grow">
-            <div className="gv-factor-t">{f.title}</div>
+        <details key={i} className="gv-factor">
+          <summary>
+            <span className={`gv-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>
+              {signed(f.pts)}
+              <span className="gv-pts-u">pts</span>
+            </span>
+            <span className="grow gv-factor-t">{f.title}</span>
+            <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
+          </summary>
+          <div className="gv-factor-b">
             <div className="gv-factor-d">{f.detail}</div>
             {f.advice && <div className="gv-advice">{f.advice}</div>}
           </div>
-        </div>
+        </details>
       ))}
       {shown.length < factors.length && (
         <button className="gv-more" onClick={() => setAll(true)}>

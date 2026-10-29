@@ -1,31 +1,30 @@
 // The breaks, on the live screen itself (the court steps aside for them): a period's end and your
-// timeout. The period report opens on the story so far in a line (the score, the run that made the
-// period, who's carrying you: see atmosphere.ts breakStory), then the staff's one voice (its read, the
-// moves it would make for the next period, what's deciding the game), who's tired or in foul trouble
-// going into it and the keys; the rest of the game so far (the score by quarter and the scorers, the
-// battle of play types, the teams side by side, both coaches' moves) sits behind one switch under it.
+// timeout. The period report opens on the story so far in a few short sentences (the score, the run
+// that made the period, who's carrying you: see atmosphere.ts breakStory), then the staff's one voice
+// (its read, the moves it would make for the next period, what's deciding the game), who's tired or in
+// foul trouble going into it, the keys, and both benches (their coach's plan and adjustments, your
+// moves). The box score, the team numbers and the play types are the Stats and Game plan views', a tap
+// away on the bench bar.
 // The huddle is the short version for a timeout: late in a close game the play call first (built around
 // your closer, each play measured from where the game stands against no call, best first:
 // usePlayWorth), then who to sub and the staff's top move; the last possession of a close game stops
 // for the same play call without one. The staff's call says what it measured from this spot (calls.ts),
 // or that nothing it measured clears the noise. The next period, or the game, goes on from the bench bar.
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Check, FastForward, Timer } from 'lucide-react';
 import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
-import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ACTION_META } from '../../core/sim/tactics';
 import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
-import { zScore } from '../../core/analysis/playTypes';
 import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
-import { Section, Segmented } from '../components/ui';
-import { QuarterTable, TeamComparison } from '../components/gameBlocks';
+import { Help, Section } from '../components/ui';
 import { KeysLive } from '../components/GameKeys';
 import { fmtClock, periodLabel, signed } from '../stats';
 import { closeGame, foulLimit } from './alerts';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
+import { noteView } from './StaffView';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
 import { playOptions, readStatus, type PlayOption } from './plays';
@@ -74,7 +73,7 @@ function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Com
     .slice(0, 4);
   if (!trouble.length) return null;
   return (
-    <Section title={huddle ? 'Tired or in foul trouble' : `Into ${periodLabel(q + 1)}`}>
+    <Section title="Tired or in foul trouble">
       <div className="card flush list">
         {trouble.map(({ p, energy, fouls }) => {
           const sub = subFor(p.pid);
@@ -145,7 +144,7 @@ function Decisions({
       {list.length > 0 ? (
         <div className="lv-notes">
           {list.map((n) => (
-            <NoteCard key={n.id} note={n} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
+            <NoteCard key={n.id} note={noteView(n)} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>
       ) : (
@@ -168,50 +167,9 @@ function Decisions({
   );
 }
 
-/** Their play types and yours, the three each runs most, against the league's. */
-function Battle({ view, side, teams, baselines }: Pick<Common, 'view' | 'side' | 'teams'> & { baselines: Record<string, number> }) {
-  const rows = (s: 0 | 1) =>
-    Object.entries(view.sides[s].pt)
-      .filter(([k, v]) => k !== 'misc' && v.poss >= 3)
-      .sort((a, b) => b[1].poss - a[1].poss)
-      .slice(0, 3);
-  const col = (s: 0 | 1) => {
-    const mine = s === side;
-    return (
-      <div className="lv-bt-col">
-        <div className="over">{teams[s].abbrev} on offense</div>
-        {rows(s).map(([k, v]) => {
-          const base = baselines[k];
-          const z = base !== undefined ? zScore(v, base) : 0;
-          const tone = Math.abs(z) < 1 ? '' : z > 0 === mine ? 'good' : 'bad';
-          return (
-            <div key={k} className="lv-bt-row small">
-              <span className="grow ellipsis">{FINISH_LABEL[k as FinishType]}</span>
-              <span className={`num bold ${tone}`}>{(v.pts / v.poss).toFixed(2)}</span>
-              <span className="tiny dim num">({v.poss})</span>
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
-  return (
-    <div className="lv-bt">
-      {col((1 - side) as 0 | 1)}
-      {col(side)}
-    </div>
-  );
-}
-
-/** The game so far behind one switch: the score by quarter and the scorers, the play types, the teams side by side, the coaches' moves. */
-type SoFar = 'score' | 'plays' | 'teams' | 'coaches';
-
 /** The period's end: the report, as the staff reads the game so far. The next period starts from the bench bar. */
 export function PeriodReport(
   props: Common & {
-    baselines: Record<string, number>;
-    /** Away, home bar colours. */
-    colors: [string, string];
     /** The game plan the other coach brought tonight, if he game-planned. */
     oppPlan?: readonly { text: string }[];
     /** The other coach's adjustments so far. */
@@ -222,8 +180,7 @@ export function PeriodReport(
     story?: string;
   },
 ) {
-  const { view, side, teams, names, keys, assistant, read, moves, colors, oppPlan, adjustments, onSkip, story } = props;
-  const [home, away] = teams;
+  const { view, side, teams, names, keys, assistant, read, moves, oppPlan, adjustments, onSkip, story } = props;
   const me = view.sides[side];
   const them = view.sides[1 - side];
   const lead = me.score - them.score;
@@ -234,17 +191,9 @@ export function PeriodReport(
     ...(q >= 4 && lead === 0 ? [`Tied at ${me.score}: overtime next.`] : []),
     ...(timeouts !== me.timeouts ? [`${plural(timeouts, 'timeout')} for ${q + 1 >= 5 ? 'overtime' : periodLabel(q + 1)}.`] : []),
   ];
-  const scorers = (s: 0 | 1) =>
-    [...view.sides[s].players]
-      .filter((p) => p.pts > 0)
-      .sort((a, b) => b.pts - a.pts)
-      .slice(0, 3)
-      .map((p) => `${names(p.pid)} ${p.pts}`)
-      .join(', ') || '—';
   const theirs = adjustments.filter((a) => a.t !== side);
   const abbrevs = { us: teams[side].abbrev, them: teams[1 - side].abbrev };
   const deciding = useDeciding(props.league, view, props.tactics);
-  const [soFar, setSoFar] = useState<SoFar>('score');
   return (
     <div className="lv-rep">
       {/* (the score, the chance to win and the timeouts are on the scorebug just above: said once) */}
@@ -264,55 +213,27 @@ export function PeriodReport(
       <Decisions {...props} max={3} deciding={deciding} />
       <Trouble {...props} huddle={false} />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, q)} />}
-      <Section title="So far">
-        <Segmented
-          value={soFar}
-          onChange={setSoFar}
-          label="The game so far"
-          options={[
-            { id: 'score', label: 'Score' },
-            { id: 'plays', label: 'Play types' },
-            { id: 'teams', label: 'Teams' },
-            { id: 'coaches', label: 'Coaches' },
-          ]}
-        />
-        {soFar === 'score' && (
-          <>
-            <QuarterTable g={view.box} abbrevs={{ [home.tid]: home.abbrev, [away.tid]: away.abbrev }} />
-            <div className="lv-bk-scorers small">
+      <Section title="Both benches">
+        <div className="lv-coaches">
+          <div className="lv-coach small">
+            <div className="over">Their coach</div>
+            {oppPlan && oppPlan.length > 0 && (
               <div>
-                <b>{away.abbrev}</b> <span className="dim2">{scorers(1)}</span>
+                <span className="dim2">Plan:</span> {oppPlan.map((x) => x.text).join(', ')}.
               </div>
-              <div>
-                <b>{home.abbrev}</b> <span className="dim2">{scorers(0)}</span>
+            )}
+            {theirs.map((a, i) => (
+              <div key={i}>
+                <span className="dim2 num">{gameTime(a.q, a.clock)}</span> {a.text}.
               </div>
-            </div>
-          </>
-        )}
-        {soFar === 'plays' && <Battle view={view} side={side} teams={teams} baselines={props.baselines} />}
-        {soFar === 'teams' && <TeamComparison g={view.box} colors={colors} only={['fg', 'tp', 'reb', 'tov', 'paint', 'ast']} />}
-        {soFar === 'coaches' && (
-          <div className="lv-coaches">
-            <div className="lv-coach small">
-              <div className="over">Their coach</div>
-              {oppPlan && oppPlan.length > 0 && (
-                <div>
-                  <span className="dim2">His plan tonight:</span> {oppPlan.map((x) => x.text).join(', ')}.
-                </div>
-              )}
-              {theirs.map((a, i) => (
-                <div key={i}>
-                  <span className="dim2 num">{gameTime(a.q, a.clock)}</span> {a.text}.
-                </div>
-              ))}
-              {!oppPlan?.length && !theirs.length && <div className="dim">No plan or adjustment from him yet.</div>}
-            </div>
-            <div className="lv-coach">
-              <div className="over">Your moves</div>
-              <MovesList moves={moves} abbrevs={abbrevs} nameOf={names} />
-            </div>
+            ))}
+            {!oppPlan?.length && !theirs.length && <div className="dim">No plan or adjustment yet.</div>}
           </div>
-        )}
+          <div className="lv-coach">
+            <div className="over">Your moves</div>
+            <MovesList moves={moves} abbrevs={abbrevs} nameOf={names} />
+          </div>
+        </div>
       </Section>
     </div>
   );
@@ -330,10 +251,10 @@ function playLook(p: PlayOption, view: Drawn, side: 0 | 1, names: (pid: number) 
   return `${r.runs ? `${r.text} · ` : ''}${cap(SETS[p.id].look)}`;
 }
 
-/** What one play's reading says, beside it: its win chance against no call, too close to say, or still being measured. */
+/** What one play's reading says, beside it: its win chance against no call, no real change, or still being measured. */
 function PlayWorth({ r }: { r: PlayReading | null }) {
   if (!r) return <span className="lv-pc-worth tiny dim">Measuring…</span>;
-  if (!r.clear) return <span className="lv-pc-worth tiny dim">Too close to say</span>;
+  if (!r.clear) return <span className="lv-pc-worth tiny dim">No real change</span>;
   return (
     <span className={`lv-pc-worth num ${r.win > 0 ? 'good' : 'bad'}`}>
       {signed(r.win * 100, 0)}%<span className="lv-pc-u">to win</span>
@@ -402,7 +323,12 @@ function PlayCall({
       </div>
       <div className="small dim lv-pc-foot">
         {foot}
-        {readings && ` Each against no call, the rest of the game played ${CHOICE_GAMES} times.`}
+        {readings && (
+          <Help title="How the plays are measured">
+            <p>Each play against no call: the rest of the game played {CHOICE_GAMES} times each way.</p>
+            <p>The figure is the change in your chance to win. No real change: inside the noise.</p>
+          </Help>
+        )}
       </div>
     </Section>
   );
@@ -428,7 +354,7 @@ export function Huddle(
     onTimeout?: () => void;
   },
 ) {
-  const { kind, view, side, teams, tactics, names, keys, assistant, read, called, closer, onTimeout } = props;
+  const { kind, view, side, tactics, names, keys, assistant, read, called, closer, onTimeout } = props;
   const deciding = useDeciding(props.league, view, tactics).slice(0, 1);
   const ato = tactics.manage.ato;
   const atoText = ato ? atoLabel(ato, (a) => ACTION_META[a].label, tactics.manage.atoPid != null ? names(tactics.manage.atoPid) : undefined) : null;
@@ -446,7 +372,7 @@ export function Huddle(
         : `No call: they run the offense, through ${closer !== undefined ? names(closer) : 'your closer'}.`
       : called
         ? `Called: ${callName}, on your next trip up the floor.`
-        : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play (${atoText})` : ''}.`;
+        : `Runs on your next trip up the floor${atoText ? `, in place of your after-timeout play, ${atoText}` : ''}.`;
   const call = plays.length > 0 && closer !== undefined ? <PlayCall {...props} plays={plays} closer={closer} foot={foot} readings={readings} /> : null;
   if (kind === 'last') {
     const me = view.sides[side];
@@ -464,7 +390,7 @@ export function Huddle(
           </div>
           <div className="small dim2">
             {margin === 0 ? `Tied at ${me.score}` : `Down ${-margin}`}, {fmtClock(view.clock)} left, your ball.{' '}
-            {onTimeout ? 'A timeout rests legs and sets the play up, but gives their coach a chance to adjust.' : 'No timeouts left: you call it from the bench.'}
+            {onTimeout ? 'A timeout sets up the play, but lets them adjust.' : 'No timeouts left: call it from the bench.'}
           </div>
         </div>
         {call}
@@ -475,7 +401,7 @@ export function Huddle(
   return (
     <div className="lv-rep huddle">
       <div className="lv-rep-head">
-        <div className="lv-rep-kicker">Timeout {teams[side].abbrev}</div>
+        <div className="lv-rep-kicker">Your timeout</div>
       </div>
       {call}
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />

@@ -1,9 +1,6 @@
 /* Team → Tactics (`tx-`): what every tab shares. Notes and empty lines, cards of controls and
    control rows, sheets' leads and facts, the assistant's switch, the changes dock, the
    tab switch, and bullet lists. Lists sit flush in cards; explanations live behind Help and ⓘ. */
-.tx-sec-r {
-  gap: 8px;
-}
 .tx-note {
   font-size: 12.5px;
   line-height: 1.4;
@@ -13,9 +10,6 @@
   padding: var(--pad-card);
   font-size: 13.5px;
   color: var(--text-dim);
-}
-.tx-chev {
-  flex: none;
 }
 /* a card of controls: Levels, sliders and switches */
 .tx-group {
@@ -44,16 +38,10 @@
   padding-top: 10px;
   border-top: 1px solid var(--line);
 }
-.tx-btns {
-  gap: 8px;
-}
 .tx-sheet-lead {
   font-size: 13.5px;
   color: var(--text-2);
   margin-bottom: 12px;
-}
-.tx-sheet-foot {
-  margin-top: 16px;
 }
 /* a headline in a sheet or over a block: the headline cut */
 .tx-lead {
@@ -91,15 +79,6 @@
   gap: 3px;
   padding-top: 8px;
   border-top: 1px solid var(--line);
-}
-.tx-sub {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.tx-confirm,
-.tx-pbsheet {
-  gap: 14px;
 }
 .tx-form {
   gap: 8px;
@@ -222,7 +201,6 @@
 .tx-opt,
 .tx-pickrow,
 .tx-preset-pick,
-.tx-set-pick,
 .tx-q-top {
   transition: background var(--dur-fast) ease;
 }
@@ -230,7 +208,6 @@
   .tx-opt:not(.on):hover,
   .tx-pickrow:hover,
   .tx-preset-pick:hover,
-  .tx-set-pick:not(:disabled):hover,
   .tx-q-top:hover {
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }

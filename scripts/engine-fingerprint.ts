@@ -1,8 +1,8 @@
 // Engine fingerprint: a hash of everything the engine does in a fixed set of seeded games and a seeded
 // slice of a season, so a change that should not change how games play (a refactor, a speed-up) can be
-// proven not to. The games cover every scheme, coverage and junk defense, the set package and the
-// after-timeout plays, guarding instructions, hunting, star plans, the game-management options, the
-// situational plans, playoff and neutral-floor games, game-time decisions and the live controls (calls,
+// proven not to. The games cover every scheme, coverage and junk defense, the after-timeout plays,
+// guarding instructions, hunting, star plans, the game-management options, playoff and neutral-floor
+// games, game-time decisions and the live controls (calls,
 // timeouts, subs, new tactics mid-game); each one hashes its result (box scores, play-by-play, shots,
 // tags, lineups, flow), its possession logs and its raw boxes. The season slice plays the first weeks of
 // a real-roster league through the league code and hashes its results, stats and standings.
@@ -18,7 +18,7 @@ import { applyPatch } from '../src/core/sim/tactics';
 import { GameSim, K, engineDiag, resetEngineDiag, type SimTeamInput } from '../src/core/sim/engine';
 import type { PossLog } from '../src/core/sim/log';
 import { Rng } from '../src/core/random';
-import type { GameType, Player, SituationalPlan, TacticsPatch } from '../src/core/types';
+import type { GameType, Player, TacticsPatch } from '../src/core/types';
 
 const verbose = process.argv.includes('--verbose');
 const edge = process.argv.find((a) => a.startsWith('--edge='));
@@ -62,12 +62,9 @@ const who = (tid: number) => {
     handler: pick((p) => p.ratings.hnd + p.ratings.pas),
   };
 };
-/** A patch, with situational plans to play on top of it. */
-type Plan = TacticsPatch & { situations?: SituationalPlan[] };
+type Plan = TacticsPatch;
 const side = (tid: number, plan?: Plan, extra: Partial<SimTeamInput> = {}): SimTeamInput => {
-  const { situations, ...patch } = plan ?? {};
-  const tactics = applyPatch(L.teams[tid].tactics, patch);
-  if (situations) tactics.situations = situations;
+  const tactics = applyPatch(L.teams[tid].tactics, plan);
   return { team: { ...L.teams[tid], tactics }, players: roster(tid), ...extra };
 };
 
@@ -114,7 +111,7 @@ const cfgs: Cfg[] = [
     name: 'sets',
     home: 0,
     away: 9,
-    h: () => ({ offense: { sets: ['spain', 'horns', 'floppy', 'hammer'] }, manage: { ato: 'postSplit', autoTimeouts: true, timeoutRun: 6 } }),
+    h: () => ({ manage: { ato: 'postSplit', autoTimeouts: true, timeoutRun: 6 } }),
     a: () => D({ scheme: 'man', pnr: 'drop' }),
     games: 3,
   },
@@ -122,10 +119,10 @@ const cfgs: Cfg[] = [
     name: 'sets vs switch',
     home: 0,
     away: 9,
-    h: (_o, me) => ({ offense: { sets: ['elevator', 'chicago', 'postSplit', 'horns'] }, manage: { ato: 'iso', atoPid: me.star, autoTimeouts: true, timeoutRun: 6 } }),
+    h: (_o, me) => ({ manage: { ato: 'iso', atoPid: me.star, autoTimeouts: true, timeoutRun: 6 } }),
     a: () => D({ scheme: 'man', pnr: 'switch', switchOffBall: true }),
   },
-  { name: 'sets vs zone', home: 1, away: 17, h: () => ({ offense: { sets: ['spain', 'floppy', 'hammer', 'chicago'] }, manage: { ato: 'pnr' } }), a: () => D({ scheme: 'zone23' }) },
+  { name: 'sets vs zone', home: 1, away: 17, h: () => ({ manage: { ato: 'pnr' } }), a: () => D({ scheme: 'zone23' }) },
   {
     name: 'late game',
     home: 21,
@@ -134,19 +131,6 @@ const cfgs: Cfg[] = [
       M({ foulToGive: true, foulUp3: true, foulWhenTrailing: true, twoForOne: true, goTo: me.star, hackThreshold: 65, hackTargets: [o.ft], hackFromQ: 2, garbageTime: true }),
     a: () => M({ foulToGive: true, foulTrouble: 'strict', fatigueSub: 0.85, autoTimeouts: true, timeoutRun: 7 }),
     games: 4,
-  },
-  {
-    name: 'situations',
-    home: 29,
-    away: 5,
-    h: () => ({
-      manage: { foulTrouble: 'loose' },
-      situations: [
-        { id: 'p1', label: 'Protect a lead', enabled: true, when: { fromQ: 4, minLead: 6 }, patch: { offense: { pace: 10 }, defense: { pnr: 'ice', getBack: 90 } } },
-        { id: 'p2', label: 'Second unit', enabled: true, when: { benchUnit: true }, patch: { defense: { scheme: 'zone23' }, nudge: { offense: { pace: 15 } } } },
-        { id: 'p3', label: 'Chase it', enabled: true, when: { fromQ: 3, maxLead: -8, maxClock: 400 }, patch: { defense: { press: 'always', pressure: 90 } } },
-      ],
-    }),
   },
   {
     name: 'foul to give',
@@ -162,7 +146,6 @@ const cfgs: Cfg[] = [
     name: 'live controls',
     home: 0,
     away: 13,
-    h: () => O({ sets: ['spain', 'horns'] }),
     live: (sim, n, h, a) => {
       void a;
       // a set queued now and then (the hook the engine's tests use)
@@ -235,19 +218,7 @@ for (const c of cfgs) {
       c.live?.(sim, n, hw, aw);
       if (!sim.step()) break;
       logs.push(sim.drainLogs());
-      if (n % 25 === 0)
-        reads.push([
-          sim.setReads(0),
-          sim.situation(0),
-          sim.situation(1),
-          sim.timeoutWaiting(0),
-          sim.timeoutOpens(),
-          sim.bonus(sim.T[0]),
-          sim.atBuzzer(),
-          sim.q,
-          sim.clock,
-          sim.poss,
-        ]);
+      if (n % 25 === 0) reads.push([sim.setReads(0), sim.timeoutWaiting(0), sim.timeoutOpens(), sim.bonus(sim.T[0]), sim.atBuzzer(), sim.q, sim.clock, sim.poss]);
       n++;
     }
     const res = sim.result(7, 2027, games);
@@ -268,7 +239,6 @@ for (const c of cfgs) {
 const S = createLeague({ name: 'Fingerprint season', userTid: 4, coachName: 'C', settings: defaultSettings(), seed, rngSeed: 23 });
 S.id = 'fingerprint_season';
 const ut = S.teams[S.userTid].tactics;
-ut.offense.sets = ['spain', 'floppy', 'postSplit'];
 ut.manage.foulToGive = true;
 const errs = startRegularSeason(S);
 if (errs.length) throw new Error(`The season can't start: ${errs.join('; ')}`);

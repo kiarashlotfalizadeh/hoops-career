@@ -301,11 +301,11 @@ describe('two seasons of the real league', () => {
       expect(og.goals[0].title).toMatch(/^Win \d+ games$/);
       for (const g of og.goals)
         expect(g.title).toMatch(
-          /^(Win \d+ games|Reach the play-in|Make the playoffs|Win a playoff round|Reach the conference finals|Reach the Finals|Turn a \$\d+\.\dM profit|Break even|Keep the loss under \$\d+\.\dM|Stay under the luxury tax|Get under the luxury tax|Stay under the first apron|Get under the first apron|Add nothing to the payroll you inherited|Keep the payroll under \$\d+\.\dM|Play your young players: [\d,]+ minutes for players 23 or under)$/,
+          /^(Win \d+ games|Reach the play-in|Make the playoffs|Win a playoff round|Reach the conference finals|Reach the Finals|Turn a \$\d+\.\dM profit|Break even|Keep the loss under \$\d+\.\dM|Stay under the luxury tax|Get under the luxury tax|Stay under the first apron|Get under the first apron|Add nothing to the payroll you inherited|Keep the payroll under \$\d+\.\dM|Give [\d,]+ minutes to players 23 or under)$/,
         );
       // he says so, with each goal's weight
       const mail = l.inbox.find((m) => m.subject === 'My goals for this season')!;
-      for (const g of og.goals) expect(mail.body).toContain(`${g.title} (${Math.round(g.weight * 100)}% of my review)`);
+      for (const g of og.goals) expect(mail.body).toContain(`${g.title}: ${Math.round(g.weight * 100)}% of my review`);
       // frozen: a week of games and a roster move later, the goals are the ones set on opening night
       const before = structuredClone(og.goals);
       for (let d = 0; d < 7; d++) simDay(l);
@@ -576,7 +576,7 @@ describe('two seasons of the real league', () => {
       expect(goal(out, 'wins')!.target).toBeLessThanOrEqual(Math.round(outlook[tid].pct * 82) + 2);
       // past his allowance, a season that misses the postseason grades Poor at best, lower each season it goes on; reaching it lifts the cap
       expect(goalsWhy(out)).toContain(
-        "2 seasons without the postseason is all I'll take. This season we compete: miss the play-in and it grades −40 at best, whatever else goes right.",
+        "2 seasons without the postseason is all I'll take. This season we compete. Miss the play-in and it grades −40 at best, whatever else goes right.",
       );
       results(l, out, { postseason: 0 });
       expect(gradeOwnerGoals(l, out)).toMatchObject({ grade: FLOOR_GRADE, impatient: true });
@@ -955,13 +955,14 @@ describe('two seasons of the real league', () => {
       const x = structuredClone(mid);
       // (from a league whose user hasn't been one yet)
       if (x.legacy) x.legacy.honors = x.legacy.honors.filter((h) => h.kind !== 'cotm');
-      x.inbox = x.inbox.filter((m) => m.subject !== 'Coach of the Month');
+      const mail = x.inbox.length;
       const day = x.day;
       x.media = { honors: [{ season: x.season, day, kind: 'cotm', conf: 'E', tid: U, line: 'The Knicks went 12-3 in December.' }] };
       legacyDay(x);
       legacyDay(x);
       expect(x.legacy!.honors).toHaveLength(1);
-      expect(x.inbox.filter((m) => m.subject === 'Coach of the Month')).toHaveLength(1);
+      // (one mail per honor: the league office's, not a second one from the cabinet)
+      expect(x.inbox).toHaveLength(mail);
       x.media.honors = [];
       expect(cabinet(x).filter((t) => t.kind === 'cotm')).toHaveLength(1);
       // another team's honor isn't his
@@ -1002,7 +1003,7 @@ describe('two seasons of the real league', () => {
         expect(m.from).toBe('Owner');
         expect(m.subject).toMatch(/^(December|January|February|March|April) check-in: [a-z ]+$/);
         // the record and the pace, against his goal
-        expect(m.body).toMatch(/you're on pace for \d+ wins; I asked for \d+/);
+        expect(m.body).toMatch(/you're on pace for \d+ wins\. I asked for \d+/);
         expect(m.important).toBeFalsy();
       }
       // (the All-Star break keeps its own check-in)

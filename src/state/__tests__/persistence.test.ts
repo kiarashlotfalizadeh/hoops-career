@@ -312,10 +312,10 @@ describe('reading a league', () => {
       expect(migrate(JSON.parse(JSON.stringify(l))).version).toBe(SAVE_VERSION);
     }
 
-    // turns away saves from before the tactics overhaul (format 7): a clean break
+    // turns away saves from before familiarity and slots went (format 8): a clean break
     {
       const l = testLeague('before the overhaul');
-      for (const version of [4, 5, 6]) expect(() => migrate(JSON.parse(JSON.stringify({ ...l, version })))).toThrow(OldSaveError);
+      for (const version of [4, 5, 6, 7]) expect(() => migrate(JSON.parse(JSON.stringify({ ...l, version })))).toThrow(OldSaveError);
     }
 
     // accepts real and fictional leagues, as saved or as backup files
@@ -573,45 +573,33 @@ describe('reading a league', () => {
       expect(back.teams[2].colors).toEqual(FRANCHISES[2].colors);
     }
 
-    // keeps a team's tactic slots, familiarity and practice focus in shape, and drops damaged ones
+    // keeps a team's mentality, shape and out-of-possession roles in shape, and drops damaged ones
     {
       const l = testLeague('system');
       const t = l.teams[l.userTid];
-      t.slots = { active: 1, names: ['Main', 'Small ball', 'Plan C'], stored: [structuredClone(t.tactics), null, null] };
-      t.prep = 'opponent';
       t.tactics.mentality = 2;
       t.tactics.offense.shape = 'fiveOut';
       t.tactics.defense.roles = { [Object.values(l.players).find((p) => p.tid === l.userTid)!.pid]: 'poa' };
       const back = migrate(JSON.parse(JSON.stringify(l)));
-      expect(back.teams[l.userTid].slots?.active).toBe(1);
-      expect(back.teams[l.userTid].prep).toBe('opponent');
       expect(back.teams[l.userTid].tactics.mentality).toBe(2);
       expect(back.teams[l.userTid].tactics.offense.shape).toBe('fiveOut');
       const bad = JSON.parse(JSON.stringify(l)) as League;
       const bt = bad.teams[l.userTid] as unknown as Record<string, unknown>;
-      bt.slots = { active: 5, names: [], stored: [] };
-      bt.prep = 'yoga';
-      bt.fam = { opt: { 'pnr:drop': 'lots' } };
       (bt.tactics as Record<string, unknown>).mentality = 9;
       (bt.tactics as { offense: Record<string, unknown> }).offense.shape = 'diamond';
       (bt.tactics as { defense: Record<string, unknown> }).defense.roles = { 1: 'goalie' };
       const fixed = migrate(bad).teams[l.userTid];
-      expect(fixed.slots).toBeUndefined();
-      expect(fixed.prep).toBeUndefined();
       expect(fixed.tactics.mentality).toBeUndefined();
       expect(fixed.tactics.offense.shape).toBeUndefined();
       expect(fixed.tactics.defense.roles).toBeUndefined();
-      expect(Object.values(fixed.fam!.opt).every((v) => typeof v === 'number')).toBe(true);
     }
 
     // reads every team's tactics in real and fictional saves as they are
     {
       const real = testLeague('tactics as saved');
       for (let i = 0; i < 4; i++) simDay(real);
-      // the user's own: a situational plan, a set package, an after-timeout play, hack-a targets
+      // the user's own: an after-timeout play, hack-a targets
       const mine = real.teams[real.userTid].tactics;
-      mine.situations = [{ id: 's1', label: 'Protect a lead', enabled: true, when: { fromQ: 4, maxClock: 300, minLead: 1 }, patch: { offense: { pace: 30 } } }];
-      mine.offense.sets = ['horns', 'spain'];
       mine.manage.ato = 'horns';
       mine.manage.hackTargets = [Number(Object.keys(real.players)[0])];
       for (const l of [real, fictional]) {
@@ -631,14 +619,13 @@ describe('reading a league', () => {
       file.teams[a].tactics = { offense: {}, defense: {}, manage: {} };
       Object.assign(file.teams[b].tactics.offense, { pace: 77, screeners: 'x', roles: null });
       file.teams[b].tactics.manage.hackTargets = 5;
-      file.teams[b].tactics.situations = [{ id: 'broken' }];
       const roles = file.teams[c].tactics.offense.roles;
       file.teams[c].tactics.defense.matchups = [];
       file.teams[c].tactics.offense.actions = { pnr: 'lots' };
       file.teams[(l.userTid + 5) % l.teams.length].tactics = null;
       const back = migrate(file);
       const tb = back.teams[b].tactics;
-      expect([tb.offense.pace, tb.offense.screeners, tb.offense.roles, tb.manage.hackTargets, tb.situations]).toEqual([77, [], {}, undefined, undefined]);
+      expect([tb.offense.pace, tb.offense.screeners, tb.offense.roles, tb.manage.hackTargets]).toEqual([77, [], {}, undefined]);
       expect(back.teams[c].tactics.offense.roles).toEqual(roles);
       expect(back.teams[c].tactics.defense.matchups).toEqual({});
       expect(Object.values(back.teams[c].tactics.offense.actions).every((v) => typeof v === 'number')).toBe(true);

@@ -1,7 +1,5 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, RotateCcw } from 'lucide-react';
-import { useLeague } from '../../state/store';
-import { pendingLive } from '../../state/live';
 import type { DefScheme, PnrCoverage, PressMode, StarPlan, Tactics } from '../../core/types';
 import { ACTIONS } from '../../core/types';
 import {
@@ -24,17 +22,13 @@ import {
   stopHacking,
   type PlayFocus,
 } from '../../core/sim/tactics';
-import { CLASH_META, LINK_META, linkState } from '../../core/sim/links';
 import { Chips, Help, Levels, Segmented, Slider, Tag, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Pill } from './pills';
 import { changesLine, screenChanges } from '../tactics/changes';
-import { OPT, famSuffix, floorLinks } from './familiar';
 
 /** Changes listed before "N more". */
 const CHANGES_SHOWN = 3;
-/** Partnerships named on the floor's line before "N more" (a tap names them all). */
-const LINKS_SHOWN = 1;
 
 type Phase = 'inPoss' | 'inTrans' | 'outPoss';
 const PHASES: { id: Phase; label: string }[] = [
@@ -71,58 +65,11 @@ function Fold({ label, meta, children }: { label: string; meta: string; children
 }
 
 /**
- * The partnerships of the five on the floor in a line, and any clash: who plays off whom, and how
- * well (see core/sim/links.ts).
- */
-function FloorLine({ nameOf }: { nameOf: (pid: number) => string }) {
-  const lg = pendingLive(useLeague());
-  const [all, setAll] = useState(false);
-  if (!lg) return null;
-  const { links, clashes } = floorLinks(lg);
-  const shown = all ? links : links.slice(0, LINKS_SHOWN);
-  return (
-    <div className="lv-floor small">
-      <span className="over">
-        <Term id="partnership">On the floor</Term>
-      </span>{' '}
-      {shown.length === 0 && !clashes.length && <span className="dim">No partnerships in this five.</span>}
-      {shown.map((l, i) => {
-        const st = linkState(l);
-        return (
-          <span key={`${l.id}${l.a}-${l.b}`}>
-            {i > 0 && ' · '}
-            {nameOf(l.a)}–{nameOf(l.b)} {LINK_META[l.id].label.toLowerCase()}{' '}
-            <b className={st.word === 'Strong' || st.word === 'Good' ? 'good' : st.word === 'Weak' ? 'bad' : 'warn'} title={st.why}>
-              {st.word}
-            </b>
-          </span>
-        );
-      })}
-      {links.length > LINKS_SHOWN && !all && (
-        <>
-          {' · '}
-          <button className="lv-floor-more" onClick={() => setAll(true)}>
-            {links.length - LINKS_SHOWN} more
-          </button>
-        </>
-      )}
-      {clashes.map((c) => (
-        <span key={c.id} className="warn" title={CLASH_META[c.id].help}>
-          {links.length > 0 && ' · '}
-          {CLASH_META[c.id].label}: {c.pids.map(nameOf).join(', ')}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Every setting, the sheet under the Game plan view: the touchline (your three tactics, the mentality,
- * the shape), tonight's game plan, what's changed since the tip (in the Tactics screen's words) and the
- * way back to it, a short row of quick changes, the floor's partnerships, then the three phases of
- * play as the Tactics screen has them: each phase's headline decisions, the rest under Fine-tune, the
- * late game one tap down too. Each discrete option shows the team's familiarity when it isn't fluid.
- * Last, whether tonight's changes stay after the game. Player-by-player orders (matchups, a
+ * Every setting, the sheet under the Game plan view: the touchline (the mentality, the shape),
+ * tonight's game plan, what's changed since the tip (in the Tactics screen's words) and the way back
+ * to it, a short row of quick changes, then the three phases of play as the Tactics screen has them:
+ * each phase's headline decisions, the rest under Fine-tune, the late game one tap down too. Last,
+ * whether tonight's changes stay after the game. Player-by-player orders (matchups, a
  * defender's instructions, a Hack-a on one man) live on each player's sheet. Every change goes
  * through the live game.
  */
@@ -140,15 +87,9 @@ export function TacticsPanel({
   nameOf,
   q,
   touchline,
-  famOf = () => 100,
-  away = false,
 }: {
   /** The touchline (see Touchline.tsx), at the top. */
   touchline?: ReactNode;
-  /** How well the team knows a discrete option ('scheme:zone23'), as tonight plays it. */
-  famOf?: (key: string) => number;
-  /** The team plays another tactic than the one the game tipped off with (its changes aren't kept). */
-  away?: boolean;
   /** What the team plays now. */
   tactics: Tactics;
   apply: (fn: (t: Tactics) => void) => void;
@@ -173,8 +114,6 @@ export function TacticsPanel({
   const set = apply;
   // what's changed since the tip, named as the Tactics screen names each control
   const changed = offPlan ? screenChanges(planned, t, nameOf) : [];
-  /** An option's label with the team's familiarity beside it when it isn't fluid ("2-3 Zone · 35%"). */
-  const fam = (label: string, key: string | null) => (key ? `${label}${famSuffix(famOf(key))}` : label);
   const focus = focusOf(t.offense);
   return (
     <div className="lv-tp">
@@ -228,8 +167,6 @@ export function TacticsPanel({
         </div>
       )}
 
-      <FloorLine nameOf={nameOf} />
-
       <div className="lv-phases">
         <Segmented label="Phase of play" value={phase} onChange={setPhase} options={PHASES} />
       </div>
@@ -276,7 +213,7 @@ export function TacticsPanel({
                 label="Full-court press"
                 value={t.defense.press}
                 onChange={(x: PressMode) => set((tt) => void (tt.defense.press = x))}
-                options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: fam(PRESS_META[k].label, OPT.press(k)) }))}
+                options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
               />
             </Field>
           </div>
@@ -299,9 +236,8 @@ export function TacticsPanel({
                 label="Scheme"
                 value={t.defense.scheme}
                 onChange={(x: DefScheme) => set((tt) => void (tt.defense.scheme = x))}
-                options={ALL_SCHEMES.map((k) => ({ id: k, label: fam(SCHEME_META[k].label, OPT.scheme(k)) }))}
+                options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label }))}
               />
-              <div className="tiny dim lv-fam-key">A figure beside an option is how familiar the team is with it: below fluid, it plays a step slow.</div>
               {n > 0 && (
                 <>
                   <div className="over" style={{ marginTop: 6 }}>
@@ -333,7 +269,7 @@ export function TacticsPanel({
                   </div>
                   <div className="tiny dim">
                     {chase.length
-                      ? `Chasing ${chase.map(nameOf).join(' and ')}${chase.length < n ? ' and their next creator' : ''}; man-to-man while ${chase.length === 2 ? 'neither is' : "he isn't"} on.`
+                      ? `Chasing ${chase.map(nameOf).join(' and ')}${chase.length < n ? ' and their next creator' : ''}. Man-to-man while ${chase.length === 2 ? 'neither is' : "he isn't"} on.`
                       : `Auto: ${n === 2 ? 'their two main creators' : 'their main creator'} on the floor.`}
                   </div>
                 </>
@@ -344,7 +280,7 @@ export function TacticsPanel({
                 label="Ball-screen coverage"
                 value={t.defense.pnr}
                 onChange={(x: PnrCoverage) => set((tt) => void (tt.defense.pnr = x))}
-                options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: fam(COVERAGE_META[k].label, OPT.pnr(k)) }))}
+                options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: COVERAGE_META[k].label }))}
               />
             </Field>
             <Levels label="Help" value={t.defense.help} names={TACTIC_LEVELS.help} onChange={(x) => set((tt) => void (tt.defense.help = x))} />
@@ -403,14 +339,14 @@ export function TacticsPanel({
           on={!!t.manage.foulToGive}
           onChange={(x) => set((tt) => void (tt.manage.foulToGive = x))}
           label="Foul to give"
-          help="3 to 8 seconds left, their ball: foul at once when it's only a side out, for a worse inbounds look (4th and overtime: tied or up 3 or less)."
+          help="With 3 to 8 seconds left and their ball, foul on a side out. In the 4th and overtime, only when tied or up 3 or less."
         />
         <Slider
           label={
             <span className="lv-tp-label">
               <Term id="hack">Hack-a-player threshold</Term>
               <Help title="Hack-a-player threshold">
-                <p>Foul their players who shoot below this from the line, away from the ball (never in a period&apos;s last 2 minutes).</p>
+                <p>Foul their players who shoot below this from the line, away from the ball. Never in a period&apos;s last 2 minutes.</p>
                 <p>
                   Off also stops tonight&apos;s game-plan targets
                   {t.manage.hackTargets?.length ? ` (${t.manage.hackTargets.map(nameOf).join(', ')})` : ''}.
@@ -429,7 +365,7 @@ export function TacticsPanel({
           on={t.manage.autoTimeouts}
           onChange={(x) => set((tt) => void (tt.manage.autoTimeouts = x))}
           label="Auto timeouts to stop runs"
-          help="After a run (unless you handle subs): rests legs and resets the run."
+          help="The staff calls one after a run, unless you make the subs."
         />
         <Slider
           label="Timeout after a run of"
@@ -445,11 +381,7 @@ export function TacticsPanel({
         on={persist}
         onChange={setPersist}
         label="Keep changes after this game"
-        help={
-          persist
-            ? `Tonight's changes, before and from now on, are your saved tactics (not tonight's matchups or star target). Off puts them back.${away ? " While you play another of your tactics than the one you tipped off with, its changes are tonight's only." : ''}`
-            : 'Off: changes last this game only.'
-        }
+        help={persist ? "Tonight's changes become your saved tactics, apart from matchups and the star target. Off puts them back." : 'Off: changes last this game only.'}
       />
     </div>
   );

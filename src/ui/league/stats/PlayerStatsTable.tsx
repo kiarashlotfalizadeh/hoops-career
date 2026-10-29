@@ -162,7 +162,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
         label: 'PER',
         get: (r) => r.adv?.per ?? -99,
         fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)),
-        help: "Player efficiency rating (Hollinger's): his per-minute production, adjusted for pace; the league's average is 15.",
+        help: "Player efficiency rating: per-minute production, adjusted for pace. The league's average is 15.",
       });
     if (hasBpm) c.push({ key: 'bpm', label: 'BPM', get: (r) => r.s.adv?.bpm ?? -99, fmt: (v) => ((v as number) === -99 ? '—' : signed(v as number)) });
     if (hasAdv)
@@ -172,7 +172,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
           label: 'WS',
           get: (r) => r.adv?.ws ?? -99,
           fmt: (v) => ((v as number) === -99 ? '—' : f1(v as number)),
-          help: "Win shares: the team's wins his offense and defense account for, from the box score (Basketball Reference's method).",
+          help: "Win shares: the team's wins his play accounts for, from the box score.",
         },
         {
           key: 'ws48',
@@ -230,7 +230,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
           <FilterField label="Position">
             <Chips label="Position" value={pos} onChange={setPos} options={(['all', ...POSITIONS] as const).map((x) => ({ id: x, label: x === 'all' ? 'All' : x }))} />
           </FilterField>
-          <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only (${quali.label})`} />
+          <Toggle on={qual === 'q'} onChange={(v) => setQual(v ? 'q' : 'all')} label={`Qualified only: ${quali.label}`} />
           <Toggle on={mine === '1'} onChange={(v) => setMine(v ? '1' : '0')} label={`${league.teams[league.userTid].name} only`} />
         </FiltersButton>
       </div>
@@ -246,7 +246,7 @@ export function PlayerStatsTable({ league, rows, s, playoffs }: { league: League
           )}
           <div className="lg-note">
             {filtered.length > limit ? `Top ${limit} of ${filtered.length} players` : plural(filtered.length, 'player')} · {seasonLabel(season)}
-            {playoffs ? ' playoffs' : real ? ' (real)' : ''} · {tot ? 'totals' : 'per game'}
+            {playoffs ? ' playoffs' : real ? ' · real' : ''} · {tot ? 'totals' : 'per game'}
           </div>
         </>
       )}

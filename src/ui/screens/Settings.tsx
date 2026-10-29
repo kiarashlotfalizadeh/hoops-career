@@ -157,13 +157,13 @@ export default function Settings() {
                 on={st.injuries}
                 onChange={(v) => set('injuries', v)}
                 label="Injuries"
-                help="Fatigue, age and history raise the risk. Off stops new injuries; the hurt still heal."
+                help="Fatigue, age and injury history raise the risk. Off stops new injuries, and the hurt still heal."
               />
               <Toggle
                 on={chosenJobSecurity(league)}
                 onChange={(v) => edit((l) => requestJobSecurity(l, v))}
                 label="Job security"
-                help={`After his grace period (${GRACE} seasons), the owner can fire you for a season short of his goals. Off, he never does: turning it off takes effect from the next opening night, so it can't dodge a review; on counts at once.`}
+                help={`After ${GRACE} seasons, the owner can fire you for missing his goals. Turning it off waits for the next opening night, so it can't dodge a review.`}
               />
               {st.pending?.jobSecurity === false && (
                 <div className="set-pending small" role="status">
@@ -174,7 +174,7 @@ export default function Settings() {
                 on={st.moments !== false}
                 onChange={(v) => set('moments', v)}
                 label="Big moments"
-                help="A clinch, a title, your draft pick, a big signing, an award or a front-page story about your team takes the screen for a moment: one at most when they come out together, the biggest. After a long sim the stories are in While you were away instead. The owner's verdict on your season and a new job show as well, whatever came out with them; his ultimatum and a firing show even with this off."
+                help="Titles, awards, big signings and front-page stories take the screen for a moment. An ultimatum or a firing shows even with this off."
               />
             </fieldset>
           </Section>
@@ -185,20 +185,20 @@ export default function Settings() {
                 on={st.stopOnNews !== false}
                 onChange={(v) => set('stopOnNews', v)}
                 label="Pause sims for what needs you"
-                help="A sim (any but one of a set number of days) stops only for a choice: a star out ten games or more, a losing skid that goes on, your playoff odds collapsing, the trade deadline's last five days, a playoff series starting, the books in the red, a week whose options win on different counts, an owner's verdict, a job offer or an offer sheet. Each opens with its numbers and the staff's lean, one tap away. What has one honest answer the staff does on its own, in any sim, short or long, and with this off: the counter for the week's big game, drills while the system is short, the adjustment when you're behind in a series. The digest, or a note after a short sim, says what it did. Off, the one below is off too."
+                help="Sims stop when a choice is yours: a star hurt, a skid, the deadline. The staff handles the rest, and the digest says what it did."
               />
               <Toggle
                 on={st.stopOnNews !== false && loopSetting(league, 'stopForBigGames')}
                 onChange={(v) => setLoop('stopForBigGames', v)}
                 disabled={st.stopOnNews === false}
                 label="Pause before your biggest games"
-                help="A long sim stops on the morning of one of the season's biggest nights for you, so you can coach it."
+                help="A long sim stops on the morning of your biggest nights, so you coach them."
               />
               <Toggle
                 on={loopSetting(league, 'digest')}
                 onChange={(v) => setLoop('digest', v)}
                 label="While you were away"
-                help="After a sim of more than a day, a digest of what happened opens first: your results and their headlines, your team's stories, the standings, injuries, new mail and the league's top stories. Off, it waits on Today."
+                help="After a sim of more than a day, a summary of what happened opens first. Off, it waits on Today."
               />
             </fieldset>
           </Section>
@@ -220,7 +220,7 @@ export default function Settings() {
                   setSlowClose(v);
                 }}
                 label="Slow close finishes to 1×"
-                help="Clutch time (the last five minutes, within five) drops to 1× by itself. Off: it's offered. On this device."
+                help="Close finishes drop to 1× on this device: the last five minutes, within five. Off, it's only offered."
               />
               <div className="set-inline">
                 <span className="set-label row">
@@ -262,7 +262,7 @@ export default function Settings() {
                 on={st.liveStaff === 'auto'}
                 onChange={(v) => set('liveStaff', v ? 'auto' : 'ask')}
                 label="Staff makes tactics calls"
-                help="In live games your lead assistant makes the tactics changes he would bring you himself, and they show in your moves. Subs and timeouts stay yours. Off: each one comes to you first."
+                help="Your lead assistant makes the tactics changes he'd bring you. Subs and timeouts stay yours."
               />
             </fieldset>
           </Section>
@@ -343,12 +343,8 @@ export default function Settings() {
               <h3>
                 League file
                 <Help title="League file">
-                  <p>Saved on this device after every change, and nowhere else: clearing site data or uninstalling deletes it.</p>
-                  <p>Export a backup to keep a copy or move the league to another device. Today asks for one once a season.</p>
-                  <p>
-                    The device also keeps a snapshot of the league as it started this season, a way back if the save is ever damaged. It goes if the device's storage is cleared, so
-                    it is no backup.
-                  </p>
+                  <p>Saved on this device after every change, and nowhere else. Export a backup to keep a copy or move the league.</p>
+                  <p>The season snapshot is a way back from a damaged save. Clearing the device's storage removes it too.</p>
                 </Help>
               </h3>
             }
@@ -372,7 +368,7 @@ export default function Settings() {
             {snap && (
               <More label="Season snapshot">
                 <div className="col" style={{ gap: 10 }}>
-                  <p className="set-p small dim2">Kept on this device: {snapshotText(snap)}. Restoring adds it as a league of its own, beside this one.</p>
+                  <p className="set-p small dim2">Kept on this device: {snapshotText(snap)}. Restoring adds it as a second league.</p>
                   <SnapshotActions id={league.id} snap={snap} />
                 </div>
               </More>
@@ -415,13 +411,9 @@ export default function Settings() {
                 </div>
                 <More label="Data sources">
                   <div className="col small dim2" style={{ gap: 8 }}>
-                    <p className="set-p">
-                      Rosters and salaries come from Basketball Reference's contracts page; the 2026-27 schedule and NBA Cup groups from NBA.com, future pick ownership from RealGM
-                      and opening-night injuries from ESPN's injury report. Every real season since 2003-04, playoffs and career highs included, comes from NBA.com box scores and
-                      play-by-play; ratings are built from the 2023-24 to 2025-26 ones (shot zones, shot creation, lineups, matchups), Basketball Reference's advanced stats and
-                      college box scores for rookies, then calibrated in the engine to each player's real line and to his impact over seven seasons of lineups. Fictional leagues
-                      use generated players.
-                    </p>
+                    <p className="set-p">Rosters and salaries: Basketball Reference. Schedule and NBA Cup: NBA.com. Future picks: RealGM. Opening-night injuries: ESPN.</p>
+                    <p className="set-p">Every real season since 2003-04 comes from NBA.com box scores and play-by-play.</p>
+                    <p className="set-p">Ratings come from the last three seasons, calibrated to each player's real line and impact. Fictional leagues use generated players.</p>
                     <p className="set-p tiny dim">Team marks are original monograms in public team colors. Not affiliated with the NBA or its teams.</p>
                   </div>
                 </More>
@@ -436,7 +428,7 @@ export default function Settings() {
       <Sheet open={sheet === 'delete'} onClose={() => setSheet(null)} title="Delete league?">
         <div className="col" style={{ gap: 12 }}>
           <div className="dim2">
-            “{league.name}” and its {plural(seasonsPlayed, 'season')} of history leave this device for good, its season snapshot with them. This can't be undone.
+            “{league.name}” and its {plural(seasonsPlayed, 'season')} of history leave this device for good, snapshot too. This can't be undone.
           </div>
           {/* the last chance to keep it: a file first */}
           <div className="set-facts">{lastBackupText(league)}</div>
@@ -456,7 +448,7 @@ export default function Settings() {
 
       <Sheet open={sheet === 'unsaved'} onClose={() => setSheet(null)} title="Leave without saving?">
         <div className="col" style={{ gap: 12 }}>
-          <div className="dim2">{saveProblem?.text} Your latest changes are only in this window: export a backup to keep them.</div>
+          <div className="dim2">{saveProblem?.text} Your latest changes are only in this window. Export a backup to keep them.</div>
           <button className="btn primary block" onClick={backup}>
             <Download size={16} /> Export backup
           </button>

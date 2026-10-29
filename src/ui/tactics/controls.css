@@ -1,6 +1,6 @@
 /* Instructions' and Match's own controls: a control's label with its ⓘ, the
-   cards that open (Fine-tune, More rules), the hunt and big-man notes, the set package's row and its
-   checkbox rows, and picker rows that open a sheet of choices. */
+   rows that open (Fine-tune, the late-game rules), the hunt and big-man notes, and picker rows that
+   open a sheet of choices. */
 .tx-phasebody {
   gap: 10px;
 }
@@ -10,7 +10,20 @@
   align-items: center;
   gap: 6px;
 }
-/* a card that opens: its name and what's in it, a chevron that turns */
+/* a row that opens (a card, or a row in a list card): its name and what's in it, a chevron that
+   turns, and its Help beside the chevron, outside the row's tap */
+.tx-fine-wrap {
+  position: relative;
+}
+.tx-fine-wrap.has-help > .tx-fine > summary > .grow {
+  padding-right: 34px;
+}
+.tx-fine-help {
+  position: absolute;
+  top: 17px;
+  right: 46px;
+  display: flex;
+}
 .tx-fine > summary {
   list-style: none;
   display: flex;
@@ -60,21 +73,6 @@
 .tx-fine-h > span:first-child {
   flex: 0 1 auto;
 }
-/* the set package on the page: one row, the sets and who they're for */
-.tx-pkg {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: var(--row-py) 14px var(--row-py) var(--row-px);
-  min-height: var(--row-min);
-}
-.tx-pkg:active {
-  background: var(--surface);
-}
-.tx-pkg .lr-name,
-.tx-pkg .lr-meta {
-  display: block;
-}
 /* a line that goes somewhere (the next game's plan, Players): quiet text on a step-up ground */
 .tx-hunt {
   display: flex;
@@ -105,56 +103,6 @@
   border-top: 1px solid var(--line);
   font-size: 13px;
   color: var(--text-2);
-}
-
-/* the set package: a checkbox row, the player it's for, its fit, ⓘ */
-.tx-set {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-height: var(--row-min);
-  padding-right: 2px;
-}
-.tx-set-pick {
-  flex: 1;
-  min-width: 0;
-  align-self: stretch;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: var(--row-py) 4px var(--row-py) var(--row-px);
-  text-align: left;
-}
-.tx-set-pick:not(:disabled):active {
-  background: var(--surface);
-}
-.tx-set-pick:disabled {
-  opacity: 0.5;
-}
-/* a set in the package: its row lit as a chosen playbook's is */
-.tx-set.on {
-  background: var(--surface-2);
-}
-.tx-set-pick .lr-name,
-.tx-set-pick .lr-meta {
-  display: block;
-}
-.tx-check {
-  flex: none;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-xs);
-  border: 2px solid var(--line-3);
-  display: grid;
-  place-items: center;
-  color: var(--accent-ink);
-  transition:
-    background-color 0.15s ease-out,
-    border-color 0.15s ease-out;
-}
-.tx-set.on .tx-check {
-  background: var(--accent);
-  border-color: var(--accent);
 }
 
 /* picker rows: a setting and its choice, the choices in a sheet */

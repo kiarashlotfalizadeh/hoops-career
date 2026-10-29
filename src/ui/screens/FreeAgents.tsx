@@ -137,7 +137,8 @@ export default function FreeAgents() {
     <main className="page fo-page">
       <PageHeader
         title="Free agents"
-        sub={`${fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ` : ''}${all.length} available · ${shortSeason(s)} deals`}
+        // (in free agency the deals are next season's: the day says more)
+        sub={fa ? `Day ${faDayNumber(league)} of ${FA_DAYS} · ${all.length} available` : `${all.length} available · ${shortSeason(s)} deals`}
         back
         right={<FaHelp league={league} s={s} space={space} exceptions={exceptions} />}
       />
@@ -195,17 +196,17 @@ export default function FreeAgents() {
                 (twoWayMode
                   ? `All ${TWO_WAY_MAX} two-way slots are taken.`
                   : tenDays
-                    ? `Your roster is full (${max}${hs.spots ? ` and ${hs.spots} hardship` : ''}).`
-                    : `Your roster is full (${max}). Release or trade someone to sign a free agent.`)}
+                    ? `Your roster is full at ${max}${hs.spots ? ` plus ${hs.spots} hardship` : ''}.`
+                    : `Your roster is full at ${max}. Release or trade someone to sign one.`)}
             </div>
           )}
-          {twoWayMode && <div className="tiny dim">Three seasons or fewer, would sign for the minimum. Two-way pays {moneyExact(twoWaySalary(league, s))}, off the cap.</div>}
+          {twoWayMode && <div className="tiny dim">Three seasons or fewer, open to a two-way. It pays {moneyExact(twoWaySalary(league, s))}, off the cap.</div>}
           {tenDays && (
             <div className="tiny dim">
-              Would sign for the minimum: prorated for {TEN_DAYS} days, ends by itself.{' '}
+              The minimum for {TEN_DAYS} days, then it ends by itself.{' '}
               {hs.out >= HARDSHIP_OUT
-                ? `${hs.out} players out 3+ games: ${hs.spots} hardship spot${hs.spots === 1 ? '' : 's'} beyond ${CAP.rosterMax}.`
-                : `Roster ${n}/${CAP.rosterMax}: hardship spots come from ${HARDSHIP_OUT} players out (${hs.out} now).`}
+                ? `${hs.out} players out 3+ games: ${hs.spots} hardship spot${hs.spots === 1 ? '' : 's'} past ${CAP.rosterMax}.`
+                : `Hardship spots open with ${HARDSHIP_OUT} players out. ${hs.out} now.`}
             </div>
           )}
         </div>
@@ -302,7 +303,7 @@ export default function FreeAgents() {
             </div>
             {rows.length > limit && (
               <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + 40)}>
-                Show more ({rows.length - limit} left)
+                Show more · {rows.length - limit} left
               </button>
             )}
           </div>

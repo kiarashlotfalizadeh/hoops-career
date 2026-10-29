@@ -23,12 +23,13 @@ export function MockView({ league, mock, onOpen }: { league: League; mock: MockD
       right={
         <HelpSheet title="Mock draft">
           <p>
-            The draft played out {mock.runs} times the way AI teams pick: potential and talent as the consensus reads them, a nudge toward what the roster lacks, and what nobody
-            outside a front office knows: its own board and its mood on the night. Your picks go to your staff&apos;s choice, the best on their read.
+            The draft played out {mock.runs} times the way AI teams pick. They weigh potential and talent as the consensus reads them, and lean toward what the roster lacks. Each
+            also has what nobody outside knows: its own board and its mood on the night.
           </p>
+          <p>Your picks go to your staff&apos;s choice, the best on their read.</p>
           <p>
-            Each pick shows the likeliest player not already named above it and how often he was the pick there, then the next likeliest. On the big board, each prospect&apos;s
-            range is where he went in four of five mocks.
+            Each pick shows the likeliest player not already named above it, and how often he was the pick there. Then the next likeliest. On the big board, a prospect&apos;s range
+            is where he went in four of five mocks.
           </p>
           {projected && <p>Until the lottery the order is by record: the lottery still decides the top four.</p>}
         </HelpSheet>

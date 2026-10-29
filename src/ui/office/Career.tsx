@@ -26,7 +26,7 @@ import { TabBar, useQueryParam } from '../league/shared';
 import { slabVars } from '../teamColors';
 import { STRATEGY_META, capSeason, fmtGrade, shortSeason } from './common';
 import { SeasonReviewView } from './SeasonReview';
-import { usePulse, TrendMark } from './Pulse';
+import { usePulse, TrendMark, TREND_WORD } from './Pulse';
 import { seatOf } from './seat';
 import '../screens/start.css';
 import './office.css';
@@ -126,8 +126,8 @@ function Profile({ league }: { league: League }) {
           <div className="card empty">
             {offers.length
               ? `${offers.length > 1 ? 'Those offers are' : 'That offer is'} your way to another job.`
-              : 'Jobs come to you: after the playoffs, teams that change coaches call when they rate you above their hire.'}{' '}
-            Your reputation comes with you: part of where you stand with this owner. God mode (Settings) can put you anywhere.
+              : 'Teams changing coaches call after the playoffs, if they rate you above their hire.'}{' '}
+            God mode in Settings puts you anywhere.
           </div>
         ))}
     </main>
@@ -157,7 +157,7 @@ function JobLine({ league }: { league: League }) {
       <span className="grow fo-min0">
         <span className="bold">Job security · {js.label}</span>
         <span className="tiny dim fo-lc-job-l">
-          Owner <TrendMark trend={p.owner.trend} /> · Fans {p.fans.word} <TrendMark trend={p.fans.trend} />
+          Owner {TREND_WORD[p.owner.trend]} <TrendMark trend={p.owner.trend} /> · Fans {p.fans.word} <TrendMark trend={p.fans.trend} />
         </span>
       </span>
       <ChevronRight size={16} className="dim" aria-hidden="true" />
@@ -263,9 +263,8 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
               <Sparkles size={20} className="fo-lc-ic" aria-hidden="true" />
               <div className="grow fo-min0">
                 <div className="lr-name">Live coaching, this season</div>
-                <div className="lr-meta">
-                  {plural(live.games, 'game')} coached live, measured (about {live.pm})
-                </div>
+                {/* the verdict and one number; the ± lives in the game reports' debrief (decision: staff numbers) */}
+                <div className="lr-meta">{plural(live.games, 'game')} coached live · points over the season</div>
               </div>
               <span className="num bold">{live.clear ? live.worth : 'Too close'}</span>
             </div>
@@ -337,7 +336,7 @@ function YourPlayers({ league, k }: { league: League; k: CoachCareer }) {
             <TeamLogo tid={t.tid} size={26} decorative />
             <div className="grow fo-min0">
               <div className="lr-name">{seasonLabel(t.season)} champions</div>
-              <div className="lr-meta">{[t.fmvp && `${t.fmvp} (Finals MVP)`, ...t.core].filter(Boolean).join(', ')}</div>
+              <div className="lr-meta">{[t.fmvp && `Finals MVP ${t.fmvp}`, t.core.join(', ')].filter(Boolean).join(' · ')}</div>
             </div>
           </div>
         ))}
@@ -465,7 +464,7 @@ function WinRow({ league, w }: { league: League; w: SignatureWin }) {
 function Milestones({ league }: { league: League }) {
   const lg = legacyOf(league);
   const ms = [...lg.milestones].reverse();
-  if (!ms.length) return <div className="card empty">Your first win, career wins, streaks, playoff runs and titles go on this timeline as they happen.</div>;
+  if (!ms.length) return <div className="card empty">First wins, streaks, playoff runs and titles land here as they happen.</div>;
   const seasons = [...new Set(ms.map((m) => m.season))];
   return (
     <>
@@ -546,13 +545,14 @@ function TakeOver({ league, onTaken }: { league: League; onTaken: () => void }) 
   const t = pick !== null && pick !== league.userTid ? league.teams[pick] : null;
   const books = capSeason(league);
   return (
-    <Section title={league.settings.godMode ? 'Take over any team (god mode)' : 'Take over a team'}>
+    <Section title={league.settings.godMode ? 'Take over any team · god mode' : 'Take over a team'}>
       <div className="small dim2">
         {league.fired ? (league.settings.godMode ? 'God mode puts you anywhere.' : 'No offers on file: pick a team.') : `The ${cur.name} go back to the AI staff.`}{' '}
         <More label="What carries over">
-          <div className="small dim2">
-            Part of your standing with this owner comes with you, and the new owner sets his goals: in season from that day (in the playoffs, the next round), otherwise on opening
-            night. Your coaching ratings come with you; the season, finances and league history carry on.
+          <div className="small dim2 fo-help">
+            <p>Part of your standing with this owner comes with you. Your coaching ratings come too.</p>
+            <p>In season, the new owner sets his goals from that day, or from the next round in the playoffs. Otherwise he sets them on opening night.</p>
+            <p>The season, finances and league history carry on.</p>
           </div>
         </More>
       </div>

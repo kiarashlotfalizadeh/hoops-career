@@ -152,7 +152,7 @@ function keptDigest(leagueId: string): Digest | null {
 
 /** The long offseason steps, which get a digest too. */
 const longTask = (op: TaskOp) => (op.kind === 'faAdvance' && op.days >= 7) || op.kind === 'newSeason';
-const TASK_SPAN: Partial<Record<TaskOp['kind'], string>> = { faAdvance: 'A week of free agency', newSeason: 'Training camp' };
+const TASK_SPAN: Partial<Record<TaskOp['kind'], string>> = { faAdvance: 'A week of free agency', newSeason: 'New season' };
 
 export function problemOf(e: unknown): SaveProblem {
   if (e instanceof SaveConflictError) return { kind: 'conflict', text: e.message, deleted: e.deleted };

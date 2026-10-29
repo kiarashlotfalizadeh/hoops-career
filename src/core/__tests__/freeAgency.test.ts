@@ -375,7 +375,7 @@ it('the market: cap holds, the mid-level, minimums, roster limits, prices over t
     young.asking = undefined;
     const no = userOffer(l, young.pid, cap.vetMin, 1);
     expect(no.ok).toBe(false);
-    expect(no.reason).toBe(`No cap space. Over the cap you can offer his minimum (${moneyExact(cap.minContract)}).`);
+    expect(no.reason).toBe(`No cap space. Over the cap, offer his minimum, ${moneyExact(cap.minContract)}.`);
   }
 
   // a fired coach can't sign, re-sign, release, convert or decide options for his old team (T7)
@@ -899,7 +899,7 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(userBid(l, c.pid, Math.min(mle, cAsk.amount), cAsk.years).ok).toBe(true);
     expect(pendingBid(l, c.pid)!.route).toBe('mle');
     expect(userMleRoom(l, s)).toBe(0);
-    expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/Over the cap you can offer his minimum \(\$[\d.]+M\)\.$/);
+    expect(offerBlockedReason(l, role, roleAsk.amount, roleAsk.years)).toMatch(/Over the cap, offer his minimum, \$[\d.]+M\.$/);
     withdrawBid(l, c.pid);
     l.teams[U].mleSeason = s;
     l.teams[U].deadMoney.pop();
@@ -969,7 +969,7 @@ it('competing offers for top free agents (W5, B2), and the player priorities the
     expect(userMleRoom(l, s, role.pid)).toBe(0);
     const res = userOffer(l, role.pid, roleAsk.amount, Math.min(4, roleAsk.years));
     expect(res.ok).toBe(false);
-    expect(res.reason).toMatch(/uses your cap space, and a team that uses its space loses the mid-level/);
+    expect(res.reason).toMatch(/uses your cap space, and that costs the mid-level/);
     expect(role.tid).toBe(FREE_AGENT);
     resolveBids(l);
     expect(star.tid).toBe(U);
@@ -1196,7 +1196,7 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     const before = capHolds(l, U).find((h) => h.p.pid === p.pid)!.amount;
     const [t] = logged(l, () => expect(userQualify(l, p.pid).ok).toBe(true));
     expect(t).toMatchObject({ kind: 'qualify', note: 'extended', amount: p.rfa!.qo, tids: [U] });
-    expect(text(l, t, { tid: U })).toBe(`Extended a qualifying offer to ${playerName(p)} ($${(p.rfa!.qo / 1000).toFixed(1)}M)`);
+    expect(text(l, t, { tid: U })).toBe(`Extended a qualifying offer to ${playerName(p)} · $${(p.rfa!.qo / 1000).toFixed(1)}M`);
     expect(p.rfa).toMatchObject({ tid: U });
     expect(capHolds(l, U).find((h) => h.p.pid === p.pid)!.amount).toBe(Math.max(before, p.rfa!.qo));
     expect(userQualify(l, p.pid).reason).toMatch(/already has a qualifying offer/);
@@ -1229,7 +1229,7 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     expect(userQualify(l, p.pid).reason).toMatch(/re-sign period/);
     l.phase = 'resign';
     const vet = young(l, teamPlayers(l, U)[1], U, { exp: 6 });
-    expect(userQualify(l, vet.pid).reason).toMatch(/rookie-scale deal, or a player with 3 seasons or fewer/);
+    expect(userQualify(l, vet.pid).reason).toMatch(/rookie deal, or a player with 3 seasons or fewer/);
     const theirs = young(l, teamPlayers(l, R)[0], R);
     expect(userQualify(l, theirs.pid).reason).toBe('Not on your team.');
     expect(userQualify(l, p.pid).ok).toBe(true);
@@ -1259,7 +1259,7 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     expect(marqueeFA(l, p)).toBe(false);
     expect(wantsTwoWay(l, p)).toBe(false);
     expect(userTwoWayOffer(l, p.pid).reason).toMatch(/your restricted free agent/);
-    expect(userWithdrawQualifying(l, p.pid).reason).toMatch(/unrestricted free agent, and his \$[\d.]+M cap hold is off your books/);
+    expect(userWithdrawQualifying(l, p.pid).reason).toMatch(/unrestricted free agent\. His \$[\d.]+M cap hold is off your books/);
     expect(capHolds(l, U)).toEqual([]);
     expect(capPayroll(l, U, s)).toBe(payroll(l, U, s));
   }
@@ -1291,14 +1291,14 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     const [t] = logged(l, () => expect(userOffer(l, p.pid, amount, 3).reason).toMatch(/Offer sheet signed: the .* have until the end of day 2 to match/));
     expect(t).toMatchObject({ kind: 'offerSheet', tids: [U, R], amount, years: 3 });
     expect(text(l, t, { tid: U })).toBe(
-      `Signed ${playerName(p)} to an offer sheet: 3 yrs / $${((amount + Math.round((amount * 1.05) / 10) * 10 + Math.round((amount * 1.1025) / 10) * 10) / 1000).toFixed(1)}M (${l.teams[R].abbrev} can match)`,
+      `Signed ${playerName(p)} to an offer sheet: 3 yrs / $${((amount + Math.round((amount * 1.05) / 10) * 10 + Math.round((amount * 1.1025) / 10) * 10) / 1000).toFixed(1)}M. ${l.teams[R].abbrev} can match`,
     );
     expect(p.tid).toBe(FREE_AGENT);
     expect(p.rfa!.sheet).toMatchObject({ tid: U, amount, years: 3, route: 'space', day: 0, until: 1 });
     expect(capSpace(l, U, s)).toBe(space - amount);
     expect(marketHolds(l, U).map((h) => h.kind)).toEqual(['sheet']);
     // nobody else can sign him meanwhile, the user included
-    expect(sheetBlockedReason(l, p, 3)).toMatch(/has signed an offer sheet with the .*: the .* decide by the end of day 2/);
+    expect(sheetBlockedReason(l, p, 3)).toMatch(/has signed an offer sheet with the .*\. The .* decide by the end of day 2/);
     expect(userBid(l, p.pid, amount, 3).ok).toBe(false);
   }
 
@@ -1409,8 +1409,8 @@ it('restricted free agency: qualifying offers, cap holds, offer sheets and match
     // one signed on the next-to-last day runs to the close, and the mail and the news say so
     const z = rfa(l, U);
     signOfferSheet(l, z, R, 9_000, 3, 'space', FA_DAYS - 2);
-    expect(l.inbox[0].body).toMatch(new RegExp(`Match it by the end of day ${FA_DAYS} \\(when free agency closes\\) and he stays with us`));
-    expect(l.news.at(-1)!.text).toMatch(new RegExp(`can match it by the end of day ${FA_DAYS} \\(when free agency closes\\)\\.$`));
+    expect(l.inbox[0].body).toMatch(new RegExp(`Match it by the end of day ${FA_DAYS} of ${FA_DAYS} and he stays with us`));
+    expect(l.news.at(-1)!.text).toMatch(new RegExp(`can match it by the end of day ${FA_DAYS} of ${FA_DAYS}\\.$`));
   }
 
   // left unanswered past its last match day, the sheet lets him go, and the inbox says so

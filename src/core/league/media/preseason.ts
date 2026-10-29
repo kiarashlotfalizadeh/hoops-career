@@ -154,7 +154,7 @@ function leaguePreview(league: League, v: Voice, pre: Preseason, odds: TeamOdds[
   const dc = defendingChampion(league);
   const body = [
     dc && dc.season === league.season - 1
-      ? `The defending champions: the ${league.teams[dc.tid].name}${dc.runner >= 0 ? `, ${dc.w}-${dc.l} over the ${league.teams[dc.runner].name} in the Finals` : ''}${dc.mvp ? ` (Finals MVP ${dc.mvp})` : ''}.`
+      ? `The defending champions: the ${league.teams[dc.tid].name}${dc.runner >= 0 ? `, ${dc.w}-${dc.l} over the ${league.teams[dc.runner].name} in the Finals` : ''}.${dc.mvp ? ` ${dc.mvp} was Finals MVP.` : ''}`
       : '',
     `East: ${top('E')}.`,
     `West: ${top('W')}.`,

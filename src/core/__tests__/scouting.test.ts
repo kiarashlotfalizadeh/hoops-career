@@ -154,8 +154,8 @@ describe('scouting and the staff', () => {
         expect(d.lastSeason).toBe(true);
         expect(d.ptGames).toBeLessThan(SCOUT_MIN_GAMES);
         expect([d.playTypes, d.defPlayTypes]).toEqual([[], []]);
-        // (play types read as "1.09 points each (league 1.02)", "score 1.14 per possession (league 1.02)")
-        for (const x of [...d.tendencies, ...d.exploits, ...Object.values(d.counters)]) expect(x).not.toMatch(/points each|per possession \(league/);
+        // (play types read as "35% of their possessions", "score 1.14 per possession, to the league's 1.02")
+        for (const x of [...d.tendencies, ...d.exploits, ...Object.values(d.counters)]) expect(x).not.toMatch(/of their possessions\.$|per possession, to the league/);
       }
       expect(read).toBeGreaterThan(20);
       // the user's own team has all its games: it ranks first of the one team with enough
@@ -184,7 +184,7 @@ describe('scouting and the staff', () => {
       const d = scoutData(m, opp);
       expect(d.h2h.games.length).toBe(2);
       expect(d.h2h.tracked).toBe(2);
-      expect(d.counters['cov-switch']).toMatch(/\(\+3\.0 points a game for them over 2 games\)\.$/);
+      expect(d.counters['cov-switch']).toMatch(/\+3\.0 points a game for them in your 2 meetings\.$/);
     }
 
     // marks the NBA Cup final in the head-to-head: a neutral floor, nobody at home
@@ -219,7 +219,7 @@ describe('scouting and the staff', () => {
       // and the scouting report's attack lines read the numbers before the rules of thumb (another
       // line from the numbers, a volume shooter's, may outweigh this one)
       const lines = scoutTeam(m, tid).weaknesses;
-      const idx = lines.findIndex((w) => /^Their defense gives up/.test(w));
+      const idx = lines.findIndex((w) => /^They give up [\d.]+ per possession/.test(w));
       expect(idx).toBeGreaterThanOrEqual(0);
       expect(idx).toBeLessThan(d.exploits.length);
       // its weak link is the one the plan's "Attack" counter goes after: Scout and Plan name the same man
@@ -402,7 +402,7 @@ describe('scouting and the staff', () => {
       // a bad night for a counter measured a gain: one clause bridges the two (their pick-and-roll at 2.00 a trip)
       const theirs = res.home.tid === opp ? res.home : res.away;
       theirs.playTypes = { ...theirs.playTypes, pnrBH: { poss: 20, pts: 40 }, pnrRoll: { poss: 0, pts: 0 } };
-      expect(debrief(league, res, buildGameReport(league, res)!).plan[0]).toMatchObject({ night: 'worse', bridge: "A bad night for it; over many games it's worth +0.6 a game." });
+      expect(debrief(league, res, buildGameReport(league, res)!).plan[0]).toMatchObject({ night: 'worse', bridge: "A bad night for it. Over many games it's worth +0.6 a game." });
       // a counter measured even is even, whatever one night did (and there's nothing to bridge)
       res.plan![0].pts = undefined;
       const even = debrief(league, res, buildGameReport(league, res)!).plan[0];
@@ -447,7 +447,8 @@ describe('scouting and the staff', () => {
         us.pts = them2.pts - 4;
         lost.ot = 0;
         league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { scheme: 'zone23' } });
-        lost.impacts = [im('zone_3pt:o', them, 25), im('zone_paint:d', me, 2)];
+        // (big enough to top whatever luck the simulated game had)
+        lost.impacts = [im('zone_3pt:o', them, 60), im('zone_paint:d', me, 2)];
         const head = debrief(league, lost, buildGameReport(league, lost)!).headline;
         expect(head).toMatch(/Our zone defense cost us more than it won back\.$/);
         lost.impacts = [im('zone_glass:o', them, 25), im('zone_paint:d', me, 25.1)];
@@ -462,9 +463,9 @@ describe('scouting and the staff', () => {
         const p = league.players[pid];
         const was = p.injury;
         p.injury = { type: 'Sprained Ankle', gamesRemaining: 5, gamesTotal: 5, severity: 'minor' };
-        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)} (out 5 games)`);
+        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)}, out 5 games`);
         p.injury = null;
-        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)} (back now)`);
+        expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBe(`${shortName(league, p)}, back now`);
         p.injury = was;
         hurt.hurt = [];
         expect(debrief(league, hurt, buildGameReport(league, hurt)!).hurt).toBeUndefined();
@@ -533,9 +534,9 @@ describe('scouting and the staff', () => {
       if (looks) expect(looks.title).toMatch(/got the better looks: worth/);
       // the luck in words follows both sides' numbers: never "ours didn't" when ours fell above their looks too
       res.xShots = side({ pts: fgPts(us) - 6, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
-      expect(luckLine(res, me, false)).toBe('Their shots fell above what their looks were worth: that part was luck, not the plan.');
+      expect(luckLine(res, me, false)).toBe('Their shots fell above their looks. That part was luck, not the plan.');
       res.xShots = side({ pts: fgPts(us) + 20, tpm: us.t.tpm }, { pts: fgPts(them) - 20, tpm: them.t.tpm });
-      expect(luckLine(res, me, false)).toBe("Their shots fell and ours didn't: that part was luck, not the plan.");
+      expect(luckLine(res, me, false)).toBe("Their shots fell and ours didn't. That part was luck, not the plan.");
       // a threes key missed with the looks there reads as shots that didn't fall, missed without them as threes not taken
       const fly = { id: 'fly', title: 'Let it fly', goal: '', dir: 'min' as const, target: us.t.tpm + 3, value: us.t.tpm, met: false };
       res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm + 3 }, { pts: fgPts(them), tpm: them.t.tpm });
@@ -545,13 +546,13 @@ describe('scouting and the staff', () => {
       // and a team that made more threes than its looks were worth beat the arc key on luck, not on the plan
       const arc = { id: 'arc', title: 'Run them off the line', goal: '', dir: 'max' as const, target: them.t.tpm - 3, value: them.t.tpm, met: false };
       res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm - 4 });
-      expect(keyAdvice(league, arc, res, me)).toMatch(/that part was luck/);
+      expect(keyAdvice(league, arc, res, me)).toMatch(/That part was luck/);
       // missed on the looks: it knows the plan played, and never asks for the Stay home that was already in
       res.xShots = side({ pts: fgPts(us), tpm: us.t.tpm }, { pts: fgPts(them), tpm: them.t.tpm });
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
-      expect(keyAdvice(league, arc, res, me)).toMatch(/: stay home on their shooters \(less help\)/);
+      expect(keyAdvice(league, arc, res, me)).toMatch(/\. Stay home on their shooters, or run/);
       res.plan = [{ label: 'Stay home on shooters', end: 'def' }];
-      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in, and they got looks worth \d+ made threes .* anyway: run their best shooter off the line/);
+      expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in, and their looks were still worth \d+ made threes\. Run their best shooter off the line/);
       const move = {
         kind: 'tactics' as const,
         end: 'def' as const,
@@ -560,7 +561,7 @@ describe('scouting and the staff', () => {
       };
       res.plan = undefined;
       res.moves = [{ ...move, q: 3, clock: 252, text: 'Help defense: Balanced → Stay home' }];
-      expect(keyAdvice(league, arc, res, me)).toMatch(/stay home on their shooters from the start \(it went in at Q3 4:12\)/);
+      expect(keyAdvice(league, arc, res, me)).toMatch(/Stay home only went in at Q3 4:12\. Start with it/);
       res.moves = [{ ...move, q: 1, clock: 0, text: 'Pick-and-roll coverage: Drop → Hedge · Help defense: Balanced → Stay home' }];
       expect(keyAdvice(league, arc, res, me)).toMatch(/^Stay home was in/);
       res.moves = undefined;
@@ -571,7 +572,9 @@ describe('scouting and the staff', () => {
       const res = structuredClone(nightRes);
       const me: 0 | 1 = res.home.tid === 0 ? 0 : 1;
       const opp = me === 0 ? 'away' : 'home';
-      res[opp] = { ...res[opp], t: { ...res[opp].t, ftm: res[opp].t.ftm + 15, fta: res[opp].t.fta + 18 } };
+      // (15 more made free throws than ours, whatever the simulated game gave each side)
+      const mine = me === 0 ? res.home.t : res.away.t;
+      res[opp] = { ...res[opp], t: { ...res[opp].t, ftm: mine.ftm + 15, fta: mine.fta + 18 } };
       const fouls = () => buildGameReport(league, res)!.factors.find((f) => f.category === 'fouls' && f.title.startsWith('Free throws'))!;
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { physicality: 65 } });
       expect(fouls()).toMatchObject({ key: 'physicality:o' });

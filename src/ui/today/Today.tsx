@@ -6,7 +6,7 @@
 // offers as one row, the trade deadline, mail that needs you, once a season a backup: see needs.ts)
 // in one list; from your staff (the owner when the seat is warm, the staff's top advice); the next
 // game when it isn't today; your season as a strip of figures; the news in two headlines; and More
-// (practice, the way back to "While you were away", the glossary, the guide). Anything with more to
+// (the way back to "While you were away", the glossary, the guide). Anything with more to
 // it is one tap away; nothing here repeats something else here or on the top bar.
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
@@ -23,7 +23,6 @@ import { Section, Sheet } from '../components/ui';
 import { NextGameRow, NextGameSlab, PhaseCard, nextGame } from './NextGame';
 import { AllStarHero, DigestRow, Headlines, LeadStory, SeasonEndHero, TenureKicker, YourSeason, useLead } from './FrontPage';
 import { allStarPhase, seasonOver } from './occasions';
-import { PracticeRow, PracticeSheet } from './Practice';
 import { MessageSheet, markRead } from './messages';
 import { useNeedsYou } from './needs';
 import { NeedRow, needRows } from './NeedsList';
@@ -48,7 +47,7 @@ function guideHidden(league: League): boolean {
   return guideDone(league).size < GUIDE_STEPS.length;
 }
 
-type Opened = null | 'advice' | 'glossary' | 'practice' | 'needs';
+type Opened = null | 'advice' | 'glossary' | 'needs';
 
 export default function Today() {
   const league = useLeague();
@@ -68,8 +67,7 @@ export default function Today() {
   const full = useLeagueMemo(() => assistantFeed(league), [league]);
   const opp = g ? (g.home === league.userTid ? g.away : g.home) : undefined;
   const noPlan = opp !== undefined && full.some((c) => c.id === `plan:${opp}`);
-  // (and what the team knows of its system to Practice, which carries the focus that answers it)
-  const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}` && !(g && c.id.startsWith('alert:fam-')));
+  const feed = full.filter((c) => STAFF_AREAS.includes(c.area) && c.id !== `plan:${opp}`);
   const forecast = useForecast(league);
   const js = useLeagueMemo(() => jobSecurity(league, forecast), [league, forecast]);
   const seat = !league.fired && !js.off && (js.heat === 'warm' || js.heat === 'hot') && !items.some((i) => i.kind === 'ultimatum');
@@ -188,10 +186,9 @@ export default function Today() {
 
       <Headlines league={league} lead={leadIsHero ? null : lead} />
 
-      {(g || digest || (moreAdvice > 0 && !staffRows.length) || hidden || league.settings.teaching !== false) && (
+      {(digest || (moreAdvice > 0 && !staffRows.length) || hidden || league.settings.teaching !== false) && (
         <Section title="More">
           <div className="card flush td-more">
-            {g && <PracticeRow league={league} onOpen={() => setSheet('practice')} />}
             <DigestRow />
             {moreAdvice > 0 && !staffRows.length && (
               <button type="button" className="td-mrow" aria-haspopup="dialog" onClick={() => setSheet('advice')}>
@@ -224,7 +221,6 @@ export default function Today() {
       <Sheet open={sheet === 'advice'} onClose={() => setSheet(null)} title="From your staff">
         <AllAdvice feed={full} />
       </Sheet>
-      {g && <PracticeSheet league={league} open={sheet === 'practice'} onClose={() => setSheet(null)} />}
       <GlossarySheet open={sheet === 'glossary'} onClose={() => setSheet(null)} />
       <MessageSheet league={league} m={msg} onClose={() => setOpenMsg(null)} />
     </main>

@@ -33,7 +33,7 @@ import type { League } from '../core/types';
 import { ordinal } from './league/shared';
 import { gamesMemo } from './stats';
 import { LeagueLook, TeamLogo } from './components/TeamLogo';
-import { Sheet, Spinner } from './components/ui';
+import { Sheet, Spinner, keep } from './components/ui';
 import { flowActions, type FlowAction } from './flow';
 import { userGameOnDay } from '../core/league/games';
 import { useFlowRunner } from './useFlow';
@@ -378,6 +378,11 @@ function ContinueBar() {
     if (a.sim) setRunning(a.label);
     void run(a);
   };
+  // a Play option: the sheet closes on the way
+  const pick = (a: FlowAction) => {
+    setOpen(false);
+    go(a);
+  };
   const label = primary ? (primary.cmd === 'watchLive' && primary.label === 'Watch & coach live' ? 'Watch & coach' : primary.label) : '';
   // the next step is the screen you're on (the draft board, free agents, re-signing): only the options button stays, out of the way
   const here = !!primary?.to && pathname === primary.to.split('?')[0];
@@ -423,7 +428,7 @@ function ContinueBar() {
                   </span>
                   <span className="grow">
                     <span className="cg-label ellipsis">{label}</span>
-                    {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{primary.disabled ?? primary.sub}</span>}
+                    {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{keep(primary.disabled ?? primary.sub)}</span>}
                   </span>
                 </button>
               )}
@@ -444,30 +449,37 @@ function ContinueBar() {
         {!flowActions(league).some((a) => a.agenda) && <div className="empty">All set. The season can move on.</div>}
       </Sheet>
       <Sheet open={open} onClose={() => setOpen(false)} title="What next?">
-        <div className="col" style={{ gap: 8 }}>
+        <div className="col" style={{ gap: 10 }}>
           {calls.length > 0 && (
             <div className="flow-calls">
               <OpenCalls calls={calls} />
             </div>
           )}
-          {actions.map((a) => (
-            <button
-              key={a.id}
-              className={`flow-opt ${a.primary ? 'primary' : ''}`}
-              disabled={!!a.disabled || !!sim}
-              onClick={() => {
-                setOpen(false);
-                go(a);
-              }}
-            >
-              <span className="fo-l">{a.label}</span>
-              {(a.disabled || a.sub) && <span className="fo-s">{a.disabled ?? a.sub}</span>}
-              <ChevronRight size={18} className="fo-c" aria-hidden="true" />
-            </button>
-          ))}
+          {/* the next step as the one ink block, every other option a row of one list under it */}
+          {primary && <FlowOption a={primary} disabled={!!primary.disabled || !!sim} onPick={() => pick(primary)} />}
+          {actions.length > 1 && (
+            <div className="card flush flow-list">
+              {actions
+                .filter((a) => a !== primary)
+                .map((a) => (
+                  <FlowOption key={a.id} a={a} disabled={!!a.disabled || !!sim} onPick={() => pick(a)} />
+                ))}
+            </div>
+          )}
         </div>
       </Sheet>
     </>
+  );
+}
+
+/** One of the Play options: its name, and when it goes or why it can't. */
+function FlowOption({ a, disabled, onPick }: { a: FlowAction; disabled: boolean; onPick: () => void }) {
+  return (
+    <button className={`flow-opt ${a.primary ? 'primary' : ''}`} disabled={disabled} onClick={onPick}>
+      <span className="fo-l">{a.label}</span>
+      {(a.disabled || a.sub) && <span className="fo-s">{keep(a.disabled ?? a.sub)}</span>}
+      <ChevronRight size={18} className="fo-c" aria-hidden="true" />
+    </button>
   );
 }
 
@@ -501,8 +513,8 @@ function SaveBanner() {
         <b>{conflict ? problem.text : 'Not saved.'}</b>{' '}
         {conflict
           ? problem.deleted
-            ? 'Export a backup to keep this copy; a reload opens the main menu without it.'
-            : 'Reload to pick it up from there. Changes made in this window since then are not kept unless you export a backup.'
+            ? 'Export a backup to keep this copy. A reload opens the main menu without it.'
+            : "Reload to pick it up from there. Export a backup to keep this window's changes."
           : problem.text}
       </div>
       {/* either way, this window's copy can be kept as a file */}

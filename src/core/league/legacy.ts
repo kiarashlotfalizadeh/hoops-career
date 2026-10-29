@@ -195,7 +195,7 @@ const where = (league: League, side: { home: boolean; tid: number; opp: number }
 /** A milestone reached: in the legacy, the news (a story at `weight`) and a short mail. */
 function reach(
   league: League,
-  m: Omit<Milestone, 'season' | 'day' | 'tid'> & { body?: string; pids?: number[]; mail: { from: string; subject?: string; body: string } },
+  m: Omit<Milestone, 'season' | 'day' | 'tid'> & { body?: string; pids?: number[]; mail?: { from: string; subject?: string; body: string } },
   weight: 2 | 3,
   news = true,
 ) {
@@ -224,13 +224,14 @@ function reach(
       tids: [league.userTid],
       pids: m.pids ?? [],
     });
-  addInbox(league, {
-    from: m.mail.from,
-    subject: m.mail.subject ?? m.head,
-    body: m.mail.body,
-    tone: 'good',
-    link: '/office/career?tab=milestones',
-  });
+  if (m.mail)
+    addInbox(league, {
+      from: m.mail.from,
+      subject: m.mail.subject ?? m.head,
+      body: m.mail.body,
+      tone: 'good',
+      link: '/office/career?tab=milestones',
+    });
   return true;
 }
 
@@ -620,14 +621,9 @@ export function legacyDay(league: League) {
           key: `cotm:${h.season}:${h.day}`,
           head: n === 1 ? `${league.coachName}'s first Coach of the Month` : `Coach of the Month, ${plural(n, 'time')} now`,
           text: h.line,
-          mail: {
-            from: 'Media Relations',
-            subject: 'Coach of the Month',
-            body: `You're the ${h.conf === 'E' ? 'East' : h.conf === 'W' ? 'West' : "league's"} Coach of the Month${n > 1 ? ` (your ${ordinalWord(n)})` : ''}. ${h.line}`,
-          },
         },
         2,
-        // (the press writes the honor's story; this is the cabinet's and the inbox's)
+        // (the press writes the honor's story and the league office's mail tells him: this is the cabinet's)
         false,
       );
     }

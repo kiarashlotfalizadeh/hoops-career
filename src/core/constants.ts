@@ -21,10 +21,12 @@ export const RATED_SEASONS = 3;
  *    values under today's names ("Custom (Drop base)").
  * 7: the tactics overhaul (shapes, out-of-possession roles, mentality, three tactic slots, and each
  *    team's familiarity and practice focus). A clean break: saves from before it can't be opened.
+ * 8: familiarity, partnerships, practice, tactic slots, situational plans, the set package and saved
+ *    playbooks are gone. A clean break: saves from before it can't be opened.
  */
-export const SAVE_VERSION = 7;
-/** The oldest save format this build opens: the tactics overhaul's (see 7 above). */
-export const MIN_SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
+/** The oldest save format this build opens: the one without familiarity and slots (see 8 above). */
+export const MIN_SAVE_VERSION = 8;
 
 export const CAP = {
   salaryCap: 165_000,

@@ -175,8 +175,8 @@ describe('batch sims & reports', () => {
         });
       at(1.3, 1.6, 0.7);
       const a = lever()!;
-      expect(a.title).toBe('Pressure the ball: measured +1.3 a game');
-      expect(a.body).toMatch(/^Pressure against Balanced over your next two games, each played both ways on the same seeds \(measured /);
+      expect(a.title).toBe('Pressure the ball: helps +1.3 a game');
+      expect(a.body).toMatch(/^Ball pressure: Balanced → Pressure\. Measured [A-Z][a-z]{2} \d+ on your next two games\.$/);
       expect(a.fix).toMatchObject({ kind: 'patch', label: 'Pressure the ball' });
       expect(applyPatch(team.tactics, (a.fix as { patch: TacticsPatch }).patch).defense.pressure).toBe(65);
       // too close to say, or the staff's own tactics: nothing to say
@@ -205,14 +205,14 @@ describe('batch sims & reports', () => {
       team.tactics = applyPatch(saved, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true } });
       expect(ids()).not.toContain('switch-slow');
       expect(slowWeakness()).toBe(false);
-      expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch off-ball screens;/);
+      expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch off-ball screens\./);
       // the staff's own coverage isn't flagged: only one the user chose
       team.tactics = { ...applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } }), manual: false };
       expect(ids()).not.toContain('switch-slow');
       team.tactics = { ...applyPatch(saved, { defense: { scheme: 'man', pnr: 'switch', switchOffBall: true } }), manual: true };
       expect(teamAlerts(league, 1).find((a) => a.id === 'switch-slow')!.body).toContain(big.lastName);
       expect(slowWeakness()).toBe(true);
-      expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch everything;/);
+      expect(counterCandidates(league, 0, 1).find((c) => c.id === 'vs-switch')!.why).toMatch(/^They switch everything\./);
       big.ratings = r;
       team.tactics = saved;
     }
@@ -247,18 +247,18 @@ describe('batch sims & reports', () => {
       p.wear = 70;
       const body = () => teamAlerts(league, 2).find((a) => a.id === `wear-${p.pid}`)!.body;
       league.teams[2].rotation = { ...rotation, restB2B: [], caps: {} };
-      expect(body()).toMatch(/^Season wear 70\. .* Rest him on back-to-backs \(Rotation\)\.$/);
+      expect(body()).toMatch(/^Season wear 70\. .* Rest him on back-to-backs, on Rotation\.$/);
       league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: {} };
-      expect(body()).toMatch(/already rests on back-to-backs: a hard minute cap \(Rotation\)/);
+      expect(body()).toMatch(/already rests on back-to-backs\. A hard minute cap on Rotation/);
       league.teams[2].rotation = { ...rotation, restB2B: [p.pid], caps: { [p.pid]: 28 } };
-      expect(body()).toMatch(/lowering his 28-minute cap \(Rotation\)/);
+      expect(body()).toMatch(/Lowering his 28-minute cap on Rotation/);
       // the postseason has no back-to-backs, a team that's out has no load to manage, and the summer has none
       const ts = league.teams[2].seasons.find((s) => s.season === league.season)!;
       const round = ts.playoffRound;
       league.phase = 'playoffs';
       ts.playoffRound = 1;
       league.teams[2].rotation = { ...rotation, restB2B: [], caps: {} };
-      expect(body()).toMatch(/^Season wear 70\. .* A hard minute cap \(Rotation\) lightens his load\.$/);
+      expect(body()).toMatch(/^Season wear 70\. .* A hard minute cap on Rotation lightens his load\.$/);
       ts.playoffRound = -1;
       expect(teamAlerts(league, 2).some((a) => a.id === `wear-${p.pid}`)).toBe(false);
       league.phase = 'draft';
@@ -390,7 +390,7 @@ describe('batch sims & reports', () => {
     // scouts in plain English: plural team names, the creator role named once
     {
       for (let tid = 1; tid < 30; tid++) {
-        for (const t of scoutTeam(league, tid).threats) expect(t.why).not.toMatch(/Primary creator \(Primary Creator\)/);
+        for (const t of scoutTeam(league, tid).threats) expect(t.why).not.toMatch(/Primary creator, Primary Creator/);
         for (const c of counterCandidates(league, 0, tid)) expect(c.why).not.toMatch(new RegExp(`^${league.teams[tid].name} (is|spaces)\\b`));
       }
     }

@@ -4,6 +4,7 @@
 // court wide and a fifth of it high, so any two spots of one formation sit a plate's width (35)
 // across or its height (18) apart, and the plates never cover each other.
 import type { DefRole, DefScheme, OffRole, OffShape } from '../../core/types';
+import type { Quality, SystemReport } from '../../core/analysis/system';
 
 /** The board's height in court units. */
 export const BOARD_H = 84;
@@ -115,12 +116,28 @@ export function place(spots: Spot[], five: BoardPlayer[]): Map<number, Spot> {
   return out;
 }
 
-/** A familiarity figure's tone: 80 and up good, 60 to 80 a warning, below that bad. */
-export const famTone = (v: number): 'good' | 'warn' | 'bad' => (v >= 80 ? 'good' : v >= 60 ? 'warn' : 'bad');
-
 /** A shape's fit as the board shows it: fit points are a tenth of a point a game ("+0.8", "−1.2", "±0"). */
 export function fitPts(v: number): string {
   const x = Math.round(v) / 10;
   if (Math.abs(x) < 0.05) return '±0';
   return `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
+}
+
+/** The five (the rotation's first five) and the bench after them; anyone the rotation leaves out goes last. */
+export function startersOf<P extends { pid: number }>(order: readonly number[], players: readonly P[]): { five: P[]; bench: P[] } {
+  const byId = new Map(players.map((p) => [p.pid, p]));
+  const all = [...order.map((pid) => byId.get(pid)).filter((p): p is P => !!p), ...players.filter((p) => !order.includes(p.pid))];
+  return { five: all.slice(0, 5), bench: all.slice(5) };
+}
+
+/** The report's best `n` and worst `n` qualities at either end, by where they rank in the league (the best first, the worst first). */
+export function strengthsOf(r: SystemReport, n = 2): { strengths: Quality[]; weaknesses: Quality[] } {
+  const all = [...r.off, ...r.def];
+  const best = [...all].sort((a, b) => a.rank - b.rank);
+  const strengths = best.slice(0, n);
+  const weaknesses = [...all]
+    .sort((a, b) => b.rank - a.rank)
+    .filter((q) => !strengths.includes(q))
+    .slice(0, n);
+  return { strengths, weaknesses };
 }

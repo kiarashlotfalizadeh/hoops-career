@@ -9,10 +9,10 @@
 // it fires (callWorth.ts): the ones that cost aren't made, and the rest say what they've been worth
 // (or that they're the staff's read, with no number yet). Pure.
 
+import type { ReactNode } from 'react';
 import type { Tactics } from '../../core/types';
 import { FINISH_LABEL, type FinishType, type PossLog } from '../../core/sim/log';
 import { zScore } from '../../core/analysis/playTypes';
-import { madeAtt } from '../../core/format';
 import { callHold, liveAlerts, type AlertInput, type LiveAlert } from './alerts';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
 
@@ -40,8 +40,10 @@ export interface StaffNote {
   rank: number;
   /** With the bench handed to the staff, it makes its pick itself (a tactics change; subs and timeouts stay yours). */
   auto?: boolean;
-  /** A decision's measured worth where it fires, in a line (worthLine), or that it's the staff's read. */
-  worth?: string;
+  /** A decision's measured worth where it fires, in a line (worthLine), or that it's the staff's read; on screen, with `detail` behind its "?" (see noteView). */
+  worth?: ReactNode;
+  /** How its number was measured, a tap down (the spot, the replays, the margin and its spread). */
+  detail?: string;
 }
 
 /** What the staff reads besides the alerts' input: the possessions the court has drawn. */
@@ -191,7 +193,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         kind: 'decision',
         tone: 'good',
         title: `We're beating ${names(pid)}`,
-        text: `${v.pts} points on ${v.trips} trips he defended (${f2(v.pts / v.trips)} a trip). Run your isolations, post-ups and ball screens at him while he's on.`,
+        text: `${v.pts} points on ${v.trips} trips he guarded.`,
         fig: { v: f2(v.pts / v.trips), unit: 'a trip' },
         actions: [{ kind: 'tactics', label: `Attack ${names(pid)}`, apply: (x) => void (x.offense.huntTarget = pid) }],
         rank: 64,
@@ -215,7 +217,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         kind: 'decision',
         tone: 'warn',
         title: `Our ${playType(k)} plays are stalling`,
-        text: `${f2(v.pts / v.poss)} points a trip on ${v.poss} (league ${f2(base)}).`,
+        text: `${v.poss} trips, league ${f2(base)} a trip.`,
         fig: { v: f2(v.pts / v.poss), unit: 'a trip' },
         actions: [
           {
@@ -233,7 +235,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         kind: 'decision',
         tone: 'good',
         title: `Our ${playType(k)} plays are working`,
-        text: `${f2(v.pts / v.poss)} points a trip on ${v.poss} (league ${f2(base)}).`,
+        text: `${v.poss} trips, league ${f2(base)} a trip.`,
         fig: { v: f2(v.pts / v.poss), unit: 'a trip' },
         actions: [{ kind: 'tactics', label: `More ${ACTION_NAME[act]}`, apply: (x) => void (x.offense.actions[act] = Math.min(100, x.offense.actions[act] + 25)) }],
         rank: 45,
@@ -251,7 +253,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       kind: 'read',
       tone: 'good',
       title: `Their ${playType(held[0])} plays aren't working`,
-      text: `${f2(held[1].pts / held[1].poss)} points a trip on ${held[1].poss} (league ${f2(a.baselines[held[0]])}).`,
+      text: `${held[1].poss} trips, league ${f2(a.baselines[held[0]])} a trip.`,
       fig: { v: f2(held[1].pts / held[1].poss), unit: 'a trip' },
       actions: [],
       rank: 30,
@@ -322,26 +324,21 @@ export function staffRead(a: Pick<AlertInput, 'view' | 'side' | 'teams'>): strin
   const { view, side } = a;
   const us = side === 0 ? view.box.home : view.box.away;
   const them = side === 0 ? view.box.away : view.box.home;
-  const abbrev = a.teams[1 - side].abbrev;
   if (view.elapsed < 240) return 'Early. Watching how they want to play.';
   const edges: { d: number; good: string; bad: string }[] = [];
   const reb = us.t.orb + us.t.drb - (them.t.orb + them.t.drb);
   edges.push({ d: reb / 4, good: `We're winning the glass by ${reb}`, bad: `They're winning the glass by ${-reb}` });
   const tov = them.t.tov - us.t.tov;
-  edges.push({ d: tov / 3, good: `${them.t.tov} turnovers from them to our ${us.t.tov}`, bad: `${us.t.tov} turnovers to their ${them.t.tov}` });
+  edges.push({ d: tov / 3, good: `They have ${them.t.tov} turnovers to our ${us.t.tov}`, bad: `We have ${us.t.tov} turnovers to their ${them.t.tov}` });
   const paint = (us.extra?.paint ?? 0) - (them.extra?.paint ?? 0);
   edges.push({ d: paint / 8, good: `We're +${paint} in the paint`, bad: `They're +${-paint} in the paint` });
   const threes = us.t.tpm - them.t.tpm;
-  edges.push({
-    d: threes / 2.5,
-    good: `${threes} more threes than them (${madeAtt(us.t.tpm, us.t.tpa)})`,
-    bad: `${-threes} fewer threes than them (${madeAtt(them.t.tpm, them.t.tpa)} for ${abbrev})`,
-  });
+  edges.push({ d: threes / 2.5, good: `We have ${threes} more threes`, bad: `They have ${-threes} more threes` });
   const fta = us.t.fta - them.t.fta;
-  edges.push({ d: fta / 6, good: `${fta} more free throws than them`, bad: `${-fta} fewer free throws than them` });
+  edges.push({ d: fta / 6, good: `We have ${fta} more free throws`, bad: `They have ${-fta} more free throws` });
   const good = edges.filter((e) => e.d >= 1).sort((x, y) => y.d - x.d)[0];
   const bad = edges.filter((e) => e.d <= -1).sort((x, y) => x.d - y.d)[0];
-  // (the second clause runs on from the first: "…, but they're winning the glass by 6"; a count or a team's abbreviation keeps its case)
+  // (the second clause runs on from the first: "…, but they're winning the glass by 6")
   if (good && bad) return `${good.good}, but ${bad.bad.replace(/^(They|We)\b/, (w) => w.toLowerCase())}.`;
   if (good) return `${good.good}.`;
   if (bad) return `${bad.bad}.`;

@@ -9,7 +9,7 @@
 //   game.ts        GameSim: the game's state, setup, live controls and main loop
 //   state.ts       the per-player and per-team state, the inputs, shared types and helpers
 //   constants.ts   the tuning constants (K) and the calibration diagnostics
-//   coach.ts       situational plans, timeouts, AI coaches' adjustments at the breaks
+//   coach.ts       new tactics from the bench, timeouts, AI coaches' adjustments at the breaks
 //   clock.ts       time and fatigue, the ends of periods, late-game modes
 //   rotation.ts    substitutions, replacements, in-game injuries
 //   usage.ts       who gets the ball and which action the offense runs

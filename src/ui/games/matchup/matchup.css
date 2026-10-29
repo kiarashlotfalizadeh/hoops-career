@@ -261,28 +261,6 @@
   font-size: 12px;
   color: var(--warn);
 }
-/* each five's partnerships (sim/links.ts), under the fives */
-.mu-links {
-  padding: 8px var(--row-px) 10px;
-}
-.mu-links-side {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.3;
-}
-.mu-links-side.r {
-  text-align: right;
-}
-.mu-link b {
-  font-weight: 650;
-}
-.mu-link.bad {
-  color: var(--bad);
-  font-weight: 600;
-}
 
 /* storylines */
 .mu-story {
@@ -348,44 +326,69 @@
   flex: 1;
 }
 
-/* the counters: one per row, what it changes, why, the numbers behind it, then Always and Add */
+/* the counters: one per row, its name and measured worth with Add beside them; the row opens on what
+   it changes, why, the numbers behind it and Every game */
 .mu-cand {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 12px var(--row-px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: 8px;
+  padding-right: var(--row-px);
 }
-.mu-cand-top {
+.mu-cand-d > summary {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 28px;
+  gap: 8px;
+  min-height: var(--row-min);
+  padding: var(--row-py) 0 var(--row-py) var(--row-px);
+  list-style: none;
+  cursor: pointer;
 }
-/* a counter's measured worth, after its name: the points a game it adds (or costs) */
-.mu-worth {
+.mu-cand-d > summary::-webkit-details-marker {
+  display: none;
+}
+.mu-cand-t {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.mu-cand-c {
   flex: none;
-  font-size: 13px;
-  font-weight: 680;
-  white-space: nowrap;
+  color: var(--text-dim);
+  transition: transform var(--dur-fast) ease;
 }
-/* what a counter costs in familiarity tonight (and Always's confirm), under its name */
+.mu-cand-d[open] .mu-cand-c {
+  transform: rotate(180deg);
+}
+.mu-cand-b {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 0 14px var(--row-px);
+}
+.mu-cand-act {
+  display: flex;
+  align-items: center;
+  min-height: var(--row-min);
+}
+/* a counter's measured worth, under its name: a verdict and the points a game it adds (or costs) */
+.mu-worth {
+  font-size: 13px;
+  font-weight: 620;
+  line-height: 1.35;
+}
+/* Every game's confirm, beside its button */
 .mu-fam {
-  margin-top: 2px;
   font-size: 12.5px;
   font-weight: 600;
   line-height: 1.35;
-}
-/* Always writes into the tactics for every game: a quiet second choice beside Add, not a warning */
-.btn.text.mu-always {
-  color: var(--text-2);
-  text-decoration: none;
 }
 .mu-cand-foot {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 3px;
+  margin-top: 6px;
 }
 
 /* hack-a-player rows */
@@ -518,10 +521,6 @@
 }
 .mu-brief-item > .grow {
   min-width: 0;
-}
-.mu-brief-why {
-  white-space: normal;
-  line-height: 1.38;
 }
 .mu-brief-go {
   display: flex;

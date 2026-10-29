@@ -15,8 +15,8 @@ export function SkipSheet({ choices, onPick, manualSubs }: { choices: SkipChoice
         </button>
       ))}
       <p className="tiny dim">
-        A starter of yours hurt on the way stops the skip there (Sim to final plays on).
-        {manualSubs && ' The staff makes the subs along the way and hands them back to you where it stops.'}
+        An injury to one of your starters stops the skip. Sim to final plays on.
+        {manualSubs && ' The staff makes your subs until it stops.'}
       </p>
     </div>
   );

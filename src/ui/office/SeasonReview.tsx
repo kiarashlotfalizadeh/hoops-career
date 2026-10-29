@@ -30,7 +30,7 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
     return (
       <main className="page fo-page">
         <PageHeader title={`${seasonLabel(season)} review`} back backTo="/office/career" />
-        <div className="card empty">No review was kept for that season: reviews start with the seasons played in this version.</div>
+        <div className="card empty">No review was kept for that season. Reviews start with seasons played in this version.</div>
       </main>
     );
   const t = league.teams[r.tid];
@@ -81,23 +81,23 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
                 </div>
               ))
             ) : (
-              <div className="fo-goal tiny dim">Graded on wins, the playoffs and profit (a season from before his goals).</div>
+              <div className="fo-goal tiny dim">Graded on wins, the playoffs and profit, from before his goals.</div>
             )}
             {/* the season against his ask and the press's prediction, under his grades */}
             <ExpectationRows r={r} />
           </div>
           <div className="tiny dim">
-            {verdict.fired ? 'He fired you after this review. ' : ''}Season grade {fmtGrade(verdict.grade)}, standing {fmtGrade(verdict.total)} after it (−100 to +100; 0 is his
-            goals met exactly).
+            {verdict.fired ? 'He fired you after this review. ' : ''}Season grade {fmtGrade(verdict.grade)}, standing {fmtGrade(verdict.total)} after it. Both run −100 to +100, and
+            0 is his goals met exactly.
           </div>
           {r.pulse && r.pulse.length >= 2 && (
             <More label="Owner and fans through the season">
               <div className="card fo-rv-pulse">
                 <PulseChart owner={r.pulse.map((p) => p[1])} fans={r.pulse.map((p) => p[2])} labels={r.pulse.map((p) => fmtDate(r.season, p[0]))} />
                 <div className="tiny dim">
-                  <span className="fo-rv-key owner" /> The owner{r.owner !== undefined ? `: ${ownerWord(r.owner).word} at the end (${r.owner})` : ''} ·{' '}
+                  <span className="fo-rv-key owner" /> The owner{r.owner !== undefined ? `: ${ownerWord(r.owner).word} at the end, ${r.owner}` : ''} ·{' '}
                   <span className="fo-rv-key fans" /> The fans
-                  {r.fans !== undefined ? ` (${r.fans})` : ''} · out of 100
+                  {r.fans !== undefined ? ` ${r.fans}` : ''} · out of 100
                 </div>
               </div>
             </More>

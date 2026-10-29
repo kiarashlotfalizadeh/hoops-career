@@ -115,13 +115,15 @@ export function callCosts(key: string): boolean {
 }
 
 /**
- * A kept call's number, in a few words: "Worth +2.2 a game where we've made it", "+1.4% to win",
- * "About even when measured" (inside two standard errors of even); the staff's read with none.
+ * A kept call's number as a verdict, in a few words: "Helps: about +2.2 points where we make it",
+ * "Helps: about +1.4% to win where we make it", "No real change where we make it" (inside two standard
+ * errors of even); "Not measured yet" with none (the staff's read).
  */
 export function worthLine(key: string): string {
   const m = callWorth(key);
-  if (!m) return "The staff's read: not measured yet";
+  if (!m) return 'Not measured yet';
   const [v, se] = m.by === 'win' ? [m.win * 100, m.winSe * 100] : [m.pts, m.ptsSe];
-  if (Math.abs(v) < 2 * se) return 'Measured: about even where we make it';
-  return m.by === 'win' ? `Measured: ${signed(v, 1)}% to win where we make it` : `Measured: worth ${signed(v, 1)} a game where we make it`;
+  if (Math.abs(v) < 2 * se) return 'No real change where we make it';
+  const say = v > 0 ? 'Helps' : 'Hurts';
+  return m.by === 'win' ? `${say}: about ${signed(v, 1)}% to win where we make it` : `${say}: about ${signed(v, 1)} points where we make it`;
 }

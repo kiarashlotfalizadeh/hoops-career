@@ -58,12 +58,12 @@ export function shownFit(id: string, terms: FitTerm[], fits: Record<string, numb
 /** The tactics the user's staff would put in for this roster (as the hand-over does). */
 export const userStaffTactics = (l: League): Tactics => {
   const tm = l.teams[l.userTid];
-  return autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { links: true, user: true });
+  return autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { user: true });
 };
 
 /**
  * What the hand-over sheet says the staff would run: its playbooks and, by the staff's read (the style
- * picker's, fully drilled), what they're worth a game against the user's at the ends where he runs one.
+ * picker's), what they're worth a game against the user's at the ends where he runs one.
  */
 export function handOverLine(l: League, staff: Tactics): string {
   const t = l.teams[l.userTid].tactics;
@@ -75,5 +75,5 @@ export function handOverLine(l: League, staff: Tactics): string {
   // (an end the user runs no playbook at reads as even: the read is of playbooks)
   const vs = (fits: Record<string, number>, mine: string, theirs: string) => (fits[mine] === undefined ? 0 : fits[theirs] - fits[mine]);
   const v = Math.round(vs(off, t.offPreset, staff.offPreset) + vs(def, t.defPreset, staff.defPreset)) / 10;
-  return `Staff would run ${name}: ${v === 0 ? 'about even with yours' : `${readText(v)} a game against yours`} (the staff's read, once drilled).`;
+  return `Staff would run ${name}: ${v === 0 ? 'about even with yours' : `${readText(v)} a game against yours`} (the staff's read).`;
 }

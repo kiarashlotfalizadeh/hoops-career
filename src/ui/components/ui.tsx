@@ -653,8 +653,11 @@ export function More({ label = 'More', children }: { label?: ReactNode; children
   );
 }
 
-/** Text on the screen with its figures kept whole ("48-5" never breaks at the hyphen); anything else as is. */
-export const keep = (n: ReactNode): ReactNode => (typeof n === 'string' ? keepFigures(n) : n);
+/**
+ * Text on the screen with its figures kept whole ("48-5" never breaks at the hyphen, nor does a
+ * figure's compound: "3-game", "7-footer"); anything else as is.
+ */
+export const keep = (n: ReactNode): ReactNode => (typeof n === 'string' ? keepFigures(n).replace(/(\d)-(?=\p{L})/gu, '$1-\u2060') : n);
 
 /**
  * A headline's words, each a run no line may break inside, with what parts them: a space, or "" after

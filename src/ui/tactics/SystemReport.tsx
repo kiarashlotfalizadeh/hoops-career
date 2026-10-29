@@ -52,13 +52,9 @@ export function SystemReportCard({ report, was }: { report: SystemReport; was?: 
     <Section
       title="All grades"
       right={
-        <Help title="System report">
-          <p>
-            What your system should be good and bad at, from the players who play its minutes (your rotation) and the settings you give them, graded against the other{' '}
-            {report.off[0] ? report.off[0].of - 1 : 29} teams&apos; systems: A+ is the top tenth of the league, F the bottom tenth.
-          </p>
-          <p>Tap a line to see what it&apos;s made of: who carries it, and what each setting adds or takes away. Change a setting and the grades move with it.</p>
-          <p>It&apos;s a projection to tinker against; under it, the season&apos;s games show what your tactics actually won and gave up.</p>
+        <Help title="All grades">
+          <p>What your system should be good at, from your rotation and your settings. A+ is the league&apos;s top tenth, F its bottom tenth.</p>
+          <p>Tap a grade for what it&apos;s made of. Change a setting and the grades move.</p>
         </Help>
       }
     >

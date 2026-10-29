@@ -191,16 +191,20 @@ const named = (w: [string, string, string]) => Number.isNaN(Number(w[1])) && Num
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
 const games = (n: number) => (n === 1 ? 'game' : `${['', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? n} games`);
 
-/**
- * "Drop measured +1.1 a game against Switch over our next six games…": the reading, as the staff says
- * it (`pts` false: without the number, under a title that has it; `brief`: the digest's few words).
- */
-function measuredLine(words: [string, string, string][], r: Pick<LeverReading, 'pts' | 'games'>, us: 'our' | 'your', pts = true, brief = false): string {
+/** A reading as a verdict and one number (DESIGN.md): "Helps: +1.1 a game", "Hurts: −0.6 a game", "No real change". */
+function verdict(r: Pick<LeverReading, 'pts' | 'raw' | 'se'>): string {
+  if (leverClears(r)) return `Helps: ${signed(r.pts)} a game`;
+  return r.pts <= -WORTH_MIN ? `Hurts: ${signed(r.pts)} a game` : 'No real change';
+}
+
+/** What a change moved, in the screen's words: "Ball-screen coverage: Switch → Drop · Help defense: …". */
+const changeLine = (words: [string, string, string][]) => words.map((w) => (w[1] || w[2] ? `${w[0]}: ${w[1]} → ${w[2]}` : w[0])).join(' · ');
+
+/** What a reading tried, in a few words: "Drop in place of Switch", "Crash the offensive glass Balanced → Crash", "a change". */
+function triedWords(words: [string, string, string][] | undefined): string {
   const one = oneSetting(words);
-  const worth = pts ? ` measured ${signed(r.pts)} a game` : '';
   // (a level the screen shows as a number reads as the setting moved: "Crash boards 42 → 60")
-  const head = one ? (named(one) ? `${one[2]}${worth} against ${one[1]}` : `${one[0]} ${one[1]} → ${one[2]}${worth}`) : `The change${worth}`;
-  return `${head} over ${us} next ${games(r.games)}, ${brief ? 'played both ways' : 'each played both ways on the same seeds'}`;
+  return !one ? 'a change' : named(one) ? `${one[2]} in place of ${one[1]}` : `${one[0]} ${one[1]} → ${one[2]}`;
 }
 
 /**
@@ -240,7 +244,8 @@ async function measureLever(league: League, opts: WorthOpts & { onMeasure?: () =
   // (one that clears is a change or a card, said there; one that doesn't changes nothing, and the staff says what it measured)
   if (!leverClears(r)) {
     const from = keptWords(words);
-    notePick(league, `${STAFF_REPORT} ${measuredLine(words, r, 'our', true, true)}; ${r.pts > 0 ? 'too close to call, so ' : ''}keeping ${from}.`);
+    // (in the staff's third person, as the digest says it)
+    notePick(league, `${STAFF_REPORT} tried ${triedWords(words)} over the next ${games(r.games)}. ${verdict(r)}. Keeping ${from}.`);
   }
   return true;
 }
@@ -268,7 +273,7 @@ export function leverReport(league: League): { pts: number; title: string; meta:
     : leverClears(r)
       ? 'yours to make on Team'
       : `kept ${keptWords(r.words)}`;
-  return { pts: r.pts, title: r.label, meta: `${fmtDate(league.season, r.day)} · ${r.games === 1 ? '1 game' : `${r.games} games`} both ways · ${came}` };
+  return { pts: r.pts, title: r.label, meta: `${fmtDate(league.season, r.day)} · ${came}` };
 }
 
 /**
@@ -316,14 +321,13 @@ export function leverDecide(league: League): StaffMove | null {
   const st = stateOf(league);
   league.staffLever = { ...st, moves: [...st.moves, m].slice(-KEPT) };
   const lead = leadAssistant(league);
-  const what = words.map((w) => (w[1] || w[2] ? `${w[0]}: ${w[1]} → ${w[2]}` : w[0])).join(' · ');
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
     subject: `Staff change: ${r.label}`,
-    body: `${what}. ${measuredLine(words, r, 'our')}, so I've changed it. Team → Tactics has it, with Undo if you'd rather keep it as it was.`,
+    body: `${changeLine(words)}. I played our next ${games(r.games)} both ways, on the same seeds. It helps: ${signed(r.pts)} a game, so I've made the change. Undo it on Team → Tactics if you'd rather not.`,
     link: '/team/tactics',
   });
-  notePick(league, `${moveShort(m)} (measured ${signed(r.pts)} a game over the next ${games(r.games)})`);
+  notePick(league, `${staffMoved(m)}. Helps: ${signed(r.pts)} a game.`);
   return m;
 }
 
@@ -344,10 +348,15 @@ export function staffMoveNow(league: League): StaffMove | null {
   return ms[ms.length - 1] ?? null;
 }
 
-/** "Staff moved ball-screen coverage to Drop on Nov 10 · measured +1.1 a game": a move as the screens name it. */
-export function moveLine(league: League, m: StaffMove): string {
+/** "Staff moved ball-screen coverage to Drop", or for a move of several settings "Staff made a change: Crash less". */
+function staffMoved(m: Pick<StaffMove, 'words' | 'label'>, on = ''): string {
   const s = moveShort(m);
-  return `Staff moved ${s.charAt(0).toLowerCase()}${s.slice(1)} on ${fmtDate(league.season, m.day)} · measured ${signed(m.pts)} a game`;
+  return s === m.label ? `Staff made a change${on}: ${s}` : `Staff moved ${s.charAt(0).toLowerCase()}${s.slice(1)}${on}`;
+}
+
+/** "Staff moved ball-screen coverage to Drop on Nov 10. Helps: +1.1 a game.": a move as the screens name it. */
+export function moveLine(league: League, m: StaffMove): string {
+  return `${staffMoved(m, ` on ${fmtDate(league.season, m.day)}`)}. Helps: ${signed(m.pts)} a game.`;
 }
 
 /** Put a move's settings back (Undo): the staff doesn't make it again this season. False if it isn't in force. */
@@ -382,10 +391,10 @@ export function leverCard(league: League): Alert | null {
   return {
     id: `lever-${r.what}`,
     tone: 'alert',
-    title: `${r.label}: measured ${signed(r.pts)} a game`,
-    body: `${measuredLine(words, r, 'your', false)} (measured ${fmtDate(league.season, r.day)}).`,
-    // (the Instructions phase the change is made in)
-    link: `/team/tactics/instructions${patch.defense ? '?phase=outPoss' : ''}`,
+    title: `${r.label}: helps ${signed(r.pts)} a game`,
+    body: `${changeLine(words)}. Measured ${fmtDate(league.season, r.day)} on your next ${games(r.games)}.`,
+    // (where the change is made: the scheme on the board's out-of-possession end, the rest in an Instructions phase)
+    link: patch.defense?.scheme ? '/team/tactics?side=out' : `/team/tactics/instructions${patch.defense ? '?phase=outPoss' : ''}`,
     fix: { kind: 'patch', patch, label: r.label },
   };
 }

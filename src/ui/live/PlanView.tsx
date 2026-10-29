@@ -1,5 +1,4 @@
-// The live game's Game plan: the touchline first (your three tactics with the team's familiarity
-// with each, and the mentality) and tonight's plan, then the battle one end at a time behind one
+// The live game's Game plan: the touchline first (the mentality) and tonight's plan, then the battle one end at a time behind one
 // switch, each number next to the lever that moves it. Defense: their play types tonight against the
 // league's, each with the setting that defends it (the ball-screen coverage beside their
 // pick-and-roll, help beside their spot-ups, transition defense beside their run-outs), and their
@@ -13,12 +12,11 @@ import type { DefScheme, PnrCoverage, PressMode, Tactics } from '../../core/type
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
 import { ALL_SCHEMES, COVERAGE_META, PRESS_META, SCHEME_META } from '../../core/sim/tactics';
 import { zScore } from '../../core/analysis/playTypes';
-import { keepFigures, madeAtt } from '../../core/format';
+import { keepFigures, madeAtt, plural } from '../../core/format';
 import { Section, Segmented, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
 import type { Drawn } from './drawn';
 import { matchups, sumBy } from './staff';
-import { OPT, famSuffix } from './familiar';
 import type { PossLog } from '../../core/sim/log';
 
 /** A three-way lever on a 0-100 setting: its low, middle and high settings. */
@@ -68,14 +66,14 @@ const action = (k: 'pnr' | 'iso' | 'post' | 'handoff' | 'motion', label: string)
   write: (t, v) => void (t.offense.actions[k] = v),
 });
 const THREES: Three = {
-  label: 'Three-point emphasis',
+  label: 'Shot profile',
   names: ['Fewer threes', 'Balanced', 'More threes'],
   values: [25, 50, 78],
   read: (t) => t.offense.threePoint,
   write: (t, v) => void (t.offense.threePoint = v),
 };
 const PUSH: Three = {
-  label: 'Push in transition',
+  label: 'After a stop',
   names: ['Walk it up', 'Balanced', 'Push'],
   values: [25, 50, 80],
   read: (t) => t.offense.transition,
@@ -89,7 +87,7 @@ const CRASH: Three = {
   write: (t, v) => void (t.offense.crashBoards = v),
 };
 const PACE: Three = {
-  label: 'Pace',
+  label: 'Tempo',
   names: ['Slow it down', 'Balanced', 'Push the pace'],
   values: [25, 50, 78],
   read: (t) => t.offense.pace,
@@ -132,6 +130,18 @@ function ThreeChips({ lever, t, apply }: { lever: Three; t: Tactics; apply: (fn:
   );
 }
 
+/** The figures' names, once over a list of play types: trips, points a trip, the league's. */
+function PlayHead() {
+  return (
+    <div className="lv-pr-h tiny dim" aria-hidden="true">
+      <span className="grow" />
+      <span className="lv-pr-trips">Trips</span>
+      <span className="lv-pr-ppp">PPP</span>
+      <span className="lv-pr-base">League</span>
+    </div>
+  );
+}
+
 /** A play type tonight: its points a trip against the league's, coloured by which way is good for you, and its trips. */
 function PlayRow({ k, v, base, mine, children }: { k: string; v: { poss: number; pts: number }; base?: number; mine: boolean; children?: ReactNode }) {
   const ppp = v.pts / v.poss;
@@ -142,9 +152,12 @@ function PlayRow({ k, v, base, mine, children }: { k: string; v: { poss: number;
     <div className="lv-pr">
       <div className="lv-pr-top">
         <span className="lv-pr-n grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-        <span className="lv-pr-trips tiny dim num">{v.poss} trips</span>
+        <span className="lv-pr-trips tiny dim num">{v.poss}</span>
         <span className={`lv-pr-ppp num ${tone}`}>{ppp.toFixed(2)}</span>
-        {base !== undefined && <span className="lv-pr-base tiny dim num">lg {base.toFixed(2)}</span>}
+        <span className="lv-pr-base tiny dim num">{base !== undefined ? base.toFixed(2) : '—'}</span>
+        <span className="sr-only">
+          , {v.poss} trips{base !== undefined ? `, league ${base.toFixed(2)}` : ''}
+        </span>
       </div>
       {children}
     </div>
@@ -166,12 +179,9 @@ export function PlanView({
   onAll,
   abbrevs,
   touchline,
-  famOf = () => 100,
 }: {
   /** The touchline (see Touchline.tsx), at the top. */
   touchline?: ReactNode;
-  /** How well the team knows a discrete option ('pnr:blitz'), as tonight plays it. */
-  famOf?: (key: string) => number;
   view: Drawn;
   side: 0 | 1;
   tactics: Tactics;
@@ -257,14 +267,16 @@ export function PlanView({
       {end === 'def' && (
         <Section title={`${abbrevs.them} on offense`}>
           <div className="card flush list">
-            {!theirs.length && <div className="lv-pr-empty small dim">Their play types show here as the game goes.</div>}
-            {theirs.map(([k, v]) => {
+            {!theirs.length ? <div className="lv-pr-empty small dim">Their play types show here as the game goes.</div> : <PlayHead />}
+            {theirs.map(([k, v], i) => {
               const lever = THEIR_LEVER[k as FinishType];
               const pnr = k === 'pnrBH' || k === 'pnrRoll';
+              // (the coverage, or why there's none, under the first of their ball-screen rows only)
+              const firstPnr = pnr && theirs.findIndex(([x]) => x === 'pnrBH' || x === 'pnrRoll') === i;
               return (
                 <PlayRow key={k} k={k} v={v} base={baselines[k]} mine={false}>
-                  {pnr && man && (
-                    <div className="lv-lev" role="group" aria-label="Pick-and-roll coverage">
+                  {firstPnr && man && (
+                    <div className="lv-lev" role="group" aria-label="Ball-screen coverage">
                       {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((c) => (
                         <button
                           key={c}
@@ -273,12 +285,11 @@ export function PlanView({
                           onClick={() => apply((x) => void (x.defense.pnr = c))}
                         >
                           {COVERAGE_META[c].label}
-                          {famSuffix(famOf(OPT.pnr(c)))}
                         </button>
                       ))}
                     </div>
                   )}
-                  {pnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens: man-to-man brings the coverages back.</div>}
+                  {firstPnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens: man-to-man brings the coverages back.</div>}
                   {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
                 </PlayRow>
               );
@@ -302,8 +313,8 @@ export function PlanView({
                       {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
                     </span>
                     <span className="tiny dim2">
-                      {keepFigures(madeAtt(p.fgm, p.fga))}
-                      {on ? ` · ${nameOf(on.def)} on him: ${on.pts} on ${on.trips} trips` : ''}
+                      {keepFigures(madeAtt(p.fgm, p.fga))} FG
+                      {on ? ` · ${nameOf(on.def)} on him: ${on.pts} pts in ${plural(on.trips, 'trip')}` : ''}
                     </span>
                   </span>
                   {target && <Tag tone="info">Doubled</Tag>}
@@ -318,7 +329,7 @@ export function PlanView({
       {end === 'off' && (
         <Section title={`${abbrevs.us} on offense`}>
           <div className="card flush list">
-            {!ours.length && <div className="lv-pr-empty small dim">Your play types show here as the game goes.</div>}
+            {!ours.length ? <div className="lv-pr-empty small dim">Your play types show here as the game goes.</div> : <PlayHead />}
             {ours.map(([k, v]) => {
               const lever = OUR_LEVER[k as FinishType];
               return (
@@ -335,8 +346,10 @@ export function PlanView({
                     Scoring on {nameOf(pid)}
                     {!them.on.includes(pid) && <span className="tiny dim"> · bench</span>}
                   </span>
-                  <span className="lv-pr-trips tiny dim num">{v.trips} trips</span>
+                  <span className="lv-pr-trips tiny dim num">{v.trips}</span>
                   <span className={`lv-pr-ppp num ${v.pts / v.trips >= 1.25 ? 'good' : ''}`}>{(v.pts / v.trips).toFixed(2)}</span>
+                  <span className="lv-pr-base" />
+                  <span className="sr-only">, {v.trips} trips</span>
                 </div>
                 <div className="lv-lev">
                   <button
@@ -359,7 +372,7 @@ export function PlanView({
             <span className="slider-label">
               <Term id="zone">Defense</Term>
             </span>
-            <div className="lv-lev" role="group" aria-label="Base scheme">
+            <div className="lv-lev" role="group" aria-label="Scheme">
               {ALL_SCHEMES.map((k: DefScheme) => (
                 <button
                   key={k}
@@ -368,7 +381,6 @@ export function PlanView({
                   onClick={() => apply((x) => void (x.defense.scheme = k))}
                 >
                   {SCHEME_META[k].label}
-                  {famSuffix(famOf(OPT.scheme(k)))}
                 </button>
               ))}
             </div>
@@ -390,7 +402,6 @@ export function PlanView({
                   onClick={() => apply((x) => void (x.defense.press = k))}
                 >
                   {PRESS_META[k].label}
-                  {k !== 'none' && famSuffix(famOf(OPT.press(k)!))}
                 </button>
               ))}
             </div>

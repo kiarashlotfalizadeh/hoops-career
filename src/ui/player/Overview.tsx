@@ -36,7 +36,8 @@ export function ScoutingProfile({ league, p, top, onAll }: { league: League; p: 
           </button>
         ) : (
           <Help title="Scouting profile">
-            <p>Each skill blends the ratings the game engine uses for it. The number is his percentile among every rostered NBA player: 90th means better than 90% of them.</p>
+            <p>Each skill blends the ratings the game engine uses for it. The number is his percentile among rostered players.</p>
+            <p>90th means better than 90% of them.</p>
             <p>
               The bars&apos; colours: <b style={{ color: skillColor(85) }}>85th and up</b>, <b style={{ color: skillColor(65) }}>65th and up</b>,{' '}
               <b style={{ color: skillColor(35) }}>35th and up</b>, <b style={{ color: skillColor(0) }}>below</b>.
@@ -88,7 +89,7 @@ export function Overview({
     ...(team ? [{ k: 'Minutes', v: p.injury ? 'Out' : String(team.rotation.minutes[p.pid] ?? 0), s: p.injury ? 'injured' : 'planned' }] : []),
     ...(cur
       ? [
-          { k: 'USG%', v: pct(cur.usg), s: 'usage' },
+          { k: <Term id="usage">USG%</Term>, v: pct(cur.usg) },
           { k: <Term id="onnet">On net</Term>, v: signed(cur.onOff), s: 'per 100', color: cur.onOff >= 0 ? 'var(--good)' : 'var(--bad)' },
           { k: '+/-', v: signed(cur.pm), s: 'a game' },
         ]

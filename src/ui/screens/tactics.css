@@ -1,8 +1,7 @@
 /* Team → Tactics, one partial per part of it (`tx-` classes). */
 @import '../tactics/base.css';
-@import '../tactics/playbooks.css';
+@import '../tactics/presets.css';
 @import '../tactics/controls.css';
-@import '../tactics/situations.css';
 @import '../tactics/insights.css';
 @import '../tactics/system.css';
 @import '../tactics/fm.css';

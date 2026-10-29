@@ -1,8 +1,9 @@
 // A roster as rows, the same for your team (Team → Roster) and any other (/teams/:tid): tonight's
-// five, the bench, then the two-way deals. A row is the jersey, the name with what's wrong (out,
-// a 10-day deal: dropping under a long name rather than cutting it), position and age, then aligned
-// columns under one header per group: minutes, points, rebounds and assists a game, OVR (with its
-// change this season, and a development tag by the name: Breakout, Rising, Prospect, Declining) and POT.
+// five, the bench, then the two-way deals. A row is two lines beside the jersey. The first: the name
+// with one mark at most (out, else a 10-day deal, else a development tag: Breakout, Rising, Prospect,
+// Declining), then OVR and POT in columns named once in the group's header. The second, quieter:
+// position and age, then minutes, points, rebounds and assists a game, each labelled. His OVR change
+// this season is on the Ratings view and his page, not on the row.
 // Before anyone plays, each player's latest season stands in for this one's, and the line under the
 // list says so.
 import type { ReactNode } from 'react';
@@ -12,10 +13,10 @@ import { playerAge } from '../../core/playerGen';
 import { Avatar, Ovr } from '../components/ui';
 import { OvrKey } from '../components/OvrKey';
 import { f1, latestLine, playerSeason, startingFive, type PerGame } from '../stats';
-import { tenDayLabel } from '../office/TenDayPanel';
+import { tenDayLeft } from '../../core/league/tenDay';
 import { injuryName, plural } from '../../core/format';
-import { devTag, ovrChange } from '../../core/league/devWatch';
-import { DevDelta, DevTagChip } from '../player/dev';
+import { devTag } from '../../core/league/devWatch';
+import { DevTagChip } from '../player/dev';
 // its rows' styles, wherever a roster shows (another team's page, not only the Team tab)
 import '../screens/team.css';
 
@@ -33,16 +34,11 @@ export function rosterLines(league: League, roster: Player[]): { lines: Map<numb
   return { lines, current, any: [...lines.values()].some(Boolean) };
 }
 
-/** A group's divider, with the columns' names over its rows. */
+/** A group's divider: its name, and the two columns' names over its rows (the figures under the name carry their own labels). */
 function GroupHead({ label }: { label: string }) {
   return (
     <div className="tm-rl tm-rl-head">
       <span className="tm-rl-glabel">{label}</span>
-      {FIGS.map(([k, short]) => (
-        <span key={k} className="tm-rl-fig" aria-hidden="true">
-          {short}
-        </span>
-      ))}
       <span className="tm-rl-ovr" aria-hidden="true">
         OVR
       </span>
@@ -53,12 +49,29 @@ function GroupHead({ label }: { label: string }) {
   );
 }
 
+/** A row's one mark, the most pressing first: out, else a 10-day deal (yours), else his development tag. */
+function RowTag({ league, p, mine }: { league: League; p: Player; mine: boolean }) {
+  if (p.injury)
+    return (
+      <span className="tag bad" title={injuryName(p.injury.type)}>
+        Out {plural(p.injury.gamesRemaining, 'game')}
+      </span>
+    );
+  const td = mine && p.contract.tenDay;
+  if (td) {
+    const left = tenDayLeft(league, p);
+    return (
+      <span className="tag warn" title={td.hardship ? 'Hardship 10-day' : undefined}>
+        10-day · {left > 1 ? `${left} days left` : 'last day'}
+      </span>
+    );
+  }
+  const dev = devTag(league, p);
+  return dev ? <DevTagChip tag={dev} /> : null;
+}
+
 /** One player's row: a link to his page. */
 export function RosterRow({ league, p, line, mine }: { league: League; p: Player; line: PerGame | null; mine: boolean }) {
-  const ten = mine ? tenDayLabel(league, p) : null;
-  // the development watch: his change this season under the badge, and a tag for the young core and the fading
-  const dev = devTag(league, p);
-  const change = ovrChange(league, p);
   return (
     <Link to={`/player/${p.pid}`} className="tm-rl tm-rl-row">
       <Avatar p={p} />
@@ -66,33 +79,33 @@ export function RosterRow({ league, p, line, mine }: { league: League; p: Player
         <span className="ellipsis">
           {p.firstName} {p.lastName}
         </span>
-        {p.injury && (
-          <span className="tag bad" title={injuryName(p.injury.type)}>
-            Out {plural(p.injury.gamesRemaining, 'game')}
-          </span>
-        )}
-        {ten && <span className="tag warn">{ten}</span>}
-        {dev && <DevTagChip tag={dev} />}
+        <RowTag league={league} p={p} mine={mine} />
       </span>
-      <span className="tm-rl-meta">
-        {p.pos} · {playerAge(p, league.season)}
-        <span className="tm-rl-arch"> · {p.archetype}</span>
-        {p.injury && <span className="sr-only">, {injuryName(p.injury.type)}</span>}
-      </span>
-      {FIGS.map(([k, , unit]) => (
-        <span key={k} className="tm-rl-fig num">
-          {line ? f1(line[k]) : '—'}
-          <span className="sr-only"> {unit}</span>
-        </span>
-      ))}
       <span className="tm-rl-ovr">
         <span className="sr-only">OVR </span>
         <Ovr v={p.ovr} size="sm" />
-        <DevDelta d={change} since="this season" />
       </span>
       <span className={`tm-rl-pot num ${p.pot > p.ovr ? '' : 'dim'}`}>
         <span className="sr-only">potential </span>
         {p.pot}
+      </span>
+      <span className="tm-rl-line">
+        <span className="tm-rl-meta">
+          {p.pos} · {playerAge(p, league.season)}
+          <span className="tm-rl-arch"> · {p.archetype}</span>
+          {p.injury && <span className="sr-only">, {injuryName(p.injury.type)}</span>}
+        </span>
+        {line ? (
+          FIGS.map(([k, short, unit]) => (
+            <span key={k} className="tm-rl-fig">
+              <b className="num">{f1(line[k])}</b>
+              <span aria-hidden="true">{short}</span>
+              <span className="sr-only"> {unit}</span>
+            </span>
+          ))
+        ) : (
+          <span className="tm-rl-none">No games yet</span>
+        )}
       </span>
     </Link>
   );
@@ -103,10 +116,13 @@ export function RosterRows({ league, label, players, foot }: { league: League; l
   const { lines } = rosterLines(league, players);
   return (
     <div className="tm-rl-list">
-      <GroupHead label={label} />
-      {players.map((p) => (
-        <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={p.tid === league.userTid} />
-      ))}
+      {/* one group, so its rows sit on hairlines rather than the list's gap between groups */}
+      <div className="tm-rl-group">
+        <GroupHead label={label} />
+        {players.map((p) => (
+          <RosterRow key={p.pid} league={league} p={p} line={lines.get(p.pid) ?? null} mine={p.tid === league.userTid} />
+        ))}
+      </div>
       {foot}
     </div>
   );
@@ -139,7 +155,7 @@ export function RosterList({ league, roster }: { league: League; roster: Player[
         )}
       </div>
       <div className="tm-foot row between wrap">
-        <span>{current ? 'Per game this season.' : any ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'} Arrows: OVR change this season.</span>
+        <span>{current ? 'Per game this season.' : any ? 'Per game in each player’s latest season.' : 'No games played yet.'}</span>
         <OvrKey />
       </div>
     </>

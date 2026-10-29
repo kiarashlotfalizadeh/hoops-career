@@ -27,7 +27,7 @@ function rumorText(league: League, r: ReturnType<typeof onTheBlock>[number]): st
   const p = league.players[r.pid];
   const callers = r.suitors.map((t) => `the ${league.teams[t].name}`);
   const listening = `The ${league.teams[r.tid].name} are listening on ${playerName(p)}`;
-  return callers.length ? `${listening}; ${andList(callers)} have called.` : `${listening}.`;
+  return callers.length ? `${listening}. ${andList(callers).replace(/^./, (c) => c.toUpperCase())} have called.` : `${listening}.`;
 }
 
 /** "$24.1M through 2028-29", "an expiring $12.0M": what a team takes on with him. */
@@ -126,7 +126,7 @@ function deadlineBriefing(league: League) {
   const offers = openProposals(league).length;
   const trades = seasonTrades(league).length;
   const lines = [
-    'Today is the trade deadline: deals have to be done by the end of the day. After that, only free agents can be added until the summer.',
+    'Today is the trade deadline: deals must be done by the end of the day. After that, only free agents can join until summer.',
     block.length ? `On the block: ${andList(block.map((r) => `${playerName(league.players[r.pid])} (${league.teams[r.tid].abbrev}, ${league.players[r.pid].ovr})`))}.` : '',
     offers ? `You have ${offers} trade offer${offers > 1 ? 's' : ''} waiting.` : '',
     `${trades === 0 ? 'No trades' : trades === 1 ? 'One trade' : `${trades} trades`} so far this season.`,

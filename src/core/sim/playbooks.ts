@@ -1,11 +1,8 @@
-// The coach's saved playbooks (League.playbooks): his own library of tactics, which goes with him
-// when he takes over another team. A playbook keeps the schemes, sliders, set package and game management;
-// roles, shot freedom and screeners are kept by player and only come back for players still on the
-// roster, and the game-specific parts (matchups, the star, chase and hunt targets, instructions by
-// player, hack-a targets) are never saved. Also here: the names the screens give a team's playbook,
-// which say "Custom" once the sliders leave the preset.
+// The names the screens give a team's playbook, which say "Custom" once the sliders leave the preset,
+// and every difference between two sets of tactics in the Tactics screen's terms (what the staff's
+// measured changes, the edit ledger and the move list say).
 
-import { ACTIONS, type League, type Mentality, type SavedPlaybook, type ShotFreedom, type Tactics } from '../types';
+import { ACTIONS, type Mentality, type ShotFreedom, type Tactics } from '../types';
 import { ROLE_META } from '../ratings';
 import {
   ACTION_META,
@@ -24,14 +21,11 @@ import {
   type LeveledTactic,
   type OffPreset,
 } from './tactics';
-import { SETS, atoLabel, isSetId } from './sets';
-
-export const MAX_PLAYBOOKS = 12;
-export const PLAYBOOK_NAME_MAX = 30;
+import { atoLabel } from './sets';
 
 // ---------------------------------------------------------------- preset labels
 
-/** Short preset names, for "Custom (Balanced base)". */
+/** Short preset names, for "Custom Balanced". */
 const OFF_SHORT: Record<string, string> = { balanced: 'Balanced', helio: 'Heliocentric', fiveOut: 'Five-Out', hub: 'Hub Big', paceSpace: 'Pace & Space', grind: 'Grit & Grind' };
 const DEF_SHORT: Record<string, string> = { drop: 'Drop', switch: 'Switch', blitz: 'Blitz', ice: 'Ice', hedge: 'Hedge', zone: '2-3 Zone', chaos: 'Chaos' };
 
@@ -43,106 +37,30 @@ export function presetMatches(values: object, preset: OffPreset | DefPreset): bo
   );
 }
 
-/** The offense as the screens name it: the preset's name, or "Custom (Balanced base)" once its settings have moved. */
+/** The offense as the screens name it: the preset's name, or "Custom Balanced" once its settings have moved. */
 export function offenseLabel(t: { offense: object; offPreset: string }): string {
   const p = OFF_PRESETS.find((x) => x.id === t.offPreset);
   if (!p) return 'Custom';
-  return presetMatches(t.offense, p) ? p.name : `Custom (${OFF_SHORT[p.id] ?? p.name} base)`;
+  return presetMatches(t.offense, p) ? p.name : `Custom ${OFF_SHORT[p.id] ?? p.name}`;
 }
 
 export function defenseLabel(t: { defense: object; defPreset: string }): string {
   const p = DEF_PRESETS.find((x) => x.id === t.defPreset);
   if (!p) return 'Custom';
-  return presetMatches(t.defense, p) ? p.name : `Custom (${DEF_SHORT[p.id] ?? p.name} base)`;
+  return presetMatches(t.defense, p) ? p.name : `Custom ${DEF_SHORT[p.id] ?? p.name}`;
 }
 
-/** "Heliocentric · Custom (Drop base)": a team's offense and defense, for headers and scouting. */
+/** "Heliocentric · Custom Drop": a team's offense and defense, for headers and scouting. */
 export function playbookLabel(t: { offense: object; defense: object; offPreset: string; defPreset: string }): string {
   return `${offenseLabel(t)} · ${defenseLabel(t)}`;
 }
 
-// ---------------------------------------------------------------- playbooks and tactics
+// ---------------------------------------------------------------- what changed
 
-/** The parts of Tactics this module knows; anything else (newer features) is saved and loaded as it is. */
-const KNOWN = ['offense', 'defense', 'manage', 'offPreset', 'defPreset', 'manual', 'playbook'];
+/** The parts of Tactics compared on their own (or not at all). */
+const KNOWN = ['offense', 'defense', 'manage', 'offPreset', 'defPreset', 'manual'];
 
-function omit<T extends object>(o: T, keys: string[]): Partial<T> {
-  const out: Record<string, unknown> = { ...(o as Record<string, unknown>) };
-  for (const k of keys) delete out[k];
-  return out as Partial<T>;
-}
-
-/** A playbook of tactics `t` (a deep copy: later edits to either leave the other alone). */
-export function toPlaybook(t: Tactics, meta: Pick<SavedPlaybook, 'id' | 'name' | 'saved'>): SavedPlaybook {
-  const c = structuredClone(t);
-  // the screens keep "no set package", "no situational plans" and "the assistant doesn't adjust" as no
-  // key at all: a playbook says so outright, so loading it takes them off (see loadPlaybook)
-  const extra = { ...Object.fromEntries(Object.entries(omit(c, KNOWN)).filter(([, v]) => v !== undefined)), situations: c.situations ?? [] };
-  return {
-    id: meta.id,
-    name: meta.name,
-    saved: { ...meta.saved },
-    // (the hunt, chase targets and instructions by player name one night's opponents, like the matchups)
-    offense: { ...omit(c.offense, ['roles', 'freedom', 'screeners', 'huntTarget', 'glass']), sets: c.offense.sets ?? [] } as SavedPlaybook['offense'],
-    defense: omit(c.defense, ['matchups', 'starTarget', 'chase', 'playerD', 'roles']) as SavedPlaybook['defense'],
-    // hack-a-player targets are one opponent's players: they belong in game plans
-    manage: { ...omit(c.manage, ['hackTargets', 'hackFromQ']), assistantAdjusts: c.manage.assistantAdjusts !== false } as SavedPlaybook['manage'],
-    offPreset: c.offPreset,
-    defPreset: c.defPreset,
-    roles: c.offense.roles,
-    freedom: c.offense.freedom,
-    screeners: c.offense.screeners,
-    // (by player, like the roles: they load for players still on the roster)
-    glass: c.offense.glass ?? {},
-    defRoles: c.defense.roles ?? {},
-    ...(Object.keys(extra).length ? { extra } : {}),
-  };
-}
-
-/**
- * Tactics `t` with a playbook loaded, for a team whose roster is `roster` (pids): its roles, shot
- * freedom and screeners apply to players still on it (the others keep theirs), and tonight's
- * matchups, star, chase and hunt targets and instructions by player stay. Fields newer than the playbook keep their current values. The
- * result shares no objects with the playbook or with `t`, and is the coach's (manual).
- */
-export function loadPlaybook(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>): Tactics {
-  const on = new Set(roster);
-  const src = structuredClone(pb);
-  const out = structuredClone(t);
-  const roles = { ...out.offense.roles };
-  for (const [pid, r] of Object.entries(src.roles ?? {})) if (on.has(+pid)) roles[+pid] = r;
-  const freedom = { ...out.offense.freedom };
-  for (const [pid, f] of Object.entries(src.freedom ?? {})) if (on.has(+pid)) freedom[+pid] = f;
-  const screeners = src.screeners ? src.screeners.filter((pid) => on.has(pid)) : out.offense.screeners;
-  const glass = { ...out.offense.glass };
-  for (const [pid, g] of Object.entries(src.glass ?? {})) if (on.has(+pid)) glass[+pid] = g;
-  const droles = { ...out.defense.roles };
-  for (const [pid, r] of Object.entries(src.defRoles ?? {})) if (on.has(+pid)) droles[+pid] = r;
-  out.offense = { ...out.offense, ...src.offense, roles, freedom, screeners, glass };
-  out.defense = { ...out.defense, ...src.defense, roles: droles };
-  // (a playbook from before shapes plays four-out; empty duties and roles are none)
-  if (!src.offense.shape) delete out.offense.shape;
-  if (!Object.keys(glass).length) delete out.offense.glass;
-  if (!Object.keys(droles).length) delete out.defense.roles;
-  out.manage = { ...out.manage, ...src.manage };
-  // a go-to player (or the player of the after-timeout play) who has left stays with the current one
-  if (src.manage.goTo !== undefined && src.manage.goTo !== null && !on.has(src.manage.goTo)) out.manage.goTo = t.manage.goTo ?? null;
-  if (src.manage.atoPid !== undefined && src.manage.atoPid !== null && !on.has(src.manage.atoPid)) out.manage.atoPid = t.manage.atoPid ?? null;
-  Object.assign(out, omit(src.extra ?? {}, KNOWN));
-  // what a playbook saved off (no set package, no situational plans) is taken off: the screens keep it
-  // as no key at all (a playbook from before it said so leaves them as they are). The assistant's
-  // adjusting is the other way round: on unless switched off, so on is no key and off stays false.
-  if (src.offense.sets?.length === 0) delete out.offense.sets;
-  if (Array.isArray(src.extra?.situations) && !src.extra.situations.length) delete out.situations;
-  if (src.manage.assistantAdjusts === true) delete out.manage.assistantAdjusts;
-  out.offPreset = src.offPreset;
-  out.defPreset = src.defPreset;
-  out.playbook = { id: pb.id, name: pb.name };
-  out.manual = true;
-  return out;
-}
-
-/** One difference between two sets of tactics: "Pace 62 → 80". Without from/to, "Situations changed". */
+/** One difference between two sets of tactics: "Tempo 62 → 80". Without from/to, "Screeners changed". */
 export interface TacticsChange {
   label: string;
   from: string;
@@ -170,17 +88,17 @@ const FREEDOM_LABEL: Record<ShotFreedom, string> = { [-1]: 'Limited', 0: 'Normal
 
 type Field<K> = [K, string, ((v: unknown) => string)?];
 const OFFENSE_FIELDS: Field<string>[] = [
-  ['pace', 'Pace', level('pace')],
-  ['transition', 'Push in transition', level('transition')],
-  ['threePoint', 'Three-point emphasis', level('threePoint')],
+  ['pace', 'Tempo', level('pace')],
+  ['transition', 'After a stop', level('transition')],
+  ['threePoint', 'Shot profile', level('threePoint')],
   ['rimAttack', 'Attack the rim', level('rimAttack')],
   ['crashBoards', 'Crash the offensive glass', level('crashBoards')],
   ['huntMismatch', 'Hunt mismatches', onOff],
   ['hotHand', 'Feed the hot hand', onOff],
 ];
 const DEFENSE_FIELDS: Field<string>[] = [
-  ['scheme', 'Base scheme', (v) => SCHEME_META[v as keyof typeof SCHEME_META]?.label ?? String(v)],
-  ['pnr', 'Pick-and-roll coverage', (v) => COVERAGE_META[v as keyof typeof COVERAGE_META]?.label ?? String(v)],
+  ['scheme', 'Scheme', (v) => SCHEME_META[v as keyof typeof SCHEME_META]?.label ?? String(v)],
+  ['pnr', 'Ball-screen coverage', (v) => COVERAGE_META[v as keyof typeof COVERAGE_META]?.label ?? String(v)],
   ['switchOffBall', 'Switch off-ball screens', onOff],
   ['help', 'Help defense', level('help')],
   ['pressure', 'Ball pressure', level('pressure')],
@@ -214,7 +132,6 @@ const NOT_COMPARED = new Set([
   'chase',
   'playerD',
   'huntTarget',
-  'sets',
   'goTo',
   'atoPid',
   'hackTargets',
@@ -256,7 +173,7 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
     for (const k of new Set([...Object.keys(x), ...Object.keys(y)])) if (!known.has(k) && !NOT_COMPARED.has(k)) add(humanize(k), x[k], y[k], onOffOr);
   };
   add('Mentality', a.mentality ?? 0, b.mentality ?? 0, (v) => MENTALITY_META[v as Mentality]?.label ?? String(v));
-  // (no shape is four-out: a playbook from before shapes and four-out read the same)
+  // (no shape is four-out)
   if ((a.offense.shape ?? 'fourOut') !== (b.offense.shape ?? 'fourOut'))
     out.push({ label: 'Shape', from: SHAPE_META[a.offense.shape ?? 'fourOut'].label, to: SHAPE_META[b.offense.shape ?? 'fourOut'].label });
   add('Offensive playbook', a.offPreset, b.offPreset, presetName(OFF_PRESETS));
@@ -270,8 +187,6 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   // the player the after-timeout play is run for (the best fit when none is named)
   const atoFor = (v: number | null | undefined) => (v === null || v === undefined ? 'Best fit' : nameOf(v));
   if ((a.manage.atoPid ?? null) !== (b.manage.atoPid ?? null)) out.push({ label: 'After-timeout play for', from: atoFor(a.manage.atoPid), to: atoFor(b.manage.atoPid) });
-  const pkg = (v: unknown) => (Array.isArray(v) && v.length ? v.map((id) => (isSetId(id) ? SETS[id].short : String(id))).join(', ') : 'None');
-  if (!same(a.offense.sets ?? [], b.offense.sets ?? [])) out.push({ label: 'Set package', from: pkg(a.offense.sets), to: pkg(b.offense.sets) });
   section(a as unknown as Record<string, unknown>, b as unknown as Record<string, unknown>, []);
   // (by player, for the players `nameOf` can name: one it can't has left the team, his settings with him)
   const pids = (x: Record<number, unknown>, y: Record<number, unknown>) => [...new Set([...Object.keys(x), ...Object.keys(y)])].map(Number).filter((pid) => nameOf(pid));
@@ -294,97 +209,4 @@ export function tacticsChanges(a: Tactics, b: Tactics, nameOf: (pid: number) => 
   const scr = (s: number[]) => s.map(nameOf).filter(Boolean).join(', ') || 'Auto';
   if (!same(a.offense.screeners, b.offense.screeners)) out.push({ label: 'Screeners', from: scr(a.offense.screeners), to: scr(b.offense.screeners) });
   return out;
-}
-
-/** What loading a playbook would change in tactics `t`, for a team with this roster ("Pace Balanced → Up-tempo", "Coverage Drop → Hedge"). */
-export function playbookDiff(t: Tactics, pb: SavedPlaybook, roster: Iterable<number>, nameOf?: (pid: number) => string): TacticsChange[] {
-  return tacticsChanges(t, loadPlaybook(t, pb, roster), nameOf);
-}
-
-// ---------------------------------------------------------------- the coach's library
-
-export const playbookLibrary = (league: League): SavedPlaybook[] => league.playbooks ?? [];
-
-export const findPlaybook = (league: League, id: string | undefined): SavedPlaybook | undefined => (id ? playbookLibrary(league).find((p) => p.id === id) : undefined);
-
-const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ');
-
-const userRoster = (league: League) =>
-  Object.values(league.players)
-    .filter((p) => p.tid === league.userTid)
-    .map((p) => p.pid);
-
-/** Why `name` can't name a playbook (empty, too long, taken by another one), or null. */
-export function playbookNameError(league: League, name: string, except?: string): string | null {
-  const n = cleanName(name);
-  if (!n) return 'Give the playbook a name.';
-  if (n.length > PLAYBOOK_NAME_MAX) return `Keep the name to ${PLAYBOOK_NAME_MAX} characters.`;
-  const dup = playbookLibrary(league).find((p) => p.id !== except && p.name.toLowerCase() === n.toLowerCase());
-  return dup ? `You already have a playbook called "${dup.name}".` : null;
-}
-
-/** A playbook id nothing uses or has used lately (tactics may still point at a deleted one). */
-function newId(league: League): string {
-  const used = new Set([...playbookLibrary(league).map((p) => p.id), ...league.teams.map((t) => t.tactics.playbook?.id)]);
-  let n = playbookLibrary(league).length + 1;
-  while (used.has(`pb-${league.season}-${league.day}-${n}`)) n++;
-  return `pb-${league.season}-${league.day}-${n}`;
-}
-
-/** Save the user's tactics as a new playbook (which they then come from). Returns why it can't be saved, or null. */
-export function savePlaybook(league: League, name: string): string | null {
-  const err = playbookNameError(league, name);
-  if (err) return err;
-  if (playbookLibrary(league).length >= MAX_PLAYBOOKS) return `You can keep ${MAX_PLAYBOOKS} playbooks: overwrite or delete one first.`;
-  const tm = league.teams[league.userTid];
-  const pb = toPlaybook(tm.tactics, { id: newId(league), name: cleanName(name), saved: { season: league.season, day: league.day } });
-  (league.playbooks ??= []).push(pb);
-  tm.tactics.playbook = { id: pb.id, name: pb.name };
-  return null;
-}
-
-/** Replace a playbook with the user's current tactics, keeping its name. */
-export function overwritePlaybook(league: League, id: string): boolean {
-  const lib = playbookLibrary(league);
-  const i = lib.findIndex((p) => p.id === id);
-  if (i < 0) return false;
-  const tm = league.teams[league.userTid];
-  lib[i] = toPlaybook(tm.tactics, { id, name: lib[i].name, saved: { season: league.season, day: league.day } });
-  tm.tactics.playbook = { id, name: lib[i].name };
-  return true;
-}
-
-/** Rename a playbook (tactics that come from it follow). Returns why it can't take that name, or null. */
-export function renamePlaybook(league: League, id: string, name: string): string | null {
-  const pb = findPlaybook(league, id);
-  if (!pb) return 'That playbook no longer exists.';
-  const err = playbookNameError(league, name, id);
-  if (err) return err;
-  pb.name = cleanName(name);
-  for (const t of league.teams) if (t.tactics.playbook?.id === id) t.tactics.playbook = { id, name: pb.name };
-  return null;
-}
-
-/** Delete a playbook: tactics that came from it keep their settings, without the link. */
-export function deletePlaybook(league: League, id: string) {
-  league.playbooks = playbookLibrary(league).filter((p) => p.id !== id);
-  for (const t of league.teams) if (t.tactics.playbook?.id === id) t.tactics.playbook = null;
-}
-
-/** Load a playbook into the user's tactics (for the players on his roster now). */
-export function applyPlaybook(league: League, id: string): boolean {
-  const pb = findPlaybook(league, id);
-  if (!pb) return false;
-  const tm = league.teams[league.userTid];
-  tm.tactics = loadPlaybook(tm.tactics, pb, userRoster(league));
-  return true;
-}
-
-/** The user's tactics compared with the playbook they came from: null when they don't come from one (or it's gone). */
-export function playbookStatus(league: League, nameOf?: (pid: number) => string): { pb: SavedPlaybook; changes: TacticsChange[] } | null {
-  const t = league.teams[league.userTid].tactics;
-  const pb = findPlaybook(league, t.playbook?.id);
-  if (!pb) return null;
-  // what has changed since: the playbook as loaded now, against the tactics
-  return { pb, changes: tacticsChanges(loadPlaybook(t, pb, userRoster(league)), t, nameOf) };
 }

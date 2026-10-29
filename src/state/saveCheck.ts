@@ -2,12 +2,9 @@
 // imported backup goes through migrate(): the shape is checked, older optional parts are filled in,
 // and anything damaged is repaired or dropped rather than left to break a screen later. Everything
 // here is pure; persistence.ts reads and writes the saves.
-import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, SET_IDS, type League, type Player, type Tactics, type Team } from '../core/types';
+import { ACTIONS, DEF_ROLES, FREE_AGENT, OFF_SHAPES, SET_IDS, type League, type Player, type Tactics } from '../core/types';
 import { MIN_SAVE_VERSION, SAVE_VERSION } from '../core/constants';
 import { defaultTactics } from '../core/sim/tactics';
-import { teamPlayers } from '../core/league/helpers';
-import { freshFamiliarity } from '../core/sim/familiarity';
-import { SLOT_COUNT } from '../core/sim/slots';
 import { FRANCHISES } from '../core/teams';
 import { REC_STATS, TEAM_REC_STATS, backfillRecords } from '../core/league/records';
 import { DUNK_FIELD, THREE_FIELD } from '../core/league/allStarSaturday';
@@ -15,10 +12,10 @@ import { registryProblems, seedCoaches } from '../core/league/coaches';
 import { REVIEWS_KEPT, type OwnerGoalKind } from '../core/league/ownerGoals';
 import { MAX_STEPS } from './live';
 
-/** A save from before the redesign (format 4): its league can't be opened by this build. */
+/** A save from before the current format (MIN_SAVE_VERSION): its league can't be opened by this build. */
 export class OldSaveError extends Error {
   constructor() {
-    super('This league was saved by an older version of Hoops Career, before the redesign, and can no longer be opened. Start a new league.');
+    super('This league was saved by an older version of Hoops Career and can no longer be opened. Start a new league.');
     this.name = 'OldSaveError';
   }
 }
@@ -68,7 +65,6 @@ const STAR_PLANS = new Set<string>(['none', 'double']);
 const KNOWN_SETS = new Set<string>(SET_IDS);
 const SHAPES = new Set<string>(OFF_SHAPES);
 const DROLES = new Set<string>(DEF_ROLES);
-const PREPS = new Set<string>(['balanced', 'system', 'opponent', 'recovery']);
 const mentality = (v: unknown) => int(v) && (v as number) >= -2 && (v as number) <= 2;
 
 /** A record by player id of values `ok` accepts, the others dropped (none left, or not a record: undefined). */
@@ -87,8 +83,7 @@ const ATOS = new Set<string>([...ACTIONS, ...SET_IDS]);
  * star plan (the deny, cut), chase targets that aren't up to two pids, a hunt target that isn't a
  * pid, a foul to give that isn't a switch, an after-timeout play that's no action or set (or a player
  * for it who isn't a pid) are dropped (a scheme falls back to man-to-man and a star plan to none when
- * `whole`), instructions by player (cut) go, and a set package keeps the sets this version knows, at
- * most four and each once.
+ * `whole`), and instructions by player (cut) go.
  */
 function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
   if (obj(d)) {
@@ -116,74 +111,16 @@ function cleanTacticsParts(o: unknown, d: unknown, m: unknown, whole: boolean) {
     if (r) d.roles = r;
     else delete d.roles;
   }
-  if (obj(o) && o.sets !== undefined) {
-    const known = Array.isArray(o.sets)
-      ? (o.sets as unknown[]).filter((id, i, all): id is string => typeof id === 'string' && KNOWN_SETS.has(id) && all.indexOf(id) === i).slice(0, 4)
-      : [];
-    if (known.length) o.sets = known;
-    else delete o.sets;
-  }
   if (obj(m) && m.foulToGive !== undefined && typeof m.foulToGive !== 'boolean') delete m.foulToGive;
   if (obj(m) && m.ato !== undefined && m.ato !== null && !ATOS.has(m.ato as string)) delete m.ato;
   if (obj(m) && m.atoPid !== undefined && m.atoPid !== null && !int(m.atoPid)) delete m.atoPid;
 }
 
-/** Whole tactics read from a save (see cleanTacticsParts), their situational plans' patches included. */
+/** Whole tactics read from a save (see cleanTacticsParts). */
 function cleanTactics(t: unknown) {
   if (!obj(t)) return;
   cleanTacticsParts(t.offense, t.defense, t.manage, true);
   if (t.mentality !== undefined && !mentality(t.mentality)) delete t.mentality;
-  if (Array.isArray(t.situations))
-    for (const s of t.situations) {
-      if (!obj(s)) continue;
-      if (obj(s.patch)) {
-        cleanTacticsParts(s.patch.offense, s.patch.defense, s.patch.manage, false);
-        if (s.patch.mentality !== undefined && !mentality(s.patch.mentality)) delete s.patch.mentality;
-      }
-      if (s.slot !== undefined && !(int(s.slot) && (s.slot as number) >= 0 && (s.slot as number) < SLOT_COUNT)) delete s.slot;
-    }
-}
-
-/**
- * A team's tactic slots, familiarity and practice focus (all optional): damaged slots go (the team
- * keeps its tactics, its other slots are lost), damaged familiarity is drilled afresh in what the team
- * plays, and an unknown focus is balanced.
- */
-function cleanSystem(x: League, t: Team) {
-  if (t.slots !== undefined) {
-    const s = t.slots as unknown;
-    const ok =
-      obj(s) &&
-      int(s.active) &&
-      (s.active as number) >= 0 &&
-      (s.active as number) < SLOT_COUNT &&
-      Array.isArray(s.names) &&
-      s.names.length === SLOT_COUNT &&
-      s.names.every(str) &&
-      Array.isArray(s.stored) &&
-      s.stored.length === SLOT_COUNT &&
-      s.stored.every((st, i) => (i === s.active ? st === null : st === null || isTactics(st)));
-    if (!ok) delete t.slots;
-    else for (const st of t.slots.stored) if (st) cleanTactics(st);
-  }
-  if (t.fam !== undefined) {
-    const f = t.fam as unknown;
-    const rec = (v: unknown) => obj(v) && !Array.isArray(v);
-    const ok =
-      obj(f) &&
-      rec(f.opt) &&
-      Object.values(f.opt as object).every(num) &&
-      rec(f.habit) &&
-      Object.values(f.habit as object).every(num) &&
-      rec(f.know) &&
-      Object.values(f.know as object).every(num) &&
-      rec(f.roles) &&
-      Object.values(f.roles as object).every((r) => Array.isArray(r) && r.length === 2 && str(r[0]) && num(r[1]));
-    if (!ok) t.fam = freshFamiliarity(t, teamPlayers(x, t.tid));
-    // pairs' understanding: damaged, or a save from before it was kept (its rotation's pairs as camp would leave them)
-    else if (!rec(t.fam.duo) || !Object.values(t.fam.duo as object).every(num)) t.fam.duo = freshFamiliarity(t, teamPlayers(x, t.tid)).duo;
-  }
-  if (t.prep !== undefined && !PREPS.has(t.prep as string)) delete t.prep;
 }
 
 /** The sliders the engine does its arithmetic with, by part of the tactics. */
@@ -191,17 +128,16 @@ const OFFENSE_NUMS = ['pace', 'transition', 'threePoint', 'rimAttack', 'crashBoa
 const DEFENSE_NUMS = ['help', 'pressure', 'getBack', 'physicality'] as const;
 const MANAGE_NUMS = ['hackThreshold', 'timeoutRun', 'fatigueSub'] as const;
 /** The optional settings each part may carry beyond the defaults' (checked by cleanTacticsParts, or below). */
-const OFFENSE_EXTRAS = ['huntTarget', 'sets'] as const;
+const OFFENSE_EXTRAS = ['huntTarget'] as const;
 const DEFENSE_EXTRAS = ['chase'] as const;
 const MANAGE_EXTRAS = ['goTo', 'ato', 'atoPid', 'hackTargets', 'hackFromQ', 'assistantAdjusts', 'foulToGive'] as const;
 
 const record = (v: unknown): v is Record<string, unknown> => obj(v) && !Array.isArray(v);
-const situationsIntact = (v: unknown) => v === undefined || (Array.isArray(v) && v.every((s) => obj(s) && obj(s.when) && obj(s.patch)));
 
 /**
  * Whole tactics in the shape the engine and the screens read them: the three parts, the sliders as
- * numbers, the action weights, roles, shot freedom and matchups as records, the screeners (and any
- * hack-a targets) as lists of player ids, and situational plans with a trigger and a patch.
+ * numbers, the action weights, roles, shot freedom and matchups as records, and the screeners (and
+ * any hack-a targets) as lists of player ids.
  */
 function isTactics(t: unknown): t is Tactics {
   if (!record(t) || !record(t.offense) || !record(t.defense) || !record(t.manage)) return false;
@@ -216,8 +152,7 @@ function isTactics(t: unknown): t is Tactics {
     DEFENSE_NUMS.every((k) => num(d[k])) &&
     record(d.matchups) &&
     MANAGE_NUMS.every((k) => num(m[k])) &&
-    (m.hackTargets === undefined || nums(m.hackTargets)) &&
-    situationsIntact(t.situations)
+    (m.hackTargets === undefined || nums(m.hackTargets))
   );
 }
 
@@ -253,11 +188,6 @@ function repairTactics(t: unknown): Tactics {
   if (record(actions)) for (const a of ACTIONS) if (num(actions[a])) out.offense.actions[a] = actions[a] as number;
   if (out.manage.hackTargets !== undefined && !nums(out.manage.hackTargets)) delete out.manage.hackTargets;
   if (typeof src.manual === 'boolean') out.manual = src.manual;
-  if (src.playbook === null || (record(src.playbook) && str(src.playbook.id) && str(src.playbook.name))) out.playbook = src.playbook as Tactics['playbook'];
-  if (Array.isArray(src.situations)) {
-    const kept = src.situations.filter((s) => obj(s) && obj(s.when) && obj(s.patch));
-    if (kept.length) out.situations = kept as Tactics['situations'];
-  }
   return out;
 }
 
@@ -305,16 +235,14 @@ export function migrate(x: unknown, notALeague = 'This save is damaged or from a
     t.colors = [a, b, c];
   }
   // junk defenses, chase and hunt targets, instructions by player and the foul to give: a damaged
-  // setting goes (an unknown scheme is man-to-man), in every team's tactics, the saved playbooks
-  // and the game plans; a live journal's tactics are checked with the journal below (one out of
-  // shape there drops the journal: its game starts over)
+  // setting goes (an unknown scheme is man-to-man), in every team's tactics and the game plans; a
+  // live journal's tactics are checked with the journal below (one out of shape there drops the
+  // journal: its game starts over)
   for (const t of x.teams) {
     // tactics out of shape are rebuilt (see repairTactics), so one damaged team doesn't stop every game it's in
     if (!isTactics(t.tactics)) t.tactics = repairTactics(t.tactics);
     cleanTactics(t.tactics);
-    cleanSystem(x, t);
   }
-  if (Array.isArray(x.playbooks)) for (const pb of x.playbooks) if (obj(pb)) cleanTacticsParts(pb.offense, pb.defense, pb.manage, true);
   cleanGamePlans(x);
   // AI trade offers: a damaged one, or one whose players or picks are gone, is dropped (the
   // inbox then says the offer is closed), and so is an untouchable mark on a player who is gone
@@ -843,7 +771,12 @@ function liveIntact(l: League, j: unknown): boolean {
   const o = j.opp;
   if (
     o !== undefined &&
-    !(obj(o) && isTactics(o.tactics) && (o.plan === undefined || (obj(o.plan) && Array.isArray(o.plan.items) && o.plan.items.every((it) => obj(it) && obj(it.patch)))))
+    !(
+      obj(o) &&
+      isTactics(o.tactics) &&
+      (o.coach === undefined || num(o.coach)) &&
+      (o.plan === undefined || (obj(o.plan) && Array.isArray(o.plan.items) && o.plan.items.every((it) => obj(it) && obj(it.patch))))
+    )
   )
     return false;
   if (!Array.isArray(j.ops) || j.ops.length > MAX_LIVE_OPS) return false;

@@ -121,18 +121,26 @@ export function MyPlayer({
                     {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
                     {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
                     {measured && <SubWorth r={readings ? readings[i] : null} />}
-                    {o.staff && <span className="sr-only"> (the staff&apos;s pick)</span>}
+                    {o.staff && <span className="sr-only">, the staff&apos;s pick</span>}
                   </button>
                 ))}
               </div>
-              <div className="tiny dim" aria-hidden="true">
-                Energy{subs.on ? '' : ' and fouls'}
-                {measured && ` · to win, against keeping him in (the rest of the game played ${CHOICE_GAMES} times each)`}
-                {options.some((o) => o.staff) && (
-                  <>
-                    {' '}
-                    · <Lightbulb size={11} className="accent-text" /> the staff&apos;s pick
-                  </>
+              <div className="tiny dim lv-ps-key">
+                <span aria-hidden="true">
+                  Energy{subs.on ? '' : ' and fouls'}
+                  {measured && ' · to win, against keeping him in'}
+                  {options.some((o) => o.staff) && (
+                    <>
+                      {' '}
+                      · <Lightbulb size={11} className="accent-text" /> the staff&apos;s pick
+                    </>
+                  )}
+                </span>
+                {measured && (
+                  <Help title="How the subs are measured">
+                    <p>Each sub against keeping him in, the rest of the game played {CHOICE_GAMES} times.</p>
+                    <p>The figure is the change in your chance to win. Even: no real change.</p>
+                  </Help>
                 )}
               </div>
             </>
@@ -185,7 +193,7 @@ export function MyPlayer({
         on={goTo}
         onChange={(on) => apply((t) => void (t.manage.goTo = on ? pid : null))}
         label="Crunch-time go-to"
-        help="In the last two minutes of a close fourth quarter or overtime the ball finds him much more, and the offense runs more of what he does best."
+        help="In the last two minutes of a close game, the ball finds him much more."
       />
 
       {subs.on && oppOn.length > 0 && (

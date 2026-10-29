@@ -14,7 +14,7 @@ import { advanceDay, postGame, simDay } from '../core/league/season';
 import { schedulePlayoffDay } from '../core/league/playoffs';
 import { oppPlanIn, planTeam } from '../core/ai/opponentPlan';
 import { reelOf } from '../core/analysis/highlights';
-import { coachMoves, slotMatcher, slotMoveName } from '../core/analysis/moves';
+import { coachMoves } from '../core/analysis/moves';
 import { shortName } from '../core/league/helpers';
 import { guideAfterLive } from '../core/league/agenda';
 import { forkSim } from './liveWorth';
@@ -107,7 +107,9 @@ export class LiveGame {
         const o = from?.opp;
         if (!o) return base;
         const tactics = cloneTactics(o.tactics);
-        return { ...base, team: o.plan ? planTeam(league.teams[tid], tactics, structuredClone(o.plan)) : { ...league.teams[tid], tactics } };
+        const team = league.teams[tid];
+        const coached = o.coach === undefined ? team : { ...team, coach: { ...team.coach, tactics: o.coach } };
+        return { ...base, team: o.plan ? planTeam(coached, tactics, structuredClone(o.plan)) : { ...coached, tactics } };
       }
       // the user coaches this one: the assistant's adjustments at breaks are for simmed games
       const u = from?.user;
@@ -158,7 +160,7 @@ export class LiveGame {
         ...(mine.play?.length ? { play: [...mine.play] } : {}),
       },
       edge: this.edge,
-      opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}) },
+      opp: { tactics: cloneTactics(theirs.team.tactics), ...(oppPlan ? { plan: structuredClone(oppPlan) } : {}), coach: theirs.team.coach.tactics },
       steps: 0,
       q: this.sim.q,
       clock: this.sim.clock,
@@ -385,16 +387,10 @@ export class LiveGame {
       return res;
     }
     if (!this.sim.over) this.simTo('end');
-    // the tactic slots as tonight's game plan plays them (the plan is used up with the result)
-    const slotOf = slotMatcher(league, g);
-    const slotName = (t: Tactics) => {
-      const i = slotOf(t);
-      return i === null ? null : slotMoveName(league, i);
-    };
     // (recording it ends its journal)
     const res = playGame(league, g, { sim: this.sim, edge: this.edge });
     // the coach's moves and what each did, for the game's report
-    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), slotName, true);
+    const moves = coachMoves(this.marks, this.logs, this.userSide, (pid) => (league.players[pid] ? shortName(league, league.players[pid]) : `#${pid}`), true);
     if (moves.length) res.moves = moves;
     // its highlights stay with the save for its game report, until the next live game
     const reel = reelOf(g.gid, this.logs, this.userSide);

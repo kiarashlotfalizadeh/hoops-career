@@ -1,5 +1,5 @@
 // Style check: whether the staff's fits say what the engine says each style is worth. Every offensive
-// playbook, defensive playbook and shape for every team of a league, fully drilled, against every
+// playbook, defensive playbook and shape for every team of a league against every
 // other team (scripts/style-measure.ts: paired games, by shot-value margin a game). Prints, for each part:
 // - r: the fit's points a game against the measured worth, both against the team's average option,
 //   over every team and option (targets: defense 0.85, offense and shapes 0.6), and within each option

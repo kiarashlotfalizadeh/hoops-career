@@ -27,7 +27,7 @@ export interface PlayReading {
   winSe: number;
   /** The margin as measured (it only breaks ties). */
   pts: number;
-  /** The shrunk reading clear of even (SAY_Z of its band): inside it, too close to say. */
+  /** The shrunk reading clear of even (SAY_Z of its band): inside it, no real change. */
   clear: boolean;
 }
 

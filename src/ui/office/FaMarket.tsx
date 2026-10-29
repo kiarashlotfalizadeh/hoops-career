@@ -1,7 +1,7 @@
 // Free agency's market, on the Free Agents screen while it runs: your offer sheets and
 // pending offers, the latest signings, and the dock that moves the market on a day or a week (and,
 // on its last day, starts the new season).
-import { FastForward, Play, SkipForward } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { seasonLabel } from '../../core/constants';
 import { freeAgents, playerName, shortName } from '../../core/league/helpers';
 import { withdrawBid } from '../../core/league/freeAgency';
@@ -62,14 +62,22 @@ export function FaMarket({ onOpen }: { onOpen: (pid: number) => void }) {
             })}
           </div>
         )}
+        {/* the newest signing in a line, the ones before it one tap down */}
         {recent.length > 0 && (
-          <More label="Latest signings">
+          <>
             <ul className="fo-notes">
-              {recent.map((x) => (
-                <li key={x.id}>{x.text}</li>
-              ))}
+              <li>{recent[0].text}</li>
             </ul>
-          </More>
+            {recent.length > 1 && (
+              <More label={`${recent.length - 1} more signing${recent.length > 2 ? 's' : ''}`}>
+                <ul className="fo-notes">
+                  {recent.slice(1).map((x) => (
+                    <li key={x.id}>{x.text}</li>
+                  ))}
+                </ul>
+              </More>
+            )}
+          </>
         )}
       </div>
     </Section>
@@ -120,7 +128,7 @@ export function FaDock() {
       ...settled.map((p) =>
         p.tid === l.userTid ? `${shortName(l, p)}'s offer sheet wasn't matched: he's yours!` : `${l.teams[p.tid].abbrev} matched ${shortName(l, p)}'s offer sheet.`,
       ),
-      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${shortName(l, p)} to an offer sheet: match it or let him go.`),
+      ...incoming.map((p) => `${l.teams[p.rfa!.sheet!.tid].abbrev} signed ${shortName(l, p)} to an offer sheet. Match it or let him go.`),
     ].join(' ');
     useStore.getState().toast(
       `${verdicts ? `${verdicts} ` : ''}${
@@ -142,11 +150,12 @@ export function FaDock() {
         </button>
       ) : (
         <div className="grid2">
+          {/* (no icons: the Play menu's words fit a phone's half width without them) */}
           <button className="btn primary" disabled={busy || !!held} onClick={() => void advance(1)}>
-            <SkipForward size={17} /> Advance 1 day
+            Advance 1 day
           </button>
           <button className="btn" disabled={busy || !!held} onClick={() => void advance(7)}>
-            <FastForward size={17} /> Advance 1 week
+            Advance 1 week
           </button>
         </div>
       )}

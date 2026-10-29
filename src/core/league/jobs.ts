@@ -75,7 +75,7 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
       offers.push({
         tid: o.tid,
         kind: 'opening',
-        note: `The ${league.teams[o.tid].name} (${record(league, o.tid)}) have an opening${firedText(o.tid)} and want you to take over.`,
+        note: `The ${league.teams[o.tid].name}, ${record(league, o.tid)}, have an opening${firedText(o.tid)} and want you to take over.`,
       });
     if (!offers.length) {
       // nobody's first choice: the jobs nobody else wants, the league's worst records, take a chance on him
@@ -90,8 +90,8 @@ export function makeJobOffers(league: League, moves: CarouselMoves) {
           tid: t.tid,
           kind: hiring.has(t.tid) ? 'opening' : 'change',
           note: hiring.has(t.tid)
-            ? `The ${t.name} (${record(league, t.tid)}) have an opening${firedText(t.tid)}, and nobody better is calling: they'll take a chance on you.`
-            : `The ${t.name} (${record(league, t.tid)}) would make a change and take a chance on you: ${activeCoach(league, t.tid)?.name ?? 'their coach'} would take over your old team.`,
+            ? `The ${t.name}, ${record(league, t.tid)}, have an opening${firedText(t.tid)}. Nobody better is calling, so they'll take a chance on you.`
+            : `The ${t.name}, ${record(league, t.tid)}, would make a change for you. ${activeCoach(league, t.tid)?.name ?? 'Their coach'} would take over your old team.`,
         });
     }
   } else if (seasonsInCharge(league) >= APPROACH_SEASONS) {
@@ -141,10 +141,10 @@ export function takeJob(league: League, tid: number): string | null {
     const me = userCoach(league);
     const k = me ? coachCareer(league, me) : null;
     const resume =
-      k && k.seasons ? ` (${k.won}-${k.lost} in ${k.seasons} season${k.seasons === 1 ? '' : 's'}${k.titles ? `, ${k.titles} title${k.titles > 1 ? 's' : ''}` : ''})` : '';
+      k && k.seasons ? `, ${k.won}-${k.lost} in ${k.seasons} season${k.seasons === 1 ? '' : 's'}${k.titles ? ` with ${k.titles} title${k.titles > 1 ? 's' : ''}` : ''}` : '';
     addNews(league, {
       kind: 'coach',
-      text: `The ${t.name} hired ${league.coachName}${resume}${displaced && !displaced.user && openStint(displaced)?.tid === old.tid ? `; ${displaced.name} takes over the ${old.name}` : ''}.`,
+      text: `The ${t.name} hired ${league.coachName}${resume}${displaced && !displaced.user && openStint(displaced)?.tid === old.tid ? `. ${displaced.name} takes over the ${old.name}` : ''}.`,
       tids: [tid, old.tid],
       pids: [],
     });

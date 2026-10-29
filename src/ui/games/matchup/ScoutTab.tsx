@@ -55,7 +55,7 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
             </More>
           </>
         ) : (
-          <div className="mu-note">League ranks after {SCOUT_MIN_GAMES} games; until then, this reads their playbook and roster.</div>
+          <div className="mu-note">League ranks come after {SCOUT_MIN_GAMES} games. Until then, this reads their playbook and roster.</div>
         )}
       </Section>
 
@@ -85,11 +85,7 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
                 <Term id="ppp">PPP</Term> vs the league
               </span>
               <Help title="Play types">
-                <p>
-                  Points per possession by how the possession finished, against the league&apos;s, over {plural(data.ptGames, 'game')}. Green is where they are better than the
-                  league (scoring more on offense, allowing less on defense), red where they are worse: red is where to attack them.
-                </p>
-                <p>vs lg is their points per possession minus the league&apos;s. A colour only shows where the gap is more than chance (1.5 standard errors).</p>
+                <p>Points per possession by how the trip ended, over {plural(data.ptGames, 'game')}. Green is better than the league, red worse, shown only past chance.</p>
               </Help>
             </span>
           }
@@ -127,7 +123,7 @@ export function ScoutTab({ league, opp }: { league: League; opp: number }) {
           </div>
         )}
         {data.players.length > 0 && (
-          <More label={data.lastSeason ? `Their numbers (${seasonLabel(data.season)})` : 'Their numbers'}>
+          <More label={data.lastSeason ? `Their numbers, ${seasonLabel(data.season)}` : 'Their numbers'}>
             <KeyPlayers d={data} />
             {data.players.some((p) => p.elsewhere) && <div className="mu-note">Newcomers show their numbers from their last team, without on/off.</div>}
           </More>

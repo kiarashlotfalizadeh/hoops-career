@@ -89,7 +89,7 @@ export function useStaffCall() {
    * nothing said until the game is there (the next stop() call for that spot).
    */
   const stop = useCallback(
-    (lg: LiveGame, input: StaffInput, slots: Parameters<typeof callDrafts>[2], prio: number, budget = CALL_BUDGET_MS, ahead?: StopAhead) => {
+    (lg: LiveGame, input: StaffInput, prio: number, budget = CALL_BUDGET_MS, ahead?: StopAhead) => {
       const sim = ahead?.sim ?? lg.sim;
       const steps = ahead?.steps ?? lg.steps;
       const ops = lg.journal.ops.length;
@@ -115,7 +115,7 @@ export function useStaffCall() {
       // (ahead, the call up now is turned down by the time the game is there)
       const skip = new Set([...declined.current].filter(([, s]) => steps - s < DECLINED_TRIPS).map(([id]) => id));
       if (ahead && up?.state === 'call') skip.add(up.draft.id);
-      const drafts = callDrafts(input, sim, slots, skip);
+      const drafts = callDrafts(input, sim, skip);
       if (!drafts.length) return ahead ? undefined : setCall({ state: 'none', tried: 0, at });
       const id = nextLiveId();
       const base = JSON.stringify(sim.baseTactics(lg.userSide));

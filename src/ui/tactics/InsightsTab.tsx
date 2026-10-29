@@ -3,7 +3,7 @@
 // scouting report as an opponent reads it. The tally is what happened, never advice: it isn't a
 // counterfactual (it has read a coverage as the worse one where paired games found it the better), so
 // it says nothing about what a change would win. The staff measures that in paired games before it
-// suggests or makes one (staffLever.ts): its latest reading heads the tally, a row.
+// suggests or makes one (staffLever.ts): its latest test heads the tally, a row.
 import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
@@ -72,13 +72,9 @@ export function InsightsTab() {
             <h3>
               The engine&apos;s tally
               <Help title="The engine's tally">
+                <p>What the engine counted in your games, in points a game. Each setting nets what it gave up against what it won back.</p>
                 <p>
-                  What the engine counted in your games this season, in points a game: each of your settings on one row, what it gave up netted against what it won back, then every
-                  other effect it tracks.
-                </p>
-                <p>
-                  It&apos;s what happened, not what a change would win: a tally isn&apos;t the same games played the other way, and it has read a coverage as the worse one where
-                  the games played both ways found it the better. Before the staff suggests or makes a change, they measure it that way (<Term id="measured">measured</Term>).
+                  It&apos;s what happened, not what a change would win. The staff <Term id="measured">measures</Term> a change before they suggest it.
                 </p>
               </Help>
             </h3>
@@ -89,7 +85,7 @@ export function InsightsTab() {
             {report && (
               <>
                 <div className="list-divider list-h" aria-hidden="true">
-                  <span>The staff measured</span>
+                  <span>Staff&apos;s latest test</span>
                 </div>
                 {row({ id: 'lever', v: report.pts, title: report.title, sides: report.meta })}
               </>
@@ -110,7 +106,7 @@ export function InsightsTab() {
           )}
         </Section>
       ) : (
-        <div className="tx-empty">The engine&apos;s tally of your season comes in after your first games.</div>
+        <div className="tx-empty">The engine&apos;s tally comes in after your first games.</div>
       )}
       <SeenBy league={league} />
     </>
@@ -129,10 +125,9 @@ function SeenBy({ league }: { league: League }) {
         <h3>
           How teams see you
           <Help title="How teams see you">
-            <p>Your numbers as other coaches scout them: league ranks (1st is the best, or the most for style numbers like pace) and your play types at both ends.</p>
+            <p>Your numbers as other coaches scout them, ranked in the league. 1st is the best, or the most for pace.</p>
             <p>
-              <Term id="ppp">PPP</Term> is points per possession by how the possession finished, against the league&apos;s. Green is where you are better than the league, red where
-              you are worse: red is what they&apos;ll go after.
+              <Term id="ppp">PPP</Term> is points per possession by play type. Red is worse than the league, and it&apos;s what they&apos;ll attack.
             </p>
           </Help>
         </h3>
@@ -159,7 +154,7 @@ function SeenBy({ league }: { league: League }) {
             </More>
           )}
           {weak.length > 0 && (
-            <More label={`What they'll go after (${weak.length})`}>
+            <More label={`What they'll attack · ${weak.length}`}>
               <ul className="tx-bullets">
                 {weak.map((w) => (
                   <li key={w}>{w}</li>

@@ -708,7 +708,7 @@ export function planOwnerGoals(league: League, tid: number, outlook: TeamOutlook
     const target = Math.max(500, round100((0.85 * youngPg * o.left + 1_350 * share) * (who === 'builder' ? 1.1 : 1)));
     goals.push({
       kind: 'youth',
-      title: `Play your young players: ${target.toLocaleString('en-US')} minutes for players ${YOUNG_AGE} or under`,
+      title: `Give ${target.toLocaleString('en-US')} minutes to players ${YOUNG_AGE} or under`,
       target,
       weight: lean('youth') * (level ? 0.5 : 1),
       perGame: (0.85 * youngPg + 1_350 / SEASON_GAMES) * (who === 'builder' ? 1.1 : 1),
@@ -769,7 +769,7 @@ export function previewTitle(g: Pick<OwnerGoal, 'kind' | 'title' | 'target'>): s
     case 'profit':
       return g.title.replace(/^Turn a (\S+) profit$/, 'Turn a profit of about $1').replace(/^Keep the loss under /, 'Keep the loss under about ');
     case 'youth':
-      return g.title.replace(/: ([\d,]+) minutes/, ': about $1 minutes');
+      return g.title.replace(/^Give ([\d,]+) minutes/, 'Give about $1 minutes');
     default:
       return g.title;
   }
@@ -816,7 +816,7 @@ export function setOwnerGoals(league: League, quiet = false) {
     subject: og.from ? 'My goals for the rest of the season' : 'My goals for this season',
     body: [
       og.from ? 'Here is what I expect for the rest of the season:' : 'Here is what I expect from this roster:',
-      ...og.goals.map((g) => `${g.title} (${Math.round(g.weight * 100)}% of my review)`),
+      ...og.goals.map((g) => `${g.title}: ${Math.round(g.weight * 100)}% of my review`),
       ...goalsWhy(og),
       `${who === 'win-now' ? 'I want results.' : who === 'frugal' ? 'Every dollar counts.' : "I'm patient, but I'm watching."} I'll check in once a month.`,
     ].join('\n'),
@@ -828,49 +828,70 @@ export function setOwnerGoals(league: League, quiet = false) {
 const SEASONS_WORD = ['no', 'one', 'two', 'three', 'four'];
 const ORDINAL_WORD = ['', 'first', 'second', 'third', 'fourth'];
 
-/** The owner's reasons, a line each: what he pays for, his floor, and the rebuild clock. */
-export function goalsWhy(og: OwnerGoals): string[] {
+/**
+ * The owner's reasons, a line each: what he pays for, his floor, and the rebuild clock. In his own
+ * words in his mail (`mail`), about him on a screen (`screen`: screens never speak in his voice).
+ */
+export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): string[] {
+  const me = voice === 'mail';
   const out: string[] = [];
   const wins = og.goals.find((g) => g.kind === 'wins');
-  if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. I expect a record to match it.`);
+  if (wins?.payRank) out.push(`You have the league's ${ordinalRank(wins.payRank)}-highest payroll. ${me ? 'I expect' : 'He expects'} a record to match it.`);
   if (wins?.held) {
     // (what got worse by his own hand, named: aging and free agents who walked aren't his doing)
     const gone = Array.isArray(wins.gone) ? wins.gone.filter((x) => typeof x === 'string') : [];
     const read = Math.round((wins.perGame ?? 0) * og.games);
     const moves = gone.length ? `Since then you've traded or let go ${andList(gone)}` : '';
     out.push(
-      `Last season I asked for ${wins.held} wins. ${
+      `Last season ${me ? 'I' : 'he'} asked for ${wins.held} wins. ${
         wins.target < wins.held - WIN_SLIDE
-          ? `${moves ? `${moves}. ` : ''}I'm holding the bar at ${wins.target}, ${wins.target - read} over my read of this roster.`
+          ? `${moves ? `${moves}. ` : ''}${me ? "I'm holding" : 'He holds'} the bar at ${wins.target}, ${wins.target - read} over ${me ? 'my' : 'his'} read of this roster.`
           : moves
             ? `${moves}, and that doesn't lower the bar by more than ${WIN_SLIDE}.`
-            : `I don't lower the bar by more than ${WIN_SLIDE} in a season.`
+            : `${me ? "I don't" : "He doesn't"} lower the bar by more than ${WIN_SLIDE} in a season.`
       }`,
     );
   }
   // a payroll line past the tax: the tax up to it is his to pay (see books.ts sanctionedTax)
   const pg = og.goals.find((g) => g.kind === 'payroll');
-  if (pg?.line !== undefined) out.push("You inherited this payroll, past my line, and I won't hold its tax against you on the books. Add to it and that's on you.");
-  else if (pg && /first apron/.test(pg.title))
-    out.push("I'll pay the luxury tax for a contender up to the first apron, and it won't count against you on the books. Past the apron, it's on you.");
-  if (og.rebuild?.over)
+  if (pg?.line !== undefined)
     out.push(
-      `${og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`} without the postseason is all I'll take. This season we compete: miss the play-in and it grades ${grade100(patienceCap(og, 0))} at best, whatever else goes right.`,
+      me
+        ? "You inherited this payroll, past my line. I won't hold its tax against you on the books. Add to it and that's on you."
+        : "You inherited this payroll, past his line. Its tax won't count against you. Adding to it will.",
     );
-  else if (og.rebuild) {
+  else if (pg && /first apron/.test(pg.title))
+    out.push(
+      me
+        ? "I'll pay the luxury tax for a contender, up to the first apron. It won't count against you on the books. Past the apron, it's on you."
+        : "He pays a contender's luxury tax up to the first apron. Past it, the tax counts against you.",
+    );
+  if (og.rebuild?.over) {
+    const took = og.rebuild.year - 1 === 1 ? 'One season' : `${og.rebuild.year - 1} seasons`;
+    const cap = grade100(patienceCap(og, 0));
+    out.push(
+      me
+        ? `${took} without the postseason is all I'll take. This season we compete. Miss the play-in and it grades ${cap} at best, whatever else goes right.`
+        : `${took} without the postseason is all he takes. This season you compete. Miss the play-in and it grades ${cap} at best.`,
+    );
+  } else if (og.rebuild) {
     const { year, of } = og.rebuild;
     const n = SEASONS_WORD[of] ?? String(of);
+    const give = me ? "I'll give you" : 'He gives you';
+    const then = me ? 'After that, I want the play-in.' : 'After that, he wants the play-in.';
     out.push(
       year <= 1
-        ? `I'll give you ${n} season${of === 1 ? '' : 's'} without the playoffs. After that, I want the play-in.`
+        ? `${give} ${n} season${of === 1 ? '' : 's'} without the playoffs. ${then}`
         : year >= of
-          ? `This is the last of the ${n} seasons without the playoffs I'll give you. After that, I want the play-in.`
-          : `I'll give you ${n} seasons without the playoffs, and this is the ${ORDINAL_WORD[year] ?? ordinalRank(year)}. After that, I want the play-in.`,
+          ? `This is the last of the ${n} seasons without the playoffs ${me ? "I'll give you" : 'he gives you'}. ${then}`
+          : `${give} ${n} seasons without the playoffs. This is the ${ORDINAL_WORD[year] ?? ordinalRank(year)}. ${then}`,
     );
   } else if (og.missed) {
     const { seasons: n, of } = og.missed;
     out.push(
-      `${n === 1 ? 'Last season' : `The last ${n} seasons`} went without the postseason, ${n === 1 ? 'one' : n} of the ${of} I'll allow. ${of - n === 1 ? 'Miss it again' : `${of - n} more`} and I want the play-in at least.`,
+      `${n === 1 ? 'Last season' : `The last ${n} seasons`} went without the postseason, ${n === 1 ? 'one' : n} of the ${of} ${me ? "I'll allow" : 'he allows'}. ${
+        of - n === 1 ? 'Miss it again' : `${of - n} more`
+      } and ${me ? 'I want' : 'he wants'} the play-in at least.`,
     );
   }
   // (the floor is said when it's near: a rebuild, or a win goal within ten wins of it)
@@ -912,7 +933,7 @@ export function concedeSeason(league: League) {
   addInbox(league, {
     from: 'Owner',
     subject: 'A rebuilding season',
-    body: `If this season is gone, I'd rather hear it from you than read it. Play the young players and sell what we can: that spares you the miss, it won't earn you anything on top. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild, and it costs you with me. The win goal stands.`,
+    body: `If this season is gone, I'd rather hear it from you than read it. Play the young players and sell what we can. That spares you the miss, but it won't earn you anything on top. It's season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild, and it costs you with me. The win goal stands.`,
     tone: 'neutral',
     link: '/office/owner',
   });
@@ -945,7 +966,7 @@ function addYouthWeight(league: League, og: OwnerGoals, weight: number, fromWins
   const target = Math.max(100, round100(youngMinutes(league, og.tid) - (og.from?.youth ?? 0) + perGame * left));
   og.goals.push({
     kind: 'youth',
-    title: `Play your young players: ${target.toLocaleString('en-US')} minutes for players ${YOUNG_AGE} or under`,
+    title: `Give ${target.toLocaleString('en-US')} minutes to players ${YOUNG_AGE} or under`,
     target,
     weight,
     perGame,
@@ -1028,7 +1049,7 @@ export function easeFloor(league: League) {
   addInbox(league, {
     from: 'Owner',
     subject: 'A development year',
-    body: `Fine: play the kids and take the lottery odds. Under ${Math.ceil(og.floor! * og.games)} wins is still a failed season: I'll grade it ${grade100(Math.min(1, FLOOR_GRADE + og.easeLift))} at best, not ${grade100(FLOOR_GRADE)}, and telling me costs you now. The kids' minutes don't make up for the losses: the win goal's miss still counts. It counts as season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild.`,
+    body: `Fine: play the kids and take the lottery odds. Under ${Math.ceil(og.floor! * og.games)} wins is still a failed season. I'll grade it ${grade100(Math.min(1, FLOOR_GRADE + og.easeLift))} at best, not ${grade100(FLOOR_GRADE)}, and telling me costs you now. The kids' minutes don't make up for the losses. The win goal's miss still counts. It's season ${og.rebuild.year} of the ${og.rebuild.of} I'll give a rebuild.`,
     tone: 'neutral',
     link: '/office/owner',
   });

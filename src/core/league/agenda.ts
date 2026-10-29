@@ -69,6 +69,8 @@ export interface AgendaItem {
   title: string;
   /** One line under it. */
   line: string;
+  /** The reasons and numbers behind it, a tap down (a staff call's Why): sentences, a paragraph a line. */
+  detail?: string;
   tone: 'bad' | 'warn' | 'info' | 'good';
   /** The screen with the whole decision. */
   to?: string;
@@ -148,10 +150,10 @@ export function cutOrder(league: League, players: Player[]): Player[] {
 // ---------------------------------------------------------------- the guided first week
 
 export const GUIDE_STEPS: { step: GuideStep; title: string; line: string }[] = [
-  { step: 'rotation', title: 'Set your rotation', line: 'Starters, minutes and who closes: change one, or keep the five the staff picked.' },
-  { step: 'playbook', title: 'Pick a playbook', line: "Each one shows how well it fits this roster. Pick one, or keep the staff's." },
+  { step: 'rotation', title: 'Set your rotation', line: "Change the starters, minutes or closers, or keep the staff's." },
+  { step: 'playbook', title: 'Pick a playbook', line: "Each shows how well it fits this roster. Pick one, or keep the staff's." },
   { step: 'scout', title: 'Plan for your opener', line: "Add the staff's counter, or go in with no plan." },
-  { step: 'coach', title: 'Coach a game live', line: 'Timeouts, subs and adjustments, then the report says what your plan did.' },
+  { step: 'coach', title: 'Coach a game live', line: 'Call timeouts, subs and changes. The report says what they did.' },
 ];
 
 /**
@@ -204,8 +206,8 @@ export function guideOpen(league: League): boolean {
 /** How a normal week goes, as the staff's note says it when the guide is done (three lines). */
 const GUIDE_WEEK = [
   'Most days: play or sim to the next game. The staff covers the rest.',
-  "Before a big game: add the staff's counter (Matchup → Plan).",
-  'Once a month the owner checks his goals (Office → Owner).',
+  "Before a big game: add the staff's counter in Matchup → Plan.",
+  'Once a month the owner checks his goals in Office → Owner.',
 ];
 const WEEK_SUBJECT = 'A normal week';
 
@@ -313,7 +315,7 @@ export function agenda(league: League): AgendaItem[] {
       kind: 'fired',
       required: true,
       title: 'Find a new job',
-      line: 'Your agent has the offers: the league waits until you take one.',
+      line: 'Your agent has the offers. The league waits until you take one.',
       tone: 'bad',
       to: '/office/career',
     });
@@ -331,7 +333,7 @@ export function agenda(league: League): AgendaItem[] {
         kind: 'cuts',
         required: true,
         title: `Release ${plural(over, 'player')}`,
-        line: `${std.length} signed · ${CAP.rosterMax} allowed on opening night. The staff's ${over === 1 ? 'pick' : 'picks'}, least value to the team: ${picks.map((p) => `${playerName(p)} (${deadText(league, p)})`).join(', ')}.`,
+        line: `${std.length} signed · ${CAP.rosterMax} allowed on opening night. The staff's ${over === 1 ? 'pick' : 'picks'}, least value first: ${picks.map((p) => `${playerName(p)}, ${deadText(league, p)}`).join(' · ')}.`,
         tone: 'bad',
         to: '/team',
         suggestion: releaseAll(league, picks),
@@ -358,7 +360,7 @@ export function agenda(league: League): AgendaItem[] {
         kind: 'twoWays',
         required: true,
         title: `Release ${plural(tw.length - TWO_WAY_MAX, 'two-way player')}`,
-        line: `${tw.length} on two-way deals; ${TWO_WAY_MAX} allowed.`,
+        line: `${tw.length} on two-way deals · ${TWO_WAY_MAX} allowed.`,
         tone: 'bad',
         to: '/team',
         suggestion: releaseChoice(league, first),
@@ -575,7 +577,7 @@ export function startGuide(league: League) {
   addInbox(league, {
     from: 'Assistant Coach',
     subject: GUIDE_TITLE,
-    body: "Four choices for your first games: your rotation, your playbook, a plan for the opener, and a game coached live. Today keeps the checklist; each one ticks off when you've made the call, not when you've looked.",
+    body: 'Four choices to make in your first games. Set your rotation, pick a playbook, plan for the opener and coach a game live. Today keeps the checklist. Each one ticks off when you make the call, not when you look.',
     tone: 'good',
     link: '/',
   });

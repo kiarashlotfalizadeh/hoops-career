@@ -205,14 +205,16 @@ describe('live court choreography', () => {
     // the sets a real game runs drawn without breaking the court
     {
       const league = newLeague();
-      const tactics = { ...league.teams[4].tactics, offense: { ...league.teams[4].tactics.offense, sets: ['floppy', 'spain', 'hammer', 'postSplit'] as const } };
       const sim = new GameSim(
-        { team: { ...league.teams[4], tactics: { ...tactics, offense: { ...tactics.offense, sets: [...tactics.offense.sets] } } }, players: teamPlayers(league, 4) },
+        { team: league.teams[4], players: teamPlayers(league, 4) },
         { team: league.teams[9], players: teamPlayers(league, 9) },
         { rng: new Rng(11), type: 'regular', record: true, injuries: false },
       );
+      // (each set called from the bench now and then)
+      const calls = ['floppy', 'spain', 'hammer', 'postSplit'] as const;
       let sets = 0;
-      while (!sim.over) {
+      for (let n = 0; !sim.over; n++) {
+        if (n % 20 === 3) sim.runSet(0, calls[((n / 20) % calls.length) | 0]);
         sim.step();
         for (const l of sim.drainLogs()) {
           const s = buildScript(l, info);

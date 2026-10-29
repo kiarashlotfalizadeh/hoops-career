@@ -1,7 +1,7 @@
 // The weekly power rankings: all 30 teams ordered by how good they are now (the season's net rating
 // regressed toward what the healthy roster is worth, with the record and the last ten on top), each
-// with a line of its own: the record and form, the net rating, a streak, a key injury, its star,
-// and how far it moved. The headline leads with the user's team when it moved or sits high.
+// with a line of its own: its form, the net rating, a streak, a key injury, its star, and how far it
+// moved. The headline leads with the user's team when it moved or sits high.
 import type { League, Player } from '../../types';
 import { injuryName } from '../../format';
 import { worldRng } from '../world';
@@ -34,10 +34,22 @@ function netRanks(league: League): number[] {
   return nets.map((n) => 1 + nets.filter((o) => o > n).length);
 }
 
-/** The press's line on one team this week: a lead on where it stands and how it moved, then one detail. */
+/** "an 8-game", "a 9-game": the article a number takes when it's read aloud. */
+const an = (n: number) => (n === 8 || n === 11 || n === 18 || (n >= 80 && n < 90) ? 'an' : 'a');
+
+/** An injury in a sentence: "sprained ankle", "MCL sprain" (an abbreviation keeps its capitals). */
+const hurtWords = (type: string) => {
+  const w = injuryName(type);
+  return /^[A-Z]{2,}/.test(w) ? w : w.charAt(0).toLowerCase() + w.slice(1);
+};
+
+/**
+ * The press's line on one team this week: a short lead on where it stands and how it moved, then one
+ * detail (an injury, a streak, its scorer). The row shows the record beside it, so the line never
+ * repeats it: it says something the row doesn't.
+ */
 function blurb(league: League, v: Voice, tid: number, rank: number, prev: number | undefined, roster: Player[], netRank: number): string {
   const ts = tsOf(league, tid);
-  const R = recOf(ts);
   const l10 = lastTen(ts);
   const form = `${l10.w}-${l10.l} in their last ${l10.w + l10.l}`;
   const net = signed(netOf(ts));
@@ -51,56 +63,48 @@ function blurb(league: League, v: Voice, tid: number, rank: number, prev: number
   const streak = ts.streak;
 
   let lead: string;
-  if (rank === 1 && prev !== 1 && prev !== undefined) lead = v.say('pw-new1', [`New No. 1. ${R}, ${form}.`, `Up to the top at ${R}.`, `${R}, and the top spot is theirs.`]);
-  else if (rank === 1) lead = v.say('pw-1', [`Still the team to beat at ${R}.`, `${R} and a net rating of ${net}.`, `${R}. Nobody has caught them.`, `${R}, ${form}.`]);
+  if (rank === 1 && prev !== 1 && prev !== undefined) lead = v.say('pw-new1', [`New No. 1, ${form}.`, 'Up to the top.', 'The top spot is theirs.']);
+  else if (rank === 1) lead = v.say('pw-1', ['Still the team to beat.', `A ${net} net rating.`, 'Nobody has caught them.', `${form}.`]);
   else if (move >= 3)
     lead = v.say('pw-up', [
-      `Up ${move}: ${streak >= 3 ? `${streak} straight wins` : form}.`,
+      streak >= 3 ? `${streak} straight wins.` : `${form}.`,
       `A ${move}-spot climb on a ${l10.w}-${l10.l} run.`,
-      `${R}, up ${move} places.`,
-      `The week's big riser: up ${move}, now ${R}.`,
+      `Up ${move} places.`,
+      "The week's big riser.",
     ]);
   else if (move <= -3)
-    lead = v.say('pw-down', [
-      `Down ${-move}: ${streak <= -3 ? `${-streak} straight losses` : form}.`,
-      `A ${-move}-spot slide to ${R}.`,
-      `${R}, down ${-move} places.`,
-      `The week's big faller, down ${-move}.`,
-    ]);
-  else if (rank <= 6) lead = v.say('pw-top', [`${R}, ${form}.`, `${R} with a ${net} net rating.`, `Solid at ${R}.`, `${R}; ${nth(netRank)} in net rating.`]);
-  else if (rank <= 16)
-    lead = v.say('pw-mid', [
-      `${R}, ${form}.`,
-      `In the pack at ${R}.`,
-      `${R} and a ${net} net rating.`,
-      `${R}: ${move > 0 ? `up ${move}` : move < 0 ? `down ${-move}` : 'holding'}.`,
-    ]);
-  else if (rank <= 24) lead = v.say('pw-low', [`${R}, ${form}.`, `${R}; ${nth(netRank)} in net rating.`, `Treading water at ${R}.`, `${R} and a ${net} net rating.`]);
-  else lead = v.say('pw-bottom', [`${R}, ${form}.`, `${R}. Lottery odds are the subject now.`, `${R} and ${nth(netRank)} in net rating.`, `A long season at ${R}.`]);
+    lead = v.say('pw-down', [streak <= -3 ? `${-streak} straight losses.` : `${form}.`, `A ${-move}-spot slide.`, `Down ${-move} places.`, "The week's big faller."]);
+  else if (rank <= 6) lead = v.say('pw-top', [`${form}.`, `A ${net} net rating.`, 'Steady near the top.', `${nth(netRank)} in net rating.`]);
+  else if (rank <= 16) lead = v.say('pw-mid', [`${form}.`, 'In the pack.', `A ${net} net rating.`, move > 0 ? `Up ${move}.` : move < 0 ? `Down ${-move}.` : 'Holding steady.']);
+  else if (rank <= 24) lead = v.say('pw-low', [`${form}.`, `${nth(netRank)} in net rating.`, 'Treading water.', `A ${net} net rating.`]);
+  else lead = v.say('pw-bottom', [`${form}.`, 'Lottery odds are the subject now.', `${nth(netRank)} in net rating.`, 'A long season.']);
 
   let detail = '';
+  // a detail without a name leans on the lead for what is this team's alone: a figure
+  let named = true;
   if (hurt) {
     const n = hurt.injury!.gamesRemaining;
-    const what = injuryName(hurt.injury!.type).toLowerCase();
+    const what = hurtWords(hurt.injury!.type);
     detail = v.say('pw-hurt', [
-      `${last(league, hurt)} is out ${n} more games (${what}).`,
-      `Without ${last(league, hurt)} (${what}) for ${n} more games.`,
+      `${last(league, hurt)} is out ${n} more games.`,
+      `Without ${last(league, hurt)} for ${n} more games.`,
       `${poss(last(league, hurt))} ${what} keeps him out ${n} more games.`,
     ]);
   } else if (Math.abs(streak) >= 4 && !lead.includes('straight')) {
+    named = false;
     detail =
       streak > 0
-        ? v.say('pw-ws', [`Winners of ${streak} straight.`, `${streak} wins in a row.`, `On a ${streak}-game win streak.`])
-        : v.say('pw-ls', [`Lost ${-streak} straight.`, `${-streak} losses in a row.`, `A ${-streak}-game losing streak.`]);
+        ? v.say('pw-ws', [`Winners of ${streak} straight.`, `${streak} wins in a row.`, `On ${an(streak)} ${streak}-game win streak.`])
+        : v.say('pw-ls', [`Lost ${-streak} straight.`, `${-streak} losses in a row.`, `${an(-streak) === 'an' ? 'An' : 'A'} ${-streak}-game losing streak.`]);
   } else if (star?.pg) {
     const pg = star.pg;
     const L = last(league, star.p);
-    detail = v.say('pw-star', [
-      `${L} is averaging ${f1(pg.pts)} points.`,
-      `${L}: ${f1(pg.pts)} points, ${f1(pg.reb)} rebounds, ${f1(pg.ast)} assists a game.`,
-      `${L} leads them at ${f1(pg.pts)} a game.`,
-    ]);
-  } else if (ts.won + ts.lost > 0) detail = `Net rating ${net}, ${nth(netRank)} in the league.`;
+    detail = v.say('pw-star', [`${L} is averaging ${f1(pg.pts)} points.`, `${L} leads them at ${f1(pg.pts)} a game.`, `${L} is scoring ${f1(pg.pts)} a game.`]);
+  } else if (ts.won + ts.lost > 0) {
+    named = false;
+    detail = `${nth(netRank)} in the league in net rating.`;
+  }
+  if (!named && !/\d/.test(lead)) lead = `A ${net} net rating.`;
   return detail ? `${lead} ${detail}` : lead;
 }
 
@@ -154,12 +158,12 @@ export function powerRankings(league: League, m: MediaState) {
       `Power rankings, week ${week}: the ${TN} lead again`,
       `The ${TN} remain the power rankings' No. 1`,
     ]);
-  const moved = (r: PowerRow) => (r.prev === undefined ? '' : r.prev > r.rank ? ` (up ${r.prev - r.rank})` : r.prev < r.rank ? ` (down ${r.rank - r.prev})` : '');
+  const moved = (r: PowerRow) => (r.prev === undefined ? '' : r.prev > r.rank ? `, up ${r.prev - r.rank}` : r.prev < r.rank ? `, down ${r.rank - r.prev}` : '');
   const dek =
     u.rank === 1
       ? `Week ${week}: the ${UN} are No. 1${moved(u)}, ahead of the ${league.teams[rows[1].tid].name}.`
-      : `Week ${week}: the ${TN} lead${moved(top)}; the ${UN} are ${nth(u.rank)}${moved(u)}.`;
-  const line = (r: PowerRow) => `${r.rank}. ${league.teams[r.tid].region} ${league.teams[r.tid].name} (${recOf(tsOf(league, r.tid))}). ${r.blurb}`;
+      : `Week ${week}: the ${TN} lead${moved(top)}. The ${UN} are ${nth(u.rank)}${moved(u)}.`;
+  const line = (r: PowerRow) => `${r.rank}. ${league.teams[r.tid].region} ${league.teams[r.tid].name}, ${recOf(tsOf(league, r.tid))}. ${r.blurb}`;
   const risers = rows.filter((r) => r.prev !== undefined && r.prev - r.rank >= 3).sort((a, b) => b.prev! - b.rank - (a.prev! - a.rank));
   const fallers = rows.filter((r) => r.prev !== undefined && r.rank - r.prev >= 3).sort((a, b) => b.rank - b.prev! - (a.rank - a.prev!));
   const body = [

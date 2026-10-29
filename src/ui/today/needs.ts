@@ -50,7 +50,7 @@ function offersRow(league: League, offers: AgendaItem[]): AgendaItem[] {
       kind: 'tradeOffer',
       required: false,
       title: `${open.length} trade offers: ${open.map((p) => league.teams[p.tid].abbrev).join(', ')}`,
-      line: `Each lapses on its own; the first on ${fmtDate(league.season, open[0].expires)}.`,
+      line: `Each lapses on its own. The first goes on ${fmtDate(league.season, open[0].expires)}.`,
       tone: 'info',
       to: '/office/trade?tab=offers',
       pids: offers.flatMap((i) => i.pids ?? []),

@@ -80,7 +80,7 @@ export const projectedSlot =
 
 /** The note under projected picks (team pages, the Office's assets and the Draft screen). */
 export const PICK_RANGE_NOTE =
-  "Ranges come from each team's projected strength (its record and its roster's worth, as the season forecast reads them), the lottery's odds included: where the pick lands three times in five. Later drafts drift toward the middle. Trade values are priced on the same projection.";
+  "A range is where the pick lands three times in five. It comes from each team's projected strength in the season forecast, lottery odds included. Later drafts drift toward the middle. Trade values use the same projection.";
 
 export interface PickGrade {
   label: 'Steal' | 'Value' | 'Fair' | 'Reach' | 'Big reach';

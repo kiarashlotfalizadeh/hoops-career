@@ -194,9 +194,9 @@ export function breakdownRule(league: League, kind: TalkKind): string {
   if (kind === 'extend') return `he won't discuss an extension for ${COOL_EXTEND} days`;
   switch (talkPeriod(league)) {
     case 'resign':
-      return `his ask goes up ${Math.round((FIRM_BUMP - 1) * 100)}% and he'll take nothing less for the rest of the re-sign period`;
+      return `his ask goes up ${Math.round((FIRM_BUMP - 1) * 100)}%, and it's firm for the rest of the re-sign period`;
     case 'fa':
-      return `he won't take your calls for ${COOL_FA} days, or for the rest of the summer if you lowballed him twice`;
+      return `he won't take your calls for ${COOL_FA} days. After two lowballs, it's the rest of the summer`;
     default:
       return `he won't take your calls for a week`;
   }
@@ -219,7 +219,7 @@ function breakDown(league: League, p: Player, t: Talks, kind: TalkKind): string 
     case 'resign': {
       t.firm = FIRM_BUMP;
       const ask = talkAsk(league, p, kind);
-      return `Talks broke down: ${name} has had enough. His ask is now ${moneyExact(ask.amount)} over ${yrs(ask.years)}, and he'll take nothing less for the rest of the re-sign period.`;
+      return `Talks broke down: ${name} has had enough. His ask is now ${moneyExact(ask.amount)} over ${yrs(ask.years)}. It's firm for the rest of the re-sign period.`;
     }
     case 'fa':
       t.closed = (t.lowballs ?? 0) >= 2 ? { season: league.season + 1, day: 0 } : { season: league.season, day: league.day + COOL_FA };
@@ -309,7 +309,7 @@ export function userExtend(league: League, pid: number, amount: number, years: n
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signs a ${years}-year, ${money(salaries.reduce((a, x) => a + x, 0))} extension`,
-    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 8% annual raises' : ''}, and counts against that season's cap; his current salary doesn't change.`,
+    body: `${playerName(p)} is now signed through ${seasonLabel(contractExp(p.contract))}. The extension starts in ${seasonLabel(start)} at ${money(salaries[0])}${years > 1 ? ' with 8% annual raises' : ''}. It counts against that season's cap. His current salary doesn't change.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });

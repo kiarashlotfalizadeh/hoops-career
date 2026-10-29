@@ -316,9 +316,15 @@
 /* ------------------------------------------------------------ trade: the asset lists */
 .fo-assets-h {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 2px 8px;
   padding: 12px var(--row-px) 10px;
+}
+
+/* the side's name keeps its line; the roster count wraps under it rather than cutting it off */
+.fo-assets-h h3 {
+  flex: 1 0 auto;
 }
 
 .fo-assets-h h3 {
@@ -416,14 +422,20 @@
 
 .fo-asset-name {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 5px;
+  gap: 2px 5px;
   min-width: 0;
 }
 
 .fo-asset .fo-name {
   font-size: 14.5px;
   min-width: 0;
+}
+
+/* a long name breaks at its hyphen rather than losing its end (a pick's label stays on one line) */
+.fo-asset:not(.pick) .fo-name {
+  white-space: normal;
 }
 
 .fo-asset .avatar {
@@ -602,12 +614,6 @@
 }
 
 /* what the deal does: salary out and in, your payroll after it, both rosters after it */
-/* the partnerships the deal breaks (sim/links.ts) */
-.fo-dock-links {
-  color: var(--warn);
-  line-height: 1.35;
-}
-
 .fo-dock-figs {
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.1fr) minmax(0, 0.75fr);
   column-gap: 12px;
@@ -957,4 +963,13 @@ body:has(.simbar) .fo-dock {
 .btn.fo-filter-on {
   background: var(--on);
   color: var(--on-ink);
+}
+
+/* the finder's row: the team's mark and the name as one piece, so a wrap never leaves the mark alone */
+.fo-finder-n {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
 }

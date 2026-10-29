@@ -22,7 +22,7 @@ import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
-import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, readingLine, stopAfter } from '../live/calls';
+import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, readingLine, stopAfter, verdictLine } from '../live/calls';
 import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { favoured, playReading } from '../live/usePlayWorth';
 import { fitPlayers, playOptions } from '../live/plays';
@@ -256,7 +256,7 @@ describe('the live assistant and the bench', () => {
       const run = liveAlerts(alertInput(g, view, { manualSubs: true })).find((x) => x.id.startsWith('run-'))!;
       expect(run.action?.kind).toBe('timeout');
       expect(run.title).toBe(`${g.league.teams[1].abbrev} on a 9-0 run`);
-      expect(run.text).toMatch(/rests legs.*stop the run.*their coach a chance to adjust/);
+      expect(run.text).toMatch(/rests legs.*stop it.*their coach adjust/);
       expect(run.text).not.toMatch(/momentum/i);
       // already called, or at a break: nothing to offer
       expect(liveAlerts(alertInput(g, view, { manualSubs: true, timeoutPending: true })).some((x) => x.id.startsWith('run-'))).toBe(false);
@@ -310,7 +310,7 @@ describe('the live assistant and the bench', () => {
       const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-hedge_roll:o')!;
       expect(a.action).toMatchObject({ kind: 'tactics', label: 'Go to Drop' });
       const note = staffNotes({ ...staffInput(g), view, tactics: t }).find((n) => n.id === 'imp-hedge_roll:o')!;
-      expect(note.worth).toBe('Measured: worth +2.2 a game where we make it');
+      expect(note.worth).toBe('Helps: about +2.2 points where we make it');
       if (a.action?.kind === 'tactics') {
         a.action.apply(t);
         expect(t.defense.pnr).toBe('drop');
@@ -321,7 +321,7 @@ describe('the live assistant and the bench', () => {
       expect(callCosts(callKey('imp-drop_pullup:o', 'Switch to Hedge'))).toBe(true);
       expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
       // a call made too rarely to have measured is the staff's read
-      expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBe("The staff's read: not measured yet");
+      expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBe('Not measured yet');
     }
 
     // straight makes and misses counted from the shot log
@@ -432,7 +432,7 @@ describe('the live assistant and the bench', () => {
       expect(new Set(drafts.map((d) => d.id)).size).toBe(drafts.length);
       const now = input.tactics;
       for (const d of drafts) if (d.choice.kind === 'tactics') expect(tacticsDiff(now, d.choice.tactics).length).toBeGreaterThan(0);
-      expect(callDrafts(input, g.sim, [], new Set([drafts[0].id])).some((d) => d.id === drafts[0].id)).toBe(false);
+      expect(callDrafts(input, g.sim, new Set([drafts[0].id])).some((d) => d.id === drafts[0].id)).toBe(false);
       const held = callDrafts({ ...input, recent: { 'defense.scheme': 3, 'defense.help': 3 } }, g.sim);
       expect(held.some((d) => d.choice.kind === 'tactics' && tacticsDiff(now, d.choice.tactics).some((k) => k === 'defense.scheme' || k === 'defense.help'))).toBe(false);
       const m = (await measureCalls(
@@ -457,10 +457,13 @@ describe('the live assistant and the bench', () => {
       // a change that changes nothing reads even, and the staff says so when nothing clears
       const same = (await measureChange(g.sim, 0, { kind: 'none' }, { kind: 'tactics', tactics: g.sim.baseTactics(0) }, { games: 8 }))!;
       expect([same.raw, same.win, same.n]).toEqual([0, 0, 8]);
-      expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Measured 4 changes from Q2 3:10: none clears the noise. Nothing to change.');
+      expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Nothing to change: none of 4 changes from Q2 3:10 clearly helps.');
       // (a call judged by the margin: the win chance beside it would be raw and picked on its noise)
-      expect(readingLine({ pts: 1.4, band: 0.5 }, 'pts')).toBe('+1.4 to the margin (±0.5)');
-      expect(readingLine({ pts: 0.3, band: 0.1 }, 'win')).toBe('+0.3 to the margin (±0.1), and clear on the win chance too');
+      expect(readingLine({ pts: 1.4, band: 0.5 }, 'pts')).toBe('About +1.4 points to the margin, give or take 0.5.');
+      expect(readingLine({ pts: 0.3, band: 0.1 }, 'win')).toBe('About +0.3 points to the margin, give or take 0.1, and a better chance to win.');
+      // (on screen a verdict and one number: the reading is a tap down)
+      expect(verdictLine({ pts: 1.4 }, true)).toBe('Helps: about +1.4 points');
+      expect(verdictLine({ pts: -0.8 }, false)).toBe('No real change');
       // a stop the game will come to is measured from a copy played on to it: the very spot the game gets
       // to (the same possessions, the same reading); its budget starts only once the game is there, and
       // a budget run out plays the device floor, never fewer
@@ -611,7 +614,7 @@ describe('the live assistant and the bench', () => {
       const t = g.sim.T[0];
       t.team = { ...t.team, rotation: { ...t.team.rotation, closers: t.on.map((p) => p.pid) } };
       expect(stopFor(at(4, 200, { energy: 0.3 }))).toBeNull();
-      expect(stopFor(at(4, 200, { energy: 0.3 }), manual)).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed (30% energy).` });
+      expect(stopFor(at(4, 200, { energy: 0.3 }), manual)).toMatchObject({ id: `tired-${pid}-4`, text: `P${pid} is gassed, at 30% energy.` });
       t.team = {
         ...t.team,
         rotation: {
@@ -682,10 +685,10 @@ describe('the live assistant and the bench', () => {
       const read = (us: ReturnType<typeof box>, them: ReturnType<typeof box>) =>
         staffRead({ view: { elapsed: 1200, box: { home: us, away: them } }, side: 0, teams: [{ abbrev: 'OKC' }, { abbrev: 'SAS' }] } as unknown as Parameters<typeof staffRead>[0]);
       // more turnovers from them, and more paint points for them
-      expect(read(box({ tov: 4 }, 20), box({ tov: 12 }, 36))).toBe("12 turnovers from them to our 4, but they're +16 in the paint.");
+      expect(read(box({ tov: 4 }, 20), box({ tov: 12 }, 36))).toBe("They have 12 turnovers to our 4, but they're +16 in the paint.");
       // the glass the other way: "they're" runs on in lower case
-      expect(read(box({ tov: 4, drb: 10 }, 30), box({ tov: 12, drb: 20 }, 30))).toBe("12 turnovers from them to our 4, but they're winning the glass by 10.");
-      expect(read(box({ fta: 6 }, 40), box({ fta: 24 }, 24))).toBe("We're +16 in the paint, but 18 fewer free throws than them.");
+      expect(read(box({ tov: 4, drb: 10 }, 30), box({ tov: 12, drb: 20 }, 30))).toBe("They have 12 turnovers to our 4, but they're winning the glass by 10.");
+      expect(read(box({ fta: 6 }, 40), box({ fta: 24 }, 24))).toBe("We're +16 in the paint, but they have 18 more free throws.");
     }
   });
 });
@@ -799,7 +802,7 @@ describe('broadcast graphics', () => {
       const with_ = (high: PlayerBefore['high']) => nextGraphic(graphicInput(view, logs, { before: new Map([[top.pid, { high }]]), shown }));
       expect(with_({ pts: top.pts + 2, games: 20, career: false })).toMatchObject({
         kind: 'watch',
-        text: `P${top.pid}: ${top.pts} points, 2 off his season high (${top.pts + 2})`,
+        text: `P${top.pid}: ${top.pts} points, 2 off his season high of ${top.pts + 2}`,
       });
       expect(with_({ pts: 20, games: 20, career: false })).toMatchObject({ kind: 'high', text: `P${top.pid}: ${top.pts} points, past his season high of 20` });
       expect(with_({ pts: top.pts - 1, games: 20, career: true })?.tag).toBe('New career high');
@@ -831,7 +834,7 @@ describe('broadcast graphics', () => {
 
     // a list with nothing on it has no record to break, and the record is tonight's best
     {
-      const { views, logs } = playThrough(23);
+      const { views, logs } = playThrough(24);
       const end = views[views.length - 1];
       const [top, second] = [...end.box.home.players].sort((a, b) => b.pts - a.pts);
       expect(second.pts).toBeGreaterThan(0);

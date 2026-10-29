@@ -117,10 +117,10 @@ export interface MatchupNote {
 }
 
 /**
- * What a pairing means, from your defender's side: the size gap, and his ratings with the ball against
- * your defender's at his spot, by their names and values on the Ratings tab (ball handling against
- * perimeter defense; post play or finishing against interior defense). Green is your edge, yellow
- * worth watching, red a mismatch to fix.
+ * What a pairing means, from your defender's side: the size gap, and his rating with the ball against
+ * your defender's at his spot, his first, by their names and values on the Ratings tab ("Ball handling
+ * 81 vs perimeter defense 69"; post play or finishing against interior defense). Green is your edge,
+ * yellow worth watching, red a mismatch to fix.
  */
 export function matchupNotes(them: Player, me: Player): MatchupNote[] {
   const out: MatchupNote[] = [];
@@ -131,7 +131,9 @@ export function matchupNotes(them: Player, me: Player): MatchupNote[] {
   const his: RatingKey = big ? (them.ratings.post > them.ratings.ins ? 'post' : 'ins') : 'hnd';
   const yours: RatingKey = big ? 'intD' : 'perD';
   const gapR = attrDisplay(them.ratings[his]) - attrDisplay(me.ratings[yours]);
-  if (gapR >= 6) out.push({ text: `His ${ratingText(them, his)} vs your ${ratingText(me, yours)}`, tone: gapR >= 12 ? 'bad' : 'warn' });
-  else if (gapR <= -6) out.push({ text: `Your ${ratingText(me, yours)} vs his ${ratingText(them, his)}`, tone: 'good' });
+  // (always his then yours, as the row reads left to right: the colour says whose edge it is)
+  const vs = `${ratingText(them, his).replace(/^./, (c) => c.toUpperCase())} vs ${ratingText(me, yours)}`;
+  if (gapR >= 6) out.push({ text: vs, tone: gapR >= 12 ? 'bad' : 'warn' });
+  else if (gapR <= -6) out.push({ text: vs, tone: 'good' });
   return out;
 }

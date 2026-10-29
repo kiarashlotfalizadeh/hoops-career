@@ -68,7 +68,7 @@ function Form({ onClose }: { onClose: () => void }) {
         format={(v) => `${v > 0 ? '+' : ''}${v.toFixed(2)}`}
         left="Slow"
         right="Fast"
-        help="How good his summers will be (most through 25), and his potential before 26."
+        help="How good his summers will be. Most players grow through 25, and his potential is set before 26."
       />
       <Select label="Starts with" value={tid} options={teamOptions(league)} onChange={setTid} />
       <div className="tiny dim">{tid === FREE_AGENT ? 'A free agent at his asking price, for anyone to sign.' : 'He joins on his asking deal.'}</div>

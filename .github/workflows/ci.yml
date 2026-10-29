@@ -34,11 +34,11 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Browser smoke test (phone + tablet, backup round trip)
         run: npm run smoke
-  # the multi-season star check in a job of its own, beside verify: four leagues of eight seasons,
-  # one per core (about 3 minutes on four cores, 5-6 on two)
+  # the multi-season star check in a job of its own, beside verify: eight leagues of eight seasons,
+  # one per core (about 6 minutes on four cores, 10-12 on two)
   stars:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -48,7 +48,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Star check (four leagues of eight seasons; no leader over 39 a game or 81-point night, one season at most over 73 wins)
+      - name: Star check (eight leagues of eight seasons; no leader over 39 a game or 81-point night, one season at most over 73 wins)
         run: npm run star-check
         env:
           QUIET: '1'

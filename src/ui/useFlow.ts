@@ -76,7 +76,7 @@ export function useFlowRunner() {
         await task('Free agency', { kind: 'faAdvance', days: 7 });
         return;
       case 'newSeason': {
-        const r = await task('Training camp', { kind: 'newSeason' });
+        const r = await task('New season', { kind: 'newSeason' });
         if (!r) return;
         const done = !!r.done;
         // finishing the market stops for an offer sheet on one of the user's restricted free agents
@@ -86,8 +86,8 @@ export function useFlowRunner() {
           nav('/office/free-agents');
           return;
         }
-        // (the camp report is a tap away)
-        if (done) st.toast(`The ${seasonLabel(useStore.getState().league!.season)} season is here · Training camp report`, 'good', '/inbox');
+        // (the summer's development report is a tap away)
+        if (done) st.toast(`The ${seasonLabel(useStore.getState().league!.season)} season is here · Summer development`, 'good', '/inbox');
         nav('/');
         return;
       }

@@ -830,7 +830,19 @@ table.stats .bx-team td {
   font-weight: 620;
   color: var(--text);
 }
+/* the bench's divider inside the table: a quiet label in the name column, a rule across */
+table.stats .bx-div td {
+  padding-top: 6px;
+  padding-bottom: 4px;
+  border-top: 1px solid var(--line-2);
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--text-dim);
+}
 .bx-key {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   padding: 0 2px;
   font-size: 12px;
   line-height: 1.45;
@@ -866,12 +878,34 @@ table.stats .bx-team td {
 .gv-more:active {
   background: var(--surface);
 }
-/* what decided it: the points an edge was worth lead the row, its unit under it */
-.gv-factor {
+/* what decided it: the points an edge was worth lead the row, its unit under it; the row opens on
+   the detail and the staff's fix, under the sentence */
+.gv-factor > summary {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  min-height: var(--row-min);
   padding: 11px var(--row-px) 12px;
+  list-style: none;
+  cursor: pointer;
+}
+.gv-factor > summary::-webkit-details-marker {
+  display: none;
+}
+.gv-factor > summary:active {
+  background: var(--surface);
+}
+.gv-factor > summary .gd-fold-c {
+  margin-top: 2px;
+}
+.gv-factor[open] > summary {
+  padding-bottom: 4px;
+}
+.gv-factor[open] > summary .gd-fold-c {
+  transform: rotate(180deg);
+}
+.gv-factor-b {
+  padding: 0 var(--row-px) 14px calc(var(--row-px) + 70px);
 }
 .gv-pts {
   flex: none;
@@ -1159,9 +1193,28 @@ table.stats .bx-team td {
   gap: 6px;
   margin-top: 8px;
 }
-/* what the night's moves were worth, measured: a line in the signal's colour over the moves themselves */
+/* what the night's moves were worth, measured: a verdict in the signal's colour over the moves
+   themselves, opening on how it was measured */
 .gd-night {
   margin-bottom: 10px;
+}
+.gd-night > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  list-style: none;
+  cursor: pointer;
+}
+.gd-night > summary::-webkit-details-marker {
+  display: none;
+}
+.gd-night[open] > summary .gd-fold-c {
+  transform: rotate(180deg);
+}
+.gd-night > p {
+  margin: 2px 0 0;
+  line-height: 1.45;
 }
 .gd-night-t {
   font-weight: 700;
@@ -1181,9 +1234,36 @@ table.stats .bx-team td {
 .gd-hurt b {
   color: var(--bad);
 }
-/* the moves' raw counts, labelled as such under the measured verdict */
-.gd-raw {
-  margin: -4px 0 6px;
+/* a plan counter's grade under its name: the verdict and its measured worth, in the signal's colour */
+.gd-plan-v {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 640;
+  line-height: 1.35;
+}
+.gd-plan-v.good {
+  color: var(--good);
+}
+.gd-plan-v.bad {
+  color: var(--bad);
+}
+.gd-plan-v.dim {
+  color: var(--text-dim);
+}
+.gd-plan-line {
+  margin: 0;
+  padding: 12px var(--row-px) 14px;
+  line-height: 1.45;
+}
+/* the edges that decided it: two lines, the rest on the report's Why */
+.gd-why-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
 }
 /* the first nights' word on luck against the plan, under the edges that decided it */
 .gd-frame {

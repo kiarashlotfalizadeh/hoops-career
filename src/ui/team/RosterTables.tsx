@@ -18,6 +18,8 @@ import { ratingCols, RatingKey } from '../ratingCols';
 import { f1, rosterNames, signed, type PerGame } from '../stats';
 import { openOption, shortSeason } from '../office/common';
 import { rosterLines } from './RosterList';
+import { ovrChange } from '../../core/league/devWatch';
+import { DevDelta } from '../player/dev';
 
 /** The sticky first column, narrow so more columns fit a phone: his last name (with as much of the first as tells teammates apart) and position. */
 function nameCol<T>(player: (r: T) => Player | undefined, name: (r: T) => string, extra?: (r: T) => ReactNode): Col<T> {
@@ -58,9 +60,23 @@ export function RosterRatings({ league, roster }: { league: League; roster: Play
         (p) => nameOf(p.pid),
       ),
       { key: 'age', label: 'Age', get: (p: Player) => playerAge(p, league.season) },
-      ...ratingCols((p: Player) => p),
+      // OVR and POT, his OVR change this season beside them (the roster's rows leave it to this view), then the attributes
+      ...ratingCols((p: Player) => p).flatMap((c) =>
+        c.key === 'pot'
+          ? [
+              c,
+              {
+                key: 'chg',
+                label: 'Change',
+                help: 'OVR change this season',
+                get: (p: Player) => ovrChange(league, p),
+                fmt: (v: number | string) => (v ? <DevDelta d={v as number} since="this season" /> : <span className="dim">—</span>),
+              },
+            ]
+          : [c],
+      ),
     ],
-    [nameOf, league.season],
+    [nameOf, league],
   );
   return (
     <>
@@ -123,8 +139,9 @@ export function RosterStats({ league, roster }: { league: League; roster: Player
     <>
       <StatTable rows={roster} cols={cols} rowKey={(p) => p.pid} onRow={(p) => nav(`/player/${p.pid}`)} initialSort="pts" />
       <div className="tm-foot">
-        {current ? 'Per game this season.' : any ? 'No games yet: each player’s latest season, per game.' : 'No games played yet.'} Tap for what they are: <Term id="ts">TS%</Term>{' '}
-        · <Term id="usage">USG%</Term> · <Term id="onnet">ON NET</Term>.
+        {/* the terms a tap away, after what the figures are */}
+        {current ? 'Per game this season' : any ? 'Per game in each player’s latest season' : 'No games played yet'} · <Term id="ts">TS%</Term> · <Term id="usage">USG%</Term> ·{' '}
+        <Term id="onnet">ON NET</Term>
       </div>
     </>
   );

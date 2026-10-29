@@ -111,8 +111,8 @@ export const pendingSheets = (league: League, tid?: number): Player[] =>
 /** The last free-agency day an offer sheet signed on `day` can be matched on. */
 export const matchDeadline = (day: number) => Math.min(FA_DAYS - 1, day + MATCH_DAYS - 1);
 
-/** When a sheet's last match day ends: "day 7" (faDay 6), or "day 30 (when free agency closes)", which reads the same mid-sentence. */
-export const deadlineLabel = (until: number) => (until >= FA_DAYS - 1 ? `day ${FA_DAYS} (when free agency closes)` : `day ${until + 1}`);
+/** When a sheet's last match day ends: "day 7" (faDay 6), or "day 30 of 30" (the market's close), which reads the same mid-sentence. */
+export const deadlineLabel = (until: number) => (until >= FA_DAYS - 1 ? `day ${FA_DAYS} of ${FA_DAYS}` : `day ${until + 1}`);
 
 // ---------------------------------------------------------------- qualifying offers
 
@@ -196,8 +196,7 @@ export function qualifyBlockedReason(league: League, p: Player): string | null {
   if (p.rfa) return `${playerName(p)} already has a qualifying offer.`;
   if (p.contract.twoWay) return "Two-way players can't be made restricted free agents.";
   if (p.contract.qualifying) return `${playerName(p)} played this season on a qualifying offer: he is unrestricted now.`;
-  if (!rfaEligible(league, p))
-    return `Only a first-round pick finishing his rookie-scale deal, or a player with ${RFA_MAX_SERVICE} seasons or fewer in the league, can be made a restricted free agent.`;
+  if (!rfaEligible(league, p)) return `Only a first-round pick ending his rookie deal, or a player with ${RFA_MAX_SERVICE} seasons or fewer, can be made restricted.`;
   return qualifyFrozenReason(league, p);
 }
 
@@ -239,7 +238,7 @@ export function userWithdrawQualifying(league: League, pid: number): { ok: boole
     ok: true,
     reason:
       p.tid === FREE_AGENT
-        ? `Qualifying offer withdrawn: ${playerName(p)} is an unrestricted free agent, and his ${money(hold ?? r.qo)} cap hold is off your books.`
+        ? `Qualifying offer withdrawn: ${playerName(p)} is an unrestricted free agent. His ${money(hold ?? r.qo)} cap hold is off your books.`
         : `Qualifying offer withdrawn: ${playerName(p)} becomes an unrestricted free agent when the market opens.`,
   };
 }
@@ -252,7 +251,7 @@ export function sheetBlockedReason(league: League, p: Player, years: number): st
   if (!r || p.tid !== FREE_AGENT) return `${playerName(p)} isn't a restricted free agent.`;
   if (league.phase !== 'freeAgency') return 'Offer sheets are signed during free agency.';
   if (r.sheet)
-    return `${playerName(p)} has signed an offer sheet with the ${league.teams[r.sheet.tid].name}: the ${league.teams[r.tid].name} decide by the end of ${deadlineLabel(r.sheet.until)}.`;
+    return `${playerName(p)} has signed an offer sheet with the ${league.teams[r.sheet.tid].name}. The ${league.teams[r.tid].name} decide by the end of ${deadlineLabel(r.sheet.until)}.`;
   if (years < SHEET_MIN_YEARS || years > SHEET_MAX_YEARS) return `Offer sheets run ${SHEET_MIN_YEARS} to ${SHEET_MAX_YEARS} years.`;
   return null;
 }
@@ -293,7 +292,7 @@ export function signOfferSheet(league: League, p: Player, tid: number, amount: n
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${t.abbrev} signed ${name} to an offer sheet`,
-      body: `${name} signed an offer sheet with the ${t.region} ${t.name}: ${yrs(years)} / ${money(total)}, ${money(sheetContract(league, p, sheet).salaries[0])} in ${seasonLabel(contractSeason(league))} with 5% raises.\nMatch it by the end of ${deadlineLabel(sheet.until)} and he stays with us on exactly those terms. Let it go, or leave it unanswered until then, and he joins ${t.abbrev}. Matching needs a roster spot, not cap room.`,
+      body: `${name} signed an offer sheet with the ${t.region} ${t.name}: ${yrs(years)} / ${money(total)}, ${money(sheetContract(league, p, sheet).salaries[0])} in ${seasonLabel(contractSeason(league))} with 5% raises.\nMatch it by the end of ${deadlineLabel(sheet.until)} and he stays with us on exactly those terms. Let it go, or leave it unanswered, and he joins ${t.abbrev}. Matching needs a roster spot, not cap room.`,
       tone: 'alert',
       important: true,
       link: '/office/free-agents',
@@ -346,8 +345,8 @@ function settleSheet(league: League, p: Player, matched: boolean) {
   addNews(league, {
     kind: 'signing',
     text: matched
-      ? `The ${own.region} ${own.name} matched ${playerName(p)}'s offer sheet from the ${offerer.name}: he stays with them on ${yrs(sh.years)} / ${money(total)}.`
-      : `${playerName(p)} joins the ${offerer.region} ${offerer.name} on ${yrs(sh.years)} / ${money(total)}: the ${own.name} declined to match his offer sheet.`,
+      ? `The ${own.region} ${own.name} matched ${playerName(p)}'s offer sheet from the ${offerer.name}. He stays, on ${yrs(sh.years)} / ${money(total)}.`
+      : `${playerName(p)} joins the ${offerer.region} ${offerer.name} on ${yrs(sh.years)} / ${money(total)}. The ${own.name} didn't match.`,
     tids: [r.tid, sh.tid],
     pids: [p.pid],
   });
@@ -400,7 +399,7 @@ export function resolveOfferSheets(league: League, through = Infinity) {
       addInbox(league, {
         from: 'Assistant GM',
         subject: `${name} joins ${league.teams[sh.tid].abbrev}`,
-        body: `We didn't match ${name}'s offer sheet by the deadline, so he joins the ${teamName(league, sh.tid)} on it (${terms}). His cap hold is off our books.`,
+        body: `We didn't match ${name}'s offer sheet by the deadline, so he joins the ${teamName(league, sh.tid)} at ${terms}. His cap hold is off our books.`,
         tone: 'bad',
         link: `/player/${p.pid}`,
       });
@@ -415,7 +414,7 @@ export function resolveOfferSheets(league: League, through = Infinity) {
       subject: verdict.match ? `${own.abbrev} matched our offer sheet for ${name}` : `${name} is ours`,
       body: verdict.match
         ? `The ${teamName(league, r.tid)} matched our offer sheet for ${name} (${terms}): ${verdict.why}. He stays with them, and the room the sheet held is free again${isException(sh.route) ? `, ${EXCEPTIONS[sh.route].name} included` : ''}.`
-        : `The ${teamName(league, r.tid)} declined to match our offer sheet: ${verdict.why}. ${name} joins us on it (${terms}) and has been added to the end of your rotation.`,
+        : `The ${teamName(league, r.tid)} declined to match our offer sheet: ${verdict.why}. ${name} joins us at ${terms}, at the end of your rotation.`,
       tone: verdict.match ? 'neutral' : 'good',
       link: `/player/${p.pid}`,
     });
@@ -465,7 +464,7 @@ export function acceptQualifyingOffers(league: League) {
       body: [
         ...mine.map((p) => `${playerName(p)} signed his qualifying offer: one season at ${money(salaryFor(p, next))}. He'll be an unrestricted free agent next summer.`),
         lapsed.length
-          ? `${andList(lapsed.map(playerName))}'s qualifying offer${lapsed.length > 1 ? 's' : ''} lapsed: our roster was full (${OFFSEASON_ROSTER_MAX}) when free agency closed, so ${lapsed.length > 1 ? "they're unrestricted free agents" : "he's an unrestricted free agent"}.`
+          ? `${andList(lapsed.map(playerName))}'s qualifying offer${lapsed.length > 1 ? 's' : ''} lapsed. Our roster was full at ${OFFSEASON_ROSTER_MAX} when free agency closed, so ${lapsed.length > 1 ? "they're unrestricted free agents" : "he's an unrestricted free agent"}.`
           : '',
       ]
         .filter(Boolean)

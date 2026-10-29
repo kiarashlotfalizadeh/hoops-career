@@ -21,11 +21,11 @@ export function AdjustmentsCard({ g, league }: { g: GameResult; league: League }
           Adjustments
           <Help title="Adjustments">
             {plan.length > 0 && <p>Their coach came in with a plan for what your team does best.</p>}
-            <p>A coach changes one thing a quarter when the other team is exploiting it, more often the better he is at adjustments.</p>
+            <p>A coach changes one thing a quarter when the other team is exploiting it. Better coaches adjust more often.</p>
           </Help>
         </h3>
       }
-      right={<span className="tiny dim">{list.length ? 'Both benches' : 'Before the game'}</span>}
+      right={!list.length ? <span className="tiny dim">Before the game</span> : undefined}
     >
       <div className="card flush list">
         {plan.length > 0 && (

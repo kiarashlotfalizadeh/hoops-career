@@ -46,7 +46,7 @@ import {
   userOffer,
   userResign,
 } from '../../core/league/freeAgency';
-import { type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../../core/league/negotiation';
+import { PLAYER_OPTION, TEAM_OPTION, YEAR_PREMIUM, type OfferResult, type TalkKind, askFor, talkAsk, talkState } from '../../core/league/negotiation';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
 import { Segmented, Sheet, Statline } from '../components/ui';
@@ -166,7 +166,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, Math.max(years, SHEET_MIN_YEARS)) : null))
       : ownRfa
         ? p.rfa?.sheet
-          ? `${shortName(league, p)} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}: match it or let him go.`
+          ? `${shortName(league, p)} has signed an offer sheet with the ${league.teams[p.rfa.sheet.tid].name}. Match it or let him go.`
           : null
         : league.phase !== 'resign'
           ? 'Re-signing happens between the draft and free agency.'
@@ -200,7 +200,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
   const counterBlocked = (c: TalkTerms): string | null =>
     mode === 'fa'
       ? (signingClosedReason(league) ?? (sheet ? sheetBlockedReason(league, p, c.years) : null) ?? offerBlockedReason(league, p, c.amount, c.years, via))
-      : (closed ?? (rosterBlocked ? `Your roster is full for next season (${rosterMax}).` : frozenAt(c.amount)));
+      : (closed ?? (rosterBlocked ? `Your roster is full for next season, at ${rosterMax}.` : frozenAt(c.amount)));
 
   const submit = (terms: TalkTerms = { amount, years, option }) => {
     // a refused offer still counts in the talks (his patience): only the answer differs
@@ -251,14 +251,13 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                   {ai.label}
                 </span>
               ),
-              s: `appeal ×${appeal.toFixed(2)}`,
             },
           ]}
         />
         <HelpSheet title="Interest in your team">
           <p>
-            Players weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they'd get. Interested players give you a discount; lukewarm ones
-            want a premium. A lowball costs some of his interest for the season.
+            Players weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they&apos;d get. Interested players give you a discount. Lukewarm
+            ones want a premium. A lowball costs some of his interest for the season.
           </p>
           <p>His price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral team.</p>
         </HelpSheet>
@@ -281,7 +280,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           yearsMax={yearsMax}
           yearsNote={
             <>
-              Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants: about 3% on his price.
+              Through {shortSeason(season + years - 1)}, {Math.round(raise * 100)}% raises. Each year off what he wants adds {Math.round(YEAR_PREMIUM * 100)}% to his price.
               {sheet ? keepFigures(` Offer sheets run ${SHEET_MIN_YEARS}-${SHEET_MAX_YEARS} years, no options.`) : ''}
               {mode === 'resign' && birdTier(league, p) !== 'full'
                 ? ` ${birdTier(league, p) === 'early' ? 'Early Bird rights' : 'Without full Bird rights'}: up to ${money(maxAmt)}, ${yearsMax} years.`
@@ -294,15 +293,15 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       {overRights && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
           <b>
-            He wants {moneyExact(wants)}; your {birdTier(league, p) === 'early' ? 'Early Bird' : 'non-Bird'} rights allow {moneyExact(maxAmt)}.
+            He wants {moneyExact(wants)}. Your {birdTier(league, p) === 'early' ? 'Early Bird' : 'non-Bird'} rights allow {moneyExact(maxAmt)}.
           </b>{' '}
           {ownRfa
-            ? 'No new deal can pay him that: you can still match an offer sheet he signs elsewhere.'
-            : 'He walks in free agency unless you renounce him and bid with cap space or an exception.'}
+            ? 'No new deal can pay that. Match an offer sheet he signs elsewhere instead.'
+            : 'He walks in free agency, unless you renounce him and bid with space or an exception.'}
           <div className="tiny dim">
             {birdTier(league, p) === 'early'
-              ? 'Early Bird rights (two seasons with you) pay up to 175% of his salary or 105% of the league average, whichever is more.'
-              : 'Non-Bird rights (a season with you) pay up to 120% of his salary.'}
+              ? 'Early Bird rights, after two seasons with you, pay up to 175% of his salary. Or 105% of the league average, if more.'
+              : 'Non-Bird rights, after a season with you, pay up to 120% of his salary.'}
           </div>
         </Callout>
       )}
@@ -321,7 +320,11 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
               { id: 'team', label: 'Team option' },
             ]}
           />
-          <div className="tiny dim">{years < 2 ? 'Options need two years or more.' : 'Player option (his call): about 4% off. Team option (yours): about 6% more.'}</div>
+          <div className="tiny dim">
+            {years < 2
+              ? 'Options need two years or more.'
+              : `Player option, his call: ${Math.round(PLAYER_OPTION * 100)}% off his price. Team option, yours: ${Math.round(TEAM_OPTION * 100)}% more.`}
+          </div>
         </div>
       )}
 
@@ -332,16 +335,15 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
       )}
       {rosterBlocked && !closed && (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>Roster full ({rosterMax}).</b>{' '}
+          <b>Roster full at {rosterMax}.</b>{' '}
           {pendingN > 0 ? (
-            `Counting ${pendingN} pending offer${pendingN > 1 ? 's' : ''}: withdraw one, or release or trade someone.`
+            `That counts ${pendingN} pending offer${pendingN > 1 ? 's' : ''}. Withdraw one, or release or trade someone.`
           ) : (
             <>
-              Release or trade someone first (
+              Release or trade someone first:{' '}
               <Link to="/team?view=contracts" onClick={onClose}>
                 Team → Contracts
               </Link>
-              ).
             </>
           )}
         </Callout>
@@ -357,21 +359,33 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             <b>This offer doesn't fit under the cap.</b>
             <HelpSheet title="Why can't I sign him?">
               <p>
-                The <b>soft cap</b> is {money(cap.salaryCap)}. A free agent signs to any contract that fits under it: you have <b>{money(Math.max(0, space))}</b> of room for{' '}
+                The <b>soft cap</b> is {money(cap.salaryCap)}. A free agent signs to any contract that fits under it. You have <b>{money(Math.max(0, space))}</b> of room for{' '}
                 {seasonLabel(season)}.
               </p>
               <p>
-                Over the cap you can still add players on <b>minimum contracts</b> (his is {moneyExact(minAmt)} a season) with a roster spot.
+                Over the cap, players still sign <b>minimum contracts</b> with a roster spot. His is {moneyExact(minAmt)} a season.
               </p>
               <p>
-                Over the cap, <b>exceptions</b> pay for one signing each: the <b>mid-level</b> (up to {money(exceptionAmount(league, 'mle', season))}, {EXCEPTIONS.mle.years} years,
-                once a season, staying under the first apron, {money(cap.firstApron)}), past it the <b>taxpayer mid-level</b> (up to{' '}
-                {money(exceptionAmount(league, 'tmle', season))}, {EXCEPTIONS.tmle.years} years, under the second apron, {money(cap.secondApron)}), the <b>bi-annual</b> (up to{' '}
-                {money(exceptionAmount(league, 'bae', season))}, {EXCEPTIONS.bae.years} years, under the first apron, not two seasons running), and for a team that used its cap
-                space the <b>room exception</b> in place of the mid-level (up to {money(exceptionAmount(league, 'room', season))}, {EXCEPTIONS.room.years} years). Each hard-caps
-                you at its apron for the season: no trade can take you past it.
+                Over the cap, each <b>exception</b> pays for one signing. Each hard-caps you at its apron for the season, and no trade can take you past it.
               </p>
-              <p>To make space: trade salary away, let contracts expire, or release players (what they're owed still counts as dead money).</p>
+              <ul>
+                <li>
+                  <b>Mid-level</b>: up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years, once a season, under the first apron,{' '}
+                  {money(cap.firstApron)}.
+                </li>
+                <li>
+                  <b>Taxpayer mid-level</b>, past that apron: up to {money(exceptionAmount(league, 'tmle', season))} for {EXCEPTIONS.tmle.years} years, under the second apron,{' '}
+                  {money(cap.secondApron)}.
+                </li>
+                <li>
+                  <b>Bi-annual</b>: up to {money(exceptionAmount(league, 'bae', season))} for {EXCEPTIONS.bae.years} years, under the first apron, not two seasons running.
+                </li>
+                <li>
+                  <b>Room exception</b>, for a team that used its cap space: up to {money(exceptionAmount(league, 'room', season))} for {EXCEPTIONS.room.years} years, in place of
+                  the mid-level.
+                </li>
+              </ul>
+              <p>To make space, trade salary away, let contracts expire, or release players. What they&apos;re owed still counts as dead money.</p>
             </HelpSheet>
           </div>
           <div className="small">{offerBlockedReason(league, p, amount, years, via) ?? `This offer puts you ${money(after - cap.salaryCap)} over the cap.`}</div>
@@ -386,7 +400,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
                   setVia(k)
                 )}
               >
-                Use the {EXCEPTIONS[k].name} ({moneyExact(room)})
+                Use the {EXCEPTIONS[k].name} · {moneyExact(room)}
               </button>
             ))}
             <button className="btn xs" onClick={() => set(minAmt)}>
@@ -412,8 +426,8 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
 
       {sheet && !closed && p.rfa && (
         <Callout icon={<ShieldCheck size={18} className="dim" />}>
-          <b>Restricted: this is an offer sheet.</b> Signed, the {league.teams[p.rfa.tid].name} have until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it on
-          these terms. Until then it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot; unmatched, he's yours.
+          <b>Restricted: this is an offer sheet.</b> Signed, the {league.teams[p.rfa.tid].name} have until the end of {deadlineLabel(matchDeadline(league.faDay))} to match it.
+          Until then it holds your {isException(route) ? EXCEPTIONS[route].name : 'cap room'} and a roster spot. Unmatched, he&apos;s yours.
         </Callout>
       )}
 
@@ -448,17 +462,17 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
           <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} aprons={{ first: cap.firstApron, second: cap.secondApron }} add={amount} addLabel="This offer" />
           <div className="tiny dim">
             {route === 'min' && after > cap.salaryCap
-              ? `Minimum deals (up to ${moneyExact(minAmt)} for him) sign over the cap.`
+              ? `Minimum deals sign over the cap: up to ${moneyExact(minAmt)} for him.`
               : route === 'space' && exceptionRoom(league, tid, 'mle', season) > 0
                 ? `Signing with cap space trades your mid-level for the smaller room exception for ${shortSeason(season)}.`
                 : route === 'mle'
-                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years; it hard-caps you at the first apron (${money(cap.firstApron)}) for ${shortSeason(season)}.`
+                  ? `Your mid-level: once a season, up to ${EXCEPTIONS.mle.years} years. It hard-caps you at the first apron, ${money(cap.firstApron)}, for ${shortSeason(season)}.`
                   : route === 'tmle'
-                    ? `Your taxpayer mid-level: once a season, up to ${EXCEPTIONS.tmle.years} years; it hard-caps you at the second apron (${money(cap.secondApron)}).`
+                    ? `Your taxpayer mid-level: once a season, up to ${EXCEPTIONS.tmle.years} years. It hard-caps you at the second apron, ${money(cap.secondApron)}.`
                     : route === 'room'
                       ? `Your room exception: once, after using cap space this season, up to ${EXCEPTIONS.room.years} years.`
                       : route === 'bae'
-                        ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, not again next season; it hard-caps you at the first apron (${money(cap.firstApron)}).`
+                        ? `Your bi-annual: up to ${EXCEPTIONS.bae.years} years, not again next season. It hard-caps you at the first apron, ${money(cap.firstApron)}.`
                         : ''}
             {held > 0
               ? ` Counts ${money(held)} held for ${[heldOffers > 0 ? 'your other pending offers and sheets' : '', heldRfa > 0 ? "your restricted free agents' holds" : ''].filter(Boolean).join(' and ')}.`

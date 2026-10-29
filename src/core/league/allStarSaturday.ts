@@ -430,7 +430,7 @@ export function allStarSaturday(league: League) {
     addNews(league, {
       kind: 'award',
       text: tied
-        ? `${w.name} (${abbrev(w.tid)}) wins the Three-Point Contest in a shoot-off with ${second.name} (${lastOff(w.finalOff)}-${lastOff(second.finalOff)}) after both scored ${w.final} in the final.`
+        ? `${w.name} (${abbrev(w.tid)}) wins the Three-Point Contest in a shoot-off, ${lastOff(w.finalOff)}-${lastOff(second.finalOff)} over ${second.name}. Both scored ${w.final} in the final.`
         : `${w.name} (${abbrev(w.tid)}) wins the Three-Point Contest, ${w.final}-${second.final} over ${second.name} in the final.`,
       tids: [w.tid],
       pids: three.slice(0, THREE_FINALISTS).map((e) => e.pid),
@@ -443,7 +443,8 @@ export function allStarSaturday(league: League) {
     const [a, b] = [total(w.final), total(second.final)];
     addNews(league, {
       kind: 'award',
-      text: `${w.name} (${abbrev(w.tid)}) wins the Slam Dunk Contest${best ? ` with a ${best.score} for ${best.text}` : ''}, ${a === b ? `beating ${second.name} in a dunk-off after a ${a}-${b} final` : `${a}-${b} over ${second.name} in the final`}.`,
+      // the result, then his best dunk, a sentence each ("an 89-89 final": the article as it's read)
+      text: `${w.name} (${abbrev(w.tid)}) wins the Slam Dunk Contest, ${a === b ? `beating ${second.name} in a dunk-off after ${a >= 80 && a < 90 ? 'an' : 'a'} ${a}-${b} final` : `${a}-${b} over ${second.name} in the final`}.${best ? ` He peaked with a ${best.score} for ${best.text}.` : ''}`,
       tids: [w.tid],
       pids: dunk.slice(0, DUNK_FINALISTS).map((e) => e.pid),
     });

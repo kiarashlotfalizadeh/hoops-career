@@ -8,6 +8,7 @@ import { FA_PRICE_CUT_DAYS, askingContract, rookieContract, twoWaySalary, valueS
 import { numberTeam } from './jerseys';
 import { logMove, logSwap } from './transactions';
 import { pickLabel } from './trades';
+import { ordinal } from '../format';
 import { blurb, combineFor, consensusRead, consensusView, holdCombine, rankByConsensus, readRange, staffRead, teamRead, type Read } from './prospects';
 
 export const LOTTERY_ODDS = [140, 140, 140, 125, 105, 90, 75, 60, 45, 30, 20, 15, 10, 5];
@@ -139,7 +140,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
         const orig = league.teams[dp.originalTid];
         addNews(league, {
           kind: 'draft',
-          text: `The ${orig.name} keep their ${season} ${round === 1 ? 'first' : 'second'}-round pick (#${(round - 1) * 30 + dp.pick}, top-${(round - 1) * 30 + dp.protection} protected); the ${holder.name} come away empty.`,
+          text: `The ${orig.name} keep their top-${(round - 1) * 30 + dp.protection} protected ${season} ${round === 1 ? 'first' : 'second'}, #${(round - 1) * 30 + dp.pick}. The ${holder.name} come away empty.`,
           tids: [dp.tid, dp.originalTid],
           pids: [],
         });
@@ -159,7 +160,7 @@ export function runLottery(league: League, rng: Rng): LotteryResult {
   if (top)
     addNews(league, {
       kind: 'draft',
-      text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick (pre-lottery position ${top.pre}).`,
+      text: `Draft lottery: the ${league.teams[top.tid].region} ${league.teams[top.tid].name} win the No. 1 pick from the ${ordinal(top.pre)} spot.`,
       tids: [top.tid],
       pids: [],
     });
@@ -214,11 +215,11 @@ export function resolveSwaps(league: League, season: number) {
       subject: used ? (userUp ? `Pick swap: we move up to #${theirs}` : `Pick swap: ${them} take our #${theirs}`) : `Pick swap with ${them} not used`,
       body: used
         ? userUp
-          ? `Our swap right paid off: ${them}'s pick landed #${theirs}, ahead of ours at #${ours}, so the two picks change hands. We pick at #${theirs}.`
-          : `${them} held the right to swap firsts with us, and our pick landed #${theirs}, ahead of theirs at #${ours}: they take it, and we pick at #${ours}.`
+          ? `Our swap right paid off. ${them}'s pick landed #${theirs}, ahead of ours at #${ours}, so we pick at #${theirs}.`
+          : `${them} held the right to swap firsts with us. Our pick landed #${theirs}, ahead of theirs at #${ours}, so they take it. We pick at #${ours}.`
         : userUp
-          ? `${them}'s pick landed #${theirs}, behind ours at #${ours}: the swap right lapses and we keep ours.`
-          : `Our pick landed #${theirs}, behind ${them}'s at #${ours}: their swap right lapses and we keep ours.`,
+          ? `${them}'s pick landed #${theirs}, behind ours at #${ours}. The swap right lapses, and we keep ours.`
+          : `Our pick landed #${theirs}, behind ${them}'s at #${ours}. Their swap right lapses, and we keep ours.`,
       tone: used ? (userUp ? 'good' : 'bad') : 'neutral',
       link: '/office/draft',
     });

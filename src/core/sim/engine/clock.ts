@@ -54,7 +54,6 @@ export const clockMethods = {
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     this.addPbp(-1, `Start of ${periodName(this.q)}.`, 'period');
-    for (const t of this.T) this.situate(t);
     return true;
   },
 

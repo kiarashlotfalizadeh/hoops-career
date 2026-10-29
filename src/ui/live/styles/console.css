@@ -356,7 +356,32 @@
   color: var(--bad);
 }
 .lv-pr-base {
+  flex: none;
   width: 42px;
+  text-align: right;
+}
+/* the figures in columns, named once over the list */
+.lv-pr-trips {
+  flex: none;
+  width: 34px;
+  text-align: right;
+}
+.lv-pr-top .lv-pr-ppp {
+  flex: none;
+  width: 46px;
+  text-align: right;
+}
+.lv-pr-h {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px var(--row-px) 0;
+}
+.lv-pr-h .lv-pr-ppp {
+  flex: none;
+  width: 46px;
+  font: inherit;
+  letter-spacing: normal;
   text-align: right;
 }
 .lv-pr-empty {
@@ -539,12 +564,20 @@
 .lv-pc-foot {
   margin-top: 8px;
 }
+/* a "?" at the end of a line of text sits a space after it, on its middle */
+.lv-pc-foot .help-btn,
+.lv-touch-worth .help-btn {
+  margin-left: 4px;
+  vertical-align: middle;
+}
 /* what a play is worth from here, at the row's end: its win chance against no call, or too close to say */
 .lv-pc-worth {
   flex: none;
   max-width: 84px;
   text-align: right;
   line-height: 1.15;
+  /* ("Too close / to say", not "Too close to / say") */
+  text-wrap: balance;
 }
 .lv-pc-worth.num {
   font-family: var(--mono);
@@ -587,12 +620,6 @@
   flex: 1;
   min-width: 0;
 }
-.lv-bk-scorers {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 2px;
-}
 .lv-coaches {
   display: flex;
   flex-direction: column;
@@ -602,42 +629,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-.lv-bt {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-}
-.lv-bt-col {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.lv-bt-col > .over {
-  padding-bottom: 6px;
-  border-bottom: 2px solid var(--ink);
-}
-.lv-bt-row {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 4px 0;
-}
-.lv-bt-row + .lv-bt-row {
-  border-top: 1px solid var(--line);
-}
-.lv-bt-row .num.bold {
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.04em;
-}
-.lv-bt-row .num.good {
-  color: var(--good);
-}
-.lv-bt-row .num.bad {
-  color: var(--bad);
 }
 .lv-stats {
   display: flex;

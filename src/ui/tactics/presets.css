@@ -1,8 +1,8 @@
-/* The Playbook tab: each preset as a row (pick, fit, about), why a fit is what it is, and the
-   coach's saved playbooks with what loading one would change. */
-/* the fit column's header sits over the fits, left of the ⓘ buttons */
+/* The style sheet's playbook lists (`tx-`): each preset as a row (pick, and its read, which opens
+   why), and why a read is what it is. Restored from the old Playbook tab's partial. */
+/* the read column's header sits over the reads, left of their chevrons */
 .list-h.tx-fith {
-  padding-right: 48px;
+  padding-right: 30px;
 }
 .tx-preset {
   border-top: none;
@@ -77,23 +77,18 @@
 }
 .tx-fit {
   flex: none;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  gap: 2px;
   min-height: 44px;
   min-width: 44px;
+  padding: 0 6px 0 8px;
   border-radius: var(--radius-sm);
 }
 .tx-fit:active {
   background: var(--surface);
 }
-.tx-about {
-  width: 36px;
-  height: 44px;
-  color: var(--text-dim);
-}
-
-/* a fit: the figure in scoreboard type, a bar under it as long as the fit is out of 100; great fits
-   read good, poor ones bad */
+/* a read: the figure in scoreboard type; a gain reads good, a cost bad */
 .tx-fitv {
   display: inline-flex;
   flex-direction: column;
@@ -108,29 +103,11 @@
   text-align: center;
   color: var(--text);
 }
-.tx-fitbar {
-  display: block;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--surface-3);
-  overflow: hidden;
-}
-.tx-fitbar i {
-  display: block;
-  height: 100%;
-  background: var(--text-dim);
-}
 .tx-fitv.good {
   color: var(--good);
 }
-.tx-fitv.good i {
-  background: var(--good);
-}
 .tx-fitv.bad {
   color: var(--bad);
-}
-.tx-fitv.bad i {
-  background: var(--bad);
 }
 
 /* why a fit: the figure and its place, then the start and each part with the players behind it */
@@ -195,53 +172,4 @@
   display: block;
   font-size: 12.5px;
   color: var(--text-dim);
-}
-
-.tx-pb {
-  min-height: 56px;
-}
-.tx-pb-n {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.tx-pb-foot {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 12px 14px 14px;
-  border-top: 1px solid var(--line);
-}
-.tx-changes {
-  background: var(--raised);
-}
-.tx-change {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-  padding: 8px 12px;
-  font-size: 13.5px;
-}
-.tx-change-l {
-  font-weight: 620;
-  color: var(--text);
-}
-.tx-change-v {
-  text-align: right;
-  color: var(--text-2);
-}
-/* no playbooks yet: the empty line and its button on one row */
-.tx-pb-none {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: var(--row-min);
-  padding: 8px 12px 8px var(--pad-card);
-  font-size: 14px;
-  color: var(--text-dim);
-}
-.tx-pb-none .btn {
-  flex: none;
 }

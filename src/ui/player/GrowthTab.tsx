@@ -47,27 +47,24 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
   const room = p.pot - p.ovr;
   return (
     <>
-      <Section title="Career arc">
-        <div className="dv-arc-wrap">
-          {hist.length > 1 || (hist.length === 1 && change) ? (
+      {/* his arc once there is a change to draw (a check-in or next preseason); until then no block
+          stands in for it: his OVR and potential are on the slab and under Potential */}
+      {(hist.length > 1 || (hist.length === 1 && change !== 0)) && (
+        <Section title="Career arc">
+          <div className="dv-arc-wrap">
             <ArcChart league={league} p={p} />
-          ) : (
-            <div className="small dim">
-              {/* (his OVR and potential are on the slab and under Potential: not a third time here) */}
-              The arc starts with his first check-in or next preseason, once there is a change to draw.
-            </div>
-          )}
-        </div>
-      </Section>
+          </div>
+        </Section>
+      )}
 
       {p.tid !== RETIRED && (
         <Section
           title="Potential"
           right={
             <Help title="Potential">
-              POT is the scouts&apos; read of where his growth should take him: his age and the way he has developed so far. Every young player also has a course of his own that
-              scouting can&apos;t see, so some beat their potential and some fall short of it. Minutes (25 a night or more), coaching, practice and a good summer all push the same
-              way.
+              <p>POT is the scouts&apos; read of where his growth should take him. It comes from his age and how he has developed so far.</p>
+              <p>Every young player also has a course scouting can&apos;t see. Some beat their potential and some fall short.</p>
+              <p>Minutes help: 25 a night or more. So do coaching, practice and a good summer.</p>
             </Help>
           }
         >
@@ -81,8 +78,9 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
                 <span className="dv-pot-tier">{tierLabel(p.pot)}</span>
               </div>
             </div>
+            {/* (at his ceiling, its head says so: no sentence repeating it) */}
             {room > 0 && <Climb p={p} />}
-            <p className="dv-pot-text">{potentialText(p)}</p>
+            {room > 0 && <p className="dv-pot-text">{potentialText(p)}</p>}
           </div>
         </Section>
       )}
@@ -121,10 +119,10 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
         title="Outlook"
         right={
           <Help title="How players develop">
-            Players follow age curves: skills and IQ improve into the late 20s, while speed and explosiveness peak around 24-27 and then decline. Most of a year&apos;s change comes
-            over the summer; players 26 and younger also move a little at the staff&apos;s three check-ins in season. On top of that come a hidden personal growth tendency,
-            coaching quality (coach + coaching budget), practice intensity, playing time for young players (25+ minutes helps, under 6 hurts), and each player&apos;s training
-            focus.
+            <p>Skills and IQ improve into the late 20s. Speed and explosiveness peak around 24-27, then decline.</p>
+            <p>Most of a year&apos;s change comes over the summer. Players 26 and under also move a little at the staff&apos;s three check-ins.</p>
+            <p>Coaching, the coaching budget, practice intensity and his training focus all push. So does a growth tendency of his own, hidden from scouts.</p>
+            <p>Young players grow with minutes: 25 a night helps, under 6 hurts.</p>
           </Help>
         }
       >
@@ -147,7 +145,7 @@ export function GrowthTab({ p, league, mine }: { p: Player; league: League; mine
             items={[
               { k: 'Age', v: age },
               ...(p.tid !== RETIRED
-                ? [{ k: 'Change', v: change ? signedInt(change) : '0', s: since, color: change > 0 ? 'var(--good)' : change < 0 ? 'var(--bad)' : undefined }]
+                ? [{ k: 'Change', v: change ? signedInt(change) : '0', s: 'this season', color: change > 0 ? 'var(--good)' : change < 0 ? 'var(--bad)' : undefined }]
                 : []),
               ...(p.tid >= 0 ? [{ k: 'Wear', v: `${Math.round(p.wear)}/100`, s: p.wear >= 55 ? 'needs rest' : 'fresh', color: p.wear >= 55 ? 'var(--warn)' : undefined }] : []),
             ]}

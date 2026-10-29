@@ -170,7 +170,6 @@ interface Case {
   teams?: number[];
 }
 const d = (defense: TacticsPatch['defense']): TacticsPatch => ({ defense: { ...MAN.defense, ...defense } });
-const PKG: SetId[] = ['floppy', 'chicago', 'spain', 'elevator'];
 const COV = ['drop_', 'switch_', 'blitz_', 'hedge_', 'ice_'];
 const cases: Case[] = [
   { name: 'box1 vs star+non-shooters', aim: '+', by: 'def', shape: 'helio', base: () => MAN, alt: (s) => d({ scheme: 'box1', chase: [s.who!] }), tags: ['box_', 'zone_'] },
@@ -210,17 +209,6 @@ const cases: Case[] = [
   { name: 'sprint back vs a running team', aim: '+', by: 'def', shape: 'runner', base: () => MAN, alt: () => d({ getBack: 90 }), tags: ['getback', 'crash_'] },
   { name: 'sprint back vs a walk-it-up team', aim: '-', by: 'def', shape: 'walker', base: () => MAN, alt: () => d({ getBack: 90 }), tags: ['getback', 'crash_'] },
   // offensive choices: the defense they face is a reshaped team playing the settings named
-  { name: 'set package vs drop', aim: '+', by: 'off', shape: 'base', opp: MAN, base: () => ({}), alt: () => ({ offense: { sets: PKG } }), tags: ['set_'] },
-  {
-    name: 'set package vs switch',
-    aim: '-',
-    by: 'off',
-    shape: 'base',
-    opp: d({ pnr: 'switch', switchOffBall: true }),
-    base: () => ({}),
-    alt: () => ({ offense: { sets: PKG } }),
-    tags: ['set_'],
-  },
   { name: 'hunt their weak link', aim: '+', by: 'off', shape: 'weakLink', opp: MAN, base: () => ({}), alt: (s) => ({ offense: { huntTarget: s.who! } }), tags: ['hunt'] },
   { name: 'hunt their stopper', aim: '-', by: 'off', shape: 'stopper', opp: MAN, base: () => ({}), alt: (s) => ({ offense: { huntTarget: s.who! } }), tags: ['hunt'] },
   {

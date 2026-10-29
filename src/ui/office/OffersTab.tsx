@@ -40,8 +40,8 @@ export function OffersTab({ league, closed, focus, onReview }: { league: League;
         No offers right now.
         <More label="When teams call">
           <p className="small">
-            About once every ten days in season and more often before the deadline, for your first-round pick on draft night, and with salary dumps when free agency opens if you
-            have cap space.
+            About once every ten days in season, more often near the deadline. On draft night, for your first-round pick. When free agency opens, with salary dumps if you have cap
+            space.
           </p>
         </More>
       </div>
@@ -114,12 +114,14 @@ function OfferCard({
           <Side league={league} title="You send" side={p.offer.a} />
           <Side league={league} title="You get" side={p.offer.b} />
         </div>
+        {/* the money in its own line, so the verdict and Review keep theirs */}
+        <div className="tiny dim num">
+          Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
+          {tax ? <span className={tax.tone}> · {tax.text}</span> : after > cap.salaryCap ? ' · over the cap' : ''}
+        </div>
         <div className="row fo-offer-foot">
           <span className={`tag ${verdict.c}`}>{verdict.l}</span>
-          <span className="tiny dim num grow">
-            Payroll after <b className={after > cap.luxuryTax ? 'bad' : after > cap.salaryCap ? 'warn' : 'good'}>{money(after)}</b>
-            {tax ? <span className={tax.tone}> · {tax.text}</span> : after > cap.salaryCap ? ', over the cap' : ''}
-          </span>
+          <span className="grow" />
           <button className="btn xs ghost" disabled={!!error} onClick={() => onReview(p.offer)}>
             <PencilLine size={14} /> Review
           </button>
@@ -148,8 +150,8 @@ function Side({ league, title, side }: { league: League; title: string; side: Tr
               <Link to={`/player/${pid}`} className="fo-name small">
                 {playerName(p)}
               </Link>
-              <div className="fo-meta num">
-                {salaryText(league, salaryFor(p, s))} · {contractEnd(league, p)}
+              <div className="fo-meta num fo-wrap">
+                {salaryText(league, salaryFor(p, s))} · <span className="nowrap">{contractEnd(league, p)}</span>
               </div>
             </div>
           </div>

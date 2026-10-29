@@ -123,9 +123,8 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
 
   // being younger is an edge between two players with careers ahead of them, not against a retired one
   const retired = pa?.tid === RETIRED || pb?.tid === RETIRED;
+  // (OVR and POT are each side's big figures, in its head: not a second time here)
   const overview: CmpRow[] = [
-    row('ovr', 'OVR', (p) => p.ovr, 'high', 'int'),
-    row('pot', 'Potential', (p) => p.pot, 'high', 'int'),
     row('age', 'Age', (p) => playerAge(p, league.season), retired ? 'none' : 'low', 'int'),
     row('hgt', 'Height', (p) => p.heightIn, 'none', 'height'),
     row('wt', 'Weight', (p) => p.weightLb, 'none', 'lb'),
@@ -151,7 +150,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
   // (a real season he split between teams is still marked real)
   const seasonName = (p: Player | undefined) => {
     const l = p && lines.get(p);
-    return l ? `${seasonLabel(l.season)}${p.stats.some((x) => x.season === l.season && x.real) ? ' (real)' : ''}` : null;
+    return l ? `${seasonLabel(l.season)}${p.stats.some((x) => x.season === l.season && x.real) ? ' · real' : ''}` : null;
   };
   const season: CmpRow[] = [
     // which season each line is from, once either isn't this one
@@ -177,7 +176,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     stat('usg', 'USG%', (t) => pg(t).usg, 'none', 'pct', 'Advanced'),
     // (a real season from a seed before the game files has no plus-minus or on-court numbers)
     stat('pm', '+/-', (t) => (t.real && !t.pm ? null : pg(t).pm), 'high', 'signed'),
-    stat('net', 'Net on court', (t) => (t.onPoss ? pg(t).onOff : null), 'high', 'signed'),
+    stat('net', 'On net', (t) => (t.onPoss ? pg(t).onOff : null), 'high', 'signed'),
     // PER and win shares for a season played here too (worked out from its box score); BPM only for real ones
     row('per', 'PER', (p) => (lines.get(p) ? (advancedView(league, p, lines.get(p)!.tot)?.per ?? null) : null), 'high', 'f1'),
     stat('bpm', 'BPM', (t) => t.adv?.bpm ?? null, 'high', 'signed'),
@@ -229,7 +228,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
     {
       id: 'season',
       title: 'This season',
-      note: 'Per game, regular season (his latest one if he has yet to play this one).',
+      note: 'Per game in the regular season. Before he plays this season, his latest one.',
       rows: season,
       empty: 'No NBA games yet.',
     },
@@ -238,8 +237,8 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
       title: 'Career',
       note:
         league.careersFrom !== undefined
-          ? 'Regular-season totals on record (for a real player, his NBA career before this league counts too).'
-          : 'Regular-season totals on record (for a real veteran, his last three seasons before this league count too).',
+          ? 'Regular-season totals on record. A real player’s NBA career before this league counts too.'
+          : 'Regular-season totals on record. A real veteran’s last three seasons before this league count too.',
       rows: careerRows,
       empty: 'No NBA games yet.',
     },
@@ -247,7 +246,7 @@ export function compareSections(league: League, pa: Player | undefined, pb: Play
       id: 'highs',
       title: 'Career highs',
       note: league.realHighs
-        ? `Regular-season games: a real player's whole NBA career, anyone else's since ${seasonLabel(since)}.`
+        ? `Regular-season games. A real player's whole NBA career, anyone else's since ${seasonLabel(since)}.`
         : `Regular-season games since ${seasonLabel(since)}.`,
       rows: highs,
       empty: 'No games in this league yet.',

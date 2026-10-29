@@ -63,12 +63,12 @@ export function skipChoices(playing: number, atBreak: boolean, sim: { q: number;
     // (from the first quarter's break, the end of the next quarter is halftime)
     ...(playing === 1 && !atBreak ? [{ id: 'half' as SkipTo, label: 'Halftime', sub: 'Plays through the second quarter too.' }] : []),
     ...(playing <= 4 && !decided && !(sim.q >= 4 && sim.clock <= CLUTCH_SEC)
-      ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth quarter. A game decided by then goes on to the final.' }]
+      ? [{ id: 'clutch' as SkipTo, label: 'Clutch time', sub: '5:00 left in the fourth. A decided game goes on to the final.' }]
       : []),
     {
       id: 'end',
       label: 'Sim to final',
-      sub: decided ? 'The game is decided: the rest plays out at once.' : 'The rest plays out at once, with your plan and rotation as they are.',
+      sub: decided ? 'The game is decided. The rest plays out at once.' : 'The rest plays out at once, with your plan and rotation.',
     },
   ];
 }

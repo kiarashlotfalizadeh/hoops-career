@@ -16,7 +16,7 @@ import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
 import { userSeasonsWith } from '../../core/league/legacy';
 import './legacy.css';
-import { plural } from '../../core/format';
+import { keepFigures, plural } from '../../core/format';
 
 /** The franchise's all-time figures in this league: seasons, record, playoff runs, titles. */
 export function FranchiseFigures({ league, tid, onSlab }: { league: League; tid: number; onSlab?: boolean }) {
@@ -74,9 +74,8 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
         title="Season by season"
         right={
           mine.size > 0 ? (
-            <span className="lg-sec-meta">
-              Yours: {plural(mine.size, 'season')} · {myRec[0]}-{myRec[1]}
-            </span>
+            // (the seasons themselves are marked in the list: the line is your record over them)
+            <span className="lg-sec-meta">{keepFigures(`Yours: ${myRec[0]}-${myRec[1]}`)}</span>
           ) : undefined
         }
       >
@@ -174,7 +173,7 @@ function FranchiseLeaders({ league, tid }: { league: League; tid: number }) {
         </div>
       )}
       {real && top.length > 0 && (
-        <div className="lg-note">Leaders count the real seasons before {seasonLabel(league.startSeason)} too; the figures above, this league&apos;s seasons only.</div>
+        <div className="lg-note">Leaders count real seasons before {seasonLabel(league.startSeason)} too. The figures above count this league&apos;s only.</div>
       )}
     </Section>
   );

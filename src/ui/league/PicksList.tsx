@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { DraftPick, League } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
-import { teamName } from '../../core/league/helpers';
 import { pickLabel, pickTermsNote } from '../../core/league/trades';
 import { TeamLogo } from '../components/TeamLogo';
 import { Help, Section, Statline } from '../components/ui';
@@ -17,22 +16,23 @@ import { teamPath } from './shared';
  * One draft pick: whose it was (its team's mark) and its name ("2027 1st #4 (LAC)"), the team behind
  * it in words, its terms, and where it projects until its slot is set ("proj. #6-12", see
  * pickProjText; neutral: a projection, not a grade; `hidden` while the lottery's reveal is still to
- * be watched). Every row reads the same way: one owed to another team (`owner`) names its owner, one
- * from another team names that team, and either links to the other team; a team's own pick is "Own pick".
+ * be watched). Every row reads the same way: one owed to another team (`owner`) names its owner, and
+ * either kind from or to another team links to it. The label names the team a pick came from ("(BKN)"),
+ * so the meta line doesn't say it again; a team's own pick has its terms there, or nothing.
  */
 export function PickRow({ league, d, hidden = false, owner = false }: { league: League; d: DraftPick; hidden?: boolean; owner?: boolean }) {
   const terms = pickTermsNote(league, d);
   const proj = hidden ? undefined : pickProjText(league, d);
   // the other team in the pick's story: its owner, or the team whose record decides it
   const other = owner ? d.tid : d.originalTid !== d.tid ? d.originalTid : undefined;
-  const whose = owner ? `Owned by the ${teamName(league.teams[d.tid])}.` : other !== undefined ? `From the ${teamName(league.teams[other])}.` : 'Own pick.';
-  const meta = [whose, terms ?? ''].filter(Boolean).join(' ');
+  // (the owner by its name alone: its mark is beside it, so the line stays one line)
+  const meta = [owner ? `Owned by the ${league.teams[d.tid].name}.` : '', terms ?? ''].filter(Boolean).join(' ');
   const body = (
     <>
       <TeamLogo tid={owner ? d.tid : d.originalTid} size={28} decorative />
       <span className="lg-pick-t">
         <span className="lr-name">{pickLabel(league, d)}</span>
-        <span className="lr-meta">{meta}</span>
+        {meta && <span className="lr-meta">{meta}</span>}
       </span>
       <span className="row lg-pick-r">
         {proj !== undefined && <span className="tiny dim num nowrap">{proj}</span>}

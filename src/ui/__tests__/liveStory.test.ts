@@ -375,10 +375,11 @@ describe('the story of a live game', () => {
       const logs = game([[0, 2], [1, 2], ...Array.from({ length: 16 }, (_, i) => [i % 2 === 0 ? 1 : 0, i % 2 === 0 ? 2 : i === 7 ? 2 : 0] as [0 | 1, number])], 2);
       const r = fold(logs);
       const story = breakStory(r.t, ctx(), 2, [[{ pid: 1, pts: 18 }], [{ pid: 15, pts: 12 }]]);
-      expect(story).toMatch(/^(Down|Trailing by) \d+ at the half after the 76ers' \d+-\d+ second-quarter run; Brunson (has|leads you with) 18\.$/);
-      // after one: no "after one after"
+      expect(story).toMatch(/^(Down|Trailing by) \d+ at the half\. The 76ers had an? \d+-\d+ second-quarter run\. Brunson (has|leads you with) 18\.$/);
+      // short sentences, one thing each
       const q1 = breakStory({ ...r.t, runs: { 1: r.t.runs[2] } }, ctx(), 1, [[{ pid: 1, pts: 9 }], []]);
-      expect(q1).toContain('after one following');
+      expect(q1).toMatch(/after one\. The 76ers had/);
+      for (const x of q1.split(/(?<=\.) /)) expect(x.split(' ').length).toBeLessThanOrEqual(15);
     }
 
     // key plays: an ordinary possession skipped

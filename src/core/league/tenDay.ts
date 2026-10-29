@@ -95,17 +95,17 @@ export function tenDayBlockedReason(league: League, tid: number, p: Player): str
     if (p.tid >= 0) return p.tid === tid ? `${name} is on a standard contract.` : `${name} isn't a free agent.`;
     if (p.waivers) return `${name} is on waivers: put in a claim instead.`;
     if (releasedBy(league, p, tid)) return `${tid === league.userTid ? 'You' : 'They'} released ${name} this season: no new deal with him until next season.`;
-    if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract (asking ${moneyExact(askingContract(league, p, tid).amount)}).`;
+    if (p.rfa || !wantsTenDay(league, p, tid)) return `${name} wants a standard contract. He asks ${moneyExact(askingContract(league, p, tid).amount)}.`;
   }
   if (tenDaysWith(league, p, tid) >= TEN_DAY_MAX)
-    return `${name} has had his two 10-day contracts with ${tid === league.userTid ? 'you' : 'them'} this season: a deal for the rest of the season, or he leaves.`;
+    return `${name} has had his two 10-days with ${tid === league.userTid ? 'you' : 'them'} this season. Next is the rest of the season, or he leaves.`;
   if (cur && cur.until > league.regularSeasonDays) return 'His 10-day contract already runs to the end of the regular season.';
   if (!tenDaySpot(league, tid, cur ? p.pid : -1)) {
     const h = hardship(league, tid);
     return `No roster spot: ${CAP.rosterMax} players${h.spots ? ` and ${h.used} on hardship 10-days` : ''}. ${
       h.out >= HARDSHIP_OUT
         ? `The hardship exception allows ${h.spots} beyond ${CAP.rosterMax} with ${h.out} players out.`
-        : `The hardship exception opens spots beyond ${CAP.rosterMax} from ${HARDSHIP_OUT} players out (3+ games each): ${h.out} now.`
+        : `Hardship spots past ${CAP.rosterMax} open with ${HARDSHIP_OUT} players out 3+ games. ${h.out} now.`
     }`;
   }
   return null;
@@ -170,8 +170,7 @@ export function tenDayRestBlockedReason(league: League, p: Player): string | nul
   if (league.phase !== 'regular') return 'The regular season is over.';
   const roster = standardRoster(league, p.tid);
   const hardshipOthers = roster.filter((x) => x.pid !== p.pid && x.contract.tenDay?.hardship).length;
-  if (roster.length - hardshipOthers > CAP.rosterMax)
-    return `He's on a hardship 10-day and your other ${CAP.rosterMax} spots are taken: release someone to give him a regular one.`;
+  if (roster.length - hardshipOthers > CAP.rosterMax) return `He's on a hardship 10-day and your ${CAP.rosterMax} spots are taken. Release someone to give him a regular one.`;
   return null;
 }
 
@@ -230,7 +229,7 @@ function fillAfterTenDay(league: League, tid: number, left: string) {
       addInbox(league, {
         from: 'Assistant GM',
         subject: `${playerName(p)} signed to fill the roster`,
-        body: `${left}'s 10-day contract ended and left us under the league's ${CAP.rosterMin}-man minimum, so we signed ${playerName(p)} (${p.ovr}) for the rest of the season at the minimum (${moneyExact(p.contract.salaries[0])}).`,
+        body: `${left}'s 10-day contract ended and left us under the league's ${CAP.rosterMin}-man minimum. We signed ${playerName(p)}, ${p.ovr} OVR, for the rest of the season at the minimum, ${moneyExact(p.contract.salaries[0])}.`,
         tone: 'neutral',
         link: `/player/${p.pid}`,
       });
@@ -304,11 +303,11 @@ function tenDayNotice(league: League, p: Player) {
   const lines = [
     `${name}'s ${n >= 2 ? 'second' : 'first'} 10-day contract with us ends after today's games.`,
     n >= 2
-      ? `That's his second 10-day with us: sign him for the rest of the season at his minimum (${moneyExact(minFor(league, p))}), or he becomes a free agent tomorrow.`
-      : `Sign him to a second 10-day${again ? ` (${moneyExact(tenDayPay(league, p, tenDayUntil(league, p.contract.tenDay!.until) - p.contract.tenDay!.until))}, through ${tenDayEnds(league, tenDayUntil(league, p.contract.tenDay!.until))})` : ''}, for the rest of the season at his minimum (${moneyExact(minFor(league, p))}), or let him go: doing nothing lets him go tomorrow, with no dead money.`,
-    p.contract.tenDay?.hardship && !again && n < 2 ? 'The hardship exception no longer covers him: a second 10-day would need a regular roster spot.' : '',
+      ? `That's his second 10-day with us. Sign him for the rest of the season at his minimum, ${moneyExact(minFor(league, p))}, or he's a free agent tomorrow.`
+      : `Sign him to a second 10-day${again ? `, ${moneyExact(tenDayPay(league, p, tenDayUntil(league, p.contract.tenDay!.until) - p.contract.tenDay!.until))} through ${tenDayEnds(league, tenDayUntil(league, p.contract.tenDay!.until))},` : ''} or for the rest of the season at ${moneyExact(minFor(league, p))}. Doing nothing lets him go tomorrow, with no dead money.`,
+    p.contract.tenDay?.hardship && !again && n < 2 ? 'The hardship exception no longer covers him. A second 10-day needs a regular roster spot.' : '',
     rest ?? '',
-    left ? `Letting him go leaves us under ${CAP.rosterMin}: the staff would sign the best free agent left for the rest of the season.` : '',
+    left ? `Letting him go leaves us under ${CAP.rosterMin}. The staff would sign the best free agent left, for the season.` : '',
   ];
   addInbox(league, {
     from: 'Assistant GM',

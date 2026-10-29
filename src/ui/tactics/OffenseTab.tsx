@@ -1,13 +1,12 @@
 // Tactics → Instructions, the offense's phases. In possession: three headline decisions (what the half
 // court plays through, the shot profile, the tempo), then Fine-tune (the five action weights, attacking
-// the rim, hunting mismatches, the hot hand), and the set package as its own compact card. In
-// transition: after a stop, when a shot goes up (one dial over the glass and getting back) and the
-// press, then Fine-tune (the glass and getting back apart, the players' own glass duties). Each control
-// marks the style's own setting, and says when it sits off what the team has drilled.
+// the rim, hunting mismatches, the hot hand). Transition: after a stop, when a shot goes up (one dial
+// over the glass and getting back) and the press, then Fine-tune (the glass and getting back apart,
+// the players' own glass duties). Each control marks the style's own setting.
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import type { ActionType, Familiarity, Player, PressMode, Tactics } from '../../core/types';
+import type { ActionType, Player, PressMode, Tactics } from '../../core/types';
 import { ACTIONS } from '../../core/types';
 import { ACTION_META, FOCUS_META, GLASS_LEVELS, GLASS_META, PLAY_FOCI, PRESS_META, applyFocus, focusOf, glassLevel, setGlassLevel, type PlayFocus } from '../../core/sim/tactics';
 import { effectiveTactics } from '../../core/league/gamePlans';
@@ -18,19 +17,14 @@ import { Term } from '../components/Glossary';
 import { tweak } from './edit';
 import { defPresetOf, offPresetOf } from './PlaybookLine';
 import { optLabel } from './DefenseTab';
-import { CostLine } from './Cost';
 import { Lv } from './Lv';
 
-type Props = { t: Tactics; fam: Familiarity };
+type Props = { t: Tactics };
 
-const ACTION_KEYS = ACTIONS.map((a) => `a_${a}` as const);
 const GLASS_NAMES = GLASS_LEVELS.map((l) => l.label) as unknown as readonly [string, string, string, string, string];
 
-/** A focus's name, or the mix's when the weights aren't near any. */
-const focusName = (f: PlayFocus | null) => (f ? FOCUS_META[f].label : 'Custom mix');
-
 /** In possession's headline decisions: what the half court plays through, the shot profile, the tempo. */
-export function InPossession({ t, fam }: Props) {
+export function InPossession({ t }: Props) {
   const pv = offPresetOf(t).values;
   const focus = focusOf(t.offense);
   const mine = focusOf(pv);
@@ -40,13 +34,13 @@ export function InPossession({ t, fam }: Props) {
         <div className="slider-label tx-label">
           Play through
           <Help title="Play through">
-            <p>What the half court runs most: one choice that sets how often each action is run. Fine-tune keeps all five weights, to set your own mix.</p>
+            <p>What the half court runs most. Fine-tune sets each action apart.</p>
             {PLAY_FOCI.map((f) => (
               <p key={f}>
                 <b>{FOCUS_META[f].label}:</b> {FOCUS_META[f].help}
               </p>
             ))}
-            <p>Whatever you pick, the offense still drifts to what the five on the floor run best: a pick-and-roll focus with no ball handler on the floor runs other things.</p>
+            <p>The offense still leans to what the five on the floor do best.</p>
           </Help>
         </div>
         <Chips
@@ -58,19 +52,18 @@ export function InPossession({ t, fam }: Props) {
             ...(focus ? [] : [{ id: 'custom' as const, label: 'Custom mix' }]),
           ]}
         />
-        <CostLine fam={fam} t={t} keys={ACTION_KEYS} drilled={(dt) => focusName(focusOf(dt.offense))} />
       </div>
-      <Lv label="Shot profile" k="threePoint" level="threePoint" t={t} fam={fam} mark={pv.threePoint} set={(tt, x) => void (tt.offense.threePoint = x)} />
-      <Lv label="Tempo" k="pace" level="pace" t={t} fam={fam} mark={pv.pace} set={(tt, x) => void (tt.offense.pace = x)} />
+      <Lv label="Shot profile" level="threePoint" value={t.offense.threePoint} mark={pv.threePoint} set={(tt, x) => void (tt.offense.threePoint = x)} />
+      <Lv label="Tempo" level="pace" value={t.offense.pace} mark={pv.pace} set={(tt, x) => void (tt.offense.pace = x)} />
     </div>
   );
 }
 
 /** What's in In possession's Fine-tune, in a few words. */
-export const IN_POSS_FINE = 'Action weights, attack the rim, mismatches, hot hand';
+export const IN_POSS_FINE = 'Each action, the rim, mismatches, the hot hand';
 
 /** In possession's fine-tuning: the five action weights, attacking the rim, hunting mismatches, the hot hand. */
-export function InPossessionFine({ t, fam }: Props) {
+export function InPossessionFine({ t }: Props) {
   const league = useLeague();
   const pv = offPresetOf(t).values;
   // the defender the game plan for the next opponent attacks (game by game: never in these tactics)
@@ -85,11 +78,8 @@ export function InPossessionFine({ t, fam }: Props) {
     <>
       <div className="tx-fine-h tx-fine-sub">
         <span className="over">How often each action is run</span>
-        <Help title="Action weights">
-          <p>
-            Each half-court trip, the offense picks an action weighted by these settings and by how well the players on the floor can run it. Play through sets all five at once;
-            here you set your own mix.
-          </p>
+        <Help title="Each action">
+          <p>Each trip picks an action by these settings and what the five run well.</p>
           {(Object.keys(ACTION_META) as ActionType[]).map((a) => (
             <p key={a}>
               <b>{ACTION_META[a].label}:</b> {ACTION_META[a].help}
@@ -98,20 +88,20 @@ export function InPossessionFine({ t, fam }: Props) {
         </Help>
       </div>
       {ACTIONS.map((a) => (
-        <Lv key={a} label={ACTION_META[a].label} k={`a_${a}`} level="action" t={t} fam={fam} mark={pv.actions[a]} set={(tt, x) => void (tt.offense.actions[a] = x)} />
+        <Lv key={a} label={ACTION_META[a].label} level="action" value={t.offense.actions[a]} mark={pv.actions[a]} set={(tt, x) => void (tt.offense.actions[a] = x)} />
       ))}
-      <Lv label="Attack the rim" k="rimAttack" level="rimAttack" t={t} fam={fam} mark={pv.rimAttack} set={(tt, x) => void (tt.offense.rimAttack = x)} />
+      <Lv label="Attack the rim" level="rimAttack" value={t.offense.rimAttack} mark={pv.rimAttack} set={(tt, x) => void (tt.offense.rimAttack = x)} />
       <div className="tx-toggles">
         <Toggle
           on={t.offense.huntMismatch}
           onChange={(x) => tweak((tt) => void (tt.offense.huntMismatch = x))}
           label="Hunt mismatches"
-          help="Isolations and ball screens at the weakest defender. Strong against switching defenses. A game plan can name the defender to attack instead."
+          help="Isolations and ball screens at the weakest defender. A game plan can name the defender instead."
         />
         {hunt && (
           <Link to={`/games/${hunt.opp}`} className="tx-hunt">
             <span className="grow">
-              Next game: your plan vs {league.teams[hunt.opp].abbrev} attacks {hunt.name} instead.
+              Next game vs {league.teams[hunt.opp].abbrev}: your plan attacks {hunt.name}
             </span>
             <ChevronRight size={15} aria-hidden="true" />
           </Link>
@@ -120,7 +110,7 @@ export function InPossessionFine({ t, fam }: Props) {
           on={t.offense.hotHand}
           onChange={(x) => tweak((tt) => void (tt.offense.hotHand = x))}
           label="Feed the hot hand"
-          help="Players who have made several shots in a row get more touches."
+          help="A player who has hit several in a row gets more touches."
         />
       </div>
     </>
@@ -128,16 +118,15 @@ export function InPossessionFine({ t, fam }: Props) {
 }
 
 /** In transition's headline decisions: after a stop, when a shot goes up, the press. */
-export function InTransition({ t, fam }: Props) {
+export function InTransition({ t }: Props) {
   const pv = offPresetOf(t).values;
   const dv = defPresetOf(t).values;
   const mine = glassLevel({ offense: { ...t.offense, crashBoards: pv.crashBoards }, defense: { ...t.defense, getBack: dv.getBack } });
   return (
     <div className="card col tx-group">
-      <Lv label="After a stop" k="transition" level="transition" t={t} fam={fam} mark={pv.transition} set={(tt, x) => void (tt.offense.transition = x)} />
+      <Lv label="After a stop" level="transition" value={t.offense.transition} mark={pv.transition} set={(tt, x) => void (tt.offense.transition = x)} />
       <div className="tx-lv">
         <Levels label="When a shot goes up" value={glassLevel(t) * 25} names={GLASS_NAMES} mark={mine * 25} onChange={(x) => tweak((tt) => setGlassLevel(tt, x / 25))} />
-        <CostLine fam={fam} t={t} keys={['crashBoards', 'getBack']} drilled={(dt) => GLASS_LEVELS[glassLevel(dt)].label} />
       </div>
       <div className="tx-lv">
         <div className="slider-label tx-label">
@@ -149,7 +138,7 @@ export function InTransition({ t, fam }: Props) {
           onChange={(x: PressMode) => tweak((tt) => void (tt.defense.press = x))}
           options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({
             id: k,
-            label: optLabel(PRESS_META[k].label, k === dv.press, fam, k === 'none' ? null : `press:${k}`),
+            label: optLabel(PRESS_META[k].label, k === dv.press),
           }))}
         />
       </div>
@@ -158,10 +147,10 @@ export function InTransition({ t, fam }: Props) {
 }
 
 /** What's in In transition's Fine-tune, in a few words. */
-export const IN_TRANS_FINE = 'The glass and getting back apart, players’ glass duties';
+export const IN_TRANS_FINE = 'The glass and getting back apart, glass duties';
 
 /** In transition's fine-tuning: the glass and getting back as two settings, and the players' own glass duties. */
-export function InTransitionFine({ t, fam, players }: Props & { players: Player[] }) {
+export function InTransitionFine({ t, players }: Props & { players: Player[] }) {
   const league = useLeague();
   const pv = offPresetOf(t).values;
   const dv = defPresetOf(t).values;
@@ -171,8 +160,8 @@ export function InTransitionFine({ t, fam, players }: Props & { players: Player[
   const names = (ps: Player[]) => ps.map((p) => shortName(league, p)).join(', ');
   return (
     <>
-      <Lv label="Crash the offensive glass" k="crashBoards" level="crashBoards" t={t} fam={fam} mark={pv.crashBoards} set={(tt, x) => void (tt.offense.crashBoards = x)} />
-      <Lv label="Transition defense" k="getBack" level="getBack" t={t} fam={fam} mark={dv.getBack} set={(tt, x) => void (tt.defense.getBack = x)} />
+      <Lv label="Crash the offensive glass" level="crashBoards" value={t.offense.crashBoards} mark={pv.crashBoards} set={(tt, x) => void (tt.offense.crashBoards = x)} />
+      <Lv label="Transition defense" level="getBack" value={t.defense.getBack} mark={dv.getBack} set={(tt, x) => void (tt.defense.getBack = x)} />
       <Link to="/team/tactics" className="tx-hunt">
         <span className="grow">
           {crash.length || back.length ? (
@@ -181,7 +170,7 @@ export function InTransitionFine({ t, fam, players }: Props & { players: Player[
               {back.length > 0 && <>Always get back: {names(back)}.</>}
             </>
           ) : (
-            'Everyone crashes or gets back as the team does. A player’s own glass duty is in his sheet on Tactic.'
+            'Everyone goes as the team does. Set a player’s glass duty on his sheet.'
           )}
         </span>
         <ChevronRight size={15} aria-hidden="true" />
@@ -193,13 +182,12 @@ export function InTransitionFine({ t, fam, players }: Props & { players: Player[
 /** In transition's Help: what each of its decisions does. */
 export function InTransitionHelp() {
   return (
-    <Help title="In transition">
+    <Help title="Transition">
       <p>
-        <b>After a stop:</b> how often you attack before the defense sets after rebounds and steals. Transition is the most efficient offense in basketball, at a cost in legs.
+        <b>After a stop:</b> how often you run before the defense sets. Running scores best and costs legs.
       </p>
       <p>
-        <b>When a shot goes up:</b> how many go after the offensive rebound and how hard the rest sprint back. Crashing gets second chances and gives up fast breaks the other way.
-        Fine-tune sets the two apart.
+        <b>When a shot goes up:</b> how many crash the glass and how hard the rest get back. Crashing wins second chances and gives up fast breaks.
       </p>
       {([1, -1] as const).map((g) => (
         <p key={g}>
@@ -211,6 +199,7 @@ export function InTransitionHelp() {
           <b>{PRESS_META[k].label}:</b> {PRESS_META[k].help}
         </p>
       ))}
+      <p>A dot marks your style&apos;s own setting. Fine-tune sets the glass and getting back apart.</p>
     </Help>
   );
 }
@@ -220,17 +209,15 @@ export function InPossessionHelp() {
   return (
     <Help title="In possession">
       <p>
-        <b>Play through:</b> what the half court runs most (its own ⓘ has each).
+        <b>Play through:</b> what the half court runs most.
       </p>
       <p>
-        <b>Shot profile:</b> higher turns mid-range looks into threes. Great with shooters; bad shooting teams lose efficiency.
+        <b>Shot profile:</b> higher turns mid-range looks into threes. It pays with shooters and costs without them.
       </p>
       <p>
-        <b>Tempo:</b> seconds you take per half-court possession. Faster means more possessions, slightly more turnovers and more fatigue.
+        <b>Tempo:</b> how long you take in the half court. Faster means more possessions, turnovers and fatigue.
       </p>
-      <p>
-        A setting moved off what the team has drilled costs <Term id="familiarity">familiarity</Term> until practice and games drill it again: the line under it says how much.
-      </p>
+      <p>A dot marks your playbook&apos;s own setting.</p>
     </Help>
   );
 }

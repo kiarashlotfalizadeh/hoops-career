@@ -1,13 +1,11 @@
-// The parts of the tactics as the coach and the staff use them: partnerships between roles (which link,
-// which clash, what they play at and how minutes together build them), shapes and out-of-possession
-// roles, the system report grading it all against the league; tactic slots, mentality, the headline
-// decisions, the live game's one-tap counters and the tactics diffs "Keep changes" saves.
+// The parts of the tactics as the coach and the staff use them: shapes and out-of-possession roles,
+// the system report grading it all against the league; mentality, the headline decisions, the live
+// game's one-tap counters, the reports' words for the engine's tags and the tactics diffs "Keep
+// changes" saves.
 import { describe, expect, it } from 'vitest';
 import { testLeague } from '../../state/__tests__/fixtures';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { afterGame, freshFamiliarity, practiceDay, sharedSeconds } from '../sim/familiarity';
-import { GELLED, NEW_DUO, duoKey, duoOf, duoShare, fitShare, lineupLinks, linkState, linksByRole } from '../sim/links';
 import {
   FOCUS_META,
   GLASS_LEVELS,
@@ -21,37 +19,21 @@ import {
   glassLevel,
   namedJunk,
   setGlassLevel,
-  situationFromTemplate,
   tacticsDiff,
   withMentality,
 } from '../sim/tactics';
-import { activeSlot, clearSlot, copyToSlot, renameSlot, slotLabel, slotPatch, slotTactics, switchSlot, withSlotPlans } from '../sim/slots';
 import { solveMatchups } from '../sim/matchups';
-import { autoDefRoles, autoRoles, autoShape, autoTactics, partnerRoles, shapeFits } from '../ai/coachAI';
+import { autoDefRoles, autoRoles, autoShape, autoTactics, shapeFits } from '../ai/coachAI';
 import { DEF_QUALITIES, OFF_QUALITIES, betterFit, defRoleFits, fitStars, gradeChanges, gradeOf, miscast, roleFits, roleScale, roleStars, systemReport } from '../analysis/system';
-import { IMPACT_TEXT } from '../analysis/gameReport';
-import { impactCounter, teamAlerts } from '../ai/advisor';
+import { IMPACT_TEXT, impactSentence } from '../analysis/gameReport';
+import { impactCounter } from '../ai/advisor';
 import { Rng } from '../random';
-import { DEF_ROLES, SET_IDS, type DefRole, type DefScheme, type League, type Player, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
+import { DEF_ROLES, type DefRole, type DefScheme, type League, type Player, type PnrCoverage, type PressMode, type StarPlan, type Tactics } from '../types';
 
 const baseLeague = testLeague();
 const fresh = () => structuredClone(baseLeague);
 const user = (l: League) => l.teams[l.userTid];
 const roster = (l: League) => teamPlayers(l, l.userTid);
-const five = (l: League) => {
-  const ps = roster(l);
-  return user(l)
-    .rotation.order.slice(0, 5)
-    .map((pid) => ps.find((p) => p.pid === pid)!);
-};
-/** Tactics with every one of `ps` a Glue Guy and a Position Defender but the roles given. */
-function cast(t: Tactics, ps: Player[], off: Record<number, string>, def: Record<number, string> = {}): Tactics {
-  const out = cloneTactics(t);
-  for (const p of ps) out.offense.roles[p.pid] = (off[p.pid] ?? 'glue') as never;
-  out.defense.roles = Object.fromEntries(ps.map((p) => [p.pid, (def[p.pid] ?? 'standard') as never]));
-  delete out.offense.shape;
-  return out;
-}
 
 /** Tactics with every setting an impact's `uses` reads spread over its range. */
 function randomTactics(rng: Rng): Tactics {
@@ -77,138 +59,15 @@ function randomTactics(rng: Rng): Tactics {
   t.offense.crashBoards = rng.int(0, 100);
   t.offense.transition = rng.int(0, 100);
   t.manage.hackThreshold = rng.chance(0.5) ? 0 : rng.int(40, 65);
-  // a set package now and then: up to four of the sets
-  const pkg = SET_IDS.filter(() => rng.chance(0.3)).slice(0, 4);
-  if (pkg.length) t.offense.sets = pkg;
   return t;
 }
 
-describe('roles, partnerships and the system', () => {
-  it('links complementary roles and clashes two inside bigs, plays a link at its fit and understanding, builds it with minutes, casts roles that suit, and grades the system', () => {
+describe('roles and the system', () => {
+  it('casts roles that suit, fits the shape to the roster, and grades the system', () => {
     {
-      // complementary roles link, both ways round only where the action has a passer and a finisher
-      const l = fresh();
-      const [a, b, c, d, e] = five(l);
-      const t = cast(
-        user(l).tactics,
-        five(l),
-        { [a.pid]: 'creator', [b.pid]: 'roller', [c.pid]: 'hub', [d.pid]: 'shooter', [e.pid]: 'stretch' },
-        { [a.pid]: 'poa', [b.pid]: 'anchor' },
-      );
-      const { links, clashes } = lineupLinks(t, five(l));
-      const has = (id: string, x: Player, y: Player) => links.some((k) => k.id === id && k.a === x.pid && k.b === y.pid);
-      expect(has('twoMan', a, b)).toBe(true);
-      expect(has('popMan', a, e)).toBe(true);
-      expect(has('dho', c, d)).toBe(true);
-      expect(has('wall', a, b)).toBe(true);
-      // (the roll man doesn't run the two-man game for his handler)
-      expect(has('twoMan', b, a)).toBe(false);
-      expect(clashes).toEqual([]);
-      // no record of what the team knows: gelled, as familiarity reads it
-      expect(links.every((k) => k.understanding === 100)).toBe(true);
-      expect(links[0].strength).toBeGreaterThanOrEqual(links.at(-1)!.strength);
-    }
-    {
-      // two inside bigs crowd the paint, except in the double post built for them
-      const l = fresh();
-      const [a, b, c] = five(l);
-      const t = cast(user(l).tactics, five(l), { [a.pid]: 'creator', [b.pid]: 'roller', [c.pid]: 'post' });
-      expect(lineupLinks(t, five(l)).clashes).toEqual([{ id: 'crowd', pids: [b.pid, c.pid] }]);
-      t.offense.shape = 'twoIn';
-      expect(lineupLinks(t, five(l)).clashes).toEqual([]);
-      // the staff's shape fit for the double post counts the crowd it spares
-      t.offense.shape = undefined;
-      const crowded = shapeFits(five(l), t).twoIn;
-      t.offense.roles[c.pid] = 'glue';
-      expect(crowded).toBeGreaterThan(shapeFits(five(l), t).twoIn);
-    }
-    {
-      // and the staff's advice says so, with the fix
-      const l = fresh();
-      const [a, b, c] = five(l);
-      const t = user(l);
-      t.tactics = cast(t.tactics, five(l), { [a.pid]: 'creator', [b.pid]: 'roller', [c.pid]: 'post' });
-      t.tactics.manual = true;
-      const alert = teamAlerts(l, l.userTid).find((x) => x.id === 'link-crowd');
-      expect(alert?.fix?.kind).toBe('patch');
-    }
-    {
-      // a link plays at its fit and the pair's understanding: nothing for strangers, all of it once they've gelled
-      expect(duoShare(NEW_DUO)).toBe(0);
-      expect(duoShare(GELLED)).toBe(1);
-      expect(fitShare(45)).toBe(0);
-      expect(fitShare(75)).toBe(1);
-      const l = fresh();
-      const [a, b] = five(l);
-      const t = cast(user(l).tactics, five(l), { [a.pid]: 'creator', [b.pid]: 'roller' });
-      const fam = freshFamiliarity(user(l), roster(l), 97);
-      // a team's rotation starts gelled after camp
-      expect(duoOf(fam, a.pid, b.pid)).toBe(90);
-      const gelled = lineupLinks(t, five(l), fam).links.find((k) => k.id === 'twoMan')!;
-      expect(gelled.understanding).toBe(90);
-      fam.duo = {};
-      const strangers = lineupLinks(t, five(l), fam).links.find((k) => k.id === 'twoMan')!;
-      expect(strangers.understanding).toBe(NEW_DUO);
-      expect(strangers.strength).toBe(0);
-      expect(linkState(strangers).word).toMatch(/Building|Weak/);
-      // the role picker: what each of his roles would make with the five
-      const byRole = linksByRole(t, five(l), b.pid, fam);
-      expect(byRole.roller?.[0].id).toBe('twoMan');
-      expect(byRole.glue).toBeUndefined();
-    }
-    {
-      // understanding builds from minutes shared on the floor and in practice, and pairs with a player gone are forgotten
-      const l = fresh();
-      const ps = roster(l);
-      const [a, b, c] = five(l);
-      const fam = freshFamiliarity(user(l), ps, 97);
-      fam.duo = {};
-      const shared = sharedSeconds(
-        [
-          { t: 0, pids: [a.pid, b.pid, c.pid, 1, 2], sec: 1000 },
-          { t: 0, pids: [a.pid, b.pid, 3, 4, 5], sec: 440 },
-          { t: 1, pids: [a.pid, c.pid, 6, 7, 8], sec: 900 },
-        ],
-        0,
-      );
-      expect(shared[duoKey(a.pid, b.pid)]).toBe(1440);
-      expect(shared[duoKey(a.pid, c.pid)]).toBe(1000);
-      afterGame(fam, user(l).tactics, ps, {}, shared);
-      const ab = duoOf(fam, a.pid, b.pid);
-      const ac = duoOf(fam, a.pid, c.pid);
-      expect(ab).toBeGreaterThan(ac);
-      expect(ac).toBeGreaterThan(NEW_DUO);
-      // practice: the rotation's pairs a little; a departed player's pairs are forgotten
-      const team = { ...user(l), fam };
-      practiceDay(team, ps);
-      expect(duoOf(fam, a.pid, b.pid)).toBeGreaterThan(ab);
-      practiceDay(
-        team,
-        ps.filter((p) => p.pid !== b.pid),
-      );
-      expect(fam.duo![duoKey(a.pid, b.pid)]).toBeUndefined();
-    }
-    {
-      // the user's staff casts for partnerships: a big beside a handler takes the role that partners him, if it suits him as well
-      const l = fresh();
-      const ps = roster(l);
-      const order = user(l).rotation.order;
-      const { roles } = autoRoles(ps);
-      const starters = five(l);
-      const handler = starters.find((p) => ['creator', 'scorer', 'playmaker'].includes(roles[p.pid]));
-      // a starting big made a glue guy who'd be an excellent rim runner, the five without a roller or a popper
-      const big = [...starters].sort((a, b) => b.ratings.hgt - a.ratings.hgt).find((p) => p !== handler)!;
-      for (const p of starters) if (roles[p.pid] === 'roller' || roles[p.pid] === 'stretch' || roles[p.pid] === 'post') roles[p.pid] = 'glue';
-      Object.assign(big.ratings, { ins: 90, ath: 85, str: 85, hgt: Math.max(big.ratings.hgt, 70), oiq: 80, tp: 20 });
-      big.ovr = 40; // (not one of the two focal players, whose roles the staff keeps)
-      expect(roleFits(big).roller).toBeGreaterThan(roleFits(big).glue);
-      expect(handler).toBeDefined();
-      partnerRoles(roles, ps, order);
-      expect(roles[big.pid]).toBe('roller');
-    }
-    {
-      // the staff's shape follows the roster: five-out for five shooters, never for non-shooters; the
-      // double post for bigs who own the offensive glass
+      // the staff's shape follows the roster: five-out for five shooters, never for non-shooters, and
+      // four-out otherwise (since partnerships went, no roster quality reads horns or the double post
+      // better in the games: their reads are flat, 2026-10-28)
       const shooters = (ps: Player[]) => ps.map((p) => ({ ...p, ratings: { ...p.ratings, tp: Math.max(p.ratings.tp, 85) }, injury: null }));
       const bruisers = (ps: Player[]) =>
         ps.map((p) => ({ ...p, ratings: { ...p.ratings, ...(p.ratings.hgt >= 55 ? { tp: 10, oreb: 90, ins: 85, post: 85 } : { tp: Math.min(p.ratings.tp, 35) }) }, injury: null }));
@@ -216,8 +75,8 @@ describe('roles, partnerships and the system', () => {
       const ps = roster(l);
       const order = user(l).rotation.order;
       expect(shapeFits(shooters(ps), undefined, order).fiveOut).toBeGreaterThan(shapeFits(bruisers(ps), undefined, order).fiveOut + 15);
-      expect(shapeFits(bruisers(ps), undefined, order).twoIn).toBeGreaterThan(shapeFits(shooters(ps), undefined, order).twoIn);
-      expect(autoShape(bruisers(ps), undefined, order)).not.toBe('fiveOut');
+      expect(autoShape(shooters(ps), undefined, order)).toBe('fiveOut');
+      expect(autoShape(bruisers(ps), undefined, order)).toBe('fourOut');
       // it gives each out-of-possession role to a player who suits it, at most once a unit
       const defRoles = autoDefRoles(ps, user(l).rotation);
       const byId = new Map(ps.map((p) => [p.pid, p]));
@@ -341,46 +200,7 @@ describe('roles, partnerships and the system', () => {
 });
 
 describe('the controls', () => {
-  it('switch slots, set the mentality and the headline decisions, diff tactics for Keep changes, and counter every edge the tactics give away', () => {
-    {
-      // slots switch between whole tactics, keeping the other in its slot and tonight's matchups with the team
-      const l = fresh();
-      const t = user(l);
-      t.tactics.defense.matchups = { 1: 2 };
-      const a = cloneTactics(t.tactics);
-      expect(activeSlot(t)).toBe(0);
-      expect(switchSlot(t, 1)).toBe(true);
-      // an empty slot starts as a copy
-      expect(t.tactics.offense.pace).toBe(a.offense.pace);
-      t.tactics.offense.pace = 95;
-      t.tactics.defense.scheme = 'zone23';
-      expect(t.tactics.defense.matchups).toEqual({ 1: 2 });
-      switchSlot(t, 0);
-      expect(t.tactics.offense.pace).toBe(a.offense.pace);
-      expect(slotTactics(t, 1)!.offense.pace).toBe(95);
-      // a stored slot keeps no opponent-specific parts
-      expect(slotTactics(t, 1)!.defense.matchups).toEqual({});
-      renameSlot(t, 1, '  Zone   look  ');
-      expect(slotLabel(t, 1)).toBe('B · Zone look');
-      expect(switchSlot(t, 3)).toBe(false);
-    }
-    {
-      // a situational plan can switch to a slot: its patch is the slot's changes
-      const l = fresh();
-      const t = user(l);
-      copyToSlot(t, 2);
-      t.slots!.stored[2]!.offense.pace = 100;
-      t.slots!.stored[2]!.defense.press = 'always';
-      const plan = { ...situationFromTemplate('chasing'), slot: 2 };
-      t.tactics.situations = [plan];
-      const patch = slotPatch(t, t.tactics, plan)!;
-      const played = applyPatch(t.tactics, patch);
-      expect(played.offense.pace).toBe(100);
-      expect(played.defense.press).toBe('always');
-      expect(withSlotPlans(t, t.tactics).situations![0].patch).toEqual(patch);
-      clearSlot(t, 2);
-      expect(t.tactics.situations![0].slot).toBeUndefined();
-    }
+  it('set the mentality and the headline decisions, diff tactics for Keep changes, name every engine tag, and counter every edge the tactics give away', () => {
     {
       // mentality nudges the risk the whole system takes, and balanced plays the settings as they are
       const t = cloneTactics(user(baseLeague).tactics);
@@ -492,6 +312,23 @@ describe('the controls', () => {
       // nothing for an edge without a tactical cause
       expect(impactCounter('mismatch_post:o', defaultTactics())).toBeUndefined();
       expect(impactCounter('nonsense', defaultTactics())).toBeUndefined();
+    }
+    // the staff has words for every engine tag of the shapes and the out-of-possession roles
+    for (const key of [
+      'shape_glass:o',
+      'shape_glass:d',
+      'shape_space:o',
+      'shape_space:d',
+      'shape_tov:o',
+      'role_poa:d',
+      'role_stopper:d',
+      'role_anchor:d',
+      'role_anchor:o',
+      'role_roam:d',
+      'role_roam:o',
+    ]) {
+      expect(IMPACT_TEXT[key], key).toBeDefined();
+      expect(impactSentence(key, 'the Aces', 'the Bees', ' (Smith)')).toMatch(/^[A-Z].*\.$/);
     }
   });
 });

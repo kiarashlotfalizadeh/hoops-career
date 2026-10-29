@@ -53,6 +53,8 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
   // before a game is played there's no order to show: the teams A to Z, and the line says so
   const rows = started ? all : [...all].sort((a, b) => league.teams[a.tid].name.localeCompare(league.teams[b.tid].name));
   const shown = view === 'league' ? (started ? leagueRows(rows) : rows) : rows.filter((r) => r.conf === view);
+  // the clinch key only once a team has clinched or is out: before then it names marks nobody has
+  const marked = view !== 'league' && shown.some((r) => r.clinched);
   return (
     <div className="lg-block">
       <StandingsPoster league={league} rows={shown} view={view} started={started} />
@@ -62,13 +64,15 @@ function Standings({ league, view }: { league: League; view: 'E' | 'W' | 'league
           'Season not started · teams A to Z'
         ) : view === 'league' ? (
           'All 30 by win % · swipe for splits'
-        ) : (
+        ) : marked ? (
           <>
             <span className="lg-keys" aria-hidden="true">
-              <b className="lg-clinch x">x</b> in <b className="lg-clinch p">p</b> clinched play-in <b className="lg-clinch e">e</b> out
+              <b className="lg-clinch x">x</b> playoffs <b className="lg-clinch p">p</b> play-in <b className="lg-clinch e">e</b> out
             </span>
             <span className="lg-foot-sep">swipe for splits</span>
           </>
+        ) : (
+          'Swipe for home, away and conference splits'
         )}
       </Foot>
     </div>
@@ -108,15 +112,17 @@ function StandingsHelp() {
   return (
     <Help title="Seeds and tiebreakers">
       <p className="lg-p">
-        Seeds 1-6 in each conference make the playoffs; 7-10 go to the <Term id="playin">play-in</Term>. <Term id="gb">GB</Term> is games behind the leader.{' '}
-        <b className="lg-clinch x">x</b> clinched a playoff spot, <b className="lg-clinch p">p</b> clinched at least the play-in, <b className="lg-clinch e">e</b> eliminated. Swipe
-        the table for home, away and conference records and point differential.
+        Seeds 1-6 in each conference make the playoffs. Seeds 7-10 go to the <Term id="playin">play-in</Term>. <Term id="gb">GB</Term> is games behind the leader.
       </p>
       <p className="lg-p">
-        Two-team ties break on head-to-head, division leader, division record (same division only), conference record, record against playoff teams in the conference, then in the
-        other conference, then point differential. In ties of three or more, division leaders go first.
+        <b className="lg-clinch x">x</b> clinched a playoff spot. <b className="lg-clinch p">p</b> clinched at least the play-in. <b className="lg-clinch e">e</b> is eliminated.
+        Swipe the table for home, away and conference records and point differential.
       </p>
-      <p className="lg-p">The League view ranks all 30 teams by win %, then point differential, with games behind the leader; seeds come from the conference standings.</p>
+      <p className="lg-p">
+        Two-team ties break on head-to-head first. Then division leader, and division record within a division. Then conference record. Then record against playoff teams in the
+        conference, then in the other conference. Point differential comes last. In ties of three or more, division leaders go first.
+      </p>
+      <p className="lg-p">The League view ranks all 30 teams by win %, then point differential. Seeds still come from the conference standings.</p>
     </Help>
   );
 }
@@ -242,15 +248,13 @@ function Power({ league }: { league: League }) {
       <Foot
         help={
           <Help title="Power rankings">
-            <p className="lg-p">
-              The press ranks all 30 teams once a week: how good each team is now (its net rating this season, weighed against what its healthy roster is worth, so an injury to a
-              star shows), its record and its last ten games.
-            </p>
-            <p className="lg-p">The arrows show the move since last week. By net rating orders the teams by the numbers alone, today.</p>
+            <p className="lg-p">The press ranks all 30 teams once a week. It weighs how good each team is now, its record and its last ten games.</p>
+            <p className="lg-p">Strength now is its net rating, weighed against what its healthy roster is worth. An injured star shows.</p>
+            <p className="lg-p">The arrows show the move since last week. By net rating orders the teams by today&apos;s numbers alone.</p>
           </Help>
         }
       >
-        The press&apos;s weekly order, its move since last week
+        The press&apos;s order, updated weekly
       </Foot>
     </div>
   );
@@ -347,11 +351,9 @@ function PowerRankings({ league, back, week }: { league: League; back?: () => vo
       <Foot
         help={
           <Help title="Power rankings">
-            <p className="lg-p">Teams are ordered by net rating: offensive rating (points scored per 100 possessions) minus defensive rating (points allowed per 100).</p>
-            <p className="lg-p">
-              Net rating predicts future results better than win-loss record. Early in the season, roster strength (Top 8: the average OVR of the eight best players) is blended in
-              until about ten games are played.
-            </p>
+            <p className="lg-p">Teams are ordered by net rating: points scored minus points allowed per 100 possessions.</p>
+            <p className="lg-p">Net rating predicts future results better than the record does.</p>
+            <p className="lg-p">Top 8 is the average OVR of a team&apos;s eight best players. It counts most until about ten games are in.</p>
           </Help>
         }
       >

@@ -27,7 +27,6 @@ import {
 import { generateSchedule } from './schedule';
 import { advanceCup, cupState } from './cup';
 import { applyStaffTactics, ensureRotation, gamesOnDay, playGame, youthNews } from './games';
-import { practiceDays, trainingCamps } from './practice';
 import { freezeRecordNames, holdsSeasonRecord } from './records';
 import { TAX_SHARE_TO_NON_TAXPAYERS, aiTicketPrice, assessLuxuryTax, shareRevenue } from './finances';
 import { annualProgression, inSeasonProgression, refreshDerived } from './progression';
@@ -108,9 +107,9 @@ export function canStartRegularSeason(league: League): string[] {
   // two-way players don't take one of the 15 spots or count toward the 13-man minimum
   const n = standardRoster(league, league.userTid).length;
   if (n > CAP.rosterMax) errs.push(`Your roster has ${n} players. Release or trade down to ${CAP.rosterMax}.`);
-  if (n < CAP.rosterMin) errs.push(`Your roster has ${n} players. Sign at least ${CAP.rosterMin - n} more (minimum ${CAP.rosterMin}).`);
+  if (n < CAP.rosterMin) errs.push(`Your roster has ${n} players. Sign ${CAP.rosterMin - n} more to reach the minimum of ${CAP.rosterMin}.`);
   const tw = twoWayRoster(league, league.userTid).length;
-  if (tw > TWO_WAY_MAX) errs.push(`You have ${tw} two-way players (max ${TWO_WAY_MAX}). Release or convert ${tw - TWO_WAY_MAX}.`);
+  if (tw > TWO_WAY_MAX) errs.push(`You have ${tw} two-way players, ${TWO_WAY_MAX} at most. Release or convert ${tw - TWO_WAY_MAX}.`);
   return errs;
 }
 
@@ -125,8 +124,6 @@ export function startRegularSeason(league: League): string[] {
     fillRosters(league, rng);
   });
   for (const t of league.teams) ensureRotation(league, t.tid);
-  // training camp drills what each team opens the season with (and its new players learn the system)
-  trainingCamps(league);
   // tickets priced where the gate peaks, the user's too until he sets a price himself: left at the
   // default, a contender's crowd paid $95-113 where the gate peaked at $123-152, $20-35M a season
   // short (OKC, four seasons, round 2026-10-25)
@@ -279,8 +276,6 @@ export function advanceDay(league: League) {
     }
     healIdle(league, rng);
   });
-  // the day's practices: teams without a game work on their tactics at their focus
-  if (league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs') practiceDays(league);
   // wear recovery, every day of the season and postseason (a player waived worn down recovers too)
   for (const p of Object.values(league.players)) if (p.tid >= FREE_AGENT && p.wear > 0) p.wear = Math.max(0, p.wear - 0.75);
   // an assistant-run rotation follows today's injuries and recoveries now, not at the next game:
@@ -335,8 +330,8 @@ function seasonBooksMail(league: League, shared: number, bills: ReturnType<typeo
   if (Math.abs(shared) >= 500)
     lines.push(
       shared > 0
-        ? `Revenue sharing paid us ${money(shared)}: our local revenue (gate, merchandise, local TV) came in below the league average.`
-        : `We paid ${money(-shared)} into revenue sharing: our local revenue (gate, merchandise, local TV) beat the league average.`,
+        ? `Revenue sharing paid us ${money(shared)}: our local revenue came in below the league average.`
+        : `We paid ${money(-shared)} into revenue sharing: our local revenue beat the league average.`,
     );
   if (mine?.tax) {
     // the seeds are final: in the top six, in the play-in or out
@@ -349,8 +344,7 @@ function seasonBooksMail(league: League, shared: number, bills: ReturnType<typeo
           : "For a team that missed the postseason. That can't happen again.";
     lines.push(`We paid ${money(mine.tax)} in luxury tax. The owner: "${word}"`);
   } else if (share >= 500) lines.push(`Our share of the league's luxury tax: ${money(share)}.`);
-  if (mine?.shortfall)
-    lines.push(`Our payroll finished ${money(mine.shortfall)} under the salary floor, so we paid the difference to the players anyway. Spend it on talent next year.`);
+  if (mine?.shortfall) lines.push(`Our payroll finished ${money(mine.shortfall)} under the salary floor. We paid the players the difference anyway. Spend it on talent next year.`);
   if (!lines.length) return;
   addInbox(league, {
     from: 'Front Office',
@@ -614,11 +608,16 @@ export function startFreeAgency(league: League): boolean {
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Free agency is open',
-    body: `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space (minimum contracts only)'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}. AI teams are already signing their first wave. Top free agents weigh competing offers over their first days on the market; anyone else accepts an offer at or above his asking price on the spot. Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.${
-      rfas.length
-        ? `\nYour restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights any time before an offer sheet comes in, or match one; unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`
-        : ''
-    }`,
+    body: [
+      `You have ${space > 0 ? `${money(space)} in cap space` : 'no cap space'} for next season${rfas.length > 1 ? " after your restricted free agents' cap holds" : rfas.length ? " after your restricted free agent's cap hold" : ''}.${space > 0 ? '' : ' Minimum contracts only.'}`,
+      'AI teams are already signing their first wave. Top free agents weigh offers over their first days on the market. Anyone else signs at his asking price on the spot.',
+      `Restricted free agents sign offer sheets their team can match within ${MATCH_DAYS} days.`,
+      ...(rfas.length
+        ? [
+            `Your restricted free agent${rfas.length > 1 ? 's' : ''}: ${andList(rfas.map(playerName))}. Re-sign ${rfas.length > 1 ? 'them' : 'him'} with Bird rights before an offer sheet comes in, or match one. Unsigned when the market closes, ${rfas.length > 1 ? 'each takes his' : 'he takes his'} qualifying offer.`,
+          ]
+        : []),
+    ].join('\n'),
     tone: 'neutral',
     link: '/office/free-agents',
   });
@@ -768,12 +767,12 @@ function extensionCandidatesMail(league: League) {
   if (!list.length) return;
   const line = (p: Player) => {
     const ask = extensionAsk(league, p);
-    return extensionRefusal(league, p) ?? `${playerName(p)} (${p.ovr}) asks about ${money(ask.amount)} × ${ask.years} year${ask.years === 1 ? '' : 's'}.`;
+    return extensionRefusal(league, p) ?? `${playerName(p)}, ${p.ovr} OVR: asks about ${money(ask.amount)} × ${ask.years} year${ask.years === 1 ? '' : 's'}.`;
   };
   addInbox(league, {
     from: 'Assistant GM',
     subject: 'Extension candidates',
-    body: `${list.length === 1 ? `${playerName(list[0])} is in the final season of his deal. Extend him` : `${list.length} of your players are in the final season of their deals. Extend them`} any time until the end of the regular season, before they reach free agency next summer:\n${list
+    body: `${list.length === 1 ? `${playerName(list[0])} is in the final season of his deal.` : `${list.length} of your players are in the final season of their deals.`} Extend ${list.length === 1 ? 'him' : 'them'} before the regular season ends, or they reach free agency:\n${list
       .slice(0, 6)
       .map(line)
       .join('\n')}${list.length > 6 ? `\nand ${list.length - 6} more.` : ''}`,

@@ -42,11 +42,11 @@ export function ResignClosed({ league }: { league: League }) {
   const room = capRoomFig(cap.salaryCap - after - holds);
   const [title, when] =
     league.phase === 'freeAgency'
-      ? ['Closed for this summer', 'These deals run out after next season: extend them now, or re-sign them next summer.']
+      ? ['Closed for this summer', 'These deals end after next season. Extend them now, or re-sign them next summer.']
       : league.phase === 'draft' || league.phase === 'draftLottery'
         ? ['Opens after the draft', 'Then re-sign your own players for any amount, even over the cap.']
         : league.phase === 'preseason' || league.phase === 'regular'
-          ? ['Opens after the playoffs', 'Until the end of the regular season you can extend these players instead.']
+          ? ['Opens after the playoffs', 'Extend these players now, until the regular season ends.']
           : ['Opens after the draft', 'Until then, review who is up.'];
   return (
     <main className="page fo-page">
@@ -84,8 +84,8 @@ export function ResignClosed({ league }: { league: League }) {
 
       {rfas.length > 0 && (
         <Callout icon={<ShieldCheck size={16} className="dim" />}>
-          Your restricted free agent{rfas.length > 1 ? 's' : ''} ({rfas.map((p) => shortName(league, p)).join(', ')}) can still re-sign with Bird rights until{' '}
-          {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet, and you can match any sheet.{' '}
+          {rfas.map((p) => shortName(league, p)).join(', ')} can still re-sign with Bird rights until {rfas.length > 1 ? 'they sign' : 'he signs'} an offer sheet. You match any
+          sheet.{' '}
           <Link to="/office/free-agents" className="bold accent-text">
             Free agents
           </Link>
@@ -108,10 +108,12 @@ export function ResignClosed({ league }: { league: League }) {
                   <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-name">{playerName(p)}</div>
+                    {/* a two-way says so in the meta line (his page converts him to a standard deal); a rarer reason gets its own */}
                     <div className="fo-meta">
                       {p.pos} · {playerAge(p, league.season)}
+                      {p.contract.twoWay ? ' · two-way' : ''}
                     </div>
-                    {own && <div className="tiny dim fo-why">{own}</div>}
+                    {own && !p.contract.twoWay && <div className="tiny dim fo-why">{own}</div>}
                   </div>
                   <div className="fo-money">
                     <div className="a">{salaryText(league, salaryFor(p, s))}</div>

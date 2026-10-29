@@ -503,8 +503,8 @@ export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
       const cut = full > 0 ? 1 - kept / full : 0;
       out.push({
         key: `p${dp.dpid}`,
-        short: `Top-${n} protection: stays ${yours ? 'yours' : 'theirs'} about ${pct(odds)} of the time; ${yours ? `${ab(judge)} count it ${pct(cut)} lower` : `${pct(cut)} less for ${ab(judge)} to give up`}`,
-        text: `Top-${n} protection: ${whose} ${dp.season} 1st stays ${yours ? 'yours' : 'theirs'} if it lands in the top ${n} (about ${pct(odds)} likely on the current projection), and then nothing is owed. ${
+        short: `Top-${n} protection: stays ${yours ? 'yours' : 'theirs'} about ${pct(odds)} of the time · ${yours ? `${ab(judge)} count it ${pct(cut)} lower` : `${pct(cut)} less for ${ab(judge)} to give up`}`,
+        text: `Top-${n} protection: ${whose} ${dp.season} 1st stays ${yours ? 'yours' : 'theirs'} if it lands in the top ${n}, and then nothing is owed. That's about ${pct(odds)} likely today. ${
           yours ? `${ab(judge)} count it ${pct(cut)} lower for that.` : `It costs ${ab(judge)} ${pct(cut)} less to give up.`
         }`,
       });
@@ -517,10 +517,10 @@ export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
       const share = base > 0 ? gain / base : 0;
       out.push({
         key: `s${y}`,
-        short: `${y} swap: used about ${pct(odds)} of the time; ${yours ? `worth ${pct(share)} of your pick to ${ab(other.tid)}` : `costs ${ab(side.tid)} ${pct(share)} of their pick`}`,
+        short: `${y} swap: used about ${pct(odds)} of the time · ${yours ? `worth ${pct(share)} of your pick to ${ab(other.tid)}` : `costs ${ab(side.tid)} ${pct(share)} of their pick`}`,
         text: yours
-          ? `${y} swap: ${ab(other.tid)} may take your ${y} 1st for theirs if yours lands higher (about ${pct(odds)} likely on the current projection). It's worth about ${pct(share)} of your pick to them.`
-          : `${y} swap: you may take ${ab(side.tid)}'s ${y} 1st for yours if theirs lands higher (about ${pct(odds)} likely on the current projection). It costs them about ${pct(share)} of their pick.`,
+          ? `${y} swap: ${ab(other.tid)} may take your ${y} 1st for theirs if yours lands higher. That's about ${pct(odds)} likely today. It's worth about ${pct(share)} of your pick to them.`
+          : `${y} swap: you may take ${ab(side.tid)}'s ${y} 1st for yours if theirs lands higher. That's about ${pct(odds)} likely today. It costs them about ${pct(share)} of their pick.`,
       });
     }
     const c = side.cash ?? 0;
@@ -529,11 +529,11 @@ export function dealTerms(league: League, offer: TradeOffer): DealTerm[] {
       out.push({
         key: 'cash',
         short: yours
-          ? `${moneyExact(c)} cash: not salary, off your profit; ${room > 0 ? `${moneyExact(room)} more allowed` : 'no more allowed'} for ${seasonLabel(contractSeason(league))}`
+          ? `${moneyExact(c)} cash: not salary, off your profit · ${room > 0 ? `${moneyExact(room)} more allowed` : 'no more allowed'} for ${seasonLabel(contractSeason(league))}`
           : `${moneyExact(c)} cash from ${ab(side.tid)}: not salary, onto your profit`,
         text: yours
-          ? `${moneyExact(c)} in cash to ${ab(other.tid)}: not salary (no matching, no cap), and it comes out of your profit. ${room > 0 ? `You can send ${moneyExact(room)} more` : "That's all you can send"} for ${seasonLabel(contractSeason(league))}.`
-          : `${moneyExact(c)} in cash from ${ab(side.tid)}: not salary (no matching, no cap), and it adds to your profit.`,
+          ? `${moneyExact(c)} in cash to ${ab(other.tid)}. It isn't salary, so no matching and no cap, and it comes out of your profit. ${room > 0 ? `${moneyExact(room)} more is allowed` : "That's the most allowed"} for ${seasonLabel(contractSeason(league))}.`
+          : `${moneyExact(c)} in cash from ${ab(side.tid)}. It isn't salary, so no matching and no cap, and it adds to your profit.`,
       });
     }
   }
@@ -1125,16 +1125,16 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
       errors.push(
         waives
           ? `${abbrev} would have to waive ${size - maxSize} players to make room (${waives} at most).`
-          : `${abbrev} would have ${size} players (max ${maxSize}${inSeason(league) ? '' : ' in the offseason'}).`,
+          : `${abbrev} would have ${size} players. The most is ${maxSize}${inSeason(league) ? '' : ' in the offseason'}.`,
       );
-    if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players (minimum ${CAP.rosterMin} during the season).`);
+    if (inSeason(league) && out > inc && size < CAP.rosterMin) errors.push(`${abbrev} would drop to ${size} players. The in-season minimum is ${CAP.rosterMin}.`);
     const twIn = other.pids.filter(twoWay).length;
     // (after the season, as on the standard roster, only next season's two-way deals hold a slot)
     const twAfter = twoWayRoster(league, mine.tid).filter((p) => contractExp(p.contract) >= s).length - mine.pids.filter(twoWay).length + twIn;
-    if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players (max ${TWO_WAY_MAX}).`);
+    if (twIn > 0 && twAfter > TWO_WAY_MAX) errors.push(`${abbrev} would have ${twAfter} two-way players. The most is ${TWO_WAY_MAX}.`);
     const m = matchInfo(league, offer, key);
     const { inSal, outSal } = m;
-    if (salaryMatchGap(league, offer, key) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)}, over its ${matchLimitText(league, m)}.`);
+    if (salaryMatchGap(league, offer, key) > 0) errors.push(`Salary doesn't match: ${abbrev} takes in ${money(inSal)} against a ${matchLimitText(league, m)}.`);
     // the user's budget frozen by his owner (see books.ts): no taking on salary, no cash out
     if (mine.tid === league.userTid) {
       const frozen = freezeTradeReason(league, inSal, outSal, mine.cash ?? 0);
@@ -1146,21 +1146,19 @@ export function validateTrade(league: League, offer: TradeOffer): string[] {
     if (m.apron2 && inSal > 0) {
       const biggest = Math.max(0, ...mine.pids.map((pid) => capSalary(league, pid)));
       if (mine.pids.filter((pid) => capSalary(league, pid) > 0).length > 1 && inSal > biggest)
-        errors.push(
-          `${abbrev} would be over the second apron (${money(cap.secondApron)}): it can't combine salaries to take back more than its biggest contract sent (${money(biggest)}).`,
-        );
+        errors.push(`${abbrev} would be over the second apron, ${money(cap.secondApron)}. It can't combine salaries to take back more than its biggest sent, ${money(biggest)}.`);
     }
     if (m.apron2 && (mine.cash ?? 0) > 0) errors.push(`${abbrev} would be over the second apron (${money(cap.secondApron)}): it can't send cash in a trade.`);
     if (m.apron2) {
       const frozen = frozenFirst(league, mine.tid);
       if (frozen && mine.dpids.includes(frozen.dpid))
-        errors.push(`${abbrev} would be over the second apron (${money(cap.secondApron)}): its ${frozen.season} first is frozen, so it can't be traded.`);
+        errors.push(`${abbrev} would be over the second apron, ${money(cap.secondApron)}. Its ${frozen.season} first is frozen, so it can't be traded.`);
     }
     // a team that used the mid-level or the bi-annual is hard-capped at the first apron for the
     // season (the taxpayer mid-level at the second): no trade can take it past the line
     const line = hardCapLine(league, mine.tid, s);
     if (line && inSal > outSal && m.after > line.amount)
-      errors.push(`${abbrev} used the ${line.what} this season, so it's hard-capped at the ${line.name} (${money(line.amount)}): this trade would take it past.`);
+      errors.push(`${abbrev} used the ${line.what} this season, so it's hard-capped at the ${line.name}, ${money(line.amount)}. This trade would take it past.`);
     const stepien = stepienError(league, offer, mine);
     if (stepien) errors.push(stepien);
     errors.push(...termErrors(league, offer, mine, other));
@@ -1183,19 +1181,19 @@ function matchLimitText(league: League, m: ReturnType<typeof matchInfo>): string
   const buf = matchBuffer(league, s);
   if (m.room > 0 && m.room >= m.limit) {
     const space = m.room - m.outSal - buf;
-    return `${money(m.limit)} limit (${m.outSal > 0 ? `${money(m.outSal)} sent + ` : ''}its ${money(space)} of cap space + ${money(buf)})`;
+    return `${money(m.limit)} limit, ${m.outSal > 0 ? `${money(m.outSal)} sent + ` : ''}its ${money(space)} of cap space + ${money(buf)}`;
   }
   const base = m.limit - m.tpe;
   const rule = m.apron1
     ? `100% of ${money(m.outSal)} sent, over the first apron after it`
     : m.outSal <= 0
-      ? 'the buffer alone, with no salary sent'
+      ? 'the buffer alone with no salary sent'
       : m.outSal <= cap * MATCH_SMALL_PCT
         ? `200% of ${money(m.outSal)} sent + ${money(buf)}`
         : m.outSal <= cap * MATCH_MID_PCT
           ? `${money(m.outSal)} sent + ${money(Math.round(cap * MATCH_SMALL_PCT))}`
           : `125% of ${money(m.outSal)} sent + ${money(buf)}`;
-  return `${money(base)} limit (${rule})${m.tpe ? `, plus its ${money(m.tpe)} traded player exception` : ''}`;
+  return `${money(base)} limit, ${rule}${m.tpe ? `, plus its ${money(m.tpe)} traded player exception` : ''}`;
 }
 
 /** The first a team over the second apron can't trade: its own in the latest draft on the books (the NBA freezes the one seven drafts out). */
@@ -1232,7 +1230,7 @@ function termErrors(league: League, offer: TradeOffer, mine: TradeSide, other: T
     else if (sp.subject.tid !== mine.tid || sp.right.tid !== other.tid) errors.push(`A ${y} swap needs both teams to hold their own ${y} first-round picks.`);
     else if (sp.subject.pick !== undefined || sp.right.pick !== undefined) errors.push(`The ${y} draft order is set: those firsts can't be swapped now.`);
     else if (protectionOf(sp.subject) || protectionOf(sp.right) || inSwap(league, sp.subject) || inSwap(league, sp.right))
-      errors.push(`A ${y} first in that swap already has a protection or a swap: one swap per pick, and none on a protected pick.`);
+      errors.push(`A ${y} first in that swap already has a protection or a swap. One swap per pick, and none on a protected pick.`);
     else if (moving.has(sp.subject.dpid) || moving.has(sp.right.dpid)) errors.push(`A ${y} first can't change hands in the same deal that swaps it.`);
   }
   const c = mine.cash;
@@ -1429,7 +1427,7 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
               x.reliefKind === 'discount'
                 ? `, but they take ${Math.round(USER_RELIEF_SHARE * 100)}% off a good player's value for it at most`
                 : x.reliefKind === 'dump'
-                  ? `, but they count only what dumping that salary would cost them (about ${asFirsts(-x.money)})`
+                  ? `, but they count only what dumping that salary would cost them, about ${asFirsts(-x.money)}`
                   : ''
             }`
           : `Shedding ${money(Math.abs(net))} frees up cap room for them`,
@@ -1527,7 +1525,10 @@ export function tradeHeadline(a: string, aList: string[], aPlayers: number, b: s
   };
   if (aList.length && !bList.length) return one(a, aList, aPlayers, b);
   if (bList.length && !aList.length) return one(b, bList, bPlayers, a);
-  return `the ${a} send ${andList(aList)} to the ${b} for ${andList(bList)}`;
+  // a short swap reads in one breath; a bigger one gets a sentence a side
+  return aList.length + bList.length > 2
+    ? `the ${a} send ${andList(aList)} to the ${b}. The ${b} send back ${andList(bList)}`
+    : `the ${a} send ${andList(aList)} to the ${b} for ${andList(bList)}`;
 }
 
 /**

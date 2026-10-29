@@ -172,8 +172,8 @@ const ppp = (v: number) => v.toFixed(2);
 /** How often a play type runs against the league's, and how well, as one sentence of evidence. */
 function ptEvidence(noun: string, r: PtRead, heavy: boolean) {
   return heavy
-    ? `${noun} finish ${pct(r.share)} of your possessions (league ${pct(r.lgShare)}), at ${ppp(r.ppp)} points each (league ${ppp(r.base)}).`
-    : `${noun} score ${ppp(r.ppp)} points per possession (league ${ppp(r.base)}).`;
+    ? `${noun} finish ${pct(r.share)} of your possessions, league ${pct(r.lgShare)}. They score ${ppp(r.ppp)} points each, league ${ppp(r.base)}.`
+    : `${noun} score ${ppp(r.ppp)} points per possession, league ${ppp(r.base)}.`;
 }
 
 /** A play type the user leans on: well above the league's points per possession, or run far more than the league runs it without scoring less. */
@@ -292,15 +292,15 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     const lgThree = div(lg.tpa, lg.fga);
     const spot = ptRead(p, off, 'spotup');
     const stay: { w: number; why: string }[] = [];
-    if (three - lgThree >= 0.04) stay.push({ w: ((three - lgThree) / 0.04) * 2, why: `${pct(three)} of your shots are threes (league ${pct(lgThree)}).` });
+    if (three - lgThree >= 0.04) stay.push({ w: ((three - lgThree) / 0.04) * 2, why: `${pct(three)} of your shots are threes, league ${pct(lgThree)}.` });
     if (spot && spot.z >= 1.5) stay.push({ w: spot.z, why: ptEvidence('Your spot-up shooters', spot, false) });
     const stayBest = stay.sort((a, b) => b.w - a.w)[0];
     if (stayBest && d.help > 45) out.push({ id: 'help-low', group: 'help', text: 'stays home on shooters', why: stayBest.why, patch: { defense: { help: 30 } }, w: stayBest.w });
     const pack: { w: number; why: string }[] = [];
     const tp = div(off.tpm, off.tpa);
     const lgTp = div(lg.tpm, lg.tpa);
-    if (off.tpa >= 150 && lgTp - tp >= 0.025) pack.push({ w: (lgTp - tp) / 0.0125, why: `You make ${pct1(tp)} of your threes (league ${pct1(lgTp)}).` });
-    if (lgThree - three >= 0.05) pack.push({ w: (lgThree - three) / 0.025, why: `Only ${pct(three)} of your shots are threes (league ${pct(lgThree)}).` });
+    if (off.tpa >= 150 && lgTp - tp >= 0.025) pack.push({ w: (lgTp - tp) / 0.0125, why: `You make ${pct1(tp)} of your threes, league ${pct1(lgTp)}.` });
+    if (lgThree - three >= 0.05) pack.push({ w: (lgThree - three) / 0.025, why: `Only ${pct(three)} of your shots are threes, league ${pct(lgThree)}.` });
     for (const [key, noun] of [
       ['post', 'Your post-ups'],
       ['cut', 'Your cutters'],
@@ -316,7 +316,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
     const sTr = strength(tr, 1.3);
     if (tr && sTr) {
       const why = sTr.heavy
-        ? `${pct(tr.share)} of your possessions come in transition (league ${pct(tr.lgShare)}), at ${ppp(tr.ppp)} points each.`
+        ? `${pct(tr.share)} of your possessions come in transition, league ${pct(tr.lgShare)}. They score ${ppp(tr.ppp)} points each.`
         : ptEvidence('Your transition plays', tr, false);
       if (d.getBack < 75) out.push({ id: 'getback', group: 'glass', text: 'sprints back in transition', why, patch: { defense: { getBack: 85 } }, w: sTr.w });
       else if (base.offense.crashBoards > 50)
@@ -329,7 +329,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         id: 'crash',
         group: 'glass',
         text: 'crashes the offensive glass',
-        why: `Opponents rebound ${pct(orbAllowed)} of their misses against you (league ${pct(lgOrb)}).`,
+        why: `Opponents rebound ${pct(orbAllowed)} of their misses against you, league ${pct(lgOrb)}.`,
         patch: { offense: { crashBoards: 72 } },
         w: ((orbAllowed - lgOrb) / 0.03) * 2,
       });
@@ -341,7 +341,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         id: 'physicality-down',
         group: 'physicality',
         text: 'defends without fouling',
-        why: `You get ${ftr.toFixed(2)} free throws per shot (league ${lgFtr.toFixed(2)}).`,
+        why: `You get ${ftr.toFixed(2)} free throws per shot, league ${lgFtr.toFixed(2)}.`,
         patch: { defense: { physicality: 35 } },
         w: (ftr - lgFtr) / 0.02,
       });
@@ -352,7 +352,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         id: 'pressure-up',
         group: 'pressure',
         text: 'pressures the ball',
-        why: `You turn it over on ${pct1(tov)} of your possessions (league ${pct1(lgTov)}).`,
+        why: `You turn it over on ${pct1(tov)} of your possessions, league ${pct1(lgTov)}.`,
         patch: { defense: { pressure: 75 } },
         w: (tov - lgTov) / 0.0075,
       });
@@ -363,7 +363,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
         id: 'run',
         group: 'pace',
         text: 'runs on the break',
-        why: `Opponents score ${ppp(trD.ppp)} points per possession in transition against you (league ${ppp(trD.base)}).`,
+        why: `Opponents score ${ppp(trD.ppp)} points a trip in transition against you, league ${ppp(trD.base)}.`,
         patch: { offense: { transition: 80 } },
         w: trD.z,
       });
@@ -391,7 +391,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       id: 'zone23',
       group: 'coverage',
       text: 'plays a 2-3 zone',
-      why: `Your five who play most space the floor at ${Math.round(fiveSpacing)}: the league's bottom fifth starts at ${CRAMPED_SPACING}.`,
+      why: `Your five who play most space the floor at ${Math.round(fiveSpacing)}. The league's bottom fifth starts at ${CRAMPED_SPACING}.`,
       patch: { defense: { scheme: 'zone23' } },
       w: 1.5 + (CRAMPED_SPACING + 6 - fiveSpacing) / 3,
     });
@@ -409,7 +409,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       id: 'box1',
       group: 'star',
       text: `plays a box-and-one on ${shortName(league, star.p)}`,
-      why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions, and the rest of your team makes ${pct1(cast.pct)} of its threes (league ${pct1(lgTp)}).`,
+      why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions. The rest of your team makes ${pct1(cast.pct)} of its threes, league ${pct1(lgTp)}.`,
       patch: { defense: { scheme: 'box1', chase: [star.p.pid] } },
       w: 1.5 + (star.usg - 0.28) * 25 + (lgTp - cast.pct) / 0.01,
     });
@@ -463,7 +463,7 @@ export function aiGamePlan(league: League, aiTid: number, userTid: number, game:
         id: 'star-stopper',
         group: 'star',
         text: `puts ${shortName(league, stopper)} on ${shortName(league, star.p)}`,
-        why: star.usg > 0 ? `${playerName(star.p)} uses the most of your possessions (${pct(star.usg)}).` : `${playerName(star.p)} is your best player.`,
+        why: star.usg > 0 ? `${playerName(star.p)} uses the most of your possessions, ${pct(star.usg)}.` : `${playerName(star.p)} is your best player.`,
         patch: { defense: { matchups: { [star.p.pid]: stopper.pid } } },
       });
   }

@@ -1,6 +1,6 @@
 // The assistant: one voice for the staff's advice. Everything the staff would tell the user about
-// his team (the advisor's alerts on fit, lineups, coverages, minutes and wear, and on what the team
-// knows of its system, its shape and its defensive roles, with the practice focus), his next
+// his team (the advisor's alerts on fit, lineups, coverages, minutes and wear, and on its shape and
+// its defensive roles), his next
 // opponent, his roster spots and contracts, and the owner's mood comes through this feed as cards
 // of one shape, each tagged with the area it's about so a screen can show its own (Today shows the
 // most urgent). A card can carry a one-tap fix the staff makes (applyFix) and the screen to open.
@@ -18,7 +18,6 @@ import { jobSecurity } from '../league/jobSecurity';
 import { nextOpponent } from '../league/agenda';
 import { Rng, hashString } from '../random';
 import { coachName } from '../teamFactory';
-import { PREP_META } from '../sim/familiarity';
 
 export type AssistantArea = 'team' | 'tactics' | 'games' | 'office' | 'owner';
 
@@ -92,7 +91,7 @@ export function assistantFeed(league: League): AssistantCard[] {
       area: 'games',
       tone: 'tip',
       title: `No game plan for ${league.teams[opp].abbrev} yet`,
-      line: 'The staff’s counters are on the Plan tab, the ones the numbers back first.',
+      line: 'The staff’s counters are on the Plan tab, the best first.',
       to: `/games/${opp}?tab=plan`,
       weight: 40,
     });
@@ -107,7 +106,7 @@ export function assistantFeed(league: League): AssistantCard[] {
       title: `${CAP.rosterMax - std} open roster spot${CAP.rosterMax - std === 1 ? '' : 's'}`,
       line:
         std < CAP.rosterMin
-          ? `Below the ${CAP.rosterMin}-man minimum: the league fills it if you don't.`
+          ? `Below the ${CAP.rosterMin}-man minimum. The league fills it if you don't.`
           : 'A minimum deal or a 10-day contract fills it without touching the cap.',
       to: '/office/free-agents',
       weight: std < CAP.rosterMin ? 85 : 20,
@@ -160,8 +159,5 @@ export function applyFix(league: League, fix: AlertFix): string {
     case 'restB2B':
       if (!t.rotation.restB2B.includes(fix.pid)) t.rotation.restB2B.push(fix.pid);
       return `${playerName(league.players[fix.pid])} rests on back-to-backs.`;
-    case 'prep':
-      t.prep = fix.focus;
-      return `Practice: ${PREP_META[fix.focus].label}, from the next practice day.`;
   }
 }

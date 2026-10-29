@@ -53,7 +53,7 @@ export function seasonHighlights(league: League, p: Player): Highlight[] {
       key: `honor-${x.kind}-${x.day}`,
       fig: '★',
       unit: 'Honor',
-      text: `${HONOR[x.kind] ?? 'Honor'}${x.conf ? ` (${x.conf === 'E' ? 'East' : 'West'})` : ''}`,
+      text: `${HONOR[x.kind] ?? 'Honor'}${x.conf ? `, ${x.conf === 'E' ? 'East' : 'West'}` : ''}`,
       sub: `${fmtDate(league.season, x.day)} · ${x.line}`,
     });
   // the league's awards this season, less the press's honors already listed

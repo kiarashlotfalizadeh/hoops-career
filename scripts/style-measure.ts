@@ -1,5 +1,5 @@
 // The style measurement style-check and style-gate share: every offensive playbook, defensive
-// playbook or shape for every team of a league, fully drilled, against every other team (paired games:
+// playbook or shape for every team of a league against every other team (paired games:
 // the same seeds for each option), by shot-value margin a game (every attempt as likely to fall, a
 // fouled miss at what its free throws were worth, plus the free throws made: as counterWorth measures),
 // as a difference from the team's average option; with the staff's fit for each, its picks (an AI
@@ -14,7 +14,6 @@ import { buildSimInput } from '../src/core/league/games';
 import { teamPlayers } from '../src/core/league/helpers';
 import { GameSim } from '../src/core/sim/engine';
 import { Rng } from '../src/core/random';
-import { freshFamiliarity } from '../src/core/sim/familiarity';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../src/core/sim/tactics';
 import { defPresetFit, fitRoster, offPresetFit, presetScores, rosterProfile, shapeFits, shapeInputs, type ProfileKey } from '../src/core/ai/coachAI';
 import { OFF_SHAPES, type League, type Tactics } from '../src/core/types';
@@ -109,7 +108,7 @@ export function measureTeams(L: League, o: Omit<MeasureOpts, 'jobs' | 'league'>,
     const runs: Record<string, number[]> = {};
     for (const [id, tactics] of options) {
       const tm = { ...team, tactics };
-      const me = { ...base, team: tm, fam: freshFamiliarity(tm, ps, 100), adjust: true };
+      const me = { ...base, team: tm, adjust: true };
       const xs: number[] = [];
       for (const seed of seeds)
         for (const op of opps)

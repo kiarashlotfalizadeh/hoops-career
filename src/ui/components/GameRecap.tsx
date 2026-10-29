@@ -92,23 +92,23 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
   const turn = story && story.turn.to - story.turn.from >= TURN_MIN ? story.turn : null;
   const turnPlay = turn ? playAt(res, turn.point) : null;
   const turnText = turn
-    ? `${gameTime(turn.point.q, turn.point.clock)}, ${
+    ? `${gameTime(turn.point.q, turn.point.clock)} · ${
         turnPlay ? turnPlay.text.replace(/\.$/, '') : `${winAbbrev} ${swingWords(winnerMargin(turn.prev.margin), winnerMargin(turn.point.margin))}`
-      }: ${winAbbrev} ${pct(turn.from)} → ${pct(turn.to)} to win.`
+      } · ${winAbbrev} ${pct(turn.from)} → ${pct(turn.to)} to win`
     : null;
   // the winner's low point: a comeback (ours) or a lead let slip (theirs); at tip-off, an upset
   const low = story && story.low.wp <= COMEBACK_WP ? story.low : null;
   const lowWhere = (p: WpPoint) => {
     const m = ourMargin(p.margin);
-    return `${m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : 'tied'}, ${gameTime(p.q, p.clock)}`;
+    return `${m > 0 ? `up ${m}` : m < 0 ? `down ${-m}` : 'tied'} at ${gameTime(p.q, p.clock)}`;
   };
   const swing = !low
     ? null
     : low.point.i < 0
       ? { label: 'Upset', text: won ? `Won with a ${pct(low.wp)} chance at tip-off` : `Lost with a ${pct(1 - low.wp)} chance at tip-off` }
       : won
-        ? { label: 'Comeback', text: `Won after falling to ${pct(low.wp)} (${lowWhere(low.point)})` }
-        : { label: 'Let it slip', text: `Lost after reaching ${pct(1 - low.wp)} (${lowWhere(low.point)})` };
+        ? { label: 'Comeback', text: `Won after falling to ${pct(low.wp)}, ${lowWhere(low.point)}` }
+        : { label: 'Let it slip', text: `Lost after reaching ${pct(1 - low.wp)}, ${lowWhere(low.point)}` };
 
   // standings (regular season) or the series (playoffs)
   const stakes = res.stakes?.tid === tid && res.stakes.before && res.stakes.after ? res.stakes : undefined;
@@ -269,7 +269,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                       {marks
                         .slice(0, 2)
                         .map((m) => `${nameOf(m.pid, '')}'s ${markText(m.stat, m.mark)}`)
-                        .join('; ')}
+                        .join(' · ')}
                     </Fact>
                   )}
                   {records.length > 0 && (
@@ -282,7 +282,7 @@ export function GameRecap({ res, league, report, highlights }: { res: GameResult
                           const what = r.team && r.stat === 'margin' ? `${r.v}-point win` : recordWhat(r);
                           return `${who} ${what}, a ${whose} ${r.book === 'post' ? 'playoff ' : ''}record`;
                         })
-                        .join('; ')}
+                        .join(' · ')}
                     </Fact>
                   )}
                 </dl>

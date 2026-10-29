@@ -202,7 +202,7 @@ function RatingsTab({ league, f, set, was, ovr, pot }: TabProps & { league: Leag
         </button>
       </div>
       <div className="tiny dim" style={{ marginTop: -8 }}>
-        Moves all his skills together until he's a {target}; his size and athleticism stay as they are.
+        Moves all his skills together until he's a {target}. His size and athleticism stay.
       </div>
       <Slider
         label="Development"
@@ -214,7 +214,7 @@ function RatingsTab({ league, f, set, was, ovr, pot }: TabProps & { league: Leag
         format={(v) => `${signed(v, 2)} · POT ${pot}`}
         left="Slow"
         right="Fast"
-        help="How good his summers are on average (most through 25), and his potential before 26."
+        help="How good his summers are on average. Most players grow through 25, and his potential is set before 26."
       />
       {GROUPS.map((g) => (
         <div key={g} className="col" style={{ gap: 10 }}>
@@ -286,8 +286,8 @@ function StatusTab({ league, p, f, set }: TabProps & { league: League; p: Player
   return (
     <div className="col" style={{ gap: 14 }}>
       <Select label="Team" value={f.tid} options={teamOptions(league)} onChange={(tid) => set({ tid })} />
-      {joining && !hasDeal && !f.touched.amount && !f.touched.years && <div className="tiny dim">He signs his asking deal with them (see Contract to set another).</div>}
-      {joining && hasDeal && <div className="tiny dim">His contract goes with him, as in a trade; nothing stays on the books of the team he leaves.</div>}
+      {joining && !hasDeal && !f.touched.amount && !f.touched.years && <div className="tiny dim">He signs his asking deal with them. Set another under Contract.</div>}
+      {joining && hasDeal && <div className="tiny dim">His contract goes with him, as in a trade. Nothing stays on his old team's books.</div>}
       {f.tid < 0 && p.tid >= 0 && <div className="tiny dim">Released to free agency with no dead money left behind.</div>}
       <div className="divider" />
       {f.injury ? (
@@ -337,12 +337,12 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
     <div className="col" style={{ gap: 14 }}>
       <div className="small dim2">
         {hasDeal
-          ? `Now ${money(salaryFor(p, cs))} in ${seasonLabel(cs)}, signed through ${seasonLabel(contractExp(p.contract))}${p.contract.option ? ` (${p.contract.option} option)` : ''}.`
+          ? `Now ${money(salaryFor(p, cs))} in ${seasonLabel(cs)}, signed through ${seasonLabel(contractExp(p.contract))}${p.contract.option ? ` with a ${p.contract.option} option` : ''}.`
           : ask
             ? 'He signs his asking deal unless you set one here.'
             : `His deal is up: set one here to sign him from ${seasonLabel(cs)}.`}
       </div>
-      <Field label={`Salary in ${seasonLabel(cs)} ($M)`} hint="Later seasons get 5% raises; seasons already under way keep what they paid.">
+      <Field label={`Salary in ${seasonLabel(cs)} ($M)`} hint="Later seasons get 5% raises. Seasons under way keep what they paid.">
         <input className="input" inputMode="decimal" value={amount} onChange={(e) => touch('amount', { amount: e.target.value })} />
       </Field>
       <div className="col" style={{ gap: 6 }}>
@@ -374,7 +374,7 @@ function ContractTab({ league, p, f, set }: TabProps & { league: League; p: Play
         on={f.twoWay}
         onChange={(twoWay) => touch('twoWay', { twoWay })}
         label="Two-way contract"
-        help="Outside the 15 roster spots and the cap and tax; each team has three two-way slots."
+        help="Outside the 15 roster spots, the cap and the tax. Each team has three two-way slots."
       />
     </div>
   );

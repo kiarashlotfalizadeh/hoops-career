@@ -79,9 +79,6 @@ export const OFF_SHAPES: OffShape[] = ['fourOut', 'fiveOut', 'horns', 'twoIn'];
 /** The team's mentality, -2 (very cautious) to 2 (very aggressive): one dial over the risk the whole system takes. */
 export type Mentality = -2 | -1 | 0 | 1 | 2;
 
-/** What the team works on between games (see src/core/sim/familiarity.ts): its system, the next opponent, or rest. */
-export type PrepFocus = 'balanced' | 'system' | 'opponent' | 'recovery';
-
 export type TrainingFocus = 'balanced' | 'shooting' | 'finishing' | 'playmaking' | 'perimeterD' | 'interiorD' | 'rebounding' | 'conditioning';
 
 export interface Contract {
@@ -501,11 +498,6 @@ export interface OffenseTactics {
   freedom: Record<number, ShotFreedom>;
   /** Preferred PnR screeners, in order (empty = auto). */
   screeners: number[];
-  /**
-   * The set package (the user's only, at most four): the half court mixes these sets in now and then
-   * when the players on the floor fit them. AI coaches run none.
-   */
-  sets?: SetId[];
   /** The half-court alignment (absent: four-out, one-in). */
   shape?: OffShape;
   /** Player instructions on the offensive glass, by pid (absent: as the team crashes). */
@@ -581,30 +573,6 @@ export interface GameManagement {
   foulToGive?: boolean;
 }
 
-/** When a situational plan applies: every condition given must hold. Overtime counts as the 4th quarter. */
-export interface SituationTrigger {
-  fromQ?: number;
-  untilQ?: number;
-  /** At most this many seconds left in the period. */
-  maxClock?: number;
-  /** The team's lead (negative when trailing) is at least / at most this. */
-  minLead?: number;
-  maxLead?: number;
-  /** Only while the second unit plays: three or more of the five on the floor didn't start. */
-  benchUnit?: boolean;
-}
-
-/** A change of plan for a game situation ("protect a lead", "second unit"), applied on top of the base tactics. */
-export interface SituationalPlan {
-  id: string;
-  label: string;
-  enabled: boolean;
-  when: SituationTrigger;
-  patch: TacticsPatch;
-  /** Switch to another tactic slot while the situation lasts (its index in Team.slots), in place of the patch. */
-  slot?: number;
-}
-
 export interface Rotation {
   /** Ordered depth: first five are starters. */
   order: number[];
@@ -629,48 +597,10 @@ export interface Tactics {
   defPreset: string;
   /** If false the auto coach can retune tactics for roster fit. */
   manual: boolean;
-  /** The saved playbook (League.playbooks) these tactics were loaded from or saved as, if any. */
-  playbook?: { id: string; name: string } | null;
-  /** Situational plans (at most four): the first enabled one whose trigger matches is played on top of the rest. */
-  situations?: SituationalPlan[];
   /** The team's mentality (absent: balanced), played on top of every setting (see withMentality). */
   mentality?: Mentality;
 }
 
-/**
- * The coach's three tactics, as Football Manager keeps them (see src/core/sim/slots.ts): the active
- * one is Team.tactics itself, the others wait in `stored` (null at the active index).
- */
-export interface TacticSlots {
-  active: number;
-  names: string[];
-  stored: (Tactics | null)[];
-}
-
-/**
- * What a team has drilled (see src/core/sim/familiarity.ts): how well it knows each discrete option
- * it could play (`opt`: 'scheme:zone23', 'pnr:blitz', 'shape:fiveOut', 'press:always', 0-100), the
- * values its sliders are drilled at (`habit`), each player's knowledge of the system (`know`, 0-100)
- * and the role pair he's drilled in ('slasher|stopper') with how well.
- */
-export interface Familiarity {
-  opt: Record<string, number>;
-  habit: Record<string, number>;
-  know: Record<number, number>;
-  roles: Record<number, [string, number]>;
-  /**
-   * Understanding between two teammates (0-100), by duoKey ('12-345', the lower pid first): built by
-   * the minutes they share on the floor, what their partnerships play at (see src/core/sim/links.ts).
-   * Pairs not kept are at NEW_DUO.
-   */
-  duo?: Record<string, number>;
-}
-
-/**
- * One of the coach's saved playbooks (League.playbooks, see src/core/sim/playbooks.ts): his tactics
- * without the game-specific parts (matchups, the star target). Roles, shot freedom and screeners
- * are kept by player and only come back for players still on the roster.
- */
 /**
  * A change the user made to his tactics or rotation, as the staff measured it (see
  * core/ai/tacticEdits.ts): each setting it moved, when, the games ahead it was measured on and what
@@ -686,8 +616,8 @@ export interface TacticEdit {
   diff: [path: string, from: unknown, to: unknown][];
   /** The user's games it was measured on as it was made (gids): the next few on the schedule. */
   ahead: number[];
-  /** What it measured on them, in points a game (shrunk toward even; `raw` before, `se` its standard error); `drilled`: once the team knows it as well as what it replaced. */
-  worth?: { pts: number; raw: number; se: number; games: number; drilled?: { pts: number; raw: number; se: number } };
+  /** What it measured on them, in points a game (shrunk toward even; `raw` before, `se` its standard error). */
+  worth?: { pts: number; raw: number; se: number; games: number };
   /** Measured again on the user's games played since (`games` of them, through `day`): each replayed with and without it, paired. */
   check?: { pts: number; raw: number; se: number; games: number; day: number };
   /** The staff's note on the check has gone out. */
@@ -696,26 +626,6 @@ export interface TacticEdit {
   closed?: 'reverted' | 'replaced';
   /** The day it was put back (absent on saves from before it was kept). */
   closedDay?: number;
-}
-
-export interface SavedPlaybook {
-  id: string;
-  name: string;
-  /** When it was saved or last overwritten. */
-  saved: { season: number; day: number };
-  offense: Omit<OffenseTactics, 'roles' | 'freedom' | 'screeners' | 'huntTarget' | 'glass'>;
-  defense: Omit<DefenseTactics, 'matchups' | 'starTarget' | 'chase' | 'roles'>;
-  manage: GameManagement;
-  offPreset: string;
-  defPreset: string;
-  roles?: Record<number, OffRole>;
-  freedom?: Record<number, ShotFreedom>;
-  screeners?: number[];
-  /** Glass duties and out-of-possession roles by player (they load for players still on the roster). */
-  glass?: Record<number, GlassDuty>;
-  defRoles?: Record<number, DefRole>;
-  /** Other parts of the tactics (features newer than this type), kept as they were saved. */
-  extra?: Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------- teams
@@ -794,12 +704,6 @@ export interface Team {
   /** Market size factor ~ metro population in millions. */
   pop: number;
   tactics: Tactics;
-  /** The coach's other tactics (the user's team: AI coaches keep one). */
-  slots?: TacticSlots;
-  /** What the team knows of its tactics (see src/core/sim/familiarity.ts); absent: fully drilled in what it plays. */
-  fam?: Familiarity;
-  /** Between games: the practice focus (absent: balanced). */
-  prep?: PrepFocus;
   rotation: Rotation;
   strategy: 'contend' | 'retool' | 'rebuild';
   budget: Budget;
@@ -1096,7 +1000,7 @@ export interface CoachMove {
   q: number;
   /** Seconds left in the period. */
   clock: number;
-  /** "Pick-and-roll coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout", "Horns: Jokić" (a play called: `after` is the trip it ran on). */
+  /** "Ball-screen coverage: Drop → Hedge", "Caruso in for Mitchell", "Timeout", "Horns: Jokić" (a play called: `after` is the trip it ran on). */
   text: string;
   /**
    * A play called: the play and who it was run for; `late` when its trip won the game in the last 24
@@ -1593,8 +1497,6 @@ export interface League {
   past?: LeaguePast;
   /** The user's game plans by opponent tid (opponent-specific adjustments, see GamePlan). */
   gamePlans?: Record<number, GamePlan>;
-  /** The coach's saved playbooks (at most 12, names unique): his, so they go with him to another team. */
-  playbooks?: SavedPlaybook[];
   /**
    * The user's recent changes to his tactics and rotation as the staff measured them (see
    * core/ai/tacticEdits.ts), oldest first, the last few kept: Tactics → Analysis's "Since you changed it".
@@ -1695,11 +1597,12 @@ export interface LiveJournal {
    */
   court?: [number, number] | null;
   /**
-   * The other side's tactics as the engine took them, with its coach's game plan for tonight: a
-   * replay plays them as they were, whatever changed since (the league's id on a
-   * backup imported as a copy).
+   * The other side's tactics as the engine took them, with its coach's game plan for tonight and his
+   * tactics rating (the engine reads it for his adjustments at the breaks and his read of your sets):
+   * a replay plays them as they were, whatever changed since (the league's id on a backup imported as
+   * a copy, his rating).
    */
-  opp?: { tactics: Tactics; plan?: OppPlan };
+  opp?: { tactics: Tactics; plan?: OppPlan; coach?: number };
   /** Possessions played (engine steps) at the last checkpoint, and the period, clock and score (home, away) then: a replay must land on them. */
   steps: number;
   q: number;

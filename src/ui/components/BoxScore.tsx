@@ -1,8 +1,8 @@
-// A team's box score, the same in the live game's Box tab and the game report: who played (starters
-// in bold), the counting stats, the shooting as made-attempted, fouls and plus-minus, then the team's
-// line and a key to the marks. The columns are named as everywhere else in the game; each is spelled
-// out on a long press (its title) and for a screen reader.
-import { useEffect, useRef } from 'react';
+// A team's box score, the same in the live game's Box tab and the game report: who played (the
+// starters, then the bench under its divider), the counting stats, the shooting as made-attempted,
+// fouls and plus-minus, then the team's line and who didn't play. The columns are named as everywhere
+// else in the game; each is spelled out on a long press (its title) and for a screen reader.
+import { Fragment, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Star } from 'lucide-react';
 import type { BoxLine, TeamBox } from '../../core/types';
@@ -26,8 +26,12 @@ export const BOX_COLUMNS = [
   ['+/-', 'Plus-minus: the score while he was on the floor'],
 ] as const;
 
-/** "Injured (Knee Soreness)" reads "Injured: Knee soreness" inside the DNP list's own parentheses, the injury named as everywhere else. */
-const dnpLabel = (dnp: string) => dnp.replace(/^Injured \((.+)\)$/, (_, type: string) => `Injured: ${injuryName(type)}`);
+/** The injury of a player out injured ("Injured (Knee Soreness)": "knee soreness", named as everywhere else), or null for any other reason. */
+const dnpInjury = (dnp: string | undefined) => {
+  const m = /^Injured \((.+)\)$/.exec(dnp ?? '');
+  // (its first letter only: "torn ACL" keeps its capitals)
+  return m ? injuryName(m[1]).replace(/^./, (c) => c.toLowerCase()) : null;
+};
 
 export function BoxScore({
   box,
@@ -52,8 +56,13 @@ export function BoxScore({
   /** List who didn't play, and why, under the table. */
   dnp?: boolean;
 }) {
-  const rows = box.players.filter(shown);
+  const played = box.players.filter(shown);
+  // the starters first, then the bench under its divider (no key needed to tell them apart)
+  const rows = [...played.filter((p) => p.gs), ...played.filter((p) => !p.gs)];
+  const firstBench = rows.findIndex((p) => !p.gs);
   const out = dnp ? box.players.filter((p) => p.min <= 0) : [];
+  const injured = out.filter((p) => dnpInjury(p.dnp));
+  const benched = out.filter((p) => !dnpInjury(p.dnp));
   const min = wholeMinutes(box.players);
   const t = box.t;
   // on a phone the figures past TOV wait to the right: the names stay put and the edge fades until
@@ -91,10 +100,10 @@ export function BoxScore({
               </tr>
             </thead>
             <tbody>
-              {rows.map((p) => {
+              {rows.map((p, i) => {
                 const who = (
                   <span className="bx-who">
-                    <span className={p.gs ? 'bold' : ''}>{name(p.pid)}</span>
+                    <span>{name(p.pid)}</span>
                     {p.pid === pog && (
                       <span className="bx-pog" role="img" aria-label="Player of the game">
                         <Star size={12} fill="currentColor" aria-hidden="true" />
@@ -103,30 +112,38 @@ export function BoxScore({
                   </span>
                 );
                 return (
-                  <tr key={p.pid}>
-                    <td className="l sticky">
-                      {/* the whole name cell is the link, not just the text */}
-                      {links ? (
-                        <Link to={`/player/${p.pid}`} className="bx-link">
-                          {who}
-                        </Link>
-                      ) : (
-                        who
-                      )}
-                    </td>
-                    <td>{min(p.pid)}</td>
-                    <td className="bold">{p.pts}</td>
-                    <td>{p.orb + p.drb}</td>
-                    <td>{p.ast}</td>
-                    <td>{p.stl}</td>
-                    <td>{p.blk}</td>
-                    <td>{p.tov}</td>
-                    <td>{keepFigures(madeAtt(p.fgm, p.fga))}</td>
-                    <td>{keepFigures(madeAtt(p.tpm, p.tpa))}</td>
-                    <td>{keepFigures(madeAtt(p.ftm, p.fta))}</td>
-                    <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
-                    <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{signed(p.pm, 0)}</td>
-                  </tr>
+                  <Fragment key={p.pid}>
+                    {i === firstBench && i > 0 && (
+                      <tr className="bx-div">
+                        <td className="l sticky">Bench</td>
+                        <td colSpan={BOX_COLUMNS.length} />
+                      </tr>
+                    )}
+                    <tr>
+                      <td className="l sticky">
+                        {/* the whole name cell is the link, not just the text */}
+                        {links ? (
+                          <Link to={`/player/${p.pid}`} className="bx-link">
+                            {who}
+                          </Link>
+                        ) : (
+                          who
+                        )}
+                      </td>
+                      <td>{min(p.pid)}</td>
+                      <td className="bold">{p.pts}</td>
+                      <td>{p.orb + p.drb}</td>
+                      <td>{p.ast}</td>
+                      <td>{p.stl}</td>
+                      <td>{p.blk}</td>
+                      <td>{p.tov}</td>
+                      <td>{keepFigures(madeAtt(p.fgm, p.fga))}</td>
+                      <td>{keepFigures(madeAtt(p.tpm, p.tpa))}</td>
+                      <td>{keepFigures(madeAtt(p.ftm, p.fta))}</td>
+                      <td className={p.pf >= 5 ? 'bad' : ''}>{p.pf}</td>
+                      <td className={p.pm > 0 ? 'good' : p.pm < 0 ? 'bad' : ''}>{signed(p.pm, 0)}</td>
+                    </tr>
+                  </Fragment>
                 );
               })}
               <tr className="bx-team">
@@ -148,16 +165,25 @@ export function BoxScore({
           </table>
         </div>
       </div>
-      <div className="bx-key">
-        <b>Bold</b>: starters
-        {pog !== undefined && rows.some((p) => p.pid === pog) && (
-          <>
-            {' '}
-            · <Star size={11} className="bx-pog" fill="currentColor" aria-hidden="true" /> Player of the game
-          </>
-        )}
-        {out.length > 0 && <span> · Didn&apos;t play: {out.map((p) => `${name(p.pid)} (${dnpLabel(p.dnp ?? "Coach's decision")})`).join(', ')}</span>}
-      </div>
+      {(injured.length > 0 || benched.length > 0 || (pog !== undefined && rows.some((p) => p.pid === pog))) && (
+        <div className="bx-key">
+          {pog !== undefined && rows.some((p) => p.pid === pog) && (
+            <div>
+              <Star size={11} className="bx-pog" fill="currentColor" aria-hidden="true" /> Player of the game
+            </div>
+          )}
+          {injured.length > 0 && (
+            <div>
+              <b>Out injured:</b> {injured.map((p) => `${name(p.pid)}, ${dnpInjury(p.dnp)}`).join(' · ')}
+            </div>
+          )}
+          {benched.length > 0 && (
+            <div>
+              <b>Didn&apos;t play:</b> {benched.map((p) => `${name(p.pid)}${p.dnp === 'Rest' ? ', rest' : ''}`).join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

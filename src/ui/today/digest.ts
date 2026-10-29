@@ -201,7 +201,7 @@ const story = (n: { id: number; head?: string; text: string; weight?: 1 | 2 | 3 
 
 /**
  * The digest of what happened since `mark`, or null if the stretch was too short to need one (fewer
- * than two of his games and three days, unless `long`: an offseason week, training camp) or nothing
+ * than two of his games and three days, unless `long`: an offseason week, a new season) or nothing
  * happened worth one.
  */
 export function buildDigest(mark: DigestMark, l: League, opts: { long?: boolean; span?: string } = {}): Digest | null {

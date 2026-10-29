@@ -87,8 +87,8 @@ export function Lineup({
       <Toggle
         on={t.manualSubs}
         onChange={setManualSubs}
-        label="I'll handle substitutions"
-        help="On: only your subs change the lineup (injuries and foul-outs aside), and the staff calls no timeouts for runs. Off: the staff follows the rotation plan."
+        label="Make the subs yourself"
+        help="On: only your subs change the lineup, apart from injuries and foul-outs. The staff calls no timeouts for runs."
       />
     </div>
   );

@@ -529,7 +529,12 @@ function headline(league: League, f: Facts): { cat: string; head: string } {
       : pick('buzzl', d.who ? [`${f.name(d.who)} beats the buzzer to sink ${T}`, `Heartbreak for ${T}: ${f.name(d.who)} at the horn`] : [`${O} beat ${T} at the buzzer`]);
   if (d && d.secs <= 12)
     return d.ours
-      ? pick('gw', d.who ? [`${poss(f.name(d.who))} late ${shot(d)} lifts ${T} past ${O}`, `${f.name(d.who)} wins it late for ${T}`] : [`${T} edge ${O} ${score} at the finish`])
+      ? pick(
+          'gw',
+          d.who
+            ? [`${poss(f.name(d.who))} late ${shot(d)} ${d.ft ? 'lift' : 'lifts'} ${T} past ${O}`, `${f.name(d.who)} wins it late for ${T}`]
+            : [`${T} edge ${O} ${score} at the finish`],
+        )
       : pick('gwl', d.who ? [`${f.name(d.who)} wins it late for ${O}`, `${poss(f.name(d.who))} late ${shot(d)} beats ${T}`] : [`${O} edge ${T} at the finish`]);
   if (f.won && f.comeback >= 15)
     return pick('comeback', [
@@ -762,7 +767,7 @@ function bodyOf(league: League, f: Facts, means: string[]): string {
     const high = f.high === 'career' ? ', a career high,' : f.high === 'season' ? ', a season high,' : '';
     const lines = [
       f.won
-        ? `${f.full(h)} led them with ${plural(h.pts, 'point')}${high} on ${madeAtt(h.fgm, h.fga)} shooting, with ${plural(reb(h), 'rebound')} and ${plural(h.ast, 'assist')}.`
+        ? `${f.full(h)} led them with ${plural(h.pts, 'point')}${high} on ${madeAtt(h.fgm, h.fga)} shooting. He had ${plural(reb(h), 'rebound')} and ${plural(h.ast, 'assist')}.`
         : `${f.full(h)} had ${nightWords(h)} for the ${T}.`,
     ];
     if (f.second && f.second.pts >= 12) lines.push(`${f.name(f.second)} added ${f.second.pts}.`);
@@ -895,7 +900,7 @@ export function gameStoryFor(league: League, gid: number, tid = league.userTid):
     head,
     dek: dekOf(league, f, cat),
     ...(f.hero ? { hero: f.hero.pid, heroLine: heroLineText(f.hero) } : {}),
-    means,
+    means: means.filter((m) => !SAID_BY[cat]?.test(m)),
     kicker: kickerOf(f),
     weight: weightOf(f, means),
     body: bodyOf(league, f, means),
@@ -912,6 +917,16 @@ export function gameStoryFor(league: League, gid: number, tid = league.userTid):
   }
   return story;
 }
+
+/** What a headline's category already says, so its line under it isn't said twice ("Wizards end 4-game skid" over "Ended a 4-game skid"). */
+const SAID_BY: Record<string, RegExp> = {
+  streak: /straight win$/,
+  'skid-end': /-game skid$/,
+  skid: /straight loss$/,
+  'streak-end': /-game win streak$/,
+  high: /^Career high for /,
+  open: /^1-0 to start$/,
+};
 
 /** The result of `gid`: the last of `league.games` with it (a replayed result replaces none, but be safe). */
 function findResult(league: League, gid: number): GameResult | undefined {
@@ -1137,6 +1152,8 @@ export function billingFor(league: League, g: ScheduledGame, tid = league.userTi
 }
 
 const stripStop = (s: string) => s.replace(/\.$/, '');
+/** A storyline as a billing's one line: its last stop and any closing aside dropped. */
+const billLine = (s: string) => stripStop(s).replace(/\s*\([^()]*\)$/, '');
 
 /**
  * Everything a game is billed for, biggest first. `light` leaves out what only the near future can
@@ -1175,10 +1192,10 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
       {
         tag: 'Play-In',
         line: id.endsWith('-78')
-          ? 'Winner is the 7th seed; the loser gets one more chance'
+          ? 'The 7th seed to the winner, one more chance to the loser'
           : id.endsWith('-910')
-            ? 'Loser goes home; the winner plays for the 8th seed'
-            : 'Winner takes the 8th seed; the loser goes home',
+            ? 'The loser goes home, the winner plays for the 8th seed'
+            : 'The 8th seed to the winner, the loser goes home',
         weight: 3,
       },
       0,
@@ -1223,7 +1240,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
         if (r.home.pts > r.away.pts === (r.home.tid === tid)) w++;
         else l++;
     const series = w + l ? `${w}-${l} this season` : '';
-    add({ tag: 'Rivalry', line: [...riv.reasons.slice(0, 2), series].filter(Boolean).join('; '), weight: 2 }, 5);
+    add({ tag: 'Rivalry', line: [...riv.reasons.slice(0, 2), series].filter(Boolean).join(' · '), weight: 2 }, 5);
   }
 
   if (!opts.light) {
@@ -1232,7 +1249,7 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
     // (a stint years ago isn't a story: the first meeting since he left, or a recent one)
     const rev = st.revenge.find((x) => x.weight >= 60);
     // (a big night only for a good player's first meeting since: others are a little extra)
-    if (rev) add({ tag: 'Revenge game', line: stripStop(rev.text), weight: rev.weight >= 68 ? 2 : 1 }, 7);
+    if (rev) add({ tag: 'Revenge game', line: billLine(rev.text), weight: rev.weight >= 68 ? 2 : 1 }, 7);
     if (tid === league.userTid) {
       const coach = league.coaches?.find((c) => c.user);
       const old = coach?.stints.filter((s) => s.tid === opp && s.to).at(-1);
@@ -1244,11 +1261,11 @@ export function billingsFor(league: League, g: ScheduledGame, tid = league.userT
     }
     // a night these two remember on this date, a round number of years ago
     const ann = anniversaryOf(league, g);
-    if (ann) add({ tag: 'Anniversary', line: stripStop(ann.line), weight: 1 }, 13);
+    if (ann) add({ tag: 'Anniversary', line: billLine(ann.line), weight: 1 }, 13);
     const ms = st.milestone[0];
     // (the marks that make the league's news are a big night; the round thousands between, a little extra)
     const mark = ms ? /-(pts|reb|ast)-(\d+)$/.exec(ms.id) : null;
-    if (ms) add({ tag: 'Milestone watch', line: stripStop(ms.text), weight: mark && newsworthy(mark[1] as MilestoneStat, Number(mark[2])) ? 2 : 1 }, 12);
+    if (ms) add({ tag: 'Milestone watch', line: billLine(ms.text), weight: mark && newsworthy(mark[1] as MilestoneStat, Number(mark[2])) ? 2 : 1 }, 12);
     if (g.type === 'regular') {
       const streak = me.seasons.find((s) => s.season === league.season)?.streak ?? 0;
       const theirs = them.seasons.find((s) => s.season === league.season)?.streak ?? 0;

@@ -3,7 +3,7 @@
 // Pure: the Live screen applies them through the live game (sim.baseTactics → setTactics).
 
 import type { Tactics } from '../../core/types';
-import { cloneTactics, hacks, levelName, startHacking, stopHacking } from '../../core/sim/tactics';
+import { cloneTactics, hacks, levelName, shapeOf, startHacking, stopHacking } from '../../core/sim/tactics';
 
 export interface Pill {
   id: string;
@@ -78,8 +78,8 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
   const pushing = t.offense.pace >= 70;
   const slowing = t.offense.pace <= 30;
   const slow = slowing || (!pushing && ctx.q >= 4 && (ctx.margin ?? 0) > 0);
-  if (slow) pair('slow', ...pace, (v) => v <= 30, 20, 50, 'Slow it down', `Pace: ${levelName('pace', 20)}. Fewer possessions, deep in the shot clock.`);
-  else pair('push', ...pace, (v) => v >= 70, 80, 50, 'Push pace', `Pace: ${levelName('pace', 80)}. More possessions, more run-outs and more fatigue.`);
+  if (slow) pair('slow', ...pace, (v) => v <= 30, 20, 50, 'Slow it down', `Tempo: ${levelName('pace', 20)}. Fewer possessions, deep in the shot clock.`);
+  else pair('push', ...pace, (v) => v >= 70, 80, 50, 'Push pace', `Tempo: ${levelName('pace', 80)}. More possessions, more run-outs and more fatigue.`);
 
   pair('pack', ...help, (v) => v >= 70, 78, 50, 'Pack the paint', `Help defense: ${levelName('help', 78)}. Wall off drives, live with kick-out threes.`);
 
@@ -88,7 +88,7 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
     id: 'getback',
     label: 'Get back',
     on: back,
-    help: `Crash the glass: ${levelName('crashBoards', 20)}; transition defense: ${levelName('getBack', 85)}. No run-outs, fewer offensive boards.`,
+    help: `Crash the glass: ${levelName('crashBoards', 20)}. Transition defense: ${levelName('getBack', 85)}. No run-outs, fewer offensive boards.`,
     apply: (x) => {
       if (back) {
         x.offense.crashBoards = plan.offense.crashBoards <= 30 ? 50 : plan.offense.crashBoards;
@@ -130,4 +130,20 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
   } else if (hacks(t.manage))
     out.push({ id: 'hack', label: 'Stop Hack-a-player', on: true, help: 'No more intentional fouls on poor free-throw shooters.', apply: (x) => stopHacking(x.manage) });
   return out;
+}
+
+/** Tactics `t` with mentality `m`: the game's own value back when it's what the game tipped off with (so "Reset" isn't offered for nothing). */
+export function withMentalityOf(x: Tactics, m: number, planned: Tactics) {
+  if (m === (planned.mentality ?? 0)) {
+    if (planned.mentality === undefined) delete x.mentality;
+    else x.mentality = planned.mentality;
+  } else x.mentality = m as Tactics['mentality'];
+}
+
+/** Tactics `x` in shape `s` (the same care as withMentalityOf). */
+export function withShapeOf(x: Tactics, s: Tactics['offense']['shape'], planned: Tactics) {
+  if (s === shapeOf(planned.offense)) {
+    if (planned.offense.shape === undefined) delete x.offense.shape;
+    else x.offense.shape = planned.offense.shape;
+  } else x.offense.shape = s;
 }

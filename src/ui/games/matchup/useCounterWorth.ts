@@ -104,11 +104,19 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   return key ? (measured.get(key) ?? { progress: 0 }) : null;
 }
 
-/** "About +0.6 a game", "Even", "About −0.5 a game": a measured counter in a few words (its shrunk worth), with its tone. */
-export function worthText(w: CounterWorth): { text: string; tone: 'good' | 'bad' | undefined } {
+/**
+ * "Helps: about +0.6 a game", "No real change", "Hurts: about −0.5 a game": a measured counter as a
+ * verdict and one number (its shrunk worth), with its tone. `short`: the number alone, for a line that
+ * already says the verdict ("+0.6 a game").
+ */
+export function worthText(w: CounterWorth): { text: string; tone: 'good' | 'bad' | undefined; short: string } {
   const call = worthCall(w);
   const n = Math.abs(w.pts).toFixed(1);
-  return call === 'gain' ? { text: `About +${n} a game`, tone: 'good' } : call === 'cost' ? { text: `About −${n} a game`, tone: 'bad' } : { text: 'Even', tone: undefined };
+  return call === 'gain'
+    ? { text: `Helps: about +${n} a game`, tone: 'good', short: `+${n} a game` }
+    : call === 'cost'
+      ? { text: `Hurts: about −${n} a game`, tone: 'bad', short: `−${n} a game` }
+      : { text: 'No real change', tone: undefined, short: 'no real change' };
 }
 
 /** Counters by what they measured: gains first (the biggest first), then the ones too close to call, then the costs, the ones the staff didn't measure last. */

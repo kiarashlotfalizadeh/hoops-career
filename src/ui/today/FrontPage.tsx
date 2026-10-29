@@ -423,7 +423,7 @@ export function AllStarHero({ league }: { league: League }) {
       <h2 className="td-phase-t">{phase === 'eve' ? 'All-Star weekend' : (results?.head ?? 'All-Star weekend')}</h2>
       <p className="td-phase-l">
         {phase === 'eve'
-          ? `${league.day < league.allStarDay ? 'Tomorrow' : 'Today'} the All-Stars are named, then the Three-Point Contest, the Slam Dunk Contest and the game.`
+          ? `${league.day < league.allStarDay ? 'Tomorrow' : 'Today'}: the All-Stars named, the Three-Point Contest, the Slam Dunk Contest and the game.`
           : (results?.lines[0] ?? '')}
       </p>
       <div className="td-phase-goals">
@@ -488,7 +488,7 @@ export function TenureKicker({ league }: { league: League }) {
   const t = useLeagueMemo(() => tenureOf(league), [league]);
   if (!t) return null;
   return (
-    <section className="card td-tenure" aria-label={t.over}>
+    <section className="td-tenure" aria-label={t.over}>
       <p className="over">{t.over}</p>
       <p className="small">{t.line}</p>
       {t.banners.length > 0 && (

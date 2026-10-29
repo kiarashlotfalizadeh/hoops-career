@@ -10,7 +10,7 @@ import { clamp } from '../../core/random';
 import { CAP_FOR, payroll } from '../../core/league/helpers';
 import { extensionBlockedReason, extensionMaxYears, extensionRefusal, makeContract, playerMax, teamAppeal } from '../../core/league/contracts';
 import { teamTaxBill } from '../../core/league/finances';
-import { type OfferResult, askFor, extensionFrozenReason, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
+import { YEAR_PREMIUM, type OfferResult, askFor, extensionFrozenReason, talkAsk, talkState, userExtend } from '../../core/league/negotiation';
 import { contractExp, salaryFor } from '../../core/playerGen';
 import { useLeague, useStore } from '../../state/store';
 import { settle, useBusy } from '../../state/actions/office';
@@ -86,20 +86,21 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
                   {ai.label}
                 </span>
               ),
-              s: `appeal ×${appeal.toFixed(2)}`,
             },
           ]}
         />
         <HelpSheet title="Extensions">
           <p>
-            In the final season of a player's deal you can extend him, from the re-sign period through the regular season. The extension starts when his deal ends and, like a
-            re-signing, can take you over the cap.
+            Extend a player in the final season of his deal, from the re-sign period through the regular season. The extension starts when his deal ends. Like a re-signing, it can
+            take you over the cap.
           </p>
           <p>
-            He asks about his market value in {seasonLabel(season)} money: a little less coming off his rookie deal or past 30 (security now), a little more as a young star. A star
-            on a team he doesn't fancy may want to test free agency: he gives the same answer until something changes.
+            He asks about his market value in {seasonLabel(season)} money. Coming off his rookie deal or past 30, he asks a little less for the security. A young star asks a little
+            more.
           </p>
-          <p>Offer his ask and he signs; he may take a little less, and below that he counters. Run out his patience and he won't discuss an extension for 30 days.</p>
+          <p>His interest in your team moves his ask: the keener he is, the less he asks.</p>
+          <p>A star on a team he doesn&apos;t fancy may want to test free agency. He gives the same answer until something changes.</p>
+          <p>Offer his ask and he signs. He may take a little less, and below that he counters. Run out his patience and he won&apos;t talk extension for 30 days.</p>
           <p>Up to {maxYears} years, no options. Like any signing, he can't be traded for a while after.</p>
         </HelpSheet>
       </div>
@@ -116,7 +117,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         yearsMax={maxYears}
         wants={ask.years}
         firstSeason={season}
-        yearsNote={`${shortSeason(season)} to ${shortSeason(season + years - 1)}, 8% raises. Each year off what he wants: about 3% on his price.`}
+        yearsNote={`${shortSeason(season)} to ${shortSeason(season + years - 1)}, 8% raises. Each year off what he wants adds ${Math.round(YEAR_PREMIUM * 100)}% to his price.`}
       />
 
       {blocked ? (
@@ -125,7 +126,7 @@ export function ExtendBody({ p, onClose }: { p: Player; onClose: () => void }) {
         </Callout>
       ) : refusal ? (
         <Callout tone="bad" icon={<Ban size={18} className="bad" />}>
-          <b>{refusal}</b> You keep his Bird rights: re-sign him in the re-sign period after his deal ends.
+          <b>{refusal}</b> You keep his Bird rights. Re-sign him after his deal ends.
         </Callout>
       ) : (
         <TalkPanel

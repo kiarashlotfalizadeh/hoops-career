@@ -14,23 +14,7 @@ import type { FinishType, PossLog } from '../log';
 import { cloneTactics, defRoleOf, shapeOf, withMentality } from '../tactics';
 import { isCallId, readAfter } from '../sets';
 import { K, ftChance, lev } from './constants';
-import { execution, famPenalty } from '../familiarity';
-import { LINK_META, linksAmong } from '../links';
-import {
-  type SP,
-  type ST,
-  type SetPlay,
-  type SimTeamInput,
-  type SimOptions,
-  type InGameInjury,
-  type Ctx,
-  type Stint,
-  newBox,
-  ACTION_LIST,
-  freedomMult,
-  linkKey,
-  mix,
-} from './state';
+import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, type Stint, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
 import { rotationMethods } from './rotation';
@@ -322,14 +306,6 @@ export class GameSim {
       adjust: input.adjust ? 0.15 + 0.6 * (input.team.coach.tactics / 100) : 0,
       adjustedQ: 0,
       base: cloneTactics(tactics),
-      drilled: cloneTactics(tactics),
-      fam: input.fam ?? input.team.fam,
-      famOff: 0,
-      famDef: 0,
-      links: null,
-      wall: null,
-      crowd: null,
-      sit: null,
       hacked: new Map(),
       nextSet: null,
       toWait: null,
@@ -400,7 +376,6 @@ export class GameSim {
       .join('-');
     t.ls = null;
     for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
-    this.refreshFam(t);
   }
 
   /** The lineup's spacing: its five's average (horns crowds it a little, see K.shape). */
@@ -438,45 +413,6 @@ export class GameSim {
     return [s[0], s[1] ?? s[0]];
   }
 
-  /**
-   * How the five on the floor execute what they play: the familiarity penalty at each end (see
-   * src/core/sim/familiarity.ts), and their partnerships (src/core/sim/links.ts); none of either for a
-   * team without a record of what it knows.
-   */
-  refreshFam(t: ST) {
-    if (!t.fam || !t.on.length) {
-      t.famOff = 0;
-      t.famDef = 0;
-      t.links = t.wall = t.crowd = null;
-      return;
-    }
-    const e = execution(
-      t.fam,
-      t.drilled,
-      t.on.map((p) => ({ pid: p.pid, ratings: p.r })),
-    );
-    t.famOff = famPenalty(e.off);
-    t.famDef = famPenalty(e.def);
-    const { links, clashes } = linksAmong(
-      t.on.map((p) => ({ pid: p.pid, off: p.role, def: p.drole, c: p.c })),
-      shapeOf(t.t.offense),
-      t.fam,
-    );
-    t.links = t.wall = null;
-    for (const l of links) {
-      if (l.strength <= 0) continue;
-      if (LINK_META[l.id].end === 'def') {
-        t.wall ??= new Map();
-        t.wall.set(l.a, Math.max(t.wall.get(l.a) ?? 0, l.strength));
-      } else {
-        t.links ??= new Map();
-        // (links come strongest first: a pair with two keeps the stronger)
-        if (!t.links.has(linkKey(l.a, l.b))) t.links.set(linkKey(l.a, l.b), { id: l.id, s: l.strength });
-      }
-    }
-    t.crowd = clashes.length ? new Set(clashes[0].pids) : null;
-  }
-
   /** The team's offensive crashing (0-100) with the five on the floor: the team's setting, and each player's glass duty on top. */
   crashOf(t: ST): number {
     let duty = 0;
@@ -491,17 +427,11 @@ export class GameSim {
     return cloneTactics(this.T[side].base);
   }
 
-  /** New base tactics for the team on `side`; a situational plan in effect stays on top of them. */
+  /** New base tactics for the team on `side`, played from the next possession. */
   setTactics(side: 0 | 1, tactics: Tactics) {
     const t = this.T[side];
     t.base = cloneTactics(tactics);
-    this.situate(t, true);
-  }
-
-  /** The situational plan in effect for the team on `side`, if any. */
-  situation(side: 0 | 1): { id: string; label: string } | null {
-    const s = this.T[side].sit;
-    return s && { ...s };
+    this.rebase(t);
   }
 
   /**

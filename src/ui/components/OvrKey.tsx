@@ -25,7 +25,7 @@ export function OvrSheet({ open, onClose, ovr, pot }: { open: boolean; onClose: 
         {ovr !== undefined && pot !== undefined && (
           <>
             {' '}
-            This one: <b>{Math.round(ovr)}</b>, {tierLabel(Math.round(ovr))}; potential <b>{pot}</b>.
+            This one: <b>{Math.round(ovr)}</b>, {tierLabel(Math.round(ovr))}. Potential <b>{pot}</b>.
           </>
         )}
       </p>
@@ -42,7 +42,7 @@ export function OvrSheet({ open, onClose, ovr, pot }: { open: boolean; onClose: 
                 <span key={name}>
                   {j > 0 ? ' · ' : ''}
                   {name}
-                  {j === 0 && t.names.length > 1 ? ` (${min}+)` : ''}
+                  {j === 0 && t.names.length > 1 ? ` ${min}+` : ''}
                 </span>
               ))}
             </span>

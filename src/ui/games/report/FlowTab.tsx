@@ -43,12 +43,12 @@ export function FlowTab({ g, league, side, kits }: { g: GameResult; league: Leag
   );
 }
 
-/** "Largest leads: BOS 12, NYK 7.", or "Largest lead: OKC 41 (LAC never led)." */
+/** "Largest leads: BOS 12, NYK 7.", or "Largest lead: OKC 41. LAC never led." */
 function leadsText(a: string, la: number, b: string, lb: number) {
   if (la > 0 && lb > 0) return `Largest leads: ${a} ${la}, ${b} ${lb}.`;
   if (!la && !lb) return '';
   const [lead, n, other] = la > 0 ? [a, la, b] : [b, lb, a];
-  return `Largest lead: ${lead} ${n} (${other} never led).`;
+  return `Largest lead: ${lead} ${n}. ${other} never led.`;
 }
 
 /**
@@ -85,10 +85,10 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
           <span className="tiny dim">{me} above 50%</span>
           <Help title="Win probability">
             <p>
-              {me} {pct(mine(series[0].wp))} to win at tip-off{g.edge === undefined ? ' (home court alone: this game kept no projection)' : ', from the pre-game projection'}.
+              {me} {pct(mine(series[0].wp))} to win at tip-off, {g.edge === undefined ? 'from home court alone' : 'from the pre-game projection'}. Then after each possession, from
+              the score and the time left{g.flowPoss ? ' and who has the ball' : ''}.
             </p>
-            <p>After each possession: the score, the time left{g.flowPoss ? ', who has the ball' : ''} and that projection.</p>
-            {!g.flowT && <p>Possession times weren&apos;t kept for this game, so they are spread evenly over each period.</p>}
+            {!g.flowT && <p>This game kept no possession times, so they are spread evenly.</p>}
           </Help>
         </span>
       }
@@ -104,7 +104,7 @@ function WinProbCard({ g, league, side, kits }: { g: GameResult; league: League;
             const p = series[i];
             return p.i < 0 ? 'Tip-off' : `${gameTime(p.q, p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
           }}
-          label={`${me} win probability over the game: ${pct(mine(series[0].wp))} at tip-off${swings.length ? `; biggest swings: ${swings.map((x) => `${say(x.at)}, ${pct(mine(x.from))} to ${pct(mine(x.to))}`).join('; ')}` : ''}`}
+          label={`${me} win probability over the game: ${pct(mine(series[0].wp))} at tip-off${swings.length ? `. Biggest swings: ${swings.map((x) => `${say(x.at)}, ${pct(mine(x.from))} to ${pct(mine(x.to))}`).join('. ')}` : ''}`}
           height={140}
         />
         <div className="gv-swings">

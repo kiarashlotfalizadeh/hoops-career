@@ -61,7 +61,7 @@ export function OppPlayer({
         <div className="over">
           Attack his man
           <Help title="Attacking a defender">
-            <p>Your isolations, post-ups and ball screens go at the player he guards while he plays, at some cost in ball movement.</p>
+            <p>Your isolations, post-ups and ball screens go at the player he guards. It costs some ball movement.</p>
             <p>Worth it against a weak defender, costly against a good one.</p>
           </Help>
         </div>
@@ -87,7 +87,7 @@ export function OppPlayer({
             <button className="btn block" onClick={() => apply((t) => startHacking(t.manage, hackThreshold(p.ftPct), q))}>
               Hack-a-{name}
             </button>
-            <div className="tiny dim">Fouled away from the ball whenever he plays{clock < 120 ? ', from the next period' : ''} (never in a period&apos;s last two minutes).</div>
+            <div className="tiny dim">Fouled away from the ball whenever he plays{clock < 120 ? ', from the next period' : ''}. Never in a period&apos;s last two minutes.</div>
           </>
         ) : (
           <div className="tiny dim">At {ft}% he&apos;s no target: fouling him gives away points.</div>

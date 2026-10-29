@@ -246,9 +246,9 @@ export default function Trade() {
         .getState()
         .toast(
           why === 'salary'
-            ? `You need to send at least ${money(out + gap)} in salary, and no player (or pair) of yours makes that work.`
+            ? `You need to send at least ${money(out + gap)} in salary. No one or two of your players make that work.`
             : why === 'theirSalary'
-              ? `${pt.abbrev} can't take back that much salary, and has no contract to send along that makes it work. Send less.`
+              ? `${pt.abbrev} can't take back that much salary, and has no contract to send along. Send less.`
               : `${pt.abbrev} can't find a version of this they'd take. Ask for less.`,
           'bad',
         );

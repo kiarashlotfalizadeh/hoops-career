@@ -94,7 +94,7 @@ export function OfferControls({
         )}
         {capped && (
           <button className="btn text tiny" onClick={() => setWide(true)}>
-            The slider stops at {moneyExact(near)}, 1.5× his ask: widen it
+            Widen the slider past {moneyExact(near)}
           </button>
         )}
       </div>

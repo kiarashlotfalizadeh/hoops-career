@@ -277,7 +277,8 @@ export function RecordBook({ league }: { league: League }) {
     <>
       {/* the poster: whose book it is, and its first record's mark (a single game's points) */}
       <Poster
-        over={`${post === 'post' ? 'Playoffs' : 'Regular season'} · since ${seasonLabel(from)}`}
+        // (how far back each part reaches is its section's line)
+        over={post === 'post' ? 'Playoffs' : 'Regular season'}
         head={tid !== undefined ? `${league.teams[tid].name} records` : 'League records'}
         fig={book.game[0]?.lines[0] ? { v: book.game[0].lines[0].v, k: book.game[0].label } : undefined}
       >
@@ -307,7 +308,7 @@ export function RecordBook({ league }: { league: League }) {
         </PickerLine>
       </Poster>
       {/* a book with nothing in it yet is one line, not four empty sections */}
-      {bare && <div className="card empty">{post === 'post' ? 'No playoff games in the book yet.' : 'No games in the book yet: records land here as they are set.'}</div>}
+      {bare && <div className="card empty">{post === 'post' ? 'No playoff games in the book yet.' : 'No games in the book yet. Records land here as they are set.'}</div>}
       {sections.map(([title, recs, empty, meta], i) =>
         recs.length && !bare ? (
           <Section
@@ -318,16 +319,23 @@ export function RecordBook({ league }: { league: League }) {
                 <span className="lg-rec-h">
                   {meta && <span className="lg-sec-meta">{meta}</span>}
                   <Help title="The record book">
+                    {from < since ? (
+                      <>
+                        <p className="lg-p">Single games reach back to {seasonLabel(from)}. They count every NBA game since then and every game here.</p>
+                        <p className="lg-p">Seasons count from {seasonLabel(since)}, this league&apos;s only.</p>
+                        <p className="lg-p">All-time holds the NBA&apos;s records from before {seasonLabel(from)} that still stand, beside this league&apos;s best.</p>
+                      </>
+                    ) : (
+                      <p className="lg-p">Seasons count from {seasonLabel(since)}, this league&apos;s only.</p>
+                    )}
+                    <p className="lg-p">A career adds his real seasons before it, if his whole career is on record.</p>
                     <p className="lg-p">
-                      {from < since
-                        ? `Single games since ${seasonLabel(from)}: the NBA's, from every game since then, and this league's. Seasons since ${seasonLabel(since)}, this league's only; careers count the players in this league, with the real seasons before it for a player whose whole career is on record. All-time: the NBA's records from before ${seasonLabel(from)} where they still stand, beside this league's best.`
-                        : `Since ${seasonLabel(since)}, this league's seasons only; careers count the real seasons before it too, for a player whose whole career is on record.`}{' '}
-                      Single games keep the top {KEEP.league.reg} (playoffs {KEEP.league.post}) for the league and the top {KEEP.team.reg} ({KEEP.team.post}) for each franchise.
+                      Single games keep the top {KEEP.league.reg} for the league and {KEEP.team.reg} for each franchise. In the playoffs, {KEEP.league.post} and {KEEP.team.post}.
                     </p>
                     <p className="lg-p">
-                      Per-game and percentage season records need 70% of the team&apos;s games (and 300 field goals, 82 threes or 125 free throws made); a playoff run, half the
-                      team&apos;s playoff games. Team seasons count once the regular season is over.
+                      A per-game or percentage season record needs 70% of the team&apos;s games. It also needs 300 field goals, 82 threes or 125 free throws made.
                     </p>
+                    <p className="lg-p">A playoff run needs half the team&apos;s playoff games. Team seasons count once the regular season is over.</p>
                   </Help>
                 </span>
               ) : meta ? (

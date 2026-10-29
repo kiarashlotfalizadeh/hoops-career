@@ -23,7 +23,7 @@ export const RATING_META: RatingMeta[] = [
   { key: 'ath', label: 'Explosiveness', short: 'EXP', group: 'Physical', help: 'Vertical pop. Finishing above the rim, lobs, blocks and offensive boards.' },
   { key: 'str', label: 'Strength', short: 'STR', group: 'Physical', help: 'Holding position in the post, finishing through contact, screening.' },
   { key: 'end', label: 'Stamina', short: 'STA', group: 'Physical', help: 'How long he can play before fatigue erodes his performance. Fatigue also raises injury risk.' },
-  { key: 'ins', label: 'Finishing', short: 'FIN', group: 'Scoring', help: 'Converting at the rim, volume counted: layups, dunks, finishing through contests.' },
+  { key: 'ins', label: 'Finishing', short: 'FIN', group: 'Scoring', help: 'Converting at the rim, volume counted. Layups, dunks, finishing through contests.' },
   { key: 'mid', label: 'Mid-range', short: 'MID', group: 'Scoring', help: 'Pull-ups, floaters and mid-range jumpers. Key against drop coverage.' },
   {
     key: 'tp',
@@ -42,7 +42,7 @@ export const RATING_META: RatingMeta[] = [
   { key: 'intD', label: 'Interior defense', short: 'INTD', group: 'Defense', help: 'Post defense and walling off drives in the paint.' },
   { key: 'blk', label: 'Shot blocking', short: 'BLK', group: 'Defense', help: 'Altering and blocking shots at the rim. The anchor of drop coverage and zones.' },
   { key: 'stl', label: 'Steals', short: 'STL', group: 'Defense', help: 'Active hands and passing-lane reads. Pairs with pressure and blitz schemes.' },
-  { key: 'diq', label: 'Defensive IQ', short: 'DIQ', group: 'Defense', help: 'Rotations, help timing and positioning. Makes complex schemes (zones, blitzes) work.' },
+  { key: 'diq', label: 'Defensive IQ', short: 'DIQ', group: 'Defense', help: 'Rotations, help timing and positioning. Makes complex schemes like zones and blitzes work.' },
   { key: 'oreb', label: 'Offensive rebounding', short: 'ORB', group: 'Rebounding', help: 'Crashing the offensive glass for second chances.' },
   { key: 'dreb', label: 'Defensive rebounding', short: 'DRB', group: 'Rebounding', help: 'Finishing defensive possessions by securing the board.' },
 ];

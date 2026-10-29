@@ -890,9 +890,9 @@ export function pickCall(events: readonly AtmoEvent[], last: number | null): Atm
 // ------------------------------------------------------------------ the breaks
 
 /**
- * The story so far in one line, for a break: where the user's team stands, the run that made the
- * period (or the lead changes, or the period's score), and who's carrying them.
- * "Down 9 at the half after the Celtics' 16-4 second-quarter run; Brunson has 18."
+ * The story so far at a break, in two or three short sentences: the score ("Down 7 after one."), what
+ * made it (a big run, a seesaw, the period won or lost by a lot, a buzzer-beater), and who's carrying
+ * you (or their scorer, when he's the story).
  */
 export function breakStory(t: Tally, ctx: AtmoCtx, q: number, scorers: [{ pid: number; pts: number }[], { pid: number; pts: number }[]]): string {
   const u = ctx.user;
@@ -902,29 +902,26 @@ export function breakStory(t: Tally, ctx: AtmoCtx, q: number, scorers: [{ pid: n
   const when = q === 1 ? 'after one' : q === 2 ? 'at the half' : q === 3 ? 'after three' : q === 4 ? 'after regulation' : `after ${periodLabel(q)}`;
   const state =
     lead === 0
-      ? `Tied at ${t.score[0]} ${when}`
+      ? `Tied at ${t.score[0]} ${when}.`
       : lead > 0
-        ? `${pick(['Up', 'Ahead by'], ...key, 's')} ${lead} ${when}`
-        : `${pick(['Down', 'Trailing by'], ...key, 's')} ${-lead} ${when}`;
+        ? `${pick(['Up', 'Ahead by'], ...key, 's')} ${lead} ${when}.`
+        : `${pick(['Down', 'Trailing by'], ...key, 's')} ${-lead} ${when}.`;
   const run = t.runs[q];
   const per = t.periods[q] ?? [0, 0];
   const pm = per[u] - per[o];
   let cause = '';
   if (run && run.a - run.b >= 10) {
-    const mine = run.side === u;
     const what = `${run.a}-${run.b} ${periodAdj(q)} run`;
-    // ("after one after a run" reads badly: after a quarter's "after", the run follows)
-    const after = when.startsWith('after') ? 'following' : 'after';
     const an = run.a === 8 || run.a === 11 || run.a === 18 ? 'an' : 'a';
-    if (mine) cause = lead >= 0 ? `${after} ${an} ${what}` : `despite ${an} ${what}`;
-    else cause = lead <= 0 ? `${after} ${teamPoss(ctx.teams[o])} ${what}` : `despite ${teamPoss(ctx.teams[o])} ${what}`;
-  } else if (t.leadChanges >= 6 && Math.abs(lead) <= 6) cause = `in a game with ${t.leadChanges} lead changes`;
-  else if (Math.abs(pm) >= 6 && q <= 4) cause = pm > 0 ? `having taken ${periodThe(q)} ${per[u]}-${per[o]}` : `having lost ${periodThe(q)} ${per[o]}-${per[u]}`;
-  else if (t.buzzers[q] !== undefined) cause = `with ${ctx.name(t.buzzers[q])}'s shot at the buzzer to end it`;
+    cause = `${run.side === u ? 'You' : `The ${ctx.teams[o]}`} had ${an} ${what}.`;
+  } else if (t.leadChanges >= 6 && Math.abs(lead) <= 6) cause = `${t.leadChanges} lead changes so far.`;
+  // (after the first, its score is the game's: said once)
+  else if (Math.abs(pm) >= 6 && q > 1 && q <= 4) cause = pm > 0 ? `You took ${periodThe(q)} ${per[u]}-${per[o]}.` : `You lost ${periodThe(q)} ${per[o]}-${per[u]}.`;
+  else if (t.buzzers[q] !== undefined) cause = `${ctx.name(t.buzzers[q])} beat the buzzer to end it.`;
   const mine = scorers[u][0];
   const theirs = scorers[o][0];
   let star = '';
-  if (theirs && theirs.pts >= 20 && (!mine || theirs.pts >= mine.pts + 6)) star = `${ctx.name(theirs.pid)} has ${theirs.pts} for the ${ctx.teams[o]}`;
-  else if (mine && mine.pts >= 8) star = pick([`${ctx.name(mine.pid)} has ${mine.pts}`, `${ctx.name(mine.pid)} leads you with ${mine.pts}`], ...key, 'star');
-  return `${state}${cause ? ` ${cause}` : ''}${star ? `; ${star}` : ''}.`;
+  if (theirs && theirs.pts >= 20 && (!mine || theirs.pts >= mine.pts + 6)) star = `${ctx.name(theirs.pid)} has ${theirs.pts} for the ${ctx.teams[o]}.`;
+  else if (mine && mine.pts >= 8) star = pick([`${ctx.name(mine.pid)} has ${mine.pts}.`, `${ctx.name(mine.pid)} leads you with ${mine.pts}.`], ...key, 'star');
+  return [state, cause, star].filter(Boolean).join(' ');
 }

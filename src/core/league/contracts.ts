@@ -493,7 +493,7 @@ export function willSign(league: League, p: Player, tid: number, amount: number,
   const gap = ask.amount * (1 + yearPenalty) - amount;
   return {
     ok: false,
-    reason: `Asking for about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're ${money(gap)} short).`,
+    reason: `He asks about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'}. You're ${money(gap)} short.`,
   };
 }
 
@@ -596,30 +596,22 @@ function exceptionClosed(league: League, tid: number, kind: Exception, season: n
     case 'tmle':
       if (t.taxMleSeason === season) return r('Used this season.', 'used');
       if (t.mleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
-      if (t.spaceSeason === season || t.roomSeason === season)
-        return r('Gone this season: a free agent was signed with cap space, so the room exception replaces it.', 'gone: cap space was used');
+      if (t.spaceSeason === season || t.roomSeason === season) return r('Gone this season. A cap-space signing brings the room exception instead.', 'gone: cap space was used');
       if (spaceSheetPending(league, tid, season))
-        return r(
-          'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.',
-          'gone while an offer sheet holds your space',
-        );
+        return r('Gone while an offer sheet on cap space is pending. Using cap space brings the room exception instead.', 'gone while an offer sheet holds your space');
       return null;
     case 'mle':
       if (t.mleSeason === season) return r('Used this season.', 'used');
       if (t.taxMleSeason === season) return r('Not after the taxpayer mid-level: a team gets one or the other.', 'not after the taxpayer mid-level');
-      if (t.spaceSeason === season || t.roomSeason === season)
-        return r('Gone this season: a free agent was signed with cap space, so the room exception replaces it.', 'gone: cap space was used');
+      if (t.spaceSeason === season || t.roomSeason === season) return r('Gone this season. A cap-space signing brings the room exception instead.', 'gone: cap space was used');
       if (spaceSheetPending(league, tid, season))
-        return r(
-          'Gone while an offer sheet on cap space is pending: a team that uses its cap space gets the room exception instead.',
-          'gone while an offer sheet holds your space',
-        );
+        return r('Gone while an offer sheet on cap space is pending. Using cap space brings the room exception instead.', 'gone while an offer sheet holds your space');
       return null;
     case 'room':
       if (t.roomSeason === season) return r('Used this season.', 'used');
       if (t.mleSeason === season || t.taxMleSeason === season) return r('Not after the mid-level: a team gets one or the other.', 'not after the mid-level');
       if (t.baeSeason === season) return r('Not after the bi-annual this season.', 'not after the bi-annual');
-      if (t.spaceSeason !== season) return r('Only after signing a free agent with cap space this season (it replaces the mid-level).', 'only after a cap-space signing');
+      if (t.spaceSeason !== season) return r('Only after a cap-space signing this season. It replaces the mid-level.', 'only after a cap-space signing');
       return null;
     case 'bae':
       if (t.baeSeason === season) return r('Used this season.', 'used');
@@ -1183,7 +1175,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed off waivers`,
-          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract, so the ${money(dead)} in dead money he left comes off our books.`,
+          body: `The ${teamNameOf(league, claimer.tid)} claimed ${name} and took over his contract. The ${money(dead)} in dead money he left comes off our books.`,
           tone: 'good',
           link: '/office',
         });
@@ -1191,7 +1183,7 @@ export function resolveWaivers(league: League) {
         addInbox(league, {
           from: 'Assistant GM',
           subject: `${name} claimed`,
-          body: `Our waiver claim on ${name} went through: his contract (${money(salaryFor(p, league.season))} this season, through ${seasonLabel(contractExp(p.contract))}) is ours, and the ${league.teams[w.from].name} are off the hook for it.`,
+          body: `Our waiver claim on ${name} went through. His contract is ours: ${money(salaryFor(p, league.season))} this season, through ${seasonLabel(contractExp(p.contract))}. The ${league.teams[w.from].name} are off the hook for it.`,
           tone: 'good',
           link: `/player/${p.pid}`,
         });
@@ -1214,7 +1206,7 @@ export function resolveWaivers(league: League) {
         subject: `${name} cleared waivers`,
         body:
           w.from === user
-            ? `Nobody claimed ${name}, so he is a free agent and his ${money(dead)} stays on our books as dead money.`
+            ? `Nobody claimed ${name}, so he is a free agent. His ${money(dead)} stays on our books as dead money.`
             : `Our claim on ${name} fell through. ${claimBlockedReason(league, user, { ...p, waivers: w }) ?? 'The claim no longer fit.'} He is a free agent now.`,
         tone: 'neutral',
         link: w.from === user ? '/office' : `/player/${p.pid}`,
@@ -1526,19 +1518,19 @@ const EXTENSION_PHASES: League['phase'][] = ['resign', 'freeAgency', 'preseason'
 export function extensionClosedReason(league: League, p: Player): string | null {
   if (!EXTENSION_PHASES.includes(league.phase))
     return league.phase === 'playin' || league.phase === 'playoffs'
-      ? 'No extensions during the postseason: they reopen with the re-signing period after the draft.'
-      : 'Extensions reopen with the re-signing period after the draft.';
+      ? 'No extensions during the postseason. They reopen after the draft.'
+      : 'Extensions reopen with the re-signing period, after the draft.';
   const c = p.contract;
   if (p.tid < 0) return `${playerName(p)} isn't under contract.`;
-  if (c.twoWay) return "Two-way deals can't be extended: convert him to a standard contract first.";
+  if (c.twoWay) return "Two-way deals can't be extended. Convert him to a standard deal first.";
   const exp = contractExp(c);
   if (c.next) return `${playerName(p)} is already extended through ${seasonLabel(exp)}.`;
   const cs = contractSeason(league);
-  if (exp < cs) return 'His contract is up: re-sign him in the re-signing period instead.';
-  if (exp > cs) return `Extensions open in the final season of his deal (${seasonLabel(exp)}).`;
+  if (exp < cs) return 'His contract is up. Re-sign him in the re-signing period.';
+  if (exp > cs) return `Extensions open in the final season of his deal, ${seasonLabel(exp)}.`;
   // a signing carries a trade lock for its first season; the seed's deals all start in the
   // league's first season, but weren't signed in it
-  if (c.start === cs && p.tradeLock?.season === cs) return `${playerName(p)} signed this deal this season: it can't be extended.`;
+  if (c.start === cs && p.tradeLock?.season === cs) return `${playerName(p)} signed this deal this season, so it can't be extended.`;
   if (pendingOption(league, p)) return `Decide his ${pendingOption(league, p)} option on ${seasonLabel(exp)} first.`;
   return null;
 }
@@ -1603,7 +1595,7 @@ export function willExtend(league: League, p: Player, amount: number, years: num
   if (amount >= need - 1) return { ok: true, reason: 'Deal!' };
   return {
     ok: false,
-    reason: `Asking for about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'} (you're ${money(need - amount)} short).`,
+    reason: `He asks about ${money(ask.amount)}/yr over ${ask.years} year${ask.years === 1 ? '' : 's'}. You're ${money(need - amount)} short.`,
   };
 }
 

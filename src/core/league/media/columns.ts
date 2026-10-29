@@ -360,7 +360,7 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
       again ? `${again.replace(/^./, (c) => c.toUpperCase())}.` : '',
       hw + lw ? `${hw === lw ? 'They split the season series' : `The ${N(hw > lw ? s.high : s.low)} won the season series ${rec(Math.max(hw, lw), Math.min(hw, lw))}`}.` : '',
       `Net ratings: ${N(s.high)} ${signed(netOf(tsOf(league, s.high)))}, ${N(s.low)} ${signed(netOf(tsOf(league, s.low)))}.`,
-      hurt ? `${N(hurt.tid)} without ${last(league, hurt.x)} (out ${hurt.x.injury!.gamesRemaining} more games).` : '',
+      hurt ? `The ${N(hurt.tid)} are without ${last(league, hurt.x)} for ${hurt.x.injury!.gamesRemaining} more games.` : '',
     ].filter(Boolean);
     const conf = s.conf === 'F' ? '' : `${confName(s.conf)} `;
     const match = `(${s.highSeed}) ${N(s.high)} vs. (${s.lowSeed}) ${N(s.low)}`;
@@ -371,7 +371,7 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
       games,
       p: Math.max(p, 1 - p),
       match,
-      text: `${conf}${match}. ${facts.join(' ')} Pick: ${N(pick)} in ${games}.${close ? ` A coin flip; the ${N(other)} can win it.` : ''}`,
+      text: `${conf}${match}. ${facts.join(' ')} Pick: ${N(pick)} in ${games}.${close ? ` A coin flip. The ${N(other)} can win it.` : ''}`,
     };
   });
   const lead = preview[0];
@@ -394,7 +394,7 @@ function roundPreview(league: League, m: MediaState, round: number, rs: PlayoffS
     ]);
     const dek = `The ${N(s.high)} have home court. Pick: ${N(lead.pick)} in ${lead.games}.`;
     const body = [
-      `The ${N(s.high)} beat ${path(s.high)}; the ${N(s.low)} beat ${path(s.low)}.`,
+      `The ${N(s.high)} beat ${path(s.high)}. The ${N(s.low)} beat ${path(s.low)}.`,
       `The stars: ${star(s.high)} for the ${N(s.high)}, ${star(s.low)} for the ${N(s.low)}.`,
       lead.text,
       pre?.champ !== undefined
@@ -463,7 +463,7 @@ export function seasonWrap(league: League, m: MediaState): NewsItem | undefined 
   const fmvp = aw.finalsMvp !== undefined ? league.players[aw.finalsMvp] : undefined;
   const mvp = aw.mvp !== undefined ? league.players[aw.mvp] : undefined;
   const mvpAgain = mvp ? awardLine(league, mvp, 'MVP', league.season) : null;
-  const dek = `The ${N(C)} beat the ${R !== undefined ? N(R) : 'field'} in the Finals${fmvp ? `; ${playerName(fmvp)} was Finals MVP` : ''}.${mvp ? ` ${playerName(mvp)} was the MVP${mvpAgain && mvpAgain !== 'his first' ? `, ${mvpAgain}` : ''}.` : ''}`;
+  const dek = `The ${N(C)} beat the ${R !== undefined ? N(R) : 'field'} in the Finals.${fmvp ? ` ${playerName(fmvp)} was Finals MVP.` : ''}${mvp ? ` ${playerName(mvp)} was the MVP${mvpAgain && mvpAgain !== 'his first' ? `, ${mvpAgain}` : ''}.` : ''}`;
   // the user's run against his franchise's history in this save ("a first series win since 2029-30")
   const drought = uts.playoffRound >= 1 && uts.playoffRound < 5 ? droughtLine(league, u, league.season, uts.playoffRound) : null;
   const final = standings(league);
@@ -484,7 +484,7 @@ export function seasonWrap(league: League, m: MediaState): NewsItem | undefined 
     pre?.champ !== undefined
       ? pre.champ === C
         ? `Opening night's pick was the ${N(C)}, and they delivered.`
-        : `Opening night's pick was the ${N(pre.champ)}; the ${N(C)} had other ideas.`
+        : `Opening night's pick was the ${N(pre.champ)}. The ${N(C)} had other ideas.`
       : '',
     pre && over && over.d >= 6 ? `The season's overachievers: the ${N(over.tid)}, ${over.d} wins better than projected.` : '',
     pre && under && under.d <= -6 ? `The biggest letdown: the ${N(under.tid)}, ${-under.d} wins short.` : '',

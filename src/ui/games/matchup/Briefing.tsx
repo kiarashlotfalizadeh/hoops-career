@@ -1,8 +1,7 @@
 // The staff's plan at the top of the matchup page's Preview: the lead assistant's read of them (who to
-// watch) and his plan for tonight (the counters the numbers back first, one per kind), each a tap into
-// your game plan or all of them at once. What they run and where to hit them are on Scout; what the
-// team knows of the tactics (and the practice focus) on Plan, with the full counters, the star plan and
-// the rest; who guards whom on Matchups.
+// watch) and his plan for tonight (the counters the numbers back first, one per kind, each with its
+// measured worth), each a tap into your game plan or all of them at once. What they run and where to hit them are on Scout; the full
+// counters, the star plan and the rest on Plan; who guards whom on Matchups.
 import { useMemo } from 'react';
 import { Check } from 'lucide-react';
 import type { League } from '../../../core/types';
@@ -16,7 +15,7 @@ import { plural } from '../../../core/format';
 import { AssistantHead } from '../../components/StaffCards';
 import { worthCall } from '../../../core/ai/counterWorth';
 import { byWorth, useCounterWorth } from './useCounterWorth';
-import { famCostText, WorthTag } from './CountersCard';
+import { WorthTag } from './CountersCard';
 import { nightWatch } from '../data';
 
 /** Counters the briefing proposes: the ones that measured as gains, the biggest first, one per game-plan group. */
@@ -59,7 +58,6 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
   // (the night's one pick: the live bench watches the same man)
   const threat = useLeagueMemo(() => nightWatch(league, opp), [league, opp]);
   const read = threat ? `Watch ${threat.name.replace(/\.$/, '')}. ${threat.why}` : scout.summary;
-  const costs = useLeagueMemo(() => new Map(drafted.map((c) => [c.id, famCostText(league, opp, c)])), [league, opp, drafted]);
   return (
     <Section title="The staff's plan">
       <div className="mu-brief">
@@ -69,14 +67,10 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
             {more && <div className="list-divider">The staff would also add</div>}
             {picks.map((c) => (
               <div key={c.id} className="mu-brief-item">
-                <div className="grow">
-                  <div className="lr-name">
-                    {c.label} <WorthTag w={worth?.get(c.id)} measuring={false} />
-                  </div>
-                  <div className="lr-meta mu-brief-why">
-                    {costs.get(c.id) && <span className="warn">{costs.get(c.id)}. </span>}
-                    {c.evidence ?? c.why}
-                  </div>
+                {/* (a verdict and its number under the name: why, and what it changes, are on the Plan) */}
+                <div className="grow mu-cand-t">
+                  <span className="lr-name">{c.label}</span>
+                  {worth?.get(c.id) ? <WorthTag w={worth.get(c.id)} measuring={false} /> : <span className="lr-meta">{c.why}</span>}
                 </div>
                 <button className="btn xs" disabled={simming} onClick={() => add([c])} aria-label={`Add ${c.label} to your plan against ${them.abbrev}`}>
                   Add

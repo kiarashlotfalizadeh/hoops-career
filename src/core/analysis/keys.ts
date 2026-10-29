@@ -306,7 +306,7 @@ function fromNumbers(league: League, agg: SeasonAgg, us: number, them: number): 
     id: 'share',
     title: 'Share the ball',
     goal: `Get ${plural(Math.ceil((U.for.ast + O.against.ast) / 2), 'ast')}`,
-    why: `You average ${U.for.ast.toFixed(1)} assists a game; they allow ${O.against.ast.toFixed(1)}.`,
+    why: `You average ${U.for.ast.toFixed(1)} assists a game. They allow ${O.against.ast.toFixed(1)}.`,
     side: 'us',
     stat: 'ast',
     dir: 'min',

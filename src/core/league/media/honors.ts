@@ -114,7 +114,8 @@ function tellUser(league: League, m: MediaState, h: Honor, newsId: number, label
   addInbox(league, {
     from: 'League Office',
     subject: h.pid !== undefined ? `${who}: ${label}` : `You're the ${label}`,
-    body: `${h.pid !== undefined ? `${who} is the ${label}` : `You are the ${label}`}: ${h.line}.${again}`,
+    // (a player's line is his figures, "25.3 points and 12.8 assists a game as the ..."; a coach's, his team's run)
+    body: `${h.pid !== undefined ? `${who} is the ${label}. He averaged ${h.line}.` : `You are the ${label}. ${h.line.charAt(0).toUpperCase()}${h.line.slice(1)}.`}${again}`,
     tone: 'good',
     link: `/league/news?story=${newsId}`,
   });
@@ -153,7 +154,8 @@ export function playersOfTheWeek(league: League, m: MediaState) {
           `The week belonged to ${L(honors[0])} and ${L(honors[1])}`,
         ])
       : `Player of the week: ${L(honors[0])}`;
-  const dek = honors.map((h) => `${confName(h.conf!)}: ${playerName(league.players[h.pid!])}, ${h.line}.`).join(' ');
+  // each conference's player, then his week, a sentence each
+  const dek = honors.map((h) => `${confName(h.conf!)}: ${playerName(league.players[h.pid!])}. ${h.line.charAt(0).toUpperCase()}${h.line.slice(1)}.`).join(' ');
   const n = publish(league, { kind: 'honor', head, dek, tids: honors.map((h) => h.tid), pids: honors.map((h) => h.pid!), weight: mine ? 2 : 1 });
   for (const h of honors) tellUser(league, m, h, n.id, `${confName(h.conf!)} Player of the Week`);
 }
@@ -259,7 +261,7 @@ function awardMonth(league: League, m: MediaState, from: number, to: number) {
   else head = `The honors for ${label}`;
   const group = (k: Honor['kind'], noun: string) => {
     const hs = of(k);
-    return hs.length ? `${noun}: ${hs.map((h) => `${h.pid !== undefined ? playerName(league.players[h.pid]) : coach(h.tid)} (${confName(h.conf!)})`).join(', ')}.` : '';
+    return hs.length ? `${noun}: ${hs.map((h) => `${h.pid !== undefined ? playerName(league.players[h.pid]) : coach(h.tid)} in the ${confName(h.conf!)}`).join(', ')}.` : '';
   };
   const dek = [group('potm', 'Players'), group('rotm', 'Rookies'), group('cotm', 'Coaches')].filter(Boolean).join(' ');
   const body = honors.map((h) => {

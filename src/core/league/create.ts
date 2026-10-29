@@ -478,8 +478,9 @@ export function createLeague(opts: CreateOpts): League {
       `${opts.coachName === 'Coach' ? 'Coach' : `Coach ${opts.coachName}`}, you're running basketball operations and the bench. Your roster has ${standard.length} players${twoWays ? `, plus ${twoWays === 1 ? 'one on a two-way deal' : `${twoWays} on two-way deals`}` : ''}. Your staff has set a rotation and a playbook that fit it.`,
       ...(goals
         ? [
-            "Here is what I expect from this roster. I'll set the goals on opening night from the roster you open with, and grade the season on them:",
-            ...goals.goals.map((g) => `${previewTitle(g)} (${Math.round(g.weight * 100)}% of my review)`),
+            'Here is what I expect from this roster.',
+            'I set the goals on opening night, from the roster you open with. I grade the season on them:',
+            ...goals.goals.map((g) => `${previewTitle(g)}: ${Math.round(g.weight * 100)}% of my review`),
             ...goalsWhy(goals),
           ]
         : []),
@@ -498,7 +499,13 @@ export function createLeague(opts: CreateOpts): League {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `Preseason cuts: ${standard.length} players, room for ${CAP.rosterMax}`,
-      body: `We carry ${standard.length} players on standard contracts into camp${twoWays ? ` (two-way deals don't count)` : ''}; the league allows ${CAP.rosterMax} on opening night. Camp and minimum deals aren't guaranteed until then, so cutting those costs nothing; anyone else's salary stays on our books as dead money.\n\nMy suggestion, least value first: ${cuts.map((p) => `${playerName(p)} (${p.ovr}, ${cost(p)})`).join(', ')}. One tap on Today.`,
+      body: [
+        `We carry ${standard.length} players on standard contracts into camp. The league allows ${CAP.rosterMax} on opening night.${twoWays ? " Two-way deals don't count." : ''}`,
+        "Camp and minimum deals aren't guaranteed until then, so those cuts cost nothing. Anyone else's salary stays on our books as dead money.",
+        'My picks, least value first:',
+        ...cuts.map((p) => `${playerName(p)}: ${p.ovr} OVR, ${cost(p)}`),
+        'One tap on Today.',
+      ].join('\n'),
       tone: 'alert',
       link: '/',
     });

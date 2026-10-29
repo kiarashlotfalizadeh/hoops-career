@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { League } from '../../../core/types';
 import type { PowerRow } from '../../../core/league/media';
 import { TeamLogo } from '../../components/TeamLogo';
+import { keep } from '../../components/ui';
 import { teamPath } from '../shared';
 import './news.css';
 
@@ -41,15 +42,14 @@ export function PowerList({ league, rows, blurbs = true }: { league: League; row
             <PowerMove r={r} />
             <TeamLogo tid={r.tid} size={28} decorative />
             <span className="lg-pw-t">
+              {/* the team's name, as the standings print it ("Thunder", never "Oklahoma City Thun…") */}
               <span className="lg-pw-name">
-                <span className="ellipsis">
-                  {t.region} {t.name}
-                </span>
+                <span className="ellipsis">{t.name}</span>
                 <span className="lg-pw-rec num">
                   {ts.won}-{ts.lost}
                 </span>
               </span>
-              {(typeof blurbs === 'function' ? blurbs(r) : blurbs) && <span className="lg-pw-blurb">{r.blurb}</span>}
+              {(typeof blurbs === 'function' ? blurbs(r) : blurbs) && <span className="lg-pw-blurb">{keep(r.blurb)}</span>}
             </span>
           </Link>
         );

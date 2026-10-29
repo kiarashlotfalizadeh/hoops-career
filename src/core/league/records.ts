@@ -438,7 +438,7 @@ function seasonMarkNews(league: League, res: GameResult) {
     if (top && ts.won === top.won + 1)
       tell(`${ts.won} wins: the ${team.name} pass the record`, `No. ${ts.won} came ${score}: the most wins in a season in league history, past ${them(top)}.${tail}`);
     else if (top && ts.won === top.won)
-      tell(`${ts.won} wins: the ${team.name} tie the record`, `No. ${ts.won} came ${score}, level with ${them(top)} for the most wins in a season in league history.${tail}`);
+      tell(`${ts.won} wins: the ${team.name} tie the record`, `No. ${ts.won} came ${score}. It ties ${them(top)} for the most wins in league history.${tail}`);
     else if (second && ts.won === second.won)
       tell(`${ts.won} wins for the ${team.name}`, `No. ${ts.won} came ${score}, level with ${them(second)}. Only ${them(top!)} won more.${tail}`);
   }
@@ -448,7 +448,7 @@ function seasonMarkNews(league: League, res: GameResult) {
     if (ts.streak === streak.v)
       tell(
         `${ts.streak} straight: the ${team.name} match the record`,
-        `The run reached ${ts.streak} with ${score}, level with ${lakers}, the longest winning streak in league history.`,
+        `The run reached ${ts.streak} with ${score}. It ties ${lakers} for the longest winning streak in league history.`,
       );
     else tell(`${ts.streak} straight: the longest winning streak ever`, `The ${team.name} made it ${ts.streak} in a row with ${score}, past ${lakers}.`);
   }

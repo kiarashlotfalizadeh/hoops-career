@@ -66,12 +66,13 @@
   white-space: nowrap;
   font-size: min(1em, calc(100cqi / (var(--len, 5) * 0.55)));
 }
+/* a figure's note wraps under it ("1 open · +1 two-way"): three columns on a phone leave it little room */
 .statline .s {
   font-size: 12px;
+  line-height: 1.3;
   color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: break-word;
+  text-wrap: balance;
 }
 .empty {
   padding: 28px 16px;
@@ -119,6 +120,7 @@
   color: var(--text-2);
 }
 .more > summary {
+  position: relative;
   list-style: none;
   cursor: pointer;
   display: inline-flex;
@@ -127,6 +129,12 @@
   font-weight: 600;
   color: var(--accent-text);
   min-height: 32px;
+}
+/* a 44px target round the 32px line */
+.more > summary::after {
+  content: '';
+  position: absolute;
+  inset: -6px -8px;
 }
 .more > summary::-webkit-details-marker {
   display: none;

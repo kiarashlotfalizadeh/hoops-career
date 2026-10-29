@@ -221,7 +221,7 @@ describe('the CBA', () => {
       expect(resignLimit(l, p, U)).toBe(12_000);
       // his market value is past that: he won't re-sign, he goes to the market
       expect(askingContract(l, p, U).amount).toBeGreaterThan(12_000);
-      expect(userResign(l, p.pid, 12_000, 2).reason).toMatch(/Without Bird rights.*up to \$12\.0M/);
+      expect(userResign(l, p.pid, 12_000, 2).reason).toMatch(/Non-Bird rights.*up to \$12\.0M/);
     }
 
     // five-year deals and 8% raises only re-signing on full Bird rights; free agents sign for four years at most, with 5% raises
@@ -549,13 +549,13 @@ describe('the CBA', () => {
       const p = freeAgent(l);
       expect(exceptionAmount(l, 'room', s)).toBe(Math.round((cap.salaryCap * ROOM_PCT) / 10) * 10);
       expect(exceptionRoom(l, U, 'room', s)).toBe(0);
-      expect(exceptionUsedReason(l, U, 'room', s)).toMatch(/Only after signing a free agent with cap space/);
+      expect(exceptionUsedReason(l, U, 'room', s)).toMatch(/Only after a cap-space signing/);
       expect(mleRoom(l, U, s)).toBe(Math.round((cap.salaryCap * MLE_PCT) / 10) * 10);
       expect(signingRoute(l, U, 4_000, s, p)).toBe('space');
       spendRoute(l, U, 'space', s);
       expect(l.teams[U].spaceSeason).toBe(s);
       expect(mleRoom(l, U, s)).toBe(0);
-      expect(exceptionUsedReason(l, U, 'mle', s)).toMatch(/room exception replaces it/);
+      expect(exceptionUsedReason(l, U, 'mle', s)).toMatch(/brings the room exception instead/);
       expect(exceptionRoom(l, U, 'room', s)).toBe(exceptionAmount(l, 'room', s));
       // beyond the space left: the room exception, for two years at most
       const amount = exceptionAmount(l, 'bae', s) + 500;
@@ -709,7 +709,7 @@ describe('the CBA', () => {
       expect(userDecideSheet(l, p2.pid, false).ok).toBe(true);
       expect(p2.tid).toBe(AI);
       expect(l.teams[AI].spaceSeason).toBe(s);
-      expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/room exception replaces it/);
+      expect(exceptionUsedReason(l, AI, 'mle', s)).toMatch(/brings the room exception instead/);
       expect(payroll(l, AI, s)).toBeLessThanOrEqual(cap.salaryCap);
     }
 
@@ -725,7 +725,7 @@ describe('the CBA', () => {
       expect(userExceptionRoom(l, 'mle', s, role.pid)).toBe(0);
       expect(userExceptionRoom(l, 'bae', s, role.pid)).toBe(exceptionAmount(l, 'bae', s));
       expect(offerRoute(l, role, 4_000, s)).toBeNull();
-      expect(offerBlockedReason(l, role, 4_000, 2)).toMatch(/cost you the mid-level exception .* pending mid-level offer to/);
+      expect(offerBlockedReason(l, role, 4_000, 2)).toMatch(/cost you the mid-level\. Your pending mid-level offer to/);
       l.faBids = [];
       expect(offerRoute(l, role, 4_000, s)).toBe('space');
     }

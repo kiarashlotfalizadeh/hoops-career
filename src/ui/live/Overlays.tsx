@@ -11,7 +11,8 @@ import { Banner, type BannerItem } from './Banner';
 /**
  * The lower stack over the backcourt, clear of the basket the play goes to: the running call of the
  * play in the offense's colour (or the key plays line between them), the graphic up now in its
- * team's colour (`kit`), and the one banner.
+ * team's colour (`kit`), or the one banner, which takes the stack to itself while it's up (one thing
+ * to read over the court at a time).
  */
 export function CourtLower({
   drawing,
@@ -37,7 +38,7 @@ export function CourtLower({
 }) {
   return (
     <div className="lv-lower">
-      {(drawing || ffing) && (
+      {(drawing || ffing) && !banner && (
         // the offense's colour along its edge, as the court's boards show who has the ball
         <div className="lv-cap" aria-hidden="true" style={drawing ? ({ '--cap-c': capColor } as CSSProperties) : undefined}>
           {drawing ? (

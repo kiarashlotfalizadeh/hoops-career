@@ -3,7 +3,7 @@
 import type { Settings } from '../core/types';
 
 /** The help line for teaching, the same in Settings and New League. */
-export const TEACHING_HELP = "The first-week guide on Today, its welcome mail and Today's Glossary link. Every ? and glossary word stays.";
+export const TEACHING_HELP = "The first-week guide on Today, its mail and Today's Glossary link. Every ? and glossary word stays.";
 
 /** Whether new leagues start with teaching on: this device remembers the last choice. */
 export function teachingDefault(): boolean {

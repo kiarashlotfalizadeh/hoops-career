@@ -238,14 +238,14 @@ export function computeRegularSeasonAwards(league: League): SeasonAwards {
   allDef.forEach((team, i) => team.forEach((pid) => give(pid, `All-Defensive ${['1st', '2nd'][i]} Team`)));
   allRookie.forEach((pid, i) => give(pid, `All-Rookie ${i < 5 ? '1st' : '2nd'} Team`));
   awardsStory(league, awards, coy?.abbrev);
-  // "Name (MVP, All-NBA 1st Team)" for each of the user's winners
-  const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])} (${types.join(', ')})`);
-  if (coy?.tid === league.userTid) mine.push('Coach of the Year (you)');
+  // "Name: MVP, All-NBA 1st Team." for each of the user's winners, one sentence each
+  const mine = [...won].filter(([pid]) => league.players[pid].tid === league.userTid).map(([pid, types]) => `${playerName(league.players[pid])}: ${andList(types)}.`);
+  if (coy?.tid === league.userTid) mine.push('You: Coach of the Year.');
   if (mine.length) {
     addInbox(league, {
       from: 'League Office',
       subject: 'Season awards',
-      body: `Your team collected hardware: ${andList(mine)}.`,
+      body: `Your team collected hardware.\n${mine.join('\n')}`,
       tone: 'good',
       link: '/league/awards',
     });
@@ -379,7 +379,7 @@ export function selectAllStars(league: League): SeasonAwards['allStars'] {
     weight: 2,
   });
   if (replacements.length)
-    addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('; ')}.`, tids: [], pids: replacements.map((r) => r.pid) });
+    addNews(league, { kind: 'award', text: `All-Star replacements: ${replacements.map((r) => r.text).join('. ')}.`, tids: [], pids: replacements.map((r) => r.pid) });
   if (mine.length) {
     addInbox(league, {
       from: 'League Office',

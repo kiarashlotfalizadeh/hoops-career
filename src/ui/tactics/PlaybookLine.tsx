@@ -1,6 +1,6 @@
 // The style a phase's settings start from, at the top of each phase's instructions: how many of that
-// phase's settings you've moved from it (with Put back, for that phase's settings only), and the key
-// to the dot that marks the style's own setting on each control below.
+// phase's settings you've moved from it (with Put back, for that phase's settings only), and the
+// phase's Help, which also keys the dot that marks the style's own setting on each control below.
 import type { ReactNode } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { DEF_PRESETS, OFF_PRESETS, type DefPreset, type OffPreset } from '../../core/sim/tactics';
@@ -8,8 +8,7 @@ import { tacticsChanges } from '../../core/sim/playbooks';
 import type { DefenseTactics, OffenseTactics, Tactics } from '../../core/types';
 import { plural } from '../../core/format';
 import { tweak } from './edit';
-import type { Phase } from './fam';
-import { StaffMoveNote } from './StaffMoveNote';
+import type { Phase } from './phases';
 
 /** The preset the user's offense or defense comes from. */
 export const offPresetOf = (t: Tactics): OffPreset => OFF_PRESETS.find((p) => p.id === t.offPreset) ?? OFF_PRESETS[0];
@@ -39,26 +38,23 @@ const asStyle = (t: Tactics, ph: Phase): Tactics => {
   return out;
 };
 
+/** The style a phase's settings come from, by name (transition takes from both: the playbook's push and glass, the identity's getting back and press). */
+const phaseStyle = (t: Tactics, phase: Phase) => (phase === 'inPoss' ? offPresetOf(t).name : phase === 'outPoss' ? defPresetOf(t).name : 'your style');
+
 export function PlaybookLine({ phase, help }: { phase: Phase; help?: ReactNode }) {
   const league = useLeague();
   const t = league.teams[league.userTid].tactics;
-  // (transition takes from both: the playbook's push and glass, the identity's getting back and press)
-  const name = phase === 'inPoss' ? offPresetOf(t).name : phase === 'outPoss' ? defPresetOf(t).name : 'your style';
+  const name = phaseStyle(t, phase);
   const moved = useLeagueMemo(() => tacticsChanges(asStyle(t, phase), t).length, [t, phase]);
   return (
-    <>
-      <StaffMoveNote only={phase} />
-      <div className="tx-pbline">
-        <span className="grow tx-note">
-          {moved ? `${plural(moved, 'setting')} moved from ${name}` : `As ${name} has it`} · <i className="tx-dot" aria-hidden="true" /> its own setting
-        </span>
-        {help}
-        {moved > 0 && (
-          <button className="btn xs" onClick={() => tweak((tt) => putBack(tt, phase))}>
-            Put back
-          </button>
-        )}
-      </div>
-    </>
+    <div className="tx-pbline">
+      <span className="grow tx-note">{moved ? `${plural(moved, 'setting')} moved from ${name}` : `As ${name} sets it`}</span>
+      {moved > 0 && (
+        <button className="btn xs" onClick={() => tweak((tt) => putBack(tt, phase))}>
+          Put back
+        </button>
+      )}
+      {help}
+    </div>
   );
 }

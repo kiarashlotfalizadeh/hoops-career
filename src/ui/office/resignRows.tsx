@@ -2,15 +2,17 @@
 // As on the other desks' lists, the rating leads and the name links to his page.
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { PenLine } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { playerName, teamPlayers } from '../../core/league/helpers';
 import { extensionAsk, extensionBlockedReason, extensionRefusal } from '../../core/league/contracts';
 import { contractExp, playerAge, salaryFor } from '../../core/playerGen';
-import { f1, latestLine, p1, playerSeason } from '../stats';
+import { f1, latestLine, playerSeason } from '../stats';
 import { OvrPot, forYears, salaryText, shortSeason } from './common';
 
-/** His per-game line this season (or his latest): points, rebounds, assists, minutes, true shooting, games. */
+/**
+ * His per-game line this season (or his latest, its season named), as a roster row reads it: minutes,
+ * points, rebounds, assists. The rest of his numbers are on his page, a tap on his name.
+ */
 export function StatLine({ league, p }: { league: League; p: Player }) {
   const pg = playerSeason(p, league.season);
   const line = pg && pg.gp > 0 ? { season: league.season, pg } : latestLine(league, p);
@@ -18,24 +20,18 @@ export function StatLine({ league, p }: { league: League; p: Player }) {
   const s = line.pg;
   return (
     <div className="fo-statline">
-      <span className="over">{shortSeason(line.season)}</span>
+      {line.season !== league.season && <span className="over">{shortSeason(line.season)}</span>}
       <span>
-        <b>{f1(s.pts)}</b> pts
+        <b>{f1(s.min)}</b> MIN
       </span>
       <span>
-        <b>{f1(s.reb)}</b> reb
+        <b>{f1(s.pts)}</b> PTS
       </span>
       <span>
-        <b>{f1(s.ast)}</b> ast
+        <b>{f1(s.reb)}</b> REB
       </span>
       <span>
-        <b>{f1(s.min)}</b> min
-      </span>
-      <span>
-        <b>{p1(s.tsPct)}</b> TS
-      </span>
-      <span>
-        <b>{s.gp}</b> gp
+        <b>{f1(s.ast)}</b> AST
       </span>
     </div>
   );
@@ -89,8 +85,9 @@ export function ExtendRow({ league, p, onExtend }: { league: League; p: Player; 
           )}
         </div>
       </div>
+      {/* (no icon: the row's ask keeps its room) */}
       <button className="btn sm" aria-label={`Extend ${playerName(p)}`} onClick={() => onExtend(p.pid)}>
-        <PenLine size={15} /> Extend
+        Extend
       </button>
     </div>
   );

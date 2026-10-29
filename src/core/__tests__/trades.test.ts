@@ -819,7 +819,7 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(validateTrade(l, offer([], [theirs.pid])).filter((e) => /two-way/.test(e))).toEqual([]);
     // in season all three hold a slot
     l.phase = 'regular';
-    expect(validateTrade(l, offer([], [theirs.pid])).some((e) => /4 two-way players \(max 3\)/.test(e))).toBe(true);
+    expect(validateTrade(l, offer([], [theirs.pid])).some((e) => /4 two-way players\. The most is 3\./.test(e))).toBe(true);
   }
 
   // reads a one-sided deal as what it is: a dump taken off a team's hands, or picks bought for nothing
@@ -850,13 +850,13 @@ it('the rules: back-to-back firsts, protections going home, no trading straight 
     expect(tradeRoster(l, U)).toHaveLength(20);
     const theirs = standardRoster(l, AI).find((p) => p.contract.salaries.length > 1)!;
     const o = deal({}, { pids: [theirs.pid] });
-    const roster = () => validateTrade(l, o).filter((e) => e.includes('players (max'));
+    const roster = () => validateTrade(l, o).filter((e) => e.includes('players. The most is'));
     expect(roster()).toEqual([]);
     // the user signs another team's restricted free agent to an offer sheet: it waits on his team
     const r = extra[30];
     r.rfa = { tid: THIRD, qo: cap.vetMin };
     signOfferSheet(l, r, U, cap.vetMin * 2, 2, 'min', 1);
-    expect(roster()).toEqual([`${l.teams[U].abbrev} would have 22 players (max 21 in the offseason).`]);
+    expect(roster()).toEqual([`${l.teams[U].abbrev} would have 22 players. The most is 21 in the offseason.`]);
     // sending one of yours fixes it, so "what would make this work?" is worth asking
     expect(validateTrade(l, o)).toHaveLength(1);
     expect(canMakeWork(l, o)).toBe(true);
@@ -965,7 +965,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const odds = Math.round(topOdds(l, dp, 20) * 100);
     expect(term.text).toMatch(
       new RegExp(
-        `^Top-20 protection: your ${dp.season} 1st stays yours if it lands in the top 20 \\(about ${odds}% likely on the current projection\\), and then nothing is owed\\. ${l.teams[AI].abbrev} count it \\d+% lower for that\\.$`,
+        `^Top-20 protection: your ${dp.season} 1st stays yours if it lands in the top 20, and then nothing is owed\\. That's about ${odds}% likely today\\. ${l.teams[AI].abbrev} count it \\d+% lower for that\\.$`,
       ),
     );
     // their cash for your first: fair unprotected, short protected
@@ -1073,7 +1073,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect(pickLabel(l, own(l, AI, y))).toBe(`${y} 1st · ${l.teams[U].abbrev} may swap`);
     expect(dealTerms(l, deal({}, { swaps: [y + 1] }))[0].text).toMatch(
       new RegExp(
-        `^${y + 1} swap: you may take ${l.teams[AI].abbrev}'s ${y + 1} 1st for yours if theirs lands higher \\(about \\d+% likely on the current projection\\)\\. It costs them about \\d+% of their pick\\.$`,
+        `^${y + 1} swap: you may take ${l.teams[AI].abbrev}'s ${y + 1} 1st for yours if theirs lands higher\\. That's about \\d+% likely today\\. It costs them about \\d+% of their pick\\.$`,
       ),
     );
   }
@@ -1226,7 +1226,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     expect([...shareRevenue(structuredClone(l))]).toEqual([...shareRevenue(structuredClone(base))]);
     const txn = l.transactions!.at(-1)!;
     expect(txn.sides![0].cash).toBe(3_000);
-    expect(txnText(l, txnLine(txn, { tid: U }))).toBe(`Acquired a ${second.season} 2nd from ${l.teams[AI].abbrev} for $3.0M in cash`);
+    expect(txnText(l, txnLine(txn, { tid: U }))).toBe(`Acquired a ${second.season} 2nd from ${l.teams[AI].abbrev}. Sent $3.0M in cash`);
     expect(l.news.at(-1)!.text).toBe(`Trade: the ${l.teams[U].name} send $3.0M in cash to the ${l.teams[AI].name} for ${second.season} 2nd (${l.teams[AI].abbrev}).`);
   }
 
@@ -1270,10 +1270,10 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
     const y = l.season + 2;
     executeTrade(l, deal({ swaps: [y], cash: 1_000 }, { dpids: [own(l, AI, l.season + 1, 2).dpid] }));
     expect(l.news.at(-1)!.text).toBe(
-      `Trade: the ${l.teams[U].name} send the right to swap ${y} firsts and $1.0M in cash to the ${l.teams[AI].name} for ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
+      `Trade: the ${l.teams[U].name} send the right to swap ${y} firsts and $1.0M in cash to the ${l.teams[AI].name}. The ${l.teams[AI].name} send back ${l.season + 1} 2nd (${l.teams[AI].abbrev}).`,
     );
     const txn = l.transactions!.at(-1)!;
-    expect(txnText(l, txnLine(txn, { tid: AI }))).toBe(`Acquired the right to swap ${y} firsts and $1.0M in cash from ${l.teams[U].abbrev} for a ${l.season + 1} 2nd`);
+    expect(txnText(l, txnLine(txn, { tid: AI }))).toBe(`Acquired the right to swap ${y} firsts and $1.0M in cash from ${l.teams[U].abbrev}. Sent a ${l.season + 1} 2nd`);
     expect(swapPicks(l, U, AI, y)!.right.swap).toBe(own(l, U, y).dpid);
   }
 

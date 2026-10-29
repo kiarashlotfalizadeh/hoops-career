@@ -244,11 +244,11 @@ export function royRace(league: League): { pid: number }[] {
   return awardRaces(league, 10).roy.map((x) => ({ pid: x.c.p.pid }));
 }
 
-/** A rookie's line in words: "9.8 points in 22 minutes a game, 4th in the rookie of the year race". */
+/** A rookie's line in words, his place in the race its own sentence: "9.8 points, 4.1 rebounds and 2.0 assists in 22 minutes over 14 games. 4th in the rookie of the year race". */
 export function rookieText(r: RookieLine): string {
-  if (!r.gp) return 'yet to play';
-  const race = r.roy === undefined ? '' : r.roy === 1 ? ', leading the rookie of the year race' : `, ${ordinal(r.roy)} in the rookie of the year race`;
-  return `${r.pts.toFixed(1)} points, ${r.reb.toFixed(1)} rebounds and ${r.ast.toFixed(1)} assists in ${Math.round(r.mpg)} minutes a game over ${plural(r.gp, 'game')}${race}`;
+  if (!r.gp) return 'Yet to play';
+  const race = r.roy === undefined ? '' : r.roy === 1 ? '. Leads the rookie of the year race' : `. ${ordinal(r.roy)} in the rookie of the year race`;
+  return `${r.pts.toFixed(1)} points, ${r.reb.toFixed(1)} rebounds and ${r.ast.toFixed(1)} assists in ${Math.round(r.mpg)} minutes over ${plural(r.gp, 'game')}${race}`;
 }
 
 // ---------------------------------------------------------------- his story
@@ -268,7 +268,7 @@ export function growthStory(league: League, p: Player): string {
     p.tid === RETIRED
       ? ''
       : age <= 21
-        ? 'years from his peak: the big jumps come now'
+        ? 'years from his peak, the big jumps ahead'
         : age <= 24
           ? 'still climbing toward his peak'
           : age <= 26
@@ -278,7 +278,7 @@ export function growthStory(league: League, p: Player): string {
               : age <= 33
                 ? slide <= -5
                   ? 'past his peak, and the decline has started to bite'
-                  : 'past his peak; the decline is gentle so far'
+                  : 'past his peak, the decline gentle so far'
                 : 'late in his career: each summer takes a little more';
   if (phase) parts.push(parts.length ? phase : phase[0].toUpperCase() + phase.slice(1));
   return parts.join(', ');
@@ -289,8 +289,7 @@ export function potentialText(p: Player): string {
   const room = p.pot - p.ovr;
   if (room <= 0) return 'He has reached the ceiling scouts saw for him.';
   const at = p.pot >= 89 ? 'an All-NBA player' : p.pot >= 82 ? 'an All-Star' : p.pot >= 76 ? 'a quality starter' : p.pot >= 70 ? 'a rotation player' : 'a bench piece';
-  if (room >= 8)
-    return `Scouts see ${room} more in him: at ${p.pot} he would be ${at}. Growth that size comes with minutes, coaching and a good summer or two, and doesn't always come.`;
+  if (room >= 8) return `Scouts see ${room} more in him: at ${p.pot} he would be ${at}. Growth that size needs minutes, coaching and a good summer or two.`;
   return `${room} to go to the ceiling scouts see, ${at} at ${p.pot}.`;
 }
 
@@ -330,6 +329,8 @@ export interface DevReport {
 /** A rating's name in running text, as ratingText writes it: "three-point", "offensive IQ". */
 const RATING_LABEL = new Map(RATING_META.map((m) => [m.key as RatingKey, m.label.replace(/^[A-Z](?=[a-z])/, (ch) => ch.toLowerCase())]));
 const minus = (n: number) => (n < 0 ? `−${-n}` : `+${n}`);
+/** A sentence from a phrase: its first letter capitalized, a full stop at the end. */
+const said = (t: string) => sentence(t ? t[0].toUpperCase() + t.slice(1) : t);
 
 /** The ratings that moved most this season, in words: "three-point +3, passing +2". */
 function movers(d: Partial<Record<RatingKey, number>>, n = 2, sign = 0): string {
@@ -360,11 +361,11 @@ export function setupLine(league: League, tid: number): string {
   const coach = rank((x) => x.coach.development);
   const practice =
     t.practice === 'intense'
-      ? 'intense practices add to every young player’s month'
+      ? 'Intense practices speed the young players up.'
       : t.practice === 'light'
-        ? 'light practices cost the young players a little every month'
-        : 'practices at a normal load';
-  return `Coaching budget ${rankOf(budget, n)}, development coaching ${rankOf(coach, n)}, ${practice}.`;
+        ? 'Light practices slow the young players down.'
+        : 'Practices at a normal load.';
+  return `Coaching budget ${rankOf(budget, n)}. Development coaching ${rankOf(coach, n)}. ${practice}`;
 }
 
 /** Why a player moved (or didn't) in what develop() reads: the month and the season, the ratings that moved, his minutes while he's young, his training focus. */
@@ -375,21 +376,20 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
   const mpg = st && st.gp ? Math.round(st.min / st.gp) : 0;
   const moved = movers(d, 2, x.group === 'slipping' ? -1 : x.group === 'rising' ? 1 : 0);
   const out: string[] = [];
-  // the month first, then the season it belongs to
-  if (recent > 0)
-    out.push(
-      `${rng.pick([`Up ${recent} this month`, `${minus(recent)} since the last check-in`])}${season > recent ? `, ${minus(season)} ${since}` : ''}${moved ? ` (${moved})` : ''}`,
-    );
-  else if (recent < 0) out.push(`Down ${-recent} this month${moved ? ` (${moved})` : ''}${age <= 22 ? `, which happens at ${age}: young players grow in fits` : ''}`);
-  else if (season >= 3) out.push(`${rng.pick(['A quiet month after a big summer', 'Quiet month, big year'])}: ${minus(season)} ${since}${moved ? ` (${moved})` : ''}`);
-  else if (season <= -3) out.push(`No change this month, ${minus(season)} ${since}${moved ? ` (${moved})` : ''}`);
-  else out.push(`${rng.pick(['No change this month', 'Steady this month', 'Holding'])}${moved ? `; ${moved} ${since}` : ''}`);
+  // the month first, then the season it belongs to, then the ratings that moved, each a sentence
+  if (recent > 0) out.push(`${rng.pick([`Up ${recent} this month`, `${minus(recent)} since the last check-in`])}${season > recent ? `, ${minus(season)} ${since}` : ''}`);
+  else if (recent < 0) out.push(`Down ${-recent} this month`);
+  else if (season >= 3) out.push(`${rng.pick(['A quiet month after a big summer', 'Quiet month, big year'])}: ${minus(season)} ${since}`);
+  else if (season <= -3) out.push(`No change this month, ${minus(season)} ${since}`);
+  else out.push(rng.pick(['No change this month', 'Steady this month', 'Holding']));
+  if (moved) out.push(recent === 0 && Math.abs(season) < 3 ? `${moved} ${since}` : moved);
+  if (recent < 0 && age <= 22) out.push(`That happens at ${age}: young players grow in fits`);
   // minutes only move a young player (develop's minutes term is for 25 and under)
   if (age <= YOUNG) {
-    if (st?.gp && mpg >= 25) out.push(rng.pick([`${mpg} minutes a night at ${age} is what grows a young player`, `The ${mpg} minutes a night are doing their work`]));
+    if (st?.gp && mpg >= 25) out.push(rng.pick([`${mpg} minutes a night grow him`, `${mpg} minutes a night pay off`]));
     else if (st?.gp && mpg >= 15) out.push(`${mpg} minutes a night help`);
-    else if (!st?.gp) out.push('Without games he has nothing to grow on');
-    else if (mpg <= 6) out.push(`${mpg} minutes a night costs him: young players who sit fall behind`);
+    else if (!st?.gp) out.push('No games, nothing to grow on');
+    else if (mpg <= 6) out.push(`${mpg} minutes a night set him back. Young players who sit fall behind`);
   } else if (age > GROWS_IN_SEASON) out.push('Players his age hold until the summer');
   if (p.training !== 'balanced') {
     const keys = FOCUS_KEYS[p.training] ?? [];
@@ -398,7 +398,7 @@ function reasonFor(league: League, p: Player, x: Pick<DevLine, 'group' | 'recent
     if (gain > 0) out.push(`The ${label} focus shows`);
     else if (x.group !== 'rising') out.push(`The ${label} focus hasn't shown yet`);
   }
-  return out.map((t) => sentence(t)).join(' ');
+  return out.map(said).join(' ');
 }
 
 /**
@@ -466,7 +466,7 @@ export const GROUP_LABEL: Record<DevGroup, string> = { rising: 'Rising', holding
 export function reportMail(league: League, r: DevReport): { subject: string; body: string; tone: 'good' | 'bad' | 'neutral' } {
   const name = (pid: number) => shortName(league, league.players[pid]);
   const full = (pid: number) => playerName(league.players[pid]);
-  const line = (x: DevLine) => `${full(x.pid)} (${x.age}), ${x.ovr}: ${x.reason}`;
+  const line = (x: DevLine) => `${full(x.pid)}, ${x.age}, now ${x.ovr}. ${x.reason}`;
   // a move in words for a subject: this month's, else the season's
   const move = (x: DevLine) => (x.recent ? `${x.recent > 0 ? 'up' : 'down'} ${Math.abs(x.recent)}` : `${minus(x.season)} this season`);
   const nth = ['first', 'second', 'third'][r.check - 1] ?? 'latest';
@@ -489,9 +489,9 @@ export function reportMail(league: League, r: DevReport): { subject: string; bod
     parts.push(`${GROUP_LABEL[g]}:`);
     for (const x of r[g]) parts.push(line(x));
   }
-  if (r.veterans.length) parts.push(`The veterans don't change in season; their test is the summer: ${andList(r.veterans.map(name))}.`);
-  if (r.watch) parts.push(`The one to watch: ${full(r.watch.pid)}, ${r.watch.why}.`);
-  for (const x of r.rookies) parts.push(`Rookie watch: ${full(x.pid)} (${x.dev.age}), ${x.dev.ovr}: ${rookieText(x.line)}. ${x.dev.reason}`);
+  if (r.veterans.length) parts.push(`The veterans hold until the summer: ${andList(r.veterans.map(name))}.`);
+  if (r.watch) parts.push(`The one to watch: ${full(r.watch.pid)}. ${said(r.watch.why)}`);
+  for (const x of r.rookies) parts.push(`Rookie watch: ${full(x.pid)}, ${x.dev.age}, now ${x.dev.ovr}. ${said(rookieText(x.line))} ${x.dev.reason}`);
   parts.push('Every name is on Team → Growth, with his page a tap away.');
   const net = r.rising.reduce((a, x) => a + x.recent, 0) + r.slipping.reduce((a, x) => a + x.recent, 0);
   return { subject, body: parts.join('\n'), tone: net > 0 ? 'good' : net < 0 ? 'bad' : 'neutral' };
@@ -604,7 +604,7 @@ function devNews(league: League, p: Player, kind: 'b' | 's' | 'p', by: number, e
     kind === 'p'
       ? extra
       : kind === 'b'
-        ? `The ${age}-year-old is up ${by} since opening night, now ${p.ovr}, and his staff see more coming.`
+        ? `The ${age}-year-old is up ${by} since opening night, now ${p.ovr}. His staff see more coming.`
         : `The ${age}-year-old is down ${-by} since opening night, now ${p.ovr}.`;
   // (the user's own player's breakout is his front page: a rebuild's best news)
   const mine = p.tid === league.userTid && kind !== 's';
@@ -629,8 +629,10 @@ function scoringWatch(league: League, dw: DevWatchState) {
   for (const f of found) {
     dw.told.push(`p:${f.p.pid}`);
     const mins =
-      Math.round(f.mNow) - Math.round(f.mThen) >= 3 ? `his minutes up from ${Math.round(f.mThen)} to ${Math.round(f.mNow)}` : `on about the same ${Math.round(f.mNow)} minutes`;
-    const line = `From ${f.then.toFixed(1)} points a game last season to ${f.now.toFixed(1)}, ${mins}.`;
+      Math.round(f.mNow) - Math.round(f.mThen) >= 3
+        ? `. His minutes are up from ${Math.round(f.mThen)} to ${Math.round(f.mNow)}`
+        : `, on about the same ${Math.round(f.mNow)} minutes`;
+    const line = `From ${f.then.toFixed(1)} points a game last season to ${f.now.toFixed(1)}${mins}.`;
     if (f.p.tid === league.userTid) {
       addInbox(league, {
         from: 'Player Development',
@@ -690,9 +692,8 @@ function seasonSummary(league: League) {
   }
   const climb = moves.filter((x) => x.age <= 23 && x.p.pot - x.p.ovr >= 4).slice(0, 3);
   const fade = moves.filter((x) => x.age >= 31).sort((a, b) => b.p.ovr - a.p.ovr);
-  if (climb.length)
-    parts.push(`This summer should lift ${andList(climb.map((x) => `${name(x.p)} (${x.age}, POT ${x.p.pot})`))}: the summers are when young players take their steps.`);
-  if (fade.length) parts.push(`Watch the age curve with ${andList(fade.slice(0, 3).map((x) => `${name(x.p)} (${x.age})`))}: conditioning work slows the athletic decline.`);
+  if (climb.length) parts.push(`This summer should lift ${andList(climb.map((x) => `${name(x.p)} at ${x.age}`))}. Summers are when young players take their steps.`);
+  if (fade.length) parts.push(`Watch the age curve with ${andList(fade.slice(0, 3).map((x) => `${name(x.p)} at ${x.age}`))}. Conditioning work slows the athletic decline.`);
   const best = up[0];
   addInbox(league, {
     from: 'Player Development',
@@ -739,7 +740,7 @@ export function devSummer(league: League) {
         `The summer's big riser: ${playerName(lead.p)}`,
         `${lead.p.lastName}, ${lead.age}, comes back a different player`,
       ]),
-      text: `Up ${lead.d} over the summer to ${to(lead.p)}.${top.length > 1 ? ` Also up big: ${andList(top.slice(1).map((x) => `${playerName(x.p)} (${league.teams[x.p.tid].abbrev}) ${minus(x.d)}`))}.` : ''}`,
+      text: `Up ${lead.d} over the summer to ${to(lead.p)}.${top.length > 1 ? ` Also up big: ${andList(top.slice(1).map((x) => `${playerName(x.p)} ${minus(x.d)} for ${league.teams[x.p.tid].abbrev}`))}.` : ''}`,
       tids: top.map((x) => x.p.tid),
       pids: top.map((x) => x.p.pid),
       weight: to(lead.p) >= 78 ? 2 : 1,
@@ -753,7 +754,7 @@ export function devSummer(league: League) {
     .filter((x) => x.d < 0)
     .slice(-3)
     .reverse();
-  const word = (x: (typeof mine)[number]) => `${name(x.p)} ${minus(x.d)} (now ${to(x.p)})`;
+  const word = (x: (typeof mine)[number]) => `${name(x.p)} ${minus(x.d)} to ${to(x.p)}`;
   const parts = [`The summer's work is in. ${setupLine(league, league.userTid)}`];
   const ours = mine.filter((x) => breakouts.includes(x));
   if (ours.length) parts.push(`Breakout${ours.length > 1 ? 's' : ''}: ${andList(ours.map(word))}. That is well past what his age alone would add.`);

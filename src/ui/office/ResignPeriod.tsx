@@ -18,7 +18,7 @@ import { CapBar, HelpSheet, OvrPot, capRoomFig, contractEnd, forYears, rosterFig
 import { ContractSheet } from './ContractSheet';
 import { QualifyRow } from './RfaPanel';
 import { MATCH_DAYS, RFA_MAX_SERVICE } from '../../core/league/rfa';
-import { FIRM_BUMP, talkAsk, talkState } from '../../core/league/negotiation';
+import { FIRM_BUMP, PLAYER_OPTION, TEAM_OPTION, talkAsk, talkState } from '../../core/league/negotiation';
 import { money } from '../../core/format';
 import { teamTaxBill } from '../../core/league/finances';
 import { ExtendRow, PlayerTop, StatLine, extendablePlayers } from './resignRows';
@@ -70,46 +70,50 @@ export function ResignPeriod() {
     <main className="page fo-page">
       <PageHeader
         title="Re-sign"
-        sub={`Deals from ${shortSeason(next)} · before free agency`}
+        sub={`${shortSeason(next)} deals · before free agency`}
         back
         right={
           <HelpSheet title="Re-signing your players">
             <p>
-              <b>Bird rights.</b> Re-sign your own players for any amount, even over the cap. In free agency, a team over the cap only adds players on minimum deals or with an
-              exception (the mid-level, bi-annual or room exception).
+              <b>Bird rights.</b> Re-sign your own players for any amount, even over the cap. In free agency, a team over the cap adds players only on minimum deals or with an
+              exception.
             </p>
             <p>
-              <b>Asking price.</b> About his market value, moved by how much he likes playing for you. Pay the ask (for his preferred length) and he signs on the spot. He'd take a
-              little less, how much he keeps to himself; below that he counters, and he only hears so many offers. Run out his patience and his ask goes up{' '}
-              {Math.round((FIRM_BUMP - 1) * 100)}%, and he takes nothing less for the rest of the re-sign period.
+              After three seasons with you, he can get up to his max for five years with 8% raises. A trade keeps his clock. After two, Early Bird pays up to 175% of his salary or
+              105% of the league average. After one, 120% of his salary. A player who wants more goes to the market.
             </p>
             <p>
-              <b>Options on new deals.</b> On two years or more you can add an option on the last season: a player option (his call) takes about 4% off his price, a team option
-              (yours) adds about 6%.
+              <b>Asking price.</b> About his market value, moved by how much he likes playing for you. Pay the ask at his preferred length and he signs on the spot.
             </p>
             <p>
-              <b>Bird rights.</b> After three seasons with you (a trade keeps his clock) you can re-sign a player up to his max, for up to five years with 8% raises. After two
-              (Early Bird), up to 175% of his salary or 105% of the league's average; after one, 120% of his salary: a player who wants more than that goes to the market.
+              He&apos;d take a little less, but keeps how much to himself. Below that he counters, and he only hears so many offers. Run out his patience and his ask goes up{' '}
+              {Math.round((FIRM_BUMP - 1) * 100)}%. Then it&apos;s firm for the rest of the re-sign period.
             </p>
             <p>
-              <b>Luxury tax.</b> Payroll above {money(cap.luxuryTax)} pays tax at the end of the season, from {CAP.taxRate}× on the first bracket and more on each after (see the
-              cap sheet's "?"). Past the first apron ({money(cap.firstApron)}) a team loses tools: in trades it takes back no more salary than it sends.
-            </p>
-            <p>Anyone you don't re-sign or qualify becomes an unrestricted free agent when free agency opens, and other teams may sign him.</p>
-            <p>
-              <b>Restricted free agents.</b> A first-round pick finishing his rookie-scale deal, or a player with {RFA_MAX_SERVICE} seasons or fewer, can get a{' '}
-              <b>qualifying offer</b>: one season at 125% of his last salary (a rookie-scale pick: 130% for #1 up to 150% for #30), at least the minimum plus $0.2M. In free agency
-              you can still re-sign him, and when another team signs him to an offer sheet (2 to 4 years) you have {MATCH_DAYS} days to match it on exactly its terms. Unsigned when
-              the market closes, he plays a season on the qualifying offer and is unrestricted after it. You can withdraw the offer until he signs a sheet.
+              <b>Options on new deals.</b> On two years or more, add an option on the last season. A player option, his call, takes {Math.round(PLAYER_OPTION * 100)}% off his
+              price. A team option, yours, adds {Math.round(TEAM_OPTION * 100)}%.
             </p>
             <p>
-              <b>Cap holds.</b> Until then each expiring player counts against next season's cap at about his ask, so you can't spend the same room twice (say, on salary taken back
-              in a trade). Renounce a player to clear his hold: he leaves for free agency. A qualified player holds the larger of his offer and his ask, through free agency too,
-              until he signs or you withdraw the offer.
+              <b>Luxury tax.</b> Payroll above {money(cap.luxuryTax)} pays tax at the end of the season. It starts at {CAP.taxRate}× on the first bracket, more on each after. The
+              cap sheet&apos;s &quot;?&quot; has the rest. Past the first apron, {money(cap.firstApron)}, a team takes back no more salary than it sends in trades.
+            </p>
+            <p>Anyone you don&apos;t re-sign or qualify becomes an unrestricted free agent when free agency opens.</p>
+            <p>
+              <b>Restricted free agents.</b> A first-round pick ending his rookie deal, or a player with {RFA_MAX_SERVICE} seasons or fewer, can get a <b>qualifying offer</b>. It
+              is one season at 125% of his last salary, and at least the minimum plus $0.2M. A rookie-scale pick gets 130% at #1, up to 150% at #30.
             </p>
             <p>
-              <b>This summer's options.</b> Players with a player option on next season have decided: those who opted out are in the expiring list. Team options (rookie-scale
-              fourth years included) are yours: exercise to keep him at that salary, or decline and he joins the expiring list. Undecided ones get the staff's call when free agency
+              In free agency he&apos;s still yours to re-sign. Another team may sign him to a 2- to 4-year offer sheet. You then have {MATCH_DAYS} days to match it exactly.
+              Unsigned at the close, he plays a season on the qualifying offer, then he&apos;s unrestricted. Withdraw the offer any time before he signs a sheet.
+            </p>
+            <p>
+              <b>Cap holds.</b> Until free agency opens, each expiring player counts against next season&apos;s cap at about his ask. That stops the same room being spent twice, as
+              on salary taken back in a trade. Renounce a player to clear his hold, and he leaves for free agency.
+            </p>
+            <p>A qualified player holds the larger of his offer and his ask. It stays through free agency, until he signs or you withdraw it.</p>
+            <p>
+              <b>This summer&apos;s options.</b> Players with a player option on next season have decided. Those who opted out are in the expiring list. Team options are yours,
+              rookie-scale fourth years included. Exercise one to keep him at that salary, or decline and he joins the expiring list. The staff decide any left when free agency
               opens.
             </p>
           </HelpSheet>
@@ -148,7 +152,7 @@ export function ResignPeriod() {
           />
           <Statline
             items={[
-              { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+              { ...capRoomFig(space), s: holds > 0 ? `${money(holds)} in holds` : undefined },
               taxFig(committed, cap.luxuryTax, teamTaxBill(league, tid, committed, next)),
               rosterFig(league),
             ]}
@@ -179,7 +183,7 @@ export function ResignPeriod() {
                         <span className={worth ? 'good' : 'warn'}>staff: {worth ? 'exercise' : 'decline'}</span>
                       </div>
                     </div>
-                    <button className="btn sm ghost" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
+                    <button className="btn sm text" aria-label={`Decline ${playerName(p)}'s option`} onClick={() => setDecline(p)}>
                       Decline
                     </button>
                     <button className="btn sm" disabled={busy} aria-label={`Exercise ${playerName(p)}'s option`} onClick={() => decide(p, true)}>
@@ -213,17 +217,17 @@ export function ResignPeriod() {
                       <div className="fo-rs-ask">
                         <b className="num">{salaryText(league, ask.amount)}</b> <span className="dim">{forYears(ask.years)}</span>
                         <div className="tiny dim">
-                          his ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
+                          ask{talkState(league, p, 'resign').firm ? <b className="warn"> · firm</b> : null} · was {salaryText(league, salaryFor(p, league.season))}
                         </div>
                         {/* without full Bird rights the team can only pay him so much: past it he goes to the market */}
                         {ask.amount > resignLimit(league, p, tid) && (
                           <div className="tiny warn">
-                            {birdTier(league, p) === 'early' ? 'Early Bird' : 'No Bird rights'}: you can pay up to {salaryText(league, resignLimit(league, p, tid))}
+                            {birdTier(league, p) === 'early' ? 'Early Bird' : 'No Bird rights'}: up to {salaryText(league, resignLimit(league, p, tid))}
                           </div>
                         )}
                       </div>
                     </div>
-                    <button className="btn sm ghost" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
+                    <button className="btn sm text" aria-label={`Renounce ${playerName(p)}`} onClick={() => setRenounce(p)}>
                       Renounce
                     </button>
                     <button className="btn sm" aria-label={`Negotiate with ${playerName(p)}`} onClick={() => setSel(p.pid)}>
@@ -268,7 +272,7 @@ export function ResignPeriod() {
             ))}
           </div>
           <div className="tiny dim">
-            Signed through {shortSeason(next)}. An extension starts in {shortSeason(next + 1)}: sign one any time until the end of the regular season.
+            Signed through {shortSeason(next)}. An extension starts in {shortSeason(next + 1)}. Sign one any time before the regular season ends.
           </div>
         </Section>
       )}
@@ -286,9 +290,10 @@ export function ResignPeriod() {
         {renounce && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              You give up {playerName(renounce)}'s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}: he's an unrestricted free agent when the market opens
-              {renounce.contract.twoWay ? '' : `, and his ${money(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now`}. To bring him
-              back you'd have to outbid other teams with cap space.
+              You give up {playerName(renounce)}&apos;s Bird rights{renounce.rfa ? ' and withdraw his qualifying offer' : ''}. He&apos;s an unrestricted free agent when the market
+              opens.
+              {renounce.contract.twoWay ? '' : ` His ${money(holders.find((h) => h.p.pid === renounce.pid)?.amount ?? 0)} cap hold comes off your books now.`} To bring him back,
+              you&apos;d have to outbid other teams with cap space.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setRenounce(null)}>
@@ -306,8 +311,8 @@ export function ResignPeriod() {
         {decline && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              His {shortSeason(next)} season ({salaryText(league, salaryFor(decline, next))}) comes off his contract and he joins the expiring list: re-sign him before free agency,
-              at about {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can't be undone.
+              His {shortSeason(next)} season at {salaryText(league, salaryFor(decline, next))} comes off his contract, and he joins the expiring list. Re-sign him before free
+              agency, at about {money(askingContract(league, decline, tid).amount)}, or he becomes a free agent. This can&apos;t be undone.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setDecline(null)}>
@@ -325,14 +330,14 @@ export function ResignPeriod() {
         <div className="col fo-sheet">
           {unrestricted > 0 && (
             <p className="fo-lede">
-              {unrestricted} player{unrestricted > 1 ? 's' : ''} become{unrestricted > 1 ? '' : 's'} unrestricted: other teams can sign {unrestricted > 1 ? 'them' : 'him'} on day
-              one, and you'd compete with cap space like everyone else.
+              {unrestricted} player{unrestricted > 1 ? 's' : ''} become{unrestricted > 1 ? '' : 's'} unrestricted. Other teams can sign {unrestricted > 1 ? 'them' : 'him'} on day
+              one. You&apos;d compete with cap space like everyone else.
             </p>
           )}
           {qualified > 0 && (
             <p className="fo-lede">
-              {qualified === 1 ? 'One qualified player becomes restricted' : `${qualified} qualified players become restricted`}: you can still re-sign{' '}
-              {qualified === 1 ? 'him' : 'them'} and match any offer sheet within {MATCH_DAYS} days. {qualified === 1 ? 'His' : 'Their'} cap hold
+              {qualified === 1 ? 'One qualified player becomes restricted' : `${qualified} qualified players become restricted`}. Re-sign {qualified === 1 ? 'him' : 'them'} still,
+              or match any offer sheet within {MATCH_DAYS} days. {qualified === 1 ? 'His' : 'Their'} cap hold
               {qualified === 1 ? ' stays' : 's stay'} on your books until {qualified === 1 ? 'he signs' : 'they sign'}.
             </p>
           )}

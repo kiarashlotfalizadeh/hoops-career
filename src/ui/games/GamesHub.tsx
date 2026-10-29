@@ -156,8 +156,9 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
       <GameBoard
         league={league}
         links={false}
-        away={{ tid: g.away, fig: chance(1 - proj.win), sub: rec(g.away), lost: proj.win > 0.5 }}
-        home={{ tid: g.home, fig: chance(proj.win), sub: rec(g.home), lost: proj.win < 0.5 }}
+        // (as shown: 50% against 50% is neither side's)
+        away={{ tid: g.away, fig: chance(1 - proj.win), sub: rec(g.away), lost: Math.round((1 - proj.win) * 100) < 50 }}
+        home={{ tid: g.home, fig: chance(proj.win), sub: rec(g.home), lost: Math.round(proj.win * 100) < 50 }}
         over={[`${when} · ${where}`, tag]}
         mid={<span className="gd-bd-k">To win</span>}
       />

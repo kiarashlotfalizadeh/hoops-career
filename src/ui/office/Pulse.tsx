@@ -1,6 +1,6 @@
 // The pulse of the job in one line: how the owner and the fans feel about the team right now, and
 // which way it's moving. Today shows it; Office → Owner has the whole story (PulseSection: both moods
-// through the season, a point a week, and the fans in the city's words). Read from legacyPulse.ts.
+// through the season, and the fans in the city's words). Read from legacyPulse.ts.
 import { Link } from 'react-router-dom';
 import { ArrowRight, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -14,7 +14,7 @@ import { seatOf } from './seat';
 import './pulse.css';
 
 // (flat isn't "steady": that's the meter's own word for a standing, see seatHeat)
-const TREND_WORD: Record<Trend, string> = { up: 'rising', down: 'falling', flat: 'holding' };
+export const TREND_WORD: Record<Trend, string> = { up: 'rising', down: 'falling', flat: 'holding' };
 
 /** Which way a mood is moving: an arrow, named for screen readers. */
 export function TrendMark({ trend }: { trend: Trend }) {
@@ -37,7 +37,7 @@ export function usePulse(league: League): { owner: Mood; fans: Mood } {
 export function CoachPulse({ league }: { league: League }) {
   const p = usePulse(league);
   if (league.fired) return null;
-  const label = `Owner: ${p.owner.word} (${TREND_WORD[p.owner.trend]}); the fans are ${p.fans.word} (${TREND_WORD[p.fans.trend]})`;
+  const label = `Owner ${p.owner.word}, ${TREND_WORD[p.owner.trend]}. Fans ${p.fans.word}, ${TREND_WORD[p.fans.trend]}.`;
   return (
     <Link to="/office/owner" className="fo-pulse" aria-label={label}>
       <span className="fo-pulse-part">
@@ -64,7 +64,7 @@ export function PulseChart({ owner, fans, labels, height = 110 }: { owner: numbe
   const x = (i: number) => 4 + (i / (n - 1)) * (W - 8);
   const y = (v: number) => 6 + (1 - v / 100) * (H - 12);
   const path = (pts: number[]) => pts.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-  const desc = `The owner from ${owner[0]} to ${owner[owner.length - 1]}; the fans from ${fans[0]} to ${fans[fans.length - 1]} (out of 100)`;
+  const desc = `Out of 100, the owner from ${owner[0]} to ${owner[owner.length - 1]}, the fans from ${fans[0]} to ${fans[fans.length - 1]}`;
   return (
     <div className="fo-pulse-chart">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" width="100%" height={H} role="img" aria-label={desc}>
@@ -95,7 +95,7 @@ export function PulseSection({ league }: { league: League }) {
   if (league.fired) return null;
   const arena = arenaOf(league, league.userTid);
   return (
-    <Section title="Pulse" right={<span className="tiny dim">A point a week</span>}>
+    <Section title="Pulse">
       <div className="card fo-pulse-card">
         <div className="fo-pulse-moods">
           <MoodFig league={league} k="Owner" m={p.owner} cls="owner" trendOnly />

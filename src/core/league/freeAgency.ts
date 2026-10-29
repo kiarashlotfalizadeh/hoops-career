@@ -97,18 +97,18 @@ import { money, moneyExact } from '../format';
 export { FA_DAYS };
 
 /** Why the user can't sign a player he released this season (see releasedBy). */
-export const RELEASED_REASON = (p: Player) => `You released ${playerName(p)} this season: you can't sign him again until next season.`;
+export const RELEASED_REASON = (p: Player) => `You released ${playerName(p)} this season. He can't sign back until next season.`;
 
 /** Free agents sign for four years at most: five is for re-signing one's own player with full Bird rights. */
 export const FA_YEARS = 4;
-const FA_YEARS_REASON = `Free agents sign for 1 to ${FA_YEARS} years: five is only for re-signing your own player with full Bird rights.`;
+const FA_YEARS_REASON = `Free agents sign for 1 to ${FA_YEARS} years. Five is only for your own player on full Bird rights.`;
 
 /** Why the user can't re-sign him for more than `limit`: his Bird rights with the team (see resignLimit). */
 export function resignLimitReason(league: League, p: Player, limit: number): string {
   const tier = birdTier(league, p);
   return tier === 'early'
-    ? `With Early Bird rights (two seasons with you) you can re-sign ${playerName(p)} for up to ${money(limit)}: 175% of his salary or 105% of the league's average, whichever is more.`
-    : `Without Bird rights (a season with you) you can re-sign ${playerName(p)} for up to ${money(limit)}: 120% of his salary. Beyond that he's a free agent like any other.`;
+    ? `Early Bird rights re-sign ${playerName(p)} for up to ${money(limit)}. That's 175% of his salary or 105% of the league average, if more.`
+    : `Non-Bird rights re-sign ${playerName(p)} for up to ${money(limit)}, 120% of his salary. Beyond that he's a free agent like any other.`;
 }
 
 export function expiringPlayers(league: League, tid: number): Player[] {
@@ -800,7 +800,7 @@ export function signingClosedReason(league: League): string | null {
     case 'draft':
       return 'Signings are frozen until free agency opens after the draft and re-signing period.';
     case 'resign':
-      return 'Re-signing period: you can only negotiate with your own players. Free agency opens next.';
+      return 'Re-signing period: only your own players for now. Free agency opens next.';
     default:
       return null;
   }
@@ -840,7 +840,7 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
     const others = otherBids(league, p.pid);
     const mleBid = others.find((b) => b.route === 'mle');
     if (mleBid)
-      return `Signing him with cap space would cost you the mid-level exception (a team that uses its space gets the smaller room exception instead), and your pending mid-level offer to ${playerName(league.players[mleBid.pid])} needs it. Withdraw that offer first.`;
+      return `Signing him with cap space would cost you the mid-level. Your pending mid-level offer to ${playerName(league.players[mleBid.pid])} needs it. Withdraw that offer first.`;
     const baeBid = others.find((b) => b.route === 'bae');
     if (baeBid) return `That would take your pending bi-annual offer to ${playerName(league.players[baeBid.pid])} past the tax line. Withdraw it first, or offer less.`;
   }
@@ -848,13 +848,13 @@ export function offerBlockedReason(league: League, p: Player, amount: number, ye
   const spaceBid = bidOnException(league, 'mle', p.pid);
   const exceptionBids = otherBids(league, p.pid).reduce((a, b) => a + (isException(b.route) ? b.amount : 0), 0);
   if (spaceBid?.route === 'space' && years <= EXCEPTIONS.mle.years && amount <= exceptionRoom(league, tid, 'mle', season, bidHolds(league, p.pid) + exceptionBids))
-    return `Your pending offer to ${playerName(league.players[spaceBid.pid])} uses your cap space, and a team that uses its space loses the mid-level exception (it gets the smaller room exception instead). Withdraw that offer first.`;
+    return `Your pending offer to ${playerName(league.players[spaceBid.pid])} uses your cap space, and that costs the mid-level. Withdraw that offer first.`;
   const min = p.experience >= 3 ? cap.vetMin : cap.minContract;
   const rooms = EXCEPTION_ORDER.map((k) => ({ k, room: userExceptionRoom(league, k, season, p.pid) }))
     .filter((r) => r.room > 0)
     .map((r) => `up to ${money(r.room)} with your ${EXCEPTIONS[r.k].name}`);
   const after = [offers > 0 ? 'your pending offers' : '', market.rfa > 0 ? `your restricted free agents' cap holds` : ''].filter(Boolean).join(' and ');
-  return `${space >= 50 ? `Not enough cap space (${money(space)})` : 'No cap space'}${after ? ` after ${after}` : ''}. Over the cap you can offer his minimum (${moneyExact(min)})${rooms.length ? `, or ${andList(rooms).replace(/ and up to/, ' or up to')}` : ''}.`;
+  return `${space >= 50 ? `Not enough cap space, ${money(space)}` : 'No cap space'}${after ? ` after ${after}` : ''}. Over the cap, offer his minimum, ${moneyExact(min)}${rooms.length ? `, or ${andList(rooms).replace(/ and up to/, ' or up to')}` : ''}.`;
 }
 
 /** The user's market holds (see marketHolds): his restricted free agents' cap holds, which count against his cap space, and his pending offer sheets, which count against the tax line too. */
@@ -1180,7 +1180,7 @@ export function userBid(league: League, pid: number, amount: number, years: numb
   if (amount < floor)
     return {
       ok: false,
-      reason: `${playerName(p)} won't consider less than ${money(floor)} a season over ${years} year${years > 1 ? 's' : ''} (he's asking ${money(askingContract(league, p, league.userTid).amount)}).`,
+      reason: `${playerName(p)} won't consider less than ${money(floor)} a season over ${years} year${years > 1 ? 's' : ''}. He asks ${money(askingContract(league, p, league.userTid).amount)}.`,
     };
   const route = offerRoute(league, p, amount, contractSeason(league), years)!;
   const old = pendingBid(league, pid);
@@ -1278,7 +1278,7 @@ function decideBid(league: League, b: FaBid) {
     addInbox(league, {
       from: 'Assistant GM',
       subject: `${name} signed with ${t.abbrev}`,
-      body: `${route ? `${name} chose the ${t.region} ${t.name} over us` : `Our offer to ${name} fell through: ${why}. He signed with the ${t.region} ${t.name}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}; ${PREF_LABEL[top]} matters most to him.` : ''}`,
+      body: `${route ? `${name} chose the ${t.region} ${t.name} over us` : `Our offer to ${name} fell through: ${why}. He signed with the ${t.region} ${t.name}`}. Their offer: ${yrs(years)} at ${money(best.amount)}. ${ours}${route && reasons.length ? ` ${reasons.join(', and ').replace(/^./, (c) => c.toUpperCase())}. ${PREF_LABEL[top].replace(/^./, (c) => c.toUpperCase())} matters most to him.` : ''}`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });
@@ -1389,7 +1389,7 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
       reason:
         p.rfa.tid === league.userTid
           ? `${playerName(p)} is your restricted free agent: re-sign him to a standard deal.`
-          : `${playerName(p)} is a restricted free agent: only an offer sheet the ${league.teams[p.rfa.tid].name} can match signs him.`,
+          : `${playerName(p)} is a restricted free agent. Only an offer sheet the ${league.teams[p.rfa.tid].name} can match signs him.`,
     };
   const closed = signingClosedReason(league);
   if (closed) return { ok: false, reason: closed };
@@ -1397,14 +1397,14 @@ export function userTwoWayOffer(league: League, pid: number): { ok: boolean; rea
   if (!twoWayEligible(p)) return { ok: false, reason: `${playerName(p)} has too much experience for a two-way deal (3 seasons max).` };
   if (twoWayRoster(league, tid).length >= TWO_WAY_MAX) return { ok: false, reason: `All ${TWO_WAY_MAX} two-way slots are taken.` };
   const season = contractSeason(league);
-  if (!wantsTwoWay(league, p, tid)) return { ok: false, reason: `${playerName(p)} wants a standard contract (asking ${money(askingContract(league, p, tid).amount)}).` };
+  if (!wantsTwoWay(league, p, tid)) return { ok: false, reason: `${playerName(p)} wants a standard contract. He asks ${money(askingContract(league, p, tid).amount)}.` };
   const amount = twoWaySalary(league, season);
   const years = twoWayYears(p);
   signPlayer(league, p, tid, amount, years, { start: season, twoWay: true });
   addInbox(league, {
     from: 'Assistant GM',
     subject: `${playerName(p)} signed (two-way)`,
-    body: `${playerName(p)} signed a ${years}-year two-way deal at ${moneyExact(amount)}. He doesn't take a roster spot or count against the cap, and sits at the end of the bench unless we run short. If he earns it, he can be converted to a standard contract when a roster spot is open.`,
+    body: `${playerName(p)} signed a ${years}-year two-way deal at ${moneyExact(amount)}. He doesn't take a roster spot or count against the cap. He sits at the end of the bench unless we run short. If he earns it, we can convert him when a roster spot opens.`,
     tone: 'good',
     link: `/player/${p.pid}`,
   });
@@ -1446,7 +1446,7 @@ export function userResign(league: League, pid: number, amount: number, years: n
     };
   const most = maxYearsWith(league, p, league.userTid);
   if (years < 1 || years > most)
-    return { ok: false, reason: most === 5 ? 'Contracts must be 1 to 5 years.' : `Without full Bird rights (three seasons with you) he re-signs for 4 years at most.` };
+    return { ok: false, reason: most === 5 ? 'Contracts must be 1 to 5 years.' : `Without full Bird rights, three seasons with you, he re-signs for 4 years at most.` };
   if (extras.option && years < 2) return { ok: false, reason: 'An option needs a deal of two years or more.' };
   const limit = resignLimit(league, p, league.userTid);
   const next = CAP_FOR(league, league.season + 1);

@@ -174,7 +174,7 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
           id: `chw-${b.pid}`,
           kind: 'watch',
           tag: 'Career high watch',
-          text: b.pts === best.pts ? `${name}: ${b.pts} points, matching his career high` : `${name}: ${b.pts} points, ${best.pts - b.pts} off his career high (${best.pts})`,
+          text: b.pts === best.pts ? `${name}: ${b.pts} points, matching his career high` : `${name}: ${b.pts} points, ${best.pts - b.pts} off his career high of ${best.pts}`,
           side,
           priority: 59,
         });
@@ -202,7 +202,8 @@ export function graphicCandidates(a: GraphicInput): Graphic[] {
             id: `watch-${b.pid}`,
             kind: 'watch',
             tag: `${which[0].toUpperCase()}${which.slice(1)} high watch`,
-            text: b.pts === high.pts ? `${name}: ${b.pts} points, matching his ${which} high` : `${name}: ${b.pts} points, ${high.pts - b.pts} off his ${which} high (${high.pts})`,
+            text:
+              b.pts === high.pts ? `${name}: ${b.pts} points, matching his ${which} high` : `${name}: ${b.pts} points, ${high.pts - b.pts} off his ${which} high of ${high.pts}`,
             side,
             priority: 55,
           });

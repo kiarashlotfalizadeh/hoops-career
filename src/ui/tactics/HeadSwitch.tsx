@@ -12,8 +12,8 @@ export function HeadSwitch<T extends string>({
   right,
 }: {
   value: T;
-  /** Each choice's name, and a small figure under it (how well the team knows a phase). */
-  options: { id: T; label: string; sub?: ReactNode }[];
+  /** Each choice's name. */
+  options: { id: T; label: string }[];
   onChange: (v: T) => void;
   label: string;
   /** The block's Help, at the right of the heading. */
@@ -24,8 +24,7 @@ export function HeadSwitch<T extends string>({
       <div className="tx-hsw-opts" role="group" aria-label={label}>
         {options.map((o) => (
           <button key={o.id} className={`tx-hsw-b${o.id === value ? ' on' : ''}`} aria-pressed={o.id === value} onClick={() => onChange(o.id)}>
-            <span className="tx-hsw-n">{o.label}</span>
-            {o.sub !== undefined && <span className="tx-hsw-v">{o.sub}</span>}
+            {o.label}
           </button>
         ))}
       </div>

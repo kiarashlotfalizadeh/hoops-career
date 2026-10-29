@@ -7,12 +7,10 @@
 // Read by the live game's bench as the night goes, and kept with the result for the post-game
 // report. Pure: it reads the possession logs the game already keeps.
 
-import type { CoachMove, League, LiveOp, MoveTally, ScheduledGame, Tactics, TacticsPatch } from '../types';
+import type { CoachMove, LiveOp, MoveTally, Tactics, TacticsPatch } from '../types';
 import type { FinishType, PossLog } from '../sim/log';
 import { tacticsChanges } from '../sim/playbooks';
-import { SCHEME_META, applyPatch, emptyPatch, tacticsDiff } from '../sim/tactics';
-import { SLOT_COUNT, SLOT_LETTERS, activeSlot, slotTactics } from '../sim/slots';
-import { effectiveTactics } from '../league/gamePlans';
+import { SCHEME_META, applyPatch } from '../sim/tactics';
 import { callLabel } from '../sim/sets';
 import { GAME } from '../constants';
 
@@ -140,32 +138,6 @@ export function moveText(a: Tactics, b: Tactics, nameOf: (pid: number) => string
 }
 
 /**
- * Which of a team's tactic slots (Tactic A, B, C) some tactics are, in a game against the other team
- * in `game`: each slot as that game plays it (tonight's game plan on top of it, for the user's team),
- * matched on everything but tonight's opponent-specific orders. The active slot first (a copy in
- * another slot is the same tactics); null when they're none of them (a slot with changes made since).
- */
-export function slotMatcher(league: League, game: Pick<ScheduledGame, 'home' | 'away' | 'seriesId'>, tid = league.userTid): (t: Tactics) => number | null {
-  const team = league.teams[tid];
-  // one tactic and no other: nothing to switch to
-  if (!team.slots?.stored.some(Boolean)) return () => null;
-  const opp = game.home === tid ? game.away : game.home;
-  const active = activeSlot(team);
-  const order = [active, ...Array.from({ length: SLOT_COUNT }, (_, i) => i).filter((i) => i !== active)];
-  const targets = order.flatMap((i) => {
-    const s = slotTactics(team, i);
-    return s ? [{ i, t: tid === league.userTid ? effectiveTactics(league, opp, game, s) : s }] : [];
-  });
-  return (t) => targets.find((x) => emptyPatch(tacticsDiff(x.t, t)))?.i ?? null;
-}
-
-/** "Tactic B (Plan B)": a slot as the night's moves name a switch to it. */
-export function slotMoveName(league: League, i: number, tid = league.userTid): string {
-  const name = league.teams[tid].slots?.names[i];
-  return `Tactic ${SLOT_LETTERS[i]}${name ? ` (${name})` : ''}`;
-}
-
-/**
  * Moves of one kind made within this many possession logs of each other (a few at a break, or two
  * changes a trip apart) are one move: no trip was played between them, so nothing could tell what
  * each did on its own, and measured one by one, each had an empty stretch after it (or before it).
@@ -174,12 +146,11 @@ const BATCH_LOGS = 4;
 
 /**
  * The night's moves, oldest first: `marks` are the game's, in the order made; `side` is the user's (0
- * home, 1 away). `slotName` names the tactic slot some tactics are, if any (see slotMatcher): a change
- * onto one from anything else reads as the switch it was ("Switched to Tactic B (Plan B)"). Changes of
- * tactics made together are one move, and so are substitutions (see BATCH_LOGS). `over`: the game has
- * ended, so a move whose stretch ran to the final buzzer is over too (see CoachMove.closed).
+ * home, 1 away). Changes of tactics made together are one move, and so are substitutions (see
+ * BATCH_LOGS). `over`: the game has ended, so a move whose stretch ran to the final buzzer is over too
+ * (see CoachMove.closed).
  */
-export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string, slotName?: (t: Tactics) => string | null, over = false): CoachMove[] {
+export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, nameOf: (pid: number) => string, over = false): CoachMove[] {
   // the moves as batches of one kind: [first, last] of each
   const batches: [MoveMark, MoveMark][] = [];
   for (const m of marks) {
@@ -189,9 +160,6 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
     else batches.push([m, m]);
   }
   const out: CoachMove[] = [];
-  // the slot the game tipped off with: the tactics the first change replaced
-  const first = marks.find((m) => m.op.op === 'tactics' && m.before);
-  const tip = first?.before && slotName ? slotName(first.before) : null;
   // each batch is measured from its last move to the next batch of its kind, against the stretch from the one before
   const nextOf = (i: number, kind: LiveOp['op']) => batches.slice(i + 1).find((b) => b[0].op.op === kind)?.[0].log ?? logs.length;
   // (from the last move of its kind, or MOVE_BASE_TRIPS back when that was only a few trips ago: two logs a trip each way)
@@ -211,16 +179,12 @@ export function coachMoves(marks: MoveMark[], logs: PossLog[], side: 0 | 1, name
     if (m.op.op === 'tactics' && last.op.op === 'tactics' && m.before) {
       const after = last.op.args.tactics;
       const aim = aimOf(m.before, after);
-      // (back onto the slot the game tipped off with from changes made on it is "Reset to game plan", not a switch)
-      const to = slotName?.(after);
-      const from = slotName?.(m.before) ?? null;
-      const switched = !!to && to !== from && (from !== null || to !== tip);
       const end = nextOf(i, 'tactics');
       const tAfter = tally(logs, side, last.log, end, aim);
       out.push({
         kind: 'tactics',
         ...at,
-        text: switched ? `Switched to ${to}` : moveText(m.before, after, nameOf),
+        text: moveText(m.before, after, nameOf),
         end: aim.end,
         // (the staff's only when it made every change in it)
         ...(all.every((x) => x.op.op === 'tactics' && x.op.args.staff) ? { by: 'staff' as const } : {}),

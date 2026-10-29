@@ -18,7 +18,6 @@ import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
 import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
 import { injuryName, plural } from '../../../core/format';
 import { K } from '../../../core/sim/engine';
-import { CLASH_META, LINK_META } from '../../../core/sim/links';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { OppPlanNote } from '../../components/scouting';
@@ -57,7 +56,7 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
   const stakes = useLeagueMemo(() => gameStakes(league, game.gid, pv.us.tid), [league, game.gid, pv.us.tid]);
   // a game that changes nothing either way isn't worth the line
   const odds = stakes && Math.abs(stakes.win - stakes.loss) >= 0.01 ? stakes : null;
-  const [, ...more] = useBillings(league, game);
+  const [bill, ...more] = useBillings(league, game);
   const tags = [
     pv.playoff?.tag,
     (pv.playoff?.elimination || pv.playIn?.elimination) && 'Elimination game',
@@ -69,8 +68,11 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
   const coach = !!(pv.oppPlan?.length || c.adjusts);
   const stories = useLeagueMemo(() => {
     const out = new Set([pv.us, pv.them].flatMap((s) => [...s.out, ...s.resting, ...s.questionable.filter((q) => !q.cleared)].map((p) => p.pid)));
-    return storylines(league, game, out).slice(0, 3);
-  }, [league, game, pv]);
+    // (the one the night is billed with is the hero's line already)
+    return storylines(league, game, out)
+      .filter((st) => !bill || !st.text.startsWith(bill.line))
+      .slice(0, 3);
+  }, [league, game, pv, bill]);
   const forms = [pv.us.tid, pv.them.tid].map((tid) => {
     const f = formGuide(league, tid, 5);
     return { tid, f, text: `${league.teams[tid].abbrev} ${f.filter(Boolean).length}-${f.filter((w) => !w).length}` };
@@ -131,7 +133,7 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
               {pv.oppPlan && pv.oppPlan.length > 0 && <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />}
               {c.adjusts && (
                 <div className="small dim2">
-                  {c.name} adjusts {c.adjusts} ({p0(c.chance)} at each break).
+                  {c.name} adjusts {c.adjusts}: a {p0(c.chance)} chance at each break.
                 </div>
               )}
             </div>
@@ -166,11 +168,7 @@ function Keys({ league, game }: { league: League; game: ScheduledGame }) {
       title="Keys to the game"
       right={
         <Help title="Keys to the game">
-          <p>
-            Three numbers to hit, from what both teams have done this season: what they do best, what their defense gives up or takes away, and the player they run their offense
-            through. Each target is about where the number lands if both teams play to form, so hitting one is a real edge.
-          </p>
-          <p>The live game tracks them at every break and in the huddle; the recap grades them. Tap a key for why.</p>
+          <p>Three numbers to hit, set where they land if both teams play to form. The live game tracks them, and the debrief grades them.</p>
         </Help>
       }
     >
@@ -209,12 +207,8 @@ function Availability({ league, pv, game, locked }: { league: League; pv: Matchu
           <span>Game-time decisions</span>
           <Help title="Game-time decisions">
             <p>
-              A player one game from returning from a minor or moderate injury (not a concussion) is questionable: he sits unless you clear him to play. The game counts as the one
-              he had left either way.
-            </p>
-            <p>
-              Cleared, he plays about {Math.round((1 - GAME_TIME_PERF) * 100)}% below his best and is {K.gameTimeRisk}× as likely to get hurt during the game. Other teams always
-              sit theirs.
+              A player one game from returning is questionable, and sits unless you clear him. Cleared, he plays about {Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, at{' '}
+              {K.gameTimeRisk}× the injury risk.
             </p>
           </Help>
         </div>
@@ -334,11 +328,7 @@ function StartingFives({
   return (
     <Section
       title="Starting fives"
-      right={
-        <Help title="Starting fives">
-          The five each coach starts, from the depth charts, injuries and rest. A player in for a usual starter says for whom; who&apos;s out, resting or worn is under them.
-        </Help>
-      }
+      right={<Help title="Starting fives">The five each coach starts, after injuries and rest. Who&apos;s out, resting or worn is listed under them.</Help>}
     >
       <div className="card flush">
         <div className="mu-fives-h">
@@ -355,30 +345,8 @@ function StartingFives({
             {cell(h, true)}
           </div>
         ))}
-        {(away.links.length > 0 || home.links.length > 0 || away.crowd || home.crowd) && (
-          <div className="mu-five mu-links">
-            <FiveLinks league={league} s={away} name={names[0]} />
-            <FiveLinks league={league} s={home} name={names[1]} right />
-          </div>
-        )}
         <Availability league={league} pv={pv} game={game} locked={locked} />
       </div>
     </Section>
-  );
-}
-
-/** A starting five's partnerships worth naming (see sim/links.ts), and its crowded paint. */
-function FiveLinks({ league, s, name, right }: { league: League; s: SidePreview; name: (pid: number) => string; right?: boolean }) {
-  const who = (pid: number) => name(pid) || league.players[pid]?.lastName;
-  return (
-    <span className={`mu-links-side ${right ? 'r' : ''}`}>
-      {s.links.map((l) => (
-        <span key={`${l.id}-${l.a}-${l.b}`} className="mu-link">
-          <b>{LINK_META[l.id].label}</b> {who(l.a)} → {who(l.b)}
-          <span className="dim"> · {l.word}</span>
-        </span>
-      ))}
-      {s.crowd && <span className="mu-link bad">{CLASH_META.crowd.label}</span>}
-    </span>
   );
 }

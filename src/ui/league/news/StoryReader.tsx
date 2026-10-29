@@ -33,7 +33,7 @@ export function StoryReader({ league }: { league: League }) {
   const n = Number.isFinite(id) ? storyById(league, id) : undefined;
   return (
     <Sheet open={raw !== null} onClose={() => setParams({ story: null })} title={n ? (n.head ?? KIND_ONE[n.kind]) : 'Story'}>
-      {n ? <Story league={league} n={n} /> : <div className="empty">This story is no longer on file: the news keeps about a season.</div>}
+      {n ? <Story league={league} n={n} /> : <div className="empty">This story is no longer on file. The news keeps about a season.</div>}
     </Sheet>
   );
 }
@@ -60,7 +60,7 @@ function Story({ league, n }: { league: League; n: NewsItem }) {
           ))}
         </p>
       ))}
-      {!paras.length && n.head && <p className="lg-story-p dim">The full story is no longer on file; the headline stays.</p>}
+      {!paras.length && n.head && <p className="lg-story-p dim">Only the headline is still on file.</p>}
       {n.kind === 'power' && (
         <Link to="/league/standings?view=power" className="card-link lg-story-more">
           All 30 teams <ChevronRight size={14} aria-hidden="true" />

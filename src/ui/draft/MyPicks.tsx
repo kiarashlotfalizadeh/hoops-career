@@ -9,7 +9,7 @@ import { ordinal, plural } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
 import { OvrPot } from '../office/common';
 import { useLeagueMemo } from '../../state/store';
-import { Empty, Section, Segmented } from '../components/ui';
+import { Empty, Help, Section, Segmented } from '../components/ui';
 import { pickProjection } from '../league/shared';
 import { PickRow } from '../league/PicksList';
 import { PICK_RANGE_NOTE, draftedThisYear, gradeTone, lotteryHidden, pickGrade, pickOrder, pickSlot, picksText, projectedSlot, type PickGrade } from './common';
@@ -96,7 +96,11 @@ export function MyPicks({ league }: { league: League }) {
         {hidden ? (
           <div className="tiny dim">Where they land shows once you reveal the lottery.</div>
         ) : (
-          owned.some((d) => proj(d) !== undefined) && <div className="tiny dim">{PICK_RANGE_NOTE}</div>
+          owned.some((d) => proj(d) !== undefined) && (
+            <div className="tiny dim row">
+              Ranges hold three times in five. <Help title="Projected picks">{PICK_RANGE_NOTE}</Help>
+            </div>
+          )
         )}
       </Section>
       {owed.length > 0 && (
@@ -127,11 +131,11 @@ function DraftRecap({ league, list }: { league: League; list: Player[] }) {
   const steals = mine.filter((x) => x.g.label === 'Steal' || x.g.label === 'Value').length;
   const reaches = mine.filter((x) => x.g.label === 'Reach' || x.g.label === 'Big reach').length;
   const verdict = !mine.length
-    ? 'No picks for us this year.'
+    ? 'No picks this year.'
     : reaches === 0 && steals
-      ? `${plural(steals, 'pick')} went well after where the board had ${steals > 1 ? 'them' : 'him'}: a night the scouts will like.`
+      ? `${plural(steals, 'pick')} went well after where the board had ${steals > 1 ? 'them' : 'him'}. A night the scouts will like.`
       : reaches > steals
-        ? `We went off the board ${reaches > 1 ? `${reaches} times` : 'once'}: our scouts saw something the consensus didn't. Time will tell.`
+        ? `Off the board ${reaches > 1 ? `${reaches} times` : 'once'}. Your scouts saw something the consensus didn't.`
         : 'A night that went to the board, more or less.';
   const first = list.find((p) => p.draft.round === 1 && p.draft.pick === 1);
   const row = (label: string, x: { p: Player; g: PickGrade }) => (

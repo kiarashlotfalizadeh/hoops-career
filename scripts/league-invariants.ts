@@ -881,7 +881,7 @@ function tenDayStep() {
     const r = TD.userTenDay(L, p.pid);
     if (!r.ok || p.contract.tenDay.until !== Math.min(until + TD.TEN_DAYS, L.regularSeasonDays + 1) || TD.tenDaysWith(L, p, u) !== 2)
       bad('second 10-day off', `${nm(p.pid)} ${r.reason} ${JSON.stringify(p.contract)}`);
-    else if (!TD.tenDayBlockedReason(L, u, p)?.includes('two 10-day contracts')) bad('third 10-day not refused', nm(p.pid));
+    else if (!TD.tenDayBlockedReason(L, u, p)?.includes('two 10-days')) bad('third 10-day not refused', nm(p.pid));
   } else if (L.day === p.contract.tenDay.until - 1) {
     const r = TD.userTenDayRest(L, p.pid);
     if (!r.ok || p.contract.tenDay || p.contract.salaries.length !== 1) bad('rest-of-season deal off', `${nm(p.pid)} ${r.reason} ${JSON.stringify(p.contract)}`);

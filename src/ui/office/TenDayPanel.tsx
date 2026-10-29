@@ -43,8 +43,8 @@ export function tenDayLabel(league: League, p: Player): string | null {
 export function tenDayLine(league: League, p: Player): string {
   const td = p.contract.tenDay!;
   const n = tenDaysWith(league, p, p.tid);
-  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name} (${moneyExact(p.contract.salaries[0])}, paid at signing): ends after ${tenDayEnds(league, td.until)}${
-    td.hardship ? `, on a hardship spot beyond ${CAP.rosterMax}` : ''
+  return `${n >= 2 ? 'Second' : 'First'} 10-day with the ${league.teams[p.tid].name}: ${moneyExact(p.contract.salaries[0])}, paid at signing. It ends after ${tenDayEnds(league, td.until)}${
+    td.hardship ? `, on a hardship spot past ${CAP.rosterMax}` : ''
   }. No dead money if he goes.`;
 }
 
@@ -106,7 +106,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <div className="fo-lines">
-            <Line k="Pay (paid at signing)">{moneyExact(tenDayPay(league, p, until - league.day))}</Line>
+            <Line k="Pay, at signing">{moneyExact(tenDayPay(league, p, until - league.day))}</Line>
             <Line k="Through">
               {tenDayEnds(league, until)} · {until - league.day} day{until - league.day === 1 ? '' : 's'}
             </Line>
@@ -114,15 +114,15 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               {n}/{CAP.rosterMax}
               {h.spots ? ` + ${h.spots} hardship` : ''}
             </Line>
-            <Line k="Players out (3+ games)">{h.out}</Line>
+            <Line k="Players out 3+ games">{h.out}</Line>
           </div>
           <p className="fo-lede small">
-            His minimum, prorated; it ends by itself with no dead money{had ? ' (his second with you)' : ''}.{' '}
+            His minimum for those days. It ends by itself, with no dead money.{had ? ' His second with you.' : ''}{' '}
             {spot === 'hardship'
-              ? `A hardship spot beyond ${CAP.rosterMax} (${h.out} out).`
+              ? `A hardship spot past ${CAP.rosterMax}, with ${h.out} out.`
               : spot === 'regular'
                 ? `Takes one of your ${CAP.rosterMax} spots.`
-                : `${HARDSHIP_OUT}+ out for 3+ games opens hardship spots beyond ${CAP.rosterMax}.`}
+                : `${HARDSHIP_OUT}+ out for 3+ games opens hardship spots past ${CAP.rosterMax}.`}
           </p>
           {blocked && <div className="small warn">{blocked}</div>}
           <div className="row">
@@ -133,7 +133,7 @@ export function TenDaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               Sign to a 10-day
             </button>
           </div>
-          <div className="tiny dim">Then a second 10-day, the rest of the season at his minimum, or he leaves: up to {TEN_DAY_MAX} per player with one team a season.</div>
+          <div className="tiny dim">Then a second 10-day, the rest of the season at his minimum, or he leaves. {TEN_DAY_MAX} at most with one team a season.</div>
         </div>
       )}
     </Sheet>

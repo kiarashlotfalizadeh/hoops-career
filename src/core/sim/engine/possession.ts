@@ -1,5 +1,4 @@
-// One possession from the start: a situational plan coming or going, the late-game foul check, the
-// play after a timeout, the press, the run-out decision (each setting's share
+// One possession from the start: the late-game foul check, the play after a timeout, the press, the run-out decision (each setting's share
 // of it tagged), and the half court's sequence of up to six actions, the first of which may be a set,
 // with the shot clock running from the inbound. Also the shot profile the offense's settings and the
 // game situation ask for, and its spacing.
@@ -14,9 +13,6 @@ import type { GameSim } from './game';
 
 export const possessionMethods = {
   possession(this: GameSim) {
-    // a situational plan (protect a lead, the second unit...) starts or ends between possessions
-    this.situate(this.T[0]);
-    this.situate(this.T[1]);
     const o = this.poss;
     const off = this.T[o];
     const def = this.T[1 - o];
@@ -54,7 +50,6 @@ export const possessionMethods = {
         scheme: this.schemeNow(def),
         help: def.t.defense.help,
       };
-      if (this.T[0].sit || this.T[1].sit) this.cur.sit = [this.T[0].sit?.label ?? '', this.T[1].sit?.label ?? ''];
       const chased = this.chased(def, off);
       if (chased.length) this.cur.chase = chased.map((p) => p.pid);
     }
@@ -190,14 +185,12 @@ export const possessionMethods = {
       this.clockOut(off);
       return;
     }
-    this.halfCourt(off, def, shotClock, late, paceF, first, isoFor, set, true);
+    this.halfCourt(off, def, shotClock, late, paceF, first, isoFor, set);
   },
 
   /**
    * `first`: an action the trip opens with (an after-timeout play, a called isolation for `isoFor`);
-   * `set`: a set it opens with instead (called, or after a timeout), for a player or the best fit;
-   * `fresh`: a trip from the start (not a reset after an offensive board), on which the set package
-   * may run one of its sets.
+   * `set`: a set it opens with instead (called, or after a timeout), for a player or the best fit.
    */
   halfCourt(
     this: GameSim,
@@ -209,10 +202,8 @@ export const possessionMethods = {
     first: ActionType | null = null,
     isoFor: SP | null = null,
     set: { id: SetId; pid: number | null } | null = null,
-    fresh = false,
   ) {
     // an inbounds play after a foul to give starts from a worse look
-    const inbound = this.inbound;
     let carryOpen = (this.inbound ? -K.ftg.open : 0) + this.firstOpen;
     this.inbound = false;
     this.firstOpen = 0;
@@ -233,16 +224,9 @@ export const possessionMethods = {
       // instead of letting the horn decide when it goes up
       const lastShot = late.hold && this.q >= 4 && this.clock < shotClock && left > 3;
       forced = left <= 4.5 || n === 5 + stops || lastShot;
-      // the trip opens with its set: after a timeout, or now and then one of the package's when it's a
-      // fresh trip with the time to run it and nothing else to do (no late-game situation)
+      // the trip opens with its set: one called from the bench, or after a timeout
       let play: SetPlay | null = null;
-      if (n === 0) {
-        // (nor in a close game's last 50 seconds, whatever the clock asks for)
-        const crunch = this.q >= 4 && this.clock <= 50 && Math.abs(off.score - def.score) <= 5;
-        const quiet = !first && !inbound && !forced && left >= 14 && !crunch && !late.hold && !late.quick && !late.milk && !late.need3 && !late.hurry;
-        const want = set ?? (fresh && quiet ? this.packageSet(off, def) : null);
-        if (want) play = this.setPlay(off, def, want.id, want.pid);
-      }
+      if (n === 0 && set) play = this.setPlay(off, def, set.id, set.pid);
       const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off, late);
       let dt = lastShot
         ? Math.max(0.5, Math.min(left - this.rng.uniform(K.lastShotSpare[0], K.lastShotSpare[1]), K.actionTime * paceF * this.rng.uniform(0.6, 1)))

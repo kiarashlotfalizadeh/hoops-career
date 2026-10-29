@@ -45,8 +45,6 @@ const GROUP: Record<TxnKind, Group> = {
 const groupOf = (t: Txn): Group => (t.kind === 'qualify' && t.note === 'accepted' ? 'signing' : t.kind === 'tenDay' && t.note === 'ended' ? 'release' : GROUP[t.kind]);
 const FILTERS: Filter[] = ['all', 'trade', 'signing', 'release', 'draft', 'other'];
 const FILTER_LABEL: Record<Filter, string> = { all: 'All', trade: 'Trades', signing: 'Signings', release: 'Releases', draft: 'Draft', other: 'Other' };
-/** A move's kind in a word, on its date line ("Trade · Feb 9"); an option or a qualifying offer goes without. */
-const GROUP_ONE: Record<Group, string> = { trade: 'Trade', signing: 'Signing', release: 'Release', draft: 'Draft', other: '' };
 
 const OFFSEASON: Phase[] = ['draftLottery', 'draft', 'resign', 'freeAgency'];
 const PAGE = 40;
@@ -101,15 +99,13 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
         </div>
         <span className="lg-bar-r">
           <Help title="The moves log">
-            <p className="lg-p">
-              Trades and your own moves stay in the log for good; other teams&apos; signings, releases, options and draft picks for two seasons. Their minimum deals aren&apos;t
-              listed.
-            </p>
+            <p className="lg-p">Trades and your own moves stay in the log for good.</p>
+            <p className="lg-p">Other teams&apos; signings, releases, options and draft picks stay two seasons. Their minimum deals aren&apos;t listed.</p>
           </Help>
         </span>
       </div>
       {shown.length === 0 ? (
-        <div className="card empty">{all.length ? 'No moves of this kind in the log.' : 'No moves yet: trades, signings, extensions and releases land here.'}</div>
+        <div className="card empty">{all.length ? 'No moves of this kind in the log.' : 'No moves yet. Trades, signings, extensions and releases land here.'}</div>
       ) : (
         <div className="card flush">
           {shown.slice(0, limit).map((t) => {
@@ -117,7 +113,6 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
             const key = `${t.season}:${summer}`;
             const header = key !== lastKey;
             lastKey = key;
-            const kind = GROUP_ONE[groupOf(t)];
             return (
               <Fragment key={t.id}>
                 {header && <div className="list-divider">{summer ? `${t.season} offseason` : `${seasonLabel(t.season)} season`}</div>}
@@ -126,10 +121,8 @@ export function MovesTab({ league, tid }: { league: League; tid: number }) {
                     <div className="lg-news-text">
                       <TxnText league={league} parts={txnLine(t, { tid })} />
                     </div>
-                    <div className="lg-news-date">
-                      {kind ? `${kind} · ` : ''}
-                      {fmtDate(t.season, t.day)}
-                    </div>
+                    {/* (the line's own verb says what kind of move it was: "Signed", "Traded") */}
+                    <div className="lg-news-date">{fmtDate(t.season, t.day)}</div>
                   </div>
                 </div>
               </Fragment>

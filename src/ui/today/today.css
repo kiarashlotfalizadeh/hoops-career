@@ -1,4 +1,4 @@
-/* Today and the inbox. Scoped with the `td-` prefix (practice `pr-`, the digest `dg-`).
+/* Today and the inbox. Scoped with the `td-` prefix (the digest `dg-`).
    Today is the front page, printed: one poster at the top (the last result's score on your team's
    slab with its headline under it on the paper, the game-day slab with the chance to win, or the
    phase), then a few blocks on the paper: what needs you as cards of card stock with ink pills, the
@@ -772,133 +772,9 @@
   font-size: 14px;
   color: var(--text-2);
 }
-.td-mrow-warn {
-  color: var(--warn);
-}
 @media (hover: hover) and (pointer: fine) {
   .td-mrow:not(:disabled):hover {
     background: color-mix(in srgb, var(--surface) 70%, var(--raised));
-  }
-}
-
-/* ------------------------------------------------------------ practice (its sheet, and the matchup page's briefing) */
-.pr-sheet {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
-.pr-opts {
-  display: flex;
-  flex-direction: column;
-  border-radius: var(--radius);
-  background: var(--raised);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.pr-opts > * + * {
-  border-top: 1px solid var(--line);
-}
-.pr-opt {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: 100%;
-  min-height: 60px;
-  padding: 14px 16px;
-  text-align: left;
-  color: inherit;
-  transition: background var(--dur-fast) ease;
-}
-.pr-opt:active {
-  background: var(--surface);
-}
-.pr-opt.on .pr-opt-t {
-  font-weight: 760;
-}
-.pr-opt:disabled {
-  opacity: 0.5;
-}
-.pr-opt-dot {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
-  border-radius: 50%;
-  border: 1.5px solid var(--line-3);
-}
-.pr-opt.on .pr-opt-dot {
-  border-color: var(--on);
-  background: var(--on);
-  box-shadow: inset 0 0 0 4px var(--raised);
-}
-.pr-opt .grow {
-  min-width: 0;
-}
-.pr-opt-t {
-  display: block;
-  font-size: 15.5px;
-  font-weight: 640;
-  line-height: 1.25;
-}
-.pr-opt-l {
-  display: block;
-  margin-top: 3px;
-  font-size: 13px;
-  line-height: 1.4;
-  color: var(--text-dim);
-}
-.pr-opt.on .pr-opt-l {
-  color: var(--text-2);
-}
-.pr-note {
-  margin: 4px 0 0;
-  font-size: 12.5px;
-  line-height: 1.42;
-  color: var(--text-dim);
-}
-.pr-fam,
-.pr-brief {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pr-meter {
-  display: grid;
-  grid-template-columns: auto minmax(40px, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-}
-.pr-meter-k {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-dim);
-}
-.pr-meter-v {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-2);
-  white-space: nowrap;
-}
-.pr-risk {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  line-height: 1.4;
-  color: var(--text-2);
-}
-.pr-risk > .btn {
-  flex: none;
-}
-.pr-chips {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-@media (hover: hover) and (pointer: fine) {
-  .pr-opt:not(.on):not(:disabled):hover {
-    background: var(--surface);
   }
 }
 

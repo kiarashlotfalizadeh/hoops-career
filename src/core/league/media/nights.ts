@@ -176,8 +176,10 @@ function fifty(league: League, v: Voice, res: GameResult, side: TeamBox, opp: Te
     `${poss(L)} ${b.pts}-point night ${won ? `sinks the ${O}` : `isn't enough against the ${O}`}`,
     `${L} goes for ${b.pts}${won ? '' : ' in a losing cause'}`,
   ]);
-  const shooting = `${b.fgm}-${b.fga} from the field${b.tpa ? `, ${b.tpm}-${b.tpa} from three` : ''} and ${b.ftm}-${b.fta} at the line`;
-  const dek = `${name(p)} went ${shooting} in the ${poss(N)} ${score(res)} ${won ? 'win over' : 'loss to'} the ${O}.`;
+  const shooting = `${b.fgm}-${b.fga} from the field`;
+  // the rest of his shooting, a sentence of its own
+  const rest = [b.tpa ? `${b.tpm}-${b.tpa} from three` : '', b.fta ? `${b.ftm}-${b.fta} at the line` : ''].filter(Boolean).join(' and ');
+  const dek = `${name(p)} went ${shooting} in the ${poss(N)} ${score(res)} ${won ? 'win over' : 'loss to'} the ${O}.${rest ? ` He was ${rest}.` : ''}`;
   // how rare: the season's 50-point nights so far (read only on such a night)
   let fifties = 0;
   for (const g of league.games) if (g.season === league.season) for (const s of [g.home, g.away]) for (const x of s.players) if (x.pts >= 50) fifties++;
@@ -221,7 +223,7 @@ function comeback(league: League, v: Voice, res: GameResult, w: TeamBox, l: Team
   const body = [
     half(l) > half(w) ? `The ${LN} led ${half(l)}-${half(w)} at the half and by as many as ${lead}.` : `The ${LN} were up by as many as ${lead} before it turned.`,
     q4(w) > q4(l) ? `The ${WN} won the fourth quarter ${q4(w)}-${q4(l)}.` : '',
-    `The ${WN} are ${standing(league, w.tid)}; the ${LN} ${recOf(tsOf(league, l.tid))}.`,
+    `The ${WN} are ${standing(league, w.tid)}. The ${LN} are ${recOf(tsOf(league, l.tid))}.`,
   ];
   publish(league, { kind: 'game', head, dek, body: res.type === 'regular' ? body : body.slice(0, 2), tids: [w.tid, l.tid], pids: p ? [p.pid] : [], weight: 2 });
 }
@@ -297,7 +299,7 @@ function snapped(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamB
   const hero = topScorer(w);
   const p = hero ? league.players[hero.pid] : undefined;
   const dek = `${O} ${score(res)} ${N}${p && hero ? `: ${last(league, p)} had ${nightLine(hero)}` : ''}.`;
-  const body = [`The ${N} had not lost in ${n} games. They are ${standing(league, l.tid)}; the ${O} ${recOf(tsOf(league, w.tid))}.`];
+  const body = [`The ${N} had not lost in ${n} games. They are ${standing(league, l.tid)}. The ${O} are ${recOf(tsOf(league, w.tid))}.`];
   publish(league, { kind: 'game', head, dek, body, tids: [l.tid, w.tid], pids: p ? [p.pid] : [], weight: n >= 14 ? 3 : 2 });
 }
 
@@ -333,7 +335,7 @@ function clash(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox
   const b = topScorer(l);
   const pa = a ? league.players[a.pid] : undefined;
   const pb = b ? league.players[b.pid] : undefined;
-  const dek = `${WN} ${score(res)} ${LN}.${pa && a ? ` ${last(league, pa)} had ${nightLine(a)}${pb && b ? `; ${last(league, pb)} ${b.pts} for the ${LN}` : ''}.` : ''}`;
+  const dek = `${WN} ${score(res)} ${LN}.${pa && a ? ` ${last(league, pa)} had ${nightLine(a)}.` : ''}${pb && b ? ` ${last(league, pb)} scored ${b.pts} for the ${LN}.` : ''}`;
   // the season series between them so far
   let ww = 0;
   let lw = 0;
@@ -346,7 +348,7 @@ function clash(league: League, v: Voice, res: GameResult, w: TeamBox, l: TeamBox
     else lw++;
   }
   const body = [
-    `The ${WN} are ${standing(league, w.tid)}; the ${LN} ${standing(league, l.tid)}.`,
+    `The ${WN} are ${standing(league, w.tid)}. The ${LN} are ${standing(league, l.tid)}.`,
     ww + lw > 1 ? `The ${WN} ${ww > lw ? 'lead' : ww === lw ? 'have evened' : 'trail'} the season series ${rec(Math.max(ww, lw), Math.min(ww, lw))}.` : '',
   ];
   publish(league, { kind: 'game', head, dek, body, tids: [w.tid, l.tid], pids: [pa?.pid, pb?.pid].filter((x): x is number => x !== undefined), weight: 2 });
@@ -370,7 +372,7 @@ function seriesOver(league: League, v: Voice, res: GameResult, s: League['playof
     : v.say('upset', [`No. ${ws} ${WN} knock out No. ${ls} ${LN}`, `Upset: the ${WN} take down the ${LN}`, `The ${LN} are out, beaten by the ${ws}-seed ${WN}`]);
   const hero = topScorer(res.home.tid === wt ? res.home : res.away);
   const p = hero ? league.players[hero.pid] : undefined;
-  const dek = `${WN} ${score(res)} ${LN} closes the ${round} ${rec(Math.max(s.highWins, s.lowWins), Math.min(s.highWins, s.lowWins))}${p && hero ? `; ${last(league, p)} had ${nightLine(hero)}` : ''}.`;
+  const dek = `${WN} ${score(res)} ${LN} closes the ${round} ${rec(Math.max(s.highWins, s.lowWins), Math.min(s.highWins, s.lowWins))}.${p && hero ? ` ${last(league, p)} had ${nightLine(hero)}.` : ''}`;
   const brief = briefTonight(league, (n) => n.kind === 'general' && n.tids[0] === wt && n.tids[1] === lt);
   const body = [
     upset ? `The ${LN} won ${tsOf(league, lt).won} games in the regular season, the ${WN} ${tsOf(league, wt).won}.` : '',
@@ -435,7 +437,13 @@ export function roundup(league: League, m: MediaState) {
     const won = side.pts > opp.pts;
     const reb = rebOf(b);
     const shape =
-      reb >= 10 && b.ast >= 10 ? `${b.pts}, ${reb} and ${b.ast}` : reb >= 10 ? `${b.pts} and ${reb} rebounds` : b.ast >= 10 ? `${b.pts} and ${b.ast} assists` : `${b.pts}`;
+      reb >= 10 && b.ast >= 10
+        ? `${b.pts}, ${reb} rebounds and ${b.ast} assists`
+        : reb >= 10
+          ? `${b.pts} and ${reb} rebounds`
+          : b.ast >= 10
+            ? `${b.pts} and ${b.ast} assists`
+            : `${b.pts}`;
     return v.say(`rnd${i}`, [
       `${L} had ${shape} as the ${N} ${won ? 'beat' : 'lost to'} the ${O}`,
       won ? `${poss(L)} ${shape} carried the ${N} past the ${O}` : `${poss(L)} ${shape} weren't enough for the ${N} against the ${O}`,
@@ -443,8 +451,8 @@ export function roundup(league: League, m: MediaState) {
       won ? `the ${N} beat the ${O} behind ${poss(L)} ${shape}` : `${L} scored ${b.pts} in a ${N} loss to the ${O}`,
     ]);
   });
-  // (the lines carry commas of their own, so semicolons part them)
-  const lines = parts.map((x, i) => (i === 0 ? x.charAt(0).toUpperCase() + x.slice(1) : x));
-  const text = `${ROUNDUP}${lines.length > 1 ? `${lines.slice(0, -1).join('; ')}; and ${lines[lines.length - 1]}` : lines[0]}.`;
+  // one game a sentence, each short enough to read at a glance
+  const lines = parts.map((x) => x.charAt(0).toUpperCase() + x.slice(1));
+  const text = `${ROUNDUP}${lines.join('. ')}.`;
   publish(league, { kind: 'game', dek: text, tids: picked.map((x) => x.side.tid), pids: picked.map((x) => x.b.pid), weight: 1 });
 }

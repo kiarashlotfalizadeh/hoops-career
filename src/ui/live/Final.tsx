@@ -25,7 +25,7 @@ export function NoGame({ league, canSim, next, busy, onNext }: { league: League;
             : ['regular', 'playin', 'playoffs'].includes(league.phase)
               ? 'No game for your team today.'
               : 'No games until next season.'}
-        {/* (the flow's line: a game's "Thu, Oct 22 · vs DEN (3-1)", or why there's none) */}
+        {/* (the flow's line: a game's "Thu, Oct 22 · vs DEN 3-1", or why there's none) */}
         {canSim && next && <div className="lv-nogame-next small">{next.includes(' · ') ? `Next: ${next}` : next}</div>}
       </Empty>
       {canSim && (
@@ -40,7 +40,7 @@ export function NoGame({ league, canSim, next, busy, onNext }: { league: League;
 /**
  * The final card: the result as a broadcast's final graphic, with the report (its Why, the recap
  * being here) and the next game; a game the Play menu finished says so and offers its box score.
- * `next` names the next game ("Sat, Feb 13 · vs PHI (37-19)") when there is one.
+ * `next` names the next game ("Sat, Feb 13 · @ PHI 37-19") when there is one.
  */
 export function LiveFinal({
   league,

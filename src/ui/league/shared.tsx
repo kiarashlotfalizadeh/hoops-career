@@ -89,7 +89,7 @@ export function TabBar<T extends string>({ value, options, onChange, label }: { 
     seg?.scrollBy({ left: dir * seg.clientWidth * 0.6, behavior: scrollBehavior() });
   };
   return (
-    <div className="lg-tabs" ref={ref}>
+    <div className="lg-tabs tabbar" ref={ref}>
       <Segmented value={value} options={options} onChange={onChange} label={label} tabs />
       {/* pointer-only: the tabs themselves are reachable by keyboard */}
       <button type="button" className="lg-tabs-more l" tabIndex={-1} aria-hidden="true" onClick={() => page(-1)}>
@@ -209,7 +209,7 @@ export function OutcomeTag({ o }: { o: Outcome }) {
 export const STRATEGY_META: Record<Team['strategy'], { label: string; tone: 'good' | 'warn' | 'info'; help: string }> = {
   contend: { label: 'Contending', tone: 'good', help: 'Wants proven players who help now. Discounts draft picks.' },
   retool: { label: 'Retooling', tone: 'warn', help: 'Values players and picks at face value.' },
-  rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks, marks down veterans 29+.' },
+  rebuild: { label: 'Rebuilding', tone: 'info', help: 'Pays extra for young players and draft picks. Marks down veterans 29+.' },
 };
 
 export function StrategyTag({ team }: { team: Team }) {
@@ -219,9 +219,6 @@ export function StrategyTag({ team }: { team: Team }) {
 
 /** Overall number of a draft slot: the second round continues from 31. */
 export const overallPick = (league: League, round: number, pick: number) => (round - 1) * league.teams.length + pick;
-
-/** The note under projected picks (team pages and the Draft screen). */
-export const PROJECTION_NOTE = 'Projected slots follow the current standings, worst record first, until the lottery reshuffles the top 14.';
 
 /**
  * Where this season's picks would land if the season ended today, until the lottery sets the

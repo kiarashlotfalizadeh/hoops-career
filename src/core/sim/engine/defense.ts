@@ -281,16 +281,13 @@ export const defenseMethods = {
     const pr = lev(pr0 > 0 ? pr0 * clamp(0.5 + (def.pressQ - 50) / K.pressQ.per, K.pressQ.min, K.pressQ.max) : pr0 * K.containTO) * sec;
     // (the league's recentring moves the base rate only: the turnovers pressure forces keep their size)
     const swing = pr > 0 ? K.pressureTO : 0.32;
-    // what the offense knows of its system (an unfamiliar one turns it over more), the structure of a
-    // horns set (fewer), and a point-of-attack stopper on the handler (more)
-    const fam = off.famOff * K.fam.tov;
+    // the structure of a horns set (fewer), and a point-of-attack stopper on the handler (more)
     const horns = shapeOf(off.t.offense) === 'horns' ? lev(K.shape.horns.tov) : 0;
     const poa = this.defOf(def, handler).drole === 'poa' && handler.on ? lev(K.role.poaTO) : 0;
-    const sys = 1 + fam + horns + poa;
+    const sys = 1 + horns + poa;
     const p = (base * (1 + levExtra(K.recenter.tov) + swing * pr) * (1 - (handler.c.ballSec - 50) / 140) + extra) * handler.ttv * sys;
     if (pr !== 0) this.impact('pressure_to', def.side, base * swing * pr * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts * K.pressureTag, handler.pid);
     const sysTo = base * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts;
-    if (fam) this.impact('fam_off', def.side, fam * sysTo, handler.pid);
     if (horns) this.impact('shape_tov', off.side, -horns * sysTo, handler.pid);
     if (poa) this.impact('role_poa', def.side, poa * sysTo, handler.pid);
     return clamp(p, 0.01, 0.4);

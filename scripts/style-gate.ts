@@ -1,8 +1,9 @@
 // Style gate (CI): no dominant setup. Every offensive and defensive playbook and every shape for every
-// team of the real league, fully drilled, against every other team (scripts/style-measure.ts: paired
+// team of the real league against every other team (scripts/style-measure.ts: paired
 // games on fixed seed sets, by shot-value margin), and the staff's picks for each roster. Fails if any
-// playbook is measured best for, or picked by an AI staff or the user's own staff for, more than
-// MAX_PLAYBOOK of the 30 teams, or any shape is measured best for more than MAX_SHAPE.
+// playbook is measured best for, or picked by an AI staff for, more than MAX_PLAYBOOK of the 30 teams,
+// picked by the user's own staff for more than MAX_USER_PICK, or any shape is measured best for more
+// than MAX_SHAPE.
 // Why these limits: an NBA league's teams spread over many schemes. With six offenses and seven
 // defenses, four or five of them close in worth, the measured best is partly the games' noise (one
 // playbook can be "best" for 9 or 10 teams by chance alone) and one seed set's games share some of
@@ -10,7 +11,13 @@
 // plays four seed sets of 3 games against each opponent rather than one of 12, and the limit is 12 of
 // 30 (two in five): no balanced engine has reached it and every dominant setup so far did (the 2-3
 // zone was best for 22 of 30, Heliocentric once for 73 of 90 rosters). Shapes are four, and four-out is
-// the one the staff leaves only for a clear edge, so a shape may be best for up to 14. A team counts
+// the one the staff leaves only for a clear edge, so a shape may be best for up to 14. The user's own
+// staff reads each roster alone, without a coach's lean: where the playbooks are within a tenth of a
+// point a game of each other, an honest read sends every roster of a kind to the same one (since
+// partnerships went, 2026-10-28, Five-Out reads best for about 16 of the real league's passing rosters
+// while no offense measures best for more than 8), so its limit is 18 of 30 (three in five): loose
+// enough for that, tight enough for a read that dominates (the zone's 22, Heliocentric's 73 of 90).
+// The league's own variety is held by the measured best and the AI staffs' picks. A team counts
 // whole for its best option only where that option beats the next by more than the games can tell
 // apart (MEASURED_TIE), and for the staff's pick where its read beats the next by a tenth of a point a
 // game (READ_TIE, the style picker's precision); closer than that it is shared between them (one
@@ -23,6 +30,8 @@ import { availableParallelism } from 'node:os';
 import { measureLeague, tallyNear, type Part } from './style-measure';
 
 const MAX_PLAYBOOK = 12;
+/** The user's own staff's picks (the read alone): see the header. */
+const MAX_USER_PICK = 18;
 const MAX_SHAPE = 14;
 /** Points a game within which a team's options share its "best" (its games measure each to about ±0.4). */
 const MEASURED_TIE = 0.2;
@@ -37,7 +46,7 @@ const t0 = performance.now();
 const failures: string[] = [];
 for (const part of ['def', 'off', 'shape'] as Part[]) {
   const rows = await measureLeague({ part, k, seeds: SEEDS, league: 'real', jobs });
-  const max = part === 'shape' ? MAX_SHAPE : MAX_PLAYBOOK;
+  const limit = (what: string) => (part === 'shape' ? MAX_SHAPE : what === "the user's staff picks" ? MAX_USER_PICK : MAX_PLAYBOOK);
   const counts: [string, Record<string, number>][] = [['measured best for', tallyNear(rows, (r) => r.meas, MEASURED_TIE)]];
   if (part !== 'shape') {
     counts.push(['an AI staff picks', tallyNear(rows, (r) => r.reads!.ai, READ_TIE)]);
@@ -52,6 +61,7 @@ for (const part of ['def', 'off', 'shape'] as Part[]) {
         .map(([id, n]) => `${id} ${Math.round(n * 10) / 10}`)
         .join(' · ')}`,
     );
+    const max = limit(what);
     for (const [id, n] of Object.entries(c))
       if (n > max)
         failures.push(

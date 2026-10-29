@@ -185,11 +185,6 @@
 .tm-rfig.s {
   grid-column: 3;
 }
-.tm-rwarn {
-  grid-column: 1 / 4;
-  grid-row: 3;
-  font-size: 12.5px;
-}
 .tm-rovr {
   grid-column: 5;
   grid-row: 1 / -1;

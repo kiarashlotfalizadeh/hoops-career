@@ -32,6 +32,14 @@ import './finances.css';
 type Tab = 'overview' | 'budget' | 'history';
 type BudgetKey = 'coaching' | 'health' | 'facilities';
 
+/** A budget level's effect as a verdict: "Faster player development", "A little slower injury recovery". */
+function verdict(lvl: number, even: string, what: string, up: string, down: string): string {
+  const d = lvl - 50;
+  if (Math.abs(d) < 1) return even;
+  const word = d > 0 ? up : down;
+  return Math.abs(d) < 20 ? `A little ${word.toLowerCase()} ${what}` : Math.abs(d) >= 40 ? `Much ${word.toLowerCase()} ${what}` : `${word} ${what}`;
+}
+
 export default function Finances() {
   const league = useLeague();
   const [tab, setTab] = useQueryParam<Tab>('tab', 'overview', ['overview', 'budget', 'history']);
@@ -113,8 +121,7 @@ function Overview({ team }: { team: Team }) {
                 {end.tax > 0 && books.sanctioned > 0 && (
                   <HelpSheet title="The tax he signed off on">
                     <p>
-                      This season's tax is {money(end.tax)}. The owner signed off on {money(books.sanctioned)} of it, so that part doesn't count against you when he reads the
-                      books.
+                      This season&apos;s tax is {money(end.tax)}. The owner signed off on {money(books.sanctioned)} of it. That part doesn&apos;t count against you in his review.
                     </p>
                   </HelpSheet>
                 )}
@@ -124,9 +131,8 @@ function Overview({ team }: { team: Team }) {
               </div>
               <div className="tiny dim">
                 {end.left > 0 ? 'projected' : 'the owner reads this'}
-                {end.tax > 0 ? `, after ${money(end.tax)} tax` : ''}
-                {/* (the tax he signed off on, out of it: fixed on opening night, so a salary-neutral trade doesn't take it back) */}
-                {books.sanctioned > 0 ? `; his ${money(books.sanctioned)} sign-off doesn't count` : ''}
+                {end.tax > 0 ? ` · after ${money(end.tax)} tax` : ''}
+                {/* the tax he signed off on is out of it (fixed on opening night, so a salary-neutral trade doesn't take it back): its "?" says so */}
               </div>
             </div>
           )}
@@ -151,10 +157,8 @@ function Overview({ team }: { team: Team }) {
         title="Attendance"
         right={
           <HelpSheet title="What fills the arena">
-            <p>
-              Winning, hype, market size, facilities and ticket price drive crowds, and a hyped visitor draws a bigger one. Hype rises with wins (playoff wins count double), falls
-              with losses and drifts back toward average every offseason.
-            </p>
+            <p>Winning, hype, market size, facilities and ticket price fill the arena. A hyped visitor draws a bigger crowd too.</p>
+            <p>Hype rises with wins and falls with losses. Playoff wins count double. Every offseason it drifts back toward average.</p>
           </HelpSheet>
         }
       >
@@ -197,14 +201,22 @@ function Overview({ team }: { team: Team }) {
             <Line k={<b>Total</b>}>{money(totalExp)}</Line>
           </div>
           <More label="League money">
-            <p className="small dim2">
-              National TV and league revenue pays every team about {money(NATIONAL_REVENUE * scale)} a season. At the end of the regular season teams over the{' '}
-              {money(cap.luxuryTax)} tax line pay by brackets: {CAP.taxRate}× on the first {money(cap.salaryCap * TAX_BRACKET_PCT)} over it, more on each one after, and a repeater
-              (a taxpayer in three of the last four seasons) 1× more on every bracket ({Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to teams under the line).
-              Past the aprons ({money(cap.firstApron)} and {money(cap.secondApron)}) a team loses tools in trades and signings. Teams under the {money(cap.minPayroll)} salary floor
-              pay the shortfall to their players. Revenue sharing evens out market size: each team pays or receives {Math.round(REVENUE_SHARING * 100)}% of the gap between its
-              local revenue (gate, merchandise, local TV) and the league average.
-            </p>
+            <div className="small dim2 fo-help">
+              <p>National TV and league revenue pay every team about {money(NATIONAL_REVENUE * scale)} a season.</p>
+              <p>
+                Teams over the {money(cap.luxuryTax)} tax line pay at the end of the regular season. The first {money(cap.salaryCap * TAX_BRACKET_PCT)} over costs {CAP.taxRate}×,
+                and each bracket after costs more. A repeater pays 1× more on every bracket. {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to teams under the
+                line.
+              </p>
+              <p>
+                Past the aprons, {money(cap.firstApron)} and {money(cap.secondApron)}, a team loses tools in trades and signings. Teams under the {money(cap.minPayroll)} salary
+                floor pay the shortfall to their players.
+              </p>
+              <p>
+                Revenue sharing evens out market size. Local revenue is the gate, merchandise and local TV. Each team pays or gets {Math.round(REVENUE_SHARING * 100)}% of its gap
+                to the league average.
+              </p>
+            </div>
           </More>
         </div>
       </Section>
@@ -271,22 +283,15 @@ function BudgetTab({ team }: { team: Team }) {
     {
       k: 'coaching',
       label: 'Coaching staff',
-      effect: (lvl) => {
-        const d = ((lvl - 50) / 50) * 0.5;
-        if (Math.abs(d) < 0.005) return 'League-average player development';
-        return `Development ${d > 0 ? '+' : ''}${d.toFixed(2)} rating pts per skill a year vs average`;
-      },
-      help: 'Assistant coaches, skills trainers and analytics staff. Better coaching makes every skill rating improve a little faster each offseason and at in-season development check-ins. Young players gain the most, because they grow the most.',
+      // a verdict, not the engine's effect size (DESIGN: copy never quotes one)
+      effect: (lvl) => verdict(lvl, 'League-average player development', 'player development', 'Faster', 'Slower'),
+      help: 'Assistant coaches, skills trainers and analytics staff. Better coaching makes every skill grow a little faster, in the offseason and in season. Young players gain the most.',
     },
     {
       k: 'health',
       label: 'Medical & health',
-      effect: (lvl) => {
-        const f = (1.12 - 0.25 * (lvl / 100)) / (1.12 - 0.25 * 0.5) - 1;
-        if (Math.round(f * 100) === 0) return 'League-average injury recovery';
-        return `Injuries last ${Math.abs(Math.round(f * 100))}% ${f < 0 ? 'shorter' : 'longer'} than average`;
-      },
-      help: 'Doctors, physios and sports science. A bigger health budget shortens injury recovery and, above average, sometimes clears players a game early.',
+      effect: (lvl) => verdict(lvl, 'League-average injury recovery', 'injury recovery', 'Faster', 'Slower'),
+      help: 'Doctors, physios and sports science. A bigger budget shortens injuries. Above average, it sometimes clears a player a game early.',
     },
     {
       k: 'facilities',
@@ -298,7 +303,7 @@ function BudgetTab({ team }: { team: Team }) {
         if (dollars === 0) return 'League-average fan demand';
         return `Fans value a ticket $${Math.abs(dollars)} ${dollars > 0 ? 'more' : 'less'} than at an average arena`;
       },
-      help: 'Arena upgrades, practice facility and fan experience. Better facilities raise demand for tickets: bigger crowds and more gate revenue.',
+      help: 'Arena upgrades, the practice facility and fan experience. Better facilities raise ticket demand: bigger crowds, more gate revenue.',
     },
   ];
   // ticket price: attendance estimate on a temporary copy of the team; the range grows with league revenue
@@ -335,17 +340,17 @@ function BudgetTab({ team }: { team: Team }) {
         <Callout tone="bad" icon={<TriangleAlert size={18} className="bad" />}>
           <b>{frozen ? 'The budget is frozen.' : books.stage === 'ultimatum' ? "The owner's ultimatum." : 'The books are heading into the red.'}</b>{' '}
           {frozen
-            ? `The staff and facilities budgets stay at the league standard (${FROZEN_BUDGET}) or under, until a season's books close in the black.`
+            ? `Budgets stay at level ${FROZEN_BUDGET} or under until the books close in the black.`
             : books.stage === 'ultimatum'
-              ? "Back in the black when the next season's books close, or he freezes the budget."
-              : "Still in the red when the regular season's books close, and he gives you an ultimatum."}{' '}
+              ? 'Back in the black when the next books close, or he freezes the budget.'
+              : 'Still in the red when the books close, and he gives you an ultimatum.'}{' '}
           <Link to="/office/owner" className="bold accent-text">
             Owner
           </Link>
         </Callout>
       )}
       <Section title="Staff & facilities" right={<span className="fo-faday num">{money(totalBudget)}/season</span>}>
-        <div className="tiny dim">Out of profit, charged per game{profitGoal ? `: profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review` : ''}.</div>
+        <div className="tiny dim">Paid out of profit, per game.{profitGoal ? ` Profit is ${Math.round(profitGoal.weight * 100)}% of the owner's review.` : ''}</div>
         <div className="card flush list">
           {items.map((it) => {
             const lvl = team.budget[it.k];
@@ -358,7 +363,7 @@ function BudgetTab({ team }: { team: Team }) {
                   <HelpSheet title={it.label}>
                     <p>{it.help}</p>
                     <p>
-                      Cost: {money(cost(1))} a season at level 1, up to {money(cost(100))} at 100. League average level: {Math.round(a)}.
+                      It costs {money(cost(1))} a season at level 1, up to {money(cost(100))} at 100. The league&apos;s average level is {Math.round(a)}.
                     </p>
                   </HelpSheet>
                   {Math.abs(lvl - a) < 1 && tied > 1 ? (
@@ -409,19 +414,19 @@ function BudgetTab({ team }: { team: Team }) {
                 s: `${Math.round((att / seats) * 100)}% full`,
                 color: att >= seats ? 'var(--good)' : undefined,
               },
-              { k: 'Gate / game', v: moneyExact(gate), s: 'ticket revenue' },
+              { k: 'Gate / game', v: moneyExact(gate) },
               { k: 'Season gate', v: money(gate * 41), s: '41 home games' },
             ]}
           />
           <div className="small dim2">
-            Gate revenue peaks near <b className="num">${sweet.p}</b> ({money(sweet.g * 41)} a season) at today's demand.
-            {team.budget.priceSet ? '' : ' Until you set a price, the staff prices tickets there each opening night.'}
+            Gate revenue peaks near <b className="num">${sweet.p}</b>: {money(sweet.g * 41)} a season.
           </div>
           <More>
-            <p className="small dim2">
-              Higher prices earn more per fan but thin the crowd. Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue
-              each summer.
-            </p>
+            <div className="small dim2 fo-help">
+              <p>Higher prices earn more per fan but thin the crowd. The peak is at today&apos;s demand.</p>
+              {!team.budget.priceSet && <p>Until you set a price, the staff prices tickets at the peak each opening night.</p>}
+              <p>Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue each summer.</p>
+            </div>
           </More>
         </div>
       </Section>
@@ -521,8 +526,8 @@ function HistoryTab({ team }: { team: Team }) {
       <Section title="Season by season">
         <StatTable rows={rows} cols={cols} rowKey={(r) => r.season} highlight={(r) => r.season === league.season} />
         <div className="tiny dim">
-          {inProgress ? 'The highlighted season is still in progress. ' : ''}
-          Payroll is recorded at the end of each regular season.
+          {inProgress ? 'This season is still in progress. ' : ''}
+          Payroll is taken at each regular season&apos;s end.
         </div>
       </Section>
     </>

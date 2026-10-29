@@ -173,6 +173,11 @@
   gap: 9px;
 }
 
+/* on draft night the Draft button narrows the row: a long name wraps rather than losing its end */
+.fo-board-row.can .fo-name {
+  white-space: normal;
+}
+
 /* under the board: what the badges' colours mean */
 .fo-board-foot {
   display: flex;

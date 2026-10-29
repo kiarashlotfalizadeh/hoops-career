@@ -124,7 +124,7 @@ export function ScoreBug({
             </span>
           </span>
         </div>
-        <span className={`lv-lb-score num${behind ? ' behind' : ''}`} aria-hidden="true">
+        <span className={`lv-lb-score num${behind ? ' behind' : ''}${pts >= 100 ? ' wide' : ''}`} aria-hidden="true">
           {pts}
         </span>
       </div>

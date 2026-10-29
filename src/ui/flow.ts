@@ -36,14 +36,15 @@ export function stillAlive(league: League): boolean {
   return ts.playoffRound >= 1 && !league.playoffs.some((s) => s.winner !== undefined && s.winner !== league.userTid && (s.high === league.userTid || s.low === league.userTid));
 }
 
-/** "vs BOS (12-8)", "@ BOS (series 2-1)": the user's opponent in a game, with its record (or the series in the playoffs). */
-export function opponentText(league: League, g: ScheduledGame): string {
+/** "vs BOS 12-8", "@ BOS · series 2-1": the user's opponent in a game, with its record (or the series in the playoffs); `record` false: "vs BOS". */
+export function opponentText(league: League, g: ScheduledGame, record = true): string {
   const home = g.home === league.userTid;
   const opp = home ? g.away : g.home;
+  const who = `${home ? 'vs' : '@'} ${league.teams[opp].abbrev}`;
+  if (!record) return who;
   const s = g.type === 'playoffs' ? league.playoffs.find((x) => x.id === g.seriesId) : undefined;
   const ts = league.teams[opp].seasons.find((x) => x.season === league.season);
-  const rec = s ? `series ${s.high === opp ? `${s.lowWins}-${s.highWins}` : `${s.highWins}-${s.lowWins}`}` : `${ts?.won ?? 0}-${ts?.lost ?? 0}`;
-  return `${home ? 'vs' : '@'} ${league.teams[opp].abbrev} (${rec})`;
+  return s ? `${who} · series ${s.high === opp ? `${s.lowWins}-${s.highWins}` : `${s.highWins}-${s.lowWins}`}` : `${who} ${ts?.won ?? 0}-${ts?.lost ?? 0}`;
 }
 
 /** A game in progress from the user's side: "NYK up 11-10", "NYK down 88-92", "Tied 50-50". */
@@ -129,7 +130,7 @@ function billing(league: League, g: ScheduledGame): Billing | null {
   }
 }
 
-/** The billing's tag in front of a line: "Rivalry · @ BOS (12-8)". */
+/** The billing's tag in front of a line: "Rivalry · @ BOS 12-8". */
 const billed = (b: Billing | null, line: string) => (b ? `${b.tag} · ${line}` : line);
 
 /** The smallest billing that makes a game a big night. */
@@ -197,7 +198,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         sub:
           errs[0] ??
           (opener
-            ? `Opening night: ${fmtDate(league.season, opener.day, { weekday: 'short', month: 'short', day: 'numeric' })} ${opponentText(league, opener).replace(/ \(.*\)$/, '')}`
+            ? `Opening night: ${fmtDate(league.season, opener.day, { weekday: 'short', month: 'short', day: 'numeric' })} ${opponentText(league, opener, false)}`
             : undefined),
         primary: true,
         cmd: 'startRegular',
@@ -225,7 +226,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
         a.push({ id: 'live', label: 'Resume live game', sub: `${q} · ${liveScoreText(league, live)}`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Finish this game', sub: 'Sim the rest from the current score.', cmd: 'quickGame' });
       } else if (g) {
-        // what's on the line tonight, when it's more than a date: "Rivalry · @ BOS (12-8)"
+        // what's on the line tonight, when it's more than a date: "Rivalry · @ BOS 12-8"
         const b = billing(league, g);
         a.push({ id: 'live', label: 'Watch & coach live', sub: b ? billed(b, opponentText(league, g)) : `${opponentText(league, g)} · today`, primary: true, cmd: 'watchLive' });
         a.push({ id: 'quick', label: 'Quick sim this game', cmd: 'quickGame' });
@@ -272,7 +273,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
           a.push({ id: 'deadline', label: 'Sim to trade deadline', sub: span(league.tradeDeadlineDay, when(league.tradeDeadlineDay)), sim: { kind: 'deadline' } });
         if (league.day < allStarStop(league))
           a.push({ id: 'allstar', label: 'Sim to All-Star break', sub: span(allStarStop(league), when(allStarStop(league))), sim: { kind: 'allStar' } });
-        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${span(Infinity)} · ${left} league-wide`, sim: { kind: 'endRegular' } });
+        a.push({ id: 'endreg', label: 'Sim to end of regular season', sub: `${span(Infinity)} · ${left.toLocaleString('en-US')} in the league`, sim: { kind: 'endRegular' } });
       } else if (!out) {
         a.push({ id: 'endpost', label: league.phase === 'playin' ? 'Sim through play-in' : 'Sim to end of playoffs', sim: { kind: 'endPostseason' } });
       }
@@ -343,7 +344,7 @@ function phaseActions(league: League, { onLive = false } = {}): FlowAction[] {
       a.push({
         id: 'new',
         label: `Start ${seasonLabel(league.season + 1)} season`,
-        sub: blocked ?? (short > 0 ? `Sign ${plural(short, 'more player')} by opening night.` : 'Training camp: players develop and age.'),
+        sub: blocked ?? (short > 0 ? `Sign ${plural(short, 'more player')} by opening night.` : 'Players develop and age over the summer.'),
         primary: over,
         cmd: 'newSeason',
         disabled: blocked,

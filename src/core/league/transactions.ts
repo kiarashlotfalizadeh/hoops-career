@@ -124,15 +124,15 @@ function assets(side: TxnSide | undefined, except?: number): TxnPart[] {
 }
 
 /**
- * One line for a move, from a team's point of view (`{ tid }`: "Acquired X from BOS for Y") or a
- * player's (`{ pid }`: "Acquired by NYK from BOS with a 2029 1st for Y").
+ * One line for a move, from a team's point of view (`{ tid }`: "Acquired X from BOS. Sent Y") or a
+ * player's (`{ pid }`: "Acquired by NYK from BOS with a 2029 1st. BOS got Y"): one side a sentence.
  */
 export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPart[] {
   const P: TxnPart = { pid: t.pid ?? -1, name: t.name ?? 'Unknown player' };
   const tid = t.tids[0];
   const T: TxnPart = { tid };
   const forPlayer = 'pid' in view;
-  const money$ = t.amount ? ` (${money(t.amount)})` : '';
+  const money$ = t.amount ? ` · ${money(t.amount)}` : '';
   switch (t.kind) {
     case 'trade': {
       const sides = t.sides ?? [];
@@ -142,7 +142,14 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
         if (!mine || !other) return ['Traded'];
         const w = assets(mine, view.pid);
         const f = assets(other);
-        return ['Acquired by ', { tid: other.tid }, ' from ', { tid: mine.tid }, ...(w.length ? [' with ', ...listParts(w)] : []), ...(f.length ? [' for ', ...listParts(f)] : [])];
+        return [
+          'Acquired by ',
+          { tid: other.tid },
+          ' from ',
+          { tid: mine.tid },
+          ...(w.length ? [' with ', ...listParts(w)] : []),
+          ...(f.length ? ['. ', { tid: mine.tid }, ' got ', ...listParts(f)] : []),
+        ];
       }
       const own = sides.find((s) => s.tid === view.tid);
       const other = sides.find((s) => s !== own);
@@ -150,7 +157,7 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
       const get = assets(other);
       const give = assets(own);
       return get.length
-        ? ['Acquired ', ...listParts(get), ' from ', { tid: other.tid }, ...(give.length ? [' for ', ...listParts(give)] : [])]
+        ? ['Acquired ', ...listParts(get), ' from ', { tid: other.tid }, ...(give.length ? ['. Sent ', ...listParts(give)] : [])]
         : ['Traded ', ...listParts(give), ' to ', { tid: other.tid }, ' for nothing back'];
     }
     case 'swap': {
@@ -170,7 +177,7 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
     case 'extend':
       return forPlayer ? ['Extended by ', T, `: ${deal(t)}`] : ['Extended ', P, `: ${deal(t)}`];
     case 'twoWay': {
-      const len = t.years ? ` (${yrs(t.years)})` : '';
+      const len = t.years ? ` · ${yrs(t.years)}` : '';
       return forPlayer ? ['Signed a two-way deal with ', T, len] : ['Signed ', P, ` to a two-way deal${len}`];
     }
     case 'convert':
@@ -178,23 +185,23 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
     case 'release':
     case 'waive': {
       const verb = t.kind === 'waive' ? 'Waived' : 'Released';
-      const dead = t.amount ? ` (${money(t.amount)} in dead money${stretched(t)})` : '';
+      const dead = t.amount ? ` · ${money(t.amount)} in dead money${stretched(t)}` : '';
       return forPlayer ? [`${verb} by `, T, dead] : [`${verb} `, P, dead];
     }
     case 'claim': {
       const from: TxnPart = { tid: t.tids[1] };
-      const terms = t.amount !== undefined ? ` (${money(t.amount)}${t.years ? `, through ${seasonLabel(t.season + t.years - 1)}` : ''})` : '';
+      const terms = t.amount !== undefined ? ` · ${money(t.amount)}${t.years ? ` through ${seasonLabel(t.season + t.years - 1)}` : ''}` : '';
       if (forPlayer) return ['Claimed off waivers by ', T, ' from ', from, terms];
       return view.tid === tid ? ['Claimed ', P, ' off waivers from ', from, terms] : [P, ' claimed off waivers by ', T];
     }
     case 'buyout': {
       const back = t.amount ? `, ${forPlayer ? 'giving' : 'who gave'} back ${money(t.amount)}` : '';
-      const rest = t.note === 'stretched' && t.years ? ` (the rest stretched over ${t.years} seasons)` : '';
+      const rest = t.note === 'stretched' && t.years ? `, the rest stretched over ${t.years} seasons` : '';
       return forPlayer ? ['Bought out by ', T, back, rest] : ['Bought out ', P, back, rest];
     }
     case 'tenDay': {
       if (t.note === 'ended') return forPlayer ? ['10-day contract with ', T, ' ended'] : [P, "'s 10-day contract ended"];
-      const which = t.note === 'second' ? 'a second 10-day contract' : t.note === 'hardship' ? 'a 10-day contract (hardship)' : 'a 10-day contract';
+      const which = t.note === 'second' ? 'a second 10-day contract' : t.note === 'hardship' ? 'a hardship 10-day contract' : 'a 10-day contract';
       return forPlayer ? [`Signed ${which} with `, T, money$] : ['Signed ', P, ` to ${which}${money$}`];
     }
     case 'renounce':
@@ -208,7 +215,7 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
       return forPlayer ? [`Team option ${declined ? 'declined' : 'exercised'} by `, T, money$] : [declined ? 'Declined ' : 'Exercised ', P, `'s team option${money$}`];
     }
     case 'draft':
-      return forPlayer ? [t.note ? `Drafted ${t.note} by ` : 'Drafted by ', T] : ['Drafted ', P, t.note ? ` (${t.note})` : ''];
+      return forPlayer ? [t.note ? `Drafted ${t.note} by ` : 'Drafted by ', T] : ['Drafted ', P, t.note ? ` · ${t.note}` : ''];
     case 'qualify':
       if (t.note === 'accepted') return forPlayer ? ['Took his qualifying offer from ', T, `: ${deal(t)}`] : [P, ` took his qualifying offer: ${deal(t)}`];
       if (t.note === 'withdrawn') return forPlayer ? ['Qualifying offer withdrawn by ', T] : ['Withdrew ', P, "'s qualifying offer"];
@@ -217,7 +224,7 @@ export function txnLine(t: Txn, view: { tid: number } | { pid: number }): TxnPar
       // [the team that signed him to it, his team]
       const own: TxnPart = { tid: t.tids[1] };
       if (forPlayer) return ['Signed an offer sheet with ', T, `: ${deal(t)}`];
-      return view.tid === tid ? ['Signed ', P, ` to an offer sheet: ${deal(t)} (`, own, ' can match)'] : [P, ' signed an offer sheet with ', T, `: ${deal(t)}`];
+      return view.tid === tid ? ['Signed ', P, ` to an offer sheet: ${deal(t)}. `, own, ' can match'] : [P, ' signed an offer sheet with ', T, `: ${deal(t)}`];
     }
     case 'match': {
       // [his team, the team that signed him to the offer sheet]

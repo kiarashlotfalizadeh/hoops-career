@@ -28,11 +28,11 @@ export { ordinal } from '../stats';
 // tones match the league screens' strategy tags
 export { STRATEGY_META } from '../league/shared';
 
-/** Practice intensity levels as the Finances budget tab names and explains them. */
+/** Practice intensity levels as the Finances budget tab names and explains them: verdicts, never the engine's effect sizes. */
 export const PRACTICE: { id: Team['practice']; label: string; dev: string; risk: string }[] = [
-  { id: 'light', label: 'Light', dev: 'Slower skill growth (about −0.35 rating points per skill each year)', risk: 'Fresher legs: least wear and injury risk' },
-  { id: 'normal', label: 'Normal', dev: 'Standard development', risk: 'Standard wear and injury risk' },
-  { id: 'intense', label: 'Intense', dev: 'Faster skill growth (about +0.45 rating points per skill each year)', risk: 'Heavier legs: more wear and injury risk' },
+  { id: 'light', label: 'Light', dev: 'Slower skill growth', risk: 'Fresher legs, fewer injuries' },
+  { id: 'normal', label: 'Normal', dev: 'Standard skill growth', risk: 'Standard wear and injury risk' },
+  { id: 'intense', label: 'Intense', dev: 'Faster skill growth', risk: 'Heavier legs, more injuries' },
 ];
 
 export function playerMeta(league: League, p: Player, extra?: string): string {
@@ -60,8 +60,8 @@ export function deadlineLabel(league: League): string | null {
 export function contractUpNote(league: League, p: Player): string | null {
   if (p.tid < 0 || !isOffseason(league) || contractExp(p.contract) > league.season) return null;
   return league.phase === 'resign'
-    ? 'His contract is up: re-sign him now or he becomes a free agent.'
-    : 'His contract is up. You hold his rights until free agency: re-sign him after the draft.';
+    ? 'His contract is up. Re-sign him now or he becomes a free agent.'
+    : 'His contract is up. You hold his rights until free agency. Re-sign him after the draft.';
 }
 
 /** Why none of the user's players can be traded right now (past the deadline, the postseason) and when that ends, or null. */
@@ -86,19 +86,21 @@ export const capRoomText = (space: number) => (space >= 0 ? `${money(space)} in 
 
 /** The salary floor, when the payroll is under it: the shortfall is paid at the season's end all the same (see assessLuxuryTax), so it's money to spend. */
 export const floorText = (pay: number, cap: { minPayroll: number }) =>
-  pay < cap.minPayroll ? `${money(cap.minPayroll - pay)} under the salary floor: you pay it anyway at season's end.` : null;
+  pay < cap.minPayroll ? `${money(cap.minPayroll - pay)} under the salary floor. You pay it anyway at season's end.` : null;
 
-/** Where a payroll stands against the tax line, as a figure: the tax bill over it, the room under it. */
-/** The tax figure for a payroll: the bill over the line (`bill`, its brackets counted, see luxuryTaxBill), or the room under it. */
-export function taxFig(pay: number, line: number, bill: number): { k: ReactNode; v: string; s: string; color?: string } {
+/**
+ * The tax figure for a payroll: the bill over the line (`bill`, its brackets counted, see
+ * luxuryTaxBill), or the room under it. The line itself is the cap bar's legend, beside it.
+ */
+export function taxFig(pay: number, line: number, bill: number): { k: ReactNode; v: string; s?: string; color?: string } {
   return pay > line
     ? { k: <Term id="tax">Luxury tax</Term>, v: money(bill), s: `over by ${money(pay - line)}`, color: 'var(--bad)' }
-    : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay), s: `line ${money(line)}` };
+    : { k: <Term id="tax">Under the tax</Term>, v: money(line - pay) };
 }
 
 /**
  * What a move does to the user's luxury tax, in a line, wherever money moves (the trade dock, an
- * offer's card, a signing or re-signing sheet): "26-27 tax +$45.1M ($18.9M → $64.0M) · crosses the
+ * offer's card, a signing or re-signing sheet): "26-27 tax +$45.1M · $18.9M → $64.0M · crosses the
  * 2nd apron", "saves $10.7M in tax", or null when there's no tax either way and no line crossed.
  */
 export function taxLine(league: League, before: number, after: number, season: number): { text: string; tone: 'bad' | 'good' | 'dim' } | null {
@@ -108,9 +110,9 @@ export function taxLine(league: League, before: number, after: number, season: n
   const cross = t.crosses ? ` · crosses the ${t.crosses === 'tax' ? 'tax line' : t.crosses === 'first' ? '1st apron' : '2nd apron'}` : '';
   const text =
     t.delta > 0
-      ? `${shortSeason(season)} tax +${money(t.delta)} (${bill})${cross}`
+      ? `${shortSeason(season)} tax +${money(t.delta)} · ${bill}${cross}`
       : t.delta < 0
-        ? `Saves ${money(-t.delta)} in ${shortSeason(season)} tax (${bill})${cross}`
+        ? `Saves ${money(-t.delta)} in ${shortSeason(season)} tax · ${bill}${cross}`
         : `${shortSeason(season)} tax bill ${money(t.after)}, unchanged${cross}`;
   return { text, tone: t.delta > 0 || t.crosses ? 'bad' : t.delta < 0 ? 'good' : 'dim' };
 }
@@ -424,7 +426,7 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
       )}
       {stretch && (
         <div className="tiny dim">
-          Stretched: the same money{contractSeason(league) === league.season ? ' past this season' : ''} over {spread} seasons (twice the {(spread - 1) / 2} left, plus one).
+          Stretched: the same money{contractSeason(league) === league.season ? ' past this season' : ''} over {spread} seasons. That is twice the {(spread - 1) / 2} left, plus one.
           {waive ? ' A waiver claim still wipes it.' : ''}
         </div>
       )}
@@ -435,8 +437,7 @@ export function ReleaseConfirm({ league, p, onKeep, onDone }: { league: League; 
             <span className="tag good">Gives back {Math.round(buyout.giveback * 100)}%</span>
           </div>
           <div className="small dim2">
-            He gives back {money(buyout.saved)} of {money(buyout.owed)}
-            {why.length ? ` (${why.join(', ')})` : ''} and skips waivers.
+            He gives back {money(buyout.saved)} of {money(buyout.owed)} and skips waivers.{why.length ? ` Why so much: ${why.join(' and ')}.` : ''}
           </div>
           <div className="statline">
             <div>

@@ -197,10 +197,10 @@ export function deeperText(league: League, nextSeason = AFTER_REVIEW.has(league.
   if (owner)
     return d.fire
       ? `Deeper in the red ${next} and ${can ? fired : `${capped} too`}.`
-      : `Deeper in the red ${next}, and that's your final warning${can ? `. Past ${money(d.limit)} in the red, ${fired}` : `: ${capped}`}.`;
+      : `Deeper in the red ${next}, and that's your final warning. ${can ? `Past ${money(d.limit)} in the red, ${fired}.` : `That season grades ${grade100(BLEED_GRADE)} at best.`}`;
   return d.fire
     ? `Deeper in the red than ${closed} ${next}, and ${can ? fired : `${capped} too`}.`
-    : `Deeper in the red than ${closed} ${next}, and it's his final warning${can ? `; past ${money(d.limit)} in the red, deeper and you're fired` : `: ${capped}`}.`;
+    : `Deeper in the red than ${closed} ${next} brings his final warning. ${can ? `Past ${money(d.limit)} in the red, deeper gets you fired.` : `That season grades ${grade100(BLEED_GRADE)} at best.`}`;
 }
 
 const grade100 = (g: number) => `${g > 0 ? '+' : g < 0 ? '−' : ''}${Math.abs(Math.round(g * 100))}`;
@@ -225,7 +225,7 @@ function step(league: League, stage: BooksStage, close?: number, debt = false) {
     addInbox(league, {
       from: 'Owner',
       subject: 'The books are heading into the red',
-      body: `At this rate the regular season's books close ${money(-p.judged)} in the red${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax bill` : ''}${p.sanctioned > 0 ? ` (the ${money(p.sanctioned)} I signed off on, tax to my line and any payroll you inherited past it, doesn't count against you)` : ''}. That comes out of my pocket, and playoff money won't cover it: I judge the books when the regular season ends. Payroll, the tax and the budgets are where the money goes. Fix it before the deadline, or we'll have a harder conversation at the review.`,
+      body: `At this rate the regular season's books close ${money(-p.judged)} in the red${p.tax > 0 ? `, after a ${money(p.tax)} luxury tax bill` : ''}.${p.sanctioned > 0 ? ` The ${money(p.sanctioned)} of tax I signed off on doesn't count against you.` : ''} That comes out of my pocket. I judge the books when the regular season ends, so playoff money won't cover it. Payroll, the tax and the budgets are where the money goes. Fix it before the deadline, or we'll have a harder talk at the review.`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -236,7 +236,7 @@ function step(league: League, stage: BooksStage, close?: number, debt = false) {
     addInbox(league, {
       from: 'Owner',
       subject: 'The books: an ultimatum',
-      body: `The regular season's books closed ${red} in the red, luxury tax and all. The playoff gates are my bonus, not your cover. Back in the black when next season's books close, or I freeze the budget: minimum deals only, no raises, no taking on salary, and the staff budgets cut to the league standard.`,
+      body: `The regular season's books closed ${red} in the red, luxury tax and all. The playoff gates are my bonus, not your cover. Be back in the black when next season's books close, or I freeze the budget. That means minimum deals only, no raises, no taking on salary, and staff budgets cut to the league standard.`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -247,7 +247,7 @@ function step(league: League, stage: BooksStage, close?: number, debt = false) {
       ...(debt ? { important: true } : {}),
       from: 'Owner',
       subject: 'The budget is frozen',
-      body: `${debt ? `The books closed ${red} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry. A hole that size doesn't get an ultimatum first.` : `The books closed ${red} in the red again, and I warned you.`} The budget is frozen until a season's books close in the black: minimum deals only, no raises (re-signing, extending, qualifying or matching an offer sheet), no trade that takes on salary or sends cash, and the staff and facilities budgets cut to the league standard. ${deeperText(league, true, true)}`,
+      body: `${debt ? `The books closed ${red} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry. A hole that size doesn't get an ultimatum first.` : `The books closed ${red} in the red again, and I warned you.`} The budget is frozen until a season's books close in the black. Minimum deals only, and no raises for your own players. No trade that takes on salary or sends cash. The staff and facilities budgets drop to the league standard. ${deeperText(league, true, true)}`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -256,7 +256,7 @@ function step(league: League, stage: BooksStage, close?: number, debt = false) {
       important: true,
       from: 'Owner',
       subject: 'The books: a final warning',
-      body: `Frozen, and the books still closed ${red} in the red, deeper than last season. The freeze stands, and no title pays for this: this season grades ${grade100(BLEED_GRADE)} at best. ${deeperText(league, true, true)}`,
+      body: `Frozen, and the books still closed ${red} in the red, deeper than last season. The freeze stands, and no title pays for this. This season grades ${grade100(BLEED_GRADE)} at best. ${deeperText(league, true, true)}`,
       tone: 'bad',
       link: '/office/finances',
     });
@@ -368,8 +368,8 @@ export function booksReview(league: League, v: BooksVerdict | null = booksVerdic
 export function booksLine(v: BooksVerdict | null, grade: number): string | null {
   if (!v || v.cap === undefined || grade <= v.cap) return null;
   return v.deeper
-    ? `The books closed ${money(-v.close)} in the red under the freeze, deeper than last season: whatever we won, this season grades ${grade100(v.cap)} at best.`
-    : `The books closed ${money(-v.close)} in the red under the freeze: whatever we won, this season grades ${grade100(v.cap)} at best until they're back in the black.`;
+    ? `The books closed ${money(-v.close)} in the red under the freeze, deeper than last season. Whatever we won, this season grades ${grade100(v.cap)} at best.`
+    : `The books closed ${money(-v.close)} in the red under the freeze. Until they're back in the black, a season grades ${grade100(v.cap)} at best.`;
 }
 
 /** The least a frozen signing, re-signing or match may pay: his minimum, or what he's paid now (no raise on it). */
@@ -377,7 +377,7 @@ const most = (now: number, min: number) => Math.max(now, min);
 
 /** Why a signing at `amount` a season is off under a freeze (more than `min`, the least he could be paid), or null. */
 export function freezeSigningReason(league: League, amount: number, min: number): string | null {
-  return frozen(league) && amount > min + 1 ? `The budget is frozen while the books are in the red: minimum deals only (${money(min)}).` : null;
+  return frozen(league) && amount > min + 1 ? `The budget is frozen: minimum deals only, ${money(min)}.` : null;
 }
 
 /**
@@ -387,13 +387,12 @@ export function freezeSigningReason(league: League, amount: number, min: number)
  */
 export function freezeResignReason(league: League, amount: number, now: number, min = 0, what = 'a new deal'): string | null {
   if (!frozen(league) || amount <= most(now, min) + 1) return null;
-  return `The budget is frozen while the books are in the red: no raises, and ${what} at ${money(amount)} is one (he's paid ${money(now)} now${min > now ? `, his minimum is ${money(min)}` : ''}).`;
+  return `The budget is frozen: no raises. He's paid ${money(now)} now${min > now ? `, his minimum is ${money(min)}` : ''}, so ${what} at ${money(amount)} is one.`;
 }
 
 /** Why a trade that takes in `incoming` and sends out `outgoing` of this contract season's salary, and `cash` in cash, is off under a freeze, or null. */
 export function freezeTradeReason(league: League, incoming: number, outgoing: number, cash = 0): string | null {
   if (!frozen(league)) return null;
-  if (incoming > outgoing)
-    return `The budget is frozen while the books are in the red: a trade can't take on more salary than it sends out (this one takes on ${money(incoming - outgoing)}).`;
-  return cash > 0 ? 'The budget is frozen while the books are in the red: no cash goes out in a trade.' : null;
+  if (incoming > outgoing) return `The budget is frozen: a trade can't take on salary. This one adds ${money(incoming - outgoing)}.`;
+  return cash > 0 ? 'The budget is frozen: no cash goes out in a trade.' : null;
 }

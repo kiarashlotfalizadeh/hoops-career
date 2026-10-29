@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { GameResult, League, PlayInGame, PlayoffSeries } from '../../core/types';
@@ -79,7 +79,8 @@ function confSlots(league: League, conf: 'E' | 'W'): Slot[][] {
 
 type Phase = 'none' | 'projected' | 'playin' | 'live' | 'done';
 
-export function PlayoffsTab({ league }: { league: League }) {
+/** `cup`: the NBA Cup's row while it's on (the hub's), under the poster: the bracket's hero comes first. */
+export function PlayoffsTab({ league, cup }: { league: League; cup?: ReactNode }) {
   const userConf = league.teams[league.userTid].conf;
   const [conf, setConf] = useQueryParam<'E' | 'W'>('conf', userConf, ['E', 'W']);
   const [open, setOpen] = useState<PlayoffSeries | null>(null);
@@ -97,7 +98,8 @@ export function PlayoffsTab({ league }: { league: League }) {
     return (
       <>
         {lastAw?.champion !== undefined && <ChampionSlab league={league} season={lastAw.season} tid={lastAw.champion} runnerUp={lastAw.runnerUp} fmvp={lastAw.finalsMvp} />}
-        <div className="card empty">No bracket yet: it&apos;s projected here once games are played. Seeds 1-6 go straight in, 7-10 play in.</div>
+        {cup}
+        <div className="card empty">The bracket appears once games are played. Seeds 1-6 go straight in, 7-10 play in.</div>
       </>
     );
   }
@@ -117,6 +119,9 @@ export function PlayoffsTab({ league }: { league: League }) {
           fmvp={league.awards.find((a) => a.season === league.season)?.finalsMvp}
         />
       )}
+      {/* the hero first, then the switch for the bracket under it */}
+      {champ === undefined && <PlayoffsPoster league={league} phase={phase} />}
+      {cup}
       <div className="bk-only-narrow">
         <ViewChips
           label="Conference"
@@ -128,7 +133,6 @@ export function PlayoffsTab({ league }: { league: League }) {
           ]}
         />
       </div>
-      {champ === undefined && <PlayoffsPoster league={league} phase={phase} />}
       <div className="bk-panel-wrap">
         {confOrder(conf).map((c) => (
           <div key={c} className={`bk-conf bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>

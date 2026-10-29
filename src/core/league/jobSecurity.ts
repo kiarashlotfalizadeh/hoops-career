@@ -177,7 +177,7 @@ export function jobSecurity(league: League, fc?: Forecast | null): JobSecurity {
     live && !live.met
       ? `Ultimatum: ${ultimatum!.text.toLowerCase()}, or you're fired.`
       : booksFire
-        ? "The books are heading deeper into the red under the freeze: close there and you're fired, whatever you win."
+        ? "The books are heading deeper into the red under the freeze. Close there and you're fired, whatever you win."
         : undefined;
   const raw = toScore(projected);
   const score = booksFire || (live && !live.onCourse) ? Math.min(raw, toScore(FIRING_LINE) - 1) : danger ? Math.min(raw, ULTIMATUM_SCORE) : raw;

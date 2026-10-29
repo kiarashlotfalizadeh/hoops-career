@@ -6,7 +6,7 @@
 // Defenses read sets: every run tonight takes some openness off its look on the next run and gets its
 // passes jumped a little more often, faster for a coach better at tactics (tagged 'set_read'), so a
 // set is strongest early and costly when spammed.
-// Sets come from bench calls, after-timeout plays and the user's set package; AI coaches run none.
+// Sets come from bench calls and after-timeout plays; AI coaches run none.
 
 import type { ActionType, CallId, DefScheme, OffRole, Player, PnrCoverage, SetId, Tactics } from '../types';
 import { SET_IDS } from '../types';
@@ -46,11 +46,11 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Spain',
     action: 'pnr',
     forWho: 'a big who rolls to the rim',
-    what: "A pick-and-roll where a shooter sets a back screen on the roll man's defender as he dives.",
-    look: 'the roll to the rim, and a three for the back screener when his man helps',
+    what: "A pick-and-roll where a shooter back-screens the roll man's defender as he dives.",
+    look: 'the roll to the rim, or a three for the back screener',
     beats: 'drop, hedge, blitz and ice coverage, where the big guarding the roll man gets screened',
     killedBy: 'a switch',
-    note: 'It needs a shooter to set the back screen, and a zone waits for the roll.',
+    note: 'It needs a shooter to set the back screen. A zone waits for the roll.',
     time: 2,
     read: 1,
   },
@@ -60,9 +60,9 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Horns',
     action: 'pnr',
     forWho: 'a big who passes or shoots',
-    what: 'Two bigs at the elbows and the handler picks a side: a passing big catches at the elbow and hands it back, a shooting big screens and pops.',
+    what: 'Two bigs at the elbows, and the handler picks a side. A passing big hands it back, a shooting big pops.',
     look: 'an elbow handoff for a passing big, a pick-and-pop three for a shooting big',
-    beats: 'drop coverage, and pressure on the ball (the elbow handoff gets behind it)',
+    beats: 'drop coverage, and ball pressure, which the elbow handoff gets behind',
     killedBy: 'zones, which sit on the elbows',
     time: 1,
     read: 1,
@@ -73,9 +73,9 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Floppy',
     action: 'handoff',
     forWho: 'a shooter who moves without the ball',
-    what: 'The shooter starts under the basket and picks a side: a single screen one way, a stagger the other.',
-    look: 'a catch-and-shoot three off the screens, or a curl to the rim when his man trails on top',
-    beats: 'man-to-man that fights over screens, drop most of all, and top-locking him (he curls)',
+    what: 'The shooter starts under the basket and picks a side: one screen or a stagger.',
+    look: 'a catch-and-shoot three off the screens, or a curl when his man trails',
+    beats: 'man-to-man that fights over screens, drop most of all, and top-locking, which he curls',
     killedBy: 'switching off-ball screens',
     note: 'It does little against a zone.',
     time: 1.5,
@@ -87,11 +87,11 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Elevator',
     action: 'handoff',
     forWho: 'a catch-and-shoot shooter',
-    what: 'The shooter runs between two screeners standing side by side, who close the doors behind him.',
+    what: 'The shooter runs between two side-by-side screeners, who close the doors behind him.',
     look: 'a three at the top of the key',
     beats: 'every man-to-man coverage, even a switch',
     killedBy: 'the 3-2 zone or top-locking him',
-    note: 'The hardest look to stop and the easiest to read: defenses read it twice as fast as the others.',
+    note: 'The hardest look to stop and the easiest to read. Defenses read it twice as fast.',
     time: 1.5,
     read: 2,
   },
@@ -101,9 +101,9 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Hammer',
     action: 'motion',
     forWho: 'a corner shooter',
-    what: 'A baseline drive while a weak-side screen takes out the defender who would rotate to the corner.',
+    what: 'A baseline drive while a weak-side screen pins the defender who’d rotate to the corner.',
     look: 'a corner three on the kick-out',
-    beats: 'help defense (the more they help, the more open the corner) and the 2-3 zone',
+    beats: 'help defense and the 2-3 zone: the more they help, the more open the corner',
     killedBy: 'staying home on shooters or switching the hammer screen',
     time: 1,
     read: 1,
@@ -114,9 +114,9 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Chicago',
     action: 'handoff',
     forWho: 'a scorer who shoots or drives off a handoff',
-    what: 'A pin-down straight into a dribble handoff from a big: his man is a step behind twice.',
+    what: 'A pin-down straight into a dribble handoff from a big. His man is a step behind twice.',
     look: 'a pull-up or a downhill drive off the handoff',
-    beats: "drop coverage most of all (the big can't be up for the handoff and back for the drive), and the other man-to-man coverages",
+    beats: 'drop coverage most of all, and the other man-to-man coverages',
     killedBy: 'switching, which takes both actions away, or a zone',
     time: 1.5,
     read: 1,
@@ -127,8 +127,8 @@ export const SETS: Record<SetId, SetDef> = {
     short: 'Post split',
     action: 'post',
     forWho: 'a post player who passes',
-    what: 'A post entry, then the two players around him split: one screens for the other, one cuts and one flares.',
-    look: "a cut to the rim or a flare three when the defense helps on the post (his own shot when it doesn't)",
+    what: 'A post entry, then the two around him split into a cut and a flare.',
+    look: 'a cut or a flare three when they help the post, else his own shot',
     beats: 'help and double teams on the post',
     killedBy: 'switching the split, staying home or a zone',
     time: 1,
@@ -153,17 +153,9 @@ export const isSetId = (x: unknown): x is SetId => typeof x === 'string' && (SET
 /** A play the bench can call: a set, or the clear-out isolation. */
 export const isCallId = (x: unknown): x is CallId => x === 'iso' || isSetId(x);
 
-/** The most sets in a package. */
-export const MAX_SETS = 4;
-
 /** Tuning shared by the engine and the screens. */
 export const SET_K = {
-  /**
-   * Chance per set in the package that a fresh half-court trip runs one of them (a package of four:
-   * about one trip in five, until the defense is on its sets: each runs once or twice a game).
-   */
-  rate: 0.05,
-  /** A package set is only run for a player who fits it at least this well, with the floor it needs. */
+  /** A player who fits a set at least this well is one the bench's play calls suggest it for. */
   fit: 60,
   /** Openness a read takes off the set's look per earlier run tonight, for a coach of 50 tactics (0.6x at 0, 1.4x at 100). */
   read: 0.35,
@@ -205,7 +197,7 @@ export function fitPlayer(p: Player, t?: Pick<Tactics, 'offense'>): FitPlayer {
   return { pid: p.pid, c: composites(p.ratings), role: t?.offense.roles[p.pid] ?? archetype(p.ratings).role, big: planRoles(p.ratings, p.pos).big, r: { hgt: p.ratings.hgt } };
 }
 
-/** How well a player fits as the one a set is run for (about 30-90; SET_K.fit and up runs from a package). */
+/** How well a player fits as the one a set is run for (about 30-90; SET_K.fit and up is a good fit). */
 export function setFit(id: SetId, p: FitPlayer): number {
   const c = p.c;
   switch (id) {
@@ -299,20 +291,6 @@ export function castFor<T extends FitPlayer>(id: SetId, five: T[], star?: T): Ca
       return { id, star: s, action: 'post', a: s, b, c, d };
     }
   }
-}
-
-/**
- * Whether the five can run set `id` from the package: a player who fits it well enough, and the
- * floor it needs (a handler for the ball-screen sets, a shooter to set Spain's back screen, a driver
- * for Hammer). A called set is run whatever the floor: the coach asked for it.
- */
-export function fitsFloor<T extends FitPlayer>(id: SetId, five: T[]): Cast<T> | null {
-  const cast = castFor(id, five);
-  if (!cast || setFit(id, cast.star) < SET_K.fit) return null;
-  if ((id === 'spain' || id === 'horns') && cast.a.c.pnrHandle < 50) return null;
-  if (id === 'spain' && cast.c.c.c3 < 50) return null;
-  if (id === 'hammer' && cast.a.c.create < 55) return null;
-  return cast;
 }
 
 // ---------------------------------------------------------------- what it goes for, and its edges
@@ -456,11 +434,4 @@ export function atoLabel(ato: string | null | undefined, actionLabel: (a: Action
   if (isSetId(ato)) return playerName ? setLabel(ato, playerName) : SETS[ato].name;
   if (ato === 'iso' && playerName) return `${CLEAR_OUT.name}: ${playerName}`;
   return actionLabel(ato as ActionType);
-}
-
-/** The set package in tactics, cleaned (known ids, no repeats, at most four). */
-export function setPackage(t: Pick<Tactics, 'offense'>): SetId[] {
-  const out: SetId[] = [];
-  for (const id of t.offense.sets ?? []) if (isSetId(id) && !out.includes(id) && out.length < MAX_SETS) out.push(id);
-  return out;
 }

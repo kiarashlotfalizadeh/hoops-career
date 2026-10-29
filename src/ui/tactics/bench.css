@@ -1,0 +1,51 @@
+/* The Tactic section's bench list, and the player instructions in a player's sheet (`tx-`, `tm-`).
+   Loaded by the player sheet too, on his own page. */
+
+/* ------------------------------------------------------------ the bench */
+.tx-bench-r {
+  width: 100%;
+  text-align: left;
+  color: inherit;
+  min-height: 52px;
+}
+.tx-bench-m {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.tx-bench-n {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.tx-bench-n .lr-name {
+  min-width: 0;
+}
+/* his role at the board's end, and how he suits it as the board's plates show it */
+.tx-bench-role {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.tx-bench-role > .ellipsis {
+  min-width: 0;
+}
+.tx-bench-role .tx-floor-s {
+  font-size: 13px;
+}
+.tx-bench-n .tag {
+  flex: none;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------ the player sheet */
+.tm-ed-ins {
+  gap: 16px;
+}
+.tm-ed-in {
+  gap: 7px;
+}

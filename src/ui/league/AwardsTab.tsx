@@ -82,24 +82,20 @@ export function AwardsTab({ league }: { league: League }) {
           {!decided && !isCurrent && <div className="card empty">No awards recorded for {seasonLabel(season)}.</div>}
           {decided && aw && <MajorAwards league={league} aw={aw} />}
           {(decided || (isCurrent && started)) && (
+            // (the All-Star MVP's row reads as his night: "East won 150-141 · 31 PTS")
             <div className="lg-note">
-              {status ? `${status} · figures per game` : 'Figures per game'}
-              {decided && aw?.finalsMvp !== undefined ? '; the Finals MVP’s in the playoffs' : ''}
-              {decided && aw?.allStarGame?.mvp ? '; the All-Star MVP’s in the game' : ''}.
+              {status ? `${status} · per game` : 'Per game'}
+              {decided && aw?.finalsMvp !== undefined ? ' · Finals MVP in the playoffs' : ''}
             </div>
           )}
         </>
       )}
-      {view === 'honors' && (
-        <>
-          <HonorsList league={league} honors={honors} />
-          <div className="lg-note">By conference; figures per game over the week or month.</div>
-        </>
-      )}
+      {/* (each line says "a game" itself) */}
+      {view === 'honors' && <HonorsList league={league} honors={honors} />}
       {view === 'teams' && aw && (
         <>
           <Teams league={league} aw={aw} />
-          <div className="lg-note">Figures per game.</div>
+          <div className="lg-note">Per game</div>
         </>
       )}
       {view === 'allstar' && aw && (
@@ -115,7 +111,7 @@ export function AwardsTab({ league }: { league: League }) {
           {aw.allStars.E.length > 0 && (
             <>
               <AllStars league={league} aw={aw} />
-              <div className="lg-note">Figures per game this season.</div>
+              <div className="lg-note">Per game this season</div>
             </>
           )}
           {aw.saturday && <AllStarSaturday league={league} aw={aw} />}
@@ -393,10 +389,9 @@ function AwardRace({ league }: { league: League }) {
           list={race.mvp}
           right={
             <Help title="Award races">
-              <p className="lg-p">
-                The ladders update daily and use the same formulas as the voters: production, availability and team success, with the same eligibility rules. Winners are announced
-                at the end of the regular season.
-              </p>
+              <p className="lg-p">The ladders update daily with the voters&apos; own formulas and eligibility rules.</p>
+              <p className="lg-p">They weigh production, games played and team success. Winners are named when the regular season ends.</p>
+              <p className="lg-p">The score puts the leader at 100.</p>
             </Help>
           }
         />
@@ -425,7 +420,8 @@ function MvpSlab({ league, p, season, over, tid: given }: { league: League; p: P
         </Link>
       }
       fig={pg ? f1(pg.pts) : undefined}
-      figLabel={pg ? `PTS a game · ${f1(pg.reb)} REB · ${f1(pg.ast)} AST` : undefined}
+      // (each figure kept with its stat where the line wraps)
+      figLabel={pg ? `PTS a game · ${f1(pg.reb)}\u00a0REB · ${f1(pg.ast)}\u00a0AST` : undefined}
     />
   );
 }
@@ -443,7 +439,7 @@ function RaceCard({ league, title, list, kind = 'off', right }: { league: League
     <Section
       title={title}
       // the scale is named once, on the first ladder, with its Help
-      right={right ? <span className="lg-race-key">Score, #1 = 100{right}</span> : undefined}
+      right={right ? <span className="lg-race-key">Leader = 100{right}</span> : undefined}
     >
       <div className="card flush list">
         {list.length === 0 ? (

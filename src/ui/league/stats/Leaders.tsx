@@ -4,10 +4,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../../core/types';
 import { TeamLogo } from '../../components/TeamLogo';
-import { Avatar } from '../../components/ui';
+import { Avatar, Help } from '../../components/ui';
 import { f1 } from '../../stats';
 import { PosterSlab, shortName, teamAbbrev } from '../shared';
-import { seasonLabel } from '../../../core/constants';
 import { qualifier, type StatRow } from './rows';
 import { Foot } from '../Views';
 import { Term } from '../../components/Glossary';
@@ -71,7 +70,7 @@ export function Leaders({ league, rows, season, playoffs }: { league: League; ro
   return (
     <>
       {lead.top[0] ? (
-        <LeadSlab league={league} cat={lead.c} top={lead.top} all={allHref(lead.c.key)} season={season} playoffs={playoffs} />
+        <LeadSlab league={league} cat={lead.c} top={lead.top} all={allHref(lead.c.key)} playoffs={playoffs} />
       ) : (
         <div className="card flush lg-leaders">
           <LeaderBlock league={league} cat={lead.c} top={lead.top} all={allHref(lead.c.key)} />
@@ -82,22 +81,32 @@ export function Leaders({ league, rows, season, playoffs }: { league: League; ro
           <LeaderBlock key={c.key} league={league} cat={c} top={top} all={allHref(c.key)} />
         ))}
       </div>
-      <Foot>
-        Per game · qualified: {q.minGp}+ games ({playoffs ? '30' : '50'}% of team games), {q.minMin}+ minutes a game · true shooting: 9+ shot attempts a game
+      <Foot
+        help={
+          <Help title="Who qualifies">
+            <p className="lg-p">
+              A leader has played {playoffs ? '30% of' : 'half'} his team&apos;s games, {q.minGp} so far. He averages {q.minMin}+ minutes.
+            </p>
+            <p className="lg-p">True shooting also needs 9 shot attempts a game, free throws counted.</p>
+          </Help>
+        }
+      >
+        Per game · qualified: {q.label}
       </Foot>
     </>
   );
 }
 
 /** The scoring race as the poster: the leader in his team's colours with his figure, the next four under him. */
-function LeadSlab({ league, cat, top, all, season, playoffs }: { league: League; cat: Cat; top: StatRow[]; all: string; season: number; playoffs: boolean }) {
+function LeadSlab({ league, cat, top, all, playoffs }: { league: League; cat: Cat; top: StatRow[]; all: string; playoffs: boolean }) {
   const [first, ...rest] = top;
   const tid = first.tid ?? -1;
   const colors = league.teams[tid >= 0 ? tid : league.userTid].colors;
   return (
     <PosterSlab
       colors={colors}
-      over={`${cat.label} per game · ${seasonLabel(season)}${playoffs ? ' playoffs' : ''}`}
+      // (the season is the picker's line over it)
+      over={`${cat.label} per game${playoffs ? ' · playoffs' : ''}`}
       mark={tid >= 0 ? <TeamLogo tid={tid} size={44} decorative /> : undefined}
       region={`${teamAbbrev(league, first.tid)} · ${first.p.pos}`}
       name={

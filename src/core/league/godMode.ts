@@ -112,9 +112,9 @@ function rosterChecks(league: League, moves: RosterMove[], out: EditCheck) {
     const ab = teamLabel(league, tid);
     if (inSeason(league) && std + tw < 0 && all < DRESS_MIN)
       out.errors.push(`${ab} would have ${all} player${all === 1 ? '' : 's'}: a team needs ${DRESS_MIN} to dress for its games.`);
-    else if (inSeason(league) && std < 0 && n < CAP.rosterMin) out.warnings.push(`${ab} drops to ${n} players (${CAP.rosterMin} is the minimum in season).`);
-    if (std > 0 && n > rosterMaxNow(league)) out.warnings.push(`${ab} will carry ${n} players (the limit is ${rosterMaxNow(league)} now).`);
-    if (tw > 0 && nTw > TWO_WAY_MAX) out.warnings.push(`${ab} will have ${nTw} two-way players (the limit is ${TWO_WAY_MAX}).`);
+    else if (inSeason(league) && std < 0 && n < CAP.rosterMin) out.warnings.push(`${ab} drops to ${n} players. The minimum in season is ${CAP.rosterMin}.`);
+    if (std > 0 && n > rosterMaxNow(league)) out.warnings.push(`${ab} will carry ${n} players. The limit now is ${rosterMaxNow(league)}.`);
+    if (tw > 0 && nTw > TWO_WAY_MAX) out.warnings.push(`${ab} will have ${nTw} two-way players. The limit is ${TWO_WAY_MAX}.`);
   }
 }
 
@@ -173,7 +173,7 @@ export function checkPlayerEdit(league: League, p: Player, e: PlayerEdit): EditC
   }
   const c = e.contract;
   if (c) {
-    if (to < 0) err('Only a player on a team has a contract: free agents sign one when they join.');
+    if (to < 0) err('Only a player on a team has a contract. Free agents sign one when they join.');
     if (c.amount !== undefined && !between(c.amount, GOD_LIMITS.salary)) err('A salary is $0.1M to $100M a season.');
     if (c.years !== undefined && !wholeIn(c.years, GOD_LIMITS.years)) err(`A contract runs ${GOD_LIMITS.years[0]} to ${GOD_LIMITS.years[1]} seasons.`);
     if (c.option) {
@@ -526,7 +526,7 @@ export function checkForceTrade(league: League, offer: TradeOffer): EditCheck {
         other.swaps?.includes(y) ||
         league.draftPicks.some((d) => d.season === y && d.round === 1 && moving.has(d.dpid) && (d.originalTid === a.tid || d.originalTid === b.tid))
       )
-        out.errors.push(`A ${y} pick swap needs both teams' own ${y} firsts, unprotected, in no other swap and not moving in the deal.`);
+        out.errors.push(`A ${y} pick swap needs both teams' own ${y} firsts. Each must be unprotected, in no other swap and staying put.`);
   const something = (s: TradeOffer['a']) => s.pids.length || s.dpids.length || s.swaps?.length || (s.cash ?? 0) > 0;
   if (!something(a) && !something(b)) out.errors.push('The trade is empty.');
   if (!out.errors.length) {

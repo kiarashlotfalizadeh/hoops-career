@@ -455,7 +455,7 @@ function stockMonth(league: League, i: number) {
   for (const x of big.slice(0, 2))
     addNews(league, {
       kind: 'draft',
-      text: `Draft stock: ${playerName(x.p)} (${where(x.p)}) ${x.to < x.from ? 'climbs' : 'slides'} from ${ordinal(x.from)} to ${ordinal(x.to)} on the big board after ${why(x.p)}.`,
+      text: `Draft stock: ${playerName(x.p)} of ${where(x.p)} ${x.to < x.from ? 'climbs' : 'slides'} from ${ordinal(x.from)} to ${ordinal(x.to)} after ${why(x.p)}.`,
       tids: [],
       pids: [x.p.pid],
     });
@@ -467,7 +467,7 @@ function stockMonth(league: League, i: number) {
   addInbox(league, {
     from: 'Scouting Department',
     subject: `Draft stock: ${month}`,
-    body: [...mail.map((x) => `${moveLine(x)} after ${why(x.p)}.`), ...hurt.map((p) => `${playerName(p)} is hurt; we're watching how he comes back.`)].join('\n'),
+    body: [...mail.map((x) => `${moveLine(x)} after ${why(x.p)}.`), ...hurt.map((p) => `${playerName(p)} is hurt. We're watching how he comes back.`)].join('\n'),
     tone: 'neutral',
     link: '/office/draft',
   });

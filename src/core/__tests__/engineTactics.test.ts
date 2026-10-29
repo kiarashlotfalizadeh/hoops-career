@@ -5,20 +5,18 @@ import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import type { PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { archetype, composites } from '../ratings';
-import { defaultTactics, situationFromTemplate, situationText } from '../sim/tactics';
+import { defaultTactics } from '../sim/tactics';
 import { Rng } from '../random';
-import type { SituationalPlan, SituationTrigger, Tactics, TacticImpact } from '../types';
+import type { Tactics, TacticImpact } from '../types';
 
-// Coaching controls inside the engine: situational plans, crunch time, a queued set, hack-a-player
-// targets, zone schemes and the cost of switching off the ball.
+// Coaching controls inside the engine: live edits, crunch time, a queued set, hack-a-player targets,
+// zone schemes and the cost of switching off the ball.
 describe('engine tactics', () => {
   const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 17 });
-  const side = (tid: number, patch?: TacticsPatch, situations?: SituationalPlan[]): SimTeamInput => {
+  const side = (tid: number, patch?: TacticsPatch): SimTeamInput => {
     const tactics = applyPatch(league.teams[tid].tactics, patch);
-    if (situations) tactics.situations = situations;
     return { team: { ...league.teams[tid], tactics }, players: teamPlayers(league, tid) };
   };
-  const sit = (id: string, label: string, when: SituationTrigger, patch: TacticsPatch): SituationalPlan => ({ id, label, enabled: true, when, patch });
   const opts = (seed: number, record = true) => ({ rng: new Rng(seed), type: 'regular' as const, record, injuries: false });
   const man: TacticsPatch = { defense: { scheme: 'man', pnr: 'drop', switchOffBall: false } };
   type SP = { pid: number; on: boolean; out: number; big: boolean; ftPct: number; starter: boolean };
@@ -30,7 +28,6 @@ describe('engine tactics', () => {
     elapsed: number;
     impacts: Map<string, TacticImpact>;
     adjust(t: ST): void;
-    situate(t: ST): void;
     checkSubs(t: ST, force?: boolean): void;
     intentionalFoul(off: ST, def: ST): string | null;
   };
@@ -44,90 +41,25 @@ describe('engine tactics', () => {
     return undefined;
   };
 
-  it('plays situational plans, crunch time, queued sets, hack-a-player targets and zones as the coach set them', () => {
-    // situational plans: plays a plan exactly while its trigger holds, logs it on each possession and says so in the play-by-play
+  it('plays live edits, crunch time, queued sets, hack-a-player targets and zones as the coach set them', () => {
+    // takes live edits on the base tactics, from the next possession
     {
-      const plans = [sit('late', 'Late game', { fromQ: 4, maxClock: 300 }, { defense: { scheme: 'zone23' } }), sit('big', 'Big lead', { minLead: 8 }, { defense: { help: 93 } })];
-      let late = 0;
-      let big = 0;
-      for (let g = 0; g < 6; g++) {
-        const sim = new GameSim(side(4, man, plans), side(5), opts(300 + g));
-        const res = sim.simToEnd();
-        let prev: [number, number] = [0, 0];
-        for (const l of sim.drainLogs()) {
-          const want = l.q >= 4 && l.clockStart <= 300 ? 'Late game' : prev[0] - prev[1] >= 8 ? 'Big lead' : '';
-          expect(l.sit?.[0] ?? '').toBe(want);
-          expect(l.sit?.[1] ?? '').toBe('');
-          // the plan is what the defense plays
-          if (l.off === 1) {
-            if (want === 'Late game') expect(l.scheme).toBe('zone23');
-            else expect(l.scheme).toBe('man');
-            if (want === 'Big lead') expect(l.help).toBe(93);
-          }
-          if (want === 'Late game') late++;
-          if (want === 'Big lead') big++;
-          prev = l.score;
-        }
-        expect(res.pbp!.some((e) => e.text === `${league.teams[4].abbrev} switches to its "Late game" plan.`)).toBe(true);
-      }
-      expect(late).toBeGreaterThan(100);
-      expect(big).toBeGreaterThan(20);
-    }
-
-    // leaves a game without plans (or with none that apply) exactly as it was
-    {
-      for (let g = 0; g < 3; g++) {
-        const base = JSON.stringify(new GameSim(side(8), side(9), opts(40 + g)).simToEnd());
-        for (const plans of [
-          [],
-          [sit('never', 'Never', { minLead: 999 }, { defense: { scheme: 'zone23' } })],
-          [{ ...sit('off', 'Off', {}, { offense: { pace: 99 } }), enabled: false }],
-        ]) {
-          expect(JSON.stringify(new GameSim(side(8, undefined, plans), side(9), opts(40 + g)).simToEnd())).toBe(base);
-        }
-      }
-    }
-
-    // a 4th-quarter plan leaves the first three quarters untouched
-    {
-      let differs = 0;
-      for (let g = 0; g < 6; g++) {
-        const base = new GameSim(side(8), side(9), opts(70 + g, false)).simToEnd();
-        const plan = sit('q4', 'Q4', { fromQ: 4 }, { defense: { scheme: 'zone23' }, nudge: { offense: { pace: 30, threePoint: 30 } } });
-        const res = new GameSim(side(8, undefined, [plan]), side(9), opts(70 + g, false)).simToEnd();
-        expect(res.home.quarters.slice(0, 3)).toEqual(base.home.quarters.slice(0, 3));
-        expect(res.away.quarters.slice(0, 3)).toEqual(base.away.quarters.slice(0, 3));
-        if (JSON.stringify(res) !== JSON.stringify(base)) differs++;
-      }
-      expect(differs).toBeGreaterThan(3);
-    }
-
-    // takes live edits on the base tactics and keeps the plan in effect on top of them
-    {
-      const sim = new GameSim(side(8, man, [sit('all', 'All game', {}, { defense: { scheme: 'zone23' } })]), side(9), opts(5));
+      const sim = new GameSim(side(8, man), side(9), opts(5));
       const s = sim as unknown as In;
       sim.step();
-      expect(sim.situation(0)?.label).toBe('All game');
-      expect(s.T[0].t.defense.scheme).toBe('zone23');
-      // what Live edits is the base, never the overlay
       const base = sim.baseTactics(0);
       expect(base.defense.scheme).toBe('man');
       base.offense.pace = 93;
+      base.defense.scheme = 'zone23';
       sim.setTactics(0, base);
       expect(s.T[0].t.offense.pace).toBe(93);
       expect(s.T[0].t.defense.scheme).toBe('zone23');
-      expect(sim.baseTactics(0).defense.scheme).toBe('man');
-      // a base without the plan ends it
-      base.situations = [];
-      sim.setTactics(0, base);
-      expect(sim.situation(0)).toBeNull();
-      expect(s.T[0].t.defense.scheme).toBe('man');
-      expect(s.T[0].t.offense.pace).toBe(93);
+      expect(sim.baseTactics(0).defense.scheme).toBe('zone23');
     }
 
-    // keeps a coach's in-game adjustment when a plan starts or ends
+    // a coach's in-game adjustment is made to the base tactics too
     {
-      const sim = new GameSim(side(8, man, [sit('late', 'Late', { maxClock: 100 }, { nudge: { offense: { pace: 25 } } })]), side(9), opts(6));
+      const sim = new GameSim(side(8, man), side(9), opts(6));
       const s = sim as unknown as In;
       const t = s.T[0];
       t.adjust = 1;
@@ -137,30 +69,16 @@ describe('engine tactics', () => {
       s.adjust(t);
       expect(t.t.defense.pnr).toBe('hedge');
       expect(t.base.defense.pnr).toBe('hedge');
-      s.clock = 60;
-      s.situate(t);
-      expect(sim.situation(0)?.label).toBe('Late');
-      expect(t.t.defense.pnr).toBe('hedge');
-      s.clock = 600;
-      s.situate(t);
-      expect(sim.situation(0)).toBeNull();
-      expect(t.t.defense.pnr).toBe('hedge');
     }
 
-    // gives a player his own role back when a plan that changed it ends, or a live edit takes it off
+    // gives a player his own role back when a live edit takes it off
     {
       const p0 = teamPlayers(league, 8).find((p) => p.pid === league.teams[8].rotation.order[0])!;
       const own = league.teams[8].tactics.offense.roles[p0.pid] ?? archetype(p0.ratings).role;
       const other = own === 'post' ? 'shooter' : 'post';
-      const sim = new GameSim(side(8, man, [sit('late', 'Late', { maxClock: 100 }, { offense: { roles: { [p0.pid]: other } } })]), side(9), opts(7));
+      const sim = new GameSim(side(8, man), side(9), opts(7));
       const s = sim as unknown as In;
       const role = () => (s.T[0].players.find((x) => x.pid === p0.pid) as unknown as { role: string }).role;
-      expect(role()).toBe(own);
-      s.clock = 60;
-      s.situate(s.T[0]);
-      expect(role()).toBe(other);
-      s.clock = 600;
-      s.situate(s.T[0]);
       expect(role()).toBe(own);
       const t = sim.baseTactics(0);
       t.offense.roles[p0.pid] = other;
@@ -171,24 +89,6 @@ describe('engine tactics', () => {
       expect(role()).toBe(archetype(p0.ratings).role);
     }
 
-    // builds plans from templates with unique ids and describes their triggers
-    {
-      const a = situationFromTemplate('protectLead');
-      const b = situationFromTemplate('protectLead', [a]);
-      expect(b.id).not.toBe(a.id);
-      expect(b.when).not.toBe(a.when);
-      expect(situationText(a.when)).toBe('Q4 & OT · last 5:00 · up 1-12');
-      expect(situationText(situationFromTemplate('chasing').when)).toBe('Q4 & OT · last 6:00 · down 6-18');
-      expect(situationText(situationFromTemplate('closeQ').when)).toBe('Q1-Q3 · last 0:40');
-      expect(situationText({ benchUnit: true })).toBe('Second unit on the floor');
-      // a plan that can never apply says so instead of reading like the quarter it starts in
-      expect(situationText({ fromQ: 4, untilQ: 2 })).toMatch(/^Never/);
-      expect(situationText({ minLead: 5, maxLead: -3 })).toMatch(/^Never/);
-      expect(situationText({ maxClock: 0 })).toMatch(/^Never/);
-      // the patch is a copy: editing a plan never edits the template
-      a.patch.nudge!.offense!.pace = 0;
-      expect(situationFromTemplate('protectLead').patch.nudge!.offense!.pace).toBe(-25);
-    }
     // crunch time
     {
       /**
@@ -408,6 +308,7 @@ describe('engine tactics', () => {
       // playbooks were recalibrated and the league's rates recentred, and again when a side-out foul's inbound started taking its seconds, a narrow late lead stopped reaching in and offensive fouls came up to the NBA's rate, and when pressure and the blitz were cut to a realistic size and the league's turnovers, fouls and blocks recentred, and when a player's share of his team's possessions was made to level off past 32%, and when the big decisions were made to matter, and when crunch time came to need a game still in reach and the AI's rotations floored their two best players' minutes, and the third game when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press, and all four when a shooter's threes came to level off past his share of the shots and his skill to count for less at the top of the scale, and a defender's steals to come less often past his second of the night, and all again when the AI's staffs were refit to what each style measures, the league's threes, fouls and turnovers recentred and a switched ball screen's tags weighed by what they're worth)
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban)
       // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
+      // All of them again 2026-10-28, when the threes were recentred (K.recenter.three) after partnerships and familiarity were deleted. And again the same day, when Five-Out, Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit.
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -415,10 +316,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [95, 122, 94, 94, 50, 35, 12, 19],
-        [122, 119, 95, 89, 45, 40, 16, 13],
-        [99, 120, 93, 96, 50, 50, 14, 7],
-        [115, 117, 82, 84, 44, 27, 8, 12],
+        [76, 113, 96, 103, 47, 35, 10, 18],
+        [119, 109, 98, 78, 46, 34, 16, 6],
+        [109, 118, 97, 101, 50, 51, 16, 6],
+        [117, 110, 77, 82, 42, 28, 7, 11],
       ]);
     }
 

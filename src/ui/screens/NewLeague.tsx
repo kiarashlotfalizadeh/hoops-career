@@ -234,9 +234,8 @@ export default function NewLeague() {
           </button>
           <More label="How the real ratings are made">
             <p className="small dim2" style={{ margin: 0 }}>
-              Ratings come from three seasons of NBA.com box scores and play-by-play (through 2025-26), calibrated so every player reproduces his real numbers in the engine. Then
-              his impact has the last word: what his teams gained with him on the floor over seven seasons of lineups, read against his box line and aged a year, so each player is
-              worth in the engine what he was worth on the court. Rookies start from their draft slot and college numbers.
+              Ratings come from three seasons of NBA.com box scores and play-by-play, through 2025-26. Each player is calibrated to reproduce his real numbers in the engine. His
+              impact over seven seasons of lineups has the last word. Rookies start from their draft slot and college numbers.
             </p>
           </More>
           <div className="nl-cta">
@@ -301,7 +300,7 @@ export default function NewLeague() {
               { id: 'W', label: 'West' },
             ]}
           />
-          {rank && <div className="nl-hint">Under each team: its roster&apos;s strength, ranked among the {FRANCHISES.length}.</div>}
+          {rank && <div className="nl-hint">Under each team: its roster&apos;s rank among the {FRANCHISES.length}.</div>}
           <div className="nl-grid">
             {FRANCHISES.map((fr, i) => ({ fr, i }))
               .filter(({ fr }) => fr.conf === conf)
@@ -365,12 +364,12 @@ export default function NewLeague() {
           </Section>
           <Section title="Gameplay">
             <div className="card flush nl-game">
-              <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Fatigue, age and history raise the risk." />
+              <Toggle on={settings.injuries} onChange={(v) => setSettings({ ...settings, injuries: v })} label="Injuries" help="Fatigue, age and injury history raise the risk." />
               <Toggle
                 on={settings.jobSecurity}
                 onChange={(v) => setSettings({ ...settings, jobSecurity: v })}
                 label="Job security"
-                help={`After his grace period (${GRACE} seasons), the owner can fire you for a season short of his goals.`}
+                help={`After ${GRACE} seasons, the owner can fire you for missing his goals.`}
               />
               <Toggle
                 on={settings.teaching !== false}
@@ -386,7 +385,7 @@ export default function NewLeague() {
           {/* a reload on this step starts over as a real league: wait for its rosters rather than silently make a fictional one */}
           <div className="nl-cta">
             {kind === 'real' && seedLoaded && !seed && (
-              <div className="small warn">The real rosters couldn't load. Check your connection and open New League again, or go back and pick a fictional league.</div>
+              <div className="small warn">The real rosters couldn't load. Check your connection and try again, or go back for a fictional league.</div>
             )}
             <button className="btn primary big block" disabled={busy || (kind === 'real' && !seed)} onClick={() => void create()}>
               {busy ? <Spinner /> : null} {busy ? 'Building the league…' : 'Start career'}

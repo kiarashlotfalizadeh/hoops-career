@@ -594,7 +594,7 @@ describe('two seasons of a fictional league', () => {
         },
       };
       league.phase = 'regular';
-      if (teamPlayers(league, us).length + 3 > CAP.rosterMax) expect(validateTrade(league, three).some((e) => e.includes('max'))).toBe(true);
+      if (teamPlayers(league, us).length + 3 > CAP.rosterMax) expect(validateTrade(league, three).some((e) => e.includes('The most is'))).toBe(true);
     }
   });
 });

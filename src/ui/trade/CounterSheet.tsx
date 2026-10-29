@@ -41,9 +41,7 @@ export function CounterSheet({
       {open && base && (
         <div className="col fo-sheet">
           <p className="fo-lede">
-            {counters.length === 1
-              ? "But they'd take this version now."
-              : `But they'd take any of these ${counters.length} versions now, the best for you first (by league-neutral value).`}
+            {counters.length === 1 ? "But they'd take this version now." : `But they'd take any of these ${counters.length} versions now. The best for you comes first.`}
           </p>
           <div className="card flush list">
             {counters.map((c, i) => (

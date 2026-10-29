@@ -1,13 +1,14 @@
 // The live game's Staff view, the one the console opens on: the lead assistant and his read of the game,
-// the calls he wants from you (each with the moves on offer, his pick first), what's working and
-// what isn't, the keys to the game as they stand and the scorer of theirs he's watching, whether he
-// makes his tactics calls himself, and your moves tonight with what each has done since.
+// the calls he wants from you (each with the moves on offer, his pick first, how it was measured a tap
+// down), what's working and what isn't, the scorer of theirs he's watching, the keys to the game as
+// they stand, your moves tonight with what each has done since, and whether he makes his tactics calls
+// himself.
 import { useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import type { CoachMove, GameResult } from '../../core/types';
 import type { GameKey } from '../../core/analysis/keys';
 import { keepFigures, madeAtt } from '../../core/format';
-import { Section, Toggle } from '../components/ui';
+import { Help, Section, Toggle } from '../components/ui';
 import { KeysLive } from '../components/GameKeys';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
@@ -16,6 +17,25 @@ import { keysShare } from './session';
 
 /** Moves listed before "All". */
 const MOVES_SHOWN = 4;
+
+/**
+ * A note as its card shows it: how its number was measured (`detail`) a tap down, a "?" beside the
+ * moves on offer (decision 8: the verdict and its number on the card, the method under the tap).
+ */
+export function noteView(n: StaffNote): StaffNote {
+  if (!n.detail) return n;
+  return {
+    ...n,
+    worth: (
+      <>
+        {n.worth}
+        <Help title="How the staff measured it">
+          <p>{n.detail}</p>
+        </Help>
+      </>
+    ),
+  };
+}
 
 export function StaffView({
   assistant,
@@ -65,7 +85,7 @@ export function StaffView({
       {decisions.length > 0 ? (
         <div className="lv-notes">
           {decisions.slice(0, 4).map((n) => (
-            <NoteCard key={n.id} note={n} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
+            <NoteCard key={n.id} note={noteView(n)} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>
       ) : (
@@ -75,7 +95,7 @@ export function StaffView({
       )}
       {reads.length > 0 && (
         <div className="lv-notes reads">
-          {reads.slice(0, 3).map((n) => (
+          {reads.slice(0, 2).map((n) => (
             <NoteCard key={n.id} note={n} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>
@@ -101,8 +121,8 @@ export function StaffView({
         <Toggle
           on={autonomy === 'auto'}
           onChange={(on) => setAutonomy(on ? 'auto' : 'ask')}
-          label="Let the staff make tactics calls"
-          help={`${assistant.name.split(' ').slice(-1)[0]} makes his measured calls himself, the moment one clears its noise, and they show in your moves. Subs and timeouts stay yours.`}
+          label="Staff makes tactics calls"
+          help={`${assistant.name.split(' ').slice(-1)[0]} makes each measured call himself, and it shows in your moves. Subs and timeouts stay yours.`}
         />
       </div>
     </div>
@@ -134,7 +154,7 @@ function Watch({
       </span>
       <span className="lv-watch-t grow">
         <span className="lv-watch-n">
-          <span className="dim2">Watching</span> {nameOf(p.pid)} <span className="dim num">{keepFigures(madeAtt(p.fgm, p.fga))}</span>
+          <span className="dim2">Watching</span> {nameOf(p.pid)} <span className="dim num">{keepFigures(madeAtt(p.fgm, p.fga))} FG</span>
         </span>
         <span className="lv-watch-l small dim">
           {watch.defender !== undefined ? `${nameOf(watch.defender)} is on him` : them.on.includes(p.pid) ? 'The staff picks his matchup' : 'On the bench'}

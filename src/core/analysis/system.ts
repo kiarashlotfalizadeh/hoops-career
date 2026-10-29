@@ -13,37 +13,35 @@ import { clamp } from '../random';
 import { composites, type Composites } from '../ratings';
 import { teamPlayers } from '../league/helpers';
 import { COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, levelName, shapeOf, withMentality } from '../sim/tactics';
-import { famDims, famEnds, famLabel, famPenalty, freshFamiliarity, rotationWeights } from '../sim/familiarity';
-import { LINK_NAMED, lineupLinks, type Link } from '../sim/links';
 
 export type QualityId = 'creation' | 'spacing' | 'rim' | 'movement' | 'transition' | 'glass' | 'security' | 'rimD' | 'perimD' | 'pnrD' | 'threeD' | 'boards' | 'transD' | 'forceTo';
 
 export const QUALITY_META: Record<QualityId, { label: string; side: 'off' | 'def'; help: string }> = {
-  creation: { label: 'Shot creation', side: 'off', help: 'Getting a good shot when the play breaks down: your creators, and how much the offense leans on them.' },
+  creation: { label: 'Shot creation', side: 'off', help: 'Getting a good shot when the play breaks down. Your creators, and how much the offense leans on them.' },
   spacing: { label: 'Spacing', side: 'off', help: 'Shooters who make the defense stay home, and a shot profile that uses them.' },
   rim: {
     label: 'Rim pressure',
     side: 'off',
-    help: 'Getting to the basket and to the line: cutters, finishers, players who draw fouls, and how hard you attack (shooters and ball screens keep it outside).',
+    help: 'Cutters, finishers and players who draw fouls, and how hard you attack. Shooters and ball screens keep it outside.',
   },
-  movement: { label: 'Ball movement', side: 'off', help: 'Passers, and actions that move the ball (motion, handoffs) rather than stopping it (isolations).' },
-  transition: { label: 'Transition', side: 'off', help: 'Speed and athleticism, and how hard you push after stops (crashing the glass slows the break).' },
+  movement: { label: 'Ball movement', side: 'off', help: 'Passers, and actions that move the ball: motion and handoffs. Isolations stop it.' },
+  transition: { label: 'Transition', side: 'off', help: 'Speed and athleticism, and how hard you push after stops. Crashing the glass slows the break.' },
   glass: { label: 'Second chances', side: 'off', help: 'Offensive rebounders, and how many you send to the glass.' },
   security: { label: 'Ball security', side: 'off', help: 'Secure handlers, and a pace that doesn’t rush them.' },
   rimD: {
     label: 'Rim protection',
     side: 'def',
-    help: 'Help behind the ball, a shot blocker and interior defenders, and how much help comes off the shooters; ball pressure the handlers beat gives the rim up.',
+    help: 'A shot blocker, interior defenders and help behind the ball. Ball pressure the handlers beat gives up the rim.',
   },
   perimD: { label: 'Perimeter D', side: 'def', help: 'Defenders who stay in front, and how much pressure they put on the ball.' },
   pnrD: {
     label: 'Pick-and-roll D',
     side: 'def',
-    help: 'Your ball-screen coverage, and whether the players fit it (a drop needs a rim protector, a switch defenders of a size, a hedge mobile bigs).',
+    help: 'Your ball-screen coverage, and whether the players fit it. A drop needs a rim protector, a switch same-size defenders, a hedge mobile bigs.',
   },
-  threeD: { label: 'Three-point D', side: 'def', help: 'Closing out on shooters: help that stays home, and a scheme that guards the arc (a 3-2 zone does, a 2-3 doesn’t).' },
-  boards: { label: 'Defensive glass', side: 'def', help: 'Rebounders, and a scheme that boxes out (zones give up more offensive boards).' },
-  transD: { label: 'Transition D', side: 'def', help: 'Getting back: speed, the transition-defense setting, and how many you send to the offensive glass.' },
+  threeD: { label: 'Three-point D', side: 'def', help: 'Closing out on shooters: help that stays home, and a scheme that guards the arc. A 3-2 zone does, a 2-3 doesn’t.' },
+  boards: { label: 'Defensive glass', side: 'def', help: 'Rebounders, and a scheme that boxes out. Zones give up more offensive boards.' },
+  transD: { label: 'Transition D', side: 'def', help: 'Getting back: speed, Transition defense, and how many you send to the offensive glass.' },
   forceTo: { label: 'Forcing turnovers', side: 'def', help: 'Hands and pressure: ball pressure, a press, traps on ball screens.' },
 };
 
@@ -119,7 +117,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   const t = withMentality(tactics);
   const o = t.offense;
   const d = t.defense;
-  const sys = systemMods(league, tid, tactics, rows, name);
+  const sys = systemMods(tactics, rows, name);
   const out = {} as Record<QualityId, { raw: number; parts: QualityPart[] }>;
   const set = (id: QualityId, base: number, who: string, mods: [string, number][]) => {
     const parts: QualityPart[] = [{ text: who, v: base }];
@@ -141,7 +139,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   ]);
   const shooters = rows.filter((x) => x.c.c3 >= 66).reduce((a, x) => a + x.w, 0);
   set('spacing', 0.75 * wavg(rows, (x) => x.c.spacing) + 30 * shooters, `Shooters: ${leaders(rows, (x) => x.c.c3, name)}`, [
-    [`Three-point emphasis: ${lvl('threePoint', o.threePoint)}`, step(o.threePoint) * 6],
+    [`Shot profile: ${lvl('threePoint', o.threePoint)}`, step(o.threePoint) * 6],
     [`Post-up: ${lvl('action', o.actions.post)}`, -step(o.actions.post) * 3],
     [`Motion & cuts: ${lvl('action', o.actions.motion)}`, step(o.actions.motion) * 2],
   ]);
@@ -166,8 +164,8 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   );
   const speed = (x: Row) => (x.p.ratings.spd + x.p.ratings.ath) / 2;
   set('transition', wavg(rows, speed), `Runners: ${leaders(rows, speed, name)}`, [
-    [`Push in transition: ${lvl('transition', o.transition)}`, step(o.transition) * 10],
-    [`Pace: ${lvl('pace', o.pace)}`, step(o.pace) * 5],
+    [`After a stop: ${lvl('transition', o.transition)}`, step(o.transition) * 10],
+    [`Tempo: ${lvl('pace', o.pace)}`, step(o.pace) * 5],
     [`Crash the offensive glass: ${lvl('crashBoards', o.crashBoards)}`, -step(o.crashBoards) * 4],
   ]);
   set(
@@ -181,7 +179,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
     wavg(rows, (x) => x.c.ballSec),
     `Handlers: ${leaders(rows, (x) => x.c.ballSec, name)}`,
     [
-      [`Pace: ${lvl('pace', o.pace)}`, -step(o.pace) * 3],
+      [`Tempo: ${lvl('pace', o.pace)}`, -step(o.pace) * 3],
       [`Isolation: ${lvl('action', o.actions.iso)}`, -step(o.actions.iso) * 2],
     ],
   );
@@ -197,7 +195,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
   set('rimD', 0.25 * anchorP + 0.5 * wavg(rows, (x) => x.c.helpD) + 0.25 * wavg(rows, (x) => x.c.intDef), anchor ? `Anchor: ${name(anchor.p)}` : 'No rim protector', [
     [`Help defense: ${lvl('help', d.help)}`, step(d.help) * 5],
     [`Scheme: ${SCHEME_META[d.scheme].label}`, ZONE_RIM[d.scheme]],
-    [`Coverage: ${COVERAGE_META[d.pnr].label}`, man ? (d.pnr === 'drop' ? 6 : d.pnr === 'switch' ? -3 : 0) : 0],
+    [`Ball-screen coverage: ${COVERAGE_META[d.pnr].label}`, man ? (d.pnr === 'drop' ? 6 : d.pnr === 'switch' ? -3 : 0) : 0],
     [`Ball pressure: ${lvl('pressure', d.pressure)}`, -step(d.pressure) * 12],
   ]);
   set(
@@ -241,7 +239,7 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
     [
       [`Transition defense: ${lvl('getBack', d.getBack)}`, step(d.getBack) * 10],
       [`Crash the offensive glass: ${lvl('crashBoards', o.crashBoards)}`, -step(o.crashBoards) * 6],
-      ['Pressing every inbound', d.press === 'always' ? -3 : 0],
+      ['Full-court press: Always', d.press === 'always' ? -3 : 0],
     ],
   );
   set(
@@ -250,9 +248,9 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
     `Hands: ${leaders(rows, (x) => x.c.steal, name)}`,
     [
       [`Ball pressure: ${lvl('pressure', d.pressure)}`, step(d.pressure) * 8],
-      [d.press === 'always' ? 'Press: always' : 'Press after makes', d.press === 'always' ? 7 : d.press === 'afterMade' ? 4 : 0],
+      [d.press === 'always' ? 'Full-court press: Always' : 'Full-court press: After makes', d.press === 'always' ? 7 : d.press === 'afterMade' ? 4 : 0],
       ['Blitzing ball screens', man && d.pnr === 'blitz' ? 4 : 0],
-      ['Doubling their star', d.starPlan === 'double' ? 2 : 0],
+      ['Star plan: Double-team', d.starPlan === 'double' ? 2 : 0],
     ],
   );
   return out;
@@ -261,10 +259,9 @@ function qualities(league: League, tid: number, tactics: Tactics, name: (p: Play
 /**
  * What the overhaul's levers add to each quality, as the engine plays them: the shape (five-out's open
  * paint as far as the five can shoot, and its glass; horns' handoffs and ball security; the double
- * post's glass and crowded paint), out-of-possession roles, glass duties, and the team's familiarity
- * with the tactics (a unit a step slow creates, moves the ball and defends worse).
+ * post's glass and crowded paint), out-of-possession roles and glass duties.
  */
-function systemMods(league: League, tid: number, t: Tactics, rows: Row[], name: (p: Player) => string): Partial<Record<QualityId, [string, number][]>> {
+function systemMods(t: Tactics, rows: Row[], name: (p: Player) => string): Partial<Record<QualityId, [string, number][]>> {
   const out: Partial<Record<QualityId, [string, number][]>> = {};
   const add = (id: QualityId, text: string, v: number) => void (out[id] ??= []).push([text, v]);
   const five = [...rows].sort((a, b) => b.w - a.w).slice(0, 5);
@@ -308,15 +305,6 @@ function systemMods(league: League, tid: number, t: Tactics, rows: Row[], name: 
       add('glass', `${name(x.p)}: ${g > 0 ? 'crashes' : 'gets back'}`, 2.5 * g);
       add('transD', `${name(x.p)}: ${g > 0 ? 'crashes' : 'gets back'}`, -1.5 * g);
     }
-  }
-  const team = league.teams[tid];
-  if (team.fam) {
-    const ps = rows.map((x) => x.p);
-    const e = famEnds(famDims(team.fam, t, ps, rotationWeights(team, ps)));
-    const off = famPenalty(e.off) * 14;
-    const def = famPenalty(e.def) * 14;
-    if (off) for (const id of ['creation', 'movement', 'security'] as QualityId[]) add(id, `Familiarity: ${famLabel(e.off)} (${Math.round(e.off)}%)`, -off);
-    if (def) for (const id of ['rimD', 'perimD', 'pnrD'] as QualityId[]) add(id, `Familiarity: ${famLabel(e.def)} (${Math.round(e.def)}%)`, -def);
   }
   return out;
 }
@@ -493,25 +481,4 @@ export function roleStars(scale: number[] | undefined, v: number): number {
 export function betterFit<R extends string>(scale: Record<R, number[]>, fits: Record<R, number>, cur: R): R | null {
   const best = miscast(fits, cur);
   return best && roleStars(scale[best], fits[best]) > roleStars(scale[cur], fits[cur]) ? best : null;
-}
-
-/**
- * A team's partnerships across its rotation (its top eight, any pair of them, as they'd play on the
- * floor together), strongest first: what a trade or a signing would break or make.
- */
-export function rotationLinks(league: League, tid: number): Link[] {
-  const team = league.teams[tid];
-  const players = teamPlayers(league, tid);
-  const byId = new Map(players.map((p) => [p.pid, p]));
-  const eight = (team.rotation?.order ?? [])
-    .map((pid) => byId.get(pid))
-    .filter((p): p is Player => !!p)
-    .slice(0, 8);
-  return lineupLinks(team.tactics, eight, team.fam ?? freshFamiliarity(team, players)).links;
-}
-
-/** The team's named partnerships that sending these players away would break. */
-export function brokenLinks(league: League, tid: number, out: number[]): Link[] {
-  const gone = new Set(out);
-  return rotationLinks(league, tid).filter((l) => l.strength >= LINK_NAMED && (gone.has(l.a) || gone.has(l.b)));
 }

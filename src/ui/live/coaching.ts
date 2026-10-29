@@ -1,15 +1,12 @@
 // The live screen's coaching moves, made through the game so its journal keeps them: a tactics change
 // (and "Keep changes after this game", which writes tonight's changes into the saved tactics), a
-// switch to another of the coach's tactic slots, a substitution, and the staff's fix for an alert.
+// substitution, and the staff's fix for an alert.
 import { haptic } from '../../native';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
 import type { LiveGame } from '../../state/live';
 import type { Tactics } from '../../core/types';
-import { cloneTactics } from '../../core/sim/tactics';
-import { slotLabel } from '../../core/sim/slots';
 import { keptTactics } from './keep';
-import { currentSlot, liveSlots, replaceWith, slotForGame, tipSlot } from './familiar';
 import type { LiveAlert } from './alerts';
 import { userSetup } from './session';
 import { changesLine, screenChanges } from '../tactics/changes';
@@ -25,10 +22,7 @@ export function coachingMoves(s: LiveSession, openLineup: () => void) {
   const keep = (lg: LiveGame) => {
     const base = lg.keep;
     if (!base) return;
-    // changes are kept on the tactic the game tipped off with: played from another slot, they're tonight's only
-    const l = useStore.getState().league;
-    const away = !!l && currentSlot(l, lg) !== tipSlot(l, lg);
-    const kept = away ? cloneTactics(base) : keptTactics(base, lg.planned, lg.sim.baseTactics(lg.userSide));
+    const kept = keptTactics(base, lg.planned, lg.sim.baseTactics(lg.userSide));
     edit((l) => {
       l.teams[l.userTid].tactics = kept;
       // this screen made the change: resuming later shouldn't treat it as an outside edit
@@ -52,23 +46,6 @@ export function coachingMoves(s: LiveSession, openLineup: () => void) {
     keep(lg);
     if (!staff && !opts.measured) s.staff.changed(lg, before, t, opts.what ?? changesLine(screenChanges(before, t, nameOf).slice(0, 2)));
     bump();
-  };
-
-  /**
-   * Switch to tactic slot `i` (Tactic A, B or C) as tonight plays it (see slotForGame): one tactics
-   * change through the game, from the next possession, at the familiarity the team has with it.
-   */
-  const switchSlot = (i: number) => {
-    const lg = liveRef.current;
-    const l = useStore.getState().league;
-    if (!lg || !l) return;
-    const now = lg.sim.baseTactics(userSide);
-    const next = slotForGame(l, lg, i, now);
-    if (!next) return;
-    applyTactics((x) => replaceWith(x, next), undefined, { what: `Tactic ${slotLabel(l.teams[l.userTid], i)}` });
-    haptic();
-    const fam = liveSlots(useStore.getState().league!, lg, lg.sim.baseTactics(userSide)).slots[i]?.fam;
-    useStore.getState().toast(`Tactic ${slotLabel(l.teams[l.userTid], i)}${fam !== undefined ? `, ${Math.round(fam)}% familiar` : ''}: from the next possession.`, 'good');
   };
 
   /** "Keep changes after this game" (kept with the game, so it's still on after the app was closed). */
@@ -118,5 +95,5 @@ export function coachingMoves(s: LiveSession, openLineup: () => void) {
     setDismissed((d) => [...d, a.id]);
   };
 
-  return { applyTactics, switchSlot, setKeep, substitute, runAlert };
+  return { applyTactics, setKeep, substitute, runAlert };
 }

@@ -1,7 +1,7 @@
 // The League hub: everyone else, one section per path (/league/standings ... /league/history).
 // /league opens on what the phase is about: the standings, or the bracket in the postseason. Five
 // sections are the tab row, which fits a 360px phone without scrolling (eight once hid behind a
-// clipped, scrolling row): Standings, Playoffs (the NBA Cup a row at its top while the Cup is on),
+// clipped, scrolling row): Standings, Playoffs (the NBA Cup a row under its poster while the Cup is on),
 // Stats, Scores, News. Awards and History, the record of what's been won, are the header's two links.
 import { Suspense } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -72,12 +72,7 @@ export default function LeagueHub() {
       />
       <TabBar value={lit} onChange={(t) => nav(`/league/${t}`, { replace: true })} options={TOP.map((id) => ({ id, label: LABEL[id] }))} label="League sections" />
       {tab === 'standings' && <StandingsTab league={league} />}
-      {tab === 'playoffs' && (
-        <>
-          {cupShown(league) && <CupLink league={league} />}
-          <PlayoffsTab league={league} />
-        </>
-      )}
+      {tab === 'playoffs' && <PlayoffsTab league={league} cup={cupShown(league) ? <CupLink league={league} /> : undefined} />}
       {tab === 'cup' && <CupTab league={league} />}
       {tab === 'stats' && <StatsTab league={league} />}
       {tab === 'schedule' && <DayScoreboard league={league} />}
@@ -99,7 +94,7 @@ export default function LeagueHub() {
   );
 }
 
-/** The NBA Cup while it's on, as one row at the top of Playoffs: where it stands, a tap to its groups and bracket. */
+/** The NBA Cup while it's on, as one row under Playoffs' poster: where it stands, a tap to its groups and bracket. */
 function CupLink({ league }: { league: League }) {
   const cup = league.cup;
   const where = !cup ? '' : cup.champion !== undefined ? `Won by the ${league.teams[cup.champion].name}` : cup.seeds ? 'Knockouts' : 'Group stage';

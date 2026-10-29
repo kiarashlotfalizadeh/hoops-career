@@ -206,7 +206,7 @@ function ActiveHero({ league, p }: { league: League; p: Player }) {
           {/* what the figures are, always: this season's, or his last one's before he plays */}
           {line ? (
             <div className="tm-hero-note">
-              {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' (real)' : ''}
+              {seasonLabel(cur ? league.season : lastSeason!)} per game{!cur && p.stats.some((s) => s.season === lastSeason && s.real) ? ' · real' : ''}
             </div>
           ) : null}
         </div>

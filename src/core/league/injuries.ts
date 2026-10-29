@@ -96,7 +96,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
     refreshPlayerDerived(p, league.season, league.ovrScale);
   }
   const team = p.tid >= 0 ? league.teams[p.tid] : null;
-  const text = `${playerName(p)} (${team?.abbrev ?? 'FA'}): ${injuryText(inj.type)}, ${outFor(inj.gamesRemaining)}.`;
+  const text = `${team ? `${team.abbrev}'s` : 'Free agent'} ${playerName(p)} is ${outFor(inj.gamesRemaining)} with ${injuryText(inj.type, true)}.`;
   // news for real absences: ten games, or five for a star (85+: at 80, a fifth of the league's
   // players, a month's wire was a column of five-game strains)
   if (inj.gamesRemaining >= 10 || (p.ovr >= 85 && inj.gamesRemaining >= 5)) addNews(league, { kind: 'injury', text, tids: team ? [team.tid] : [], pids: [p.pid] });
@@ -111,7 +111,7 @@ export function applyInjury(league: League, p: Player, rng: Rng) {
       from: 'Medical Staff',
       // what happened in the subject: who, for how long, with what
       subject: `${playerName(p)}: ${injuryName(inj.type)} · ${outFor(inj.gamesRemaining)}`,
-      body: `${playerName(p)} is out with ${injuryText(inj.type, true)}: about ${plural(inj.gamesRemaining, 'game')}.${LASTING[inj.severity] ?? ''} His minutes go to the healthy players until he's back; Rotation has them.`,
+      body: `${playerName(p)} is out about ${plural(inj.gamesRemaining, 'game')} with ${injuryText(inj.type, true)}.${LASTING[inj.severity] ?? ''} His minutes go to the healthy players until he's back. Team → Rotation shows who gets them.`,
       tone: 'bad',
       link: `/player/${p.pid}`,
     });

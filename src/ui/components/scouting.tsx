@@ -113,10 +113,7 @@ export function PlayTypeTable({ rows, defense }: { rows: PlayTypeRow[]; defense:
   return (
     <>
       <StatTable rows={rows.filter((r) => r.key !== 'misc')} cols={cols} rowKey={(r) => r.key} initialSort="share" />
-      <div className="tiny dim">
-        {defense ? 'Faced' : 'Freq'}: share, then league rank · PPP <span className="good">{defense ? 'allows less' : 'scores more'}</span> or{' '}
-        <span className="bad">{defense ? 'more' : 'less'}</span> than the league
-      </div>
+      <div className="tiny dim">{defense ? 'Faced' : 'Freq'}: share of possessions and its league rank</div>
     </>
   );
 }
@@ -139,7 +136,7 @@ export function KeyPlayers({ d }: { d: ScoutData }) {
     label: 'On/off',
     get: onOff,
     fmt: (v) => <span style={{ color: !isFinite(+v) ? undefined : +v >= 3 ? 'var(--good)' : +v <= -3 ? 'var(--bad)' : undefined }}>{isFinite(+v) ? signed(+v) : '—'}</span>,
-    help: 'Net rating per 100 possessions with him on the floor minus with him off (this team only)',
+    help: 'Net rating per 100 possessions with him on the floor, minus with him off',
   });
   cols.push({ key: 'on', label: 'On', get: (p) => p.on ?? NaN, fmt: (v) => (isFinite(+v) ? signed(+v) : '—'), help: 'Net rating with him on the floor' });
   return <StatTable rows={d.players} cols={cols} rowKey={(p) => p.pid} />;

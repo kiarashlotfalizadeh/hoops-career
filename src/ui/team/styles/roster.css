@@ -1,9 +1,9 @@
 /* A roster's rows (yours and other teams'), and the page tabs and switches the Team screens use. */
 /* ------------------------------------------------------------ roster rows */
-/* a printed roster on card stock: each group opened by its name over a 2px ink rule with the
-   columns' names beside it in mono, then the players on hairlines. A row and its group's header
-   share one grid: the jersey, the name over position and age, four figures a game in mono, OVR and
-   POT, so every column lines up under its name */
+/* a printed roster on card stock: each group opened by its name over a 2px ink rule with OVR and
+   POT named beside it in mono, then the players on hairlines. A row is two lines beside the jersey:
+   the name (and one mark) with OVR and POT in the header's columns, then position and age with the
+   four figures a game, each labelled, in fixed columns so they line up down the list */
 .tm-rl-list {
   display: flex;
   flex-direction: column;
@@ -16,19 +16,16 @@
 }
 .tm-rl {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) repeat(4, 32px) 30px 24px;
-  column-gap: 6px;
+  grid-template-columns: 34px minmax(0, 1fr) 32px 26px;
+  column-gap: 8px;
   align-items: center;
 }
 .tm-rl-ovr {
-  grid-column: 7;
+  grid-column: 3;
   justify-self: center;
 }
 .tm-rl-pot {
-  grid-column: 8;
-  text-align: right;
-}
-.tm-rl-fig {
+  grid-column: 4;
   text-align: right;
 }
 .tm-rl-head {
@@ -55,9 +52,9 @@
 .tm-rl-row {
   position: relative;
   grid-template-rows: auto auto;
-  row-gap: 2px;
+  row-gap: 3px;
   min-height: 56px;
-  padding: 8px 0;
+  padding: 9px 0;
   color: inherit;
 }
 .tm-rl-row + .tm-rl-row {
@@ -88,23 +85,19 @@
   width: 34px;
   height: 34px;
 }
+/* the name keeps priority: his mark drops under a long name instead of cutting it short */
 .tm-rl-name {
-  grid-column: 2 / 7;
+  grid-column: 2;
   grid-row: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 3px 6px;
   min-width: 0;
   font-weight: 660;
   font-size: 15.5px;
   letter-spacing: -0.005em;
   line-height: 1.2;
-}
-/* the name keeps priority: what's wrong (out, a 10-day deal) drops under a long name instead of
-   cutting it short */
-.tm-rl-name {
-  flex-wrap: wrap;
-  row-gap: 3px;
 }
 .tm-rl-name > .ellipsis {
   flex: 0 1 auto;
@@ -116,29 +109,9 @@
   font-size: 12px;
   padding: 0 6px;
 }
-.tm-rl-meta {
-  grid-column: 2;
-  grid-row: 2;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-/* the figures: the box score's mono, tabular, a step quieter than the name */
-.tm-rl-row .tm-rl-fig {
-  grid-row: 2;
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-  line-height: 1.1;
-  color: var(--text-2);
-}
 .tm-rl-row .tm-rl-ovr,
 .tm-rl-row .tm-rl-pot {
-  grid-row: 1 / 3;
+  grid-row: 1;
 }
 .tm-rl-row .tm-rl-pot {
   font-family: var(--mono);
@@ -150,19 +123,94 @@
 .tm-rl-row .tm-rl-pot.dim {
   color: var(--text-dim);
 }
-/* the archetype beside position and age where there's room for it, and the figures level with the
-   row's middle once the name no longer needs their width */
-@media (max-width: 559px) {
+/* the quieter line: position and age, then the four figures in fixed columns at its end, each a
+   mono figure with its name after it (every name three letters, so the figures line up) */
+.tm-rl-line {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(4, 48px);
+  column-gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.2;
+  color: var(--text-dim);
+}
+.tm-rl-meta {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tm-rl-fig {
+  display: flex;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 2px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.tm-rl-fig b {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  color: var(--text-2);
+}
+.tm-rl-none {
+  grid-column: 2 / -1;
+  text-align: right;
+}
+/* the list's own width decides (a scrollbar or a tablet's column, not the window): the archetype
+   beside position and age where there's room for it, wider figure columns there */
+.tm-rl-list {
+  container-type: inline-size;
+}
+.tm-rl-arch {
+  display: none;
+}
+@container (min-width: 480px) {
   .tm-rl-arch {
-    display: none;
+    display: inline;
+  }
+  .tm-rl-line {
+    grid-template-columns: minmax(0, 1fr) repeat(4, 62px);
   }
 }
-@media (min-width: 560px) {
+/* a phone's width: the card's sides a little narrower, so the jersey keeps its place at 360 */
+@media (max-width: 400px) {
+  .tm-rl-list {
+    padding-inline: calc(var(--row-px) - 4px);
+  }
+}
+/* too narrow for the jersey beside both lines: it gives its width to the figures */
+@container (max-width: 299px) {
+  .tm-rl {
+    grid-template-columns: minmax(0, 1fr) 32px 26px;
+  }
+  .tm-rl-row > .avatar {
+    display: none;
+  }
+  .tm-rl-glabel,
   .tm-rl-name {
+    grid-column: 1;
+  }
+  .tm-rl-line {
+    grid-column: 1 / -1;
+  }
+  .tm-rl-ovr {
     grid-column: 2;
   }
-  .tm-rl-row .tm-rl-fig {
-    grid-row: 1 / 3;
+  .tm-rl-pot {
+    grid-column: 3;
+  }
+}
+@container (max-width: 257px) {
+  .tm-rl-line {
+    column-gap: 3px;
   }
 }
 /* the line under a roster: what the figures are, and the OVR key */

@@ -6,7 +6,7 @@
 import type { PnrCoverage, ShotZone } from '../../types';
 import { clamp } from '../../random';
 import { K, lev, levExtra, levW } from './constants';
-import { linkKey, type SP, type ST, type LateMode, type ActionResult } from './state';
+import type { SP, ST, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
 export const pnrMethods = {
@@ -29,9 +29,6 @@ export const pnrMethods = {
         if (p === H) return 0;
         let w = Math.max(p.c.roll, p.c.pop * 0.9) * (p.big ? 2 : 0.6);
         if (p.role === 'roller' || p.role === 'stretch' || p.role === 'hub') w *= 1.6;
-        // a two-man game or a pick-and-pop: the handler's partner sets more of his screens
-        const lk = off.links?.get(linkKey(H.pid, p.pid));
-        if (lk && (lk.id === 'twoMan' || lk.id === 'popMan')) w *= levW(1 + K.link.screen * lk.s);
         if (off.t.offense.huntMismatch && !hunted) {
           const d = this.defOf(def, p);
           w *= Math.exp(lev(clamp((60 - d.c.perDef) / 30, -0.4, 0.9)));
@@ -221,26 +218,6 @@ export const pnrMethods = {
       tagsKick.push(['help_kick', lev(help * 0.3)]);
     }
     if (spacing !== 0) tagsRim.push(['spacing', spacing * 0.6]);
-    // a two-man game or a pick-and-pop the two know: the screen comes at the right moment, and the
-    // roll or the pop lands cleaner (see src/core/sim/links.ts)
-    // the wall: a point-of-attack stopper on the handler sends him where his rim anchor waits
-    advH -= this.wallEdge(def, dH, 'pnr', H.pid);
-    const lk = off.links?.get(linkKey(H.pid, S.pid));
-    if (lk && (lk.id === 'twoMan' || lk.id === 'popMan')) {
-      const edge = lev(K.link.adv * lk.s);
-      const key = `link_${lk.id}`;
-      const tw = K.link.tag[key] ?? 1;
-      advH += edge;
-      this.impact(key, off.side, edge * K.advPts.pnr * tw, H.pid);
-      const o = lev(K.link[lk.id] * lk.s);
-      if (lk.id === 'twoMan') {
-        rollOpen += o;
-        tagsRoll.push([key, o * tw]);
-      } else {
-        popOpen += o;
-        tagsPop.push([key, o * tw]);
-      }
-    }
     // a set's edges against this coverage, and what the defense has read of it
     if (play) {
       rollOpen += this.setOpen(play, 'roll', tagsRoll);

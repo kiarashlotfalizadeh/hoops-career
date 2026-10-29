@@ -329,21 +329,6 @@
   align-items: center;
   gap: 4px;
 }
-/* the floor's partnerships, in a line over the phases */
-.lv-floor {
-  line-height: 1.45;
-  color: var(--text-2);
-}
-.lv-floor .over {
-  margin-right: 4px;
-}
-.lv-floor b {
-  font-weight: 700;
-}
-.lv-floor-more {
-  font-weight: 650;
-  color: var(--accent-text);
-}
 /* the three phases: one switch that fits a phone */
 .lv-phases .seg button {
   flex: 1 1 auto;
@@ -388,117 +373,24 @@
   padding: 4px 0 8px;
 }
 
-/* the touchline: the three tactics, the mentality, the shape */
+/* the touchline: the mentality, the shape */
 .lv-touch {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
-.lv-touch-h {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+/* the mentality's label sits over the scale with its "?" (the scale's own label names it for screen readers) */
+.lv-touch .levels > .slider-label {
+  display: none;
 }
-.lv-slots {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
+/* the console is narrower than a card's width on a phone: the scale's names set condensed, so
+   "Aggressive" stays one word */
+.lv-touch .levels-row button {
+  padding-inline: 1px;
+  font-stretch: 82%;
+  letter-spacing: -0.01em;
 }
-/* a tactic: white card stock; the one in play solid ink, as a chosen option is */
-.lv-slot {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 5px;
-  min-height: 60px;
-  min-width: 0;
-  padding: 9px 10px;
-  border-radius: var(--radius-md);
-  background: var(--raised);
-  box-shadow: var(--shadow-card);
-  color: var(--text-2);
-  text-align: left;
-  transition: background var(--dur-fast) ease;
-}
-.lv-slot:not(:disabled):not(.on):active {
-  background: var(--surface);
-}
-@media (hover: hover) and (pointer: fine) {
-  .lv-slot:not(:disabled):not(.on):hover {
-    background: var(--surface);
-  }
-}
-.lv-slot.on {
-  --text: #fff;
-  --text-dim: rgba(255, 255, 255, 0.74);
-  --good: #7fe3a8;
-  --warn: #ffc65c;
-  --bad: #ff9a8f;
-  background: var(--on);
-  color: var(--on-ink);
-}
-.lv-slot:disabled:not(.on) {
-  background: transparent;
-  box-shadow: inset 0 0 0 1.5px var(--line-2);
-  opacity: 0.7;
-}
-.lv-slot-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.lv-slot-l {
-  flex: none;
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--ink);
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--paper-ink);
-}
-.lv-slot.on .lv-slot-l {
-  background: var(--on-ink);
-  color: var(--on);
-}
-.lv-slot-n {
-  min-width: 0;
-  font-size: 13.5px;
-  font-weight: 620;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lv-slot-f {
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  color: var(--text-dim);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.lv-slot-f.good {
-  color: var(--good);
-}
-.lv-slot-f.warn {
-  color: var(--warn);
-}
-.lv-slot-f.bad {
-  color: var(--bad);
-}
-/* the familiarity key under a control's options */
-.lv-fam-key {
-  line-height: 1.35;
-}
+
 .lv-plan-touch {
   padding-bottom: 4px;
 }

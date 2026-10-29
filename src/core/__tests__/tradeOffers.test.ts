@@ -218,7 +218,7 @@ it('help and the finder: "what would make this work?", counter-offers, value tie
     const swap = shape(l, standardRoster(l, U)[0], 81, 26, vetMin);
     const ask = offer([], [target.pid]);
     // a 15-man roster can't take him for nothing, but sending a player fixes that
-    expect(validateTrade(l, ask).some((e) => e.includes('max 15'))).toBe(true);
+    expect(validateTrade(l, ask).some((e) => e.includes('most is 15'))).toBe(true);
     expect(canMakeWork(l, ask)).toBe(true);
     const r = makeItWork(l, ask);
     expect(r.offer?.a.pids).toEqual([swap.pid]);

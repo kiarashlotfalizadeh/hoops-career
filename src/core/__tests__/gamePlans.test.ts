@@ -12,7 +12,6 @@ import { playerName, teamPlayers } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { rosterNames } from '../../ui/stats';
 import { GameSim } from '../sim/engine';
-import { situationFromTemplate } from '../sim/tactics';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
 import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
@@ -293,20 +292,18 @@ describe('game plans', () => {
       expect(res.home.pts + res.away.pts).toBeGreaterThan(0);
     }
     {
-      // never lets an AI coach play situational plans or crunch-time calls left on a team it inherits
+      // never lets an AI coach play crunch-time calls left on a team it inherits
       const l = fresh();
       const tid = (l.userTid + 3) % 30;
       const t = l.teams[tid].tactics;
-      t.situations = [situationFromTemplate('protectLead')];
       t.manage.goTo = l.teams[tid].rotation.order[0];
       t.manage.ato = 'iso';
       const input = buildSimInput(l, tid, l.day, 'regular', l.userTid);
-      expect(input.team.tactics.situations).toBeUndefined();
       expect(input.team.tactics.manage.goTo).toBeUndefined();
       expect(input.team.tactics.manage.ato).toBeUndefined();
       expect(input.adjust).toBe(true);
       // the team keeps them, for a coach who comes back to it
-      expect(l.teams[tid].tactics.situations).toHaveLength(1);
+      expect(l.teams[tid].tactics.manage.ato).toBe('iso');
     }
     {
       // the staff's counters, each measured in paired games of the next game (the season's seeds for
@@ -357,9 +354,8 @@ describe('game plans', () => {
     }
     {
       // the user's change is kept as the settings it moved and measured over his next games (each with
-      // and without it, pooled; a coverage the team hasn't drilled also played as it will be once
-      // drilled); about ten games on, measured again on the games played, with one staff note; putting
-      // it back moves only what it set
+      // and without it, pooled); about ten games on, measured again on the games played, with one staff
+      // note; putting it back moves only what it set
       const l = fresh();
       toGameDay(l);
       const me = l.teams[l.userTid];
@@ -397,16 +393,15 @@ describe('game plans', () => {
         return out;
       };
       const made = editPlan(l, l.tacticEdits![0], 'made').plan!;
-      expect(made.changes.map((c) => c.id)).toEqual(['without', 'drilled']);
+      expect(made.changes.map((c) => c.id)).toEqual(['without']);
       expect(made.games.reduce((a, g) => a + g.w, 0)).toBeCloseTo(1, 9);
       const rm = await play(made, 8);
       const r = readEdit(rm);
       // the change against the old way: each game's "without" reading turned round, weighted by its share
       expect(r.worth.raw).toBeCloseTo(-rm.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
       expect(Math.abs(r.worth.pts)).toBeLessThanOrEqual(Math.abs(r.worth.raw) + 0.05);
-      expect(r.drilled).toBeDefined();
       saveMade(l, e.id, r, made.count);
-      expect(madeLine(l.tacticEdits![0])).toMatch(/^This change/);
+      expect(madeLine(l.tacticEdits![0])).toMatch(/^Your change (helps|hurts|makes no real difference)/);
       // a change to another setting that day is a change of its own: the first keeps its reading
       const mid = structuredClone({ tactics: me.tactics, rotation: me.rotation });
       me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
@@ -425,8 +420,8 @@ describe('game plans', () => {
       const w = readEdit(await play(check, 6)).worth;
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);
-      expect(l.inbox[0].subject).toMatch(/^Since you changed it: (it worked|it cost|too close to say)/);
-      expect(l.inbox[0].body).toMatch(/replayed with it and without it/);
+      expect(l.inbox[0].subject).toMatch(/^Your change (helped|hurt|made no real difference)/);
+      expect(l.inbox[0].body).toMatch(/with your change and without it/);
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);
       expect(checksDue(l)).toHaveLength(0);

@@ -1,8 +1,8 @@
 // The matchup page's Plan: your plan against this team first (each item with exactly what it
 // changes, and how long it lasts), then the staff's counters, the special plans (a star plan, a junk
-// defense and who it chases, a defender to attack, players to hack: a row each that opens), what the
-// team knows of the tactics it plays them with (and the practice focus), and a note. Every change is the
-// user's tactics against this team only, on top of his playbook (see core/league/gamePlans.ts).
+// defense and who it chases, a defender to attack, players to hack: a row each that opens) and a
+// note. Every change is the user's tactics against this team only, on top of his playbook (see
+// core/league/gamePlans.ts).
 import { useEffect, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import type { GamePlanItem, League, PlanScope, StarPlan } from '../../../core/types';
@@ -25,8 +25,6 @@ import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
 import { Fold } from '../occasion';
 import { ftChance } from '../../../core/sim/engine';
-import { nextUserGame } from '../../../core/analysis/preview';
-import { FamBrief } from '../../today/Practice';
 
 export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const simming = useStore((s) => !!s.sim);
@@ -51,10 +49,9 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
             )}
             <Help title="Game plans">
               <p>
-                A <Term id="gameplan">game plan</Term> changes your tactics against this team only, on top of your playbook: the counters you add, a star plan, a junk defense, a
-                defender to attack, players to hack, and who guards whom (Matchups). Your playbook itself never changes.
+                A <Term id="gameplan">game plan</Term> changes your tactics against this team only, on top of your playbook. It lasts the next game, the series or the season, as
+                you pick.
               </p>
-              <p>Next game: used up when you play them. This series: until the playoff series is decided. All season: every meeting this season. Plans clear at the new season.</p>
             </Help>
           </span>
         }
@@ -64,11 +61,11 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
             {plan.items.map((it) => (
               <PlanItemRow key={it.id} league={league} opp={opp} it={it} />
             ))}
-            {extras && <div className="mu-item mu-note">Plus {extras} (Matchups).</div>}
+            {extras && <div className="mu-item mu-note">Plus {extras}, on Matchups.</div>}
           </div>
         ) : (
           <div className="mu-note">
-            {NO_PLAN}: you play your playbook ({playbookLabel(base)}). Add a counter or set any card below.
+            {NO_PLAN}. You play {playbookLabel(base)} as usual.
           </div>
         )}
         <div className="mu-scope">
@@ -101,37 +98,12 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
           <HackCard league={league} opp={opp} />
         </div>
       </Section>
-      <FamiliarityCard league={league} opp={opp} />
       <NoteCard key={`${opp}:${stored?.note ?? ''}`} league={league} opp={opp} />
     </>
   );
 }
 
-/** What the team knows of the tactics it plays them with (the plan on top), and the practice focus. */
-function FamiliarityCard({ league, opp }: { league: League; opp: number }) {
-  const next = useLeagueMemo(() => nextUserGame(league), [league]);
-  const tonight = !!next && (next.home === opp || next.away === opp);
-  return (
-    <Section
-      title="Familiarity"
-      right={
-        <Help title="Familiarity">
-          <p>
-            How well the team knows the tactics it plays against them, your plan included: what practice and games have drilled. Below 95% it plays a step slow: worse shots and
-            more turnovers on offense, more open looks given up on defense.
-          </p>
-          <p>Opponent prep before the next game drills whatever your plan for it changes; tactical drills build the system itself about twice as fast.</p>
-        </Help>
-      }
-    >
-      <div className="card">
-        <FamBrief league={league} opp={opp} tonight={tonight} chips />
-      </div>
-    </Section>
-  );
-}
-
-/** One item in the plan: its name, what it changes from your playbook, why, and Remove. */
+/** One item in the plan: its name, what it changes from your playbook (why is on its counter's row), and Remove. */
 function PlanItemRow({ league, opp, it }: { league: League; opp: number; it: GamePlanItem }) {
   const simming = useStore((s) => !!s.sim);
   const line = useLeagueMemo(() => {
@@ -143,7 +115,6 @@ function PlanItemRow({ league, opp, it }: { league: League; opp: number; it: Gam
       <span className="grow">
         <span className="lr-name">{it.label}</span>
         {line && <span className="mu-changes">{line}</span>}
-        {it.evidence && <span className="lr-meta">{it.evidence}</span>}
       </span>
       <button className="iconbtn" disabled={simming} onClick={() => edit((l) => removePlanItem(l, opp, it.id))} aria-label={`Remove ${it.label}`}>
         <X size={18} />
@@ -190,12 +161,7 @@ function StarPlanCard({ league, opp }: { league: League; opp: number }) {
     <Fold
       title="Star plan"
       peek={sp === 'none' ? STAR_PLAN_META.none.label : `${STAR_PLAN_META[sp].label} · ${who}`}
-      help={
-        <Help title="Star plan">
-          A double team sends a second defender when he attacks: it pays against a star who can&apos;t pass out of it with non-shooters around him, and costs against one who can.
-          Without a target it goes after their primary creator. ★ is the player their offense runs through by the numbers, or their best shot creator by the scouts.
-        </Help>
-      }
+      help={<Help title="Star plan">A double pays against a star who can&apos;t pass out of it. ★ marks the man their offense runs through.</Help>}
     >
       <div className="mu-fold">
         <div className="mu-group">
@@ -277,24 +243,14 @@ function HackCard({ league, opp }: { league: League; opp: number }) {
       peek={targets.length ? targets.map((pid) => names(pid)).join(', ') + (fromQ > 1 ? ` from Q${fromQ}` : '') : 'Nobody'}
       help={
         <Help title="Hack-a-player">
-          <p>
-            Foul a poor free-throw shooter on purpose whenever he&apos;s on the floor, from the quarter you pick: two free throws for him instead of a normal possession
-            {ppp !== null ? (
-              <>
-                {' '}
-                (the league scores {ppp.toFixed(2)} points a possession), so it pays below about {breakEven}% from the line
-              </>
-            ) : null}
-            . Never in the last two minutes of a period, where it costs a free throw and the ball.
-          </p>
-          <p>Their staff benches a player hacked twice in a period when a reserve his size can come in.</p>
+          <p>Foul a poor free-throw shooter on purpose, from the quarter you pick. Never in a period&apos;s last two minutes, and their coach sits a man hacked twice.</p>
         </Help>
       }
     >
       {/* nobody worth fouling: say who comes closest, rather than offer a 76% shooter */}
       {!rows.length && sorted[0] && (
         <div className="mu-note">
-          Nobody in their rotation is a poor free-throw shooter: the worst, {names(sorted[0].pid)}, makes {Math.round(ftPct(sorted[0].ratings.ft) * 100)}%.
+          Nobody in their rotation is a poor free-throw shooter. The worst, {names(sorted[0].pid)}, makes {Math.round(ftPct(sorted[0].ratings.ft) * 100)}%.
         </div>
       )}
       <div className="list mu-hack-list" hidden={!rows.length}>

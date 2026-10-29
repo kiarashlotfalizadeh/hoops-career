@@ -57,12 +57,8 @@ function revenge(league: League, p: Player, opp: number, name: string): Storylin
     .find((t) => t.season >= left && (t.kind === 'trade' ? t.sides?.some((s) => s.tid === opp && s.players.some((x) => x.pid === p.pid)) : t.pid === p.pid && t.tids[0] === opp));
   const how = txn?.kind === 'trade' ? 'traded him' : txn && ['release', 'waive', 'buyout'].includes(txn.kind) ? 'let him go' : null;
   const team = league.teams[opp];
-  const until = `his team until ${seasonLabel(left)}`;
-  const text = first
-    ? how
-      ? `${name} faces the ${team.name} for the first time since they ${how} (${until}).`
-      : `${name} faces the ${team.name} for the first time since he left (${until}).`
-    : `${name} faces his old team, the ${team.name} (${until}).`;
+  const since = how === 'traded him' ? `the ${seasonLabel(txn!.season)} trade` : how ? `they let him go in ${seasonLabel(txn!.season)}` : `he left after ${seasonLabel(left)}`;
+  const text = first ? `${name} faces the ${team.name} for the first time since ${since}.` : `${name} faces his old team, the ${team.name}.`;
   const recency = Math.max(0, 3 - (league.season - left));
   return { id: `revenge-${p.pid}`, kind: 'revenge', text, pids: [p.pid], tids: [opp, p.tid], weight: 42 + (first ? 18 : 0) + recency * 3 + Math.max(0, p.ovr - 75) };
 }
@@ -111,7 +107,7 @@ function milestoneWatch(league: League, p: Player, name: string): Storyline | nu
     best = {
       id: `milestone-${p.pid}-${stat}-${mark}`,
       kind: 'milestone',
-      text: `${name} needs ${need} ${need === 1 ? word[0] : word[1]} for ${mark.toLocaleString('en-US')} in his career (he averages ${avg.toFixed(1)}).`,
+      text: `${name} needs ${need} ${need === 1 ? word[0] : word[1]} for ${mark.toLocaleString('en-US')} in his career. He averages ${avg.toFixed(1)} ${word[1]} a game.`,
       pids: [p.pid],
       tids: [p.tid],
       weight,

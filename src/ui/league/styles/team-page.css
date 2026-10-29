@@ -137,7 +137,7 @@
   color: var(--text-dim);
 }
 
-/* your record against them, over their schedule (where your games carry your team's edge) */
+/* your record against them, over their schedule (where your games carry your team's wash) */
 .lg-h2h {
   display: flex;
   align-items: center;
@@ -154,16 +154,6 @@
   font-weight: 640;
   line-height: 1.25;
   letter-spacing: -0.01em;
-}
-/* the key to the wash on your games in their schedule */
-.lg-h2h-key {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: var(--radius-xs);
-  background: color-mix(in srgb, var(--team) 12%, transparent);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-2);
 }
 /* draft picks */
 .lg-pick {

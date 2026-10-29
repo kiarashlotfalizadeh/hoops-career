@@ -90,10 +90,10 @@ describe('transaction log', () => {
       const [a, b] = get.map(playerName);
       const [ua, aa] = [l.teams[U].abbrev, l.teams[AI].abbrev];
       const sent = `${playerName(give)}, a ${label} and a ${viaLabel}`;
-      expect(text(l, t, { tid: U })).toBe(`Acquired ${a} and ${b} from ${aa} for ${sent}`);
-      expect(text(l, t, { tid: AI })).toBe(`Acquired ${sent} from ${ua} for ${a} and ${b}`);
-      expect(text(l, t, { pid: give.pid })).toBe(`Acquired by ${aa} from ${ua} with a ${label} and a ${viaLabel} for ${a} and ${b}`);
-      expect(text(l, t, { pid: get[0].pid })).toBe(`Acquired by ${ua} from ${aa} with ${b} for ${sent}`);
+      expect(text(l, t, { tid: U })).toBe(`Acquired ${a} and ${b} from ${aa}. Sent ${sent}`);
+      expect(text(l, t, { tid: AI })).toBe(`Acquired ${sent} from ${ua}. Sent ${a} and ${b}`);
+      expect(text(l, t, { pid: give.pid })).toBe(`Acquired by ${aa} from ${ua} with a ${label} and a ${viaLabel}. ${ua} got ${a} and ${b}`);
+      expect(text(l, t, { pid: get[0].pid })).toBe(`Acquired by ${ua} from ${aa} with ${b}. ${aa} got ${sent}`);
       expect(tradesBetween(l, AI, U)).toEqual([t]);
       expect(teamTxns(l, AI)).toEqual([t]);
       expect(playerTxns(l, get[1].pid)).toEqual([t]);
@@ -115,7 +115,7 @@ describe('transaction log', () => {
       const t = one(l, () => executeTrade(l, { a: { tid: U, pids: [give.pid], dpids: [] }, b: { tid: AI, pids: [get.pid], dpids: [pick.dpid] } }));
       expect(label).toBe(`${pick.season} 2nd`);
       const before = [text(l, t, { tid: U }), text(l, t, { tid: AI }), text(l, t, { pid: give.pid })];
-      expect(before[0]).toBe(`Acquired ${names[1]} and a ${label} from ${l.teams[AI].abbrev} for ${names[0]}`);
+      expect(before[0]).toBe(`Acquired ${names[1]} and a ${label} from ${l.teams[AI].abbrev}. Sent ${names[0]}`);
       const signing = one(l, () => signPlayer(l, freeAgents(l)[0], U, CAP_FOR(l).vetMin, 1));
       const signedName = signing.name!;
       // later: one is renamed, the other retires and leaves the save, and the pick gets its slot and is made
@@ -186,7 +186,7 @@ describe('transaction log', () => {
       const w = one(l, () => releasePlayer(l, cut));
       expect(cut.waivers).toBeDefined();
       expect(w).toMatchObject({ kind: 'waive', tids: [U], pid: cut.pid, amount: 8_000 });
-      expect(text(l, w, { tid: U })).toBe(`Waived ${playerName(cut)} ($8.0M in dead money)`);
+      expect(text(l, w, { tid: U })).toBe(`Waived ${playerName(cut)} · $8.0M in dead money`);
       // (he clears or is claimed before the claim below)
       l.day += WAIVER_DAYS;
       resolveWaivers(l);
@@ -217,7 +217,7 @@ describe('transaction log', () => {
       const c = one(l, () => resolveWaivers(l));
       expect(theirs.tid).toBe(U);
       expect(c).toMatchObject({ kind: 'claim', tids: [U, AI], pid: theirs.pid, amount: vetMin, years: 2, user: true });
-      expect(text(l, c, { tid: U })).toMatch(new RegExp(`^Claimed ${playerName(theirs)} off waivers from ${l.teams[AI].abbrev} \\(\\$`));
+      expect(text(l, c, { tid: U })).toMatch(new RegExp(`^Claimed ${playerName(theirs)} off waivers from ${l.teams[AI].abbrev} · \\$`));
       expect(text(l, c, { tid: AI })).toBe(`${playerName(theirs)} claimed off waivers by ${l.teams[U].abbrev}`);
     }
 
@@ -231,7 +231,7 @@ describe('transaction log', () => {
       p.contract.option = 'team';
       const t = one(l, () => expect(decideTeamOption(l, p.pid, false).ok).toBe(true));
       expect(t).toMatchObject({ kind: 'option', pid: p.pid, amount: 3_000, note: 'declined' });
-      expect(text(l, t, { tid: U })).toBe(`Declined ${playerName(p)}'s team option ($3.0M)`);
+      expect(text(l, t, { tid: U })).toBe(`Declined ${playerName(p)}'s team option · $3.0M`);
 
       l.phase = 'draft';
       const pool = Object.values(l.players).filter((x) => x.tid === DRAFT_PROSPECT);

@@ -74,7 +74,7 @@ export function BoardList({
     const gone = mine ? mock.goneBefore(p.pid, mine.overall) : null;
     return {
       where: keepFigures(where.replace(/-$/, '+')),
-      gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by your #${mine!.overall}` : null,
+      gone: gone !== null && gone >= 0.05 && gone <= 0.95 ? `${Math.round(gone * 100)}% gone by #${mine!.overall}` : null,
     };
   };
   return (
@@ -104,7 +104,13 @@ export function BoardList({
                   {/* one line: who he is, his move on the board and where the mocks have him (his school, size and type are on his sheet); the chance he's gone before your pick wraps under it */}
                   <div className="fo-board-proj">
                     {p.pos} · {playerAge(p, league.season)} <StockMove p={p} />
-                    {pr ? <span className="fo-proj"> · {pr.where}</span> : null}
+                    {/* (the projection wraps as one piece: "proj." never parts from its range) */}
+                    {pr ? (
+                      <span className="fo-proj">
+                        {' · '}
+                        <span className="nowrap">{pr.where}</span>
+                      </span>
+                    ) : null}
                     {pr?.gone ? <span className="warn"> · {pr.gone}</span> : null}
                   </div>
                 </div>
@@ -121,7 +127,7 @@ export function BoardList({
       </div>
       {list.length > limit && (
         <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + 30)}>
-          Show more ({list.length - limit} left)
+          Show more · {list.length - limit} left
         </button>
       )}
       <div className="fo-board-foot">

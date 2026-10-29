@@ -260,6 +260,16 @@
 .lg-hon-line {
   margin-top: 2px;
 }
+/* the season's list: his name and his conference on one line */
+.lg-hon-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lg-hon-name .tag {
+  flex: none;
+}
 
 /* ------------------------------------------------------------------ the reader */
 .lg-story {

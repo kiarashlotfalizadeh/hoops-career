@@ -145,19 +145,21 @@ export default function Lineups() {
             {any && ` · ${rows}`}
             <Help title={view === 'onoff' ? 'On-off' : 'Lineup ratings'}>
               {view === 'onoff' ? (
-                <p>
-                  The team&apos;s net rating (points scored minus allowed per 100 possessions) with each player on the floor, against the rest of its regular season with him off
-                  it. The big number is the difference. Starters share the floor with the best teammates, so their numbers lean on who they play with.
-                </p>
+                <>
+                  <p>
+                    The team&apos;s <Term id="ortg">net rating</Term> with him on the floor, against its net with him off it. The big number is the difference.
+                  </p>
+                  <p>Starters play beside the best teammates, so their numbers lean on who they play with.</p>
+                </>
               ) : (
                 <p>
-                  Points scored (<Term id="ortg">ORtg</Term>) and allowed (DRtg) per 100 of the unit&apos;s own possessions while those players shared the floor; net is the
-                  difference. {view !== '5' && 'Trios and pairs count every five-man stint they were part of.'}
+                  <Term id="ortg">ORtg</Term> is points scored per 100 of the unit&apos;s possessions, DRtg points allowed. Net is the difference.
+                  {view !== '5' && ' Trios and pairs count every five-man stint they were part of.'}
                 </p>
               )}
               <p>
-                Faded rows have fewer than {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}: over that few, a net rating can swing ±
-                {Math.round(netSE(LOW_SAMPLE_POSS))} or more by chance. Trust the ones with more minutes.
+                Faded rows have under {LOW_SAMPLE_POSS} possessions{view === 'onoff' ? ' on or off the floor' : ''}. Over that few, a net rating can swing ±
+                {Math.round(netSE(LOW_SAMPLE_POSS))} by chance.
               </p>
               {view === '5' && <p>Tap a five to make it your starters or closers.</p>}
             </Help>
@@ -177,10 +179,10 @@ export default function Lineups() {
           <div className="card">
             <Empty>
               {view === 'onoff'
-                ? `No on-off numbers ${season === league.season ? 'yet this season' : 'from last season'}: they come from regular-season games.`
+                ? `No on-off numbers ${season === league.season ? 'yet this season' : 'from last season'}. They come from regular-season games.`
                 : season === league.season
-                  ? 'No lineups yet: they’re tracked from your first game this season.'
-                  : `No lineups kept from last season (only your own games keep them).`}
+                  ? 'No lineups yet. They’re tracked from your first game.'
+                  : 'No lineups kept from last season.'}
             </Empty>
           </div>
         ) : !rows ? (
@@ -363,15 +365,19 @@ function UnitSheet({
       </div>
       <Statline
         items={[
-          { k: <span className="as-is">Net</span>, v: signed(u.net), s: Number.isFinite(se) ? `± ${f1(2 * se)}` : undefined, color: u.net >= 0 ? 'var(--good)' : 'var(--bad)' },
+          // the 95% range chance alone could give it, in three words
+          {
+            k: <span className="as-is">Net</span>,
+            v: signed(u.net),
+            s: Number.isFinite(se) ? `±${f1(2 * se)} by chance` : undefined,
+            color: u.net >= 0 ? 'var(--good)' : 'var(--bad)',
+          },
           { k: <span className="as-is">ORtg</span>, v: f1(u.ortg) },
           { k: <span className="as-is">DRtg</span>, v: f1(u.drtg) },
           { k: 'Minutes', v: Math.round(u.min), s: `${u.poss} poss` },
         ]}
       />
-      <div className="tm-foot">
-        {u.poss < LOW_SAMPLE_POSS ? 'A small sample: the ratings can swing a lot by chance.' : 'The ± under Net is its 95% range: chance alone could move it that much.'}
-      </div>
+      {u.poss < LOW_SAMPLE_POSS && <div className="tm-foot">A small sample: these can swing a lot by chance.</div>}
       <div className="col" style={{ gap: 8 }}>
         <button className="btn primary block" disabled={busy || !!why || hurt.length > 0 || isStarters} onClick={() => make('starters')}>
           {isStarters ? 'Your starters' : 'Make these the starters'}
@@ -381,14 +387,15 @@ function UnitSheet({
         </button>
         {(why || hurt.length > 0) && (
           <div className="tm-why-line">
-            {why ?? `${names(hurt)} ${hurt.length === 1 ? 'is' : 'are'} injured: this five can start once ${hurt.length === 1 ? 'he is' : 'they are'} back.`}
+            {why ?? `${names(hurt)} ${hurt.length === 1 ? 'is' : 'are'} injured. This five can start once ${hurt.length === 1 ? 'he is' : 'they are'} back.`}
           </div>
         )}
       </div>
       <div className="row between top tm-sheet-foot">
         <More label="What changes">
           <p className="tm-more-p">
-            Starters swap into the first five spots on your depth chart and take those spots’ minutes, as a swap on the Rotation tab does. Either one makes your rotation custom.
+            New starters take the first five spots on your depth chart, and those spots&apos; minutes. A swap on Rotation does the same. Either one turns off Let the assistant
+            manage.
           </p>
         </More>
         <Link to="/team/rotation" className="card-link" onClick={close}>

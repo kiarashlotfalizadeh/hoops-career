@@ -1,179 +1,36 @@
-/* The Football Manager layer of Team → Tactics (`tx-`): the hero (the tactic slots, one familiarity
-   figure, the strengths and weaknesses), the mentality dial, the tactics board with its formation
-   picker and its partnership lines, familiarity everywhere (bars, dots, each option's %), the phases
-   of play on Instructions, and Analysis → Familiarity. */
+/* The Football Manager layer of Team → Tactics (`tx-`): the hero (the style, who runs it), the
+   strengths and weaknesses, the mentality dial, the tactics board with its formation picker, and the
+   headings that are their block's switch. */
 
-/* ------------------------------------------------------------ familiarity, wherever it shows */
-.tx-fambar {
-  display: block;
-  height: 3px;
-  border-radius: 1px;
-  background: var(--line-2);
-  overflow: hidden;
-}
-.tx-fambar i {
-  display: block;
-  height: 100%;
-  border-radius: 1px;
-  background: var(--text-dim);
-  transition: width var(--dur) var(--ease-out);
-}
-.tx-fambar i.good {
-  background: var(--good);
-}
-.tx-fambar i.warn {
-  background: var(--warn);
-}
-.tx-fambar i.bad {
-  background: var(--bad);
-}
-/* a player's familiarity with his role pair, as a dot */
-.tx-famdot {
-  display: inline-block;
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--text-dim);
-  vertical-align: middle;
-}
-.tx-famdot.good {
-  background: var(--good);
-}
-.tx-famdot.warn {
-  background: var(--warn);
-}
-.tx-famdot.bad {
-  background: var(--bad);
-}
-/* an option's familiarity, in its chip: "Blitz 40%" */
-.tx-optfam {
-  margin-left: 6px;
-  font-size: 12px;
-  font-weight: 680;
-  font-variant-numeric: tabular-nums;
-}
-.chip.on .tx-optfam.good {
-  color: var(--good);
-}
-/* a setting off what's drilled: a line under its levels */
+/* a 0-100 setting's levels */
 .tx-lv {
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-.tx-lv-fam {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--text-dim);
-}
-.tx-lv-fam b {
-  color: var(--text-2);
-  font-weight: 700;
-}
 
-/* ------------------------------------------------------------ the hero: the plan in use */
-/* one group: the slots, the style, the grades, the assistant's switch */
+/* ------------------------------------------------------------ the hero: the style in use */
+/* one card over every section: the style and Change; on Tactic, who runs it under a hairline */
 .tx-hero {
-  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 12px var(--pad-card) 4px;
-  overflow: hidden;
-}
-/* the three tactics as one row of pills: the active one white, as a chosen option is */
-/* (the active one takes the room for its name; the others show their letter) */
-.tx-slots {
-  display: flex;
-  gap: 6px;
-}
-.tx-slot {
-  position: relative;
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  height: 38px;
-  padding: 0 12px 0 6px;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--line-3);
-  color: var(--text-2);
-  text-align: left;
-  transition:
-    background var(--dur-fast) ease,
-    color var(--dur-fast) ease;
-}
-.tx-slot::after {
-  content: '';
-  position: absolute;
-  inset: -4px -3px;
-}
-.tx-slot:not(.on):active {
-  background: var(--surface);
-}
-@media (hover: hover) and (pointer: fine) {
-  .tx-slot:not(.on):hover {
-    background: var(--surface);
-  }
-}
-.tx-slot.on {
-  flex: 1 1 auto;
-  background: var(--on);
-  box-shadow: none;
-  color: var(--on-ink);
-}
-.tx-slot:not(.on) .tx-slot-n {
-  display: none;
-}
-.tx-slot:not(.on) {
-  padding-right: 9px;
-}
-.tx-slot-l {
-  flex: none;
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-weight: 600;
-  font-size: 12px;
-  background: var(--surface-3);
-  color: var(--text);
-}
-.tx-slot.on .tx-slot-l {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-.tx-slot-n {
-  flex: 1;
-  min-width: 0;
-  font-weight: 620;
-  font-size: 13.5px;
-}
-.tx-slot-plus {
-  flex: none;
-  color: var(--text-dim);
+  padding: 0 10px 0 var(--pad-card);
 }
 .tx-hero-pick {
-  flex: 1;
   min-width: 0;
+  min-height: 60px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  padding: 8px 0;
   text-align: left;
   color: inherit;
-  border-radius: var(--radius-sm);
 }
-.tx-hero-pick > .grow {
+.tx-hero-text {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .tx-hero-pick > .btn {
   flex: none;
@@ -182,22 +39,10 @@
 .tx-hero-pick:active > .btn {
   background: var(--surface-3);
 }
-/* the line over every section: the slot's letter (its own switch), the style, how well it's known, Change */
-.tx-hero.compact {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 8px;
-}
-.tx-hero.compact .tx-hero-pick {
-  gap: 10px;
-  min-height: 44px;
-}
 .tx-hero-line {
-  flex: 1;
   min-width: 0;
-  font-size: 14px;
-  line-height: 1.3;
+  font-size: 15px;
+  line-height: 1.25;
   color: var(--text-2);
   /* (two lines at most: a long custom style wraps rather than loses its name) */
   display: -webkit-box;
@@ -210,16 +55,11 @@
   color: var(--text);
   font-weight: 760;
 }
-/* a row of the plan: a label in mono, its value (the mentality, a tap: its dial) */
-.tx-hero-fam {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 32px;
-  color: inherit;
-  text-align: left;
-  border-radius: var(--radius-sm);
+.tx-hero-sub {
+  font-size: 13px;
+  color: var(--text-dim);
 }
+/* a label over a column of figures, in mono (the strengths and weaknesses) */
 .tx-hero-k {
   flex: none;
   font-family: var(--mono);
@@ -227,22 +67,27 @@
   font-weight: 500;
   color: var(--text-dim);
 }
-.tx-hero-fv {
-  flex: none;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1;
+/* the assistant's switch and the staff's change: rows of the card, each over a hairline */
+.tx-hero-auto,
+.tx-hero > .tx-move {
+  margin: 0 -10px 0 calc(-1 * var(--pad-card));
+  padding: 6px 10px 6px var(--pad-card);
+  border-top: 1px solid var(--line);
 }
-/* the two strengths and two weaknesses, side by side over a hairline (a tap: Analysis → Report) */
+.tx-hero-auto > label {
+  min-height: 44px;
+}
+.tx-hero > .tx-move {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+/* the two strengths and two weaknesses, side by side (a tap: Analysis → Report) */
 .tx-sw {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
-  margin: 0 calc(-1 * var(--pad-card));
-  padding: 12px var(--pad-card) 2px;
-  border-top: 1px solid var(--line);
+  width: 100%;
+  padding: 12px var(--pad-card) 14px;
   color: inherit;
   text-align: left;
 }
@@ -262,6 +107,9 @@
 }
 .tx-sw-n {
   min-width: 0;
+  line-height: 1.2;
+  /* a long grade name ("Forcing turnovers") wraps rather than losing its end */
+  text-wrap: balance;
 }
 /* a grade that moved this visit: its name in the signal's colour, a short pulse */
 .tx-sw-q.up,
@@ -274,18 +122,8 @@
 .tx-sw-q.down .tx-sw-n {
   color: var(--bad);
 }
-.tx-hero-fam:active,
 .tx-sw:active {
   background: var(--surface);
-}
-/* the assistant's switch, the group's foot */
-.tx-hero-auto {
-  margin: 0 calc(-1 * var(--pad-card));
-  padding: 8px var(--pad-card) 8px;
-  border-top: 1px solid var(--line);
-}
-.tx-hero-auto > label {
-  min-height: 44px;
 }
 
 /* ------------------------------------------------------------ the mentality dial */
@@ -307,7 +145,7 @@
   gap: var(--gap-page);
   min-width: 0;
 }
-/* a wide screen: the board on the left, the playbooks beside it */
+/* a wide screen: the board on the left, the plan and the bench beside it */
 @media (min-width: 900px) {
   .tx-tactic {
     display: grid;
@@ -348,191 +186,15 @@
   width: 10px;
   font-weight: 720;
 }
-/* the court: the five's plates, a dot for each one's familiarity (as wide as .tx-floor lets it: on a
-   tablet a full-width court would push the bench and the style off the screen) */
+/* the court: the five's plates (as wide as .tx-floor lets it: on a tablet a full-width court would
+   push the bench and the style off the screen) */
 .tx-board .tx-floor-n {
   display: flex;
   align-items: center;
   gap: 4px;
 }
-.tx-board .tx-famdot {
-  flex: none;
-  width: 0.5em;
-  height: 0.5em;
-}
-/* the partnerships on the court: lines under the plates (their weight and ink set inline by strength),
-   the clash a red dash, a picked link named at its middle */
-.tx-floor-links {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.tx-link-l {
-  stroke: var(--ink);
-  stroke-linecap: round;
-  transition:
-    stroke-opacity var(--dur-fast) ease,
-    stroke-width var(--dur-fast) ease;
-}
-.tx-link-l.off {
-  stroke-opacity: 0.16;
-}
-.tx-clash-l {
-  stroke: var(--bad);
-  stroke-width: 1.1;
-  stroke-dasharray: 2 1.6;
-  stroke-linecap: round;
-}
-.tx-floor-p.clash {
-  border-color: var(--bad);
-}
-.tx-link-tag {
-  position: absolute;
-  z-index: 1;
-  left: var(--x);
-  top: var(--y);
-  transform: translate(-50%, -50%);
-  padding: 3px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--ink);
-  color: var(--paper-ink);
-  font-size: 12px;
-  font-weight: 650;
-  white-space: nowrap;
-  pointer-events: none;
-}
 .tx-style {
   gap: 16px;
-}
-
-/* ------------------------------------------------------------ the Familiarity tab */
-.tx-famrow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 9px var(--row-px);
-}
-.tx-famrow-top {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.tx-famrow-n {
-  font-weight: 640;
-  font-size: 14.5px;
-}
-.tx-famrow-w {
-  font-size: 12.5px;
-  color: var(--text-dim);
-}
-.tx-famrow-v {
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-weight: 600;
-  font-size: 14.5px;
-  line-height: 1;
-}
-.tx-famrow-s {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-.tx-famrow-s .ellipsis {
-  min-width: 0;
-}
-.tx-famrow-eta {
-  flex: none;
-}
-.tx-prep .tx-preset-t {
-  white-space: normal;
-  line-height: 1.35;
-}
-.tx-prep .tx-preset-pick {
-  padding-top: 9px;
-  padding-bottom: 9px;
-}
-.tx-famp-h > :nth-child(2),
-.tx-famp-h > :nth-child(3) {
-  width: 64px;
-  flex: none;
-  text-align: right;
-}
-.tx-famp .lr-name {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.tx-famp .tag {
-  flex: none;
-  height: 18px;
-  padding: 0 5px;
-  font-size: 12px;
-}
-.tx-famp-c {
-  flex: none;
-  width: 56px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-size: 14px;
-  font-weight: 600;
-}
-.tx-famp-c .tx-fambar {
-  width: 100%;
-}
-/* the rest of the players, at full speed: one quiet row to show them */
-.tx-famp-all {
-  width: 100%;
-  min-height: 44px;
-  padding: 0 var(--pad-card);
-  text-align: left;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--accent-text);
-  border-top: 1px solid var(--line);
-}
-
-/* the tactic switch: the active one's letter and a chevron, beside the style it runs; the three in a sheet */
-.tx-slotpick {
-  position: relative;
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 38px;
-  padding: 0 8px 0 6px;
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--line-3);
-  color: var(--text-2);
-}
-.tx-slotpick::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-}
-.tx-slotpick .tx-slot-l {
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-.tx-slotpick:active {
-  background: var(--surface);
-}
-.tx-slots-note {
-  margin: 0 0 12px;
-}
-.tx-slot-row {
-  gap: 12px;
-}
-.tx-slot-row.on {
-  background: color-mix(in srgb, var(--team) 10%, transparent);
 }
 
 /* the board's head is its end: In possession / Out of possession, the Help beside it */
@@ -543,11 +205,6 @@
 .tx-boardsec > .sec-h {
   align-items: center;
   gap: 10px;
-}
-.tx-hero-mv {
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 620;
 }
 /* a heading that is its block's switch (HeadSwitch): the one that's on in the heading's ink and cut,
    the others beside it quieter; it scrolls sideways on a narrow phone rather than wrap */
@@ -603,10 +260,4 @@
   .tx-hsw-b:not(.on):hover {
     color: var(--text-2);
   }
-}
-.tx-hsw-v {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.03em;
 }

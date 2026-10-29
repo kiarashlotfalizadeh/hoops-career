@@ -91,10 +91,7 @@ export default function GodMode() {
                 label={
                   <span className="row" style={{ gap: 6 }}>
                     Owner's confidence in you
-                    <Help title="Owner's confidence">
-                      Your standing with him, −100 to +100: Office → Owner&apos;s job-security meter reads it out of 100 (50 + half of it). With job security on, a review under −50
-                      fires you once his grace period is over.
-                    </Help>
+                    <Help title="Owner's confidence">Your standing with him, from −100 to +100. With job security on, a review under −50 fires you after his grace period.</Help>
                   </span>
                 }
                 name="Owner's confidence in you"

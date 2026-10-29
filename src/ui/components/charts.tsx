@@ -217,7 +217,7 @@ export function WinProbChart({
     periods.reduce((a, p) => a + p, 0),
   );
   // room on the left for the 100% / 50% / 0% ticks
-  const left = 30;
+  const left = 36;
   const x = (t: number) => left + (Math.min(total, Math.max(0, t)) / total) * (w - left - 4);
   const y = (wp: number) => 6 + (1 - wp) * (h - 12);
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.wp).toFixed(1)}`).join(' ');

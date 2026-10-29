@@ -15,9 +15,6 @@ import { aiGamePlan, oppPlanIn, planTeam, withOppPlan } from '../ai/opponentPlan
 import { staffTactics } from '../ai/advisor';
 import { projectGame } from '../analysis/projection';
 import { careerOnRecord, careerTotals, marksCrossed, markText, newsworthy, type MilestoneStat } from '../analysis/milestones';
-import { learnFromGame } from './practice';
-import { prepared } from '../sim/familiarity';
-import { withSlotPlans } from '../sim/slots';
 import { gameKeys, gradeKey } from '../analysis/keys';
 import { planAim } from '../analysis/moves';
 import { recapFacts } from '../analysis/quotes';
@@ -283,7 +280,7 @@ export function youthNews(league: League) {
       .slice(0, 2);
     addNews(league, {
       kind: 'general',
-      text: `The ${teamName(t)} ${YOUTH_NEWS}${young.length ? `: more minutes for ${andList(young.map(playerName))}` : ''}, and their veterans will sit some nights.`,
+      text: `The ${teamName(t)} ${YOUTH_NEWS}.${young.length ? ` More minutes for ${andList(young.map(playerName))}.` : ''} Their veterans will sit some nights.`,
       tids: [t.tid],
       pids: young.map((p) => p.pid),
     });
@@ -385,33 +382,28 @@ export function buildSimInput(
       benchTwoWays(rotation, ready);
     }
     const extra = play.length ? { play } : {};
-    // opponent-specific game plan for the user's team (drilled for tonight after a day of opponent
-    // prep); situational plans that switch to another tactic slot carry its changes. The assistant
-    // adjusts at breaks unless switched off (Tactics: crunch time), whoever runs the tactics, leaving
+    // opponent-specific game plan for the user's team. The assistant adjusts at breaks unless switched off (Tactics: crunch time), whoever runs the tactics, leaving
     // alone the kinds that cost the user's side (ASSISTANT_SKIPS in engine/coach.ts: the team played
     // carries `assistant` to say they're his): about even against no adjustments, +0.05 ± 0.15 points
     // a game over 28,160 paired games with injuries on (2026-10-26; the card says so without a number)
     const adjust = team.tactics.manage.assistantAdjusts !== false;
     const marked = adjust ? { assistant: true as const } : {};
     if (opp !== undefined && planFor(league, opp, game)) {
-      const tactics = withSlotPlans(team, effectiveTactics(league, opp, game));
-      const fam = team.prep === 'opponent' && team.fam ? { fam: prepared(team.fam, team.tactics, tactics) } : {};
-      return { team: { ...team, tactics, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra, ...fam };
+      const tactics = effectiveTactics(league, opp, game);
+      return { team: { ...team, tactics, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra };
     }
-    const tactics = withSlotPlans(team, team.tactics);
-    const same = rotation === team.rotation && tactics === team.tactics && !adjust;
-    return { team: same ? team : { ...team, tactics, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra };
+    const same = rotation === team.rotation && !adjust;
+    return { team: same ? team : { ...team, rotation, ...marked }, players, perf, rest, injuryMult, adjust, ...extra };
   }
-  // an AI coach never plays the situational plans or crunch-time calls a user left on this team
+  // an AI coach never plays the crunch-time calls a user left on this team
   const t = team.tactics;
   const userPlans = hasCoachPlans(t);
   const tactics = userPlans ? withoutCoachPlans(t) : t;
   // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
   const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
-  // (a coach who comes in with a plan has drilled it)
   if (plan) {
     const planned = withOppPlan(tactics, plan);
-    return { team: planTeam(team, planned, plan), players, perf, rest, injuryMult, adjust: true, ...(team.fam && { fam: prepared(team.fam, tactics, planned) }) };
+    return { team: planTeam(team, planned, plan), players, perf, rest, injuryMult, adjust: true };
   }
   return { team: userPlans ? { ...team, tactics } : team, players, perf, rest, injuryMult, adjust: true };
 }
@@ -536,8 +528,6 @@ function applyResult(league: League, g: ScheduledGame, sim: GameSim, res: GameRe
     );
   }
   g.played = true;
-  // both teams learn from the tactics they played (an All-Star game teaches nobody anything)
-  if (g.type !== 'allstar') learnFromGame(league, sim);
   // a next-game plan is used up once the user plays that opponent, a series plan once its series is decided
   consumePlans(league, g);
   const playoffs = g.type === 'playoffs';
@@ -683,7 +673,7 @@ function milestoneNews(league: League, sim: GameSim) {
         const team = league.teams[rb.tid];
         addNews(league, {
           kind: 'milestone',
-          text: `${playerName(p)} (${team.abbrev}) ${STAT_NEWS[stat]} ${markText(stat, mark)}.`,
+          text: `${playerName(p)} of the ${team.name} ${STAT_NEWS[stat]} ${markText(stat, mark)}.`,
           tids: [team.tid],
           pids: [p.pid],
         });
@@ -702,16 +692,17 @@ function notableNews(league: League, res: GameResult) {
         const team = league.teams[side.tid];
         const opp = league.teams[side === res.home ? res.away.tid : res.home.tid];
         // in words, as a story reads: a triple-double named as one, a scoring night led by its points
+        // (two short sentences: who and against whom, then the line)
         const reb = bl.orb + bl.drb;
         const text = tdbl
-          ? `${playerName(p)} (${team.abbrev}) had a triple-double vs ${opp.abbrev}: ${[
-              `${bl.pts} points`,
-              `${reb} rebounds`,
-              `${bl.ast} assists`,
-              ...(bl.stl >= 10 ? [`${bl.stl} steals`] : []),
-              ...(bl.blk >= 10 ? [`${bl.blk} blocks`] : []),
-            ].join(', ')}.`
-          : `${playerName(p)} (${team.abbrev}) scored ${bl.pts} vs ${opp.abbrev}, with ${plural(reb, 'rebound')} and ${plural(bl.ast, 'assist')}.`;
+          ? `${playerName(p)} had a triple-double for the ${team.name} against the ${opp.name}. ${andList([
+              plural(bl.pts, 'point'),
+              plural(reb, 'rebound'),
+              plural(bl.ast, 'assist'),
+              ...(bl.stl >= 10 ? [plural(bl.stl, 'steal')] : []),
+              ...(bl.blk >= 10 ? [plural(bl.blk, 'block')] : []),
+            ]).replace(/^./, (c) => c.toUpperCase())}.`
+          : `${playerName(p)} scored ${bl.pts} for the ${team.name} against the ${opp.name}. He added ${plural(reb, 'rebound')} and ${plural(bl.ast, 'assist')}.`;
         addNews(league, { kind: 'milestone', text, tids: [team.tid], pids: [p.pid] });
       }
     }

@@ -77,7 +77,10 @@ export function CoachesView({ league }: { league: League }) {
           region={`${league.teams[league.userTid].region} ${league.teams[league.userTid].name}`}
           name={league.coachName}
           fig={`${me.k.won}-${me.k.lost}`}
-          figLabel={`${winPctLabel(me.k.won, me.k.lost)} · ${plural(me.k.seasons, 'season')} · ${plural(me.k.playoffs, 'playoff run')} · ${plural(me.k.titles, 'title')}`}
+          // (each figure kept with its word where the line wraps: "0 playoff runs", never "0 / playoff runs")
+          figLabel={[winPctLabel(me.k.won, me.k.lost), plural(me.k.seasons, 'season'), plural(me.k.playoffs, 'playoff run'), plural(me.k.titles, 'title')]
+            .map((x) => x.replace(/ /g, '\u00a0'))
+            .join(' · ')}
         />
       )}
       {me && (
@@ -101,24 +104,21 @@ export function CoachesView({ league }: { league: League }) {
           ))}
         </div>
       </Section>
-      <Section title="Former coaches" right={<span className="lg-sec-meta">{former.length}</span>}>
-        {former.length === 0 ? (
-          <div className="card empty">Coaches who lose their jobs land here.</div>
-        ) : (
-          <>
-            <div className="card flush list">
-              {former.slice(0, limit).map((x) => (
-                <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
-              ))}
-            </div>
-            {former.length > limit && (
-              <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + 25)}>
-                <ChevronDown size={15} /> Show more ({former.length - limit})
-              </button>
-            )}
-          </>
-        )}
-      </Section>
+      {/* (no section until a coach has lost his job: an empty one would only say so) */}
+      {former.length > 0 && (
+        <Section title="Former coaches" right={<span className="lg-sec-meta">{former.length}</span>}>
+          <div className="card flush list">
+            {former.slice(0, limit).map((x) => (
+              <CoachRow key={x.r.id} league={league} x={x} onOpen={() => setOpen(String(x.r.id))} />
+            ))}
+          </div>
+          {former.length > limit && (
+            <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + 25)}>
+              <ChevronDown size={15} /> Show more ({former.length - limit})
+            </button>
+          )}
+        </Section>
+      )}
       <CoachSheet league={league} x={shown} onClose={() => setOpen('')} />
     </>
   );
@@ -191,8 +191,8 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
   const def = DEF_PRESETS.find((p) => p.id === r.def)?.name ?? r.def;
   const last = k.lines[k.lines.length - 1];
   const where = cur
-    ? `Head coach of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}${r.user ? ' (you)' : ''}`
-    : `${status === 'available' ? 'Out of work, available to hire' : 'Retired'}${last ? `: last coached ${league.teams[last.tid].abbrev} in ${seasonLabel(last.season)}` : ''}`;
+    ? `${r.user ? 'You: head' : 'Head'} coach of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}`
+    : `${status === 'available' ? 'Available to hire.' : 'Retired.'}${last ? ` Last coached ${league.teams[last.tid].abbrev} in ${seasonLabel(last.season)}.` : ''}`;
   return (
     <Sheet open onClose={onClose} title={r.name}>
       <div className="col lg-sheet">

@@ -181,9 +181,10 @@ export function FinalSlab({
   const won = !!us && us.pts > (us === res.home ? res.away : res.home).pts;
   const by = Math.abs(res.home.pts - res.away.pts);
   const fig = (pts: number) => (moment ? <CountUp value={String(pts)} ms={800} /> : pts);
-  // the occasion over the board: a regular-season night's own (opening night, a rivalry) or the attendance; a series, the play-in and the Cup say theirs
+  // the occasion over the board: a regular-season night's own (opening night, a rivalry); a series, the
+  // play-in and the Cup say theirs (the crowd is the box score's, once)
   const kind = gameTypeLabel(league, res);
-  const occasion = story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : kind !== 'Regular season' ? kind : res.att ? `Att ${res.att.toLocaleString()}` : '';
+  const occasion = story?.kicker && res.type === 'regular' && !res.cup ? story.kicker : kind !== 'Regular season' ? kind : '';
   return (
     <section
       className={`gd-final${story ? ` gd-story w${story.weight}` : ''}${moment ? ' gd-moment' : ''}`}

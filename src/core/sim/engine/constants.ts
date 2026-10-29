@@ -673,17 +673,11 @@ export const K = {
    * rng 7 and 11). Now within 3% (rng 7, 11 and 23). Threes −0.2 → −0.12 on 2026-10-26, when the 2-3
    * zone was retuned and the playbooks rebalanced (Pace & Space and Five-Out shoot fewer threes, Grit &
    * Grind more, and fewer staffs run the two): threes had fallen 4-6% under (rng 7, 11 and 23).
+   * Threes −0.12 → −0.15 on 2026-10-28, when partnerships and familiarity were deleted: without the
+   * two-man game's and the pick-and-pop's roll and pop, more ball screens ended in kick-outs, and
+   * threes had gone 2-3% over (rng 7), the leaders' and their 10-three nights past star-check's shape.
    */
-  recenter: { three: -0.12, foul: -0.04, orb: -0.15, tov: -0.12, blk: 0 },
-  /**
-   * Tactical familiarity (src/core/sim/familiarity.ts): at the full penalty (a unit that knows
-   * nothing of what it plays) the make probability its offense loses and its turnover rate's rise,
-   * and the make probability its defense gives up. A unit is played at famPenalty of it, none when
-   * fluid (scripts/system-impact.ts, against the same tactics drilled): a never-drilled coverage costs
-   * about 0.4 points per 100, a never-drilled 2-3 zone about 0.6, a new shape about 0.25, a new
-   * offense with new roles for everyone about 1.8. Not a tactical edge: no leverage.
-   */
-  fam: { shot: 0.029, tov: 0.15, shotD: 0.036 },
+  recenter: { three: -0.15, foul: -0.04, orb: -0.15, tov: -0.12, blk: 0 },
   /**
    * The offense's shape (SHAPE_META), against four-out, one-in (the engine's baseline). In the half
    * court, five-out opens the rim for everyone's drives, rolls and cuts (`rim`, the openness), less
@@ -730,31 +724,6 @@ export const K = {
   },
   /** A player's glass duty: his weight among the offensive rebounders when he crashes or gets back, and what each crasher on the floor adds to the team's crashing (out of 100). */
   glassDuty: { crash: 1.35, back: 0.45, team: 6 },
-  /**
-   * Partnerships (src/core/sim/links.ts), at a link's full strength: a two-man game or a pick-and-pop
-   * adds `adv` to the handler's edge on the pick-and-roll and openness to the roll man's finish or the
-   * pop; inside-out adds openness to the post hub's kick-outs, a handoff chain to the hub's handoffs
-   * and cuts, and the wall takes `wall` off the edge of a handler its stopper guards, on the
-   * pick-and-roll and the isolation; `screen` is how much more
-   * often a handler's linked big sets his screens (a weight, 1 + screen at full strength). The crowded
-   * paint takes `crowd` off everyone else's half-court shots at the rim and in the paint. Tactical
-   * edges (at the leverage). Measured in scripts/link-impact.ts (paired, each team's own links gelled
-   * against its pairs new to each other): about +0.5 per 100 on average, +0.66 for an elite two-man
-   * game, +1.4 for an elite pick-and-pop, −0.14 for a crowded starting five. `tag` is the share of
-   * its openness and edge a link's impact tag counts, so the reports say what it measures (the
-   * two-man game's and the crowd's rim openness tag about three times what they're worth).
-   */
-  link: {
-    adv: 0.9,
-    twoMan: 0.9,
-    popMan: 1.0,
-    inOut: 1.6,
-    dho: 1.6,
-    wall: 2.0,
-    screen: 0.4,
-    crowd: 0.25,
-    tag: { link_twoMan: 0.35, link_popMan: 0.65, link_wall: 0.5, clash_crowd: 0.25 } as Record<string, number>,
-  },
 };
 
 /** A tactical edge (openness, advantage, a rate) at the game's tactical leverage: `x` is its 1x size. */

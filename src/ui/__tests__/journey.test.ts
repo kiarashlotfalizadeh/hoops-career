@@ -241,7 +241,7 @@ describe('the journey between screens', () => {
         day: 31,
         kind: 'milestone',
         head: `${nm(b)} reaches 10,000 points`,
-        text: `${nm(b)} (ABC) scored his 10,000th career point.`,
+        text: `${nm(b)} of the Testers scored his 10,000th career point.`,
         body: 'He got there in his 600th game, in his 8th season.',
         tids: [me],
         pids: [b.pid],

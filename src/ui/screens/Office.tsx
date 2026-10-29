@@ -370,7 +370,7 @@ function CapSheet({ league }: { league: League }) {
       />
       <Statline
         items={[
-          { ...capRoomFig(space), s: holds > 0 ? `after ${money(holds)} in holds` : undefined },
+          { ...capRoomFig(space), s: holds > 0 ? `${money(holds)} in holds` : undefined },
           taxFig(pay, cap.luxuryTax, teamTaxBill(league, tid, pay, s0)),
           // on the season the money is about: signed for it, the expiring deals beside them
           rosterFig(league),
@@ -379,7 +379,7 @@ function CapSheet({ league }: { league: League }) {
       <Exceptions league={league} season={s0} />
       {(hard || tpes.length > 0) && (
         <div className="tiny dim">
-          {hard ? `Hard-capped at the ${hard.name} (${money(hard.amount)}) for ${shortSeason(s0)}: you used the ${hard.what}.` : ''}
+          {hard ? `Hard-capped at the ${hard.name}, ${money(hard.amount)}, for ${shortSeason(s0)}. You used the ${hard.what}.` : ''}
           {hard && tpes.length ? ' ' : ''}
           {tpes.length
             ? `${tpes.length > 1 ? 'Traded player exceptions' : 'Traded player exception'}: ${tpes.map((x) => `${money(x.amount)} until ${fmtDate(x.season + 1, x.day)}`).join(', ')}.`
@@ -501,66 +501,72 @@ function CapHelp({ league, season }: { league: League; season: number }) {
   return (
     <HelpSheet title="How the cap works">
       <p>
-        <b>Soft cap ({money(cap.salaryCap)}).</b> Sign free agents with cap space, or for the minimum (up to {moneyExact(cap.vetMin)}) over it. The cap sheet shows the season new
-        deals count against: next season's from the draft lottery on.
+        <b>Soft cap · {money(cap.salaryCap)}.</b> Sign free agents with cap space, or over the cap for the minimum. Minimum deals run up to {moneyExact(cap.vetMin)}. The cap sheet
+        shows the season new deals count against. From the draft lottery on, that is next season.
       </p>
       <p>
-        <b>Mid-level.</b> Once a season, for a team that stays under the first apron ({money(cap.firstApron)}): one free agent up to {money(exceptionAmount(league, 'mle', season))}{' '}
-        ({pct('mle')}% of the cap, {EXCEPTIONS.mle.years} years), even over the cap. It hard-caps the team at the first apron for the season. A team it would take past the first
-        apron gets the <b>taxpayer mid-level</b> instead: up to {money(exceptionAmount(league, 'tmle', season))} ({pct('tmle')}%), {EXCEPTIONS.tmle.years} years, under the second
-        apron ({money(cap.secondApron)}), hard-capped there.
+        <b>Mid-level.</b> Once a season, sign one free agent even over the cap. He gets up to {money(exceptionAmount(league, 'mle', season))} for {EXCEPTIONS.mle.years} years,{' '}
+        {pct('mle')}% of the cap. The team must stay under the first apron, {money(cap.firstApron)}, and is hard-capped there for the season.
       </p>
       <p>
-        <b>Room exception.</b> Sign a free agent with cap space and the mid-level is gone for the season; this replaces it: one signing up to{' '}
-        {money(exceptionAmount(league, 'room', season))} ({pct('room')}%), {EXCEPTIONS.room.years} years.
+        <b>Taxpayer mid-level.</b> A team the mid-level would take past the first apron gets this one instead. It pays up to {money(exceptionAmount(league, 'tmle', season))} for{' '}
+        {EXCEPTIONS.tmle.years} years, {pct('tmle')}% of the cap. The team must stay under the second apron, {money(cap.secondApron)}, and is hard-capped there.
       </p>
       <p>
-        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} ({pct('bae')}%), {EXCEPTIONS.bae.years} years, for a team under the first apron after
-        it: not two seasons running, nor with the room exception. Like the mid-level, it hard-caps the team at the first apron that season.
+        <b>Room exception.</b> A signing with cap space ends the mid-level for the season. The room exception replaces it. One signing up to{' '}
+        {money(exceptionAmount(league, 'room', season))} for {EXCEPTIONS.room.years} years, {pct('room')}% of the cap.
       </p>
       <p>
-        <b>Stretch.</b> A release can spread its dead money evenly over twice the seasons left plus one (in season, this season's salary is paid as usual). Less a season, for
-        longer; a waiver claim still wipes it.
+        <b>Bi-annual.</b> One signing up to {money(exceptionAmount(league, 'bae', season))} for {EXCEPTIONS.bae.years} years, {pct('bae')}% of the cap. The team must stay under the
+        first apron after it. Not two seasons running, and not with the room exception. Like the mid-level, it hard-caps the team at the first apron.
       </p>
       <p>
-        <b>10-day contracts.</b> From January 5 to the end of the regular season: the minimum prorated for 10 days, no dead money, two at most per player and team. With{' '}
-        {HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows them beyond {CAP.rosterMax}.
+        <b>Stretch.</b> A release can spread its dead money over twice the seasons left, plus one. In season, this season&apos;s salary is paid as usual. It costs less a season,
+        for longer. A waiver claim still wipes it.
       </p>
       <p>
-        <b>Bird rights.</b> Re-sign your own players in the re-sign period, even over the cap: after three seasons with you (a trade keeps his clock) up to his max, for up to five
-        years with 8% raises; after two (Early Bird) up to 175% of his salary or 105% of the league average; after one, 120% of his salary. Anyone else signs for four years at
-        most, with 5% raises. Until free agency opens (or you renounce them), each holds cap room at about his ask: the striped part of the bar.
+        <b>10-day contracts.</b> From January 5 to the end of the regular season. They pay the minimum for 10 days, with no dead money. Two at most per player and team. With{' '}
+        {HARDSHIP_OUT}+ players out for 3+ games, the hardship exception allows more than {CAP.rosterMax}.
       </p>
       <p>
-        <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. With All-NBA, MVP or Defensive Player of the Year honors, his own team
-        can pay a player off his rookie deal 30%, and one with seven to nine seasons 35% (the supermax). A player worth about the max asks it of every team: where he signs is up to
-        how much he likes each.
+        <b>Bird rights.</b> Re-sign your own players in the re-sign period, even over the cap. After three seasons with you, he can get his max for five years with 8% raises. A
+        trade keeps his clock. After two seasons, Early Bird: up to 175% of his salary or 105% of the league average. After one, up to 120% of his salary. Anyone else signs for
+        four years at most, with 5% raises.
       </p>
       <p>
-        <b>Restricted free agents.</b> A young player you qualify can still be re-signed in free agency, and you can match any offer sheet he signs. His cap hold (the larger of the
-        offer and his ask) stays until he signs or you withdraw the offer; an offer sheet you sign holds its room until his team decides.
+        <b>Cap holds.</b> Until free agency opens, each expiring player holds cap room at about his ask. That is the striped part of the bar. Renounce him to free it.
       </p>
       <p>
-        <b>Luxury tax ({money(cap.luxuryTax)}).</b> Paid at the end of the regular season by brackets of {money(cap.salaryCap * TAX_BRACKET_PCT)} over the line:{' '}
-        {TAX_RATES.join('×, ')}× and 0.5 more for each after. A repeater (a taxpayer in three of the last four seasons) pays 1 more on every bracket.{' '}
-        {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to the teams under it. Cap holds don't count toward it.
+        <b>The max.</b> 25% of the cap up to six seasons in the league, 30% for seven to nine, 35% from ten. All-NBA, MVP or Defensive Player of the Year honors raise it with his
+        own team. Off his rookie deal he can get 30%, and with seven to nine seasons 35%: the supermax. A player worth about the max asks it of every team. Where he signs comes
+        down to how much he likes each.
+      </p>
+      <p>
+        <b>Restricted free agents.</b> Qualify a young player and he stays yours to re-sign in free agency. Match any offer sheet he signs, or let him go. His cap hold is the
+        larger of the offer and his ask. It stays until he signs or you withdraw the offer. An offer sheet you sign holds its room until his team decides.
+      </p>
+      <p>
+        <b>Luxury tax · {money(cap.luxuryTax)}.</b> Paid at the end of the regular season, by brackets of {money(cap.salaryCap * TAX_BRACKET_PCT)} over the line. The rates run{' '}
+        {TAX_RATES.join('×, ')}×, then 0.5 more for each bracket after. A repeater pays 1 more on every bracket. A repeater paid the tax in three of the last four seasons.{' '}
+        {Math.round(TAX_SHARE_TO_NON_TAXPAYERS * 100)}% of the pot goes to the teams under the line. Cap holds don&apos;t count toward it.
       </p>
       <p>
         <b>
-          Aprons ({money(cap.firstApron)}, {money(cap.secondApron)}).
+          Aprons · {money(cap.firstApron)} and {money(cap.secondApron)}.
         </b>{' '}
-        Over the first apron after a deal, a team takes back no more salary than it sends, and has no bi-annual and only the taxpayer mid-level. Over the second it can't combine
-        salaries to take back a bigger one, send cash, use a traded player exception or trade its first in the furthest draft on the books, and has no mid-level at all.
+        Over the first apron after a deal, a team takes back no more salary than it sends. It has no bi-annual and only the taxpayer mid-level. Over the second, it can&apos;t
+        combine salaries to take back a bigger one. It can&apos;t send cash or use a traded player exception. It can&apos;t trade its first in the furthest draft on the books. It
+        has no mid-level at all.
       </p>
       <p>
-        <b>Trades.</b> A team over the cap after a trade takes back up to 200% of a small salary it sends (up to {money(cap.salaryCap * 0.0485)}) plus{' '}
-        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}, what it sends plus {money(cap.salaryCap * 0.0485)} up to {money(cap.salaryCap * 0.1875)}, and 125% plus{' '}
-        {money(cap.salaryCap * CAP.tradeMatchBufferPct)} above that. Sending out more than it takes back leaves it a <Term id="tpe">traded player exception</Term> for the
-        difference, for a year.
+        <b>Trades.</b> A team over the cap after a trade can take back only so much salary. Sending up to {money(cap.salaryCap * 0.0485)}: 200% of it, plus{' '}
+        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}. Sending up to {money(cap.salaryCap * 0.1875)}: what it sends, plus {money(cap.salaryCap * 0.0485)}. Above that: 125%, plus{' '}
+        {money(cap.salaryCap * CAP.tradeMatchBufferPct)}. Send out more than you take back and the difference becomes a <Term id="tpe">traded player exception</Term>. It lasts a
+        year.
       </p>
       <p>
-        <b>Rosters.</b> {CAP.rosterMin}-{CAP.rosterMax} players in season, up to {OFFSEASON_ROSTER_MAX} in the offseason. Minimum deals for the coming season aren't guaranteed
-        until opening night. First-round picks sign rookie-scale deals (4 years, team option on the last).
+        <b>Rosters.</b> {CAP.rosterMin}-{CAP.rosterMax} players in season, up to {OFFSEASON_ROSTER_MAX} in the offseason. Minimum deals for the coming season aren&apos;t guaranteed
+        until opening night. First-round picks sign rookie-scale deals: 4 years, a team option on the last.
       </p>
       <p>The cap, tax line and minimums grow 6% a season.</p>
     </HelpSheet>

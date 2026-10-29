@@ -140,24 +140,27 @@ export default function Draft() {
         right={
           <HelpSheet title="How the draft works">
             <p>
-              <b>Lottery.</b> The 14 non-playoff teams draw for the top 4 picks; the worst three records have the best odds (14% each). Everyone else picks in reverse order of
+              <b>Lottery.</b> The 14 non-playoff teams draw for the top 4 picks. The worst three records have the best odds, 14% each. Everyone else picks in reverse order of
               record.
             </p>
             <p>
-              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals (team option on year 4), cheaper the later the pick. Second-rounders get 2-year minimum deals,
-              not guaranteed until opening night; AI teams with full rosters sign theirs to two-way deals.
+              <b>Rookie scale.</b> First-round picks sign 4-year rookie-scale deals, cheaper the later the pick. Year 4 is a team option. Second-rounders get 2-year minimum deals,
+              not guaranteed until opening night. AI teams with full rosters sign theirs to two-way deals.
             </p>
             <p>
-              <b>Big board.</b> Rank is the league's consensus order of the class, mixing potential and current ability; proj. is where the league's mock drafts have him going, by
-              each team's needs, so the two can differ. The arrow is his move on the board since the preseason.
+              <b>Big board.</b> Rank is the league&apos;s consensus order of the class, mixing potential and current ability. Proj. is where the league&apos;s mock drafts have him
+              going, by each team&apos;s needs. So the two can differ. The arrow is his move on the board since the preseason.
             </p>
             <p>
-              <b>Staff read.</b> Nobody knows a prospect's true ratings. OVR is your staff's read of what he can do now; POT is the range his ceiling falls in four times in five.
-              Send scouts to up to five prospects (on his report) and the range narrows with every day they watch; the staff keep free scouts near your pick. A bigger coaching
-              budget sharpens every read. Every team drafts by its own board, so steals and busts happen.
+              <b>Staff read.</b> Nobody knows a prospect&apos;s true ratings. OVR is your staff&apos;s read of what he can do now. POT is the range his ceiling falls in four times
+              in five.
             </p>
             <p>
-              <b>The season.</b> Prospects have hot and cold months and the odd injury, and the combine in May sharpens everyone's read.
+              <b>Scouting.</b> Send scouts to up to five prospects from his report. The range narrows with every day they watch. The staff keep free scouts near your pick. A bigger
+              coaching budget sharpens every read. Every team drafts by its own board, so steals and busts happen.
+            </p>
+            <p>
+              <b>The season.</b> Prospects have hot and cold months and the odd injury. The combine in May sharpens everyone&apos;s read.
             </p>
             <p>Undrafted prospects with promise become free agents after the draft.</p>
           </HelpSheet>
@@ -201,7 +204,7 @@ export default function Draft() {
             on={!!league.settings.draftPause}
             onChange={setPause}
             label="Stop before every pick"
-            help="Off, it runs to your next pick. On, it waits before each team's, so you can trade for the pick on the clock."
+            help="Off, it runs to your next pick. On, it waits before each team's, so a trade for the pick on the clock stays open."
           />
         </div>
       )}

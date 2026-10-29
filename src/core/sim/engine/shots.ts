@@ -7,7 +7,7 @@ import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
 import { K, engineDiag, lev, levExtra, levGift, levW } from './constants';
-import { linkKey, type SP, type ST, type ShotOpts } from './state';
+import type { SP, ST, ShotOpts } from './state';
 import type { GameSim } from './game';
 
 /** Who gets the block on a contested miss: mostly timing and instincts (BLK), some length and pop. */
@@ -21,7 +21,7 @@ const blockSkill = (p: { r: { blk: number; hgt: number; ath: number } }) => 0.7 
  */
 const TWO_ASSIST = 0.91;
 
-/** No partnership effect (shared: never added to). */
+/** No tags (shared: never added to). */
 const NONE_TAGS: [string, number][] = [];
 
 export type MatchupFamily = keyof typeof K.matchup.open;
@@ -147,39 +147,6 @@ export const shotsMethods = {
     }
   },
 
-  /**
-   * The wall's edge against a handler (see src/core/sim/links.ts): when his man is a point-of-attack
-   * stopper with a rim anchor behind him, the handler's edge on the pick-and-roll or the isolation is
-   * smaller, by the link's strength; tagged for the defense.
-   */
-  wallEdge(this: GameSim, def: ST, guard: SP, act: 'pnr' | 'iso', pid: number): number {
-    const w = def.wall?.get(guard.pid);
-    if (!w) return 0;
-    const edge = lev(K.link.wall * w);
-    this.impact('link_wall', def.side, edge * K.advPts[act] * (K.link.tag.link_wall ?? 1), pid);
-    return edge;
-  },
-
-  /**
-   * What partnerships do to a half-court shot (see src/core/sim/links.ts), as openness by impact tag:
-   * the passer's link with the shooter where the action is theirs (inside-out's kick-out, the handoff
-   * chain's handoffs and cuts), and the crowded paint everyone but its bigs drives into.
-   */
-  linkOpen(this: GameSim, off: ST, s: ShotOpts): [string, number][] {
-    const f = s.finish;
-    if ((!off.links && !off.crowd) || f === 'transition' || f === 'putback' || f === 'misc') return NONE_TAGS;
-    const a = s.assister;
-    const l = a && off.links?.get(linkKey(a.pid, s.shooter.pid));
-    // (the two-man game and the pick-and-pop play in the pick-and-roll itself, see pnr.ts)
-    const link = l && (l.id === 'inOut' ? f === 'spotup' : l.id === 'dho' && (f === 'handoff' || f === 'offscreen' || f === 'cut')) ? l : null;
-    const crowd = !!off.crowd && (s.zone === 'rim' || s.zone === 'paint') && f !== 'post' && !off.crowd.has(s.shooter.pid);
-    if (!link && !crowd) return NONE_TAGS;
-    const out: [string, number][] = [];
-    if (link) out.push([`link_${link.id}`, lev(K.link[link.id] * link.s)]);
-    if (crowd) out.push(['clash_crowd', -lev(K.link.crowd)]);
-    return out;
-  },
-
   shoot(this: GameSim, off: ST, def: ST, s: ShotOpts) {
     const sh = s.shooter;
     const zone = s.zone;
@@ -218,11 +185,7 @@ export const shotsMethods = {
     for (const [, v] of fit) mine += v;
     // the shape: five-out's open paint, the double post's crowded one (and its bigs inside)
     const shape = this.shapeOpen(off, sh, zone, s.finish);
-    // partnerships: the passer and the shooter's link, the wall a drive meets, the crowded paint
-    const links = this.linkOpen(off, s);
-    let link = 0;
-    for (const [, v] of links) link += v;
-    const open = clamp(s.open + over + mine + shape + link + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
+    const open = clamp(s.open + over + mine + shape + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
     // (a shooter past his share of the threes gets tougher ones from a man defense, or from the chaser
@@ -241,11 +204,6 @@ export const shotsMethods = {
     // the offense's feel (reads, passing, handling) against the defense's team defense (help,
     // on-ball, inside): what lets good teams get good shots and bad ones not, beyond the matchups
     p += ((off.feelQ - def.defQ - K.feelGap) / 50) * K.feel;
-    // familiarity: an offense that doesn't know what it's running gets worse looks, a defense that
-    // doesn't know its rotations gives up better ones (none for a fluid unit)
-    const famO = off.famOff * K.fam.shot;
-    const famD = def.famDef * K.fam.shotD;
-    p += famD - famO;
     // fatigue
     p -= (1 - sh.energy) * 0.12;
     // physicality: tighter contests
@@ -277,16 +235,13 @@ export const shotsMethods = {
       }
     }
     if (over) this.impact('pressure_blowby', off.side, (over + extra('pressure_blowby')) * K.zoneOpen[zone] * value, sh.pid);
-    if (famO) this.impact('fam_off', def.side, famO * value, sh.pid);
     if (shape) this.impact('shape_space', off.side, shape * K.zoneOpen[zone] * value, sh.pid);
-    for (const [k, v] of links) this.impact(k, off.side, v * (K.link.tag[k] ?? 1) * K.zoneOpen[zone] * value, sh.pid);
     if (stopper) this.impact('role_stopper', def.side, stopper * value, sh.pid);
     // (the anchor's share of the rim's contests beyond what he'd get as anyone else, at his edge over an average contester)
     if (c?.drole === 'anchor' && (zone === 'rim' || zone === 'paint') && def.guardOf.get(sh.pid) !== c) {
       const extra = 1 - 1 / levW(K.role.anchorRim);
       this.impact('role_anchor', def.side, extra * ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07 * value, sh.pid);
     }
-    if (famD) this.impact('fam_def', off.side, famD * value, sh.pid);
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
 
     // block?

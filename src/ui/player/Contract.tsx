@@ -91,7 +91,7 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
             {p.contract.tenDay && <div className="tm-deal-note">{tenDayLine(league, p)}</div>}
             {p.rfa && (
               <div className="tm-deal-note">
-                <Term id="qo">Qualifying offer</Term> out ({money(p.rfa.qo)} for {seasonLabel(league.season + 1)}): restricted when free agency opens.
+                <Term id="qo">Qualifying offer</Term> out: {money(p.rfa.qo)} for {seasonLabel(league.season + 1)}. He is restricted when free agency opens.
               </div>
             )}
           </>
@@ -101,7 +101,7 @@ export function ContractSection({ league, p, onExtend, onRelease }: { league: Le
               {p.waivers
                 ? `On waivers: any team can claim his contract until he clears ${p.waivers.until - league.day > 1 ? `in ${p.waivers.until - league.day} days` : 'tomorrow'}.`
                 : p.rfa?.sheet
-                  ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev} (${sheetTerms(league, p)}). ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
+                  ? `Signed an offer sheet with ${league.teams[p.rfa.sheet.tid].abbrev}: ${sheetTerms(league, p)}. ${league.teams[p.rfa.tid].abbrev} can match until the end of ${deadlineLabel(p.rfa.sheet.until)}.`
                   : p.rfa?.tid === league.userTid
                     ? `Your restricted free agent: asking ${money(faAsk.amount)} ${forYears(faAsk.years)}. Unsigned at the close, he takes his ${money(p.rfa.qo)} qualifying offer.`
                     : p.rfa

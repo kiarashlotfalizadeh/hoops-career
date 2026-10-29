@@ -228,8 +228,14 @@ body,
 
 html {
   background: var(--bg);
-  /* a desktop scrollbar keeps its room while a sheet locks the page: nothing shifts sideways */
-  scrollbar-gutter: stable;
+}
+/* a desktop scrollbar keeps its room while a sheet locks the page, so the centred column doesn't
+   shift sideways. Only where the column has room to spare: in a narrow window the gutter would take
+   15px off a phone-sized layout (phones' scrollbars float over the page and take none). */
+@media (min-width: 600px) {
+  html {
+    scrollbar-gutter: stable;
+  }
 }
 body {
   background: transparent;

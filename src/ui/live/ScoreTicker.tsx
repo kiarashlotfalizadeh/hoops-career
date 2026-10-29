@@ -130,10 +130,7 @@ export function ScoresSheet({ league, games, elapsed, done }: { league: League; 
         );
       })}
       <More label="How the clock runs">
-        <div className="small dim">
-          Games tip at the home team&apos;s local 7:00 or 7:30 and run on your game&apos;s clock, so the late ones out West are still to come when an early one ends. Final scores
-          are in once your game is.
-        </div>
+        <div className="small dim">Games tip at 7:00 or 7:30 local time and run on your game&apos;s clock. Late games out West start after early ones end.</div>
       </More>
     </div>
   );

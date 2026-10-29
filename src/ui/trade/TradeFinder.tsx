@@ -83,17 +83,17 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
           <HelpSheet title="Trade finder">
             <p>Every player on another team who can be traded now. Tap one to open the builder with his team and hear their ask.</p>
             <p>
-              <b>Value tiers</b> rank league-neutral trade value (ability, age, potential, contract) among everyone on a roster: Franchise (about one for every two teams),
-              All-Star, Starter, Rotation and Depth. Negative is a contract worth less than nothing. A tier is trade value, not his rating: a cheap young 78 can outrank an
-              expensive 84.
+              <b>Value tiers</b> rank trade value among everyone on a roster. Ability, age, potential and contract all count. Franchise comes first, about one for every two teams.
+              Then All-Star, Starter, Rotation and Depth. Negative is a contract worth less than nothing.
+            </p>
+            <p>A tier is trade value, not rating. A cheap young 78 can outrank an expensive 84.</p>
+            <p>
+              <b>On the block</b>: his team looks ready to move him. His contract is a burden, or he&apos;s a rebuilder&apos;s veteran. <b>Cornerstone</b>: a young star his team
+              builds around. Expect a steep price.
             </p>
             <p>
-              <b>On the block</b>: his team looks ready to move him (his contract is a burden, or he's a rebuilder's veteran). <b>Cornerstone</b>: a young star his team builds
-              around; expect a steep price.
-            </p>
-            <p>
-              <b>Salary you can match</b>: the most you could take back sending up to two of your tradeable contracts (125% of them plus $0.1M, or what fits under the cap after
-              they leave).
+              <b>Salary you can match</b>: the most you could take back for up to two of your contracts. That is 125% of them plus $0.1M, or what fits under the cap after they
+              leave.
             </p>
           </HelpSheet>
         }
@@ -124,11 +124,14 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
                   <OvrPot p={p} />
                   <div className="grow">
                     <div className="fo-prow-name">
-                      <TeamLogo tid={p.tid} size={16} decorative />
-                      <span className="fo-name">{playerName(p)}</span>
+                      {/* his team's mark stays with his name; a flag that doesn't fit wraps under them */}
+                      <span className="fo-finder-n">
+                        <TeamLogo tid={p.tid} size={16} decorative />
+                        <span className="fo-name">{playerName(p)}</span>
+                      </span>
                       <AvailFlag avail={avail} />
                     </div>
-                    <div className="fo-meta">
+                    <div className="fo-meta fo-wrap">
                       <span className="sr-only">{league.teams[p.tid].abbrev} · </span>
                       {/* (the name line keeps its room for the full name: an injury leads the details) */}
                       {p.injury && <span className="bad bold">{outTag(p)} · </span>}
@@ -144,13 +147,13 @@ export function TradeFinder({ league, state, onChange, onPick }: { league: Leagu
             </div>
             {rows.length > limit && (
               <button className="btn ghost block fo-more-btn" onClick={() => setLimit(limit + PAGE)}>
-                Show more ({rows.length - limit} left)
+                Show more · {rows.length - limit} left
               </button>
             )}
           </div>
           {data.locked > 0 && (
             <div className="tiny dim">
-              {data.locked} more can't be traded now ({isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}).
+              {data.locked} more can&apos;t be traded now: {isOffseason(league) ? 'expiring contracts, undecided options and recent signings' : 'recent signings'}.
             </div>
           )}
         </Section>
@@ -249,11 +252,11 @@ export function AskCallout({ league, ask, onClose }: { league: League; ask: Ask;
             {': '}
           </b>
           {!r
-            ? 'trading is closed, but you can plan the deal.'
+            ? 'trading is closed. Plan the deal anyway.'
             : r.offer
               ? `${asked(r.offer).join(' + ') || 'nothing more'}. Loaded below: change it or propose it.`
               : r.why === 'salary'
-                ? `no player (or pair) of yours matches his salary, so ${abbr} can't take it back.`
+                ? `no one or two of your players match his salary, so ${abbr} can't take it back.`
                 : `${abbr} can't find a package of yours they'd take for him.`}
         </div>
         <button className="iconbtn fo-ask-x" aria-label="Dismiss their ask" onClick={onClose}>

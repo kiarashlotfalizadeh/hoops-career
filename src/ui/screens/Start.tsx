@@ -38,7 +38,7 @@ export default function Start() {
       })
       .catch((e) => {
         console.error(e);
-        setError('Saved leagues could not be read from device storage (private browsing, or site data blocked in the browser settings).');
+        setError('Saved leagues could not be read from this device. Private browsing or blocked site data can cause this.');
         setLeagues([]);
       });
   useEffect(() => {
@@ -121,7 +121,7 @@ export default function Start() {
           <br />
           Career
         </h1>
-        <p className="st-tag">GM and head coach of a real NBA roster: build it in the office, coach it on the floor.</p>
+        <p className="st-tag">GM and head coach of a real NBA roster. Build it in the office, coach it on the floor.</p>
         <Statline
           items={[
             { k: 'Teams', v: String(FRANCHISES.length) },

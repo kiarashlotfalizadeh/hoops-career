@@ -43,9 +43,7 @@ export function TwoWaySheet({ p, onClose }: { p: Player | undefined; onClose: ()
               {used}/{TWO_WAY_MAX}
             </Line>
           </div>
-          <p className="fo-lede small">
-            No roster spot or cap room needed. He sits at the end of the bench unless you run short, and can move to a standard minimum deal when a spot opens.
-          </p>
+          <p className="fo-lede small">No roster spot or cap room needed. He sits at the end of the bench unless you run short. He can move to a minimum deal when a spot opens.</p>
           {blocked && <div className="small warn">{blocked}</div>}
           <div className="row">
             <button className="btn grow" onClick={onClose}>
@@ -79,8 +77,8 @@ export function WaiverSheet({ p, onClose }: { p: Player | undefined; onClose: ()
         <div className="col fo-sheet">
           <PlayerHead league={league} p={p} right={<OvrPot p={p} />} />
           <p className="fo-lede small">
-            Released by the {league.teams[w.from].region} {league.teams[w.from].name}. Clears {days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}; until then any
-            team can claim him and take over his contract, worst record first. Unclaimed, he's a free agent.
+            Released by the {league.teams[w.from].region} {league.teams[w.from].name}. Clears {days > 1 ? `in ${days} days` : days === 1 ? 'tomorrow' : 'today'}. Until then, teams
+            claim him worst record first and take over his contract. Unclaimed, he&apos;s a free agent.
           </p>
           <div className="fo-lines">
             {w.contract.salaries.map((amt, i) => {

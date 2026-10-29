@@ -315,7 +315,7 @@ function checkInMail(
   const parts: string[] = [];
   if (target !== undefined && !span) parts.push(`I asked for ${target}`);
   if (picked) parts.push(`the papers picked you for ${picked.wins}`);
-  lines.push(`At ${ts.won}-${ts.lost} you're on pace for ${pace} wins${parts.length ? `; ${parts.join(', ')}` : ''}.`);
+  lines.push(`At ${ts.won}-${ts.lost} you're on pace for ${pace} wins.${parts.length ? ` ${parts.join(', ').replace(/^./, (c) => c.toUpperCase())}.` : ''}`);
   const row = confStandings(league, t.conf).find((r) => r.tid === tid);
   if (row) {
     const conf = t.conf === 'E' ? 'East' : 'West';
@@ -358,7 +358,7 @@ function skidNote(league: League, s: LegacyState) {
   const words = n >= 10 ? 'Ten' : 'Six';
   const opener: Record<OwnerPersonality, string[]> = {
     'win-now': [`${words} straight. Fix it.`, `${words} losses in a row. I don't accept that.`],
-    builder: [`${words} in a row. I can take losses; I can't take a team that stops improving.`, `${words} straight. Show me this isn't who we are.`],
+    builder: [`${words} in a row. I can take losses. I can't take a team that stops improving.`, `${words} straight. Show me this isn't who we are.`],
     frugal: [`${words} straight losses, and the gate is feeling it.`, `${words} in a row. Losing streaks are expensive.`],
   };
   addInbox(league, {

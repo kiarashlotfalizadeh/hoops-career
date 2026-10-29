@@ -81,6 +81,21 @@
     flex: 0 1 220px;
   }
 }
+/* a call's Why, opened under its line: the reasons in the line's size, a paragraph each */
+.ag-row > .more {
+  margin-top: -4px;
+}
+.ag-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.42;
+  color: var(--text-2);
+}
+.ag-detail p {
+  margin: 0;
+}
 .ag-why {
   font-size: 12.5px;
   color: var(--warn);

@@ -83,7 +83,7 @@ describe('screen logic', () => {
         // the glossary: one entry per id, the core jargon in it, and every <Term id> on a screen resolves
         const ids = GLOSSARY.map((g) => g.id);
         expect(new Set(ids).size).toBe(ids.length);
-        for (const id of ['counter', 'luck', 'keys', 'fambands', 'measured', 'per', 'ws', 'closer', 'sta', 'gb', 'playin', 'roles', 'pb-helio', 'role-glue', 'drole-poa'])
+        for (const id of ['counter', 'luck', 'keys', 'measured', 'per', 'ws', 'closer', 'sta', 'gb', 'playin', 'roles', 'pb-helio', 'role-glue', 'drole-poa'])
           expect(glossaryEntry(id), id).toBeTruthy();
         expect(search(index, 'luck').some((e) => e.kind === 'term' && e.termId === 'luck')).toBe(true);
         const sources = import.meta.glob<string>('../**/*.tsx', { query: '?raw', import: 'default', eager: true });

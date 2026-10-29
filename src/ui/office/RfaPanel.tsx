@@ -126,7 +126,7 @@ export function SheetDecision({ league, p }: { league: League; p: Player }) {
         {sheetTerms(league, p)}.
       </div>
       <div className="small">
-        Match by the end of {deadlineLabel(s.until)} to keep him on those terms (a roster spot, not cap room). Let it go, or leave it, and he joins the {t.name}.
+        Match by the end of {deadlineLabel(s.until)} to keep him on those terms. Matching takes a roster spot, not cap room. Let it go, and he joins the {t.name}.
       </div>
       {blocked && <div className="small warn">{blocked}</div>}
       <div className="row fo-callout-btns">
@@ -163,7 +163,7 @@ export function LetGoSheet({ league, p, open, onClose }: { league: League; p: Pl
       {t && (
         <div className="col fo-sheet">
           <p className="fo-lede">
-            {playerName(p)} joins the {t.region} {t.name} on the sheet's terms ({sheetTerms(league, p)}) and his cap hold comes off your books. This can't be undone.
+            {playerName(p)} joins the {t.region} {t.name} at {sheetTerms(league, p)}. His cap hold comes off your books. This can&apos;t be undone.
           </p>
           <div className="row">
             <button className="btn grow" onClick={onClose}>
@@ -198,8 +198,8 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
       }
     >
       <div className="tiny dim">
-        Re-sign with Bird rights, or match an offer sheet within {MATCH_DAYS} days. Unsigned at the close, he plays {seasonLabel(league.season + 1)} on his qualifying offer
-        {full ? ` (with a roster spot: full at ${OFFSEASON_ROSTER_MAX})` : ''}.
+        Re-sign with Bird rights, or match an offer sheet within {MATCH_DAYS} days. Unsigned, he plays {seasonLabel(league.season + 1)} on his qualifying offer.
+        {full ? ` That needs a roster spot, and you're full at ${OFFSEASON_ROSTER_MAX}.` : ''}
       </div>
       <div className="card flush list">
         {mine.map((p) => {
@@ -247,8 +247,8 @@ export function MyRfas({ onResign }: { onResign: (pid: number) => void }) {
         {withdraw && (
           <div className="col fo-sheet">
             <p className="fo-lede">
-              {playerName(withdraw)} becomes an unrestricted free agent now: his {money(withdraw.rfa?.hold ?? 0)} cap hold comes off your books and any team can sign him outright.
-              To bring him back you'd need cap space like anyone else. This can't be undone.
+              {playerName(withdraw)} becomes an unrestricted free agent now. His {money(withdraw.rfa?.hold ?? 0)} cap hold comes off your books, and any team can sign him. To bring
+              him back, you need cap space like anyone else. This can&apos;t be undone.
             </p>
             <div className="row">
               <button className="btn grow" onClick={() => setWithdraw(null)}>

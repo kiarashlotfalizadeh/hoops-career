@@ -188,6 +188,11 @@
   color: #fff;
   transition: opacity var(--dur) ease;
 }
+/* three figures a size down, so the block beside it keeps room for its labels on a phone */
+.lv-lb-score.wide {
+  padding: 0 5px;
+  font-size: clamp(30px, 8.4vw, 44px);
+}
 /* (the side behind reads a shade quieter, as a broadcast's bug has it) */
 .lv-lb-score.behind {
   opacity: 0.62;

@@ -1,7 +1,7 @@
 // Regression tests for the live-game controller: a live game is recorded exactly once, in the
 // league that's open, however the user leaves it (Main menu, a reload, the Play menu), the
-// skips stop at the break, the touchline switches tactic slots, and a game in progress survives
-// the app being closed (its journal plays it back to where it was saved, sets included).
+// skips stop at the break, and a game in progress survives the app being closed (its journal plays
+// it back to where it was saved, sets included).
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CLUTCH_SEC, checkpointLive, clearLive, dropLive, liveInProgress, pendingLive, playedElsewhere, prepareLive, type LiveGame } from '../live';
@@ -17,10 +17,8 @@ import { guideDone } from '../../core/league/agenda';
 import type { League, LiveJournal, Rotation } from '../../core/types';
 import { gamesOnDay } from '../../core/league/games';
 import { emptyPatch, tacticsDiff } from '../../core/sim/tactics';
-import { copyToSlot } from '../../core/sim/slots';
 import { snapshot, subsLine } from '../../ui/live/drawn';
-import { currentSlot, liveOpt, liveSlots, replaceWith, slotForGame, tipSlot, withMentalityOf } from '../../ui/live/familiar';
-import { resetToPlan } from '../../ui/live/pills';
+import { resetToPlan, withMentalityOf } from '../../ui/live/pills';
 import type { PossLog } from '../../core/sim/log';
 import { oppPlanIn, preparesPlan } from '../../core/ai/opponentPlan';
 import { userGameOnDay } from '../../core/league/games';
@@ -85,7 +83,7 @@ function coachedGame(l: League): LiveGame {
   return lg;
 }
 
-/** A live game coached with sets: a package and an after-timeout set, timeouts to run it, and a clear-out called from the bench for the go-to player. */
+/** A live game coached with sets: an after-timeout set, timeouts to run it, a set called out of the huddle, and a clear-out called from the bench for the go-to player. */
 function setsGame(l: League): LiveGame {
   const lg = goLive(l);
   const play = (n: number) => {
@@ -93,7 +91,6 @@ function setsGame(l: League): LiveGame {
   };
   play(10);
   const t = lg.sim.baseTactics(lg.userSide);
-  t.offense.sets = ['floppy', 'spain', 'hammer'];
   t.manage.ato = 'elevator';
   t.manage.goTo = lg.sim.T[lg.userSide].on[0].pid;
   lg.setTactics(t);
@@ -111,20 +108,6 @@ function setsGame(l: League): LiveGame {
   expect(lg.callPlay('iso', lg.sim.closer(lg.sim.T[lg.userSide])!.pid)).toBe(true);
   play(6);
   return lg;
-}
-
-/** A league on game day whose Tactic B is a 2-3 zone out of the 5-Out. */
-function withPlanB(): League {
-  const l = testLeague('slots');
-  toGameDay(l);
-  const team = l.teams[l.userTid];
-  copyToSlot(team, 1);
-  const b = team.slots!.stored[1]!;
-  // (a 3-2: the user's staff may base on the 2-3)
-  b.defense.scheme = 'zone32';
-  b.offense.shape = 'fiveOut';
-  team.slots!.names[1] = 'Zone look';
-  return l;
 }
 
 describe('live game', () => {
@@ -364,7 +347,7 @@ describe('live game', () => {
     }
   });
 
-  it('coaching it: skips stop at the break, the tactic slots on the touchline, the reports and Subs sheet as the game stands, the highlights kept', { timeout: 180_000 }, () => {
+  it('coaching it: skips stop at the break, the reports and Subs sheet as the game stands, the highlights kept', { timeout: 180_000 }, () => {
     fresh();
 
     // skipping to the end of a quarter stops at the break (E12)
@@ -442,74 +425,20 @@ describe('live game', () => {
       fresh();
     }
 
-    // the touchline switches to another tactic with tonight's orders kept, and knows which one is in play
-    {
-      const l = withPlanB();
-      const lg = goLive(l);
-      const league = useStore.getState().league!;
-      expect(currentSlot(league, lg)).toBe(0);
-      const now = lg.sim.baseTactics(lg.userSide);
-      // a matchup of tonight's carries over
-      const theirs = lg.sim.T[1 - lg.userSide].players[0].pid;
-      const mine = lg.sim.T[lg.userSide].players[0].pid;
-      now.defense.matchups = { [theirs]: mine };
-      const b = slotForGame(league, lg, 1, now)!;
-      expect(b.defense.scheme).toBe('zone32');
-      expect(b.offense.shape).toBe('fiveOut');
-      expect(b.defense.matchups[theirs]).toBe(mine);
-      // an empty slot has nothing to switch to
-      expect(slotForGame(league, lg, 2, now)).toBeNull();
-      lg.setTactics(b);
-      expect(currentSlot(league, lg)).toBe(1);
-      // a change on it: still Tactic B
-      const tweak = lg.sim.baseTactics(lg.userSide);
-      withMentalityOf(tweak, 1, lg.planned);
-      lg.setTactics(tweak);
-      expect(currentSlot(league, lg)).toBe(1);
-      expect(tipSlot(league, lg)).toBe(0);
-      // the touchline's figures: B is less familiar than A (a zone and a shape the team hasn't drilled)
-      const { cur, slots } = liveSlots(league, lg, lg.sim.baseTactics(lg.userSide));
-      expect(cur).toBe(1);
-      expect(slots[0].fam).toBeGreaterThan(slots[1].fam);
-      expect(slots[2].tactics).toBeNull();
-      expect(liveOpt(lg, 'scheme:zone32')).toBeLessThan(liveOpt(lg, `scheme:${league.teams[league.userTid].tactics.defense.scheme}`));
-      // "Reset to game plan": back on A
-      const back = lg.sim.baseTactics(lg.userSide);
-      resetToPlan(back, lg.planned);
-      lg.setTactics(back);
-      expect(currentSlot(league, lg)).toBe(0);
-      fresh();
-    }
-
     // replaces tactics whole, and puts a mentality back to the game's own value
     {
-      const l = withPlanB();
+      const l = testLeague('reset');
+      toGameDay(l);
       const lg = goLive(l);
       const x = lg.sim.baseTactics(lg.userSide);
       x.mentality = 2;
-      replaceWith(x, lg.planned);
+      resetToPlan(x, lg.planned);
       expect(x.mentality).toBe(lg.planned.mentality);
       withMentalityOf(x, 1, lg.planned);
       expect(x.mentality).toBe(1);
       withMentalityOf(x, lg.planned.mentality ?? 0, lg.planned);
       expect(emptyPatch(tacticsDiff(lg.planned, x))).toBe(true);
       expect(JSON.stringify(x)).toBe(JSON.stringify(lg.planned));
-      fresh();
-    }
-
-    // names the switch in the night's moves
-    {
-      const l = withPlanB();
-      const lg = goLive(l);
-      const league = useStore.getState().league!;
-      lg.simTo('quarter');
-      lg.setTactics(slotForGame(league, lg, 1, lg.sim.baseTactics(lg.userSide))!);
-      lg.simTo('end');
-      let res = null as ReturnType<LiveGame['commit']> | null;
-      useStore.getState().mutate((x) => void (res = lg.commit(x)));
-      expect(res!.moves?.[0].text).toBe('Switched to Tactic B (Zone look)');
-      // and the saved tactics are still Tactic A's
-      expect(useStore.getState().league!.teams[league.userTid].tactics.defense.scheme).not.toBe('zone32');
       fresh();
     }
 
@@ -804,12 +733,12 @@ describe('live game', () => {
       fresh();
     }
 
-    // sets: an after-timeout set and a set package are journaled and played back exactly
+    // sets: an after-timeout set and the plays called are journaled and played back exactly
     {
       const l = testLeague('sets-journal');
       toGameDay(l);
       const lg = setsGame(l);
-      // the game ran sets (its package, the after-timeout play)
+      // the game ran sets (the after-timeout play, the call)
       expect(lg.logs.filter((x) => x.set && x.off === lg.userSide).length).toBeGreaterThan(1);
       // the call is journaled, ran on a trip of ours, and is one of the night's moves
       expect(l.live!.ops.some((o) => o.op === 'play' && o.args.set === 'hammer')).toBe(true);
@@ -1062,20 +991,16 @@ describe('live game', () => {
       checkpointLive(l);
       const saved = JSON.parse(JSON.stringify(l)) as League;
       expect(migrate(structuredClone(saved)).live).toEqual(saved.live);
-      // tactics: unknown sets go, the package keeps four at most and each once; a damaged after-timeout play goes
+      // tactics: a damaged after-timeout play goes
       const z = structuredClone(saved);
       const ut = z.teams[z.userTid].tactics as unknown as { offense: Record<string, unknown>; manage: Record<string, unknown> };
-      ut.offense.sets = ['flex', 'floppy', 'floppy', 'spain', 'horns', 'hammer', 'chicago'];
       ut.manage.ato = 'flex';
       ut.manage.atoPid = 'x';
       const ai = z.teams[(z.userTid + 1) % z.teams.length].tactics as unknown as { offense: Record<string, unknown>; manage: Record<string, unknown> };
-      ai.offense.sets = 'floppy';
       ai.manage.ato = 'spain';
       const m = migrate(z);
-      expect(m.teams[m.userTid].tactics.offense.sets).toEqual(['floppy', 'spain', 'horns', 'hammer']);
       expect(m.teams[m.userTid].tactics.manage.ato).toBeUndefined();
       expect(m.teams[m.userTid].tactics.manage.atoPid).toBeUndefined();
-      expect(m.teams[(m.userTid + 1) % m.teams.length].tactics.offense.sets).toBeUndefined();
       expect(m.teams[(m.userTid + 1) % m.teams.length].tactics.manage.ato).toBe('spain');
       // a result's set tallies in shape, or dropped
       const res = lg.commit(l);

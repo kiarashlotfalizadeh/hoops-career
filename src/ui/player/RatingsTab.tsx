@@ -17,6 +17,9 @@ import { ScoutingProfile } from './Overview';
 /** Median OVR of rostered players (the display scale puts the 50th percentile here). */
 const AVERAGE_OVR = 74;
 
+/** "a 77", "an 87", "an 11": the article a figure takes when it's read aloud. */
+const an = (n: number) => (/^(8|11|18)/.test(String(n)) && !/^1[1-8]\d/.test(String(n)) ? 'an' : 'a');
+
 const RATING_GROUPS = ['Physical', 'Scoring', 'Playmaking', 'Defense', 'Rebounding'] as const;
 
 /**
@@ -54,10 +57,11 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
   return (
     <>
       <ScoutingProfile league={league} p={p} />
-      <Section title={`Why he's a ${p.ovr}`}>
+      <Section title={`Why he's ${an(p.ovr)} ${p.ovr}`}>
         <div className="tm-why">
           <div className="tm-why-sum">
-            {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} ${contribs.gap > 0 ? 'above' : 'below'}`} an average player ({AVERAGE_OVR} <Term id="ovr">OVR</Term>)
+            {contribs.gap === 0 ? 'Right at' : `${Math.abs(contribs.gap)} ${contribs.gap > 0 ? 'above' : 'below'}`} the average player&apos;s {AVERAGE_OVR}{' '}
+            <Term id="ovr">OVR</Term>
           </div>
           <div className="tm-why-cols">
             {[
@@ -108,7 +112,7 @@ export function RatingsTab({ p, league }: { p: Player; league: League }) {
         ))}
       </div>
       <div className="tm-foot">
-        <RatingBands named />. Arrows: the change {since}. Tap a rating for what it does.
+        <RatingBands named />. Arrows: change {since}. Tap a rating for what it does.
       </div>
     </>
   );

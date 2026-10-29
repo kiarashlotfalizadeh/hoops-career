@@ -1,32 +1,15 @@
-// Sets as the engine runs them (the library is ../sets.ts): the set package's picks on fresh trips,
-// the cast and the openness a set adds to its look against this defense, the defense's read of it
-// from the runs before (openness lost, passes jumped), and the night's tally of each set's runs and
-// points. An action takes its set when it starts, so the actions it hands on to never see it.
+// Sets as the engine runs them (the library is ../sets.ts): the cast and the openness a set adds to
+// its look against this defense, the defense's read of it from the runs before (openness lost, passes
+// jumped), and the night's tally of each set's runs and points. An action takes its set when it
+// starts, so the actions it hands on to never see it.
 
 import type { ActionType, SetId, SetStat } from '../../types';
-import { READ_ON_IT, SET_K, castFor, fitsFloor, readAfter, readSlots, setEdges, setLabel, setLook, setPackage, type DefRead, type Slot } from '../sets';
+import { READ_ON_IT, SET_K, castFor, readAfter, readSlots, setEdges, setLabel, setLook, type DefRead, type Slot } from '../sets';
 import { K, lev } from './constants';
 import type { SP, ST, SetPlay } from './state';
 import type { GameSim } from './game';
 
 export const setPlaysMethods = {
-  /**
-   * Now and then (SET_K.rate a trip for each set in the package) a fresh trip runs one of the
-   * package's sets the five on the floor fit, favoring the ones run least tonight; the staff stops
-   * running one once the defense is on it (only an after-timeout play runs it again). No package, no
-   * draws.
-   */
-  packageSet(this: GameSim, off: ST, def: ST): { id: SetId; pid: null } | null {
-    const pkg = off.t.offense.sets;
-    if (!pkg?.length) return null;
-    const ids = setPackage(off.t);
-    if (!ids.length || !this.rng.chance(SET_K.rate * ids.length)) return null;
-    const coach = def.team.coach?.tactics ?? 50;
-    const fit = ids.filter((id) => readAfter(id, off.setRuns.get(id) ?? 0, coach) < READ_ON_IT && fitsFloor(id, off.on));
-    if (!fit.length) return null;
-    return { id: fit[this.rng.weighted(fit.map((id) => 1 / (1 + (off.setRuns.get(id) ?? 0))))], pid: null };
-  },
-
   /**
    * Set `id` run now for player `pid` (the best fit when he isn't on the floor): its cast, its edges
    * against this defense, the defense's read of it from the runs before, and the look the team goes

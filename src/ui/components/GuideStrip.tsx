@@ -22,7 +22,7 @@ export function GuideStrip({ step, keep, line, act }: { step: GuideStep; keep: s
     <div className={`card guide-strip${act ? ' stacked' : ''}`} role="note" aria-label="First-week guide">
       <div className="grow">
         <div className="guide-k">
-          First games · {i + 1} of {GUIDE_STEPS.length}
+          First games · step {i + 1} of {GUIDE_STEPS.length}
         </div>
         <div className="guide-t">{guideStepTitle(league, step)}</div>
         <div className="guide-l">{line ?? s.line}</div>

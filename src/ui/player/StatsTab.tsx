@@ -105,22 +105,26 @@ export function StatsTab({ p, league }: { p: Player; league: League }) {
       )}
       <div className="tm-foot">
         Per game.{' '}
-        {real ? (
-          <More label="“real” seasons and advanced stats">
+        <More label={real ? 'Real seasons and advanced stats' : 'Advanced stats'}>
+          {real && (
             <p className="tm-more-p">
-              “real” seasons, regular season and playoffs, come from NBA.com&apos;s box scores, with games started and shots by zone from its play-by-play; their PER, win shares
-              and BPM are Basketball Reference&apos;s (regular seasons only), and only they have BPM. PER and win shares for seasons played in this league are worked out from their
-              box scores the way Basketball Reference does (not in the playoffs).
+              Real seasons come from NBA.com&apos;s box scores and play-by-play. Their PER, win shares and BPM are Basketball Reference&apos;s, regular seasons only. Only they have
+              BPM.
             </p>
-          </More>
-        ) : (
-          'PER and win shares come from each box score, as Basketball Reference works them (not in the playoffs).'
-        )}
+          )}
+          <p className="tm-more-p">PER and win shares for seasons in this league come from each box score, as Basketball Reference works them. The playoffs have neither.</p>
+        </More>
       </div>
+      {/* his impact estimate: the figure on show, how it's measured a tap down */}
       {!po && p.proj?.season === league.season && p.proj.tot !== undefined && (
         <div className="tm-foot">
-          Impact going into {seasonLabel(p.proj.season)}: {signed(p.proj.tot)} points per 100 possessions ({signed(p.proj.off!)} offense, {signed(p.proj.def!)} defense), from his
-          teams&apos; lineups over seven seasons and his box line ({Math.round(p.proj.mpg)} minutes a game), aged a year. His ratings make him worth that in the engine.
+          Impact going into {seasonLabel(p.proj.season)}: {signed(p.proj.tot)} per 100 possessions.{' '}
+          <More label="How it's measured">
+            <p className="tm-more-p">
+              {signed(p.proj.off!)} on offense, {signed(p.proj.def!)} on defense. It comes from his teams&apos; lineups over seven seasons and his box line at{' '}
+              {Math.round(p.proj.mpg)} minutes a game, aged a year. His ratings make him worth that in the engine.
+            </p>
+          </More>
         </div>
       )}
       {!po && <CareerHighs p={p} league={league} />}

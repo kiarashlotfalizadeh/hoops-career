@@ -77,12 +77,10 @@ export function PresetFit({
       <div className="tx-why-head">
         <span className={`tx-fitv tx-read ${fitTone(mine ? f.total : f.vs)}`}>{readText(mine ? f.total : f.vs)}</span>
         <span className="grow">
-          <span className="tx-why-rank">
-            {mine ? 'In use: a game against an average playbook' : `A game against ${curName}`} · {ordinal(f.rank)} of {presets.length} {kind === 'off' ? 'offenses' : 'defenses'}{' '}
-            for your roster
-          </span>
+          <span className="tx-why-rank">{mine ? 'A game against an average playbook' : `A game against ${curName}`}</span>
           <span className="tx-term-s">
-            The staff&apos;s read, once drilled{best.id === id ? '' : `. Best: ${best.name}`}. Make the change and they measure it on your next games.
+            Staff&apos;s read · {ordinal(f.rank)} of {presets.length} {kind === 'off' ? 'offenses' : 'defenses'} for your roster
+            {best.id === id ? '' : `. Best: ${best.name}`}
           </span>
         </span>
       </div>
@@ -105,9 +103,9 @@ export function PresetFit({
         })}
         <div className="tx-term">
           <span className="tx-term-v num bold">{readText(f.total)}</span>
-          <span className="grow tx-term-l">Against an average playbook, for your roster</span>
+          <span className="grow tx-term-l">Total against an average playbook</span>
         </div>
-        {!parts.length && <div className="small dim2">It doesn&apos;t lean on any one quality: about the same for every roster.</div>}
+        {!parts.length && <div className="small dim2">It leans on no one quality, so it reads the same for most rosters.</div>}
       </div>
       {levers.length > 0 && best.id !== id && (
         <div className="tx-terms">

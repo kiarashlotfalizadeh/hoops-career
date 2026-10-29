@@ -1,7 +1,7 @@
 // The staff's numbers on its calls, and "Leave it to the staff" on a series call.
 //
-// A call whose choice needs a number (the week's counter for its big game, a skid's change, the
-// adjustment when behind in a series, the week's practice, what a hurt star is worth: see calls.ts's
+// A call whose choice needs a number (a skid's change, the adjustment when behind in a series, the
+// young players' minutes, what a hurt star is worth: see calls.ts's
 // CallMeasure) is measured as its row shows, in the sim worker, one at a time (a newer measurement
 // stops the one in flight, so two rows would only stop each other): "The staff is measuring…" with
 // how far it has got, then the numbers, kept on the league (storeWorth) so the card, the staff's

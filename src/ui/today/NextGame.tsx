@@ -16,6 +16,7 @@ import { draftOrder } from '../../core/league/draft';
 import { expiringPlayers } from '../../core/league/freeAgency';
 import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
+import { keep } from '../components/ui';
 import { flowActions, liveScoreText, stillAlive } from '../flow';
 import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
@@ -246,9 +247,8 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
         <span className="td-next-t">
           {g.home === me ? 'vs' : 'at'} {t.name}
         </span>
-        <span className="td-next-m">
-          {whenLabel(league, g.day)} · {bills[0]?.tag ?? kindOf(league, g)} · {r.won}-{r.lost}
-        </span>
+        {/* (when, the billing if it has one, their record: "Game 29 of 82" is on the game's own page) */}
+        <span className="td-next-m">{keep([whenLabel(league, g.day), bills[0]?.tag, `${r.won}-${r.lost}`].filter(Boolean).join(' · '))}</span>
         {out && <span className="td-next-m td-next-out">{out}</span>}
       </span>
       <span className="td-next-win">
@@ -370,7 +370,7 @@ export function PhaseCard({ league, linked = [] }: { league: League; linked?: (s
               <li key={g.kind}>{previewTitle(g)}</li>
             ))}
           </ul>
-          <p className="td-phase-gn">{[...goalsWhy(goals).slice(0, 1), "I'll set the final numbers on opening night, from the roster you open with."].join(' ')}</p>
+          <p className="td-phase-gn">{[...goalsWhy(goals, 'screen').slice(0, 1), 'He sets the final numbers on opening night.'].join(' ')}</p>
         </div>
       )}
     </section>

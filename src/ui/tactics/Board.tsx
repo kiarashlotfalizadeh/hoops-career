@@ -1,36 +1,31 @@
 // The tactics board, Football Manager's way with a basketball court: the starting five (the rotation's
 // first five) where the formation puts them, in possession by the offensive shape, out of possession
-// by the defensive scheme. Each plate is a player with his role at that end, how well he suits it (one
-// figure: his stars of five, as his sheet shows them) and a dot for how well he knows his role pair; a
-// tap opens his player sheet. The board's heading is its end, the switch between them. Lines join the
-// partners whose roles link at that end (heavier the more of it the engine plays), a red dashed one
-// the bigs who crowd the paint. Over the court, the formation's picker (the shape, or the scheme and
-// coverage) with each choice's fit for this roster and how well the team knows it.
+// by the defensive scheme. Each plate is a player with his role at that end and how well he suits it
+// (one figure: his stars of five, as his sheet shows them); a tap opens his player sheet. The board's
+// heading is its end, the switch between them. Over the court, the formation's picker: the shape, with
+// each shape's fit for this roster, or the scheme (its one home; the coverage is on Instructions).
 import { useMemo, type CSSProperties } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import type { DefScheme, Familiarity, OffShape, Player, PnrCoverage, Tactics } from '../../core/types';
+import type { DefScheme, OffShape, Player, Tactics } from '../../core/types';
 import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
 import { ROLE_META, archetype } from '../../core/ratings';
-import { ALL_SCHEMES, COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
-import { famLabel, optValue, roleFam } from '../../core/sim/familiarity';
+import { ALL_SCHEMES, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf } from '../../core/sim/tactics';
 import { betterFit, defRoleFits, roleFits, roleScale, roleStars, type RoleScale } from '../../core/analysis/system';
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
 import { rosterNames } from '../stats';
-import { LINK_META, type Clash, type Link } from '../../core/sim/links';
 import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
 import { HeadSwitch } from './HeadSwitch';
 import { tweak } from './edit';
-import { BOARD_H, DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from './formation';
-import { linkKey, linkLine, linksOnSide, plateAt } from './partners';
+import { BOARD_H, DEF_SPOTS, OFF_SPOTS, fitPts, place, type BoardPlayer } from './formation';
 
 export type BoardSide = 'in' | 'out';
 
 const NO_ORDER: number[] = [];
 
-/** A player's place on the board: his roles at both ends, how well he suits each, his pair's familiarity. */
+/** A player's place on the board: his roles at both ends, and how well he suits each. */
 interface Row {
   p: Player;
   off: keyof typeof ROLE_META;
@@ -41,10 +36,9 @@ interface Row {
   /** A role at each end that suits him clearly better (miscast: two stars or more), if there is one. */
   offBetter: keyof typeof ROLE_META | null;
   defBetter: (typeof DEF_ROLES)[number] | null;
-  pair: number;
 }
 
-function rowOf(t: Tactics, fam: Familiarity, p: Player, scale: RoleScale): Row {
+function rowOf(t: Tactics, p: Player, scale: RoleScale): Row {
   const of = roleFits(p);
   const df = defRoleFits(p);
   const off = t.offense.roles[p.pid] ?? archetype(p.ratings).role;
@@ -57,7 +51,6 @@ function rowOf(t: Tactics, fam: Familiarity, p: Player, scale: RoleScale): Row {
     defStars: roleStars(scale.def[def], df[def]),
     offBetter: betterFit(scale.off, of, off),
     defBetter: betterFit(scale.def, df, def),
-    pair: roleFam(fam, t, p),
   };
 }
 
@@ -71,26 +64,16 @@ export function Board({
   t,
   players,
   five,
-  fam,
   side,
   setSide,
-  links,
-  clashes,
-  focus,
   onPick,
 }: {
   t: Tactics;
   /** The whole roster (the shapes' fits), and the five on the board. */
   players: Player[];
   five: Player[];
-  fam: Familiarity;
   side: BoardSide;
   setSide: (s: BoardSide) => void;
-  /** The five's partnerships and clashes (lineupLinks). */
-  links: Link[];
-  clashes: Clash[];
-  /** A link picked in the Partnerships card (linkKey): its line stands out and is named. */
-  focus?: string | null;
   /** Opens a player's sheet. */
   onPick: (pid: number) => void;
 }) {
@@ -99,7 +82,7 @@ export function Board({
   const nameOf = useMemo(() => rosterNames(players), [players]);
   const order = team.rotation?.order ?? NO_ORDER;
   const scale = useLeagueMemo(() => roleScale(league), [league]);
-  const rows = five.map((p) => rowOf(t, fam, p, scale));
+  const rows = five.map((p) => rowOf(t, p, scale));
   const inPoss = side === 'in';
   const shape = shapeOf(t.offense);
   const spots = inPoss ? OFF_SPOTS[shape] : DEF_SPOTS[t.defense.scheme];
@@ -111,29 +94,6 @@ export function Board({
     }),
   );
   const fits = useLeagueMemo(() => shapeFits(fitRoster(players), t, order), [players, t, order]);
-  // the lines: this end's links, and in possession the bigs who crowd the paint
-  const shown = linksOnSide(links, side);
-  const crowd = inPoss ? clashes.filter((c) => c.id === 'crowd') : [];
-  const clashed = new Set(crowd.flatMap((c) => c.pids));
-  const at = (pid: number) => {
-    const sp = placed.get(pid);
-    return sp ? plateAt(sp) : null;
-  };
-  const named = shown.find((l) => linkKey(l) === focus);
-  const famOf = (key: string) => optValue(fam, key);
-  const famSub = (key: string, extra?: string) => {
-    const v = famOf(key);
-    return (
-      <>
-        {/* (how well the team knows this choice: "known", as the overall familiarity is the hero's) */}
-        <span className={famTone(v)}>
-          {Math.round(v)}% known<span className="sr-only">, {famLabel(v).toLowerCase()}</span>
-        </span>
-        {extra && <> · {extra}</>}
-      </>
-    );
-  };
-
   return (
     <Section
       className="tx-boardsec"
@@ -155,23 +115,16 @@ export function Board({
       right={
         <Help title="Tactics board">
           <p>
-            Your starting five (the rotation&apos;s first five) where your tactic puts them: in possession by your <Term id="shape">shape</Term>, out of possession by your scheme
-            and each player&apos;s <Term id="defroles">defensive role</Term>.
+            Your starting five, where your tactic puts them. In possession by your <Term id="shape">shape</Term>, out of it by your scheme.
           </p>
           <p>
-            Each plays a <Term id="roles">role</Term> at each end (Primary Creator, Rim Runner, Glue Guy…; <Term id="defroles">defensive roles</Term> out of possession). The figure
-            (4★) is how well he suits his role at that end against the league&apos;s rotation players at it, out of five; an amber edge means another role suits him clearly better
-            (two stars or more). The dot is how well he knows his pair of roles (<Term id="familiarity">familiarity</Term>): green fluid or familiar, amber learning, red new to it.
+            Each plays a <Term id="roles">role</Term> at each end. The ★ figure rates his fit out of five, against others in that role.
           </p>
-          <p>
-            A line joins two players whose roles make a <Term id="partnership">partnership</Term> at that end: the heavier and darker, the more of it they play (it grows with their{' '}
-            <Term id="understanding">understanding</Term>). A red dashed line is two bigs crowding the paint.
-          </p>
-          <p>Tap a player for his roles, shot freedom, glass duty and screens.</p>
+          <p>An amber edge means another role suits him two stars better. Tap a player to set his roles.</p>
         </Help>
       }
     >
-      {/* the board as one printed object: the formation's pickers, the floor, the row to the bench */}
+      {/* the board as one printed object: the formation's picker over the floor */}
       <div className="card flush tx-boardcard">
         <div className="tx-formation">
           {inPoss ? (
@@ -184,12 +137,7 @@ export function Board({
                   else tt.offense.shape = s;
                 })
               }
-              help={
-                <>
-                  Where your five stand in the half court, whatever the playbook: any playbook runs from any shape. The figure is the staff&apos;s read of what the shape is worth a
-                  game for this roster against 4-out, 1-in, once drilled; the % is how well your team knows it. Change it and the staff measures it on your next games.
-                </>
-              }
+              help={<>Where your five stand in the half court, with any playbook. Each figure is the staff&apos;s read for this roster against 4-Out, 1-In.</>}
               options={[...OFF_SHAPES]
                 .sort((a, b) => fits[b] - fits[a])
                 .map((s) => ({
@@ -197,7 +145,12 @@ export function Board({
                   label: SHAPE_META[s].label,
                   sub: (
                     <>
-                      <b className={fitClass(fits[s])}>{fitPts(fits[s])} a game</b> · {famSub(`shape:${s}`, first(SHAPE_META[s].help))}
+                      {s !== 'fourOut' && (
+                        <>
+                          <b className={fitClass(fits[s])}>{fitPts(fits[s])} a game</b> ·{' '}
+                        </>
+                      )}
+                      {first(SHAPE_META[s].help)}
                       <span className="tx-shape-gb">
                         <span>
                           <b className="good">+</b> {SHAPE_META[s].good}
@@ -210,38 +163,21 @@ export function Board({
                   ),
                 }))}
               note={
-                shape === 'fourOut' ? (
-                  <>The default, whatever the playbook · {famSub('shape:fourOut')}</>
-                ) : (
+                shape === 'fourOut' ? undefined : (
                   <>
-                    <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> a game vs 4-out · {famSub(`shape:${shape}`)}
+                    Staff&apos;s read: <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> a game against 4-Out, 1-In
                   </>
                 )
               }
             />
           ) : (
-            <>
-              <PickRow<DefScheme>
-                label="Scheme"
-                value={t.defense.scheme}
-                onChange={(x) => tweak((tt) => void (tt.defense.scheme = x))}
-                help="Your base defense. The % is how well your team knows each."
-                options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label, sub: famSub(`scheme:${k}`, first(SCHEME_META[k].help)) }))}
-                note={famSub(`scheme:${t.defense.scheme}`)}
-              />
-              <PickRow<PnrCoverage>
-                label="Ball screens"
-                value={t.defense.pnr}
-                onChange={(x) => tweak((tt) => void (tt.defense.pnr = x))}
-                help="How you guard the pick-and-roll. The % is how well your team knows each."
-                options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({
-                  id: k,
-                  label: COVERAGE_META[k].label,
-                  sub: famSub(`pnr:${k}`, first(COVERAGE_META[k].help)),
-                }))}
-                note={famSub(`pnr:${t.defense.pnr}`)}
-              />
-            </>
+            <PickRow<DefScheme>
+              label="Scheme"
+              value={t.defense.scheme}
+              onChange={(x) => tweak((tt) => void (tt.defense.scheme = x))}
+              help={<>Your base defense, and where your five stand. A game plan&apos;s junk defense picks who the chasers guard.</>}
+              options={ALL_SCHEMES.map((k) => ({ id: k, label: SCHEME_META[k].label, sub: SCHEME_META[k].help }))}
+            />
           )}
         </div>
 
@@ -271,37 +207,6 @@ export function Board({
             <path d="M 44 2.6 H 56" className="tx-floor-board" />
             <circle cx="50" cy="4.6" r="1.6" className="tx-floor-rim" fill="none" />
           </svg>
-          {/* the partnerships and the clash, under the plates */}
-          <svg className="tx-floor-links" viewBox={`0 0 100 ${BOARD_H}`} preserveAspectRatio="none" aria-hidden="true">
-            {crowd.map((c) =>
-              c.pids.slice(1).map((pid, i) => {
-                const a = at(c.pids[i]);
-                const b = at(pid);
-                return a && b ? <line key={`crowd${pid}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className="tx-clash-l" /> : null;
-              }),
-            )}
-            {shown.map((l) => {
-              const a = at(l.a);
-              const b = at(l.b);
-              if (!a || !b) return null;
-              const st = linkLine(l.strength);
-              const k = linkKey(l);
-              return (
-                <line
-                  key={k}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  className={`tx-link-l${focus ? (k === focus ? ' on' : ' off') : ''}`}
-                  strokeWidth={k === focus ? Math.max(1.4, st.width) : st.width}
-                  strokeOpacity={k === focus ? 1 : st.opacity}
-                  strokeDasharray={st.dashed ? '1.4 1.2' : undefined}
-                />
-              );
-            })}
-          </svg>
-          {named && <LinkTag spot={mid(at(named.a), at(named.b))} label={LINK_META[named.id].label} />}
           {rows.map((r) => {
             const spot = placed.get(r.p.pid);
             if (!spot) return null;
@@ -314,13 +219,12 @@ export function Board({
               <button
                 key={r.p.pid}
                 role="listitem"
-                className={`tx-floor-p${off ? ' off' : ''}${clashed.has(r.p.pid) ? ' clash' : ''}`}
+                className={`tx-floor-p${off ? ' off' : ''}`}
                 style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
                 onClick={() => onPick(r.p.pid)}
-                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}${clashed.has(r.p.pid) ? '; crowds the paint' : ''}; knows his roles ${Math.round(r.pair)}%`}
+                aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}`}
               >
                 <span className="tx-floor-n">
-                  <i className={`tx-famdot ${famTone(r.pair)}`} aria-hidden="true" />
                   <span className="ellipsis">{nameOf(r.p.pid)}</span>
                 </span>
                 <span className="tx-floor-r">
@@ -330,25 +234,12 @@ export function Board({
                     <i>★</i>
                   </span>
                 </span>
-                {r.p.injury && <span className="tx-floor-best">Injured</span>}
+                {r.p.injury && <span className="tx-floor-best">Out</span>}
               </button>
             );
           })}
         </div>
       </div>
     </Section>
-  );
-}
-
-/** The middle of two plates, where a picked link is named. */
-const mid = (a: { x: number; y: number } | null, b: { x: number; y: number } | null) => (a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null);
-
-/** A picked link's name on the court, at the middle of its line. */
-function LinkTag({ spot, label }: { spot: Pick<Spot, 'x' | 'y'> | null; label: string }) {
-  if (!spot) return null;
-  return (
-    <span className="tx-link-tag" style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}>
-      {label}
-    </span>
   );
 }

@@ -1,7 +1,8 @@
-// Who guards whom against one opponent: their projected top eight, the staff's defender for each at
-// tip-off or the plan's own (setPlanMatchup), with the numbers behind the pairing. One row per player
-// of theirs; a tap opens the choice.
-import { useState } from 'react';
+// Who guards whom against one opponent: their projected top eight, starters then bench, the staff's
+// defender for each at tip-off or the plan's own (setPlanMatchup). One row per player of theirs: his
+// name and your defender, then the pairing's sharpest note (or his position and height); a tap opens
+// the choice, every note beside each defender.
+import { Fragment, useState } from 'react';
 import { Check, ChevronRight } from 'lucide-react';
 import type { League, Player } from '../../core/types';
 import { previewMatchups, matchupNotes } from '../../core/analysis/matchupPreview';
@@ -15,8 +16,11 @@ import { teamPlayers } from '../../core/league/helpers';
 import { Avatar, Help, Ovr, Section, Sheet, Tag } from './ui';
 import './scouting.css';
 
-function Notes({ them, me }: { them: Player; me: Player }) {
-  const notes = matchupNotes(them, me);
+/** A pairing's notes, the sharpest first (a mismatch to fix, then one worth watching, then your edge); `one`: that one alone. */
+function Notes({ them, me, one }: { them: Player; me: Player; one?: boolean }) {
+  const rank = { bad: 0, warn: 1, good: 2 } as const;
+  const all = [...matchupNotes(them, me)].sort((a, b) => rank[a.tone] - rank[b.tone]);
+  const notes = one ? all.slice(0, 1) : all;
   if (!notes.length) return null;
   return (
     <div className="gp-notes">
@@ -36,7 +40,7 @@ function shootingLine(l: GuardLine | undefined): string {
   if (!l || l.source === 'ratings') return '';
   const parts = [Number.isFinite(l.tpPct) && l.tpa >= 0.5 ? `${pct1(l.tpPct)} 3P on ${l.tpa.toFixed(1)}` : `${l.tpa.toFixed(1)} 3PA`];
   if (Number.isFinite(l.ftPct) && l.fta >= 1) parts.push(`${pct1(l.ftPct)} FT`);
-  return `${parts.join(' · ')} a game${l.source === 'last' ? ' (last season)' : ''}`;
+  return `${parts.join(' · ')} a game${l.source === 'last' ? ' · last season' : ''}`;
 }
 
 export function MatchupPlanner({ league, opp }: { league: League; opp: number }) {
@@ -58,11 +62,7 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
       title="Who guards whom"
       right={
         <Help title="Matchups">
-          <p>
-            Their projected top eight against your top ten, as the staff would match them at tip-off: starters on starters, bench on bench. The staff matches size and puts its best
-            defenders on the players their offense runs through. A planned matchup holds whenever both players are on the floor.
-          </p>
-          <p>Each pairing is for this opponent only.</p>
+          <p>The staff matches size and puts its best defenders on their creators. Under a pairing, green is your edge and red a mismatch to fix.</p>
         </Help>
       }
     >
@@ -71,37 +71,49 @@ export function MatchupPlanner({ league, opp }: { league: League; opp: number })
       ) : (
         <>
           <div className="card flush list">
-            {pv.rows.map((r) => {
-              const p = league.players[r.pid];
-              const def = r.planned ?? r.auto;
-              const d = def !== null ? league.players[def] : undefined;
+            {[true, false].map((starters) => {
+              const group = pv.rows.filter((r) => r.starter === starters);
+              if (!group.length) return null;
               return (
-                <button key={r.pid} className="gp-match" onClick={() => setPick(r.pid)} aria-haspopup="dialog">
-                  <Avatar p={p} />
-                  <span className="gp-match-p">
-                    <span className="gp-match-n">
-                      <span className="lr-name ellipsis">{names(r.pid)}</span>
-                      <Ovr v={p.ovr} size="sm" />
-                    </span>
-                    <span className="lr-meta">
-                      {p.pos} · {fmtHeight(p.heightIn)} · {r.starter ? 'Starter' : 'Bench'}
-                    </span>
-                  </span>
-                  <span className="gp-match-d">
-                    <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
-                    <span className="gp-match-dn ellipsis">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</span>
-                    {r.planned !== null ? <Tag tone="info">Planned</Tag> : <span className="tiny dim">Staff pick</span>}
-                  </span>
-                  <ChevronRight size={16} className="dim gp-chev" aria-hidden="true" />
-                  {d && <Notes them={p} me={d} />}
-                </button>
+                <Fragment key={String(starters)}>
+                  <div className="list-divider list-h">
+                    <span>{starters ? 'Starters' : 'Bench'}</span>
+                    <span>Your defender</span>
+                  </div>
+                  {group.map((r) => {
+                    const p = league.players[r.pid];
+                    const def = r.planned ?? r.auto;
+                    const d = def !== null ? league.players[def] : undefined;
+                    const note = d && matchupNotes(p, d).length > 0;
+                    return (
+                      <button key={r.pid} className="gp-match" onClick={() => setPick(r.pid)} aria-haspopup="dialog">
+                        <Avatar p={p} />
+                        <span className="gp-match-p">
+                          <span className="gp-match-n">
+                            <span className="lr-name ellipsis">{names(r.pid)}</span>
+                            <Ovr v={p.ovr} size="sm" />
+                          </span>
+                          {!note && (
+                            <span className="lr-meta">
+                              {p.pos} · {fmtHeight(p.heightIn)}
+                            </span>
+                          )}
+                        </span>
+                        <span className="gp-match-d">
+                          <span className="sr-only">{d ? ', guarded by ' : ', guarded by nobody yet'}</span>
+                          <span className="gp-match-dn ellipsis">{d ? names(d.pid) : <span aria-hidden="true">—</span>}</span>
+                          {r.planned !== null && <Tag tone="info">Planned</Tag>}
+                        </span>
+                        <ChevronRight size={16} className="dim gp-chev" aria-hidden="true" />
+                        {d && note && <Notes them={p} me={d} one />}
+                      </button>
+                    );
+                  })}
+                </Fragment>
               );
             })}
           </div>
-          <div className="mu-note">
-            Tap a player to set who guards him{planned ? ` · ${planned} planned` : ''}. Under a pairing: <span className="good">your edge</span>,{' '}
-            <span className="warn">worth watching</span>, <span className="bad">a mismatch to fix</span>.
-          </div>
+          <div className="mu-note">Tap a player to set who guards him{planned ? ` · ${planned} planned` : ''}.</div>
         </>
       )}
       <Sheet open={!!them && !!row} onClose={() => setPick(null)} title={them ? names(them.pid) : ''}>

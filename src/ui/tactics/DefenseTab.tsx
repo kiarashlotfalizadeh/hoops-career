@@ -1,13 +1,11 @@
-// Tactics → Instructions, out of possession: the headline decisions (the base scheme, the ball-screen
-// coverage with how your starting big suits it, ball pressure and help: the ones whose worth turns on
-// the opponent), then Fine-tune (switching off the ball, the star plan). Each control marks the
-// identity's own setting, and every scheme and coverage shows how well the team knows it, so the cost
-// of a switch is in view before you make it.
+// Tactics → Instructions, out of possession: the headline decisions (the ball-screen coverage with how
+// your starting big suits it, ball pressure and help defense: the ones whose worth turns on the
+// opponent), then Fine-tune (switching off the ball, the star plan). The scheme is the board's, at its
+// out-of-possession end. Each control marks the identity's own setting.
 import type { ReactNode } from 'react';
 import { useLeague } from '../../state/store';
-import type { DefScheme, Familiarity, PnrCoverage, StarPlan, Tactics } from '../../core/types';
-import { ALL_SCHEMES, COVERAGE_META, SCHEME_META, STAR_PLAN_META } from '../../core/sim/tactics';
-import { optValue } from '../../core/sim/familiarity';
+import type { PnrCoverage, StarPlan, Tactics } from '../../core/types';
+import { COVERAGE_META, STAR_PLAN_META } from '../../core/sim/tactics';
 import { composites } from '../../core/ratings';
 import { shortName } from '../../core/league/helpers';
 import { ratingText } from '../../core/analysis/guarding';
@@ -15,38 +13,25 @@ import { Chips, Help, Tag, Toggle } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { tweak } from './edit';
 import { defPresetOf } from './PlaybookLine';
-import { famTone } from './formation';
 import { Lv } from './Lv';
 
-/**
- * A choice's name, with the dot when it's the identity's own, and how well the team knows it
- * (`key`: its familiarity key, 'pnr:blitz'; none for a choice with nothing to learn).
- */
-export const optLabel = (label: string, mine: boolean, fam?: Familiarity, key?: string | null): ReactNode => {
-  const v = fam && key ? optValue(fam, key) : null;
-  return (
-    <>
-      {label}
-      {mine && (
-        <>
-          <i className="tx-dot" aria-hidden="true" />
-          <span className="sr-only"> (the style&apos;s own)</span>
-        </>
-      )}
-      {v !== null && (
-        <span className={`tx-optfam ${famTone(v)}`}>
-          <span className="sr-only">, familiarity </span>
-          {Math.round(v)}%
-        </span>
-      )}
-    </>
-  );
-};
+/** A choice's name, with the dot when it's the identity's own. */
+export const optLabel = (label: string, mine: boolean): ReactNode => (
+  <>
+    {label}
+    {mine && (
+      <>
+        <i className="tx-dot" aria-hidden="true" />
+        <span className="sr-only">, the style&apos;s own</span>
+      </>
+    )}
+  </>
+);
 
-type Props = { t: Tactics; fam: Familiarity };
+type Props = { t: Tactics };
 
-/** Out of possession's headline decisions: the base scheme, the ball-screen coverage, ball pressure, help. */
-export function OutOfPossession({ t, fam }: Props) {
+/** Out of possession's headline decisions: the ball-screen coverage, ball pressure, help defense. */
+export function OutOfPossession({ t }: Props) {
   const league = useLeague();
   const team = league.teams[league.userTid];
   // personnel hints, for the five who start next: the first healthy ones in the depth chart
@@ -62,24 +47,13 @@ export function OutOfPossession({ t, fam }: Props) {
     <div className="card col tx-group">
       <div className="tx-lv">
         <div className="slider-label tx-label">
-          <Term id="zone">Scheme</Term>
-        </div>
-        <Chips
-          label="Scheme"
-          value={t.defense.scheme}
-          onChange={(x: DefScheme) => tweak((tt) => void (tt.defense.scheme = x))}
-          options={ALL_SCHEMES.map((k) => ({ id: k, label: optLabel(SCHEME_META[k].label, k === pv.scheme, fam, `scheme:${k}`) }))}
-        />
-      </div>
-      <div className="tx-lv">
-        <div className="slider-label tx-label">
           <Term id="pnr">Ball-screen coverage</Term>
         </div>
         <Chips
           label="Ball-screen coverage"
           value={t.defense.pnr}
           onChange={(x: PnrCoverage) => tweak((tt) => void (tt.defense.pnr = x))}
-          options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: optLabel(COVERAGE_META[k].label, k === pv.pnr, fam, `pnr:${k}`) }))}
+          options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => ({ id: k, label: optLabel(COVERAGE_META[k].label, k === pv.pnr) }))}
         />
         {big && bigC && (t.defense.pnr === 'drop' || t.defense.pnr === 'switch' || t.defense.pnr === 'hedge') && (
           <div className="tx-bigfit">
@@ -92,8 +66,8 @@ export function OutOfPossession({ t, fam }: Props) {
           </div>
         )}
       </div>
-      <Lv label="Ball pressure" k="pressure" level="pressure" t={t} fam={fam} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
-      <Lv label="Help" k="help" level="help" t={t} fam={fam} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
+      <Lv label="Ball pressure" level="pressure" value={t.defense.pressure} mark={pv.pressure} set={(tt, x) => void (tt.defense.pressure = x)} />
+      <Lv label="Help defense" level="help" value={t.defense.help} mark={pv.help} set={(tt, x) => void (tt.defense.help = x)} />
     </div>
   );
 }
@@ -110,7 +84,7 @@ export function OutOfPossessionFine({ t }: Props) {
           on={t.defense.switchOffBall}
           onChange={(x) => tweak((tt) => void (tt.defense.switchOffBall = x))}
           label="Switch off-ball screens"
-          help="Neutralizes handoffs and movement shooters, but a big switched onto a guard gets attacked off the dribble, and a guard switched onto a big gets posted up (and fouls)."
+          help="Stops handoffs and movement shooters. Switched bigs get driven on, and switched guards get posted up."
         />
       </div>
       <div className="tx-lv tx-toggles">
@@ -122,10 +96,7 @@ export function OutOfPossessionFine({ t }: Props) {
                 <b>{STAR_PLAN_META[k].label}:</b> {STAR_PLAN_META[k].help}
               </p>
             ))}
-            <p>
-              It applies to the opponent&apos;s primary creator each game. To go after a specific player, set a star plan in that opponent&apos;s game plan (on its matchup page),
-              or change it during a live game.
-            </p>
+            <p>It goes at the other team&apos;s lead creator every game. To pick the player, use that opponent&apos;s game plan.</p>
           </Help>
         </div>
         <Chips
@@ -143,33 +114,20 @@ export function OutOfPossessionFine({ t }: Props) {
 export function OutOfPossessionHelp() {
   return (
     <Help title="Out of possession">
-      {ALL_SCHEMES.map((k) => (
-        <p key={k}>
-          <b>{SCHEME_META[k].label}:</b> {SCHEME_META[k].help}
-        </p>
-      ))}
-      <p>
-        A box-and-one or triangle-and-two as your scheme sends its chasers at their main creators on the floor, every game. To name who, and play it only while they&apos;re on the
-        floor, use a game plan (Junk defense) or the live game&apos;s tactics.
-      </p>
       {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((k) => (
         <p key={k}>
           <b>{COVERAGE_META[k].label}:</b> {COVERAGE_META[k].help}
         </p>
       ))}
-      <p>Drop needs a big who protects the rim; switching and hedging need one who moves. Blitzing needs length and quick hands behind it; ice needs disciplined guards.</p>
+      <p>Drop needs a big who protects the rim. Switching and hedging need one who moves.</p>
       <p>
-        These turn on who you play: a 2-3 zone or packing the paint pays against a team that can&apos;t shoot and costs against one that can (the open looks they leave count by who
-        takes them), drop pays against a handler who can&apos;t shoot off the dribble and costs against one who can, and ball pressure pays against loose handlers and gets beaten
-        by secure ones. A game plan sets them for one opponent; the staff measures each against the next game (Games → matchup → Plan).
+        <b>Ball pressure:</b> more steals and turnovers, and more fouls. Secure handlers blow by it.
       </p>
       <p>
-        <b>Ball pressure:</b> more steals and turnovers, but secure handlers blow by and backdoor cuts open up. Also more fouls. <b>Help:</b> packing the paint walls off drives and
-        post-ups but gives up kick-out threes. Stay home against good shooting teams.
+        <b>Help defense:</b> packing the paint walls off drives and gives up kick-out threes. Stay home against shooters.
       </p>
-      <p>
-        The % on a scheme or coverage is how well your team knows it (<Term id="familiarity">familiarity</Term>): below 95 they play it a step slow.
-      </p>
+      <p>Each pays against some teams and costs against others. A game plan sets them for one opponent.</p>
+      <p>A dot marks your identity&apos;s own setting. The scheme is on the board, out of possession.</p>
     </Help>
   );
 }

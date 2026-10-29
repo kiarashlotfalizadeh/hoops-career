@@ -83,10 +83,8 @@ export interface PossLog {
   /** A junk defense's chased players (offensive pids), face-guarded by their defenders while the rest play the zone. */
   chase?: number[];
   help: number;
-  /** The set the offense ran (after a timeout, or from its package): who it was for, and its run tonight (1 = first). */
+  /** The set the offense ran (after a timeout, or called from the bench): who it was for, and its run tonight (1 = first). */
   set?: { id: SetId; pid: number; n: number };
   /** A clear-out isolation called for a player (from the bench, or as the after-timeout play): who it was for. */
   iso?: number;
-  /** Each side's situational plan in effect ('' for none), when either has one. */
-  sit?: [string, string];
 }

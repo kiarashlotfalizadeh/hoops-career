@@ -122,11 +122,14 @@ const OT_TOLERANCE = 0.008;
 const MAX_FOUL_OUTS = 130;
 const SHAPE_FAILS = { streak: true, streakEver: true, seventy: true, titles: true, tpm: true, tpm10: true, ot: false, foulOuts: false };
 /**
- * The leagues CI plays: four different runs from the same opening night, one of them with the user
+ * The leagues CI plays: eight different runs from the same opening night, one of them with the user
  * running the Thunder, the opening night's best team (a user keeps his core together, as AI front
- * offices over the tax don't: that league is where 77-5 seasons came from).
+ * offices over the tax don't: that league is where 77-5 seasons came from). Eight since 2026-10-28, the
+ * 64 seasons the shape's limits were set on: on four, a 70-win season or a title more is a coin flip
+ * (the playbooks' retune that day failed two shapes by one season on the first four, and the setup
+ * before it failed the 70-win limit on the next eight, where the retune passed every shape).
  */
-const DEFAULT_SEEDS = ['42', '7', '2026', '1234:OKC'];
+const DEFAULT_SEEDS = ['42', '7', '2026', '1234:OKC', '11', '23', '99', '314'];
 const DEFAULT_SEASONS = 8;
 
 /** What a league reports back for each season. */

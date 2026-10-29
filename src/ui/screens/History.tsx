@@ -14,7 +14,7 @@ import { seasonLabel } from '../../core/constants';
 import { TeamLogo } from '../components/TeamLogo';
 import { Avatar, Ovr, Section } from '../components/ui';
 import { ViewChips } from '../league/Views';
-import { AccoladeChips, Poster, TitleSlab, accoladeScore, careerTotals, confName, confOrder, shortName, useQueryParam, useSetParams } from '../league/shared';
+import { Poster, accolades, TitleSlab, accoladeScore, careerTotals, confName, confOrder, shortName, useQueryParam, useSetParams } from '../league/shared';
 import { RecordBook } from '../league/RecordBook';
 import { CoachesView } from '../league/Coaches';
 import { FranchiseFigures, FranchiseHistory } from '../league/Franchise';
@@ -317,7 +317,7 @@ function SeasonPage({ league, season }: { league: League; season: number }) {
             </div>
           </div>
         ) : (
-          <div className="card empty">The league kept no stories from this season: its memory starts with the seasons played in this version.</div>
+          <div className="card empty">No stories were kept from this season.</div>
         )}
       </Section>
       <SeasonPlayoffs league={league} season={season} />
@@ -596,7 +596,8 @@ function HallOfFame({ league }: { league: League }) {
         over={`Hall of Fame · ${league.startSeason < league.season ? `since ${seasonLabel(league.startSeason)}` : 'this league'}`}
         head={latest ? `Latest in: ${latest.firstName} ${latest.lastName}` : 'Nobody inducted yet'}
         dek={latest ? undefined : 'Legends go in when they retire.'}
-        fig={{ v: hof.length, k: 'inducted' }}
+        // (a count of none would only repeat the headline)
+        fig={hof.length ? { v: hof.length, k: 'inducted' } : undefined}
       />
       {hof.length > 0 && (
         <div className="card flush list wide2">
@@ -605,29 +606,22 @@ function HallOfFame({ league }: { league: League }) {
           ))}
         </div>
       )}
-      <Section title="Notable retirements" right={<span className="lg-sec-meta">{retired.length}</span>}>
-        {retired.length === 0 ? (
-          <div className="card empty">None yet.</div>
-        ) : (
-          <>
-            <div className="card flush list wide2">
-              {retired.slice(0, limit).map((p) => (
-                <LegendRow key={p.pid} league={league} p={p} />
-              ))}
-            </div>
-            {retired.length > limit && (
-              <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + 25)}>
-                <ChevronDown size={15} /> Show more ({retired.length - limit})
-              </button>
-            )}
-          </>
-        )}
-      </Section>
-      {hof.length + retired.length > 0 && (
-        <div className="lg-note">
-          Regular-season careers, figures per game; the badge is his peak OVR in this league (none for a veteran who came with it); every honour on his page.
-        </div>
+      {/* (no section until someone has retired: an empty one would only say so) */}
+      {retired.length > 0 && (
+        <Section title="Notable retirements" right={<span className="lg-sec-meta">{retired.length}</span>}>
+          <div className="card flush list wide2">
+            {retired.slice(0, limit).map((p) => (
+              <LegendRow key={p.pid} league={league} p={p} />
+            ))}
+          </div>
+          {retired.length > limit && (
+            <button className="btn sm ghost lg-showmore" onClick={() => setLimit(limit + 25)}>
+              <ChevronDown size={15} /> Show more ({retired.length - limit})
+            </button>
+          )}
+        </Section>
       )}
+      {hof.length + retired.length > 0 && <div className="lg-note">Regular-season careers, per game · the badge is his peak OVR here</div>}
     </>
   );
 }
@@ -650,6 +644,8 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
   const jersey = (mainTid !== undefined && (league.teams[mainTid].retired?.find((r) => r.pid === p.pid)?.jersey ?? p.jerseys?.[mainTid])) || p.jersey;
   // his peak OVR only when he played his prime here: a veteran who came with the league peaked before it
   const showPeak = !p.stats.some((s) => s.real);
+  // his biggest honour beside his name (every one is on his page)
+  const top = accolades(p)[0];
   return (
     <Link to={`/player/${p.pid}`} className="lg-legend-row">
       <Avatar p={{ ...p, tid: mainTid ?? -1, jersey }} />
@@ -659,6 +655,12 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
             {p.firstName} {p.lastName}
           </span>
           {hof && <Crown size={14} className="lg-crown" aria-label="Hall of Famer" />}
+          {top && (
+            <span className={`tag ${top.gold ? 'lg-gold' : ''}`}>
+              {top.n > 1 ? `${top.n}× ` : ''}
+              {top.label}
+            </span>
+          )}
         </span>
         <span className="sub">
           {p.pos} · {seasonLabel(from).slice(0, 4)}–{p.retiredSeason ? String(p.retiredSeason).slice(2) : 'now'} · {c.gp.toLocaleString('en-US')} game{c.gp === 1 ? '' : 's'}
@@ -678,7 +680,6 @@ function LegendRow({ league, p, hof }: { league: League; p: Player; hof?: boolea
             </span>
           ))}
         </span>
-        <AccoladeChips p={p} max={2} />
       </span>
       <span className="lg-legend-r">
         {showPeak && <Ovr v={peak} size="sm" />}

@@ -55,7 +55,7 @@ function TradeFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDon
       {!ask.offer ? (
         <Empty>
           {ask.why === 'salary'
-            ? `The ${t.name} would want salary back, and no player (or pair) of yours makes it match.`
+            ? `The ${t.name} would want salary back, and no one or two of your players make it match.`
             : sentence(`Nothing you can offer gets the ${t.name} to move the ${pickLabel(league, dp)}`)}
         </Empty>
       ) : (

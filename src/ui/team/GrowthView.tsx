@@ -1,11 +1,13 @@
 // Team → Growth: the development report as it stands (the monthly mail links here). A hero with
 // where the report stands (the check-in, the next one), the one to watch and the development coach's
 // word on the setup; then the young players Rising, Holding and Slipping with a short reason each
-// (the whole of it on his page), the veterans (who hold until the summer), the
+// (the whole of it in the report's mail), the veterans (who hold until the summer), the
 // rookie watch, and the breakouts around the league. Every name opens his page.
 import { Link } from 'react-router-dom';
 import type { League, Player } from '../../core/types';
-import { CHECK_DAYS, GROUP_LABEL, YOUNG, devReport, devTag, isBreakout, ovrChange, rookieText, type DevLine } from '../../core/league/devWatch';
+import { CHECK_DAYS, GROUP_LABEL, YOUNG, devReport, devTag, isBreakout, ovrChange, type DevLine, type RookieLine } from '../../core/league/devWatch';
+import { ordinal } from '../../core/format';
+import { f1 } from '../stats';
 import { fmtDate, playerName, shortName } from '../../core/league/helpers';
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
@@ -13,15 +15,23 @@ import { Avatar, Help, Ovr, Section } from '../components/ui';
 import { DevDelta, DevTagChip } from '../player/dev';
 import '../player/growth.css';
 
+/** A reason's sentence that only says what the section's head already does ("Holding · 9"). */
+const RESTATES = /^(No change this month|Steady this month|Holding)\.$/;
+
 /**
- * The coach's reason, short for a row: its first sentence, without the group's word the section
- * already says ("Holding; shot blocking +1 since opening night. 29 minutes..." reads "Shot blocking +1
- * since opening night."). The whole of it is on his Growth tab.
+ * The coach's reason, short for a row: its first sentence that says something the section's head
+ * doesn't ("No change this month. Shot blocking +1 since opening night." reads "Shot blocking +1
+ * since opening night."); with nothing more, his potential. The whole of it is in the report's mail.
  */
-function shortWhy(why: string): string {
-  const first = why.split(/(?<=\.)\s/)[0];
-  const t = first.replace(/^(Rising|Holding|Slipping)[;:,]\s*/i, '');
-  return t ? t[0].toUpperCase() + t.slice(1) : first;
+function shortWhy(why: string, p: Player): string {
+  const t = why.split(/(?<=\.)\s/).find((x) => !RESTATES.test(x));
+  return t ?? (p.pot > p.ovr ? `POT ${p.pot}` : 'At his ceiling');
+}
+
+/** A rookie's season for a row, his race first, then the box score's words: "ROY 4th · 10.5 PTS · 3.8 REB" (his whole line is on his page). */
+function rookieShort(r: RookieLine): string {
+  if (!r.gp) return 'Yet to play';
+  return [...(r.roy ? [`ROY ${ordinal(r.roy)}`] : []), `${f1(r.pts)} PTS`, `${f1(r.reb)} REB`].join(' · ');
 }
 
 /** One player in the report: his jersey, name and tag, then his age and the coach's reason in a line; OVR with this season's change. */
@@ -39,7 +49,7 @@ function DevRow({ league, p, why }: { league: League; p: Player; why: string }) 
           <span className="sr-only">
             {p.pos}, POT {p.pot},{' '}
           </span>
-          {playerAge(p, league.season)} · {shortWhy(why)}
+          {playerAge(p, league.season)} · {why}
         </span>
       </span>
       <span className="dv-row-ovr">
@@ -71,7 +81,7 @@ export default function GrowthView() {
   const around = useLeagueMemo(() => leagueBreakouts(league), [league]);
   const next = nextCheck(league);
   const groups = (['rising', 'holding', 'slipping'] as const).filter((g) => r[g].length);
-  const row = (x: DevLine) => <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={x.reason} />;
+  const row = (x: DevLine) => <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={shortWhy(x.reason, league.players[x.pid])} />;
   const nth = ['first', 'second', 'third'][r.check - 1];
   return (
     <>
@@ -83,11 +93,10 @@ export default function GrowthView() {
             {next ? ` · next ${next}` : ''}
           </span>
           <Help title="How players develop">
-            <p>
-              Most of a player&apos;s year happens over the summer: young players climb, veterans fade, and the arrows here measure from where each ended last season. In season the
-              staff checks in three times; players 26 and younger move a little each time. Minutes (25 a night or more), coaching, the coaching budget, practice intensity and his
-              training focus all push the same way. Breakout: well past what his age alone would add.
-            </p>
+            <p>Most of a player&apos;s year happens over the summer. Young players climb and veterans fade.</p>
+            <p>The arrows measure from where each player ended last season. In season the staff checks in three times, and players 26 and under move a little.</p>
+            <p>Minutes help: 25 a night or more. So do coaching, the coaching budget, practice intensity and his training focus.</p>
+            <p>A breakout is well past what his age alone would add.</p>
           </Help>
         </div>
         {r.watch ? (
@@ -116,7 +125,7 @@ export default function GrowthView() {
         <Section title="Rookie watch">
           <div className="dv-list">
             {r.rookies.map((x) => (
-              <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={`${rookieText(x.line)[0].toUpperCase()}${rookieText(x.line).slice(1)}. ${x.dev.reason}`} />
+              <DevRow key={x.pid} league={league} p={league.players[x.pid]} why={rookieShort(x.line)} />
             ))}
           </div>
         </Section>

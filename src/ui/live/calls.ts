@@ -7,15 +7,14 @@
 // counter to what's hurting you (the bench's notes: their play type running hot, their tactical edge,
 // their run), then the defense's big levers the way the game points (the scheme, the coverage on their
 // ball screens, a double or your best defender on their hot scorer, the help, the pressure), one of
-// theirs in foul trouble, the penalty, the mentality and the pace toward the score's need, your other
-// tactics (B or C), a cold shooter given less rope; when you make the subs, the sub the bench would
+// theirs in foul trouble, the penalty, the mentality and the pace toward the score's need, a cold
+// shooter given less rope; when you make the subs, the sub the bench would
 // make; and in crunch time a timeout and fresh legs for your most tired player, whoever makes the subs
 // (the staff plays through legs there: the measurement says when that's wrong). Pure.
 
 import type { Tactics } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
 import { cloneTactics, COVERAGE_META, MENTALITY_META, SCHEME_META } from '../../core/sim/tactics';
-import { optValue } from '../../core/sim/familiarity';
 import { CALL_CONFIRM, CALL_CONFIRM_CRUNCH, CALL_CONFIRM_LATE, forkSim, type CallsMeasured, type LiveChoice } from '../../state/liveWorth';
 import type { PossLog } from '../../core/sim/log';
 import { tacticsDiff, crunchTime, foulLimit, DECIDED_WIN, LEVER_TRIPS } from './alerts';
@@ -23,7 +22,6 @@ import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
 import { signed } from '../stats';
-import { OPT, replaceWith } from './familiar';
 
 /** Most changes measured at a stop (the brief's three to five: what the game suggests, the likeliest first). */
 export const CALL_DRAFTS = 5;
@@ -37,7 +35,7 @@ export const DECLINED_TRIPS = 40;
 /** A change the staff drafts at a stop: what it is, why, and the move as the game makes it. */
 export interface CallDraft {
   id: string;
-  /** The change, as its button says it: "Go to Drop", "Tactic B", "Timeout". */
+  /** The change, as its button says it: "Go to Drop", "Pack the paint", "Timeout". */
   label: string;
   /** Why the staff looked at it, in a few words: "Their P&R ball handler plays are hot". */
   why: string;
@@ -148,9 +146,8 @@ export const confirmGames = (v: Pick<StaffInput['view'], 'q' | 'clock' | 'sides'
  * The changes the staff measures now, the likeliest first, at most CALL_DRAFTS (the order above: the
  * bench's own calls, then the levers that move a game most). None that changes a setting changed fewer
  * than LEVER_TRIPS trips ago, none the coach turned down lately (`skip`), none that changes nothing.
- * `slots`: your other tactics as tonight plays them, with the team's familiarity with each.
  */
-export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; label: string; tactics: Tactics; fam: number }[] = [], skip: Set<string> = new Set()): CallDraft[] {
+export function callDrafts(input: StaffInput, sim: GameSim, skip: Set<string> = new Set()): CallDraft[] {
   const { view, side, tactics: t, names } = input;
   const out: CallDraft[] = [];
   const seen = new Set<string>([JSON.stringify(t)]);
@@ -206,7 +203,6 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
   const ours = sim.T[side];
   const d = t.defense;
   const man = d.scheme === 'man';
-  const knows = (key: string) => optValue(ours.fam, key);
   // (at a break the benches come back: their scorer counts whether he's on the floor now or not)
   const avail = (sd: typeof them, p: (typeof them.players)[number]) => p.out === 0 && (input.atBreak || sd.on.includes(p.pid));
 
@@ -222,11 +218,9 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
     .filter(([k]) => k === 'post' || k === 'cut' || k === 'pnrRoll')
     .reduce((a, [, v]) => ({ poss: a.poss + v.poss, pts: a.pts + v.pts }), { poss: 0, pts: 0 });
 
-  // the scheme: out of a zone to man-to-man; out of man-to-man to the zone the team knows best (the
-  // 2-3 against a team missing threes or living inside, the 3-2 against one living on threes)
+  // the scheme: out of a zone to man-to-man; out of man-to-man to the 2-3 zone (the 3-2 from the 2-3)
   if (!man) addTactics('man', 'Man-to-man', scoring, (x) => void (x.defense.scheme = 'man'));
-  const zones = (['zone23', 'zone32'] as const).filter((z) => z !== d.scheme && knows(OPT.scheme(z)) >= 50);
-  const zone = zones.sort((a, b) => knows(OPT.scheme(b)) - knows(OPT.scheme(a)))[0];
+  const zone = (['zone23', 'zone32'] as const).find((z) => z !== d.scheme);
   if (zone)
     addTactics(
       zone,
@@ -235,13 +229,11 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
       (x) => void (x.defense.scheme = zone),
     );
 
-  // their ball screens: the coverage the team knows best besides this one
+  // their ball screens: the first of drop, hedge, switch, ice and blitz besides this one
   const pnr = (them.pt.pnrBH?.poss ?? 0) + (them.pt.pnrRoll?.poss ?? 0);
   const pnrPts = (them.pt.pnrBH?.pts ?? 0) + (them.pt.pnrRoll?.pts ?? 0);
   if (man && pnr >= 4) {
-    const cov = (['drop', 'hedge', 'switch', 'ice', 'blitz'] as const)
-      .filter((c) => c !== d.pnr && knows(OPT.pnr(c)) >= 50)
-      .sort((a, b) => knows(OPT.pnr(b)) - knows(OPT.pnr(a)))[0];
+    const cov = (['drop', 'hedge', 'switch', 'ice', 'blitz'] as const).find((c) => c !== d.pnr);
     if (cov) addTactics(`cov-${cov}`, `${COVERAGE_META[cov].label} on ball screens`, `Their ball screens: ${pnrPts} points on ${pnr} trips`, (x) => void (x.defense.pnr = cov));
   }
 
@@ -293,10 +285,6 @@ export function callDrafts(input: StaffInput, sim: GameSim, slots: { i: number; 
   const pace = margin > 3 ? Math.max(0, t.offense.pace - 20) : Math.min(100, t.offense.pace + 20);
   addTactics(margin > 3 ? 'slower' : 'faster', margin > 3 ? 'Slow it down' : 'Push the pace', scoreWhy, (x) => void (x.offense.pace = pace));
 
-  // your other tactics, the most familiar first (one of them: a switch is the touchline's biggest lever)
-  const other = [...slots].sort((a, b) => b.fam - a.fam)[0];
-  if (other) addTactics(`slot-${other.i}`, other.label, `${Math.round(other.fam)}% familiar`, (x) => replaceWith(x, other.tactics));
-
   // a shooter of yours off tonight with the green light: less rope (the engine has no cold hand, so the
   // measurement will say if his shots are worse than the team's others)
   const cold = me.players.filter((p) => avail(me, p) && p.fga >= 8 && (t.offense.freedom[p.pid] ?? 0) > 0 && p.fgm / p.fga < 0.34).sort((a, b) => a.fgm / a.fga - b.fgm / b.fga)[0];
@@ -315,16 +303,29 @@ export function spotLabel(q: number, clock: number): string {
 }
 
 /**
- * A measured reading as the staff says it: "+1.4 to the margin (±0.5)": the margin shrunk toward even by
- * its noise, with what's left of its uncertainty (CallReading.band). A crunch-time call also cleared on
- * the result, and says so without a figure: picked for clearing its noise the win chance reads high (over
- * 28 calls judged by the margin it read +7.4% against a true +4.3%, round-3 game-day review; over 16
- * crunch-time calls in games where every call was taken, +2.6% against +0.2), and no one shrink held in
- * games followed and not (scratch p1/live, 2026-10-27).
+ * A measured reading in a sentence, for the tap under a verdict: "About +1.4 points to the margin, give
+ * or take 0.5": the margin shrunk toward even by its noise, with what's left of its uncertainty
+ * (CallReading.band). A crunch-time call also cleared on the result, and says so without a figure:
+ * picked for clearing its noise the win chance reads high (over 28 calls judged by the margin it read
+ * +7.4% against a true +4.3%, round-3 game-day review; over 16 crunch-time calls in games where every
+ * call was taken, +2.6% against +0.2), and no one shrink held in games followed and not (scratch
+ * p1/live, 2026-10-27).
  */
 export function readingLine(r: { pts: number; band: number }, by: 'pts' | 'win'): string {
-  const margin = `${signed(r.pts, 1)} to the margin (±${r.band.toFixed(1)})`;
-  return by === 'win' ? `${margin}, and clear on the win chance too` : margin;
+  return `About ${signed(r.pts, 1)} points to the margin, give or take ${r.band.toFixed(1)}${by === 'win' ? ', and a better chance to win' : ''}.`;
+}
+
+/** How a reading was taken, in a sentence: "Measured from Q3 6:12: the rest of the game played 320 times each way." */
+export const measuredFrom = (at: string, n: number) => `Measured from ${at}: the rest of the game played ${n} times each way.`;
+
+/**
+ * A measured reading as a verdict, the way the screens say it (decision 8: a verdict and one number,
+ * the rest a tap down): "Helps: about +1.4 points", "Hurts: about −0.8 points", "No real change" (inside
+ * its noise, as Tactics and the counters say it).
+ */
+export function verdictLine(r: { pts: number }, clear: boolean): string {
+  if (!clear) return 'No real change';
+  return `${r.pts > 0 ? 'Helps' : 'Hurts'}: about ${signed(r.pts, 1)} points`;
 }
 
 /** What the staff found at the last stop: measuring, a call (with its number), or none that clears. */
@@ -333,7 +334,11 @@ export type StaffCall =
   | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number }
   | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
-/** The call as a bench note: the change on its button, why the staff looked, and the number that backs it. */
+/**
+ * The call as a bench note: why the staff looked (the evidence, its headline), its number, the change
+ * on its button, and how it was measured a tap down (`detail`). Its line is the verdict: a call is only
+ * made once its reading clears its noise.
+ */
 export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   const r = c.m.reading!;
   const by = c.m.by;
@@ -343,7 +348,8 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
     kind: 'decision',
     tone: 'good',
     title: a.why,
-    text: `${readingLine(r, by)}. Measured from ${c.at}, ${r.n} replays each way.`,
+    text: by === 'win' ? 'Helps the chance to win from here.' : 'Helps from here.',
+    detail: `${measuredFrom(c.at, r.n)} ${readingLine(r, by)}`,
     fig: { v: signed(r.pts, 1), unit: 'pts' },
     actions: [
       a.choice.kind === 'timeout'
@@ -357,10 +363,16 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   };
 }
 
+/** The staff's call over the court, in a line: its verdict and its number ("Helps: about +1.4 points."). */
+export const callBannerLine = (c: Extract<StaffCall, { state: 'call' }>) => `${verdictLine(c.m.reading!, true)}.`;
+
 /** The staff's line when it measured and found nothing to change, or while it measures. */
 export function callQuietLine(c: StaffCall | null): string | null {
   if (!c) return null;
   if (c.state === 'measuring') return `Measuring ${c.tried === 1 ? 'a change' : `${c.tried} changes`} from ${c.at}…`;
-  if (c.state === 'none') return c.tried ? `Measured ${c.tried === 1 ? 'a change' : `${c.tried} changes`} from ${c.at}: none clears the noise. Nothing to change.` : null;
+  if (c.state === 'none')
+    return c.tried
+      ? `Nothing to change: ${c.tried === 1 ? `the one change from ${c.at} doesn't` : `none of ${c.tried} changes from ${c.at}`} clearly help${c.tried === 1 ? '' : 's'}.`
+      : null;
   return null;
 }

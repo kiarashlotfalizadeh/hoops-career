@@ -36,15 +36,11 @@ export function AttackCard({ league, opp, fold }: { league: League; opp: number;
   const sorted = [...theirs].sort((a, b) => per(a) - per(b) || a.pid - b.pid);
   if (!theirs.length) return null;
   const help = (
-    <Help title="Attack a defender">
-      While he&apos;s on the floor your offense runs its isolations, post-ups and ball screens at the player he guards, and that player sets most of the ball screens, so a switch
-      leaves him on your ball handler and a weak screen defender can&apos;t hold up the coverage. It costs some ball movement: motion and handoffs lose a little. Against a real
-      weak link it pays; against a good defender it costs points. It replaces Hunt mismatches while he plays.
-    </Help>
+    <Help title="Attack a defender">Your isolations, post-ups and ball screens go at the man he guards. It pays against a real weak link and costs some ball movement.</Help>
   );
   const body = (
     <div className="mu-group">
-      <div className="tiny dim">Their rotation by perimeter defense (40-99), weakest first{pick?.worth ? ' · ★ the staff’s pick' : ''}</div>
+      <div className="tiny dim">By perimeter defense, weakest first{pick?.worth ? ' · ★ the staff’s pick' : ''}</div>
       <Chips
         label="Defender to attack"
         value={target ?? -1}
@@ -54,7 +50,7 @@ export function AttackCard({ league, opp, fold }: { league: League; opp: number;
       />
       {pick && !pick.worth && (
         <div className="mu-note">
-          Their weakest, {names(pick.pid)} ({pick.perDef}), is close to their rotation ({pick.teamPerDef}): it may not pay.
+          Their weakest, {names(pick.pid)} at {pick.perDef}, is close to their rotation&apos;s {pick.teamPerDef}. It may not pay.
         </div>
       )}
     </div>
@@ -116,10 +112,7 @@ export function JunkCard({ league, opp, fold }: { league: League; opp: number; f
       <p>
         <b>{SCHEME_META.tri2.label}:</b> {SCHEME_META.tri2.help}
       </p>
-      <p>
-        Planned on named players, it plays only while one of them is on the floor: the rest of the game you play your usual defense. The staff sends your best perimeter defenders
-        (or whoever you plan on Matchups) to chase; the rest play a zone behind them.
-      </p>
+      <p>It plays only while a named player is on the floor. Your best perimeter defenders chase, the rest play zone.</p>
     </Help>
   );
   const body = (
@@ -145,7 +138,7 @@ export function JunkCard({ league, opp, fold }: { league: League; opp: number; f
               </button>
             ))}
           </div>
-          {!chase.length && <div className="mu-note">Nobody named: the chasers take their main creators on the floor, all game.</div>}
+          {!chase.length && <div className="mu-note">Nobody named, so the chasers take their main creators all game.</div>}
         </div>
       )}
     </div>

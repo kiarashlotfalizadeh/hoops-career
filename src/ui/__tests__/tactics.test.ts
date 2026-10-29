@@ -1,26 +1,24 @@
-// Tactics in the UI: the Tactics screen's board, familiarity, partnerships, playbook fit, change
-// summaries and season insights; the live game's quick changes (a short curated row, each one a real
+// Tactics in the UI: the Tactics screen's board, its phases, playbook fit, change summaries and
+// season insights; the live game's quick changes (a short curated row, each one a real
 // change, a pressed one going back to the game plan, a Hack-a only when the engine would send that
 // shooter to the line); and "Keep changes after this game" (tonight's changes go into the saved
 // tactics, the game plan for tonight's opponent and tonight's matchups don't, and taking a change back
 // takes it out again).
 import { describe, expect, it } from 'vitest';
-import { DEF_SPOTS, OFF_SPOTS, famTone, fitPts, place, type BoardPlayer, type Spot } from '../tactics/formation';
-import { PHASES, offHabit, phaseFam, phaseId } from '../tactics/fam';
-import { linkLine, plateAt, startersOf, strengthsOf } from '../tactics/partners';
+import { DEF_SPOTS, OFF_SPOTS, fitPts, place, startersOf, strengthsOf, type BoardPlayer, type Spot } from '../tactics/formation';
+import { PHASES, phaseId } from '../tactics/phases';
 import { byFit, fitTone, handOverLine, readText, shownFit, userStaffTactics } from '../tactics/fit';
-import { learnInline, learnText } from '../tactics/learnCost';
 import { defenseLabel } from '../../core/sim/playbooks';
-import { patchText, screenChanges, changesLine } from '../tactics/changes';
+import { screenChanges, changesLine } from '../tactics/changes';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
 import { hackThreshold, livePills, offPlan, resetToPlan, type PillContext } from '../live/pills';
 import { keptTactics } from '../live/keep';
 import type { Quality, SystemReport } from '../../core/analysis/system';
 import { offPresetFit, offPresetTerms, defPresetFit, defPresetTerms, type RosterProfile } from '../../core/ai/coachAI';
-import { OFF_PRESETS, SITUATION_TEMPLATES, applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
+import { OFF_PRESETS, applyPatch, cloneTactics, defaultTactics, tacticsDiff } from '../../core/sim/tactics';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { simDay, startRegularSeason } from '../../core/league/season';
-import type { Familiarity, Tactics } from '../../core/types';
+import type { Tactics } from '../../core/types';
 
 const P = (pid: number, role: string, hgt: number, handle = 50, shoot = 50): BoardPlayer => ({ pid, role: role as BoardPlayer['role'], hgt, handle, shoot });
 
@@ -68,7 +66,7 @@ const press = (t: Tactics, plan: Tactics, c: PillContext, id: string) => {
 };
 
 describe('tactics in the UI', () => {
-  it('draws the board, reads familiarity, partnerships, fit, changes and insights, and makes and keeps live changes', () => {
+  it('draws the board, reads its phases, fit, changes and insights, and makes and keeps live changes', () => {
     // every formation's five plates kept apart
     for (const spots of [...Object.values(OFF_SPOTS), ...Object.values(DEF_SPOTS)]) {
       expect(spots).toHaveLength(5);
@@ -109,48 +107,21 @@ describe('tactics in the UI', () => {
     expect(place(OFF_SPOTS.fiveOut, [P(1, 'creator', 40)]).size).toBe(1);
     expect(place(OFF_SPOTS.fiveOut, []).size).toBe(0);
 
-    // a shape's fit in points per 100 and a familiarity's band
+    // a shape's fit in points per 100
     expect(fitPts(11)).toBe('+1.1');
     expect(fitPts(-9.4)).toBe('−0.9');
     expect(fitPts(0.3)).toBe('±0');
-    expect([famTone(92), famTone(80), famTone(60), famTone(20)]).toEqual(['good', 'good', 'warn', 'bad']);
 
-    // familiarity: each of the three phases read from its parts, and an old link's phase as its new one
+    // the three phases, and an old link's phase as its new one
     {
-      const dims = { shape: 90, actions: 60, tempo: 30, roles: 80, scheme: 100, coverage: 40, pressure: 70 };
-      expect(phaseFam(dims, 'inPoss')).toBe(60);
-      // transition, both ways: tempo and pressure
-      expect(phaseFam(dims, 'inTrans')).toBe(50);
-      expect(phaseFam(dims, 'outPoss')).toBe(70);
-      expect(PHASES.map((p) => p.end)).toEqual(['off', 'both', 'def']);
+      expect(PHASES.map((p) => p.id)).toEqual(['inPoss', 'inTrans', 'outPoss']);
       expect(phaseId('defTrans')).toBe('inTrans');
       expect(phaseId('outPoss')).toBe('outPoss');
       expect(phaseId(null)).toBe('inPoss');
       expect(phaseId('nonsense')).toBe('inPoss');
     }
 
-    // where a setting was drilled and what moving it costs
-    {
-      const t = defaultTactics('balanced', 'drop');
-      const fam: Familiarity = { opt: {}, habit: { pace: t.offense.pace, help: t.defense.help }, know: {}, roles: {} };
-      // where it was drilled: nothing to say
-      expect(offHabit(fam, t, 'pace', 'pace')).toBeNull();
-      // two levels faster than drilled: the tempo part pays for it
-      const fast = { ...t, offense: { ...t.offense, pace: 100 } };
-      const off = offHabit(fam, fast, 'pace', 'pace');
-      expect(off).not.toBeNull();
-      expect(off!.drilled).toBe('Balanced');
-      expect(off!.cost).toBeGreaterThan(10);
-      // a defensive setting counts against pressure & help, which spreads it over more habits: cheaper per point
-      const packed = { ...t, defense: { ...t.defense, help: 100 } };
-      const d = offHabit(fam, packed, 'help', 'help')!;
-      expect(d.cost).toBeGreaterThan(0);
-      expect(d.cost).toBeLessThan(off!.cost);
-      // a setting never drilled (no habit kept) costs nothing to show
-      expect(offHabit(fam, fast, 'a_pnr', 'action')).toBeNull();
-    }
-
-    // partnerships: the rotation's first five start and the rest are benched, anyone it leaves out last
+    // the board: the rotation's first five start and the rest are benched, anyone it leaves out last
     {
       const ps = [1, 2, 3, 4, 5, 6, 7].map((pid) => ({ pid }));
       const { five, bench } = startersOf([7, 6, 5, 4, 3], ps);
@@ -170,21 +141,6 @@ describe('tactics in the UI', () => {
       const small: SystemReport = { off: [q('creation', 1), q('spacing', 2)], def: [q('rimD', 3)] };
       expect(strengthsOf(small).weaknesses.map((x) => x.id)).toEqual(['rimD']);
     }
-
-    // a link drawn heavier the more of it plays, a dashed hairline when it plays at little
-    {
-      const weak = linkLine(0.1);
-      const full = linkLine(1.2);
-      expect(weak.dashed).toBe(true);
-      expect(full.dashed).toBe(false);
-      expect(full.width).toBeGreaterThan(weak.width);
-      expect(full.opacity).toBeGreaterThan(weak.opacity);
-      expect(full).toEqual(linkLine(1));
-    }
-
-    // a line's ends kept where the plates sit, a half plate in from the court's edges
-    expect(plateAt({ x: 5, y: 2 })).toEqual({ x: 16.5, y: 8.5 });
-    expect(plateAt({ x: 50, y: 40 })).toEqual({ x: 50, y: 40 });
 
     // playbook fit as shown, the staff's read in points a game: its start and parts add up to its worth
     // against an average playbook exactly, and the row says what it's worth against the one in use
@@ -213,35 +169,17 @@ describe('tactics in the UI', () => {
     expect([fitTone(0.6), fitTone(0.5), fitTone(0.4), fitTone(-0.4), fitTone(-0.5)]).toEqual(['good', 'good', '', '', 'bad']);
     expect([readText(0.6), readText(-1.24), readText(0)]).toEqual(['+0.6', '−1.2', '0.0']);
     {
-      // the hand-over names what the staff would run and its read against the user's; a learning cost
-      // reads in points a game, measured, or as too small to tell; a moved playbook reads as Custom
+      // the hand-over names what the staff would run and its read against the user's; a moved playbook reads as Custom
       const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
       const staff = userStaffTactics(l);
       expect(handOverLine(l, staff)).toMatch(/^The staff would keep .+ · .+, with their own settings, roles and shape\.$/);
       const t = l.teams[0].tactics;
       const other = staff.defPreset === 'hedge' ? 'drop' : 'hedge';
       l.teams[0].tactics = { ...t, defPreset: other, defense: applyPatch(t, { defense: { scheme: 'man' } }).defense, manual: true };
-      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+: \+\d\.\d a game against yours \(the staff's read, once drilled\)\.$/);
-      expect(defenseLabel(l.teams[0].tactics)).toMatch(/^Custom \(.+ base\)$/);
-      const w = (pts: number) => ({ progress: 1, worth: { id: 'learn', pts, raw: pts, se: 0.2 } });
-      expect([learnText(w(0.7)), learnText(w(0.2)), learnText({ progress: 0.4 }), learnText({ progress: 1, skip: 'camp' })]).toEqual([
-        'Learning it costs about 0.7 a game at first (measured)',
-        'Learning it costs too little to tell (measured)',
-        'Measuring what learning it costs…',
-        'Training camp drills it before opening night',
-      ]);
-      expect([learnInline(w(0.7)), learnInline({ progress: 1, skip: 'none' })]).toEqual([' · learning it costs about 0.7 a game at first (measured)', '']);
+      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+: \+\d\.\d a game against yours \(the staff's read\)\.$/);
+      expect(defenseLabel(l.teams[0].tactics)).toMatch(/^Custom .+$/);
     }
 
-    // situational plans say what each template changes, in the Tactics screen words
-    expect(patchText(SITUATION_TEMPLATES.protectLead.patch)).toBe(
-      'Pace −25 · Push in transition −20 · Crash the offensive glass −20 · Transition defense +20 · Ball pressure −10 · Physicality −10',
-    );
-    expect(patchText(SITUATION_TEMPLATES.chasing.patch)).toBe('Press after makes · Pace +25 · Push in transition +20 · Three-point emphasis +15 · Ball pressure +20');
-    expect(patchText(SITUATION_TEMPLATES.closeQ.patch)).toBe('Hunt mismatches · Physicality −15 · Isolation +20');
-    expect(patchText({ defense: { scheme: 'zone32' } })).toBe('3-2 Zone');
-    expect(patchText({ defense: { help: 75 } })).toBe('Help defense: Pack the paint');
-    expect(patchText({})).toBe('No changes yet');
     // changes name each setting as its control on the Tactics screen
     {
       const a = defaultTactics('balanced', 'drop');
@@ -249,7 +187,7 @@ describe('tactics in the UI', () => {
       b.defense.pnr = 'hedge';
       b.defense.scheme = 'zone23';
       b.offense.crashBoards = 100;
-      expect(changesLine(screenChanges(a, b))).toBe('Crash the offensive glass: Balanced → Crash hard · Base scheme: Man-to-man → 2-3 Zone · Pick-and-roll coverage: Drop → Hedge');
+      expect(changesLine(screenChanges(a, b))).toBe('Crash the offensive glass: Balanced → Crash hard · Scheme: Man-to-man → 2-3 Zone · Ball-screen coverage: Drop → Hedge');
     }
 
     // season aggregates behind the Insights tab

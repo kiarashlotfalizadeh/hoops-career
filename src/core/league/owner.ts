@@ -196,9 +196,9 @@ export function ownerEvaluation(league: League) {
     const rec = goalsRecord(league, og);
     lines.push(`${rec.won}-${rec.games - rec.won} is under anything I can accept, so nothing else saves this season's grade.`);
   }
-  if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't: nothing else saves this season's grade.`);
+  if (impatient && og?.rebuild) lines.push(`${og.rebuild.year} seasons in a row without the postseason. I said we compete, and we didn't. Nothing else saves this season's grade.`);
   if (debtHeld && books)
-    lines.push(`The books closed ${money(-books.close)} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry: no result lifts a season like that.`);
+    lines.push(`The books closed ${money(-books.close)} in the red, past the ${money(DEBT_LIMIT * revenueScale(league))} I'll carry. No result lifts a season like that.`);
   if (booksText) lines.push(booksText);
   // budgets cut under the league's standard: what they saved isn't profit he asked for (see ownerProfit)
   const trimmed = curTeamSeason(league, tid).trimmed ?? 0;
@@ -210,7 +210,7 @@ export function ownerEvaluation(league: League) {
       important: true,
       from: 'Owner',
       subject: "You're fired",
-      body: [said, ...lines, '(Your agent will bring you the offers: take one to keep your career going. The league waits until you do.)'].join('\n'),
+      body: [said, ...lines, 'Your agent will bring you the offers. Take one to keep your career going. The league waits until you do.'].join('\n'),
       tone: 'bad',
       link: '/office/career',
     });
@@ -222,7 +222,12 @@ export function ownerEvaluation(league: League) {
     from: 'Owner',
     subject: 'Season review',
     body: og
-      ? [`${debt ?? `I'm ${feeling}.`} Season grade ${fmt(grade)}, overall standing ${fmt(total)} (both −100 to +100; 0 is my goals met exactly).`, ...lines, answered, warning]
+      ? [
+          `${debt ?? `I'm ${feeling}.`} Season grade ${fmt(grade)}, overall standing ${fmt(total)}. Both run −100 to +100, and 0 is my goals met exactly.`,
+          ...lines,
+          answered,
+          warning,
+        ]
           .filter(Boolean)
           .join('\n')
       : `I'm ${feeling}. Wins: ${fmt(league.ownerMood.wins)} · Playoffs: ${fmt(league.ownerMood.playoffs)} · Finances: ${fmt(league.ownerMood.money)}.${warning ? ` ${warning}` : ''}`,

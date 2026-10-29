@@ -1,18 +1,14 @@
 // The style sheet's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
-// roster first, each a row to pick it by with how well the team knows its least-known part (the coverage,
-// the scheme, the shape..., as the staff's familiarity card names it) and, in a column, the staff's read of
-// what it's worth a game against the one in use (coachAI's fits, calibrated against the engine: the same
-// unit a change is measured in once it's made). The user's own staff picks the top one (StaffFor); in
-// season it keeps the one it runs until another reads STICK better, and says so above the list. Its read
-// or ⓘ opens one sheet: what it is, who it's for, the read broken into its parts, what would raise it,
-// what learning it costs (measured), and Use.
+// roster first, each a row to pick it by with, in a column, the staff's read of what it's worth a game
+// against the one in use (coachAI's fits, calibrated against the engine: the same unit a change is
+// measured in once it's made). The user's own staff picks the top one (StaffFor); in season it keeps the
+// one it runs until another reads STICK better, and says so above the list. Its read opens one sheet:
+// what it is, who it's for, the read broken into its parts, what would raise it, and Use.
 import { useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
-import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics, type DefPreset, type OffPreset } from '../../core/sim/tactics';
-import { FAM_DIMS, FLUID, famLabel, type FamDim } from '../../core/sim/familiarity';
-import { systemFamiliarity } from '../../core/league/practice';
+import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { presetMatches } from '../../core/sim/playbooks';
 import { STICK, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
@@ -20,24 +16,7 @@ import { rosterNames } from '../stats';
 import { Sheet, Tag } from '../components/ui';
 import { PresetFit } from './PresetFit';
 import { byFit, fitTone, readText, shownFit } from './fit';
-import type { Tactics } from '../../core/types';
-import { famTone } from './formation';
-import { learnText, useLearnCost } from './learnCost';
 import '../screens/tactics.css';
-import { StaffMoveNote } from './StaffMoveNote';
-
-/** Each end's parts a playbook sets (its players' roles are the staff's, whichever it is). */
-const PARTS = { off: FAM_DIMS.filter((d) => d.end === 'off' && d.id !== 'roles'), def: FAM_DIMS.filter((d) => d.end === 'def') };
-/** A part's name in a row ("Coverage 45%"), as Analysis → Familiarity names it, cut to a word. */
-const PART_SHORT: Record<FamDim, string> = { shape: 'Shape', actions: 'Actions', tempo: 'Tempo', roles: 'Roles', scheme: 'Scheme', coverage: 'Coverage', pressure: 'Pressure' };
-
-/** The tactics with preset `id` loaded at end `kind` (a copy). */
-function withPreset(t: Tactics, kind: 'off' | 'def', id: string): Tactics {
-  const tt = cloneTactics(t);
-  if (kind === 'off') tt.offense = applyOffPreset(tt.offense, id);
-  else tt.defense = applyDefPreset(tt.defense, id);
-  return tt;
-}
 
 type Preset = OffPreset | DefPreset;
 
@@ -55,19 +34,6 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const [open, setOpen] = useState<string | null>(null);
   const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits), [kind, fits]);
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
-  // how well the team knows each one's least-known part at this end (the staff's card names the same
-  // part when it's new to them): what a switch is played a step slow in until it's drilled
-  // (none before training camp: camp drills whichever the team plays, and the sheet says so)
-  const known = useLeagueMemo(() => {
-    const out: Record<string, { id: FamDim; v: number }> = {};
-    if (!league.teams[league.userTid].fam) return out;
-    for (const p of presets) {
-      const dims = systemFamiliarity(league, league.userTid, withPreset(t, kind, p.id)).dims;
-      const w = PARTS[kind].reduce((a, d) => (dims[d.id] < dims[a.id] ? d : a));
-      out[p.id] = { id: w.id, v: dims[w.id] };
-    }
-    return out;
-  }, [league, kind, presets, t]);
   // in season the staff keeps the playbook it runs until another reads clearly better (STICK): said, not hidden
   const top = presets[0]?.id;
   const held = !t.manual && inSeason(league) && cur !== undefined && top !== cur && staffPick(fits, cur, true) === cur ? presets[0] : null;
@@ -88,23 +54,17 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const sheet = presets.find((p) => p.id === open);
   const sheetOn = sheet?.id === cur;
   const sheetCustom = !!sheet && isCustom(sheet);
-  // what learning the one in the sheet costs, measured on the next game
-  const sheetWant = useMemo(() => (sheet && !sheetOn ? withPreset(t, kind, sheet.id) : null), [sheet, sheetOn, t, kind]);
-  const learn = useLearnCost(t, sheetWant);
-  const learnLine = learn ? learnText(learn) : '';
   return (
     <>
       {held && (
         <p className="small dim2 tx-held">
-          The staff keeps {presets.find((p) => p.id === cur)?.name} while the team knows it: in season they change once another reads {readText(STICK.preset / 10)} a game better (
-          {held.name}: {readText(shownFit(held.id, terms[held.id], fits, cur!).vs)}).
+          In season the staff keeps {presets.find((p) => p.id === cur)?.name} until another reads {readText(STICK.preset / 10)} a game better.
         </p>
       )}
-      <StaffMoveNote only={kind} />
       <div className="card flush list wide2 tx-presets">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
-          <span>Best for your roster first</span>
-          <span>Staff&apos;s read, a game</span>
+          <span>Best fit first</span>
+          <span>Staff&apos;s read</span>
         </div>
         {presets.map((p) => {
           const on = cur === p.id;
@@ -119,30 +79,17 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
                     <span className="ellipsis">{p.name}</span>
                     {custom && <Tag>Custom</Tag>}
                   </span>
-                  <span className={`tx-preset-t ${custom ? 'accent-text' : ''}`}>
-                    {/* (how well it's known first: a long tagline is cut short, not the figure) */}
-                    {!on && known[p.id] && (
-                      <>
-                        <span className={famTone(known[p.id].v)}>
-                          {known[p.id].v >= FLUID ? famLabel(known[p.id].v) : `${PART_SHORT[known[p.id].id]} ${Math.round(known[p.id].v)}%`}
-                        </span>
-                        {' · '}
-                      </>
-                    )}
-                    {custom ? 'Settings moved: tap to put them back' : p.tagline}
-                  </span>
+                  <span className={`tx-preset-t ${custom ? 'accent-text' : ''}`}>{custom ? 'Settings moved. Tap to put them back.' : p.tagline}</span>
                 </span>
               </button>
               <button
                 className="tx-fit"
-                aria-label={on ? `${p.name} is in use: why` : `The staff's read: ${readText(v)} a game against yours: why, for ${p.name}`}
+                aria-label={on ? `About ${p.name}, in use` : `About ${p.name}, the staff's read ${readText(v)} a game against yours`}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(p.id)}
               >
                 <span className={`tx-fitv tx-read ${on ? '' : fitTone(v)}`}>{on ? 'Yours' : readText(v)}</span>
-              </button>
-              <button className="iconbtn tx-about" aria-label={`About ${p.name}`} aria-haspopup="dialog" onClick={() => setOpen(p.id)}>
-                <Info size={18} />
+                <ChevronRight size={16} className="dim" aria-hidden="true" />
               </button>
             </div>
           );
@@ -158,12 +105,6 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               <span>{sheet.bestFor}</span>
             </div>
             <PresetFit id={sheet.id} cur={cur} presets={presets} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} kind={kind} />
-            {learnLine && (
-              <p className="small dim2">
-                {learnLine}
-                {learn?.worth || learn?.skip ? '.' : ''}
-              </p>
-            )}
             <button
               className="btn primary block"
               disabled={sheetOn && !sheetCustom}

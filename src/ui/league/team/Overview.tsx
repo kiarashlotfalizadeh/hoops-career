@@ -10,7 +10,7 @@ import { defenseLabel, offenseLabel } from '../../../core/sim/playbooks';
 import { activeCoach, coachCareer, coyWinners } from '../../../core/league/coaches';
 import { seasonLabel } from '../../../core/constants';
 import { money, rankOf } from '../../../core/format';
-import { Statline } from '../../components/ui';
+import { Help, Statline } from '../../components/ui';
 import { Term } from '../../components/Glossary';
 import { f1, signed, teamRatings } from '../../stats';
 import { STRATEGY_META, StrategyTag } from '../shared';
@@ -40,10 +40,10 @@ function useOutlook(league: League, tid: number): string | null {
   if (t.out) return league.phase === 'playoffs' || league.phase === 'playin' ? null : 'Eliminated from the playoffs';
   const w = Math.round(t.w);
   const rec = league.phase === 'playin' ? '' : `Projected ${w}-${Math.round(t.w + t.l) - w} · `;
-  return `${rec}Playoffs ${pct(t.reach[0], t.clinched)}${t.reach[4] >= 0.01 ? ` · Title ${pct(t.reach[4])}` : ''}${f.preseason ? ' (preseason)' : ''}`;
+  return `${f.preseason ? 'Preseason · ' : ''}${rec}Playoffs ${pct(t.reach[0], t.clinched)}${t.reach[4] >= 0.01 ? ` · Title ${pct(t.reach[4])}` : ''}`;
 }
 
-// (moved off its playbook's settings: "Custom (Drop base)", as the Tactics hero and Plan name it)
+// (moved off its playbook's settings: "Custom Drop", as the Tactics hero and Plan name it)
 const playbook = (team: League['teams'][number]) => {
   const off = offenseLabel(team.tactics);
   return `${off === 'Custom' ? 'Custom offense' : off} / ${defenseLabel(team.tactics)}`;
@@ -138,11 +138,14 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
           </span>
           <ChevronRight size={15} className="dim" aria-hidden="true" />
         </Link>
+        {/* what the strategy means in a trade, a tap away */}
         <div className="lg-kvl">
           <span className="k">Strategy</span>
           <span className="v">
             <StrategyTag team={team} />
-            <span className="sub">{strategy.help}</span>
+            <Help title={strategy.label}>
+              <p className="lg-p">{strategy.help}</p>
+            </Help>
           </span>
           <span />
         </div>

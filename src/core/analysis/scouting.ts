@@ -364,7 +364,7 @@ const ppp = (v: number) => v.toFixed(2);
 /** Play types as a sentence names them. */
 const PT_NOUN: Record<FinishType, string> = {
   pnrBH: 'pick-and-roll ball-handler plays',
-  pnrRoll: 'rolls and pops off the pick-and-roll',
+  pnrRoll: 'rolls and pops',
   iso: 'isolations',
   post: 'post-ups',
   spotup: 'spot-up shots',
@@ -508,7 +508,7 @@ function readHeadToHead(league: League, d: ScoutData, counters: Map<string, Sign
   for (const e of d.h2h.effects) {
     if (e.forUser || e.perGame < 1 || !IMPACT_COUNTER[e.key]) continue;
     const said = impactSentence(e.key, teamRef(opp), 'your team').replace(/\.$/, '');
-    const text = `In your games against them, ${said.charAt(0).toLowerCase()}${said.slice(1)} (+${e.perGame.toFixed(1)} points a game for them over ${n === 1 ? 'one game' : `${n} games`}).`;
+    const text = `${said}. That was +${e.perGame.toFixed(1)} points a game for them in your ${n === 1 ? 'last meeting' : `${n} meetings`}.`;
     for (const id of IMPACT_COUNTER[e.key]) backs(counters, id, text, 3 + e.perGame);
   }
   for (const [id, s] of counters) d.counters[id] = s.text;
@@ -529,17 +529,17 @@ function read(league: League, d: ScoutData) {
   const worst = (x: Ranked) => n + 1 - x.rank;
   const off = (k: FinishType) => d.playTypes.find((x) => x.key === k && x.poss >= MIN_PT_POSS);
   const def = (k: FinishType) => d.defPlayTypes.find((x) => x.key === k && x.poss >= MIN_PT_POSS);
-  const vsLeague = (row: PlayTypeRow) => `${ppp(row.ppp)} per possession (league ${ppp(row.base)})`;
+  const vsLeague = (row: PlayTypeRow) => `${ppp(row.ppp)} per possession, to the league's ${ppp(row.base)}`;
 
   // ---- style
   if (d.pace.rank <= 3)
-    tendencies.push({ text: `Play at ${most(d.pace.rank, 'fastest')} pace in the league (${d.pace.v.toFixed(1)} possessions a game).`, weight: 4 - d.pace.rank });
+    tendencies.push({ text: `Play at ${most(d.pace.rank, 'fastest')} pace in the league: ${d.pace.v.toFixed(1)} possessions a game.`, weight: 4 - d.pace.rank });
   else if (worst(d.pace) <= 3)
-    tendencies.push({ text: `Play at ${most(worst(d.pace), 'slowest')} pace in the league (${d.pace.v.toFixed(1)} possessions a game).`, weight: 4 - worst(d.pace) });
+    tendencies.push({ text: `Play at ${most(worst(d.pace), 'slowest')} pace in the league: ${d.pace.v.toFixed(1)} possessions a game.`, weight: 4 - worst(d.pace) });
   for (const row of d.playTypes) {
     if (row.key === 'misc' || row.share < 0.04 || row.shareRank > 3) continue;
     tendencies.push({
-      text: `Run ${most(row.shareRank)} ${PT_NOUN[row.key]} in the league: ${pct0(row.share)} of their possessions, ${ppp(row.ppp)} points each (league ${ppp(row.base)}).`,
+      text: `Run ${most(row.shareRank)} ${PT_NOUN[row.key]} in the league: ${pct0(row.share)} of their possessions.`,
       weight: 5 - row.shareRank,
     });
   }
@@ -564,7 +564,7 @@ function read(league: League, d: ScoutData) {
   if (swing && Math.abs(swing.on! - swing.off!) >= 8) {
     const gap = swing.on! - swing.off!;
     tendencies.push({
-      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} net rating per 100 possessions on vs off.`,
+      text: `${gap > 0 ? 'Much better' : 'Worse'} with ${swing.name} on the floor: ${gap > 0 ? '+' : '−'}${Math.abs(gap).toFixed(1)} net rating per 100.`,
       weight: Math.abs(gap) / 10,
     });
   }
@@ -585,24 +585,19 @@ function read(league: League, d: ScoutData) {
     backs(
       counters,
       'help-high',
-      `${pct0(d.rimRate.v)} of their shots come at the rim (${most(d.rimRate.rank)} in the league) and only ${pct0(d.threeRate.v)} from three.`,
+      `${pct0(d.rimRate.v)} of their shots come at the rim, ${most(d.rimRate.rank)} in the league. Only ${pct0(d.threeRate.v)} are threes.`,
       6 - d.rimRate.rank,
     );
   const tr = d.playTypes.find((x) => x.key === 'transition');
   if (tr && (tr.shareRank <= 5 || (tr.poss >= MIN_PT_POSS && tr.z >= 2)))
-    backs(
-      counters,
-      'getback',
-      `They run: ${pct0(tr.share)} of their possessions in transition (${most(tr.shareRank)} in the league), ${ppp(tr.ppp)} points each.`,
-      Math.max(6 - tr.shareRank, tr.z),
-    );
+    backs(counters, 'getback', `They run: ${pct0(tr.share)} of their possessions come in transition, ${most(tr.shareRank)} in the league.`, Math.max(6 - tr.shareRank, tr.z));
   if (d.off.ftr.rank <= 5)
     backs(counters, 'physicality-down', `They live at the line: ${d.off.ftr.v.toFixed(2)} free throws per shot, ${most(d.off.ftr.rank)} in the league.`, 6 - d.off.ftr.rank);
   if (worst(d.off.tov) <= 5) {
     const text = `They turn it over on ${pct1(d.off.tov.v)} of their possessions, ${most(worst(d.off.tov))} in the league.`;
     for (const id of ['pressure-up', 'press-on']) backs(counters, id, text, 6 - worst(d.off.tov));
     exploits.push({
-      text: `Loose with the ball: ${pct1(d.off.tov.v)} of their possessions end in a turnover, ${most(worst(d.off.tov))} in the league. Pressure them.`,
+      text: `Loose with the ball: they turn it over on ${pct1(d.off.tov.v)} of possessions, ${most(worst(d.off.tov))}. Pressure them.`,
       weight: 6 - worst(d.off.tov),
     });
   }
@@ -615,7 +610,10 @@ function read(league: League, d: ScoutData) {
   // ---- their defense: what the user's offense should attack
   for (const row of d.defPlayTypes) {
     if (row.key === 'misc' || row.poss < MIN_PT_POSS || row.z < 2) continue;
-    exploits.push({ text: `Their defense gives up ${vsLeague(row)} on ${PT_NOUN[row.key]}. ${PT_ATTACK[row.key] ?? ''}`.trim(), weight: row.z });
+    exploits.push({
+      text: `They give up ${ppp(row.ppp)} per possession on ${PT_NOUN[row.key]}, to the league's ${ppp(row.base)}. ${PT_ATTACK[row.key] ?? ''}`.trim(),
+      weight: row.z,
+    });
   }
   const dBh = def('pnrBH');
   if (dBh && dBh.z >= 2) backs(counters, 'vs-drop', `Their defense gives up ${vsLeague(dBh)} on pick-and-roll ball-handler plays.`, dBh.z);
@@ -650,13 +648,13 @@ function read(league: League, d: ScoutData) {
   const volume = [...d.players].filter((p) => !p.elsewhere && p.gp >= SCOUT_MIN_GAMES && p.min >= 20).sort((a, b) => b.usg - a.usg)[0];
   if (volume && volume.usg >= 0.25 && volume.ts < 0.54)
     exploits.push({
-      text: `${volume.name} uses ${pct0(volume.usg)} of their possessions at ${pct1(volume.ts)} true shooting: let him shoot, and take away everyone else.`,
+      text: `${volume.name} uses ${pct0(volume.usg)} of their possessions at ${pct1(volume.ts)} true shooting. Let him shoot, take away the rest.`,
       weight: 2 + (0.54 - volume.ts) * 40,
     });
   const brick = d.players.filter((p) => p.min >= 15 && p.fta >= 2 && p.ft < 0.6).sort((a, b) => a.ft - b.ft)[0];
   if (brick)
     exploits.push({
-      text: `${brick.name} makes ${pct0(brick.ft)} of his free throws: worth fouling on purpose (Hack-a-player, on the Plan).`,
+      text: `${brick.name} makes ${pct0(brick.ft)} of his free throws. Worth a Hack-a-player on the Plan.`,
       weight: 1.5 + (0.6 - brick.ft) * 10,
     });
 

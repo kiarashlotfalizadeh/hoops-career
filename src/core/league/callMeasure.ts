@@ -10,12 +10,9 @@
 // draft), a promising one played again on fresh seeds (see counterWorth.ts). That reads a counter to
 // about ±1.0 a game (±0.7 replayed) where a card's own 240 read it to ±0.45; every reading is shrunk
 // toward even by its noise before it's called a gain, so the smaller budget makes the staff more
-// cautious, not less honest. A measurement is 80 to 240 paired games. The week's billed nights were
-// measured every week for a one-night counter worth about a tenth of a win a season, 40% of the
-// measuring (OKC, 2026-10-27: 9.2 of 22.5 seconds against 14 for the season's own days); now only in
-// a week of drills (weekCall.ts). What's left: a skid's steps, a starter's injury, the young players'
-// lean and its second reading, the deadline's deal, the series, and the staff's playbook change
-// (staffLever.ts, the biggest).
+// cautious, not less honest. A measurement is 80 to 240 paired games: a skid's steps, a starter's
+// injury, the young players' lean and its second reading, the deadline's deal, the series, and the
+// staff's playbook change (staffLever.ts, the biggest).
 import type { League } from '../types';
 import { counterWorth, measureChanges, withChange, type WorthOpts } from '../ai/counterWorth';
 import { callNeeds, callsDecide, changeWorth, countersWorth, storeWorth, type CallMeasure, type CallWorth } from './calls';
@@ -26,7 +23,7 @@ import { leverMorning } from './staffLever';
 export const SIM_GAMES = 40;
 /** Counters a sim's measurement plays at most. */
 export const SIM_COUNTERS = 2;
-/** Rounds of measuring a morning at most (a pick can call for another measurement: the practice waits on the big game's counter). */
+/** Rounds of measuring a morning at most (a pick can call for another measurement). */
 const ROUNDS = 4;
 
 /** One call's numbers, measured on the sim's budget (the screens pass their own options). Null if it was stopped. */

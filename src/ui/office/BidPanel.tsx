@@ -37,19 +37,20 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
   // how far it can drop: his summer floor, through its day and after (see SUMMER_FLOOR), the one number that holds whatever the others spend
   const floors = floorAmounts(league, p);
   const early = league.faDay < SUMMER_FLOOR.day;
-  const toward = `${drops} toward what the money left would pay him`;
   // (a floor the mid-level caps stays where it is past the floor's day: see floorAmounts)
-  const then =
-    floors && floors.late < floors.early - 50 ? `through day ${SUMMER_FLOOR.day}, then ${money(floors.late)} on a one-year deal` : `(a one-year deal past day ${SUMMER_FLOOR.day})`;
+  const lateTxt =
+    floors && floors.late < floors.early - 50
+      ? `After day ${SUMMER_FLOOR.day}: ${money(floors.late)} on a one-year deal.`
+      : `Past day ${SUMMER_FLOOR.day}, he takes a one-year deal.`;
   const floorLine = !floors
-    ? `${toward}.`
+    ? `${drops} toward what the market can pay.`
     : early
       ? ask <= floors.early + 50
-        ? `He's at his floor: ${money(floors.early)} ${then}.`
-        : `${toward}, never under ${money(floors.early)} ${then}.`
+        ? `He's at his floor, ${money(floors.early)}. ${lateTxt}`
+        : `${drops}, never under ${money(floors.early)}. ${lateTxt}`
       : ask <= floors.late + 50
         ? `He's at his floor, ${money(floors.late)}, on a one-year deal.`
-        : `${toward}, never under ${money(floors.late)}: there he takes a one-year deal.`;
+        : `${drops}, never under ${money(floors.late)}. There he takes a one-year deal.`;
 
   // fit of your team for each priority: yes, no, or neither
   const fit: Record<keyof PlayerPrefs, { ok: boolean | null; note: string }> = {
@@ -74,8 +75,8 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
         {dry && (
           <div className="small dim2">
             {room! > 0
-              ? `No other team can pay his ask now: the most one could is about ${moneyExact(Math.round(room! / 100) * 100)}.`
-              : 'No other team has room for him past the minimum now.'}{' '}
+              ? `No other team can pay his ask. The most one could is about ${moneyExact(Math.round(room! / 100) * 100)}.`
+              : 'No other team has room for him past the minimum.'}{' '}
             {floorLine}
           </div>
         )}
@@ -110,7 +111,7 @@ export function BidPanel({ p, amount, years, floor, onAmount }: { p: Player; amo
             'Even a max offer would not top theirs now.'
           )}
           {/* (today's offers, as bidStanding reads them: a rival's room can be spent or freed by his day) */}
-          {best && <div className="small dim2">Staff read of today&apos;s offers: theirs can change before he decides {when}.</div>}
+          {best && <div className="small dim2">Theirs can still change before he decides {when}.</div>}
         </Callout>
       )}
 

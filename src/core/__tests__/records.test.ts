@@ -266,7 +266,7 @@ describe('the record book', () => {
       expect(wins(72)[0]).toContain('level with the 1995-96 Chicago Bulls (72-10). Only the 2015-16 Golden State Warriors (73-9) won more');
       expect(wins(73)[0]).toMatch(/^73 wins: the .+ tie the record/);
       expect(wins(74)[0]).toMatch(/^74 wins: the .+ pass the record.*past the 2015-16 Golden State Warriors \(73-9\)/);
-      expect(wins(40, 33)[0]).toContain('level with the 1971-72 Los Angeles Lakers (33)');
+      expect(wins(40, 33)[0]).toContain('It ties the 1971-72 Los Angeles Lakers (33) for the longest winning streak');
     }
 
     // what one game did to the book

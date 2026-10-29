@@ -44,7 +44,7 @@ export function CupTab({ league }: { league: League }) {
         {lastWinner?.cupWinner !== undefined && (
           <CupBanner league={league} season={lastWinner.season} tid={lastWinner.cupWinner} runnerUp={lastWinner.cupRunnerUp} mvp={lastWinner.cupMvp} />
         )}
-        <div className="card empty">No NBA Cup this season: it&apos;s drawn with each new schedule (groups in November, knockouts in December).</div>
+        <div className="card empty">No NBA Cup this season. It&apos;s drawn with each new schedule: groups in November, knockouts in December.</div>
       </>
     );
   }
@@ -96,7 +96,8 @@ export function CupTab({ league }: { league: League }) {
           <div className="bk-panel-wrap">
             {confOrder(conf).map((c) => (
               <div key={c} className={`bk-${c} ${c !== conf ? 'bk-hide-narrow' : ''}`}>
-                <Section title={`${confName(c)} knockouts`} right={<span className="lg-sec-meta">{status}</span>}>
+                {/* where it stands is the poster's line; once it's won, the slab's, so the section says when */}
+                <Section title={`${confName(c)} knockouts`} right={cup.champion !== undefined ? <span className="lg-sec-meta">{status}</span> : undefined}>
                   <div className="card bk-card">
                     <KnockoutBracket league={league} conf={c} projected={projected} />
                   </div>
@@ -123,11 +124,7 @@ export function CupTab({ league }: { league: League }) {
           </div>
         ))}
       </div>
-      <Foot help={<CupHelp league={league} />}>
-        {seeds
-          ? keepFigures(`${cup.seeds ? 'Went through' : 'Would go through today'}: group winners (seeds 1-3) and the best runner-up (WC). +/- and PTS count group games only.`)
-          : 'How the Cup works'}
-      </Foot>
+      <Foot help={<CupHelp league={league} />}>{seeds ? keepFigures(`Seeds 1-3 ${cup.seeds ? 'won' : 'lead'} their group · WC is the best runner-up`) : 'How the Cup works'}</Foot>
     </>
   );
 }
@@ -159,13 +156,15 @@ function CupHelp({ league }: { league: League }) {
   const cup = league.cup!;
   return (
     <Help title="NBA Cup">
+      <p className="lg-p">The three group winners and the best runner-up in each conference go through. The runner-up is the wild card, WC.</p>
       <p className="lg-p">
-        The three group winners and the best runner-up in each conference advance. Quarterfinals ({dateRange(league, cup.qfDays[0], cup.qfDays[1])}) and semifinals (
-        {fmtDate(league.season, cup.sfDay)}) are hosted by the better seed and count in the standings. The championship ({fmtDate(league.season, cup.finalDay)}) is on a neutral
-        floor and doesn&apos;t count in the standings or season stats. Teams that don&apos;t advance play their last two regular-season games in the knockout window.
+        The better seed hosts the quarterfinals, {dateRange(league, cup.qfDays[0], cup.qfDays[1])}, and the semifinals, {fmtDate(league.season, cup.sfDay)}. Both count in the
+        standings.
       </p>
+      <p className="lg-p">The championship is on {fmtDate(league.season, cup.finalDay)}, on a neutral floor. It doesn&apos;t count in the standings or season stats.</p>
+      <p className="lg-p">Teams that miss the knockouts play their last two regular-season games in that window.</p>
       <p className="lg-p">Cup nights: {cup.nights.map((d) => fmtDate(league.season, d)).join(', ')}.</p>
-      <p className="lg-p">Group ties break on head-to-head, then point differential and points scored in group games, then last season&apos;s record.</p>
+      <p className="lg-p">+/- and PTS count group games only. Group ties break on head-to-head, then point differential, points scored and last season&apos;s record.</p>
     </Help>
   );
 }
@@ -334,7 +333,6 @@ function CupFinal({ league, final }: { league: League; final?: CupTie }) {
       ) : (
         <div className="card bk-fcard">{body}</div>
       )}
-      <div className="lg-note">Doesn&apos;t count in the standings or season stats.</div>
     </Section>
   );
 }
