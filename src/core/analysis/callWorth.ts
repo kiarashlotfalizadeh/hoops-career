@@ -8,14 +8,8 @@
 // (ui/live/calls.ts). Taking every call as it fired, over 1,200 paired games with the
 // switches on: −0.20 ± 0.24 points a game before (1.9 calls a game, the most frequent, "We're beating
 // X: attack him", at −0.2 each, the coverage switches to Hedge at −1.3 to −1.6), +0.10 ± 0.12 after
-// (0.2 calls a game, +1.5 each). A kept call shows its number; one the staff makes too rarely to have
-// measured shows as the staff's read. Pure.
-
-/** "+2.2", "−1.3" (a true minus), "0.0". */
-const signed = (v: number, d = 1) => {
-  const t = Math.abs(v).toFixed(d);
-  return Number(t) === 0 ? t : `${v > 0 ? '+' : '−'}${t}`;
-};
+// (0.2 calls a game, +1.5 each). A kept call shows the staff's opinion in words; one made too rarely to
+// have measured shows nothing. Pure.
 
 /** A call's measured worth when taken where it fires: points of the rest of the game's margin and of win chance, each with its standard error, over `n` calls. */
 export interface CallWorth {
@@ -115,15 +109,14 @@ export function callCosts(key: string): boolean {
 }
 
 /**
- * A kept call's number as a verdict, in a few words: "Helps: about +2.2 points where we make it",
- * "Helps: about +1.4% to win where we make it", "No real change where we make it" (inside two standard
- * errors of even); "Not measured yet" with none (the staff's read).
+ * A kept call as the staff's opinion, in a few words and no figure (staffWords.ts): "Usually helps here",
+ * "Usually hurts here", "Could go either way" inside two standard errors of even; nothing with no
+ * measurement behind it.
  */
-export function worthLine(key: string): string {
+export function worthLine(key: string): string | undefined {
   const m = callWorth(key);
-  if (!m) return 'Not measured yet';
+  if (!m) return undefined;
   const [v, se] = m.by === 'win' ? [m.win * 100, m.winSe * 100] : [m.pts, m.ptsSe];
-  if (Math.abs(v) < 2 * se) return 'No real change where we make it';
-  const say = v > 0 ? 'Helps' : 'Hurts';
-  return m.by === 'win' ? `${say}: about ${signed(v, 1)}% to win where we make it` : `${say}: about ${signed(v, 1)} points where we make it`;
+  if (Math.abs(v) < 2 * se) return 'Could go either way';
+  return v > 0 ? 'Usually helps here' : 'Usually hurts here';
 }

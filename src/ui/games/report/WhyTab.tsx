@@ -1,5 +1,5 @@
-// The game report's Why, for one of your games: what decided it (each edge in points of the final
-// margin, biggest first, a row each that opens on its detail and the staff's fix), the four factors side by side (away
+// The game report's Why, for one of your games: what decided it (each edge sized in a word, biggest
+// first, a row each that opens on its detail and the staff's fix), the four factors side by side (away
 // on the left, as the final reads),
 // every player's grade, both benches' adjustments, and one tap down the play types, your sets, your
 // lineups and the momentum swings.
@@ -8,7 +8,8 @@ import { Link } from 'react-router-dom';
 import { ChevronDown } from 'lucide-react';
 import type { GameResult, League } from '../../../core/types';
 import { setLineText, type GameReport } from '../../../core/analysis/gameReport';
-import { Help, More, Section } from '../../components/ui';
+import { edgeWord } from '../../../core/analysis/staffWords';
+import { Help, More, Section, Tag } from '../../components/ui';
 import { CompareBar } from '../../components/charts';
 import { AdjustmentsCard } from '../../components/AdjustmentsCard';
 import { Term } from '../../components/Glossary';
@@ -34,14 +35,7 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
   );
   return (
     <>
-      <Section
-        title="What decided it"
-        right={
-          <Help title="What decided it">
-            <p>Each figure is what that edge was worth to the final margin. Plus went your way, minus theirs.</p>
-          </Help>
-        }
-      >
+      <Section title="What decided it">
         {report.factors.length === 0 ? <div className="gv-note">No single factor stood out: this one came down to execution.</div> : <Factors factors={report.factors} />}
       </Section>
 
@@ -161,8 +155,8 @@ export function WhyTab({ g, league, report }: { g: GameResult; league: League; r
 }
 
 /**
- * What decided it, biggest first, each worth so many points of the margin: the first few, the rest a
- * tap away. A row is its figure and what happened; it opens on the detail and the staff's fix.
+ * What decided it, biggest first: the first few, the rest a tap away. A row is what happened and its
+ * size in a word, in the tone of who it favoured; it opens on the detail and the staff's fix.
  */
 function Factors({ factors }: { factors: GameReport['factors'] }) {
   const [all, setAll] = useState(false);
@@ -172,11 +166,8 @@ function Factors({ factors }: { factors: GameReport['factors'] }) {
       {shown.map((f, i) => (
         <details key={i} className="gv-factor">
           <summary>
-            <span className={`gv-pts num ${f.pts >= 0 ? 'good' : 'bad'}`}>
-              {signed(f.pts)}
-              <span className="gv-pts-u">pts</span>
-            </span>
             <span className="grow gv-factor-t">{f.title}</span>
+            <Tag tone={f.pts >= 0 ? 'good' : 'bad'}>{edgeWord(f.pts)}</Tag>
             <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
           </summary>
           <div className="gv-factor-b">

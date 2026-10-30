@@ -1,6 +1,6 @@
 // The first live game's coach marks: three short cards, one at a time over the foot of the court
 // (never the scorebug), each gone at a tap or after a few seconds up: where speed and Skip ahead are,
-// what Lineup and Staff hold, and what a timeout does. They give way to a banner over the court (the
+// what Players and Now hold, and what a timeout does. They give way to a banner over the court (the
 // staff's call above all: Live.tsx). With teaching on, once on this device, in the first quarter of the
 // first live game: after the last (or past that quarter), never again.
 import { useEffect, useRef } from 'react';
@@ -10,7 +10,7 @@ const SEEN_KEY = 'hc:live-tips';
 /** The cards, and the bench bar's controls each points at (Live.tsx rings them while it's up). */
 export const COACH_MARKS: { text: string; at: string[] }[] = [
   { text: 'Tap the court for speed and Skip ahead.', at: [] },
-  { text: 'Lineup has your subs. Staff has your assistant’s calls.', at: ['lineup', 'staff'] },
+  { text: 'Players has your subs. Now has your assistant’s calls.', at: ['lineup', 'staff'] },
   { text: 'Timeout stops play to sub and change the plan.', at: ['timeout'] },
 ];
 

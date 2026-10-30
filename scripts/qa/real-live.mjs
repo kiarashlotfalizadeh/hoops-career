@@ -37,7 +37,7 @@ for (const [tag, viewport] of [
   await page.waitForTimeout(8000);
   await shot('live');
   // the console's views: the game plan, the lineup and the stats
-  for (const name of ['Game plan', 'Lineup', 'Stats']) {
+  for (const name of ['Tactics', 'Players', 'Stats']) {
     await page
       .locator('.lv-bb-views')
       .getByRole('tab', { name })

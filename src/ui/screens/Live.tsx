@@ -1,7 +1,7 @@
 // The live game, broadcast first: the scorebug and the court own the top of the screen; under them,
-// the console holds the staff (the lead assistant's read, the calls he wants from you and your moves
-// with what each has done), the game plan (each of tonight's numbers beside the lever that moves it),
-// the lineup and the stats; the bench bar in the tab bar's place has the timeout and the views. At a
+// the console answers one question a view: Now (what the staff sees and what needs you), Players (who's
+// on, who's tired, who to sub), Tactics (what each side is running, beside the lever that moves it) and
+// Stats; the bench bar in the tab bar's place has the timeout and the views. At a
 // period's end or in your timeout the court steps aside for the report or the huddle, on this screen.
 // Playback is a tap on the court. Around it, the night: the crowd's glow and its lines, the callouts
 // for a run or a big play, clutch time on the scorebug and the court (live/atmosphere.ts, Atmos.tsx).
@@ -51,7 +51,7 @@ import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
 import type { CallId } from '../../core/types';
 import { quickPills, subOptions } from '../live/session';
-import { HOT_STREAK } from '../live/OnCourt';
+import { HOT_STREAK } from '../live/Lineup';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
@@ -177,11 +177,10 @@ export default function Live() {
     const a = n?.actions[0];
     if (!n || a?.kind !== 'tactics') return;
     autoDone.current.add(n.id);
-    const call = n.id.startsWith('call-');
-    applyTactics(a.apply, n.title, { measured: call });
-    if (call) s.staff.took(a.label);
+    applyTactics(a.apply, n.title);
+    if (n.id.startsWith('call-')) s.staff.took();
     s.setDismissed((d) => [...d, n.id]);
-    useStore.getState().toast(`${assistant.last}: ${a.label}${call && n.fig ? `, about ${n.fig.v} points` : ''}.`, 'good');
+    useStore.getState().toast(`${assistant.last}: ${a.label}.`, 'good');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.notes, autonomy, over, simBusy]);
 
@@ -312,15 +311,14 @@ export default function Live() {
   };
   /** One of the staff's moves, taken: its change, sub, timeout or the lineup. */
   const act = (n: StaffNote, a: StaffAction) => {
-    // the staff's measured call: its number is the change's (nothing to measure again)
     const call = n.id.startsWith('call-');
     if (a.kind === 'tactics') {
-      applyTactics(a.apply, undefined, { measured: call });
+      applyTactics(a.apply);
       useStore.getState().toast(`${a.label}: from the next possession.`, 'good');
     } else if (a.kind === 'sub') (stop ? subAtStop : substitute)(a.out, a.in);
     else if (a.kind === 'timeout') s.callTimeout(call ? 'staff call' : 'stop the run');
     else setCview('lineup');
-    if (call) s.staff.took(a.label);
+    if (call) s.staff.took();
     s.setDismissed((d) => [...d, n.id]);
   };
   const dismiss = (n: StaffNote) => {
@@ -330,7 +328,7 @@ export default function Live() {
   };
   const changed = offPlan(tactics, game.planned) ? changesLine(screenChanges(game.planned, tactics, nameOf).slice(0, 3)) : '';
   // the touchline: the mentality and (in Every setting) the shape
-  const touchline = (shape: boolean) => <Touchline tactics={tactics} planned={game.planned} apply={applyTactics} shape={shape} measured={s.staff.change} />;
+  const touchline = (shape: boolean) => <Touchline tactics={tactics} planned={game.planned} apply={applyTactics} shape={shape} />;
 
   const common = {
     league,
@@ -388,6 +386,9 @@ export default function Live() {
           keys={s.keys}
           watch={watch}
           onPlayer={pickPlayer}
+          tactics={tactics}
+          subFor={s.subFor}
+          substitute={subAtStop}
         />
       );
     }
@@ -418,11 +419,12 @@ export default function Live() {
           side={userSide}
           fives={fives}
           info={[
-            { abbrev: home.abbrev, kit: colors[0], edge: teamLook(home.colors).text, manage: sim.T[0].t.manage },
-            { abbrev: away.abbrev, kit: colors[1], edge: teamLook(away.colors).text, manage: sim.T[1].t.manage },
+            { abbrev: home.abbrev, kit: colors[0], manage: sim.T[0].t.manage },
+            { abbrev: away.abbrev, kit: colors[1], manage: sim.T[1].t.manage },
           ]}
           nameOf={nameOf}
           jersey={jersey}
+          ovr={(pid) => league.players[pid]?.ovr}
           onTap={pickPlayer}
           setManualSubs={(on) => {
             coach((g) => g.setManualSubs(on));

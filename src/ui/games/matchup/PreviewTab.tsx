@@ -14,14 +14,13 @@ import { matchupPreview, type MatchupPreview, type SidePreview } from '../../../
 import { gameKeys } from '../../../core/analysis/keys';
 import { storylines } from '../../../core/analysis/storylines';
 import { formGuide } from '../../../core/analysis/gameStory';
-import { gameStakes, pct as oddsPct } from '../../../core/analysis/odds';
-import { GAME_TIME_PERF, setGameTime } from '../../../core/league/injuries';
+import { gameStakes } from '../../../core/analysis/odds';
+import { setGameTime } from '../../../core/league/injuries';
 import { injuryName, plural } from '../../../core/format';
-import { K } from '../../../core/sim/engine';
 import { Avatar, Empty, Help, Ovr, Section, Tag } from '../../components/ui';
 import { TeamLogo } from '../../components/TeamLogo';
 import { OppPlanNote } from '../../components/scouting';
-import { p0, rosterNames } from '../../stats';
+import { rosterNames } from '../../stats';
 import { teamPlayers } from '../../../core/league/helpers';
 import { Briefing } from './Briefing';
 import { Fold, TeamForm, useBillings } from '../occasion';
@@ -55,7 +54,7 @@ export function PreviewTab({ league, game, onPlan }: { league: League; game: Sch
 function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv: MatchupPreview }) {
   const stakes = useLeagueMemo(() => gameStakes(league, game.gid, pv.us.tid), [league, game.gid, pv.us.tid]);
   // a game that changes nothing either way isn't worth the line
-  const odds = stakes && Math.abs(stakes.win - stakes.loss) >= 0.01 ? stakes : null;
+  const matters = !!stakes && Math.abs(stakes.win - stakes.loss) >= 0.01;
   const [bill, ...more] = useBillings(league, game);
   const tags = [
     pv.playoff?.tag,
@@ -63,7 +62,7 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
     pv.playoff?.clinch && 'A win takes the series',
     ...[pv.us, pv.them].map((s) => s.b2b && `${league.teams[s.tid].abbrev} back-to-back`),
   ].filter((x): x is string => !!x);
-  const stake = !!(odds || pv.playIn || tags.length || more.length);
+  const stake = !!(matters || pv.playIn || tags.length || more.length);
   const c = pv.them.coach;
   const coach = !!(pv.oppPlan?.length || c.adjusts);
   const stories = useLeagueMemo(() => {
@@ -83,16 +82,9 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
     <Section title="More about tonight">
       <div className="card flush list">
         {stake && (
-          <Fold
-            title="What it's worth"
-            peek={odds ? `Playoff odds ${oddsPct(odds.win)} with a win, ${oddsPct(odds.loss)} with a loss` : (tags[0] ?? more[0]?.tag ?? pv.playIn?.note ?? '')}
-          >
+          <Fold title="What it's worth" peek={matters ? 'Matters for the playoffs' : (tags[0] ?? more[0]?.tag ?? pv.playIn?.note ?? '')}>
             <div className="mu-fold">
-              {odds && (
-                <div className="mu-stakes">
-                  Playoff odds with a win <b className="good num">{oddsPct(odds.win)}</b> · with a loss <b className="bad num">{oddsPct(odds.loss)}</b>
-                </div>
-              )}
+              {matters && <div className="mu-stakes">A win or a loss here moves your playoff chances.</div>}
               {pv.playIn && <div className="mu-stakes">{pv.playIn.note}</div>}
               {tags.length > 0 && (
                 <div className="chips">
@@ -131,11 +123,7 @@ function Tonight({ league, game, pv }: { league: League; game: ScheduledGame; pv
           <Fold title="Their coach" peek={c.adjusts ? `${c.name} adjusts ${c.adjusts}` : c.name}>
             <div className="mu-fold">
               {pv.oppPlan && pv.oppPlan.length > 0 && <OppPlanNote league={league} items={pv.oppPlan} day={pv.day} />}
-              {c.adjusts && (
-                <div className="small dim2">
-                  {c.name} adjusts {c.adjusts}: a {p0(c.chance)} chance at each break.
-                </div>
-              )}
+              {c.adjusts && <div className="small dim2">{c.name} may adjust at each break.</div>}
             </div>
           </Fold>
         )}
@@ -206,10 +194,7 @@ function Availability({ league, pv, game, locked }: { league: League; pv: Matchu
         <div className="list-divider mu-avail-h">
           <span>Game-time decisions</span>
           <Help title="Game-time decisions">
-            <p>
-              A player one game from returning is questionable, and sits unless you clear him. Cleared, he plays about {Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, at{' '}
-              {K.gameTimeRisk}× the injury risk.
-            </p>
+            <p>A player one game from returning is questionable, and sits unless you clear him. Cleared, he plays below his best, with a higher injury risk.</p>
           </Help>
         </div>
       )}
@@ -235,7 +220,7 @@ function Availability({ league, pv, game, locked }: { league: League; pv: Matchu
             {locked
               ? 'Settled at tip-off.'
               : p.cleared
-                ? `About ${Math.round((1 - GAME_TIME_PERF) * 100)}% below his best, ${K.gameTimeRisk}× the injury risk${
+                ? `He'd play below his best, with a higher injury risk${
                     rot.manual ? (rot.minutes[p.pid] ? ` · ${rot.minutes[p.pid]} min in your rotation` : ' · no minutes in your rotation') : ''
                   }.`
                 : 'Sits unless you clear him.'}

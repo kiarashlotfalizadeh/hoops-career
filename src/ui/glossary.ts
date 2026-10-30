@@ -158,7 +158,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'fit',
     term: 'Fit',
     group: 'Numbers',
-    text: "What the staff reads a playbook or shape to be worth a game for your roster. It's an estimate. Make the change and the staff measures it.",
+    text: "How well the staff thinks a playbook or shape suits your roster. It's their opinion. Make the change and they watch how it goes.",
   },
   {
     id: 'wear',
@@ -316,13 +316,13 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'measured',
     term: 'Measured',
     group: 'The game',
-    text: "A number from playing the same games twice, once each way, on the same seeds. The gap is shrunk toward zero by its noise. Anything else is labelled the staff's read.",
+    text: 'The staff plays the same games both ways before they back a change. You get their opinion, not a figure.',
   },
   {
     id: 'counter',
     term: 'Counter',
     group: 'The game',
-    text: 'A change the staff would make for one opponent, measured before you see it. Add it to the plan for a game, a series or the season. It never changes your playbook.',
+    text: 'A change the staff would make for one opponent, tested before you see it. Add it to the plan for a game, a series or the season. It never changes your playbook.',
   },
   {
     id: 'luck',

@@ -131,9 +131,16 @@ world (no people layer: no morale, personalities or player conversations, by the
    a line of them sits under a 2px ink rule (`.statline`), as a printed box score does. The one figure
    a hero leads with is the condensed black cut, as big as it can be. A figure appears once per screen (the record is in the top bar: a screen
    doesn't repeat it unless it's the subject).
-8. **Short copy.** See Copy.
-9. **Thumb first.** Primary actions sit low (the dock's play row, a screen's own `.dockbar`),
-   targets are 44px, nothing important hides behind hover.
+8. **Words before the fact, numbers for facts.** What has happened is a number: the box score,
+   standings, OVR and POT, ages, contracts, money, a goal the owner set. What a choice will do, or an
+   estimate of what it did, is the staff's opinion in words, from `core/analysis/staffWords.ts`
+   ("Should help", "Seems to hurt", "Better fit", "Slight favorite", "Big edge"). No points a game, no
+   win chance moving with a choice, no ± and no "measured over 240 games". The sim still measures, and
+   the staff still picks by it, but the player gets a hunch and has to find out. League odds, draft
+   projections and the lottery stay: they are the league's own boards, not a preview of a choice.
+9. **Short copy.** See Copy.
+10. **Thumb first.** Primary actions sit low (the dock's play row, a screen's own `.dockbar`),
+    targets are 44px, nothing important hides behind hover.
 
 ## Tokens (theme.css `:root`)
 
@@ -320,27 +327,30 @@ Broadcast first: the court is always the biggest thing on screen. It is a maple 
 colours painted in the key and the centre circle, under an ink scorebug (the broadcast's own
 graphics package); the console under it is paper and card stock like every other screen.
 
-- A slim scorebug sits over a full-width court (the win-probability sliver and the scores ticker
+- A slim scorebug sits over a full-width court (the win bar, with no figures, and the scores ticker
   under it when Settings has them on). Captions, graphics and **one banner at a time** (injuries,
   foul-outs, their adjustments, the staff's word) go over the court, never beside it.
 - **The scorebug labels its figures**: each team's block reads Timeouts n and Fouls n (Penalty n
-  when the other team is in the bonus), and the sliver under it reads To win. A player on the floor
-  shows points, energy (bar and %) and fouls as "n PF".
+  when the other team is in the bonus), and the bar under it reads To win. A player's row shows his
+  energy as a bar and a word (Fresh, Tiring, Tired), then OVR, MIN, PTS and PF in columns.
 - **One bench bar** takes the tab bar's place: the one action the moment calls for first (Timeout
   while the game plays, Start the next period at a break, Resume in your huddle), then the
-  console's views (Staff, Game plan, Lineup, Stats; the Staff tab counts the staff's calls waiting).
+  console's views (Now, Players, Tactics, Stats; Now counts the staff's calls waiting).
   Don't add a second row or a floating button.
 - **One console** under the court (beside it, held sideways) holds every coaching control, in its
-  four views. **Evidence next to the lever**: a control in the Game plan sits beside the number it
-  moves (the coverage beside their pick-and-roll's points a trip). Every setting is in its sheet,
-  one tap down. A new control goes in one view, once.
-- **The staff has one voice**: the lead assistant (`leadAssistant`) heads the Staff tab, the breaks,
+  four views, **one question a view**. Now: what needs me? (the staff's read, its calls, who's tired
+  or in foul trouble with the sub a tap away, the keys.) Players: who's on, who's fresh, who can come
+  in? (the same row for your five, your bench and their five.) Tactics: what's each side running and
+  what do I change? Stats: what happened? **Evidence next to the lever**: a Tactics row says in plain
+  words how a play is going ("7 points on 4 trips", Hurting you), with its lever named under it. A
+  lever shows once. Every setting is in its sheet, one tap down. A new control goes in one view, once.
+- **The staff has one voice**: the lead assistant (`leadAssistant`) heads Now, the breaks,
   the pre-game briefing and the debrief, as `AssistantHead` with a read in a sentence; his calls are
-  `NoteCard`s: the measured figure, the evidence as its headline, a verdict ("Helps from here"),
-  the moves on offer with his pick first, and Not now; how it was measured sits behind its `?`.
+  `NoteCard`s: the evidence as its headline, his opinion ("The staff thinks this helps from here"),
+  the moves on offer with his pick first, and Not now. No figure and no method behind it.
   Don't build another advice box.
-- **Every move is measured**: a tactics change, sub or timeout shows in Your moves with what it has
-  done since (`coachMoves`, drawn with `MovesList`), in the live game and in the report.
+- **Every move is tracked**: a tactics change, sub or timeout shows in Your moves with the score since
+  (`coachMoves`, drawn with `MovesList`), in the live game and in the report.
 - Playback (pause, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
 - **The way out is on the scorebug's top line** (Leave, beside what's at stake): the game waits where
   it is, and the Continue bar and its Matchup page resume it.
@@ -354,7 +364,7 @@ graphics package); the console under it is paper and card stock like every other
   down three, the shot clock off), which opens the play call without a timeout. Late in a game the
   play call heads the huddle, built around your closer: his isolation, his sets, one for someone else.
 - Every change during a game goes through the live controller (the journal records it), never a raw
-  league edit. The Game plan says what's changed since the tip, in Tactics' words.
+  league edit. Tactics says what's changed since the tip, in Tactics' words.
 - **One box score**: `BoxScore` (`components/BoxScore.tsx`), in the live game and the report, with
   MIN PTS REB AST STL BLK TOV FG 3P FT PF +/-. Don't build another.
 - Two-team comparisons use `CompareBar`, which puts the winning figure in a pill of its side's

@@ -1,10 +1,10 @@
 // The staff's shared pieces, in the live game and after it: the lead assistant at the head of a
 // section, one of his notes (a decision with the moves on offer, or a read), and the night's moves
-// with what each has done since (the numbers alone: whether a move worked is the replayed night's to say).
+// with the score since each (the facts alone: whether a move worked is the replayed night's to say).
 import { ArrowLeftRight, Bot, Timer, X } from 'lucide-react';
 import type { CoachMove } from '../../core/types';
 import { moveRate } from '../../core/analysis/moves';
-import { fmtClock, periodLabel, signed } from '../stats';
+import { fmtClock, periodLabel } from '../stats';
 import { plural } from '../../core/format';
 import type { StaffAction, StaffNote } from '../live/staff';
 import './staff.css';
@@ -28,23 +28,19 @@ export function AssistantHead({ name, initials, read, right }: { name: string; i
 }
 
 /**
- * One of the staff's notes: its figure, headline and evidence, the moves on offer (the staff's pick
- * first) with what the call has been worth where it fires (measured, or the staff's read), and Not now.
+ * One of the staff's notes: its headline and evidence, its size in a word, the moves on offer (the
+ * staff's pick first) with the staff's opinion of the call, and Not now.
  */
 export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; onAct: (a: StaffAction) => void; onDismiss?: () => void; busy?: boolean }) {
   return (
     <div className={`lv-note tone-${note.tone} ${note.kind}`}>
       <div className="lv-note-top">
-        {note.fig && (
-          <span className="lv-note-fig num" aria-hidden="true">
-            {note.fig.v}
-            <span className="lv-note-u">{note.fig.unit}</span>
-          </span>
-        )}
+        {note.kind === 'read' && <span className="lv-note-dot" aria-hidden="true" />}
         <div className="grow lv-note-tx">
           <div className="lv-note-title">{note.title}</div>
           {note.text && <div className="lv-note-line">{note.text}</div>}
         </div>
+        {note.tag && <span className="lv-note-tag">{note.tag}</span>}
         {/* a note with no moves closes from its corner; a call says Not now beside its moves */}
         {onDismiss && !note.actions.length && (
           <button className="lv-note-x" onClick={onDismiss} aria-label={`Not now: ${note.title}`}>
@@ -73,7 +69,7 @@ export function NoteCard({ note, onAct, onDismiss, busy }: { note: StaffNote; on
   );
 }
 
-/** What a move has done since, in a line: "SAS 0.91 a trip in 22 trips since, 1.18 before". */
+/** What's happened since a move, in a line of plain facts: "OKC 14-9 since", "Fox 4 on 5 trips since". */
 export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, nameOf: (pid: number) => string): string {
   // a play called: the one trip it ran on
   if (m.kind === 'play') {
@@ -82,34 +78,21 @@ export function moveLine(m: CoachMove, abbrevs: { us: string; them: string }, na
   }
   const v = moveRate(m);
   if (v.now === null) return 'Not a trip since yet.';
-  if (v.what === 'margin') {
-    const t = m.after;
-    const d = t.us.pts - t.them.pts;
-    // (the rate before in words: "-0.80 a trip before" read as a figure with no subject)
-    const was =
-      v.was === null ? '' : Math.abs(v.was) < 0.005 ? ' Level before.' : ` ${v.was > 0 ? 'Outscoring them' : 'Outscored'} by ${Math.abs(v.was).toFixed(2)} a trip before.`;
-    return `${abbrevs.us} ${t.us.pts}-${t.them.pts} since, ${signed(d, 0)}.${was}`;
-  }
-  // one of theirs it was aimed at: his points and the trips he finished, since and before
+  // one of theirs it was aimed at: his points and the trips he finished
   if (v.what === 'focus' && m.pid !== undefined) {
     const a = m.after.focus!;
-    const b = m.before.focus;
-    return `${nameOf(m.pid)} ${a.pts} on ${a.poss} trips since${b && b.poss ? `, ${b.pts} on ${b.poss} before` : ''}.`;
+    return `${nameOf(m.pid)} ${a.pts} on ${plural(a.poss, 'trip')} since.`;
   }
-  const team = m.end === 'off' || v.what === 'us' ? abbrevs.us : abbrevs.them;
-  const who = v.what === 'focus' && m.aim ? `${team} ${m.aim}` : team;
-  const now = `${who} ${v.now.toFixed(2)} a trip in ${plural(v.trips, 'trip')} since`;
-  return v.was !== null ? `${now}, ${v.was.toFixed(2)} before.` : `${now}.`;
+  return `${abbrevs.us} ${m.after.us.pts}-${m.after.them.pts} since.`;
 }
 
 /**
- * The night's moves, newest first, each with what it has done since against the stretch before it, and
- * no verdict: a move made after a hot stretch reads better afterwards whatever it did (the rate falls
+ * The night's moves, newest first, each with the score since, and no verdict: a move made after a hot stretch reads better afterwards whatever it did (the rate falls
  * back toward the usual either way), so "working" is left to the replayed night (see nightLine).
  */
 export function MovesList({ moves, abbrevs, nameOf, max }: { moves: CoachMove[]; abbrevs: { us: string; them: string }; nameOf: (pid: number) => string; max?: number }) {
   const list = [...moves].reverse().slice(0, max ?? moves.length);
-  if (!list.length) return <div className="lv-mv-empty small dim">Nothing changed yet. Every change you make shows here, with what it has done since.</div>;
+  if (!list.length) return <div className="lv-mv-empty small dim">Nothing changed yet. Your changes show here.</div>;
   return (
     <div className="lv-mv card flush list">
       {list.map((m, i) => (

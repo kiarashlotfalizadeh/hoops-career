@@ -17,6 +17,17 @@ import { UntouchableToggle } from '../office/Untouchable';
 import { money } from '../../core/format';
 import { rosterNames } from '../stats';
 
+/**
+ * A package against what he's worth, in league-neutral value rather than your front office's lens on
+ * it, as a word: the share stays the AI's. Worth less than nothing (a bad contract): any taker is a
+ * salary dump, not a share of his value.
+ */
+export function packageWord(neutralGive: number, neutralGet: number): { l: string; c: string } {
+  if (neutralGive <= 0) return { l: 'Salary dump', c: 'good' };
+  const ratio = neutralGet / neutralGive;
+  return ratio >= 1.1 ? { l: 'Overpay', c: 'good' } : ratio >= 0.9 ? { l: 'Fair value', c: 'info' } : ratio >= 0.7 ? { l: 'Below value', c: 'warn' } : { l: 'Lowball', c: 'bad' };
+}
+
 export function TradingBlock({
   league,
   shop,
@@ -80,19 +91,7 @@ export function TradingBlock({
           <div className="card flush list">
             {(showAll ? offers : offers.slice(0, 8)).map((o) => {
               const t = league.teams[o.tid];
-              // a player worth less than nothing (a bad contract): any taker is a salary dump, not a share of his value;
-              // the share in league-neutral value, not your front office's lens on it
-              const dump = o.neutralGive <= 0;
-              const ratio = dump ? 0 : o.neutralGet / o.neutralGive;
-              const tone = dump
-                ? { l: 'Salary dump', c: 'good' }
-                : ratio >= 1.1
-                  ? { l: 'Overpay', c: 'good' }
-                  : ratio >= 0.9
-                    ? { l: 'Fair value', c: 'info' }
-                    : ratio >= 0.7
-                      ? { l: 'Below value', c: 'warn' }
-                      : { l: 'Lowball', c: 'bad' };
+              const tone = packageWord(o.neutralGive, o.neutralGet);
               const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
               return (
                 <div key={o.tid} className="fo-pkg">
@@ -102,10 +101,8 @@ export function TradingBlock({
                       <div className="fo-name ellipsis">
                         {t.region} {t.name}
                       </div>
-                      {/* (wraps rather than cut off: the share of his value is the point) */}
                       <div className="fo-meta">
-                        {STRATEGY_META[t.strategy].label}
-                        {dump ? '' : ` · ${Math.round(ratio * 100)}% of his value`} · {inSal > 0 ? `${money(inSal)} back` : 'no salary back'}
+                        {STRATEGY_META[t.strategy].label} · {inSal > 0 ? `${money(inSal)} back` : 'no salary back'}
                       </div>
                     </div>
                     <div className="right">

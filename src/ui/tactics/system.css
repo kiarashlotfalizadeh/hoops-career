@@ -80,10 +80,6 @@
 .tx-q-was.bad {
   color: var(--bad);
 }
-.tx-q-rank {
-  width: 30px;
-  text-align: right;
-}
 .tx-q-bar {
   height: 3px;
   margin: 0 var(--row-px) 9px;
@@ -304,11 +300,6 @@
   max-width: 100%;
 }
 /* ranks are box-score figures */
-.tx-q-rank,
-.tx-q-was {
-  font-family: var(--mono);
-  letter-spacing: -0.03em;
-}
 /* the report's strengths and weaknesses: the grade, its name over who carries it, the rank */
 .tx-swrow-m {
   min-width: 0;
@@ -334,26 +325,4 @@
 }
 .tx-edmeta.bad {
   color: var(--bad);
-}
-.tx-edv {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: -0.03em;
-}
-.tx-edv.good {
-  color: var(--good);
-}
-.tx-edv.bad {
-  color: var(--bad);
-}
-.tx-edv .tiny {
-  font-family: var(--font);
-  font-weight: 500;
-  letter-spacing: 0;
 }

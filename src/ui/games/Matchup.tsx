@@ -1,5 +1,5 @@
 // The matchup page: everything about one opponent in one place. The hero is the next meeting as a
-// board (the two teams in their colours, each one's chance to win, the projected margin), what the
+// board (the two teams in their colours, their records, who the staff favours in words), what the
 // night is billed as, the season series and your plan against them; then the sections: Preview (when
 // the next game against them is the user's next game), Scout, Plan (with the staff's counters) and
 // Matchups. On game day a dock tips the game off or sims it, and a sim lands on the result: the game's
@@ -22,6 +22,7 @@ import { neutralSite } from '../../core/league/games';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
 import { gameStoryFor } from '../../core/analysis/gameStory';
 import { GameTop, nightTitle, useBillings } from './occasion';
+import { favoriteOf } from './favorite';
 import { Empty, Help, PageHeader, keep } from '../components/ui';
 import { GameBoard, type BoardSide } from '../components/FinalSlab';
 import { ordinal } from '../stats';
@@ -91,8 +92,8 @@ function MatchupScreen({ league, opp }: { league: League; opp: number }) {
 }
 
 /**
- * The guide's plan step on the opener's page: the staff's counter by name and measured worth, or that
- * none of them beats the playbook tonight (until it's measured, the guide's own words).
+ * The guide's plan step on the opener's page: the staff's counter by name, or that none of them beats
+ * the playbook tonight (until they've looked, the guide's own words).
  */
 function ScoutGuide({ league, opp }: { league: League; opp: number }) {
   const drafted = useLeagueMemo(() => counterCandidates(league, league.userTid, opp), [league, opp]);
@@ -101,7 +102,7 @@ function ScoutGuide({ league, opp }: { league: League; opp: number }) {
   const line = !worth
     ? undefined
     : best
-      ? `${best.label} helps, ${worthText(worth.get(best.id)!).short}. Add it, or go in with no plan.`
+      ? `${best.label} ${worthText(worth.get(best.id)!).short}. Add it, or go in with no plan.`
       : "None of the staff's counters beats your playbook tonight. Go in with no plan.";
   // (the measured counter is the step's move: Add does what the Counters card's Add does, and ticks the step)
   const add = best && {
@@ -127,24 +128,22 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
   };
   const live = liveInProgress(league);
   const resume = live?.gid === gid;
-  // the staff's counters for tonight still being measured: said on the button, so a quick tap doesn't skip the plan unseen
+  // the staff still looking at tonight's counters: said on the button, so a quick tap doesn't skip the plan unseen
   const measuring = useCounterWorth(league, opp);
   const pending = !resume && !!measuring && !measuring.worth;
-  // (never "100%" while it's still at it: the last games round up before the reading lands)
-  const pct = pending ? Math.min(99, Math.floor(measuring!.progress * 100)) : 0;
   return (
     <div className="dockbar mu-dock" role="group" aria-label="Game day">
       <button
         className="btn primary big grow"
         disabled={simming}
         onClick={() => nav('/live')}
-        aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}${pending ? `. The staff is still measuring its counters: ${pct}%` : ''}`}
+        aria-label={resume ? `Resume the game against the ${name}` : `Tip off against the ${name}${pending ? '. The staff is still looking at its counters' : ''}`}
       >
         <span className="mu-dock-tip">
           <span>
             <Eye size={18} /> {resume ? 'Resume the game' : 'Tip off'}
           </span>
-          {pending && <span className="mu-dock-sub">Staff still measuring · {pct}%</span>}
+          {pending && <span className="mu-dock-sub">Staff still looking at counters</span>}
         </span>
       </button>
       <button className="btn" disabled={simming} onClick={() => void quick()}>
@@ -155,9 +154,8 @@ function TipOff({ league, gid, opp, name }: { league: League; gid: number; opp: 
 }
 
 /**
- * The hero: the next meeting as a board (away on the left, each team's chance to win, the projected
- * margin under it; with no meeting left, the two records), what the night is billed as, the season
- * series and your plan for them (`onPlan`: a tap to it; none on the Plan tab).
+ * The hero: the next meeting as a board (away on the left, the two records, who the staff favours under
+ * them when there's a meeting left), what the night is billed as, the season series and your plan for them (`onPlan`: a tap to it; none on the Plan tab).
  */
 function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; onPlan?: () => void; compact?: boolean }) {
   const me = league.userTid;
@@ -167,7 +165,7 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
   const series = liveSeries(league, opp);
   const h2h = useLeagueMemo(() => seasonSeries(league, opp), [league, opp]);
   const ranks = useLeagueMemo(() => new Map([...confStandings(league, 'E'), ...confStandings(league, 'W')].map((r) => [r.tid, r.confRank])), [league]);
-  // the preview's chance to win, from the home side (the same number the Preview and the game use)
+  // the preview's chance to win, from the home side (the same reading the Preview and the game use), said in words
   const proj = useLeagueMemo(() => (g ? gameProjection(league, g) : null), [league, g]);
   const [bill] = useBillings(league, g);
   // (the preseason's calendar is the regular season's: its day 0 is opening night, not today)
@@ -187,32 +185,14 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
     // no rank before anyone has played
     return r && ts.won + ts.lost > 0 ? `${ordinal(r)} ${league.teams[tid].conf === 'E' ? 'East' : 'West'}` : undefined;
   };
-  const side = (tid: number): BoardSide => {
-    if (!proj) return { tid, fig: <span className="mu-rec">{rec(tid)}</span>, sub: rank(tid) };
-    const win = tid === homeTid ? proj.win : 1 - proj.win;
-    // (as shown: 50% against 50% is neither side's)
-    return {
-      tid,
-      fig: (
-        <>
-          {Math.round(win * 100)}
-          <small>%</small>
-        </>
-      ),
-      sub: rec(tid),
-      lost: Math.round(win * 100) < 50,
-    };
-  };
+  const side = (tid: number): BoardSide => ({ tid, fig: <span className="mu-rec">{rec(tid)}</span>, sub: rank(tid) });
   const where = g ? (neutralSite(g) ? 'Neutral floor' : g.home === me ? 'Home' : 'Away') : '';
   const tag = g ? gameTag(league, g) : '';
   const seriesNow = series ? `${league.teams[series.high].abbrev} ${series.highWins}-${series.lowWins} ${league.teams[series.low].abbrev}` : '';
-  // the projected margin, from the favourite's side
-  const margin = proj ? proj.margin : 0;
-  const fav = league.teams[margin >= 0 ? homeTid : awayTid];
   if (compact)
     return (
       <section className="mu-hero" aria-label={`Matchup: the ${t.region} ${t.name}`}>
-        <GameBoard league={league} compact away={side(awayTid)} home={side(homeTid)} over={['']} mid={<span className="gd-bd-k">{proj ? 'To win' : 'Record'}</span>} />
+        <GameBoard league={league} compact away={side(awayTid)} home={side(homeTid)} over={['']} mid={<span className="gd-bd-k">Record</span>} />
       </section>
     );
   return (
@@ -222,22 +202,15 @@ function Hero({ league, opp, onPlan, compact }: { league: League; opp: number; o
         away={side(awayTid)}
         home={side(homeTid)}
         over={g ? [`${day(g.day)} · ${where}`, [tag, seriesNow && `Series ${seriesNow}`].filter(Boolean).join(' · ')] : ['No games left against them']}
-        mid={<span className="gd-bd-k">{proj ? 'To win' : 'Record'}</span>}
+        mid={<span className="gd-bd-k">Record</span>}
       >
         {proj && (
           <div className="gd-bd-foot">
-            {Math.abs(margin) < 0.5 ? (
-              <span>A toss-up</span>
-            ) : (
-              <span>
-                <b className="num">
-                  {fav.abbrev} by {Math.abs(margin).toFixed(1)}
-                </b>{' '}
-                projected
-              </span>
-            )}
-            <Help title="Projection">
-              <p>From both teams&apos; net ratings, pace and home court, and early on their rotations. One game swings well either side of it.</p>
+            <span>
+              <b>{favoriteOf(league, { home: homeTid, away: awayTid }, proj.win).line}</b>
+            </span>
+            <Help title="The staff's read">
+              <p>From both teams&apos; form, pace and home court, and early on their rotations. One game can go either way.</p>
             </Help>
           </div>
         )}

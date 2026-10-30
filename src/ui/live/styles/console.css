@@ -232,14 +232,22 @@
 .lv-staff {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 /* (his "nothing to change" belongs to his read, just above it) */
 .lv-staff > .lv-calm {
-  margin-top: -14px;
+  margin-top: -10px;
   padding: 0 0 0 46px;
 }
-/* the scorer the staff is watching: his points leading the row, a tap to his sheet */
+/* (the console's small room: the head steps down, and the name's role is said elsewhere) */
+.lv-con .sec-h h3 {
+  font-size: 15px;
+  font-stretch: 108%;
+}
+.lv-con .lv-ah-role {
+  display: none;
+}
+/* the scorer the staff is watching: a tap to his sheet */
 .lv-watch {
   display: flex;
   align-items: center;
@@ -261,21 +269,6 @@
     background: var(--surface);
   }
 }
-.lv-watch-pts {
-  flex: none;
-  width: 34px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  line-height: 1;
-}
-.lv-watch-pts .num {
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 23px;
-  font-weight: 600;
-  letter-spacing: -0.06em;
-}
 .lv-watch-t {
   min-width: 0;
   display: flex;
@@ -286,8 +279,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.lv-watch-n .dim2,
-.lv-watch-n .dim {
+.lv-watch-n .dim2 {
   font-weight: 420;
 }
 .lv-calm {
@@ -298,7 +290,7 @@
 .lv-plan {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
 }
 .lv-plan-top {
   display: flex;
@@ -325,67 +317,41 @@
   position: absolute;
   inset: -12px -8px;
 }
-/* a play type tonight, and the lever under it */
+/* a play type tonight, in words, and the lever under it */
 .lv-pr {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 9px var(--row-px);
+  gap: 8px;
+  padding: 10px var(--row-px);
 }
 .lv-pr-top {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+}
+.lv-pr-t {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .lv-pr-n {
   min-width: 0;
   font-size: 15px;
   font-weight: 600;
 }
-.lv-pr-ppp {
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.05em;
-}
-.lv-pr-ppp.good {
-  color: var(--good);
-}
-.lv-pr-ppp.bad {
-  color: var(--bad);
-}
-.lv-pr-base {
-  flex: none;
-  width: 42px;
-  text-align: right;
-}
-/* the figures in columns, named once over the list */
-.lv-pr-trips {
-  flex: none;
-  width: 34px;
-  text-align: right;
-}
-.lv-pr-top .lv-pr-ppp {
-  flex: none;
-  width: 46px;
-  text-align: right;
-}
-.lv-pr-h {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 9px var(--row-px) 0;
-}
-.lv-pr-h .lv-pr-ppp {
-  flex: none;
-  width: 46px;
-  font: inherit;
-  letter-spacing: normal;
-  text-align: right;
-}
 .lv-pr-empty {
   padding: 12px var(--row-px);
+}
+/* a lever: its name over its choices */
+.lv-lv {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lv-lv-k {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 .lv-lev {
   display: flex;
@@ -396,6 +362,15 @@
   height: 32px;
   padding: 0 11px;
   font-size: 12.5px;
+}
+/* a three-way lever fills its row, so low, middle and high sit in the same place on every row */
+.lv-lev.three {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.lv-lev.three .chip.sm {
+  justify-content: center;
+  padding: 0 4px;
 }
 /* their scorers: points, who's on him, a tap to his sheet */
 .lv-sc-row {
@@ -410,16 +385,6 @@
 .lv-sc-row:active {
   background: var(--surface);
 }
-.lv-sc-pts {
-  flex: none;
-  width: 30px;
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 19px;
-  font-weight: 600;
-  letter-spacing: -0.06em;
-  text-align: center;
-}
 .lv-sc-t {
   min-width: 0;
   display: flex;
@@ -432,12 +397,7 @@
 .lv-team-lev {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-.lv-tl {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  gap: 14px;
 }
 /* every setting, one tap down: a row of its own at the foot of the plan */
 .lv-plan-all {
@@ -565,39 +525,20 @@
   margin-top: 8px;
 }
 /* a "?" at the end of a line of text sits a space after it, on its middle */
-.lv-pc-foot .help-btn,
-.lv-touch-worth .help-btn {
+.lv-pc-foot .help-btn {
   margin-left: 4px;
   vertical-align: middle;
 }
-/* what a play is worth from here, at the row's end: its win chance against no call, or too close to say */
-.lv-pc-worth {
+/* the staff's pick, at the row's end */
+.lv-pc-pick {
   flex: none;
-  max-width: 84px;
-  text-align: right;
-  line-height: 1.15;
-  /* ("Too close / to say", not "Too close to / say") */
-  text-wrap: balance;
-}
-.lv-pc-worth.num {
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: 16px;
-  letter-spacing: -0.04em;
-}
-.lv-pc-worth.good {
-  color: var(--good);
-}
-.lv-pc-worth.bad {
-  color: var(--bad);
-}
-.lv-pc-u {
-  display: block;
-  font-family: var(--font);
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--accent-text);
+  white-space: nowrap;
 }
 @media (hover: hover) and (pointer: fine) {
   .lv-pc:not(.on):not(:disabled):hover {

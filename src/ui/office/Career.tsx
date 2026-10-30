@@ -10,6 +10,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ArrowLeftRight, Award, ChevronRight, Crown, Flame, Landmark, Medal, Sparkles, Trophy } from 'lucide-react';
 import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
+import { SINCE } from '../../core/analysis/staffWords';
 import { curTeamSeason, fmtDate, payroll } from '../../core/league/helpers';
 import { coachCareer, coyWinners, userCoach, type CoachCareer } from '../../core/league/coaches';
 import { seasonsInCharge } from '../../core/league/owner';
@@ -263,10 +264,9 @@ function ProfileTab({ league, k }: { league: League; k: CoachCareer }) {
               <Sparkles size={20} className="fo-lc-ic" aria-hidden="true" />
               <div className="grow fo-min0">
                 <div className="lr-name">Live coaching, this season</div>
-                {/* the verdict and one number; the ± lives in the game reports' debrief (decision: staff numbers) */}
-                <div className="lr-meta">{plural(live.games, 'game')} coached live · points over the season</div>
+                <div className="lr-meta">{plural(live.games, 'game')} coached live</div>
               </div>
-              <span className="num bold">{live.clear ? live.worth : 'Too close'}</span>
+              <span className="bold">{SINCE[!live.clear ? 'even' : live.worth.startsWith('+') ? 'gain' : 'cost']}</span>
             </div>
           )}
         </div>

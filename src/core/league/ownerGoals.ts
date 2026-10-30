@@ -775,20 +775,24 @@ export function previewTitle(g: Pick<OwnerGoal, 'kind' | 'title' | 'target'>): s
   }
 }
 
-/** A postseason goal's level as a cell's short label ("Play-in 21%"). */
+/** A postseason goal's level as a cell's short label ("Play-in"). */
 const LEVEL_SHORT = ['Postseason', 'Play-in', 'Playoffs', 'Round 2', 'Conf. finals', 'Finals', 'Title'];
 
 /**
  * The season forecast's chance at the owner's postseason goal while he has one, labelled by it
- * ("Play-in": the top six or the play-in, 21%), else at the postseason (the playoffs, through the
- * play-in too). `sure`: a place clinched that meets it. Today's cell had
- * shown "Postseason 9%" (making the playoffs) under a goal of reaching the play-in, about 21%.
+ * ("Play-in": the top six or the play-in), else at the postseason (the playoffs, through the
+ * play-in too). `sure`: a place clinched that meets it. Today's cell says it through goalWord.
  */
 export function goalChance(league: League, o: TeamOdds): { label: string; p: number; sure: boolean } {
   const g = currentGoals(league)?.goals.find((x) => x.kind === 'postseason');
   const level = g ? clamp(g.target, 1, 6) : 2;
   const p = level === 1 ? o.top6 + o.playIn : o.reach[level - 2];
   return { label: g ? LEVEL_SHORT[level] : LEVEL_SHORT[0], p, sure: o.clinched && level <= 2 };
+}
+
+/** A chance at a goal as the screens say it: a word, never the forecast's figure. */
+export function goalWord(p: number, sure = false): 'Clinched' | 'On track' | 'In reach' | 'Long shot' {
+  return sure ? 'Clinched' : p >= 0.7 ? 'On track' : p >= 0.3 ? 'In reach' : 'Long shot';
 }
 
 /** The goals the owner set for the user's current season, if he has set them (absent before opening night, for a fired coach, and in a save from before goals). */
@@ -840,12 +844,11 @@ export function goalsWhy(og: OwnerGoals, voice: 'mail' | 'screen' = 'mail'): str
   if (wins?.held) {
     // (what got worse by his own hand, named: aging and free agents who walked aren't his doing)
     const gone = Array.isArray(wins.gone) ? wins.gone.filter((x) => typeof x === 'string') : [];
-    const read = Math.round((wins.perGame ?? 0) * og.games);
     const moves = gone.length ? `Since then you've traded or let go ${andList(gone)}` : '';
     out.push(
       `Last season ${me ? 'I' : 'he'} asked for ${wins.held} wins. ${
         wins.target < wins.held - WIN_SLIDE
-          ? `${moves ? `${moves}. ` : ''}${me ? "I'm holding" : 'He holds'} the bar at ${wins.target}, ${wins.target - read} over ${me ? 'my' : 'his'} read of this roster.`
+          ? `${moves ? `${moves}. ` : ''}${me ? "I'm holding" : 'He holds'} the bar at ${wins.target}, over ${me ? 'my' : 'his'} read of this roster.`
           : moves
             ? `${moves}, and that doesn't lower the bar by more than ${WIN_SLIDE}.`
             : `${me ? "I don't" : "He doesn't"} lower the bar by more than ${WIN_SLIDE} in a season.`
@@ -1066,7 +1069,7 @@ export interface GoalProgress {
   /** Where it projects at the season's end (the result once it's final). */
   projected: number;
   status: GoalStatus;
-  /** How it stands, in a few words: "31-19, projected 50 wins", "3rd in the East" (before a game: "His read of the roster: 46 wins"). */
+  /** How it stands, in a few words: "31-19", "3rd in the East" (before a game, his forecast in words: "He thinks the roster can get there"). */
   text: string;
   /** Progress toward the target, 0..1, for a bar (payroll: how much of the line is used). */
   fill: number;
@@ -1141,6 +1144,9 @@ export function gradeGoal(league: League, og: OwnerGoals, g: OwnerGoal, result: 
 /** A grade (−1..1) as the owner says it: "−40", "+12". */
 const grade100 = (g: number) => `${g > 0 ? '+' : g < 0 ? '−' : ''}${Math.abs(Math.round(g * 100))}`;
 
+/** A goal before a game counts: the owner's forecast of it, in words. */
+const rosterRead = (status: GoalStatus) => (status === 'behind' ? 'He thinks the roster falls short' : 'He thinks the roster can get there');
+
 const ordinalRank = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 
 /** The result in words: "52 wins", "lost in the second round", "$9.4M profit", "$198.1M, $2.9M under", "1,840 minutes". */
@@ -1206,9 +1212,7 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
         const lost = gp - now;
         const status: GoalStatus =
           now >= g.target ? 'met' : now + left < g.target ? 'missed' : projected >= g.target + 3 ? 'ahead' : projected >= g.target - 1 ? 'on track' : 'behind';
-        const read = Math.round((g.perGame ?? 0.5) * og.games);
-        const text =
-          gp === 0 ? `His read of the roster: ${read} ${og.from ? `of the ${og.games} left` : 'wins'}` : left ? `${now}-${lost}, projected ${projected} wins` : `${now}-${lost}`;
+        const text = gp === 0 ? rosterRead(status) : `${now}-${lost}`;
         return { goal: g, now, projected, status, text, fill: clamp(now / Math.max(1, g.target), 0, 1) };
       }
       case 'postseason': {
@@ -1236,7 +1240,7 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
                       ? 'on track'
                       : 'behind';
           const conf = league.teams[og.tid].conf === 'E' ? 'East' : 'West';
-          const text = fresh ? `His read of the roster: ${ordinalRank(seed)} in the ${conf}` : `${ordinalRank(seed)} in the ${conf}`;
+          const text = fresh ? rosterRead(status) : `${ordinalRank(seed)} in the ${conf}`;
           // a deep run on track projects to his goal, as its status says (the seed alone only implies the playoffs)
           return { goal: g, now: implied, projected: g.target >= 3 && deep ? g.target : implied, status, text, fill: clamp(implied / g.target, 0, 1) };
         }
@@ -1273,11 +1277,7 @@ export function ownerProgress(league: League, og: OwnerGoals | undefined = curre
         const projected = youthProjected(league, og, g);
         const status: GoalStatus = now >= g.target ? 'met' : !regular ? 'missed' : projected >= g.target * 1.1 ? 'ahead' : projected >= g.target * 0.95 ? 'on track' : 'behind';
         const text =
-          !regular || !left
-            ? `${now.toLocaleString('en-US')} minutes`
-            : gp
-              ? `${now.toLocaleString('en-US')} so far, projected ${projected.toLocaleString('en-US')}`
-              : `About ${Math.round(g.perGame ?? 0)} minutes a game`;
+          !regular || !left ? `${now.toLocaleString('en-US')} minutes` : gp ? `${now.toLocaleString('en-US')} so far` : `About ${Math.round(g.perGame ?? 0)} minutes a game`;
         return { goal: g, now, projected, status, text, fill: clamp(now / Math.max(1, g.target), 0, 1) };
       }
     }
@@ -1383,7 +1383,7 @@ export function ownerCheckIn(league: League) {
       important: canBeFired(league),
       from: 'Owner',
       subject: "We're off pace",
-      body: `We're ${wins.now}-${since - wins.now}${og.from ? ' since you took over' : ''}, on course for about ${wins.projected} wins. I expected ${wins.goal.target} from this roster. That gap has to close.`,
+      body: `We're ${wins.now}-${since - wins.now}${og.from ? ' since you took over' : ''}. That's short of the ${wins.goal.target} wins I expected from this roster. That gap has to close.`,
       tone: 'bad',
       link: '/office/owner',
     });

@@ -41,7 +41,8 @@ import { benchTwoWays, ensureRotation, youthLean } from './games';
 import { currentGoals, goalResult, gradeGoal, YOUNG_AGE, youthProjected } from './ownerGoals';
 import { playerAge } from '../playerGen';
 import { winChance } from '../analysis/winProb';
-import { lotteryMatrix, pct, pickProjection } from '../analysis/odds';
+import { lotteryMatrix, pickProjection } from '../analysis/odds';
+import { SINCE, leanOf } from '../analysis/staffWords';
 import { LOTTERY_ODDS } from './draft';
 import { Rng, hashString } from '../random';
 
@@ -327,12 +328,6 @@ export function weekNeeds(league: League): CallMeasure[] {
   return out;
 }
 
-/** "+1.4", "−0.3". */
-const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
-
-/** A measured worth in a game as the digest says it, one number: "+1.2 pts" (the chance to win it comes to goes in a card's Why). */
-const ptsText = (pts: number) => `${signed(pts)} pts`;
-
 /** Wins over `games` games at `pts` a game: what a measured worth comes to. */
 export const winsOf = (pts: number, games: number) => games * (winChance(pts) - 0.5);
 
@@ -385,20 +380,15 @@ export function weekDecide(league: League) {
   if (y && yw && yw.pts !== undefined) {
     if (draft && !moves) {
       putYouth(league, 'kept', wc);
-      notePick(league, `The rotation stays as it is. More minutes for the young players measured ${ptsText(yw.pts)}, not enough to move your pick.`);
+      notePick(league, "The rotation stays as it is. More minutes for the young players wouldn't move your pick.");
     } else if (yw.pts <= -WORTH_MIN) {
       wc.ask = 'youth';
     } else {
-      // (read before the lean goes in: "without" is the rotation as it was)
-      const o = youthOutlook(league, y.add);
       putYouth(league, 'auto', wc);
-      const what =
-        y.why === 'draft'
-          ? ', the postseason out of reach.'
-          : `, for the owner's goal.${o ? ` On pace for ${o.lean.toLocaleString('en-US')} of his ${o.g.target.toLocaleString('en-US')} minutes, ${o.base.toLocaleString('en-US')} without.` : ''}`;
+      const what = y.why === 'draft' ? ', the postseason out of reach.' : ", for the owner's goal.";
       notePick(
         league,
-        `About ${y.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}${what} ${yw.pts >= WORTH_MIN ? `It measured ${ptsText(yw.pts)}, a gain.` : 'It costs nothing measurable.'}`,
+        `About ${y.add} more minutes a game for the young players until ${fmtDate(league.season, league.youthLean!.until)}${what} ${yw.pts >= WORTH_MIN ? 'It should help.' : "It shouldn't cost you."}`,
       );
     }
   }
@@ -448,9 +438,8 @@ export function payoffNeeds(league: League): CallMeasure[] {
 }
 
 /**
- * Once measured again, the digest's line for the lean: whose call it was, what it measured at then
- * and now, and the young players' minutes in its games (the box scores) against what the rotation
- * planned without it.
+ * Once measured again, the digest's line for the lean: whose call it was, what the staff makes of it
+ * now in words, and the young players' minutes in its games (the box scores).
  */
 export function youthPayoff(league: League) {
   const due = payoffDue(league);
@@ -467,11 +456,9 @@ export function youthPayoff(league: League) {
         if (p && playerAge(p, league.season) <= YOUNG_AGE) mins += b.min;
       }
   const who = y.how === 'staff' ? 'Your call' : "The staff's lean on a card you left";
-  const then = y.pts !== undefined ? `. It was ${signed(y.pts)} pts when it went in` : '';
-  const planned = y.young !== undefined ? `, where the rotation without it planned about ${Math.round(y.young * games.length).toLocaleString('en-US')}` : '';
   notePick(
     league,
-    `The young players' minutes${y.why === 'draft' ? ' for the draft' : " for the owner's goal"}, ${who.charAt(0).toLowerCase()}${who.slice(1)} on ${fmtDate(league.season, y.from)}. Measured again ${vsAt(league, g)} in its last game: ${ptsText(w.pts)}${then}. They played ${Math.round(mins).toLocaleString('en-US')} minutes in its ${games.length} games${planned}.`,
+    `The young players' minutes${y.why === 'draft' ? ' for the draft' : " for the owner's goal"}, ${who.charAt(0).toLowerCase()}${who.slice(1)} on ${fmtDate(league.season, y.from)}. ${SINCE[leanOf(w.pts)]}. They played ${Math.round(mins).toLocaleString('en-US')} minutes in its ${games.length} games.`,
   );
   league.youthLean = { ...y, paid: true };
 }
@@ -502,34 +489,32 @@ export function weekCard(league: League): CallCard | null {
   const y = wc.youth!;
   const yw = kept(league, weekWorthId(wc, 'youth'), y.gid);
   if (!yw || yw.pts === undefined) return null;
-  const left = Math.min(YOUTH_GAMES, gamesLeft(league));
   const lost = leanLost(league, yw.pts);
   const leans = youthLeans(league, y, yw.pts);
   const play: CallCard['suggestion'] = { label: 'Play the young players', action: { kind: 'youthLean', id } };
   const keep: CallCard['suggestion'] = { label: 'Keep the rotation', action: { kind: 'settle', id } };
   const n = (x: number) => x.toLocaleString('en-US');
-  const at = vsAt(
-    league,
-    league.schedule.find((x) => x.gid === y.gid)!,
-  );
-  // the lean and the one number it turns on on the row; the measured cost, the gain and why a tap down
-  const cost = `It costs ${Math.abs(yw.pts).toFixed(1)} pts a game, about −${Math.round((0.5 - winChance(yw.pts)) * 100)}% to win, measured ${at}.`;
-  const wins = `That's about ${lost.toFixed(1)} wins over ${left} games.`;
+  // the lean and what it turns on on the row, why and what it brings a tap down: all in words
+  const cost = lost < 1 ? 'It should only cost a little.' : 'It could cost you wins.';
   let gain: string;
   let lead: string;
   let why: string;
   if (y.why === 'draft') {
     const lo = lotteryOutlook(league, lost);
     if (!lo) return null;
-    // (the pick as the forecast reads it: its odds, not a measurement, and said so)
-    lead = `A top-four pick: ${pct(lo.top4[1])} with it.`;
-    gain = `${pct(lo.top4[0])} without it. Your own first, as the forecast reads the standings: about No. ${Math.round(lo.pick[1])}, not No. ${Math.round(lo.pick[0])}.`;
+    lead = 'It should help your draft pick.';
+    gain = 'Your own first should land higher with it.';
     why = leans ? "The owner's wins goal is out of reach either way." : 'The owner still counts these wins.';
   } else {
     const o = youthOutlook(league, y.add);
     if (!o) return null;
-    lead = `It costs about ${lost.toFixed(1)} wins over ${left} games.`;
-    gain = `It adds ${n(o.lean - o.base)} of the owner's minutes. On pace for ${n(o.lean)} of his ${n(o.g.target)}, not ${n(o.base)}.`;
+    lead = cost;
+    gain =
+      o.lean < o.g.target
+        ? `You'd still fall short of his ${n(o.g.target)} minutes.`
+        : o.base < o.g.target
+          ? `It should get you to his ${n(o.g.target)} minutes.`
+          : 'His minutes goal looks safe either way.';
     why = leans ? 'The owner counts the minutes for more.' : 'The owner counts the wins for more.';
   }
   return {
@@ -537,7 +522,7 @@ export function weekCard(league: League): CallCard | null {
     kind: 'week',
     title: `${y.add} more minutes a game for the young players?`,
     line: `The staff leans ${leans ? 'to playing them' : 'to the rotation as it is'}. ${lead}`,
-    detail: [why, `${cost} ${y.why === 'draft' ? wins : ''}`.trim(), gain, tomorrow].join('\n'),
+    detail: [why, ...(y.why === 'draft' ? [cost] : []), gain, tomorrow].join('\n'),
     tone: 'info',
     to: y.why === 'draft' ? '/office/draft' : '/office/owner',
     suggestion: leans ? play : keep,

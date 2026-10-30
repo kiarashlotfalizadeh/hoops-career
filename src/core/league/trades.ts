@@ -1339,9 +1339,9 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
             ? "By neutral value you'd get nothing back for this"
             : "By neutral value you'd take on a bigger burden than you send"
           : ratio < 2
-            ? `By neutral value you'd give up about ${Math.round((ratio - 1) * 100)}% more than you get`
+            ? "By neutral value you'd give up more than you get"
             : ratio < 5
-              ? `By neutral value you'd give up about ${Math.round(ratio)} times what you get`
+              ? "By neutral value you'd give up much more than you get"
               : "By neutral value you'd give up far more than you get",
         2e9,
       );
@@ -1363,9 +1363,9 @@ export function tradeNotes(league: League, offer: TradeOffer, ev: Pick<TradeEval
         : ev.valueIn <= 0
           ? `They see no value in ${yours} for ${theirs}`
           : ratio >= 1.5
-            ? `They value ${theirs} about ${ratio >= 3 ? Math.round(ratio) : ratio.toFixed(1)}× ${yours}`
+            ? `They value ${theirs} ${ratio >= 3 ? 'far' : 'much'} more than ${yours}`
             : ratio >= 1.03
-              ? `They value ${theirs} about ${Math.round((ratio - 1) * 100)}% more than ${yours}`
+              ? `They value ${theirs} more than ${yours}`
               : null;
     if (text) add('bad', text, 9e8);
   }

@@ -12,7 +12,8 @@ import { FINISH_LABEL } from '../../core/sim/log';
 import { IMPACT_TEXT, impactSentence, teamRef } from '../../core/analysis/gameReport';
 import { fmtDate } from '../../core/league/helpers';
 import { seasonLabel } from '../../core/constants';
-import { StatTable, type Col } from './ui';
+import { edgeWord } from '../../core/analysis/staffWords';
+import { StatTable, Tag, type Col } from './ui';
 import { f1, ordinal, p0, p1, signed } from '../stats';
 import './scouting.css';
 
@@ -168,19 +169,17 @@ export function HeadToHead({ league, d }: { league: League; d: ScoutData }) {
       {effects.length > 0 && (
         <div className="scout-dec">
           <div className="over">What decided them</div>
-          {/* the figures in a column of their own, the sentences beside them */}
+          {/* the sizes in a column of their own, in the tone of who they favoured, the sentences beside them */}
           <div className="scout-imps">
             {effects.map((e) => (
               <Fragment key={`${e.key}|${e.forUser}`}>
-                <span className={`num ${e.forUser ? 'good' : 'bad'}`}>
-                  {e.forUser ? '+' : '−'}
-                  {e.perGame.toFixed(1)}
+                <span>
+                  <Tag tone={e.forUser ? 'good' : 'bad'}>{edgeWord(e.perGame)}</Tag>
                 </span>
                 <span>{IMPACT_TEXT[e.key] && impactSentence(e.key, e.forUser ? `the ${me.name}` : teamRef(opp), e.forUser ? teamRef(opp) : `the ${me.name}`)}</span>
               </Fragment>
             ))}
           </div>
-          <div className="tiny dim">Points a game, from your side.</div>
         </div>
       )}
     </div>

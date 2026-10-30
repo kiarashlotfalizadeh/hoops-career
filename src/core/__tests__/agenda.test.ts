@@ -44,7 +44,7 @@ import {
   setOwnerGoals,
   type OwnerReview,
 } from '../league/ownerGoals';
-import { leagueForecast, pct } from '../analysis/odds';
+import { leagueForecast } from '../analysis/odds';
 import {
   DEADLINE_DAYS,
   DUE_SOON,
@@ -524,12 +524,13 @@ describe('the agenda', () => {
       ts.lost = 28;
       ts.lastTen = Array(10).fill(0);
       const card = () => agenda(l).find((i) => i.kind === 'floor');
-      expect(card()!.title).toMatch(/^On pace for \d+ wins: under the owner's floor$/);
-      // the lean is the answer his review projects higher (the meter's read, the same record either way), with both numbers
+      expect(card()!.title).toBe("On pace to miss the owner's floor");
+      // the lean is the answer his review projects higher (the meter's read, the same record either way), in words
       const st = floorStanding(l)!;
       expect(card()!.detail).toMatch(
-        /^Chasing it: [−+]\d+ to your standing at his review\. A development year: [−+]\d+, its cost included\.\nThe forecast reads about \d+ wins either way\./,
+        st.ease > st.chase ? /^A development year should leave you better with him at his review/ : /^Chasing it should leave you better with him at his review/,
       );
+      expect(card()!.detail).not.toMatch(/\d/);
       const both = [card()!.suggestion!, ...card()!.choices!];
       expect(card()!.suggestion!.label).toBe(st.ease > st.chase ? "Tell him it's a development year" : 'Chase the floor');
       expect(both.find((c) => c.label === 'Chase the floor')).toMatchObject({ to: expect.stringMatching(/^\/office\/trade\?tab=find&minOvr=\d+$/) });
@@ -604,8 +605,8 @@ describe('the agenda', () => {
         expect(agenda(m).some((i) => i.kind === 'odds')).toBe(false);
       }
       const card = agenda(l).find((i) => i.kind === 'odds')!;
-      // (they count the play-in too: the postseason's odds)
-      expect(card.title).toBe('Postseason odds down to 3%');
+      // (a word, not the forecast's figure)
+      expect(card.title).toBe('The postseason is slipping away');
       expect(card.due).toBe(`Decide by ${fmtDate(l.season, l.tradeDeadlineDay)}`);
       // still open as the deadline nears, it stops a long sim once more: a new id within DUE_SOON days of it
       // (the week's own call is open beside it: see weekCall.ts)
@@ -614,14 +615,15 @@ describe('the agenda', () => {
       l.day = l.tradeDeadlineDay - DUE_SOON;
       expect(crisis()).toEqual([card.id, dueId(card.id)]);
       l.day = 35;
-      // the staff's lean is the answer that leaves his standing higher, as the forecast reads the season, with both numbers
+      // the staff's lean is the answer that leaves his standing higher, as the forecast reads the season, in words
       {
         const st = concedeStanding(l)!;
         const post = og.goals.find((g) => g.kind === 'postseason')!;
         expect(st.concede).toBe(-CONCEDE_COST);
         expect(st.push).toBeLessThanOrEqual(0);
         expect(st.push).toBeGreaterThanOrEqual(-seasonWeight(l) * post.weight - 1e-9);
-        expect(card.detail).toMatch(/^Pushing on: [−+]\d+ to your standing with him\. The forecast gives you .+ to reach his goal\.\nTelling him now: −10 at once/);
+        expect(card.detail).toMatch(/^Pushing on should .+\. His goal .+\.\nTelling him now costs standing at once/);
+        expect(card.detail).not.toMatch(/\d/);
         expect(card.suggestion!.label).toBe(st.concede > st.push ? "Tell the owner it's a rebuild" : 'Keep pushing');
         // a goal one level out costs little missed (−35 on his weight): push; one three levels out costs it all: tell him
         const m = structuredClone(l);
@@ -714,9 +716,8 @@ describe('the agenda', () => {
       expect(call).toMatchObject({ season: l.season, mode: odds > 500 ? 'buy' : 'sell', odds });
       const card = agenda(l).find((i) => i.kind === 'deadline')!;
       expect(card.title).toBe(`Trade deadline in ${DEADLINE_DAYS} days`);
-      // the odds it says are today's, as Today shows them, not the reading the call was worked out from
-      const now = leagueForecast(l)!.teams[tid];
-      expect(card.line.startsWith(`Postseason odds ${pct(now.reach[0], now.clinched)}. `)).toBe(true);
+      // the odds it says are today's, in a word, not the reading the call was worked out from
+      expect(card.line).toMatch(/^The postseason (is clinched|looks likely|is in reach|is a long shot)\. /);
       if (deal) {
         const theirs = call.offer!.b.pids;
         expect(card.suggestion!.label).toMatch(odds > 500 ? /^Trade for / : /^Sell to [A-Z]{3}$/);
@@ -735,15 +736,15 @@ describe('the agenda', () => {
           storeWorth(m, ms.key, changeWorth(m, ms, { id: 'deal', pts: 1.2, raw: 1.3, se: 0.4 }));
           const c = agenda(m).find((i) => i.kind === 'deadline')!;
           expect(c.measure).toBeUndefined();
-          expect(c.line).toMatch(/With the deal: about \+1\.2 a game\.$/);
-          expect(c.detail).toMatch(/^Measured (vs|@) [A-Z]{3}: about \+\d\.\d wins over the \d+ games left\./m);
-          expect(c.suggestion!.confirm).toMatch(/^You send .+\. The .+ send .+\. With the deal: about \+1\.2 a game\.$/);
+          expect(c.line).toMatch(/The deal should help\.$/);
+          expect(c.detail).not.toMatch(/wins over|Postseason odds/);
+          expect(c.suggestion!.confirm).toMatch(/^You send .+\. The .+ send .+\. The deal should help\.$/);
           // a buy that measures as no gain is his to take, not the staff's call
           if (odds > 500) {
             storeWorth(m, ms.key, changeWorth(m, ms, { id: 'deal', pts: 0.2, raw: 0.3, se: 0.4 }));
             const f = agenda(m).find((i) => i.kind === 'deadline')!;
             expect([f.suggestion!.label, f.choices![0].label]).toEqual(['Stand pat', c.suggestion!.label]);
-            expect(f.line).toMatch(/The staff's call: stand pat\. With the deal: too close to say\.$/);
+            expect(f.line).toMatch(/The staff's call: stand pat\. No clear edge from the deal\.$/);
             expect(f.detail).toMatch(/^The best buy it found: .+ from the .+ for .+\./);
           }
         }
@@ -768,7 +769,7 @@ describe('the agenda', () => {
         expect(call.offer).toBeUndefined();
         // no deal found: the call names the need, and the look, the staff's call and the solid button, goes where it's met (Find for a buyer, the block for a seller)
         expect(card.line).not.toMatch(/look yourself/);
-        expect(card.line).toMatch(odds > 500 ? /buy a player better than your fifth best \(\d+ OVR\)/ : /^Postseason odds .+ The staff's call: sell/);
+        expect(card.line).toMatch(odds > 500 ? /buy a player better than your fifth best \(\d+ OVR\)/ : /^The postseason .+ The staff's call: sell/);
         expect(card.suggestion!).toMatchObject({ label: 'Look for a deal', to: expect.stringMatching(odds > 500 ? /^\/office\/trade\?tab=find&minOvr=\d+$/ : /^\/office\/trade/) });
         expect(card.choices!.map((c) => c.label)).toEqual(['Stand pat']);
         // (a look doesn't answer it: standing pat does)
@@ -894,9 +895,7 @@ describe('the agenda', () => {
       // how much of the gap the staff's call closes, and plainly when it can't on its own
       expect(card.detail).toMatch(/The cut saves \$[\d.]+M over the rest of the season, enough to close the \$[\d.]+M gap\.$/);
       projectTo(-40_000 * scale);
-      expect(agenda(l).find((i) => i.kind === 'books')!.detail).toMatch(
-        /It closes \$[\d.]+M of the \$[\d.]+M gap\. On its own it won't change what happens when the books close, so salary has to go too\.$/,
-      );
+      expect(agenda(l).find((i) => i.kind === 'books')!.detail).toMatch(/On its own it won't close the \$[\d.]+M gap, so salary has to go too\.$/);
       projectTo(-1_000 - WARN_RED * scale);
       expect(card.choices!.map((c) => c.label)).toEqual(['Shed salary', 'Not now']);
       expect(card.line).toMatch(/^Projected .+ in the red when the regular season's books close\. Still in the red then/);
@@ -1161,10 +1160,8 @@ describe('the agenda', () => {
       answer(free, -0.2);
       expect(card(free)).toBeUndefined();
       expect(userYouth(free)).toBeGreaterThan(0);
-      // the digest's "without" is the rotation as it was before the lean went in (not counting the lean twice)
-      expect(staffPicksSince(free, free.season, free.day - 1).at(-1)).toContain(
-        `${was.lean.toLocaleString('en-US')} of his 99,999 minutes, ${was.base.toLocaleString('en-US')} without`,
-      );
+      // the digest says what went in and the staff's opinion of it, not what it measured
+      expect(staffPicksSince(free, free.season, free.day - 1).at(-1)).toMatch(/for the owner's goal\. It shouldn't cost you\.$/);
       const young = (x: League) =>
         Object.values(x.players)
           .filter((p) => p.tid === x.userTid && x.season - p.bornYear <= 23)
@@ -1176,10 +1173,9 @@ describe('the agenda', () => {
       answer(l, -0.9);
       const c = card(l)!;
       expect(c.title).toBe(`${wc.youth!.add} more minutes a game for the young players?`);
-      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. It costs about \d\.\d wins over \d+ games\.$/);
-      expect(c.detail).toMatch(
-        /\nIt costs 0\.9 pts a game, about −\d+% to win, measured (vs|@) [A-Z]{3}\.\nIt adds [\d,]+ of the owner's minutes\. On pace for [\d,]+ of his 99,999, not [\d,]+\./,
-      );
+      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. (It could cost you wins|It should only cost a little)\.$/);
+      expect(c.detail).toMatch(/\nYou'd still fall short of his 99,999 minutes\./);
+      expect(c.detail).not.toMatch(/pts|to win|On pace/);
       // turned down: not asked again for a while
       expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Keep the rotation')!.action).ok).toBe(true);
       expect(l.youthLean).toMatchObject({ how: 'kept', level: 0 });
@@ -1209,15 +1205,12 @@ describe('the agenda', () => {
       answer(flat, -0.6);
       expect(card(flat)).toBeUndefined();
       expect(flat.youthLean).toMatchObject({ how: 'kept', level: 0 });
-      expect(staffPicksSince(flat, flat.season, flat.day - 1).at(-1)).toMatch(
-        /^The rotation stays as it is\. More minutes for the young players measured −0\.6 pts, not enough to move your pick\.$/,
-      );
+      expect(staffPicksSince(flat, flat.season, flat.day - 1).at(-1)).toMatch(/^The rotation stays as it is\. More minutes for the young players wouldn't move your pick\.$/);
       answer(l, -6);
       const c = card(l)!;
-      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. A top-four pick: \d+% with it\.$/);
-      expect(c.detail).toMatch(
-        /It costs 6\.0 pts a game.* That's about \d\.\d wins over \d+ games\.\n\d+% without it\. Your own first, as the forecast reads the standings: about No\. \d+, not No\. \d+\./,
-      );
+      expect(c.line).toMatch(/^The staff leans to (playing them|the rotation as it is)\. It should help your draft pick\.$/);
+      expect(c.detail).toMatch(/It could cost you wins\.\nYour own first should land higher with it\./);
+      expect(c.detail).not.toMatch(/\d/);
       expect(c.to).toBe('/office/draft');
       expect(resolveAgenda(l, [c.suggestion!, ...c.choices!].find((x) => x.label === 'Play the young players')!.action).ok).toBe(true);
       const y = l.youthLean!;
@@ -1228,7 +1221,7 @@ describe('the agenda', () => {
       expect(again.kind === 'change' && again.base?.teams?.[l.userTid].rotation).toBeTruthy();
       answer(l, -1.1);
       expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
-        /^The young players' minutes for the draft, your call on \w+ \d+\. Measured again (vs|@) [A-Z]{3} in its last game: −1\.1 pts\. It was −6\.0 pts when it went in\. They played 0 minutes in its \d+ games, where the rotation without it planned about [\d,]+\.$/,
+        /^The young players' minutes for the draft, your call on \w+ \d+\. Seems to hurt\. They played 0 minutes in its \d+ games\.$/,
       );
       expect(staffNeeds(l).some((m) => m.key.endsWith('|again'))).toBe(false);
     }
@@ -1251,9 +1244,7 @@ describe('the agenda', () => {
       const best = measured(l, need, 1.1);
       staffDecide(l);
       expect(l.gamePlans![l.skidCall!.opp].items.map((x) => x.id)).toContain(best.id);
-      expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
-        new RegExp(`^4 straight losses\\. .*The staff put in ${esc(best.label)} for \\w+ (vs|@) [A-Z]{3}\\. It measured \\+1\\.1 pts\\.$`),
-      );
+      expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(new RegExp(`^4 straight losses\\. .*The staff put in ${esc(best.label)} for \\w+ (vs|@) [A-Z]{3}\\.$`));
       expect(agenda(l).some((i) => i.kind === 'skid')).toBe(false);
       // it goes on: eight straight, two counters measured, and a card
       Object.assign(ts, { won: 14, lost: 10, streak: -8 });
@@ -1300,10 +1291,10 @@ describe('the agenda', () => {
         p.injury = { type: 'Torn ACL', gamesRemaining: 82, gamesTotal: 82, severity: 'severe' };
       const ts = curTeamSeason(l, 29);
       while (ts.won + ts.lost < 12) simDay(l);
-      const lines = (l.staffPicks ?? []).filter((x) => /, as the staff reads it/.test(x.text));
+      const lines = (l.staffPicks ?? []).filter((x) => /The forecast, which counts all of it/.test(x.text));
       expect(lines).toHaveLength(1);
       expect(lines[0].text).toMatch(
-        /^\d+-\d+\. (Outscored by|Even on points).+, as the staff reads it.*\. (About \d+\.\d a game of it is shots that didn't fall|The shots fell about as their looks were worth).+missed \d+ games? hurt.+The forecast, which counts all of it, has you at about \d+ wins\.$/,
+        /^\d+-\d+\. (Outscored by|Even on points)[^.]+\.\d[^.]*\. (Some of it is shots that didn't fall|The shots fell about as their looks were worth).+missed \d+ games? hurt.+The forecast, which counts all of it, has you (as a winning team|in the middle of the pack|near the bottom)\.$/,
       );
       expect(agenda(l).some((i) => i.kind === 'odds')).toBe(false);
     }
@@ -1328,7 +1319,7 @@ describe('the agenda', () => {
       expect(l.gamePlans![opp].items.map((x) => x.id)).toContain(best.id);
       expect(l.callsDone).toContain(id);
       expect(staffPicksSince(l, l.season, l.day - 1).at(-1)).toMatch(
-        new RegExp(`^${esc(seriesLabel(l.playoffs[0]))}, down 2-1 to ${l.teams[opp].abbrev}\\. The staff put in ${esc(best.label)} for Game 4\\. It measured \\+0\\.9 pts\\.$`),
+        new RegExp(`^${esc(seriesLabel(l.playoffs[0]))}, down 2-1 to ${l.teams[opp].abbrev}\\. The staff put in ${esc(best.label)} for Game 4\\.$`),
       );
       l.playoffs[0].highWins = 1;
       l.playoffs[0].lowWins = 3;

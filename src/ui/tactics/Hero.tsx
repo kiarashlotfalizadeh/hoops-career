@@ -1,7 +1,7 @@
 // Team → Tactics' hero: one card over every section, the style the team runs (its offensive
 // playbook, the defensive identity, the mentality; a tap on Change opens the style sheet). On the
-// Tactic section it also holds who runs it: the assistant's switch and the staff's measured change in
-// force (StaffMoveNote, with Undo). Under the board there, the system's two strengths and two
+// Tactic section it also holds who runs it: the assistant's switch and the staff's change in force
+// (StaffMoveNote, with Undo). Under the board there, the system's two strengths and two
 // weaknesses from the system report (they move as you edit, so every lever shows what it buys and
 // what it costs), a tap from every grade on Analysis. The style reads as the team plays it: a playbook
 // whose settings have moved (by the user, or by the staff on a change it measured) is "Custom Drop",
@@ -12,7 +12,6 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { defenseLabel, offenseLabel } from '../../core/sim/playbooks';
 import { QUALITY_META, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
 import type { Mentality, Tactics } from '../../core/types';
-import { ordinal } from '../stats';
 import { Help, Levels, Section, Segmented, Sheet, Toggle } from '../components/ui';
 import { MENTALITY_META } from '../../core/sim/tactics';
 import { GradeBadge } from './SystemReport';
@@ -117,10 +116,7 @@ export function StrengthsCard({
       <span key={`${q.id}-${q.grade}`} className={`tx-sw-q${dir}`}>
         <GradeBadge g={q.grade} sm />
         <span className="tx-sw-n">{QUALITY_META[q.id].label}</span>
-        <span className="sr-only">
-          , {ordinal(q.rank)} of {q.of}
-          {b && b !== q.grade ? `, was ${b}` : ''}
-        </span>
+        {b && b !== q.grade && <span className="sr-only">, was {b}</span>}
       </span>
     );
   };

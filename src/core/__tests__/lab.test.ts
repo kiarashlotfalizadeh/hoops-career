@@ -163,7 +163,7 @@ describe('batch sims & reports', () => {
       team.tactics = { ...applyPatch(saved, { defense: { pressure: 40 } }), manual: true };
       season(10, 1.5, 0.3);
       expect(lever()).toBeUndefined();
-      // measured on these tactics: a gain clear of the noise is a card, its number the measurement's
+      // measured on these tactics: a gain clear of the noise is a card, in the staff's words
       const t = team.tactics;
       const at = (pts: number, raw: number, se: number) =>
         (league.staffLever = {
@@ -175,8 +175,8 @@ describe('batch sims & reports', () => {
         });
       at(1.3, 1.6, 0.7);
       const a = lever()!;
-      expect(a.title).toBe('Pressure the ball: helps +1.3 a game');
-      expect(a.body).toMatch(/^Ball pressure: Balanced → Pressure\. Measured [A-Z][a-z]{2} \d+ on your next two games\.$/);
+      expect(a.title).toBe('Pressure the ball: should help');
+      expect(a.body).toMatch(/^Ball pressure: Balanced → Pressure\. The staff's read on [A-Z][a-z]{2} \d+\.$/);
       expect(a.fix).toMatchObject({ kind: 'patch', label: 'Pressure the ball' });
       expect(applyPatch(team.tactics, (a.fix as { patch: TacticsPatch }).patch).defense.pressure).toBe(65);
       // too close to say, or the staff's own tactics: nothing to say

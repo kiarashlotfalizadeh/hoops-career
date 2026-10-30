@@ -1,21 +1,22 @@
-// The style sheet's playbook pickers: the offensive playbooks or the defensive identities, best fit for the
-// roster first, each a row to pick it by with, in a column, the staff's read of what it's worth a game
-// against the one in use (coachAI's fits, calibrated against the engine: the same unit a change is
-// measured in once it's made). The user's own staff picks the top one (StaffFor); in season it keeps the
-// one it runs until another reads STICK better, and says so above the list. Its read opens one sheet:
-// what it is, who it's for, the read broken into its parts, what would raise it, and Use.
+// The style sheet's playbook pickers: the offensive playbooks or the defensive identities, better fits
+// first, each a row to pick it by with, in a column, the staff's read against the one in use in a word
+// (coachAI's fits, calibrated against the engine; the figures stay under the hood). The user's own staff
+// picks the best one (StaffFor); in season it keeps the one it runs until another reads clearly better,
+// and says so above the list. Its read opens one sheet: what it is, who it's for, what suits the roster
+// and what works against it, what would raise it, and Use.
 import { useMemo, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { presetMatches } from '../../core/sim/playbooks';
-import { STICK, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
+import { defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
+import { FIT, leanTone } from '../../core/analysis/staffWords';
 import { Sheet, Tag } from '../components/ui';
 import { PresetFit } from './PresetFit';
-import { byFit, fitTone, readText, shownFit } from './fit';
+import { bestFit, byFit, shownFit } from './fit';
 import '../screens/tactics.css';
 
 type Preset = OffPreset | DefPreset;
@@ -32,11 +33,12 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const fits = useMemo(() => (kind === 'off' ? offPresetFit(prof) : defPresetFit(prof)), [prof, kind]);
   const name = useMemo(() => rosterNames(healthy, { initial: true }), [healthy]);
   const [open, setOpen] = useState<string | null>(null);
-  const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits), [kind, fits]);
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
+  const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits, cur), [kind, fits, cur]);
+  const best = bestFit<Preset>(presets, fits);
   // in season the staff keeps the playbook it runs until another reads clearly better (STICK): said, not hidden
-  const top = presets[0]?.id;
-  const held = !t.manual && inSeason(league) && cur !== undefined && top !== cur && staffPick(fits, cur, true) === cur ? presets[0] : null;
+  const held = !t.manual && inSeason(league) && cur !== undefined && best.id !== cur && staffPick(fits, cur, true) === cur;
+  const curName = presets.find((p) => p.id === cur)?.name;
   const pick = (id: string) =>
     edit((l) => {
       const tt = l.teams[l.userTid].tactics;
@@ -56,11 +58,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const sheetCustom = !!sheet && isCustom(sheet);
   return (
     <>
-      {held && (
-        <p className="small dim2 tx-held">
-          In season the staff keeps {presets.find((p) => p.id === cur)?.name} until another reads {readText(STICK.preset / 10)} a game better.
-        </p>
-      )}
+      {held && <p className="small dim2 tx-held">In season the staff keeps {curName} until another fits clearly better.</p>}
       <div className="card flush list wide2 tx-presets">
         <div className="list-divider list-h tx-fith" aria-hidden="true">
           <span>Best fit first</span>
@@ -69,7 +67,8 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
         {presets.map((p) => {
           const on = cur === p.id;
           const custom = isCustom(p);
-          const v = shownFit(p.id, terms[p.id], fits, cur).vs;
+          const { lean } = shownFit(p.id, terms[p.id], fits, cur);
+          const tone = leanTone(lean);
           return (
             <div key={p.id} className={`tx-preset ${on ? 'on' : ''}`}>
               <button className="tx-preset-pick" aria-pressed={on} onClick={() => pick(p.id)}>
@@ -84,11 +83,11 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               </button>
               <button
                 className="tx-fit"
-                aria-label={on ? `About ${p.name}, in use` : `About ${p.name}, the staff's read ${readText(v)} a game against yours`}
+                aria-label={on ? `About ${p.name}, in use` : `About ${p.name}, the staff's read: ${FIT[lean]}`}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(p.id)}
               >
-                <span className={`tx-fitv tx-read ${on ? '' : fitTone(v)}`}>{on ? 'Yours' : readText(v)}</span>
+                {on ? <Tag>Yours</Tag> : <Tag tone={tone || undefined}>{FIT[lean]}</Tag>}
                 <ChevronRight size={16} className="dim" aria-hidden="true" />
               </button>
             </div>
@@ -104,7 +103,7 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               <span className="over">Best for</span>
               <span>{sheet.bestFor}</span>
             </div>
-            <PresetFit id={sheet.id} cur={cur} presets={presets} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} kind={kind} />
+            <PresetFit id={sheet.id} cur={cur} curName={curName ?? 'yours'} best={best.id === sheet.id} terms={terms[sheet.id]} fits={fits} pr={prof} name={name} />
             <button
               className="btn primary block"
               disabled={sheetOn && !sheetCustom}

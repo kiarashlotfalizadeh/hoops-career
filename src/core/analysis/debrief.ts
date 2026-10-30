@@ -27,8 +27,8 @@ export interface DebriefAdvice {
   /** Game-plan group: it replaces the plan's item in the same group. */
   group?: string;
   /**
-   * The change measured as a gain where the bench calls it (callWorth.ts): what it's been worth, in a
-   * line. Only a change with one is offered for every game. For the plan against this opponent it's
+   * The change measured as a gain where the bench calls it (callWorth.ts): the staff's opinion of it, in
+   * a few words. Only a change with one is offered for every game. For the plan against this opponent it's
    * offered only as a staff counter measured a gain against them (see sameChange): else it's the
    * staff's read, with nothing to tap.
    */
@@ -77,8 +77,6 @@ export interface PlanGrade {
   line: string;
   /** Its grade: what the staff measured it worth over many games when it went in (a gain, a cost, or even). */
   call: 'gain' | 'cost' | 'even';
-  /** What that measure was, in points: "+0.4 a game". */
-  worth?: string;
   /**
    * Tonight on what it was aimed at, against coming in: 'better' / 'worse' only for a night far
    * outside a single game's noise (PLAN_Z), 'same' otherwise, 'few' with too few trips to say.
@@ -86,7 +84,7 @@ export interface PlanGrade {
   night: 'better' | 'worse' | 'same' | 'few';
   /**
    * A counter measured a gain on a night that went against it (a standard error or more): the clause
-   * that bridges the two, so a bad night doesn't read as the number being wrong.
+   * that bridges the two, so a bad night doesn't read as the staff being wrong.
    */
   bridge?: string;
 }
@@ -222,7 +220,7 @@ const DO_TITLE: Partial<Record<Factor['category'], string>> = {
 
 /**
  * The staff's read of the result in a sentence or two, the score left to the final above it: how it
- * went ("A 21-point rout.") and what decided it, in words (the edges' cards carry the figures).
+ * went ("A 21-point rout.") and what decided it, in words.
  */
 export function verdict(res: GameResult, side: 0 | 1, report: GameReport): string {
   const [us, them] = side === 0 ? [res.home.pts, res.away.pts] : [res.away.pts, res.home.pts];
@@ -377,14 +375,12 @@ export function planGrades(league: League, res: GameResult, side: 0 | 1): PlanGr
   const abbrev = (tid: number) => league.teams[tid].abbrev;
   const base = playTypeBaselines(league);
   return (res.plan ?? []).map((u) => {
-    const worth = u.pts !== undefined && Math.abs(u.pts) >= 0.05 ? `${u.pts > 0 ? '+' : '−'}${Math.abs(u.pts).toFixed(1)} a game` : undefined;
     const call = worthCall({ pts: u.pts ?? 0 });
     // (a bad night for a counter measured a gain: one clause says both are true)
     const graded = (x: { label: string; line: string; night: PlanGrade['night'] }, against = false): PlanGrade => ({
       ...x,
       call,
-      ...(worth ? { worth } : {}),
-      ...(against && call === 'gain' && worth ? { bridge: `A bad night for it. Over many games it's worth ${worth}.` } : {}),
+      ...(against && call === 'gain' ? { bridge: 'A bad night for it. Over many games it should still help.' } : {}),
     });
     // one of theirs: his points tonight against his average coming in
     if (u.pid !== undefined) {
@@ -430,19 +426,13 @@ const ROUT = 15;
 /** "+2.1", "−0.4", "0.0": a reading in points with its sign (a true minus). */
 const sgn1 = (x: number) => (Math.abs(x) < 0.05 ? '0.0' : `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`);
 
-/** "+9%", "−4%", "0%": a reading of win chance with its sign (a true minus). */
-const sgnPct = (x: number) => {
-  const v = Math.round(x * 100);
-  return v === 0 ? '0%' : `${v > 0 ? '+' : '−'}${Math.abs(v)}%`;
-};
-
 /** Moves this late (the fourth quarter's or an overtime's last six minutes, crunch time) are judged by the win chance: a point of margin there isn't the question. */
 const LATE_CLOCK = 360;
 
 /**
- * What the night's moves were worth (GameResult.movesWorth, measured after the final), in a line and
- * how it was measured: worth so many points when the reading is clear of even (two standard errors),
- * "too close to say" inside them, with the move that mattered most when one clearly did. Moves made
+ * What the staff makes of the night's moves (GameResult.movesWorth, measured after the final), in words:
+ * that they seemed to help or hurt when the reading is clear of even (two standard errors), "too close
+ * to say" inside them, and in `detail` the move that mattered most when one clearly did. Moves made
  * only in crunch time (a late play call), or a night whose win-chance reading is clearer than its
  * points, are judged by the win chance instead, as the bench's late calls are (CallWorth.by 'win'):
  * a call that won the game moves the margin by a point or two and the result by much more. Null for
@@ -455,30 +445,21 @@ export function nightLine(res: GameResult, staff = false): { text: string; detai
   // (one play called: the call)
   const call = moves.length === 1 && moves[0].kind === 'play';
   const who = staff ? (call ? "The staff's call" : "The staff's moves") : call ? 'Your call' : 'Your moves';
-  const top = w.top && typeof w.top.text === 'string' ? ` Mattered most · ${w.top.text} · ${sgn1(w.top.pts)}.` : '';
-  const how = (pm: string) => `Measured to ${pm}. The rest of the game was played ${w.n} times, with ${plural(w.moves, 'move')} and without.${top}`;
+  const lower = `${who.charAt(0).toLowerCase()}${who.slice(1)}`;
+  const line = (clear: boolean, up: boolean): { text: string; detail: string; tone: 'good' | 'bad' | 'dim' } => ({
+    text: clear ? `${who} seemed to ${up ? 'help' : 'hurt'} tonight` : `Too close to say whether ${lower} helped tonight`,
+    detail: w.top && typeof w.top.text === 'string' ? `Mattered most · ${w.top.text}.` : '',
+    tone: !clear ? 'dim' : up ? 'good' : 'bad',
+  });
   // by the win chance: late moves, or a reading clearer in it than in points (a reading from before its noise was kept is read by the points)
   const winSe = w.winSe;
   if (winSe !== undefined && Number.isFinite(winSe) && winSe > 0 && Number.isFinite(w.win)) {
     const late = moves.length > 0 && moves.every((m) => m.q >= 4 && m.clock < LATE_CLOCK);
     const zWin = Math.abs(w.win) / winSe;
     const clearWin = zWin >= 2 && Math.round(w.win * 100) !== 0;
-    if (late || (clearWin && zWin > Math.abs(w.raw) / Math.max(w.se, 1e-9))) {
-      const pm = `about ±${Math.max(1, Math.round(winSe * 100))}%`;
-      return {
-        text: clearWin ? `${who} ${w.win > 0 ? 'helped' : 'hurt'}: ${sgnPct(w.win)} to win tonight` : `${who}: too close to say tonight, ${sgnPct(w.win)} to win`,
-        detail: how(pm),
-        tone: !clearWin ? 'dim' : w.win > 0 ? 'good' : 'bad',
-      };
-    }
+    if (late || (clearWin && zWin > Math.abs(w.raw) / Math.max(w.se, 1e-9))) return line(clearWin, w.win > 0);
   }
-  const pm = `about ±${Math.max(0.1, w.se).toFixed(1)}`;
-  const clear = Math.abs(w.raw) >= 2 * w.se && Math.abs(w.pts) >= 0.05;
-  return {
-    text: clear ? `${who} ${w.pts > 0 ? 'helped' : 'hurt'}: about ${sgn1(w.pts)} points tonight` : `${who}: too close to say tonight, ${sgn1(w.pts)} points`,
-    detail: how(pm),
-    tone: !clear ? 'dim' : w.pts > 0 ? 'good' : 'bad',
-  };
+  return line(Math.abs(w.raw) >= 2 * w.se && Math.abs(w.pts) >= 0.05, w.pts > 0);
 }
 
 /**
@@ -504,14 +485,16 @@ export function seasonCoaching(league: League, season = league.season, tid = lea
 }
 
 /**
- * "Your live coaching this season: +4.2 points over 9 games": said clear of even as a night is (the
- * readings as measured, two standard errors), the shrunk sum shown, its ± in `pm`. Null with fewer
- * than two games measured (one is the night's own line).
+ * "Your live coaching this season seems to help, over 9 games": said clear of even as a night is (the
+ * readings as measured, two standard errors), in words. Null with fewer than two games measured (one
+ * is the night's own line).
  */
 export function seasonCoachingLine(league: League, season = league.season, tid = league.userTid): string | null {
   const c = seasonCoachingRead(league, season, tid);
   if (!c) return null;
-  return `Your live coaching this season: ${c.clear ? `${c.worth} points` : `too close to say, ${c.worth}`} over ${plural(c.games, 'game')}`;
+  return c.clear
+    ? `Your live coaching this season seems to ${c.worth.startsWith('+') ? 'help' : 'hurt'}, over ${plural(c.games, 'game')}`
+    : `Your live coaching this season is too close to say, over ${plural(c.games, 'game')}`;
 }
 
 /** The season's live coaching as the line reads it, in parts (Career's record row): its worth ("+4.2"), whether it's clear of even, its ± and the games. Null under two games. */
@@ -582,6 +565,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
       if (emptyPatch(patch)) continue;
       topics.add((f.key && IMPACT_TOPIC[f.key]) || f.key!);
       const m = callWorth(key);
+      const worth = m && m.pts >= 2 * m.ptsSe ? worthLine(key) : undefined;
       advice.push({
         id: `fix-${f.key}`,
         title: f.title.replace(/\.$/, ''),
@@ -589,7 +573,7 @@ export function debrief(league: League, res: GameResult, report: GameReport): De
         patch,
         label: fix.label,
         group: `debrief-${fix.label}`,
-        ...(m && m.pts >= 2 * m.ptsSe && { worth: worthLine(key) }),
+        ...(worth && { worth }),
       });
     } else if (f.advice && advice.length < 4) {
       const topic = (f.key && IMPACT_TOPIC[f.key]) || (f.key ? f.key : f.category);

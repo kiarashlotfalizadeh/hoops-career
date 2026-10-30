@@ -8,7 +8,7 @@ import type { League, LiveOp } from '../core/types';
 import { counterWorth, measureChanges as measureLocally, type CounterWorth, type LeagueChange } from '../core/ai/counterWorth';
 import type { GameSim } from '../core/sim/engine';
 import { forkSim, measureChoices, nightWorth, simState, type ChoiceWorth, type LiveChoice, type NightWorth } from './liveWorth';
-import { measureCalls, measureChange, type CallReading, type CallsMeasured } from './liveWorth';
+import { measureCalls, type CallsMeasured } from './liveWorth';
 import type { SimWorkerApi } from '../workers/sim.worker';
 import {
   applyGames,
@@ -372,23 +372,6 @@ export async function measureCallsLive(
   const copy = forkSim(sim);
   try {
     return await guarded(() => r.liveCalls(simState(copy), side, changes, by, confirm, id, Comlink.proxy(progress), budgetMs, ahead));
-  } catch (e) {
-    if (e instanceof WorkerUnavailable) return local(copy);
-    throw e;
-  }
-}
-
-/** One change made in the live game `sim`, measured from where it stands (see measureChange): in the worker, as measureCallsLive. */
-export async function measureChangeLive(sim: GameSim, side: 0 | 1, before: LiveChoice, after: LiveChoice, id: number): Promise<CallReading | null> {
-  const r = ensure();
-  const local = (s: GameSim) =>
-    measureChange(s, side, before, after, { between: () => new Promise<void>((res) => setTimeout(res, 0)), cancelled: () => localGone.has(id) }).finally(() =>
-      localGone.delete(id),
-    );
-  if (!r) return local(forkSim(sim));
-  const copy = forkSim(sim);
-  try {
-    return await guarded(() => r.liveChange(simState(copy), side, before, after, id));
   } catch (e) {
     if (e instanceof WorkerUnavailable) return local(copy);
     throw e;

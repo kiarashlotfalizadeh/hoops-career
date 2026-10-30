@@ -1,11 +1,10 @@
-// The live game's Game plan: the touchline first (the mentality) and tonight's plan, then the battle one end at a time behind one
-// switch, each number next to the lever that moves it. Defense: their play types tonight against the
-// league's, each with the setting that defends it (the ball-screen coverage beside their
-// pick-and-roll, help beside their spot-ups, transition defense beside their run-outs), and their
-// scorers with who's been on each, a tap from their sheet. Offense: your own play types with the
-// action behind each, and the defenders of theirs you're scoring on, with Attack. Team: the
-// team-wide levers. Every setting is one tap down at the foot. Every change goes through the live
-// game, so its journal keeps it and the bench measures it from here.
+// The live game's Tactics view: the mentality and tonight's plan, then the game one end at a time behind
+// one switch. Each row says in plain words what a side is running and how it's going, with the lever
+// that moves it named under it. Defense: their play types (the ball-screen coverage beside their
+// pick-and-roll, help beside their spot-ups, transition defense beside their run-outs), their scorers
+// with who's been on each, then your scheme and press. Offense: your own play types with the action
+// behind each, the defenders of theirs you're scoring on with Attack, then your tempo. Every setting is
+// one tap down at the foot. Every change goes through the live game, so its journal keeps it.
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronRight, RotateCcw, SlidersHorizontal, Target } from 'lucide-react';
 import type { DefScheme, PnrCoverage, PressMode, Tactics } from '../../core/types';
@@ -32,14 +31,14 @@ const third = (v: number) => (v < 38 ? 0 : v < 63 ? 1 : 2);
 
 const HELP: Three = {
   label: 'Help defense',
-  names: ['Stay home', 'Balanced', 'Pack the paint'],
+  names: ['Stay home', 'Balanced', 'Pack paint'],
   values: [30, 50, 75],
   read: (t) => t.defense.help,
   write: (t, v) => void (t.defense.help = v),
 };
 const GET_BACK: Three = {
   label: 'Transition defense',
-  names: ['Crash the glass', 'Balanced', 'Sprint back'],
+  names: ['Crash glass', 'Balanced', 'Sprint back'],
   values: [25, 50, 85],
   read: (t) => t.defense.getBack,
   write: (t, v) => void (t.defense.getBack = v),
@@ -80,7 +79,7 @@ const PUSH: Three = {
   write: (t, v) => void (t.offense.transition = v),
 };
 const CRASH: Three = {
-  label: 'Crash the offensive glass',
+  label: 'Offensive glass',
   names: ['Get back', 'Balanced', 'Crash'],
   values: [20, 50, 78],
   read: (t) => t.offense.crashBoards,
@@ -88,7 +87,7 @@ const CRASH: Three = {
 };
 const PACE: Three = {
   label: 'Tempo',
-  names: ['Slow it down', 'Balanced', 'Push the pace'],
+  names: ['Slow down', 'Balanced', 'Push pace'],
   values: [25, 50, 78],
   read: (t) => t.offense.pace,
   write: (t, v) => void (t.offense.pace = v),
@@ -117,47 +116,64 @@ const OUR_LEVER: Partial<Record<FinishType, Three>> = {
   putback: CRASH,
 };
 
-function ThreeChips({ lever, t, apply }: { lever: Three; t: Tactics; apply: (fn: (t: Tactics) => void) => void }) {
-  const cur = third(lever.read(t));
+/** The lever for the play at `i` in a list, unless a play above it has the same one. */
+function firstLever(rows: [string, unknown][], i: number, levers: Partial<Record<FinishType, Three>>): Three | undefined {
+  const lever = levers[rows[i][0] as FinishType];
+  return lever && rows.slice(0, i).some(([k]) => levers[k as FinishType]?.label === lever.label) ? undefined : lever;
+}
+
+/** A named lever: what it is, then its choices across the row. */
+function Lever({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
-    <div className="lv-lev" role="group" aria-label={lever.label}>
-      {lever.names.map((n, i) => (
-        <button key={n} className={`chip sm ${i === cur ? 'on' : ''}`} aria-pressed={i === cur} onClick={() => i !== cur && apply((x) => lever.write(x, lever.values[i]))}>
-          {n}
+    <div className="lv-lv">
+      <span className="lv-lv-k">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function Choices<T extends string>({ label, options, value, onPick }: { label: string; options: { id: T; label: string }[]; value: T; onPick: (id: T) => void }) {
+  return (
+    <div className="lv-lev" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} className={`chip sm ${o.id === value ? 'on' : ''}`} aria-pressed={o.id === value} onClick={() => o.id !== value && onPick(o.id)}>
+          {o.label}
         </button>
       ))}
     </div>
   );
 }
 
-/** The figures' names, once over a list of play types: trips, points a trip, the league's. */
-function PlayHead() {
+function ThreeChips({ lever, t, apply }: { lever: Three; t: Tactics; apply: (fn: (t: Tactics) => void) => void }) {
+  const cur = third(lever.read(t));
   return (
-    <div className="lv-pr-h tiny dim" aria-hidden="true">
-      <span className="grow" />
-      <span className="lv-pr-trips">Trips</span>
-      <span className="lv-pr-ppp">PPP</span>
-      <span className="lv-pr-base">League</span>
-    </div>
+    <Lever label={lever.label}>
+      <div className="lv-lev three" role="group" aria-label={lever.label}>
+        {lever.names.map((n, i) => (
+          <button key={n} className={`chip sm ${i === cur ? 'on' : ''}`} aria-pressed={i === cur} onClick={() => i !== cur && apply((x) => lever.write(x, lever.values[i]))}>
+            {n}
+          </button>
+        ))}
+      </div>
+    </Lever>
   );
 }
 
-/** A play type tonight: its points a trip against the league's, coloured by which way is good for you, and its trips. */
+/** A play type tonight: its points and trips, and in a word how it's going from your side. */
 function PlayRow({ k, v, base, mine, children }: { k: string; v: { poss: number; pts: number }; base?: number; mine: boolean; children?: ReactNode }) {
-  const ppp = v.pts / v.poss;
   const z = base !== undefined && v.poss >= 4 ? zScore(v, base) : 0;
-  // good for you: your plays above the league, theirs below it
-  const tone = Math.abs(z) < 1 ? '' : z > 0 === mine ? 'good' : 'bad';
+  const good = z > 0 === mine;
+  const word = Math.abs(z) < 1 ? null : mine ? (good ? 'Working' : 'Stalling') : good ? 'Holding them' : 'Hurting you';
   return (
     <div className="lv-pr">
       <div className="lv-pr-top">
-        <span className="lv-pr-n grow">{FINISH_LABEL[k as FinishType] ?? k}</span>
-        <span className="lv-pr-trips tiny dim num">{v.poss}</span>
-        <span className={`lv-pr-ppp num ${tone}`}>{ppp.toFixed(2)}</span>
-        <span className="lv-pr-base tiny dim num">{base !== undefined ? base.toFixed(2) : '—'}</span>
-        <span className="sr-only">
-          , {v.poss} trips{base !== undefined ? `, league ${base.toFixed(2)}` : ''}
+        <span className="grow lv-pr-t">
+          <span className="lv-pr-n">{FINISH_LABEL[k as FinishType] ?? k}</span>
+          <span className="tiny dim">
+            {plural(v.pts, 'point')} on {plural(v.poss, 'trip')}
+          </span>
         </span>
+        {word && <Tag tone={good ? 'good' : 'bad'}>{word}</Tag>}
       </div>
       {children}
     </div>
@@ -222,8 +238,8 @@ export function PlanView({
   // the defenders of theirs you're scoring on
   const theirD = [...sumBy(ourRows, 'def')].filter(([, v]) => v.trips >= 4).sort((a, b) => b[1].pts / b[1].trips - a[1].pts / a[1].trips);
   const hunt = t.offense.huntTarget ?? null;
-  // the battle one end at a time, then the team-wide levers: one view under the touchline
-  const [end, setEnd] = useState<'def' | 'off' | 'team'>('def');
+  // the battle one end at a time: one view under the touchline
+  const [end, setEnd] = useState<'def' | 'off'>('def');
 
   return (
     <div className="lv-plan">
@@ -256,157 +272,144 @@ export function PlanView({
       <Segmented
         value={end}
         onChange={setEnd}
-        label="Game plan"
+        label="Which end"
         options={[
           { id: 'def', label: 'Defense' },
           { id: 'off', label: 'Offense' },
-          { id: 'team', label: 'Team' },
         ]}
       />
 
       {end === 'def' && (
-        <Section title={`${abbrevs.them} on offense`}>
-          <div className="card flush list">
-            {!theirs.length ? <div className="lv-pr-empty small dim">Their play types show here as the game goes.</div> : <PlayHead />}
-            {theirs.map(([k, v], i) => {
-              const lever = THEIR_LEVER[k as FinishType];
-              const pnr = k === 'pnrBH' || k === 'pnrRoll';
-              // (the coverage, or why there's none, under the first of their ball-screen rows only)
-              const firstPnr = pnr && theirs.findIndex(([x]) => x === 'pnrBH' || x === 'pnrRoll') === i;
-              return (
-                <PlayRow key={k} k={k} v={v} base={baselines[k]} mine={false}>
-                  {firstPnr && man && (
-                    <div className="lv-lev" role="group" aria-label="Ball-screen coverage">
-                      {(Object.keys(COVERAGE_META) as PnrCoverage[]).map((c) => (
-                        <button
-                          key={c}
-                          className={`chip sm ${t.defense.pnr === c ? 'on' : ''}`}
-                          aria-pressed={t.defense.pnr === c}
-                          onClick={() => apply((x) => void (x.defense.pnr = c))}
-                        >
-                          {COVERAGE_META[c].label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {firstPnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens: man-to-man brings the coverages back.</div>}
-                  {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
-                </PlayRow>
-              );
-            })}
-          </div>
-        </Section>
-      )}
+        <>
+          <Section title={`What ${abbrevs.them} is running`}>
+            <div className="card flush list">
+              {!theirs.length && <div className="lv-pr-empty small dim">Their plays show here as the game goes.</div>}
+              {theirs.map(([k, v], i) => {
+                // (a lever shows once, under the first play it moves: two sets of the same chips read as two settings)
+                const lever = firstLever(theirs, i, THEIR_LEVER);
+                const pnr = k === 'pnrBH' || k === 'pnrRoll';
+                // (the coverage, or why there's none, under the first of their ball-screen rows only)
+                const firstPnr = pnr && theirs.findIndex(([x]) => x === 'pnrBH' || x === 'pnrRoll') === i;
+                return (
+                  <PlayRow key={k} k={k} v={v} base={baselines[k]} mine={false}>
+                    {firstPnr && man && (
+                      <Lever label="Ball-screen coverage">
+                        <Choices
+                          label="Ball-screen coverage"
+                          value={t.defense.pnr}
+                          onPick={(c: PnrCoverage) => apply((x) => void (x.defense.pnr = c))}
+                          options={(Object.keys(COVERAGE_META) as PnrCoverage[]).map((c) => ({ id: c, label: COVERAGE_META[c].label }))}
+                        />
+                      </Lever>
+                    )}
+                    {firstPnr && !man && <div className="tiny dim">Your {SCHEME_META[t.defense.scheme].label} plays their ball screens. Man-to-man brings the coverages back.</div>}
+                    {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
+                  </PlayRow>
+                );
+              })}
+            </div>
+          </Section>
 
-      {end === 'def' && (
-        <Section title="Their scorers">
-          <div className="card flush list">
-            {scorers.map((p) => {
-              const on = theirRows.filter((r) => r.off === p.pid).sort((a, b) => b.trips - a.trips)[0];
-              const target = t.defense.starPlan !== 'none' && t.defense.starTarget === p.pid;
-              return (
-                <button key={p.pid} className="lv-sc-row" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
-                  <span className="lv-sc-pts num">{p.pts}</span>
-                  <span className="grow lv-sc-t">
-                    <span className="lv-sc-n">
-                      {nameOf(p.pid)}
-                      {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
+          <Section title="Their scorers">
+            <div className="card flush list">
+              {scorers.map((p) => {
+                const on = theirRows.filter((r) => r.off === p.pid).sort((a, b) => b.trips - a.trips)[0];
+                const target = t.defense.starPlan !== 'none' && t.defense.starTarget === p.pid;
+                return (
+                  <button key={p.pid} className="lv-sc-row" onClick={() => onPlayer(p.pid)} aria-haspopup="dialog">
+                    <span className="grow lv-sc-t">
+                      <span className="lv-sc-n">
+                        {nameOf(p.pid)}
+                        {!them.on.includes(p.pid) && <span className="tiny dim"> · bench</span>}
+                      </span>
+                      <span className="tiny dim2">
+                        {p.pts} pts on {keepFigures(madeAtt(p.fgm, p.fga))}
+                        {on ? ` · ${nameOf(on.def)} on him` : ''}
+                      </span>
                     </span>
-                    <span className="tiny dim2">
-                      {keepFigures(madeAtt(p.fgm, p.fga))} FG
-                      {on ? ` · ${nameOf(on.def)} on him: ${on.pts} pts in ${plural(on.trips, 'trip')}` : ''}
-                    </span>
-                  </span>
-                  {target && <Tag tone="info">Doubled</Tag>}
-                  <ChevronRight size={16} className="dim" aria-hidden="true" />
-                </button>
-              );
-            })}
-          </div>
-        </Section>
+                    {target && <Tag tone="info">Doubled</Tag>}
+                    <ChevronRight size={16} className="dim" aria-hidden="true" />
+                  </button>
+                );
+              })}
+            </div>
+          </Section>
+
+          <Section title="Your defense">
+            <div className="card lv-team-lev">
+              <Lever label={<Term id="zone">Scheme</Term>}>
+                <Choices
+                  label="Scheme"
+                  value={t.defense.scheme}
+                  onPick={(k: DefScheme) => apply((x) => void (x.defense.scheme = k))}
+                  options={ALL_SCHEMES.map((k: DefScheme) => ({ id: k, label: SCHEME_META[k].label }))}
+                />
+              </Lever>
+              <Lever label={<Term id="press">Full-court press</Term>}>
+                <Choices
+                  label="Full-court press"
+                  value={t.defense.press}
+                  onPick={(k: PressMode) => apply((x) => void (x.defense.press = k))}
+                  options={(Object.keys(PRESS_META) as PressMode[]).map((k) => ({ id: k, label: PRESS_META[k].label }))}
+                />
+              </Lever>
+            </div>
+          </Section>
+        </>
       )}
 
       {end === 'off' && (
-        <Section title={`${abbrevs.us} on offense`}>
-          <div className="card flush list">
-            {!ours.length ? <div className="lv-pr-empty small dim">Your play types show here as the game goes.</div> : <PlayHead />}
-            {ours.map(([k, v]) => {
-              const lever = OUR_LEVER[k as FinishType];
-              return (
-                <PlayRow key={k} k={k} v={v} base={baselines[k]} mine>
-                  {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
-                </PlayRow>
-              );
-            })}
-            {theirD.slice(0, 2).map(([pid, v]) => (
-              <div key={pid} className="lv-pr">
-                <div className="lv-pr-top">
-                  <Target size={14} className="dim" aria-hidden="true" />
-                  <span className="grow lv-pr-n">
-                    Scoring on {nameOf(pid)}
-                    {!them.on.includes(pid) && <span className="tiny dim"> · bench</span>}
-                  </span>
-                  <span className="lv-pr-trips tiny dim num">{v.trips}</span>
-                  <span className={`lv-pr-ppp num ${v.pts / v.trips >= 1.25 ? 'good' : ''}`}>{(v.pts / v.trips).toFixed(2)}</span>
-                  <span className="lv-pr-base" />
-                  <span className="sr-only">, {v.trips} trips</span>
-                </div>
-                <div className="lv-lev">
-                  <button
-                    className={`chip sm ${hunt === pid ? 'on' : ''}`}
-                    aria-pressed={hunt === pid}
-                    onClick={() => apply((x) => void (x.offense.huntTarget = hunt === pid ? null : pid))}
-                  >
-                    {hunt === pid ? `Attacking ${nameOf(pid)}` : `Attack ${nameOf(pid)}`}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Section>
-      )}
+        <>
+          <Section title={`What ${abbrevs.us} is running`}>
+            <div className="card flush list">
+              {!ours.length && <div className="lv-pr-empty small dim">Your plays show here as the game goes.</div>}
+              {ours.map(([k, v], i) => {
+                const lever = firstLever(ours, i, OUR_LEVER);
+                return (
+                  <PlayRow key={k} k={k} v={v} base={baselines[k]} mine>
+                    {lever && <ThreeChips lever={lever} t={t} apply={apply} />}
+                  </PlayRow>
+                );
+              })}
+            </div>
+          </Section>
 
-      {end === 'team' && (
-        <div className="lv-team-lev">
-          <div className="lv-tl">
-            <span className="slider-label">
-              <Term id="zone">Defense</Term>
-            </span>
-            <div className="lv-lev" role="group" aria-label="Scheme">
-              {ALL_SCHEMES.map((k: DefScheme) => (
-                <button
-                  key={k}
-                  className={`chip sm ${t.defense.scheme === k ? 'on' : ''}`}
-                  aria-pressed={t.defense.scheme === k}
-                  onClick={() => apply((x) => void (x.defense.scheme = k))}
-                >
-                  {SCHEME_META[k].label}
-                </button>
-              ))}
+          {theirD.length > 0 && (
+            <Section title="Who you're scoring on">
+              <div className="card flush list">
+                {theirD.slice(0, 2).map(([pid, v]) => (
+                  <div key={pid} className="lv-pr">
+                    <div className="lv-pr-top">
+                      <Target size={14} className="dim" aria-hidden="true" />
+                      <span className="grow lv-pr-t">
+                        <span className="lv-pr-n">
+                          {nameOf(pid)}
+                          {!them.on.includes(pid) && <span className="tiny dim"> · bench</span>}
+                        </span>
+                        <span className="tiny dim">
+                          {plural(v.pts, 'point')} on {plural(v.trips, 'trip')}
+                        </span>
+                      </span>
+                      <button
+                        className={`chip sm ${hunt === pid ? 'on' : ''}`}
+                        aria-pressed={hunt === pid}
+                        onClick={() => apply((x) => void (x.offense.huntTarget = hunt === pid ? null : pid))}
+                      >
+                        {hunt === pid ? 'Attacking' : 'Attack'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          <Section title="Your offense">
+            <div className="card lv-team-lev">
+              <ThreeChips lever={PACE} t={t} apply={apply} />
             </div>
-          </div>
-          <div className="lv-tl">
-            <span className="slider-label">{PACE.label}</span>
-            <ThreeChips lever={PACE} t={t} apply={apply} />
-          </div>
-          <div className="lv-tl">
-            <span className="slider-label">
-              <Term id="press">Full-court press</Term>
-            </span>
-            <div className="lv-lev" role="group" aria-label="Full-court press">
-              {(Object.keys(PRESS_META) as PressMode[]).map((k) => (
-                <button
-                  key={k}
-                  className={`chip sm ${t.defense.press === k ? 'on' : ''}`}
-                  aria-pressed={t.defense.press === k}
-                  onClick={() => apply((x) => void (x.defense.press = k))}
-                >
-                  {PRESS_META[k].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+          </Section>
+        </>
       )}
 
       <button className="lv-plan-all" onClick={onAll} aria-haspopup="dialog">

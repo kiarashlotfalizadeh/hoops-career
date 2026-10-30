@@ -1,11 +1,11 @@
 // The staff's debrief at the top of a game's recap (the live final card and the report's Debrief
-// tab): the lead assistant's verdict, the two edges that decided it in points (a line each: the rest,
-// and what each was, on the report's Why), your game plan's counters graded on their measured worth
-// (a row each that opens on tonight), your moves in a live game (a verdict and its number, measured
-// after the final by playing the night back with them and without; how, a tap down; then what each
-// did since), and what to do next time: a fix one tap away for the plan against this opponent only
-// when the staff measured it a gain against them (else it's the staff's read), for every game only
-// when measured a gain where the bench calls it.
+// tab): the lead assistant's verdict, the two edges that decided it sized in a word (a line each: the
+// rest, and what each was, on the report's Why), your game plan's counters with the staff's opinion
+// of each (a row each that opens on tonight), your moves in a live game (what the staff makes of
+// them, from playing the night back with them and without; then what each did since), and what to do
+// next time: a fix one tap away for the plan against this opponent only when the staff likes it
+// against them (else it's only their read), for every game only when they back it where the bench
+// calls it. All words: the readings stay under the hood (core/analysis/staffWords.ts).
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, ChevronDown, ChevronRight } from 'lucide-react';
@@ -18,7 +18,8 @@ import { applyPatch } from '../../core/sim/tactics';
 import { persistableTactics, planFor, setPlanItem } from '../../core/league/gamePlans';
 import { counterCandidates } from '../../core/ai/advisor';
 import { worthCall } from '../../core/ai/counterWorth';
-import { counterItem, useCounterWorth, worthText } from '../games/matchup/useCounterWorth';
+import { SINCE, edgeWord } from '../../core/analysis/staffWords';
+import { counterItem, useCounterWorth } from '../games/matchup/useCounterWorth';
 import { shortName } from '../../core/league/helpers';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { act } from '../../state/actions';
@@ -28,12 +29,8 @@ import { AssistantHead, MovesList, NoteCard } from './StaffCards';
 /** What to do next time, shown before "more". */
 const ADVICE_SHOWN = 2;
 
-/** A plan counter's grade: a verdict and its measured worth (a single night is too noisy to grade it on). */
-const PLAN_CALL: Record<PlanGrade['call'], { label: (g: PlanGrade) => string; tone: string }> = {
-  gain: { label: (g) => `Helps ${g.worth ?? 'a little'}`, tone: 'good' },
-  cost: { label: (g) => `Hurts ${g.worth ?? 'a little'}`, tone: 'bad' },
-  even: { label: () => 'No real change', tone: 'dim' },
-};
+/** A plan counter's grade: the staff's opinion of it (a single night is too noisy to grade it on). */
+const PLAN_TONE: Record<PlanGrade['call'], string> = { gain: 'good', cost: 'bad', even: 'dim' };
 
 /** Tonight, when it was far enough outside one game's noise to say. */
 const PLAN_NIGHT: Partial<Record<PlanGrade['night'], string>> = {
@@ -71,6 +68,8 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
       )
     : null;
   const season = night ? seasonCoachingLine(league, res.season) : null;
+  // (the move that mattered most and the season's, a tap down when there's either)
+  const nightMore = [night?.detail, season && `${season}.`].filter(Boolean).join(' ');
   return (
     <div className="gd-debrief">
       <AssistantHead name={assistant.name} initials={assistant.initials} read={d.headline} />
@@ -87,7 +86,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                 tone: f.pts >= 0 ? 'good' : 'bad',
                 title: f.title,
                 text: '',
-                fig: { v: `${f.pts > 0 ? '+' : f.pts < 0 ? '−' : ''}${Math.abs(f.pts).toFixed(1)}`, unit: 'pts' },
+                tag: edgeWord(f.pts),
                 actions: [],
                 rank: 0,
               }}
@@ -110,16 +109,16 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
 
       {d.plan.length > 0 && (
         <Section title="Your plan">
-          {/* a row each: the counter and its measured worth, opening on what tonight did */}
+          {/* a row each: the counter and the staff's opinion of it, opening on what tonight did */}
           <div className="card flush list">
             {d.plan.map((g) => (
               <details key={g.label} className="gd-fold">
                 <summary>
                   <span className="grow gd-fold-t">
                     <span className="lr-name">{g.label}</span>
-                    <span className={`gd-plan-v ${PLAN_CALL[g.call].tone}`}>
+                    <span className={`gd-plan-v ${PLAN_TONE[g.call]}`}>
                       {g.call === 'gain' && <Check size={12} aria-hidden="true" />}
-                      {PLAN_CALL[g.call].label(g)}
+                      {SINCE[g.call]}
                     </span>
                   </span>
                   <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
@@ -139,19 +138,21 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
       {res.moves && res.moves.length > 0 && (
         <Section title="Your moves">
           {night ? (
-            // a verdict and its number; how it was measured and the season's, a tap down
-            <details className={`gd-night tone-${night.tone}`}>
-              <summary>
-                <span className="grow gd-night-t">{night.text}</span>
-                <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
-              </summary>
-              <p className="small dim2">
-                {night.detail}
-                {season && ` ${season}.`}
-              </p>
-            </details>
+            nightMore ? (
+              <details className={`gd-night tone-${night.tone}`}>
+                <summary>
+                  <span className="grow gd-night-t">{night.text}</span>
+                  <ChevronDown size={16} className="gd-fold-c" aria-hidden="true" />
+                </summary>
+                <p className="small dim2">{nightMore}</p>
+              </details>
+            ) : (
+              <div className={`gd-night tone-${night.tone}`}>
+                <span className="gd-night-t">{night.text}</span>
+              </div>
+            )
           ) : (
-            measuringNight(res.gid) && <div className="gd-night small dim">The staff is replaying the night with your moves and without…</div>
+            measuringNight(res.gid) && <div className="gd-night small dim">The staff is going back over your moves…</div>
           )}
           <MovesList moves={res.moves} abbrevs={abbrevs} nameOf={nameOf} />
         </Section>
@@ -167,7 +168,7 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
                 {a.patch && (d.meetAgain || a.worth) && (
                   <div className="gd-next-acts">
                     {d.meetAgain && <PlanFix league={league} opp={d.opp} a={a} inPlan={inPlan} quiet={!!a.worth} />}
-                    {/* (for every game only a change measured as a gain: one night's tags are no reason to change them all) */}
+                    {/* (for every game only a change the staff backs: one night's tags are no reason to change them all) */}
                     {a.worth && (
                       <button className="btn xs" disabled={simming} onClick={() => always(a)}>
                         {a.label}: every game
@@ -192,9 +193,9 @@ export function Debrief({ res, league, report }: { res: GameResult; league: Leag
 
 /**
  * A next-time fix for the plan against this opponent: one tap only as the staff's counter that makes
- * the same change (sameChange), measured a gain against them on the matchup page's games, with its
- * number. Otherwise the staff's read, said as such, with nothing to tap (`quiet`: the row already
- * carries a measured line, the bench's, so this one says nothing).
+ * the same change (sameChange), measured a gain against them on the matchup page's games. Otherwise
+ * the staff's read, said as such, with nothing to tap (`quiet`: the row already carries the bench's
+ * opinion, so this one says nothing).
  */
 function PlanFix({ league, opp, a, inPlan, quiet }: { league: League; opp: number; a: DebriefAdvice; inPlan: Set<string>; quiet: boolean }) {
   const simming = useStore((s) => !!s.sim);
@@ -214,20 +215,18 @@ function PlanFix({ league, opp, a, inPlan, quiet }: { league: League; opp: numbe
         <button className="btn xs" disabled={simming} onClick={add}>
           {c.label}: vs {abbrev}
         </button>
-        <span className="lv-note-worth tiny">
-          Helps against {abbrev}, {worthText(w).short}
-        </span>
+        <span className="lv-note-worth tiny">Should help against {abbrev}</span>
       </>
     );
   }
   if (quiet) return null;
   const note =
     c && measuring && !measuring.worth
-      ? `The staff is measuring it against ${abbrev}…`
+      ? `The staff is looking at it against ${abbrev}…`
       : w
         ? worthCall(w) === 'cost'
-          ? `Hurts against ${abbrev}, ${worthText(w).short}. Not one for the plan.`
-          : `No real change against ${abbrev}. Not one for the plan.`
-        : `The staff's read, not measured against ${abbrev}`;
+          ? `Could hurt against ${abbrev}. Not one for the plan.`
+          : `No clear edge against ${abbrev}. Not one for the plan.`
+        : `Only the staff's read against ${abbrev}`;
   return <span className="lv-note-worth tiny">{note}</span>;
 }

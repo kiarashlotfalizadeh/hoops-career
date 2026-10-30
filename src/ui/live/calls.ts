@@ -21,7 +21,6 @@ import { tacticsDiff, crunchTime, foulLimit, DECIDED_WIN, LEVER_TRIPS } from './
 import { crunchTime as coreCrunch, winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { staffNotes, type StaffInput, type StaffNote } from './staff';
-import { signed } from '../stats';
 
 /** Most changes measured at a stop (the brief's three to five: what the game suggests, the likeliest first). */
 export const CALL_DRAFTS = 5;
@@ -302,55 +301,25 @@ export function spotLabel(q: number, clock: number): string {
   return `${per} ${m}:${String(s).padStart(2, '0')}`;
 }
 
-/**
- * A measured reading in a sentence, for the tap under a verdict: "About +1.4 points to the margin, give
- * or take 0.5": the margin shrunk toward even by its noise, with what's left of its uncertainty
- * (CallReading.band). A crunch-time call also cleared on the result, and says so without a figure:
- * picked for clearing its noise the win chance reads high (over 28 calls judged by the margin it read
- * +7.4% against a true +4.3%, round-3 game-day review; over 16 crunch-time calls in games where every
- * call was taken, +2.6% against +0.2), and no one shrink held in games followed and not (scratch
- * p1/live, 2026-10-27).
- */
-export function readingLine(r: { pts: number; band: number }, by: 'pts' | 'win'): string {
-  return `About ${signed(r.pts, 1)} points to the margin, give or take ${r.band.toFixed(1)}${by === 'win' ? ', and a better chance to win' : ''}.`;
-}
-
-/** How a reading was taken, in a sentence: "Measured from Q3 6:12: the rest of the game played 320 times each way." */
-export const measuredFrom = (at: string, n: number) => `Measured from ${at}: the rest of the game played ${n} times each way.`;
-
-/**
- * A measured reading as a verdict, the way the screens say it (decision 8: a verdict and one number,
- * the rest a tap down): "Helps: about +1.4 points", "Hurts: about −0.8 points", "No real change" (inside
- * its noise, as Tactics and the counters say it).
- */
-export function verdictLine(r: { pts: number }, clear: boolean): string {
-  if (!clear) return 'No real change';
-  return `${r.pts > 0 ? 'Helps' : 'Hurts'}: about ${signed(r.pts, 1)} points`;
-}
-
-/** What the staff found at the last stop: measuring, a call (with its number), or none that clears. */
+/** What the staff found at the last stop: measuring, a call, or none that clears. */
 export type StaffCall =
   | { state: 'measuring'; tried: number; at: string; done?: number }
   | { state: 'call'; draft: CallDraft; m: CallsMeasured; at: string; base: string; steps: number }
   | { state: 'none'; tried: number; at: string; m?: CallsMeasured; steps?: number };
 
 /**
- * The call as a bench note: why the staff looked (the evidence, its headline), its number, the change
- * on its button, and how it was measured a tap down (`detail`). Its line is the verdict: a call is only
- * made once its reading clears its noise.
+ * The call as a bench note: why the staff looked (the evidence, its headline), its opinion and the change
+ * on its button. A call is only made once its reading clears its noise, but what it measured stays the
+ * staff's own: the player gets the opinion, never the figure (core/analysis/staffWords.ts).
  */
 export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
-  const r = c.m.reading!;
-  const by = c.m.by;
   const a = c.draft;
   return {
     id: `call-${a.id}`,
     kind: 'decision',
     tone: 'good',
     title: a.why,
-    text: by === 'win' ? 'Helps the chance to win from here.' : 'Helps from here.',
-    detail: `${measuredFrom(c.at, r.n)} ${readingLine(r, by)}`,
-    fig: { v: signed(r.pts, 1), unit: 'pts' },
+    text: c.m.by === 'win' ? 'The staff thinks this helps you close.' : 'The staff thinks this helps from here.',
     actions: [
       a.choice.kind === 'timeout'
         ? { kind: 'timeout', label: a.label }
@@ -363,16 +332,13 @@ export function callNote(c: Extract<StaffCall, { state: 'call' }>): StaffNote {
   };
 }
 
-/** The staff's call over the court, in a line: its verdict and its number ("Helps: about +1.4 points."). */
-export const callBannerLine = (c: Extract<StaffCall, { state: 'call' }>) => `${verdictLine(c.m.reading!, true)}.`;
+/** The staff's call over the court, in a line. */
+export const CALL_BANNER_LINE = 'The staff thinks this helps.';
 
-/** The staff's line when it measured and found nothing to change, or while it measures. */
+/** The staff's line when it found nothing to change, or while it looks. */
 export function callQuietLine(c: StaffCall | null): string | null {
   if (!c) return null;
-  if (c.state === 'measuring') return `Measuring ${c.tried === 1 ? 'a change' : `${c.tried} changes`} from ${c.at}…`;
-  if (c.state === 'none')
-    return c.tried
-      ? `Nothing to change: ${c.tried === 1 ? `the one change from ${c.at} doesn't` : `none of ${c.tried} changes from ${c.at}`} clearly help${c.tried === 1 ? '' : 's'}.`
-      : null;
+  if (c.state === 'measuring') return 'The staff is talking it over…';
+  if (c.state === 'none') return 'Nothing the staff would change right now.';
   return null;
 }

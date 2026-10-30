@@ -1,16 +1,14 @@
 // The staff's live voice, as a hook: at each stop in play the Live screen hands it the game (useLiveGame:
 // a period's end, a timeout of either side, a run of theirs, crunch time's dead balls), and it drafts the
 // changes the game suggests (calls.ts), measures them in the worker from that spot (never on the main
-// thread: playback goes on while it measures) and holds what it found: a call with its number, or the
-// line that none cleared. A stop the game will come to a few possessions on is measured from before it
-// gets there (ahead): on a slow phone that lead is what keeps the readings full. A change the coach
-// makes on the touchline is measured the same way from where he made it.
+// thread: playback goes on while it measures) and holds what it found: a call, or the line that none
+// cleared. A stop the game will come to a few possessions on is measured from before it
+// gets there (ahead): on a slow phone that lead is what keeps the readings full.
 import { useCallback, useRef, useState } from 'react';
 import type { LiveGame } from '../../state/live';
-import type { Tactics } from '../../core/types';
 import type { GameSim } from '../../core/sim/engine';
-import { cancelLive, measureCallsLive, measureChangeLive, nextLiveId, reachLive } from '../../state/simClient';
-import { CALL_BUDGET_MS, type CallReading, type CallsMeasured } from '../../state/liveWorth';
+import { cancelLive, measureCallsLive, nextLiveId, reachLive } from '../../state/simClient';
+import { CALL_BUDGET_MS, type CallsMeasured } from '../../state/liveWorth';
 import { DECLINED_TRIPS, callBy, callDrafts, callQuiet, confirmGames, spotLabel, type StaffCall } from './calls';
 import type { StaffInput } from './staff';
 
@@ -18,16 +16,6 @@ import type { StaffInput } from './staff';
 const MEASURE_HOLD = 8;
 /** Possessions a call stays up before a stop (not a period's end) measures again, and takes it as turned down. */
 export const CALL_HOLD = 4;
-
-/** A change the coach made on the touchline, as measured from where he made it (null reading: still measuring). */
-export interface ChangeWorth {
-  /** What changed, in a few words ("Mentality: Aggressive"). */
-  what: string;
-  at: string;
-  reading: CallReading | null;
-  /** The staff's call he took (already measured): its reading is the call's. */
-  call?: boolean;
-}
 
 /** A stop the game will come to, measured before it gets there: the game played on to it (a copy) and the possessions it'll have played by then. */
 export interface StopAhead {
@@ -53,11 +41,9 @@ interface Run {
 
 export function useStaffCall() {
   const [call, setCall] = useState<StaffCall | null>(null);
-  const [change, setChange] = useState<ChangeWorth | null>(null);
   const callRef = useRef(call);
   callRef.current = call;
   const run = useRef<Run | null>(null);
-  const changeRun = useRef(0);
   /** Changes the coach turned down (with ×, or by leaving the call up to the next stop), by draft id, with the possession he did. */
   const declined = useRef(new Map<string, number>());
 
@@ -179,32 +165,8 @@ export function useStaffCall() {
     setCall(null);
   }, []);
 
-  /** The coach took the call: its number is the change's (nothing to measure again). */
-  const took = useCallback((what: string) => {
-    const c = callRef.current;
-    if (c?.state === 'call') setChange({ what, at: c.at, reading: c.m.reading, call: true });
-    setCall(null);
-  }, []);
-
-  /** The coach changed tactics himself: `after` against `before`, from where the game stands now. */
-  const changed = useCallback((lg: LiveGame, before: Tactics, after: Tactics, what: string) => {
-    if (changeRun.current) cancelLive(changeRun.current);
-    changeRun.current = 0;
-    if (lg.over || !what) return setChange(null);
-    const at = spotLabel(lg.sim.q, lg.sim.clock);
-    // (a decided game: nothing a change does reads as anything)
-    if (callQuiet(lg.sim, lg.edge) === 'decided') return setChange(null);
-    const id = nextLiveId();
-    changeRun.current = id;
-    setChange({ what, at, reading: null });
-    measureChangeLive(lg.sim, lg.userSide, { kind: 'tactics', tactics: before }, { kind: 'tactics', tactics: after }, id)
-      .then((r) => {
-        if (changeRun.current !== id || !r) return;
-        changeRun.current = 0;
-        setChange({ what, at, reading: r });
-      })
-      .catch((e: unknown) => console.warn('The change could not be measured:', e));
-  }, []);
+  /** The coach took the call. */
+  const took = useCallback(() => setCall(null), []);
 
   /** The late play call is being measured: the staff's own measurement gives way (the worker is the play call's). */
   const hush = useCallback(() => {
@@ -216,13 +178,10 @@ export function useStaffCall() {
   /** A new game: nothing in flight, nothing said. */
   const reset = useCallback(() => {
     if (run.current) cancelLive(run.current.id);
-    if (changeRun.current) cancelLive(changeRun.current);
     run.current = null;
-    changeRun.current = 0;
     declined.current = new Map();
     setCall(null);
-    setChange(null);
   }, []);
 
-  return { call, change, stop, busy, decline, took, changed, reset, hush };
+  return { call, stop, busy, decline, took, reset, hush };
 }

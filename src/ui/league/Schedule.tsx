@@ -4,7 +4,7 @@ import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
 import { useLeagueMemo } from '../../state/store';
 import { TeamLogo } from '../components/TeamLogo';
-import { p0 } from '../stats';
+import { favoriteOf } from '../games/favorite';
 import { keepFigures, plural } from '../../core/format';
 import { roundName, useGamesByGid, useQueryParam } from './shared';
 import { gameProjection, nextUserGame } from '../../core/analysis/preview';
@@ -118,12 +118,8 @@ export function DayScoreboard({ league }: { league: League }) {
   );
 }
 
-/** "MIL 72%": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court), so the two never disagree. */
-function favorite(league: League, g: ScheduledGame): string {
-  const { win } = gameProjection(league, g);
-  const fav = win >= 0.5 ? g.home : g.away;
-  return `${league.teams[fav].abbrev} ${p0(Math.max(win, 1 - win))}`;
-}
+/** "MIL · Favorite": the matchup preview's own projection (net ratings regressed toward tonight's rotations, home court), in the staff's words. */
+const favorite = (league: League, g: ScheduledGame) => favoriteOf(league, g, gameProjection(league, g).win).line;
 
 function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame; res?: GameResult; after?: Map<number, [number, number]> }) {
   const mine = g.home === league.userTid || g.away === league.userTid;
@@ -131,9 +127,9 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
   const done = !!res || !!g.played;
   // (the projection sets up the game as it will tip off: once per league change)
   const fav = useLeagueMemo(() => (done ? '' : favorite(league, g)), [league, g, done]);
-  // a game to come leads with its favourite ("LAC 53% to win"), a final with its result; the right
+  // a game to come leads with its favourite ("LAC · Slight favorite"), a final with its result; the right
   // holds what kind of game it is (a Cup night, a playoff game), when it is one
-  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : tag ? fav : `${fav} to win`;
+  const status = res ? `Final${res.ot ? (res.ot > 1 ? `/${res.ot}OT` : '/OT') : ''}` : g.played ? 'Final' : fav;
   const right = tag;
   // a playoff card shows the series as it stood after this game (or going into it)
   const series =
@@ -149,9 +145,8 @@ function ScoreCard({ league, g, res, after }: { league: League; g: ScheduledGame
   const body = (
     <>
       <div className="lg-sb-st">
-        <span className={!done && mine ? 'live' : ''} title={done ? undefined : 'Chance to win, from the matchup preview'}>
+        <span className={!done && mine ? 'live' : ''} title={done ? undefined : "The staff's read, from the matchup preview"}>
           {status}
-          {!done && tag && <span className="sr-only"> to win</span>}
         </span>
         {right && <span>{right}</span>}
       </div>

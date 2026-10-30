@@ -4,7 +4,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { QUALITY_META, gradeTone, type Grade, type Quality, type SystemReport } from '../../core/analysis/system';
-import { ordinal } from '../stats';
 import { Help, Section } from '../components/ui';
 
 const ORDER: Grade[] = ['F', 'D', 'C', 'C+', 'B', 'B+', 'A', 'A+'];
@@ -14,7 +13,7 @@ export function GradeBadge({ g, sm }: { g: Grade; sm?: boolean }) {
   return <span className={`tx-grade ${gradeTone(g)}${sm ? ' sm' : ''}`}>{g}</span>;
 }
 
-/** One quality: its name, grade, rank and a bar for where it sits; open, what it's made of. */
+/** One quality: its name, grade and a bar for where it sits; open, what it's made of. */
 function QualityRow({ q, was }: { q: Quality; was?: Quality }) {
   const [open, setOpen] = useState(false);
   const moved = was && was.grade !== q.grade ? (ORDER.indexOf(q.grade) > ORDER.indexOf(was.grade) ? 'up' : 'down') : null;
@@ -25,7 +24,6 @@ function QualityRow({ q, was }: { q: Quality; was?: Quality }) {
         <span className="tx-q-n grow">{QUALITY_META[q.id].label}</span>
         {moved && was && <span className={`tx-q-was ${moved === 'up' ? 'good' : 'bad'}`}>{was.grade} →</span>}
         <GradeBadge g={q.grade} />
-        <span className="tx-q-rank tiny dim num">{ordinal(q.rank)}</span>
         {open ? <ChevronUp size={15} className="dim" aria-hidden="true" /> : <ChevronDown size={15} className="dim" aria-hidden="true" />}
       </button>
       <div className="tx-q-bar" aria-hidden="true">
@@ -37,7 +35,7 @@ function QualityRow({ q, was }: { q: Quality; was?: Quality }) {
           {q.parts.map((p, i) => (
             <div key={i} className="tx-q-part small">
               <span className="grow">{p.text}</span>
-              {i > 0 && <span className={`num bold ${p.v > 0 ? 'good' : 'bad'}`}>{`${p.v > 0 ? '+' : '−'}${Math.abs(p.v).toFixed(1)}`}</span>}
+              {i > 0 && <span className={`bold ${p.v > 0 ? 'good' : 'bad'}`}>{p.v > 0 ? 'Helps' : 'Hurts'}</span>}
             </div>
           ))}
         </div>

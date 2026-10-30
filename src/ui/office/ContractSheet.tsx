@@ -259,7 +259,7 @@ function OfferBody({ p, mode, onClose }: { p: Player; mode: Exclude<OfferMode, '
             Players weigh your <b>winning</b>, team <b>hype</b>, <b>market size</b> and the <b>playing time</b> they&apos;d get. Interested players give you a discount. Lukewarm
             ones want a premium. A lowball costs some of his interest for the season.
           </p>
-          <p>His price for you is {vsNeutral < 0 ? `${-vsNeutral}% below` : vsNeutral > 0 ? `${vsNeutral}% above` : 'about the same as'} what he'd ask a neutral team.</p>
+          <p>{vsNeutral < 0 ? "He'd take less to play for you." : vsNeutral > 0 ? "He'd want more to play for you." : "He'd ask you about what he'd ask anyone."}</p>
         </HelpSheet>
       </div>
 

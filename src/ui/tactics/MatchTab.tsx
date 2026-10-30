@@ -32,7 +32,7 @@ export function MatchTab({ t, players }: { t: Tactics; players: Player[] }) {
               help={
                 <>
                   <p>At breaks he fixes what the other team cashes in on, as AI coaches do. Never in games you coach live.</p>
-                  <p>By the staff&apos;s measurements it comes out about even.</p>
+                  <p>The staff can&apos;t say it helps or hurts.</p>
                 </>
               }
             />

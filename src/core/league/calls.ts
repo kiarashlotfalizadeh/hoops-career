@@ -46,6 +46,7 @@ import {
   gradeGoal,
   ownerProgress,
   patienceCap,
+  goalWord,
   YOUNG_AGE,
 } from './ownerGoals';
 import { frozenBooksOutlook, seasonWeight } from './jobSecurity';
@@ -62,13 +63,14 @@ import { ensureRotation, userGameOnDay } from './games';
 import { seriesLabel } from './playoffs';
 import { itemGroup, planFor, planMade, setPlanItem } from './gamePlans';
 import { contractExp, playerAge, salaryFor } from '../playerGen';
-import { forecast, leagueForecast, pct, TRAIL_SIMS, type Forecast } from '../analysis/odds';
+import { forecast, leagueForecast, TRAIL_SIMS, type Forecast } from '../analysis/odds';
+import { AHEAD, leanOf } from '../analysis/staffWords';
 import { hashString } from '../random';
 import { autoRotation } from '../ai/coachAI';
 import { WORTH_MIN, withChange, worthCall, type CounterWorth, type LeagueChange } from '../ai/counterWorth';
 import { counterCandidates } from '../ai/advisor';
 import { buildGameReport, type Factor } from '../analysis/gameReport';
-import { answerWeek, isWeekId, notePick, openWeekId, vsAt, weekCard, weekDaily, winsOf } from './weekCall';
+import { answerWeek, isWeekId, notePick, openWeekId, vsAt, weekCard, weekDaily } from './weekCall';
 
 /** A star: one of the team's three best players by OVR (a skid's read names them out). */
 export const STAR_RANK = 3;
@@ -279,12 +281,13 @@ export function changeWorth(league: League, m: Extract<CallMeasure, { kind: 'cha
   return { gid: m.gid, sig: m.sig, day: league.day, pts: w.pts, raw: w.raw, se: w.se };
 }
 
-/** "+1.4", "−0.3": a measured worth as the cards say it. */
+/** "+1.4", "−0.3": a real margin over games played as the cards say it. */
 const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
 
-/** A measured worth in words: "about +1.4 a game", or "too close to say" inside WORTH_MIN (as the counters read). */
-function worthWords(pts: number): string {
-  return Math.abs(pts) >= WORTH_MIN ? `about ${signed(pts)} a game` : 'too close to say';
+/** A deal's measured worth as the staff's opinion: never the figure (src/ui/DESIGN.md). */
+function dealWords(pts: number): string {
+  const lean = leanOf(pts);
+  return lean === 'even' ? 'No clear edge from the deal.' : `The deal ${AHEAD[lean].toLowerCase()}.`;
 }
 
 /** The staff's deadline call, worked out once when its card opens (League.deadlineCall). */
@@ -315,12 +318,22 @@ function dealt(league: League, id: string): boolean {
   return !!look && look.id === id && (league.transactions ?? []).some((t) => t.kind === 'trade' && t.user && t.id >= look.txn);
 }
 
-/**
- * Odds in tenths of a percent as the cards say them, as the screens' odds read (pct): "3%", "<1%"
- * and ">99%" at the ends, never a 100% or a 0% a simulated count can't promise. They count the
- * play-in too, so the cards call them the postseason odds.
- */
-const oddsText = (tenths: number) => pct(tenths / 1000);
+/** The forecast's chance at the postseason (the play-in counts) as the cards say it: a word, not the figure. */
+const postseasonText = (p: number, sure = false) =>
+  ({
+    Clinched: 'The postseason is clinched.',
+    'On track': 'The postseason looks likely.',
+    'In reach': 'The postseason is in reach.',
+    'Long shot': 'The postseason is a long shot.',
+  })[goalWord(p, sure)];
+
+/** What a deal does to the forecast's postseason chance (tenths of a percent), in words. */
+const oddsMoveText = (gain: number) =>
+  gain >= 20
+    ? 'The forecast likes your postseason chances more with it.'
+    : gain <= -20
+      ? 'The forecast likes your postseason chances less with it.'
+      : 'The forecast barely moves your postseason chances.';
 
 /**
  * The user's playoff odds as of the latest weekly point this season (tenths of a percent), how many
@@ -579,7 +592,7 @@ function slideRead(league: League, results: GameResult[]): { text: string; luck:
     const worst = [...sum.entries()].sort((a, b) => a[1] - b[1])[0];
     if (worst && worst[1] / results.length <= -1) {
       luck = worst[0] === 'luck';
-      parts.push(`The box scores point to ${CAUSE[worst[0]]}, ${signed(worst[1] / results.length)} a game by the staff's read.${luck ? " That's luck, not the plan." : ''}`);
+      parts.push(`The box scores point to ${CAUSE[worst[0]]}.${luck ? " That's luck, not the plan." : ''}`);
     }
   }
   const out = starsOut(league);
@@ -813,7 +826,11 @@ function dealGoalText(d: DealGoal): string {
     ? `Profit: ${cash(d.with)} on pace with it, ${cash(d.now)} without. The owner's goal: ${cash(d.target)}.`
     : d.kind === 'payroll'
       ? `Payroll: ${money(d.with)} with it, ${money(d.now)} without. The owner's line: ${money(d.target)}.`
-      : `Young players' minutes: ${n(d.with)} on pace with it, ${n(d.now)} without. The owner's goal: ${n(d.target)}.`;
+      : d.with < d.target
+        ? `Young players' minutes fall short of the owner's ${n(d.target)} with it.`
+        : d.with < d.now
+          ? "Young players lose minutes with it, but the owner's goal holds."
+          : 'Young players get more minutes with it.';
 }
 
 /** A player a deal brings in, with what he costs: "James Harden: 37, $96.5M over 3 seasons, a player option on the last". */
@@ -938,7 +955,7 @@ export const SLUMP_GAMES: readonly [number, number] = [5, 20];
  * The first slump of a user's first season (SLUMP_UNDER games under .500 within SLUMP_GAMES), once:
  * one plain line from the staff that pulls apart what the box scores put down to luck (shots falling
  * below their looks), the games his best players missed, and the rest (the matchups and the roster:
- * what a plan can change), with the wins the forecast, which counts all of it, still has him at.
+ * what a plan can change), with where the forecast, which counts all of it, still has him, in words.
  * The staff's read, in the digest.
  */
 function firstSlump(league: League) {
@@ -977,11 +994,11 @@ function firstSlump(league: League) {
   notePick(
     league,
     [
-      `${ts.won}-${ts.lost}. ${margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game, as the staff reads it` : `Even on points at ${signed(margin)} a game, as the staff reads it, the close ones gone the other way`}.`,
-      luck <= -1 ? `About ${(-luck).toFixed(1)} a game of it is shots that didn't fall. That's luck, not the plan.` : 'The shots fell about as their looks were worth. Not luck.',
+      `${ts.won}-${ts.lost}. ${margin < 0 ? `Outscored by ${(-margin).toFixed(1)} a game` : `Even on points at ${signed(margin)} a game, the close ones gone the other way`}.`,
+      luck <= -1 ? "Some of it is shots that didn't fall. That's luck, not the plan." : 'The shots fell about as their looks were worth. Not luck.',
       `${capitalize(hurt)}.`,
-      rest < -1 ? `The other ${(-rest).toFixed(1)} a game is the roster and the matchups, injuries included. A plan or a move can change that.` : 'The rest is about even.',
-      ...(fc ? [`The forecast, which counts all of it, has you at about ${Math.round(fc.w)} wins.`] : []),
+      rest < -1 ? 'The rest is the roster and the matchups, injuries included. A plan or a move can change that.' : 'The rest is about even.',
+      ...(fc ? [`The forecast, which counts all of it, has you ${fc.w >= 46 ? 'as a winning team' : fc.w >= 36 ? 'in the middle of the pack' : 'near the bottom'}.`] : []),
     ].join(' '),
   );
 }
@@ -1050,15 +1067,9 @@ export function callsDecide(league: League) {
   }
 }
 
-/**
- * What the staff put in for a game, as the digest says it: the counters and one measured number each,
- * points a game (the chance to win they come to is the game's own business, on its pages).
- * "The staff put in Drop for Friday vs BOS. It measured +1.1 pts.", "The staff put in Drop and
- * Deny Brunson for Game 4: +1.1 and +0.4 pts, measured."
- */
+/** What the staff put in for a game, as the digest says it: "The staff put in Drop and Deny Brunson for Game 4." */
 function putText(items: GamePlanItem[], game: string): string {
-  if (items.length === 1) return `The staff put in ${items[0].label} for ${game}. It measured ${signed(items[0].pts ?? 0)} pts.`;
-  return `The staff put in ${items.map((x) => x.label).join(' and ')} for ${game}: ${items.map((x) => signed(x.pts ?? 0)).join(' and ')} pts, measured.`;
+  return `The staff put in ${items.map((x) => x.label).join(' and ')} for ${game}.`;
 }
 
 // ---------------------------------------------------------------- the cards
@@ -1222,9 +1233,9 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       : items.length
         ? `The staff's plan: ${items.map((x) => x.label).join(', ')}.`
         : "None of the staff's counters helps against them.";
-    // (the numbers a tap down: each counter measured on its own on tonight's game)
+    // (a tap down: the staff's opinion of them, never the figures)
     const detail = [
-      ...(items.length ? [`Each measured on its own on tonight's game: ${items.map((x) => `${x.label} ${signed(x.pts ?? 0)} a game`).join(', ')}.`] : []),
+      ...(items.length ? [items.length > 1 ? 'Each should help tonight.' : 'It should help tonight.'] : []),
       ...(planned ? ['Your plan against them is in place.'] : worth && !items.length ? ['Go with your playbook as it is, or a plan of your own.'] : []),
     ].join('\n');
     // (opening the plan doesn't answer the call: a plan set for the series does, see planSet)
@@ -1292,9 +1303,8 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
           }
         : undefined;
     const on = worth && league.schedule.find((x) => x.gid === worth.gid);
-    // the call and what he's worth on the row; where it was measured and where his minutes go a tap down
-    const value = worth && on ? ` Without him: ${worthWords(-(worth.pts ?? 0))}.` : '';
-    const where = worth && on ? `Measured on ${on.day >= league.day ? gameText(league, on) : `${fmtDate(league.season, on.day)} ${vsAt(league, on)}`}.` : '';
+    // the call and what losing him does on the row; where his minutes go a tap down
+    const value = worth && on ? (missed ? ' Losing him hurts.' : ' The team should hold up without him.') : '';
     const to = mins.to.length ? `His minutes go to ${mins.to.map((x) => playerName(x)).join(' and ')}.` : 'His minutes go to the healthy players.';
     const why = cover
       ? manual
@@ -1312,7 +1322,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       kind: 'injury',
       title: `${playerName(p)} is out ${plural(out, 'game')}`,
       line: `${cover ? "The staff's call: a 10-day for cover." : manual ? "The staff's call: hand them the rotation while he's out." : "The staff's call: ride it out."}${value}`,
-      detail: [where, why].filter(Boolean).join('\n'),
+      detail: why,
       tone: 'bad',
       to: look?.to ?? '/team',
       pids: [p.pid],
@@ -1338,17 +1348,25 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     // the lean: whichever answer leaves his standing higher, as the forecast reads the season
     const st = blocked ? null : concedeStanding(league);
     const tell = !!st && st.concede > st.push;
-    // (both answers' numbers a tap down)
+    // (both answers a tap down, in words)
+    const reach = st
+      ? {
+          Clinched: 'His goal is in hand.',
+          'On track': 'His goal still looks likely.',
+          'In reach': 'His goal is still in reach.',
+          'Long shot': 'His goal looks like a long shot.',
+        }[goalWord(st.reach)]
+      : '';
     const read = st
       ? [
-          `Pushing on: ${standingPts(st.push)} to your standing with him. The forecast gives you ${pct(st.reach)} to reach his goal.`,
-          `Telling him now: ${standingPts(st.concede)} at once, and a season on his rebuild clock.`,
+          `${st.push >= 0 ? 'Pushing on should help your standing with him.' : `Pushing on should cost you ${tell ? 'more' : 'less'} with him than telling him.`} ${reach}`,
+          'Telling him now costs standing at once, and a season on his rebuild clock.',
         ].join('\n')
       : '';
     cards.push({
       id,
       kind: 'odds',
-      title: `Postseason odds down to ${oddsText(odds.now)}`,
+      title: 'The postseason is slipping away',
       line: blocked
         ? `The staff's call: keep pushing. ${blocked}`
         : tell
@@ -1379,11 +1397,10 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const st = blocked ? null : floorStanding(league);
     const tell = !!st && st.ease > st.chase;
     const play: CallChoice = { label: 'Play it out', action: { kind: 'settle', id } };
-    // (both answers' numbers a tap down, with what a development year changes)
+    // (both answers a tap down, in words, with what a development year changes)
     const read = st
       ? [
-          `Chasing it: ${standingPts(st.chase)} to your standing at his review. A development year: ${standingPts(st.ease)}, its cost included.`,
-          `The forecast reads about ${st.wins} wins either way.`,
+          tell ? 'A development year should leave you better with him at his review, even with its cost.' : 'Chasing it should leave you better with him at his review.',
           ...(tell ? ['Part of the win goal becomes minutes for the young players. Play them for the lottery.'] : []),
           ...(!tell && !chase ? ['Nobody the staff can find on the market clears it.'] : []),
         ].join('\n')
@@ -1391,7 +1408,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     cards.push({
       id,
       kind: 'floor',
-      title: `On pace for ${floor.projected} wins: under the owner's floor`,
+      title: "On pace to miss the owner's floor",
       line: `Under ${floor.floorWins} wins is a failed season, whatever else goes right. ${
         blocked
           ? `The staff's call: chase it before the deadline. ${blocked}`
@@ -1414,7 +1431,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
     const other = offer ? league.teams[offer.b.tid] : null;
     // (today's odds, as Today and the standings show them: not the reading the call was worked out from)
     const now = call ? leagueForecast(league)?.teams[me] : undefined;
-    const odds = now ? `Postseason odds ${pct(now.reach[0], now.clinched)}. ` : call ? `Postseason odds ${oddsText(call.odds)}. ` : '';
+    const odds = now ? `${postseasonText(now.reach[0], now.clinched)} ` : call ? `${postseasonText(call.odds / 1000)} ` : '';
     const stand: CallChoice = { label: 'Stand pat', action: { kind: 'settle', id } };
     // with no deal found, the need the staff was looking for: a player better than the fifth best
     // to buy (Trade → Find), the veteran a contender would pay most for to sell (the trading block)
@@ -1433,9 +1450,9 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
             ? `sell${vet ? ` ${playerName(vet)}` : ''}. No contender the staff asked bites yet. The trading block shows who would.`
             : 'stand pat. No contender the staff asked bites on what you have to sell.'
           : 'stand pat. The team is where it is.';
-    // the deal's numbers: its worth a game measured on his next game against someone else (once, as
-    // its card opens), what the forecast reads it adds to the odds, what the players coming cost, and
-    // what it does to the owner's money and youth goals
+    // the deal: its worth measured on his next game against someone else (once, as its card opens)
+    // and what the forecast reads it adds to the odds, both said in words; what the players coming
+    // cost, and what it does to the owner's money and youth goals
     const g = offer ? nextGame(league, offer.b.tid) : undefined;
     const opp = g && (g.home === me ? g.away : g.home);
     const worth = offer ? (league.callWorth?.[id] ?? null) : null;
@@ -1444,21 +1461,15 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
         ? { kind: 'change', key: id, opp, gid: g.gid, sig: worthSig(league, opp, g, `deal:${offer.a.pids.join(',')}:${offer.b.pids.join(',')}`), ...dealChange(league, offer) }
         : undefined;
     const on = worth && league.schedule.find((x) => x.gid === worth.gid);
-    const games = gamesLeft(league);
     const pts = worth?.pts;
     // a buy is the call only once it measures as a gain: one too close to say, or a cost, is his to take, not the staff's
     const flat = call?.mode === 'buy' && pts !== undefined && pts < WORTH_MIN;
-    // the deal's worth a game on the row; where it was measured, the wins, the odds, its contracts and the owner's goals a tap down
-    const measured = pts !== undefined && on ? `With the deal: ${worthWords(pts)}.` : offer ? 'The staff is measuring the deal.' : '';
+    // the staff's opinion of the deal on the row; the odds in words, its contracts and the owner's goals a tap down
+    const measured = pts !== undefined && on ? dealWords(pts) : offer ? 'The staff is measuring the deal.' : '';
     const detail = offer
       ? [
           `${flat ? 'The best buy it found: ' : ''}${assetText(league, offer.b)} from the ${other?.name ?? league.teams[offer.b.tid].name} for ${assetText(league, offer.a)}.`,
-          ...(pts !== undefined && on
-            ? [`Measured ${vsAt(league, on)}${Math.abs(pts) >= WORTH_MIN && games ? `: about ${signed(winsOf(pts, games))} wins over the ${games} games left` : ''}.`]
-            : []),
-          ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched
-            ? [`Postseason odds with it: about ${pct(Math.min(1, Math.max(0, now.reach[0] + call.oddsGain / 1000)))}, as the forecast reads it.`]
-            : []),
+          ...(pts !== undefined && on && now && call?.oddsGain !== undefined && !now.clinched ? [oddsMoveText(call.oddsGain)] : []),
           ...offer.b.pids.map((pid) => `${contractText(league, league.players[pid])}.`),
           ...dealGoals(league, offer)
             .filter((d) => Math.abs(d.with - d.now) >= (d.kind === 'youth' ? 50 : 100))
@@ -1549,7 +1560,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       gap > 0 && covers > 0
         ? covers >= gap
           ? `, enough to close the ${money(gap)} gap`
-          : `. It closes ${money(covers)} of the ${money(gap)} gap. On its own it won't change what happens ${between ? "when next season's books close" : 'when the books close'}${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
+          : `. On its own it won't close the ${money(gap)} gap${shed ? ', so salary has to go too' : ', and no deals can be made now'}`
         : '';
     // the call on the row; what it brings, and how much of the gap, a tap down
     const call =
@@ -1564,7 +1575,7 @@ export function staffCalls(league: League, opts: { skipWeek?: boolean } = {}): C
       suggestion === cut
         ? `The cut saves ${money(save)}${between ? ' a season' : ' over the rest of the season'}${share}.`
         : suggestion === price
-          ? `$${ticket!.price} is where the gate peaks: ${money(ticket!.gain)} more over the home games left${share}.`
+          ? `The staff thinks $${ticket!.price} is where the gate peaks${share}.`
           : suggestion === shed && gap > 0
             ? `${money(gap)} to find.`
             : '';

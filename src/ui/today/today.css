@@ -573,14 +573,6 @@
   align-items: flex-end;
   gap: 3px;
 }
-.td-next-pct {
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: 32px;
-  line-height: 0.9;
-  letter-spacing: -0.06em;
-  font-variant-numeric: tabular-nums;
-}
 .td-next-k {
   font-size: 12px;
   font-weight: 600;

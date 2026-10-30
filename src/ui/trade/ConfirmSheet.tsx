@@ -1,11 +1,11 @@
 // A last look before a deal you'd regret goes through: one that gives up much more neutral value than
-// it gets, or moves a first-round pick. What each side sends, the neutral value of each, and what it
-// does to your books, with the trade one more tap away.
+// it gets, or moves a first-round pick. What each side sends and what it does to your books, with the
+// trade one more tap away.
 import { Handshake } from 'lucide-react';
 import type { League } from '../../core/types';
 import { CAP_FOR, playerName } from '../../core/league/helpers';
 import { capPayroll, withHoldsMemo } from '../../core/league/freeAgency';
-import { capSalary, evaluateTrade, neutralSplit, type TradeEval, type TradeOffer } from '../../core/league/trades';
+import { capSalary, evaluateTrade, type TradeEval, type TradeOffer } from '../../core/league/trades';
 import { pickName } from '../draft/common';
 import { useLeagueMemo } from '../../state/store';
 import { Sheet } from '../components/ui';
@@ -41,7 +41,7 @@ function Body({ league, offer, onClose, onConfirm }: { league: League; offer: Tr
         const ev = evaluateTrade(league, offer);
         const out = offer.a.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
         const inc = offer.b.pids.reduce((a, pid) => a + capSalary(league, pid, s), 0);
-        return { ev, out, inc, after: capPayroll(league, user, s) - out + inc, neutral: neutralSplit(ev.parts, offer) };
+        return { ev, out, inc, after: capPayroll(league, user, s) - out + inc };
       }),
     // key stands for the offer
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,16 +57,12 @@ function Body({ league, offer, onClose, onConfirm }: { league: League; offer: Tr
     ...(side.cash ? [{ key: 'c', name: `${moneyExact(side.cash)} cash` }] : []),
   ];
   const warn = overpayNote(info.ev);
-  const { give, get } = info.neutral;
   return (
     <div className="col fo-sheet">
       {warn ? <TradeNotes notes={[warn]} /> : <p className="fo-lede">A first-round pick moves in this deal. Once it's made, it can't be undone.</p>}
       <div className="fo-counter-sides">
         <Side title="You send" items={items(offer.a)} />
         <Side title="You get" items={items(offer.b)} />
-      </div>
-      <div className="tiny dim num">
-        Neutral value: you send <b>{Math.round(give)}</b> · you get <b>{Math.round(get)}</b>
       </div>
       <PayrollLine cap={CAP_FOR(league, s)} out={info.out} inc={info.inc} after={info.after} />
       <div className="row">

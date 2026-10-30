@@ -20,6 +20,7 @@ import { TeamScheduleList, type ScheduleFilter } from './ScheduleList';
 import { gameTag, liveSeries, planStatus } from './data';
 import { seasonSeries, seriesParts, seriesText } from './series';
 import { FormPills, nightTitle, useBillings } from './occasion';
+import { favoriteOf } from './favorite';
 import './games.css';
 
 const FILTERS: (ScheduleFilter | 'opp')[] = ['all', 'upcoming', 'results', 'home', 'away', 'cup', 'post', 'opp'];
@@ -129,7 +130,7 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
   const ss = g.type === 'regular' ? seasonSeries(league, opp) : null;
   const plan = planStatus(league, opp, g);
   const [bill] = useBillings(league, g);
-  // the preview's chance to win, from the home side
+  // the preview's chance to win, from the home side, said in words
   const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
   const seriesLine = series
     ? (() => {
@@ -145,23 +146,14 @@ function NextGame({ league, g }: { league: League; g: ScheduledGame }) {
     const ts = curTeamSeason(league, tid);
     return keepFigures(`${ts.won}-${ts.lost}`);
   };
-  const chance = (v: number) => (
-    <>
-      {Math.round(v * 100)}
-      <small>%</small>
-    </>
-  );
+  const side = (tid: number) => ({ tid, fig: <span className="mu-rec">{rec(tid)}</span> });
   return (
     <section className="gs-next" aria-label={`Next game: ${when}, ${g.home === me || neutral ? 'vs' : 'at'} the ${t.region} ${t.name}`}>
-      <GameBoard
-        league={league}
-        links={false}
-        // (as shown: 50% against 50% is neither side's)
-        away={{ tid: g.away, fig: chance(1 - proj.win), sub: rec(g.away), lost: Math.round((1 - proj.win) * 100) < 50 }}
-        home={{ tid: g.home, fig: chance(proj.win), sub: rec(g.home), lost: Math.round(proj.win * 100) < 50 }}
-        over={[`${when} · ${where}`, tag]}
-        mid={<span className="gd-bd-k">To win</span>}
-      />
+      <GameBoard league={league} links={false} away={side(g.away)} home={side(g.home)} over={[`${when} · ${where}`, tag]} mid={<span className="gd-bd-k">Record</span>}>
+        <div className="gd-bd-foot">
+          <b>{favoriteOf(league, g, proj.win).line}</b>
+        </div>
+      </GameBoard>
       <div className="gs-next-body">
         {/* the poster's headline: what the night is billed as, or on an ordinary night who's next */}
         <div className="gs-next-bill">

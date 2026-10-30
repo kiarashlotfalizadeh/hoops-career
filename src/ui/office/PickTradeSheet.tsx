@@ -15,6 +15,7 @@ import { Empty, Ovr, Sheet } from '../components/ui';
 import { overallPick } from '../league/shared';
 import { STRATEGY_META } from './common';
 import { blockOffers } from './tradeBlock';
+import { packageWord } from '../trade/TradingBlock';
 
 /** Make the deal (checked again first) and let the draft carry on. */
 function take(league: League, offer: TradeOffer, onDone: () => void) {
@@ -91,7 +92,7 @@ function OffersFor({ league, dp, onDone }: { league: League; dp: DraftPick; onDo
                 <span className="fo-name grow">
                   {t.region} {t.name}
                 </span>
-                <span className="tiny dim num">{o.neutralGive > 0 ? `${Math.round((o.neutralGet / o.neutralGive) * 100)}% of its value` : ''}</span>
+                {o.neutralGive > 0 && <span className={`tag ${packageWord(o.neutralGive, o.neutralGet).c}`}>{packageWord(o.neutralGive, o.neutralGet).l}</span>}
               </div>
               <Assets league={league} side={o.offer.b} />
               <button className="btn sm good block" disabled={busy} onClick={() => take(league, o.offer, onDone)}>

@@ -52,7 +52,7 @@
   flex-direction: column;
   gap: 8px;
 }
-/* a note: a flat panel, its figure in the signal's colour (no edge stripe) */
+/* a note: a flat panel; a read carries the signal's colour as a dot (no edge stripe) */
 .lv-note {
   --tone: var(--text);
   position: relative;
@@ -95,25 +95,22 @@
 .lv-note-tx {
   min-width: 0;
 }
-.lv-note-fig {
+.lv-note-dot {
   flex: none;
-  min-width: 44px;
-  font-family: var(--mono);
-  font-weight: 600;
-  font-size: 21px;
-  line-height: 1.02;
-  letter-spacing: -0.06em;
-  color: var(--tone);
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--tone);
 }
-.lv-note-u {
-  display: block;
-  margin-top: 2px;
-  font-family: var(--font);
-  font-stretch: var(--text-w);
+/* a read's size, in a word, in its colour */
+.lv-note-tag {
+  flex: none;
+  margin-top: 1px;
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: var(--text-dim);
+  font-weight: 680;
+  color: var(--tone);
+  white-space: nowrap;
 }
 .lv-note-title {
   font-size: 15px;
@@ -150,7 +147,7 @@
 .lv-note-acts .btn {
   min-height: 34px;
 }
-/* what the call has been worth where it fires (measured, or the staff's read): beside its buttons */
+/* the staff's opinion of the call where it fires: beside its buttons */
 .lv-note-worth {
   align-self: center;
   flex: 1 1 140px;

@@ -1,22 +1,22 @@
-import { BarChart3, ClipboardList, Play, Timer, Users, Bot } from 'lucide-react';
+import { Activity, BarChart3, ClipboardList, Play, Timer, Users } from 'lucide-react';
 
 /**
- * The console's views: the staff's (the report at a break, the huddle in a timeout: its tab is Staff
- * all game, the stop says what it is at its head), the game plan, the lineup and the stats.
+ * The console's views: Now (the staff's read and what needs you; the report at a break, the huddle in a
+ * timeout: the stop says what it is at its head), the tactics, the players and the stats.
  */
 export type ConsoleView = 'staff' | 'plan' | 'lineup' | 'stats';
 
-const VIEWS: { id: ConsoleView; label: string; icon: typeof Bot }[] = [
-  { id: 'staff', label: 'Staff', icon: Bot },
-  { id: 'plan', label: 'Game plan', icon: ClipboardList },
-  { id: 'lineup', label: 'Lineup', icon: Users },
+const VIEWS: { id: ConsoleView; label: string; icon: typeof Activity }[] = [
+  { id: 'staff', label: 'Now', icon: Activity },
+  { id: 'lineup', label: 'Players', icon: Users },
+  { id: 'plan', label: 'Tactics', icon: ClipboardList },
   { id: 'stats', label: 'Stats', icon: BarChart3 },
 ];
 
 /**
  * The bench bar in the tab bar's place: the one action the moment calls for first (a timeout while
  * the game plays, Start the next period at a break, Resume in your huddle), then the console's views,
- * the staff's with a count of the calls waiting on you.
+ * Now with a count of the calls waiting on you.
  */
 export function BenchBar({
   view,

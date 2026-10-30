@@ -153,16 +153,6 @@
   gap: 12px;
   font-size: 14px;
 }
-.tx-term-v {
-  flex: none;
-  width: 40px;
-  font-family: var(--mono);
-  letter-spacing: -0.04em;
-  font-weight: 600;
-  font-size: 17px;
-  line-height: 1.05;
-  text-align: right;
-}
 .tx-term-l {
   display: block;
   font-weight: 620;

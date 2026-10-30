@@ -638,7 +638,7 @@ export function buildGameReport(league: League, res: GameResult, userTid = leagu
       const [who, d] = Math.abs(du) >= Math.abs(dv) ? [ut.name, du] : [ot.name, dv];
       factors.push({
         title: `${possessive(`The ${who}`)} shots fell ${d > 0 ? 'above' : 'below'} their looks.`,
-        detail: `${ut.abbrev} shot ${pct(fu.efg)} eFG on looks worth ${pct(xefg(xu, u.t.fga))}, ${ot.abbrev} ${pct(fo.efg)} on ${pct(xefg(xo, o.t.fga))}. That part is luck, with nothing to change.`,
+        detail: 'That part is luck, with nothing to change.',
         pts: fell,
         category: 'shooting',
         topic: 'shotmaking',

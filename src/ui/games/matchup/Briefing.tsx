@@ -1,6 +1,6 @@
 // The staff's plan at the top of the matchup page's Preview: the lead assistant's read of them (who to
-// watch) and his plan for tonight (the counters the numbers back first, one per kind, each with its
-// measured worth), each a tap into your game plan or all of them at once. What they run and where to hit them are on Scout; the full
+// watch) and his plan for tonight (the counters the staff likes first, one per kind, each with its
+// opinion of it), each a tap into your game plan or all of them at once. What they run and where to hit them are on Scout; the full
 // counters, the star plan and the rest on Plan; who guards whom on Matchups.
 import { useMemo } from 'react';
 import { Check } from 'lucide-react';
@@ -67,7 +67,7 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
             {more && <div className="list-divider">The staff would also add</div>}
             {picks.map((c) => (
               <div key={c.id} className="mu-brief-item">
-                {/* (a verdict and its number under the name: why, and what it changes, are on the Plan) */}
+                {/* (the staff's opinion under the name: why, and what it changes, are on the Plan) */}
                 <div className="grow mu-cand-t">
                   <span className="lr-name">{c.label}</span>
                   {worth?.get(c.id) ? <WorthTag w={worth.get(c.id)} measuring={false} /> : <span className="lr-meta">{c.why}</span>}
@@ -91,12 +91,12 @@ export function Briefing({ league, opp, onPlan }: { league: League; opp: number;
           </div>
         ) : measuring && !worth ? (
           <div className="small dim" role="status">
-            The staff is still measuring each counter · {Math.min(99, Math.floor(measuring.progress * 100))}%
+            The staff is still looking at each counter.
           </div>
         ) : (
           <div className="small dim">
             {worth && drafted.length > 0 ? (
-              "By the staff's numbers, none of its counters beats how you play them now."
+              "The staff doesn't see a counter that beats how you play them now."
             ) : plan ? (
               <>
                 Your plan covers what the staff sees: <Tag tone="info">{plural(plan.items.length, 'change')}</Tag>

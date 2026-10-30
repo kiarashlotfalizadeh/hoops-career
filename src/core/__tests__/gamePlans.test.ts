@@ -401,7 +401,7 @@ describe('game plans', () => {
       expect(r.worth.raw).toBeCloseTo(-rm.reduce((a, x) => a + x.w * x.worth.find((c) => c.id === 'without')!.raw, 0), 1);
       expect(Math.abs(r.worth.pts)).toBeLessThanOrEqual(Math.abs(r.worth.raw) + 0.05);
       saveMade(l, e.id, r, made.count);
-      expect(madeLine(l.tacticEdits![0])).toMatch(/^Your change (helps|hurts|makes no real difference)/);
+      expect(madeLine(l.tacticEdits![0])).toMatch(/^Your change (seems to help|seems to hurt|makes no clear difference)\.$/);
       // a change to another setting that day is a change of its own: the first keeps its reading
       const mid = structuredClone({ tactics: me.tactics, rotation: me.rotation });
       me.tactics.offense.pace = me.tactics.offense.pace > 50 ? 20 : 90;
@@ -420,7 +420,7 @@ describe('game plans', () => {
       const w = readEdit(await play(check, 6)).worth;
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);
-      expect(l.inbox[0].subject).toMatch(/^Your change (helped|hurt|made no real difference)/);
+      expect(l.inbox[0].subject).toMatch(/^Your change (seems to have helped|seems to have hurt|made no clear difference)$/);
       expect(l.inbox[0].body).toMatch(/with your change and without it/);
       saveCheck(l, e.id, w, check.count);
       expect(l.inbox.length).toBe(mail + 1);

@@ -5,9 +5,9 @@
 // tactics, the game plan for tonight's opponent and tonight's matchups don't, and taking a change back
 // takes it out again).
 import { describe, expect, it } from 'vitest';
-import { DEF_SPOTS, OFF_SPOTS, fitPts, place, startersOf, strengthsOf, type BoardPlayer, type Spot } from '../tactics/formation';
+import { DEF_SPOTS, OFF_SPOTS, place, startersOf, strengthsOf, type BoardPlayer, type Spot } from '../tactics/formation';
 import { PHASES, phaseId } from '../tactics/phases';
-import { byFit, fitTone, handOverLine, readText, shownFit, userStaffTactics } from '../tactics/fit';
+import { bestFit, byFit, handOverLine, shownFit, userStaffTactics } from '../tactics/fit';
 import { defenseLabel } from '../../core/sim/playbooks';
 import { screenChanges, changesLine } from '../tactics/changes';
 import { seasonImpacts, seasonPlayTypes } from '../seasonAnalysis';
@@ -107,11 +107,6 @@ describe('tactics in the UI', () => {
     expect(place(OFF_SPOTS.fiveOut, [P(1, 'creator', 40)]).size).toBe(1);
     expect(place(OFF_SPOTS.fiveOut, []).size).toBe(0);
 
-    // a shape's fit in points per 100
-    expect(fitPts(11)).toBe('+1.1');
-    expect(fitPts(-9.4)).toBe('−0.9');
-    expect(fitPts(0.3)).toBe('±0');
-
     // the three phases, and an old link's phase as its new one
     {
       expect(PHASES.map((p) => p.id)).toEqual(['inPoss', 'inTrans', 'outPoss']);
@@ -151,23 +146,28 @@ describe('tactics in the UI', () => {
       ] as const) {
         const ids = Object.keys(fits);
         for (const id of ids) {
+          // half a point a game either way reads as a better or a worse fit; the one in use reads as even
           const f = shownFit(id, terms[id], fits, ids[0]);
-          expect(Math.round((f.start + f.parts.reduce((a, p) => a + p.v, 0)) * 10) + 0).toBe(Math.round(f.total * 10) + 0);
-          expect(f.vs).toBeCloseTo((fits[id] - fits[ids[0]]) / 10, 1);
-          expect(shownFit(id, terms[id], fits, id).vs).toBe(0);
+          const vs = Math.round(fits[id] - fits[ids[0]]) / 10;
+          expect(f.lean).toBe(vs >= 0.5 ? 'gain' : vs <= -0.5 ? 'cost' : 'even');
+          expect(shownFit(id, terms[id], fits, id).lean).toBe('even');
+          expect(f.parts.every((p) => p.v !== 0)).toBe(true);
         }
       }
     }
-    // the best ranked first
+    // better fits first, then similar, then worse, the list's own order inside each; the staff's pick is still the best
     {
       const fits = offPresetFit(profile(62, 85));
-      const order = byFit(OFF_PRESETS, fits);
-      expect(fits[order[0].id]).toBe(Math.max(...Object.values(fits)));
-      expect(shownFit(order[0].id, offPresetTerms(profile(62, 85))[order[0].id], fits, 'balanced').rank).toBe(1);
+      const terms = offPresetTerms(profile(62, 85));
+      const order = byFit(OFF_PRESETS, fits, 'balanced');
+      const leans = order.map((p) => shownFit(p.id, terms[p.id], fits, 'balanced').lean);
+      expect(leans).toEqual([...leans.filter((x) => x === 'gain'), ...leans.filter((x) => x === 'even'), ...leans.filter((x) => x === 'cost')]);
+      for (const lean of ['gain', 'even', 'cost']) {
+        const tier = order.filter((_, i) => leans[i] === lean);
+        expect(tier).toEqual(OFF_PRESETS.filter((p) => tier.includes(p)));
+      }
+      expect(fits[bestFit(OFF_PRESETS, fits).id]).toBe(Math.max(...Object.values(fits)));
     }
-    // half a point a game either way reads as a gain or a cost, as a measured change does
-    expect([fitTone(0.6), fitTone(0.5), fitTone(0.4), fitTone(-0.4), fitTone(-0.5)]).toEqual(['good', 'good', '', '', 'bad']);
-    expect([readText(0.6), readText(-1.24), readText(0)]).toEqual(['+0.6', '−1.2', '0.0']);
     {
       // the hand-over names what the staff would run and its read against the user's; a moved playbook reads as Custom
       const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
@@ -176,7 +176,7 @@ describe('tactics in the UI', () => {
       const t = l.teams[0].tactics;
       const other = staff.defPreset === 'hedge' ? 'drop' : 'hedge';
       l.teams[0].tactics = { ...t, defPreset: other, defense: applyPatch(t, { defense: { scheme: 'man' } }).defense, manual: true };
-      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+: \+\d\.\d a game against yours \(the staff's read\)\.$/);
+      expect(handOverLine(l, staff)).toMatch(/^Staff would run .+ · .+\. (Better fit than|About even with) yours, by their read\.$/);
       expect(defenseLabel(l.teams[0].tactics)).toMatch(/^Custom .+$/);
     }
 

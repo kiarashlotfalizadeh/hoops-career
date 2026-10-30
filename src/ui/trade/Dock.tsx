@@ -1,5 +1,5 @@
-// The dock: their GM's live reaction to the deal (the verdict, how much of the value they give up
-// you cover, his reasons), what it does to your cap and both rosters, always in view, and the
+// The dock: their GM's live reaction to the deal (the verdict, a meter of how close it is, his
+// reasons), what it does to your cap and both rosters, always in view, and the
 // buttons (make it work, propose, force in god mode).
 import { useState } from 'react';
 import { ChevronDown, Handshake, Zap } from 'lucide-react';
@@ -20,7 +20,7 @@ import { money } from '../../core/format';
 
 /**
  * Their reaction as the meter shows it: how much of the value they'd give up your side covers
- * (`pct`), and the words for it. Value that's there but blocked (the rules, too many firsts) fills
+ * (`pct`, the meter's fill and never said as a figure), and the words for it. Value that's there but blocked (the rules, too many firsts) fills
  * the meter short of a deal.
  */
 function reaction(ev: TradeEval): { pct: number; label: string; color: string; figure: string } {
@@ -39,7 +39,7 @@ function reaction(ev: TradeEval): { pct: number; label: string; color: string; f
       ? { pct: 94, label: ev.message, color: 'var(--warn)', figure: 'Value there' }
       : // the value works for them, but a rule stops the deal (the reason is under the figures)
         { pct: 100, label: 'The value works for them', color: 'var(--warn)', figure: 'Blocked' };
-  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: `${Math.round(pct)}% of ask` };
+  return { pct, label, color: rel > 0.6 ? 'var(--bad)' : rel > 0.25 ? 'var(--warn)' : 'var(--tier-elite)', figure: '' };
 }
 
 /** Whether the dock's details are folded away (kept for the session, across deals and partners); folded until it's first tapped: the verdict and the buttons are what it's for. */
@@ -130,11 +130,13 @@ export function Dock({
             {r.label}
           </span>
         </span>
-        <span className="fo-dock-pct num">
-          <span className="fo-react" key={r.figure}>
-            {r.figure}
+        {r.figure && (
+          <span className="fo-dock-pct num">
+            <span className="fo-react" key={r.figure}>
+              {r.figure}
+            </span>
           </span>
-        </span>
+        )}
         <ChevronDown size={16} className="fo-dock-fold" aria-hidden="true" />
         <span className="sr-only">{fold ? 'Show the details' : 'Hide the details'}</span>
       </button>

@@ -286,7 +286,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
     const ft = k as FinishType;
     // only a button that changes something: none once the tactics already do it
     const counter = liveCounter(ft, tactics);
-    const text = `${(v.pts / v.poss).toFixed(2)} points a trip, league ${base.toFixed(2)}.${counter?.note ? ` ${counter.note}` : ''}`;
+    const text = `${v.pts} points on ${v.poss} trips.${counter?.note ? ` ${counter.note}` : ''}`;
     out.push({
       id: `pt-${k}`,
       tone: 'warn',
@@ -319,7 +319,7 @@ export function liveAlerts(a: AlertInput): LiveAlert[] {
         id: `mypt-${k}`,
         tone: 'info',
         title: `Our ${playType(k as FinishType)} plays are stalling`,
-        text: `${(v.pts / v.poss).toFixed(2)} points a trip, league ${base.toFixed(2)}. Try other actions.`,
+        text: `${v.pts} points on ${v.poss} trips. Try other actions.`,
       });
   }
   // nothing the staff would hold back (a decided game, the last seconds, a setting just changed), and

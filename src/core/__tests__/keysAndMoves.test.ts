@@ -175,20 +175,18 @@ describe('keys to the game and coach moves', () => {
     {
       const names = (pid: number) => `P${pid}`;
 
-      // what the night's moves were worth (measured after the final), in a line: worth so many points when
-      // clear of even, too close to say inside two standard errors, the move that mattered most when one
-      // clearly did; and the season's added up where it was measured
+      // what the staff makes of the night's moves (measured after the final), in words: that they seemed to
+      // help or hurt when clear of even, too close to say inside two standard errors, the move that
+      // mattered most when one clearly did; and the season's added up where it was measured
       {
         const worth = (pts: number, raw: number, se: number, top?: { text: string; pts: number; se: number }) =>
           ({ home: { tid: 3 }, away: { tid: 4 }, season: 2026, movesWorth: { pts, raw, se, win: 0.05, n: 200, moves: 4, ...(top && { top }) } }) as unknown as GameResult;
-        // (a verdict and one number: the ± and how it was measured are the detail, a tap down)
-        expect(nightLine(worth(1.8, 2.6, 0.9))).toMatchObject({ text: 'Your moves helped: about +1.8 points tonight', tone: 'good' });
-        expect(nightLine(worth(-1.4, -2.2, 1.0), true)!.text).toBe("The staff's moves hurt: about −1.4 points tonight");
+        // (words only: no figure, no method)
+        expect(nightLine(worth(1.8, 2.6, 0.9))).toMatchObject({ text: 'Your moves seemed to help tonight', detail: '', tone: 'good' });
+        expect(nightLine(worth(-1.4, -2.2, 1.0), true)!.text).toBe("The staff's moves seemed to hurt tonight");
         const close = nightLine(worth(0.3, 0.5, 0.9, { text: 'Pick-and-roll coverage: Hedge → Drop', pts: 1.4, se: 0.6 }))!;
-        expect(close).toMatchObject({ text: 'Your moves: too close to say tonight, +0.3 points', tone: 'dim' });
-        expect(close.detail).toBe(
-          'Measured to about ±0.9. The rest of the game was played 200 times, with 4 moves and without. Mattered most · Pick-and-roll coverage: Hedge → Drop · +1.4.',
-        );
+        expect(close).toMatchObject({ text: 'Too close to say whether your moves helped tonight', tone: 'dim' });
+        expect(close.detail).toBe('Mattered most · Pick-and-roll coverage: Hedge → Drop.');
         expect(nightLine({ ...worth(0, 0, 1), movesWorth: undefined })).toBeNull();
         // moves only in crunch time (a late play call) are judged by the win chance, as the bench's late
         // calls are: a call that won it moves the margin a point and the result far more
@@ -206,15 +204,14 @@ describe('keys to the game and coach moves', () => {
             const g = worth(0.2, 0.2, 0.3);
             return { ...g, moves, movesWorth: { ...g.movesWorth!, moves: moves.length, win, ...(winSe !== undefined && { winSe }) } } as GameResult;
           };
-          expect(nightLine(late(0.09, 0.02))).toMatchObject({ text: 'Your call helped: +9% to win tonight', tone: 'good' });
-          expect(nightLine(late(0.09, 0.06))).toMatchObject({ text: 'Your call: too close to say tonight, +9% to win', tone: 'dim' });
-          expect(nightLine(late(0.09, 0.06))!.detail).toMatch(/^Measured to about ±6%\./);
+          expect(nightLine(late(0.09, 0.02))).toMatchObject({ text: 'Your call seemed to help tonight', tone: 'good' });
+          expect(nightLine(late(0.09, 0.06))).toMatchObject({ text: 'Too close to say whether your call helped tonight', tone: 'dim' });
           // (a reading from before its noise was kept: by the points)
-          expect(nightLine(late(0.09, undefined))!.text).toBe('Your call: too close to say tonight, +0.2 points');
+          expect(nightLine(late(0.09, undefined))!.text).toBe('Too close to say whether your call helped tonight');
           // earlier moves: by the points, unless the win chance reads clearer
           const early = { ...play, kind: 'tactics', q: 2, clock: 300 };
-          expect(nightLine(late(0.01, 0.02, [early, play]))!.text).toBe('Your moves: too close to say tonight, +0.2 points');
-          expect(nightLine(late(-0.08, 0.02, [early, play]), true)).toMatchObject({ text: "The staff's moves hurt: −8% to win tonight", tone: 'bad' });
+          expect(nightLine(late(0.01, 0.02, [early, play]))!.text).toBe('Too close to say whether your moves helped tonight');
+          expect(nightLine(late(-0.08, 0.02, [early, play]), true)).toMatchObject({ text: "The staff's moves seemed to hurt tonight", tone: 'bad' });
         }
         const league = {
           season: 2026,
@@ -222,7 +219,7 @@ describe('keys to the game and coach moves', () => {
           games: [worth(1.8, 2.6, 0.9), worth(0.3, 0.5, 1.2), { ...worth(2, 2, 1), season: 2025 }, { ...worth(0, 0, 1), movesWorth: undefined }],
         } as unknown as League;
         expect(seasonCoaching(league)).toEqual({ pts: 2.1, raw: 3.1, se: 1.5, games: 2 });
-        expect(seasonCoachingLine(league)).toBe('Your live coaching this season: +2.1 points over 2 games');
+        expect(seasonCoachingLine(league)).toBe('Your live coaching this season seems to help, over 2 games');
         expect(seasonCoachingLine({ ...league, games: league.games.slice(0, 1) })).toBeNull();
         expect(seasonCoaching({ ...league, userTid: 9 })).toBeNull();
       }

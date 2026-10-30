@@ -26,7 +26,7 @@ import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
 import { useStaffCall } from './useStaffCall';
-import { benchFor, callBannerLine, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
+import { benchFor, CALL_BANNER_LINE, callNote, callQuietLine, nextStop, noStops, stopAfter } from './calls';
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
@@ -145,7 +145,7 @@ export function useLiveGame() {
   /** The calls the game has stopped for tonight: each stops it once. */
   const stoppedFor = useRef(new Set<string>());
   const [resultGid, setResultGid] = useState<number | null>(null);
-  /** The staff's live voice: what it measured at the last stop in play, and the coach's last change as measured (useStaffCall). */
+  /** The staff's live voice: what it measured at the last stop in play (useStaffCall). */
   const staff = useStaffCall();
   const { stop: staffMeasure, reset: staffReset, hush: staffHush } = staff;
   const { busy: staffBusy } = staff;
@@ -880,7 +880,7 @@ export function useLiveGame() {
    * The bench's notes (see staff.ts), from the game as the court has drawn it: the ones not dismissed.
    * Its tactics changes are the measured call's to make (calls.ts): the bench's own rules only say where
    * to look, so their notes read as what they see, with no button; the call, while it still fits the
-   * tactics it was measured on, leads with its number. Subs, timeouts and the late fouls stay the bench's.
+   * tactics it was measured on, leads. Subs, timeouts and the late fouls stay the bench's.
    */
   const staffCall = staff.call;
   const notes = useMemo(() => {
@@ -897,12 +897,12 @@ export function useLiveGame() {
     return c && !dismissed.includes(c.id) ? [c, ...own.filter((n) => n.id !== (staffCall?.state === 'call' ? staffCall.draft.id : ''))] : own;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view, tick, dismissed, over, alertInput, staffCall]);
-  // a call that lands goes up over the court once, with its number. A stop with nothing to change says
+  // a call that lands goes up over the court once. A stop with nothing to change says
   // nothing over the court (its line waits in the Staff view): in close finishes those stops outnumbered
   // the calls about 3 to 1, 11 to 2 in one double-overtime game (round-4 game-day review)
   useEffect(() => {
     if (over || staffCall?.state !== 'call') return;
-    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: callBannerLine(staffCall) }]);
+    queueBanner([{ id: `call-${staffCall.draft.id}${staffCall.steps}`, tone: 'info', kicker: 'Staff call', title: staffCall.draft.label, line: CALL_BANNER_LINE }]);
   }, [staffCall, over, queueBanner]);
 
   return {
@@ -959,7 +959,7 @@ export function useLiveGame() {
     notes,
     /** The staff's line when it measured and found nothing to change (or while it measures). */
     quiet: callQuietLine(staffCall),
-    /** The staff's live voice: its call, the coach's last change as measured, and taking or turning down a call. */
+    /** The staff's live voice: its call, and taking or turning down a call. */
     staff,
     dismissed,
     setDismissed,

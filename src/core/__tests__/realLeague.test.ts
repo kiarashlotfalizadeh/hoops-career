@@ -240,14 +240,14 @@ describe('two seasons of the real league', () => {
           expect(p.now).toBe(m.won);
           expect(p.projected).toBeGreaterThanOrEqual(m.won);
           expect(p.projected).toBeLessThanOrEqual(m.won + left);
-          expect(p.text).toBe(`${m.won}-${m.lost}, projected ${p.projected} wins`);
+          expect(p.text).toBe(`${m.won}-${m.lost}`);
           const want = p.projected >= p.goal.target + 3 ? 'ahead' : p.projected >= p.goal.target - 1 ? 'on track' : 'behind';
           if (m.won < p.goal.target && m.won + left >= p.goal.target) expect(p.status).toBe(want);
         }
         if (p.goal.kind === 'postseason') expect(p.text).toMatch(/^\d+(st|nd|rd|th) in the (East|West)$/);
         if (p.goal.kind === 'profit') expect(p.text).toMatch(/^−?\$\d+\.\dM so far, projected −?\$\d+\.\dM$/);
         if (p.goal.kind === 'payroll') expect(p.text).toMatch(/^\$\d+\.\dM, \$\d+\.\dM (under|over)$/);
-        if (p.goal.kind === 'youth') expect(p.text).toMatch(/^[\d,]+ so far, projected [\d,]+$/);
+        if (p.goal.kind === 'youth') expect(p.text).toMatch(/^[\d,]+ so far$/);
       }
     }
 
@@ -494,7 +494,7 @@ describe('two seasons of the real league', () => {
       const target = Math.min(base + 12 - WIN_SLIDE, Math.round(read + HOLD_OVER_READ), Math.round(82 * 0.88));
       expect(goal(held, 'wins')).toMatchObject({ target, held: base + 12 });
       expect(target).toBeLessThan(base + 12 - WIN_SLIDE);
-      expect(goalsWhy(held)).toContain(`Last season I asked for ${base + 12} wins. I'm holding the bar at ${target}, ${target - Math.round(read)} over my read of this roster.`);
+      expect(goalsWhy(held)).toContain(`Last season I asked for ${base + 12} wins. I'm holding the bar at ${target}, over my read of this roster.`);
       // a smaller hold says the rule, and names what the coach himself traded or let go since, not what aged or walked
       {
         const m = structuredClone(l);
@@ -613,7 +613,7 @@ describe('two seasons of the real league', () => {
       [ts.won, ts.lost] = [bad, gp - bad];
       const quick = ownerProgress(l).find((p) => p.goal.kind === 'wins')!;
       expect(quick.status).toBe('behind');
-      expect(quick.text).toBe(`${bad}-${gp - bad}, projected ${quick.projected} wins`);
+      expect(quick.text).toBe(`${bad}-${gp - bad}`);
       // the screens pass the season forecast: its projected record, as the odds line beside it shows it
       const fc = forecast(l)!;
       const wins = ownerProgress(l, og, fc).find((p) => p.goal.kind === 'wins')!;
@@ -633,7 +633,7 @@ describe('two seasons of the real league', () => {
       ownerCheckIn(l);
       expect(off()).toBe(1);
       expect(l.inbox.find((m) => m.subject === "We're off pace")?.important).toBe(false);
-      if (before === 0) expect(l.inbox[0].body).toContain(`on course for about ${Math.round(forecast(l)!.teams[U].w)} wins. I expected ${target}`);
+      if (before === 0) expect(l.inbox[0].body).toContain(`That's short of the ${target} wins I expected`);
       l.day += 7;
       ownerCheckIn(l);
       expect(off()).toBe(1);

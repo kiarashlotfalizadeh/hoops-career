@@ -3,6 +3,7 @@
 import { Check, X } from 'lucide-react';
 import type { GameResult, KeyGrade } from '../../core/types';
 import { isRate, keyState, keyValue, type GameKey, type KeyState } from '../../core/analysis/keys';
+import { Section } from './ui';
 
 const STATE_TAG: Record<KeyState, { text: string; tone: string }> = {
   met: { text: 'Done', tone: 'good' },
@@ -18,37 +19,31 @@ export function gameShare(elapsed: number, q: number): number {
   return Math.min(1, Math.max(0, elapsed / total));
 }
 
-/**
- * The keys as the game stands: each one's number so far and whether it's on track (on pace for a
- * full game at the rate so far), done or gone. `box` is the game as drawn.
- */
-export function KeysLive({ keys, box, side, share, compact }: { keys: GameKey[]; box: Pick<GameResult, 'home' | 'away'>; side: 0 | 1; share: number; compact?: boolean }) {
+/** The keys as the game stands: each one's number so far against its goal, and whether it's on track. `box` is the game as drawn. */
+export function KeysLive({ keys, box, side, share }: { keys: GameKey[]; box: Pick<GameResult, 'home' | 'away'>; side: 0 | 1; share: number }) {
   return (
-    <div className={`gd-keys-live${compact ? ' compact' : ''}`}>
-      <div className="over">Keys to the game</div>
-      {keys.map((k) => {
-        const v = keyValue(k, box, side);
-        const st = keyState(k, v, share, false);
-        const tag = STATE_TAG[st];
-        const rate = isRate(k.stat);
-        // a share of the misses has no pace: it is what it is so far
-        const pace = !rate && v !== null && share > 0.05 && share < 1 && st !== 'met' && st !== 'missed' ? Math.round(v / share) : null;
-        const u = rate ? '%' : '';
-        return (
-          <div key={k.id} className="gd-kl">
-            <div className="grow">
-              <div className="gd-kl-t">{k.title}</div>
-              <div className="gd-kl-n num">
-                {v ?? 0}
-                {u} so far{pace ? ` · on pace for ${pace}` : ''} · goal {k.dir === 'max' ? '≤' : '≥'} {k.target}
-                {u}
+    <Section title="Keys to the game">
+      <div className="card flush list">
+        {keys.map((k) => {
+          const v = keyValue(k, box, side);
+          const tag = STATE_TAG[keyState(k, v, share, false)];
+          const u = isRate(k.stat) ? '%' : '';
+          return (
+            <div key={k.id} className="gd-kl">
+              <div className="grow">
+                <div className="gd-kl-t">{k.title}</div>
+                <div className="gd-kl-n">
+                  {v ?? 0}
+                  {u} so far · goal {k.target}
+                  {u} or {k.dir === 'max' ? (u ? 'lower' : 'fewer') : u ? 'higher' : 'more'}
+                </div>
               </div>
+              <span className={`tag ${tag.tone}`}>{tag.text}</span>
             </div>
-            <span className={`tag ${tag.tone}`}>{tag.text}</span>
-          </div>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+    </Section>
   );
 }
 

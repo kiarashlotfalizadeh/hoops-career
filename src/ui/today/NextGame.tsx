@@ -22,6 +22,7 @@ import { rosterNames } from '../stats';
 import { picksText } from '../draft/common';
 import { rosterLine } from '../office/basis';
 import { billingTitle, useBillings } from '../games/occasion';
+import { favoriteOf } from '../games/favorite';
 import { gameProjection } from '../../core/analysis/preview';
 import { goalsWhy, planOwnerGoals, previewTitle } from '../../core/league/ownerGoals';
 import { quietSeriesStart } from '../../core/league/calls';
@@ -145,7 +146,8 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
   // (a series or play-in game starting tonight whose counters measured no gain: no call stops for it, the staff says so here)
   const quiet = useLeagueMemo(() => (g.day === league.day ? quietSeriesStart(league) : null), [league, g.day]);
   const dek = top && quiet ? `${top.line.replace(/\.?$/, '.')} ${quiet}` : (top?.line ?? quiet ?? '');
-  const win = pv?.projection.win;
+  // the preview's chance to win (from our side), said in words: who the staff favours
+  const fav = pv && favoriteOf(league, { home: pv.us.tid, away: pv.them.tid }, pv.projection.win);
   return (
     <section className="td-gameday" aria-label="Next game">
       <div className="slab td-gd">
@@ -158,14 +160,13 @@ export function NextGameSlab({ league, g, noPlan }: { league: League; g: Schedul
           </Link>
         </div>
         <div className="td-gd-main">
-          {/* the preview's chance to win, as big as it fits */}
-          {win !== undefined && (
+          {/* who the staff favours, in the poster's type at a size a phrase fits */}
+          {fav && (
             <div className="td-gd-win">
-              <span className="td-gd-pct">
-                {Math.round(win * 100)}
-                <small>%</small>
+              <span className="td-gd-pct" style={{ fontSize: 'clamp(30px, 9vw, 48px)', lineHeight: 1, letterSpacing: '-0.02em' }}>
+                {fav.word}
               </span>
-              <span className="td-gd-k">Chance to win</span>
+              <span className="td-gd-k">{fav.abbrev || "The staff's read"}</span>
             </div>
           )}
           {/* away over home, as the scoreboard lists them */}
@@ -231,16 +232,16 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
   const bills = useBillings(league, g);
   const r = curTeamSeason(league, opp);
   const t = league.teams[opp];
-  // the preview's chance to win (from the home side), turned to ours
+  // the preview's chance to win (from the home side), said in words
   const proj = useLeagueMemo(() => gameProjection(league, g), [league, g]);
-  const win = Math.round((g.home === me ? proj.win : 1 - proj.win) * 100);
+  const fav = favoriteOf(league, g, proj.win);
   // (his starters hurt: the game's own preview names them on game day, this row the days before)
   const out = useLeagueMemo(() => startersOut(league), [league]);
   return (
     <Link
       to={`/games/${opp}`}
       className="card td-next"
-      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}, ${win}% chance to win.${out ? ` ${out}.` : ''} Matchup`}
+      aria-label={`Next game, ${whenLabel(league, g.day)}: ${g.home === me ? 'versus' : 'at'} the ${t.name}. ${fav.line}.${out ? ` ${out}.` : ''} Matchup`}
     >
       <TeamLogo tid={opp} size={40} decorative />
       <span className="grow">
@@ -252,8 +253,8 @@ export function NextGameRow({ league, g }: { league: League; g: ScheduledGame })
         {out && <span className="td-next-m td-next-out">{out}</span>}
       </span>
       <span className="td-next-win">
-        <span className="td-next-pct">{win}%</span>
-        <span className="td-next-k">to win</span>
+        {fav.abbrev && <span className="td-next-k">{fav.abbrev}</span>}
+        <span className="td-next-k">{fav.word}</span>
       </span>
     </Link>
   );

@@ -4,7 +4,7 @@ import type { League, ScheduledGame, Team } from '../../core/types';
 import { cupLabel } from '../../core/league/cup';
 import { fmtClock, periodLabel } from '../stats';
 import { matchupColors, matchupLooks, nightFill } from '../teamColors';
-import { wpText } from '../../core/analysis/winProb';
+import { oddsWord } from '../../core/analysis/staffWords';
 import type { Drawn } from './drawn';
 import type { Ticker } from './ticker';
 
@@ -102,7 +102,6 @@ export function ScoreBug({
   const [homeKit, awayKit] = matchupColors(home.colors, away.colors).map(nightFill);
   // the two colour blocks never read as one: on a clash the away side wears its second colour
   const looks = matchupLooks(home.colors, away.colors);
-  const pct = wpText;
   // each block says what its figures are: the timeouts left, and the team fouls this period (PF), with
   // "Bonus" on the team that shoots free throws on every foul from here (the other team's fouls put it there)
   const side = (t: Team, s: Drawn['sides'][number], pts: number, isHome: boolean) => {
@@ -151,7 +150,7 @@ export function ScoreBug({
       <div
         className="lv-lb-main live-bug"
         role="group"
-        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. Win probability: ${away.abbrev} ${pct(1 - wp)}, ${home.abbrev} ${pct(wp)}` : ''}`}
+        aria-label={`${away.abbrev} ${score[1]}, ${home.abbrev} ${score[0]}, ${state}${wp !== null ? `. ${home.abbrev}: ${oddsWord(wp)}` : ''}`}
       >
         {side(away, a, score[1], false)}
         <div className="lv-lb-mid" aria-hidden="true">
@@ -168,16 +167,12 @@ export function ScoreBug({
       {wp !== null && (
         <div className="lv-lb-wp" aria-hidden="true">
           <span className="lv-lb-wp-k">To win</span>
-          <span className="num">
-            {away.abbrev} <b>{pct(1 - wp)}</b>
-          </span>
+          <span className="num">{away.abbrev}</span>
           <span className={`lv-lb-wp-bar${mo ? ` mo-${mo} mo-${moSide}` : ''}`}>
             <span style={{ width: `${(1 - wp) * 100}%`, background: awayKit, '--mo-c': awayKit } as CSSProperties} />
             <span style={{ width: `${wp * 100}%`, background: homeKit, '--mo-c': homeKit } as CSSProperties} />
           </span>
-          <span className="num">
-            <b>{pct(wp)}</b> {home.abbrev}
-          </span>
+          <span className="num">{home.abbrev}</span>
         </div>
       )}
       {children}

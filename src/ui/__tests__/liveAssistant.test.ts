@@ -22,7 +22,7 @@ import { foulLimit, liveAlerts, newEvents, recentLevers, staffCallsTimeout, type
 import { finisher, gameDecided, matchups, staffNotes, staffRead, sumBy, type StaffInput } from '../live/staff';
 import { stopCalls, takeStop, type StopCall } from '../live/useLiveGame';
 import { callCosts, callKey, worthLine } from '../../core/analysis/callWorth';
-import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, readingLine, stopAfter, verdictLine } from '../live/calls';
+import { CALL_DRAFTS, CALL_DRAFTS_CRUNCH, benchFor, callDrafts, callQuietLine, deadBall, nextStop, noStops, stopAfter } from '../live/calls';
 import { CALL_CONFIRM_MIN, PLAY_SPREAD, clearOf, measureCalls, measureChange, type LiveChoice } from '../../state/liveWorth';
 import { favoured, playReading } from '../live/usePlayWorth';
 import { fitPlayers, playOptions } from '../live/plays';
@@ -310,7 +310,7 @@ describe('the live assistant and the bench', () => {
       const a = liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-hedge_roll:o')!;
       expect(a.action).toMatchObject({ kind: 'tactics', label: 'Go to Drop' });
       const note = staffNotes({ ...staffInput(g), view, tactics: t }).find((n) => n.id === 'imp-hedge_roll:o')!;
-      expect(note.worth).toBe('Helps: about +2.2 points where we make it');
+      expect(note.worth).toBe('Usually helps here');
       if (a.action?.kind === 'tactics') {
         a.action.apply(t);
         expect(t.defense.pnr).toBe('drop');
@@ -321,7 +321,7 @@ describe('the live assistant and the bench', () => {
       expect(callCosts(callKey('imp-drop_pullup:o', 'Switch to Hedge'))).toBe(true);
       expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
       // a call made too rarely to have measured is the staff's read
-      expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBe('Not measured yet');
+      expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBeUndefined();
     }
 
     // straight makes and misses counted from the shot log
@@ -457,13 +457,7 @@ describe('the live assistant and the bench', () => {
       // a change that changes nothing reads even, and the staff says so when nothing clears
       const same = (await measureChange(g.sim, 0, { kind: 'none' }, { kind: 'tactics', tactics: g.sim.baseTactics(0) }, { games: 8 }))!;
       expect([same.raw, same.win, same.n]).toEqual([0, 0, 8]);
-      expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Nothing to change: none of 4 changes from Q2 3:10 clearly helps.');
-      // (a call judged by the margin: the win chance beside it would be raw and picked on its noise)
-      expect(readingLine({ pts: 1.4, band: 0.5 }, 'pts')).toBe('About +1.4 points to the margin, give or take 0.5.');
-      expect(readingLine({ pts: 0.3, band: 0.1 }, 'win')).toBe('About +0.3 points to the margin, give or take 0.1, and a better chance to win.');
-      // (on screen a verdict and one number: the reading is a tap down)
-      expect(verdictLine({ pts: 1.4 }, true)).toBe('Helps: about +1.4 points');
-      expect(verdictLine({ pts: -0.8 }, false)).toBe('No real change');
+      expect(callQuietLine({ state: 'none', tried: 4, at: 'Q2 3:10' })).toBe('Nothing the staff would change right now.');
       // a stop the game will come to is measured from a copy played on to it: the very spot the game gets
       // to (the same possessions, the same reading); its budget starts only once the game is there, and
       // a budget run out plays the device floor, never fewer

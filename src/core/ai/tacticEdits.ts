@@ -402,17 +402,16 @@ export function saveCheck(league: League, id: number, w: CounterWorth, games: nu
   e.told = true;
   const lead = leadAssistant(league);
   const call = worthCall(w);
-  const n = Math.abs(w.pts).toFixed(1);
-  const replayed = `I replayed the ${plural(games, 'game')} since, with your change and without it.`;
+  const replayed = 'I went back over the games since, with your change and without it.';
   const body =
     call === 'gain'
-      ? `${replayed} It helped: +${n} a game. I'd keep it.`
+      ? `${replayed} It seems to have helped. I'd keep it.`
       : call === 'cost'
-        ? `${replayed} It hurt: −${n} a game. Put it back from Team → Tactics → Analysis.`
-        : `${replayed} It made no real difference either way. Nothing to undo.`;
+        ? `${replayed} It seems to have hurt. Put it back from Team → Tactics → Analysis.`
+        : `${replayed} It made no clear difference. Nothing to undo.`;
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
-    subject: call === 'gain' ? `Your change helped: +${n} a game` : call === 'cost' ? `Your change hurt: −${n} a game` : 'Your change made no real difference',
+    subject: call === 'gain' ? 'Your change seems to have helped' : call === 'cost' ? 'Your change seems to have hurt' : 'Your change made no clear difference',
     body: `${shortWhat(e)}${e.what.includes(' · ') ? ' and more' : ''}. ${body}`,
     link: '/team/tactics/analysis',
     tone: call === 'gain' ? 'good' : call === 'cost' ? 'bad' : 'neutral',
@@ -444,52 +443,20 @@ export function revertEdit(league: League, e: TacticEdit): boolean {
 
 // ---------------------------------------------------------------- the lines
 
-const ahead = (n: number) => (n === 1 ? 'your next game' : `your next ${['', 'one', 'two', 'three', 'four', 'five'][n] ?? n}`);
-
-/**
- * The staff's line on a change as it's made, a verdict and one number: "Your change helps: +1.2 a
- * game over your next five", "Your change hurts: −0.8 a game over your next five", "Your change makes
- * no real difference over your next five".
- */
+/** The staff's line on a change as it's made, in words (the reading stays under the hood). */
 export function madeLine(e: TacticEdit): string {
   const w = e.worth;
-  if (!w) return 'The staff is measuring your change.';
+  if (!w) return 'The staff is watching your change.';
   const call = worthCall(w);
-  const n = Math.abs(w.pts).toFixed(1);
-  const over = ahead(w.games);
-  return call === 'gain'
-    ? `Your change helps: +${n} a game over ${over}.`
-    : call === 'cost'
-      ? `Your change hurts: −${n} a game over ${over}.`
-      : `Your change makes no real difference over ${over}.`;
+  return call === 'gain' ? 'Your change seems to help.' : call === 'cost' ? 'Your change seems to hurt.' : 'Your change makes no clear difference.';
 }
 
-/** A reading's verdict in a word or three, for a row: "Helps", "Hurts", "No real change". */
-export const verdictWord = (w: Pick<CounterWorth, 'pts'>) => {
-  const call = worthCall(w);
-  return call === 'gain' ? 'Helps' : call === 'cost' ? 'Hurts' : 'No real change';
-};
-
-/** The same in a few words, for a row: "Helps over the next five", "No real change over the next five". */
-export function madeShort(e: TacticEdit): string {
-  const w = e.worth;
-  if (!w) return '';
-  const over = w.games === 1 ? 'the next game' : `the next ${['', 'one', 'two', 'three', 'four', 'five'][w.games] ?? w.games}`;
-  return `${verdictWord(w)} over ${over}`;
-}
-
-/** The check's verdict: "Your change helped: +0.9 a game over 12 games", "… hurt: −0.6 …", "… made no real difference over 12 games". */
+/** The check's verdict, in words, on the games since. */
 export function checkLine(e: TacticEdit): string {
   const c = e.check;
   if (!c) return '';
   const call = worthCall(c);
-  const n = Math.abs(c.pts).toFixed(1);
-  const over = `over ${plural(c.games, 'game')}`;
-  return call === 'gain'
-    ? `Your change helped: +${n} a game ${over}.`
-    : call === 'cost'
-      ? `Your change hurt: −${n} a game ${over}.`
-      : `Your change made no real difference ${over}.`;
+  return call === 'gain' ? 'Your change seems to have helped.' : call === 'cost' ? 'Your change seems to have hurt.' : 'Your change made no clear difference.';
 }
 
 /** The call of a reading, for its tone. */

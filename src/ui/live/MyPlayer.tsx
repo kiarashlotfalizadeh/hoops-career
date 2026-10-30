@@ -6,17 +6,7 @@ import { Chips, Help, More, Statline, Tag, Toggle } from '../components/ui';
 import type { DrawnPlayer } from './drawn';
 import { fitPlayers } from './plays';
 import { pendingLive } from '../../state/live';
-import { CHOICE_GAMES } from '../../state/liveWorth';
-import { signed } from '../stats';
-import { favoured, measuresSubs, useSubWorth, type PlayReading } from './usePlayWorth';
-
-/** A sub's reading against keeping him in, on its chip: its win chance (shrunk toward even), or even inside the noise. */
-function SubWorth({ r }: { r: PlayReading | null | undefined }) {
-  if (r === undefined) return null;
-  if (r === null) return <span className="lv-ps-sub-w dim">…</span>;
-  if (!r.clear) return <span className="lv-ps-sub-w dim">even</span>;
-  return <span className={`lv-ps-sub-w num ${r.win > 0 ? 'good' : 'bad'}`}>{signed(r.win * 100, 0)}%</span>;
-}
+import { favoured, measuresSubs, useSubWorth } from './usePlayWorth';
 
 /** A player's night so far, at the top of his sheet (yours or theirs). */
 export function PlayerLine({ p }: { p: DrawnPlayer }) {
@@ -54,8 +44,8 @@ export interface SubOptions {
 
 /**
  * One of your players: his line tonight, the sub (the bench players who can come in for him, the
- * staff's pick first, or the five he can come in for; in crunch time each sub for him measured against
- * keeping him in: useSubWorth), and his orders: shot freedom, role, crunch-time go-to and who he
+ * staff's pick first, or the five he can come in for; in crunch time the staff picks by measuring each
+ * against keeping him in: useSubWorth), and his orders: shot freedom, role, crunch-time go-to and who he
  * guards. Every order goes through your tactics, so the game's journal keeps it, and "Keep changes
  * after this game" treats it like any other change (tonight's matchups excepted).
  */
@@ -116,11 +106,10 @@ export function MyPlayer({
           {options.length ? (
             <>
               <div className="chips" role="group" aria-label={subs.on ? `Who comes in for ${name}` : `Who ${name} comes in for`}>
-                {options.map((o, i) => (
+                {options.map((o) => (
                   <button key={o.pid} className={`chip lv-ps-sub${o.staff ? ' staff' : ''}`} onClick={() => onSub(o.pid)}>
                     {o.staff && <Lightbulb size={13} className="accent-text" aria-hidden="true" />}
                     {nameOf(o.pid)} <span className="lv-ps-sub-l num">{o.line}</span>
-                    {measured && <SubWorth r={readings ? readings[i] : null} />}
                     {o.staff && <span className="sr-only">, the staff&apos;s pick</span>}
                   </button>
                 ))}
@@ -128,7 +117,6 @@ export function MyPlayer({
               <div className="tiny dim lv-ps-key">
                 <span aria-hidden="true">
                   Energy{subs.on ? '' : ' and fouls'}
-                  {measured && ' · to win, against keeping him in'}
                   {options.some((o) => o.staff) && (
                     <>
                       {' '}
@@ -136,12 +124,6 @@ export function MyPlayer({
                     </>
                   )}
                 </span>
-                {measured && (
-                  <Help title="How the subs are measured">
-                    <p>Each sub against keeping him in, the rest of the game played {CHOICE_GAMES} times.</p>
-                    <p>The figure is the change in your chance to win. Even: no real change.</p>
-                  </Help>
-                )}
               </div>
             </>
           ) : (

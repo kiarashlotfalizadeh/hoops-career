@@ -195,6 +195,7 @@ export function WinProbChart({
   describe,
   label,
   height = 130,
+  bare,
 }: {
   points: WpChartPoint[];
   periods: number[];
@@ -206,6 +207,8 @@ export function WinProbChart({
   /** What the chart shows, for screen readers. */
   label: string;
   height?: number;
+  /** The shape alone, no percentages: the live game's. */
+  bare?: boolean;
 }) {
   const [ref, w] = useWidth();
   const clip = useId().replace(/:/g, '');
@@ -275,11 +278,12 @@ export function WinProbChart({
           <line key={v} x1={left} x2={w} y1={y(v)} y2={y(v)} stroke="var(--line)" />
         ))}
         <line x1={left} x2={w} y1={y(0.5)} y2={y(0.5)} stroke="var(--line-3)" />
-        {[1, 0.5, 0].map((v) => (
-          <text key={v} x={left - 5} y={y(v) + 3.5} textAnchor="end" className="ch-axis">
-            {Math.round(v * 100)}%
-          </text>
-        ))}
+        {!bare &&
+          [1, 0.5, 0].map((v) => (
+            <text key={v} x={left - 5} y={y(v) + 3.5} textAnchor="end" className="ch-axis">
+              {Math.round(v * 100)}%
+            </text>
+          ))}
         <path d={area} fill={color} opacity={0.26} clipPath={`url(#${clip}-top)`} />
         <path d={area} fill={colorOther} opacity={0.26} clipPath={`url(#${clip}-bot)`} />
         <path d={d} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
@@ -302,7 +306,7 @@ export function WinProbChart({
       </svg>
       {shown !== null && (
         <div className="ch-tip" style={{ left: tipLeft }} role="status">
-          <b className="num">{wpText(points[shown].wp)}</b> <span className="dim2">{describe(shown)}</span>
+          {!bare && <b className="num">{wpText(points[shown].wp)}</b>} <span className="dim2">{describe(shown)}</span>
         </div>
       )}
     </div>

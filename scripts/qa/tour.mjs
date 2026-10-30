@@ -186,7 +186,7 @@ if (stages.includes('mid')) {
     mkdirSync(`${out}/live`, { recursive: true });
     await phone.screenshot({ path: `${out}/live/phone-live.png` });
     // the console's views: the game plan, the lineup and the stats
-    for (const name of ['Game plan', 'Lineup', 'Stats']) {
+    for (const name of ['Tactics', 'Players', 'Stats']) {
       const b = phone.locator('.lv-bb-views').getByRole('tab', { name }).first();
       if (await b.count()) {
         await b.click().catch(() => {});

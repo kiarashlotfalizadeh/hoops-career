@@ -9,7 +9,7 @@ import type { League } from '../../core/types';
 import { seasonLabel } from '../../core/constants';
 import { CAP_FOR, curTeamSeason, revenueScale } from '../../core/league/helpers';
 import { FIRING_LINE, seasonsInCharge } from '../../core/league/owner';
-import { GRACE, SEASON_WEIGHT, ULTIMATUM_ODDS, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
+import { GRACE, SEASON_WEIGHT, seasonWeight, seatHeat, type JobSecurity, type SeatHeat } from '../../core/league/jobSecurity';
 import { BLEED_GRADE, DEBT_LIMIT, FREEZE_GRADE, booksOf, booksOutlook, deeperText } from '../../core/league/books';
 import { seasonEndCash } from '../../core/league/finances';
 import {
@@ -23,7 +23,6 @@ import {
   PAYROLL_SCALE,
   personalityLine,
   POSTSEASON,
-  POSTSEASON_ODDS,
   PROFIT_SCALE,
   REBUILD_OVER_FLOOR,
   REBUILD_SEASONS,
@@ -286,7 +285,12 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
             ))}
           </div>
           <div className="tiny dim">
-            Standing now: {fmtGrade(js.standing)}, {meter(js.standing)} on the meter. This season projects it to {fmtGrade(js.projected)}, {meter(js.projected)}.
+            Standing now: {fmtGrade(js.standing)}, {meter(js.standing)} on the meter.{' '}
+            {js.projected - js.standing >= 0.03
+              ? 'This season should lift it.'
+              : js.projected - js.standing <= -0.03
+                ? 'This season should lower it.'
+                : 'This season should hold it about level.'}
           </div>
         </More>
       )}
@@ -439,8 +443,7 @@ function GradingHelp({ league }: { league: League }) {
     <HelpSheet title="How the owner judges you">
       <p>
         On opening night he sets three or four goals from your roster. The win total is the season forecast&apos;s read. The postseason goal never asks for a round the forecast
-        gives under a {Math.round(POSTSEASON_ODDS * 100)}% chance. For a rebuild, minutes for the young players replace it. The money goal is a profit target at the league&apos;s
-        standard prices and budgets.
+        thinks is out of reach. For a rebuild, minutes for the young players replace it. The money goal is a profit target at the league&apos;s standard prices and budgets.
       </p>
       <p>After the playoffs each goal is graded −100 to +100. Their weights make the season&apos;s grade.</p>
       {rows.map((r) => (
@@ -456,8 +459,8 @@ function GradingHelp({ league }: { league: League }) {
         <b>Grace.</b> He waits {GRACE} seasons before a review can fire you. Below the line after that, you&apos;re out.
       </p>
       <p>
-        <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver. The forecast gives it at least a{' '}
-        {Math.round(ULTIMATUM_ODDS * 100)}% chance. Meet it and you win back some standing. Miss it and you&apos;re fired.
+        <b>Ultimatum.</b> On the hot seat at the All-Star break, he names one thing the season can still deliver. The forecast says it&apos;s still possible. Meet it and you win
+        back some standing. Miss it and you&apos;re fired.
       </p>
       <p>
         <b>Payroll.</b> After your first season, a top-half payroll of your own raises the win target. It rises toward what a team paid like that should win, by {PAY_RAISE} wins at

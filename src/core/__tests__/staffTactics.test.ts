@@ -93,12 +93,12 @@ describe('the staff acts on the season', () => {
       expect(l.teams[0].tactics.offense.crashBoards).toBeLessThanOrEqual(50);
       expect(l.teams[0].tactics.manual).toBe(false);
       expect(l.inbox[0].subject).toBe('Staff change: Crash less');
-      expect(l.inbox[0].body).toMatch(/I played our next six games both ways, on the same seeds\. It helps: \+1\.2 a game, so I've made the change\./);
+      expect(l.inbox[0].body).toMatch(/I tried it both ways\. It seems to help, so I've made the change\./);
       expect(l.inbox[0].body).toContain('Undo');
-      expect(l.staffPicks!.at(-1)!.text).toMatch(/^Staff (moved|made a change: ).+\. Helps: \+1\.2 a game\.$/);
+      expect(l.staffPicks!.at(-1)!.text).toMatch(/^Staff (moved|made a change: ).+\. It seems to help\.$/);
       // named on Tactics while it holds, kept through the staff's refits, not made twice
       expect(staffMoveNow(l)).toEqual(m);
-      expect(moveLine(l, m)).toMatch(/^Staff (moved .+ on|made a change on) [A-Z][a-z]{2} \d+(: .+)?\. Helps: \+1\.2 a game\.$/);
+      expect(moveLine(l, m)).toMatch(/^Staff (moved .+ on|made a change on) [A-Z][a-z]{2} \d+(: .+)?\. It seems to help\.$/);
       expect(withStaffMoves(l, { ...l.teams[0].tactics, offense: { ...l.teams[0].tactics.offense, crashBoards: 80 } }).offense.crashBoards).toBeLessThanOrEqual(50);
       expect(leverDecide(l)).toBeNull();
       // Undo puts it back, and the staff doesn't make it again this season
@@ -117,7 +117,7 @@ describe('the staff acts on the season', () => {
       expect(teamAlerts(l, 0).some((a) => a.id.startsWith('lever-'))).toBe(false);
       put(l, reading(l, 'crashing', { pts: 1.2, raw: 1.5, se: 0.6 }));
       const card = leverCard(l)!;
-      expect(card).toMatchObject({ title: 'Crash less: helps +1.2 a game', fix: { kind: 'patch', label: 'Crash less' } });
+      expect(card).toMatchObject({ title: 'Crash less: should help', fix: { kind: 'patch', label: 'Crash less' } });
       expect(teamAlerts(l, 0).find((a) => a.id === card.id)).toBeTruthy();
       expect(leverDecide(l)).toBeNull();
       // (changed since it was measured: the reading no longer stands)
@@ -150,7 +150,7 @@ describe('the staff acts on the season', () => {
       t.defense.pressure = 40;
       put(l, reading(l, 'soft ball pressure', { pts: -0.6, raw: -0.8, se: 0.9 }));
       expect(leverReport(l)).toMatchObject({
-        pts: -0.6,
+        lean: 'cost',
         title: l.staffLever!.readings[0].label,
         meta: expect.stringMatching(/^[A-Z][a-z]{2} \d+ · kept the playbook as it is$/),
       });
@@ -165,12 +165,12 @@ describe('the staff acts on the season', () => {
       expect(rs.map((r) => r.what)).toEqual(['soft ball pressure', 'crashing']);
       expect(leverReport(l)!.title).toBe(rs[1].label);
       if (!leverClears(rs[1])) {
-        expect(l.staffPicks!.at(-1)!.text).toMatch(/^Staff report: tried .+ over the next \w+ games?\. (No real change|Hurts: −\d\.\d a game)\. Keeping .+\.$/);
+        expect(l.staffPicks!.at(-1)!.text).toMatch(/^Staff report: tried .+\. (No clear edge|Could hurt)\. Keeping .+\.$/);
         // (the digest says the latest, as one row)
         const latest = l.staffPicks!.at(-1)!.text;
         l.staffPicks!.splice(-1, 0, { season: l.season, day: l.day, text: 'Staff report: an earlier one.' });
-        // (on screen without its mark, and in the staff's third person: "over the next", not "on our next")
-        const said = `${latest.slice('Staff report: '.length).replace(/^t/, 'T').replace('on our next', 'over the next')} The latest of 2 reports.`;
+        // (on screen without its mark)
+        const said = `${latest.slice('Staff report: '.length).replace(/^t/, 'T')} The latest of 2 reports.`;
         expect(staffPicksSince(l, l.season, -1).filter((x) => x.startsWith('Tried') || x.startsWith('An earlier'))).toEqual([said]);
         // nothing left to look at on these tactics: no reading
         l.staffLever!.last = l.day - LEVER_EVERY;

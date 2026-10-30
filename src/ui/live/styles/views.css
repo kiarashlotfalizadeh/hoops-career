@@ -5,83 +5,44 @@
   flex-direction: column;
   gap: var(--gap-page);
 }
-.lv-oc-grid {
+/* a player's row, the same in every list: number, name over energy, then OVR, minutes, points, fouls */
+.lv-pl {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  background: var(--raised);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-}
-.lv-oc-col {
-  min-width: 0;
-}
-.lv-oc-col + .lv-oc-col {
-  border-left: 1px solid var(--line);
-}
-/* each five under its name, in its team's colour as text */
-.lv-oc-head {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-height: 38px;
-  padding: 11px 10px 5px;
-  border-bottom: 2px solid var(--ink);
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -0.03em;
-  color: var(--oc-edge, var(--text));
-}
-.lv-oc-you {
-  font-family: var(--font);
-  font-stretch: var(--text-w);
-  color: var(--text-dim);
-  font-size: 12px;
-  font-weight: 520;
-}
-.lv-oc-head-pts {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--text-dim);
-}
-.lv-oc-row {
-  display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) auto;
-  grid-template-areas:
-    'num name pts'
-    'num energy pf';
-  column-gap: 8px;
-  row-gap: 4px;
+  grid-template-columns: 24px minmax(0, 1fr) 32px 24px 26px 20px;
   align-items: center;
+  column-gap: 8px;
   width: 100%;
   min-height: 50px;
-  padding: 7px 10px;
+  padding: 6px var(--row-px);
   text-align: left;
   color: var(--text);
   transition: background var(--dur-fast) ease;
 }
-.lv-oc-row + .lv-oc-row {
-  border-top: 1px solid var(--line);
-}
-.lv-oc-row:active {
+.lv-pl:active {
   background: var(--surface);
 }
 @media (hover: hover) and (pointer: fine) {
-  .lv-oc-row:hover,
-  .lv-lu-row:hover {
+  button.lv-pl:hover {
     background: var(--surface);
   }
 }
-.lv-oc-num {
-  grid-area: num;
-  width: 22px;
-  height: 22px;
+.lv-pl.out {
+  opacity: 0.55;
+}
+/* the columns' names, once over a list */
+.lv-pl.lv-pl-h {
+  min-height: 0;
+  padding-top: 8px;
+  padding-bottom: 2px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-align: right;
+}
+.lv-pl-num {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   border: 2px solid;
   display: grid;
@@ -92,17 +53,24 @@
   font-size: 12px;
   line-height: 1;
 }
-.lv-oc-name {
-  grid-area: name;
+.lv-pl-who {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+.lv-pl-name {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  max-width: 100%;
   min-width: 0;
-  font-size: 14px;
+  font-size: 14.5px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.15;
 }
-.lv-oc-mark {
+.lv-pl-mark {
   display: inline-flex;
   align-items: center;
   gap: 1px;
@@ -110,147 +78,68 @@
   font-size: 12px;
   font-weight: 680;
 }
-.lv-oc-mark.hot {
+.lv-pl-mark.hot {
   color: var(--warn);
 }
-.lv-oc-mark.cold {
+.lv-pl-mark.cold {
   color: var(--info);
 }
-.lv-oc-pts {
-  grid-area: pts;
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-weight: 600;
-  font-size: 19px;
-  line-height: 1;
-  letter-spacing: -0.06em;
-  text-align: right;
-}
-/* the energy bar against the staff's sub-out mark (green, then amber near it, red under it), with its figure */
-.lv-oc-energy {
-  grid-area: energy;
+/* energy: a short bar and its word, in the bar's colour once it matters */
+.lv-pl-energy {
+  --e: var(--good);
   display: flex;
   align-items: center;
   gap: 5px;
-  min-width: 0;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  color: var(--text-dim);
-}
-.lv-oc-meter {
-  flex: 1;
-  min-width: 0;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--surface-3);
-  overflow: hidden;
-}
-.lv-oc-meter > span,
-.lv-lu-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: 2px;
-}
-.lv-oc-meter > .good,
-.lv-lu-bar > .good {
-  background: var(--good);
-}
-.lv-oc-meter > .warn,
-.lv-lu-bar > .warn {
-  background: var(--warn);
-}
-.lv-oc-meter > .bad,
-.lv-lu-bar > .bad {
-  background: var(--bad);
-}
-/* personal fouls: amber at the staff's foul-trouble limit for the period, red at five */
-.lv-oc-pf {
-  grid-area: pf;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  text-align: right;
-  color: var(--text-dim);
-}
-.lv-oc-pf.warn {
-  color: var(--warn);
-  font-weight: 600;
-}
-.lv-oc-pf.bad {
-  color: var(--bad);
-  font-weight: 600;
-}
-.lv-lu-head,
-.lv-lu-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px 22px 26px 26px;
-  align-items: center;
-  column-gap: 8px;
-}
-.lv-lu-head {
-  flex: 1;
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-dim);
-  text-align: right;
-  padding-right: var(--row-px);
-}
-.lv-lu-head > :first-child {
-  grid-column: 2;
-}
-.lv-lu-row {
-  width: 100%;
-  min-height: 48px;
-  padding: 4px var(--row-px);
-  text-align: left;
-  font-size: 15px;
+  font-size: 11.5px;
   font-weight: 560;
-  transition: background var(--dur-fast) ease;
+  line-height: 1;
+  color: var(--text-dim);
 }
-.lv-lu-row:active {
-  background: var(--surface);
+.lv-pl-energy.warn {
+  --e: var(--warn);
+  color: var(--warn);
 }
-.lv-lu-row.out {
-  opacity: 0.55;
+.lv-pl-energy.bad {
+  --e: var(--bad);
+  color: var(--bad);
 }
-.lv-lu-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.lv-lu-e {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  font-family: var(--mono);
-  font-stretch: normal;
-  font-size: 13px;
-  font-weight: 500;
-  letter-spacing: -0.04em;
-}
-.lv-lu-bar {
-  width: 30px;
+.lv-pl-bar {
+  width: 44px;
   height: 4px;
   border-radius: 2px;
   background: var(--surface-3);
   overflow: hidden;
 }
-.lv-lu-n {
+.lv-pl-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--e);
+}
+.lv-pl-ovr {
+  display: flex;
+  justify-content: flex-end;
+}
+.lv-pl-n {
   text-align: right;
   font-family: var(--mono);
   font-stretch: normal;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 500;
   letter-spacing: -0.04em;
   color: var(--text-2);
+}
+.lv-pl-n.strong {
+  font-weight: 650;
+  color: var(--text);
+}
+.lv-pl-n.warn {
+  color: var(--warn);
+  font-weight: 650;
+}
+.lv-pl-n.bad {
+  color: var(--bad);
+  font-weight: 650;
 }
 
 /* a player's sheet */
@@ -276,19 +165,6 @@
   color: var(--text-dim);
   font-weight: 620;
 }
-/* a sub's measured worth against keeping him in (crunch time), at the chip's end */
-.lv-ps-sub-w {
-  margin-left: 2px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.lv-ps-sub-w.good {
-  color: var(--good);
-}
-.lv-ps-sub-w.bad {
-  color: var(--bad);
-}
-
 /* the tactics */
 .lv-tp {
   display: flex;
@@ -377,7 +253,7 @@
 .lv-touch {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 /* the mentality's label sits over the scale with its "?" (the scale's own label names it for screen readers) */
 .lv-touch .levels > .slider-label {
@@ -392,7 +268,7 @@
 }
 
 .lv-plan-touch {
-  padding-bottom: 4px;
+  padding-bottom: 0;
 }
 
 /* the box score's play types */

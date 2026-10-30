@@ -9,8 +9,7 @@ import type { League, NewsItem } from '../../core/types';
 import { useLeagueMemo, useStore } from '../../state/store';
 import { confStandings } from '../../core/league/standings';
 import { fmtDate } from '../../core/league/helpers';
-import { pct } from '../../core/analysis/odds';
-import { goalChance } from '../../core/league/ownerGoals';
+import { goalChance, goalWord } from '../../core/league/ownerGoals';
 import { Avatar, Section, Statline, keep } from '../components/ui';
 import { madeAtt } from '../../core/format';
 import { seasonLabel } from '../../core/constants';
@@ -175,8 +174,8 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
 const MOOD_WORD = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
 /**
- * His season in one strip of figures, each opening where it lives in full: the postseason odds (the
- * standings), the last five results (the schedule), the owner's and the fans' mood (Office →
+ * His season in one strip, each cell opening where it lives in full: his chance at the postseason goal
+ * in a word (the standings), the last five results (the schedule), the owner's and the fans' mood (Office →
  * Owner). Where he stands and his record are on the top bar.
  */
 export function YourSeason({ league }: { league: League }) {
@@ -195,10 +194,10 @@ export function YourSeason({ league }: { league: League }) {
     <Section title="Your season">
       <div className="td-strip">
         {played && odds && chance && (
-          // (the chance at the owner's postseason goal while he has one, named by it: "Play-in 21%")
-          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `${chance.label} odds ${pct(chance.p, chance.sure)}. Standings`}>
+          // (the chance at the owner's postseason goal while he has one, named by it: "Play-in: In reach")
+          <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `${chance.label}: ${goalWord(chance.p, chance.sure)}. Standings`}>
             <span className="td-cell-k">{chance.label}</span>
-            <span className={`num td-cell-v ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : pct(chance.p, chance.sure)}</span>
+            <span className={`td-cell-v td-word ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : goalWord(chance.p, chance.sure)}</span>
           </Link>
         )}
         {results.length > 0 && (

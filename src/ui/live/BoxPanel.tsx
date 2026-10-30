@@ -3,7 +3,8 @@ import type { GameType, League } from '../../core/types';
 import { GAME } from '../../core/constants';
 import { gameTime, keepFigures, madeAtt } from '../../core/format';
 import { FINISH_LABEL, type FinishType } from '../../core/sim/log';
-import { marginWords, wpSeries, wpText } from '../../core/analysis/winProb';
+import { marginWords, wpSeries } from '../../core/analysis/winProb';
+import { oddsWord } from '../../core/analysis/staffWords';
 import { Card, Chips, Section, Segmented } from '../components/ui';
 import { FlowChart, ShotChart, WinProbChart } from '../components/charts';
 import { QuarterTable, TeamComparison } from '../components/gameBlocks';
@@ -272,7 +273,7 @@ function WinProbCard({
   const mine = (v: number) => (side === 0 ? v : 1 - v);
   const me = abbrevs[side];
   return (
-    <Card title={<Term id="winprob">Win probability</Term>} right={<span className="tiny dim">{me} above 50%</span>}>
+    <Card title={<Term id="winprob">Who's winning it</Term>} right={<span className="tiny dim">{me} above the line</span>}>
       {!series || series.length < 2 ? (
         <div className="small dim">The chart starts after the first possession.</div>
       ) : (
@@ -286,11 +287,12 @@ function WinProbCard({
               const p = series[i];
               return p.i < 0 ? 'Tip-off' : `${gameTime(p.q, p.clock)} · ${marginWords(me, side === 0 ? p.margin : -p.margin)}`;
             }}
-            label={`${me} win probability over the game so far: ${wpText(mine(series[0].wp))} at tip-off, ${wpText(mine(series[series.length - 1].wp))} now`}
+            label={`${me} chance to win over the game so far: ${oddsWord(mine(series[series.length - 1].wp))} now`}
             height={130}
+            bare
           />
           <div className="small dim lv-bx-foot">
-            {me} {wpText(mine(series[series.length - 1].wp))} to win now, {wpText(mine(series[0].wp))} at tip-off.
+            {me} now: {oddsWord(mine(series[series.length - 1].wp))}.
           </div>
         </>
       )}

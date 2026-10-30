@@ -249,8 +249,8 @@ export default function Settings() {
               <Toggle
                 on={st.liveWinProb !== false}
                 onChange={(v) => set('liveWinProb', v)}
-                label="Win probability"
-                help="On the scorebug, the Flow tab and at the breaks. Game reports always show it."
+                label="Win bar"
+                help="Who's ahead to win, as a bar on the scorebug and the Flow tab. Game reports always show the chart."
               />
               <Toggle
                 on={st.liveScores !== false}

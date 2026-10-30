@@ -116,13 +116,6 @@ export function place(spots: Spot[], five: BoardPlayer[]): Map<number, Spot> {
   return out;
 }
 
-/** A shape's fit as the board shows it: fit points are a tenth of a point a game ("+0.8", "−1.2", "±0"). */
-export function fitPts(v: number): string {
-  const x = Math.round(v) / 10;
-  if (Math.abs(x) < 0.05) return '±0';
-  return `${x > 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
-}
-
 /** The five (the rotation's first five) and the bench after them; anyone the rotation leaves out goes last. */
 export function startersOf<P extends { pid: number }>(order: readonly number[], players: readonly P[]): { five: P[]; bench: P[] } {
   const byId = new Map(players.map((p) => [p.pid, p]));

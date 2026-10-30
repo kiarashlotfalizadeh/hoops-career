@@ -32,18 +32,16 @@ export interface StaffNote {
   title: string;
   /** The evidence, one line. */
   text: string;
-  /** The figure it leads with: "1.31" a trip, "+4.2" points, "14" points. */
-  fig?: { v: string; unit: string };
+  /** Whose edge a read is, sized in a word ("Big edge"), at its end. */
+  tag?: string;
   /** The moves on offer, the staff's pick first. */
   actions: StaffAction[];
   /** Higher first. */
   rank: number;
   /** With the bench handed to the staff, it makes its pick itself (a tactics change; subs and timeouts stay yours). */
   auto?: boolean;
-  /** A decision's measured worth where it fires, in a line (worthLine), or that it's the staff's read; on screen, with `detail` behind its "?" (see noteView). */
+  /** The staff's opinion of a decision where it fires, in a few words (worthLine). */
   worth?: ReactNode;
-  /** How its number was measured, a tap down (the spot, the replays, the margin and its spread). */
-  detail?: string;
 }
 
 /** What the staff reads besides the alerts' input: the possessions the court has drawn. */
@@ -99,7 +97,6 @@ export function sumBy(rows: MatchupRow[], key: 'off' | 'def'): Map<number, { tri
 
 /** A play type mid-sentence: "their isolation plays". */
 const playType = (ft: string) => (FINISH_LABEL[ft as FinishType] ?? ft).replace(/^[A-Z](?=[a-z])/, (c) => c.toLowerCase());
-const f2 = (x: number) => x.toFixed(2);
 
 /** The action an offensive play type comes out of, and the settings that lean into it or away. */
 const OFF_ACTION: Partial<Record<FinishType, 'pnr' | 'iso' | 'post' | 'handoff' | 'motion'>> = {
@@ -194,7 +191,6 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         tone: 'good',
         title: `We're beating ${names(pid)}`,
         text: `${v.pts} points on ${v.trips} trips he guarded.`,
-        fig: { v: f2(v.pts / v.trips), unit: 'a trip' },
         actions: [{ kind: 'tactics', label: `Attack ${names(pid)}`, apply: (x) => void (x.offense.huntTarget = pid) }],
         rank: 64,
         auto: true,
@@ -217,8 +213,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         kind: 'decision',
         tone: 'warn',
         title: `Our ${playType(k)} plays are stalling`,
-        text: `${v.poss} trips, league ${f2(base)} a trip.`,
-        fig: { v: f2(v.pts / v.poss), unit: 'a trip' },
+        text: `${v.pts} points on ${v.poss} trips.`,
         actions: [
           {
             kind: 'tactics',
@@ -235,8 +230,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
         kind: 'decision',
         tone: 'good',
         title: `Our ${playType(k)} plays are working`,
-        text: `${v.poss} trips, league ${f2(base)} a trip.`,
-        fig: { v: f2(v.pts / v.poss), unit: 'a trip' },
+        text: `${v.pts} points on ${v.poss} trips.`,
         actions: [{ kind: 'tactics', label: `More ${ACTION_NAME[act]}`, apply: (x) => void (x.offense.actions[act] = Math.min(100, x.offense.actions[act] + 25)) }],
         rank: 45,
       });
@@ -253,8 +247,7 @@ export function staffNotes(a: StaffInput): StaffNote[] {
       kind: 'read',
       tone: 'good',
       title: `Their ${playType(held[0])} plays aren't working`,
-      text: `${held[1].poss} trips, league ${f2(a.baselines[held[0]])} a trip.`,
-      fig: { v: f2(held[1].pts / held[1].poss), unit: 'a trip' },
+      text: `${held[1].pts} points on ${held[1].poss} trips.`,
       actions: [],
       rank: 30,
     });

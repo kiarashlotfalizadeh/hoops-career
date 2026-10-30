@@ -534,7 +534,7 @@ it("valuation and the AI's verdict: talent over depth, strategy lenses within 15
     expect(lop.message).toBe('Not even close.');
     expect(lop.notes[0]).toEqual({
       tone: 'bad',
-      text: expect.stringMatching(new RegExp(`^They value ${equal.firstName} ${equal.lastName} about \\d+× ${mineScrub.firstName} ${mineScrub.lastName}$`)),
+      text: expect.stringMatching(new RegExp(`^They value ${equal.firstName} ${equal.lastName} far more than ${mineScrub.firstName} ${mineScrub.lastName}$`)),
     });
     // a deal they take says nothing of the kind
     expect(ev.notes.some((n) => /^They value /.test(n.text))).toBe(false);
@@ -1262,7 +1262,7 @@ it('deal terms: protections on your own firsts, pick swaps and cash, and how the
       const o = deal({ dpids: [dp.dpid], protect }, { cash: 1_000 });
       return { ...neutralSplit(evaluateTrade(l, o).parts, o), warn: evaluateTrade(l, o).notes.find((n) => n.tone === 'warn')?.text };
     };
-    expect(split().warn).toMatch(/give up about \d+ times what you get|far more than you get/);
+    expect(split().warn).toMatch(/give up (much|far) more than you get/);
     expect(split().get).toBeCloseTo(1, 9);
     expect(split({ [dp.dpid]: 20 }).give).toBeLessThan(split().give);
     expect(neutralBalance(l, deal({ dpids: [dp.dpid], protect: { [dp.dpid]: 20 } }, { cash: 1_000 })).net).toBeCloseTo(1 - split({ [dp.dpid]: 20 }).give, 9);

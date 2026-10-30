@@ -1,9 +1,9 @@
 // Tactics → Analysis → Season: the engine's tally of your season (each setting's trade-off netted on
-// one row, each other effect it tracks on its own, in points a game) and how teams see you: your
-// scouting report as an opponent reads it. The tally is what happened, never advice: it isn't a
-// counterfactual (it has read a coverage as the worse one where paired games found it the better), so
-// it says nothing about what a change would win. The staff measures that in paired games before it
-// suggests or makes one (staffLever.ts): its latest test heads the tally, a row.
+// one row, each other effect it tracks on its own, biggest first, each tagged with which way it went)
+// and how teams see you: your scouting report as an opponent reads it. The tally is what happened, never
+// advice: it isn't a counterfactual (it has read a coverage as the worse one where paired games found it
+// the better), so it says nothing about what a change would win. The staff measures that in paired
+// games before it suggests or makes one (staffLever.ts): its latest test heads the tally, a row.
 import { useState } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { League } from '../../core/types';
@@ -11,7 +11,8 @@ import { scoutData, SCOUT_MIN_GAMES } from '../../core/analysis/scouting';
 import { scoutTeam, seasonLevers } from '../../core/ai/advisor';
 import { leverReport } from '../../core/league/staffLever';
 import { IMPACT_TEXT, LEVER_GAINS, impactSentence, leverNet } from '../../core/analysis/gameReport';
-import { Help, More, Section, Segmented } from '../components/ui';
+import { AHEAD, leanTone } from '../../core/analysis/staffWords';
+import { Help, More, Section, Segmented, Tag } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { plural } from '../../core/format';
 import { PlayTypeTable, RankStrip, scoutSource } from '../components/scouting';
@@ -27,24 +28,25 @@ interface TallyRow {
   id: string;
   v: number;
   title: string;
-  /** A setting's two sides. */
-  sides?: string;
+  /** A line under the title. */
+  sub?: string;
+  /** Its tag and tone, when it isn't "Helped" or "Cost you" by the sign. */
+  tag?: string;
+  tone?: 'good' | 'bad';
 }
-
-const signed = (v: number) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1)}`;
 
 export function InsightsTab() {
   const league = useLeague();
   // the games the effects were tracked in, whether or not any effect is big enough to list
   const { games, effects } = useLeagueMemo(() => seasonImpacts(league), [league]);
   const levers = useLeagueMemo(() => seasonLevers(league, league.userTid), [league]);
-  // (the staff's latest measured change: what the tally sent it to look at, played both ways)
+  // (the staff's latest test: what the tally sent it to look at, played both ways)
   const report = useLeagueMemo(() => leverReport(league), [league]);
   const [more, setMore] = useState(false);
   // your settings, each on one row: what it gave up against what it won back
   const settings: TallyRow[] = levers
     .filter((l) => l.lost + l.won >= LISTED)
-    .map((l) => ({ id: l.what, v: l.net, title: l.what.charAt(0).toUpperCase() + l.what.slice(1), sides: `gave up ${l.lost.toFixed(1)}, won ${l.won.toFixed(1)} back` }))
+    .map((l) => ({ id: l.what, v: l.net, title: l.what.charAt(0).toUpperCase() + l.what.slice(1) }))
     .sort((a, b) => Math.abs(b.v) - Math.abs(a.v));
   // every other effect: the opponents' settings, and what isn't a trade-off (a side of one of yours is in its row above)
   const yours = (x: { key: string; forUser: boolean }) => (x.forUser ? LEVER_GAINS.has(x.key) : !!leverNet([], x.key, 0));
@@ -57,11 +59,11 @@ export function InsightsTab() {
   const cut = (xs: TallyRow[]) => (more ? xs : xs.slice(0, SHOWN));
   const row = (x: TallyRow) => (
     <div key={x.id} className="tx-imp">
-      <span className={`tx-imp-v num ${x.v >= 0 ? 'good' : 'bad'}`}>{signed(x.v)}</span>
       <span className="grow">
         <span className="tx-imp-t">{x.title}</span>
-        {x.sides && <span className="tx-imp-s">{x.sides}</span>}
+        {x.sub && <span className="tx-imp-s">{x.sub}</span>}
       </span>
+      {x.tag !== undefined ? <Tag tone={x.tone}>{x.tag}</Tag> : <Tag tone={x.v >= 0 ? 'good' : 'bad'}>{x.v >= 0 ? 'Helped' : 'Cost you'}</Tag>}
     </div>
   );
   return (
@@ -72,14 +74,14 @@ export function InsightsTab() {
             <h3>
               The engine&apos;s tally
               <Help title="The engine's tally">
-                <p>What the engine counted in your games, in points a game. Each setting nets what it gave up against what it won back.</p>
+                <p>What the engine counted in your games. Each setting nets what it gave up against what it won back.</p>
                 <p>
-                  It&apos;s what happened, not what a change would win. The staff <Term id="measured">measures</Term> a change before they suggest it.
+                  It&apos;s what happened, not what a change would win. The staff <Term id="measured">tests</Term> a change before they suggest it.
                 </p>
               </Help>
             </h3>
           }
-          right={<span className="tiny dim">pts a game · {plural(games, 'game')}</span>}
+          right={<span className="tiny dim">{plural(games, 'game')}</span>}
         >
           <div className="card flush list">
             {report && (
@@ -87,7 +89,7 @@ export function InsightsTab() {
                 <div className="list-divider list-h" aria-hidden="true">
                   <span>Staff&apos;s latest test</span>
                 </div>
-                {row({ id: 'lever', v: report.pts, title: report.title, sides: report.meta })}
+                {row({ id: 'lever', v: 0, title: report.title, sub: report.meta, tag: AHEAD[report.lean], tone: leanTone(report.lean) || undefined })}
               </>
             )}
             <div className="list-divider list-h" aria-hidden="true">

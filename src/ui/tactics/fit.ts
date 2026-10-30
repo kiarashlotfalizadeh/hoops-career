@@ -1,58 +1,45 @@
-// Playbook fit as the Tactics screen shows it: the staff's read of what each playbook is worth a game
-// for this roster (coachAI's fits, a tenth of a point a game each, calibrated against the engine),
-// against the playbook in use, in the same unit a change is measured in when it's made (editWatch); and
-// a fit broken into the parts it's made of, in points a game too, so its start and parts add up to what
-// it's worth against an average playbook; and the hand-over sheet's line, what the user's own staff would
-// run (by that same read: StaffFor in coachAI) and its read against his.
+// Playbook fit as the Tactics screen says it: the staff's read of each playbook for this roster (coachAI's
+// fits, a tenth of a point a game each, calibrated against the engine) against the playbook in use, in
+// the staff's words (core/analysis/staffWords.ts), never the figure; a fit's parts, for what suits the
+// roster and what works against it; and the hand-over sheet's line, what the user's own staff would run
+// (by that same read: StaffFor in coachAI) and how it compares with his.
 import type { League, Tactics } from '../../core/types';
 import { autoTactics, defPresetFit, fitRoster, offPresetFit, rosterProfile, type FitTerm } from '../../core/ai/coachAI';
-import { WORTH_MIN } from '../../core/ai/counterWorth';
+import { leanOf, type Lean } from '../../core/analysis/staffWords';
 import { rosterSorted } from '../../core/league/helpers';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
 
-/** A read's tone: half a point a game or more either way reads as a gain or a cost, as a measured change does. */
-export const fitTone = (pts: number): '' | 'good' | 'bad' => (pts >= WORTH_MIN ? 'good' : pts <= -WORTH_MIN ? 'bad' : '');
+/** A preset's reading against the one in use, points a game (against an average playbook when no preset is in use). */
+const versus = (id: string, fits: Record<string, number>, cur: string) => Math.round(fits[id] - (fits[cur] ?? 0)) / 10;
 
-/** "+0.6", "−1.2", "0.0": a read in points a game. */
-export const readText = (pts: number) => (pts > 0 ? `+${pts.toFixed(1)}` : pts < 0 ? `−${Math.abs(pts).toFixed(1)}` : '0.0');
+const TIER: Record<Lean, number> = { gain: 0, even: 1, cost: 2 };
 
-/** The presets by their fit, best first (ties keep the list's own order). */
-export function byFit<T extends { id: string }>(presets: T[], fits: Record<string, number>): T[] {
-  return [...presets].sort((a, b) => fits[b.id] - fits[a.id]);
+/**
+ * The presets by fit against the one in use: better fits, similar ones, worse ones, keeping the list's
+ * own order inside each, so the order says no more than the words beside it do.
+ */
+export function byFit<T extends { id: string }>(presets: T[], fits: Record<string, number>, cur: string): T[] {
+  const tier = (p: T) => TIER[leanOf(versus(p.id, fits, cur))];
+  return [...presets].sort((a, b) => tier(a) - tier(b));
 }
 
+/** The preset the staff reads as the best fit, what it would pick (ties: the list's first). */
+export const bestFit = <T extends { id: string }>(presets: T[], fits: Record<string, number>): T => presets.reduce((a, p) => (fits[p.id] > fits[a.id] ? p : a), presets[0]);
+
 export interface ShownFit {
-  /** Points a game against the playbook in use (0 for it). */
-  vs: number;
-  /** Its place among the presets, 1 for the best. */
-  rank: number;
-  /** What it's worth against an average playbook for this roster, points a game: start + parts, exactly. */
-  total: number;
-  /** What it's worth for a typical roster, before this roster's qualities move it. */
-  start: number;
-  /** Each roster quality's part, points a game (parts that round to nothing left out). */
+  /** Its lean against the playbook in use (even for that playbook itself). */
+  lean: Lean;
+  /** The roster qualities that move it, each with which way (parts that round to nothing left out). */
   parts: { term: FitTerm; v: number }[];
 }
 
-/**
- * Preset `id`'s fit as shown, against preset `cur` (the one in use). Worked in tenths of a point so
- * the start takes what the rounded parts leave and start + parts is the total exactly.
- */
+/** Preset `id`'s fit as shown, against preset `cur` (the one in use). */
 export function shownFit(id: string, terms: FitTerm[], fits: Record<string, number>, cur: string): ShownFit {
   const parts = terms
     .filter((t) => t.key !== 'base')
-    .map((term) => ({ term, v10: Math.round(term.value) }))
-    .filter((p) => p.v10 !== 0);
-  const total10 = Math.round(fits[id]);
-  const start10 = total10 - parts.reduce((a, p) => a + p.v10, 0);
-  const rank = 1 + Object.values(fits).filter((x) => x > fits[id]).length;
-  return {
-    vs: Math.round(fits[id] - (fits[cur] ?? fits[id])) / 10,
-    rank,
-    total: total10 / 10,
-    start: start10 / 10,
-    parts: parts.map(({ term, v10 }) => ({ term, v: v10 / 10 })),
-  };
+    .map((term) => ({ term, v: Math.round(term.value) }))
+    .filter((p) => p.v !== 0);
+  return { lean: leanOf(versus(id, fits, cur)), parts };
 }
 
 /** The tactics the user's staff would put in for this roster (as the hand-over does). */
@@ -61,10 +48,7 @@ export const userStaffTactics = (l: League): Tactics => {
   return autoTactics({ ...tm, tactics: { ...tm.tactics, manual: false } }, rosterSorted(l, l.userTid), false, { user: true });
 };
 
-/**
- * What the hand-over sheet says the staff would run: its playbooks and, by the staff's read (the style
- * picker's), what they're worth a game against the user's at the ends where he runs one.
- */
+/** What the hand-over sheet says the staff would run: its playbooks and how the staff reads them against the user's. */
 export function handOverLine(l: League, staff: Tactics): string {
   const t = l.teams[l.userTid].tactics;
   const name = `${OFF_PRESETS.find((p) => p.id === staff.offPreset)?.name ?? 'their offense'} · ${DEF_PRESETS.find((p) => p.id === staff.defPreset)?.name ?? 'their defense'}`;
@@ -74,6 +58,7 @@ export function handOverLine(l: League, staff: Tactics): string {
   const def = defPresetFit(pr);
   // (an end the user runs no playbook at reads as even: the read is of playbooks)
   const vs = (fits: Record<string, number>, mine: string, theirs: string) => (fits[mine] === undefined ? 0 : fits[theirs] - fits[mine]);
-  const v = Math.round(vs(off, t.offPreset, staff.offPreset) + vs(def, t.defPreset, staff.defPreset)) / 10;
-  return `Staff would run ${name}: ${v === 0 ? 'about even with yours' : `${readText(v)} a game against yours`} (the staff's read).`;
+  const lean = leanOf(Math.round(vs(off, t.offPreset, staff.offPreset) + vs(def, t.defPreset, staff.defPreset)) / 10);
+  const read = lean === 'gain' ? 'Better fit than yours' : lean === 'cost' ? 'Worse fit than yours' : 'About even with yours';
+  return `Staff would run ${name}. ${read}, by their read.`;
 }

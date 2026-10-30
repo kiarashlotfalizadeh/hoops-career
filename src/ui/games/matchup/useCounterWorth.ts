@@ -2,11 +2,12 @@
 // core/ai/counterWorth.ts) for the user's next game against them: a few seconds of games, once for
 // each state of the plan, the tactics and who's fit to play on either side (a counter added changes
 // what the others are worth), not again each day. Kept for the session, so the matchup page's tabs
-// and a return to it read the same numbers.
+// and a return to it say the same. The player gets the staff's opinion (worthText), never the figure.
 import { useEffect, useState } from 'react';
 import type { GamePlanItem, League } from '../../../core/types';
 import type { Candidate } from '../../../core/ai/advisor';
 import { worthCall, type CounterWorth } from '../../../core/ai/counterWorth';
+import { AHEAD, leanTone } from '../../../core/analysis/staffWords';
 import { effectiveTactics } from '../../../core/league/gamePlans';
 import { hashString } from '../../../core/random';
 import { measureCounters } from '../../../state/simClient';
@@ -104,19 +105,10 @@ export function useCounterWorth(league: League, opp: number): WorthState | null 
   return key ? (measured.get(key) ?? { progress: 0 }) : null;
 }
 
-/**
- * "Helps: about +0.6 a game", "No real change", "Hurts: about −0.5 a game": a measured counter as a
- * verdict and one number (its shrunk worth), with its tone. `short`: the number alone, for a line that
- * already says the verdict ("+0.6 a game").
- */
+/** "Should help", "Could hurt", "No clear edge": a measured counter as the staff's opinion, with its tone. `short`: the same inside a sentence. */
 export function worthText(w: CounterWorth): { text: string; tone: 'good' | 'bad' | undefined; short: string } {
   const call = worthCall(w);
-  const n = Math.abs(w.pts).toFixed(1);
-  return call === 'gain'
-    ? { text: `Helps: about +${n} a game`, tone: 'good', short: `+${n} a game` }
-    : call === 'cost'
-      ? { text: `Hurts: about −${n} a game`, tone: 'bad', short: `−${n} a game` }
-      : { text: 'No real change', tone: undefined, short: 'no real change' };
+  return { text: AHEAD[call], tone: leanTone(call) || undefined, short: AHEAD[call].toLowerCase() };
 }
 
 /** Counters by what they measured: gains first (the biggest first), then the ones too close to call, then the costs, the ones the staff didn't measure last. */

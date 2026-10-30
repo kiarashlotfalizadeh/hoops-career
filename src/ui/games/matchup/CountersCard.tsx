@@ -1,7 +1,7 @@
-// The Plan's counters: what the staff would change against this team, each a row with its measured
-// worth in tonight's game as a verdict and one number (see useCounterWorth: the gains first, the
-// costs behind "more") and Add. A row opens on the rest: exactly what it changes in the Tactics
-// screen's words, why, the numbers behind it, and Always (confirmed: in your tactics for every game).
+// The Plan's counters: what the staff would change against this team, each a row with the staff's
+// opinion of it tonight (see useCounterWorth: the ones it likes first, the costs behind "more") and
+// Add. A row opens on the rest: exactly what it changes in the Tactics screen's words, why, the
+// scouting behind it, and Always (confirmed: in your tactics for every game).
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
@@ -66,14 +66,14 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
       right={
         <Help title="Counters">
           <p>
-            A <Term id="counter">counter</Term> is a change aimed at one opponent. Its number is what it adds a game, over hundreds of replays.
+            A <Term id="counter">counter</Term> is a change aimed at one opponent. The word under it is the staff&apos;s opinion.
           </p>
         </Help>
       }
     >
       <div className="card flush list">
         {!cands.length && <div className="mu-empty">Your plan already covers what the staff sees.</div>}
-        {cands.length > 0 && shown === 0 && !all && <div className="mu-empty">By the staff&apos;s numbers, none of its counters beats how you play them now.</div>}
+        {cands.length > 0 && shown === 0 && !all && <div className="mu-empty">The staff doesn&apos;t see a counter that beats how you play them now.</div>}
         {visible.map((c) => {
           const added = inPlan.has(c.id);
           const w = worth?.get(c.id);
@@ -144,16 +144,9 @@ function CounterChanges({ league, opp, c }: { league: League; opp: number; c: Ca
   return line ? <div className="mu-changes">{line}</div> : null;
 }
 
-/**
- * A counter's measured worth as a verdict and one number, the line under its name (or that it's being
- * measured). The raw reading and its ± are its title, a long press down.
- */
+/** The staff's opinion of a counter, the line under its name (or that they're still looking at it). */
 export function WorthTag({ w, measuring }: { w?: CounterWorth; measuring: boolean }) {
-  if (!w) return measuring ? <span className="mu-worth dim">Measuring…</span> : null;
+  if (!w) return measuring ? <span className="mu-worth dim">Staff still looking…</span> : null;
   const { text, tone } = worthText(w);
-  return (
-    <span className={`mu-worth ${tone ?? 'dim'}`} title={`Measured ${w.raw >= 0 ? '+' : '−'}${Math.abs(w.raw).toFixed(1)} a game, ±${w.se.toFixed(1)}`}>
-      {text}
-    </span>
-  );
+  return <span className={`mu-worth ${tone ?? 'dim'}`}>{text}</span>;
 }

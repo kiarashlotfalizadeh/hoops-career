@@ -13,13 +13,14 @@ import { ALL_SCHEMES, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, shapeOf
 import { betterFit, defRoleFits, roleFits, roleScale, roleStars, type RoleScale } from '../../core/analysis/system';
 import { fitRoster, shapeFits } from '../../core/ai/coachAI';
 import { composites } from '../../core/ratings';
+import { FIT, leanOf, leanTone, type Lean } from '../../core/analysis/staffWords';
 import { rosterNames } from '../stats';
 import { Help, Section } from '../components/ui';
 import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
 import { HeadSwitch } from './HeadSwitch';
 import { tweak } from './edit';
-import { BOARD_H, DEF_SPOTS, OFF_SPOTS, fitPts, place, type BoardPlayer } from './formation';
+import { BOARD_H, DEF_SPOTS, OFF_SPOTS, place, type BoardPlayer } from './formation';
 
 export type BoardSide = 'in' | 'out';
 
@@ -54,8 +55,10 @@ function rowOf(t: Tactics, p: Player, scale: RoleScale): Row {
   };
 }
 
-/** A shape's fit as a tone: half a point a game or more either way shows. */
-const fitClass = (v: number) => (v >= 5 ? 'good' : v <= -5 ? 'bad' : '');
+/** A shape's fit against 4-Out, 1-In as a lean (shapeFits reads in tenths of a point a game). */
+const shapeLean = (v: number): Lean => leanOf(Math.round(v) / 10);
+
+const TIER: Record<Lean, number> = { gain: 0, even: 1, cost: 2 };
 
 /** First sentence of a line of help. */
 const first = (s: string) => s.split(/(?<=\.)\s/)[0];
@@ -137,9 +140,10 @@ export function Board({
                   else tt.offense.shape = s;
                 })
               }
-              help={<>Where your five stand in the half court, with any playbook. Each figure is the staff&apos;s read for this roster against 4-Out, 1-In.</>}
+              help={<>Where your five stand in the half court, with any playbook. Each read is the staff&apos;s, for this roster against 4-Out, 1-In.</>}
+              // (better fits first, the list's own order inside each: the order says no more than the words)
               options={[...OFF_SHAPES]
-                .sort((a, b) => fits[b] - fits[a])
+                .sort((a, b) => TIER[shapeLean(fits[a])] - TIER[shapeLean(fits[b])])
                 .map((s) => ({
                   id: s,
                   label: SHAPE_META[s].label,
@@ -147,7 +151,7 @@ export function Board({
                     <>
                       {s !== 'fourOut' && (
                         <>
-                          <b className={fitClass(fits[s])}>{fitPts(fits[s])} a game</b> ·{' '}
+                          <b className={leanTone(shapeLean(fits[s]))}>{FIT[shapeLean(fits[s])]}</b> ·{' '}
                         </>
                       )}
                       {first(SHAPE_META[s].help)}
@@ -165,7 +169,8 @@ export function Board({
               note={
                 shape === 'fourOut' ? undefined : (
                   <>
-                    Staff&apos;s read: <b className={fitClass(fits[shape])}>{fitPts(fits[shape])}</b> a game against 4-Out, 1-In
+                    Staff&apos;s read: <b className={leanTone(shapeLean(fits[shape]))}>{FIT[shapeLean(fits[shape])].toLowerCase()}</b>
+                    {shapeLean(fits[shape]) === 'even' ? ' to' : ' than'} 4-Out, 1-In
                   </>
                 )
               }

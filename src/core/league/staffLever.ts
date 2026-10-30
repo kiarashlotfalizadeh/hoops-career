@@ -11,13 +11,13 @@
 // in the worker), over his next LEVER_AHEAD games, each played as the tactics stand and with the
 // change, game for game on the same seeds, pooled and shrunk toward even (counterWorth.ts). A reading
 // that clears WORTH_MIN and LEVER_Z standard errors:
-// - the staff runs his tactics: it goes in, with a mail that says what was measured, the digest's
-//   line and Undo on Tactics (a StaffMove: it holds while the playbook and identity it was made on
+// - the staff runs his tactics: it goes in, with a mail that says what the staff makes of it, the
+//   digest's line and Undo on Tactics (a StaffMove: it holds while the playbook and identity it was made on
 //   do; undone, the staff doesn't make it again that season);
-// - he runs them himself: a card offers it with the number (leverCard, through teamAlerts).
+// - he runs them himself: a card offers it, in words (leverCard, through teamAlerts).
 // Anything less changes nothing, and isn't measured again that season on the same tactics and roster
 // (the next look is the tally's next candidate: round 4 found the same rejected change measured six
-// times a season); the staff says what it measured (the digest's staff report, and Tactics →
+// times a season); the staff says what it makes of it, in words, never the figure (the digest's staff report, and Tactics →
 // Analysis's row: leverReport). AI staffs don't read the tally at all: they run their coach's fit
 // (autoTactics). Nothing here draws from the league's random stream.
 import type { League, Tactics, TacticsPatch } from '../types';
@@ -29,6 +29,7 @@ import { WORTH_MIN, measureChanges, poolWorth, type WorthOpts } from '../ai/coun
 import { STAFF_LEVERS, leverCounter, seasonLevers, type Alert } from '../ai/advisor';
 import { gamesAhead } from '../ai/tacticEdits';
 import { leadAssistant } from '../ai/assistant';
+import { AHEAD, type Lean } from '../analysis/staffWords';
 import { STAFF_REPORT, notePick } from './weekCall';
 
 /**
@@ -188,14 +189,8 @@ const oneSetting = (words: [string, string, string][] | undefined) => (words?.le
 /** A setting moved between named options ("Drop" to "Hedge"), not between levels shown as numbers. */
 const named = (w: [string, string, string]) => Number.isNaN(Number(w[1])) && Number.isNaN(Number(w[2]));
 
-const signed = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(1)}`;
-const games = (n: number) => (n === 1 ? 'game' : `${['', 'one', 'two', 'three', 'four', 'five', 'six'][n] ?? n} games`);
-
-/** A reading as a verdict and one number (DESIGN.md): "Helps: +1.1 a game", "Hurts: −0.6 a game", "No real change". */
-function verdict(r: Pick<LeverReading, 'pts' | 'raw' | 'se'>): string {
-  if (leverClears(r)) return `Helps: ${signed(r.pts)} a game`;
-  return r.pts <= -WORTH_MIN ? `Hurts: ${signed(r.pts)} a game` : 'No real change';
-}
+/** Which way a reading leans for the staff: a gain only when it clears the bar they'd make it on. */
+const leanOfReading = (r: Pick<LeverReading, 'pts' | 'raw' | 'se'>): Lean => (leverClears(r) ? 'gain' : r.pts <= -WORTH_MIN ? 'cost' : 'even');
 
 /** What a change moved, in the screen's words: "Ball-screen coverage: Switch → Drop · Help defense: …". */
 const changeLine = (words: [string, string, string][]) => words.map((w) => (w[1] || w[2] ? `${w[0]}: ${w[1]} → ${w[2]}` : w[0])).join(' · ');
@@ -245,7 +240,7 @@ async function measureLever(league: League, opts: WorthOpts & { onMeasure?: () =
   if (!leverClears(r)) {
     const from = keptWords(words);
     // (in the staff's third person, as the digest says it)
-    notePick(league, `${STAFF_REPORT} tried ${triedWords(words)} over the next ${games(r.games)}. ${verdict(r)}. Keeping ${from}.`);
+    notePick(league, `${STAFF_REPORT} tried ${triedWords(words)}. ${AHEAD[leanOfReading(r)]}. Keeping ${from}.`);
   }
   return true;
 }
@@ -257,10 +252,10 @@ const keptWords = (words: [string, string, string][] | undefined) => {
 };
 
 /**
- * The staff's latest reading this season, as Tactics → Analysis lists it: the change, what it
- * measured a game, and one line (when, on what, and what came of it). Null before the first.
+ * The staff's latest reading this season, as Tactics → Analysis lists it: the change, which way it
+ * leaned, and one line (when, and what came of it). Null before the first.
  */
-export function leverReport(league: League): { pts: number; title: string; meta: string } | null {
+export function leverReport(league: League): { lean: Lean; title: string; meta: string } | null {
   const st = stateOf(league);
   const r = st.readings[st.readings.length - 1];
   if (!r) return null;
@@ -273,7 +268,7 @@ export function leverReport(league: League): { pts: number; title: string; meta:
     : leverClears(r)
       ? 'yours to make on Team'
       : `kept ${keptWords(r.words)}`;
-  return { pts: r.pts, title: r.label, meta: `${fmtDate(league.season, r.day)} · ${came}` };
+  return { lean: leanOfReading(r), title: r.label, meta: `${fmtDate(league.season, r.day)} · ${came}` };
 }
 
 /**
@@ -324,10 +319,10 @@ export function leverDecide(league: League): StaffMove | null {
   addInbox(league, {
     from: `${lead.name}, lead assistant`,
     subject: `Staff change: ${r.label}`,
-    body: `${changeLine(words)}. I played our next ${games(r.games)} both ways, on the same seeds. It helps: ${signed(r.pts)} a game, so I've made the change. Undo it on Team → Tactics if you'd rather not.`,
+    body: `${changeLine(words)}. I tried it both ways. It seems to help, so I've made the change. Undo it on Team → Tactics if you'd rather not.`,
     link: '/team/tactics',
   });
-  notePick(league, `${staffMoved(m)}. Helps: ${signed(r.pts)} a game.`);
+  notePick(league, `${staffMoved(m)}. It seems to help.`);
   return m;
 }
 
@@ -354,9 +349,9 @@ function staffMoved(m: Pick<StaffMove, 'words' | 'label'>, on = ''): string {
   return s === m.label ? `Staff made a change${on}: ${s}` : `Staff moved ${s.charAt(0).toLowerCase()}${s.slice(1)}${on}`;
 }
 
-/** "Staff moved ball-screen coverage to Drop on Nov 10. Helps: +1.1 a game.": a move as the screens name it. */
+/** "Staff moved ball-screen coverage to Drop on Nov 10. It seems to help.": a move as the screens name it. */
 export function moveLine(league: League, m: StaffMove): string {
-  return `${staffMoved(m, ` on ${fmtDate(league.season, m.day)}`)}. Helps: ${signed(m.pts)} a game.`;
+  return `${staffMoved(m, ` on ${fmtDate(league.season, m.day)}`)}. It seems to help.`;
 }
 
 /** Put a move's settings back (Undo): the staff doesn't make it again this season. False if it isn't in force. */
@@ -391,8 +386,8 @@ export function leverCard(league: League): Alert | null {
   return {
     id: `lever-${r.what}`,
     tone: 'alert',
-    title: `${r.label}: helps ${signed(r.pts)} a game`,
-    body: `${changeLine(words)}. Measured ${fmtDate(league.season, r.day)} on your next ${games(r.games)}.`,
+    title: `${r.label}: should help`,
+    body: `${changeLine(words)}. The staff's read on ${fmtDate(league.season, r.day)}.`,
     // (where the change is made: the scheme on the board's out-of-possession end, the rest in an Instructions phase)
     link: patch.defense?.scheme ? '/team/tactics?side=out' : `/team/tactics/instructions${patch.defense ? '?phase=outPoss' : ''}`,
     fix: { kind: 'patch', patch, label: r.label },

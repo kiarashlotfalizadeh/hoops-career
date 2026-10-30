@@ -395,14 +395,14 @@ describe('scouting and the staff', () => {
       expect(res.plan).toEqual([{ label: 'Change the coverage', end: 'def', types: ['pnrBH', 'pnrRoll'], pts: 0.6 }]);
       const d = debrief(league, res, buildGameReport(league, res)!);
       expect(d.plan).toHaveLength(1);
-      // graded on its measured worth (a gain at +0.6), the night beside it
-      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', worth: '+0.6 a game', call: 'gain' });
+      // graded on its measured worth (a gain at +0.6), the night beside it; the player gets the words, no figure
+      expect(d.plan[0]).toMatchObject({ label: 'Change the coverage', call: 'gain' });
       expect(d.plan[0].line).toMatch(/pick-and-roll/);
       expect(['better', 'worse', 'same', 'few']).toContain(d.plan[0].night);
       // a bad night for a counter measured a gain: one clause bridges the two (their pick-and-roll at 2.00 a trip)
       const theirs = res.home.tid === opp ? res.home : res.away;
       theirs.playTypes = { ...theirs.playTypes, pnrBH: { poss: 20, pts: 40 }, pnrRoll: { poss: 0, pts: 0 } };
-      expect(debrief(league, res, buildGameReport(league, res)!).plan[0]).toMatchObject({ night: 'worse', bridge: "A bad night for it. Over many games it's worth +0.6 a game." });
+      expect(debrief(league, res, buildGameReport(league, res)!).plan[0]).toMatchObject({ night: 'worse', bridge: 'A bad night for it. Over many games it should still help.' });
       // a counter measured even is even, whatever one night did (and there's nothing to bridge)
       res.plan![0].pts = undefined;
       const even = debrief(league, res, buildGameReport(league, res)!).plan[0];

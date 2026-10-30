@@ -25,7 +25,7 @@ import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
-import { money, moneySigned, moneyExact, plural } from '../../core/format';
+import { money, moneySigned, plural } from '../../core/format';
 import { FROZEN_BUDGET, booksOf, booksOutlook } from '../../core/league/books';
 import './finances.css';
 
@@ -298,30 +298,19 @@ function BudgetTab({ team }: { team: Team }) {
       label: 'Facilities',
       effect: (lvl) => {
         const fans = attendanceFor(league, withBudget({ facilities: lvl })) - attendanceFor(league, withBudget({ facilities: 50 }));
-        if (fans !== 0) return `${fans > 0 ? '+' : ''}${fans.toLocaleString()} fans a home game vs average, at your price`;
+        if (fans !== 0) return fans > 0 ? 'Draws more fans than average' : 'Draws fewer fans than average';
         const dollars = Math.round(referencePrice(league, withBudget({ facilities: lvl })) - referencePrice(league, withBudget({ facilities: 50 })));
         if (dollars === 0) return 'League-average fan demand';
-        return `Fans value a ticket $${Math.abs(dollars)} ${dollars > 0 ? 'more' : 'less'} than at an average arena`;
+        return `Fans value a ticket ${dollars > 0 ? 'more' : 'less'} than at an average arena`;
       },
       help: 'Arena upgrades, the practice facility and fan experience. Better facilities raise ticket demand: bigger crowds, more gate revenue.',
     },
   ];
-  // ticket price: attendance estimate on a temporary copy of the team; the range grows with league revenue
-  const priceAt = (price: number) => attendanceFor(league, withBudget({ ticketPrice: price }));
+  // ticket price: the crowd in a word, from the attendance model on a temporary copy of the team; the range grows with league revenue
   const price = team.budget.ticketPrice;
   const scale = revenueScale(league);
   const [minPrice, maxPrice] = [30, 250].map((x) => Math.max(5, Math.round((x * scale) / 5) * 5));
-  const att = priceAt(price);
-  const seats = arenaCapacity(team);
-  const gate = (att * price) / 1000;
-  const sweet = (() => {
-    let best = { p: price, g: 0 };
-    for (let p = minPrice; p <= maxPrice; p += 5) {
-      const g = (priceAt(p) * p) / 1000;
-      if (g > best.g) best = { p, g };
-    }
-    return best;
-  })();
+  const fill = attendanceFor(league, withBudget({ ticketPrice: price })) / arenaCapacity(team);
   const totalBudget = items.reduce((a, it) => a + cost(team.budget[it.k]), 0);
   // what profit counts for in the owner's review this season (his money goal may be the payroll instead)
   const profitGoal = currentGoals(league)?.goals.find((g) => g.kind === 'profit');
@@ -409,21 +398,15 @@ function BudgetTab({ team }: { team: Team }) {
           <Statline
             items={[
               {
-                k: 'Est. crowd',
-                v: att >= seats ? 'Sellout' : att.toLocaleString(),
-                s: `${Math.round((att / seats) * 100)}% full`,
-                color: att >= seats ? 'var(--good)' : undefined,
+                k: 'Crowd',
+                v: fill >= 1 ? 'Packed' : fill >= 0.8 ? 'Mostly full' : 'Empty seats',
+                color: fill >= 1 ? 'var(--good)' : undefined,
               },
-              { k: 'Gate / game', v: moneyExact(gate) },
-              { k: 'Season gate', v: money(gate * 41), s: '41 home games' },
             ]}
           />
-          <div className="small dim2">
-            Gate revenue peaks near <b className="num">${sweet.p}</b>: {money(sweet.g * 41)} a season.
-          </div>
           <More>
             <div className="small dim2 fo-help">
-              <p>Higher prices earn more per fan but thin the crowd. The peak is at today&apos;s demand.</p>
+              <p>Higher prices earn more per fan but thin the crowd. The best price moves with demand.</p>
               {!team.budget.priceSet && <p>Until you set a price, the staff prices tickets at the peak each opening night.</p>}
               <p>Playoff games sell at a {Math.round((PLAYOFF_PRICE_MULT - 1) * 100)}% premium. Prices rise with league revenue each summer.</p>
             </div>

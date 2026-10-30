@@ -1,5 +1,5 @@
 // The staff's change to the playbook it runs, on the Tactic section under the assistant's switch (its
-// one home): what moved, that the staff moved it, when, a verdict and one number, and Undo
+// one home): what moved, that the staff moved it, when, what they make of it, and Undo
 // (staffLever.ts). Without one in force, nothing.
 import { edit } from '../../state/actions';
 import { useLeague, useLeagueMemo } from '../../state/store';

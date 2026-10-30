@@ -6,30 +6,30 @@
 // moves). The box score, the team numbers and the play types are the Stats and Game plan views', a tap
 // away on the bench bar.
 // The huddle is the short version for a timeout: late in a close game the play call first (built around
-// your closer, each play measured from where the game stands against no call, best first:
-// usePlayWorth), then who to sub and the staff's top move; the last possession of a close game stops
-// for the same play call without one. The staff's call says what it measured from this spot (calls.ts),
-// or that nothing it measured clears the noise. The next period, or the game, goes on from the bench bar.
+// your closer, with the staff's pick marked: usePlayWorth), then who to sub and the staff's top move; the
+// last possession of a close game stops for the same play call without one. The staff's call says what
+// it would do from this spot (calls.ts), or that it would change nothing. The next period, or the game,
+// goes on from the bench bar.
 import { useMemo } from 'react';
-import { Check, FastForward, Timer } from 'lucide-react';
+import { Check, FastForward, Lightbulb, Timer } from 'lucide-react';
 import type { CallId, CoachMove, GameAdjustment, League, Tactics, Team } from '../../core/types';
 import { buildGameReport, decidingFactors } from '../../core/analysis/gameReport';
 import { ACTION_META } from '../../core/sim/tactics';
 import { CLEAR_OUT, SETS, atoLabel, callLabel } from '../../core/sim/sets';
 import { gameTime, plural } from '../../core/format';
 import type { GameKey } from '../../core/analysis/keys';
-import { Help, Section } from '../components/ui';
+import { Section } from '../components/ui';
 import { KeysLive } from '../components/GameKeys';
-import { fmtClock, periodLabel, signed } from '../stats';
-import { closeGame, foulLimit } from './alerts';
+import { fmtClock, periodLabel } from '../stats';
+import { edgeWord } from '../../core/analysis/staffWords';
+import { closeGame } from './alerts';
+import { Trouble } from './Trouble';
 import type { Drawn } from './drawn';
 import { AssistantHead, MovesList, NoteCard } from '../components/StaffCards';
-import { noteView } from './StaffView';
 import type { StaffAction, StaffNote } from './staff';
 import { keysShare } from './session';
 import { playOptions, readStatus, type PlayOption } from './plays';
-import { usePlayWorth, type PlayReading } from './usePlayWorth';
-import { CHOICE_GAMES } from '../../state/liveWorth';
+import { favoured, usePlayWorth, type PlayReading } from './usePlayWorth';
 import { CLUTCH_SEC, pendingLive } from '../../state/live';
 
 interface Common {
@@ -56,58 +56,10 @@ interface Common {
   quiet?: string | null;
 }
 
-/** Your five going into the next stretch who are tired or in foul trouble, each with the staff's sub. */
-function Trouble({ view, side, tactics, names, subFor, substitute, huddle }: Common & { huddle: boolean }) {
-  const q = view.q;
-  const me = view.sides[side];
-  // in the huddle, as things stand; at a break, going into the next period (its foul limit, the break's rest)
-  const limit = foulLimit(huddle ? q : q + 1, tactics.manage.foulTrouble);
-  const rest = huddle ? 0 : q === 2 ? 0.3 : 0.1;
-  const fat = tactics.manage.fatigueSub;
-  const trouble = me.players
-    .filter((p) => me.on.includes(p.pid))
-    // (one foul from where the staff sits him, and never a single foul: one in the first quarter isn't trouble)
-    .map((p) => ({ p, energy: Math.min(1, p.energy + rest), fouls: p.fouls >= Math.max(2, limit - 1) }))
-    .filter((x) => x.p.out === 0 && (x.energy < fat + 0.1 || x.fouls))
-    .sort((a, b) => a.energy - b.energy)
-    .slice(0, 4);
-  if (!trouble.length) return null;
-  return (
-    <Section title="Tired or in foul trouble">
-      <div className="card flush list">
-        {trouble.map(({ p, energy, fouls }) => {
-          const sub = subFor(p.pid);
-          const tired = energy < fat + 0.1;
-          return (
-            <div key={p.pid} className="lv-bk-row">
-              <div className="lv-bk-who">
-                <div className="bold ellipsis">{names(p.pid)}</div>
-                <div className="small num">
-                  <span className={tired ? 'warn' : 'dim'}>{Math.round(energy * 100)}% energy</span>
-                  <span className="dim"> · </span>
-                  <span className={fouls ? 'warn' : 'dim'}>{plural(p.fouls, 'foul')}</span>
-                </div>
-              </div>
-              {sub !== undefined ? (
-                <button className="btn sm" onClick={() => substitute(p.pid, sub)}>
-                  {names(sub)} in
-                </button>
-              ) : (
-                <span className="tiny dim">No rested sub</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </Section>
-  );
-}
-
 /**
- * What's deciding the game so far: the report's biggest edges (each worth so many points of the
- * margin), as reads. The counter to one going against you is the staff's to measure from here before
- * it's offered (calls.ts: its call leads the report when one clears), so an edge carries its detail,
- * not a one-tap fix with no number (or one the staff's numbers call a cost).
+ * What's deciding the game so far: the report's biggest edges, sized in a word, as reads. The counter
+ * to one going against you is the staff's to measure from here before it's offered (calls.ts: its call
+ * leads the report when one clears), so an edge carries its detail, not a one-tap fix.
  */
 function useDeciding(league: League, view: Drawn, tactics: Tactics): StaffNote[] {
   return useMemo(() => {
@@ -118,7 +70,7 @@ function useDeciding(league: League, view: Drawn, tactics: Tactics): StaffNote[]
       tone: f.pts >= 0 ? 'good' : 'bad',
       title: f.title,
       text: f.detail,
-      fig: { v: `${f.pts > 0 ? '+' : f.pts < 0 ? '−' : ''}${Math.abs(f.pts).toFixed(1)}`, unit: 'pts' },
+      tag: edgeWord(f.pts),
       actions: [],
       rank: 60 + Math.abs(f.pts),
     }));
@@ -144,7 +96,7 @@ function Decisions({
       {list.length > 0 ? (
         <div className="lv-notes">
           {list.map((n) => (
-            <NoteCard key={n.id} note={noteView(n)} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
+            <NoteCard key={n.id} note={n} busy={busy} onAct={(a) => onAct(n, a)} onDismiss={() => onDismiss(n)} />
           ))}
         </div>
       ) : (
@@ -211,7 +163,7 @@ export function PeriodReport(
       </div>
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
       <Decisions {...props} max={3} deciding={deciding} />
-      <Trouble {...props} huddle={false} />
+      <Trouble view={view} side={side} tactics={props.tactics} names={names} subFor={props.subFor} substitute={props.substitute} ahead />
       {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, q)} />}
       <Section title="Both benches">
         <div className="lv-coaches">
@@ -251,22 +203,11 @@ function playLook(p: PlayOption, view: Drawn, side: 0 | 1, names: (pid: number) 
   return `${r.runs ? `${r.text} · ` : ''}${cap(SETS[p.id].look)}`;
 }
 
-/** What one play's reading says, beside it: its win chance against no call, no real change, or still being measured. */
-function PlayWorth({ r }: { r: PlayReading | null }) {
-  if (!r) return <span className="lv-pc-worth tiny dim">Measuring…</span>;
-  if (!r.clear) return <span className="lv-pc-worth tiny dim">No real change</span>;
-  return (
-    <span className={`lv-pc-worth num ${r.win > 0 ? 'good' : 'bad'}`}>
-      {signed(r.win * 100, 0)}%<span className="lv-pc-u">to win</span>
-    </span>
-  );
-}
-
 /**
  * The late play call, at the top of a late huddle and of the last possession: built around your closer
- * (who he is, in a line), his isolation and his sets first, each play saying who it's for and what it's
- * worth from here (the rest of the game played out with it against no call: usePlayWorth), best first
- * once they're measured, the one called lit; under it, when it runs.
+ * (who he is, in a line), his isolation and his sets first, each play saying who it's for, the staff's
+ * pick marked once it has one (the rest of the game played out against no call: usePlayWorth), the one
+ * called lit; under it, when it runs.
  */
 function PlayCall({
   plays,
@@ -292,9 +233,7 @@ function PlayCall({
   readings: PlayReading[] | null;
 }) {
   const goTo = tactics.manage.goTo;
-  // best first once measured: the win chance, then the margin
-  const rows = plays.map((p, i) => ({ p, r: readings?.[i] ?? null }));
-  if (readings) rows.sort((a, b) => b.r!.win - a.r!.win || b.r!.pts - a.r!.pts);
+  const pick = favoured(readings);
   const who =
     goTo === closer
       ? `${names(closer)} is your go-to.`
@@ -305,7 +244,7 @@ function PlayCall({
     <Section title="Call the play">
       <div className="small dim2 lv-pc-who">{who}</div>
       <div className="card flush list" role="group" aria-label="Call the play">
-        {rows.map(({ p, r }) => {
+        {plays.map((p, i) => {
           const on = called?.set === p.id && (called.pid === null || called.pid === p.pid);
           return (
             <button key={`${p.id}-${p.pid}`} className={`lv-pc${on ? ' on' : ''}`} aria-pressed={on} disabled={busy} onClick={() => onCall(p.id, p.pid)}>
@@ -316,20 +255,16 @@ function PlayCall({
                 <span className="lr-name">{callLabel(p.id, names(p.pid))}</span>
                 <span className="lr-meta ellipsis">{playLook(p, view, side, names, defenderOf)}</span>
               </span>
-              <PlayWorth r={r} />
+              {pick === i && (
+                <span className="lv-pc-pick">
+                  <Lightbulb size={13} aria-hidden="true" /> Staff&apos;s pick
+                </span>
+              )}
             </button>
           );
         })}
       </div>
-      <div className="small dim lv-pc-foot">
-        {foot}
-        {readings && (
-          <Help title="How the plays are measured">
-            <p>Each play against no call: the rest of the game played {CHOICE_GAMES} times each way.</p>
-            <p>The figure is the change in your chance to win. No real change: inside the noise.</p>
-          </Help>
-        )}
-      </div>
+      <div className="small dim lv-pc-foot">{foot}</div>
     </Section>
   );
 }
@@ -394,7 +329,7 @@ export function Huddle(
           </div>
         </div>
         {call}
-        <Trouble {...props} huddle />
+        <Trouble view={view} side={side} tactics={tactics} names={names} subFor={props.subFor} substitute={props.substitute} />
       </div>
     );
   }
@@ -406,8 +341,8 @@ export function Huddle(
       {call}
       <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
       <Decisions {...props} max={2} deciding={deciding} />
-      <Trouble {...props} huddle />
-      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} compact />}
+      <Trouble view={view} side={side} tactics={tactics} names={names} subFor={props.subFor} substitute={props.substitute} />
+      {keys && keys.length > 0 && <KeysLive keys={keys} box={view.box} side={side} share={keysShare(view.elapsed, view.q)} />}
       {/* (the saved after-timeout play, read-only: it's set away from the game, so with none there's nothing to say) */}
       {!call && atoText && (
         <Section title="Out of the timeout">
