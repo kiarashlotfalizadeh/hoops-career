@@ -3,6 +3,7 @@
 // who got back.
 
 import { clamp } from '../../random';
+import { GAME } from '../../constants';
 import { K, lev } from './constants';
 import type { ST, Ctx } from './state';
 import type { GameSim } from './game';
@@ -67,6 +68,26 @@ export const transitionMethods = {
     const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, h, this.stealBy(this.stealer(def), 0.5), 'transition');
+      return;
+    }
+    // a clear run-out stopped with a take foul: a free throw and the ball (NBA, from 2023-24)
+    if (adv > 0.6 && this.clock > 120 && this.rng.chance(K.takeFoul)) {
+      const d0 = this.defOf(def, h);
+      if (this.record) {
+        this.addPbp(def.side, `Take foul on ${d0.name}.`, 'foul');
+        this.cur!.steps.push({ k: 'foul', pid: d0.pid, pid2: h.pid });
+      }
+      this.addFoul(def, d0);
+      this.inTransition = false;
+      const sh = off.on.reduce((a, x) => (x.ftPct > a.ftPct ? x : a), off.on[0]);
+      this.extraFreeThrow(off, def, sh, 'transition take foul');
+      if (this.cur) this.cur.kind = 'half';
+      this.tick(this.rng.uniform(3, 6));
+      if (this.clock <= 0.05) {
+        this.clockOut(off);
+        return;
+      }
+      this.halfCourt(off, def, GAME.shotClock, this.lateMode(off, def), this.paceF(off));
       return;
     }
     // shot selection

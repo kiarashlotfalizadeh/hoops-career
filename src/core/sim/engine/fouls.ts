@@ -16,25 +16,18 @@ export const foulsMethods = {
     const defDiff = def.score - off.score;
     let fouled: SP | null = null;
     let tag = '';
+    this.foulAt = 0;
     if (final && def.t.manage.foulWhenTrailing && defDiff < 0) {
-      const down = -defDiff;
-      // only while there is time to score twice more after the free throws: down one or two, a foul
-      // still buys a last shot; down three a stop and a three tie it, and a foul (two free throws)
-      // would make it a two-possession game, so they defend; down four or more with seconds left a
-      // foul only pads the margin
-      // (down four to six there's time for a stop until the leader can run the shot clock out; down
-      // seven to nine they foul sooner, though the further down the fewer coaches still do: there's
-      // hardly a way back)
-      const reach = down <= 6 ? 1 : down === 7 ? 0.6 : down === 8 ? 0.35 : 0.15;
-      const from = down <= 6 ? 30 : 50;
-      if ((down >= 4 && down <= 9 && clock <= from && clock > 6 && (reach === 1 || this.rng.chance(reach))) || (down <= 2 && clock <= 24 && clock > 1.2)) {
-        // offense gets the ball to its best free throw shooters
-        const ws = off.on.map((p) => Math.pow(p.ftPct, 6) * (0.5 + p.c.ballSec / 100));
-        fouled = off.on[this.rng.weighted(ws)];
+      // when on this trip the trailing defense fouls (decided once, as the ball comes in): now, or when
+      // the clock gets down to it (see halfCourt)
+      this.foulAt = this.lateFoulAt(def, -defDiff, clock, GAME.shotClock);
+      if (this.foulAt > 0 && clock <= this.foulAt) {
+        this.foulAt = 0;
+        fouled = this.lateFoulTarget(off);
         tag = 'late_foul';
       }
     }
-    if (!fouled && final && def.t.manage.foulUp3 && defDiff === 3 && clock <= 7 && clock >= 1.5) {
+    if (!fouled && final && def.habit.foulUp3 && defDiff === 3 && clock <= 7 && clock >= 1.5) {
       const ws = off.on.map((p) => this.usageWeight(p, off, 'any'));
       fouled = off.on[this.rng.weighted(ws)];
       tag = 'foul_up3';
@@ -67,6 +60,56 @@ export const foulsMethods = {
       }
     }
     if (!fouled) return null;
+    return this.commitFoul(off, def, fouled, tag);
+  },
+
+  /**
+   * The seconds left at which the trailing defense (down `down` in the fourth quarter or overtime)
+   * fouls on the trip just begun, or 0 for none on it. Down three or less, it fouls once the leader
+   * could run the clock out (the game clock under the shot clock), as real teams do 81-86% of the
+   * time, the rest playing for a steal first (the coach's habit); with more time left now and then it
+   * fouls a few seconds in anyway, for two trips to the leader's one (25-37% of the chances). Down
+   * four to six it fouls from about half a minute (71-72% of the chances at 24-40 seconds), down
+   * seven to nine sooner, the further down the fewer coaches still do. Down four or more with
+   * seconds left a foul only pads the margin.
+   */
+  lateFoulAt(this: GameSim, def: ST, down: number, clock: number, shotLeft: number): number {
+    if (clock <= 1.2) return 0;
+    const r = this.rng.next();
+    if (down <= 3) {
+      if (clock <= shotLeft + 1) return r < def.habit.lateFoul ? clock : 0;
+      if (clock <= 40) return r < K.lateFoul.early ? clock - this.rng.uniform(2, 9) : 0;
+      return 0;
+    }
+    if (down <= 6) {
+      if (clock <= 6) return 0;
+      if (clock <= 32) return r < K.lateFoul.two ? clock : 0;
+      if (clock <= 46) return r < K.lateFoul.twoEarly ? this.rng.uniform(26, 33) : 0;
+      return 0;
+    }
+    if (down <= 9 && clock > 6 && clock <= 52) {
+      const reach = down === 7 ? 0.6 : down === 8 ? 0.35 : 0.15;
+      return r < reach ? Math.min(clock, 50) : 0;
+    }
+    return 0;
+  },
+
+  /** Late in a game the offense gets the ball to its best free throw shooters, and the defense fouls whoever has it. */
+  lateFoulTarget(this: GameSim, off: ST): SP {
+    const ws = off.on.map((p) => Math.pow(p.ftPct, 6) * (0.5 + p.c.ballSec / 100));
+    return off.on[this.rng.weighted(ws)];
+  },
+
+  /**
+   * The trailing defense fouls as planned partway through the trip (see lateFoulAt): 'ft' when it sent
+   * him to the line (the trip is over), 'sideout' when short of the penalty it was only a side out.
+   */
+  midTripFoul(this: GameSim, off: ST, def: ST): 'ft' | 'sideout' {
+    this.foulAt = 0;
+    return this.commitFoul(off, def, this.lateFoulTarget(off), 'late_foul');
+  },
+
+  commitFoul(this: GameSim, off: ST, def: ST, fouled: SP, tag: string): 'ft' | 'sideout' {
     if (this.cur) {
       this.cur.kind = 'ft';
       this.cur.label = tag === 'hack' ? `Hack-a-${fouled.name}` : tag === 'foul_give' ? 'Foul to give' : 'Intentional foul';
@@ -120,14 +163,34 @@ export const foulsMethods = {
     // (a defense protecting a narrow lead in the last 24 seconds keeps its hands off)
     const lead = def.score - off.score;
     const careful = this.q >= 4 && this.clock <= 24 && lead >= 1 && lead <= 3 ? K.lateLeadFoul : 1;
-    const p = K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * careful;
-    if (!this.rng.chance(p)) return false;
+    const p = this.whistle(def, K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * careful);
+    if (this.rng.chance(p)) def.wpf++;
+    else {
+      // (now and then the defense kicks the ball instead: the offense keeps it, the shot clock at 14 or more)
+      if (this.rng.chance(K.kicked)) {
+        if (this.record) {
+          this.addPbp(def.side, `Kicked ball violation on ${defender.name}.`, 'other');
+          // (a whistle that stops play, as a foul's does)
+          this.cur!.steps.push({ k: 'foul', pid: defender.pid });
+        }
+        this.sideOut = true;
+      }
+      return false;
+    }
     const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
+    // a hard foul now and then is a flagrant: two free throws and the ball
+    const flagrant = this.rng.chance(K.flagrant);
     if (this.record) {
-      this.addPbp(def.side, `${this.fx.pick(['Foul', 'Reach-in foul', 'Holding foul', 'Foul'])} on ${fouler.name}.`, 'foul');
+      this.addPbp(def.side, flagrant ? `Flagrant foul (1) on ${fouler.name}.` : `${this.fx.pick(['Foul', 'Reach-in foul', 'Holding foul', 'Foul'])} on ${fouler.name}.`, 'foul');
       this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: handler.pid });
     }
     this.addFoul(def, fouler);
+    if (flagrant) {
+      this.extraFreeThrow(off, def, handler, 'flagrant');
+      this.extraFreeThrow(off, def, handler, 'flagrant');
+      this.sideOut = true;
+      return false;
+    }
     if (this.bonus(def)) {
       // two free throws (~1.55) instead of the rest of the possession (~1.1)
       if (phys !== 0) this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, (0.45 * 0.3 * phys) / mult, handler.pid);
@@ -180,27 +243,86 @@ export const foulsMethods = {
   },
 
   /** Technical foul on `t`: one free throw for the other side's best shooter on the floor; the possession carries on. */
-  technical(this: GameSim, t: ST) {
+  technical(this: GameSim, t: ST, why = 'a disqualified player stays in') {
     const opp = this.T[1 - t.side];
     const sh = opp.on.reduce((a, x) => (x.ftPct > a.ftPct ? x : a), opp.on[0]);
+    const made = this.extraFreeThrow(opp, t, sh, '', false);
+    this.addPbp(opp.side, `Technical foul on ${t.team.abbrev} (${why}). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
+  },
+
+  /**
+   * One free throw that doesn't end anything (a technical's, a take foul's, a flagrant's): the point
+   * is the game's, not this possession's play type or its fast-break or second-chance tallies.
+   * `label`: its play-by-play line ('' for none, the caller writes it). A technical's point is nobody's
+   * possession's; a take foul's or a flagrant's counts for the trip it came in (`own`).
+   */
+  extraFreeThrow(this: GameSim, team: ST, other: ST, sh: SP, label: string, own = true): boolean {
     sh.b.fta++;
-    opp.tot.fta++;
-    for (const x of opp.on) x.b.tFta++;
+    team.tot.fta++;
+    for (const x of team.on) x.b.tFta++;
     const made = this.rng.chance(sh.ftPct);
     if (made) {
       sh.b.ftm++;
-      opp.tot.ftm++;
-      // a point for the game, not for this possession's play type or its fast-break / second-chance tallies
+      team.tot.ftm++;
       const keep = { pts: this.possPts, second: this.secondChance, trans: this.inTransition, ctx: this.possCtxForTOPts };
       this.secondChance = this.inTransition = false;
       this.possCtxForTOPts = 'start';
-      this.score(opp, t, sh, 1);
-      this.possPts = keep.pts;
+      // (a point scored by the side on defense isn't this possession's)
+      this.score(team, other, sh, 1);
+      this.possPts = own ? keep.pts + 1 : keep.pts;
       this.secondChance = keep.second;
       this.inTransition = keep.trans;
       this.possCtxForTOPts = keep.ctx;
     }
-    this.addPbp(opp.side, `Technical foul on ${t.team.abbrev} (a disqualified player stays in). ${sh.name} ${made ? 'makes' : 'misses'} the free throw.`, 'ft');
+    if (label && this.record) this.addPbp(team.side, `${sh.name} ${made ? 'makes' : 'misses'} the ${label} free throw.`, 'ft');
+    return made;
+  },
+
+  /**
+   * The chance the officials call a foul on `def` that its play draws at `p` (a shooting foul, a
+   * reach-in): a little less while the calls have gone against it by more than its play has drawn,
+   * a little more while they've gone its way (crews even out a night's luck: NBA 2025-26, the gap
+   * between two teams' fouls in a game has an SD of 5.0, the sim's 7.1 with every whistle independent).
+   * Only the luck: a side that draws fouls by its play keeps drawing them. And a hair less on the home
+   * side (+0.6 free throws a game at home). Books `p` as a call the side's play drew (see calledOn).
+   */
+  whistle(this: GameSim, def: ST, p: number): number {
+    def.xpf += p;
+    const o = this.T[1 - def.side];
+    const luck = def.wpf - def.xpf - (o.wpf - o.xpf);
+    // (2 / (1 + e^x): what one side loses the other gains, so a night's calls add up as before)
+    return ((p * 2) / (1 + Math.exp(K.whistleBalance * luck))) * (def.side === 0 && !this.opts.neutral ? 1 - K.homeWhistle : 1 + K.homeWhistle);
+  },
+
+  /**
+   * The officials' other calls between trips: technical fouls (about one a game: a player barking
+   * at a call more often on the side being called for more and the side behind, sometimes the bench),
+   * a second one an ejection. One free throw for the other side; play goes on.
+   */
+  randomTechnical(this: GameSim) {
+    // (at the dead ball before a trip, on the side without the ball, so its free throw opens the trip:
+    // the chance is doubled and the side drawn as either, the half of them that would land on the side
+    // with the ball not given)
+    if (this.over || this.atBuzzer() || (this.ctx !== 'made' && this.ctx !== 'ft' && this.ctx !== 'deadTO') || !this.rng.chance(K.tech)) return;
+    const w = this.T.map((t) => {
+      const o = this.T[1 - t.side];
+      return Math.exp(0.08 * (t.tot.pf - o.tot.pf) + 0.03 * Math.max(0, o.score - t.score));
+    });
+    const t = this.T[this.rng.weighted(w)];
+    if (t.side === this.poss) return;
+    if (this.rng.chance(0.22)) {
+      this.technical(t, this.fx.pick(['bench', 'coach']));
+      return;
+    }
+    const p = t.on[this.rng.weighted(t.on.map((x) => (1 + x.fouls) * (x.starter ? 1.6 : 1) * (0.6 + x.c.ballSec / 100)))];
+    p.techs = (p.techs ?? 0) + 1;
+    this.technical(t, p.name);
+    if (p.techs >= 2 && p.out === 0) {
+      p.out = 1;
+      p.outAt = this.elapsed;
+      this.addPbp(t.side, `${p.name} is ejected (second technical).`, 'foul');
+      this.replace(t, p);
+    }
   },
 
   /** Free throws, booked to the play type that drew the foul (a missed last one included). */

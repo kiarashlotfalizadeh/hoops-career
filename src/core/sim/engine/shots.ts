@@ -249,7 +249,7 @@ export const shotsMethods = {
     const pBlk = c ? K.blockMiss[zone] * (1 + levExtra(K.recenter.blk)) * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
     // shooting foul?
     const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
-    const pFoul = K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls;
+    const pFoul = this.whistle(def, K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls);
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
@@ -263,6 +263,7 @@ export const shotsMethods = {
       this.impact(s.foulTag[0], off.side, (pFoul - pFoul / s.foulTag[1]) * foulGain * (s.foulTag[2] ?? 1), sh.pid);
     }
     const fouled = this.rng.chance(pFoul);
+    if (fouled) def.wpf++;
     // (fouled, it goes in less often: an and-one)
     const pMake = fouled ? p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25) : p;
     let made: boolean;
@@ -312,7 +313,7 @@ export const shotsMethods = {
     this.possFinish = s.finish;
     this.lastShooter = sh;
 
-    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast, made, !!blocker) : '';
+    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast, made, !!blocker, sh) : '';
     // the court's captions call the shot as the play-by-play does
     if (shotStep) shotStep.d = desc;
     if (made) {
@@ -461,29 +462,39 @@ export const shotsMethods = {
   },
 
   /**
-   * Play-by-play wording for a shot (an alley-oop needs the pass it's credited to). A dunk is nearly
-   * always good (about 9 in 10 go down, against about 6 in 10 layups), so a miss at the rim, and most
-   * blocks there, are layups.
+   * Play-by-play wording for a shot (cosmetic draws only). At the rim the shooter's own size and bounce
+   * decide how often it's a dunk (see dunkShare): a center who lives above the rim dunks about half his
+   * finishes, a small guard almost never (NBA 2025-26: Gobert 211 dunks, Brunson 0); a dunk goes down
+   * about 9 times in 10 against about 6 in 10 for layups. Alley-oops (about 1.4 a team-game, 82% made)
+   * are lobs to a dunker on a roll, cut or run-out. Bigs in the paint shoot hooks and turnarounds, and
+   * a mid-range jumper is now and then a fadeaway (NBA: hooks 2.7% of shots, fadeaways 3.5%,
+   * turnarounds 4%).
    */
-  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean, made = true, blocked = false) {
+  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean, made = true, blocked = false, sh?: SP) {
     const r = this.fx;
+    const big = !!sh && (sh.big || sh.r.hgt >= 55);
     switch (zone) {
-      case 'rim':
-        if (!made) {
-          if (r.chance(blocked ? 0.08 : 0.06)) return f === 'putback' ? 'putback dunk' : 'dunk';
-          if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback layup']);
-          if (f === 'post') return r.pick(['drop-step layup', 'layup', 'up-and-under']);
-          return f === 'pnrRoll' || f === 'cut' || f === 'transition' ? 'layup' : r.pick(['driving layup', 'layup', 'reverse layup', 'layup']);
-        }
-        if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback dunk', 'putback layup']);
-        if (f === 'post') return r.pick(['drop-step layup', 'layup', 'dunk', 'up-and-under']);
-        return f === 'pnrRoll' || f === 'cut' || f === 'transition'
-          ? r.pick(['dunk', 'layup', assisted ? 'alley-oop' : 'dunk', 'dunk'])
-          : r.pick(['driving layup', 'layup', 'dunk', 'reverse layup']);
+      case 'rim': {
+        const lob = f === 'pnrRoll' || f === 'cut' || f === 'transition';
+        const d = sh ? dunkShare(sh) * (lob || f === 'putback' ? 1.35 : f === 'post' ? 0.6 : 0.55) : 0.2;
+        // P(dunk | made) and P(dunk | missed), for a dunk share d of his attempts
+        const pd = made ? Math.min(0.95, (d * 0.9) / 0.65) : Math.min(0.3, (d * 0.1) / 0.35);
+        const dunk = r.chance(blocked ? pd * 0.5 : pd);
+        if (dunk && lob && r.chance(made ? (assisted ? 0.3 : 0) : 0.55)) return 'alley-oop';
+        if (dunk) return f === 'putback' ? 'putback dunk' : r.pick(['dunk', 'dunk', 'slam dunk', 'two-handed dunk']);
+        if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback layup']);
+        if (f === 'post') return r.pick(['drop-step layup', 'layup', 'up-and-under', big ? 'hook shot' : 'layup']);
+        if (lob) return r.pick(['layup', 'layup', 'finger roll', 'cutting layup']);
+        return r.pick(['driving layup', 'layup', 'reverse layup', 'driving finger roll']);
+      }
       case 'paint':
         if (f === 'putback') return r.pick(['putback', 'tip-in', 'putback']);
-        return f === 'post' ? r.pick(['hook shot', 'turnaround', 'post fadeaway']) : r.pick(['floater', 'runner', 'short jumper']);
+        if (f === 'post') return r.pick(['hook shot', 'turnaround', 'post fadeaway', 'hook shot']);
+        if (big && r.chance(0.45)) return r.pick(['hook shot', 'hook shot', 'turnaround jumper']);
+        return r.pick(['floater', 'runner', 'short jumper', 'floater']);
       case 'mid':
+        if (f === 'post') return r.pick(['turnaround jumper', 'post fadeaway', 'fadeaway']);
+        if (r.chance(0.3)) return r.pick(['fadeaway', 'turnaround jumper', 'step-back jumper']);
         return pullup ? 'pull-up jumper' : r.pick(['mid-range jumper', 'elbow jumper', 'baseline jumper']);
       case 'c3':
         return 'corner three';
@@ -492,3 +503,13 @@ export const shotsMethods = {
     }
   },
 };
+
+/**
+ * The share of a player's attempts at the rim that are dunks, by his size and bounce: about half for a
+ * rim-running center (Gobert, Duren), a few percent for a big who plays below the rim or a strong
+ * wing, almost none for a small guard.
+ */
+export function dunkShare(p: SP): number {
+  const lift = 0.45 * p.r.hgt + 0.75 * p.r.ath;
+  return 0.39 / (1 + Math.exp(-(lift - 64) / 4.5));
+}

@@ -828,7 +828,8 @@ describe('broadcast graphics', () => {
 
     // a list with nothing on it has no record to break, and the record is tonight's best
     {
-      const { views, logs } = playThrough(24);
+      // (a game whose top two scorers aren't level)
+      const { views, logs } = playThrough(25);
       const end = views[views.length - 1];
       const [top, second] = [...end.box.home.players].sort((a, b) => b.pts - a.pts);
       expect(second.pts).toBeGreaterThan(0);

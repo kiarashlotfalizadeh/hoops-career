@@ -146,6 +146,18 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
   return floors;
 }
 
+/**
+ * A stint's length in the plan: a player's minutes over `per` (at least `min`; the opening one over
+ * `first`, shorter), short of what his endurance allows (6-12). By endurance alone the starters'
+ * first stints ran about 10 minutes (NBA 2025-26: their first trip to the bench a median 7:16 in) and
+ * the regulars came back in short stints, five of 7.6 minutes against the NBA's four of 9-10. `stay`
+ * and `sit` hold a player on (or off) the floor until his stint (or a `rest` of minutes) is through,
+ * `smooth` passes of smoothPlan take out the one-minute stints left, and `stagger` keeps a starter
+ * out there with the second unit (no starter on the floor: NBA 5% of the time, the plan's 10.7%).
+ * Exported for the measurement scripts; the engine reads it as constants.
+ */
+export const STINT = { first: 4.5, per: 3, min: 4, stay: 3, rest: 3, sit: 3, smooth: 3, stagger: true };
+
 /** Returns plan[slot] = array of 5 pids, slot 0..47. */
 export function buildMinutePlan(players: PlanPlayer[]): number[][] {
   const n = players.length;
@@ -214,11 +226,15 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
         const avail = need[i] - (p.starter && !inBlock ? block : 0);
         if (avail <= 0) continue;
         const left = inBlock ? remaining : remaining - block;
-        const maxStint = 6 + (p.endurance / 100) * 6;
+        // a stint about a quarter of his night (four for a 34-minute starter, the NBA's shape: about
+        // nine minutes each, the first trip to the bench a median 7:16 in), no longer than his legs allow
+        // (the opening stint is the shortest: the first subs come about seven minutes in)
+        const opening = half === 0 && onPrev[i] && stint[i] === step;
+        const maxStint = Math.min(6 + (p.endurance / 100) * 6, Math.max(STINT.min, mins[i] / (opening ? STINT.first : STINT.per)));
         let sc = avail / left;
         // a player on the floor plays out his last minute now rather than in a one-minute stint later
-        if (onPrev[i]) sc += stint[i] < maxStint ? (avail === 1 ? 0.8 : 0.45) : -0.6;
-        else if (rest[i] < 3) sc -= 0.35;
+        if (onPrev[i]) sc += stint[i] < maxStint ? (avail === 1 ? 0.8 : STINT.stay) : -0.6;
+        else if (rest[i] < STINT.rest) sc -= STINT.sit;
         const pinned = (half === 0 && step === 0 && p.starter) || (half === 1 && step < 4 && p.closer);
         if (pinned) sc += 6;
         if (avail >= left) sc += 100;
@@ -250,6 +266,16 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
           if (alt) chosen = chosen.map((i) => (i === drop ? alt.i : i));
         }
       }
+      // staggered: a starter stays out there with the second unit (NBA 2025-26: no starter on the
+      // floor 5% of the time; the plan's all-bench fives played twice that)
+      if (STINT.stagger && !chosen.some((i) => players[i].starter)) {
+        // (the one on the floor stays a little longer, rather than one just sat coming straight back)
+        const alt =
+          scores.find((x) => players[x.i].starter && onPrev[x.i] && !chosen.includes(x.i)) ??
+          scores.find((x) => players[x.i].starter && !chosen.includes(x.i) && rest[x.i] >= STINT.rest);
+        const out = chosen.filter((i) => !must.has(i)).pop();
+        if (alt && out !== undefined) chosen = chosen.map((i) => (i === out ? alt.i : i));
+      }
       // fill if fewer than five have minutes left (short roster): use the regulars with the most minutes
       if (chosen.length < 5) {
         const extra = players
@@ -276,7 +302,50 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
     stint.fill(0);
     rest.fill(99);
   }
+  smoothPlan(plan, players);
   return plan;
+}
+
+/**
+ * Takes out the plan's one-minute stints and one-minute rests (a coach doesn't sit a player for a
+ * minute, or send one in for one), by trading the minute with a teammate whose stint it borders and
+ * trading one back where the two swap at the other's stint edge: everyone's minutes stay as planned,
+ * as do the first two minutes of each half and the closers' last four minutes.
+ */
+function smoothPlan(plan: number[][], players: PlanPlayer[]) {
+  const on = (pid: number, s: number) => s >= 0 && s < 48 && plan[s].includes(pid);
+  // (the tip's five and the third quarter's first two minutes stay as planned too)
+  const pinned = (pid: number, s: number) => s <= 1 || s === 24 || s === 25 || (s >= 44 && players.some((p) => p.pid === pid && p.closer));
+  const edge = (pid: number, s: number) => !on(pid, s - 1) || !on(pid, s + 1);
+  const swap = (s: number, out: number, inn: number) => (plan[s] = plan[s].map((x) => (x === out ? inn : x)));
+  const ids = players.map((p) => p.pid);
+  for (let pass = 0; pass < STINT.smooth; pass++) {
+    for (let s = 1; s < 47; s++) {
+      for (const a of ids) {
+        const lone = on(a, s) && !on(a, s - 1) && !on(a, s + 1);
+        const gap = !on(a, s) && on(a, s - 1) && on(a, s + 1);
+        if (!lone && !gap) continue;
+        // lone: a gives slot s to a partner whose stint it borders, and takes one back at t
+        // gap: a takes slot s from a partner at his stint's edge, and gives one back at t
+        const partners = ids.filter((b) => b !== a && (lone ? !on(b, s) && (on(b, s - 1) || on(b, s + 1)) : on(b, s) && edge(b, s) && !pinned(b, s)));
+        let done = false;
+        for (const b of partners) {
+          if (lone && pinned(a, s)) break;
+          for (let t = 1; t < 47 && !done; t++) {
+            if (Math.abs(t - s) <= 1) continue;
+            // (the trade back: the receiver's stint grows at its edge, the giver's shrinks at its edge)
+            const [give, take] = lone ? [b, a] : [a, b];
+            if (!on(give, t) || on(take, t) || pinned(give, t) || !edge(give, t) || !(on(take, t - 1) || on(take, t + 1))) continue;
+            if (lone) swap(s, a, b);
+            else swap(s, b, a);
+            swap(t, give, take);
+            done = true;
+          }
+          if (done) break;
+        }
+      }
+    }
+  }
 }
 
 /** Default minute distribution by depth order (sums to 240 for 10+ players). */

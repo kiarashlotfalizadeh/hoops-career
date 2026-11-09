@@ -10,6 +10,7 @@ import type { FinishType } from '../log';
 import { cloneTactics, defRoleOf, withMentality } from '../tactics';
 import { type ST, ACTION_LIST, freedomMult } from './state';
 import type { GameSim } from './game';
+import { K } from './constants';
 
 /**
  * The adjustments the user's assistant doesn't make at the breaks of a simmed game (the side whose
@@ -115,8 +116,9 @@ export const coachMethods = {
       what = 'stops blitzing ball screens';
       kind = 'unblitz';
       // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
-      // so this is the 0.8 the coaches read before, the same games for them to react to)
-    } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.3 || rate('hedge_roll:o') >= 0.6)) {
+      // so this is the 0.8 the coaches read before, the same games for them to react to; 0.5 since the
+      // switched ball screen's tags went from half their estimate to 0.95 of it, K.switchTag)
+    } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.5 || rate('hedge_roll:o') >= 0.6)) {
       change = (x) => {
         x.defense.pnr = 'drop';
         x.defense.switchOffBall = false;
@@ -165,17 +167,72 @@ export const coachMethods = {
     if (this.q === 4 && this.clock <= 180) for (const t of this.T) t.timeouts = Math.min(t.timeouts, 2);
   },
 
+  /**
+   * The staff's timeouts (a team with auto timeouts on, not driven live): against a run, at the end of
+   * a close game with the ball (to advance it, set a play, or after the other side scores), and the
+   * TV's two a quarter. NBA 2024-26: 5.4 a team-game, 35% of them in the fourth quarter, 2.2 in the
+   * last two minutes of games within five (both teams); at 1.6 a game, all of them against runs, the
+   * sim's coaches still had most of theirs at the final horn.
+   */
   autoTimeouts(this: GameSim) {
     this.lateTimeouts();
+    const final = this.q >= 4;
     for (const t of this.T) {
       const opp = this.T[1 - t.side];
       // (in a live ball only the team with the ball may call one)
       if (!t.t.manage.autoTimeouts || t.manualSubs || !this.mayCallTimeout(t.side)) continue;
-      const late = this.q >= 4 && this.clock < 120;
-      const reserve = late ? 0 : this.q >= 4 ? 1 : 2;
+      const late = final && this.clock < 120;
+      const reserve = late ? 0 : final ? 1 : 2;
       if (opp.run >= t.t.manage.timeoutRun && t.timeouts > reserve) {
         this.callTimeout(t.side, `${opp.run}-0 run`);
+        continue;
       }
+      // the end of a close game, with the ball: behind or tied in the last 40 seconds (it advances the
+      // ball), ahead by a basket or less after the other side scored, or to set up a trip in the last two
+      // minutes
+      const diff = t.score - opp.score;
+      const dead = this.ctx === 'made' || this.ctx === 'ft' || this.ctx === 'deadTO';
+      // timeouts past the two a team may keep after 3:00 of the fourth are used before it or lost
+      if (this.q === 4 && this.clock > 180 && this.clock <= K.lateTO.spend && t.timeouts > 2 && dead && Math.abs(diff) <= 12 && this.rng.chance(K.lateTO.spendP)) {
+        this.callTimeout(t.side, '', true);
+        continue;
+      }
+      if (!final || this.poss !== t.side || t.timeouts <= 0 || this.clock > 120 || this.clock < 0.8) continue;
+      const p =
+        this.clock <= K.lateTO.at && diff <= 0 && diff >= -6
+          ? K.lateTO.behind
+          : this.clock <= 24 && diff >= 1 && diff <= 3 && dead
+            ? K.lateTO.ahead
+            : Math.abs(diff) <= 5 && dead
+              ? K.lateTO.close
+              : 0;
+      if (p && this.rng.chance(p)) this.callTimeout(t.side, '', true);
     }
+    this.mandatoryTimeout();
+  },
+
+  /**
+   * The TV's timeouts: at the first dead ball under 7:00 and under 3:00 of each quarter, one is taken
+   * if nobody has called one in that stretch, charged to the side that has used fewer (the home side
+   * on a tie) while it has more than it keeps for the end.
+   */
+  mandatoryTimeout(this: GameSim) {
+    if (!K.tvTimeouts || this.q > 4 || this.ctx === 'steal' || this.ctx === 'dreb' || this.ctx === 'orb') return;
+    const mark = this.clock < 180 ? 2 : this.clock < 420 ? 1 : 0;
+    const key = this.q * 10 + mark;
+    if (!mark || this.mandatory.q >= key) return;
+    this.mandatory.q = key;
+    const taken = this.T[0].qTimeouts + this.T[1].qTimeouts;
+    if (taken > this.mandatory.n) {
+      this.mandatory.n = taken;
+      return;
+    }
+    const reserve = this.q >= 4 ? 1 : 2;
+    const ok = this.T.filter((t) => t.t.manage.autoTimeouts && !t.manualSubs && t.timeouts > reserve);
+    if (ok.length) {
+      const t = ok.length === 2 && ok[1].timeouts > ok[0].timeouts ? ok[1] : ok[0];
+      this.callTimeout(t.side, '', true);
+    }
+    this.mandatory.n = this.T[0].qTimeouts + this.T[1].qTimeouts;
   },
 };

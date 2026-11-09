@@ -10,12 +10,16 @@ import type { GameSim } from './game';
 
 export const reboundsMethods = {
   rebound(this: GameSim, off: ST, def: ST, zone: ShotZone, blocked: boolean, ft: boolean) {
+    // the ball in the air and the scramble for it: the clock runs (a free throw's miss is live sooner)
+    this.tick(ft ? this.rng.uniform(K.reboundTime.ft[0], K.reboundTime.ft[1]) : this.rng.uniform(K.reboundTime.shot[0], K.reboundTime.shot[1]));
     // blocked shots sometimes go out of bounds to the offense
     if (blocked && this.rng.chance(0.3)) {
       this.ctx = 'orb';
       this.continueAfterOrb(off, def, null);
       return;
     }
+    // the fight for the ball: a loose-ball foul, or two players tied up for a jump ball
+    if (this.looseBall(off, def, ft)) return;
     // (a player sent to the glass is in the fight for it more often, one sent back less)
     const inside = shapeOf(off.t.offense) === 'twoIn' ? this.bigTwo(off) : null;
     const offR = off.on.reduce((a, p) => a + Math.pow(p.c.orb * (0.85 + 0.15 * p.energy), 1.2) * this.glassW(p, inside), 0);
@@ -81,6 +85,67 @@ export const reboundsMethods = {
     this.finishPoss(off, this.possFinish);
   },
 
+  /**
+   * A loose-ball foul or a held ball on the rebound (see K.looseBall, K.heldBall): true when it settled
+   * who has the ball. A loose-ball foul on the crashing side hands the ball over; one on a defender
+   * boxing out keeps it for the offense (two free throws in the penalty). A held ball goes to a jump.
+   */
+  looseBall(this: GameSim, off: ST, def: ST, ft: boolean): boolean {
+    const r = this.rng.next();
+    if (r < K.looseBall) {
+      const onOffense = this.rng.chance(0.45);
+      const t = onOffense ? off : def;
+      const o = onOffense ? def : off;
+      const fouler = t.on[this.rng.weighted(t.on.map((p) => Math.pow(p.c.orb + p.c.drb, 1.5) * p.tpf))];
+      const fouled = o.on[this.rng.weighted(o.on.map((p) => Math.pow(p.c.orb + p.c.drb, 1.5)))];
+      if (this.record) {
+        this.addPbp(t.side, `Loose ball foul on ${fouler.name}.`, 'foul');
+        this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: fouled.pid });
+      }
+      this.addFoul(t, fouler);
+      if (onOffense) {
+        if (this.cur && !this.cur.label) this.cur.label = 'Loose ball foul';
+        this.ctx = 'deadTO';
+        this.finishPoss(off, this.possFinish);
+        return true;
+      }
+      if (this.bonus(def)) {
+        this.freeThrows(off, def, fouled, 2, this.possFinish);
+        return true;
+      }
+      // the offense inbounds it, a 14-second shot clock
+      this.secondChance = true;
+      this.tick(Math.min(this.rng.uniform(2, 4), Math.max(0, this.clock - 0.3)));
+      if (this.clock <= 0.3) {
+        this.clockOut(off);
+        return true;
+      }
+      this.halfCourt(off, def, 14, this.lateMode(off, def), this.paceF(off));
+      return true;
+    }
+    if (r < K.looseBall + K.heldBall && !ft) {
+      const a = off.on.reduce((x, p) => (p.c.orb > x.c.orb ? p : x), off.on[0]);
+      const b = def.on.reduce((x, p) => (p.c.drb > x.c.drb ? p : x), def.on[0]);
+      const offWins = this.rng.chance(0.42);
+      if (this.record) {
+        this.addPbp(-1, `Jump ball: ${a.name} vs. ${b.name}. ${(offWins ? off : def).team.abbrev} gains possession.`, 'other');
+        // (the court shows it as a team rebound)
+        this.cur!.steps.push({ k: 'reb' });
+      }
+      this.tick(Math.min(this.rng.uniform(2, 5), Math.max(0, this.clock - 0.3)));
+      if (offWins && this.clock > 0.3) {
+        this.ctx = 'orb';
+        this.continueAfterOrb(off, def, null);
+        return true;
+      }
+      if (this.cur && !this.cur.label) this.cur.label = 'Jump ball';
+      this.ctx = 'deadTO';
+      this.finishPoss(off, this.possFinish);
+      return true;
+    }
+    return false;
+  },
+
   /** A player's weight among the offensive rebounders: his glass duty, and a double post's bigs (`inside`) under the basket. */
   glassW(this: GameSim, p: SP, inside?: SP[] | null) {
     const duty = p.glass === 1 ? K.glassDuty.crash : p.glass === -1 ? K.glassDuty.back : 1;
@@ -99,8 +164,8 @@ export const reboundsMethods = {
       return;
     }
     // immediate putback for bigs near the rim
-    if (rebounder && this.rng.chance(clamp(0.25 + (rebounder.r.hgt - 50) / 100 + (rebounder.c.rim - 50) / 150, 0.1, 0.65))) {
-      this.tick(this.rng.uniform(0.8, 2.5));
+    if (rebounder && this.rng.chance(clamp(K.putback.base + (rebounder.r.hgt - 50) / 100 + (rebounder.c.rim - 50) / 150, 0.1, K.putback.max))) {
+      this.tick(this.rng.uniform(K.putback.time[0], K.putback.time[1]));
       this.shoot(off, def, {
         shooter: rebounder,
         zone: this.rimOr(rebounder, 0.75),
@@ -114,7 +179,10 @@ export const reboundsMethods = {
     // reset with a 14-second shot clock
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
-    const setup = Math.min(this.rng.uniform(1.5, 4), Math.max(0.3, this.clock * 0.4));
+    // (often a kick-out on the spot to a shooter, the defense still scrambled back)
+    const kick = this.rng.chance(K.putback.kick);
+    const setup = Math.min(kick ? this.rng.uniform(0.2, 0.8) : this.rng.uniform(1.5, 4.5), Math.max(0.3, this.clock * 0.4));
+    this.early = kick ? 'kick' : false;
     this.tick(setup);
     if (this.clock <= 0.05) {
       this.clockOut(off);

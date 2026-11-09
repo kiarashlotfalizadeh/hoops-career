@@ -10,7 +10,7 @@ import { ROLE_USAGE } from '../../ratings';
 import { solveMatchups } from '../matchups';
 import { shapeOf } from '../tactics';
 import { K, blowByTag, lev, levExtra, levW, type ZoneK } from './constants';
-import { type SP, type ST, NONE } from './state';
+import { type SP, type ST, NONE, mix } from './state';
 import type { GameSim } from './game';
 
 /** A junk defense's chaser top-locking his man, as the actions play it (K.lock's table at the tactical leverage), with the tags for what it takes away and what it gives back. */
@@ -192,6 +192,13 @@ export const defenseMethods = {
   zone(this: GameSim, def: ST): ZoneK | null {
     const s = def.t.defense.scheme;
     if (s === 'man') return null;
+    // an AI staff plays its zone in stretches, man-to-man the rest (see coachHabits)
+    if (
+      (s === 'zone23' || s === 'zone32') &&
+      def.habit.zone < 1 &&
+      mix(this.seed, 977 * def.side + 31 * this.q + Math.floor(this.elapsed / K.zoneStretch)) / 4294967296 >= def.habit.zone
+    )
+      return null;
     // a junk defense whose chased players are all on the bench plays man-to-man
     const off = this.T[1 - def.side];
     if ((s === 'box1' || s === 'tri2') && !this.chased(def, off).length) return null;

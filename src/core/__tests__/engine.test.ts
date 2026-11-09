@@ -319,7 +319,8 @@ describe('engine rules', () => {
           )
             continue;
           trips++;
-          if (l.clockStart - l.clockEnd > GAME.shotClock + 1e-6) over++;
+          // (a miss's flight to the rebound runs the clock after the shot: K.reboundTime)
+          if (l.clockStart - l.clockEnd > GAME.shotClock + (l.steps.some((s) => s.k === 'reb') ? K.reboundTime.shot[1] : 0) + 1e-6) over++;
         }
       }
       expect(trips).toBeGreaterThan(100);
@@ -772,27 +773,41 @@ describe('engine rules', () => {
       // cosmetic draws don't touch the simulation, so recording doesn't change the game
       expect(quiet).toBe(recorded);
     }
-    // a team trailing late fouls only while a foul can still buy another shot
+    // a team trailing late fouls when the leader could run the clock out (most of the time: some play
+    // for a steal first), now and then sooner; down four to six from about half a minute
     {
-      type F = Internals & { T: { score: number }[]; intentionalFoul(off: unknown, def: unknown): string | null };
-      const at = (clock: number, down: number) => {
-        const sim = new GameSim(side(0), side(1), { rng: new Rng(2), type: 'regular', injuries: false }) as unknown as F;
-        const [off, def] = sim.T;
-        sim.q = 4;
-        sim.clock = clock;
-        off.score = 100 + down;
-        def.score = 100;
-        return sim.intentionalFoul(off, def);
+      type F = Internals & { T: { score: number }[]; foulAt: number; intentionalFoul(off: unknown, def: unknown): string | null };
+      // the share of 40 trips on which the defense fouls at once, and on which it fouls at once or later on the trip
+      const rate = (clock: number, down: number) => {
+        let now = 0;
+        let planned = 0;
+        for (let g = 0; g < 40; g++) {
+          const sim = new GameSim(side(0), side(1), { rng: new Rng(g), type: 'regular', injuries: false }) as unknown as F;
+          const [off, def] = sim.T;
+          sim.q = 4;
+          sim.clock = clock;
+          off.score = 100 + down;
+          def.score = 100;
+          const f = sim.intentionalFoul(off, def);
+          if (f) now++;
+          if (f || sim.foulAt > 0) planned++;
+        }
+        return [now / 40, planned / 40];
       };
-      expect(at(20, 2)).not.toBeNull();
-      expect(at(2, 2)).not.toBeNull();
-      // down three a stop and a three tie it: they defend rather than make it a two-possession game
-      expect(at(20, 3)).toBeNull();
-      expect(at(3, 3)).toBeNull();
-      // down four to six they defend until the leader could run the shot clock out, then foul
-      expect(at(40, 5)).toBeNull();
-      expect(at(25, 5)).not.toBeNull();
-      expect(at(4, 7)).toBeNull();
+      expect(rate(20, 2)[0]).toBeGreaterThan(0.7);
+      expect(rate(2, 2)[0]).toBeGreaterThan(0.7);
+      // down three with the game clock under the shot clock too (NBA 2024-26: 81-86% of the time)
+      expect(rate(20, 3)[0]).toBeGreaterThan(0.7);
+      // with more time than a shot clock left, now and then a few seconds in
+      const early = rate(36, 3);
+      expect(early[0]).toBe(0);
+      expect(early[1]).toBeGreaterThan(0.1);
+      expect(early[1]).toBeLessThan(0.55);
+      // down four to six: at 40 seconds later on the trip, at 25 at once
+      expect(rate(40, 5)[0]).toBe(0);
+      expect(rate(40, 5)[1]).toBeGreaterThan(0.4);
+      expect(rate(25, 5)[0]).toBeGreaterThan(0.7);
+      expect(rate(4, 7)[1]).toBe(0);
       // down seven to nine they foul sooner, though fewer coaches do the further down they are
       const fouls = (down: number) => {
         let n = 0;

@@ -156,7 +156,22 @@ export const possessionMethods = {
     off.atoNext = false;
     off.nextSet = null;
     // (out of a timeout, the ball is inbounded and brought up, as after any dead ball)
-    let setup = (K.setup[outOfTimeout && (ctx === 'steal' || ctx === 'dreb') ? 'deadTO' : ctx] ?? 4) * paceF * this.rng.uniform(0.75, 1.25);
+    let setup = (K.setup[outOfTimeout && (ctx === 'steal' || ctx === 'dreb') ? 'deadTO' : ctx] ?? 4) * paceF * this.spread(K.spread.setup);
+    // a late timeout with the ball advanced it: the inbound is in the frontcourt
+    const advanced = outOfTimeout && off.advance;
+    off.advance = false;
+    if (advanced) setup = this.rng.uniform(K.advanceSetup[0], K.advanceSetup[1]);
+    // early offense: off a defensive board or a steal, the ball pushed up and into a quick look
+    this.early = false;
+    if (!outOfTimeout && !queued && !late.hold && !late.milk && !late.slow && (ctx === 'dreb' || ctx === 'steal')) {
+      const p = K.earlyO[ctx] * off.habit.earlyO * (0.6 + 0.8 * (off.t.offense.pace / 100)) * (late.push || late.hurry ? 1.5 : 1);
+      if (this.rng.chance(p)) {
+        this.early = true;
+        setup = this.rng.uniform(K.earlyO.setup[0], K.earlyO.setup[1]);
+      }
+    }
+    if (late.slow) setup += this.rng.uniform(K.lateSlow.slow[0], K.lateSlow.slow[1]);
+    else if (late.push) setup *= K.lateSlow.push;
     // (a press beaten is the ball brought up: the time it took was the walk-up)
     if (pressed) setup = Math.max(2, setup - pressed);
     if (late.milk) setup += 6;
@@ -212,8 +227,21 @@ export const possessionMethods = {
     // (rushed actions a side-out foul cut short, which don't count toward the trip's six)
     let stops = 0;
     for (let n = 0; n < 6 + stops; n++) {
+      // the trailing defense fouls when the clock gets down to where it planned to (see lateFoulAt)
+      if (this.foulAt > 0 && this.clock <= this.foulAt && this.clock > 0.3) {
+        if (this.midTripFoul(off, def) === 'ft') return;
+        shotClock = Math.max(shotClock, 14);
+      }
       // a late lead with the shot clock off (it can't run out before the game clock): the clock dies with the ball
-      if (late.milk && this.clock <= shotClock) this.tick(this.clock);
+      if (late.milk && this.clock <= shotClock) {
+        // (unless the trailing defense fouls first)
+        if (this.foulAt > 0 && this.foulAt > 0.3) {
+          this.tick(Math.max(0, this.clock - this.foulAt));
+          stops++;
+          continue;
+        }
+        this.tick(this.clock);
+      }
       if (this.clock <= 0.05) {
         this.clockOut(off);
         return;
@@ -224,6 +252,14 @@ export const possessionMethods = {
       // instead of letting the horn decide when it goes up
       const lastShot = late.hold && this.q >= 4 && this.clock < shotClock && left > 3;
       forced = left <= 4.5 || n === 5 + stops || lastShot;
+      // the shot clock runs out on a trip that never found its shot (not when the game clock goes first)
+      if (left <= 4.5 && shotClock < this.clock - 0.5 && !late.milk && this.rng.chance(K.shotClockOut)) {
+        this.tick(shotClock);
+        const h = ballFrom?.on ? ballFrom : off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]);
+        if (this.cur) this.cur.label = 'Shot clock violation';
+        this.turnover(off, def, h, null, 'misc', 'shot clock violation');
+        return;
+      }
       // the trip opens with its set: one called from the bench, or after a timeout
       let play: SetPlay | null = null;
       if (n === 0 && set) play = this.setPlay(off, def, set.id, set.pid);
@@ -232,7 +268,12 @@ export const possessionMethods = {
         ? Math.max(0.5, Math.min(left - this.rng.uniform(K.lastShotSpare[0], K.lastShotSpare[1]), K.actionTime * paceF * this.rng.uniform(0.6, 1)))
         : forced
           ? Math.max(0.5, left - this.rng.uniform(0.3, 1.5))
-          : K.actionTime * paceF * this.rng.uniform(0.6, 1.4);
+          : n === 0 && this.early
+            ? this.early === 'kick'
+              ? this.rng.uniform(K.putback.kickAct[0], K.putback.kickAct[1])
+              : this.rng.uniform(K.earlyO.act[0], K.earlyO.act[1])
+            : K.actionTime * paceF * this.spread(K.spread.action) * (late.slow ? 1.15 : 1);
+      this.early = false;
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
       // a set takes longer to run than whatever the team would do: with too little clock it's rushed
@@ -315,6 +356,11 @@ export const possessionMethods = {
     // (a team easing off a blowout hunts fewer threes)
     if (this.eases(off)) three *= K.garbage.three;
     return { three, mid, rim: late.need3 ? rim * two : rim, two };
+  },
+
+  /** A multiplier around 1 (mean 1, skewed long: some trips get into their look fast, some take their time), for setups and actions. */
+  spread(this: GameSim, sd: number) {
+    return clamp(Math.exp(this.rng.normal(-sd * sd * 0.5, sd)), 0.3, 2.4);
   },
 
   spacingBonus(this: GameSim, off: ST) {

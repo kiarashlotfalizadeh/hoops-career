@@ -51,6 +51,30 @@ function cachedPlan(players: PlanPlayer[]): number[][] {
   return plan;
 }
 
+/**
+ * An AI coach's late-game habits, from his name: the same every night, differing from coach to coach
+ * as real ones do (NBA 2024-26 play-by-play): about two in three foul when up three in the last
+ * seconds (leaders did in 28-30% of the chances), four in five take a two-for-one when it's there
+ * (79-80% of the chances), and down a possession late most foul at once, 81-86% of the time, the rest
+ * playing for a steal first. A staff whose base defense is a zone plays it in stretches (K.zoneShare).
+ * The user's side plays its settings as rules.
+ */
+export function coachHabits(input: SimTeamInput): ST['habit'] {
+  const m = input.team.tactics.manage;
+  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne, lateFoul: 0.85, earlyO: 1, zone: 1 };
+  if (!input.adjust || input.team.assistant) return rules;
+  let h = input.team.tid + 1;
+  for (const ch of input.team.coach?.name ?? '') h = mix(h, ch.charCodeAt(0));
+  const u = (n: number) => mix(h, n) / 4294967296;
+  return {
+    foulUp3: m.foulUp3 && u(1) < 0.62,
+    twoForOne: m.twoForOne && u(2) < 0.85,
+    lateFoul: 0.74 + 0.2 * u(3),
+    earlyO: 0.7 + 0.6 * u(4),
+    zone: K.zoneShare,
+  };
+}
+
 function shortName(p: Player) {
   return p.lastName || p.firstName;
 }
@@ -135,6 +159,12 @@ export class GameSim {
   scramble = 1;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
+  /** This trip is early offense (see possession), or a kick-out off an offensive board: its first action is quick. */
+  early: boolean | 'kick' = false;
+  /** Seconds left at which the trailing defense fouls on this trip (0: it doesn't; see lateFoulAt). */
+  foulAt = 0;
+  /** Timeouts taken this period by both sides, as of the last mandatory one's mark (see autoTimeouts). */
+  mandatory = { q: 0, n: 0 };
   /** A set handed to the action about to run (it takes it: see takePlay). */
   play: SetPlay | null = null;
   /** The tally of the set (or clear-out isolation) this possession runs: its points go to it. */
@@ -311,6 +341,11 @@ export class GameSim {
       toWait: null,
       atoNext: false,
       setRuns: new Map(),
+      habit: coachHabits(input),
+      advance: false,
+      qTimeouts: 0,
+      wpf: 0,
+      xpf: 0,
     };
   }
 
@@ -479,8 +514,9 @@ export class GameSim {
    * is a stop of its own, and a timeout there would be charged for nothing). NBA: in a live ball only the
    * team with the ball may call one, so one asked for while the other side has the ball after a steal or
    * a defensive board waits for the next dead ball (see takeWaitingTimeouts); it counts as called.
+   * `routine`: the staff's TV and late-game timeouts, which are no occasion for an AI coach's adjustment.
    */
-  callTimeout(side: 0 | 1, reason = '') {
+  callTimeout(side: 0 | 1, reason = '', routine = false) {
     const t = this.T[side];
     this.lateTimeouts();
     if (t.timeouts <= 0 || this.over || this.atBuzzer()) return false;
@@ -490,6 +526,10 @@ export class GameSim {
     }
     t.toWait = null;
     t.timeouts--;
+    t.qTimeouts++;
+    // NBA: in the last two minutes of the fourth quarter or overtime a timeout by the team with the
+    // ball advances it to the frontcourt
+    t.advance = this.q >= 4 && this.clock <= 120 && this.poss === side;
     for (const tm of this.T) for (const p of tm.players) p.energy = Math.min(1, p.energy + (p.on ? 0.05 : 0.02));
     this.T[0].run = 0;
     this.T[1].run = 0;
@@ -497,8 +537,11 @@ export class GameSim {
     this.timeoutStep = true;
     this.timeoutSide = side;
     if (t.t.manage.ato) t.atoNext = true;
-    this.adjust(this.T[0]);
-    this.adjust(this.T[1]);
+    // (the TV's timeouts and the late ones are no new look at what is being exploited)
+    if (!routine) {
+      this.adjust(this.T[0]);
+      this.adjust(this.T[1]);
+    }
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     return true;
@@ -535,6 +578,7 @@ export class GameSim {
       this.checkSubs(this.T[1]);
     }
     this.autoTimeouts();
+    this.randomTechnical();
     this.possession();
     this.takeWaitingTimeouts();
     return !this.over;

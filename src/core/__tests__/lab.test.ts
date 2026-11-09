@@ -34,12 +34,14 @@ describe('batch sims & reports', () => {
 
       const a = buildSimInput(league, 0, 1, 'regular', 1);
       const b = buildSimInput(league, 1, 1, 'regular', 0);
-      const base = runLab({ a, b, games: 60, seed: 7 });
-      const noop = runLab({ a, b, games: 60, seed: 7, patch: { manage: { hackThreshold: 5 } } });
+      const base = runLab({ a, b, games: 150, seed: 7 });
+      const noop = runLab({ a, b, games: 150, seed: 7, patch: { manage: { hackThreshold: 5 } } });
       expect(noop.margins).toEqual(base.margins);
-      const help = runLab({ a, b, games: 60, seed: 7, patch: { defense: { help: Math.min(100, a.team.tactics.defense.help + 10) } } });
+      const help = runLab({ a, b, games: 150, seed: 7, patch: { defense: { help: Math.min(100, a.team.tactics.defense.help + 10) } } });
       // paired: the same seeds keep the games alike (unpaired, about 0). A help change touches every
-      // pick-and-roll, so the games drift apart as they go: 0.42 over 600 games, 0.34-0.62 over 60 (round 2026-10-25)
+      // pick-and-roll, so the games drift apart as they go: 0.42 over 600 games, 0.34-0.62 over 60 (round
+      // 2026-10-25); 0.37-0.46 over 150 (2026-11-09, the officials evening out a night's fouls: 0.36-0.55
+      // without), a 60-game draw as low as 0.18
       expect(corr(base.margins, help.margins)).toBeGreaterThan(0.3);
     }
     // is deterministic and paired

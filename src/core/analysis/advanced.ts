@@ -8,6 +8,7 @@
 // playoffs. Box plus-minus isn't computed: its regression's coefficients aren't reproduced here, so
 // BPM and VORP stay the imported seasons'. Pure reads of the league.
 
+import { clamp } from '../random';
 import type { League, Player, PlayerStats, TeamSeason, TeamTotals } from '../types';
 
 export interface Advanced {
@@ -159,7 +160,9 @@ function lineAdvanced(c: SeasonCtx, s: PlayerStats) {
   const safe = (x: number) => (Number.isFinite(x) ? x : 0);
 
   // offense: points produced and possessions used (Oliver)
-  const qAst = safe(share * (1.14 * ((t.ast - s.ast) / t.fgm)) + (((t.ast / tmMp) * mp * 5 - s.ast) / ((t.fgm / tmMp) * mp * 5 - s.fgm)) * (1 - share));
+  // (a share of his baskets: on a line of a few minutes the formula's second term divides by nearly
+  // nothing, and one 3-minute, 7-point night had a player at 69 win shares)
+  const qAst = clamp(safe(share * (1.14 * ((t.ast - s.ast) / t.fgm)) + (((t.ast / tmMp) * mp * 5 - s.ast) / ((t.fgm / tmMp) * mp * 5 - s.fgm)) * (1 - share)), 0, 1);
   const fgShare = s.fga ? (s.pts - s.ftm) / (2 * s.fga) : 0;
   const fgPart = s.fgm * (1 - 0.5 * fgShare * qAst);
   const othersFga = t.fga - s.fga;

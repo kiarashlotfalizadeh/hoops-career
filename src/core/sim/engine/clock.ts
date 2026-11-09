@@ -29,6 +29,8 @@ export const clockMethods = {
     for (const t of this.T) {
       t.fouls = 0;
       t.foulsLast2 = 0;
+      t.qTimeouts = 0;
+      t.advance = false;
       t.qs.push(0);
       if (this.q === 4) t.timeouts = Math.min(t.timeouts, 4);
       if (this.q >= 5) t.timeouts = 2;
@@ -42,6 +44,7 @@ export const clockMethods = {
     }
     // the break draws from its own stream, so the possessions around it stay paired in batch comparisons
     this.rng = new Rng(mix(this.seed, 0x7ff00000 + this.q));
+    this.mandatory.n = 0;
     for (const t of this.T) this.adjust(t);
     // possession arrow: loser of tip gets Q2 & Q3, winner Q4; OT is a jump
     if (this.q === 2 || this.q === 3) this.poss = (1 - this.tipWinner) as 0 | 1;
@@ -106,16 +109,21 @@ export const clockMethods = {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, tie: false };
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, tie: false, slow: false, push: false };
     if (final && clock <= 26 && diff >= -2 && diff <= 0) res.hold = true;
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;
+    // the last three minutes of a game still in reach: the leader works the shot clock, the trailing
+    // side gets into its offense early (NBA 2024-26: up 1-8 in the last 3:00, 58-59% of trips after
+    // the other side scored used 18 seconds or more; behind, about half got a shot off within 8)
+    else if (final && clock <= K.lateSlow.from && diff > 0 && diff <= K.lateSlow.lead) res.slow = true;
+    if (final && clock <= K.lateSlow.from && clock >= 24 && diff < 0 && diff >= -K.lateSlow.lead) res.push = true;
     if (final && clock <= 35 && diff <= -3 && diff >= -5) res.need3 = true;
     // down two with the last shot: most coaches play for the tie
     if (final && clock <= 24 && diff === -2) res.tie = true;
     // two possessions or more down late, still within reach: quick shots, more of them threes
     if (final && diff <= -4 && diff >= -3 - clock / 12 && clock > 1 && clock <= 20 + 10 * -diff) res.hurry = true;
-    if (off.t.manage.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;
+    if (off.habit.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;
     return res;
   },
 };

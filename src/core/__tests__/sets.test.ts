@@ -312,8 +312,9 @@ describe('sets in the engine', () => {
       for (const [id, beats, kills] of cases) {
         const o = teamFor(id);
         // (Chicago's gap is the smallest, about 0.19 a run: forty games measure it to 0.05, ten only to 0.1;
-        // Spain's against hedge came out about 0.05-0.14 over ten games when the playbooks were rebalanced, 2026-10-26)
-        const games = id === 'chicago' ? 40 : id === 'spain' ? 30 : 10;
+        // Spain's against hedge came out about 0.05-0.14 over ten games when the playbooks were rebalanced, 2026-10-26,
+        // and 0.095 against a 0.105 bar over thirty after the 2026-11 game-day round)
+        const games = id === 'chicago' || id === 'spain' ? 60 : 10;
         const a = pairedValue(id, o, DEF[beats], games, 500);
         const b = pairedValue(id, o, DEF[kills], games, 500);
         expect(a.mean, `${id} vs ${beats}`).toBeGreaterThan(0);
@@ -321,15 +322,17 @@ describe('sets in the engine', () => {
       }
       // the more the defense helps, the more open Hammer's corner
       const o = teamFor('hammer');
-      const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 10, 500);
-      const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 10, 500);
+      // (thirty games: over ten the gap, about 0.14-0.25 a run, came out inside its noise on some engines)
+      const hi = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 90 } }, 30, 500);
+      const lo = pairedValue('hammer', o, { defense: { ...MAN.defense, help: 10 } }, 30, 500);
       expect(hi.mean - lo.mean).toBeGreaterThan(2 * Math.hypot(hi.se, lo.se));
     }
     {
       // is read a little better every run: its look gets less open, and a spammed set costs points
       const o = teamFor('floppy');
-      const first = pairedValue('floppy', o, MAN, 10, 700, 0);
-      const late = pairedValue('floppy', o, MAN, 10, 700, 7);
+      // (forty games: its first run's edge, about +0.12 a run, came out at -0.01 over ten on one engine)
+      const first = pairedValue('floppy', o, MAN, 40, 700, 0);
+      const late = pairedValue('floppy', o, MAN, 40, 700, 7);
       expect(first.mean).toBeGreaterThan(0);
       expect(late.mean).toBeLessThan(0);
       expect(first.mean - late.mean).toBeGreaterThan(2 * Math.hypot(first.se, late.se));
@@ -358,15 +361,15 @@ describe('sets in the engine', () => {
       // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
       const expected = {
         ai: [
-          [115, 114, 85, 38, 11, 17, 13, 0],
-          [122, 113, 82, 18, 6, 26, 13, 0],
-          [111, 106, 97, 43, 7, 16, 11, 0],
+          [117, 113, 74, 31, 14, 33, 16, 0],
+          [120, 122, 84, 13, 9, 32, 16, 0],
+          [113, 100, 81, 37, 12, 25, 22, 0],
         ],
-        // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press)
+        // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round)
         coached: [
-          [121, 106, 89, 32, 14, 20, 11, 0],
-          [113, 125, 77, 31, 7, 29, 16, 0],
-          [95, 109, 75, 32, 11, 31, 19, 0],
+          [111, 106, 80, 36, 10, 25, 17, 0],
+          [99, 111, 82, 36, 9, 19, 20, 0],
+          [100, 123, 77, 31, 8, 34, 23, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

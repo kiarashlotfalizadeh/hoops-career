@@ -138,6 +138,8 @@ export interface SP {
   planMin: number;
   /** In-game injury risk multiplier: 1, or K.gameTimeRisk for an injured player cleared to play. */
   risk: number;
+  /** Technical fouls tonight (a second ejects him). */
+  techs?: number;
 }
 
 export interface ST {
@@ -213,6 +215,19 @@ export interface ST {
   atoNext: boolean;
   /** Times each set has been run tonight: what the other defense has read of it. */
   setRuns: Map<SetId, number>;
+  /**
+   * This coach's late-game habits (see coachHabits): an AI coach's own, the same every night; the
+   * user's side plays its settings as rules. `lateFoul`: the chance he fouls at once when down a
+   * possession late (the rest of the time his defense plays for the steal first).
+   */
+  habit: { foulUp3: boolean; twoForOne: boolean; lateFoul: number; earlyO: number; zone: number };
+  /** A timeout in the last two minutes with the ball: the trip out of it is inbounded in the frontcourt. */
+  advance: boolean;
+  /** Timeouts this period. */
+  qTimeouts: number;
+  /** Shooting fouls and reach-ins called on this side tonight, and the number its opponents' play drew on average (see whistle). */
+  wpf: number;
+  xpf: number;
 }
 
 /**
@@ -299,6 +314,10 @@ export interface ShotOpts {
 
 /** The late-game modes the clock and the score put an offense in (see lateMode). */
 export interface LateMode {
+  /** Ahead late (from 3:00): work the shot clock before shooting. */
+  slow: boolean;
+  /** Behind late (from 3:00): push the ball up and get into the offense early. */
+  push: boolean;
   /** Hold for the last shot of the period. */
   hold: boolean;
   /** A quick shot: a two-for-one. */

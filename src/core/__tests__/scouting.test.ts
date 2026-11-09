@@ -437,7 +437,10 @@ describe('scouting and the staff', () => {
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });
       res.impacts = [im('help_kick:o', them, 3)];
       expect(buildGameReport(league, res)!.factors.find((f) => f.key === 'help_kick:o')).toBeTruthy();
-      const home = debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.label === 'Stay home');
+      // (on a night not won by 15 or more, which has no lessons in it)
+      const close = structuredClone(res);
+      (me === 0 ? close.home : close.away).pts = (me === 0 ? close.away : close.home).pts - 2;
+      const home = debrief(league, close, buildGameReport(league, close)!).advice.find((a) => a.label === 'Stay home');
       expect([!!home?.patch, home?.worth]).toEqual([true, undefined]);
       // a loss whose top edge is our own setting's cost: ours, never "their game plan"; one the setting
       // more than won back didn't lose it at all
@@ -575,6 +578,8 @@ describe('scouting and the staff', () => {
       // (15 more made free throws than ours, whatever the simulated game gave each side)
       const mine = me === 0 ? res.home.t : res.away.t;
       res[opp] = { ...res[opp], t: { ...res[opp].t, ftm: mine.ftm + 15, fta: mine.fta + 18 } };
+      // (and a night not won by 15 or more, which has no lessons in it)
+      (me === 0 ? res.home : res.away).pts = res[opp].pts - 2;
       const fouls = () => buildGameReport(league, res)!.factors.find((f) => f.category === 'fouls' && f.title.startsWith('Free throws'))!;
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { physicality: 65 } });
       expect(fouls()).toMatchObject({ key: 'physicality:o' });

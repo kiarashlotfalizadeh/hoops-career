@@ -31,9 +31,12 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
   const side = (tid: number, opp: number) => ({ ...buildSimInput(league, tid, 1, 'regular', opp), adjust: false });
   /**
    * Seed sets the games are played over: one game's noise is as big as some effects, so a measure averages several
-   * (ten: over five, a seed rebuild flipped the off-ball switching case, +0.06 measured against +0.45 over ten).
+   * (ten: over five, a seed rebuild flipped the off-ball switching case, +0.06 measured against +0.45 over ten;
+   * twenty since 2026-11-09: over ten, walking it up measured -0.11 on seed sets 0-9 and -0.59 on 10-19, and
+   * switching every screen -0.68 to -1.46 on engines a random stream apart, the paired games drifting apart
+   * more than the standard error says).
    */
-  const SEEDS = Array.from({ length: 10 }, (_, i) => i * 1000);
+  const SEEDS = Array.from({ length: 20 }, (_, i) => i * 1000);
   const baseOf = new Map<number, LabSummary[]>();
   const base = (off: number) => {
     let b = baseOf.get(off);

@@ -17,9 +17,28 @@ export const K = {
   /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
   orbBase: 0.262,
-  toBase: 0.15,
+  toBase: 0.146,
   /** Reach-ins and holds on the handler, a chance per trip (0.23 until 2026-10-25: see K.recenter). */
-  nonShootFoul: 0.22,
+  nonShootFoul: 0.165,
+  /**
+   * The officials (see whistle): a foul call's chance falls by exp(-whistleBalance) per foul the calls
+   * have gone against the side beyond what the two sides' play drew, and the home side's by homeWhistle
+   * (the away side's rises by it). Technicals: the chance at each dead ball before a trip (NBA 2024-26: 1.04-1.07 a game); flagrants, the
+   * share of reach-ins (0.06-0.10 a team-game); kicked balls, the chance on a trip without a reach-in.
+   * Loose-ball fouls on a rebound (1.2-1.4 a team-game), held balls on one (0.74-0.81 a game), and
+   * take fouls on a run-out (about 0.4 a team-game): the reach-ins went from 0.22 to 0.165 a trip
+   * with them (common fouls were 8.5 a team-game, the NBA's 5.7-6.0). Shot-clock violations: the
+   * chance a trip whose shot clock is running out never gets its shot off (0.67-0.74 a team-game).
+   */
+  whistleBalance: 0.3,
+  homeWhistle: 0.012,
+  tech: 0.019,
+  flagrant: 0.012,
+  kicked: 0.006,
+  looseBall: 0.027,
+  heldBall: 0.009,
+  takeFoul: 0.05,
+  shotClockOut: 0.5,
   /**
    * A side-out foul in an action that plays on: the seconds the inbound and the reset take before the
    * action's shot (it used to go up on the same tick as the whistle).
@@ -35,6 +54,58 @@ export const K = {
    * fourth quarter or overtime: it plays without fouling (a reach-in there was a free tie or lead).
    */
   lateLeadFoul: 0.3,
+  /**
+   * A trailing defense's late fouls (see lateFoulAt), the chance on a trip: down three or less with
+   * more time left than a shot clock, a foul a few seconds in anyway (`early`); down four to six, at
+   * once from 32 seconds (`two`), or from about half a minute on a trip begun before (`twoEarly`).
+   * Fitted to the NBA's 2024-26 play-by-play: the leader up 1-3 with 24-40 seconds left was fouled
+   * before the next shot 25-37% of the time, up 4-6 there 71-72%.
+   */
+  lateFoul: { early: 0.3, two: 0.85, twoEarly: 0.66 },
+  /**
+   * The last `from` seconds of a game within `lead` points: the leader's setup runs `slow` seconds
+   * longer (a range) and the trailing side's is cut to `push` of it (see lateMode).
+   */
+  lateSlow: { from: 180, lead: 8, slow: [3, 8] as [number, number], push: 0.55 },
+  /**
+   * Early offense: after a defensive board or a steal that isn't a run-out, the share of trips (times
+   * the coach's habit and the team's pace) that are in the half court within a couple of seconds and
+   * shoot early in the clock (NBA 2024-26: 34-35% of trips after a defensive board shot or turned it
+   * over within 6 seconds, run-outs included).
+   */
+  earlyO: { dreb: 0.2, steal: 0.25, setup: [1, 2.2] as [number, number], act: [1.2, 3.2] as [number, number] },
+  /**
+   * Off an offensive board: the rebounder's chance of putting it straight back up (a base, by his size
+   * and finishing, up to `max`) and how soon (seconds); else the share of resets that are a kick-out on
+   * the spot. NBA 2024-26: 62-63% of offensive boards were followed within 2 seconds by a shot, a
+   * foul or a turnover (at 0.25, 0.8-2.5 s and no kick-outs, 23%); second-chance points 14.1-15.0.
+   */
+  /**
+   * Seconds from a miss to the rebound (a range): the flight and the scramble. With none, every board
+   * came on the shot's tick, and trips had to run longer than the NBA's to hold its pace.
+   */
+  reboundTime: { shot: [1.2, 3.4] as [number, number], ft: [0.2, 0.9] as [number, number] },
+  putback: { base: 0.36, max: 0.75, time: [0.2, 1.4] as [number, number], kick: 0.45, kickAct: [0.5, 2] as [number, number] },
+  /**
+   * The staff's late-game timeouts with the ball (see autoTimeouts), a chance at each trip: behind or
+   * tied by six or less in the last `at` seconds, ahead by one to three after the other side scored in
+   * the last 24, and in a game within five in the last two minutes after the other side scored. NBA
+   * 2024-26: 2.2 timeouts in the last two minutes of games within five, 1.5 of them in the last 24
+   * seconds. Before 3:00 of the fourth (from `spend` seconds left), a team with more than the two it may
+   * keep spends one at a dead ball (`spendP`).
+   */
+  lateTO: { at: 40, behind: 0.85, ahead: 0.4, close: 0.3, spend: 420, spendP: 0.3 },
+  /**
+   * An AI staff whose base defense is a 2-3 or 3-2 zone plays it this share of the time, in stretches
+   * of `zoneStretch` seconds, man-to-man the rest: playing it every trip, AI defenses were in a zone on
+   * 9.6% of half-court trips (Cleveland 35%), the NBA's few percent (a handful of teams near ten).
+   */
+  zoneShare: 0.25,
+  zoneStretch: 150,
+  /** The TV's two timeouts a quarter (see mandatoryTimeout). */
+  tvTimeouts: true,
+  /** Late-game timeouts: setup out of one that advances the ball to the frontcourt (seconds, a range). */
+  advanceSetup: [1.2, 3] as [number, number],
   /**
    * Seconds left on the game clock when a team holding for the last shot starts its action: a range,
    * drawn each time, tied in the fourth quarter or overtime and behind by one or two there; at the end
@@ -56,6 +127,12 @@ export const K = {
   transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
   setup: { made: 8.6, dreb: 4.9, steal: 2.0, ft: 8.4, deadTO: 8.0, start: 5.6 } as Record<string, number>,
   actionTime: 7.6,
+  /**
+   * The spread of setups and actions (the sd of a log-normal multiplier around 1): at uniform 0.75-1.25
+   * and 0.6-1.4 nearly every trip after a make shot 16-20 seconds in (42%, NBA 26%) and almost none
+   * 8-12 seconds in (2.6%, NBA 16%).
+   */
+  spread: { setup: 0.38, action: 0.42 },
   continueBase: 0.38,
   injuryRate: 0.00042,
   /** A player playing through an injury (a game-time decision: SimTeamInput.play) is this many times as likely to get hurt in the game. */
@@ -70,10 +147,12 @@ export const K = {
    * usage weight falls by exp(-usageDamp) per unit of share above it, so as the game goes on the ball
    * finds his teammates. The real league's top scorers use 30-34% (Dončić 38%); at 36.5% and 5.2 a
    * star's share kept climbing with his ratings, and leaders used 40-43% and scored 38-43 a game
-   * within a few simulated seasons.
+   * within a few simulated seasons. Damp 9 → 9.5 on 2026-11-09, when the stint plan's longer stints
+   * (four of about nine minutes) put about 0.3 a game on the top two's minutes and Anthony Edwards
+   * averaged 0.8 a game more over star-check's 64 seasons, three of them past 35 in one league.
    */
   useLevel: 0.32,
-  usageDamp: 9,
+  usageDamp: 9.5,
   /**
    * ...and past `level` it falls by exp(-damp) per unit more: a season's share past it is beyond all
    * but two real seasons of 1,354 since 2004 (Westbrook's 0.408 and Harden's 0.406; the 99.5th
@@ -109,7 +188,7 @@ export const K = {
    * looks are left out (nobody is running him off the line there): at every share it took the 2-3's
    * and box-and-one's measured worth with it (tacticsModel, engineDefense).
    */
-  threeUse: { from: 15, level: 0.18, damp: 15, contest: 1 },
+  threeUse: { from: 15, level: 0.18, damp: 17, contest: 1 },
   /**
    * A three-point shooter's skill (c3 or pu3) counts in full up to `from`, at `keep` of it to `top` and
    * at `keepTop` past that. The real league's shooting was fitted to the engine before the big
@@ -169,9 +248,12 @@ export const K = {
    * ratings that count three-point volume, with the playbooks rebalanced (the four teams now crash at
    * 42-55 and push more): over the same ten seed sets going to 0 measured +0.65 ± 0.23 where it tagged
    * -0.15, and to 100 +0.79 ± 0.25 where it tagged +0.42 (a board is worth less, and a run-out given
-   * up more, against the league's fives as they shoot now).
+   * up more, against the league's fives as they shoot now). Boards 0.49 → 0.65 on 2026-11-09, when
+   * more of them came to be put straight back up or kicked out on the spot (K.putback) and the ball
+   * took its time coming down (K.reboundTime): going to 0 measured −0.38 and +0.30 on two engines a
+   * stream apart (the measure's noise is wider than its ±0.24) where it tagged +0.62; now about +0.15.
    */
-  crashTag: { orb: 0.49, leak: 0.29 },
+  crashTag: { orb: 0.65, leak: 0.29 },
   /**
    * Switching off-ball screens: the edge it takes off the man coming off a handoff or a screen, and off
    * motion's ball movement; and the offensive boards it gives up (a guard switched onto a big can't
@@ -194,9 +276,11 @@ export const K = {
    * every screen against icing them, two real matchups over ten seed sets): at 1 the mismatches tagged
    * −1.79 a game against a measured −1.46 for them (2026-10-24), then −2.29 against −1.10 once volume
    * shooters were damped and the AI's offenses refit (2026-10-25): each mismatch is still taken, and
-   * worth less. At 0.5 the switch tags −1.10 against a measured −1.01.
+   * worth less. At 0.5 the switch tags −1.10 against a measured −1.01. 0.95 since 2026-11-09, when the
+   * game-day realism round (stint plan, tempo, the whistle) left switching measured at −1.46 (−0.63 before)
+   * and its tags at −0.09: now about −1.1.
    */
-  switchTag: 0.5,
+  switchTag: 0.95,
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
   /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */

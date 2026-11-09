@@ -63,7 +63,8 @@ export const recordMethods = {
     if (pid !== undefined) im.players[pid] = (im.players[pid] ?? 0) + 1;
   },
 
-  turnover(this: GameSim, off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press') {
+  /** A turnover; `kind` names a violation (a shot-clock violation), which is never a charge. */
+  turnover(this: GameSim, off: ST, def: ST, handler: SP, stealer: SP | null, finish: FinishType | 'press', kind?: string) {
     handler.b.tov++;
     off.tot.tov++;
     for (const p of off.on) p.b.tTov++;
@@ -72,7 +73,7 @@ export const recordMethods = {
       stealer.b.stl++;
       def.tot.stl++;
     }
-    const charge = !stealer && this.rng.chance(K.chargeShare);
+    const charge = !stealer && !kind && this.rng.chance(K.chargeShare);
     if (this.record) {
       const text = stealer
         ? // (a pass picked off: the pocket pass to the roller, a pass round the perimeter; else a strip)
@@ -81,8 +82,11 @@ export const recordMethods = {
             finish === 'pnrRoll' || finish === 'spotup' ? `${stealer.name} picks off ${handler.name}'s pass.` : `${stealer.name} strips ${handler.name}.`,
           ])
         : charge
-          ? `${handler.name} offensive foul (charge).`
-          : `${handler.name} turnover (${this.fx.pick(['bad pass', 'lost ball', 'traveling', 'stepped out of bounds', 'bad pass', 'lost ball'])}).`;
+          ? `${handler.name} offensive foul (${this.fx.pick(['charge', 'charge', 'illegal screen', 'charge'])}).`
+          : kind
+            ? `${off.team.abbrev} ${kind}.`
+            : // (NBA 2024-26 dead-ball turnovers: bad passes and balls lost out of bounds most, then traveling, then the rarer violations)
+              `${handler.name} turnover (${this.fx.pick(['bad pass', 'bad pass', 'lost ball', 'out of bounds', 'out of bounds', 'bad pass out of bounds', 'traveling', 'traveling', 'offensive three seconds', 'backcourt violation', 'lost ball out of bounds', 'double dribble'])}).`;
       this.addPbp(off.side, text, 'to');
       this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid });
     }

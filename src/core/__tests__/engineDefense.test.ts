@@ -82,7 +82,8 @@ describe('engine defense', () => {
     {
       const helio = shaped(7, 'helio');
       const box1: TacticsPatch = { defense: { scheme: 'box1', chase: [helio.star.pid] } };
-      const [base, box] = paired(3, 7, helio, box1, 30, 100, [helio.star.pid]);
+      // (120 games: the others' extra threes are about 0.6 a game, inside sixty games' noise)
+      const [base, box] = paired(3, 7, helio, box1, 120, 100, [helio.star.pid]);
       // his share of the possessions he plays drops by a fifth or more
       expect(usage(box)).toBeLessThan(usage(base) * 0.85);
       expect(box.tpa).toBeLessThan(base.tpa * 0.9);
@@ -98,11 +99,14 @@ describe('engine defense', () => {
           ctx: string;
           continueAfterOrb(): void;
           finishPoss(): void;
+          looseBall(): boolean;
           rebound(off: unknown, def: unknown, zone: string, blocked: boolean, ft: boolean): void;
         };
         sim.poss = 1;
         sim.continueAfterOrb = () => {};
         sim.finishPoss = () => {};
+        // (the boards alone: no loose-ball fouls or jump balls)
+        sim.looseBall = () => false;
         let orb = 0;
         for (let i = 0; i < n; i++) {
           sim.rebound(sim.T[1], sim.T[0], i % 3 ? 'ab3' : 'rim', false, false);
@@ -121,8 +125,9 @@ describe('engine defense', () => {
     {
       const helio = shaped(7, 'helio');
       const star = helio.star.pid;
+      // (a game the star plays through: on some nights foul trouble sits him for most of it)
       const logs = (patch: TacticsPatch) => {
-        const sim = new GameSim(side(3, patch), side(7, undefined, helio.players, helio.tactics), opts(5, true));
+        const sim = new GameSim(side(3, patch), side(7, undefined, helio.players, helio.tactics), opts(8, true));
         const out: PossLog[] = [];
         while (sim.step()) out.push(...sim.drainLogs().filter((l) => l.off === 1 && l.kind === 'half'));
         return out;
@@ -283,30 +288,30 @@ describe('engine defense', () => {
       // All of them again 2026-10-28, when the threes were recentred (K.recenter.three) after partnerships and familiarity were deleted. And again the same day, when Five-Out, Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit.
       const expected: Record<string, number[][]> = {
         default: [
-          [115, 114, 85, 38, 11, 17, 13, 0],
-          [122, 113, 82, 18, 6, 26, 13, 0],
-          [111, 106, 97, 43, 7, 16, 11, 0],
+          [117, 113, 74, 31, 14, 33, 16, 0],
+          [120, 122, 84, 13, 9, 32, 16, 0],
+          [113, 100, 81, 37, 12, 25, 22, 0],
         ],
         zone23: [
-          [118, 115, 89, 43, 14, 22, 12, 0],
-          [124, 106, 95, 21, 16, 17, 12, 0],
-          [113, 126, 89, 39, 9, 11, 11, 0],
+          [119, 103, 72, 29, 7, 26, 14, 0],
+          [129, 114, 88, 18, 10, 28, 13, 0],
+          [119, 110, 80, 30, 3, 19, 20, 0],
         ],
         zone32: [
-          [124, 115, 86, 32, 11, 30, 12, 0],
-          [137, 123, 95, 18, 8, 33, 8, 0],
-          [116, 109, 94, 34, 13, 33, 12, 0],
+          [113, 105, 70, 34, 6, 24, 16, 0],
+          [134, 127, 83, 10, 5, 24, 15, 0],
+          [118, 104, 81, 43, 7, 30, 19, 0],
         ],
         double: [
-          [125, 114, 93, 37, 16, 21, 9, 0],
-          [125, 119, 91, 29, 10, 31, 8, 0],
-          [115, 102, 104, 38, 11, 19, 4, 0],
+          [126, 121, 73, 38, 9, 31, 9, 0],
+          [121, 130, 84, 19, 4, 30, 14, 0],
+          [117, 94, 97, 27, 20, 21, 13, 0],
         ],
         // (the first game hacks nobody: the couple of trips the mismatch hunt changes are all it changes)
         hunt: [
-          [120, 117, 85, 42, 11, 20, 13, 0],
-          [122, 107, 85, 23, 7, 26, 13, 0],
-          [119, 102, 101, 34, 12, 19, 6, 0],
+          [126, 104, 91, 43, 18, 29, 13, 0],
+          [124, 122, 77, 24, 6, 26, 19, 0],
+          [115, 95, 87, 35, 14, 26, 18, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -352,39 +357,39 @@ describe('engine defense', () => {
       // The hunting games again 2026-10-28, when the set package they ran was deleted.
       const expected: Record<string, number[][]> = {
         default: [
-          [129, 119, 80, 34, 12, 24, 9, 0],
-          [121, 101, 94, 23, 13, 18, 12, 0],
-          [116, 101, 99, 35, 10, 23, 10, 0],
+          [123, 114, 83, 35, 9, 30, 11, 0],
+          [118, 121, 90, 19, 13, 26, 16, 0],
+          [125, 97, 86, 38, 12, 32, 16, 0],
         ],
         zone23: [
-          [123, 103, 79, 43, 6, 19, 8, 0],
-          [119, 107, 92, 26, 12, 21, 7, 0],
-          [116, 103, 95, 51, 11, 7, 11, 0],
+          [130, 122, 83, 51, 12, 26, 11, 0],
+          [117, 112, 85, 18, 12, 20, 11, 0],
+          [115, 107, 86, 35, 14, 21, 21, 0],
         ],
         zone32: [
-          [117, 105, 86, 37, 13, 15, 9, 0],
-          [118, 106, 92, 21, 10, 18, 7, 0],
-          [119, 97, 88, 36, 12, 13, 11, 0],
+          [130, 115, 83, 35, 10, 25, 12, 0],
+          [121, 120, 82, 20, 11, 17, 13, 0],
+          [113, 92, 84, 33, 8, 15, 19, 0],
         ],
         box1: [
-          [121, 102, 83, 39, 8, 24, 14, 0],
-          [128, 114, 88, 27, 9, 21, 8, 0],
-          [121, 108, 102, 38, 12, 17, 8, 0],
+          [142, 147, 86, 52, 11, 36, 16, 1],
+          [119, 109, 89, 21, 11, 25, 13, 0],
+          [119, 98, 88, 29, 19, 32, 19, 0],
         ],
         double: [
-          [115, 117, 87, 42, 11, 22, 14, 0],
-          [126, 111, 95, 20, 16, 11, 10, 0],
-          [116, 97, 91, 28, 15, 20, 14, 0],
+          [127, 118, 82, 37, 11, 40, 12, 0],
+          [114, 124, 91, 19, 12, 23, 12, 0],
+          [121, 105, 96, 28, 17, 22, 15, 0],
         ],
         pressure: [
-          [126, 123, 84, 48, 8, 28, 16, 0],
-          [133, 136, 88, 22, 9, 33, 19, 0],
-          [101, 106, 121, 23, 18, 38, 12, 0],
+          [136, 114, 81, 35, 7, 34, 13, 0],
+          [144, 131, 96, 18, 13, 36, 18, 0],
+          [101, 105, 92, 27, 13, 21, 18, 0],
         ],
         hunting: [
-          [121, 116, 81, 42, 11, 22, 9, 0],
-          [124, 111, 88, 27, 9, 39, 10, 0],
-          [107, 130, 89, 42, 6, 24, 10, 0],
+          [126, 111, 81, 39, 14, 28, 13, 0],
+          [119, 107, 83, 21, 6, 23, 14, 0],
+          [106, 107, 89, 33, 10, 24, 17, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -421,7 +426,8 @@ describe('engine defense', () => {
       expect(helio.delta).toBeGreaterThan(0);
       expect(shooters.delta).toBeLessThan(0);
       expect(helio.delta - shooters.delta).toBeGreaterThan(2 * Math.hypot(helio.se, shooters.se));
-      // about twice as much as at 1x, both ways (500 games: the 400 above and 100 more)
+      // about twice as much as at 1x, both ways (1,500 games: the 400 above and 1,100 more; over 500 the box
+      // aimed right came out +2.0 ± 0.7 at 1x and +1.9 ± 0.7 at 2x on one engine, +0.9 ± 0.4 and +2.3 ± 0.4 over 1,500)
       const join = (a: LabSummary, b: LabSummary): LabSummary => ({
         ...a,
         games: a.games + b.games,
@@ -429,10 +435,10 @@ describe('engine defense', () => {
         pace: (a.pace * a.games + b.pace * b.games) / (a.games + b.games),
       });
       const at2 = (kind: 'helio' | 'shooters', first: [LabSummary, LabSummary]) => {
-        const more = lab(kind, 2, 100, 400);
+        const more = lab(kind, 2, 1100, 400);
         return pairedDelta(join(first[0], more[0]), join(first[1], more[1]));
       };
-      const [r1, w1, r2, w2] = [pairedDelta(...lab('helio', 1, 500)), pairedDelta(...lab('shooters', 1, 500)), at2('helio', h400), at2('shooters', s400)];
+      const [r1, w1, r2, w2] = [pairedDelta(...lab('helio', 1, 1500)), pairedDelta(...lab('shooters', 1, 1500)), at2('helio', h400), at2('shooters', s400)];
       // aimed right it gains more and aimed wrong it costs more, and the gap between the two (the part of
       // its value that comes from the matchup) is at least twice what it was: more, since the open looks
       // it leaves count by who takes them (K.matchup), in full past a room the leverage gets them to
