@@ -61,7 +61,7 @@ function cachedPlan(players: PlanPlayer[]): number[][] {
  */
 export function coachHabits(input: SimTeamInput): ST['habit'] {
   const m = input.team.tactics.manage;
-  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne, lateFoul: 0.85, earlyO: 1, zone: 1 };
+  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne, lateFoul: 0.85, earlyO: 1, zone: 1, ride: 0, calls: 0 };
   if (!input.adjust || input.team.assistant) return rules;
   let h = input.team.tid + 1;
   for (const ch of input.team.coach?.name ?? '') h = mix(h, ch.charCodeAt(0));
@@ -72,6 +72,8 @@ export function coachHabits(input: SimTeamInput): ST['habit'] {
     lateFoul: 0.74 + 0.2 * u(3),
     earlyO: 0.7 + 0.6 * u(4),
     zone: K.zoneShare,
+    ride: 0.5 + u(5),
+    calls: 0.5 + u(6),
   };
 }
 
@@ -157,12 +159,26 @@ export class GameSim {
   tripClock = Infinity;
   /** This trip's make-probability factor for a scrambled look (1: none; see halfCourt). */
   scramble = 1;
+  /** The game clock when this trip's shot clock would have read 24 (an offensive board's 14 counts as 10 used): see tempoOpen. */
+  shotStart = Infinity;
+  /** This trip began on a live ball (a defensive board or a steal, no timeout): the defense isn't set for its first seconds. */
+  liveStart = false;
+  /** What this trip's early look keeps of its edge: one over how much more often than the league the team pushes (see K.tempo). */
+  earlyScale = 1;
+  /** Actions this trip has run without finding its shot (since the last offensive board): see tempoOpen. */
+  tripActs = 0;
+  /** The trailing defense plays for a steal before it fouls on this trip (see lateFoulAt). */
+  trap = false;
+  /** Two free throws owed a player fouled on the glass by the side with the ball, in the penalty: he shoots them before the next trip (see looseBall). */
+  owed: SP | null = null;
   /** A side-out foul in this action: the shot clock restarts at 14 or more (see halfCourt). */
   sideOut = false;
   /** This trip is early offense (see possession), or a kick-out off an offensive board: its first action is quick. */
   early: boolean | 'kick' = false;
   /** Seconds left at which the trailing defense fouls on this trip (0: it doesn't; see lateFoulAt). */
   foulAt = 0;
+  /** The stretch of the quarter the last timeout came in (the quarter times ten, plus 0 before 7:00, 1 to 3:00, 2 after). */
+  toWindow = 0;
   /** Timeouts taken this period by both sides, as of the last mandatory one's mark (see autoTimeouts). */
   mandatory = { q: 0, n: 0 };
   /** A set handed to the action about to run (it takes it: see takePlay). */
@@ -176,7 +192,7 @@ export class GameSim {
   /** Cosmetic draws (shot spots, play-by-play wording) never touch the simulation stream. */
   fx: Rng;
   /** Conditions both teams share in this game: tempo, shooting night, how tightly it's called. */
-  env: { pace: number; shoot: number; fouls: number };
+  env: { pace: number; shoot: number; fouls: number; team: [number, number] };
 
   constructor(home: SimTeamInput, away: SimTeamInput, opts: SimOptions) {
     this.seed = Math.floor(opts.rng.next() * 4294967296) >>> 0;
@@ -187,6 +203,7 @@ export class GameSim {
       pace: clamp(env.normal(1, K.envPace), 0.9, 1.1),
       shoot: clamp(env.normal(0, K.envShoot), -0.04, 0.04),
       fouls: clamp(env.normal(1, K.envFouls), 0.7, 1.3),
+      team: [clamp(env.normal(0, K.envTeam), -0.04, 0.04), clamp(env.normal(0, K.envTeam), -0.04, 0.04)],
     };
     this.opts = opts;
     this.record = !!opts.record;
@@ -465,7 +482,10 @@ export class GameSim {
   /** New base tactics for the team on `side`, played from the next possession. */
   setTactics(side: 0 | 1, tactics: Tactics) {
     const t = this.T[side];
-    t.base = cloneTactics(tactics);
+    const next = cloneTactics(tactics);
+    // (the same tactics again change nothing: no new matchups either, which are drawn up at substitutions)
+    if (JSON.stringify(next) === JSON.stringify(t.base)) return;
+    t.base = next;
     this.rebase(t);
   }
 
@@ -527,6 +547,7 @@ export class GameSim {
     t.toWait = null;
     t.timeouts--;
     t.qTimeouts++;
+    this.toWindow = this.q * 10 + (this.clock > 420 ? 0 : this.clock > 180 ? 1 : 2);
     // NBA: in the last two minutes of the fourth quarter or overtime a timeout by the team with the
     // ball advances it to the frontcourt
     t.advance = this.q >= 4 && this.clock <= 120 && this.poss === side;

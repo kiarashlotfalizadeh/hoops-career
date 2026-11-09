@@ -218,9 +218,11 @@ export interface ST {
   /**
    * This coach's late-game habits (see coachHabits): an AI coach's own, the same every night; the
    * user's side plays its settings as rules. `lateFoul`: the chance he fouls at once when down a
-   * possession late (the rest of the time his defense plays for the steal first).
+   * possession late (the rest of the time his defense plays for the steal first). `ride`: how readily
+   * he leaves a player in foul trouble on the floor (0: never, the user's rule; see K.foulRide).
+   * `calls`: how readily he calls a timeout through a quarter (0: only against the run the user set; see K.quarterTO).
    */
-  habit: { foulUp3: boolean; twoForOne: boolean; lateFoul: number; earlyO: number; zone: number };
+  habit: { foulUp3: boolean; twoForOne: boolean; lateFoul: number; earlyO: number; zone: number; ride: number; calls: number };
   /** A timeout in the last two minutes with the ball: the trip out of it is inbounded in the frontcourt. */
   advance: boolean;
   /** Timeouts this period. */
@@ -305,6 +307,8 @@ export interface ShotOpts {
   tags?: [string, number][];
   pullup?: boolean;
   forcedFoulMult?: number;
+  /** A heave from the backcourt at the horn: it goes in at K.heave.make, whoever throws it. */
+  heave?: boolean;
   /**
    * The impact tag owed the fouls drawn above the shot's usual rate, the multiplier that drew them, and
    * the share of its estimate the tag counts (1 when absent: see K.offBallTag).
@@ -328,8 +332,8 @@ export interface LateMode {
   need3: boolean;
   /** Two possessions or more down late, still within reach: quick shots, more of them threes. */
   hurry: boolean;
-  /** Down two with the last shot: playing for the tie, a two more often than a three. */
-  tie: boolean;
+  /** Down one with the last shot: a two wins it, so fewer threes. */
+  two: boolean;
 }
 
 /** How an action ends: the possession is over ('done'), or the ball moves on to the next action with what's left of the advantage. */

@@ -794,10 +794,13 @@ describe('engine rules', () => {
         }
         return [now / 40, planned / 40];
       };
-      expect(rate(20, 2)[0]).toBeGreaterThan(0.7);
-      expect(rate(2, 2)[0]).toBeGreaterThan(0.7);
+      // (at once on most trips; on the rest it traps for a few seconds first and then fouls: K.lateSteal)
+      expect(rate(20, 2)[0]).toBeGreaterThan(0.5);
+      expect(rate(20, 2)[1]).toBe(1);
+      expect(rate(2, 2)[0]).toBe(1);
       // down three with the game clock under the shot clock too (NBA 2024-26: 81-86% of the time)
-      expect(rate(20, 3)[0]).toBeGreaterThan(0.7);
+      expect(rate(20, 3)[0]).toBeGreaterThan(0.5);
+      expect(rate(20, 3)[1]).toBe(1);
       // with more time than a shot clock left, now and then a few seconds in
       const early = rate(36, 3);
       expect(early[0]).toBe(0);
@@ -825,6 +828,127 @@ describe('engine rules', () => {
       expect(fouls(7)).toBeGreaterThan(fouls(9));
       expect(fouls(9)).toBeGreaterThan(0);
       expect(fouls(10)).toBe(0);
+    }
+    // a shot is worth what the moment makes it: more against a defense that isn't set, less late in the
+    // shot clock and at the horn; nobody gets a catch-up bonus; foul trouble is the user's rule and an AI
+    // coach's habit; a board comes before the whistle or the tie-up on it; a quarter can end on a heave
+    {
+      type R = {
+        q: number;
+        clock: number;
+        shotStart: number;
+        liveStart: boolean;
+        tripActs: number;
+        tempoOpen(): number;
+        lastLook(off: unknown, def: unknown, three: boolean): number;
+        scoreEffect(off: unknown, def: unknown, three?: boolean): number;
+        sitsForFouls(t: unknown, p: unknown, limit: number, crunch: boolean): boolean;
+        T: { score: number; habit: { ride: number }; players: { pid: number; fouls: number; planMin: number }[] }[];
+      };
+      const sim = new GameSim(side(0), side(1), { rng: new Rng(3), type: 'regular', injuries: false }) as unknown as R;
+      const [a, b] = sim.T;
+      sim.q = 2;
+      sim.clock = 400;
+      sim.shotStart = 402;
+      sim.liveStart = true;
+      const unset = sim.tempoOpen();
+      sim.liveStart = false;
+      expect(unset).toBeGreaterThan(sim.tempoOpen());
+      expect(sim.tempoOpen()).toBeGreaterThan(0);
+      sim.shotStart = 408;
+      expect(sim.tempoOpen()).toBe(0);
+      // (the cost is by action, not by second: a deliberate offense's first look is as good as a quick one's)
+      sim.shotStart = 422;
+      expect(sim.tempoOpen()).toBe(0);
+      sim.tripActs = 2;
+      expect(sim.tempoOpen()).toBeLessThan(-0.2);
+      sim.tripActs = 0;
+      // the horn: any quarter's last seconds, and the last shot of a game more
+      expect(sim.lastLook(a, b, true)).toBe(1);
+      sim.clock = 3;
+      const quarter = sim.lastLook(a, b, true);
+      expect(quarter).toBeLessThan(1);
+      sim.q = 4;
+      a.score = 100;
+      b.score = 102;
+      expect(sim.lastLook(a, b, true)).toBeLessThan(quarter);
+      expect(sim.lastLook(b, a, false)).toBeLessThan(1);
+      // late and close, both sides shoot a little worse and the side ahead worse on its twos; even
+      // at two apart the side behind gets nothing like the old five points
+      sim.clock = 100;
+      expect(sim.scoreEffect(a, b)).toBeLessThan(0);
+      expect(sim.scoreEffect(b, a)).toBeLessThan(sim.scoreEffect(a, b));
+      expect(sim.scoreEffect(b, a, true)).toBeGreaterThan(sim.scoreEffect(b, a));
+      // from the tip, the side ahead gives a little back
+      sim.q = 1;
+      b.score = 115;
+      expect(sim.scoreEffect(a, b)).toBeGreaterThan(0);
+      expect(sim.scoreEffect(b, a)).toBe(-sim.scoreEffect(a, b));
+      // foul trouble: the user's staff sits a player at the limit every time; an AI coach rides with some
+      sim.q = 2;
+      sim.clock = 400;
+      const sat = (ride: number) => {
+        a.habit.ride = ride;
+        let n = 0;
+        for (let pid = 0; pid < 200; pid++) if (sim.sitsForFouls(a, { pid, fouls: 3, planMin: 30 }, 3, false)) n++;
+        return n;
+      };
+      expect(sat(0)).toBe(200);
+      expect(sat(1)).toBeLessThan(190);
+      expect(sat(1)).toBeGreaterThan(120);
+      expect(sim.sitsForFouls(a, { pid: 1, fouls: 2, planMin: 30 }, 3, false)).toBe(false);
+      expect(sim.sitsForFouls(a, { pid: 1, fouls: 5, planMin: 30 }, 3, true)).toBe(false);
+      expect(sim.sitsForFouls(a, { pid: 1, fouls: 5, planMin: 30 }, 3, false)).toBe(true);
+      // the play-by-play of a dozen games: a loose-ball foul or a jump ball on the glass follows the board
+      let whistles = 0;
+      let heaves = 0;
+      for (let g = 0; g < 12; g++) {
+        const pbp = new GameSim(side(2 + g), side(14 + g), { rng: new Rng(300 + g), type: 'regular', record: true, injuries: false }).simToEnd().pbp!;
+        pbp.forEach((e, i) => {
+          if (/^Loose ball foul|^Jump ball/.test(e.text)) {
+            whistles++;
+            expect(pbp[i - 1].text, e.text).toMatch(/rebound/);
+            expect(e.clock, e.text).toBeGreaterThan(0);
+          }
+          if (/heave/.test(e.text)) {
+            heaves++;
+            expect(e.q).toBeLessThan(4);
+            expect(e.clock).toBeLessThan(0.5);
+          }
+        });
+      }
+      expect(whistles).toBeGreaterThan(12);
+      expect(heaves).toBeGreaterThan(3);
+      // every end game ends: a narrow lead with seconds left, the defense fouling at once, trapping first
+      // or not at all; and a trap planned for a moment the clock has already run past (an offensive board
+      // with a tenth of a second left) is no reason to wait (the trip once waited for it forever)
+      let ended = 0;
+      for (let g = 0; g < 200; g++) {
+        const late = new GameSim(side(g % 28), side((g % 28) + 1), { rng: new Rng(700 + g), type: 'regular', injuries: false });
+        const x = late as unknown as {
+          q: number;
+          clock: number;
+          poss: 0 | 1;
+          foulAt: number;
+          trap: boolean;
+          T: { score: number }[];
+          lateMode(off: unknown, def: unknown): unknown;
+          halfCourt(off: unknown, def: unknown, shotClock: number, late: unknown, paceF: number): void;
+        };
+        x.q = 4;
+        x.clock = g < 20 ? 0.1 : 1.5 + (g % 47) * 0.5;
+        x.T[x.poss].score = 100 + 1 + (g % 6);
+        x.T[1 - x.poss].score = 100;
+        if (g < 20) {
+          x.foulAt = 3.9;
+          x.trap = g % 2 === 0;
+          x.halfCourt(x.T[x.poss], x.T[1 - x.poss], 13.7, x.lateMode(x.T[x.poss], x.T[1 - x.poss]), 1);
+        }
+        let steps = 0;
+        while (late.step() && steps++ < 400);
+        if (late.over) ended++;
+      }
+      expect(ended).toBe(200);
     }
     // a poor free-throw shooter is hacked only before the last two minutes of a period
     {

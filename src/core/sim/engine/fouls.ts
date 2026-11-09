@@ -25,6 +25,13 @@ export const foulsMethods = {
         this.foulAt = 0;
         fouled = this.lateFoulTarget(off);
         tag = 'late_foul';
+        // (now and then the pressure gets the ball before the foul: a pass picked off, a five-second call)
+        if (clock > 2 && this.rng.chance(K.lateSteal.inbound)) {
+          this.tick(this.rng.uniform(0.4, Math.min(3, clock - 0.5)));
+          if (this.cur) this.cur.label = 'Turnover against the pressure';
+          this.turnover(off, def, fouled, this.rng.chance(0.6) ? this.stealer(def) : null, 'misc');
+          return 'ft';
+        }
       }
     }
     if (!fouled && final && def.habit.foulUp3 && defDiff === 3 && clock <= 7 && clock >= 1.5) {
@@ -67,7 +74,8 @@ export const foulsMethods = {
    * The seconds left at which the trailing defense (down `down` in the fourth quarter or overtime)
    * fouls on the trip just begun, or 0 for none on it. Down three or less, it fouls once the leader
    * could run the clock out (the game clock under the shot clock), as real teams do 81-86% of the
-   * time, the rest playing for a steal first (the coach's habit); with more time left now and then it
+   * time: most at once, the rest after playing for a steal for a few seconds (the coach's habit; it
+   * sets `trap`, see K.lateSteal and halfCourt); with more time left now and then it
    * fouls a few seconds in anyway, for two trips to the leader's one (25-37% of the chances). Down
    * four to six it fouls from about half a minute (71-72% of the chances at 24-40 seconds), down
    * seven to nine sooner, the further down the fewer coaches still do. Down four or more with
@@ -77,7 +85,14 @@ export const foulsMethods = {
     if (clock <= 1.2) return 0;
     const r = this.rng.next();
     if (down <= 3) {
-      if (clock <= shotLeft + 1) return r < def.habit.lateFoul ? clock : 0;
+      if (clock <= shotLeft + 1) {
+        if (r < def.habit.lateFoul - K.lateSteal.first) return clock;
+        // the steal first, then the foul (with no time for both, the foul)
+        const at = clock - this.rng.uniform(K.lateSteal.time[0], K.lateSteal.time[1]);
+        if (at < 1.5) return clock;
+        this.trap = true;
+        return at;
+      }
       if (clock <= 40) return r < K.lateFoul.early ? clock - this.rng.uniform(2, 9) : 0;
       return 0;
     }
@@ -162,7 +177,7 @@ export const foulsMethods = {
     const mult = Math.max(0.25, 1 + 0.3 * phys + 0.25 * pr);
     // (a defense protecting a narrow lead in the last 24 seconds keeps its hands off)
     const lead = def.score - off.score;
-    const careful = this.q >= 4 && this.clock <= 24 && lead >= 1 && lead <= 3 ? K.lateLeadFoul : 1;
+    const careful = this.q >= 4 && this.clock <= 24 && lead >= 0 && lead <= 3 ? K.lateLeadFoul : 1;
     const p = this.whistle(def, K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * careful);
     if (this.rng.chance(p)) def.wpf++;
     else {
@@ -177,7 +192,7 @@ export const foulsMethods = {
       }
       return false;
     }
-    const fouler = this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))];
+    const fouler = this.handsOff(def, this.rng.chance(clamp(0.7 * defender.tpf, 0.2, 0.92)) ? defender : def.on[this.rng.weighted(def.on.map((p) => p.tpf))]);
     // a hard foul now and then is a flagrant: two free throws and the ball
     const flagrant = this.rng.chance(K.flagrant);
     if (this.record) {
@@ -216,8 +231,19 @@ export const foulsMethods = {
   /** Who is charged with a shooting foul: the help defender takes most contact, the beaten man some. */
   shootingFouler(this: GameSim, def: ST, c: SP | null, sh: SP): SP {
     const md = this.defOf(def, sh);
-    if (!c || c === md) return c ?? md;
-    return this.rng.weighted([0.6 * c.tpf, 0.4 * md.tpf]) === 0 ? c : md;
+    const one = !c || c === md ? (c ?? md) : this.rng.weighted([0.6 * c.tpf, 0.4 * md.tpf]) === 0 ? c : md;
+    return this.handsOff(def, one);
+  },
+
+  /**
+   * A player on the floor in foul trouble (at the quarter's limit or past it: an AI coach riding with
+   * him, or crunch time) plays with his hands off: a foul that would be his is a teammate's
+   * 1 − K.foulRide.careful of the time.
+   */
+  handsOff(this: GameSim, def: ST, p: SP): SP {
+    if (p.fouls < this.foulLimit(def) || this.rng.chance(K.foulRide.careful)) return p;
+    const others = def.on.filter((x) => x !== p && x.fouls < GAME.foulOut - 1);
+    return others.length ? others[this.rng.weighted(others.map((x) => x.tpf))] : p;
   },
 
   /** A defensive foul: counts toward the team's fouls for the penalty. */

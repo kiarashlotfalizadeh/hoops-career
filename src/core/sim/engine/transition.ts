@@ -57,7 +57,8 @@ export const transitionMethods = {
     }
     const ws = off.on.map((p) => (p.r.spd + p.c.create * 0.6) * (p.guard ? 1.4 : 0.7) * Math.sqrt(p.tu));
     const h = off.on[this.rng.weighted(ws)];
-    this.tick(this.rng.uniform(3, 6.5));
+    // (a run-out off a steal is at the rim sooner than one off a board)
+    this.tick(ctx === 'steal' ? this.rng.uniform(2.2, 5.5) : this.rng.uniform(3, 6.5));
     if (this.record) this.cur!.steps.push({ k: 'transition', pid: h.pid });
     let adv = (off.speed - def.speed) / K.runSpeed.edge + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
     adv -= lev((def.t.defense.getBack - 50) / 100);
@@ -71,7 +72,8 @@ export const transitionMethods = {
       return;
     }
     // a clear run-out stopped with a take foul: a free throw and the ball (NBA, from 2023-24)
-    if (adv > 0.6 && this.clock > 120 && this.rng.chance(K.takeFoul)) {
+    // (not in the last two minutes of the fourth quarter or overtime, where the rule doesn't apply)
+    if (adv > 0.6 && (this.q < 4 || this.clock > 120) && this.rng.chance(K.takeFoul)) {
       const d0 = this.defOf(def, h);
       if (this.record) {
         this.addPbp(def.side, `Take foul on ${d0.name}.`, 'foul');
@@ -87,6 +89,8 @@ export const transitionMethods = {
         this.clockOut(off);
         return;
       }
+      this.shotStart = this.clock;
+      this.liveStart = false;
       this.halfCourt(off, def, GAME.shotClock, this.lateMode(off, def), this.paceF(off));
       return;
     }

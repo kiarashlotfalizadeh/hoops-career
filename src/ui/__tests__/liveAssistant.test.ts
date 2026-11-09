@@ -806,10 +806,12 @@ describe('broadcast graphics', () => {
 
     // record book: a franchise or league scoring record broken goes up, the league one first; one within reach late is a watch
     {
-      const { sim, views, logs } = playThrough(24);
+      // (a night with one top scorer: a record is tonight's best alone, see graphics.ts)
+      const scorers = (v: Drawn) => [...v.box.home.players, ...v.box.away.players].sort((a, b) => b.pts - a.pts);
+      const { sim, views, logs } = [24, 25, 26, 27, 28].map(playThrough).find((p) => scorers(p.views[p.views.length - 1])[0].pts > scorers(p.views[p.views.length - 1])[1].pts)!;
       const end = views[views.length - 1];
-      // (the night's top scorer, whichever side he's on: a record is tonight's best)
-      const top = [...end.box.home.players, ...end.box.away.players].sort((a, b) => b.pts - a.pts)[0];
+      // (the night's top scorer, whichever side he's on)
+      const top = scorers(end)[0];
       expect(top.pts).toBeGreaterThan(10);
       const at = (records: PlayerBefore['records']) =>
         graphicCandidates(graphicInput(end, logs, { before: new Map([[top.pid, { records }]]) })).filter((g) => g.kind === 'record' || g.id.startsWith('rec-'));

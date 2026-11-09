@@ -9,6 +9,21 @@ import { K } from './constants';
 import type { Box, SP, ST, Stint } from './state';
 import type { GameSim } from './game';
 
+/** How a dead-ball turnover is worded, and how often each (see turnover). */
+const DEAD_BALL = [
+  'bad pass out of bounds',
+  'lost ball out of bounds',
+  'out of bounds',
+  'traveling',
+  'bad pass',
+  'lost ball',
+  'backcourt violation',
+  'double dribble',
+  'offensive three seconds',
+  'palming',
+];
+const DEAD_BALL_W = [30, 22, 20, 14, 4, 3, 3, 2, 1, 1];
+
 export const recordMethods = {
   lineupStat(this: GameSim, t: ST): LineupStat {
     if (t.ls) return t.ls;
@@ -85,8 +100,10 @@ export const recordMethods = {
           ? `${handler.name} offensive foul (${this.fx.pick(['charge', 'charge', 'illegal screen', 'charge'])}).`
           : kind
             ? `${off.team.abbrev} ${kind}.`
-            : // (NBA 2024-26 dead-ball turnovers: bad passes and balls lost out of bounds most, then traveling, then the rarer violations)
-              `${handler.name} turnover (${this.fx.pick(['bad pass', 'bad pass', 'lost ball', 'out of bounds', 'out of bounds', 'bad pass out of bounds', 'traveling', 'traveling', 'offensive three seconds', 'backcourt violation', 'lost ball out of bounds', 'double dribble'])}).`;
+            : // (NBA 2024-26 dead-ball turnovers: three in four are a ball out of bounds, a bad pass or a lost
+              // ball or a step on the line (2.8-2.9 a team-game), then traveling; the other violations are rare:
+              // an equal share for each of twelve words had three-second calls at 6.6 times the NBA's rate)
+              `${handler.name} turnover (${DEAD_BALL[this.fx.weighted(DEAD_BALL_W)]}).`;
       this.addPbp(off.side, text, 'to');
       this.cur!.steps.push({ k: stealer ? 'steal' : 'to', pid: handler.pid, pid2: stealer?.pid });
     }

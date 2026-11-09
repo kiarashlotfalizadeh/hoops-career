@@ -635,7 +635,10 @@ function settledSheets(before: ReturnType<typeof sheetSnapshot>, next: number): 
     const p = L.players[pid];
     if (p.rfa?.sheet) continue;
     const c = C.makeContract(L, s.amount, s.years, next, p.experience);
-    if ((p.tid !== s.own && p.tid !== s.tid) || p.contract.start !== next || p.contract.salaries.join() !== c.salaries.join())
+    // (to the rounding step: a sheet at the maximum is clamped to the max of the player's years of service, which
+    // the summer's rollover can move a tier between the signing and this check: $49.129M against $49.13M)
+    const same = p.contract.salaries.length === c.salaries.length && p.contract.salaries.every((x, i) => Math.abs(x - c.salaries[i]) <= 10 * (i + 1));
+    if ((p.tid !== s.own && p.tid !== s.tid) || p.contract.start !== next || !same)
       bad('offer sheet settled off its terms', `${nm(pid)} tid ${p.tid} ${JSON.stringify(p.contract)} vs ${JSON.stringify(s)}`);
     out[p.tid === s.own ? 'matched' : 'declined']++;
   }

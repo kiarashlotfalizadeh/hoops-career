@@ -6,7 +6,7 @@
 import { K } from './constants';
 import { GAME } from '../../constants';
 import { crunchTime } from '../../analysis/winProb';
-import type { SP, ST } from './state';
+import { type SP, type ST, mix } from './state';
 import type { GameSim } from './game';
 
 export const rotationMethods = {
@@ -20,6 +20,25 @@ export const rotationMethods = {
     const q = Math.min(this.q, 4);
     const base = q + 1; // 2 in Q1, 3 in Q2, 4 in Q3, 5 in Q4
     return mode === 'strict' ? base - (q === 1 ? 0 : 1) : mode === 'loose' ? base + 1 : base;
+  },
+
+  /**
+   * Whether the staff sits `p` for his fouls right now: at the quarter's limit or past it (never in
+   * crunch time), unless this coach rides with him. The user's staff keeps to the rule; an AI coach
+   * leaves him on some of the time (K.foulRide: more in the first and fourth quarters, more for a
+   * player he leans on, by the coach's own habit, much less a foul past the limit), and now and then
+   * brings him back for the end of the quarter. Decided once per player and foul: the draw is the
+   * game's and his, not the stream's, so looking again gives the same answer.
+   */
+  sitsForFouls(this: GameSim, t: ST, p: SP, limit: number, crunch: boolean): boolean {
+    if (crunch || p.fouls < limit) return false;
+    if (!t.habit.ride || p.fouls >= GAME.foulOut - (this.q >= 4 ? 0 : 1)) return true;
+    const k = K.foulRide;
+    const u = mix(this.seed, 0x5f000000 + p.pid * 8 + p.fouls) / 4294967296;
+    const base = (k.q[Math.min(this.q, 4) - 1] + (p.planMin >= k.starMin ? k.star : 0)) * t.habit.ride * Math.pow(k.over, p.fouls - limit);
+    if (u < base) return false;
+    // (sat, but back for the last couple of minutes of the quarter)
+    return !(this.q < 4 && p.fouls === limit && this.clock <= k.back && u < base + k.backP);
   },
 
   /** At his hard minute cap: he sits unless nobody else can play. Subs wait for a dead ball and a
@@ -133,12 +152,12 @@ export const rotationMethods = {
     else if (t.restedLate.size) desired = desired.filter((p) => !t.restedLate.has(p.pid));
     const limit = this.foulLimit(t);
     const bigsWanted = desired.filter((p) => p.big).length;
-    desired = desired.filter((p) => crunch || p.fouls < limit);
+    desired = desired.filter((p) => !this.sitsForFouls(t, p, limit, crunch));
     // fatigue: swap exhausted players for rested teammates of the same type from the rotation (a
     // coach doesn't reach past it for a breather: the deep bench plays in blowouts and emergencies)
     const fatigueLine = t.t.manage.fatigueSub;
     const playoffs = this.opts.type === 'playoffs';
-    const bench = ordered.filter((p) => !desired.includes(p) && (crunch || p.fouls < limit) && !t.restedLate.has(p.pid));
+    const bench = ordered.filter((p) => !desired.includes(p) && !this.sitsForFouls(t, p, limit, crunch) && !t.restedLate.has(p.pid));
     desired = desired.map((p) => {
       if (p.energy >= fatigueLine || crunch) return p;
       const alt = bench.filter((b) => b.energy > 0.82 && b.big === p.big && b.planMin > 0).sort((a, b) => b.c.helpD + b.c.create - (a.c.helpD + a.c.create))[0];
@@ -191,7 +210,15 @@ export const rotationMethods = {
   subSignature(this: GameSim, t: ST): number[] {
     const fl = t.t.manage.fatigueSub;
     // (a blowout, or one getting back within reach, changes the lineup now, not at the next minute mark)
-    const sig = [this.q <= 4 ? this.planSlot() : 100 + this.q, this.foulLimit(t), this.crunch() ? 1 : 0, this.wantsGarbage(t) ? 1 : 0, this.lopsided(t) ? 1 : 0];
+    // (a coach who sat a player for his fouls may bring him back for the end of the quarter)
+    const sig = [
+      this.q <= 4 ? this.planSlot() : 100 + this.q,
+      this.foulLimit(t),
+      this.crunch() ? 1 : 0,
+      this.wantsGarbage(t) ? 1 : 0,
+      this.lopsided(t) ? 1 : 0,
+      this.q < 4 && this.clock <= K.foulRide.back ? 1 : 0,
+    ];
     for (const p of t.players) {
       const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;
       sig.push(p.out + 4 * state + 16 * p.fouls + (this.capped(p) ? 1024 : 0) + (t.hacked.size && (t.hacked.get(p.pid) ?? 0) >= 2 ? 2048 : 0));

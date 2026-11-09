@@ -187,6 +187,17 @@ export const coachMethods = {
         this.callTimeout(t.side, `${opp.run}-0 run`);
         continue;
       }
+      // through a quarter: the other side has just scored (a few unanswered, or the coach wants a word)
+      if (t.habit.calls && this.poss === t.side && this.ctx === 'made' && t.timeouts > (this.q < 4 ? 3 : 2) && (this.q < 4 || this.clock > 180) && this.q <= 4 && this.clock > 20) {
+        const k = K.quarterTO;
+        // (one that isn't against a real run only when nobody has called one in this stretch of the quarter)
+        const fresh = this.toWindow !== this.q * 10 + (this.clock > 420 ? 0 : this.clock > 180 ? 1 : 2);
+        if (this.rng.chance(t.habit.calls * (opp.run >= 6 ? k.run6 : !fresh ? 0 : opp.run >= 4 ? k.run4 : k.any))) {
+          // (a real run is an occasion to adjust; a word with the team isn't)
+          this.callTimeout(t.side, opp.run >= 4 ? `${opp.run}-0 run` : '', opp.run < 6);
+          continue;
+        }
+      }
       // the end of a close game, with the ball: behind or tied in the last 40 seconds (it advances the
       // ball), ahead by a basket or less after the other side scored, or to set up a trip in the last two
       // minutes
@@ -218,7 +229,8 @@ export const coachMethods = {
    */
   mandatoryTimeout(this: GameSim) {
     if (!K.tvTimeouts || this.q > 4 || this.ctx === 'steal' || this.ctx === 'dreb' || this.ctx === 'orb') return;
-    const mark = this.clock < 180 ? 2 : this.clock < 420 ? 1 : 0;
+    // (a quarter that reaches its last minute and a half without a dead ball goes without the second one)
+    const mark = this.clock < 90 ? 0 : this.clock < 180 ? 2 : this.clock < 420 ? 1 : 0;
     const key = this.q * 10 + mark;
     if (!mark || this.mandatory.q >= key) return;
     this.mandatory.q = key;

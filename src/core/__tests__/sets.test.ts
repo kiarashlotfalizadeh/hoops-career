@@ -361,15 +361,15 @@ describe('sets in the engine', () => {
       // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
       const expected = {
         ai: [
-          [117, 113, 74, 31, 14, 33, 16, 0],
-          [120, 122, 84, 13, 9, 32, 16, 0],
-          [113, 100, 81, 37, 12, 25, 22, 0],
+          [120, 100, 80, 30, 9, 33, 12, 0],
+          [131, 121, 79, 22, 8, 30, 16, 0],
+          [127, 100, 90, 29, 7, 14, 11, 0],
         ],
-        // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round)
+        // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
-          [111, 106, 80, 36, 10, 25, 17, 0],
-          [99, 111, 82, 36, 9, 19, 20, 0],
-          [100, 123, 77, 31, 8, 34, 23, 0],
+          [103, 89, 81, 25, 11, 17, 18, 0],
+          [100, 103, 80, 32, 12, 15, 20, 0],
+          [100, 116, 89, 30, 14, 18, 17, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];

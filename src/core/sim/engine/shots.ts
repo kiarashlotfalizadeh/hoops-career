@@ -89,15 +89,41 @@ export const shotsMethods = {
   },
 
   /**
-   * Second-half score effects: a big lead makes the leader ease off and the trailer play loose;
-   * late in a close game the leader plays not to lose and the trailer presses.
+   * Score effects: the side ahead gives a little back and the side behind gains it, from the tip
+   * (K.band), more in a second-half blowout (K.easeBig); late in a close game both defenses tighten,
+   * and the leader's twos come harder still (K.clutchD).
    */
-  scoreEffect(this: GameSim, off: ST, def: ST) {
-    if (this.q < 3) return 0;
+  scoreEffect(this: GameSim, off: ST, def: ST, three = false) {
     const m = off.score - def.score;
-    let x = clamp((Math.abs(m) - K.easeFrom) / K.easeSpan, 0, 1) * K.ease + clamp((Math.abs(m) - K.easeBig.from) / K.easeBig.span, 0, 1) * K.easeBig.x;
-    if (this.q >= 4 && this.clock < K.clutchSec && m !== 0 && Math.abs(m) <= 6) x += K.clutchEase;
-    return m > 0 ? -x : x;
+    const a = Math.abs(m);
+    let x = (K.band.per * Math.min(a, K.band.cap)) / 10;
+    if (this.q >= 3) x += clamp((a - K.easeBig.from) / K.easeBig.span, 0, 1) * K.easeBig.x;
+    const c = K.clutchD;
+    const tight = this.q >= 4 && this.clock < c.sec && a <= c.within ? c.all + (m > 0 && !three ? c.leadTwo : 0) : 0;
+    return (m > 0 ? -x : x) - tight;
+  },
+
+  /**
+   * What the moment of the trip adds to a look, in openness (K.tempo): a shot in the first seconds
+   * after a live-ball change of possession comes against a defense that isn't set (worth less to a
+   * team that pushes more often than most: earlyScale); one that comes after the trip's first
+   * actions found nothing, or late in the shot clock, is what the offense had left. None on a putback.
+   */
+  tempoOpen(this: GameSim): number {
+    const k = K.tempo;
+    const used = this.shotStart - this.clock;
+    const early = clamp((k.earlyEnd - used) / (k.earlyEnd - k.earlyFull), 0, 1) * (this.liveStart ? 1 : k.dead) * this.earlyScale;
+    return k.early * early - k.perAct * Math.min(this.tripActs, k.acts) - k.late * clamp((used - k.lateFrom) / (24 - k.lateFrom), 0, 1);
+  },
+
+  /** The share of its chance a shot against the horn keeps (K.lastLook). */
+  lastLook(this: GameSim, off: ST, def: ST, three: boolean): number {
+    const k = K.lastLook;
+    if (this.clock > k.sec) return 1;
+    const i = three ? 1 : 0;
+    const chase = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
+    if (this.clock <= k.horn) return chase ? k.game[i] : k.quarter[i];
+    return chase ? k.late[i] : three && this.q >= 4 && off.score < def.score && off.score >= def.score - 6 ? k.far : 1;
   },
 
   cornerOrWing(this: GameSim, off: ST, sh?: SP): ShotZone {
@@ -212,12 +238,14 @@ export const shotsMethods = {
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
     if (this.opts.edge) p += this.opts.edge[off.side];
-    p += this.env.shoot + this.scoreEffect(off, def);
+    p += this.env.shoot + this.env.team[off.side] + this.scoreEffect(off, def, three);
+    if (s.finish !== 'putback') p += this.tempoOpen() * K.zoneOpen[zone];
     // late-game nerves: close and late, a player short on feel (offensive IQ) shoots a little worse, one with plenty a little better
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;
-    // a trip begun with the period nearly over gets a scrambled look (see halfCourt)
-    p *= this.scramble;
-    p = clamp(p, 0.04, 0.93);
+    // a trip begun with the period nearly over gets a scrambled look (see halfCourt), and any shot
+    // against the horn is a tougher one
+    p *= Math.min(this.scramble, this.lastLook(off, def, three));
+    p = s.heave ? K.heave.make : clamp(p, 0.04, 0.93);
 
     // impact accounting: each tag's openness contribution in expected points (a big decision's with
     // what the shooter made of it: see matchupOpen)
@@ -249,7 +277,11 @@ export const shotsMethods = {
     const pBlk = c ? K.blockMiss[zone] * (1 + levExtra(K.recenter.blk)) * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
     // shooting foul?
     const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
-    const pFoul = this.whistle(def, K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls);
+    // (late in a close game more shots are fouled; one for the tie or the lead at the horn rarely is: K.clutchD)
+    const cd = K.clutchD;
+    const gap = off.score - def.score;
+    const lateCall = this.q < 4 || this.clock >= cd.sec || Math.abs(gap) > cd.within ? 1 : this.clock <= K.lastLook.horn && gap <= 0 && gap >= -3 ? cd.hornFouls : cd.fouls;
+    const pFoul = this.whistle(def, K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls * lateCall);
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
@@ -313,7 +345,7 @@ export const shotsMethods = {
     this.possFinish = s.finish;
     this.lastShooter = sh;
 
-    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast, made, !!blocker, sh) : '';
+    const desc = this.record ? this.shotDesc(zone, s.finish, !!s.pullup, !!ast, made, !!blocker, sh, s.heave) : '';
     // the court's captions call the shot as the play-by-play does
     if (shotStep) shotStep.d = desc;
     if (made) {
@@ -470,8 +502,9 @@ export const shotsMethods = {
    * a mid-range jumper is now and then a fadeaway (NBA: hooks 2.7% of shots, fadeaways 3.5%,
    * turnarounds 4%).
    */
-  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean, made = true, blocked = false, sh?: SP) {
+  shotDesc(this: GameSim, zone: ShotZone, f: FinishType, pullup: boolean, assisted: boolean, made = true, blocked = false, sh?: SP, heave = false) {
     const r = this.fx;
+    if (heave) return 'heave from the backcourt';
     const big = !!sh && (sh.big || sh.r.hgt >= 55);
     switch (zone) {
       case 'rim': {

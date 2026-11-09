@@ -154,11 +154,19 @@ describe('game day', () => {
       // (on a night after a win: ending a skid, or one going on, would be the bigger story, and so would a 4th straight win)
       const games = userGames(base);
       const won = (g: GameResult) => side(base, g).pts > other(base, g).pts;
-      const afterWin = 1 + [...games].reverse().findIndex((_, k, rev) => k + 3 < rev.length && won(rev[k + 1]) && !(won(rev[k + 2]) && won(rev[k + 3])));
-      const rout = craft((l, g) => {
-        plain(l, g, true);
-        side(l, g).pts = 135;
-      }, afterWin).story;
+      // (nor against an opponent whose own streak the win would end: that leads too)
+      const routOn = (n: number) =>
+        craft((l, g) => {
+          plain(l, g, true);
+          side(l, g).pts = 135;
+        }, n).story;
+      const afterWins = [...games]
+        .reverse()
+        .map((_, k) => k)
+        .filter((k, _, ks) => k + 3 < ks.length && won(games.at(-k - 2)!) && !(won(games.at(-k - 3)!) && won(games.at(-k - 4)!)))
+        .map((k) => k + 1);
+      const afterWin = afterWins.find((n) => !/streak/.test(routOn(n).head))!;
+      const rout = routOn(afterWin);
       expect(rout.head).toMatch(/rout|blow out|off the floor/);
 
       const routed = craft((l, g) => {

@@ -297,7 +297,13 @@ export const defenseMethods = {
     const sysTo = base * (1 - (handler.c.ballSec - 50) / 140) * handler.ttv * K.toPts;
     if (horns) this.impact('shape_tov', off.side, -horns * sysTo, handler.pid);
     if (poa) this.impact('role_poa', def.side, poa * sysTo, handler.pid);
-    return clamp(p, 0.01, 0.4);
+    // (a trip for the tie or the lead in the last seconds is run for one safe look)
+    const m = off.score - def.score;
+    const last = this.q >= 4 && this.clock <= 24 && m <= 0 && m >= -3 ? K.lastTripTO : 1;
+    // (and late in a close game the side ahead is the one that gives it away: K.clutchD)
+    const c = K.clutchD;
+    const tight = this.q >= 4 && this.clock < c.sec && m !== 0 && Math.abs(m) <= c.within ? (m > 0 ? c.leadTO : c.trailTO) : 1;
+    return clamp(p * last * tight, 0.01, 0.4);
   },
 
   /**

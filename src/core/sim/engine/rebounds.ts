@@ -87,17 +87,23 @@ export const reboundsMethods = {
 
   /**
    * A loose-ball foul or a held ball on the rebound (see K.looseBall, K.heldBall): true when it settled
-   * who has the ball. A loose-ball foul on the crashing side hands the ball over; one on a defender
-   * boxing out keeps it for the offense (two free throws in the penalty). A held ball goes to a jump.
+   * who has the ball. Either follows the board: the player fouled had it, or position for it, and is
+   * credited with it (the NBA logs 84% of its loose-ball fouls right after a rebound at the same
+   * clock; replacing the board, they took 1.6 rebounds a team-game off the box). A loose-ball foul on
+   * the crashing side hands the ball over (in the penalty, two free throws at the other end first: see
+   * `owed`); one on a defender boxing out keeps it for the offense (two free throws in the penalty). A
+   * held ball goes to a jump, and the board to the side that wins it. Neither is called at the horn.
    */
   looseBall(this: GameSim, off: ST, def: ST, ft: boolean): boolean {
     const r = this.rng.next();
+    if (this.clock <= 0.3) return false;
     if (r < K.looseBall) {
       const onOffense = this.rng.chance(0.45);
       const t = onOffense ? off : def;
       const o = onOffense ? def : off;
       const fouler = t.on[this.rng.weighted(t.on.map((p) => Math.pow(p.c.orb + p.c.drb, 1.5) * p.tpf))];
       const fouled = o.on[this.rng.weighted(o.on.map((p) => Math.pow(p.c.orb + p.c.drb, 1.5)))];
+      this.creditBoard(o, fouled, !onOffense);
       if (this.record) {
         this.addPbp(t.side, `Loose ball foul on ${fouler.name}.`, 'foul');
         this.cur!.steps.push({ k: 'foul', pid: fouler.pid, pid2: fouled.pid });
@@ -106,6 +112,7 @@ export const reboundsMethods = {
       if (onOffense) {
         if (this.cur && !this.cur.label) this.cur.label = 'Loose ball foul';
         this.ctx = 'deadTO';
+        if (this.bonus(off)) this.owed = fouled;
         this.finishPoss(off, this.possFinish);
         return true;
       }
@@ -120,6 +127,8 @@ export const reboundsMethods = {
         this.clockOut(off);
         return true;
       }
+      this.shotStart = this.clock + 10;
+      this.liveStart = false;
       this.halfCourt(off, def, 14, this.lateMode(off, def), this.paceF(off));
       return true;
     }
@@ -127,11 +136,9 @@ export const reboundsMethods = {
       const a = off.on.reduce((x, p) => (p.c.orb > x.c.orb ? p : x), off.on[0]);
       const b = def.on.reduce((x, p) => (p.c.drb > x.c.drb ? p : x), def.on[0]);
       const offWins = this.rng.chance(0.42);
-      if (this.record) {
-        this.addPbp(-1, `Jump ball: ${a.name} vs. ${b.name}. ${(offWins ? off : def).team.abbrev} gains possession.`, 'other');
-        // (the court shows it as a team rebound)
-        this.cur!.steps.push({ k: 'reb' });
-      }
+      if (offWins) this.creditBoard(off, a, true);
+      else this.creditBoard(def, b, false);
+      if (this.record) this.addPbp(-1, `Jump ball: ${a.name} vs. ${b.name}. ${(offWins ? off : def).team.abbrev} gains possession.`, 'other');
       this.tick(Math.min(this.rng.uniform(2, 5), Math.max(0, this.clock - 0.3)));
       if (offWins && this.clock > 0.3) {
         this.ctx = 'orb';
@@ -144,6 +151,21 @@ export const reboundsMethods = {
       return true;
     }
     return false;
+  },
+
+  /** A rebound for `p` in the box score and the play-by-play (one the scramble's whistle or tie-up follows). */
+  creditBoard(this: GameSim, t: ST, p: SP, offensive: boolean) {
+    if (offensive) {
+      p.b.orb++;
+      t.tot.orb++;
+    } else {
+      p.b.drb++;
+      t.tot.drb++;
+    }
+    if (this.record) {
+      this.addPbp(t.side, `${offensive ? 'Offensive' : 'Defensive'} rebound ${p.name}.`, 'other');
+      this.cur!.steps.push({ k: 'reb', pid: p.pid });
+    }
   },
 
   /** A player's weight among the offensive rebounders: his glass duty, and a double post's bigs (`inside`) under the basket. */
@@ -159,6 +181,10 @@ export const reboundsMethods = {
 
   continueAfterOrb(this: GameSim, off: ST, def: ST, rebounder: SP | null) {
     this.secondChance = true;
+    // (the shot clock is back at 14: ten seconds of a full one gone, for what the look is worth)
+    this.shotStart = this.clock + 10;
+    this.liveStart = false;
+    this.tripActs = 0;
     if (this.clock <= 0.3) {
       this.clockOut(off);
       return;

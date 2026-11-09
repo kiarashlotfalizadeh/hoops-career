@@ -43,6 +43,7 @@ export const clockMethods = {
       t.hacked.clear();
     }
     // the break draws from its own stream, so the possessions around it stay paired in batch comparisons
+    this.owed = null;
     this.rng = new Rng(mix(this.seed, 0x7ff00000 + this.q));
     this.mandatory.n = 0;
     for (const t of this.T) this.adjust(t);
@@ -67,7 +68,8 @@ export const clockMethods = {
     this.elapsed += dt;
     for (const t of this.T) {
       const press = this.T[1 - t.side].t.defense.press !== 'none' || t.t.defense.press !== 'none';
-      const paceMult = 0.9 + (t.t.offense.pace / 100) * 0.2;
+      // (0.9 to 1.1 until 2026-11-09: an early look is worth more now, see K.tempo, and pushing for it costs more legs)
+      const paceMult = 0.87 + (t.t.offense.pace / 100) * 0.26;
       // chasing in a junk defense wears out the chasers
       const off = this.T[1 - t.side];
       const chased = t.side !== this.poss ? this.chased(t, off) : NONE;
@@ -109,8 +111,10 @@ export const clockMethods = {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, tie: false, slow: false, push: false };
-    if (final && clock <= 26 && diff >= -2 && diff <= 0) res.hold = true;
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, two: false, slow: false, push: false };
+    // (tied, a team holds for the last shot; behind by one or two with time for more than one trip, it
+    // goes now and plays on: NBA 2024-26, down one or two, half the shots in the last 24 seconds come before the last 5)
+    if (final && clock <= 26 && diff >= -2 && diff <= 0 && (diff === 0 || clock <= K.holdBehind)) res.hold = true;
     else if (!final && clock <= 24 && clock > 3) res.hold = true;
     else if (final && clock < 50 && diff > 0) res.milk = true;
     // the last three minutes of a game still in reach: the leader works the shot clock, the trailing
@@ -119,8 +123,8 @@ export const clockMethods = {
     else if (final && clock <= K.lateSlow.from && diff > 0 && diff <= K.lateSlow.lead) res.slow = true;
     if (final && clock <= K.lateSlow.from && clock >= 24 && diff < 0 && diff >= -K.lateSlow.lead) res.push = true;
     if (final && clock <= 35 && diff <= -3 && diff >= -5) res.need3 = true;
-    // down two with the last shot: most coaches play for the tie
-    if (final && clock <= 24 && diff === -2) res.tie = true;
+    // down one with the last shot: a two wins it
+    if (final && clock <= 24 && diff === -1) res.two = true;
     // two possessions or more down late, still within reach: quick shots, more of them threes
     if (final && diff <= -4 && diff >= -3 - clock / 12 && clock > 1 && clock <= 20 + 10 * -diff) res.hurry = true;
     if (off.habit.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;

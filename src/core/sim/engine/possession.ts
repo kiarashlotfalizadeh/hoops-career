@@ -29,6 +29,11 @@ export const possessionMethods = {
     this.possCtxForTOPts = ctx;
     const clockStart = this.clock;
     this.tripClock = clockStart;
+    this.shotStart = clockStart;
+    this.liveStart = (ctx === 'dreb' || ctx === 'steal') && !this.timeoutStep;
+    this.earlyScale = 1;
+    this.tripActs = 0;
+    this.trap = false;
     this.scramble = 1;
     // a timeout stops play: the trip out of it starts with an inbound, whatever the ball was doing
     // before (a steal or a defensive board still counts as what the trip came from)
@@ -60,6 +65,18 @@ export const possessionMethods = {
     ls.poss++;
     if (this.stints) this.stint(off, def).poss++;
 
+    // two free throws owed from a loose-ball foul at the other end (the penalty): this trip is the line
+    if (this.owed) {
+      const sh = this.owed.on && off.on.includes(this.owed) ? this.owed : off.on.reduce((a, p) => (p.ftPct > a.ftPct ? p : a), off.on[0]);
+      this.owed = null;
+      if (this.cur) {
+        this.cur.kind = 'ft';
+        this.cur.label = 'Loose ball foul';
+      }
+      this.freeThrows(off, def, sh, 2, 'misc');
+      return;
+    }
+
     // ---- end-of-game: intentional fouls by the defense (short of the penalty, a side out)
     const foul = this.intentionalFoul(off, def);
     if (foul === 'ft') return;
@@ -75,6 +92,15 @@ export const possessionMethods = {
 
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
+    // a heave: the period is about to end and there is time for nothing else (the first three quarters;
+    // out of a timeout a team runs something)
+    if (this.q < 4 && clockStart < K.heave.sec && clockStart > 0.4 && !outOfTimeout && this.rng.chance(K.heave.take)) {
+      const h = off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]);
+      this.tick(Math.max(0, this.clock - this.rng.uniform(0.05, 0.4)));
+      if (this.cur) this.cur.label = 'Heave';
+      this.shoot(off, def, { shooter: h, zone: 'ab3', open: 0, contest: null, assister: null, finish: 'misc', pullup: true, forcedFoulMult: 0, heave: true });
+      return;
+    }
     // the after-timeout play is for this trip (a called play takes its place). Both wait for a trip
     // that gets to the half court: a press turnover or a run-out leaves them for the next one
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
@@ -142,6 +168,8 @@ export const possessionMethods = {
         this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack + lev((def.t.defense.getBack - 50) / 100) * K.transAdvPts);
         if (leak !== 1) this.impact('crash_leak', o, ((K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts) * (crashLeak > 0 ? K.crashTag.leak : 1));
       }
+      // (a team that runs more often than most takes worse run-outs: see K.tempo)
+      this.earlyScale = 1 / Math.max(0.55, push);
       this.transition(off, def, ctx, pressBroken);
       return;
     }
@@ -164,9 +192,11 @@ export const possessionMethods = {
     // early offense: off a defensive board or a steal, the ball pushed up and into a quick look
     this.early = false;
     if (!outOfTimeout && !queued && !late.hold && !late.milk && !late.slow && (ctx === 'dreb' || ctx === 'steal')) {
-      const p = K.earlyO[ctx] * off.habit.earlyO * (0.6 + 0.8 * (off.t.offense.pace / 100)) * (late.push || late.hurry ? 1.5 : 1);
+      const often = off.habit.earlyO * (0.6 + 0.8 * (off.t.offense.pace / 100));
+      const p = K.earlyO[ctx] * often * (late.hurry ? 1.5 : 1);
       if (this.rng.chance(p)) {
         this.early = true;
+        this.earlyScale = 1 / Math.max(0.4, often);
         setup = this.rng.uniform(K.earlyO.setup[0], K.earlyO.setup[1]);
       }
     }
@@ -194,6 +224,8 @@ export const possessionMethods = {
     let shotClock = shotFull - (shotFrom - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
     setup = Math.min(setup, shotClock - 4);
+    // (a defense that means to foul or trap partway through the trip does it when it planned to)
+    if (this.foulAt > 0) setup = Math.min(setup, Math.max(0, this.clock - this.foulAt));
     this.tick(setup);
     shotClock -= setup;
     if (this.clock <= 0.05) {
@@ -226,20 +258,44 @@ export const possessionMethods = {
     let forced = false;
     // (rushed actions a side-out foul cut short, which don't count toward the trip's six)
     let stops = 0;
-    for (let n = 0; n < 6 + stops; n++) {
+    // (a defense not fouling a leader who is running the clock out gets one go at the ball)
+    let pressed = false;
+    for (let n = 0; n < 6 + Math.min(stops, 12); n++) {
       // the trailing defense fouls when the clock gets down to where it planned to (see lateFoulAt)
       if (this.foulAt > 0 && this.clock <= this.foulAt && this.clock > 0.3) {
-        if (this.midTripFoul(off, def) === 'ft') return;
-        shotClock = Math.max(shotClock, 14);
+        // (it played for the steal first: now and then it gets one, and now and then nobody fouls after all)
+        if (this.trap) {
+          this.trap = false;
+          const r = this.rng.next();
+          if (r < K.lateSteal.trap) {
+            if (this.cur) this.cur.label = 'Turnover against the trap';
+            this.turnover(off, def, this.lateFoulTarget(off), this.rng.chance(0.7) ? this.stealer(def) : null, 'misc');
+            return;
+          }
+          if (r > 1 - K.lateSteal.miss) this.foulAt = 0;
+        }
+        if (this.foulAt > 0) {
+          if (this.midTripFoul(off, def) === 'ft') return;
+          shotClock = Math.max(shotClock, 14);
+        }
       }
       // a late lead with the shot clock off (it can't run out before the game clock): the clock dies with the ball
       if (late.milk && this.clock <= shotClock) {
-        // (unless the trailing defense fouls first)
-        if (this.foulAt > 0 && this.foulAt > 0.3) {
-          this.tick(Math.max(0, this.clock - this.foulAt));
+        // (unless the trailing defense fouls first: a foul still to come, not one the clock has already
+        // run past, which is no reason to wait)
+        if (this.foulAt > 0.3 && this.clock > this.foulAt) {
+          this.tick(this.clock - this.foulAt + 1e-6);
           stops++;
           continue;
         }
+        // (or, still within two possessions and not fouling, its pressure gets the ball)
+        if (!pressed && this.clock > 2 && off.score - def.score <= 6 && this.rng.chance(K.lateSteal.press)) {
+          this.tick(this.rng.uniform(1, this.clock - 0.5));
+          if (this.cur) this.cur.label = 'Turnover against the pressure';
+          this.turnover(off, def, this.lateFoulTarget(off), this.rng.chance(0.7) ? this.stealer(def) : null, 'misc');
+          return;
+        }
+        pressed = true;
         this.tick(this.clock);
       }
       if (this.clock <= 0.05) {
@@ -289,7 +345,7 @@ export const possessionMethods = {
       // left in the fourth quarter or overtime) gets what it can: a heave or a scrambled catch, rarely
       // a good look (the other quarters' last trips are left as they were calibrated)
       this.scramble = this.q >= 4 && this.tripClock < K.scramble.sec ? 1 - K.scramble.cut * (1 - this.tripClock / K.scramble.sec) : 1;
-      const urgency = buzzer || forced ? -0.45 : 0;
+      const urgency = buzzer || forced ? -K.tempo.forced : 0;
       const ctxOpen = carryOpen + urgency;
       if (n === 0 && isoFor) {
         this.calledActor = isoFor;
@@ -300,6 +356,7 @@ export const possessionMethods = {
         }
       }
       this.play = play;
+      this.tripActs = n - stops;
       // (a set run for a shooter is the staff getting him his look: he takes it whatever his share of
       // the threes tonight, see threeDamp; the damp is back at the next shot)
       if (play) play.cast.star.t3 = play.cast.star.t3o;
@@ -337,6 +394,12 @@ export const possessionMethods = {
     }
   },
 
+  /**
+   * The shot profile the offense's settings and the moment ask for. Down one with the last shot most
+   * teams go to the basket (NBA 2024-26: twos on about 70% of those shots); down two they shoot the
+   * three as often as at any other time (it had been cut by 40%, "playing for the tie": the NBA's
+   * teams take it on more than half).
+   */
   prefs(this: GameSim, off: ST, late: LateMode) {
     const t3 = off.t.offense.threePoint / 100;
     let three = (0.48 + 0.8 * t3) * (1 + levExtra(K.recenter.three));
@@ -352,7 +415,7 @@ export const possessionMethods = {
     } else if (late.hurry) {
       three *= 1.8;
       mid *= 0.5;
-    } else if (late.tie) three *= 0.6;
+    } else if (late.two) three *= 0.45;
     // (a team easing off a blowout hunts fewer threes)
     if (this.eases(off)) three *= K.garbage.three;
     return { three, mid, rim: late.need3 ? rim * two : rim, two };
