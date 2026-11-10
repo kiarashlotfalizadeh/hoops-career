@@ -5,7 +5,8 @@ import { CAP, RATED_SEASONS, ROOKIE_SCALE, SAVE_VERSION, START_SEASON } from '..
 import { Rng, hashString, clamp } from '../random';
 import { FRANCHISES, BBREF_TO_TID } from '../teams';
 import { coachName, makeTeam } from '../teamFactory';
-import { seedCoaches } from './coaches';
+import { activeCoach, seedCoaches } from './coaches';
+import { defPresetOf, nearestOffPreset, realStyle } from '../ai/style';
 import { DEFAULT_SCALE, genTendencies, generatePlayer, refreshPlayerDerived } from '../playerGen';
 import { OVR_ANCHORS, SKILL_KEYS, archetype, buildOvrScale, ovrRaw, ovrWeights } from '../ratings';
 import { generateSchedule, realSchedule, type RealCupData } from './schedule';
@@ -463,6 +464,19 @@ export function createLeague(opts: CreateOpts): League {
   fillRosters(league, rng);
   league.rng = rng.state;
   teamStrategyUpdate(league);
+  // a real league's coaches play their franchises' real styles, with the coverage each roster calls for
+  if (realSeed) {
+    for (const t of league.teams) {
+      if (t.tid === opts.userTid) continue;
+      const style = realStyle(t.abbrev, teamPlayers(league, t.tid));
+      if (!style) continue;
+      t.coach.style = style;
+      t.coach.offPhilosophy = nearestOffPreset({ ...style });
+      t.coach.defPhilosophy = defPresetOf(style.coverage, style.zone);
+      const rec = activeCoach(league, t.tid);
+      if (rec) Object.assign(rec, { style: structuredClone(style), off: t.coach.offPhilosophy, def: t.coach.defPhilosophy });
+    }
+  }
   for (const t of league.teams) ensureRotation(league, t.tid);
   const user = league.teams[opts.userTid];
   const roster = teamPlayers(league, opts.userTid);

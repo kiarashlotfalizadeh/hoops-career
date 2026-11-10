@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
 import { GameSim, K, engineDiag, resetEngineDiag, type SimTeamInput } from '../sim/engine';
+import { TK } from '../sim/engine/tk';
+import { planRoles } from '../sim/rotationPlan';
 import { FINISH_LABEL } from '../sim/log';
 import { applyPatch, type TacticsPatch } from '../ai/lab';
 import { dpoyScore } from '../league/awards';
@@ -326,21 +328,45 @@ describe('engine rules', () => {
       expect(trips).toBeGreaterThan(100);
       expect(over).toBe(0);
     }
-    // the coverage chosen is played, switching off the ball only off the ball
+    // the coverage chosen is played, screen by screen (tactics v2, 2026-11-10: screenCoverage): a drop
+    // defense drops every ball screen but a small's for a handler of his size, which it switches by habit
+    // (TK.screen.smallSwitch on the user's side; with the habit off, never), and switching off the ball
+    // switches no ball screen; an ice defense ices the side screens and drops the middle ones, and horns'
+    // screens, at the elbows, are all middle ones
     {
-      const cov: Record<string, number> = {};
-      for (let g = 0; g < 4; g++) {
-        const sim = new GameSim(side(4, { defense: { scheme: 'man', pnr: 'drop', switchOffBall: true, starPlan: 'none' } }), side(5), {
-          rng: new Rng(g),
-          type: 'regular',
-          record: true,
-          injuries: false,
-        });
-        sim.simToEnd();
-        for (const l of sim.drainLogs()) if (l.off === 1 && l.coverage) cov[l.coverage] = (cov[l.coverage] ?? 0) + 1;
-      }
-      expect(cov.drop).toBeGreaterThan(20);
-      expect(cov.switch ?? 0).toBe(0);
+      const covs = (pnr: 'drop' | 'ice', habit?: number, offense?: TacticsPatch) => {
+        const cov: Record<string, number> = {};
+        const notSmall: string[] = [];
+        for (let g = 0; g < 4; g++) {
+          const sim = new GameSim(side(4, { defense: { scheme: 'man', pnr, switchOffBall: true, starPlan: 'none' } }), side(5, offense), {
+            rng: new Rng(g),
+            type: 'regular',
+            record: true,
+            injuries: false,
+          });
+          if (habit !== undefined) (sim as unknown as { T: { habit: { smallSwitch: number } }[] }).T[0].habit.smallSwitch = habit;
+          sim.simToEnd();
+          for (const l of sim.drainLogs()) {
+            if (l.off !== 1 || !l.coverage) continue;
+            cov[l.coverage] = (cov[l.coverage] ?? 0) + 1;
+            if (l.coverage !== 'switch') continue;
+            // (the trip's coverage is its last ball screen's)
+            const s = l.steps.filter((x) => x.k === 'screen').at(-1)!;
+            const [S, H] = [league.players[s.pid!], league.players[s.pid2!]];
+            if (planRoles(S.ratings, S.pos).big || planRoles(H.ratings, H.pos).big || Math.abs(S.ratings.hgt - H.ratings.hgt) > TK.screen.smallGap) notSmall.push(l.label);
+          }
+        }
+        return { cov, notSmall };
+      };
+      const drop = covs('drop');
+      expect(drop.cov.drop).toBeGreaterThan(20);
+      expect(drop.cov.switch).toBeGreaterThan(0);
+      expect(drop.notSmall).toEqual([]);
+      expect(covs('drop', 0).cov).toEqual({ drop: expect.any(Number) });
+      const ice = covs('ice', 0).cov;
+      expect(ice.ice / (ice.ice + ice.drop)).toBeGreaterThan(TK.screen.side - 0.12);
+      expect(ice.ice / (ice.ice + ice.drop)).toBeLessThan(TK.screen.side + 0.12);
+      expect(covs('ice', 0, { offense: { shape: 'horns' } }).cov).toEqual({ drop: expect.any(Number) });
     }
     // a player fouls out on his sixth foul, offensive fouls included
     {
@@ -619,8 +645,10 @@ describe('engine rules', () => {
           if (!called || !l) continue;
           expect(l.steps[0]).toEqual({ k: 'timeout', t: 0 });
           expect(l.kind, `out of a timeout after ${ctx}`).not.toBe('transition');
-          // (a trip that ends in free throws before any action keeps the play for the next one)
-          if (l.kind !== 'half') continue;
+          // (a trip that ends in free throws before any action keeps the play for the next one; one whose shot
+          // clock runs out on the longest walk-ups never gets to it: one of 200 here since 2026-11-10, a new
+          // random path, none before; both engines play about one half-court trip in 400 that way)
+          if (l.kind !== 'half' || !l.action) continue;
           expect(l.set?.id, `the after-timeout set, after ${ctx}`).toBe('spain');
           from[ctx] = (from[ctx] ?? 0) + 1;
           trips++;
@@ -910,6 +938,8 @@ describe('engine rules', () => {
       let whistles = 0;
       let heaves = 0;
       let kept = 0;
+      // the trips after a defensive board gone out of bounds, and after a live one: how many, and how many run out
+      const after = { dead: [0, 0], live: [0, 0] };
       for (let g = 0; g < 12; g++) {
         const game = new GameSim(side(2 + g), side(14 + g), { rng: new Rng(300 + g), type: 'regular', record: true, injuries: false });
         const pbp = game.simToEnd().pbp!;
@@ -917,8 +947,11 @@ describe('engine rules', () => {
         logs.forEach((l, i) => {
           // (a team rebound that keeps the ball is an inbound: the same side's trip goes on, never as a putback)
           if (l.lines.includes(`${game.T[l.off].team.abbrev} team rebound.`)) kept++;
-          // a defensive board gone out of bounds starts the next trip with an inbound: no run-out
-          if (i > 0 && logs[i - 1].off !== l.off && /team rebound\.$/.test(logs[i - 1].lines.at(-1) ?? '')) expect(l.kind, l.lines.join(' ')).not.toBe('transition');
+          if (i === 0 || logs[i - 1].off === l.off) return;
+          const last = logs[i - 1].lines.at(-1) ?? '';
+          const n = /team rebound\.$/.test(last) ? after.dead : /^Defensive rebound/.test(last) ? after.live : null;
+          if (n) n[0]++;
+          if (n && l.kind === 'transition') n[1]++;
         });
         pbp.forEach((e, i) => {
           if (/rebound/.test(e.text) && !/team rebound/.test(e.text)) expect(e.clock, e.text).toBeGreaterThan(0);
@@ -937,6 +970,12 @@ describe('engine rules', () => {
       expect(whistles).toBeGreaterThan(12);
       expect(heaves).toBeGreaterThan(3);
       expect(kept).toBeGreaterThan(12);
+      // a defensive board gone out of bounds starts the next trip with an inbound: it's run out at a dead
+      // ball's rate, as a made basket is, not a live board's (2026-11-10: about 2% of them over 200 games, as
+      // before the tactics rewrite, against 19% after a live board; that none of the 46 here had been, as this
+      // check once required, was luck)
+      expect(after.dead[0]).toBeGreaterThan(30);
+      expect(after.dead[1] / after.dead[0]).toBeLessThan(0.5 * (after.live[1] / after.live[0]));
       // every end game ends: a narrow lead with seconds left, the defense fouling at once, trapping first
       // or not at all; and a trap planned for a moment the clock has already run past (an offensive board
       // with a tenth of a second left) is no reason to wait (the trip once waited for it forever)

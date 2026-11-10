@@ -1,15 +1,19 @@
 // Style check: whether the staff's fits say what the engine says each style is worth. Every offensive
 // playbook, defensive playbook and shape for every team of a league against every
-// other team (scripts/style-measure.ts: paired games, by shot-value margin a game). Prints, for each part:
+// other team (scripts/style-measure.ts: paired games, by shot-value margin a game, each option played as
+// the user's team plays it). Prints, for each part:
 // - r: the fit's points a game against the measured worth, both against the team's average option,
 //   over every team and option (targets: defense 0.85, offense and shapes 0.6), and within each option
 //   across teams;
-// - for the playbooks, how many teams each is best for and picked by (an AI staff's pick, its coach's
-//   lean included, and the user's own staff's, by its read alone), and the picks' cost against the best:
-//   the league's style spread (scripts/style-gate.ts holds it in CI);
-// - for the shapes, how often the fit's sign against four-out is right where it says 0.2 or more.
-// The fits were fitted to runs of this over the real league and fictional ones (2026-10); run it again
-// after an engine or playbook change, and refit coachAI's OFF_FIT/DEF_FIT/SHAPE_FIT if r falls.
+// - for the playbooks, how many teams each is best for and picked by the user's own staff (by its read
+//   alone), and its picks' cost against the best: scripts/style-gate.ts holds the spread in CI; and what
+//   the AI's staffs run (since tactics v2 their coaches' styles: on defense the coverage each roster
+//   calls for, whose cost against the best is printed too; on offense only the name of the playbook
+//   nearest the style);
+// - for the shapes, how often the fit's sign against four-out is right where it says 0.2 or more, and
+//   the shapes the staffs play.
+// The fits were fitted to runs of this over the real league and fictional ones (2026-11); run it again
+// after an engine or playbook change, and refit coachAI's OFF_FIT/DEF_FIT/shapeFits if r falls.
 // Usage: tsx scripts/style-check.ts [games per opponent on each seed set, default 6] [parts: off,def,shape]
 // [seed sets, comma-separated, default 9001] [league: real, or a fictional league's rng seed] [processes, default 4]
 // (STYLE_JSON=<file> also writes every row, the roster profiles included, for refitting.)
@@ -67,26 +71,28 @@ for (const part of parts) {
   console.log(`measured worth against the team's average option: ${ids.map((id) => `${id} ${mean(rows.map((r) => r.meas[id])).toFixed(2)}`).join(' · ')}`);
   console.log(`a team's standard error, a game: ${mean(rows.flatMap((r) => ids.map((id) => r.se[id]))).toFixed(2)}`);
   console.log(`best for: ${JSON.stringify(tally(rows, bestOf))}`);
+  const under = (who: string, f: (r: StyleRow) => string) =>
+    console.log(
+      `${who} under the best, a game: ${mean(rows.map((r) => r.meas[bestOf(r)] - r.meas[f(r)])).toFixed(2)} (the best for ${rows.filter((r) => bestOf(r) === f(r)).length} of ${rows.length})`,
+    );
   if (part !== 'shape') {
     console.log(
-      `an AI staff picks: ${JSON.stringify(tally(rows, (r) => r.staff))}; the user's staff: ${JSON.stringify(tally(rows, (r) => r.user))}; the league plays: ${JSON.stringify(tally(rows, (r) => r.cur))}`,
+      `the user's staff picks: ${JSON.stringify(tally(rows, (r) => r.user))}; an AI staff runs ${part === 'def' ? 'the coverage' : 'a style nearest'}: ${JSON.stringify(tally(rows, (r) => r.staff))}`,
     );
-    for (const [who, f] of [
-      ['an AI staff', (r: StyleRow) => r.staff!],
-      ["the user's staff", (r: StyleRow) => r.user!],
-    ] as const)
-      console.log(
-        `${who}'s pick under the best, a game: ${mean(rows.map((r) => r.meas[bestOf(r)] - r.meas[f(r)])).toFixed(2)} (the pick is the best for ${rows.filter((r) => bestOf(r) === f(r)).length} of ${rows.length})`,
-      );
+    under("the user's staff's pick", (r) => r.user!);
+    // (an AI staff plays its coach's help, pressure and physicality with its coverage: its playbook's worth is near it)
+    if (part === 'def') under("an AI staff's coverage (its playbook's worth)", (r) => r.staff);
   } else {
     const said = rows.flatMap((r) =>
       ids.filter((id) => id !== 'fourOut' && Math.abs(r.fit[id] - r.fit.fourOut) >= 2).map((id) => Math.sign(r.fit[id] - r.fit.fourOut) === Math.sign(r.meas[id] - r.meas.fourOut)),
     );
     console.log(`the fit's sign against four-out, where it says 0.2 a game or more: right ${said.filter(Boolean).length} of ${said.length}`);
+    console.log(`the staffs play: ${JSON.stringify(tally(rows, (r) => r.staff))}`);
+    under("the staffs' shape", (r) => r.staff);
   }
   for (const r of rows)
     console.log(
-      `  ${r.abbrev.padEnd(4)} ${ids.map((id) => `${id} ${r.meas[id] >= 0 ? '+' : ''}${r.meas[id].toFixed(1)}/${(rel(r)[id] >= 0 ? '+' : '') + rel(r)[id].toFixed(1)}`).join('  ')}${r.staff ? `  AI: ${r.staff} · user: ${r.user}` : ''}`,
+      `  ${r.abbrev.padEnd(4)} ${ids.map((id) => `${id} ${r.meas[id] >= 0 ? '+' : ''}${r.meas[id].toFixed(1)}/${(rel(r)[id] >= 0 ? '+' : '') + rel(r)[id].toFixed(1)}`).join('  ')}  AI: ${r.staff}${r.user ? ` · user: ${r.user}` : ''}`,
     );
 }
 if (process.env.STYLE_JSON) writeFileSync(process.env.STYLE_JSON, JSON.stringify(dump));

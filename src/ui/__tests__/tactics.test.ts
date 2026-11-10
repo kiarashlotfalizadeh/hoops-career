@@ -155,7 +155,7 @@ describe('tactics in the UI', () => {
         }
       }
     }
-    // better fits first, then similar, then worse, the list's own order inside each; the staff's pick is still the best
+    // better fits first, then similar, then worse, the staff's read best first inside each; the staff's pick is still the best
     {
       const fits = offPresetFit(profile(62, 85));
       const terms = offPresetTerms(profile(62, 85));
@@ -164,7 +164,7 @@ describe('tactics in the UI', () => {
       expect(leans).toEqual([...leans.filter((x) => x === 'gain'), ...leans.filter((x) => x === 'even'), ...leans.filter((x) => x === 'cost')]);
       for (const lean of ['gain', 'even', 'cost']) {
         const tier = order.filter((_, i) => leans[i] === lean);
-        expect(tier).toEqual(OFF_PRESETS.filter((p) => tier.includes(p)));
+        expect(tier).toEqual([...tier].sort((a, b) => fits[b.id] - fits[a.id]));
       }
       expect(fits[bestFit(OFF_PRESETS, fits).id]).toBe(Math.max(...Object.values(fits)));
     }

@@ -3,8 +3,8 @@
 
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
-import { K, lev, levExtra, levW } from './constants';
-import { shapeOf } from '../tactics';
+import { K } from './constants';
+import { TK } from './tk';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -30,35 +30,35 @@ export const reboundsMethods = {
     // the fight for the ball: a loose-ball foul, or two players tied up for a jump ball
     if (this.looseBall(off, def, ft)) return;
     // (a player sent to the glass is in the fight for it more often, one sent back less)
-    const inside = shapeOf(off.t.offense) === 'twoIn' ? this.bigTwo(off) : null;
+    const inside = this.shapeOf(off) === 'twoIn' ? this.bigTwo(off) : null;
     const offR = off.on.reduce((a, p) => a + Math.pow(p.c.orb * (0.85 + 0.15 * p.energy), 1.2) * this.glassW(p, inside), 0);
     const offR0 = inside ? off.on.reduce((a, p) => a + Math.pow(p.c.orb * (0.85 + 0.15 * p.energy), 1.2) * this.glassW(p), 0) : offR;
     const defR = def.on.reduce((a, p) => a + Math.pow(p.c.drb * (0.85 + 0.15 * p.energy), 1.2), 0);
-    // crashing wins offensive boards (the fourth and fifth crasher add less); sprinting back
-    // on the shot (transition D above 50) gives some up
+    // crashing wins offensive boards (the fourth and fifth crasher add less), sending fewer gives them
+    // up; sprinting back on the shot (the side's own get-back setting) gives a few up too
+    const k = TK.crash;
     const crash = (this.crashOf(off) - 50) / 50;
-    const glass =
-      (1 + lev((crash > 0 ? 0.22 : K.crashLow.orb) * crash) - lev(K.crashFade * Math.max(0, crash) ** 2)) *
-      (1 - lev(K.getBackOrb * Math.max(0, (off.t.defense.getBack - 50) / 50)));
-    let pOrb = K.orbBase * (1 + levExtra(K.recenter.orb)) * Math.pow(offR / defR, 1.05) * glass;
+    const glass = (crash > 0 ? 1 + k.orb * crash - k.fade * crash * crash : 1 + k.low * crash) * (1 - TK.getBack.orb * Math.max(0, (off.t.defense.getBack - 50) / 50));
+    let pOrb = K.orbBase * (1 + K.recenter.orb) * Math.pow(offR / defR, 1.05) * glass;
     if (zone === 'c3' || zone === 'ab3') pOrb *= 1.03;
     if (ft) pOrb *= 0.5;
     // the tags count the boards a scheme adds at an average rate: half as many off a free throw
     const orbRate = K.orbBase * (ft ? 0.5 : 1);
     const zd = this.zone(def);
     if (zd) {
-      pOrb *= 1 + lev(zd.glassTag);
-      this.impact('zone_glass', off.side, orbRate * lev(zd.glassTag) * K.orbPts);
+      pOrb *= zd.glass;
+      this.impact('zone_glass', off.side, orbRate * (zd.glass - 1) * K.orbPts);
     }
     if (glass !== 1) this.impact('crash_orb', off.side, orbRate * (glass - 1) * K.orbPts * K.crashTag.orb);
     // the shape: five-out has nobody near the glass, the double post two bigs under it (as much as they rebound)
-    const sg = this.shapeGlass(off) + (offR0 !== offR ? Math.pow(offR / offR0, 1.05) - 1 : 0);
-    if (this.shapeGlass(off)) pOrb *= 1 + this.shapeGlass(off);
+    const sgl = this.shapeGlass(off);
+    const sg = sgl + (offR0 !== offR ? Math.pow(offR / offR0, 1.05) - 1 : 0);
+    if (sgl) pOrb *= 1 + sgl;
     if (sg) this.impact('shape_glass', off.side, orbRate * sg * K.orbPts);
     // switching off-ball screens leaves smalls boxing out bigs
-    if (!zd && def.t.defense.switchOffBall && K.switchGlass) {
-      pOrb *= 1 + lev(K.switchGlass);
-      this.impact('switch_mismatch', off.side, orbRate * lev(K.switchGlass) * K.orbPts * K.offBallTag.glass);
+    if (!zd && def.t.defense.switchOffBall) {
+      pOrb *= 1 + TK.offBall.glass;
+      this.impact('switch_mismatch', off.side, orbRate * TK.offBall.glass * K.orbPts * K.offBallTag.glass);
     }
     pOrb = clamp(pOrb, 0.08, 0.45);
     if (this.rng.chance(pOrb)) {
@@ -105,6 +105,8 @@ export const reboundsMethods = {
     // inbound, not a push; played as a live board, 13.5% of those trips shot or turned it over within
     // 4 seconds, the NBA's 0.7%)
     this.ctx = team ? 'oob' : 'dreb';
+    // (a missed three comes off long: the next trip's run-out chance, see TK.longRebound)
+    this.longReb = !ft && (zone === 'c3' || zone === 'ab3');
     this.finishPoss(off, this.possFinish);
   },
 
@@ -193,13 +195,13 @@ export const reboundsMethods = {
 
   /** A player's weight among the offensive rebounders: his glass duty, and a double post's bigs (`inside`) under the basket. */
   glassW(this: GameSim, p: SP, inside?: SP[] | null) {
-    const duty = p.glass === 1 ? K.glassDuty.crash : p.glass === -1 ? K.glassDuty.back : 1;
-    return inside?.includes(p) ? duty * levW(K.shape.twoIn.glassW) : duty;
+    const duty = p.glass === 1 ? TK.glassDuty.crash : p.glass === -1 ? TK.glassDuty.back : 1;
+    return inside?.includes(p) ? duty * (1 + TK.shape.twoIn.glass) : duty;
   },
 
   /** The share of offensive boards five-out gives up (nobody near the glass). */
   shapeGlass(this: GameSim, off: ST) {
-    return shapeOf(off.t.offense) === 'fiveOut' ? lev(K.shape.fiveOut.glass) : 0;
+    return this.shapeOf(off) === 'fiveOut' ? TK.shape.fiveOut.glass : 0;
   },
 
   /** `dead`: the ball went out of bounds to the offense (nobody's board): an inbound, no kick-out on the spot. */

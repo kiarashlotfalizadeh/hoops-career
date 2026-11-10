@@ -3,7 +3,7 @@
 import type { GameResult, League, Player, Rotation, ScheduledGame, StandingLine, Team, TeamSeason, TeamTotals } from '../types';
 import { GameSim, K, type SimTeamInput } from '../sim/engine';
 import { Rng, clamp } from '../random';
-import { autoRotation, autoTactics, presetScores, rankedPresets, staffPick } from '../ai/coachAI';
+import { autoRotation, autoTactics, presetScores, staffPick, styleChanged } from '../ai/coachAI';
 import { addNews, andList, inSeason, playerName, statsLine, teamName, teamPlayers, teamSeason } from './helpers';
 import { applyInjury, clearedToPlay, GAME_TIME_PERF, healOneGame } from './injuries';
 import { gameFinances, updateHype } from './finances';
@@ -69,8 +69,8 @@ function bestPresetsChanged(team: Team, players: Player[], user: boolean, sticky
     const sc = presetScores(team, players, { user });
     return staffPick(sc.off, team.tactics.offPreset, sticky) !== team.tactics.offPreset || staffPick(sc.def, team.tactics.defPreset, sticky) !== team.tactics.defPreset;
   }
-  const best = rankedPresets(team, players);
-  return best.off[0] !== team.tactics.offPreset || best.def[0] !== team.tactics.defPreset;
+  // (an AI staff plays its coach's style: it refits when its personnel calls for another coverage)
+  return styleChanged(team, players);
 }
 
 /**
@@ -116,13 +116,40 @@ function dayStandings(league: League) {
   let memo = dayMemo.get(league);
   if (!memo || memo.key !== key) {
     const start = dayStart(league);
-    memo = { key, youth: youthLevels(league, start), locked: lockedSeeds(league, start) };
+    memo = { key, youth: youthLevels(league, start), locked: lockedSeeds(league, start), clear: clearLeaders(start, league) };
     dayMemo.set(league, memo);
   }
   return memo;
 }
 
-const dayMemo = new WeakMap<League, { key: string; youth: Map<number, number>; locked: Set<number> }>();
+const dayMemo = new WeakMap<League, { key: string; youth: Map<number, number>; locked: Set<number>; clear: Set<number> }>();
+
+/**
+ * A conference leader well clear of the rest (CLEAR_LEAD games ahead of the second, CLEAR_FROM games
+ * in): its staff rests its best player on the second night of a back-to-back, as NBA contenders do.
+ * Without it a staff-run Thunder won 73 and 75 and strung together 38- and 43-game streaks in the star
+ * check's leagues (the NBA's record is 33).
+ */
+export function clearLeader(league: League, tid: number): boolean {
+  return league.phase === 'regular' && dayStandings(league).clear.has(tid);
+}
+
+function clearLeaders({ record }: DayStart, league: League): Set<number> {
+  const out = new Set<number>();
+  for (const conf of ['E', 'W'] as const) {
+    const rows = league.teams
+      .filter((t) => t.conf === conf)
+      .map((t) => ({ t, r: record(t) }))
+      .sort((a, b) => b.r[0] - b.r[1] - (a.r[0] - a.r[1]));
+    if (rows.length < 2 || rows[0].r[0] + rows[0].r[1] < CLEAR_FROM) continue;
+    if ((rows[0].r[0] - rows[0].r[1] - (rows[1].r[0] - rows[1].r[1])) / 2 >= CLEAR_LEAD) out.add(rows[0].t.tid);
+  }
+  return out;
+}
+
+/** Games ahead of its conference's second, and games played, before a leader rests its best player on back-to-backs (clearLeader). */
+const CLEAR_LEAD = 6;
+const CLEAR_FROM = 30;
 
 /** The day of the season a rebuilding team at the bottom of its conference starts to play its young players (about 20 games in). */
 const YOUTH_FROM = 40;
@@ -361,6 +388,11 @@ export function buildSimInput(
         if (p.ovr >= 82 && playerAge(p, league.season) >= 33 && !rest.includes(p.pid) && p.wear > 45) rest.push(p.pid);
       }
     }
+    // a conference leader well clear rests its best player on the second night (the user's only when his staff runs the rotation)
+    if ((tid !== league.userTid || !team.rotation.manual) && clearLeader(league, tid)) {
+      const best = players.filter((p) => !p.contract.twoWay && !p.injury).sort((a, b) => b.ovr - a.ovr || a.pid - b.pid)[0];
+      if (best && !rest.includes(best.pid)) rest.push(best.pid);
+    }
   }
   if (type === 'regular' && youthMovement(league, tid) >= 1) restVeterans(league, players, day, rest);
   // (the user's stars only when his staff runs the rotation)
@@ -399,8 +431,9 @@ export function buildSimInput(
   const t = team.tactics;
   const userPlans = hasCoachPlans(t);
   const tactics = userPlans ? withoutCoachPlans(t) : t;
-  // against the user's team its coach may bring a game plan for tonight (never in a game between AI teams)
-  const plan = opp === league.userTid && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
+  // its coach may bring a game plan for tonight, the same way against the user's team as against another AI team
+  const plan =
+    tid !== league.userTid && opp !== undefined && game?.gid !== undefined && game.day !== undefined ? aiGamePlan(league, tid, opp, { gid: game.gid, day: game.day }) : null;
   if (plan) {
     const planned = withOppPlan(tactics, plan);
     return { team: planTeam(team, planned, plan), players, perf, rest, injuryMult, adjust: true };

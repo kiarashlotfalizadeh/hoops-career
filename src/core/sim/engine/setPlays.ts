@@ -5,7 +5,9 @@
 
 import type { ActionType, SetId, SetStat } from '../../types';
 import { READ_ON_IT, SET_K, castFor, readAfter, readSlots, setEdges, setLabel, setLook, type DefRead, type Slot } from '../sets';
-import { K, lev } from './constants';
+import { clamp } from '../../random';
+import { K } from './constants';
+import { TK } from './tk';
 import type { SP, ST, SetPlay } from './state';
 import type { GameSim } from './game';
 
@@ -14,31 +16,35 @@ export const setPlaysMethods = {
    * Set `id` run now for player `pid` (the best fit when he isn't on the floor): its cast, its edges
    * against this defense, the defense's read of it from the runs before, and the look the team goes
    * for. Counts the run (the possession's points go to its tally) and records it on the possession.
-   * Its edges and the read's openness are played at the tactical leverage; whether the defense is on
-   * it (READ_ON_IT) is judged on the read's 1x size, so a set is read in as many runs as before.
+   * Its edges and the read's openness are played at twice the library's sizes (sets.ts writes them at
+   * the size they had before tactics were made to matter more); whether the defense is on it
+   * (READ_ON_IT) is judged on the library's size, so a set is read in as many runs as before. The
+   * library reads help on a ±1 scale: half the engine's.
    */
-  setPlay(this: GameSim, off: ST, def: ST, id: SetId, pid: number | null): SetPlay | null {
+  setPlay(this: GameSim, off: ST, def: ST, id: SetId, pid: number | null, ai = false): SetPlay | null {
     const cast = castFor(id, off.on, pid !== null ? off.on.find((p) => p.pid === pid) : undefined);
     if (!cast) return null;
     const runs = off.setRuns.get(id) ?? 0;
     off.setRuns.set(id, runs + 1);
     const seen = readAfter(id, runs, def.team.coach?.tactics ?? 50);
-    const read = lev(seen);
+    const read = 2 * seen;
     const zone = this.zone(def);
     const d: DefRead = {
       cov: zone ? 'zone' : def.t.defense.pnr,
       scheme: this.schemeNow(def),
       switches: !zone && (def.t.defense.pnr === 'switch' || def.t.defense.switchOffBall),
-      help: this.help(def),
+      help: this.help(def) / 2,
       pressure: this.pressure(def),
       locked: !!this.lock(def, off, cast.star),
     };
     const open: SetPlay['open'] = {};
     const tags: SetPlay['tags'] = {};
+    // (an AI coach's own set comes with as much of its edge as his tactics rating draws up: TK.aiSet)
+    const k = ai ? clamp(TK.aiSet.at + TK.aiSet.per * ((off.team.coach?.tactics ?? 50) - 50), TK.aiSet.min, TK.aiSet.max) : 1;
     for (const [slot, e] of Object.entries(setEdges(cast, d)) as [Slot, number][]) {
       if (!e) continue;
-      open[slot] = lev(e);
-      tags[slot] = [[`set_${id}`, lev(e)]];
+      open[slot] = 2 * e * k;
+      tags[slot] = [[`set_${id}`, 2 * e * k]];
     }
     if (read > 0)
       for (const slot of readSlots(cast)) {

@@ -15,12 +15,13 @@ const versus = (id: string, fits: Record<string, number>, cur: string) => Math.r
 const TIER: Record<Lean, number> = { gain: 0, even: 1, cost: 2 };
 
 /**
- * The presets by fit against the one in use: better fits, similar ones, worse ones, keeping the list's
- * own order inside each, so the order says no more than the words beside it do.
+ * The presets by fit against the one in use: better fits, similar ones, worse ones, and inside each the
+ * staff's read best first, so a list of similar fits still shows which way the staff leans (the
+ * second review: with every offense a "Similar fit", the list's own order hid the read).
  */
 export function byFit<T extends { id: string }>(presets: T[], fits: Record<string, number>, cur: string): T[] {
   const tier = (p: T) => TIER[leanOf(versus(p.id, fits, cur))];
-  return [...presets].sort((a, b) => tier(a) - tier(b));
+  return [...presets].sort((a, b) => tier(a) - tier(b) || (fits[b.id] ?? 0) - (fits[a.id] ?? 0));
 }
 
 /** The preset the staff reads as the best fit, what it would pick (ties: the list's first). */

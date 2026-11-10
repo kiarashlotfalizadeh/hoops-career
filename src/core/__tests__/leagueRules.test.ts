@@ -11,7 +11,8 @@ import { askingContract, convertTwoWay, releasePlayer, signPlayer, twoWaySalary,
 import { signingClosedReason, userOffer, userTwoWayOffer } from '../league/freeAgency';
 import { tradingClosedReason, validateTrade } from '../league/trades';
 import { ensureRotation, wearInjuryRisk } from '../league/games';
-import { rankedPresets } from '../ai/coachAI';
+import { fitRoster, styleChanged } from '../ai/coachAI';
+import { coachStyle, coverageFor } from '../ai/style';
 import { finalsHomeCourt, standings } from '../league/standings';
 import { champion, playInDone, processPlayInResult, processPlayoffResult, schedulePlayoffDay, startPlayIn, startPlayoffs } from '../league/playoffs';
 import { awardRaces, computeRegularSeasonAwards, selectAllStars } from '../league/awards';
@@ -780,7 +781,7 @@ describe('injuries, wear and development', () => {
       const l = league();
       l.teams[U].tactics.manual = true;
       const mine = structuredClone(l.teams[U].tactics);
-      const before = l.teams.map((t) => t.tactics.offPreset + t.tactics.defPreset);
+      const before = l.teams.map((t) => t.tactics.defense.pnr);
       // every team loses its four best players for a month
       for (const t of l.teams)
         for (const p of teamPlayers(l, t.tid)
@@ -788,11 +789,14 @@ describe('injuries, wear and development', () => {
           .slice(0, 4))
           p.injury = { type: 'Calf Strain', gamesRemaining: 30, gamesTotal: 30, severity: 'moderate' };
       for (const t of l.teams) ensureRotation(l, t.tid);
+      // (an AI staff plays its coach's style, tactics v2 2026-11-10: it refits to the ball-screen coverage
+      // its healthy players call for, and its playbook's name follows)
       for (const t of l.teams.filter((x) => x.tid !== U)) {
-        const best = rankedPresets(t, teamPlayers(l, t.tid));
-        expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([best.off[0], best.def[0]]);
+        const players = teamPlayers(l, t.tid);
+        expect(t.tactics.defense.pnr).toBe(coverageFor(fitRoster(players), coachStyle(t.coach)));
+        expect(styleChanged(t, players)).toBe(false);
       }
-      expect(l.teams.some((t, i) => t.tid !== U && t.tactics.offPreset + t.tactics.defPreset !== before[i])).toBe(true);
+      expect(l.teams.some((t, i) => t.tid !== U && t.tactics.defense.pnr !== before[i])).toBe(true);
       expect(l.teams[U].tactics).toEqual(mine);
     }
 

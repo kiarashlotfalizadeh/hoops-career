@@ -67,8 +67,8 @@ export const GLOSSARY: GlossaryEntry[] = [
   { id: 'drop', term: 'Drop', group: 'Defense', text: 'Ball-screen coverage: the big sags back toward the rim. Protects the paint, gives up pull-up jumpers.' },
   { id: 'switch', term: 'Switch', group: 'Defense', text: 'Defenders trade assignments on a screen. No gaps, but it can leave a big on a quick guard.' },
   { id: 'hedge', term: 'Hedge', group: 'Defense', text: 'The big steps out to slow the ball handler, then recovers. It takes away the pull-up but can open the roll.' },
-  { id: 'blitz', term: 'Blitz', group: 'Defense', text: "Two defenders trap the ball handler off the screen. It forces the ball out of a star's hands, but leaves a 4-on-3." },
-  { id: 'ice', term: 'Ice', group: 'Defense', text: 'The ball handler is pushed toward the sideline, away from the screen, into the big. Limits middle drives.' },
+  { id: 'blitz', term: 'Blitz', group: 'Defense', text: 'Two defenders trap the ball handler off the screen. It forces turnovers, but a good passer finds the 4-on-3 behind it.' },
+  { id: 'ice', term: 'Ice', group: 'Defense', text: "A side screen's ball handler is pushed to the sideline, away from the middle. Middle screens get a drop instead." },
   {
     id: 'zone',
     term: 'Zone (2-3, 3-2)',
@@ -79,7 +79,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'junk',
     term: 'Junk defense (box-and-one, triangle-and-two)',
     group: 'Defense',
-    text: 'A zone behind one or two chasers who face-guard their main creators. Good against an offense of one or two scorers.',
+    text: "A zone behind one or two chasers who face-guard their main creators. It pays only when the players around them can't shoot.",
   },
   {
     id: 'defroles',
@@ -302,7 +302,7 @@ export const GLOSSARY: GlossaryEntry[] = [
     id: 'mentality',
     term: 'Mentality',
     group: 'The game',
-    text: 'How much risk your team takes. Aggressive pushes and crashes the glass. Cautious protects the ball and gets back.',
+    text: 'How much risk your team takes. Aggressive means more possessions, turnovers and rushed shots, cautious the reverse.',
   },
   {
     id: 'bench',

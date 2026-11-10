@@ -5,7 +5,8 @@
 import { clamp } from '../../random';
 import { GAME } from '../../constants';
 import type { FinishType } from '../log';
-import { K, lev } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
 import type { SP, ST } from './state';
 import type { GameSim } from './game';
 
@@ -166,10 +167,10 @@ export const foulsMethods = {
 
   /** Reach-in / off-ball foul on the handler: free throws in the penalty (returns true), else a side out (sets sideOut). */
   nonShootingFoul(this: GameSim, off: ST, def: ST, handler: SP, defender: SP, finish: FinishType): boolean {
-    const phys = lev((def.t.defense.physicality - 50) / 50);
-    const pr = lev(this.pressure(def));
-    // (a clean, containing defense at past-1x leverage still reaches in now and then)
-    const mult = Math.max(0.25, 1 + 0.3 * phys + 0.25 * pr);
+    const phys = this.phys(def);
+    const pr = this.pressure(def);
+    // (a clean, containing defense still reaches in now and then)
+    const mult = Math.max(0.4, 1 + TK.phys.foul * phys + 0.4 * pr);
     // (a defense protecting a narrow lead in the last 24 seconds keeps its hands off)
     const lead = def.score - off.score;
     const careful = this.q >= 4 && this.clock <= 24 && lead >= 0 ? (lead <= 3 ? K.lateLeadFoul : K.clutchD.safe) : 1;
@@ -203,8 +204,8 @@ export const foulsMethods = {
     }
     if (this.bonus(def)) {
       // two free throws (~1.55) instead of the rest of the possession (~1.1)
-      if (phys !== 0) this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, (0.45 * 0.3 * phys) / mult, handler.pid);
-      if (pr !== 0) this.impact('pressure_foul', off.side, (0.45 * 0.25 * pr) / mult, handler.pid);
+      if (phys !== 0) this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, (0.45 * TK.phys.foul * phys) / mult, handler.pid);
+      if (pr !== 0) this.impact('pressure_foul', off.side, (0.45 * 0.4 * pr) / mult, handler.pid);
       this.freeThrows(off, def, handler, 2, finish);
       return true;
     }

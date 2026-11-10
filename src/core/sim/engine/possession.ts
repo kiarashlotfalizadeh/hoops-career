@@ -7,7 +7,8 @@ import type { ActionType, SetId } from '../../types';
 import { clamp } from '../../random';
 import { GAME } from '../../constants';
 import { SETS, isSetId } from '../sets';
-import { K, lev, levExtra } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
 
@@ -104,11 +105,13 @@ export const possessionMethods = {
     // the after-timeout play is for this trip (a called play takes its place). Both wait for a trip
     // that gets to the half court: a press turnover or a run-out leaves them for the next one
     const ato = off.atoNext ? (off.t.manage.ato ?? null) : null;
-    const queued = off.nextSet;
+    // (an AI coach's set, drawn up at a stop that may have come trips ago, is picked again for the score now)
+    const aiCall = !!off.nextSet?.ai;
+    const queued = aiCall ? ((id) => (id ? { id, pid: null } : null))(this.atoSet(off)) : off.nextSet;
     // an after-timeout set is run for its player (the best fit when he's off the floor), and an
     // after-timeout isolation named for a player is a clear-out for him
     const atoPid = off.t.manage.atoPid ?? null;
-    let set: { id: SetId; pid: number | null } | null = ato && isSetId(ato) ? { id: ato, pid: atoPid } : null;
+    let set: { id: SetId; pid: number | null; ai?: boolean } | null = ato && isSetId(ato) ? { id: ato, pid: atoPid } : null;
     let first: ActionType | null = ato && !isSetId(ato) ? ato : null;
     let isoFor: SP | null = first === 'iso' && atoPid !== null ? (off.byId.get(atoPid) ?? null) : null;
     // a called play takes the after-timeout play's place: a set, or a clear-out isolation run as the
@@ -122,7 +125,7 @@ export const possessionMethods = {
       } else {
         first = null;
         isoFor = null;
-        set = { id, pid };
+        set = { id, pid, ai: aiCall };
       }
     }
 
@@ -140,17 +143,20 @@ export const possessionMethods = {
     }
 
     // ---- transition
-    const push = 0.55 + 0.9 * (off.t.offense.transition / 100);
+    // (past 50, only some of the extra pushes find a run-out: the defense is back for the rest, TK.push.found)
+    const push0 = 0.55 + 0.9 * (off.t.offense.transition / 100);
+    const push = push0 > 1 ? 1 + TK.push.found * (push0 - 1) : push0;
     let transP = (K.transitionBase[ctx] ?? 0) * push;
     transP *= 1 + (off.speed - def.speed) / K.runSpeed.often;
-    const getBack = 1.25 - 0.5 * (def.t.defense.getBack / 100) + levExtra(0.25 - 0.5 * (def.t.defense.getBack / 100));
+    // the defense getting back (TK.getBack), and the glass it crashed on its last trip (TK.crash): a
+    // little more exposed above 50, a little less below
+    const gb = TK.getBack;
+    const getBack = gb.base - gb.per * (def.t.defense.getBack / 100);
     transP *= getBack;
-    // crashing the offensive glass leaves you exposed (the defense crashed on its last
-    // possession): a little below 50, a lot above it (more so past 1x leverage, see K.tradeOff)
-    const crashLeak = ctx === 'dreb' ? (this.crashOf(def) - 50) / 50 : 0;
-    // (never quite none: each run-out that happens books its share of the ones saved)
-    const leak = Math.max(0.1, 1 + lev((crashLeak > 0 ? K.crashLeak : K.crashLow.leak) * crashLeak) + levExtra(K.tradeOff.crash * Math.max(0, crashLeak)));
+    const crash = ctx === 'dreb' ? (this.crashOf(def) - 50) / 50 : 0;
+    const leak = 1 + (crash > 0 ? TK.crash.leak : TK.crash.leakLow) * crash;
     transP *= leak;
+    if (ctx === 'dreb' && this.longReb) transP *= TK.longRebound;
     if (pressBroken) transP = 0.75;
     if (late.hold || late.milk) transP *= 0.2;
     // (nor does it push the ball: it walks it up, see K.garbage)
@@ -165,8 +171,8 @@ export const possessionMethods = {
       // each setting's share of the run-outs, at K.runOutPts per run-out over a half-court trip
       if (!pressBroken) {
         this.impact('transition', o, ((K.runOutPts * (push - 1)) / push) * (push < 1 ? K.walkUpTag : 1));
-        this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack + lev((def.t.defense.getBack - 50) / 100) * K.transAdvPts);
-        if (leak !== 1) this.impact('crash_leak', o, ((K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts) * (crashLeak > 0 ? K.crashTag.leak : 1));
+        this.impact('getback', (1 - o) as 0 | 1, (K.runOutPts * (1 - getBack)) / getBack + gb.edge * (def.t.defense.getBack / 100 - 0.5) * K.transAdvPts);
+        if (leak !== 1) this.impact('crash_leak', o, (K.runOutPts * (leak - 1)) / leak + this.crashRunOut(def, ctx) * K.transAdvPts);
       }
       // (a team that runs more often than most takes worse run-outs: see K.tempo)
       this.earlyScale = 1 / Math.max(0.55, push);
@@ -176,10 +182,12 @@ export const possessionMethods = {
 
     // ---- half court: the trip uses up the after-timeout play and a called one
     if (this.cur) this.cur.kind = 'half';
+    // (a trip against a zone is one more look at it: TK.zoneRead)
+    if (this.zone(def)) off.zoneSeen++;
     // a defense that didn't crash the glass is back and set when the ball comes up the floor
-    if (crashLeak < 0 && !outOfTimeout) {
-      this.firstOpen = lev(K.crashLow.set * crashLeak);
-      this.impact('crash_leak', o, this.firstOpen * K.crashLow.setPts);
+    if (crash < 0 && !outOfTimeout) {
+      this.firstOpen = TK.crash.set * crash;
+      this.impact('crash_leak', o, this.firstOpen * 0.03);
     }
     off.atoNext = false;
     off.nextSet = null;
@@ -251,7 +259,7 @@ export const possessionMethods = {
     paceF: number,
     first: ActionType | null = null,
     isoFor: SP | null = null,
-    set: { id: SetId; pid: number | null } | null = null,
+    set: { id: SetId; pid: number | null; ai?: boolean } | null = null,
   ) {
     // an inbounds play after a foul to give starts from a worse look
     let carryOpen = (this.inbound ? -K.ftg.open : 0) + this.firstOpen;
@@ -335,8 +343,13 @@ export const possessionMethods = {
       }
       // the trip opens with its set: one called from the bench, or after a timeout
       let play: SetPlay | null = null;
-      if (n === 0 && set) play = this.setPlay(off, def, set.id, set.pid);
+      if (n === 0 && set) play = this.setPlay(off, def, set.id, set.pid, !!set.ai);
+      const chosen = !play && !(n === 0 && first) && !forced;
       const action = play ? play.cast.action : n === 0 && first ? first : forced ? (this.rng.chance(0.6) ? 'iso' : 'pnr') : this.chooseAction(off, late);
+      // the defense keys on what the offense runs most (TK.key): a chosen action starts down for it
+      const keyed = chosen ? this.keyed(off, action) : 0;
+      if (chosen) this.countAction(off, action);
+      if (keyed) this.impact('keyed', def.side, keyed * 0.25);
       let dt = lastShot
         ? Math.max(0.5, Math.min(left - this.rng.uniform(K.lastShotSpare[0], K.lastShotSpare[1]), K.actionTime * paceF * this.rng.uniform(0.6, 1)))
         : forced
@@ -369,7 +382,9 @@ export const possessionMethods = {
       // a good look (the other quarters' last trips are left as they were calibrated)
       this.scramble = this.q >= 4 && this.tripClock < K.scramble.sec ? 1 - K.scramble.cut * (1 - this.tripClock / K.scramble.sec) : 1;
       const urgency = buzzer || forced ? -K.tempo.forced : 0;
-      const ctxOpen = carryOpen + urgency;
+      // (an aggressive side rushes its looks, a patient one waits for better ones: TK.mentality)
+      const m = off.t.mentality ?? 0;
+      const ctxOpen = carryOpen + urgency - keyed - (m > 0 ? TK.mentality.rush * m : TK.mentality.patient * m);
       if (n === 0 && isoFor) {
         this.calledActor = isoFor;
         // a clear-out for a player on the floor: its possession counts for the night's tally of them
@@ -432,7 +447,7 @@ export const possessionMethods = {
    */
   prefs(this: GameSim, off: ST, late: LateMode) {
     const t3 = off.t.offense.threePoint / 100;
-    let three = (0.48 + 0.8 * t3) * (1 + levExtra(K.recenter.three));
+    let three = (0.48 + 0.8 * t3) * (1 + K.recenter.three);
     let mid = 1.43 - 0.95 * t3;
     const rim = 0.7 + 0.6 * (off.t.offense.rimAttack / 100);
     // (two: the weight left on the looks that can only be twos, the roll and the drive on the catch)

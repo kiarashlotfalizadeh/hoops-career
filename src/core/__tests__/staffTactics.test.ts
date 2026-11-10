@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { simDay, startRegularSeason } from '../league/season';
 import { leverCounter, seasonLevers, staffTactics, teamAlerts } from '../ai/advisor';
-import { autoTactics, defPresetFit, fitRoster, offPresetFit, rankedPresets, rosterProfile, staffPick } from '../ai/coachAI';
+import { autoTactics, baseDefenses, defPresetFit, fitRoster, offPresetFit, rankedPresets, rosterProfile, staffPick, staffPresets } from '../ai/coachAI';
+import { coachStyle, coverageFor, defPresetOf, nearestOffPreset, styleIdentity } from '../ai/style';
 import { cloneTactics } from '../sim/tactics';
 import { teamPlayers } from '../league/helpers';
 import { applyStaffTactics } from '../league/games';
@@ -192,20 +193,41 @@ describe('the staff acts on the season', () => {
       expect(staffTactics(quiet, 0)).toEqual(autoTactics(quiet.teams[0], teamPlayers(quiet, 0), true, { sticky: true, user: true }));
     }
     {
-      // the user's own staff picks by its read, the style picker's top (no coach's lean); AI staffs keep
-      // their coach's lean; in season a staff keeps what it runs
-      // until another reads STICK better
+      // the user's own staff picks its offense by its read, the style picker's top (no coach's lean), and its base
+      // defense by its personnel unless the read puts another clearly ahead (staffPresets: never the 2-3 zone,
+      // a change-up); an AI staff plays
+      // its coach's style (tactics v2, 2026-11-10: ai/style.ts): his tempo, shot profile, glass and mix of
+      // actions, man-to-man with the ball-screen coverage his personnel calls for (switching off the ball
+      // only when it switches every screen) and his help, pressure and physicality, named for the nearest
+      // playbooks; in season a staff keeps what it runs until another reads STICK better
       const l = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 3 });
       const pr = rosterProfile(fitRoster(teamPlayers(l, 0)));
       const top = (f: Record<string, number>) => Object.entries(f).sort((a, b) => b[1] - a[1])[0][0];
-      expect([l.teams[0].tactics.offPreset, l.teams[0].tactics.defPreset]).toEqual([top(offPresetFit(pr)), top(defPresetFit(pr))]);
+      expect([l.teams[0].tactics.offPreset, l.teams[0].tactics.defPreset]).toEqual([top(offPresetFit(pr)), staffPresets(l.teams[0], teamPlayers(l, 0)).def]);
+      expect(rankedPresets(l.teams[0], teamPlayers(l, 0), { user: true }).def[0]).toBe(top(baseDefenses(defPresetFit(pr))));
+      expect(rankedPresets(l.teams[0], teamPlayers(l, 0), { user: true }).def).not.toContain('zone');
+      expect(l.teams[0].tactics.identity).toBeUndefined();
       for (const t of l.teams.slice(1)) {
-        const r = rankedPresets(t, teamPlayers(l, t.tid));
-        expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([r.off[0], r.def[0]]);
+        const st = coachStyle(t.coach);
+        const { offense: o, defense: d } = t.tactics;
+        expect([o.pace, o.transition, o.threePoint, o.rimAttack, o.crashBoards, o.actions]).toEqual([st.pace, st.transition, st.threePoint, st.rimAttack, st.crash, st.actions]);
+        const cov = coverageFor(fitRoster(teamPlayers(l, t.tid)), st);
+        expect(d).toMatchObject({
+          scheme: 'man',
+          pnr: cov,
+          switchOffBall: cov === 'switch',
+          help: st.help,
+          pressure: st.pressure,
+          physicality: st.physicality,
+          getBack: st.getBack,
+          press: 'none',
+        });
+        expect([t.tactics.offPreset, t.tactics.defPreset]).toEqual([nearestOffPreset(o), defPresetOf(cov, st.zone)]);
+        expect(t.tactics.identity).toEqual(styleIdentity(o, d, st.zone));
       }
-      expect(rankedPresets(l.teams[0], teamPlayers(l, 0), { user: true }).def[0]).toBe(top(defPresetFit(pr)));
-      // (no defense is barred for AI staffs: the zone is in every staff's read, its coach's or not)
-      for (const t of l.teams.slice(1, 6)) expect(rankedPresets(t, teamPlayers(l, t.tid)).def).toContain('zone');
+      // (a fictional league's coaches play the real league's styles with their own on them: not all one way)
+      expect(new Set(l.teams.slice(1).map((t) => t.tactics.offPreset)).size).toBeGreaterThan(2);
+      expect(new Set(l.teams.slice(1).map((t) => t.tactics.defense.pnr)).size).toBeGreaterThan(1);
       expect([staffPick({ a: 10, b: 17 }, 'a', true), staffPick({ a: 10, b: 18 }, 'a', true), staffPick({ a: 10, b: 17 }, 'a')]).toEqual(['a', 'b', 'b']);
     }
   }, 120_000);

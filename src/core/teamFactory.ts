@@ -1,5 +1,6 @@
 import type { CoachProfile, Team, TeamSeason, TeamTotals } from './types';
 import { FRANCHISES } from './teams';
+import { defPresetOf, nearestOffPreset, randomStyle } from './ai/style';
 import { defaultTactics } from './sim/tactics';
 import { Rng } from './random';
 
@@ -160,19 +161,21 @@ const COACH_LAST = [
   'Vukovich',
   'Whitaker',
 ];
-const OFF_PHIL = ['balanced', 'helio', 'fiveOut', 'hub', 'paceSpace', 'grind'];
-const DEF_PHIL = ['drop', 'switch', 'blitz', 'ice', 'hedge', 'zone'];
-
 export const coachName = (rng: Rng) => `${rng.pick(COACH_FIRST)} ${rng.pick(COACH_LAST)}`;
 
+/**
+ * A new coach: his name, development and in-game skills, and his style (a real team's with some of his
+ * own on it: see randomStyle), with his playbooks named for the ones nearest it.
+ */
 export function randomCoach(rng: Rng): CoachProfile {
-  return {
-    name: coachName(rng),
-    offPhilosophy: rng.pick(OFF_PHIL),
-    defPhilosophy: rng.pick(DEF_PHIL),
-    development: Math.round(rng.uniform(35, 85)),
-    tactics: Math.round(rng.uniform(35, 85)),
-  };
+  const name = coachName(rng);
+  // (the style comes from a stream of its own, seeded by the two draws his playbooks were once picked
+  // with: the league's stream moves exactly as it did)
+  const seed = (Math.floor(rng.next() * 4294967296) ^ Math.floor(rng.next() * 65536)) >>> 0;
+  const development = Math.round(rng.uniform(35, 85));
+  const tactics = Math.round(rng.uniform(35, 85));
+  const style = randomStyle(new Rng(seed));
+  return { name, offPhilosophy: nearestOffPreset({ ...style, threePoint: style.threePoint }), defPhilosophy: defPresetOf(style.coverage, style.zone), development, tactics, style };
 }
 
 export function emptyTotals(): TeamTotals {

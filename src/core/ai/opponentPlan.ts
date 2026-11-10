@@ -50,8 +50,13 @@ export function oppPlanChance(league: League, aiTid: number): number {
   return clamp(0.5 + (league.teams[aiTid].coach.tactics - 60) / 100, 0.15, 0.85);
 }
 
-/** Whether he prepares a plan for game `gid`: the same answer every time it's asked. */
+/**
+ * Whether he prepares a plan for game `gid`: the same answer every time it's asked. In the playoffs
+ * always, as every NBA staff game-plans a series (before, by the same chance as in the season: a
+ * staff-run Thunder won five titles in eight seasons of a star-check league).
+ */
 export function preparesPlan(league: League, aiTid: number, gid: number): boolean {
+  if (league.phase === 'playoffs' && league.schedule.some((g) => g.gid === gid && g.type === 'playoffs')) return true;
   const p = oppPlanChance(league, aiTid);
   return p > 0 && new Rng(hashString(`${league.id}:${league.season}:${gid}:opp-plan`)).chance(p);
 }
@@ -118,7 +123,24 @@ interface Profile {
  * played fewer than SCOUT_MIN_GAMES), against everyone else in the same games. Games played on
  * game day itself are left out, so the other games that night never change the plan.
  */
+/**
+ * What a team's stored games show (its offense, what its opponents did against it, the league's), read
+ * once per team and day: AI coaches game-plan for every opponent now, and a season asks for about
+ * 2,500 of them.
+ */
+const profiles = new WeakMap<League['games'], Map<string, Profile | null>>();
 function userProfile(league: League, userTid: number, day: number): Profile | null {
+  let memo = profiles.get(league.games);
+  if (!memo) profiles.set(league.games, (memo = new Map()));
+  const key = `${league.season}:${day}:${userTid}:${league.games.length}`;
+  if (memo.has(key)) return memo.get(key)!;
+  if (memo.size > 2000) memo.clear();
+  const out = readProfile(league, userTid, day);
+  memo.set(key, out);
+  return out;
+}
+
+function readProfile(league: League, userTid: number, day: number): Profile | null {
   const read = (season: number, lastSeason: boolean): Profile | null => {
     const off = blank();
     const def = blank();
@@ -383,17 +405,20 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
       w: (hunt.teamPerDef - hunt.perDef) / 4,
     });
   // ---- a 2-3 zone against a five that can't shoot (the five who play most tonight, by their ratings):
-  // the zone's open threes go to players who miss them (see K.matchup)
+  // the zone's open threes go to players who miss them (see TK.use)
   const five = projectedRotation(league, userTid, 5, resting);
   const fiveSpacing = five.reduce((a, x) => a + composites(x.ratings).spacing, 0) / Math.max(1, five.length);
-  if (man && five.length >= 5 && fiveSpacing <= CRAMPED_SPACING + 6)
+  // (only a five that really can't shoot: the league's bottom fifth. With six points of slack, once AI
+  // coaches game-planned every opponent, a tenth of the AI league's half-court trips were zone)
+  if (man && five.length >= 5 && fiveSpacing <= CRAMPED_SPACING)
     out.push({
       id: 'zone23',
       group: 'coverage',
-      text: 'plays a 2-3 zone',
+      // (an AI staff plays a planned zone in stretches: TK.zonePlanned)
+      text: 'plays a 2-3 zone in stretches',
       why: `Your five who play most space the floor at ${Math.round(fiveSpacing)}. The league's bottom fifth starts at ${CRAMPED_SPACING}.`,
       patch: { defense: { scheme: 'zone23' } },
-      w: 1.5 + (CRAMPED_SPACING + 6 - fiveSpacing) / 3,
+      w: 1.5 + (CRAMPED_SPACING - fiveSpacing) / 3,
     });
   // ---- the player the user's offense runs through: doubled only when he can't pass out of it and
   // the players around him can't shoot by their ratings (over real rosters a double, or a box-and-one
@@ -404,11 +429,12 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
   // ...or chased in a box-and-one when the players around him don't make their threes
   const cast = star && p ? castThrees(league, userTid, star.p.pid) : null;
   const lgTp = p ? div(p.lg.tpm, p.lg.tpa) : NaN;
-  if (star && star.usg >= 0.28 && cast && lgTp - cast.pct >= 0.02 && around < CRAMPED_SPACING && d.scheme === 'man')
+  if (star && star.usg >= 0.29 && cast && lgTp - cast.pct >= 0.03 && around < CRAMPED_SPACING && d.scheme === 'man')
     out.push({
       id: 'box1',
       group: 'star',
-      text: `plays a box-and-one on ${shortName(league, star.p)}`,
+      // (and a planned junk defense in stretches too: TK.junkPlanned)
+      text: `plays a box-and-one on ${shortName(league, star.p)} in stretches`,
       why: `${playerName(star.p)} uses ${pct(star.usg)} of your possessions. The rest of your team makes ${pct1(cast.pct)} of its threes, league ${pct1(lgTp)}.`,
       patch: { defense: { scheme: 'box1', chase: [star.p.pid] } },
       w: 1.5 + (star.usg - 0.28) * 25 + (lgTp - cast.pct) / 0.01,
@@ -439,7 +465,7 @@ function candidates(league: League, aiTid: number, base: Tactics, userTid: numbe
  * player the user's team leans on most.
  */
 export function aiGamePlan(league: League, aiTid: number, userTid: number, game: Pick<ScheduledGame, 'gid' | 'day'>): OppPlan | null {
-  if (aiTid === userTid || userTid !== league.userTid || !league.teams[aiTid] || !preparesPlan(league, aiTid, game.gid)) return null;
+  if (aiTid === userTid || aiTid === league.userTid || !league.teams[aiTid] || !league.teams[userTid] || !preparesPlan(league, aiTid, game.gid)) return null;
   const base = league.teams[aiTid].tactics;
   const items: OppPlanItem[] = [];
   // the strongest numbers always get an answer; the rest of the plan varies from coach to coach and

@@ -104,18 +104,20 @@ export function scoutTeam(league: League, tid: number): ScoutReport {
   // with enough games, what the numbers show comes first, then what the playbook and roster suggest
   const data = scoutData(league, tid);
   const weaknesses: string[] = data.enough ? [...data.exploits] : [];
-  offense.push(`Runs ${offName} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
+  offense.push(t.identity && !t.manual ? t.identity.line : `Runs ${offName} at a ${t.offense.pace >= 65 ? 'fast' : t.offense.pace <= 35 ? 'slow' : 'moderate'} pace.`);
   const topAct = (Object.entries(t.offense.actions) as [ActionType, number][]).sort((a, b) => b[1] - a[1])[0][0];
   offense.push(`Favorite action: ${ACTION_META[topAct].label}.`);
   if (t.offense.threePoint >= 70) offense.push('Lives behind the arc.');
-  if (t.offense.crashBoards >= 65) offense.push('Crashes the offensive glass hard, which leaves them open to run-outs.');
+  if (t.offense.crashBoards >= 65) offense.push('Crashes the offensive glass hard. Box out.');
   // ball-screen coverages and off-ball switching only apply in man-to-man: a zone plays its zone
   const man = t.defense.scheme === 'man';
   const scheme = SCHEME_META[t.defense.scheme].label;
   defense.push(
-    man
-      ? `Plays ${defName}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens.`
-      : `Plays ${defName !== scheme ? `${defName} in a ${scheme}` : scheme}, so there is no ball-screen coverage to attack.`,
+    t.identity && !t.manual && man
+      ? t.identity.defLine
+      : man
+        ? `Plays ${defName}: ${COVERAGE_META[t.defense.pnr].label.toLowerCase()} coverage on ball screens.`
+        : `Plays ${defName !== scheme ? `${defName} in a ${scheme}` : scheme}, so there is no ball-screen coverage to attack.`,
   );
   if (t.defense.press !== 'none') defense.push('Uses a full-court press, so secure ball handlers matter.');
   if (t.defense.help >= 65) defense.push('Helps aggressively off shooters into the paint.');
@@ -184,7 +186,7 @@ export function tacticsWithCounter(league: League, opp: number, c: Pick<Candidat
  *
  * The big decisions come first (the scheme, the ball-screen coverage, ball pressure and the press,
  * help, the double): each is worth two points a game and more against the opponent it's aimed at,
- * and costs about as much against the wrong one (paired real-league games; see K.matchup and
+ * and costs about as much against the wrong one (paired real-league games; see TK.use and
  * scripts/tactic-impact.ts). So each is offered only on the read it's aimed at: a 2-3 zone against a
  * five that can't shoot (spacing CRAMPED_SPACING + 6 or less: the measured best cases were 25-38), a
  * 3-2 against one that lives on threes (ZONE32_SPACING and more), pressure against handlers who
@@ -469,7 +471,7 @@ export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined
   const man = t.defense.scheme === 'man';
   const cov = t.defense.pnr;
   let c: LiveCounter | undefined;
-  if (ft === 'pnrBH' && man && cov === 'drop') c = { label: 'Switch to Hedge', note: 'Drop is giving their handlers room.', apply: (x) => void (x.defense.pnr = 'hedge') };
+  if (ft === 'pnrBH' && man && cov === 'drop') c = { label: 'Ice it', note: 'Drop is giving their handlers room.', apply: (x) => void (x.defense.pnr = 'ice') };
   else if (ft === 'spotup' && t.defense.help > 55) c = { label: 'Stay home', note: 'Too much help is leaving shooters open.', apply: (x) => void (x.defense.help = 35) };
   else if (ft === 'transition')
     c = {
@@ -486,7 +488,7 @@ export function liveCounter(ft: FinishType, t: Tactics): LiveCounter | undefined
 
 /** The one-tap fix for each tactical edge an opponent can get on you, keyed like the engine's impact tags. */
 const IMPACT_COUNTERS: Record<string, { label: string; apply: (t: Tactics) => void }> = {
-  'drop_pullup:o': { label: 'Switch to Hedge', apply: (t) => void (t.defense.pnr = 'hedge') },
+  'drop_pullup:o': { label: 'Ice their screens', apply: (t) => void (t.defense.pnr = 'ice') },
   'drop_pop:o': { label: 'Switch screens', apply: (t) => void (t.defense.pnr = 'switch') },
   'drop_handoff:o': { label: 'Switch off-ball screens', apply: (t) => void (t.defense.switchOffBall = true) },
   'switch_mismatch:o': { label: 'Go to Drop', apply: (t) => void (t.defense.pnr = 'drop') },

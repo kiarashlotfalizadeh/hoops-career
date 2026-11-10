@@ -359,18 +359,19 @@ describe('sets in the engine', () => {
       // (all of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones: K.threeUse.contest; and again for K.useCeil;
       // and again 2026-10-28, when the threes were recentred: K.recenter.three, and again that day, when Five-Out,
       // Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit)
-      // (and again 2026-11-09, the game-day realism rounds: see engineDefense.test.ts)
+      // (and again 2026-11-09, the game-day realism rounds: see engineDefense.test.ts; and all of them again 2026-11-10,
+      // the tactics rewrite, tactics v2: see engineDefense.test.ts)
       const expected = {
         ai: [
-          [123, 96, 86, 38, 17, 22, 13, 0],
-          [125, 122, 95, 19, 10, 29, 11, 0],
-          [123, 106, 91, 27, 12, 39, 17, 0],
+          [136, 116, 88, 43, 15, 25, 10, 0],
+          [109, 112, 91, 20, 6, 33, 6, 0],
+          [118, 95, 90, 28, 5, 22, 14, 0],
         ],
         // (taken again when play calls from the bench were retired, and the first and third games when garbage time came for both benches from late in the third quarter, with the team up big easing off and calling off its press; all of them again 2026-11-09, the game-day realism round, and its second round the same day)
         coached: [
-          [112, 81, 79, 31, 12, 21, 21, 0],
-          [107, 91, 88, 28, 12, 18, 16, 0],
-          [101, 111, 82, 28, 9, 26, 17, 0],
+          [124, 118, 86, 45, 19, 20, 14, 0],
+          [127, 121, 95, 37, 8, 24, 9, 0],
+          [100, 119, 77, 36, 15, 30, 14, 0],
         ],
       };
       const fp = (res: ReturnType<GameSim['result']>) => [res.home.pts, res.away.pts, res.home.t.fga, res.away.t.tpa, res.home.t.orb, res.away.t.fta, res.home.t.tov, res.ot];
@@ -398,7 +399,8 @@ describe('sets in the engine', () => {
       const withAto = new GameSim(input, buildSimInput(l2, 2, 1, 'regular', 1), opts(5)).simToEnd();
       const without = new GameSim(buildSimInput(league, 1, 1, 'regular', 2), buildSimInput(league, 2, 1, 'regular', 1), opts(5)).simToEnd();
       expect(JSON.stringify(withAto)).toBe(JSON.stringify(without));
-      expect(withAto.sets).toBeUndefined();
+      // (its coach calls his own after-timeout sets: never the one the user left)
+      expect((withAto.sets ?? []).some((x) => x.id === 'floppy')).toBe(false);
     }
     {
       // runs an after-timeout set for the player it names (the best fit when he sits)

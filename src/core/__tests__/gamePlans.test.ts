@@ -12,6 +12,7 @@ import { playerName, teamPlayers } from '../league/helpers';
 import { releasePlayer } from '../league/contracts';
 import { rosterNames } from '../../ui/stats';
 import { GameSim } from '../sim/engine';
+import { LOSING_ADJUSTMENTS } from '../sim/engine/coach';
 import { Rng } from '../random';
 import type { League, PlayoffSeries } from '../types';
 import { counterWorth, measureChanges, shrinkWorth, worthCall, WORTH_MAX } from '../ai/counterWorth';
@@ -215,22 +216,24 @@ describe('game plans', () => {
     }
     {
       // the user's assistant adjusts at breaks in simmed games unless switched off, whoever runs the
-      // tactics, deterministically, and never with the kinds that cost the user's side (Drop to Hedge,
-      // backing off the ball, staying home: a measured gain without them, ASSISTANT_SKIPS); an AI
-      // coach makes them all
+      // tactics, deterministically, from the AI coaches' menu (engine/coach.ts) and never with a kind measured
+      // as losing (tactics v2, 2026-11-10: LOSING_ADJUSTMENTS holds for everyone, and ASSISTANT_SKIPS is
+      // gone). His side blitzing every ball screen here: the trap's 4-on-3 burns it in most games, and he
+      // stops blitzing, as an AI coach in his place does
       const l = fresh();
       const opp = (l.userTid + 1) % 30;
-      const skipped = /hedges ball screens instead of dropping|backs off the ball|stays home on shooters/;
+      l.teams[l.userTid].tactics.defense = { ...l.teams[l.userTid].tactics.defense, scheme: 'man', pnr: 'blitz' };
       const run = (asAi = false) => {
         const out: string[] = [];
         for (let g = 0; g < 20; g++) {
           const me = buildSimInput(l, l.userTid, l.day, 'regular', opp);
           const mine = asAi ? { ...me, team: { ...me.team, assistant: undefined } } : me;
           const res = new GameSim(mine, buildSimInput(l, opp, l.day, 'regular', l.userTid), { rng: new Rng(30 + g), type: 'regular', injuries: false }).simToEnd();
-          for (const a of res.adjustments ?? []) if (a.t === 0) out.push(`${g} Q${a.q} ${a.text}`);
+          for (const a of res.adjustments ?? []) if (a.t === 0) out.push(`${g} Q${a.q} ${a.kind}: ${a.text}`);
         }
         return out;
       };
+      const kinds = (xs: string[]) => xs.map((x) => x.split(' ')[2].slice(0, -1));
       for (const manual of [false, true]) {
         l.teams[l.userTid].tactics.manual = manual;
         const me = buildSimInput(l, l.userTid, l.day, 'regular', opp);
@@ -239,10 +242,11 @@ describe('game plans', () => {
       }
       expect(buildSimInput(l, opp, l.day, 'regular', l.userTid).team.assistant).toBeUndefined();
       const first = run();
-      expect(first.length).toBeGreaterThan(0);
+      expect(first.length).toBeGreaterThan(5);
       expect(run()).toEqual(first);
-      expect(first.some((x) => skipped.test(x))).toBe(false);
-      expect(run(true).some((x) => skipped.test(x))).toBe(true);
+      expect(kinds(first).some((k) => LOSING_ADJUSTMENTS.has(k))).toBe(false);
+      expect(first.filter((x) => / unblitz: stops blitzing ball screens$/.test(x)).length).toBeGreaterThan(5);
+      expect(kinds(run(true))).toContain('unblitz');
       // switched off: none
       l.teams[l.userTid].tactics.manage.assistantAdjusts = false;
       expect(buildSimInput(l, l.userTid, l.day, 'regular', opp).adjust).toBe(false);

@@ -197,7 +197,7 @@ export function MentalityDial({ t }: { t: Tactics }) {
       />
       <Help title="Mentality">
         <p>How much risk your team takes, on top of every setting.</p>
-        <p>Aggressive pushes, crashes and gets into the ball. Cautious protects the ball and gets back.</p>
+        <p>Aggressive pushes, crashes and pressures, at the cost of turnovers and rushed shots. Cautious protects the ball and waits for better looks.</p>
       </Help>
     </div>
   );

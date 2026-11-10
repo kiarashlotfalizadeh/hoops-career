@@ -171,10 +171,13 @@ describe('two seasons of a fictional league', () => {
         const r = activeCoach(l, t.tid)!;
         expect(r.name).toBe(t.coach.name);
         expect(r.stints).toEqual([{ tid: t.tid, from: l.startSeason }]);
+        // his style goes with him from job to job (tactics v2, 2026-11-10: ai/style.ts)
+        expect(r.style).toEqual(t.coach.style);
       }
       expect(userCoach(l)).toMatchObject({ name: 'The User', user: true, stints: [{ tid: userTid, from: l.startSeason }] });
-      // compact: about 100 bytes a coach
-      expect(JSON.stringify(l.coaches).length).toBeLessThan(30 * 130);
+      // compact: about 100 bytes a coach, and his style about 280 more (2026-11-10: 113 and 278-281 bytes)
+      expect(JSON.stringify(l.coaches!.map(({ style, ...r }) => (void style, r))).length).toBeLessThan(30 * 130);
+      for (const r of l.coaches!) expect(JSON.stringify(r.style).length).toBeLessThan(300);
     }
 
     // it keeps the registry in step with the teams through every phase

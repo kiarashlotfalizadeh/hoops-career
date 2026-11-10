@@ -1,14 +1,19 @@
 // Isolations (called, mismatch-hunted, or what a switch leaves) and double teams: the creator's edge
 // on his man against ball pressure, help and the zone, the star plan's double and heavy help's, and
 // the 4-on-3 a double hands the offense (Post split's cut and flare when it's the set's post player).
+// Rewritten in November 2026 (tactics v2): every size is in tk.ts.
 
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType } from '../log';
 import { SPLIT_DOUBLE } from '../sets';
-import { K, blowByTag, lev, levExtra } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
+import { blowByTag } from './defense';
 import type { SP, ST, SetPlay, LateMode, ActionResult } from './state';
 import type { GameSim } from './game';
+
+type Tags = [string, number][];
 
 export const isolationMethods = {
   iso(
@@ -35,26 +40,24 @@ export const isolationMethods = {
     const edge = this.blowBy(def, A, 'iso');
     adv += edge;
     if (pr > 0) {
-      const blow = lev(pr * clamp((A.c.create - 55) / 50, 0, 0.5));
+      const blow = pr * clamp((A.c.create - 55) / 50, 0, 0.5) * 2;
       adv += blow;
-      // (the share of the whole edge's worth this part adds)
       this.impact('pressure_blowby', off.side, blowByTag(edge + blow, 'iso') - blowByTag(edge, 'iso'), A.pid);
     }
     const zd = this.zone(def);
     if (zd) {
-      adv -= lev(zd.iso) - this.zoneHide(def, D);
-      this.impact('zone_paint', def.side, lev(zd.isoTag), A.pid);
+      adv -= zd.iso - this.zoneHide(def, D);
+      this.impact('zone_paint', def.side, zd.iso * 0.1, A.pid);
     }
-    // the Star plan doubles him; heavy help sends a second defender at anyone who beats his man
+    // the star plan doubles him; heavy help sends a second defender at anyone who beats his man
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
     let doubled = false;
-    if (starDouble) doubled = this.rng.chance(0.75);
-    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(lev(0.25 * help));
+    if (starDouble) doubled = this.rng.chance(TK.double.p);
+    else if (adv > 0.7 && help > 0) doubled = this.rng.chance(0.5 * help);
     if (this.record) this.cur!.steps.push({ k: 'drive', pid: A.pid });
-    // (a switched pick-and-roll's isolation is booked to the handler's play type throughout)
     if (doubled) return this.doubleTeam(off, def, A, finish, starDouble);
 
-    const pTO = this.toChance(K.toBase * 0.95, A, def);
+    const pTO = this.toChance(K.toBase * 0.95, A, def, this.driveRisk(off) * 0.5);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, this.stealBy(D, 0.55, true), finish);
       return 'done';
@@ -66,42 +69,42 @@ export const isolationMethods = {
     }
     if (!D.on) D = this.defOf(def, A);
     const spacing = this.spacingBonus(off);
-    const rimOpen = adv * 0.35 + spacing * 0.5 - lev(help * 0.25);
+    const rimOpen = adv * 0.35 + spacing * 0.5 - help * 0.5;
     const sizeEdge = (A.r.hgt - D.r.hgt) / 25;
     const ss = this.selfShot(A);
     const opts = [
-      Math.pow(A.c.rim / 50, 1.7) * pf.rim * A.td * (1 + rimOpen) * ss,
-      Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.9 * Math.sqrt(A.tm) * ss,
+      Math.pow(A.c.rim / 50, 1.7) * pf.rim * A.td * Math.max(0.1, 1 + rimOpen) * ss * this.shapeW(off, A).drive,
+      Math.pow(A.c.midShot / 50, 2.3) * pf.mid * 0.7 * Math.sqrt(A.tm) * ss,
       Math.pow(A.c.pu3 / 50, 2.5) * pf.three * 0.6 * A.t3 * ss,
       sizeEdge > 0.3 ? Math.pow(A.c.postScore / 50, 2) * sizeEdge : 0,
-      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + lev(Math.max(0, help))),
+      Math.pow(A.c.passing / 50, 1.2) * 0.8 * this.passT(A) * (1 + Math.max(0, help)),
       forced ? 0 : K.continueBase * (adv < -0.3 ? 1.4 : 0.5),
     ];
     const c = this.rng.weighted(opts);
     const advOpen = clamp(adv * 0.35, -0.7, 0.75);
     switch (c) {
       case 0: {
-        const zone: ShotZone = this.rimOr(A, 0.62);
-        const hp = -lev(help * 0.25);
-        const tags: [string, number][] = [
-          ['help_paint', hp],
+        const z: ShotZone = this.rimOr(A, 0.62);
+        const tags: Tags = [
+          ['help_paint', -help * 0.5],
           ['spacing', spacing * 0.5],
         ];
         const roam = this.roamHelp(def, off, A);
         if (roam) tags.push(['role_roam', -roam]);
         this.shoot(off, def, {
           shooter: A,
-          zone,
-          open: advOpen + spacing * 0.5 + hp - 0.08 - roam,
-          contest: zone === 'rim' ? this.rimContester(def, D) : D,
+          zone: z,
+          open: advOpen + this.room(A, z === 'rim' ? 'rim' : 'paint', tags) - 0.08,
+          contest: z === 'rim' ? this.rimContester(def, D) : D,
           assister: null,
           finish,
           tags,
+          drive: true,
         });
         return 'done';
       }
       case 1:
-        this.shoot(off, def, { shooter: A, zone: this.midOr(A, 0.7), open: advOpen - 0.12, contest: D, assister: null, finish, pullup: true });
+        this.shoot(off, def, { shooter: A, zone: this.midOr(A, 0.6), open: advOpen - 0.12, contest: D, assister: null, finish, pullup: true });
         return 'done';
       case 2:
         this.shoot(off, def, { shooter: A, zone: 'ab3', open: advOpen * 0.6 - 0.2, contest: D, assister: null, finish, pullup: true });
@@ -111,15 +114,15 @@ export const isolationMethods = {
       case 4: {
         const sh = this.kickTarget(off, A);
         this.passStep(A, sh);
-        const ko = 0.15 + lev(Math.max(0, help) * 0.3);
+        const tags: Tags = [['help_kick', Math.max(0, help) * 0.6]];
         this.spotUp(off, def, {
           shooter: sh,
           zone: this.cornerOrWing(off, sh),
-          open: ko + advOpen * 0.3,
+          open: 0.15 + this.room(sh, 'c3', tags) + advOpen * 0.3,
           contest: this.defOf(def, sh),
           assister: A,
           finish: 'spotup',
-          tags: [['help_kick', lev(Math.max(0, help) * 0.3)]],
+          tags,
         });
         return 'done';
       }
@@ -129,18 +132,17 @@ export const isolationMethods = {
   },
 
   /**
-   * A double team; only the Star plan's doubles are tagged as the plan's doing. Doubling Post split's
+   * A double team; only the star plan's doubles are tagged as the plan's doing. Doubling Post split's
    * post player sends the ball out to the pair splitting around him: the cutter or the flare, with the
-   * split's edge on the 4-on-3. A Star plan double plays its edges over the usual look at the tactical
-   * leverage: the turnovers it forces past a usual 6%, the open 4-on-3 past a usual kick-out's 0.15
-   * openness, and the forced shot of a star who splits it past a usual pull-up's -0.12.
+   * split's edge on the 4-on-3.
    */
   doubleTeam(this: GameSim, off: ST, def: ST, A: SP, from: 'iso' | 'pnrBH' | 'post', star: boolean, play: SetPlay | null = null): 'done' {
+    const k = TK.double;
     if (this.cur) this.cur.label = `${A.name} gets doubled!`;
     if (this.record) this.cur!.steps.push({ k: 'trap', pid: A.pid });
-    const escape = (A.c.passing - 55) / K.cov.double.escape;
+    const escape = (A.c.passing - 55) / 40;
     const pTO0 = clamp((0.1 - escape * 0.25) * A.ttv, 0.03, 0.2);
-    const pTO = star ? pTO0 + levExtra(pTO0 - 0.06) : pTO0;
+    const pTO = star ? clamp((k.to - escape * k.escape) * A.ttv, k.toMin, k.toMax) : pTO0;
     if (star) this.impact('star_double', def.side, (pTO - 0.06) * 1.1 + 0.12, A.pid);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, A, this.stealer(def), from);
@@ -151,27 +153,29 @@ export const isolationMethods = {
       const split = play?.cast.id === 'postSplit' ? play.cast : null;
       const sh = split ? (this.rng.chance(0.5) ? split.c : split.d!) : this.kickTarget(off, A);
       this.passStep(A, sh);
-      const o0 = 0.5 + escape * 0.5;
-      const o = star ? o0 + levExtra(o0 - 0.15) : o0;
-      // (a Star plan double's 4-on-3 is the plan's look, and counts by who gets it: see K.matchup)
+      const o = star ? k.kick + escape : 0.5 + escape * 0.5;
       if (!star) this.impact('double_kick', off.side, o * 0.06 * 3 * 0.35, sh.pid);
       // (what the defense has read of the split takes its share off this look too)
       const read = split ? play!.read : 0;
-      const tags = (room: number): [string, number][] | undefined =>
-        split ? [['set_postSplit', lev(SPLIT_DOUBLE)], ...(read ? [['set_read', -read] as [string, number]] : [])] : star ? [['double_kick', room]] : undefined;
-      const so = split ? lev(SPLIT_DOUBLE) - read : 0;
+      const tags = (room: number): Tags | undefined =>
+        split ? [['set_postSplit', SPLIT_DOUBLE * 2], ...(read ? [['set_read', -read] as [string, number]] : [])] : star ? [['double_kick', room]] : undefined;
+      const so = split ? SPLIT_DOUBLE * 2 - read : 0;
       if (split ? sh === split.c : this.rng.chance(0.3) && sh.c.rim > 52) {
+        const t = tags(o * 0.6);
+        const extra = star && t ? this.room(sh, 'rim', t) - o * 0.6 : 0;
         this.shoot(off, def, {
           shooter: sh,
           zone: 'rim',
-          open: o * 0.6 + so,
+          open: o * 0.6 + so + extra,
           contest: this.rimContester(def, this.defOf(def, sh), 1.2),
           assister: A,
           finish: 'cut',
-          tags: tags(o * 0.6),
+          tags: t,
         });
       } else {
-        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o + so, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: tags(o) });
+        const t = tags(o);
+        const extra = star && t ? this.room(sh, 'c3', t) - o : 0;
+        this.spotUp(off, def, { shooter: sh, zone: this.cornerOrWing(off, sh), open: o + so + extra, contest: this.defOf(def, sh), assister: A, finish: 'spotup', tags: t });
       }
       return 'done';
     }
@@ -179,11 +183,11 @@ export const isolationMethods = {
     this.shoot(off, def, {
       shooter: A,
       zone: this.midOr(A, 0.5),
-      open: star ? -0.55 - levExtra(0.43) : -0.55,
+      open: star ? k.split : -0.55,
       contest: this.defOf(def, A),
       assister: null,
       finish: from,
-      tags: star ? [['star_double', -lev(0.4)]] : undefined,
+      tags: star ? [['star_double', k.split + 0.55]] : undefined,
     });
     return 'done';
   },

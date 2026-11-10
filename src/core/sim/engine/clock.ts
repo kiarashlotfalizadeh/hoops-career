@@ -5,7 +5,8 @@
 
 import { Rng } from '../../random';
 import { GAME } from '../../constants';
-import { K, levW } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
 import { type ST, type LateMode, NONE, mix } from './state';
 import type { GameSim } from './game';
 
@@ -70,20 +71,22 @@ export const clockMethods = {
       const press = this.T[1 - t.side].t.defense.press !== 'none' || t.t.defense.press !== 'none';
       // (0.9 to 1.1 until 2026-11-09: an early look is worth more now, see K.tempo, and pushing for it costs more legs)
       const paceMult = 0.87 + (t.t.offense.pace / 100) * 0.26;
+      // (and crashing the glass on every miss: TK.crash.drain)
+      const crashMult = 1 + TK.crash.drain * Math.max(0, (t.t.offense.crashBoards - 50) / 50);
       // chasing in a junk defense wears out the chasers
       const off = this.T[1 - t.side];
       const chased = t.side !== this.poss ? this.chased(t, off) : NONE;
       for (const p of t.players) {
         if (p.on) {
           p.b.sec += dt;
-          let drain = K.drain * (1.4 - 0.75 * (p.r.end / 100)) * paceMult;
-          if (press) drain *= levW(1.15);
+          let drain = K.drain * (1.4 - 0.75 * (p.r.end / 100)) * paceMult * crashMult;
+          if (press) drain *= TK.press.both;
           // (and the pressing side runs more of it)
-          if (t.t.defense.press !== 'none') drain *= levW(K.pressAdv.drain);
-          if (t.t.defense.press === 'always') drain *= levW(1.12);
-          if (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p)) drain *= levW(K.chaseDrain);
+          if (t.t.defense.press !== 'none') drain *= TK.press.drain;
+          if (t.t.defense.press === 'always') drain *= TK.press.always;
+          if (chased.length && chased.some((c) => t.guardOf.get(c.pid) === p)) drain *= TK.chase.drain;
           // (the chasing roles wear their players down on defense)
-          else if (t.side !== this.poss && (p.drole === 'poa' || p.drole === 'stopper')) drain *= K.role.drain;
+          else if (t.side !== this.poss && (p.drole === 'poa' || p.drole === 'stopper')) drain *= TK.role.drain;
           p.energy = Math.max(0.2, p.energy - drain * dt);
         } else if (p.out === 0 || p.out === 1) {
           p.energy = Math.min(1, p.energy + K.recover * dt);

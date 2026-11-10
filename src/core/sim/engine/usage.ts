@@ -1,14 +1,16 @@
 // Who gets the ball: each player's usage weight for an action (role, shot freedom, tendencies, form, a
 // defense loading up on a high-usage player as the game goes on), his passing and shoot-vs-pass tilt,
-// the actor of an action (a called isolation, a hunted matchup, the deny's and the chasers' fewer
-// touches, the crunch-time go-to player), the action the offense runs next, what the lineup can run,
-// and who the kick-out finds.
+// the actor of an action (a called isolation, a hunted matchup, mismatch hunting, the chasers' fewer
+// touches, the crunch-time go-to player), the action the offense runs next (its weights, what the five
+// can run in its shape, a zone's ball movement, mismatches worth hunting), and who the kick-out finds.
+// The tactical parts were rewritten in November 2026 (tactics v2, sizes in tk.ts); the usage limits
+// that hold stars' lines are as calibrated before.
 
 import type { ActionType } from '../../types';
 import { clamp } from '../../random';
 import { ROLE_USAGE } from '../../ratings';
-import { shapeOf } from '../tactics';
-import { K, lev, levW } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
 import { type SP, type ST, type LateMode, ACTION_LIST } from './state';
 import type { GameSim } from './game';
 
@@ -41,14 +43,15 @@ export const usageMethods = {
     let w = roleU * p.freedom * p.tu * p.tcr * Math.pow(Math.max(5, skill) / 50, K.usageExp) * (0.75 + 0.25 * p.energy) * p.perf;
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
     // a wing stopper on him keeps the ball out of his hands a little
-    if (this.T && this.T[1 - t.side].guardOf.get(p.pid)?.drole === 'stopper') w *= levW(K.role.stopperTouch);
+    const st = this.T ? this.T[1 - t.side].guardOf.get(p.pid) : undefined;
+    if (st?.drole === 'stopper') w *= Math.max(0.5, 1 - (1 - TK.role.stopperTouch) * st.dm);
     // (with the game on the line the ball goes to him however much of it he has had tonight)
     if (free) return w;
-    // defenses load up on a high-usage player as the game goes on (a junk defense's chaser sooner)
+    // defenses load up on a high-usage player as the game goes on (a junk defense's chaser a little sooner)
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12.5) {
       const share = (p.b.fga + 0.44 * p.b.fta + p.b.tov) / teamUse;
-      const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - lev(K.chaseCap) : p.useCap;
+      const cap = this.T && this.chased(this.T[1 - t.side], t).includes(p) ? p.useCap - TK.chase.cap : p.useCap;
       if (share > cap) w *= Math.exp(-p.useDamp * (share - cap));
       if (share > K.useCeil.level) w *= Math.exp(-K.useCeil.damp * (share - K.useCeil.level));
     }
@@ -60,10 +63,7 @@ export const usageMethods = {
     return w;
   },
 
-  /**
-   * Passing tendency right now: his fitted tendency, braked once he has assisted on more than
-   * ~45% of his teammates' baskets in this game (real assist percentages top out near there).
-   */
+  /** Passing tendency right now: his fitted tendency, braked once he has assisted on more than ~45% of his teammates' baskets in this game. */
   passT(this: GameSim, p: SP): number {
     const mates = p.b.tFgm - p.b.fgm;
     if (mates < 10) return p.tp;
@@ -71,16 +71,13 @@ export const usageMethods = {
     return share > K.astCap ? p.tp * Math.exp(-10 * (share - K.astCap)) : p.tp;
   },
 
-  /**
-   * Shoot-vs-pass tilt for a player with the ball in an action: high-usage players hunt their own shot,
-   * and the go-to player with a shot for the tie or the lead in the last seconds takes it himself.
-   */
+  /** Shoot-vs-pass tilt for a player with the ball in an action: high-usage players hunt their own shot, and the go-to player with a shot for the tie or the lead in the last seconds takes it himself. */
   selfShot(this: GameSim, p: SP): number {
     const w = Math.pow(clamp(p.tu, 0.1, 25), K.selfShotExp);
     return this.q >= 4 && this.clock <= 120 && this.lastShotFor(p) ? w * K.goToSelf : w;
   },
 
-  /** Whether `p` is his side's go-to player on a trip for the tie or the lead in the last seconds (K.goToFrom: the trips whose shot goes up in the last 24). */
+  /** Whether `p` is his side's go-to player on a trip for the tie or the lead in the last seconds. */
   lastShotFor(this: GameSim, p: SP): boolean {
     if (this.q < 4 || this.clock > K.goToFrom) return false;
     const t = this.T[0].byId.get(p.pid) === p ? this.T[0] : this.T[1];
@@ -97,25 +94,31 @@ export const usageMethods = {
       called.b.acts++;
       return called;
     }
-    // crunch time: the ball finds the go-to player (the one named, or else the staff's: his best scorer
-    // on the floor), whatever his share of it so far; most of all for the last shot (K.goToLast)
+    // crunch time: the ball finds the go-to player, whatever his share of it so far
     const go = this.goTo(t);
     const ws = t.on.map((p) => (p === exclude ? 0 : this.usageWeight(p, t, action, p === go)));
-    // hunting one defender: the player he guards gets the isolations, post-ups and ball screens (in
-    // place of the automatic mismatch hunt)
-    const hunted = action === 'iso' || action === 'post' || action === 'pnr' ? this.hunted(t, this.T[1 - t.side]) : null;
-    if (hunted) ws[t.on.indexOf(hunted)] *= levW(K.hunt.pick);
-    // mismatch hunting: favor the player with the weakest defender
-    else if (t.t.offense.huntMismatch && (action === 'iso' || action === 'pnr')) {
-      const def = this.T[1 - t.side];
+    const def = this.T[1 - t.side];
+    // hunting one defender: the player he guards gets the isolations, post-ups and ball screens
+    const hunted = action === 'iso' || action === 'post' || action === 'pnr' ? this.hunted(t, def) : null;
+    if (hunted) ws[t.on.indexOf(hunted)] *= TK.hunt.pick;
+    // hunting mismatches: an isolation or post-up goes to a capable creator (post scorer) whose man is
+    // weaker than the rest of the defense on the floor (and, posting up, smaller); a ball screen hunts
+    // through its screener (screenerFor), bringing the weak defender into the action
+    else if (t.t.offense.huntMismatch && (action === 'iso' || action === 'post')) {
+      const k = TK.hunt;
+      const post = action === 'post';
+      const q = (d: SP) => (post ? d.c.intDef : d.c.perDef) * this.dq(d);
+      const avg = def.on.reduce((a, d) => a + q(d), 0) / Math.max(1, def.on.length);
       t.on.forEach((p, i) => {
         const d = def.guardOf.get(p.pid);
-        if (d) ws[i] *= Math.exp(lev(clamp((p.c.create - d.c.perDef) / 40, -0.5, 0.9)));
+        if (!d) return;
+        const able = clamp(((post ? p.c.postScore : p.c.create) - k.able) / 25, 0, 1.3);
+        const weak = (avg - q(d)) / k.weakPer + (post ? (p.r.hgt - d.r.hgt) / 60 : 0);
+        ws[i] *= Math.exp(k.tilt * clamp(weak * able, k.tiltMin, k.tiltMax));
       });
     }
-    // a junk defense's chasers face-guard their men: the ball goes elsewhere
-    const def = this.T[1 - t.side];
-    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= levW(K.chaseTouch);
+    // a junk defense's chasers face-guard their men: the ball goes elsewhere more often
+    for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= TK.chase.touch;
     if (go) ws[t.on.indexOf(go)] *= (go.pid === t.t.manage.goTo ? K.goToPick : K.goToAuto) * (this.lastShotFor(go) ? K.goToLast : 1);
     const actor = t.on[this.rng.weighted(ws)];
     for (const p of t.on) p.b.tActs++;
@@ -123,20 +126,13 @@ export const usageMethods = {
     return actor;
   },
 
-  /**
-   * The go-to player in crunch time (the last two minutes of the 4th quarter or overtime, within five):
-   * the team's closer (see closer), whom the ball finds a little less when the coach didn't name him (K.goToAuto).
-   */
+  /** The go-to player in crunch time (the last two minutes of the 4th quarter or overtime, within five): the team's closer. */
   goTo(this: GameSim, t: ST): SP | null {
     if (this.q < 4 || this.clock > 120 || Math.abs(t.score - this.T[1 - t.side].score) > 5) return null;
     return this.closer(t);
   },
 
-  /**
-   * Who a team's last shots go to: the go-to player the coach named while he's on the floor, else the
-   * best scorer on the floor (his shot creation and his own usage). The live game builds its late play
-   * call around him.
-   */
+  /** Who a team's last shots go to: the go-to player the coach named while he's on the floor, else the best scorer on the floor. */
   closer(this: GameSim, t: ST): SP | null {
     const pid = t.t.manage.goTo;
     const p = pid == null ? undefined : t.byId.get(pid);
@@ -153,11 +149,26 @@ export const usageMethods = {
     return best;
   },
 
+  /**
+   * The action the offense runs next: its weights (sharpened by TK.emph) times what the five can run
+   * in its shape; against a zone or a junk defense the ball moves more on its own (TK.vsZone); hunting
+   * mismatches runs more isolations where one is worth it; crunch time runs more of what the go-to
+   * player does best.
+   */
   chooseAction(this: GameSim, off: ST, late?: LateMode): ActionType {
     const a = off.t.offense.actions;
+    const def = this.T[1 - off.side];
+    const zoned = !!this.zone(def);
+    let isoW = 1;
+    if (off.t.offense.huntMismatch) {
+      const gap = this.bestMismatch(off, def);
+      if (gap > TK.hunt.from) isoW = Math.min(TK.hunt.isoMax, 1 + TK.hunt.isoW * (gap - TK.hunt.from));
+    }
     const ws = ACTION_LIST.map((act) => {
-      const emph = Math.pow(Math.max(1, a[act]) / 50, 1.4);
-      return emph * off.cap[act];
+      let w = Math.pow(Math.max(1, a[act]) / 50, TK.emph) * off.cap[act];
+      if (zoned) w *= TK.vsZone[act];
+      if (act === 'iso') w *= isoW;
+      return w;
     });
     // down three late the offense looks for the arc: hardly a post-up (its shots are twos)
     if (late?.need3) ws[ACTION_LIST.indexOf('post')] *= 0.1;
@@ -166,7 +177,6 @@ export const usageMethods = {
     if (go) {
       const mine: ActionType[] = ['pnr', 'iso', 'post', 'handoff'];
       const best = mine.reduce((b, act) => (this.usageWeight(go, off, act) > this.usageWeight(go, off, b) ? act : b), mine[0]);
-      // (and with a shot for the tie or the lead coming, the play is his)
       ws[ACTION_LIST.indexOf(best)] *= (go.pid === off.t.manage.goTo ? K.goToAction : K.goToAutoAction) * (this.lastShotFor(go) ? K.goToLast : 1);
     }
     return ACTION_LIST[this.rng.weighted(ws)];
@@ -179,22 +189,23 @@ export const usageMethods = {
     return p;
   },
 
-  /** How well the current lineup can run an action, in the offense's shape (see K.shape). */
+  /** How well the current lineup can run an action, in the offense's shape. */
   capability(this: GameSim, t: ST, act: ActionType): number {
     const c = this.baseCapability(t, act);
-    switch (shapeOf(t.t.offense)) {
+    const s = TK.shape;
+    switch (this.shapeOf(t)) {
       case 'fiveOut':
-        return act === 'post' ? c * levW(K.shape.fiveOut.post) : c;
+        return act === 'post' ? c * s.fiveOut.post : c;
       case 'horns': {
-        if (act === 'pnr') return c * levW(K.shape.horns.pnr);
-        if (act === 'motion') return c * levW(K.shape.horns.motion);
+        if (act === 'pnr') return c * s.horns.pnrCap;
+        if (act === 'motion') return c * s.horns.motion;
         if (act !== 'handoff') return c;
         // the elbow bigs run the handoffs: as well as the better passer of them
-        const [a, b] = this.bigTwo(t);
-        return c * levW(Math.max(0.9, K.shape.horns.handoff + (K.shape.horns.handoffW * (Math.max(a.c.passing, b.c.passing) - 55)) / 20));
+        const [x, y] = this.bigTwo(t);
+        return c * Math.max(0.8, s.horns.handoff + (s.horns.handoffW * (Math.max(x.c.passing, y.c.passing) - 55)) / 20);
       }
       case 'twoIn':
-        return act === 'post' ? c * levW(K.shape.twoIn.post) : c;
+        return act === 'post' ? c * s.twoIn.post : c;
       default:
         return c;
     }
@@ -219,7 +230,6 @@ export const usageMethods = {
         return 0.36 * Math.pow(a / 62, 3);
       }
       case 'handoff': {
-        // the two best off the ball
         for (const p of on) {
           const x = p.c.offBall;
           if (x > a) {

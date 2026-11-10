@@ -2,9 +2,17 @@
 // playbook or shape for every team of a league against every other team (paired games:
 // the same seeds for each option), by shot-value margin a game (every attempt as likely to fall, a
 // fouled miss at what its free throws were worth, plus the free throws made: as counterWorth measures),
-// as a difference from the team's average option; with the staff's fit for each, its picks (an AI
-// staff's, coach's lean included, and the user's own staff's, by its read alone) and the roster's
-// profile. The teams are split over `jobs` processes (each a fork of this file).
+// as a difference from the team's average option; with the user's staff's read of each (coachAI's fits)
+// and its pick by that read, what an AI staff runs with the roster, and the roster's profile.
+// Since tactics v2 (2026-11) only the user's staff picks playbooks (an AI staff plays its coach's style:
+// ai/style.ts), so each option is played as the user's team plays one: its settings as rules (a 2-3
+// zone all game, no zone of the coach's own mixed in, small screens switched at the engine's habit) with
+// the assistant's adjustments at the breaks (an AI staff plays a base zone in stretches, half the game,
+// and adjusts his offense too: STYLE_AS=ai below). The league is the AI's: every team, the user's
+// included, runs its coach's style as an AI staff fits it (coachAI.styleTactics; in the real league the
+// franchise's real style), so no playbook is measured against the playbook reads being refitted (the
+// shapes the staffs play do come from the shape reads). The teams are split over `jobs` processes (each
+// a fork of this file).
 import { fork } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,15 +23,20 @@ import { teamPlayers } from '../src/core/league/helpers';
 import { GameSim, K } from '../src/core/sim/engine';
 import { Rng } from '../src/core/random';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../src/core/sim/tactics';
-import { defPresetFit, fitRoster, offPresetFit, presetScores, rosterProfile, shapeFits, shapeInputs, type ProfileKey } from '../src/core/ai/coachAI';
+import { autoTactics, defPresetFit, fitRoster, offPresetFit, presetScores, rosterProfile, shapeFits, shapeInputs, staffPresets, type ProfileKey } from '../src/core/ai/coachAI';
+import { realStyle } from '../src/core/ai/style';
 import { OFF_SHAPES, type League, type Tactics } from '../src/core/types';
+import { TK } from '../src/core/sim/engine/tk';
 
-// For experiments (the workers inherit them): HC_K='{"cov.ice.kick":0.5}' overrides engine constants by
-// path, HC_SEED=<file> plays another seed file's real league.
+// For experiments (the workers inherit them): HC_K='{"recenter.three":-0.1,"TK.key.per":3}' overrides
+// engine constants by path (K's, or TK's with a "TK." prefix), HC_SEED=<file> plays another seed file's
+// real league, STYLE_AS=ai plays each option as an AI staff would (its coach's habits: a base zone in
+// stretches, his own zone mixed in, his adjustments).
 if (process.env.HC_K) {
-  for (const [path, v] of Object.entries(JSON.parse(process.env.HC_K) as Record<string, unknown>)) {
-    const keys = path.split('.');
-    let o = K as unknown as Record<string, unknown>;
+  for (const [full, v] of Object.entries(JSON.parse(process.env.HC_K) as Record<string, unknown>)) {
+    const tk = full.startsWith('TK.');
+    const keys = (tk ? full.slice(3) : full).split('.');
+    let o = (tk ? TK : K) as unknown as Record<string, unknown>;
     for (const k of keys.slice(0, -1)) o = o[k] as Record<string, unknown>;
     o[keys[keys.length - 1]] = v;
   }
@@ -40,12 +53,16 @@ export interface StyleRow {
   se: Record<string, number>;
   /** The staff's fit for each option, in fit points (a tenth of a point a game). */
   fit: Record<string, number>;
-  /** An AI staff's pick (its coach's lean included) and the user's own staff's (the read alone), and the reads they pick from; playbooks only. */
-  staff?: string;
+  /**
+   * What an AI staff runs with this roster, as styleTactics labels it: on defense its coverage (the one
+   * its personnel calls for, or 'zone' for a coach who mixes in a lot of it), on offense the playbook
+   * nearest its coach's style (a name for a real team's style, not a pick); for the shapes, the one its
+   * staff plays (autoShape: an AI staff's and the user's alike).
+   */
+  staff: string;
+  /** The user's own staff's pick (its read alone, best first: the style picker's) and the read it picks from; playbooks only. */
   user?: string;
-  reads?: { ai: Record<string, number>; user: Record<string, number> };
-  /** What the team runs. */
-  cur: string;
+  reads?: { user: Record<string, number> };
   profile: Record<ProfileKey, number>;
   /** For the shapes, what their fits are read from (shapeInputs). */
   shape?: Record<string, number>;
@@ -66,7 +83,10 @@ export interface MeasureOpts {
   jobs: number;
 }
 
-/** The league measured: the real one (rng 7) or a fictional one from its rng seed, in its regular season. */
+/**
+ * The league measured: the real one (rng 7) or a fictional one from its rng seed, in its regular season,
+ * the user's team run as an AI staff runs it (in the real league, with its franchise's real style).
+ */
 export function styleLeague(league: 'real' | number): League {
   const real = league === 'real';
   const L = createLeague({
@@ -79,6 +99,11 @@ export function styleLeague(league: 'real' | number): League {
   });
   L.id = 'style-check';
   startRegularSeason(L);
+  const user = L.teams[L.userTid];
+  const ps = teamPlayers(L, user.tid);
+  const style = real ? realStyle(user.abbrev, ps) : null;
+  if (style) user.coach = { ...user.coach, style };
+  user.tactics = autoTactics(user, ps, false);
   return L;
 }
 
@@ -113,13 +138,14 @@ export function measureTeams(L: League, o: Omit<MeasureOpts, 'jobs' | 'league'>,
       fit = shapeFits(fitRoster(ps), t, team.rotation.order);
     }
     const top = (sc: Record<string, number>) => Object.entries(sc).sort((a, b) => b[1] - a[1])[0][0];
-    const reads = part === 'shape' ? undefined : { ai: presetScores(team, ps)[part], user: presetScores(team, ps, { user: true })[part] };
+    const reads = part === 'shape' ? undefined : { user: presetScores(team, ps, { user: true })[part] };
     // the games: the same seeds for every option
     const base = buildSimInput(L, tid, 1, 'regular');
     const opps = L.teams.filter((x) => x.tid !== tid).map((x) => buildSimInput(L, x.tid, 1, 'regular'));
     const runs: Record<string, number[]> = {};
     for (const [id, tactics] of options) {
-      const tm = { ...team, tactics };
+      // (played as the user's team plays a playbook: its settings as rules, the assistant adjusting at the breaks)
+      const tm = process.env.STYLE_AS === 'ai' ? { ...team, tactics } : { ...team, tactics, assistant: true as const };
       const me = { ...base, team: tm, adjust: true };
       const xs: number[] = [];
       for (const seed of seeds)
@@ -156,10 +182,8 @@ export function measureTeams(L: League, o: Omit<MeasureOpts, 'jobs' | 'league'>,
       meas,
       se,
       fit,
-      staff: reads && top(reads.ai),
-      user: reads && top(reads.user),
-      ...(reads ? { reads } : {}),
-      cur: part === 'off' ? t.offPreset : part === 'def' ? t.defPreset : (t.offense.shape ?? 'fourOut'),
+      staff: part === 'off' ? t.offPreset : part === 'def' ? t.defPreset : (t.offense.shape ?? 'fourOut'),
+      ...(reads ? { user: part === 'def' ? staffPresets(team, ps).def : top(reads.user), reads } : {}),
       profile,
       ...(part === 'shape' ? { shape: shapeInputs(fitRoster(ps), t, team.rotation.order) } : {}),
     };

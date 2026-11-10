@@ -12,3 +12,6 @@ src/data/history.json
 src/data/records.json
 package-lock.json
 .claude
+src/data/realStyles.json
+# the tactics lab's generated runs
+scripts/tactics-lab/out

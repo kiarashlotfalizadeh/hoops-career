@@ -454,6 +454,8 @@ export interface CombineResults {
 // ---------------------------------------------------------------- tactics
 
 export type ActionType = 'pnr' | 'iso' | 'post' | 'handoff' | 'motion';
+/** Every half-court action, in the engine's order. */
+export const ACTION_TYPES: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 export const ACTIONS: ActionType[] = ['pnr', 'iso', 'post', 'handoff', 'motion'];
 
 export type PnrCoverage = 'drop' | 'switch' | 'hedge' | 'blitz' | 'ice';
@@ -461,7 +463,8 @@ export type PnrCoverage = 'drop' | 'switch' | 'hedge' | 'blitz' | 'ice';
 export type DefScheme = 'man' | 'zone23' | 'zone32' | 'box1' | 'tri2';
 export type PressMode = 'none' | 'afterMade' | 'always';
 /** Plan for the opponent's star: none, or double-team him (a deny was cut: it was worth nothing against anyone). */
-export type StarPlan = 'none' | 'double';
+/** How the defense treats the other side's star: straight up, doubled whenever he attacks, or shown high on his ball screens only. */
+export type StarPlan = 'none' | 'double' | 'show';
 
 /**
  * A named offensive set (see src/core/sim/sets.ts): a specific way of running one of the engine's
@@ -553,6 +556,11 @@ export interface GameManagement {
   foulTrouble: 'loose' | 'standard' | 'strict';
   /** Fatigue (energy %) threshold below which a player is subbed if possible. */
   fatigueSub: number;
+  /**
+   * Offense-defense substitutions in the last seconds of a close game: a defensive specialist in for the
+   * weakest defender when the other side has the ball, back out when you get it (absent: on).
+   */
+  odSubs?: boolean;
   /** Crunch-time go-to player (pid): in the last two minutes of a close fourth quarter or overtime the ball finds him more. */
   goTo?: number | null;
   /** After-timeout play: the first action (or a set) of the next half-court trip after one of your timeouts. */
@@ -599,6 +607,11 @@ export interface Tactics {
   manual: boolean;
   /** The team's mentality (absent: balanced), played on top of every setting (see withMentality). */
   mentality?: Mentality;
+  /**
+   * What an AI staff's playbook is, in a few words, when it plays its coach's style rather than a
+   * preset (ai/style.ts): "Isolation-heavy, slow" and "Drop", and the scouting report's sentence.
+   */
+  identity?: { off: string; def: string; line: string; defLine: string };
 }
 
 /**
@@ -758,12 +771,41 @@ export interface RetiredNumber {
 
 export interface CoachProfile {
   name: string;
+  /** The offensive and defensive playbooks nearest his style (the names the scouting card and the coach pages use). */
   offPhilosophy: string;
   defPhilosophy: string;
   /** 0..100 player development skill. */
   development: number;
   /** 0..100 in-game adjustment skill. */
   tactics: number;
+  /** How he plays: a real team's coach its real style, any other a style drawn from the real league's (see ai/style.ts). */
+  style?: CoachStyle;
+}
+
+/**
+ * A coach's style: what his teams run whoever is on the roster (the AI staff fits it to the players it
+ * has). Offense: tempo, how hard it runs, its shot profile, the glass and its mix of actions. Defense: his
+ * base ball-screen coverage, whether he switches off the ball, help, ball pressure, physicality, how
+ * often he switches a small's screen, and how much zone he mixes in (a share of the half-court trips).
+ */
+export interface CoachStyle {
+  pace: number;
+  transition: number;
+  threePoint: number;
+  rimAttack: number;
+  crash: number;
+  actions: Record<ActionType, number>;
+  coverage: PnrCoverage;
+  switchOffBall: boolean;
+  help: number;
+  pressure: number;
+  physicality: number;
+  getBack: number;
+  smallSwitch: number;
+  zone: number;
+  zoneKind: 'zone23' | 'zone32';
+  /** The real franchise whose style this is (absent: drawn for a coach of his own). */
+  from?: string;
 }
 
 export interface DraftPick {
@@ -1073,8 +1115,10 @@ export interface GameAdjustment {
   q: number;
   /** Seconds left in the period. */
   clock: number;
-  /** What changed, e.g. 'hedges ball screens instead of dropping'. */
+  /** What changed, e.g. 'ices ball screens instead of dropping'. */
   text: string;
+  /** Which kind of change (see LOSING_ADJUSTMENTS in sim/engine/coach.ts). */
+  kind?: string;
 }
 
 export interface PbpEntry {

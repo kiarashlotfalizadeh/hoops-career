@@ -21,7 +21,7 @@ export function AdjustmentsCard({ g, league }: { g: GameResult; league: League }
           Adjustments
           <Help title="Adjustments">
             {plan.length > 0 && <p>Their coach came in with a plan for what your team does best.</p>}
-            <p>A coach changes one thing a quarter when the other team is exploiting it. Better coaches adjust more often.</p>
+            <p>A coach changes one thing a quarter, at either end, when something isn&apos;t working. Better coaches adjust more often.</p>
           </Help>
         </h3>
       }

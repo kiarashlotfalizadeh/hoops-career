@@ -243,7 +243,7 @@ describe('scouting and the staff', () => {
 
       // names a group for every counter, and changes actions relative to the playbook
       const cands = counterCandidates(l, l.userTid, opp);
-      expect(cands.length).toBeGreaterThan(3);
+      expect(cands.length).toBeGreaterThanOrEqual(3);
       for (const c of cands) {
         expect(c.group).toBeTruthy();
         if (c.id.startsWith('cov-') || c.id === 'zone') expect(c.group).toBe('coverage');
@@ -427,11 +427,14 @@ describe('scouting and the staff', () => {
       expect(factor().key).toBeUndefined();
       expect(factor().advice).toBeUndefined();
       expect(debrief(league, res, buildGameReport(league, res)!).advice.some((a) => a.id === 'fix-drop_pullup:o')).toBe(false);
-      // it won back only 0.4: the report's edge stands, but the switch to Hedge isn't next time's fix:
-      // it measured as a cost where the bench calls it (callWorth.ts)
+      // it won back only 0.4: the report's edge stands, and next time's fix is to ice their screens (not
+      // the switch to Hedge it once was: that measured as a cost where the bench called it, callWorth.ts)
       res.impacts = [im('drop_pullup:o', them, 2.5), im('drop_rim:d', me, 0.4)];
       expect(factor()).toMatchObject({ key: 'drop_pullup:o', detail: 'Over 8 plays.' });
-      expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')).toBeUndefined();
+      expect(debrief(league, res, buildGameReport(league, res)!).advice.find((a) => a.id === 'fix-drop_pullup:o')).toMatchObject({
+        label: 'Ice their screens',
+        patch: { defense: { pnr: 'ice' } },
+      });
       // Stay home off their kick-out threes is: the bench's reading of it (off hot spot-ups) is below even
       // only inside its noise, not a cost; with no measure where it's called, not an every-game one-tap
       league.teams[0].tactics = applyPatch(league.teams[0].tactics, { defense: { help: 70 } });

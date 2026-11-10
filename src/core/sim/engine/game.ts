@@ -5,21 +5,22 @@
 // defense, possession, transition, setPlays, the actions (pnr, isolation, postUp, handoff, motion),
 // shots, rebounds, fouls and record.
 
-import type { CallId, GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, ShotZone, Tactics, TacticImpact, XShots } from '../../types';
+import type { CallId, GameAdjustment, GameResult, LineupStat, PbpEntry, Player, SetId, SetStat, ShotRecord, Tactics, TacticImpact, XShots } from '../../types';
 import { Rng, clamp } from '../../random';
 import { archetype, composites } from '../../ratings';
 import { GAME } from '../../constants';
 import { type PlanPlayer, buildMinutePlan, planInputs, planRoles } from '../rotationPlan';
 import type { FinishType, PossLog } from '../log';
-import { cloneTactics, defRoleOf, shapeOf, withMentality } from '../tactics';
-import { isCallId, readAfter } from '../sets';
-import { K, ftChance, lev } from './constants';
+import { cloneTactics, defRoleOf, withMentality } from '../tactics';
+import { SETS, bestFor, isCallId, readAfter, setFit } from '../sets';
+import { K, ftChance } from './constants';
+import { TK } from './tk';
 import { type SP, type ST, type SetPlay, type SimTeamInput, type SimOptions, type InGameInjury, type Ctx, type Stint, newBox, ACTION_LIST, freedomMult, mix } from './state';
 import { coachMethods } from './coach';
 import { clockMethods } from './clock';
 import { rotationMethods } from './rotation';
 import { usageMethods } from './usage';
-import { defenseMethods } from './defense';
+import { defenseMethods, roleEdge } from './defense';
 import { possessionMethods } from './possession';
 import { transitionMethods } from './transition';
 import { setPlaysMethods } from './setPlays';
@@ -28,6 +29,7 @@ import { isolationMethods } from './isolation';
 import { postUpMethods } from './postUp';
 import { handoffMethods } from './handoff';
 import { motionMethods } from './motion';
+import { offenseMethods } from './offense';
 import { shotsMethods } from './shots';
 import { reboundsMethods } from './rebounds';
 import { foulsMethods } from './fouls';
@@ -57,22 +59,53 @@ function cachedPlan(players: PlanPlayer[]): number[][] {
  * did in 28-33% of the chances; with two in three, 43%), each takes the two-for-one when it's there
  * in his own share of periods (10-60%: a trip begun with 33-40 seconds left shoots in time for another
  * 64-65% of the time, half of them without trying to; it was 89% with four coaches in five taking every one), and down a possession late most foul at
- * once, 81-86% of the time, the rest playing for a steal first. A staff whose base defense is a zone plays it in stretches (K.zoneShare).
+ * once, 81-86% of the time, the rest playing for a steal first. A staff plays a base zone or a game
+ * plan's zone or junk defense in stretches (TK.zonePlanned, TK.junkPlanned), mixes its own zone into a man
+ * defense at its style's share, switches small screens by its own habit, and calls sets out of timeouts.
  * The user's side plays its settings as rules.
  */
 export function coachHabits(input: SimTeamInput): ST['habit'] {
   const m = input.team.tactics.manage;
-  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne ? 1 : 0, lateFoul: 0.85, earlyO: 1, zone: 1, ride: 0, calls: 0 };
+  const rules: ST['habit'] = {
+    foulUp3: m.foulUp3,
+    twoForOne: m.twoForOne ? 1 : 0,
+    lateFoul: 0.85,
+    earlyO: 1,
+    zone: 1,
+    zoneMix: 0,
+    zoneKind: 'zone23',
+    junk: 1,
+    smallSwitch: TK.screen.smallSwitch,
+    blitzStar: 0,
+    upShooter: 0,
+    odSub: m.odSubs !== false,
+    ato: 0,
+    // (the user's assistant, adjusting a simmed game at the breaks, has the AI coaches' whole menu: both ends)
+    offAdj: input.adjust ? 1 : 0,
+    ride: 0,
+    calls: 0,
+  };
   if (!input.adjust || input.team.assistant) return rules;
   let h = input.team.tid + 1;
   for (const ch of input.team.coach?.name ?? '') h = mix(h, ch.charCodeAt(0));
   const u = (n: number) => mix(h, n) / 4294967296;
+  const style = input.team.coach?.style;
   return {
     foulUp3: m.foulUp3 && u(1) < 0.55,
     twoForOne: m.twoForOne ? 0.1 + 0.5 * u(2) : 0,
     lateFoul: 0.74 + 0.2 * u(3),
     earlyO: 0.7 + 0.6 * u(4),
-    zone: K.zoneShare,
+    // (a base zone, or a game plan's, in stretches; his own zone mixed into a man defense at his style's share)
+    zone: TK.zonePlanned,
+    zoneMix: style?.zone ?? 0,
+    zoneKind: style?.zoneKind ?? 'zone23',
+    junk: TK.junkPlanned,
+    smallSwitch: style?.smallSwitch ?? 0.45 + 0.45 * u(7),
+    blitzStar: TK.blitzStar.share * (0.5 + u(9)),
+    upShooter: 0.5 + 0.45 * u(10),
+    odSub: u(11) < TK.odSub.habit,
+    ato: TK.ato * (0.5 + u(8)),
+    offAdj: 1,
     ride: 0.5 + u(5),
     calls: 0.5 + u(6),
   };
@@ -152,6 +185,8 @@ export class GameSim {
   possFinish: FinishType = 'misc';
   /** The player an after-timeout isolation is for: the next pickActor hands it to him. */
   calledActor: SP | null = null;
+  /** The last defensive board came off a missed three: it comes off long (TK.longRebound). */
+  longReb = false;
   /** The defense fouled to give: this trip's first half-court action is an inbounds play. */
   inbound = false;
   /** Openness this trip's first half-court action starts with (a defense set because it didn't crash the glass). */
@@ -253,6 +288,7 @@ export class GameSim {
       const role = tactics.offense.roles[p.pid] ?? archetype(p.ratings).role;
       const sp: SP = {
         drole: defRoleOf(tactics.defense, p.pid),
+        dm: 1,
         glass: tactics.offense.glass?.[p.pid] ?? 0,
         pid: p.pid,
         name: shortName(p),
@@ -303,6 +339,7 @@ export class GameSim {
         // a game-time decision: he plays through it, at a higher risk of getting hurt
         sp.risk = K.gameTimeRisk;
       }
+      sp.dm = roleEdge(sp);
       return sp;
     });
     // teammates who share a last name get as much of their first names as tells them apart in
@@ -351,6 +388,8 @@ export class GameSim {
       lineupKey: '',
       ls: null,
       cap: { pnr: 1, iso: 1, post: 1, handoff: 1, motion: 1 },
+      acts: { pnr: 0, iso: 0, post: 0, handoff: 0, motion: 0, n: 0 },
+      zoneSeen: 0,
       injMult: input.injuryMult ?? 1,
       subSig: [],
       manualSubs: false,
@@ -433,48 +472,6 @@ export class GameSim {
       .join('-');
     t.ls = null;
     for (const a of ACTION_LIST) t.cap[a] = this.capability(t, a);
-  }
-
-  /** The lineup's spacing: its five's average (horns crowds it a little, see K.shape). */
-  shapeSpacing(t: ST): number {
-    const avg = t.on.reduce((a, p) => a + p.c.spacing, 0) / t.on.length;
-    return shapeOf(t.t.offense) === 'horns' ? avg + lev(K.shape.horns.space) : avg;
-  }
-
-  /**
-   * The openness the offense's shape gives a half-court shot (none in transition or on a putback):
-   * five-out's open paint for shots at the rim and in the paint, as much as the five's shooting
-   * keeps the defense out of it; the double post's crowded paint for everyone but its bigs, who
-   * finish better inside.
-   */
-  shapeOpen(t: ST, sh: SP, zone: ShotZone, finish: FinishType): number {
-    if (finish === 'transition' || finish === 'putback' || (zone !== 'rim' && zone !== 'paint')) return 0;
-    const shape = shapeOf(t.t.offense);
-    if (shape === 'fiveOut') {
-      let exposed = 0;
-      for (const p of t.on) exposed += Math.max(0, 40 - p.c.spacing) / 40;
-      return lev(K.shape.fiveOut.rim * (1 - K.shape.fiveOut.exposed * exposed));
-    }
-    if (shape === 'twoIn') {
-      const [a, b] = this.bigTwo(t);
-      if (sh === a || sh === b) return lev(K.shape.twoIn.bigs);
-      const waste = Math.max(0, a.c.spacing - K.shape.twoIn.inside) + Math.max(0, b.c.spacing - K.shape.twoIn.inside);
-      return -lev(K.shape.twoIn.crowd + K.shape.twoIn.waste * waste);
-    }
-    return 0;
-  }
-
-  /** The two biggest players on the floor (by height, then rebounding): a double post's bigs, horns' elbows. */
-  bigTwo(t: ST): [SP, SP] {
-    const s = [...t.on].sort((a, b) => b.r.hgt - a.r.hgt || b.c.orb - a.c.orb);
-    return [s[0], s[1] ?? s[0]];
-  }
-
-  /** The team's offensive crashing (0-100) with the five on the floor: the team's setting, and each player's glass duty on top. */
-  crashOf(t: ST): number {
-    let duty = 0;
-    for (const p of t.on) duty += p.glass;
-    return duty ? clamp(t.t.offense.crashBoards + K.glassDuty.team * duty, 0, 100) : t.t.offense.crashBoards;
   }
 
   // ------------------------------------------------------------ public control API (live games)
@@ -564,6 +561,11 @@ export class GameSim {
     this.timeoutStep = true;
     this.timeoutSide = side;
     if (t.t.manage.ato) t.atoNext = true;
+    // an AI coach draws one up now and then: the set his five on the floor runs best (TK.ato)
+    else if (t.habit.ato > 0 && !t.nextSet && t.on.length >= 5 && this.rng.chance(t.habit.ato)) {
+      const pick = this.atoSet(t);
+      if (pick) t.nextSet = { id: pick, pid: null, ai: true };
+    }
     // (the TV's timeouts and the late ones are no new look at what is being exploited)
     if (!routine) {
       this.adjust(this.T[0]);
@@ -572,6 +574,29 @@ export class GameSim {
     this.checkSubs(this.T[0], true);
     this.checkSubs(this.T[1], true);
     return true;
+  }
+
+  /**
+   * The set an AI coach calls out of a timeout: the one whose best fit on the floor fits it best (sets
+   * he has run tonight are read: each run counts against it). In the last 36 seconds of the fourth
+   * quarter or overtime the score picks the look: down one or two, no set built for a three (Elevator
+   * doors, Hammer, Floppy); down three, only those.
+   */
+  atoSet(t: ST): SetId | null {
+    let best: SetId | null = null;
+    let top = -Infinity;
+    const late = this.q >= 4 && this.clock <= 36;
+    const diff = t.score - this.T[1 - t.side].score;
+    const forThree = (id: SetId) => id === 'elevator' || id === 'hammer' || id === 'floppy';
+    for (const id of Object.keys(SETS) as SetId[]) {
+      if (late && (diff === -1 || diff === -2) && forThree(id)) continue;
+      if (late && diff === -3 && !forThree(id)) continue;
+      const star = bestFor(id, t.on);
+      if (!star) continue;
+      const score = setFit(id, star) - 6 * (t.setRuns.get(id) ?? 0);
+      if (score > top) [best, top] = [id, score];
+    }
+    return best;
   }
 
   /** The team on `side` asked for a timeout that waits for the next dead ball. */
@@ -634,6 +659,7 @@ export interface GameSim
     PostUpMethods,
     HandoffMethods,
     MotionMethods,
+    OffenseMethods,
     ShotsMethods,
     ReboundsMethods,
     FoulsMethods,
@@ -652,6 +678,7 @@ type IsolationMethods = typeof isolationMethods;
 type PostUpMethods = typeof postUpMethods;
 type HandoffMethods = typeof handoffMethods;
 type MotionMethods = typeof motionMethods;
+type OffenseMethods = typeof offenseMethods;
 type ShotsMethods = typeof shotsMethods;
 type ReboundsMethods = typeof reboundsMethods;
 type FoulsMethods = typeof foulsMethods;
@@ -672,6 +699,7 @@ for (const part of [
   postUpMethods,
   handoffMethods,
   motionMethods,
+  offenseMethods,
   shotsMethods,
   reboundsMethods,
   foulsMethods,

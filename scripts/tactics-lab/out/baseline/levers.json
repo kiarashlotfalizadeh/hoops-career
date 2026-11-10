@@ -1,0 +1,5374 @@
+{
+ "meta": {
+  "label": "baseline",
+  "started": "2026-11-10T06:20:43.242Z",
+  "commit": "f27e467",
+  "srcDirty": false,
+  "node": "v23.10.0",
+  "seconds": 20.4
+ },
+ "params": {
+  "games": 200,
+  "matchups": [
+   {
+    "a": "CLE",
+    "b": "GSW",
+    "seed": 4247
+   },
+   {
+    "a": "LAL",
+    "b": "PHI",
+    "seed": 4255
+   },
+   {
+    "a": "ATL",
+    "b": "BOS",
+    "seed": 4242
+   },
+   {
+    "a": "TOR",
+    "b": "CHA",
+    "seed": 4269
+   },
+   {
+    "a": "DEN",
+    "b": "OKC",
+    "seed": 4249
+   },
+   {
+    "a": "NYK",
+    "b": "MIL",
+    "seed": 4261
+   }
+  ],
+  "settings": 47,
+  "schema": true,
+  "quick": false
+ },
+ "base": {
+  "net": 4.499,
+  "pace": 99.75,
+  "own": {
+   "poss": 99.77,
+   "threeRate": 0.4115,
+   "rimRate": 0.359,
+   "ftRate": 0.2898,
+   "tov": 0.1371,
+   "orb": 0.2696,
+   "efg": 0.5621,
+   "playTypes": {
+    "spotup": 0.3133,
+    "handoff": 0.044,
+    "cut": 0.1218,
+    "transition": 0.1203,
+    "pnrRoll": 0.12,
+    "putback": 0.0467,
+    "post": 0.0511,
+    "pnrBH": 0.0767,
+    "iso": 0.0419,
+    "misc": 0.0261,
+    "offscreen": 0.0382
+   }
+  },
+  "opp": {
+   "poss": 99.7308,
+   "threeRate": 0.4429,
+   "rimRate": 0.3244,
+   "ftRate": 0.2651,
+   "tov": 0.1558,
+   "orb": 0.2545,
+   "efg": 0.5552,
+   "playTypes": {
+    "pnrBH": 0.0878,
+    "iso": 0.07,
+    "handoff": 0.0641,
+    "spotup": 0.2783,
+    "putback": 0.0426,
+    "pnrRoll": 0.1324,
+    "transition": 0.0908,
+    "offscreen": 0.0565,
+    "cut": 0.0928,
+    "misc": 0.0252,
+    "post": 0.0594
+   }
+  },
+  "perMatchup": [
+   {
+    "a": "CLE",
+    "b": "GSW",
+    "net": 14.43,
+    "netSE": 0.904,
+    "pace": 101.27
+   },
+   {
+    "a": "LAL",
+    "b": "PHI",
+    "net": -0.566,
+    "netSE": 0.92,
+    "pace": 103.77
+   },
+   {
+    "a": "ATL",
+    "b": "BOS",
+    "net": -9.665,
+    "netSE": 0.926,
+    "pace": 98.19
+   },
+   {
+    "a": "TOR",
+    "b": "CHA",
+    "net": 13.415,
+    "netSE": 0.827,
+    "pace": 100.9
+   },
+   {
+    "a": "DEN",
+    "b": "OKC",
+    "net": -0.205,
+    "netSE": 1.052,
+    "pace": 97.43
+   },
+   {
+    "a": "NYK",
+    "b": "MIL",
+    "net": 9.582,
+    "netSE": 0.958,
+    "pace": 96.96
+   }
+  ]
+ },
+ "sides": [
+  {
+   "tid": 5,
+   "abbrev": "CLE",
+   "offPreset": "paceSpace",
+   "defPreset": "zone",
+   "mentality": null,
+   "offense": {
+    "pace": 88,
+    "transition": 63,
+    "threePoint": 64,
+    "rimAttack": 58,
+    "crashBoards": 45,
+    "actions": {
+     "pnr": 60,
+     "iso": 28,
+     "post": 10,
+     "handoff": 38,
+     "motion": 60
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "zone23",
+    "pnr": "drop",
+    "help": 56,
+    "pressure": 44,
+    "press": "none",
+    "getBack": 62,
+    "switchOffBall": false,
+    "starPlan": "none",
+    "physicality": 48
+   }
+  },
+  {
+   "tid": 9,
+   "abbrev": "GSW",
+   "offPreset": "helio",
+   "defPreset": "ice",
+   "mentality": null,
+   "offense": {
+    "pace": 44,
+    "transition": 45,
+    "threePoint": 64,
+    "rimAttack": 60,
+    "crashBoards": 55,
+    "actions": {
+     "pnr": 66,
+     "iso": 66,
+     "post": 18,
+     "handoff": 42,
+     "motion": 50
+    },
+    "huntMismatch": true
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "ice",
+    "help": 60,
+    "pressure": 52,
+    "press": "none",
+    "getBack": 60,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 50
+   }
+  },
+  {
+   "tid": 13,
+   "abbrev": "LAL",
+   "offPreset": "paceSpace",
+   "defPreset": "ice",
+   "mentality": null,
+   "offense": {
+    "pace": 88,
+    "transition": 63,
+    "threePoint": 64,
+    "rimAttack": 58,
+    "crashBoards": 45,
+    "actions": {
+     "pnr": 60,
+     "iso": 28,
+     "post": 10,
+     "handoff": 38,
+     "motion": 60
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "ice",
+    "help": 60,
+    "pressure": 52,
+    "press": "none",
+    "getBack": 60,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 50
+   }
+  },
+  {
+   "tid": 22,
+   "abbrev": "PHI",
+   "offPreset": "fiveOut",
+   "defPreset": "ice",
+   "mentality": null,
+   "offense": {
+    "pace": 44,
+    "transition": 44,
+    "threePoint": 70,
+    "rimAttack": 55,
+    "crashBoards": 42,
+    "actions": {
+     "pnr": 58,
+     "iso": 18,
+     "post": 10,
+     "handoff": 62,
+     "motion": 88
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "ice",
+    "help": 60,
+    "pressure": 52,
+    "press": "none",
+    "getBack": 60,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 50
+   }
+  },
+  {
+   "tid": 0,
+   "abbrev": "ATL",
+   "offPreset": "fiveOut",
+   "defPreset": "blitz",
+   "mentality": null,
+   "offense": {
+    "pace": 44,
+    "transition": 44,
+    "threePoint": 70,
+    "rimAttack": 55,
+    "crashBoards": 42,
+    "actions": {
+     "pnr": 58,
+     "iso": 18,
+     "post": 10,
+     "handoff": 62,
+     "motion": 88
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "blitz",
+    "help": 55,
+    "pressure": 74,
+    "press": "none",
+    "getBack": 55,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 58
+   }
+  },
+  {
+   "tid": 1,
+   "abbrev": "BOS",
+   "offPreset": "hub",
+   "defPreset": "hedge",
+   "mentality": null,
+   "offense": {
+    "pace": 46,
+    "transition": 48,
+    "threePoint": 56,
+    "rimAttack": 62,
+    "crashBoards": 55,
+    "actions": {
+     "pnr": 60,
+     "iso": 20,
+     "post": 48,
+     "handoff": 72,
+     "motion": 52
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "hedge",
+    "help": 52,
+    "pressure": 56,
+    "press": "none",
+    "getBack": 58,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 52
+   }
+  },
+  {
+   "tid": 27,
+   "abbrev": "TOR",
+   "offPreset": "paceSpace",
+   "defPreset": "blitz",
+   "mentality": null,
+   "offense": {
+    "pace": 88,
+    "transition": 63,
+    "threePoint": 64,
+    "rimAttack": 58,
+    "crashBoards": 45,
+    "actions": {
+     "pnr": 60,
+     "iso": 28,
+     "post": 10,
+     "handoff": 38,
+     "motion": 60
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "blitz",
+    "help": 55,
+    "pressure": 74,
+    "press": "none",
+    "getBack": 55,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 58
+   }
+  },
+  {
+   "tid": 3,
+   "abbrev": "CHA",
+   "offPreset": "helio",
+   "defPreset": "zone",
+   "mentality": null,
+   "offense": {
+    "pace": 44,
+    "transition": 45,
+    "threePoint": 64,
+    "rimAttack": 60,
+    "crashBoards": 55,
+    "actions": {
+     "pnr": 66,
+     "iso": 66,
+     "post": 18,
+     "handoff": 42,
+     "motion": 50
+    },
+    "huntMismatch": true
+   },
+   "defense": {
+    "scheme": "zone23",
+    "pnr": "drop",
+    "help": 56,
+    "pressure": 44,
+    "press": "none",
+    "getBack": 62,
+    "switchOffBall": false,
+    "starPlan": "none",
+    "physicality": 48
+   }
+  },
+  {
+   "tid": 7,
+   "abbrev": "DEN",
+   "offPreset": "fiveOut",
+   "defPreset": "ice",
+   "mentality": null,
+   "offense": {
+    "pace": 44,
+    "transition": 44,
+    "threePoint": 70,
+    "rimAttack": 55,
+    "crashBoards": 42,
+    "actions": {
+     "pnr": 58,
+     "iso": 18,
+     "post": 10,
+     "handoff": 62,
+     "motion": 88
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "ice",
+    "help": 60,
+    "pressure": 52,
+    "press": "none",
+    "getBack": 60,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 50
+   }
+  },
+  {
+   "tid": 20,
+   "abbrev": "OKC",
+   "offPreset": "grind",
+   "defPreset": "blitz",
+   "mentality": null,
+   "offense": {
+    "pace": 28,
+    "transition": 32,
+    "threePoint": 56,
+    "rimAttack": 72,
+    "crashBoards": 66,
+    "actions": {
+     "pnr": 58,
+     "iso": 45,
+     "post": 58,
+     "handoff": 30,
+     "motion": 38
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "blitz",
+    "help": 55,
+    "pressure": 74,
+    "press": "none",
+    "getBack": 55,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 58
+   }
+  },
+  {
+   "tid": 19,
+   "abbrev": "NYK",
+   "offPreset": "grind",
+   "defPreset": "hedge",
+   "mentality": null,
+   "offense": {
+    "pace": 28,
+    "transition": 32,
+    "threePoint": 56,
+    "rimAttack": 72,
+    "crashBoards": 66,
+    "actions": {
+     "pnr": 58,
+     "iso": 45,
+     "post": 58,
+     "handoff": 30,
+     "motion": 38
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "hedge",
+    "help": 52,
+    "pressure": 56,
+    "press": "none",
+    "getBack": 58,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 52
+   }
+  },
+  {
+   "tid": 16,
+   "abbrev": "MIL",
+   "offPreset": "hub",
+   "defPreset": "ice",
+   "mentality": null,
+   "offense": {
+    "pace": 46,
+    "transition": 48,
+    "threePoint": 56,
+    "rimAttack": 62,
+    "crashBoards": 55,
+    "actions": {
+     "pnr": 60,
+     "iso": 20,
+     "post": 48,
+     "handoff": 72,
+     "motion": 52
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "ice",
+    "help": 60,
+    "pressure": 52,
+    "press": "none",
+    "getBack": 60,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 50
+   }
+  }
+ ],
+ "rows": [
+  {
+   "name": "pace 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "pace": 0
+    }
+   },
+   "status": "ok",
+   "net": -0.676,
+   "se": 0.422,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.806,
+     "se": 1.081,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -0.03,
+     "se": 1.04,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.603,
+     "se": 1.044,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.117,
+     "se": 1.023,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -2.328,
+     "se": 1.083,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.376,
+     "se": 0.918,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -5.5425,
+    "threeRate": -0.0021,
+    "rimRate": -0.0002,
+    "ftRate": -0.0003,
+    "tov": 0.006,
+    "orb": 0.0044,
+    "efg": 0,
+    "playTypes": {
+     "spotup": -0.0017,
+     "handoff": -0.0006,
+     "cut": -0.0031,
+     "transition": 0.0003,
+     "pnrRoll": 0.0002,
+     "putback": 0.0007,
+     "post": -0.0005,
+     "pnrBH": -0.0006,
+     "iso": 0.0012,
+     "misc": 0.0051,
+     "offscreen": -0.001
+    }
+   },
+   "opp": {
+    "poss": -5.5125,
+    "threeRate": 0.0033,
+    "rimRate": -0.0007,
+    "ftRate": -0.0058,
+    "tov": 0.0011,
+    "orb": -0.0023,
+    "efg": 0.0016,
+    "playTypes": {
+     "pnrBH": -0.0018,
+     "iso": -0.0002,
+     "handoff": 0.0003,
+     "spotup": 0.0003,
+     "putback": -0.0006,
+     "pnrRoll": 0,
+     "transition": -0.0004,
+     "offscreen": 0.0011,
+     "cut": -0.0011,
+     "misc": 0.0018,
+     "post": 0.0007
+    }
+   }
+  },
+  {
+   "name": "pace 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "pace": 100
+    }
+   },
+   "status": "ok",
+   "net": 0.034,
+   "se": 0.394,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.098,
+     "se": 0.898,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.831,
+     "se": 0.953,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.569,
+     "se": 0.97,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.729,
+     "se": 0.809,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.09,
+     "se": 1.135,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.323,
+     "se": 0.994,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 4.0108,
+    "threeRate": -0.0013,
+    "rimRate": 0.0012,
+    "ftRate": 0.0043,
+    "tov": -0.0019,
+    "orb": -0.0005,
+    "efg": -0.003,
+    "playTypes": {
+     "spotup": -0.0015,
+     "handoff": 0.0003,
+     "cut": -0.0012,
+     "transition": 0.0007,
+     "pnrRoll": 0.0013,
+     "putback": 0.0011,
+     "post": -0.0005,
+     "pnrBH": 0.0019,
+     "iso": 0.0006,
+     "misc": -0.0029,
+     "offscreen": 0.0002
+    }
+   },
+   "opp": {
+    "poss": 4.015,
+    "threeRate": 0.0022,
+    "rimRate": -0.0013,
+    "ftRate": 0.0003,
+    "tov": 0.0003,
+    "orb": -0.0007,
+    "efg": 0.0013,
+    "playTypes": {
+     "pnrBH": 0.0005,
+     "iso": -0.0003,
+     "handoff": -0.0012,
+     "spotup": 0.0008,
+     "putback": -0.0001,
+     "pnrRoll": 0.001,
+     "transition": -0.0001,
+     "offscreen": 0.0004,
+     "cut": -0.001,
+     "misc": -0.0004,
+     "post": 0.0004
+    }
+   }
+  },
+  {
+   "name": "transition 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "transition": 0
+    }
+   },
+   "status": "ok",
+   "net": -0.595,
+   "se": 0.377,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.644,
+     "se": 0.933,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.516,
+     "se": 0.966,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.66,
+     "se": 0.894,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.285,
+     "se": 0.924,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.015,
+     "se": 0.944,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.511,
+     "se": 0.885,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.9042,
+    "threeRate": 0.0008,
+    "rimRate": -0.0164,
+    "ftRate": -0.0034,
+    "tov": 0.002,
+    "orb": 0,
+    "efg": -0.0025,
+    "playTypes": {
+     "spotup": 0.0213,
+     "handoff": 0.0035,
+     "cut": 0.0068,
+     "transition": -0.0538,
+     "pnrRoll": 0.007,
+     "putback": 0.0012,
+     "post": 0.0031,
+     "pnrBH": 0.0059,
+     "iso": 0.0033,
+     "misc": -0.0002,
+     "offscreen": 0.002
+    }
+   },
+   "opp": {
+    "poss": -0.9125,
+    "threeRate": 0.0005,
+    "rimRate": -0.0003,
+    "ftRate": -0.0053,
+    "tov": 0.0011,
+    "orb": -0.0025,
+    "efg": 0.0002,
+    "playTypes": {
+     "pnrBH": -0.0007,
+     "iso": 0.0008,
+     "handoff": -0.0016,
+     "spotup": 0.0015,
+     "putback": 0,
+     "pnrRoll": 0,
+     "transition": 0,
+     "offscreen": 0.0003,
+     "cut": -0.0014,
+     "misc": 0.0011,
+     "post": 0
+    }
+   }
+  },
+  {
+   "name": "transition 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "transition": 100
+    }
+   },
+   "status": "ok",
+   "net": 0.973,
+   "se": 0.366,
+   "positive": 5,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.89,
+     "se": 0.786,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.047,
+     "se": 0.846,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.769,
+     "se": 0.962,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 1.868,
+     "se": 0.858,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.051,
+     "se": 0.958,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.312,
+     "se": 0.953,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 1.0133,
+    "threeRate": -0.0023,
+    "rimRate": 0.0136,
+    "ftRate": -0.0054,
+    "tov": -0.0026,
+    "orb": 0.004,
+    "efg": 0,
+    "playTypes": {
+     "spotup": -0.0176,
+     "handoff": -0.0031,
+     "cut": -0.0086,
+     "transition": 0.0459,
+     "pnrRoll": -0.0059,
+     "putback": 0.0012,
+     "post": -0.0036,
+     "pnrBH": -0.004,
+     "iso": -0.0016,
+     "misc": -0.0004,
+     "offscreen": -0.0023
+    }
+   },
+   "opp": {
+    "poss": 0.9192,
+    "threeRate": 0.0031,
+    "rimRate": 0.0004,
+    "ftRate": -0.0012,
+    "tov": 0.0015,
+    "orb": -0.0022,
+    "efg": 0.0009,
+    "playTypes": {
+     "pnrBH": 0.0002,
+     "iso": -0.0002,
+     "handoff": -0.0013,
+     "spotup": 0.0031,
+     "putback": -0.0011,
+     "pnrRoll": -0.0004,
+     "transition": -0.0002,
+     "offscreen": 0.001,
+     "cut": -0.0005,
+     "misc": -0.0004,
+     "post": -0.0001
+    }
+   }
+  },
+  {
+   "name": "threePoint 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "threePoint": 0
+    }
+   },
+   "status": "ok",
+   "net": -1.022,
+   "se": 0.371,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.04,
+     "se": 0.857,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.948,
+     "se": 0.919,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.229,
+     "se": 0.853,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.419,
+     "se": 0.923,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.828,
+     "se": 0.966,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.56,
+     "se": 0.932,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.155,
+    "threeRate": -0.1128,
+    "rimRate": 0.0323,
+    "ftRate": 0.0212,
+    "tov": -0.0004,
+    "orb": 0.0009,
+    "efg": -0.0085,
+    "playTypes": {
+     "spotup": -0.0012,
+     "handoff": -0.001,
+     "cut": -0.0022,
+     "transition": 0.0025,
+     "pnrRoll": -0.0023,
+     "putback": -0.0017,
+     "post": 0.0001,
+     "pnrBH": 0.0045,
+     "iso": 0.0029,
+     "misc": -0.0005,
+     "offscreen": -0.0011
+    }
+   },
+   "opp": {
+    "poss": 0.1083,
+    "threeRate": 0.0025,
+    "rimRate": -0.0006,
+    "ftRate": -0.0003,
+    "tov": 0.0011,
+    "orb": -0.0028,
+    "efg": 0.0011,
+    "playTypes": {
+     "pnrBH": -0.0003,
+     "iso": -0.0002,
+     "handoff": 0.0003,
+     "spotup": 0.0006,
+     "putback": -0.0008,
+     "pnrRoll": -0.0005,
+     "transition": -0.0008,
+     "offscreen": 0.0009,
+     "cut": -0.0008,
+     "misc": 0.001,
+     "post": 0.0006
+    }
+   }
+  },
+  {
+   "name": "threePoint 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "threePoint": 100
+    }
+   },
+   "status": "ok",
+   "net": 0.078,
+   "se": 0.38,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.567,
+     "se": 0.892,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.6,
+     "se": 0.902,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.388,
+     "se": 0.951,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.119,
+     "se": 0.997,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.678,
+     "se": 0.92,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.155,
+     "se": 0.92,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.2575,
+    "threeRate": 0.0429,
+    "rimRate": -0.0072,
+    "ftRate": -0.0077,
+    "tov": 0.0001,
+    "orb": -0.0001,
+    "efg": -0.0011,
+    "playTypes": {
+     "spotup": -0.0012,
+     "handoff": 0.0006,
+     "cut": 0.0006,
+     "transition": 0.0001,
+     "pnrRoll": 0.0028,
+     "putback": 0.0016,
+     "post": -0.0004,
+     "pnrBH": -0.0032,
+     "iso": -0.0006,
+     "misc": -0.0001,
+     "offscreen": -0.0001
+    }
+   },
+   "opp": {
+    "poss": 0.1417,
+    "threeRate": 0.0011,
+    "rimRate": -0.0027,
+    "ftRate": 0.0002,
+    "tov": -0.0002,
+    "orb": -0.0027,
+    "efg": 0.001,
+    "playTypes": {
+     "pnrBH": 0.0005,
+     "iso": -0.0001,
+     "handoff": -0.0004,
+     "spotup": 0.0005,
+     "putback": 0.0001,
+     "pnrRoll": -0.0009,
+     "transition": 0.0009,
+     "offscreen": 0.0002,
+     "cut": -0.0015,
+     "misc": -0.0002,
+     "post": 0.0009
+    }
+   }
+  },
+  {
+   "name": "rimAttack 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "rimAttack": 0
+    }
+   },
+   "status": "ok",
+   "net": -0.773,
+   "se": 0.374,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.88,
+     "se": 0.867,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.719,
+     "se": 0.966,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.826,
+     "se": 0.88,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.111,
+     "se": 0.884,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.81,
+     "se": 0.967,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.728,
+     "se": 0.926,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0125,
+    "threeRate": 0.0232,
+    "rimRate": -0.0241,
+    "ftRate": -0.0164,
+    "tov": 0.0023,
+    "orb": 0.0005,
+    "efg": -0.0004,
+    "playTypes": {
+     "spotup": 0.0152,
+     "handoff": -0.0005,
+     "cut": -0.0172,
+     "transition": 0.0008,
+     "pnrRoll": 0.0047,
+     "putback": 0.0005,
+     "post": -0.0005,
+     "pnrBH": -0.0028,
+     "iso": 0.0002,
+     "misc": 0.0004,
+     "offscreen": -0.0008
+    }
+   },
+   "opp": {
+    "poss": -0.0258,
+    "threeRate": 0.0025,
+    "rimRate": -0.0022,
+    "ftRate": 0.0018,
+    "tov": -0.0012,
+    "orb": -0.0032,
+    "efg": 0.0014,
+    "playTypes": {
+     "pnrBH": -0.0002,
+     "iso": 0.0004,
+     "handoff": -0.0009,
+     "spotup": 0.0016,
+     "putback": -0.0007,
+     "pnrRoll": -0.0001,
+     "transition": 0.0002,
+     "offscreen": 0.0005,
+     "cut": -0.0014,
+     "misc": 0.0004,
+     "post": 0.0002
+    }
+   }
+  },
+  {
+   "name": "rimAttack 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "rimAttack": 100
+    }
+   },
+   "status": "ok",
+   "net": 0.23,
+   "se": 0.337,
+   "positive": 3,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.632,
+     "se": 0.784,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.52,
+     "se": 0.844,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.827,
+     "se": 0.85,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.371,
+     "se": 0.85,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.497,
+     "se": 0.871,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.728,
+     "se": 0.74,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.1342,
+    "threeRate": -0.0153,
+    "rimRate": 0.0126,
+    "ftRate": 0.0071,
+    "tov": -0.0017,
+    "orb": 0.0002,
+    "efg": -0.0005,
+    "playTypes": {
+     "spotup": -0.0094,
+     "handoff": 0.0006,
+     "cut": 0.0067,
+     "transition": 0.0008,
+     "pnrRoll": -0.0011,
+     "putback": -0.0008,
+     "post": 0.0001,
+     "pnrBH": 0.0028,
+     "iso": 0.0009,
+     "misc": -0.0003,
+     "offscreen": -0.0003
+    }
+   },
+   "opp": {
+    "poss": 0.0942,
+    "threeRate": -0.0001,
+    "rimRate": 0.0003,
+    "ftRate": -0.001,
+    "tov": 0.0002,
+    "orb": -0.0028,
+    "efg": 0.0014,
+    "playTypes": {
+     "pnrBH": -0.0008,
+     "iso": 0.0001,
+     "handoff": -0.0011,
+     "spotup": 0.0011,
+     "putback": -0.0007,
+     "pnrRoll": 0.0014,
+     "transition": -0.0003,
+     "offscreen": 0,
+     "cut": -0.0002,
+     "misc": -0.0003,
+     "post": 0.0006
+    }
+   }
+  },
+  {
+   "name": "crashBoards 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "crashBoards": 0
+    }
+   },
+   "status": "ok",
+   "net": -0.532,
+   "se": 0.378,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.728,
+     "se": 0.841,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -0.116,
+     "se": 0.958,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.326,
+     "se": 0.883,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.727,
+     "se": 0.952,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.963,
+     "se": 0.917,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.016,
+     "se": 0.993,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.3208,
+    "threeRate": 0.0022,
+    "rimRate": -0.0017,
+    "ftRate": -0.0005,
+    "tov": -0.0008,
+    "orb": -0.0478,
+    "efg": -0.0032,
+    "playTypes": {
+     "spotup": 0.0022,
+     "handoff": 0.0003,
+     "cut": -0.0012,
+     "transition": 0.005,
+     "pnrRoll": 0.0017,
+     "putback": -0.0087,
+     "post": -0.0002,
+     "pnrBH": 0.0004,
+     "iso": 0.001,
+     "misc": -0.0002,
+     "offscreen": -0.0003
+    }
+   },
+   "opp": {
+    "poss": -0.3192,
+    "threeRate": -0.0008,
+    "rimRate": -0.0136,
+    "ftRate": 0.0028,
+    "tov": 0.0042,
+    "orb": -0.0026,
+    "efg": -0.0116,
+    "playTypes": {
+     "pnrBH": 0.0025,
+     "iso": 0.0029,
+     "handoff": 0.0035,
+     "spotup": 0.0134,
+     "putback": 0.0004,
+     "pnrRoll": 0.0066,
+     "transition": -0.0413,
+     "offscreen": 0.004,
+     "cut": 0.0034,
+     "misc": 0.0009,
+     "post": 0.0038
+    }
+   }
+  },
+  {
+   "name": "crashBoards 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "crashBoards": 100
+    }
+   },
+   "status": "ok",
+   "net": -1.493,
+   "se": 0.418,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.249,
+     "se": 0.921,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.239,
+     "se": 1.114,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.448,
+     "se": 1.038,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.615,
+     "se": 0.997,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -4.303,
+     "se": 1.032,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -3.581,
+     "se": 1.039,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 2.6408,
+    "threeRate": -0.0096,
+    "rimRate": 0.0062,
+    "ftRate": 0.0045,
+    "tov": 0.0016,
+    "orb": 0.0531,
+    "efg": -0.0019,
+    "playTypes": {
+     "spotup": -0.0069,
+     "handoff": 0,
+     "cut": -0.0018,
+     "transition": -0.0055,
+     "pnrRoll": 0.0011,
+     "putback": 0.0115,
+     "post": 0.0008,
+     "pnrBH": 0.002,
+     "iso": 0.001,
+     "misc": -0.0015,
+     "offscreen": -0.0006
+    }
+   },
+   "opp": {
+    "poss": 2.6033,
+    "threeRate": -0.0011,
+    "rimRate": 0.0358,
+    "ftRate": 0.0146,
+    "tov": -0.011,
+    "orb": -0.0006,
+    "efg": 0.0122,
+    "playTypes": {
+     "pnrBH": -0.0158,
+     "iso": -0.0107,
+     "handoff": -0.0108,
+     "spotup": -0.0439,
+     "putback": -0.0006,
+     "pnrRoll": -0.0217,
+     "transition": 0.1348,
+     "offscreen": -0.0082,
+     "cut": -0.0151,
+     "misc": 0.0011,
+     "post": -0.0091
+    }
+   }
+  },
+  {
+   "name": "getBack 0",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "getBack": 0
+    }
+   },
+   "status": "ok",
+   "net": -2.022,
+   "se": 0.402,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.883,
+     "se": 0.901,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.218,
+     "se": 1.004,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -1.232,
+     "se": 0.953,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.569,
+     "se": 0.943,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -4.286,
+     "se": 1.052,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -4.383,
+     "se": 1.044,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.9917,
+    "threeRate": -0.0029,
+    "rimRate": 0.0007,
+    "ftRate": -0.0043,
+    "tov": 0.0014,
+    "orb": 0.0078,
+    "efg": 0.0006,
+    "playTypes": {
+     "spotup": -0.0012,
+     "handoff": 0.0001,
+     "cut": -0.0014,
+     "transition": -0.0009,
+     "pnrRoll": 0.003,
+     "putback": 0.0014,
+     "post": -0.0002,
+     "pnrBH": 0.0004,
+     "iso": 0.0007,
+     "misc": -0.0016,
+     "offscreen": -0.0003
+    }
+   },
+   "opp": {
+    "poss": 1.0092,
+    "threeRate": -0.0009,
+    "rimRate": 0.0135,
+    "ftRate": 0.0111,
+    "tov": -0.0024,
+    "orb": -0.0024,
+    "efg": 0.0093,
+    "playTypes": {
+     "pnrBH": -0.0041,
+     "iso": -0.0044,
+     "handoff": -0.0035,
+     "spotup": -0.0158,
+     "putback": -0.0009,
+     "pnrRoll": -0.0074,
+     "transition": 0.0477,
+     "offscreen": -0.003,
+     "cut": -0.0057,
+     "misc": 0.0006,
+     "post": -0.0036
+    }
+   }
+  },
+  {
+   "name": "getBack 100",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "getBack": 100
+    }
+   },
+   "status": "ok",
+   "net": -0.724,
+   "se": 0.391,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.447,
+     "se": 0.88,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.068,
+     "se": 0.993,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.828,
+     "se": 0.891,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.239,
+     "se": 0.894,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.416,
+     "se": 1.001,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.311,
+     "se": 1.072,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.3392,
+    "threeRate": 0.0007,
+    "rimRate": -0.0008,
+    "ftRate": -0.0055,
+    "tov": 0,
+    "orb": -0.0325,
+    "efg": -0.0011,
+    "playTypes": {
+     "spotup": 0.0013,
+     "handoff": 0.0013,
+     "cut": -0.002,
+     "transition": 0.004,
+     "pnrRoll": 0.0011,
+     "putback": -0.0059,
+     "post": 0.0003,
+     "pnrBH": 0.0008,
+     "iso": 0.0003,
+     "misc": -0.001,
+     "offscreen": -0.0002
+    }
+   },
+   "opp": {
+    "poss": -0.295,
+    "threeRate": 0.0006,
+    "rimRate": -0.0126,
+    "ftRate": -0.0042,
+    "tov": 0.003,
+    "orb": -0.0039,
+    "efg": -0.0021,
+    "playTypes": {
+     "pnrBH": 0.005,
+     "iso": 0.0038,
+     "handoff": 0.0016,
+     "spotup": 0.0146,
+     "putback": -0.0006,
+     "pnrRoll": 0.0056,
+     "transition": -0.0399,
+     "offscreen": 0.0034,
+     "cut": 0.0033,
+     "misc": 0.0007,
+     "post": 0.0024
+    }
+   }
+  },
+  {
+   "name": "iso 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "iso": 0
+     }
+    }
+   },
+   "status": "ok",
+   "net": 0.244,
+   "se": 0.363,
+   "positive": 4,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.986,
+     "se": 0.915,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.574,
+     "se": 0.955,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.347,
+     "se": 0.721,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.198,
+     "se": 0.878,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.221,
+     "se": 0.827,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.419,
+     "se": 1.014,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0625,
+    "threeRate": -0.0036,
+    "rimRate": 0.0087,
+    "ftRate": 0,
+    "tov": 0.0012,
+    "orb": -0.0009,
+    "efg": 0,
+    "playTypes": {
+     "spotup": 0.0016,
+     "handoff": 0.0027,
+     "cut": 0.0041,
+     "transition": 0.0004,
+     "pnrRoll": 0.0063,
+     "putback": 0.0005,
+     "post": 0.0028,
+     "pnrBH": 0.0042,
+     "iso": -0.0228,
+     "misc": -0.0005,
+     "offscreen": 0.0008
+    }
+   },
+   "opp": {
+    "poss": -0.075,
+    "threeRate": 0.0007,
+    "rimRate": -0.0003,
+    "ftRate": -0.0005,
+    "tov": 0.0013,
+    "orb": -0.0016,
+    "efg": 0,
+    "playTypes": {
+     "pnrBH": 0.0007,
+     "iso": -0.0004,
+     "handoff": -0.002,
+     "spotup": 0.0008,
+     "putback": -0.0004,
+     "pnrRoll": -0.0006,
+     "transition": 0.0006,
+     "offscreen": -0.0001,
+     "cut": 0.0001,
+     "misc": 0.0006,
+     "post": 0.0007
+    }
+   }
+  },
+  {
+   "name": "iso 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "iso": 100
+     }
+    }
+   },
+   "status": "ok",
+   "net": -0.054,
+   "se": 0.409,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.061,
+     "se": 0.935,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.24,
+     "se": 1.06,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.191,
+     "se": 0.924,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.416,
+     "se": 0.946,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.691,
+     "se": 1.115,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.588,
+     "se": 1.023,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0692,
+    "threeRate": 0.0049,
+    "rimRate": -0.0243,
+    "ftRate": -0.0019,
+    "tov": -0.0049,
+    "orb": 0.0002,
+    "efg": -0.0061,
+    "playTypes": {
+     "spotup": -0.0096,
+     "handoff": -0.0072,
+     "cut": -0.0205,
+     "transition": 0.0013,
+     "pnrRoll": -0.0194,
+     "putback": 0.0007,
+     "post": -0.0076,
+     "pnrBH": -0.0137,
+     "iso": 0.0841,
+     "misc": -0.0008,
+     "offscreen": -0.0072
+    }
+   },
+   "opp": {
+    "poss": -0.0758,
+    "threeRate": 0.0015,
+    "rimRate": -0.0026,
+    "ftRate": 0.0001,
+    "tov": -0.0009,
+    "orb": -0.0018,
+    "efg": -0.0006,
+    "playTypes": {
+     "pnrBH": -0.0006,
+     "iso": -0.0004,
+     "handoff": -0.0012,
+     "spotup": 0.0031,
+     "putback": -0.0003,
+     "pnrRoll": -0.0009,
+     "transition": -0.0011,
+     "offscreen": 0.001,
+     "cut": -0.0008,
+     "misc": 0.001,
+     "post": 0.0003
+    }
+   }
+  },
+  {
+   "name": "post 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "post": 0
+     }
+    }
+   },
+   "status": "ok",
+   "net": 0.317,
+   "se": 0.257,
+   "positive": 5,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.256,
+     "se": 0.449,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.472,
+     "se": 0.537,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.622,
+     "se": 0.471,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.382,
+     "se": 0.557,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.523,
+     "se": 0.594,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.692,
+     "se": 1.003,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.09,
+    "threeRate": 0.0023,
+    "rimRate": 0.0017,
+    "ftRate": -0.0021,
+    "tov": -0.0004,
+    "orb": 0.0007,
+    "efg": 0.001,
+    "playTypes": {
+     "spotup": 0.0013,
+     "handoff": 0.0005,
+     "cut": 0.0006,
+     "transition": 0.0005,
+     "pnrRoll": 0.0034,
+     "putback": 0.0001,
+     "post": -0.0096,
+     "pnrBH": 0.0015,
+     "iso": 0.0015,
+     "misc": -0.0005,
+     "offscreen": 0.0006
+    }
+   },
+   "opp": {
+    "poss": -0.0867,
+    "threeRate": 0.0002,
+    "rimRate": -0.0004,
+    "ftRate": -0.0023,
+    "tov": 0.001,
+    "orb": -0.0006,
+    "efg": 0.0008,
+    "playTypes": {
+     "pnrBH": 0.0002,
+     "iso": -0.0006,
+     "handoff": -0.0007,
+     "spotup": 0.0009,
+     "putback": -0.0002,
+     "pnrRoll": 0.0001,
+     "transition": -0.0004,
+     "offscreen": 0.0008,
+     "cut": -0.0009,
+     "misc": 0.0003,
+     "post": 0.0004
+    }
+   }
+  },
+  {
+   "name": "post 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "post": 100
+     }
+    }
+   },
+   "status": "ok",
+   "net": -0.114,
+   "se": 0.402,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.094,
+     "se": 0.93,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.256,
+     "se": 1.043,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.036,
+     "se": 0.967,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.577,
+     "se": 0.968,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.415,
+     "se": 1.041,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.82,
+     "se": 0.957,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.055,
+    "threeRate": -0.0208,
+    "rimRate": -0.006,
+    "ftRate": -0.0024,
+    "tov": -0.0024,
+    "orb": 0.0021,
+    "efg": -0.0052,
+    "playTypes": {
+     "spotup": -0.0162,
+     "handoff": -0.0055,
+     "cut": -0.0093,
+     "transition": 0.0018,
+     "pnrRoll": -0.0121,
+     "putback": -0.0001,
+     "post": 0.0611,
+     "pnrBH": -0.0097,
+     "iso": -0.0048,
+     "misc": -0.0009,
+     "offscreen": -0.0043
+    }
+   },
+   "opp": {
+    "poss": -0.135,
+    "threeRate": 0.0005,
+    "rimRate": -0.0024,
+    "ftRate": -0.0003,
+    "tov": 0.0005,
+    "orb": -0.0015,
+    "efg": 0,
+    "playTypes": {
+     "pnrBH": 0.0003,
+     "iso": 0.0004,
+     "handoff": -0.001,
+     "spotup": 0.0019,
+     "putback": -0.0004,
+     "pnrRoll": -0.0001,
+     "transition": -0.0005,
+     "offscreen": 0.0006,
+     "cut": -0.0018,
+     "misc": 0.0002,
+     "post": 0.0006
+    }
+   }
+  },
+  {
+   "name": "pnr 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "pnr": 0
+     }
+    }
+   },
+   "status": "ok",
+   "net": -1.412,
+   "se": 0.441,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.368,
+     "se": 1.125,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.05,
+     "se": 1.008,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.535,
+     "se": 1.021,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.247,
+     "se": 1.024,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -3.856,
+     "se": 1.15,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -4.517,
+     "se": 1.149,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.3542,
+    "threeRate": -0.0564,
+    "rimRate": 0.0194,
+    "ftRate": -0.0106,
+    "tov": 0.0066,
+    "orb": 0.002,
+    "efg": -0.0013,
+    "playTypes": {
+     "spotup": -0.0085,
+     "handoff": 0.0269,
+     "cut": 0.0726,
+     "transition": 0.0006,
+     "pnrRoll": -0.0962,
+     "putback": -0.0009,
+     "post": 0.0344,
+     "pnrBH": -0.0754,
+     "iso": 0.0259,
+     "misc": -0.0001,
+     "offscreen": 0.0207
+    }
+   },
+   "opp": {
+    "poss": 0.3242,
+    "threeRate": -0.0003,
+    "rimRate": -0.0006,
+    "ftRate": -0.0018,
+    "tov": 0.0006,
+    "orb": -0.0006,
+    "efg": 0.0018,
+    "playTypes": {
+     "pnrBH": -0.0016,
+     "iso": -0.001,
+     "handoff": -0.0007,
+     "spotup": 0.0004,
+     "putback": 0.0001,
+     "pnrRoll": 0.0012,
+     "transition": 0.0002,
+     "offscreen": 0.0017,
+     "cut": -0.001,
+     "misc": -0.0003,
+     "post": 0.0009
+    }
+   }
+  },
+  {
+   "name": "pnr 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "pnr": 100
+     }
+    }
+   },
+   "status": "ok",
+   "net": 0.437,
+   "se": 0.429,
+   "positive": 4,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.642,
+     "se": 0.969,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.191,
+     "se": 1,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 2.086,
+     "se": 1.076,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.577,
+     "se": 0.958,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.091,
+     "se": 1.147,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.373,
+     "se": 1.13,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0192,
+    "threeRate": 0.0188,
+    "rimRate": -0.0061,
+    "ftRate": 0.0104,
+    "tov": -0.0028,
+    "orb": -0.0012,
+    "efg": 0.0008,
+    "playTypes": {
+     "spotup": 0.0012,
+     "handoff": -0.0136,
+     "cut": -0.0356,
+     "transition": 0.0009,
+     "pnrRoll": 0.0463,
+     "putback": 0.0003,
+     "post": -0.0155,
+     "pnrBH": 0.0392,
+     "iso": -0.012,
+     "misc": 0,
+     "offscreen": -0.0113
+    }
+   },
+   "opp": {
+    "poss": -0.0567,
+    "threeRate": 0.0012,
+    "rimRate": -0.0003,
+    "ftRate": -0.0018,
+    "tov": -0.0003,
+    "orb": -0.0014,
+    "efg": 0.0024,
+    "playTypes": {
+     "pnrBH": -0.0006,
+     "iso": -0.0011,
+     "handoff": -0.0009,
+     "spotup": 0.0023,
+     "putback": 0.0002,
+     "pnrRoll": 0.0009,
+     "transition": -0.0008,
+     "offscreen": -0.0003,
+     "cut": -0.0012,
+     "misc": 0.0008,
+     "post": 0.0008
+    }
+   }
+  },
+  {
+   "name": "handoff 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "handoff": 0
+     }
+    }
+   },
+   "status": "ok",
+   "net": -0.459,
+   "se": 0.402,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.384,
+     "se": 0.866,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.425,
+     "se": 1.012,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.02,
+     "se": 0.988,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.578,
+     "se": 0.951,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.133,
+     "se": 1.046,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.103,
+     "se": 1.038,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.1025,
+    "threeRate": -0.0157,
+    "rimRate": 0.0108,
+    "ftRate": 0.0032,
+    "tov": 0.0005,
+    "orb": 0.0015,
+    "efg": -0.0014,
+    "playTypes": {
+     "spotup": 0.0504,
+     "handoff": -0.0437,
+     "cut": 0.0256,
+     "transition": 0.0015,
+     "pnrRoll": 0.0101,
+     "putback": -0.0001,
+     "post": -0.0126,
+     "pnrBH": 0.0172,
+     "iso": -0.0098,
+     "misc": -0.0005,
+     "offscreen": -0.038
+    }
+   },
+   "opp": {
+    "poss": 0.06,
+    "threeRate": 0.0021,
+    "rimRate": 0,
+    "ftRate": -0.0021,
+    "tov": 0.0003,
+    "orb": -0.0009,
+    "efg": 0.0011,
+    "playTypes": {
+     "pnrBH": 0.0002,
+     "iso": -0.0013,
+     "handoff": -0.0016,
+     "spotup": 0.0017,
+     "putback": 0,
+     "pnrRoll": 0.0008,
+     "transition": 0.0006,
+     "offscreen": 0.0004,
+     "cut": -0.001,
+     "misc": 0.0001,
+     "post": 0.0001
+    }
+   }
+  },
+  {
+   "name": "handoff 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "handoff": 100
+     }
+    }
+   },
+   "status": "ok",
+   "net": -0.215,
+   "se": 0.406,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.721,
+     "se": 1,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.388,
+     "se": 1.093,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.8,
+     "se": 0.942,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.213,
+     "se": 0.891,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.41,
+     "se": 1.029,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.136,
+     "se": 0.994,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.0525,
+    "threeRate": 0.0034,
+    "rimRate": -0.0032,
+    "ftRate": -0.0046,
+    "tov": -0.0024,
+    "orb": -0.0011,
+    "efg": -0.0024,
+    "playTypes": {
+     "spotup": -0.0661,
+     "handoff": 0.0569,
+     "cut": -0.0296,
+     "transition": 0.0007,
+     "pnrRoll": -0.0105,
+     "putback": 0.0012,
+     "post": 0.0147,
+     "pnrBH": -0.0242,
+     "iso": 0.0114,
+     "misc": -0.0002,
+     "offscreen": 0.0458
+    }
+   },
+   "opp": {
+    "poss": 0.0233,
+    "threeRate": 0.0017,
+    "rimRate": -0.0025,
+    "ftRate": -0.0045,
+    "tov": -0.001,
+    "orb": 0.0008,
+    "efg": 0.0014,
+    "playTypes": {
+     "pnrBH": -0.0004,
+     "iso": 0.0001,
+     "handoff": -0.0002,
+     "spotup": 0.0017,
+     "putback": 0.0003,
+     "pnrRoll": 0.0005,
+     "transition": -0.0014,
+     "offscreen": 0.0012,
+     "cut": -0.0014,
+     "misc": 0.0003,
+     "post": -0.0007
+    }
+   }
+  },
+  {
+   "name": "motion 0",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "motion": 0
+     }
+    }
+   },
+   "status": "ok",
+   "net": 0.986,
+   "se": 0.458,
+   "positive": 4,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.015,
+     "se": 1.037,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.834,
+     "se": 1.057,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.19,
+     "se": 1.109,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.368,
+     "se": 1.039,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 2.537,
+     "se": 1.238,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.293,
+     "se": 1.235,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.1092,
+    "threeRate": 0.0524,
+    "rimRate": -0.0349,
+    "ftRate": 0.0173,
+    "tov": -0.0091,
+    "orb": 0.001,
+    "efg": -0.0027,
+    "playTypes": {
+     "spotup": -0.0755,
+     "handoff": 0.0278,
+     "cut": -0.1161,
+     "transition": 0.0011,
+     "pnrRoll": 0.0723,
+     "putback": 0.0019,
+     "post": -0.0037,
+     "pnrBH": 0.0473,
+     "iso": 0.0217,
+     "misc": -0.0002,
+     "offscreen": 0.0235
+    }
+   },
+   "opp": {
+    "poss": -0.16,
+    "threeRate": 0.0004,
+    "rimRate": 0.0004,
+    "ftRate": -0.0054,
+    "tov": -0.001,
+    "orb": -0.0026,
+    "efg": 0.0035,
+    "playTypes": {
+     "pnrBH": -0.0019,
+     "iso": -0.0013,
+     "handoff": -0.0009,
+     "spotup": 0.0026,
+     "putback": 0.0008,
+     "pnrRoll": 0.0025,
+     "transition": -0.0015,
+     "offscreen": -0.0001,
+     "cut": -0.0013,
+     "misc": 0,
+     "post": 0.0011
+    }
+   }
+  },
+  {
+   "name": "motion 100",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "actions": {
+      "motion": 100
+     }
+    }
+   },
+   "status": "ok",
+   "net": -1.222,
+   "se": 0.419,
+   "positive": 0,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.014,
+     "se": 1.008,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -0.477,
+     "se": 1.027,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.24,
+     "se": 0.971,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.798,
+     "se": 0.95,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.174,
+     "se": 1.002,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -3.631,
+     "se": 1.189,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.3142,
+    "threeRate": -0.0295,
+    "rimRate": 0.0203,
+    "ftRate": -0.0069,
+    "tov": 0.0052,
+    "orb": -0.002,
+    "efg": -0.0013,
+    "playTypes": {
+     "spotup": 0.0256,
+     "handoff": -0.0096,
+     "cut": 0.0448,
+     "transition": 0.0005,
+     "pnrRoll": -0.0249,
+     "putback": -0.0004,
+     "post": 0.0025,
+     "pnrBH": -0.0207,
+     "iso": -0.0101,
+     "misc": -0.0005,
+     "offscreen": -0.0074
+    }
+   },
+   "opp": {
+    "poss": 0.29,
+    "threeRate": 0.0014,
+    "rimRate": 0.0002,
+    "ftRate": -0.001,
+    "tov": -0.0007,
+    "orb": -0.0008,
+    "efg": 0.0001,
+    "playTypes": {
+     "pnrBH": -0.0006,
+     "iso": -0.0009,
+     "handoff": -0.0015,
+     "spotup": 0.0011,
+     "putback": 0.0005,
+     "pnrRoll": 0.0003,
+     "transition": 0.0021,
+     "offscreen": 0,
+     "cut": -0.0014,
+     "misc": 0.0007,
+     "post": -0.0003
+    }
+   }
+  },
+  {
+   "name": "help 0",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "help": 0
+    }
+   },
+   "status": "ok",
+   "net": -1.985,
+   "se": 0.411,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.441,
+     "se": 0.957,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -2.229,
+     "se": 1.002,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.692,
+     "se": 1.062,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.783,
+     "se": 0.936,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -5.313,
+     "se": 1.064,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -3.405,
+     "se": 1.011,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.1517,
+    "threeRate": -0.0025,
+    "rimRate": -0.0007,
+    "ftRate": -0.0034,
+    "tov": 0.0019,
+    "orb": 0.0021,
+    "efg": -0.0046,
+    "playTypes": {
+     "spotup": -0.0005,
+     "handoff": 0.0005,
+     "cut": -0.0002,
+     "transition": -0.0043,
+     "pnrRoll": 0.0022,
+     "putback": 0.0009,
+     "post": 0.0001,
+     "pnrBH": 0.0012,
+     "iso": 0.001,
+     "misc": -0.001,
+     "offscreen": 0.0002
+    }
+   },
+   "opp": {
+    "poss": 0.1367,
+    "threeRate": -0.0811,
+    "rimRate": 0.052,
+    "ftRate": 0.0316,
+    "tov": -0.001,
+    "orb": -0.0036,
+    "efg": 0.0094,
+    "playTypes": {
+     "pnrBH": 0.0243,
+     "iso": 0.0131,
+     "handoff": -0.0007,
+     "spotup": -0.0579,
+     "putback": -0.0027,
+     "pnrRoll": 0.0178,
+     "transition": 0.0006,
+     "offscreen": 0.0019,
+     "cut": -0.0009,
+     "misc": 0.001,
+     "post": 0.0035
+    }
+   }
+  },
+  {
+   "name": "help 100",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "help": 100
+    }
+   },
+   "status": "ok",
+   "net": -0.739,
+   "se": 0.402,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.094,
+     "se": 0.961,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 2.805,
+     "se": 0.961,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.996,
+     "se": 0.956,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.546,
+     "se": 1.02,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.854,
+     "se": 1.027,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.738,
+     "se": 0.985,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.3483,
+    "threeRate": -0.0043,
+    "rimRate": 0.0048,
+    "ftRate": 0.0021,
+    "tov": -0.0009,
+    "orb": 0.001,
+    "efg": 0.0022,
+    "playTypes": {
+     "spotup": -0.0026,
+     "handoff": 0.0002,
+     "cut": -0.0016,
+     "transition": 0.0046,
+     "pnrRoll": 0.0005,
+     "putback": 0.0005,
+     "post": 0,
+     "pnrBH": 0,
+     "iso": 0.0002,
+     "misc": -0.0008,
+     "offscreen": -0.0009
+    }
+   },
+   "opp": {
+    "poss": 0.33,
+    "threeRate": 0.0681,
+    "rimRate": -0.0301,
+    "ftRate": -0.0458,
+    "tov": -0.004,
+    "orb": -0.0014,
+    "efg": 0.0102,
+    "playTypes": {
+     "pnrBH": -0.0138,
+     "iso": -0.0315,
+     "handoff": -0.0026,
+     "spotup": 0.0785,
+     "putback": 0.0009,
+     "pnrRoll": -0.0104,
+     "transition": 0.0004,
+     "offscreen": 0,
+     "cut": 0.004,
+     "misc": -0.0005,
+     "post": -0.025
+    }
+   }
+  },
+  {
+   "name": "pressure 0",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pressure": 0
+    }
+   },
+   "status": "ok",
+   "net": -2.358,
+   "se": 0.401,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.915,
+     "se": 0.915,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.435,
+     "se": 0.893,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.8,
+     "se": 1.059,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -6.832,
+     "se": 0.944,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.452,
+     "se": 1.066,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.585,
+     "se": 0.996,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.5867,
+    "threeRate": -0.0027,
+    "rimRate": -0.0009,
+    "ftRate": -0.0027,
+    "tov": 0.0011,
+    "orb": 0.0018,
+    "efg": 0.0019,
+    "playTypes": {
+     "spotup": 0.0013,
+     "handoff": 0.0005,
+     "cut": -0.0004,
+     "transition": -0.0042,
+     "pnrRoll": 0.001,
+     "putback": 0.0005,
+     "post": 0.0008,
+     "pnrBH": 0.0009,
+     "iso": 0.0007,
+     "misc": -0.0012,
+     "offscreen": 0.0001
+    }
+   },
+   "opp": {
+    "poss": -0.5567,
+    "threeRate": 0.0049,
+    "rimRate": -0.0068,
+    "ftRate": -0.0298,
+    "tov": -0.038,
+    "orb": -0.0026,
+    "efg": -0.0129,
+    "playTypes": {
+     "pnrBH": -0.016,
+     "iso": -0.0023,
+     "handoff": -0.002,
+     "spotup": 0.0102,
+     "putback": 0.0033,
+     "pnrRoll": 0.0048,
+     "transition": 0.0006,
+     "offscreen": -0.0011,
+     "cut": -0.001,
+     "misc": 0.0018,
+     "post": 0.0017
+    }
+   }
+  },
+  {
+   "name": "pressure 100",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pressure": 100
+    }
+   },
+   "status": "ok",
+   "net": -0.521,
+   "se": 0.41,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.02,
+     "se": 1.056,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -1.503,
+     "se": 1.056,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.436,
+     "se": 0.951,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 3.369,
+     "se": 0.909,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -4.337,
+     "se": 1.063,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.072,
+     "se": 0.974,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 1.1033,
+    "threeRate": -0.0025,
+    "rimRate": 0.003,
+    "ftRate": 0.004,
+    "tov": 0.0012,
+    "orb": 0.0011,
+    "efg": -0.0007,
+    "playTypes": {
+     "spotup": -0.0023,
+     "handoff": 0.0003,
+     "cut": -0.0023,
+     "transition": 0.0023,
+     "pnrRoll": 0.0007,
+     "putback": 0.0005,
+     "post": 0.0002,
+     "pnrBH": 0.0012,
+     "iso": 0.0005,
+     "misc": -0.0003,
+     "offscreen": -0.0009
+    }
+   },
+   "opp": {
+    "poss": 1.0508,
+    "threeRate": -0.0202,
+    "rimRate": 0.0237,
+    "ftRate": 0.0311,
+    "tov": 0.0334,
+    "orb": -0.0057,
+    "efg": 0.0372,
+    "playTypes": {
+     "pnrBH": 0.0187,
+     "iso": 0.0012,
+     "handoff": 0.0011,
+     "spotup": -0.0255,
+     "putback": -0.0053,
+     "pnrRoll": -0.0038,
+     "transition": 0.0004,
+     "offscreen": 0.0024,
+     "cut": 0.0132,
+     "misc": -0.0015,
+     "post": -0.0009
+    }
+   }
+  },
+  {
+   "name": "physicality 0",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "physicality": 0
+    }
+   },
+   "status": "ok",
+   "net": 1.223,
+   "se": 0.388,
+   "positive": 5,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.799,
+     "se": 0.873,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 4.837,
+     "se": 1.038,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.561,
+     "se": 1.005,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.144,
+     "se": 0.86,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 1.261,
+     "se": 0.994,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.026,
+     "se": 0.92,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0142,
+    "threeRate": -0.0035,
+    "rimRate": 0.0027,
+    "ftRate": 0.0002,
+    "tov": 0,
+    "orb": 0.0039,
+    "efg": 0.0024,
+    "playTypes": {
+     "spotup": -0.0026,
+     "handoff": -0.0003,
+     "cut": 0.0007,
+     "transition": 0.0005,
+     "pnrRoll": 0.0001,
+     "putback": 0.0012,
+     "post": 0.0015,
+     "pnrBH": -0.0008,
+     "iso": -0.0005,
+     "misc": 0,
+     "offscreen": 0.0002
+    }
+   },
+   "opp": {
+    "poss": -0.015,
+    "threeRate": -0.0141,
+    "rimRate": 0.0155,
+    "ftRate": -0.1737,
+    "tov": 0.001,
+    "orb": 0.0027,
+    "efg": 0.0203,
+    "playTypes": {
+     "pnrBH": -0.0103,
+     "iso": -0.0017,
+     "handoff": -0.0008,
+     "spotup": 0.0084,
+     "putback": 0.0003,
+     "pnrRoll": 0.0046,
+     "transition": 0.0007,
+     "offscreen": 0.0007,
+     "cut": 0.0002,
+     "misc": -0.0007,
+     "post": -0.0014
+    }
+   }
+  },
+  {
+   "name": "physicality 100",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "physicality": 100
+    }
+   },
+   "status": "ok",
+   "net": -2.607,
+   "se": 0.385,
+   "positive": 0,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.891,
+     "se": 0.944,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -2.866,
+     "se": 1.005,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.656,
+     "se": 0.943,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.513,
+     "se": 0.866,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -5.389,
+     "se": 0.993,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.327,
+     "se": 0.899,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.4125,
+    "threeRate": 0.0003,
+    "rimRate": -0.0008,
+    "ftRate": -0.0044,
+    "tov": 0.0003,
+    "orb": -0.0017,
+    "efg": -0.0037,
+    "playTypes": {
+     "spotup": 0.0003,
+     "handoff": 0.0006,
+     "cut": -0.0023,
+     "transition": 0.001,
+     "pnrRoll": 0.0029,
+     "putback": 0.0003,
+     "post": -0.0031,
+     "pnrBH": 0.0007,
+     "iso": 0.001,
+     "misc": -0.0008,
+     "offscreen": -0.0006
+    }
+   },
+   "opp": {
+    "poss": 0.3975,
+    "threeRate": 0.0135,
+    "rimRate": -0.0133,
+    "ftRate": 0.2097,
+    "tov": -0.0012,
+    "orb": -0.0024,
+    "efg": -0.0121,
+    "playTypes": {
+     "pnrBH": 0.017,
+     "iso": 0.0014,
+     "handoff": -0.0011,
+     "spotup": -0.0113,
+     "putback": -0.0008,
+     "pnrRoll": -0.0079,
+     "transition": -0.0001,
+     "offscreen": -0.0005,
+     "cut": -0.0002,
+     "misc": 0.0022,
+     "post": 0.0014
+    }
+   }
+  },
+  {
+   "name": "press afterMade",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "press": "afterMade"
+    }
+   },
+   "status": "ok",
+   "net": -1.179,
+   "se": 0.428,
+   "positive": 3,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -2.115,
+     "se": 0.989,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.592,
+     "se": 1.09,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.497,
+     "se": 1.089,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.588,
+     "se": 0.982,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -6.045,
+     "se": 1.071,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.59,
+     "se": 1.066,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 3.4983,
+    "threeRate": -0.0026,
+    "rimRate": 0.0037,
+    "ftRate": 0.0007,
+    "tov": 0.0013,
+    "orb": -0.0006,
+    "efg": -0.0159,
+    "playTypes": {
+     "spotup": 0.0003,
+     "handoff": 0.0004,
+     "cut": -0.0026,
+     "transition": 0.0068,
+     "pnrRoll": 0,
+     "putback": 0.0007,
+     "post": -0.0013,
+     "pnrBH": -0.0015,
+     "iso": 0.0001,
+     "misc": -0.0027,
+     "offscreen": -0.0005
+    }
+   },
+   "opp": {
+    "poss": 3.515,
+    "threeRate": -0.0003,
+    "rimRate": 0.025,
+    "ftRate": 0.0026,
+    "tov": 0.0104,
+    "orb": 0.0036,
+    "efg": -0.0008,
+    "playTypes": {
+     "pnrBH": -0.0112,
+     "iso": -0.0078,
+     "handoff": -0.0073,
+     "spotup": -0.0329,
+     "putback": 0.0003,
+     "pnrRoll": -0.015,
+     "transition": 0.0801,
+     "offscreen": -0.0072,
+     "cut": -0.0126,
+     "misc": 0.0198,
+     "post": -0.0063
+    }
+   }
+  },
+  {
+   "name": "press always",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "press": "always"
+    }
+   },
+   "status": "ok",
+   "net": -3.634,
+   "se": 0.444,
+   "positive": 0,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -5.368,
+     "se": 1.057,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -2.219,
+     "se": 1.151,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -1.011,
+     "se": 1.1,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.813,
+     "se": 1.043,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -9.418,
+     "se": 1.086,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.972,
+     "se": 1.092,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 4.0483,
+    "threeRate": -0.0011,
+    "rimRate": 0.0037,
+    "ftRate": -0.0015,
+    "tov": 0.0032,
+    "orb": -0.0066,
+    "efg": -0.0282,
+    "playTypes": {
+     "spotup": -0.0016,
+     "handoff": 0.0006,
+     "cut": -0.004,
+     "transition": 0.0091,
+     "pnrRoll": 0.0022,
+     "putback": 0.0007,
+     "post": -0.0015,
+     "pnrBH": -0.002,
+     "iso": 0.0005,
+     "misc": -0.0031,
+     "offscreen": -0.0009
+    }
+   },
+   "opp": {
+    "poss": 4.0908,
+    "threeRate": -0.0008,
+    "rimRate": 0.0312,
+    "ftRate": 0.0048,
+    "tov": 0.0144,
+    "orb": 0.0084,
+    "efg": -0.0021,
+    "playTypes": {
+     "pnrBH": -0.013,
+     "iso": -0.0103,
+     "handoff": -0.0102,
+     "spotup": -0.04,
+     "putback": 0.0016,
+     "pnrRoll": -0.019,
+     "transition": 0.0969,
+     "offscreen": -0.0097,
+     "cut": -0.0143,
+     "misc": 0.0257,
+     "post": -0.0078
+    }
+   }
+  },
+  {
+   "name": "mentality -2",
+   "side": "off",
+   "patch": {
+    "mentality": -2
+   },
+   "status": "ok",
+   "net": -0.984,
+   "se": 0.417,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.754,
+     "se": 0.929,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.37,
+     "se": 1.031,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.496,
+     "se": 0.955,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -4.375,
+     "se": 1.024,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.789,
+     "se": 1.091,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.854,
+     "se": 1.084,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -2.4825,
+    "threeRate": -0.0107,
+    "rimRate": -0.0035,
+    "ftRate": -0.0014,
+    "tov": 0.0019,
+    "orb": -0.0236,
+    "efg": 0.0012,
+    "playTypes": {
+     "spotup": 0.0067,
+     "handoff": 0.0006,
+     "cut": 0.0017,
+     "transition": -0.0163,
+     "pnrRoll": 0.0043,
+     "putback": -0.004,
+     "post": 0.0014,
+     "pnrBH": 0.0028,
+     "iso": 0.002,
+     "misc": 0.001,
+     "offscreen": -0.0002
+    }
+   },
+   "opp": {
+    "poss": -2.46,
+    "threeRate": 0.0028,
+    "rimRate": -0.0127,
+    "ftRate": -0.033,
+    "tov": -0.0095,
+    "orb": -0.0012,
+    "efg": -0.0073,
+    "playTypes": {
+     "pnrBH": -0.0039,
+     "iso": 0.0008,
+     "handoff": 0.0027,
+     "spotup": 0.0165,
+     "putback": 0.0015,
+     "pnrRoll": 0.0066,
+     "transition": -0.0319,
+     "offscreen": 0.0025,
+     "cut": 0.0005,
+     "misc": 0.0016,
+     "post": 0.0031
+    }
+   }
+  },
+  {
+   "name": "mentality +2",
+   "side": "off",
+   "patch": {
+    "mentality": 2
+   },
+   "status": "ok",
+   "net": -0.751,
+   "se": 0.414,
+   "positive": 3,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.618,
+     "se": 0.967,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.824,
+     "se": 1,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.255,
+     "se": 0.993,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 1.12,
+     "se": 0.956,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -4.541,
+     "se": 1.07,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.548,
+     "se": 1.086,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 2.9917,
+    "threeRate": 0.0043,
+    "rimRate": 0.006,
+    "ftRate": -0.0013,
+    "tov": -0.0002,
+    "orb": 0.0268,
+    "efg": -0.0031,
+    "playTypes": {
+     "spotup": -0.009,
+     "handoff": -0.001,
+     "cut": -0.0046,
+     "transition": 0.0158,
+     "pnrRoll": -0.0021,
+     "putback": 0.0063,
+     "post": -0.0013,
+     "pnrBH": -0.0009,
+     "iso": 0.0001,
+     "misc": -0.002,
+     "offscreen": -0.0014
+    }
+   },
+   "opp": {
+    "poss": 2.9217,
+    "threeRate": -0.0016,
+    "rimRate": 0.0171,
+    "ftRate": 0.0358,
+    "tov": 0.0077,
+    "orb": -0.0049,
+    "efg": 0.0179,
+    "playTypes": {
+     "pnrBH": 0.0015,
+     "iso": -0.0034,
+     "handoff": -0.0042,
+     "spotup": -0.0247,
+     "putback": -0.0034,
+     "pnrRoll": -0.0096,
+     "transition": 0.0522,
+     "offscreen": -0.0034,
+     "cut": -0.0004,
+     "misc": -0.0007,
+     "post": -0.0038
+    }
+   }
+  },
+  {
+   "name": "drop",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pnr": "drop",
+     "switchOffBall": false
+    }
+   },
+   "status": "ok",
+   "net": 0.018,
+   "se": 0.407,
+   "positive": 2,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.468,
+     "se": 1.071,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 3.17,
+     "se": 1.097,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.137,
+     "se": 1.07,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.93,
+     "se": 1.151,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.462,
+     "se": 1.07,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.2275,
+    "threeRate": -0.0025,
+    "rimRate": 0,
+    "ftRate": 0.0001,
+    "tov": 0.0003,
+    "orb": -0.0005,
+    "efg": -0.001,
+    "playTypes": {
+     "spotup": -0.0002,
+     "handoff": -0.0003,
+     "cut": -0.0007,
+     "transition": -0.0014,
+     "pnrRoll": 0.0015,
+     "putback": 0.0001,
+     "post": 0.0007,
+     "pnrBH": 0.0009,
+     "iso": 0.0002,
+     "misc": -0.0007,
+     "offscreen": -0.0002
+    }
+   },
+   "opp": {
+    "poss": -0.2125,
+    "threeRate": 0.0279,
+    "rimRate": -0.0565,
+    "ftRate": -0.0546,
+    "tov": -0.016,
+    "orb": -0.0098,
+    "efg": -0.005,
+    "playTypes": {
+     "pnrBH": 0.0975,
+     "iso": -0.0194,
+     "handoff": 0.0214,
+     "spotup": -0.0343,
+     "putback": 0.0001,
+     "pnrRoll": -0.063,
+     "transition": 0.0012,
+     "offscreen": 0.0257,
+     "cut": 0.0093,
+     "misc": 0.001,
+     "post": -0.0395
+    }
+   }
+  },
+  {
+   "name": "hedge",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pnr": "hedge",
+     "switchOffBall": false
+    }
+   },
+   "status": "ok",
+   "net": 0.386,
+   "se": 0.407,
+   "positive": 2,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.422,
+     "se": 1.075,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 3.719,
+     "se": 1.162,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.389,
+     "se": 1.064,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -3.32,
+     "se": 1.078,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.113,
+     "se": 1.072,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.1717,
+    "threeRate": -0.0021,
+    "rimRate": 0.0009,
+    "ftRate": 0.0005,
+    "tov": 0.0002,
+    "orb": 0.0003,
+    "efg": 0.0015,
+    "playTypes": {
+     "spotup": -0.0011,
+     "handoff": 0.0001,
+     "cut": -0.0002,
+     "transition": -0.0007,
+     "pnrRoll": 0.0016,
+     "putback": 0,
+     "post": -0.0004,
+     "pnrBH": 0.0004,
+     "iso": 0.0005,
+     "misc": -0.0003,
+     "offscreen": 0.0001
+    }
+   },
+   "opp": {
+    "poss": -0.2133,
+    "threeRate": 0.0016,
+    "rimRate": -0.0006,
+    "ftRate": -0.0324,
+    "tov": -0.0108,
+    "orb": -0.0109,
+    "efg": -0.0029,
+    "playTypes": {
+     "pnrBH": 0.0172,
+     "iso": -0.0186,
+     "handoff": 0.0209,
+     "spotup": -0.0157,
+     "putback": -0.0009,
+     "pnrRoll": 0.0022,
+     "transition": 0.0013,
+     "offscreen": 0.0233,
+     "cut": 0.0094,
+     "misc": 0.0007,
+     "post": -0.0398
+    }
+   }
+  },
+  {
+   "name": "ice",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pnr": "ice",
+     "switchOffBall": false
+    }
+   },
+   "status": "ok",
+   "net": -0.107,
+   "se": 0.403,
+   "positive": 2,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.474,
+     "se": 1.093,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.313,
+     "se": 1.1,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.862,
+     "se": 1.06,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.265,
+     "se": 1.05,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.301,
+     "se": 1.103,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.1667,
+    "threeRate": 0.0003,
+    "rimRate": -0.0017,
+    "ftRate": 0.0027,
+    "tov": 0.0004,
+    "orb": 0.0004,
+    "efg": -0.0012,
+    "playTypes": {
+     "spotup": 0.0025,
+     "handoff": -0.0009,
+     "cut": -0.0018,
+     "transition": -0.001,
+     "pnrRoll": 0.0006,
+     "putback": 0.0001,
+     "post": 0,
+     "pnrBH": 0.001,
+     "iso": 0.0005,
+     "misc": -0.0005,
+     "offscreen": -0.0006
+    }
+   },
+   "opp": {
+    "poss": -0.1933,
+    "threeRate": 0.0233,
+    "rimRate": -0.0081,
+    "ftRate": -0.0317,
+    "tov": -0.0155,
+    "orb": -0.0124,
+    "efg": -0.0077,
+    "playTypes": {
+     "pnrBH": -0.0006,
+     "iso": -0.018,
+     "handoff": 0.0203,
+     "spotup": 0.0184,
+     "putback": -0.0003,
+     "pnrRoll": -0.0155,
+     "transition": 0.0013,
+     "offscreen": 0.0241,
+     "cut": 0.0095,
+     "misc": 0.0002,
+     "post": -0.0394
+    }
+   }
+  },
+  {
+   "name": "blitz",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pnr": "blitz",
+     "switchOffBall": false
+    }
+   },
+   "status": "ok",
+   "net": -1.277,
+   "se": 0.392,
+   "positive": 2,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.351,
+     "se": 1.042,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.828,
+     "se": 1.063,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.441,
+     "se": 1.013,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -6.95,
+     "se": 1.066,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.45,
+     "se": 1.077,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.3092,
+    "threeRate": -0.0008,
+    "rimRate": -0.0016,
+    "ftRate": -0.0042,
+    "tov": 0,
+    "orb": -0.001,
+    "efg": 0.001,
+    "playTypes": {
+     "spotup": 0.0008,
+     "handoff": 0.0007,
+     "cut": -0.0008,
+     "transition": -0.0011,
+     "pnrRoll": 0.0012,
+     "putback": 0.0005,
+     "post": -0.0006,
+     "pnrBH": 0,
+     "iso": 0,
+     "misc": -0.001,
+     "offscreen": 0.0002
+    }
+   },
+   "opp": {
+    "poss": 0.2925,
+    "threeRate": 0.0071,
+    "rimRate": 0.0122,
+    "ftRate": -0.0354,
+    "tov": 0.0003,
+    "orb": -0.0126,
+    "efg": 0.0195,
+    "playTypes": {
+     "pnrBH": -0.0195,
+     "iso": -0.019,
+     "handoff": 0.0198,
+     "spotup": -0.0009,
+     "putback": -0.0041,
+     "pnrRoll": 0.0308,
+     "transition": 0.0016,
+     "offscreen": 0.0229,
+     "cut": 0.0083,
+     "misc": 0.0004,
+     "post": -0.0402
+    }
+   }
+  },
+  {
+   "name": "switch",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "pnr": "switch",
+     "switchOffBall": true
+    }
+   },
+   "status": "ok",
+   "net": -0.995,
+   "se": 0.394,
+   "positive": 1,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": -0.145,
+     "se": 1.005,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.266,
+     "se": 1.088,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.556,
+     "se": 0.998,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -3.838,
+     "se": 1.123,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.697,
+     "se": 1.071,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.105,
+    "threeRate": 0.0009,
+    "rimRate": -0.0017,
+    "ftRate": -0.0049,
+    "tov": -0.0003,
+    "orb": 0.0015,
+    "efg": -0.0001,
+    "playTypes": {
+     "spotup": 0.0003,
+     "handoff": 0.0006,
+     "cut": -0.0004,
+     "transition": -0.0022,
+     "pnrRoll": 0.0014,
+     "putback": 0.0006,
+     "post": -0.0014,
+     "pnrBH": 0.0009,
+     "iso": 0.0013,
+     "misc": -0.0008,
+     "offscreen": -0.0003
+    }
+   },
+   "opp": {
+    "poss": 0.1525,
+    "threeRate": -0.0394,
+    "rimRate": -0.0088,
+    "ftRate": 0.0141,
+    "tov": -0.0138,
+    "orb": -0.0007,
+    "efg": -0.005,
+    "playTypes": {
+     "pnrBH": 0.0455,
+     "iso": -0.0002,
+     "handoff": -0.0012,
+     "spotup": -0.0357,
+     "putback": 0.0002,
+     "pnrRoll": -0.0635,
+     "transition": 0.0003,
+     "offscreen": -0.0001,
+     "cut": 0.0037,
+     "misc": 0.0008,
+     "post": 0.0502
+    }
+   }
+  },
+  {
+   "name": "zone23",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "scheme": "zone23"
+    }
+   },
+   "status": "ok",
+   "net": -0.152,
+   "se": 0.406,
+   "positive": 1,
+   "inert": [
+    "CLE-GSW"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 4.358,
+     "se": 0.983,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.128,
+     "se": 1.115,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -2.526,
+     "se": 1.024,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.374,
+     "se": 1.179,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.243,
+     "se": 1.139,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -1.1208,
+    "threeRate": -0.0023,
+    "rimRate": -0.0004,
+    "ftRate": -0.0026,
+    "tov": 0.0001,
+    "orb": -0.0006,
+    "efg": 0.0015,
+    "playTypes": {
+     "spotup": 0.0002,
+     "handoff": -0.0003,
+     "cut": -0.0008,
+     "transition": -0.0015,
+     "pnrRoll": 0.0016,
+     "putback": 0.0005,
+     "post": 0.0006,
+     "pnrBH": 0.0004,
+     "iso": 0.0006,
+     "misc": -0.0015,
+     "offscreen": 0.0001
+    }
+   },
+   "opp": {
+    "poss": -1.0767,
+    "threeRate": 0.0717,
+    "rimRate": -0.0665,
+    "ftRate": -0.0613,
+    "tov": -0.0112,
+    "orb": 0.0341,
+    "efg": -0.0183,
+    "playTypes": {
+     "pnrBH": 0.0376,
+     "iso": -0.0198,
+     "handoff": 0.0223,
+     "spotup": 0.0435,
+     "putback": 0.0132,
+     "pnrRoll": -0.052,
+     "transition": 0.0003,
+     "offscreen": 0.0247,
+     "cut": -0.0325,
+     "misc": 0.0022,
+     "post": -0.0395
+    }
+   }
+  },
+  {
+   "name": "zone32",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "scheme": "zone32"
+    }
+   },
+   "status": "ok",
+   "net": 0.634,
+   "se": 0.43,
+   "positive": 5,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0.513,
+     "se": 0.941,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.971,
+     "se": 1.08,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 3.549,
+     "se": 1.107,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.61,
+     "se": 1.031,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -5.48,
+     "se": 1.046,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0.645,
+     "se": 1.1,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -1.3642,
+    "threeRate": -0.001,
+    "rimRate": 0,
+    "ftRate": -0.0006,
+    "tov": 0.0008,
+    "orb": -0.0002,
+    "efg": 0.0004,
+    "playTypes": {
+     "spotup": 0.0015,
+     "handoff": 0.0004,
+     "cut": -0.0016,
+     "transition": -0.0041,
+     "pnrRoll": 0.0024,
+     "putback": 0.0001,
+     "post": 0.0004,
+     "pnrBH": 0.001,
+     "iso": 0.0005,
+     "misc": -0.0007,
+     "offscreen": 0.0002
+    }
+   },
+   "opp": {
+    "poss": -1.3683,
+    "threeRate": -0.0702,
+    "rimRate": 0.0308,
+    "ftRate": -0.0059,
+    "tov": -0.0106,
+    "orb": 0.0663,
+    "efg": -0.0391,
+    "playTypes": {
+     "pnrBH": 0.0787,
+     "iso": -0.0174,
+     "handoff": 0.0169,
+     "spotup": -0.0737,
+     "putback": 0.0188,
+     "pnrRoll": 0.0209,
+     "transition": -0.0029,
+     "offscreen": 0.0204,
+     "cut": -0.0252,
+     "misc": 0.0029,
+     "post": -0.0393
+    }
+   }
+  },
+  {
+   "name": "box1",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "scheme": "box1"
+    }
+   },
+   "status": "ok",
+   "net": 0.246,
+   "se": 0.429,
+   "positive": 3,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 1.711,
+     "se": 0.95,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 4.52,
+     "se": 1.077,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -1.205,
+     "se": 1.046,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.834,
+     "se": 1.115,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.519,
+     "se": 1.088,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.238,
+     "se": 1.013,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.4667,
+    "threeRate": -0.0029,
+    "rimRate": 0.0025,
+    "ftRate": -0.0007,
+    "tov": -0.0002,
+    "orb": 0,
+    "efg": -0.0006,
+    "playTypes": {
+     "spotup": -0.0009,
+     "handoff": 0.0006,
+     "cut": -0.0008,
+     "transition": -0.0002,
+     "pnrRoll": 0.0008,
+     "putback": 0.0008,
+     "post": -0.0002,
+     "pnrBH": 0.0002,
+     "iso": 0.0002,
+     "misc": -0.0001,
+     "offscreen": -0.0003
+    }
+   },
+   "opp": {
+    "poss": -0.4183,
+    "threeRate": 0.0198,
+    "rimRate": -0.0114,
+    "ftRate": -0.0421,
+    "tov": -0.0108,
+    "orb": 0.0191,
+    "efg": -0.0164,
+    "playTypes": {
+     "pnrBH": 0.0157,
+     "iso": -0.0198,
+     "handoff": 0.0152,
+     "spotup": 0.0064,
+     "putback": 0.0078,
+     "pnrRoll": -0.0139,
+     "transition": -0.0012,
+     "offscreen": 0.0304,
+     "cut": -0.0015,
+     "misc": 0.0008,
+     "post": -0.0399
+    }
+   }
+  },
+  {
+   "name": "tri2",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "scheme": "tri2"
+    }
+   },
+   "status": "ok",
+   "net": 1.361,
+   "se": 0.429,
+   "positive": 5,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 1.845,
+     "se": 0.982,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 3.842,
+     "se": 1,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.832,
+     "se": 1.144,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 1.333,
+     "se": 1.048,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.283,
+     "se": 1.031,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.969,
+     "se": 1.094,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.3133,
+    "threeRate": -0.0015,
+    "rimRate": 0.0004,
+    "ftRate": -0.0003,
+    "tov": 0.0002,
+    "orb": -0.0013,
+    "efg": -0.0021,
+    "playTypes": {
+     "spotup": 0.0011,
+     "handoff": 0.0009,
+     "cut": -0.0018,
+     "transition": -0.0009,
+     "pnrRoll": 0.0008,
+     "putback": 0.0009,
+     "post": -0.0003,
+     "pnrBH": -0.0003,
+     "iso": -0.0001,
+     "misc": -0.0002,
+     "offscreen": 0.0001
+    }
+   },
+   "opp": {
+    "poss": -0.2833,
+    "threeRate": -0.0099,
+    "rimRate": 0.0159,
+    "ftRate": -0.0264,
+    "tov": -0.0059,
+    "orb": 0.0264,
+    "efg": -0.0251,
+    "playTypes": {
+     "pnrBH": 0.0135,
+     "iso": -0.0226,
+     "handoff": 0.0108,
+     "spotup": -0.0156,
+     "putback": 0.0085,
+     "pnrRoll": -0.012,
+     "transition": -0.0004,
+     "offscreen": 0.0333,
+     "cut": 0.0232,
+     "misc": 0.0011,
+     "post": -0.0398
+    }
+   }
+  },
+  {
+   "name": "starPlan double",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "starPlan": "double"
+    }
+   },
+   "status": "ok",
+   "net": -1.67,
+   "se": 0.375,
+   "positive": 1,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.737,
+     "se": 0.829,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.421,
+     "se": 0.914,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": -0.28,
+     "se": 0.881,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.053,
+     "se": 0.865,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -5.662,
+     "se": 1.045,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -2.708,
+     "se": 0.968,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.2425,
+    "threeRate": -0.0026,
+    "rimRate": 0.001,
+    "ftRate": -0.0013,
+    "tov": -0.0004,
+    "orb": 0.0011,
+    "efg": 0.0003,
+    "playTypes": {
+     "spotup": -0.0013,
+     "handoff": 0.0009,
+     "cut": -0.0012,
+     "transition": 0.0008,
+     "pnrRoll": 0.0004,
+     "putback": 0.0008,
+     "post": 0.0001,
+     "pnrBH": 0.0004,
+     "iso": 0.0007,
+     "misc": -0.0009,
+     "offscreen": -0.0007
+    }
+   },
+   "opp": {
+    "poss": 0.2192,
+    "threeRate": 0.0191,
+    "rimRate": -0.0028,
+    "ftRate": -0.0189,
+    "tov": -0.0016,
+    "orb": -0.0026,
+    "efg": 0.0151,
+    "playTypes": {
+     "pnrBH": -0.0129,
+     "iso": -0.0194,
+     "handoff": -0.0005,
+     "spotup": 0.0257,
+     "putback": -0.001,
+     "pnrRoll": 0.0124,
+     "transition": 0.0003,
+     "offscreen": -0.0002,
+     "cut": 0.0025,
+     "misc": -0.0002,
+     "post": -0.0068
+    }
+   }
+  },
+  {
+   "name": "switchOffBall true",
+   "side": "def",
+   "patch": {
+    "defense": {
+     "switchOffBall": true
+    }
+   },
+   "status": "ok",
+   "net": 0,
+   "se": 0,
+   "positive": 0,
+   "inert": [
+    "CLE-GSW",
+    "LAL-PHI",
+    "ATL-BOS",
+    "TOR-CHA",
+    "DEN-OKC",
+    "NYK-MIL"
+   ],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": 0,
+     "se": 0,
+     "inert": true
+    }
+   ],
+   "own": {
+    "poss": 0,
+    "threeRate": 0,
+    "rimRate": 0,
+    "ftRate": 0,
+    "tov": 0,
+    "orb": 0,
+    "efg": 0,
+    "playTypes": {
+     "spotup": 0,
+     "handoff": 0,
+     "cut": 0,
+     "transition": 0,
+     "pnrRoll": 0,
+     "putback": 0,
+     "post": 0,
+     "pnrBH": 0,
+     "iso": 0,
+     "misc": 0,
+     "offscreen": 0
+    }
+   },
+   "opp": {
+    "poss": 0,
+    "threeRate": 0,
+    "rimRate": 0,
+    "ftRate": 0,
+    "tov": 0,
+    "orb": 0,
+    "efg": 0,
+    "playTypes": {
+     "pnrBH": 0,
+     "iso": 0,
+     "handoff": 0,
+     "spotup": 0,
+     "putback": 0,
+     "pnrRoll": 0,
+     "transition": 0,
+     "offscreen": 0,
+     "cut": 0,
+     "misc": 0,
+     "post": 0
+    }
+   }
+  },
+  {
+   "name": "huntMismatch true",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "huntMismatch": true
+    }
+   },
+   "status": "ok",
+   "net": -0.152,
+   "se": 0.34,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.645,
+     "se": 0.789,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.458,
+     "se": 0.857,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.407,
+     "se": 0.813,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -0.501,
+     "se": 0.742,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -1.184,
+     "se": 0.812,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.45,
+     "se": 0.966,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.0033,
+    "threeRate": -0.0035,
+    "rimRate": 0.0023,
+    "ftRate": -0.0009,
+    "tov": -0.0004,
+    "orb": 0.0004,
+    "efg": -0.0007,
+    "playTypes": {
+     "spotup": -0.0003,
+     "handoff": -0.0001,
+     "cut": -0.0013,
+     "transition": 0.0007,
+     "pnrRoll": 0.0006,
+     "putback": 0.0003,
+     "post": -0.0003,
+     "pnrBH": 0.0017,
+     "iso": -0.0001,
+     "misc": -0.0007,
+     "offscreen": -0.0004
+    }
+   },
+   "opp": {
+    "poss": -0.0125,
+    "threeRate": 0.0021,
+    "rimRate": -0.0001,
+    "ftRate": -0.0036,
+    "tov": 0.0002,
+    "orb": 0,
+    "efg": 0.0021,
+    "playTypes": {
+     "pnrBH": -0.0001,
+     "iso": -0.0007,
+     "handoff": -0.0004,
+     "spotup": 0.0008,
+     "putback": 0,
+     "pnrRoll": -0.0008,
+     "transition": 0.0007,
+     "offscreen": 0.0006,
+     "cut": -0.0006,
+     "misc": 0.0007,
+     "post": -0.0003
+    }
+   }
+  },
+  {
+   "name": "shape fiveOut",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "shape": "fiveOut"
+    }
+   },
+   "status": "ok",
+   "net": -0.246,
+   "se": 0.297,
+   "positive": 2,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.141,
+     "se": 0.629,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.043,
+     "se": 0.689,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.519,
+     "se": 0.583,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.189,
+     "se": 0.685,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": -0.292,
+     "se": 0.653,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.418,
+     "se": 1.037,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.1958,
+    "threeRate": 0.0021,
+    "rimRate": 0.0013,
+    "ftRate": -0.0033,
+    "tov": 0.0001,
+    "orb": -0.0072,
+    "efg": 0.0015,
+    "playTypes": {
+     "spotup": 0.0013,
+     "handoff": 0.0008,
+     "cut": 0.0001,
+     "transition": 0.0008,
+     "pnrRoll": 0.0022,
+     "putback": -0.0011,
+     "post": -0.0063,
+     "pnrBH": 0.0008,
+     "iso": 0.0012,
+     "misc": -0.0003,
+     "offscreen": 0.0004
+    }
+   },
+   "opp": {
+    "poss": 0.22,
+    "threeRate": 0.0012,
+    "rimRate": -0.001,
+    "ftRate": -0.0003,
+    "tov": 0.0005,
+    "orb": -0.0011,
+    "efg": 0.0012,
+    "playTypes": {
+     "pnrBH": 0.0011,
+     "iso": 0.0002,
+     "handoff": -0.0002,
+     "spotup": -0.0003,
+     "putback": -0.0004,
+     "pnrRoll": -0.0013,
+     "transition": 0.0005,
+     "offscreen": 0.0003,
+     "cut": -0.0003,
+     "misc": 0.0004,
+     "post": 0
+    }
+   }
+  },
+  {
+   "name": "shape horns",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "shape": "horns"
+    }
+   },
+   "status": "ok",
+   "net": -0.026,
+   "se": 0.392,
+   "positive": 3,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -1.367,
+     "se": 0.913,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 1.452,
+     "se": 1.058,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 1.099,
+     "se": 0.978,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": -1.404,
+     "se": 0.914,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.318,
+     "se": 0.952,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -0.252,
+     "se": 0.944,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": 0.2042,
+    "threeRate": -0.0065,
+    "rimRate": 0.0035,
+    "ftRate": 0.0035,
+    "tov": 0.0001,
+    "orb": 0.0013,
+    "efg": -0.0006,
+    "playTypes": {
+     "spotup": -0.0204,
+     "handoff": 0.0026,
+     "cut": -0.0101,
+     "transition": 0.0011,
+     "pnrRoll": 0.0134,
+     "putback": 0.0007,
+     "post": -0.0002,
+     "pnrBH": 0.0084,
+     "iso": 0.0028,
+     "misc": -0.0003,
+     "offscreen": 0.0021
+    }
+   },
+   "opp": {
+    "poss": 0.185,
+    "threeRate": 0.0026,
+    "rimRate": -0.0016,
+    "ftRate": -0.0023,
+    "tov": -0.0002,
+    "orb": -0.0007,
+    "efg": 0.0019,
+    "playTypes": {
+     "pnrBH": 0.0003,
+     "iso": 0.0001,
+     "handoff": -0.0006,
+     "spotup": 0.0005,
+     "putback": 0,
+     "pnrRoll": -0.0009,
+     "transition": -0.0005,
+     "offscreen": -0.0001,
+     "cut": -0.0004,
+     "misc": 0.001,
+     "post": 0.0005
+    }
+   }
+  },
+  {
+   "name": "shape twoIn",
+   "side": "off",
+   "patch": {
+    "offense": {
+     "shape": "twoIn"
+    }
+   },
+   "status": "ok",
+   "net": -0.054,
+   "se": 0.288,
+   "positive": 4,
+   "inert": [],
+   "perMatchup": [
+    {
+     "a": "CLE",
+     "b": "GSW",
+     "delta": -0.163,
+     "se": 0.699,
+     "inert": false
+    },
+    {
+     "a": "LAL",
+     "b": "PHI",
+     "delta": 0.825,
+     "se": 0.689,
+     "inert": false
+    },
+    {
+     "a": "ATL",
+     "b": "BOS",
+     "delta": 0.112,
+     "se": 0.62,
+     "inert": false
+    },
+    {
+     "a": "TOR",
+     "b": "CHA",
+     "delta": 0.184,
+     "se": 0.675,
+     "inert": false
+    },
+    {
+     "a": "DEN",
+     "b": "OKC",
+     "delta": 0.226,
+     "se": 0.646,
+     "inert": false
+    },
+    {
+     "a": "NYK",
+     "b": "MIL",
+     "delta": -1.507,
+     "se": 0.879,
+     "inert": false
+    }
+   ],
+   "own": {
+    "poss": -0.0258,
+    "threeRate": -0.0027,
+    "rimRate": 0.0009,
+    "ftRate": -0.0003,
+    "tov": 0.0008,
+    "orb": 0.0117,
+    "efg": -0.0047,
+    "playTypes": {
+     "spotup": -0.0021,
+     "handoff": -0.0006,
+     "cut": -0.0023,
+     "transition": -0.0002,
+     "pnrRoll": -0.0009,
+     "putback": 0.0035,
+     "post": 0.0039,
+     "pnrBH": -0.0004,
+     "iso": -0.0004,
+     "misc": -0.0002,
+     "offscreen": -0.0002
+    }
+   },
+   "opp": {
+    "poss": -0.0308,
+    "threeRate": 0.0012,
+    "rimRate": -0.0007,
+    "ftRate": -0.0007,
+    "tov": 0.0014,
+    "orb": 0.0015,
+    "efg": 0.0026,
+    "playTypes": {
+     "pnrBH": 0.0004,
+     "iso": 0.0001,
+     "handoff": -0.0008,
+     "spotup": 0.0001,
+     "putback": 0,
+     "pnrRoll": -0.0007,
+     "transition": 0.0002,
+     "offscreen": 0.0007,
+     "cut": -0.0009,
+     "misc": 0.0004,
+     "post": 0.0004
+    }
+   }
+  }
+ ]
+}

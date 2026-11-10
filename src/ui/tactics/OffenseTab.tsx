@@ -187,8 +187,9 @@ export function InTransitionHelp() {
         <b>After a stop:</b> how often you run before the defense sets. Running scores best and costs legs.
       </p>
       <p>
-        <b>When a shot goes up:</b> how many crash the glass and how hard the rest get back. Crashing wins second chances and gives up fast breaks.
+        <b>When a shot goes up:</b> how many crash the glass and how hard the rest get back. Crashing wins second chances, gives up fast breaks and tires legs.
       </p>
+      <p>Missed threes come off long and start more fast breaks.</p>
       {([1, -1] as const).map((g) => (
         <p key={g}>
           <b>{GLASS_META[g].label}:</b> {GLASS_META[g].help}

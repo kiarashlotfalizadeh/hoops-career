@@ -4,6 +4,7 @@
 // never plays four), and in-game injuries.
 
 import { K } from './constants';
+import { TK } from './tk';
 import { GAME } from '../../constants';
 import { crunchTime } from '../../analysis/winProb';
 import { type SP, type ST, mix } from './state';
@@ -199,7 +200,29 @@ export const rotationMethods = {
       if (desired.length >= 5) break;
       if (!desired.includes(p)) desired.push(p);
     }
-    return desired.slice(0, 5);
+    desired = desired.slice(0, 5);
+    // the last seconds of a close game with the other side's ball: a stopper in for the weakest defender
+    if (this.odWindow(t)) desired = this.odSwap(t, desired, ordered);
+    return desired;
+  },
+
+  /** A close game's last seconds with the other side about to have the ball, for a staff that makes offense-defense substitutions (TK.odSub). */
+  odWindow(this: GameSim, t: ST): boolean {
+    const k = TK.odSub;
+    return (
+      t.habit.odSub && !t.manualSubs && this.q >= 4 && this.clock <= k.sec && this.clock > 0.5 && Math.abs(t.score - this.T[1 - t.side].score) <= k.within && this.poss !== t.side
+    );
+  },
+
+  /** The five with its weakest defender (never its closer) swapped for the best defender of his size on the bench, when that one is TK.odSub.gap better. */
+  odSwap(this: GameSim, t: ST, five: SP[], ordered: SP[]): SP[] {
+    const d = (p: SP) => 0.5 * p.c.perDef + 0.3 * p.c.helpD + 0.2 * p.c.intDef;
+    const closer = this.closer(t);
+    const weak = five.filter((p) => p !== closer).sort((a, b) => d(a) - d(b))[0];
+    if (!weak) return five;
+    const sub = ordered.filter((p) => !five.includes(p) && p.big === weak.big && p.energy > 0.6 && p.fouls < 5).sort((a, b) => d(b) - d(a))[0];
+    if (!sub || d(sub) < d(weak) + TK.odSub.gap) return five;
+    return five.map((p) => (p === weak ? sub : p));
   },
 
   /**
@@ -218,6 +241,7 @@ export const rotationMethods = {
       this.wantsGarbage(t) ? 1 : 0,
       this.lopsided(t) ? 1 : 0,
       this.q < 4 && this.clock <= K.foulRide.back ? 1 : 0,
+      this.odWindow(t) ? 1 : 0,
     ];
     for (const p of t.players) {
       const state = p.on ? (p.energy < fl ? 0 : 1) : p.energy > 0.82 ? 2 : 3;

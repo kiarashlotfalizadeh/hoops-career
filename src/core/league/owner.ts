@@ -38,6 +38,8 @@ export function takeOverTeam(league: League, tid: number) {
   old.tactics = autoTactics({ ...old, tactics: defaultTactics(old.coach.offPhilosophy, old.coach.defPhilosophy) }, teamPlayers(league, old.tid), false);
   league.userTid = tid;
   league.fired = false;
+  // (the new team's playbook is no longer its old coach's style: the user's staff names and refits it)
+  delete nu.tactics.identity;
   // the old team's game plans and the old scouting department's board don't come along, and
   // nor does its business: pending free-agent offers, waiver claims, trade offers and untouchables
   clearAllPlans(league);

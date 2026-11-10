@@ -68,7 +68,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Style gate (no playbook best for or picked by more than 12 of 30 teams, no shape best for more than 14)
+      - name: Style gate (no playbook measured best for more than 12 of 30 teams or picked by the user's staff for more than 18, no AI coverage run by more than 20, no shape best for more than 14)
         run: npm run style-gate
   # the season forecast against the seasons it forecasts: ten real leagues and six fictional ones from
   # opening night, two seasons each (scripts/forecast-check.ts); fails when its spread, its tails, its

@@ -120,6 +120,7 @@ export function OutOfPossessionHelp() {
         </p>
       ))}
       <p>Drop needs a big who protects the rim. Switching and hedging need one who moves.</p>
+      <p>Two guards of a size usually switch their screen under Drop, Hedge or Ice.</p>
       <p>
         <b>Ball pressure:</b> more steals and turnovers, and more fouls. Secure handlers blow by it.
       </p>

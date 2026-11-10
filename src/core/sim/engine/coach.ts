@@ -8,22 +8,19 @@ import { archetype } from '../../ratings';
 import { GAME } from '../../constants';
 import type { FinishType } from '../log';
 import { cloneTactics, defRoleOf, withMentality } from '../tactics';
-import { type ST, ACTION_LIST, freedomMult } from './state';
+import { type SP, type ST, ACTION_LIST, freedomMult } from './state';
 import type { GameSim } from './game';
+import { roleEdge } from './defense';
 import { K } from './constants';
+import { TK } from './tk';
 
 /**
- * The adjustments the user's assistant doesn't make at the breaks of a simmed game (the side whose
- * team is marked `assistant`: see buildSimInput), measured for the user's side (12 teams' first 12
- * games, 120 seeds each, injuries off; scratch round/gameday/adjust.mts, 2026-10-25), each kind kept
- * alone against none over 7,200 paired games, in points of margin: going from Drop to Hedge cost 1.9
- * a game where it was made, backing off the ball 0.35 and staying home on shooters 3.4 (on 36 games).
- * Over 17,280 paired games against no adjustments (injuries off): with every kind, +0.31 ± 0.09 a game;
- * without these three, +0.47 ± 0.09. Re-measured with injuries on (28,160 paired games over 32 team
- * runs, 2026-10-26): +0.05 ± 0.15, about even, swinging from +0.64 to −0.37 by matchups. AI coaches
- * make all of them as before.
+ * The adjustments a coach makes at a break, by kind, and the kinds measured as losing for the side
+ * that makes them, which nobody makes (2026-11, scripts/tactics-lab: each kind alone against none in
+ * paired AI games). Before, AI coaches made two the code's own notes had measured as losing (drop to
+ * hedge, -1.9 a game where made; staying home on shooters, -3.4) and never touched their offense.
  */
-const ASSISTANT_SKIPS = new Set(['hedge', 'backoff', 'home']);
+export const LOSING_ADJUSTMENTS = new Set<string>([]);
 
 export const coachMethods = {
   /** Plays the team's base tactics (new ones from the bench), with the mentality's nudges on top. No random draws. */
@@ -35,6 +32,7 @@ export const coachMethods = {
       p.role = t.t.offense.roles[p.pid] ?? archetype(p.r).role;
       p.freedom = freedomMult(t.t.offense.freedom[p.pid] ?? 0);
       p.drole = defRoleOf(t.t.defense, p.pid);
+      p.dm = roleEdge(p);
       p.glass = t.t.offense.glass?.[p.pid] ?? 0;
     }
     this.refreshMatchups();
@@ -72,94 +70,150 @@ export const coachMethods = {
   },
 
   /**
-   * In-game adjustments by an AI coach at a break: if the opponent is exploiting something
-   * (per the impact tags and play-type PPP), change one thing, more often the better the coach.
+   * In-game adjustments by a coach at a break (an AI coach, or the user's assistant in a simmed game):
+   * if the other side is cashing in on something, or his own offense is stuck, he changes one thing,
+   * more often the better the coach. Read from the tags each side is cashing in (impact rates per 12
+   * minutes) and the play types' points per trip. Defense first, then offense; one a period. A kind
+   * measured as losing is never made (LOSING_ADJUSTMENTS); `opts.adjustOnly` (the measuring kit) limits
+   * the kinds made.
    */
   adjust(this: GameSim, t: ST) {
     if (!t.adjust || t.adjustedQ === this.q || this.elapsed < 360 || !this.rng.chance(t.adjust)) return;
     const opp = this.T[1 - t.side];
     const d = t.t.defense;
+    const o = t.t.offense;
     const rate = (key: string) => this.gainedRate(opp.side, key);
-    const ppp = (f: FinishType) => {
-      const x = opp.pt[f];
+    const ppp = (side: ST, f: FinishType) => {
+      const x = side.pt[f];
       return x && x.poss >= 6 ? x.pts / x.poss : 0;
     };
-    // the change is decided on what is being played, and made to the base tactics too
-    let what = '';
-    /** Which kind of change it is (see ASSISTANT_SKIPS). */
-    let kind = '';
-    let change = (x: Tactics) => void x;
+    type Move = { kind: string; what: string; change: (x: Tactics) => void; rematch?: boolean };
+    const moves: Move[] = [];
+    // ---- defense
     // a defender the other bench hunts with success gets hidden on their weakest scorer on the floor
-    // (only ever when the opponent hunts one: never in a game between AI teams)
     const huntedD = rate('hunt:o') >= 0.5 ? t.byId.get(opp.t.offense.huntTarget ?? -1) : undefined;
     const weak = huntedD?.on ? opp.on.filter((p) => t.guardOf.get(p.pid) !== huntedD).sort((a, b) => this.threat(a, opp) - this.threat(b, opp) || a.pid - b.pid)[0] : undefined;
-    const junk = d.scheme === 'box1' || d.scheme === 'tri2';
-    if (huntedD && weak) {
-      change = (x) => {
-        for (const k of Object.keys(x.defense.matchups)) if (x.defense.matchups[+k] === huntedD.pid) delete x.defense.matchups[+k];
-        x.defense.matchups[weak.pid] = huntedD.pid;
-      };
-      what = `hides ${huntedD.name} on ${weak.name}`;
-      kind = 'hide';
-    } else if (d.scheme !== 'man') {
-      if (rate('zone_3pt:o') + rate('zone_glass:o') + rate('box_open:o') + rate('box_beat:o') >= 1) {
-        change = (x) => void (x.defense.scheme = 'man');
-        what = 'goes back to man-to-man';
-        kind = 'man';
-      }
-    } else if (d.pnr === 'drop' && (rate('drop_pullup:o') + rate('drop_pop:o') >= 0.8 || ppp('pnrBH') >= 1.15)) {
-      change = (x) => void (x.defense.pnr = 'hedge');
-      what = 'hedges ball screens instead of dropping';
-      kind = 'hedge';
-    } else if (d.pnr === 'blitz' && rate('blitz_4v3:o') >= 0.6) {
-      change = (x) => void (x.defense.pnr = 'hedge');
-      what = 'stops blitzing ball screens';
-      kind = 'unblitz';
-      // (0.3 a quarter of mismatch points: the off-ball switches' tags count what they're worth, K.offBallTag,
-      // so this is the 0.8 the coaches read before, the same games for them to react to; 0.5 since the
-      // switched ball screen's tags went from half their estimate to 0.95 of it, K.switchTag)
-    } else if (d.pnr !== 'drop' && (ppp('pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.5 || rate('hedge_roll:o') >= 0.6)) {
-      change = (x) => {
-        x.defense.pnr = 'drop';
-        x.defense.switchOffBall = false;
-      };
-      what = 'drops the big on ball screens';
-      kind = 'drop';
+    if (huntedD && weak)
+      moves.push({
+        kind: 'hide',
+        what: `hides ${huntedD.name} on ${weak.name}`,
+        rematch: true,
+        change: (x) => {
+          for (const k of Object.keys(x.defense.matchups)) if (x.defense.matchups[+k] === huntedD.pid) delete x.defense.matchups[+k];
+          x.defense.matchups[weak.pid] = huntedD.pid;
+        },
+      });
+    // a zone or a junk defense being picked apart goes back to man-to-man, for good
+    const zoneHurt = rate('zone_3pt:o') + rate('zone_glass:o') + rate('box_open:o') + rate('box_beat:o');
+    if ((d.scheme !== 'man' || t.habit.zoneMix > 0) && zoneHurt >= 0.9)
+      moves.push({
+        kind: 'man',
+        what: 'goes back to man-to-man',
+        rematch: d.scheme === 'box1' || d.scheme === 'tri2',
+        change: (x) => {
+          x.defense.scheme = 'man';
+          t.habit.zoneMix = 0;
+        },
+      });
+    if (d.scheme === 'man') {
+      // a handler who can shoot it is pulling up over the drop: ice the side screens and stay up on the middle ones
+      const lead = this.leadHandler(opp);
+      if (d.pnr === 'drop' && rate('drop_pullup:o') + rate('drop_pop:o') >= 0.8 && lead && Math.max(lead.c.pu3, lead.c.midShot) >= 62)
+        moves.push({ kind: 'ice', what: `ices ${lead.name}'s ball screens instead of dropping`, change: (x) => void (x.defense.pnr = 'ice') });
+      // the trap's 4-on-3 is burning them: back to the drop
+      if (d.pnr === 'blitz' && rate('blitz_4v3:o') >= 0.6) moves.push({ kind: 'unblitz', what: 'stops blitzing ball screens', change: (x) => void (x.defense.pnr = 'drop') });
+      // the roll man (or the switch's mismatches) are eating them alive: drop the big
+      // (only with a rim protector on the floor to drop: without one it measured as a loss)
+      const anchor = Math.max(...t.on.map((p) => p.c.rimProt));
+      if (d.pnr !== 'drop' && d.pnr !== 'ice' && anchor >= 62 && (ppp(opp, 'pnrRoll') >= 1.45 || rate('switch_mismatch:o') >= 0.6 || rate('hedge_roll:o') >= 0.6))
+        moves.push({
+          kind: 'drop',
+          what: 'drops the big on ball screens',
+          change: (x) => {
+            x.defense.pnr = 'drop';
+            x.defense.switchOffBall = false;
+          },
+        });
     }
-    if (!what) {
-      if (rate('help_kick:o') >= 0.6 && d.help > 30) {
-        change = (x) => void (x.defense.help = Math.max(0, x.defense.help - 15));
-        what = 'stays home on shooters';
-        kind = 'home';
-      } else if (rate('help_paint:o') + rate('spacing:o') >= 0.6 && d.help < 75) {
-        change = (x) => void (x.defense.help = Math.min(100, x.defense.help + 15));
-        what = 'packs the paint';
-        kind = 'pack';
-        // (backing off and crashing less pay only from an extreme: the change stops at the middle,
-        // where giving up turnovers or boards would cost more than the blow-bys or run-outs it saves)
-      } else if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.5 && d.pressure > 60) {
-        change = (x) => void (x.defense.pressure = Math.max(50, x.defense.pressure - 15));
-        what = 'backs off the ball';
-        kind = 'backoff';
-      } else if (rate('crash_leak:o') >= 0.5 && t.t.offense.crashBoards > 65) {
-        change = (x) => void (x.offense.crashBoards = Math.max(55, x.offense.crashBoards - 20));
-        what = 'sends fewer players to the offensive glass';
-        kind = 'glass';
-      } else if (rate('getback:o') >= 0.4 && d.getBack < 80) {
-        change = (x) => void (x.defense.getBack = Math.min(100, x.defense.getBack + 15));
-        what = 'sprints back in transition';
-        kind = 'getback';
-      }
+    if (rate('help_paint:o') + rate('spacing:o') + rate('drop_rim:o') >= 0.7 && d.help < 70)
+      moves.push({ kind: 'pack', what: 'packs the paint', change: (x) => void (x.defense.help = Math.min(100, x.defense.help + 15)) });
+    if (rate('help_kick:o') >= 0.7 && d.help > 60 && this.shooters(opp) >= 3)
+      moves.push({ kind: 'home', what: 'stays home on shooters', change: (x) => void (x.defense.help = Math.max(45, x.defense.help - 15)) });
+    // (against handlers secure enough to make the pressure pay: against loose ones it's the turnovers that count)
+    if (rate('pressure_blowby:o') + rate('pressure_backdoor:o') + rate('pressure_foul:o') >= 0.6 && d.pressure > 62 && opp.secQ >= 57)
+      moves.push({ kind: 'backoff', what: 'backs off the ball', change: (x) => void (x.defense.pressure = Math.max(50, x.defense.pressure - 15)) });
+    if (rate('getback:o') + rate('crash_leak:o') >= 0.6 && d.getBack < 75)
+      moves.push({
+        kind: 'getback',
+        what: 'sprints back in transition',
+        change: (x) => {
+          x.defense.getBack = Math.min(100, x.defense.getBack + 15);
+          x.offense.crashBoards = Math.max(35, x.offense.crashBoards - 10);
+        },
+      });
+    // ---- offense
+    if (t.habit.offAdj > 0) {
+      const zoned = this.schemeNow(opp) !== 'man' || opp.habit.zoneMix > 0.15;
+      // against a zone or a junk defense: move it, flash the high post, find the shooters
+      if (zoned && rate('zone_paint:d') >= 0.4 && o.actions.motion < 80)
+        moves.push({
+          kind: 'attackZone',
+          what: 'attacks the zone with ball movement',
+          change: (x) => {
+            x.offense.actions.motion = Math.min(100, x.offense.actions.motion + 20);
+            x.offense.actions.handoff = Math.min(100, x.offense.actions.handoff + 10);
+            x.offense.actions.iso = Math.max(10, x.offense.actions.iso - 15);
+          },
+        });
+      // a defender in foul trouble gets attacked
+      const trouble = this.foulTarget(t, opp);
+      if (trouble && o.huntTarget == null)
+        moves.push({ kind: 'foulHunt', what: `goes at ${trouble.name} in foul trouble`, change: (x) => void (x.offense.huntTarget = trouble.pid) });
+      // a switching defense hands out mismatches: go get them
+      if (!o.huntMismatch && opp.t.defense.pnr === 'switch' && this.bestMismatch(t, opp) >= 12)
+        moves.push({ kind: 'hunt', what: 'hunts the mismatches the switches leave', change: (x) => void (x.offense.huntMismatch = true) });
+      // behind by double figures in the fourth quarter: more possessions, more risk
+      const down = opp.score - t.score;
+      if (this.q >= 4 && this.clock <= 600 && down >= 10 && down <= 22 && (t.t.mentality ?? 0) < 1)
+        moves.push({ kind: 'chase', what: 'pushes the pace to chase the game', change: (x) => void (x.mentality = 1) });
     }
-    // (the user's assistant leaves the kinds that cost his side alone, and may look again at the next stop)
-    if (!what || (t.team.assistant && ASSISTANT_SKIPS.has(kind))) return;
-    change(t.t);
-    change(t.base);
-    // a hidden defender and chasers called off are new assignments
-    if ((huntedD && weak) || junk) this.refreshMatchups();
+    const only = this.opts.adjustOnly;
+    const move = moves.find((m) => !LOSING_ADJUSTMENTS.has(m.kind) && (!only || only.includes(m.kind)));
+    if (!move) return;
+    // (a new mentality is played from the base, as new base tactics are: see rebase)
+    if (move.kind === 'chase') {
+      move.change(t.base);
+      this.rebase(t);
+    } else {
+      move.change(t.t);
+      move.change(t.base);
+      if (move.rematch) this.refreshMatchups();
+    }
+    // (attacking the zone is the high-post flash and the ball reversal it calls for: the zone is read sooner)
+    if (move.kind === 'attackZone') t.zoneSeen += TK.zoneRead.answer;
     t.adjustedQ = this.q;
-    this.adjustments.push({ t: t.side, q: this.q, clock: Math.round(this.clock), text: what });
-    this.addPbp(t.side, `${t.team.abbrev} adjusts: ${what}.`, 'other');
+    this.adjustments.push({ t: t.side, q: this.q, clock: Math.round(this.clock), text: move.what, kind: move.kind });
+    this.addPbp(t.side, `${t.team.abbrev} adjusts: ${move.what}.`, 'other');
+  },
+
+  /** The other side's lead ball handler on the floor (the one with the most pick-and-roll handling). */
+  leadHandler(this: GameSim, t: ST): SP | null {
+    let best: SP | null = null;
+    for (const p of t.on) if (!best || p.c.pnrHandle * p.tu > best.c.pnrHandle * best.tu) best = p;
+    return best;
+  },
+
+  /** How many players on the floor can shoot it (catch-and-shoot 55 and up). */
+  shooters(this: GameSim, t: ST): number {
+    return t.on.filter((p) => p.c.c3 >= 55).length;
+  },
+
+  /** A defender worth attacking in foul trouble: one on the floor with four fouls (five in the fourth) who plays inside or guards the ball. */
+  foulTarget(this: GameSim, _off: ST, def: ST): SP | null {
+    const limit = this.q >= 4 ? 5 : 4;
+    const cands = def.on.filter((p) => p.fouls >= limit && p.planMin >= 20);
+    if (!cands.length) return null;
+    return cands.sort((a, b) => b.planMin - a.planMin)[0];
   },
 
   /** NBA: no more than two timeouts each after the 3:00 mark of the fourth quarter. */

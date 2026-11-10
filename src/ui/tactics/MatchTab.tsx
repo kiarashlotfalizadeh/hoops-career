@@ -18,9 +18,9 @@ export function MatchTab({ t, players }: { t: Tactics; players: Player[] }) {
           <div className="tx-ctl">
             <Toggle
               // (on unless switched off, whoever runs the tactics: taking over the tactics doesn't turn it
-              // off; see buildSimInput). Measured again with injuries on (2026-10-25: 32 team runs over two
-              // leagues, 28,160 paired games, each team's first 10-12): +0.05 ± 0.15 a game, about even, so
-              // the help says so and quotes no number (DESIGN.md)
+              // off; see buildSimInput). Since tactics v2 the assistant has the AI coaches' menu at both ends,
+              // each kind measured alone (scripts/tactics-lab/adjustments.ts) at about even or better and the
+              // losing kinds never made, so the help says so and quotes no number (DESIGN.md)
               on={m.assistantAdjusts !== false}
               onChange={(x) =>
                 tweak((tt) => {
@@ -76,6 +76,14 @@ export function MatchTab({ t, players }: { t: Tactics; players: Player[] }) {
               </div>
               <div className="tx-ctl">
                 <Toggle on={m.twoForOne} onChange={(x) => tweak((tt) => void (tt.manage.twoForOne = x))} label="Go for 2-for-1" />
+              </div>
+              <div className="tx-ctl">
+                <Toggle
+                  on={m.odSubs !== false}
+                  onChange={(x) => tweak((tt) => void (tt.manage.odSubs = x))}
+                  label="Offense-defense subs late"
+                  help="Your best bench defender comes in on defense in the last seconds of a close game."
+                />
               </div>
               <div className="tx-ctl">
                 <Toggle on={m.garbageTime} onChange={(x) => tweak((tt) => void (tt.manage.garbageTime = x))} label="Rest starters in blowouts" />

@@ -280,6 +280,8 @@ describe('the draft', () => {
       const dp = x.draftPicks.find((d) => d.season === x.season && d.round === 1 && d.originalTid === first.orig)!;
       const buyer = (first.orig + 1) % 30;
       dp.tid = buyer;
+      // (the seed's real picks carry their protections: whichever team the season leaves with the first pick)
+      delete dp.protection;
       expect(mockDraft(x)!.slots[0]).toMatchObject({ tid: buyer, orig: first.orig });
       dp.protection = 4;
       expect(mockDraft(x)!.slots[0]).toMatchObject({ tid: first.orig, orig: first.orig });

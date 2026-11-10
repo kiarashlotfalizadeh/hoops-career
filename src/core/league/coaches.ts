@@ -15,7 +15,7 @@
 // stint per job, and the carousel never touches his team. It draws on a random stream of its own,
 // never the league's, so it doesn't shift any of the league's other draws.
 
-import type { CoachProfile, League, Phase, TeamSeason } from '../types';
+import type { CoachProfile, CoachStyle, League, Phase, TeamSeason } from '../types';
 import { Rng, clamp, hashString } from '../random';
 import { coachName, randomCoach } from '../teamFactory';
 import { autoTactics } from '../ai/coachAI';
@@ -45,6 +45,8 @@ export interface CoachRecord {
   def: string;
   dev: number;
   tac: number;
+  /** His style (see ai/style.ts): he takes it from job to job. Absent for a coach from before styles. */
+  style?: CoachStyle;
   /** The user's coach. */
   user?: true;
   /**
@@ -64,10 +66,27 @@ const CANDIDATES = 2;
 /** A shortfall against the roster's expected win% that counts as one step in an owner's review. */
 const SHORTFALL = 0.08;
 
-export const profileOf = (r: CoachRecord): CoachProfile => ({ name: r.name, offPhilosophy: r.off, defPhilosophy: r.def, development: r.dev, tactics: r.tac });
+export const profileOf = (r: CoachRecord): CoachProfile => ({
+  name: r.name,
+  offPhilosophy: r.off,
+  defPhilosophy: r.def,
+  development: r.dev,
+  tactics: r.tac,
+  ...(r.style ? { style: structuredClone(r.style) } : {}),
+});
 
 function newRecord(id: number, p: CoachProfile, user: boolean): CoachRecord {
-  return { id, name: p.name, off: p.offPhilosophy, def: p.defPhilosophy, dev: p.development, tac: p.tactics, ...(user ? { user: true as const } : {}), stints: [] };
+  return {
+    id,
+    name: p.name,
+    off: p.offPhilosophy,
+    def: p.defPhilosophy,
+    dev: p.development,
+    tac: p.tactics,
+    ...(p.style ? { style: structuredClone(p.style) } : {}),
+    ...(user ? { user: true as const } : {}),
+    stints: [],
+  };
 }
 
 export const openStint = (r: CoachRecord) => r.stints.find((s) => !s.to);

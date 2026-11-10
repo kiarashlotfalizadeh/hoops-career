@@ -251,16 +251,18 @@ describe('planning for an opponent', () => {
       expect(l.rng).toBe(rng);
     }
     {
-      // never applies in games between AI teams
+      // AI coaches game-plan for each other too: the plan is in the game they play
       const l = keenAt(12);
-      const g = l.schedule.find((x) => !x.played && x.home !== l.userTid && x.away !== l.userTid)!;
+      const g = l.schedule.find((x) => !x.played && x.home !== l.userTid && x.away !== l.userTid && (preparesPlan(l, x.home, x.gid) || preparesPlan(l, x.away, x.gid)))!;
       for (const [tid, opp] of [
         [g.home, g.away],
         [g.away, g.home],
       ]) {
-        expect(aiGamePlan(l, tid, opp, g)).toBeNull();
+        const plan = aiGamePlan(l, tid, opp, g);
+        expect(!!plan).toBe(preparesPlan(l, tid, g.gid));
         const input = buildSimInput(l, tid, g.day, g.type, opp, g);
-        expect(input.team).toBe(l.teams[tid]);
+        if (plan) expect(input.team.tactics).toEqual(withOppPlan(l.teams[tid].tactics, plan));
+        else expect(input.team).toBe(l.teams[tid]);
       }
       // a day of simmed games keeps a plan only on the user's game
       toGameDay(l);
@@ -323,7 +325,7 @@ describe('planning for an opponent', () => {
         const box = plan?.items.find((it) => it.id === 'box1');
         if (!box) continue;
         found++;
-        expect(box.text).toBe(`plays a box-and-one on ${shortName(l, star)}`);
+        expect(box.text).toBe(`plays a box-and-one on ${shortName(l, star)} in stretches`);
         expect(box.why).toMatch(/uses 38% of your possessions\. The rest of your team makes 2\d\.\d% of its threes/);
         const t = buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics;
         expect(t.defense).toMatchObject({ scheme: 'box1', chase: [star.pid] });
@@ -372,7 +374,7 @@ describe('planning for an opponent', () => {
         const zone = aiGamePlan(l, tid, l.userTid, g)?.items.find((it) => it.id === 'zone23');
         if (!zone) continue;
         zones++;
-        expect(zone).toMatchObject({ group: 'coverage', text: 'plays a 2-3 zone' });
+        expect(zone).toMatchObject({ group: 'coverage', text: 'plays a 2-3 zone in stretches' });
         expect(buildSimInput(l, tid, g.day, g.type, l.userTid, g).team.tactics.defense.scheme).toBe('zone23');
       }
       expect(zones).toBeGreaterThan(3);

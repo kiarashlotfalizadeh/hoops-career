@@ -38,27 +38,30 @@ export function presetMatches(values: object, preset: OffPreset | DefPreset): bo
 }
 
 /** The offense as the screens name it: the preset's name, or "Custom Balanced" once its settings have moved. */
-export function offenseLabel(t: { offense: object; offPreset: string }): string {
+export function offenseLabel(t: { offense: object; offPreset: string; identity?: { off: string }; manual?: boolean }): string {
+  // (an AI staff's playbook is its coach's style, named in a few words)
+  if (t.identity && !t.manual) return t.identity.off;
   const p = OFF_PRESETS.find((x) => x.id === t.offPreset);
   if (!p) return 'Custom';
   return presetMatches(t.offense, p) ? p.name : `Custom ${OFF_SHORT[p.id] ?? p.name}`;
 }
 
-export function defenseLabel(t: { defense: object; defPreset: string }): string {
+export function defenseLabel(t: { defense: object; defPreset: string; identity?: { def: string }; manual?: boolean }): string {
+  if (t.identity && !t.manual) return t.identity.def;
   const p = DEF_PRESETS.find((x) => x.id === t.defPreset);
   if (!p) return 'Custom';
   return presetMatches(t.defense, p) ? p.name : `Custom ${DEF_SHORT[p.id] ?? p.name}`;
 }
 
 /** "Heliocentric · Custom Drop": a team's offense and defense, for headers and scouting. */
-export function playbookLabel(t: { offense: object; defense: object; offPreset: string; defPreset: string }): string {
+export function playbookLabel(t: { offense: object; defense: object; offPreset: string; defPreset: string; identity?: { off: string; def: string }; manual?: boolean }): string {
   return `${offenseLabel(t)} · ${defenseLabel(t)}`;
 }
 
 // ---------------------------------------------------------------- what changed
 
 /** The parts of Tactics compared on their own (or not at all). */
-const KNOWN = ['offense', 'defense', 'manage', 'offPreset', 'defPreset', 'manual'];
+const KNOWN = ['offense', 'defense', 'manage', 'offPreset', 'defPreset', 'manual', 'identity'];
 
 /** One difference between two sets of tactics: "Tempo 62 → 80". Without from/to, "Screeners changed". */
 export interface TacticsChange {
@@ -118,6 +121,7 @@ const MANAGE_FIELDS: Field<string>[] = [
   ['timeoutRun', 'Timeout after a run of', (v) => `${v}-0`],
   ['foulTrouble', 'Foul trouble', (v) => String(v).charAt(0).toUpperCase() + String(v).slice(1)],
   ['fatigueSub', 'Sub out tired players at', (v) => `${Math.round((v as number) * 100)}% energy`],
+  ['odSubs', 'Offense-defense subs late', onUnlessOff],
   ['ato', 'After-timeout play', (v) => atoLabel(v as string | null, (a) => ACTION_META[a].label)],
   ['assistantAdjusts', 'Assistant adjusts in simmed games', onUnlessOff],
 ];

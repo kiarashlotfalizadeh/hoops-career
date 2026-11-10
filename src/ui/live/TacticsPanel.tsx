@@ -336,6 +336,12 @@ export function TacticsPanel({
         />
         <Toggle on={t.manage.twoForOne} onChange={(x) => set((tt) => void (tt.manage.twoForOne = x))} label="Go for 2-for-1" />
         <Toggle
+          on={t.manage.odSubs !== false}
+          onChange={(x) => set((tt) => void (tt.manage.odSubs = x))}
+          label="Offense-defense subs late"
+          help="Your best bench defender comes in on defense in the last seconds of a close game."
+        />
+        <Toggle
           on={!!t.manage.foulToGive}
           onChange={(x) => set((tt) => void (tt.manage.foulToGive = x))}
           label="Foul to give"

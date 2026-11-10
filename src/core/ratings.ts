@@ -1,4 +1,4 @@
-import type { OffRole, Pos, RatingKey, Ratings } from './types';
+import type { DefRole, OffRole, Pos, RatingKey, Ratings } from './types';
 import { clamp } from './random';
 
 export interface RatingMeta {
@@ -438,4 +438,26 @@ export function emptyRatings(): Ratings {
 export function clampRatings(r: Ratings): Ratings {
   for (const k of RATING_KEYS) r[k] = clamp(Math.round(r[k] * 10) / 10, 1, 100);
   return r;
+}
+
+/**
+ * How well a player suits each out-of-possession role (0-100), from his composites and ratings: the
+ * point-of-attack stopper's feet and hands on the ball, the wing stopper's on-ball defense and length,
+ * the rim anchor's rim protection (a small one can't be one), the roamer's reads and help. A hidden
+ * defender suits the role as much as he doesn't suit the others, and a position defender is his
+ * defense in general. (The staff's reads use it through analysis/system.ts defRoleFits; the engine
+ * scales each role's edge by it.)
+ */
+export function defRoleFitsFrom(c: Composites, r: Ratings): Record<DefRole, number> {
+  const small = (n: number) => (r.hgt < 55 ? n : 0);
+  const big = (n: number) => (r.hgt >= 62 ? n : 0);
+  const general = 0.45 * c.perDef + 0.3 * c.intDef + 0.25 * c.helpD;
+  return {
+    standard: general,
+    poa: 0.55 * c.perDef + 0.25 * c.steal + 0.2 * r.spd - big(15),
+    stopper: 0.6 * c.perDef + 0.2 * r.diq + 0.2 * Math.min(r.hgt, 65) - big(8),
+    anchor: 0.6 * c.rimProt + 0.4 * c.intDef - small(20),
+    roamer: 0.55 * c.helpD + 0.25 * c.steal + 0.2 * c.rimProt,
+    hide: clamp(110 - general, 30, 75),
+  };
 }

@@ -4,7 +4,8 @@
 
 import { clamp } from '../../random';
 import { GAME } from '../../constants';
-import { K, lev } from './constants';
+import { K } from './constants';
+import { TK } from './tk';
 import type { ST, Ctx } from './state';
 import type { GameSim } from './game';
 
@@ -14,12 +15,12 @@ export const transitionMethods = {
     const h = handlers[0];
     const trapQ = def.on.reduce((a, p) => a + p.c.steal + p.r.spd, 0) / (def.on.length * 2);
     const secQ = (h.c.ballSec + handlers[1].c.ballSec + off.passQ) / 3;
-    const k = K.pressAdv;
+    const k = TK.press;
     const adv = (secQ - k.sec - (trapQ - k.trap)) / k.per;
-    const pTO = clamp(K.pressTO - lev(adv * k.to), 0.004, 0.16);
-    const pBroken = clamp(k.broken + lev(adv * k.brokenAdv), 0.06, 0.7);
+    const pTO = clamp(k.baseTO - adv * k.to, 0.004, 0.16);
+    const pBroken = clamp(k.broken + adv * k.brokenAdv, 0.06, 0.7);
     // (secure handlers beat it sooner: less of the shot clock is gone)
-    this.tick(this.rng.uniform(K.pressTime.min, K.pressTime.max) * clamp(1 - K.pressTime.beat * adv, 0.5, 1.3));
+    this.tick(this.rng.uniform(k.time[0], k.time[1]) * clamp(1 - k.beat * adv, 0.5, 1.3));
     if (this.cur) {
       this.cur.kind = 'press';
       this.cur.label = 'Full-court press';
@@ -27,7 +28,7 @@ export const transitionMethods = {
     }
     // expected value accounting: TOs forced vs easy baskets given up (a broken press is a run-out
     // three times in four, with the runners a step ahead)
-    this.impact('press_to', def.side, (pTO - 0.012) * K.toPts);
+    this.impact('press_to', def.side, (pTO - k.baseTO) * K.toPts);
     this.impact('press_break', off.side, pBroken * 0.75 * (K.runOutPts + 0.6 * K.transAdvPts));
     const r = this.rng.next();
     if (r < pTO) {
@@ -41,12 +42,11 @@ export const transitionMethods = {
     return 'neutral';
   },
 
-  /** The runners' edge off a defensive board against a team that crashed the glass (negative against one that got back). */
+  /** The runners' edge off a defensive board against a team that crashed the glass (negative against one that sent fewer: its defenders are back). */
   crashRunOut(this: GameSim, def: ST, ctx: Ctx) {
     if (ctx !== 'dreb') return 0;
-    // (and less of one against a team that sent fewer to the glass: its defenders are back)
     const c = (this.crashOf(def) - 50) / 50;
-    return c > 0 ? lev(K.crashRunOut * c) : lev(K.crashLow.back * c);
+    return c > 0 ? TK.crash.edge * c : TK.crash.edge * 0.5 * c;
   },
 
   transition(this: GameSim, off: ST, def: ST, ctx: Ctx, pressBroken: boolean) {
@@ -61,12 +61,15 @@ export const transitionMethods = {
     this.tick(ctx === 'steal' ? this.rng.uniform(K.runOutTime.steal[0], K.runOutTime.steal[1]) : this.rng.uniform(K.runOutTime.other[0], K.runOutTime.other[1]));
     if (this.record) this.cur!.steps.push({ k: 'transition', pid: h.pid });
     let adv = (off.speed - def.speed) / K.runSpeed.edge + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
-    adv -= lev((def.t.defense.getBack - 50) / 100);
+    adv -= TK.getBack.edge * (def.t.defense.getBack / 100 - 0.5);
     // fewer defenders back when they crashed the glass
     adv += this.crashRunOut(def, ctx);
+    // a team that pushes after every stop runs into more set defenses than one that picks its moments (TK.push)
+    const pushed = Math.max(0, (off.t.offense.transition - 50) / 50);
+    adv -= TK.push.adv * pushed;
     adv += this.rng.normal(0, 0.5);
     // turnover in the open floor
-    const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv, 0.02, 0.18);
+    const pTO = clamp((0.085 - (h.c.ballSec - 50) / 900) * h.ttv * (1 + TK.push.to * pushed), 0.02, 0.18);
     if (this.rng.chance(pTO)) {
       this.turnover(off, def, h, this.stealBy(this.stealer(def), 0.5), 'transition');
       return;
@@ -106,19 +109,19 @@ export const transitionMethods = {
     const c = this.rng.weighted(opts);
     const d = this.defOf(def, h);
     if (c === 0) {
-      this.shoot(off, def, { shooter: h, zone: 'rim', open: -0.08 + adv * 0.3, contest: this.rimContester(def, d, 0.8), assister: null, finish: 'transition' });
+      this.shoot(off, def, { shooter: h, zone: 'rim', open: TK.run.rim + adv * 0.3, contest: this.rimContester(def, d, 0.8), assister: null, finish: 'transition' });
     } else if (c === 1) {
       this.passStep(h, trailer);
       this.shoot(off, def, {
         shooter: trailer,
         zone: this.rng.chance(0.4) ? 'c3' : 'ab3',
-        open: 0.08 + adv * 0.25,
+        open: TK.run.three + adv * 0.25,
         contest: this.defOf(def, trailer),
         assister: h,
         finish: 'transition',
       });
     } else if (c === 2) {
-      this.shoot(off, def, { shooter: h, zone: 'ab3', open: 0.1 + adv * 0.2, contest: d, assister: null, finish: 'transition', pullup: true });
+      this.shoot(off, def, { shooter: h, zone: 'ab3', open: TK.run.pull + adv * 0.2, contest: d, assister: null, finish: 'transition', pullup: true });
     } else {
       const runners = off.on.filter((p) => p !== h);
       const runner = runners[this.rng.weighted(runners.map((p) => p.c.rim + p.r.spd))];
@@ -126,7 +129,7 @@ export const transitionMethods = {
       this.shoot(off, def, {
         shooter: runner,
         zone: 'rim',
-        open: 0.06 + adv * 0.3,
+        open: TK.run.drop + adv * 0.3,
         contest: this.rimContester(def, this.defOf(def, runner), 0.8),
         assister: h,
         finish: 'transition',

@@ -15,7 +15,7 @@ import { teamPlayers } from '../src/core/league/helpers';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../src/core/ai/lab';
 import { composites } from '../src/core/ratings';
 import type { Player, SetId, Tactics } from '../src/core/types';
-import { GameSim, K, type SimTeamInput } from '../src/core/sim/engine';
+import { GameSim, type SimTeamInput } from '../src/core/sim/engine';
 import { castFor, setFit } from '../src/core/sim/sets';
 import { Rng } from '../src/core/random';
 
@@ -236,8 +236,9 @@ const todo = cases.filter((x) => !which.length || which.some((w) => x.name.inclu
 const setsToo = !which.length || which.includes('sets');
 if (!todo.length && !setsToo) throw new Error(`No case matches ${which.join(', ')}; the cases are: ${cases.map((x) => x.name).join('; ')}`);
 
-const EDGE = K.tacticEdge;
-console.log(`${games} games x 3 teams per case: net pts/100 for the team making the choice (paired) at 1x and ${EDGE}x tactical leverage, tags per 100 likewise`);
+console.log(
+  `${games} games x 3 teams per case: net pts/100 for the team making the choice (paired), tags per 100 likewise (tactics v2: no leverage multiplier, so both columns are the engine as it plays)`,
+);
 const sum = { right: [0, 0], wrong: [0, 0] };
 for (const k of todo) {
   const s = shaped(k.shape);
@@ -250,15 +251,13 @@ for (const k of todo) {
         return runLab({ a: side(t, patch), b: opp, games, seed: 31 + 1000 * i });
       }),
     );
-  const out = [1, EDGE].map((e) => {
-    K.tacticEdge = e;
+  const out = [0, 1].map(() => {
     const base = run(k.base(s));
     const alt = run({ ...k.base(s), ...k.alt(s), defense: { ...k.base(s).defense, ...k.alt(s).defense }, offense: { ...k.base(s).offense, ...k.alt(s).offense } });
     const { delta, se } = pairedDelta(base, alt);
     const per100 = 100 / ((base.pace + alt.pace) / 2);
     return { delta, se, tags: (tags(alt, k.tags) - tags(base, k.tags)) * per100 };
   });
-  K.tacticEdge = EDGE;
   const [a, b] = out;
   const acc = k.aim === '+' ? sum.right : sum.wrong;
   acc[0] += a.delta;
@@ -331,7 +330,7 @@ function runValue(id: SetId, def: TacticsPatch, n: number, prior: number) {
 }
 if (setsToo) {
   const n = Math.max(10, Math.round(games / 25));
-  console.log(`sets, points per possession over the trip it replaces (${n} games each) at 1x and ${EDGE}x:`);
+  console.log(`sets, points per possession over the trip it replaces (${n} games each) (both columns the engine as it plays):`);
   const SET_CASES: [SetId, string, TacticsPatch][] = [
     ['floppy', 'drop', d({ pnr: 'drop' })],
     ['floppy', 'switch', d({ pnr: 'switch', switchOffBall: true })],
@@ -343,11 +342,7 @@ if (setsToo) {
   ];
   const f = (x: { mean: number; se: number }) => `${x.mean >= 0 ? '+' : ''}${x.mean.toFixed(3)} ± ${x.se.toFixed(3)}`;
   for (const [id, vs, patch] of SET_CASES) {
-    const out = [1, EDGE].map((e) => {
-      K.tacticEdge = e;
-      return [runValue(id, patch, n, 0), runValue(id, patch, n, 1)];
-    });
-    K.tacticEdge = EDGE;
+    const out = [0, 1].map(() => [runValue(id, patch, n, 0), runValue(id, patch, n, 1)]);
     const [[a0, a1], [b0, b1]] = out;
     console.log(`  ${`${id} vs ${vs}`.padEnd(22)} first run ${f(a0)} → ${f(b0)}   read cost ${(a0.mean - a1.mean).toFixed(3)} → ${(b0.mean - b1.mean).toFixed(3)}`);
   }

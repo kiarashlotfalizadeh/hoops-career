@@ -18,7 +18,7 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
     [13, 22],
   ];
   // the four play ice, the defense the tags are calibrated against: since AI coaches play their own
-  // defenses (two of these trap and one presses full court), a trap makes the half court worth more
+  // defenses (when this was set, two of these trapped and one pressed full court), a trap makes the half court worth more
   // and a push in transition less than the tags count (walking it up measured -0.1 a game against
   // them, tagged -1.7), which is the matchup, not the tags
   for (const tid of pairs.flat()) {
@@ -63,21 +63,28 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
   };
 
   it('tags each tactic about as much as it is worth', () => {
-    const cases: [TacticsPatch, string[]][] = [
+    // (2026-11-10, after the tactics rewrite and the tag prices' refit, the tags against the measure over the
+    // twenty seed sets, a game: pressure 0 -0.13 against -0.43 ± 0.18; crashing 0 -1.53 against -1.65 ± 0.17;
+    // transition 0 -0.61 against -0.85 ± 0.17; physicality 100 -0.07 against -0.51 ± 0.17, a gap of 0.44 in the
+    // 0.6 allowed: nothing prices physicality's tags)
+    const cases: [TacticsPatch, string[], number?][] = [
       [{ defense: { pressure: 0 } }, ['pressure_']],
       [{ offense: { crashBoards: 0 } }, ['crash_']],
       [{ offense: { transition: 0 } }, ['transition']],
+      // switching every screen: tagged -0.34 a game where it measures -0.53 ± 0.20 (2026-11-10, once K.switchTag
+      // and K.offBallTag were refit to the rewritten engine: before, it tagged +0.49 against -0.57)
       [{ defense: { pnr: 'switch', switchOffBall: true } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
-      // switching off the ball: handoffs denied, mismatches (and boards) handed out; AI defenses switch, so
-      // the change measured is not switching
-      [{ defense: { switchOffBall: false } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
+      // switching off the ball: handoffs denied, mismatches (and boards) handed out; only Switch Everything and
+      // Full-Court Chaos switch off the ball since the tactics rewrite (every man defense had), so the change
+      // measured is switching (tagged -0.25 against -0.42 ± 0.19 since K.offBallTag's refit: +0.05 before)
+      [{ defense: { switchOffBall: true } }, ['drop_', 'switch_', 'hedge_', 'ice_', 'blitz_']],
       [{ defense: { physicality: 100 } }, ['physicality', 'clean_defense']],
     ];
-    for (const [patch, prefixes] of cases) {
+    for (const [patch, prefixes, slack] of cases) {
       const m = measure(patch, prefixes, SEEDS);
       // within the measurement's noise, or within half of it; and the right sign when it's clear
-      expect(Math.abs(m.tags - m.delta)).toBeLessThan(2 * m.se + 0.5 * Math.abs(m.delta));
-      if (Math.abs(m.delta) > 2 * m.se) expect(Math.sign(m.tags)).toBe(Math.sign(m.delta));
+      expect(Math.abs(m.tags - m.delta)).toBeLessThan(2 * m.se + 0.5 * Math.abs(m.delta) + (slack ?? 0));
+      if (!slack && Math.abs(m.delta) > 2 * m.se) expect(Math.sign(m.tags)).toBe(Math.sign(m.delta));
     }
   }, 600_000);
 
@@ -89,8 +96,8 @@ describe.skipIf(seed.players.length === 0)('tactic balance and "why" tags (real 
         { offense: { crashBoards: 100 } },
         { defense: { pnr: 'blitz' as const, switchOffBall: false } },
         { defense: { press: 'always' as const } },
-        // (AI defenses switch off the ball: not switching is the extreme left to try)
-        { defense: { switchOffBall: false } },
+        // (these defenses don't switch off the ball since the tactics rewrite: switching is the extreme left to try)
+        { defense: { switchOffBall: true } },
       ]) {
         expect(measure(patch, []).delta).toBeLessThan(2.5);
       }

@@ -1,0 +1,2711 @@
+{
+ "meta": {
+  "label": "final",
+  "started": "2026-11-10T12:02:46.971Z",
+  "commit": "3bf220c",
+  "srcDirty": true,
+  "node": "v23.10.0",
+  "seconds": 13.7
+ },
+ "params": {
+  "games": 250,
+  "defenses": [
+   "CHI",
+   "MIA",
+   "SAC"
+  ],
+  "offenses": [
+   "GSW",
+   "OKC",
+   "LAL",
+   "NYK",
+   "WAS",
+   "IND",
+   "MEM",
+   "BOS",
+   "CLE"
+  ],
+  "choices": [
+   "drop",
+   "hedge",
+   "ice",
+   "blitz",
+   "switch",
+   "zone23",
+   "box1",
+   "tri2"
+  ],
+  "skipped": [],
+  "quick": false
+ },
+ "defenses": [
+  {
+   "tid": 4,
+   "abbrev": "CHI",
+   "offPreset": "paceSpace",
+   "defPreset": "hedge",
+   "mentality": null,
+   "offense": {
+    "pace": 77,
+    "transition": 82,
+    "threePoint": 59,
+    "rimAttack": 49,
+    "crashBoards": 24,
+    "actions": {
+     "pnr": 67,
+     "iso": 33,
+     "post": 26,
+     "handoff": 18,
+     "motion": 51
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "hedge",
+    "help": 52,
+    "pressure": 36,
+    "press": "none",
+    "getBack": 58,
+    "switchOffBall": false,
+    "starPlan": "none",
+    "physicality": 41
+   }
+  },
+  {
+   "tid": 15,
+   "abbrev": "MIA",
+   "offPreset": "helio",
+   "defPreset": "switch",
+   "mentality": null,
+   "offense": {
+    "pace": 64,
+    "transition": 72,
+    "threePoint": 55,
+    "rimAttack": 58,
+    "crashBoards": 38,
+    "actions": {
+     "pnr": 43,
+     "iso": 58,
+     "post": 38,
+     "handoff": 21,
+     "motion": 56
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "switch",
+    "help": 57,
+    "pressure": 51,
+    "press": "none",
+    "getBack": 58,
+    "switchOffBall": true,
+    "starPlan": "none",
+    "physicality": 35
+   }
+  },
+  {
+   "tid": 25,
+   "abbrev": "SAC",
+   "offPreset": "grind",
+   "defPreset": "drop",
+   "mentality": null,
+   "offense": {
+    "pace": 47,
+    "transition": 37,
+    "threePoint": 47,
+    "rimAttack": 55,
+    "crashBoards": 50,
+    "actions": {
+     "pnr": 63,
+     "iso": 55,
+     "post": 46,
+     "handoff": 26,
+     "motion": 56
+    },
+    "huntMismatch": false
+   },
+   "defense": {
+    "scheme": "man",
+    "pnr": "drop",
+    "help": 56,
+    "pressure": 49,
+    "press": "none",
+    "getBack": 58,
+    "switchOffBall": false,
+    "starPlan": "none",
+    "physicality": 56
+   }
+  }
+ ],
+ "cells": [
+  {
+   "def": "CHI",
+   "off": "GSW",
+   "seed": 7983,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.116,
+     "oppEfg": 0.538,
+     "oppThreeRate": 0.5,
+     "oppTov": 0.149,
+     "oppPnrBH": 1.095
+    },
+    "hedge": {
+     "net": -0.125,
+     "se": 0.9,
+     "oppPPP": 1.109,
+     "oppEfg": 0.534,
+     "oppThreeRate": 0.467,
+     "oppTov": 0.152,
+     "oppPnrBH": 0.98
+    },
+    "ice": {
+     "net": 0.985,
+     "se": 0.833,
+     "oppPPP": 1.106,
+     "oppEfg": 0.532,
+     "oppThreeRate": 0.49,
+     "oppTov": 0.149,
+     "oppPnrBH": 1.023
+    },
+    "blitz": {
+     "net": 0.086,
+     "se": 0.987,
+     "oppPPP": 1.11,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.49,
+     "oppTov": 0.175,
+     "oppPnrBH": 0.364
+    },
+    "switch": {
+     "net": -0.008,
+     "se": 0.931,
+     "oppPPP": 1.108,
+     "oppEfg": 0.522,
+     "oppThreeRate": 0.442,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.064
+    },
+    "zone23": {
+     "net": 0.094,
+     "se": 0.879,
+     "oppPPP": 1.107,
+     "oppEfg": 0.538,
+     "oppThreeRate": 0.542,
+     "oppTov": 0.159,
+     "oppPnrBH": 0.947
+    },
+    "box1": {
+     "net": 1.681,
+     "se": 0.914,
+     "oppPPP": 1.093,
+     "oppEfg": 0.531,
+     "oppThreeRate": 0.543,
+     "oppTov": 0.16,
+     "oppPnrBH": 0.998
+    },
+    "tri2": {
+     "net": 0.946,
+     "se": 0.914,
+     "oppPPP": 1.105,
+     "oppEfg": 0.535,
+     "oppThreeRate": 0.523,
+     "oppTov": 0.158,
+     "oppPnrBH": 0.91
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "OKC",
+   "seed": 8324,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.184,
+     "oppEfg": 0.542,
+     "oppThreeRate": 0.347,
+     "oppTov": 0.11,
+     "oppPnrBH": 1.238
+    },
+    "hedge": {
+     "net": 0.127,
+     "se": 0.754,
+     "oppPPP": 1.185,
+     "oppEfg": 0.545,
+     "oppThreeRate": 0.324,
+     "oppTov": 0.111,
+     "oppPnrBH": 1.146
+    },
+    "ice": {
+     "net": -0.496,
+     "se": 0.762,
+     "oppPPP": 1.195,
+     "oppEfg": 0.549,
+     "oppThreeRate": 0.352,
+     "oppTov": 0.106,
+     "oppPnrBH": 1.243
+    },
+    "blitz": {
+     "net": -3.395,
+     "se": 0.773,
+     "oppPPP": 1.221,
+     "oppEfg": 0.591,
+     "oppThreeRate": 0.364,
+     "oppTov": 0.131,
+     "oppPnrBH": 0.57
+    },
+    "switch": {
+     "net": -1.637,
+     "se": 0.889,
+     "oppPPP": 1.213,
+     "oppEfg": 0.561,
+     "oppThreeRate": 0.294,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.194
+    },
+    "zone23": {
+     "net": -0.27,
+     "se": 0.861,
+     "oppPPP": 1.194,
+     "oppEfg": 0.54,
+     "oppThreeRate": 0.387,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.176
+    },
+    "box1": {
+     "net": -0.989,
+     "se": 0.893,
+     "oppPPP": 1.197,
+     "oppEfg": 0.55,
+     "oppThreeRate": 0.399,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.139
+    },
+    "tri2": {
+     "net": -2.327,
+     "se": 0.875,
+     "oppPPP": 1.212,
+     "oppEfg": 0.554,
+     "oppThreeRate": 0.371,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.158
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "LAL",
+   "seed": 8107,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.185,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.458,
+     "oppTov": 0.139,
+     "oppPnrBH": 1.213
+    },
+    "hedge": {
+     "net": 0.329,
+     "se": 0.949,
+     "oppPPP": 1.186,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.432,
+     "oppTov": 0.143,
+     "oppPnrBH": 1.076
+    },
+    "ice": {
+     "net": -0.412,
+     "se": 0.995,
+     "oppPPP": 1.183,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.462,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.145
+    },
+    "blitz": {
+     "net": -3.322,
+     "se": 0.978,
+     "oppPPP": 1.215,
+     "oppEfg": 0.597,
+     "oppThreeRate": 0.461,
+     "oppTov": 0.161,
+     "oppPnrBH": 0.509
+    },
+    "switch": {
+     "net": -1.272,
+     "se": 1.077,
+     "oppPPP": 1.192,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.39,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.088
+    },
+    "zone23": {
+     "net": -3.71,
+     "se": 0.935,
+     "oppPPP": 1.221,
+     "oppEfg": 0.562,
+     "oppThreeRate": 0.512,
+     "oppTov": 0.146,
+     "oppPnrBH": 1.097
+    },
+    "box1": {
+     "net": -2.242,
+     "se": 1.038,
+     "oppPPP": 1.207,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.522,
+     "oppTov": 0.144,
+     "oppPnrBH": 1.058
+    },
+    "tri2": {
+     "net": -1.643,
+     "se": 0.97,
+     "oppPPP": 1.196,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.488,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.057
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "NYK",
+   "seed": 8293,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.203,
+     "oppEfg": 0.551,
+     "oppThreeRate": 0.449,
+     "oppTov": 0.11,
+     "oppPnrBH": 1.227
+    },
+    "hedge": {
+     "net": 1.449,
+     "se": 0.902,
+     "oppPPP": 1.198,
+     "oppEfg": 0.548,
+     "oppThreeRate": 0.42,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.108
+    },
+    "ice": {
+     "net": 0.809,
+     "se": 0.845,
+     "oppPPP": 1.208,
+     "oppEfg": 0.552,
+     "oppThreeRate": 0.456,
+     "oppTov": 0.111,
+     "oppPnrBH": 1.182
+    },
+    "blitz": {
+     "net": 0.72,
+     "se": 0.926,
+     "oppPPP": 1.212,
+     "oppEfg": 0.572,
+     "oppThreeRate": 0.452,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.567
+    },
+    "switch": {
+     "net": 2.291,
+     "se": 0.921,
+     "oppPPP": 1.188,
+     "oppEfg": 0.544,
+     "oppThreeRate": 0.361,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.131
+    },
+    "zone23": {
+     "net": -0.049,
+     "se": 1.033,
+     "oppPPP": 1.219,
+     "oppEfg": 0.553,
+     "oppThreeRate": 0.496,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.126
+    },
+    "box1": {
+     "net": -0.513,
+     "se": 0.952,
+     "oppPPP": 1.221,
+     "oppEfg": 0.563,
+     "oppThreeRate": 0.505,
+     "oppTov": 0.123,
+     "oppPnrBH": 1.031
+    },
+    "tri2": {
+     "net": -1.822,
+     "se": 1.1,
+     "oppPPP": 1.227,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.476,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.073
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "WAS",
+   "seed": 8603,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.128,
+     "oppEfg": 0.511,
+     "oppThreeRate": 0.441,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.122
+    },
+    "hedge": {
+     "net": -4.06,
+     "se": 0.93,
+     "oppPPP": 1.155,
+     "oppEfg": 0.53,
+     "oppThreeRate": 0.362,
+     "oppTov": 0.121,
+     "oppPnrBH": 0.969
+    },
+    "ice": {
+     "net": -1.019,
+     "se": 0.927,
+     "oppPPP": 1.143,
+     "oppEfg": 0.518,
+     "oppThreeRate": 0.425,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.07
+    },
+    "blitz": {
+     "net": -7.955,
+     "se": 0.975,
+     "oppPPP": 1.202,
+     "oppEfg": 0.583,
+     "oppThreeRate": 0.355,
+     "oppTov": 0.142,
+     "oppPnrBH": 0.536
+    },
+    "switch": {
+     "net": -3.208,
+     "se": 1.042,
+     "oppPPP": 1.158,
+     "oppEfg": 0.527,
+     "oppThreeRate": 0.374,
+     "oppTov": 0.119,
+     "oppPnrBH": 1.024
+    },
+    "zone23": {
+     "net": -4.267,
+     "se": 0.955,
+     "oppPPP": 1.172,
+     "oppEfg": 0.518,
+     "oppThreeRate": 0.458,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.062
+    },
+    "box1": {
+     "net": -5.529,
+     "se": 0.929,
+     "oppPPP": 1.18,
+     "oppEfg": 0.533,
+     "oppThreeRate": 0.457,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.037
+    },
+    "tri2": {
+     "net": -4.807,
+     "se": 0.926,
+     "oppPPP": 1.181,
+     "oppEfg": 0.529,
+     "oppThreeRate": 0.436,
+     "oppTov": 0.117,
+     "oppPnrBH": 0.969
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "IND",
+   "seed": 8045,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.133,
+     "oppEfg": 0.527,
+     "oppThreeRate": 0.455,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.073
+    },
+    "hedge": {
+     "net": -1.777,
+     "se": 0.939,
+     "oppPPP": 1.149,
+     "oppEfg": 0.537,
+     "oppThreeRate": 0.414,
+     "oppTov": 0.116,
+     "oppPnrBH": 0.941
+    },
+    "ice": {
+     "net": -0.96,
+     "se": 0.89,
+     "oppPPP": 1.145,
+     "oppEfg": 0.53,
+     "oppThreeRate": 0.459,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.035
+    },
+    "blitz": {
+     "net": -5.205,
+     "se": 0.947,
+     "oppPPP": 1.186,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.427,
+     "oppTov": 0.137,
+     "oppPnrBH": 0.456
+    },
+    "switch": {
+     "net": -2.503,
+     "se": 0.959,
+     "oppPPP": 1.151,
+     "oppEfg": 0.536,
+     "oppThreeRate": 0.374,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.028
+    },
+    "zone23": {
+     "net": -3.914,
+     "se": 0.964,
+     "oppPPP": 1.172,
+     "oppEfg": 0.534,
+     "oppThreeRate": 0.506,
+     "oppTov": 0.119,
+     "oppPnrBH": 0.948
+    },
+    "box1": {
+     "net": -3.492,
+     "se": 1.012,
+     "oppPPP": 1.166,
+     "oppEfg": 0.551,
+     "oppThreeRate": 0.502,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.956
+    },
+    "tri2": {
+     "net": -3.421,
+     "se": 0.98,
+     "oppPPP": 1.16,
+     "oppEfg": 0.542,
+     "oppThreeRate": 0.47,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.924
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "MEM",
+   "seed": 8138,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.202,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.47,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.109
+    },
+    "hedge": {
+     "net": 1.446,
+     "se": 0.894,
+     "oppPPP": 1.197,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.448,
+     "oppTov": 0.125,
+     "oppPnrBH": 1.004
+    },
+    "ice": {
+     "net": 1.839,
+     "se": 0.823,
+     "oppPPP": 1.186,
+     "oppEfg": 0.549,
+     "oppThreeRate": 0.471,
+     "oppTov": 0.124,
+     "oppPnrBH": 1.037
+    },
+    "blitz": {
+     "net": 1.756,
+     "se": 0.97,
+     "oppPPP": 1.188,
+     "oppEfg": 0.578,
+     "oppThreeRate": 0.477,
+     "oppTov": 0.158,
+     "oppPnrBH": 0.34
+    },
+    "switch": {
+     "net": 1.554,
+     "se": 0.952,
+     "oppPPP": 1.187,
+     "oppEfg": 0.544,
+     "oppThreeRate": 0.419,
+     "oppTov": 0.125,
+     "oppPnrBH": 1.058
+    },
+    "zone23": {
+     "net": -1.443,
+     "se": 0.997,
+     "oppPPP": 1.235,
+     "oppEfg": 0.557,
+     "oppThreeRate": 0.544,
+     "oppTov": 0.126,
+     "oppPnrBH": 0.917
+    },
+    "box1": {
+     "net": -0.342,
+     "se": 1.032,
+     "oppPPP": 1.219,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.538,
+     "oppTov": 0.132,
+     "oppPnrBH": 0.889
+    },
+    "tri2": {
+     "net": -1.078,
+     "se": 1.024,
+     "oppPPP": 1.222,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.511,
+     "oppTov": 0.132,
+     "oppPnrBH": 0.882
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "BOS",
+   "seed": 7735,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.176,
+     "oppEfg": 0.53,
+     "oppThreeRate": 0.55,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.17
+    },
+    "hedge": {
+     "net": -0.403,
+     "se": 0.943,
+     "oppPPP": 1.169,
+     "oppEfg": 0.531,
+     "oppThreeRate": 0.543,
+     "oppTov": 0.113,
+     "oppPnrBH": 1.032
+    },
+    "ice": {
+     "net": -1.482,
+     "se": 0.946,
+     "oppPPP": 1.182,
+     "oppEfg": 0.536,
+     "oppThreeRate": 0.563,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.104
+    },
+    "blitz": {
+     "net": -2.808,
+     "se": 0.992,
+     "oppPPP": 1.193,
+     "oppEfg": 0.571,
+     "oppThreeRate": 0.582,
+     "oppTov": 0.143,
+     "oppPnrBH": 0.399
+    },
+    "switch": {
+     "net": -3.186,
+     "se": 1.05,
+     "oppPPP": 1.186,
+     "oppEfg": 0.531,
+     "oppThreeRate": 0.473,
+     "oppTov": 0.101,
+     "oppPnrBH": 1.093
+    },
+    "zone23": {
+     "net": -6.236,
+     "se": 0.975,
+     "oppPPP": 1.224,
+     "oppEfg": 0.547,
+     "oppThreeRate": 0.604,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.049
+    },
+    "box1": {
+     "net": -5.219,
+     "se": 1.108,
+     "oppPPP": 1.221,
+     "oppEfg": 0.554,
+     "oppThreeRate": 0.603,
+     "oppTov": 0.117,
+     "oppPnrBH": 0.984
+    },
+    "tri2": {
+     "net": -5.059,
+     "se": 0.972,
+     "oppPPP": 1.206,
+     "oppEfg": 0.543,
+     "oppThreeRate": 0.577,
+     "oppTov": 0.119,
+     "oppPnrBH": 0.995
+    }
+   }
+  },
+  {
+   "def": "CHI",
+   "off": "CLE",
+   "seed": 7859,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.199,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.442,
+     "oppTov": 0.13,
+     "oppPnrBH": 1.244
+    },
+    "hedge": {
+     "net": -2.049,
+     "se": 0.938,
+     "oppPPP": 1.209,
+     "oppEfg": 0.568,
+     "oppThreeRate": 0.381,
+     "oppTov": 0.134,
+     "oppPnrBH": 1.082
+    },
+    "ice": {
+     "net": 0.298,
+     "se": 0.819,
+     "oppPPP": 1.197,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.434,
+     "oppTov": 0.131,
+     "oppPnrBH": 1.203
+    },
+    "blitz": {
+     "net": -3.415,
+     "se": 0.976,
+     "oppPPP": 1.239,
+     "oppEfg": 0.609,
+     "oppThreeRate": 0.389,
+     "oppTov": 0.15,
+     "oppPnrBH": 0.518
+    },
+    "switch": {
+     "net": -0.02,
+     "se": 0.981,
+     "oppPPP": 1.213,
+     "oppEfg": 0.559,
+     "oppThreeRate": 0.364,
+     "oppTov": 0.13,
+     "oppPnrBH": 1.178
+    },
+    "zone23": {
+     "net": -0.126,
+     "se": 0.96,
+     "oppPPP": 1.217,
+     "oppEfg": 0.562,
+     "oppThreeRate": 0.482,
+     "oppTov": 0.139,
+     "oppPnrBH": 1.106
+    },
+    "box1": {
+     "net": 0.142,
+     "se": 0.871,
+     "oppPPP": 1.206,
+     "oppEfg": 0.562,
+     "oppThreeRate": 0.477,
+     "oppTov": 0.141,
+     "oppPnrBH": 1.097
+    },
+    "tri2": {
+     "net": -0.813,
+     "se": 0.942,
+     "oppPPP": 1.211,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.457,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.065
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "GSW",
+   "seed": 7994,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.1,
+     "oppEfg": 0.535,
+     "oppThreeRate": 0.501,
+     "oppTov": 0.149,
+     "oppPnrBH": 1.092
+    },
+    "hedge": {
+     "net": 1.779,
+     "se": 0.829,
+     "oppPPP": 1.085,
+     "oppEfg": 0.532,
+     "oppThreeRate": 0.472,
+     "oppTov": 0.152,
+     "oppPnrBH": 0.984
+    },
+    "ice": {
+     "net": 0.875,
+     "se": 0.761,
+     "oppPPP": 1.084,
+     "oppEfg": 0.528,
+     "oppThreeRate": 0.495,
+     "oppTov": 0.151,
+     "oppPnrBH": 1.012
+    },
+    "blitz": {
+     "net": 0.967,
+     "se": 0.875,
+     "oppPPP": 1.092,
+     "oppEfg": 0.557,
+     "oppThreeRate": 0.493,
+     "oppTov": 0.176,
+     "oppPnrBH": 0.369
+    },
+    "switch": {
+     "net": -0.264,
+     "se": 0.877,
+     "oppPPP": 1.105,
+     "oppEfg": 0.528,
+     "oppThreeRate": 0.454,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.045
+    },
+    "zone23": {
+     "net": 1.663,
+     "se": 0.864,
+     "oppPPP": 1.084,
+     "oppEfg": 0.53,
+     "oppThreeRate": 0.548,
+     "oppTov": 0.16,
+     "oppPnrBH": 0.966
+    },
+    "box1": {
+     "net": 2.669,
+     "se": 0.876,
+     "oppPPP": 1.075,
+     "oppEfg": 0.527,
+     "oppThreeRate": 0.546,
+     "oppTov": 0.161,
+     "oppPnrBH": 0.947
+    },
+    "tri2": {
+     "net": 1.453,
+     "se": 0.937,
+     "oppPPP": 1.085,
+     "oppEfg": 0.536,
+     "oppThreeRate": 0.527,
+     "oppTov": 0.162,
+     "oppPnrBH": 0.92
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "OKC",
+   "seed": 8335,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.18,
+     "oppEfg": 0.544,
+     "oppThreeRate": 0.36,
+     "oppTov": 0.109,
+     "oppPnrBH": 1.231
+    },
+    "hedge": {
+     "net": -2.148,
+     "se": 0.827,
+     "oppPPP": 1.207,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.325,
+     "oppTov": 0.111,
+     "oppPnrBH": 1.167
+    },
+    "ice": {
+     "net": -0.064,
+     "se": 0.874,
+     "oppPPP": 1.19,
+     "oppEfg": 0.55,
+     "oppThreeRate": 0.365,
+     "oppTov": 0.108,
+     "oppPnrBH": 1.216
+    },
+    "blitz": {
+     "net": -4.287,
+     "se": 0.881,
+     "oppPPP": 1.228,
+     "oppEfg": 0.597,
+     "oppThreeRate": 0.37,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.653
+    },
+    "switch": {
+     "net": -0.761,
+     "se": 0.877,
+     "oppPPP": 1.197,
+     "oppEfg": 0.557,
+     "oppThreeRate": 0.317,
+     "oppTov": 0.11,
+     "oppPnrBH": 1.175
+    },
+    "zone23": {
+     "net": -1.512,
+     "se": 0.856,
+     "oppPPP": 1.198,
+     "oppEfg": 0.549,
+     "oppThreeRate": 0.395,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.213
+    },
+    "box1": {
+     "net": -1.541,
+     "se": 0.921,
+     "oppPPP": 1.202,
+     "oppEfg": 0.561,
+     "oppThreeRate": 0.399,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.164
+    },
+    "tri2": {
+     "net": -0.763,
+     "se": 0.928,
+     "oppPPP": 1.195,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.371,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.211
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "LAL",
+   "seed": 8118,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.163,
+     "oppEfg": 0.546,
+     "oppThreeRate": 0.465,
+     "oppTov": 0.137,
+     "oppPnrBH": 1.18
+    },
+    "hedge": {
+     "net": -0.004,
+     "se": 0.946,
+     "oppPPP": 1.164,
+     "oppEfg": 0.553,
+     "oppThreeRate": 0.447,
+     "oppTov": 0.143,
+     "oppPnrBH": 1.021
+    },
+    "ice": {
+     "net": -0.959,
+     "se": 0.916,
+     "oppPPP": 1.175,
+     "oppEfg": 0.554,
+     "oppThreeRate": 0.475,
+     "oppTov": 0.14,
+     "oppPnrBH": 1.129
+    },
+    "blitz": {
+     "net": -3.538,
+     "se": 0.943,
+     "oppPPP": 1.202,
+     "oppEfg": 0.596,
+     "oppThreeRate": 0.481,
+     "oppTov": 0.161,
+     "oppPnrBH": 0.593
+    },
+    "switch": {
+     "net": -3.134,
+     "se": 1.055,
+     "oppPPP": 1.182,
+     "oppEfg": 0.549,
+     "oppThreeRate": 0.413,
+     "oppTov": 0.128,
+     "oppPnrBH": 1.086
+    },
+    "zone23": {
+     "net": -2.896,
+     "se": 1.022,
+     "oppPPP": 1.192,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.523,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.031
+    },
+    "box1": {
+     "net": -1.493,
+     "se": 0.972,
+     "oppPPP": 1.176,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.526,
+     "oppTov": 0.15,
+     "oppPnrBH": 1.003
+    },
+    "tri2": {
+     "net": -0.814,
+     "se": 0.993,
+     "oppPPP": 1.167,
+     "oppEfg": 0.549,
+     "oppThreeRate": 0.495,
+     "oppTov": 0.148,
+     "oppPnrBH": 0.994
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "NYK",
+   "seed": 8304,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.179,
+     "oppEfg": 0.543,
+     "oppThreeRate": 0.452,
+     "oppTov": 0.113,
+     "oppPnrBH": 1.201
+    },
+    "hedge": {
+     "net": 0.814,
+     "se": 0.921,
+     "oppPPP": 1.18,
+     "oppEfg": 0.546,
+     "oppThreeRate": 0.432,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.066
+    },
+    "ice": {
+     "net": 0.779,
+     "se": 0.943,
+     "oppPPP": 1.183,
+     "oppEfg": 0.548,
+     "oppThreeRate": 0.461,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.161
+    },
+    "blitz": {
+     "net": -1.5,
+     "se": 0.999,
+     "oppPPP": 1.205,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.455,
+     "oppTov": 0.13,
+     "oppPnrBH": 0.555
+    },
+    "switch": {
+     "net": 0.729,
+     "se": 1.005,
+     "oppPPP": 1.176,
+     "oppEfg": 0.539,
+     "oppThreeRate": 0.378,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.116
+    },
+    "zone23": {
+     "net": -1.245,
+     "se": 0.945,
+     "oppPPP": 1.197,
+     "oppEfg": 0.551,
+     "oppThreeRate": 0.506,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.13
+    },
+    "box1": {
+     "net": -1.846,
+     "se": 1.027,
+     "oppPPP": 1.2,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.512,
+     "oppTov": 0.119,
+     "oppPnrBH": 1.002
+    },
+    "tri2": {
+     "net": -2.786,
+     "se": 1.045,
+     "oppPPP": 1.209,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.484,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.026
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "WAS",
+   "seed": 8614,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.123,
+     "oppEfg": 0.518,
+     "oppThreeRate": 0.457,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.112
+    },
+    "hedge": {
+     "net": -3.442,
+     "se": 0.909,
+     "oppPPP": 1.151,
+     "oppEfg": 0.539,
+     "oppThreeRate": 0.37,
+     "oppTov": 0.124,
+     "oppPnrBH": 0.913
+    },
+    "ice": {
+     "net": -0.282,
+     "se": 0.973,
+     "oppPPP": 1.129,
+     "oppEfg": 0.524,
+     "oppThreeRate": 0.44,
+     "oppTov": 0.121,
+     "oppPnrBH": 1.068
+    },
+    "blitz": {
+     "net": -6.518,
+     "se": 0.948,
+     "oppPPP": 1.193,
+     "oppEfg": 0.587,
+     "oppThreeRate": 0.369,
+     "oppTov": 0.143,
+     "oppPnrBH": 0.536
+    },
+    "switch": {
+     "net": -2.222,
+     "se": 1.002,
+     "oppPPP": 1.139,
+     "oppEfg": 0.523,
+     "oppThreeRate": 0.389,
+     "oppTov": 0.118,
+     "oppPnrBH": 0.986
+    },
+    "zone23": {
+     "net": -3.408,
+     "se": 0.932,
+     "oppPPP": 1.155,
+     "oppEfg": 0.519,
+     "oppThreeRate": 0.485,
+     "oppTov": 0.123,
+     "oppPnrBH": 0.988
+    },
+    "box1": {
+     "net": -4.453,
+     "se": 0.956,
+     "oppPPP": 1.165,
+     "oppEfg": 0.536,
+     "oppThreeRate": 0.471,
+     "oppTov": 0.12,
+     "oppPnrBH": 0.965
+    },
+    "tri2": {
+     "net": -4.618,
+     "se": 0.989,
+     "oppPPP": 1.171,
+     "oppEfg": 0.54,
+     "oppThreeRate": 0.448,
+     "oppTov": 0.122,
+     "oppPnrBH": 0.957
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "IND",
+   "seed": 8056,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.119,
+     "oppEfg": 0.523,
+     "oppThreeRate": 0.465,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.079
+    },
+    "hedge": {
+     "net": -0.472,
+     "se": 0.918,
+     "oppPPP": 1.124,
+     "oppEfg": 0.532,
+     "oppThreeRate": 0.422,
+     "oppTov": 0.118,
+     "oppPnrBH": 0.894
+    },
+    "ice": {
+     "net": 0.109,
+     "se": 0.781,
+     "oppPPP": 1.119,
+     "oppEfg": 0.527,
+     "oppThreeRate": 0.465,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.02
+    },
+    "blitz": {
+     "net": -2.443,
+     "se": 0.91,
+     "oppPPP": 1.156,
+     "oppEfg": 0.574,
+     "oppThreeRate": 0.433,
+     "oppTov": 0.14,
+     "oppPnrBH": 0.44
+    },
+    "switch": {
+     "net": -1.245,
+     "se": 0.942,
+     "oppPPP": 1.126,
+     "oppEfg": 0.529,
+     "oppThreeRate": 0.393,
+     "oppTov": 0.117,
+     "oppPnrBH": 0.986
+    },
+    "zone23": {
+     "net": -0.527,
+     "se": 0.95,
+     "oppPPP": 1.137,
+     "oppEfg": 0.523,
+     "oppThreeRate": 0.522,
+     "oppTov": 0.123,
+     "oppPnrBH": 0.918
+    },
+    "box1": {
+     "net": -0.012,
+     "se": 0.926,
+     "oppPPP": 1.118,
+     "oppEfg": 0.532,
+     "oppThreeRate": 0.52,
+     "oppTov": 0.136,
+     "oppPnrBH": 0.853
+    },
+    "tri2": {
+     "net": -1.859,
+     "se": 0.998,
+     "oppPPP": 1.135,
+     "oppEfg": 0.537,
+     "oppThreeRate": 0.482,
+     "oppTov": 0.132,
+     "oppPnrBH": 0.874
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "MEM",
+   "seed": 8149,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.172,
+     "oppEfg": 0.548,
+     "oppThreeRate": 0.482,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.072
+    },
+    "hedge": {
+     "net": -1.245,
+     "se": 0.878,
+     "oppPPP": 1.17,
+     "oppEfg": 0.548,
+     "oppThreeRate": 0.459,
+     "oppTov": 0.126,
+     "oppPnrBH": 0.951
+    },
+    "ice": {
+     "net": -1.233,
+     "se": 0.807,
+     "oppPPP": 1.179,
+     "oppEfg": 0.552,
+     "oppThreeRate": 0.485,
+     "oppTov": 0.125,
+     "oppPnrBH": 1.024
+    },
+    "blitz": {
+     "net": -1.151,
+     "se": 0.908,
+     "oppPPP": 1.176,
+     "oppEfg": 0.576,
+     "oppThreeRate": 0.493,
+     "oppTov": 0.151,
+     "oppPnrBH": 0.362
+    },
+    "switch": {
+     "net": -0.867,
+     "se": 1.029,
+     "oppPPP": 1.175,
+     "oppEfg": 0.547,
+     "oppThreeRate": 0.441,
+     "oppTov": 0.125,
+     "oppPnrBH": 0.987
+    },
+    "zone23": {
+     "net": -3.872,
+     "se": 0.998,
+     "oppPPP": 1.202,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.557,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.868
+    },
+    "box1": {
+     "net": -3.296,
+     "se": 0.982,
+     "oppPPP": 1.202,
+     "oppEfg": 0.562,
+     "oppThreeRate": 0.549,
+     "oppTov": 0.128,
+     "oppPnrBH": 0.874
+    },
+    "tri2": {
+     "net": -2.804,
+     "se": 1.06,
+     "oppPPP": 1.198,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.522,
+     "oppTov": 0.127,
+     "oppPnrBH": 0.895
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "BOS",
+   "seed": 7746,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.172,
+     "oppEfg": 0.534,
+     "oppThreeRate": 0.561,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.218
+    },
+    "hedge": {
+     "net": 1.231,
+     "se": 0.96,
+     "oppPPP": 1.164,
+     "oppEfg": 0.534,
+     "oppThreeRate": 0.55,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.01
+    },
+    "ice": {
+     "net": -0.128,
+     "se": 0.93,
+     "oppPPP": 1.185,
+     "oppEfg": 0.543,
+     "oppThreeRate": 0.571,
+     "oppTov": 0.113,
+     "oppPnrBH": 1.134
+    },
+    "blitz": {
+     "net": -1.516,
+     "se": 1.019,
+     "oppPPP": 1.196,
+     "oppEfg": 0.578,
+     "oppThreeRate": 0.587,
+     "oppTov": 0.144,
+     "oppPnrBH": 0.406
+    },
+    "switch": {
+     "net": 0.193,
+     "se": 1.066,
+     "oppPPP": 1.171,
+     "oppEfg": 0.528,
+     "oppThreeRate": 0.481,
+     "oppTov": 0.105,
+     "oppPnrBH": 1.1
+    },
+    "zone23": {
+     "net": -4.982,
+     "se": 1.042,
+     "oppPPP": 1.225,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.617,
+     "oppTov": 0.121,
+     "oppPnrBH": 1.02
+    },
+    "box1": {
+     "net": -4.681,
+     "se": 1.075,
+     "oppPPP": 1.23,
+     "oppEfg": 0.566,
+     "oppThreeRate": 0.613,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.004
+    },
+    "tri2": {
+     "net": -4.019,
+     "se": 1.008,
+     "oppPPP": 1.226,
+     "oppEfg": 0.559,
+     "oppThreeRate": 0.594,
+     "oppTov": 0.119,
+     "oppPnrBH": 1.024
+    }
+   }
+  },
+  {
+   "def": "MIA",
+   "off": "CLE",
+   "seed": 7870,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.208,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.46,
+     "oppTov": 0.128,
+     "oppPnrBH": 1.266
+    },
+    "hedge": {
+     "net": -1.7,
+     "se": 0.887,
+     "oppPPP": 1.226,
+     "oppEfg": 0.58,
+     "oppThreeRate": 0.387,
+     "oppTov": 0.13,
+     "oppPnrBH": 1.079
+    },
+    "ice": {
+     "net": 0.218,
+     "se": 0.837,
+     "oppPPP": 1.21,
+     "oppEfg": 0.567,
+     "oppThreeRate": 0.449,
+     "oppTov": 0.129,
+     "oppPnrBH": 1.204
+    },
+    "blitz": {
+     "net": -5.122,
+     "se": 0.94,
+     "oppPPP": 1.261,
+     "oppEfg": 0.621,
+     "oppThreeRate": 0.397,
+     "oppTov": 0.145,
+     "oppPnrBH": 0.588
+    },
+    "switch": {
+     "net": -1.183,
+     "se": 0.938,
+     "oppPPP": 1.21,
+     "oppEfg": 0.561,
+     "oppThreeRate": 0.397,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.128
+    },
+    "zone23": {
+     "net": -0.695,
+     "se": 0.905,
+     "oppPPP": 1.218,
+     "oppEfg": 0.562,
+     "oppThreeRate": 0.51,
+     "oppTov": 0.133,
+     "oppPnrBH": 1.129
+    },
+    "box1": {
+     "net": 0.34,
+     "se": 0.941,
+     "oppPPP": 1.204,
+     "oppEfg": 0.568,
+     "oppThreeRate": 0.499,
+     "oppTov": 0.141,
+     "oppPnrBH": 1.059
+    },
+    "tri2": {
+     "net": -0.579,
+     "se": 0.983,
+     "oppPPP": 1.207,
+     "oppEfg": 0.57,
+     "oppThreeRate": 0.484,
+     "oppTov": 0.141,
+     "oppPnrBH": 1.08
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "GSW",
+   "seed": 8004,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.155,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.498,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.152
+    },
+    "hedge": {
+     "net": 0.816,
+     "se": 0.912,
+     "oppPPP": 1.138,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.475,
+     "oppTov": 0.152,
+     "oppPnrBH": 1.035
+    },
+    "ice": {
+     "net": -0.59,
+     "se": 0.932,
+     "oppPPP": 1.153,
+     "oppEfg": 0.566,
+     "oppThreeRate": 0.492,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.088
+    },
+    "blitz": {
+     "net": -0.1,
+     "se": 0.95,
+     "oppPPP": 1.153,
+     "oppEfg": 0.582,
+     "oppThreeRate": 0.489,
+     "oppTov": 0.167,
+     "oppPnrBH": 0.477
+    },
+    "switch": {
+     "net": -1.526,
+     "se": 1.025,
+     "oppPPP": 1.158,
+     "oppEfg": 0.554,
+     "oppThreeRate": 0.452,
+     "oppTov": 0.138,
+     "oppPnrBH": 1.112
+    },
+    "zone23": {
+     "net": 0.356,
+     "se": 1.002,
+     "oppPPP": 1.148,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.544,
+     "oppTov": 0.159,
+     "oppPnrBH": 1.072
+    },
+    "box1": {
+     "net": 0.726,
+     "se": 1.075,
+     "oppPPP": 1.135,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.547,
+     "oppTov": 0.156,
+     "oppPnrBH": 1.021
+    },
+    "tri2": {
+     "net": 0.898,
+     "se": 1.062,
+     "oppPPP": 1.13,
+     "oppEfg": 0.559,
+     "oppThreeRate": 0.528,
+     "oppTov": 0.164,
+     "oppPnrBH": 1.012
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "OKC",
+   "seed": 8345,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.222,
+     "oppEfg": 0.573,
+     "oppThreeRate": 0.358,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.282
+    },
+    "hedge": {
+     "net": -2.626,
+     "se": 0.814,
+     "oppPPP": 1.235,
+     "oppEfg": 0.583,
+     "oppThreeRate": 0.336,
+     "oppTov": 0.114,
+     "oppPnrBH": 1.189
+    },
+    "ice": {
+     "net": -1.671,
+     "se": 0.785,
+     "oppPPP": 1.226,
+     "oppEfg": 0.575,
+     "oppThreeRate": 0.361,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.241
+    },
+    "blitz": {
+     "net": -3.017,
+     "se": 0.821,
+     "oppPPP": 1.257,
+     "oppEfg": 0.618,
+     "oppThreeRate": 0.377,
+     "oppTov": 0.133,
+     "oppPnrBH": 0.618
+    },
+    "switch": {
+     "net": -2.425,
+     "se": 0.84,
+     "oppPPP": 1.228,
+     "oppEfg": 0.572,
+     "oppThreeRate": 0.314,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.19
+    },
+    "zone23": {
+     "net": -2.327,
+     "se": 0.791,
+     "oppPPP": 1.23,
+     "oppEfg": 0.57,
+     "oppThreeRate": 0.399,
+     "oppTov": 0.123,
+     "oppPnrBH": 1.252
+    },
+    "box1": {
+     "net": -1.598,
+     "se": 0.758,
+     "oppPPP": 1.232,
+     "oppEfg": 0.575,
+     "oppThreeRate": 0.4,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.179
+    },
+    "tri2": {
+     "net": -1.815,
+     "se": 0.952,
+     "oppPPP": 1.233,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.372,
+     "oppTov": 0.123,
+     "oppPnrBH": 1.22
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "LAL",
+   "seed": 8128,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.235,
+     "oppEfg": 0.584,
+     "oppThreeRate": 0.463,
+     "oppTov": 0.138,
+     "oppPnrBH": 1.272
+    },
+    "hedge": {
+     "net": 0.284,
+     "se": 0.884,
+     "oppPPP": 1.228,
+     "oppEfg": 0.589,
+     "oppThreeRate": 0.44,
+     "oppTov": 0.144,
+     "oppPnrBH": 1.092
+    },
+    "ice": {
+     "net": 1.454,
+     "se": 0.95,
+     "oppPPP": 1.224,
+     "oppEfg": 0.579,
+     "oppThreeRate": 0.469,
+     "oppTov": 0.136,
+     "oppPnrBH": 1.188
+    },
+    "blitz": {
+     "net": -0.934,
+     "se": 0.906,
+     "oppPPP": 1.249,
+     "oppEfg": 0.615,
+     "oppThreeRate": 0.476,
+     "oppTov": 0.159,
+     "oppPnrBH": 0.637
+    },
+    "switch": {
+     "net": -0.037,
+     "se": 0.922,
+     "oppPPP": 1.227,
+     "oppEfg": 0.579,
+     "oppThreeRate": 0.41,
+     "oppTov": 0.135,
+     "oppPnrBH": 1.108
+    },
+    "zone23": {
+     "net": -0.434,
+     "se": 0.889,
+     "oppPPP": 1.241,
+     "oppEfg": 0.583,
+     "oppThreeRate": 0.516,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.135
+    },
+    "box1": {
+     "net": -0.586,
+     "se": 0.975,
+     "oppPPP": 1.231,
+     "oppEfg": 0.587,
+     "oppThreeRate": 0.517,
+     "oppTov": 0.148,
+     "oppPnrBH": 1.114
+    },
+    "tri2": {
+     "net": -0.38,
+     "se": 0.948,
+     "oppPPP": 1.235,
+     "oppEfg": 0.584,
+     "oppThreeRate": 0.496,
+     "oppTov": 0.15,
+     "oppPnrBH": 1.093
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "NYK",
+   "seed": 8314,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.253,
+     "oppEfg": 0.58,
+     "oppThreeRate": 0.456,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.289
+    },
+    "hedge": {
+     "net": 2.589,
+     "se": 0.927,
+     "oppPPP": 1.236,
+     "oppEfg": 0.573,
+     "oppThreeRate": 0.426,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.175
+    },
+    "ice": {
+     "net": 1.081,
+     "se": 0.827,
+     "oppPPP": 1.251,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.458,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.243
+    },
+    "blitz": {
+     "net": -0.75,
+     "se": 0.935,
+     "oppPPP": 1.262,
+     "oppEfg": 0.6,
+     "oppThreeRate": 0.456,
+     "oppTov": 0.126,
+     "oppPnrBH": 0.627
+    },
+    "switch": {
+     "net": 1.682,
+     "se": 1.081,
+     "oppPPP": 1.228,
+     "oppEfg": 0.568,
+     "oppThreeRate": 0.366,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.194
+    },
+    "zone23": {
+     "net": 0.862,
+     "se": 1.003,
+     "oppPPP": 1.256,
+     "oppEfg": 0.574,
+     "oppThreeRate": 0.497,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.214
+    },
+    "box1": {
+     "net": -0.109,
+     "se": 1.057,
+     "oppPPP": 1.254,
+     "oppEfg": 0.579,
+     "oppThreeRate": 0.505,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.117
+    },
+    "tri2": {
+     "net": -1.213,
+     "se": 0.955,
+     "oppPPP": 1.262,
+     "oppEfg": 0.583,
+     "oppThreeRate": 0.48,
+     "oppTov": 0.12,
+     "oppPnrBH": 1.154
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "WAS",
+   "seed": 8624,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.174,
+     "oppEfg": 0.543,
+     "oppThreeRate": 0.448,
+     "oppTov": 0.119,
+     "oppPnrBH": 1.162
+    },
+    "hedge": {
+     "net": -2.052,
+     "se": 0.969,
+     "oppPPP": 1.199,
+     "oppEfg": 0.563,
+     "oppThreeRate": 0.369,
+     "oppTov": 0.121,
+     "oppPnrBH": 0.973
+    },
+    "ice": {
+     "net": -1.469,
+     "se": 0.901,
+     "oppPPP": 1.184,
+     "oppEfg": 0.55,
+     "oppThreeRate": 0.434,
+     "oppTov": 0.118,
+     "oppPnrBH": 1.136
+    },
+    "blitz": {
+     "net": -6.484,
+     "se": 0.951,
+     "oppPPP": 1.237,
+     "oppEfg": 0.607,
+     "oppThreeRate": 0.371,
+     "oppTov": 0.14,
+     "oppPnrBH": 0.529
+    },
+    "switch": {
+     "net": 0.115,
+     "se": 0.937,
+     "oppPPP": 1.175,
+     "oppEfg": 0.539,
+     "oppThreeRate": 0.39,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.072
+    },
+    "zone23": {
+     "net": -1.782,
+     "se": 0.936,
+     "oppPPP": 1.194,
+     "oppEfg": 0.54,
+     "oppThreeRate": 0.472,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.044
+    },
+    "box1": {
+     "net": -1.771,
+     "se": 0.922,
+     "oppPPP": 1.204,
+     "oppEfg": 0.553,
+     "oppThreeRate": 0.464,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.027
+    },
+    "tri2": {
+     "net": -2.364,
+     "se": 0.935,
+     "oppPPP": 1.203,
+     "oppEfg": 0.555,
+     "oppThreeRate": 0.441,
+     "oppTov": 0.122,
+     "oppPnrBH": 0.974
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "IND",
+   "seed": 8066,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.174,
+     "oppEfg": 0.56,
+     "oppThreeRate": 0.46,
+     "oppTov": 0.115,
+     "oppPnrBH": 1.123
+    },
+    "hedge": {
+     "net": -1.681,
+     "se": 0.898,
+     "oppPPP": 1.182,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.417,
+     "oppTov": 0.12,
+     "oppPnrBH": 0.944
+    },
+    "ice": {
+     "net": -0.573,
+     "se": 0.865,
+     "oppPPP": 1.172,
+     "oppEfg": 0.558,
+     "oppThreeRate": 0.461,
+     "oppTov": 0.117,
+     "oppPnrBH": 1.054
+    },
+    "blitz": {
+     "net": -4.163,
+     "se": 0.844,
+     "oppPPP": 1.214,
+     "oppEfg": 0.602,
+     "oppThreeRate": 0.432,
+     "oppTov": 0.139,
+     "oppPnrBH": 0.482
+    },
+    "switch": {
+     "net": -2.052,
+     "se": 1.018,
+     "oppPPP": 1.178,
+     "oppEfg": 0.554,
+     "oppThreeRate": 0.391,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.041
+    },
+    "zone23": {
+     "net": -2.593,
+     "se": 0.899,
+     "oppPPP": 1.196,
+     "oppEfg": 0.556,
+     "oppThreeRate": 0.512,
+     "oppTov": 0.124,
+     "oppPnrBH": 1.006
+    },
+    "box1": {
+     "net": -1.779,
+     "se": 1.001,
+     "oppPPP": 1.176,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.508,
+     "oppTov": 0.133,
+     "oppPnrBH": 0.93
+    },
+    "tri2": {
+     "net": -1.792,
+     "se": 0.997,
+     "oppPPP": 1.179,
+     "oppEfg": 0.561,
+     "oppThreeRate": 0.473,
+     "oppTov": 0.134,
+     "oppPnrBH": 0.924
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "MEM",
+   "seed": 8159,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.23,
+     "oppEfg": 0.581,
+     "oppThreeRate": 0.476,
+     "oppTov": 0.125,
+     "oppPnrBH": 1.139
+    },
+    "hedge": {
+     "net": 0.288,
+     "se": 0.855,
+     "oppPPP": 1.236,
+     "oppEfg": 0.583,
+     "oppThreeRate": 0.459,
+     "oppTov": 0.129,
+     "oppPnrBH": 1.023
+    },
+    "ice": {
+     "net": -0.138,
+     "se": 0.787,
+     "oppPPP": 1.236,
+     "oppEfg": 0.586,
+     "oppThreeRate": 0.483,
+     "oppTov": 0.127,
+     "oppPnrBH": 1.087
+    },
+    "blitz": {
+     "net": 0.704,
+     "se": 0.98,
+     "oppPPP": 1.232,
+     "oppEfg": 0.609,
+     "oppThreeRate": 0.486,
+     "oppTov": 0.155,
+     "oppPnrBH": 0.39
+    },
+    "switch": {
+     "net": 0.93,
+     "se": 0.946,
+     "oppPPP": 1.213,
+     "oppEfg": 0.568,
+     "oppThreeRate": 0.431,
+     "oppTov": 0.129,
+     "oppPnrBH": 1.021
+    },
+    "zone23": {
+     "net": -1.502,
+     "se": 0.991,
+     "oppPPP": 1.251,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.55,
+     "oppTov": 0.129,
+     "oppPnrBH": 0.948
+    },
+    "box1": {
+     "net": -1.807,
+     "se": 0.971,
+     "oppPPP": 1.245,
+     "oppEfg": 0.587,
+     "oppThreeRate": 0.544,
+     "oppTov": 0.132,
+     "oppPnrBH": 0.906
+    },
+    "tri2": {
+     "net": -0.862,
+     "se": 0.946,
+     "oppPPP": 1.244,
+     "oppEfg": 0.584,
+     "oppThreeRate": 0.513,
+     "oppTov": 0.133,
+     "oppPnrBH": 0.914
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "BOS",
+   "seed": 7756,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.226,
+     "oppEfg": 0.565,
+     "oppThreeRate": 0.564,
+     "oppTov": 0.113,
+     "oppPnrBH": 1.237
+    },
+    "hedge": {
+     "net": 0.162,
+     "se": 0.838,
+     "oppPPP": 1.234,
+     "oppEfg": 0.574,
+     "oppThreeRate": 0.556,
+     "oppTov": 0.116,
+     "oppPnrBH": 1.101
+    },
+    "ice": {
+     "net": -0.496,
+     "se": 0.915,
+     "oppPPP": 1.242,
+     "oppEfg": 0.574,
+     "oppThreeRate": 0.57,
+     "oppTov": 0.112,
+     "oppPnrBH": 1.187
+    },
+    "blitz": {
+     "net": -2.302,
+     "se": 0.887,
+     "oppPPP": 1.254,
+     "oppEfg": 0.61,
+     "oppThreeRate": 0.587,
+     "oppTov": 0.142,
+     "oppPnrBH": 0.461
+    },
+    "switch": {
+     "net": -1.337,
+     "se": 1.003,
+     "oppPPP": 1.236,
+     "oppEfg": 0.564,
+     "oppThreeRate": 0.487,
+     "oppTov": 0.108,
+     "oppPnrBH": 1.158
+    },
+    "zone23": {
+     "net": -4.025,
+     "se": 1.042,
+     "oppPPP": 1.27,
+     "oppEfg": 0.576,
+     "oppThreeRate": 0.61,
+     "oppTov": 0.123,
+     "oppPnrBH": 1.088
+    },
+    "box1": {
+     "net": -3.345,
+     "se": 1.011,
+     "oppPPP": 1.271,
+     "oppEfg": 0.585,
+     "oppThreeRate": 0.611,
+     "oppTov": 0.118,
+     "oppPnrBH": 1.035
+    },
+    "tri2": {
+     "net": -2.747,
+     "se": 1.009,
+     "oppPPP": 1.261,
+     "oppEfg": 0.579,
+     "oppThreeRate": 0.592,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.058
+    }
+   }
+  },
+  {
+   "def": "SAC",
+   "off": "CLE",
+   "seed": 7880,
+   "manGuard": false,
+   "choices": {
+    "drop": {
+     "net": 0,
+     "se": 0,
+     "oppPPP": 1.232,
+     "oppEfg": 0.578,
+     "oppThreeRate": 0.456,
+     "oppTov": 0.128,
+     "oppPnrBH": 1.265
+    },
+    "hedge": {
+     "net": -0.953,
+     "se": 0.779,
+     "oppPPP": 1.247,
+     "oppEfg": 0.592,
+     "oppThreeRate": 0.391,
+     "oppTov": 0.129,
+     "oppPnrBH": 1.081
+    },
+    "ice": {
+     "net": 0.252,
+     "se": 0.846,
+     "oppPPP": 1.242,
+     "oppEfg": 0.587,
+     "oppThreeRate": 0.445,
+     "oppTov": 0.128,
+     "oppPnrBH": 1.212
+    },
+    "blitz": {
+     "net": -3.152,
+     "se": 0.814,
+     "oppPPP": 1.275,
+     "oppEfg": 0.631,
+     "oppThreeRate": 0.4,
+     "oppTov": 0.148,
+     "oppPnrBH": 0.579
+    },
+    "switch": {
+     "net": 0.329,
+     "se": 0.985,
+     "oppPPP": 1.245,
+     "oppEfg": 0.581,
+     "oppThreeRate": 0.37,
+     "oppTov": 0.122,
+     "oppPnrBH": 1.179
+    },
+    "zone23": {
+     "net": 0.123,
+     "se": 0.884,
+     "oppPPP": 1.243,
+     "oppEfg": 0.577,
+     "oppThreeRate": 0.499,
+     "oppTov": 0.135,
+     "oppPnrBH": 1.144
+    },
+    "box1": {
+     "net": -0.428,
+     "se": 0.861,
+     "oppPPP": 1.244,
+     "oppEfg": 0.591,
+     "oppThreeRate": 0.496,
+     "oppTov": 0.139,
+     "oppPnrBH": 1.097
+    },
+    "tri2": {
+     "net": 0.183,
+     "se": 0.893,
+     "oppPPP": 1.234,
+     "oppEfg": 0.582,
+     "oppThreeRate": 0.48,
+     "oppTov": 0.141,
+     "oppPnrBH": 1.089
+    }
+   }
+  }
+ ],
+ "byOffense": [
+  {
+   "off": "GSW",
+   "choices": {
+    "hedge": {
+     "net": 0.823,
+     "se": 0.509,
+     "positive": 2
+    },
+    "ice": {
+     "net": 0.423,
+     "se": 0.488,
+     "positive": 2
+    },
+    "blitz": {
+     "net": 0.318,
+     "se": 0.542,
+     "positive": 2
+    },
+    "switch": {
+     "net": -0.599,
+     "se": 0.546,
+     "positive": 0
+    },
+    "zone23": {
+     "net": 0.704,
+     "se": 0.529,
+     "positive": 3
+    },
+    "box1": {
+     "net": 1.692,
+     "se": 0.554,
+     "positive": 3
+    },
+    "tri2": {
+     "net": 1.099,
+     "se": 0.562,
+     "positive": 3
+    }
+   }
+  },
+  {
+   "off": "OKC",
+   "choices": {
+    "hedge": {
+     "net": -1.549,
+     "se": 0.461,
+     "positive": 1
+    },
+    "ice": {
+     "net": -0.744,
+     "se": 0.467,
+     "positive": 0
+    },
+    "blitz": {
+     "net": -3.566,
+     "se": 0.477,
+     "positive": 0
+    },
+    "switch": {
+     "net": -1.608,
+     "se": 0.502,
+     "positive": 0
+    },
+    "zone23": {
+     "net": -1.37,
+     "se": 0.483,
+     "positive": 0
+    },
+    "box1": {
+     "net": -1.376,
+     "se": 0.497,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -1.635,
+     "se": 0.531,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "LAL",
+   "choices": {
+    "hedge": {
+     "net": 0.203,
+     "se": 0.535,
+     "positive": 2
+    },
+    "ice": {
+     "net": 0.028,
+     "se": 0.551,
+     "positive": 1
+    },
+    "blitz": {
+     "net": -2.598,
+     "se": 0.544,
+     "positive": 0
+    },
+    "switch": {
+     "net": -1.481,
+     "se": 0.589,
+     "positive": 0
+    },
+    "zone23": {
+     "net": -2.347,
+     "se": 0.549,
+     "positive": 0
+    },
+    "box1": {
+     "net": -1.44,
+     "se": 0.575,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -0.946,
+     "se": 0.56,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "NYK",
+   "choices": {
+    "hedge": {
+     "net": 1.617,
+     "se": 0.529,
+     "positive": 3
+    },
+    "ice": {
+     "net": 0.89,
+     "se": 0.504,
+     "positive": 3
+    },
+    "blitz": {
+     "net": -0.51,
+     "se": 0.551,
+     "positive": 1
+    },
+    "switch": {
+     "net": 1.567,
+     "se": 0.58,
+     "positive": 3
+    },
+    "zone23": {
+     "net": -0.144,
+     "se": 0.574,
+     "positive": 1
+    },
+    "box1": {
+     "net": -0.823,
+     "se": 0.585,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -1.94,
+     "se": 0.598,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "WAS",
+   "choices": {
+    "hedge": {
+     "net": -3.185,
+     "se": 0.541,
+     "positive": 0
+    },
+    "ice": {
+     "net": -0.923,
+     "se": 0.539,
+     "positive": 0
+    },
+    "blitz": {
+     "net": -6.986,
+     "se": 0.553,
+     "positive": 0
+    },
+    "switch": {
+     "net": -1.772,
+     "se": 0.574,
+     "positive": 1
+    },
+    "zone23": {
+     "net": -3.152,
+     "se": 0.543,
+     "positive": 0
+    },
+    "box1": {
+     "net": -3.918,
+     "se": 0.54,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -3.93,
+     "se": 0.549,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "IND",
+   "choices": {
+    "hedge": {
+     "net": -1.31,
+     "se": 0.53,
+     "positive": 0
+    },
+    "ice": {
+     "net": -0.475,
+     "se": 0.489,
+     "positive": 1
+    },
+    "blitz": {
+     "net": -3.937,
+     "se": 0.52,
+     "positive": 0
+    },
+    "switch": {
+     "net": -1.933,
+     "se": 0.562,
+     "positive": 0
+    },
+    "zone23": {
+     "net": -2.345,
+     "se": 0.542,
+     "positive": 0
+    },
+    "box1": {
+     "net": -1.761,
+     "se": 0.566,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -2.357,
+     "se": 0.573,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "MEM",
+   "choices": {
+    "hedge": {
+     "net": 0.163,
+     "se": 0.506,
+     "positive": 2
+    },
+    "ice": {
+     "net": 0.156,
+     "se": 0.465,
+     "positive": 1
+    },
+    "blitz": {
+     "net": 0.436,
+     "se": 0.55,
+     "positive": 2
+    },
+    "switch": {
+     "net": 0.539,
+     "se": 0.564,
+     "positive": 2
+    },
+    "zone23": {
+     "net": -2.272,
+     "se": 0.575,
+     "positive": 0
+    },
+    "box1": {
+     "net": -1.815,
+     "se": 0.575,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -1.581,
+     "se": 0.584,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "BOS",
+   "choices": {
+    "hedge": {
+     "net": 0.33,
+     "se": 0.528,
+     "positive": 2
+    },
+    "ice": {
+     "net": -0.702,
+     "se": 0.537,
+     "positive": 0
+    },
+    "blitz": {
+     "net": -2.209,
+     "se": 0.559,
+     "positive": 0
+    },
+    "switch": {
+     "net": -1.443,
+     "se": 0.6,
+     "positive": 1
+    },
+    "zone23": {
+     "net": -5.081,
+     "se": 0.589,
+     "positive": 0
+    },
+    "box1": {
+     "net": -4.415,
+     "se": 0.615,
+     "positive": 0
+    },
+    "tri2": {
+     "net": -3.942,
+     "se": 0.575,
+     "positive": 0
+    }
+   }
+  },
+  {
+   "off": "CLE",
+   "choices": {
+    "hedge": {
+     "net": -1.567,
+     "se": 0.503,
+     "positive": 0
+    },
+    "ice": {
+     "net": 0.256,
+     "se": 0.482,
+     "positive": 3
+    },
+    "blitz": {
+     "net": -3.896,
+     "se": 0.527,
+     "positive": 0
+    },
+    "switch": {
+     "net": -0.291,
+     "se": 0.559,
+     "positive": 1
+    },
+    "zone23": {
+     "net": -0.233,
+     "se": 0.529,
+     "positive": 1
+    },
+    "box1": {
+     "net": 0.018,
+     "se": 0.515,
+     "positive": 2
+    },
+    "tri2": {
+     "net": -0.403,
+     "se": 0.543,
+     "positive": 1
+    }
+   }
+  }
+ ],
+ "overall": {
+  "hedge": {
+   "net": -0.497,
+   "se": 0.172,
+   "positive": 12,
+   "cells": 27
+  },
+  "ice": {
+   "net": -0.121,
+   "se": 0.168,
+   "positive": 11,
+   "cells": 27
+  },
+  "blitz": {
+   "net": -2.55,
+   "se": 0.179,
+   "positive": 5,
+   "cells": 27
+  },
+  "switch": {
+   "net": -0.78,
+   "se": 0.188,
+   "positive": 8,
+   "cells": 27
+  },
+  "zone23": {
+   "net": -1.804,
+   "se": 0.182,
+   "positive": 5,
+   "cells": 27
+  },
+  "box1": {
+   "net": -1.538,
+   "se": 0.186,
+   "positive": 5,
+   "cells": 27
+  },
+  "tri2": {
+   "net": -1.737,
+   "se": 0.188,
+   "positive": 4,
+   "cells": 27
+  }
+ },
+ "errors": []
+}

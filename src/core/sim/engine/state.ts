@@ -4,12 +4,31 @@
 // fouls, calls from the bench, the sets run), the inputs a game takes, and the small types and helpers
 // the engine's modules share.
 
-import type { ActionType, CallId, DefRole, GlassDuty, LineupStat, OffRole, Player, Pos, Ratings, SetId, ShotZone, Tactics, Team, TeamBox, TeamTotals, GameType } from '../../types';
+import type {
+  ActionType,
+  CallId,
+  DefRole,
+  DefScheme,
+  GlassDuty,
+  LineupStat,
+  OffRole,
+  Player,
+  Pos,
+  Ratings,
+  SetId,
+  ShotZone,
+  Tactics,
+  Team,
+  TeamBox,
+  TeamTotals,
+  GameType,
+} from '../../types';
 import type { Rng } from '../../random';
 import type { Composites } from '../../ratings';
 import type { FinishType } from '../log';
 import type { Cast, Slot } from '../sets';
-import { K, type ZoneK } from './constants';
+import { K } from './constants';
+import type { ZoneT } from './tk';
 
 export interface Box {
   sec: number;
@@ -93,6 +112,8 @@ export interface SP {
   role: OffRole;
   /** His out-of-possession role and his glass duty. */
   drole: DefRole;
+  /** How much of his role's edge he brings: by his fit for it (TK.role.fitAt, fitPer), negative for a poor fit. */
+  dm: number;
   glass: GlassDuty;
   freedom: number; // usage multiplier from shot freedom
   energy: number;
@@ -194,7 +215,11 @@ export interface ST {
   lineupKey: string;
   ls: LineupStat | null;
   /** The zone this five plays against the five on the floor (GameSim.zone), by scheme and both lineups. */
-  zk?: { key: string; z: ZoneK };
+  zk?: { key: string; kind: Exclude<DefScheme, 'man'>; z: ZoneT };
+  /** The team's chosen half-court actions tonight, by kind and in all (`n`): what the defense keys on (see keyed). */
+  acts: Record<ActionType, number> & { n: number };
+  /** Half-court trips this side has played against a zone or junk defense tonight: the zone gets read (TK.zoneRead). */
+  zoneSeen: number;
   cap: Record<ActionType, number>;
   /** The lineup decision's inputs when the staff last looked (see subSignature). */
   subSig: number[];
@@ -209,8 +234,8 @@ export interface ST {
   base: Tactics;
   /** Times each player has been hacked this period. */
   hacked: Map<number, number>;
-  /** A play called for the side's next half-court trip this period (runSet): a set, or a clear-out isolation ('iso'). */
-  nextSet: { id: CallId; pid: number | null } | null;
+  /** A play called for the side's next half-court trip this period (runSet): a set, or a clear-out isolation ('iso'); `ai` when an AI coach drew it up (it is picked again for the score when the trip comes). */
+  nextSet: { id: CallId; pid: number | null; ai?: boolean } | null;
   /** A timeout asked for while the other side had a live ball (the reason given): taken at the next dead ball. */
   toWait: string | null;
   /** One of the team's timeouts was called: its next trip runs the after-timeout play. */
@@ -225,7 +250,32 @@ export interface ST {
    * he leaves a player in foul trouble on the floor (0: never, the user's rule; see K.foulRide).
    * `calls`: how readily he calls a timeout through a quarter (0: only against the run the user set; see K.quarterTO).
    */
-  habit: { foulUp3: boolean; twoForOne: number; lateFoul: number; earlyO: number; zone: number; ride: number; calls: number };
+  habit: {
+    foulUp3: boolean;
+    twoForOne: number;
+    lateFoul: number;
+    earlyO: number;
+    /** The share of the time a base zone (or a game plan's) is played (the user's: always), a man defense's own zone mixed in, and which zone. */
+    zone: number;
+    zoneMix: number;
+    zoneKind: 'zone23' | 'zone32';
+    /** The share of the time a junk defense is played (an AI game plan's in stretches; the user's always). */
+    junk: number;
+    /** How often a man defense switches a small's ball screen for a handler of his size (see screenCoverage). */
+    smallSwitch: number;
+    /** The share of an elite pull-up shooter's ball screens an AI drop staff shows high on (see TK.upShooter; 0: never). */
+    upShooter: number;
+    /** The share of an elite, non-passing scorer's ball screens an AI staff traps (see TK.blitzStar; 0: never). */
+    blitzStar: number;
+    /** Whether the staff makes offense-defense substitutions late (see TK.odSub). */
+    odSub: boolean;
+    /** How readily an AI coach calls a set out of a timeout (0: never; the user calls his own). */
+    ato: number;
+    /** How readily an AI coach adjusts his offense at a break (0: never). */
+    offAdj: number;
+    ride: number;
+    calls: number;
+  };
   /** A timeout in the last two minutes with the ball: the trip out of it is inbounded in the frontcourt. */
   advance: boolean;
   /** Timeouts this period. */
@@ -280,6 +330,8 @@ export interface SimOptions {
   keepShots?: boolean;
   /** Tally possessions and points by the two fives on the floor (GameSim.stints), for the seed's on-court value fit. */
   stints?: boolean;
+  /** Only these kinds of in-game adjustment are made (the measuring kit's paired runs of each kind; see coach.ts). */
+  adjustOnly?: string[];
 }
 
 /** Possessions one five had the ball against another, and the points it scored on them. */
@@ -312,6 +364,8 @@ export interface ShotOpts {
   forcedFoulMult?: number;
   /** A heave from the backcourt at the horn: it goes in at K.heave.make, whoever throws it. */
   heave?: boolean;
+  /** A drive to the basket (attacking the rim more drives into more blocks: TK.rim). */
+  drive?: boolean;
   /**
    * The impact tag owed the fouls drawn above the shot's usual rate, the multiplier that drew them, and
    * the share of its estimate the tag counts (1 when absent: see K.offBallTag).

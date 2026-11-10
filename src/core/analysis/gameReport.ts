@@ -65,7 +65,7 @@ export const impactSentence = (key: string, X: string, Y: string, who = '') => {
 export const IMPACT_TEXT: Record<string, Tpl> = {
   'drop_pullup:o': {
     text: (X, _Y, w) => `${X} attacked drop coverage with pull-up jumpers${w}.`,
-    advice: 'Against elite pull-up shooters, go to Hedge or Ice. Switch if your big can move.',
+    advice: 'Ice their screens to keep the handler off the middle.',
     uses: dropping,
   },
   'drop_rim:d': {
@@ -252,9 +252,10 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
     advice: 'Shorten stints in Rotation, or sub tired players out sooner in Match. Heavy minutes cost shooting.',
     cat: 'fatigue',
   },
+  // (the chase's own tag: late catches, and his catch-and-shoot and off-screen looks less open; he keeps most of his touches)
   'box_chase:d': {
-    text: (X, _Y, w) => `${possessive(X)} chasers took their man out of the offense: fewer touches, fewer clean looks${w}.`,
-    advice: 'Against a box-and-one or triangle-and-two, run the chased player off screens and handoffs. Let the others attack the zone with ball movement.',
+    text: (X, _Y, w) => `${possessive(X)} chasers made their man catch it late, with fewer clean looks${w}.`,
+    advice: 'Against a box-and-one or triangle-and-two, move the ball and cut. The zone behind the chasers has holes.',
     uses: (t) => t.offense.actions.motion < 75 || t.offense.actions.handoff < 65,
   },
   'box_open:o': {
@@ -270,6 +271,11 @@ export const IMPACT_TEXT: Record<string, Tpl> = {
   'hunt:o': {
     text: (X, _Y, w) => `${X} hunted a weak link in the defense with isolations and ball screens${w}.`,
     advice: 'Hide the defender they hunt on their weakest scorer in Matchups, or sub him out.',
+  },
+  // (the defense keying on what an offense runs past the league's mix: TK.key)
+  'keyed:d': {
+    text: (X, Y, w) => `${X} keyed on what ${Y} ran most${w}.`,
+    advice: 'Run a wider mix of actions, so the defense can’t key on one. In possession → Play through.',
   },
   'hunt:d': {
     text: (_X, Y) => `${possessive(Y)} hunt for one defender cost them ball movement and good looks.`,

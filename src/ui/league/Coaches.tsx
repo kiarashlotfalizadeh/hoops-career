@@ -8,6 +8,8 @@ import type { League } from '../../core/types';
 import { useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { DEF_PRESETS, OFF_PRESETS } from '../../core/sim/tactics';
+import { defenseLabel, offenseLabel } from '../../core/sim/playbooks';
+import { styleIdentity } from '../../core/ai/style';
 import { coachCareer, coachStatus, coyWinners, type CoachCareer, type CoachRecord, type CoachSeason, type CoachTotals, type CoachStint } from '../../core/league/coaches';
 import { TeamLogo } from '../components/TeamLogo';
 import { Section, Sheet, Statline } from '../components/ui';
@@ -182,13 +184,31 @@ function JobRow({ league, j }: { league: League; j: CoachTotals & { stint: Coach
   );
 }
 
+/**
+ * How a coach's teams play, in the team pages' words: what his team runs now ("Isolation-heavy, slow /
+ * Drop", the user's own playbook for the user), and for a coach out of work the style he takes to his
+ * next job (a coach from before styles, his playbooks' names).
+ */
+function styleWords(league: League, r: CoachRecord, tid: number | undefined): string {
+  if (tid !== undefined) {
+    const t = league.teams[tid].tactics;
+    const off = offenseLabel(t);
+    return `${off === 'Custom' ? 'Custom offense' : off} / ${defenseLabel(t)}`;
+  }
+  if (r.style) {
+    const s = r.style;
+    const id = styleIdentity({ pace: s.pace, threePoint: s.threePoint, crashBoards: s.crash, actions: s.actions }, { pnr: s.coverage }, s.zone);
+    return `${id.off} / ${id.def}`;
+  }
+  return `${OFF_PRESETS.find((p) => p.id === r.off)?.name ?? r.off} / ${DEF_PRESETS.find((p) => p.id === r.def)?.name ?? r.def}`;
+}
+
 /** A coach's sheet: his profile, career numbers, Coach of the Year seasons and every job season by season. */
 function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: () => void }) {
   if (!x) return null;
   const { r, k, status } = x;
   const cur = k.stints.find((s) => !s.stint.to);
-  const off = OFF_PRESETS.find((p) => p.id === r.off)?.name ?? r.off;
-  const def = DEF_PRESETS.find((p) => p.id === r.def)?.name ?? r.def;
+  const style = styleWords(league, r, cur?.stint.tid);
   const last = k.lines[k.lines.length - 1];
   const where = cur
     ? `${r.user ? 'You: head' : 'Head'} coach of the ${league.teams[cur.stint.tid].region} ${league.teams[cur.stint.tid].name}`
@@ -199,7 +219,7 @@ function CoachSheet({ league, x, onClose }: { league: League; x?: Row; onClose: 
         <div>
           <div className="lg-coach-where">{where}</div>
           <div className="lg-note">
-            {off} · {def} · Development {r.dev} · Adjustments {r.tac}
+            {style} · Development {r.dev} · Adjustments {r.tac}
           </div>
         </div>
         <div className="card lg-strip">

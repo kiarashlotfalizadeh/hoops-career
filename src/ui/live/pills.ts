@@ -88,7 +88,7 @@ export function livePills(t: Tactics, plan: Tactics, ctx: PillContext): Pill[] {
     id: 'getback',
     label: 'Get back',
     on: back,
-    help: `Crash the glass: ${levelName('crashBoards', 20)}. Transition defense: ${levelName('getBack', 85)}. No run-outs, fewer offensive boards.`,
+    help: `Crash the glass: ${levelName('crashBoards', 20)}. Transition defense: ${levelName('getBack', 85)}. Fewer run-outs, fewer offensive boards.`,
     apply: (x) => {
       if (back) {
         x.offense.crashBoards = plan.offense.crashBoards <= 30 ? 50 : plan.offense.crashBoards;

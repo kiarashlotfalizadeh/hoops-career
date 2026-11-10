@@ -52,7 +52,11 @@ export interface DefPreset {
  * and Pace & Space takes fewer threes (72 → 64), pushes a little less (66 → 63) and attacks the rim
  * less (66 → 58). Against the roster's average playbook over the real league (two seed groups): Pace &
  * Space +0.1, Five-Out +0.1, Balanced +0.1, Heliocentric 0.0, Grit & Grind 0.0, Hub Big −0.3, none the
- * measured best for more than 11 of the 30.
+ * measured best for more than 11 of the 30. Tactics v2 (2026-11): the playbooks now differ mainly in what
+ * they run, their tempo and shot profiles closer to the league's, so a playbook's worth is its fit with
+ * the roster (Hub Big with a passing center, Heliocentric with one elite creator, Five-Out with shooters,
+ * Grit & Grind with size and post scoring) rather than a tempo or a shot profile every roster gains or
+ * loses from alike.
  */
 export const OFF_PRESETS: OffPreset[] = [
   {
@@ -69,7 +73,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Give the star the ball',
     description: 'Your best creator runs high pick-and-rolls and isolations while four teammates space the floor.',
     bestFor: 'One elite creator surrounded by shooters. He handles, passes and shoots off the dribble.',
-    values: { pace: 44, transition: 45, actions: { pnr: 66, iso: 66, post: 18, handoff: 42, motion: 50 }, threePoint: 64, rimAttack: 60, crashBoards: 55, huntMismatch: true },
+    values: { pace: 48, transition: 50, actions: { pnr: 70, iso: 64, post: 15, handoff: 38, motion: 45 }, threePoint: 63, rimAttack: 60, crashBoards: 52, huntMismatch: true },
   },
   {
     id: 'fiveOut',
@@ -77,7 +81,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Spacing, cutting, sharing',
     description: 'Constant movement, dribble handoffs and backdoor cuts with five shooters. Generates open threes.',
     bestFor: 'Many good shooters and passers, with no need for a dominant creator.',
-    values: { pace: 44, transition: 44, actions: { pnr: 58, iso: 18, post: 10, handoff: 62, motion: 88 }, threePoint: 70, rimAttack: 55, crashBoards: 42, huntMismatch: false },
+    values: { pace: 50, transition: 52, actions: { pnr: 55, iso: 20, post: 10, handoff: 64, motion: 85 }, threePoint: 70, rimAttack: 58, crashBoards: 45, huntMismatch: false },
   },
   {
     id: 'hub',
@@ -85,7 +89,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Run it through the big',
     description: 'Elbow and post touches for a playmaking big. Guards cut and run off his handoffs.',
     bestFor: 'A center with elite passing and IQ.',
-    values: { pace: 46, transition: 48, actions: { pnr: 60, iso: 20, post: 48, handoff: 72, motion: 52 }, threePoint: 56, rimAttack: 62, crashBoards: 55, huntMismatch: false },
+    values: { pace: 48, transition: 50, actions: { pnr: 45, iso: 20, post: 58, handoff: 80, motion: 62 }, threePoint: 60, rimAttack: 60, crashBoards: 54, huntMismatch: false },
   },
   {
     id: 'paceSpace',
@@ -93,7 +97,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Seven seconds or less',
     description: 'Push after every stop, shoot early threes, attack before the defense sets.',
     bestFor: 'Fast, athletic rosters with shooting and good conditioning.',
-    values: { pace: 88, transition: 63, actions: { pnr: 60, iso: 28, post: 10, handoff: 38, motion: 60 }, threePoint: 64, rimAttack: 58, crashBoards: 45, huntMismatch: false },
+    values: { pace: 80, transition: 70, actions: { pnr: 60, iso: 30, post: 10, handoff: 40, motion: 60 }, threePoint: 66, rimAttack: 60, crashBoards: 46, huntMismatch: false },
   },
   {
     id: 'grind',
@@ -101,7 +105,7 @@ export const OFF_PRESETS: OffPreset[] = [
     tagline: 'Slow it down, pound it inside',
     description: 'Low possession count, post-ups and isolations, and relentless offensive rebounding.',
     bestFor: 'Big, physical rosters short on shooting.',
-    values: { pace: 28, transition: 32, actions: { pnr: 58, iso: 45, post: 58, handoff: 30, motion: 38 }, threePoint: 56, rimAttack: 72, crashBoards: 66, huntMismatch: false },
+    values: { pace: 34, transition: 38, actions: { pnr: 55, iso: 45, post: 62, handoff: 30, motion: 40 }, threePoint: 54, rimAttack: 70, crashBoards: 66, huntMismatch: false },
   },
 ];
 
@@ -110,9 +114,9 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'drop',
     name: 'Drop & Protect',
     tagline: 'Wall off the rim',
-    description: 'Big sits in the paint on pick-and-rolls. Concedes pull-up jumpers, takes away the rim and the roll man. Off-ball screens are switched.',
+    description: 'Big sits in the paint on pick-and-rolls. Concedes pull-up jumpers, takes away the rim and the roll man. Guards switch screens between themselves.',
     bestFor: 'An elite rim protector. Weak against pull-up shooters and popping bigs.',
-    values: { scheme: 'man', pnr: 'drop', help: 56, pressure: 52, press: 'none', getBack: 60, switchOffBall: true, physicality: 50 },
+    values: { scheme: 'man', pnr: 'drop', help: 56, pressure: 52, press: 'none', getBack: 60, switchOffBall: false, physicality: 50 },
   },
   {
     id: 'switch',
@@ -126,33 +130,32 @@ export const DEF_PRESETS: DefPreset[] = [
     id: 'blitz',
     name: 'Blitz the Ball',
     tagline: 'Take the ball out of his hands',
-    description: 'Trap the pick-and-roll ball handler and pressure passing lanes. Forces turnovers, but gives up 4-on-3s when beaten. Off-ball screens are switched.',
-    bestFor: 'Long, rangy defenders with high IQ vs a ball-dominant star with weak passing.',
-    values: { scheme: 'man', pnr: 'blitz', help: 55, pressure: 74, press: 'none', getBack: 55, switchOffBall: true, physicality: 58 },
+    description: 'Trap the pick-and-roll ball handler and pressure passing lanes. Forces turnovers, but gives up 4-on-3s when the ball gets out.',
+    bestFor: 'Long, rangy defenders with quick hands vs a ball-dominant star with weak passing.',
+    values: { scheme: 'man', pnr: 'blitz', help: 55, pressure: 66, press: 'none', getBack: 55, switchOffBall: false, physicality: 54 },
   },
   {
     id: 'ice',
     name: 'Ice & Contain',
     tagline: 'Force him baseline',
-    description:
-      'Push side pick-and-rolls toward the sideline. Takes away pull-up jumpers, drives and the roll man. The ball goes to the kick-out instead. Off-ball screens are switched.',
+    description: 'Pushes side pick-and-rolls to the sideline and drops on middle ones. Takes away pull-ups, drives and the roll. The ball goes to the weak-side corner instead.',
     bestFor: 'Disciplined defenders vs drivers and pull-up shooters.',
-    values: { scheme: 'man', pnr: 'ice', help: 60, pressure: 52, press: 'none', getBack: 60, switchOffBall: true, physicality: 50 },
+    values: { scheme: 'man', pnr: 'ice', help: 60, pressure: 52, press: 'none', getBack: 60, switchOffBall: false, physicality: 50 },
   },
   {
     id: 'hedge',
     name: 'Hedge & Recover',
     tagline: 'Show and get back',
-    description: 'Big jumps out to stall the ball handler, then recovers. Needs mobile bigs, and can leave the roll man open. Off-ball screens are switched.',
+    description: 'Big shows high to stall the ball handler, then recovers. Needs mobile bigs, and can leave the roll man open.',
     bestFor: 'Mobile bigs with good IQ.',
-    values: { scheme: 'man', pnr: 'hedge', help: 52, pressure: 56, press: 'none', getBack: 58, switchOffBall: true, physicality: 52 },
+    values: { scheme: 'man', pnr: 'hedge', help: 52, pressure: 56, press: 'none', getBack: 58, switchOffBall: false, physicality: 52 },
   },
   {
     id: 'zone',
     name: '2-3 Zone',
     tagline: 'Pack it in',
-    description: 'Shrinks driving lanes and clogs the post. Leaves corner threes and the offensive glass open.',
-    bestFor: 'Long lineups with a rim anchor vs poor-shooting, drive-heavy teams.',
+    description: 'Shrinks driving lanes and clogs the post. Leaves corner threes and the offensive glass open. Offenses solve it as the game goes.',
+    bestFor: 'A change-up in stretches, against poor-shooting, drive-heavy teams.',
     values: { scheme: 'zone23', pnr: 'drop', help: 56, pressure: 44, press: 'none', getBack: 62, switchOffBall: false, physicality: 48 },
   },
   {
@@ -209,10 +212,10 @@ export const ACTION_META: Record<ActionType, { label: string; help: string }> = 
 
 export const COVERAGE_META: Record<PnrCoverage, { label: string; help: string }> = {
   drop: { label: 'Drop', help: 'Big sags into the paint. Protects the rim and the roll man, concedes pull-up jumpers.' },
-  switch: { label: 'Switch', help: 'Defenders exchange assignments. No open roll man, but creates mismatches.' },
+  switch: { label: 'Switch', help: 'Defenders exchange assignments. No open roll man, but creates mismatches for post-ups and isolations.' },
   hedge: { label: 'Hedge', help: 'Big shows high to slow the ball, then recovers. Balanced, but slow bigs leave the roller open.' },
-  blitz: { label: 'Blitz', help: 'Double-team the handler. Forces the ball out and turnovers, but leaves a 4-on-3 behind it.' },
-  ice: { label: 'Ice', help: 'Force the handler to the sideline. Takes away the middle: pull-up jumpers, drives and the roll.' },
+  blitz: { label: 'Blitz', help: 'Trap the handler. Forces turnovers against poor passers, but leaves a 4-on-3 behind it.' },
+  ice: { label: 'Ice', help: 'Forces side screens to the sideline and drops on middle ones. Takes away the middle, gives up the corner.' },
 };
 
 export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
@@ -224,11 +227,11 @@ export const SCHEME_META: Record<DefScheme, { label: string; help: string }> = {
   },
   box1: {
     label: 'Box-and-one',
-    help: 'One chaser face-guards their main creator while four play a 2-2 zone. Beats one star with poor shooters around him, loses to teams that shoot.',
+    help: 'One chaser face-guards their main creator while four play a 2-2 zone. It pays only against a lone star with poor shooters around him.',
   },
   tri2: {
     label: 'Triangle-and-two',
-    help: 'Two chasers face-guard their top two creators while three play a zone. Only against two scorers surrounded by players who can’t shoot.',
+    help: 'Two chasers face-guard their top two creators while three play a zone. Only for stretches, against two scorers and no other shooters.',
   },
 };
 
@@ -248,6 +251,7 @@ export const PRESS_META: Record<PressMode, { label: string; help: string }> = {
 export const STAR_PLAN_META: Record<StarPlan, { label: string; help: string }> = {
   none: { label: 'Play straight', help: 'No special treatment.' },
   double: { label: 'Double-team', help: 'Send a second defender whenever he attacks. Forces others to beat you.' },
+  show: { label: 'Show high', help: 'Your big jumps out on his ball screens. Everyone else gets your usual coverage.' },
 };
 
 // ---------------------------------------------------------------- headline decisions
@@ -415,14 +419,14 @@ export const GLASS_META: Record<GlassDuty, { label: string; help: string }> = {
 export const MENTALITY_META: Record<Mentality, { label: string; help: string }> = {
   [-2]: {
     label: 'Very cautious',
-    help: 'Long possessions, no leaking or crashing, no gambles on defense. Protects a lead but can’t chase one.',
+    help: 'Long possessions, fewer turnovers, no gambles on defense. Protects a lead but can’t chase one.',
   },
-  [-1]: { label: 'Cautious', help: 'A little slower and safer at both ends: fewer gambles, more bodies back.' },
+  [-1]: { label: 'Cautious', help: 'A little slower and safer at both ends. Fewer turnovers, more bodies back.' },
   0: { label: 'Balanced', help: 'Your settings as they are.' },
-  1: { label: 'Aggressive', help: 'A little faster and riskier at both ends: push, crash, pressure the ball.' },
+  1: { label: 'Aggressive', help: 'A little faster and riskier at both ends. More possessions, but more turnovers and rushed shots.' },
   2: {
     label: 'Very aggressive',
-    help: 'Run on everything, shoot early, crash and pressure: more possessions, more variance. For chasing a game, or an underdog looking for chaos.',
+    help: 'Run on everything, crash and pressure, with more turnovers and rushed shots. For chasing a game.',
   },
 };
 
@@ -466,6 +470,7 @@ export function defaultManagement(): GameManagement {
     garbageTime: true,
     foulTrouble: 'standard',
     fatigueSub: 0.55,
+    odSubs: true,
   };
 }
 

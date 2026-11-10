@@ -129,7 +129,7 @@ describe('batch sims & reports', () => {
       const t = league.teams[0].tactics;
       const drop = applyPatch(t, { defense: { scheme: 'man', pnr: 'drop', starPlan: 'none' } });
       const hedge = applyPatch(t, { defense: { scheme: 'man', pnr: 'hedge', starPlan: 'none' } });
-      expect(impactAdvice('drop_pullup:o', drop)).toMatch(/Hedge/);
+      expect(impactAdvice('drop_pullup:o', drop)).toMatch(/Ice/);
       expect(impactAdvice('drop_pullup:o', hedge)).toBeUndefined();
       expect(impactAdvice('blitz_4v3:o', hedge)).toBeUndefined();
       expect(impactAdvice('blitz_4v3:o', applyPatch(hedge, { defense: { starPlan: 'double' } }))).toMatch(/Star plan/);
@@ -145,7 +145,7 @@ describe('batch sims & reports', () => {
       league.teams[0].tactics = hedge;
       expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toBeUndefined();
       league.teams[0].tactics = drop;
-      expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Hedge/);
+      expect(buildGameReport(league, res)!.factors.find((f) => f.title.includes('pull-up'))!.advice).toMatch(/Ice/);
       league.teams[0].tactics = t;
     }
     // never flags a setting on the engine's tally alone: only a change measured in paired games, with the change as its fix

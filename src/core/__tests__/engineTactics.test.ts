@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { GameSim, K, type SimTeamInput } from '../sim/engine';
+import { GameSim, type SimTeamInput } from '../sim/engine';
+import { TK, type ZoneT } from '../sim/engine/tk';
 import type { PossLog } from '../sim/log';
 import { applyPatch, pairedDelta, runLab, type LabSummary, type TacticsPatch } from '../ai/lab';
 import { archetype, composites } from '../ratings';
@@ -57,18 +58,59 @@ describe('engine tactics', () => {
       expect(sim.baseTactics(0).defense.scheme).toBe('zone23');
     }
 
-    // a coach's in-game adjustment is made to the base tactics too
+    // a coach's in-game adjustment is made to the base tactics too: one from the menu at either end
+    // (tactics v2, 2026-11-10: engine/coach.ts), what the other side is cashing in calls for, of the kinds
+    // allowed (SimOptions.adjustOnly), and said with its kind
     {
-      const sim = new GameSim(side(8, man), side(9), opts(6));
-      const s = sim as unknown as In;
-      const t = s.T[0];
-      t.adjust = 1;
-      s.q = 2;
-      s.elapsed = 1200;
-      s.impacts.set('drop_pullup:o|1', { key: 'drop_pullup:o', t: 1, count: 20, pts: 30, players: {} });
-      s.adjust(t);
-      expect(t.t.defense.pnr).toBe('hedge');
-      expect(t.base.defense.pnr).toBe('hedge');
+      type Adj = In & { adjustments: { kind?: string; text: string }[]; T: (ST & { habit: { zoneMix: number }; on: { c: { pu3: number; midShot: number } }[] })[] };
+      const at = (patch: TacticsPatch | undefined, o: Partial<ReturnType<typeof opts>> & { adjustOnly?: string[] } = {}, ai = false) => {
+        // (against a drop: a switching defense would call for hunting its mismatches first)
+        const sim = new GameSim({ ...side(8, patch), adjust: ai }, side(9, man), { ...opts(6), ...o }) as unknown as Adj;
+        const t = sim.T[0];
+        t.adjust = 1;
+        sim.q = 2;
+        sim.elapsed = 1200;
+        return { sim, t };
+      };
+      // their handler pulling up over the drop: ice his side screens (and drop the middle ones)
+      {
+        const { sim, t } = at(man);
+        sim.impacts.set('drop_pullup:o|1', { key: 'drop_pullup:o', t: 1, count: 20, pts: 30, players: {} });
+        sim.adjust(t);
+        expect(t.t.defense.pnr).toBe('ice');
+        expect(t.base.defense.pnr).toBe('ice');
+        expect(sim.adjustments.at(-1)).toMatchObject({ kind: 'ice', text: expect.stringMatching(/^ices .+'s ball screens instead of dropping$/) });
+      }
+      // ...not against handlers who can't shoot it, and not when the kinds allowed leave it out
+      {
+        const { sim, t } = at(man);
+        for (const p of sim.T[1].on) Object.assign(p.c, { pu3: 40, midShot: 40 });
+        sim.impacts.set('drop_pullup:o|1', { key: 'drop_pullup:o', t: 1, count: 20, pts: 30, players: {} });
+        sim.adjust(t);
+        expect([t.t.defense.pnr, sim.adjustments]).toEqual(['drop', []]);
+        const only = at(man, { adjustOnly: ['man', 'pack'] });
+        only.sim.impacts.set('drop_pullup:o|1', { key: 'drop_pullup:o', t: 1, count: 20, pts: 30, players: {} });
+        only.sim.adjust(only.t);
+        expect([only.t.t.defense.pnr, only.sim.adjustments]).toEqual(['drop', []]);
+      }
+      // a zone being picked apart: back to man-to-man for good (an AI coach's own zone mix too)
+      {
+        const { sim, t } = at({ defense: { scheme: 'zone23' } }, {}, true);
+        t.habit.zoneMix = 0.1;
+        sim.impacts.set('zone_3pt:o|1', { key: 'zone_3pt:o', t: 1, count: 30, pts: 30, players: {} });
+        sim.adjust(t);
+        expect([t.t.defense.scheme, t.base.defense.scheme, t.habit.zoneMix]).toEqual(['man', 'man', 0]);
+        expect(sim.adjustments.at(-1)!.kind).toBe('man');
+      }
+      // and at the other end: down double figures late, an AI coach pushes the pace to chase the game
+      {
+        const { sim, t } = at(undefined, {}, true);
+        Object.assign(sim, { q: 4, clock: 300 });
+        sim.T[1].score = t.score + 14;
+        sim.adjust(t);
+        expect([t.base.mentality, t.t.mentality, sim.adjustments.at(-1)!.kind]).toEqual([1, 1, 'chase']);
+        expect(t.t.offense.pace).toBeGreaterThan(t.base.offense.pace);
+      }
     }
 
     // gives a player his own role back when a live edit takes it off
@@ -249,7 +291,7 @@ describe('engine tactics', () => {
       }
       expect(benched).toBe(8);
     }
-    // zones: play to the two fives on the floor (K.zoneFit), not a blanket gain: taller walls with length
+    // zones: play to the two fives on the floor (TK.zoneFit), not a blanket gain: taller walls with length
     // and against a five with no one to flash to the high post, wider open looks against ball movement and
     // narrower with long closeouts, a softer glass against a five that crashes, and weak on-ball defenders
     // hidden (good ones wasted)
@@ -259,20 +301,20 @@ describe('engine tactics', () => {
         on: Array.from({ length: 5 }, () => ({ r: { hgt }, c: { passing, midShot, orb, perDef: 50 }, energy: 1, perf: 1 })),
         passQ,
       });
-      const sim = new GameSim(side(0), side(1), opts(1, false)) as unknown as { zoneFor(z: typeof K.zone.zone23, def: Five, off: Five): typeof K.zone.zone23 };
-      const z = K.zone.zone23;
+      const sim = new GameSim(side(0), side(1), opts(1, false)) as unknown as { zoneFor(z: ZoneT, def: Five, off: Five): ZoneT };
+      const z = TK.zone.zone23;
       const avg = five(46.5, 60, 74, 47, 63);
       const at = (def: Five, off: Five) => sim.zoneFor(z, def, off);
       const even = at(avg, avg);
       // (an average five against an average five plays the table)
       expect(even.iso).toBeCloseTo(z.iso, 5);
       expect(even.swing).toBeCloseTo(z.swing, 5);
-      expect(even.glassTag).toBeCloseTo(z.glassTag, 5);
+      expect(even.glass).toBeCloseTo(z.glass, 5);
       expect(at(five(52, 60, 74, 47, 63), avg).drive).toBeGreaterThan(even.drive * 1.25);
       expect(at(five(52, 60, 74, 47, 63), avg).swing).toBeLessThan(even.swing);
       expect(at(avg, five(46.5, 75, 85, 47, 63)).post).toBeLessThan(even.post * 0.75);
       expect(at(avg, five(46.5, 60, 74, 47, 72)).swing).toBeGreaterThan(even.swing * 1.3);
-      expect(at(avg, five(46.5, 60, 74, 53, 63)).glassTag).toBeGreaterThan(even.glassTag * 1.5);
+      expect(at(avg, five(46.5, 60, 74, 53, 63)).glass - 1).toBeGreaterThan((even.glass - 1) * 1.5);
     }
     // zones: plays the 2-3 from its table
     {
@@ -281,25 +323,24 @@ describe('engine tactics', () => {
       // against post-up teams; its walls doubled when the big decisions were made to matter, as its open
       // threes came to count by who takes them)
       // (its looks at the arc and its glass made bigger 2026-10-26, as the table came to scale with the two fives on the floor: K.zoneFit)
-      expect(K.zone.zone23).toEqual({
-        roll: 0.5,
-        pnr: 0.6,
-        pnrTag: 0.6 * 0.1,
-        iso: 0.65,
-        isoTag: 0.065,
-        post: 0.9,
-        postTag: 0.09,
-        drive: 0.6,
-        kick: 0.38,
-        pop: 0.28,
-        handoff: 0.18,
-        cutW: 0.25,
-        cut: 0.2,
-        swingW: 1.35,
-        swing: 0.48,
+      // (written again from scratch 2026-11-10, the tactics rewrite: TK.zone, each edge at the size the engine
+      // plays it, with no leverage on top: the walls about what the old ones played at 2x, the glass a
+      // multiplier rather than a tag)
+      expect(TK.zone.zone23).toEqual({
+        roll: 1.0,
+        pnr: 1.2,
+        iso: 1.3,
+        post: 1.8,
+        drive: 1.2,
+        kick: 0.7,
+        pop: 0.52,
+        handoff: 0.34,
+        swing: 0.9,
+        swingW: 1.8,
         corner: 0.45,
-        glass: 1.13,
-        glassTag: 0.13,
+        cutW: 0.5,
+        cut: 0.4,
+        glass: 1.16,
       });
       // box-score fingerprint of four 2-3 vs 2-3 games, taken from the engine before the table (and again when
       // side-out fouls started restarting the shot clock at 14, and when tactics were made to matter twice as
@@ -312,6 +353,7 @@ describe('engine tactics', () => {
       // All of them again 2026-11-09, the game-day realism round: late fouls and timeouts, tempo, the rebound's flight, the whistle, shot locations and the stint plan.
       // And again the same day, its second round: a shot's worth by the shot clock, shots at the horn, the score effect from the tip, rebounds before loose-ball fouls.
       // And again that day, its third round (see engineDefense.test.ts).
+      // All of them again 2026-11-10, the tactics rewrite (tactics v2: the table above, see engineDefense.test.ts).
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -319,10 +361,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [83, 106, 101, 95, 43, 49, 21, 15],
-        [109, 105, 90, 95, 43, 42, 18, 13],
-        [139, 140, 101, 108, 56, 58, 12, 13],
-        [107, 129, 85, 98, 45, 34, 9, 11],
+        [87, 112, 94, 80, 50, 39, 16, 8],
+        [123, 115, 95, 90, 45, 43, 18, 12],
+        [124, 106, 100, 100, 48, 50, 24, 18],
+        [93, 125, 85, 103, 48, 38, 9, 21],
       ]);
     }
 
@@ -337,10 +379,11 @@ describe('engine tactics', () => {
       const shooters = [...tids].sort((a, b) => avg(b, (c) => c.c3) - avg(a, (c) => c.c3))[0];
       const bigs = tids.filter((t) => t !== shooters).sort((a, b) => avg(b, (c) => c.postScore + c.rim) - avg(a, (c) => c.postScore + c.rim))[0];
       const defenses = tids.filter((t) => t !== shooters && t !== bigs).slice(0, 3);
-      // (the shooters' edge, about 1.3 per 100, is the close one; the post-up team's, about 3 per 100, clears
-      // twice its standard error more than three times over in as many games)
+      // (the shooters' edge, about 1.3 per 100, is the close one: 900 games a defense since the tactics rewrite,
+      // 2026-11-10, +1.32 and +1.23 ± 0.27 on two seed streams, where the first 300 came out +0.50 ± 0.46; the
+      // post-up team's, about 6 per 100, clears twice its standard error six times over in 300)
       const offenses: [SimTeamInput, number, number][] = [
-        [side(shooters, { offense: { threePoint: 100, rimAttack: 40, crashBoards: 10, actions: { motion: 100, handoff: 90, pnr: 45, iso: 10, post: 0 } } }), 1, 300],
+        [side(shooters, { offense: { threePoint: 100, rimAttack: 40, crashBoards: 10, actions: { motion: 100, handoff: 90, pnr: 45, iso: 10, post: 0 } } }), 1, 900],
         [side(bigs, { offense: { threePoint: 0, rimAttack: 100, crashBoards: 85, actions: { post: 100, iso: 70, pnr: 45, motion: 25, handoff: 10 } } }), -1, 300],
       ];
       // paired over three defenses: the same games with each zone

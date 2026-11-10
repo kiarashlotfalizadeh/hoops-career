@@ -9,8 +9,7 @@
 // season's numbers (Insights) say what actually happened. Pure.
 
 import type { DefRole, DefScheme, League, OffRole, Player, Tactics } from '../types';
-import { clamp } from '../random';
-import { composites, type Composites } from '../ratings';
+import { composites, defRoleFitsFrom, type Composites } from '../ratings';
 import { teamPlayers } from '../league/helpers';
 import { COVERAGE_META, DEF_ROLE_META, SCHEME_META, SHAPE_META, defRoleOf, levelName, shapeOf, withMentality } from '../sim/tactics';
 
@@ -378,19 +377,7 @@ export function roleFits(p: Player): Record<OffRole, number> {
  * role as much as he doesn't suit the others, and a position defender is his defense in general.
  */
 export function defRoleFits(p: Player): Record<DefRole, number> {
-  const c = composites(p.ratings);
-  const r = p.ratings;
-  const small = (n: number) => (r.hgt < 55 ? n : 0);
-  const big = (n: number) => (r.hgt >= 62 ? n : 0);
-  const general = 0.45 * c.perDef + 0.3 * c.intDef + 0.25 * c.helpD;
-  return {
-    standard: general,
-    poa: 0.55 * c.perDef + 0.25 * c.steal + 0.2 * r.spd - big(15),
-    stopper: 0.6 * c.perDef + 0.2 * r.diq + 0.2 * Math.min(r.hgt, 65) - big(8),
-    anchor: 0.6 * c.rimProt + 0.4 * c.intDef - small(20),
-    roamer: 0.55 * c.helpD + 0.25 * c.steal + 0.2 * c.rimProt,
-    hide: clamp(110 - general, 30, 75),
-  };
+  return defRoleFitsFrom(composites(p.ratings), p.ratings);
 }
 
 /**

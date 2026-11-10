@@ -236,7 +236,8 @@ describe('the live assistant and the bench', () => {
       const view = withPlayer(snapshot(g.sim), 2, { fouls: foulLimit(1, 'standard') });
       expect(view.q).toBe(1);
       expect(liveAlerts(alertInput(g, view)).some((x) => x.id.startsWith('fouls-'))).toBe(false);
-      const a = liveAlerts(alertInput(g, view, { manualSubs: true })).find((x) => x.id.startsWith('fouls-'));
+      // (his alert: another player the game itself has put in foul trouble may be flagged too)
+      const a = liveAlerts(alertInput(g, view, { manualSubs: true })).find((x) => x.id.startsWith(`fouls-${view.sides[0].on[2]}-`));
       expect(a?.action?.label).toBe(`Sit P${view.sides[0].on[2]}`);
       expect(foulLimit(2, 'strict')).toBe(2);
       expect(foulLimit(4, 'loose')).toBe(6);
@@ -296,9 +297,9 @@ describe('the live assistant and the bench', () => {
       expect(liveAlerts(alertInput(g, later, { events: ev })).some((x) => /^(inj|fo|adj)-/.test(x.id))).toBe(false);
     }
 
-    // the biggest edge against you turned into a one-tap fix, when that fix measured as a gain where it
-    // fires (callWorth.ts): a roll man punishing a hedge brings Go to Drop; pull-ups over a drop bring
-    // nothing (the switch to Hedge cost 1.6 a game, measured), nor does a counter-call on it
+    // the biggest edge against you turned into a one-tap fix, unless that fix measured as a cost where it
+    // fires (callWorth.ts): a roll man punishing a hedge brings Go to Drop; pull-ups over a drop bring Ice
+    // their screens (the switch to Hedge they once brought cost 1.6 a game, measured)
     {
       const g = game();
       for (let i = 0; i < 40; i++) g.sim.step();
@@ -319,7 +320,7 @@ describe('the live assistant and the bench', () => {
       }
       view.impacts = [{ key: 'drop_pullup:o', t: 1, count: 6, pts: 4.2, players: {} }];
       expect(callCosts(callKey('imp-drop_pullup:o', 'Switch to Hedge'))).toBe(true);
-      expect(liveAlerts(alertInput(g, view, { tactics: t })).some((x) => x.id === 'imp-drop_pullup:o')).toBe(false);
+      expect(liveAlerts(alertInput(g, view, { tactics: t })).find((x) => x.id === 'imp-drop_pullup:o')?.action).toMatchObject({ kind: 'tactics', label: 'Ice their screens' });
       // a call made too rarely to have measured is the staff's read
       expect(worthLine('imp-drop_handoff:o>Switch off-ball screens')).toBeUndefined();
     }
@@ -791,8 +792,10 @@ describe('broadcast graphics', () => {
       }
       const top = [...view.box.home.players, ...view.box.away.players].sort((a, b) => b.pts - a.pts)[0];
       expect([view.q, top.pts > 20]).toEqual([4, true]);
-      // (his big-night graphic, at 30 or 40, has already gone up: it outranks the watch)
-      const shown = new Set([30, 40, 50].map((n) => `big-${top.pid}-${n}`));
+      // (his big-night graphic, at 30 or 40, has already gone up: it outranks the watch; and so has whatever
+      // else is due by then without his high on record, which may outrank it too: 2026-11-10, after the tactics
+      // rewrite, someone's 4 of 4 from three was)
+      const shown = new Set([...[30, 40, 50].map((n) => `big-${top.pid}-${n}`), ...graphicCandidates(graphicInput(view, logs)).map((g) => g.id)]);
       const with_ = (high: PlayerBefore['high']) => nextGraphic(graphicInput(view, logs, { before: new Map([[top.pid, { high }]]), shown }));
       expect(with_({ pts: top.pts + 2, games: 20, career: false })).toMatchObject({
         kind: 'watch',

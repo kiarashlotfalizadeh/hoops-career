@@ -43,10 +43,17 @@ function useOutlook(league: League, tid: number): string | null {
   return `${f.preseason ? 'Preseason · ' : ''}${rec}Playoffs ${pct(t.reach[0], t.clinched)}${t.reach[4] >= 0.01 ? ` · Title ${pct(t.reach[4])}` : ''}`;
 }
 
-// (moved off its playbook's settings: "Custom Drop", as the Tactics hero and Plan name it)
+// (an AI staff's style in a few words, "Isolation-heavy, slow / Drop"; a playbook moved off its
+// settings, "Custom Drop", as the Tactics hero and Plan name it)
 const playbook = (team: League['teams'][number]) => {
   const off = offenseLabel(team.tactics);
   return `${off === 'Custom' ? 'Custom offense' : off} / ${defenseLabel(team.tactics)}`;
+};
+
+/** An AI staff's style as its scouting report says it ("Slow-paced, isolation-heavy offense. Drops its big on ball screens."), else nothing. */
+const styleLine = (team: League['teams'][number]) => {
+  const id = team.tactics.identity;
+  return id && !team.tactics.manual ? `${id.line} ${id.defLine}` : null;
 };
 
 /** The head coach from the coach registry: since when he's had the job (or when he takes it), and the playbook the team runs. */
@@ -69,6 +76,7 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
   const ranks = useRatingRanks(league, tid);
   const outlook = useOutlook(league, tid);
   const coach = useLeagueMemo(() => coachLine(league, tid), [league, tid]);
+  const style = styleLine(team);
   const roster = useLeagueMemo(() => rosterSorted(league, tid), [league, tid]);
   const key = [...roster].sort((a, b) => b.ovr - a.ovr).slice(0, 3);
   const cs = contractSeason(league);
@@ -135,6 +143,7 @@ export function TeamOverview({ league, tid, onContracts }: { league: League; tid
           <span className="v">
             <span className="bold">{team.coach.name}</span>
             <span className="sub">{coach?.line ?? playbook(team)}</span>
+            {style && <span className="sub">{style}</span>}
           </span>
           <ChevronRight size={15} className="dim" aria-hidden="true" />
         </Link>

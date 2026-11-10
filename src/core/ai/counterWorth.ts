@@ -9,7 +9,7 @@
 // rather than the points: a counter changes the looks, and whether this one look fell is noise it
 // can't move. Paired that way, 240 games pin a counter to about ±0.45 a game (the points alone: ±0.6).
 //
-// Since the big decisions were made to matter (2026-10: see K.matchup), a counter aimed right is worth
+// Since the big decisions were made to matter (the room a choice leaves counts by who takes it: TK.use), a counter aimed right is worth
 // two points a game and more against the opponent it's for, and a wrong one costs as much (over the
 // real league each big decision's true worth spreads about ±1.2 a game from one opponent to the next),
 // so a reading is mostly the counter and partly noise. A counter that reads promising is still played

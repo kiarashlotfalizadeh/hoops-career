@@ -10,7 +10,7 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { edit } from '../../state/actions';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, type DefPreset, type OffPreset } from '../../core/sim/tactics';
 import { presetMatches } from '../../core/sim/playbooks';
-import { defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
+import { CHANGE_UPS, baseDefenses, defPresetFit, defPresetTerms, fitRoster, offPresetFit, offPresetTerms, rosterProfile, staffPick } from '../../core/ai/coachAI';
 import { inSeason, rosterSorted } from '../../core/league/helpers';
 import { rosterNames } from '../stats';
 import { FIT, leanTone } from '../../core/analysis/staffWords';
@@ -35,9 +35,14 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
   const [open, setOpen] = useState<string | null>(null);
   const cur = kind === 'off' ? t.offPreset : t.defPreset;
   const presets = useMemo(() => byFit<Preset>(kind === 'off' ? OFF_PRESETS : DEF_PRESETS, fits, cur), [kind, fits, cur]);
-  const best = bestFit<Preset>(presets, fits);
+  // (a change-up, the 2-3 zone, is never the staff's base: CHANGE_UPS)
+  const changeUp = (id: string) => kind === 'def' && CHANGE_UPS.has(id);
+  const best = bestFit<Preset>(
+    presets.filter((p) => !changeUp(p.id)),
+    fits,
+  );
   // in season the staff keeps the playbook it runs until another reads clearly better (STICK): said, not hidden
-  const held = !t.manual && inSeason(league) && cur !== undefined && best.id !== cur && staffPick(fits, cur, true) === cur;
+  const held = !t.manual && inSeason(league) && cur !== undefined && best.id !== cur && staffPick(kind === 'def' ? baseDefenses(fits) : fits, cur, true) === cur;
   const curName = presets.find((p) => p.id === cur)?.name;
   const pick = (id: string) =>
     edit((l) => {
@@ -83,11 +88,11 @@ export function PresetPicker({ kind }: { kind: 'off' | 'def' }) {
               </button>
               <button
                 className="tx-fit"
-                aria-label={on ? `About ${p.name}, in use` : `About ${p.name}, the staff's read: ${FIT[lean]}`}
+                aria-label={on ? `About ${p.name}, in use` : changeUp(p.id) ? `About ${p.name}, a change-up` : `About ${p.name}, the staff's read: ${FIT[lean]}`}
                 aria-haspopup="dialog"
                 onClick={() => setOpen(p.id)}
               >
-                {on ? <Tag>Yours</Tag> : <Tag tone={tone || undefined}>{FIT[lean]}</Tag>}
+                {on ? <Tag>Yours</Tag> : changeUp(p.id) ? <Tag>Change-up</Tag> : <Tag tone={tone || undefined}>{FIT[lean]}</Tag>}
                 <ChevronRight size={16} className="dim" aria-hidden="true" />
               </button>
             </div>

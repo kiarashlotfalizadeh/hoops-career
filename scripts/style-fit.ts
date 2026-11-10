@@ -7,9 +7,10 @@
 // printed are the real league's. Prints each model (start and terms in fit points, a tenth of a point a
 // game, with each quality's neutral level), and for each league the fit's r and slope against the
 // measured worth, the read's top picks and the best measured.
-// Usage: STYLE_JSON=real-a.json tsx scripts/style-check.ts 24 off,def,shape 4242 real, the same for a
-// second seed and a fictional league or two, then
+// Usage: STYLE_JSON=real-a.json tsx scripts/style-check.ts 24 off,def,shape 4242 real 15, the same for a
+// second seed set (real-b.json: 9001) and a fictional league or two (fic11.json: ... 9001 11 15), then
 //   tsx scripts/style-fit.ts off real-a.json+real-b.json,fic11.json,fic23.json
+// (2026-11, tactics v2: each run about 2.5 minutes on 15 processes, 354,960 games.)
 import { readFileSync } from 'node:fs';
 import type { Part, StyleRow } from './style-measure';
 
@@ -17,15 +18,20 @@ const part = process.argv[2] as Part;
 const spec = process.argv[3];
 if (!part || !spec) throw new Error('Usage: style-fit off|def|shape real-a.json[+real-b.json][,fictional.json...]');
 
-/** The qualities each option's fit may use: what its style leans on, as a coach would read it. */
+/**
+ * The qualities each option's fit may use: what its style leans on, as a coach would read it. (Added for
+ * the tactics v2 refit, 2026-11: a top-heavy roster for Heliocentric, a center who protects the rim and
+ * can't space the floor for Five-Out and Grit & Grind, the big's post game and the shooters running off
+ * his handoffs for Hub Big, a lead creator pushing the ball for Pace & Space.)
+ */
 const QUALITIES: Record<Part, Record<string, string[]>> = {
   off: {
     balanced: ['depth', 'starCreator'],
-    helio: ['starCreator', 'creatorGap', 'shooting', 'passing'],
-    fiveOut: ['shooting', 'passing', 'size', 'starCreator', 'bigPassing'],
-    hub: ['bigPassing', 'passing', 'creatorGap', 'starCreator'],
-    paceSpace: ['athleticism', 'shooting', 'passing', 'depth'],
-    grind: ['size', 'postScoring', 'shooting', 'passing', 'starCreator'],
+    helio: ['starCreator', 'creatorGap', 'shooting', 'passing', 'depth'],
+    fiveOut: ['shooting', 'passing', 'size', 'starCreator', 'bigPassing', 'rimProtection'],
+    hub: ['bigPassing', 'passing', 'creatorGap', 'starCreator', 'postScoring', 'shooting'],
+    paceSpace: ['athleticism', 'shooting', 'passing', 'depth', 'starCreator'],
+    grind: ['size', 'postScoring', 'shooting', 'passing', 'starCreator', 'rimProtection'],
   },
   def: {
     drop: ['rimProtection', 'steals', 'athleticism', 'size', 'depth'],

@@ -1,11 +1,13 @@
 // Post-ups (a set's, a mismatch, what a switch leaves): the entry pass, the post player's edge on his
-// man, the double team, a small switched onto a big fouling to hold his ground, getting physical with
-// him, and the shot or the pass out (Post split's cutter and flare).
+// man, the double team, a small switched onto a big fouling to hold his ground, and the shot or the
+// pass out (Post split's cutter and flare). Rewritten in November 2026 (tactics v2): sizes in tk.ts.
 
 import { clamp } from '../../random';
-import { K, lev } from './constants';
+import { K } from './constants';
 import type { SP, ST, ActionResult } from './state';
 import type { GameSim } from './game';
+
+type Tags = [string, number][];
 
 export const postUpMethods = {
   post(this: GameSim, off: ST, def: ST, open: number, forced: boolean, fixed: { actor: SP; defender: SP; tag: string; entry: SP | null; tagW?: number } | null): ActionResult {
@@ -23,7 +25,6 @@ export const postUpMethods = {
     }
     if (this.cur && !fixed && (play || !this.cur.set)) this.cur.label = play ? play.label : `Post-up: ${A.name} vs ${D.name}`;
     if (this.record) this.cur!.steps.push({ k: 'post', pid: A.pid });
-    // the split: one screens for the other off the ball
     if (play && this.record) this.cur!.steps.push({ k: 'pin', pid: play.cast.d!.pid, pid2: play.cast.c.pid });
     const help = this.help(def);
     let adv = (A.c.postScore * A.perf - D.c.intDef * this.dq(D)) / 20 + (A.r.str - D.r.str) / 80 + (A.r.hgt - D.r.hgt) / 70 + this.rng.normal(0, 0.55) + open;
@@ -31,12 +32,12 @@ export const postUpMethods = {
     if (!fixed && def.byId.get(off.t.offense.huntTarget ?? -1) === D) this.huntEdge(def, D, 'post', A.pid);
     const zd = this.zone(def);
     if (zd) {
-      adv -= lev(zd.post);
-      this.impact('zone_paint', def.side, lev(zd.postTag), A.pid);
+      adv -= zd.post;
+      this.impact('zone_paint', def.side, zd.post * 0.1, A.pid);
     }
     if (fixed?.tag === 'mismatch_post') this.impact(fixed.tag, off.side, Math.max(0, (A.r.hgt - D.r.hgt) / 70) * K.advPts.post, A.pid);
     const starDouble = def.t.defense.starPlan === 'double' && this.starTarget(def, off) === A;
-    const doubleP = starDouble ? 0.75 : 0.08 + lev(Math.max(0, help) * 0.15) + (adv > 0.6 ? 0.15 : 0);
+    const doubleP = starDouble ? 0.75 : 0.08 + Math.max(0, help) * 0.3 + (adv > 0.6 ? 0.15 : 0);
     if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble, play);
     const pTO = this.toChance(K.toBase * 1.1, A, def, this.setJump(play, def, A));
     if (this.rng.chance(pTO)) {
@@ -45,7 +46,7 @@ export const postUpMethods = {
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);
     // a small switched onto a big can only hold his ground by fouling
-    const reach = fixed?.tag === 'switch_mismatch' ? 1 + lev(Math.max(0, A.r.hgt - D.r.hgt) / K.mismatchFoul) : 1;
+    const reach = fixed?.tag === 'switch_mismatch' ? 1 + (0.6 * Math.max(0, A.r.hgt - D.r.hgt)) / K.mismatchFoul : 1;
     const foulTag: [string, number, number?] | undefined = reach > 1 ? ['switch_mismatch', reach, fixed?.tagW] : undefined;
     const ss = this.selfShot(A);
     const opts = [
@@ -55,7 +56,6 @@ export const postUpMethods = {
       Math.pow(A.c.passing / 50, 1.4) * 0.45 * this.passT(A), // pass out
       forced ? 0 : K.continueBase * 0.6,
     ];
-    // a set goes for its look
     if (play) (['post', 'post', 'post', 'pass'] as const).forEach((slot, i) => (opts[i] *= play.w[slot] ?? 1));
     const c = this.rng.weighted(opts);
     switch (c) {
@@ -84,24 +84,25 @@ export const postUpMethods = {
         if (play && cutter && this.record) this.cur!.steps.push({ k: 'cut', pid: tgt.pid });
         this.passStep(A, tgt);
         if (cutter) {
-          const ct: [string, number][] = [];
+          const ct: Tags = [];
           const so = play ? this.setOpen(play, 'cut', ct) : 0;
           this.shoot(off, def, {
             shooter: tgt,
             zone: 'rim',
-            open: 0.25 + advOpen * 0.3 + so,
+            // (a post player who reads the floor finds the cutter in stride)
+            open: 0.25 + advOpen * 0.3 + so + (A.c.passing - 55) / 100,
             contest: this.rimContester(def, this.defOf(def, tgt), 1.2),
             assister: A,
             finish: 'cut',
             ...(ct.length ? { tags: ct } : {}),
           });
         } else {
-          const kt: [string, number][] = [['help_kick', lev(Math.max(0, help) * 0.25)]];
-          const so = play ? this.setOpen(play, 'kick', kt) : 0;
+          const kt: Tags = [['help_kick', Math.max(0, help) * 0.5]];
+          if (play) this.setOpen(play, 'kick', kt);
           this.spotUp(off, def, {
             shooter: tgt,
             zone: this.cornerOrWing(off, tgt),
-            open: 0.2 + lev(Math.max(0, help) * 0.25) + so,
+            open: 0.2 + this.room(tgt, 'c3', kt) + (A.c.passing - 55) / 100,
             contest: this.defOf(def, tgt),
             assister: A,
             finish: 'spotup',

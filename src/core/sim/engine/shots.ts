@@ -6,7 +6,8 @@
 import type { ShotZone } from '../../types';
 import { clamp } from '../../random';
 import type { FinishType, PossStep } from '../log';
-import { K, engineDiag, lev, levExtra, levGift, levW } from './constants';
+import { K, engineDiag } from './constants';
+import { TK } from './tk';
 import type { SP, ST, ShotOpts } from './state';
 import type { GameSim } from './game';
 
@@ -19,73 +20,25 @@ const blockSkill = (p: { r: { blk: number; hgt: number; ath: number } }) => 0.7 
  * handed out 28.7 assists a game, 67% of its baskets (now 27.1 and 63%; the NBA's 2025-26: 26.6 and
  * 64%, on a league field-goal percentage 1.3 points lower).
  */
-const TWO_ASSIST = 0.91;
+const TWO_ASSIST = 0.99;
 
 /** ...and what a pass that led to a paint or mid-range make keeps on top (see assistProb). */
 const ZONE_ASSIST = { paint: 1.25, mid: 1.3 };
 
-/** No tags (shared: never added to). */
-const NONE_TAGS: [string, number][] = [];
-
-export type MatchupFamily = keyof typeof K.matchup.open;
-
-const familyOf = new Map<string, MatchupFamily | null>();
-/** The big decision an impact tag is one of (K.matchup.family), if any. */
-export function matchupFamily(k: string): MatchupFamily | null {
-  let f = familyOf.get(k);
-  if (f === undefined) {
-    f = (Object.entries(K.matchup.family).find(([, ps]) => ps.some((p) => k.startsWith(p)))?.[0] as MatchupFamily | undefined) ?? null;
-    familyOf.set(k, f);
-  }
-  return f;
-}
-
-/** Room a big decision leaves on a look that gets its full skill term (K.matchup): less room, a share of it. */
-const FULL_ROOM = 0.3;
-
 export const shotsMethods = {
-  /**
-   * The big decisions' looks on this shot, counted by who gets them (K.matchup): for each family that
-   * left it open (and the room ball pressure gives up, `over`), the shooter's skill for it over the
-   * league's in openness, by tag (the first of the family's tags on the look). `skill` is his rating
-   * for the shot; his form counts.
-   */
-  matchupOpen(this: GameSim, sh: SP, zone: ShotZone, pullup: boolean, skill: number, tags: [string, number][] | undefined, over: number): [string, number][] {
-    const m = K.matchup;
-    // (by family: its net room, and the tag the term goes to, the family's largest the same way as the net)
-    let fams: [MatchupFamily, string, number, [string, number][]][] | null = null;
-    if (tags)
-      for (const [k, d] of tags) {
-        const f = matchupFamily(k);
-        if (!f) continue;
-        const e = (fams ??= []).find((x) => x[0] === f);
-        if (e) {
-          e[2] += d;
-          e[3].push([k, d]);
-        } else fams.push([f, k, d, [[k, d]]]);
-      }
-    for (const e of fams ?? []) e[1] = e[3].reduce((a, x) => ((e[2] >= 0 ? x[1] > a[1] : x[1] < a[1]) ? x : a), e[3][0])[0];
-    if (!fams && over <= 0) return NONE_TAGS;
-    const avg = zone === 'rim' ? m.avg.rim : zone === 'paint' ? m.avg.paint : zone === 'mid' ? m.avg.mid : pullup ? m.avg.pu3 : m.avg.c3;
-    const z = (f: MatchupFamily) => clamp((skill * sh.perf - avg - m.center[f]) / m.per, -m.cap, m.cap);
-    // (the room keeps `floor` of its size at worst for a shooter who can't use it, and a look taken
-    // away keeps as much of its cost: the term never turns a decision's room into its opposite)
-    const term = (f: MatchupFamily, d: number) => {
-      const x = m.open[f] * z(f) * clamp(d / FULL_ROOM, -1, 1);
-      return d > 0 ? Math.max(x, -d * (1 - m.floor)) : Math.min(x, -d * (1 - m.floor));
-    };
-    const out: [string, number][] = [];
-    for (const [f, k, d] of fams ?? []) if (d !== 0) out.push([k, term(f, d)]);
-    if (over > 0) out.push(['pressure_blowby', term('pressure', over)]);
-    return out;
-  },
-
   /**
    * How much of his three-point tendency a shooter keeps tonight: all of it until his threes pass
    * K.threeUse.level of his team's shots while he's on the floor, then less (the defense runs him off
    * the line and the ball finds others, and the ones he still takes are tougher: K.threeUse.contest),
    * as K.useLevel levels off a player's share of the possessions.
    */
+  /** The openness a team's half-court threes lose for hunting them past TK.arc.from on its shot profile (more the further: squared). */
+  arcCost(this: GameSim, off: ST): number {
+    const a = TK.arc;
+    const x = (off.t.offense.threePoint - a.from) / (100 - a.from);
+    return x > 0 ? a.forced * x * x : 0;
+  },
+
   threeDamp(this: GameSim, p: SP): number {
     const over = p.b.tpa / p.b.tFga - K.threeUse.level;
     return over > 0 ? Math.exp(-K.threeUse.damp * over) : 1;
@@ -133,7 +86,7 @@ export const shotsMethods = {
   },
 
   cornerOrWing(this: GameSim, off: ST, sh?: SP): ShotZone {
-    const base = 0.27 + (off.t.offense.threePoint - 50) / 400;
+    const base = 0.31 + (off.t.offense.threePoint - 50) / 400;
     const w = base * (sh?.tcn ?? 1);
     return this.rng.chance(w / (w + 1 - base)) ? 'c3' : 'ab3';
   },
@@ -204,20 +157,15 @@ export const shotsMethods = {
           skill = t.from + (Math.min(skill, t.top) - t.from) * t.keep + Math.max(0, skill - t.top) * t.keepTop;
         }
     }
-    // past 1x tactical leverage, a defense overplaying the ball is a step out of position on the
-    // half-court shots that do get off, as much as the offense's handlers make of it (the trade-off
-    // that keeps heavy pressure from a free win against teams that can handle it)
-    const beat = clamp(1 + (off.secQ - K.tradeOff.sec.avg) / K.tradeOff.sec.open, 0.25, 1.5);
-    const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : levExtra(K.tradeOff.pressure * Math.max(0, this.pressure(def)) * beat);
-    // (the room tactics have to open or close a look grows with the tactical leverage)
-    // the big decisions' looks count by who gets them (K.matchup): the room the scheme, the coverage,
-    // help, the double or ball pressure left him, by his skill for the shot
-    const fit = s.finish === 'putback' || s.finish === 'transition' ? NONE_TAGS : this.matchupOpen(sh, zone, !!s.pullup, skill, s.tags, over);
-    let mine = 0;
-    for (const [, v] of fit) mine += v;
+    // a defense overplaying the ball is a step out of position on the half-court shots that do get
+    // off, as much as the offense's handlers make of it (TK.pressure.over)
+    const over = s.finish === 'putback' || s.finish === 'transition' ? 0 : this.overplay(off, def);
     // the shape: five-out's open paint, the double post's crowded one (and its bigs inside)
     const shape = this.shapeOpen(off, sh, zone, s.finish);
-    const open = clamp(s.open + over + mine + shape + this.rng.normal(0, 0.18), -lev(1.2), lev(1.3));
+    // a team hunting threes past what its looks give takes tougher ones: the defense runs it off the
+    // line (TK.arc, on the half court's threes)
+    const arc = three && s.finish !== 'transition' && s.finish !== 'putback' ? this.arcCost(off) : 0;
+    const open = clamp(s.open + over + shape - arc + this.rng.normal(0, 0.18), -2.4, 2.6);
     let p = K.zoneBase[zone] + ((skill * sh.perf - 50) / 50) * K.zoneSkill[zone] + open * K.zoneOpen[zone];
     if (s.pullup && three) p -= 0.012;
     // (a shooter past his share of the threes gets tougher ones from a man defense, or from the chaser
@@ -227,7 +175,7 @@ export const shotsMethods = {
     // chaser on him sooner: K.useContest, K.chaseCap)
     const teamUse = sh.b.tFga + 0.44 * sh.b.tFta + sh.b.tTov;
     if (teamUse >= 25) {
-      const level = K.useLevel - (this.chased(def, off).includes(sh) ? lev(K.chaseCap) : 0);
+      const level = K.useLevel - (this.chased(def, off).includes(sh) ? TK.chase.cap : 0);
       p -= K.useContest * Math.max(0, (sh.b.fga + 0.44 * sh.b.fta + sh.b.tov) / teamUse - level);
     }
     // contesting defender quality
@@ -237,7 +185,7 @@ export const shotsMethods = {
       if (zone === 'rim' || zone === 'paint') p -= ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07;
       else p -= ((c.c.perDef * this.dq(c) - 50) / 50) * 0.022;
       // a wing stopper on his own man makes every look a little tougher
-      if (c.drole === 'stopper' && def.guardOf.get(sh.pid) === c) stopper = lev(K.role.stopperContest);
+      if (c.drole === 'stopper' && def.guardOf.get(sh.pid) === c) stopper = TK.role.stopperContest * c.dm;
       p -= stopper;
     }
     // the offense's feel (reads, passing, handling) against the defense's team defense (help,
@@ -245,9 +193,9 @@ export const shotsMethods = {
     p += ((off.feelQ - def.defQ - K.feelGap) / 50) * K.feel;
     // fatigue
     p -= (1 - sh.energy) * 0.12;
-    // physicality: tighter contests
-    const phys = lev((def.t.defense.physicality - 50) / 50);
-    p -= phys * K.physContest;
+    // physicality: tighter contests (TK.phys)
+    const phys = this.phys(def);
+    p -= phys * TK.phys.contest;
     // home court, the game's shooting conditions and the score
     if (!this.opts.neutral) p += off.side === 0 ? K.home : -K.home * 0.3;
     if (this.opts.edge) p += this.opts.edge[off.side];
@@ -261,36 +209,31 @@ export const shotsMethods = {
     p *= this.scramble < 1 ? Math.min(this.scramble, look) : look;
     p = s.heave ? K.heave.make : clamp(p, 0.04, 0.93);
 
-    // impact accounting: each tag's openness contribution in expected points (a big decision's with
-    // what the shooter made of it: see matchupOpen)
-    // (once a key: a family's term goes to its first tag on the look)
-    const credited = fit.length ? new Set<string>() : null;
-    const extra = (k: string) => {
-      if (!credited || credited.has(k)) return 0;
-      credited.add(k);
-      return fit.reduce((a, [fk, v]) => (fk === k ? a + v : a), 0);
-    };
+    // impact accounting: each tag's openness in expected points (a look's room is already counted by
+    // who got it: see room)
     if (s.tags) {
       for (const [k, d] of s.tags) {
         if (d === 0) continue;
-        this.impact(k, off.side, (d + extra(k)) * K.zoneOpen[zone] * value, sh.pid);
+        this.impact(k, off.side, d * K.zoneOpen[zone] * value, sh.pid);
       }
     }
-    if (over) this.impact('pressure_blowby', off.side, (over + extra('pressure_blowby')) * K.zoneOpen[zone] * value, sh.pid);
+    if (over) this.impact('pressure_blowby', off.side, over * K.zoneOpen[zone] * value, sh.pid);
     if (shape) this.impact('shape_space', off.side, shape * K.zoneOpen[zone] * value, sh.pid);
     if (stopper) this.impact('role_stopper', def.side, stopper * value, sh.pid);
     // (the anchor's share of the rim's contests beyond what he'd get as anyone else, at his edge over an average contester)
     if (c?.drole === 'anchor' && (zone === 'rim' || zone === 'paint') && def.guardOf.get(sh.pid) !== c) {
-      const extra = 1 - 1 / levW(K.role.anchorRim);
+      const extra = 1 - 1 / TK.role.anchorRim;
       this.impact('role_anchor', def.side, extra * ((c.c.rimProt * this.dq(c) - 50) / 50) * 0.07 * value, sh.pid);
     }
     if (sh.energy < 0.7) this.impact('fatigue', def.side, (1 - sh.energy) * 0.12 * value * 0.5, sh.pid);
 
     // block?
     let blocker: SP | null = null;
-    const pBlk = c ? K.blockMiss[zone] * (1 + levExtra(K.recenter.blk)) * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) : 0;
+    // (a team attacking the rim at every chance drives into more of them: TK.rim.blk)
+    const downhill = s.drive ? 1 + TK.rim.blk * Math.max(0, (off.t.offense.rimAttack - 50) / 50) : 1;
+    const pBlk = c ? K.blockMiss[zone] * (1 + K.recenter.blk) * Math.pow(clamp(blockSkill(c), 10, 100) / 55, 2) * c.tbk * (1 - 0.3 * clamp(open, -1, 1)) * downhill : 0;
     // shooting foul?
-    const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + 0.3 * phys) * (s.forcedFoulMult ?? 1);
+    const draw = Math.pow(clamp(sh.c.foulDraw, 10, 100) / 50, 0.9) * (1 + TK.phys.foul * phys) * (s.forcedFoulMult ?? 1);
     // (late in a close game more shots are fouled; one for the tie or the lead at the horn rarely is: K.clutchD)
     const cd = K.clutchD;
     const gap = off.score - def.score;
@@ -302,13 +245,13 @@ export const shotsMethods = {
           : this.clock <= K.lastLook.horn && gap <= 0 && gap >= -3
             ? cd.hornFouls
             : cd.fouls;
-    const pFoul = this.whistle(def, K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls * lateCall);
+    const pFoul = this.whistle(def, K.foulRate[zone] * (1 + K.recenter.foul) * draw * this.env.fouls * lateCall);
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
       const foulGain = andOne * (value + 0.78) + (1 - andOne) * value * 0.78 - p * value;
-      const extraFouls = pFoul - pFoul / (1 + 0.3 * phys);
-      this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, extraFouls * foulGain - K.physContest * phys * value * (1 - pFoul), sh.pid);
+      const extraFouls = pFoul - pFoul / (1 + TK.phys.foul * phys);
+      this.impact(phys > 0 ? 'physicality' : 'clean_defense', off.side, extraFouls * foulGain - TK.phys.contest * phys * value * (1 - pFoul) * K.physTag.contest, sh.pid);
     }
     if (s.foulTag) {
       const andOne = p * (zone === 'rim' || zone === 'paint' ? 0.45 : 0.25);
@@ -434,17 +377,12 @@ export const shotsMethods = {
       // a roamer has left him to help, and a rim anchor stays home in the paint: the catch is open
       // (the anchor's man only as far as he's a shooter)
       const md = def.guardOf.get(sh.pid);
-      const gift = md?.drole === 'roamer' ? levGift(K.role.roamKick) : md?.drole === 'anchor' ? lev(K.role.anchorKick) * clamp((sh.c.c3 - 40) / 30, 0, 1.5) : 0;
+      const gift = md?.drole === 'roamer' ? TK.role.roamKick : md?.drole === 'anchor' ? TK.role.anchorKick * 2 * clamp((sh.c.c3 - 40) / 30, 0, 1.5) : 0;
       if (gift) s = { ...s, open: s.open + gift, tags: [...(s.tags ?? []), [md!.drole === 'roamer' ? 'role_roam' : 'role_anchor', gift]] };
     }
     const t3 = off.t.offense.threePoint / 100;
     let wShoot =
-      Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) *
-      (0.55 + t3) *
-      (1 + levExtra(K.recenter.three)) *
-      sh.t3 *
-      (1 + 0.6 * clamp(s.open, -0.5, 1)) *
-      (this.eases(off) ? K.garbage.three : 1);
+      Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) * (0.55 + t3) * (1 + K.recenter.three) * sh.t3 * (1 + 0.6 * clamp(s.open, -0.5, 1)) * (this.eases(off) ? K.garbage.three : 1);
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
     if (lk) wDrive *= 1 + 2 * lk.beat;
@@ -465,8 +403,8 @@ export const shotsMethods = {
     const pMid = (0.15 * sh.tm) / (0.15 * sh.tm + 0.85);
     const zone: ShotZone = r < pMid ? 'mid' : this.rimOr(sh, 0.65);
     const help = this.help(def);
-    const tags: [string, number][] = [['help_paint', -lev(help * 0.2)]];
-    let o = adv * 0.3 + this.spacingBonus(off) * 0.4 - lev(help * 0.2);
+    const tags: [string, number][] = [['help_paint', -help * 0.4]];
+    let o = adv * 0.3 + this.spacingBonus(off) * 0.4 - help * 0.4;
     if (lk) {
       o += lk.beat;
       tags.push([lk.beatTag, lk.beat]);
@@ -474,15 +412,28 @@ export const shotsMethods = {
     // (a zone walls off the drive off the catch as it does any other)
     const zd = this.zone(def);
     if (zd && zone !== 'mid') {
-      o -= lev(zd.drive);
-      tags.push(['zone_paint', -lev(zd.drive)]);
+      o -= zd.drive;
+      tags.push(['zone_paint', -zd.drive]);
     }
     const roam = zone !== 'mid' ? this.roamHelp(def, off, sh) : 0;
     if (roam) {
       o -= roam;
       tags.push(['role_roam', -roam]);
     }
-    this.shoot(off, def, { shooter: sh, zone, open: o, contest: zone === 'rim' ? this.rimContester(def, d) : d, assister: s.assister, finish: 'spotup', tags });
+    if (zone !== 'mid' && this.rng.chance(this.driveRisk(off) * 0.5)) {
+      this.turnover(off, def, sh, null, 'spotup');
+      return;
+    }
+    this.shoot(off, def, {
+      shooter: sh,
+      zone,
+      open: o,
+      contest: zone === 'rim' ? this.rimContester(def, d) : d,
+      assister: s.assister,
+      finish: 'spotup',
+      tags,
+      drive: zone !== 'mid',
+    });
   },
 
   /**
@@ -498,26 +449,26 @@ export const shotsMethods = {
     // (a floater or a pull-up off the catch is credited more often than it was: NBA 2024-26, 48-49% of
     // paint makes and 38-39% of mid-range makes are assisted, the sim's 38-40% and 28-31%, with the
     // rim's on its 60-61%)
-    return Math.min(0.97, TWO_ASSIST * this.finishAssist(f, zone, false) * (zone === 'paint' ? ZONE_ASSIST.paint : zone === 'mid' ? ZONE_ASSIST.mid : 1));
+    return Math.min(0.98, TWO_ASSIST * this.finishAssist(f, zone, false) * (zone === 'paint' ? ZONE_ASSIST.paint : zone === 'mid' ? ZONE_ASSIST.mid : 1));
   },
 
   /** A finish's assist rate before TWO_ASSIST (see assistProb). */
   finishAssist(this: GameSim, f: FinishType, zone: ShotZone, three: boolean) {
     switch (f) {
       case 'spotup':
-        return three ? 0.98 : zone === 'rim' ? 0.7 : zone === 'paint' ? 0.5 : 0.75;
+        return three ? 0.99 : zone === 'rim' ? 0.88 : zone === 'paint' ? 0.7 : 0.86;
       case 'cut':
       case 'pnrRoll':
-        return zone === 'paint' ? 0.85 : 0.93;
+        return zone === 'paint' ? 0.9 : 0.97;
       case 'offscreen':
       case 'handoff':
-        return three ? 0.96 : zone === 'rim' ? 0.5 : zone === 'paint' ? 0.55 : 0.65;
+        return three ? 0.98 : zone === 'rim' ? 0.68 : zone === 'paint' ? 0.7 : 0.8;
       case 'transition':
         // (an outlet or a hit-ahead the runner still has to take to the basket himself, often enough;
         // a trailer's three off the kick-ahead is a catch-and-shoot)
-        return three ? 0.95 : 0.8;
+        return three ? 0.97 : 0.92;
       case 'post':
-        return 0.25;
+        return 0.3;
       default:
         return three ? 0.85 : 0.6;
     }
