@@ -286,32 +286,33 @@ describe('engine defense', () => {
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
       // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
       // All of them again 2026-10-28, when the threes were recentred (K.recenter.three) after partnerships and familiarity were deleted. And again the same day, when Five-Out, Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit.
+      // All of them again 2026-11-09, the game-day realism round 3: the go-to player's last shots, the late game's fouls, timeouts and tempo, timeouts as tendencies, the stint plan's shape, boards at the horn and out of bounds, the whistle by quarter, steals by rate, the pace, and the seed refit to it.
       const expected: Record<string, number[][]> = {
         default: [
-          [120, 100, 80, 30, 9, 33, 12, 0],
-          [131, 121, 79, 22, 8, 30, 16, 0],
-          [127, 100, 90, 29, 7, 14, 11, 0],
+          [123, 96, 86, 38, 17, 22, 13, 0],
+          [125, 122, 95, 19, 10, 29, 11, 0],
+          [123, 106, 91, 27, 12, 39, 17, 0],
         ],
         zone23: [
-          [137, 94, 81, 30, 13, 23, 11, 0],
-          [133, 126, 91, 24, 10, 21, 11, 0],
-          [114, 97, 90, 36, 7, 21, 13, 0],
+          [124, 102, 81, 31, 16, 30, 13, 0],
+          [128, 121, 104, 27, 15, 17, 13, 1],
+          [121, 109, 105, 38, 18, 22, 12, 0],
         ],
         zone32: [
-          [114, 97, 80, 28, 17, 33, 13, 0],
-          [141, 135, 96, 15, 14, 31, 12, 0],
-          [117, 116, 94, 42, 11, 27, 11, 0],
+          [130, 103, 77, 30, 11, 31, 10, 0],
+          [106, 115, 86, 13, 12, 18, 14, 0],
+          [124, 128, 102, 37, 18, 22, 17, 0],
         ],
         double: [
-          [136, 111, 79, 41, 8, 35, 9, 0],
-          [121, 115, 90, 22, 6, 22, 15, 0],
-          [109, 119, 92, 34, 13, 22, 20, 0],
+          [124, 113, 83, 38, 8, 23, 15, 0],
+          [123, 118, 95, 22, 13, 32, 14, 0],
+          [126, 130, 87, 29, 8, 28, 21, 0],
         ],
         // (the first game hacks nobody: the couple of trips the mismatch hunt changes are all it changes)
         hunt: [
-          [116, 82, 84, 24, 8, 32, 9, 0],
-          [140, 134, 96, 17, 14, 36, 14, 1],
-          [115, 117, 84, 28, 9, 28, 14, 0],
+          [128, 93, 77, 31, 8, 34, 11, 0],
+          [120, 119, 105, 20, 12, 38, 13, 1],
+          [125, 106, 92, 25, 8, 40, 15, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {
@@ -355,41 +356,42 @@ describe('engine defense', () => {
       // (and again 2026-10-26, when the zones came to play to the two fives on the floor, K.zoneFit, the 2-3's open looks and glass grew, the playbooks were rebalanced and the AI's staffs refit with no zone ban, and garbage time came from the half; the pressure games when a press's steals came under the nightly cap)
       // All of them again 2026-10-27, when a shooter past his share of the threes came to get tougher ones (K.threeUse.contest), and again when a share of the possessions past K.useCeil came to cost more.
       // The hunting games again 2026-10-28, when the set package they ran was deleted.
+      // All of them again 2026-11-09, the game-day realism round 3: the go-to player's last shots, the late game's fouls, timeouts and tempo, timeouts as tendencies, the stint plan's shape, boards at the horn and out of bounds, the whistle by quarter, steals by rate, the pace, and the seed refit to it.
       const expected: Record<string, number[][]> = {
         default: [
-          [123, 107, 83, 33, 15, 24, 13, 0],
-          [113, 118, 82, 20, 10, 33, 18, 0],
-          [113, 91, 87, 29, 12, 29, 15, 0],
+          [126, 113, 84, 37, 11, 17, 11, 0],
+          [119, 121, 92, 17, 13, 24, 17, 0],
+          [108, 96, 92, 29, 15, 19, 15, 0],
         ],
         zone23: [
-          [113, 126, 79, 48, 12, 24, 15, 0],
-          [138, 132, 82, 24, 8, 26, 13, 0],
-          [125, 119, 92, 49, 11, 21, 16, 1],
+          [138, 117, 82, 50, 8, 16, 11, 0],
+          [130, 129, 87, 27, 10, 27, 13, 0],
+          [120, 99, 87, 34, 9, 31, 16, 0],
         ],
         zone32: [
-          [125, 119, 84, 34, 9, 29, 10, 0],
-          [118, 124, 78, 19, 7, 21, 16, 0],
-          [106, 102, 85, 33, 11, 26, 17, 0],
+          [136, 112, 79, 46, 8, 27, 17, 0],
+          [125, 133, 86, 13, 11, 28, 14, 0],
+          [114, 83, 88, 39, 10, 21, 12, 0],
         ],
         box1: [
-          [123, 133, 88, 44, 12, 24, 13, 0],
-          [127, 130, 86, 19, 9, 24, 15, 0],
-          [127, 113, 85, 34, 12, 22, 17, 0],
+          [128, 132, 82, 46, 11, 29, 16, 0],
+          [136, 140, 91, 14, 10, 34, 16, 0],
+          [120, 97, 99, 42, 11, 12, 11, 0],
         ],
         double: [
-          [114, 108, 83, 37, 14, 26, 13, 0],
-          [105, 117, 88, 17, 11, 27, 16, 0],
-          [116, 101, 89, 26, 14, 35, 18, 0],
+          [134, 123, 83, 33, 8, 51, 13, 0],
+          [111, 118, 88, 20, 10, 27, 18, 0],
+          [133, 114, 98, 31, 17, 23, 16, 0],
         ],
         pressure: [
-          [120, 138, 84, 41, 14, 32, 14, 0],
-          [127, 135, 86, 21, 13, 44, 24, 0],
-          [112, 100, 96, 33, 13, 27, 15, 0],
+          [134, 133, 90, 42, 17, 37, 14, 0],
+          [131, 140, 99, 23, 18, 35, 21, 0],
+          [131, 119, 108, 33, 20, 17, 17, 0],
         ],
         hunting: [
-          [121, 107, 75, 41, 12, 22, 14, 0],
-          [119, 118, 92, 22, 12, 35, 13, 0],
-          [93, 100, 86, 40, 11, 26, 19, 0],
+          [134, 111, 78, 34, 10, 18, 13, 0],
+          [115, 116, 88, 17, 7, 25, 9, 0],
+          [123, 127, 98, 38, 18, 18, 19, 0],
         ],
       };
       const patches: Record<string, TacticsPatch | undefined> = {

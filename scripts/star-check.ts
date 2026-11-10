@@ -6,8 +6,8 @@
 // biggest margin and team score, and the injuries that end seasons. Fails (exit 1) when any league
 // has a season whose scoring leader averages more than MAX_PPG, a game over MAX_GAME_PTS, a threes
 // or steals leader past MAX_TPM or MAX_STL, more than MAX_TPM10 nights of 10 made threes, a margin
-// past MAX_MARGIN or a team score past MAX_TEAM_PTS, or more than MAX_35_SEASONS seasons of a
-// 35-point scorer; when more seasons than BEST_RECORD_ALLOWANCE allows end with a record better than
+// past MAX_MARGIN or a team score past MAX_TEAM_PTS, or one scorer at 35 points a game in more than
+// MAX_35_SEASONS of its seasons (or more than one such season in SEASONS_PER_35 over all the leagues); when more seasons than BEST_RECORD_ALLOWANCE allows end with a record better than
 // MAX_WINS, or more than OLD_LEADER_ALLOWANCE allows have a player 36 or older leading the league in
 // points or threes; or when the seasons average more than MAX_LONG_INJURIES absences of 60+ games or
 // MAX_ACHILLES Achilles ruptures. It also measures the league's shape against the NBA's (the longest
@@ -64,11 +64,21 @@ const MAX_STL = 3.2;
 const MAX_MARGIN = 73;
 const MAX_TEAM_PTS = 180;
 /**
- * Seasons per league with a 35-PPG scorer: the NBA has had about a dozen in its history, and an
- * engine that made one perennial (Edwards at 35-37 in 6 of 8 seasons) had 12 in 32; since the
- * extremes were tuned, 3 in 48 (none in this check's 32).
+ * Seasons with a 35-PPG scorer: the NBA has had about a dozen in its history (four since 1985: Jordan
+ * twice, Bryant, Harden), and an engine that made one perennial (Edwards at 35-37 in 6 of 8 seasons)
+ * had 12 in 32. Two guards since 2026-11-09: no scorer leading a league at 35 or more in more than
+ * MAX_35_SEASONS of its eight seasons (one player making it his habit), and no more than one such
+ * season in SEASONS_PER_35 over all the leagues (the engine making it everyone's; the NBA's rate
+ * since 1985 is one in ten). Counted by league alone, at 2, the check failed on which league a great
+ * scorer's best years fell in: with the real league's top scorers on their real lines in the first
+ * season (they had run 2.4 a game under), three to six of the 64 seasons have one, and one run in
+ * three or four had three of them in one league, between two players or at 35.0-36.1 for one. An
+ * engine that inflates the top still fails: 10-13 of 64 with the in-game ceiling looser (K.useCeil)
+ * or without the tougher looks past a star's share (K.useContest), and a scorer at 35+ in four
+ * seasons of eight.
  */
-const MAX_35_SEASONS = 2;
+const MAX_35_SEASONS = 3;
+const SEASONS_PER_35 = 8;
 /**
  * Seasons per one that may have a player 36 or older leading the league in points or made threes:
  * a 38-year-old Curry does it in some leagues' first season (he led it at 37 in 2025-26, with 4.4 a
@@ -206,9 +216,13 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     if (r.score.pts > MAX_TEAM_PTS) failures.push(`${at(r)}: ${r.score.text} had a team score ${r.score.pts} in regulation (max ${MAX_TEAM_PTS})`);
   }
   for (const seed of new Set(all.map((r) => r.seed))) {
-    const n = all.filter((r) => r.seed === seed && r.over35 > 0).length;
-    if (n > MAX_35_SEASONS) failures.push(`rng ${seed}: ${n} seasons with a 35-PPG scorer (max ${MAX_35_SEASONS})`);
+    const by = new Map<string, number>();
+    for (const r of all) if (r.seed === seed && r.leader.ppg >= 35) by.set(r.leader.name, (by.get(r.leader.name) ?? 0) + 1);
+    for (const [name, n] of by) if (n > MAX_35_SEASONS) failures.push(`rng ${seed}: ${name} led the league at 35+ PPG in ${n} seasons (max ${MAX_35_SEASONS})`);
   }
+  const all35 = all.filter((r) => r.over35 > 0).length;
+  const max35 = Math.max(1, Math.floor(all.length / SEASONS_PER_35));
+  if (all35 > max35) failures.push(`${all35} of ${all.length} seasons with a 35-PPG scorer (max ${max35})`);
   const old = all.filter((r) => r.oldLeader);
   const oldAllowed = Math.floor(all.length / OLD_LEADER_ALLOWANCE);
   if (old.length > oldAllowed)
@@ -305,7 +319,7 @@ function verdict(all: (SeasonReport & { seed: string })[]): boolean {
     return false;
   }
   console.log(
-    `OK: no scoring leader above ${MAX_PPG} PPG, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins, leaders within ${MAX_TPM} threes and ${MAX_STL} steals, at most ${MAX_TPM10} 10-three nights a season, at most ${oldAllowed} season(s) led by a player 36 or older, margins within ${MAX_MARGIN}, team scores within ${MAX_TEAM_PTS}, at most ${MAX_35_SEASONS} seasons of a 35-PPG scorer per league, long injuries and Achilles ruptures within ${MAX_LONG_INJURIES} and ${MAX_ACHILLES} a season`,
+    `OK: no scoring leader above ${MAX_PPG} PPG, no game above ${MAX_GAME_PTS} points, at most ${allowed} season(s) above ${MAX_WINS} wins, leaders within ${MAX_TPM} threes and ${MAX_STL} steals, at most ${MAX_TPM10} 10-three nights a season, at most ${oldAllowed} season(s) led by a player 36 or older, margins within ${MAX_MARGIN}, team scores within ${MAX_TEAM_PTS}, no scorer at 35+ PPG in more than ${MAX_35_SEASONS} seasons of a league and at most ${max35} such seasons in all, long injuries and Achilles ruptures within ${MAX_LONG_INJURIES} and ${MAX_ACHILLES} a season`,
   );
   return true;
 }
@@ -469,6 +483,16 @@ function playLeague(spec: string): SeasonReport[] {
       champ,
       foulOuts,
     });
+    if (process.env.STAR_DETAIL) {
+      const x = rows[0];
+      const st = x.p.stats.filter((s) => s.season === season && !s.playoffs);
+      const sum = (k: 'gp' | 'pts' | 'min' | 'fga' | 'fgm' | 'tpa' | 'tpm' | 'fta' | 'ftm' | 'tov' | 'rimA' | 'rimM' | 'midA' | 'midM') => st.reduce((a, s) => a + s[k], 0);
+      const g = sum('gp');
+      const r = x.p.ratings;
+      console.log(
+        `   DETAIL ${playerName(x.p)} ${season}: gp ${g} min ${(sum('min') / g).toFixed(1)} fga ${(sum('fga') / g).toFixed(1)} fg% ${(sum('fgm') / sum('fga')).toFixed(3)} 3pa ${(sum('tpa') / g).toFixed(1)} 3p% ${(sum('tpm') / sum('tpa')).toFixed(3)} fta ${(sum('fta') / g).toFixed(1)} rim ${(sum('rimA') / g).toFixed(1)} at ${(sum('rimM') / sum('rimA')).toFixed(3)} mid ${(sum('midA') / g).toFixed(1)} at ${(sum('midM') / sum('midA')).toFixed(3)} tov ${(sum('tov') / g).toFixed(1)} ts ${(sum('pts') / (2 * (sum('fga') + 0.44 * sum('fta')))).toFixed(3)} | ins ${r.ins | 0} mid ${r.mid | 0} tp ${r.tp | 0} drw ${r.drw | 0} ft ${r.ft | 0} hnd ${r.hnd | 0} use ${x.p.tend?.use?.toFixed(2)} create ${x.p.tend?.create?.toFixed(2)}`,
+      );
+    }
     console.log(
       `${season}: ${rows
         .slice(0, quiet ? 3 : 5)

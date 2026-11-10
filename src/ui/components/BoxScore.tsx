@@ -63,6 +63,8 @@ export function BoxScore({
   const out = dnp ? box.players.filter((p) => p.min <= 0) : [];
   const injured = out.filter((p) => dnpInjury(p.dnp));
   const benched = out.filter((p) => !dnpInjury(p.dnp));
+  // (played and didn't finish: hurt during the game, or thrown out of it)
+  const left = dnp ? box.players.filter((p) => p.left) : [];
   const min = wholeMinutes(box.players);
   const t = box.t;
   // on a phone the figures past TOV wait to the right: the names stay put and the edge fades until
@@ -165,11 +167,16 @@ export function BoxScore({
           </table>
         </div>
       </div>
-      {(injured.length > 0 || benched.length > 0 || (pog !== undefined && rows.some((p) => p.pid === pog))) && (
+      {(injured.length > 0 || benched.length > 0 || left.length > 0 || (pog !== undefined && rows.some((p) => p.pid === pog))) && (
         <div className="bx-key">
           {pog !== undefined && rows.some((p) => p.pid === pog) && (
             <div>
               <Star size={11} className="bx-pog" fill="currentColor" aria-hidden="true" /> Player of the game
+            </div>
+          )}
+          {left.length > 0 && (
+            <div>
+              <b>Left the game:</b> {left.map((p) => `${name(p.pid)}, ${p.left === 'ejected' ? 'ejected' : 'injured'}`).join(' · ')}
             </div>
           )}
           {injured.length > 0 && (

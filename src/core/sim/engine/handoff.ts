@@ -103,7 +103,7 @@ export const handoffMethods = {
     }
     const pTO = this.toChance(K.toBase * 0.7, B, def, this.setJump(play, def, B));
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, this.rng.chance(B.ttv / (B.ttv + Sh.ttv)) ? B : Sh, this.stealBy(D, 0.5), finish);
+      this.turnover(off, def, this.rng.chance(B.ttv / (B.ttv + Sh.ttv)) ? B : Sh, this.stealBy(D, 0.5, true), finish);
       return 'done';
     }
     const advOpen = clamp(adv * 0.35, -0.6, 0.75);

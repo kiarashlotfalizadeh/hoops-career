@@ -12,11 +12,23 @@ import { createLeague, defaultSettings } from '../src/core/league/create';
 import { startRegularSeason } from '../src/core/league/season';
 import { buildSimInput } from '../src/core/league/games';
 import { teamPlayers } from '../src/core/league/helpers';
-import { GameSim } from '../src/core/sim/engine';
+import { GameSim, K } from '../src/core/sim/engine';
 import { Rng } from '../src/core/random';
 import { DEF_PRESETS, OFF_PRESETS, applyDefPreset, applyOffPreset, cloneTactics } from '../src/core/sim/tactics';
 import { defPresetFit, fitRoster, offPresetFit, presetScores, rosterProfile, shapeFits, shapeInputs, type ProfileKey } from '../src/core/ai/coachAI';
 import { OFF_SHAPES, type League, type Tactics } from '../src/core/types';
+
+// For experiments (the workers inherit them): HC_K='{"cov.ice.kick":0.5}' overrides engine constants by
+// path, HC_SEED=<file> plays another seed file's real league.
+if (process.env.HC_K) {
+  for (const [path, v] of Object.entries(JSON.parse(process.env.HC_K) as Record<string, unknown>)) {
+    const keys = path.split('.');
+    let o = K as unknown as Record<string, unknown>;
+    for (const k of keys.slice(0, -1)) o = o[k] as Record<string, unknown>;
+    o[keys[keys.length - 1]] = v;
+  }
+}
+const SEED_FILE = process.env.HC_SEED ?? 'src/data/seed.json';
 
 export type Part = 'off' | 'def' | 'shape';
 
@@ -62,7 +74,7 @@ export function styleLeague(league: 'real' | number): League {
     userTid: 0,
     coachName: 'C',
     settings: defaultSettings(),
-    seed: real ? JSON.parse(readFileSync('src/data/seed.json', 'utf8')) : null,
+    seed: real ? JSON.parse(readFileSync(SEED_FILE, 'utf8')) : null,
     rngSeed: real ? 7 : league,
   });
   L.id = 'style-check';

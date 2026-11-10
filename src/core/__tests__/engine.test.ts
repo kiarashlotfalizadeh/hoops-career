@@ -502,10 +502,10 @@ describe('engine rules', () => {
       sim.q = 4;
       sim.clock = 200;
       t.score = 100;
-      sim.T[1].score = 79;
+      sim.T[1].score = 78;
       sim.checkSubs(t);
       expect(t.garbage).toBe(false);
-      // 21 up with 2:40 left is a blowout at the league's line (21.7 with 3:20 left, 20.9 with 2:40):
+      // 22 up with 2:40 left is a blowout at the league's line (22.7 with 3:20 left, 21.9 with 2:40):
       // the bench comes in now, not at the next minute mark
       t.subSig = sim.subSignature(t);
       sim.clock = 160;
@@ -522,7 +522,7 @@ describe('engine rules', () => {
       expect(t.subLock.size).toBe(0);
     }
     // a playoff game running away goes back to the regular-season rotation (K.garbage.playoffs): up 18
-    // with 12:00 left (the line 28.5, minus 12) but not up 5, and never in the regular season
+    // with 12:00 left (the line 29.5, minus 12) but not up 5, and never in the regular season
     {
       type T = { score: number; gLine: number; plan: number[][]; planReg?: number[][] };
       type G = { q: number; clock: number; elapsed: number; T: [T, T]; lopsided(t: unknown): boolean; desiredLineup(t: unknown): { pid: number }[] };
@@ -564,9 +564,9 @@ describe('engine rules', () => {
       for (const t of sim.T) sim.checkSubs(t);
       expect(sim.T.some((t) => t.garbage)).toBe(false);
       sim.q = 3;
-      // 31 up with 2:50 left in the third (the line is 30.2 with 14:50 of regulation left)
+      // 32 up with 2:50 left in the third (the line is 31.2 with 14:50 of regulation left)
       sim.clock = 170;
-      sim.T[1].score = 59;
+      sim.T[1].score = 58;
       for (const t of sim.T) {
         t.subSig = [];
         sim.checkSubs(t);
@@ -797,7 +797,8 @@ describe('engine rules', () => {
       // (at once on most trips; on the rest it traps for a few seconds first and then fouls: K.lateSteal)
       expect(rate(20, 2)[0]).toBeGreaterThan(0.5);
       expect(rate(20, 2)[1]).toBe(1);
-      expect(rate(2, 2)[0]).toBe(1);
+      // (with seconds left, nearly always: there isn't always time to)
+      expect(rate(2, 2)[0]).toBeGreaterThan(0.8);
       // down three with the game clock under the shot clock too (NBA 2024-26: 81-86% of the time)
       expect(rate(20, 3)[0]).toBeGreaterThan(0.5);
       expect(rate(20, 3)[1]).toBe(1);
@@ -806,10 +807,14 @@ describe('engine rules', () => {
       expect(early[0]).toBe(0);
       expect(early[1]).toBeGreaterThan(0.1);
       expect(early[1]).toBeLessThan(0.55);
-      // down four to six: at 40 seconds later on the trip, at 25 at once
+      // down four to six: at 40 seconds later on the trip, at 25 at once; with seconds left, down four
+      // about half the coaches still do and down six hardly any (K.lateFoul.by)
       expect(rate(40, 5)[0]).toBe(0);
       expect(rate(40, 5)[1]).toBeGreaterThan(0.4);
-      expect(rate(25, 5)[0]).toBeGreaterThan(0.7);
+      expect(rate(25, 4)[0]).toBeGreaterThan(0.7);
+      expect(rate(4, 4)[0]).toBeGreaterThan(0.2);
+      expect(rate(4, 4)[0]).toBeLessThan(0.75);
+      expect(rate(4, 6)[0]).toBeLessThan(0.25);
       expect(rate(4, 7)[1]).toBe(0);
       // down seven to nine they foul sooner, though fewer coaches do the further down they are
       const fouls = (down: number) => {
@@ -899,12 +904,24 @@ describe('engine rules', () => {
       expect(sim.sitsForFouls(a, { pid: 1, fouls: 2, planMin: 30 }, 3, false)).toBe(false);
       expect(sim.sitsForFouls(a, { pid: 1, fouls: 5, planMin: 30 }, 3, true)).toBe(false);
       expect(sim.sitsForFouls(a, { pid: 1, fouls: 5, planMin: 30 }, 3, false)).toBe(true);
-      // the play-by-play of a dozen games: a loose-ball foul or a jump ball on the glass follows the board
+      // the play-by-play of a dozen games: a loose-ball foul or a jump ball on the glass follows the board,
+      // nobody is credited with a board at the horn (a heave's miss is nobody's), and the offense keeps a
+      // few balls that go out of bounds off the defense (a team rebound)
       let whistles = 0;
       let heaves = 0;
+      let kept = 0;
       for (let g = 0; g < 12; g++) {
-        const pbp = new GameSim(side(2 + g), side(14 + g), { rng: new Rng(300 + g), type: 'regular', record: true, injuries: false }).simToEnd().pbp!;
+        const game = new GameSim(side(2 + g), side(14 + g), { rng: new Rng(300 + g), type: 'regular', record: true, injuries: false });
+        const pbp = game.simToEnd().pbp!;
+        const logs = game.drainLogs();
+        logs.forEach((l, i) => {
+          // (a team rebound that keeps the ball is an inbound: the same side's trip goes on, never as a putback)
+          if (l.lines.includes(`${game.T[l.off].team.abbrev} team rebound.`)) kept++;
+          // a defensive board gone out of bounds starts the next trip with an inbound: no run-out
+          if (i > 0 && logs[i - 1].off !== l.off && /team rebound\.$/.test(logs[i - 1].lines.at(-1) ?? '')) expect(l.kind, l.lines.join(' ')).not.toBe('transition');
+        });
         pbp.forEach((e, i) => {
+          if (/rebound/.test(e.text) && !/team rebound/.test(e.text)) expect(e.clock, e.text).toBeGreaterThan(0);
           if (/^Loose ball foul|^Jump ball/.test(e.text)) {
             whistles++;
             expect(pbp[i - 1].text, e.text).toMatch(/rebound/);
@@ -919,6 +936,7 @@ describe('engine rules', () => {
       }
       expect(whistles).toBeGreaterThan(12);
       expect(heaves).toBeGreaterThan(3);
+      expect(kept).toBeGreaterThan(12);
       // every end game ends: a narrow lead with seconds left, the defense fouling at once, trapping first
       // or not at all; and a trap planned for a moment the clock has already run past (an offensive board
       // with a tenth of a second left) is no reason to wait (the trip once waited for it forever)
@@ -979,7 +997,9 @@ describe('engine rules', () => {
         return sim.lateMode(off, def).hurry;
       };
       expect(at(50, 6)).toBe(true);
-      expect(at(100, 9)).toBe(true);
+      expect(at(70, 9)).toBe(true);
+      // (not yet with a minute and a half left: a side nine down still runs its offense)
+      expect(at(100, 9)).toBe(false);
       expect(at(150, 25)).toBe(false);
       expect(at(50, 2)).toBe(false);
       expect(at(400, 6)).toBe(false);

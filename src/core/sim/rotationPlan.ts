@@ -158,6 +158,61 @@ export function normalizeMinutes(players: PlanPlayer[], total = 240): number[] {
  */
 export const STINT = { first: 4.5, per: 3, min: 4, stay: 3, rest: 3, sit: 3, smooth: 3, stagger: true };
 
+/**
+ * Starters on the floor by minute of the game, the shape of an NBA night (2024-26 play-by-play, the
+ * fourth quarter's from games within six with six minutes left; its last four minutes are the
+ * closers'): all five to the first substitutions four to five minutes in, one or two left by the end
+ * of the first and third quarters, two to open the second and the fourth, and most of them back to
+ * close each half. The plan follows it as far as the starters' minutes go (see starterTargets).
+ * Planned by score alone the starters all came back three minutes into the second quarter and had
+ * used their first-half minutes with three to play: 4.2 of them on the floor at 7:30 of the second
+ * (the NBA's 2.8-2.9) and 2.1 at 1:30 (3.7-3.8), and the fourth quarter opened with 0.95 (2.1-2.2).
+ */
+export const STARTERS_ON = [
+  [5, 5, 5, 5, 4.95, 4.45, 3.6, 2.7, 1.95, 1.6, 1.5, 1.5],
+  [2.05, 2.15, 2.35, 2.6, 2.9, 3.2, 3.4, 3.55, 3.7, 3.85, 3.95, 3.95],
+  [5, 5, 5, 4.9, 4.6, 4.0, 3.3, 2.6, 2.05, 1.75, 1.7, 1.7],
+  [2.2, 2.3, 2.5, 2.75, 3.0, 3.3, 3.5, 3.75, 4, 4, 4, 4],
+].flat();
+
+/**
+ * How many starters each minute of a half plans for: the NBA's shape (STARTERS_ON), stretched toward
+ * five or toward one until it adds up to the minutes the starters have in the half (`total`), in whole
+ * players (a team rounds the same way all night, by `dither`, so teams differ in the minute a starter
+ * sits or returns and the count never flickers), with `fixed` minutes as given (the closers' four).
+ */
+export function starterTargets(half: 0 | 1, total: number, fixed: (number | undefined)[], dither: number): number[] {
+  const shape = STARTERS_ON.slice(half * 24, half * 24 + 24);
+  const at = (k: number) => shape.map((b, t) => fixed[t] ?? Math.floor(Math.min(5, Math.max(1, 5 - k * (5 - b))) + dither));
+  const sum = (x: number[]) => x.reduce((a, b) => a + b, 0);
+  // the stretch whose total is nearest the starters' minutes (the total falls as k grows)
+  let lo = 0;
+  let hi = 6;
+  for (let i = 0; i < 30; i++) {
+    const mid = (lo + hi) / 2;
+    if (sum(at(mid)) > total) lo = mid;
+    else hi = mid;
+  }
+  const n = at(hi);
+  // the minute or few left over: a step of the count comes a minute sooner or later, never a flicker
+  const real = shape.map((b) => Math.min(5, Math.max(1, 5 - hi * (5 - b))) + dither);
+  for (let left = total - sum(n), guard = 0; left !== 0 && guard < 48; guard++) {
+    const up = left > 0;
+    let best = -1;
+    for (let t = 0; t < 24; t++) {
+      if (fixed[t] !== undefined || (up ? n[t] >= 5 : n[t] <= 1)) continue;
+      const edge = up ? (t > 0 && n[t - 1] > n[t]) || (t < 23 && n[t + 1] > n[t]) : (t > 0 && n[t - 1] < n[t]) || (t < 23 && n[t + 1] < n[t]);
+      if (!edge) continue;
+      const frac = real[t] - n[t];
+      if (best < 0 || (up ? frac > real[best] - n[best] : frac < real[best] - n[best])) best = t;
+    }
+    if (best < 0) break;
+    n[best] += up ? 1 : -1;
+    left += up ? -1 : 1;
+  }
+  return n;
+}
+
 /** Returns plan[slot] = array of 5 pids, slot 0..47. */
 export function buildMinutePlan(players: PlanPlayer[]): number[][] {
   const n = players.length;
@@ -167,6 +222,9 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
     return plan;
   }
   const mins = normalizeMinutes(players);
+  const fiveStarters = players.filter((p) => p.starter).length === 5;
+  // (which way this team rounds the shape: its own, from who is in the rotation)
+  const dither = (players.reduce((h, p) => (h * 31 + p.pid * 7 + p.minutes) >>> 0, 17) % 1000) / 1000;
   const onPrev = new Array<boolean>(n).fill(false);
   const stint = new Array<number>(n).fill(0);
   const rest = new Array<number>(n).fill(99);
@@ -197,6 +255,12 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
     // stretch of the third quarter is held back until planning reaches it, so they still have
     // the minutes for it: about half the second-half minutes of the starter who plays fewest,
     // leaving the closers their last four and the bench room for its own minutes.
+    // how many starters each minute plans for (the closers' last four minutes are theirs)
+    const startersNeed = need.reduce((a, m, i) => a + (players[i].starter ? m : 0), 0);
+    const closing = players.filter((p, i) => p.starter && p.closer && need[i] >= 4).length;
+    const target = fiveStarters
+      ? starterTargets(half as 0 | 1, startersNeed, half === 1 ? Array.from({ length: 24 }, (_, t) => (t >= 20 ? closing : undefined)) : [], dither)
+      : null;
     let block = 0;
     if (half === 1) {
       block = 24;
@@ -208,6 +272,15 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
           block = Math.min(block, Math.round(need[i] / 2), Math.floor(6 + (p.endurance / 100) * 6), need[i] - (p.closer ? 4 : 0));
         } else if (need[i] > 0) block = Math.min(block, 24 - need[i] - (p.closer ? 0 : 4));
       }
+      // (no longer than the shape keeps all five out there: four or five minutes, not eight)
+      if (target)
+        block = Math.min(
+          block,
+          Math.max(
+            2,
+            target.findIndex((x) => x < 5),
+          ),
+        );
       if (block < 2 || starters !== 5) block = 0;
     }
     for (let step = 0; step < 24; step++) {
@@ -244,7 +317,26 @@ export function buildMinutePlan(players: PlanPlayer[]): number[][] {
         scores.push({ i, sc });
       }
       scores.sort((a, b) => b.sc - a.sc);
-      let chosen = scores.slice(0, 5).map((x) => x.i);
+      let chosen: number[];
+      if (target) {
+        // whoever can't sit this minute plays; then the starters the minute's shape asks for and the
+        // reserves beside them, the best placed of each first (one group short, the other fills in)
+        chosen = scores
+          .filter((x) => must.has(x.i))
+          .slice(0, 5)
+          .map((x) => x.i);
+        const take = (starter: boolean, k: number) => {
+          for (const x of scores) {
+            if (k <= 0 || chosen.length >= 5) break;
+            if (players[x.i].starter !== starter || chosen.includes(x.i)) continue;
+            chosen.push(x.i);
+            k--;
+          }
+        };
+        take(true, target[s] - chosen.filter((i) => players[i].starter).length);
+        take(false, 5 - chosen.length);
+        take(true, 5 - chosen.length);
+      } else chosen = scores.slice(0, 5).map((x) => x.i);
       // positional sanity (at least one ball handler, at most three bigs) shapes the plan's own
       // subs: the fives the coach picked to start and close stay, nobody who needs every minute
       // left sits (he couldn't make it up, and someone else would play his), and a five that stays

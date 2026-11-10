@@ -181,41 +181,60 @@ export const coachMethods = {
       const opp = this.T[1 - t.side];
       // (in a live ball only the team with the ball may call one)
       if (!t.t.manage.autoTimeouts || t.manualSubs || !this.mayCallTimeout(t.side)) continue;
+      // (one timeout at a dead ball is enough for both benches)
+      if (this.timeoutStep) break;
       const late = final && this.clock < 120;
       const reserve = late ? 0 : final ? 1 : 2;
-      if (opp.run >= t.t.manage.timeoutRun && t.timeouts > reserve) {
+      const k = K.quarterTO;
+      // through a quarter, to the last three minutes of the fourth, an AI coach's timeouts are a habit
+      // (see K.quarterTO); the user's staff, and anyone in the last minutes, stops a run at the number set
+      const habit = t.habit.calls > 0 && this.q <= 4 && (this.q < 4 || this.clock > 180);
+      if (!habit && opp.run >= t.t.manage.timeoutRun && t.timeouts > reserve) {
         this.callTimeout(t.side, `${opp.run}-0 run`);
         continue;
       }
-      // through a quarter: the other side has just scored (a few unanswered, or the coach wants a word)
-      if (t.habit.calls && this.poss === t.side && this.ctx === 'made' && t.timeouts > (this.q < 4 ? 3 : 2) && (this.q < 4 || this.clock > 180) && this.q <= 4 && this.clock > 20) {
-        const k = K.quarterTO;
-        // (one that isn't against a real run only when nobody has called one in this stretch of the quarter)
-        const fresh = this.toWindow !== this.q * 10 + (this.clock > 420 ? 0 : this.clock > 180 ? 1 : 2);
-        if (this.rng.chance(t.habit.calls * (opp.run >= 6 ? k.run6 : !fresh ? 0 : opp.run >= 4 ? k.run4 : k.any))) {
+      // the other side has just scored (a few unanswered, or the coach wants a word)
+      if (habit && this.poss === t.side && (this.ctx === 'made' || this.ctx === 'ft') && t.timeouts > (this.q < 4 ? 3 : 2) && this.clock > 20) {
+        // (one that isn't against a real run only when play has gone a while without one, and in the
+        // first three quarters only while the quarter's two breaks haven't both come, with time left
+        // for it to be worth one)
+        const since = this.elapsed - this.lastTO;
+        const word = since >= k.quiet && (this.q === 4 || (this.T[0].qTimeouts + this.T[1].qTimeouts < 2 && this.clock > 120));
+        const mid = this.clock <= 420 && this.clock > 180 ? k.mid : 1;
+        const run = opp.run;
+        const p =
+          (run >= 8 ? k.run8 + k.per * (run - 8) : run >= 6 ? (since >= k.quiet / 2 ? k.run6 : 0) : !word ? 0 : (run >= 4 ? k.run4 : k.any) * mid) * (this.q === 4 ? k.q4 : 1);
+        if (this.rng.chance(t.habit.calls * p)) {
           // (a real run is an occasion to adjust; a word with the team isn't)
-          this.callTimeout(t.side, opp.run >= 4 ? `${opp.run}-0 run` : '', opp.run < 6);
+          this.callTimeout(t.side, run >= 4 ? `${run}-0 run` : '', run < 6);
           continue;
         }
       }
-      // the end of a close game, with the ball: behind or tied in the last 40 seconds (it advances the
+      // the end of a close game, with the ball: behind or tied in the last half minute (it advances the
       // ball), ahead by a basket or less after the other side scored, or to set up a trip in the last two
       // minutes
       const diff = t.score - opp.score;
-      const dead = this.ctx === 'made' || this.ctx === 'ft' || this.ctx === 'deadTO';
-      // timeouts past the two a team may keep after 3:00 of the fourth are used before it or lost
+      const dead = this.ctx === 'made' || this.ctx === 'ft' || this.ctx === 'deadTO' || this.ctx === 'oob';
+      // timeouts past the two a team may keep after 3:00 of the fourth are used before it or lost: now
+      // and then a coach spends one at a dead ball rather than lose it
       if (this.q === 4 && this.clock > 180 && this.clock <= K.lateTO.spend && t.timeouts > 2 && dead && Math.abs(diff) <= 12 && this.rng.chance(K.lateTO.spendP)) {
         this.callTimeout(t.side, '', true);
         continue;
       }
       if (!final || this.poss !== t.side || t.timeouts <= 0 || this.clock > 120 || this.clock < 0.8) continue;
+      const lt = K.lateTO;
+      const last = this.clock <= lt.at;
       const p =
-        this.clock <= K.lateTO.at && diff <= 0 && diff >= -6
-          ? K.lateTO.behind
-          : this.clock <= 24 && diff >= 1 && diff <= 3 && dead
-            ? K.lateTO.ahead
+        this.clock <= lt.from && diff <= 0 && diff >= -6
+          ? last
+            ? lt.behind
+            : lt.behindEarly
+          : this.clock <= lt.from && diff >= 1 && diff <= 6 && dead
+            ? last
+              ? lt.ahead
+              : lt.aheadEarly
             : Math.abs(diff) <= 5 && dead
-              ? K.lateTO.close
+              ? lt.close
               : 0;
       if (p && this.rng.chance(p)) this.callTimeout(t.side, '', true);
     }

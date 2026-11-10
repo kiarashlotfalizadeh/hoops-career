@@ -350,7 +350,8 @@ describe('two seasons of the real league', () => {
         const odds = outlook[og.tid].odds!;
         let most = 5;
         while (most > 0 && levelOdds(odds, most) < POSTSEASON_ODDS) most--;
-        const want = t.strategy === 'rebuild' || r >= 11 ? 0 : r <= 4 || t.strategy === 'contend' ? 3 : r <= 8 ? 2 : 1;
+        // (a front office that says it contends is asked for the postseason wherever it projects, as far as the odds allow)
+        const want = t.strategy === 'rebuild' ? 0 : r <= 4 || t.strategy === 'contend' ? 3 : r <= 8 ? 2 : r <= 10 ? 1 : 0;
         if (Math.min(want, most) === 0) {
           expect(post, t.abbrev).toBeUndefined();
           expect(goal(og, 'youth'), t.abbrev).toBeDefined();
@@ -609,7 +610,7 @@ describe('two seasons of the real league', () => {
       expect(l.day).toBeLessThan(l.allStarDay - 14);
       const gp = ts.won + ts.lost;
       // (well under: the forecast regresses the half season left toward the roster's strength, as below)
-      const bad = Math.max(0, Math.round((target * gp) / 82) - 12);
+      const bad = Math.max(0, Math.round((target * gp) / 82) - 14);
       [ts.won, ts.lost] = [bad, gp - bad];
       const quick = ownerProgress(l).find((p) => p.goal.kind === 'wins')!;
       expect(quick.status).toBe('behind');

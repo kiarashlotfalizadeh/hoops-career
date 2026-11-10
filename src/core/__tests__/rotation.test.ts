@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { createLeague, defaultSettings } from '../league/create';
 import { teamPlayers } from '../league/helpers';
-import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
+import { buildMinutePlan, normalizeMinutes, planInputs, planRoles, starterTargets, type PlanPlayer, type PlanSource } from '../sim/rotationPlan';
 import { autoRotation, roleMemory, rosterSeason, sortByPosition, veteranCeiling } from '../ai/coachAI';
 import { blankStats, generatePlayer, DEFAULT_SCALE } from '../playerGen';
 import { youthLean } from '../league/games';
@@ -89,6 +89,8 @@ describe('rotations', () => {
       const league = createLeague({ name: 't', userTid: 0, coachName: 'c', settings: defaultSettings(), seed: null, rngSeed: 5 });
       let starters = 0;
       let oneMinute = 0;
+      // starters on the floor by minute, over the league: the shape of an NBA night (STARTERS_ON)
+      const on = new Array<number>(48).fill(0);
       for (const t of league.teams) {
         const pp = planInputs(
           teamPlayers(league, t.tid).map((p) => ({ pid: p.pid, available: !(p.injury && p.injury.gamesRemaining > 0), ...planRoles(p.ratings, p.pos), endurance: p.ratings.end })),
@@ -97,6 +99,7 @@ describe('rotations', () => {
         const plan = buildMinutePlan(pp);
         const norm = normalizeMinutes(pp);
         starters += plan[24].filter((pid) => pp.find((p) => p.pid === pid)!.starter).length;
+        plan.forEach((slot, i) => (on[i] += slot.filter((pid) => pp.find((p) => p.pid === pid)!.starter).length / league.teams.length));
         // nobody takes the floor for the tip only to leave a minute later
         for (const pid of plan[24]) expect(plan[25]).toContain(pid);
         pp.forEach((p, i) => expect(Math.abs(plan.filter((s) => s.includes(p.pid)).length - norm[i])).toBeLessThanOrEqual(1));
@@ -108,6 +111,23 @@ describe('rotations', () => {
       }
       expect(starters / league.teams.length).toBeGreaterThanOrEqual(4);
       expect(oneMinute / league.teams.length).toBeLessThan(4);
+      // all five for the first minutes, one or two by the end of the first quarter, two to open the
+      // second, most of them back to close the half (they used to return early and leave it to the
+      // bench), a starter or two through the end of the third and the start of the fourth
+      expect(on[2]).toBe(5);
+      expect(on[10]).toBeGreaterThan(1);
+      expect(on[10]).toBeLessThan(2.3);
+      expect(on[12]).toBeGreaterThan(1.6);
+      expect(on[16]).toBeLessThan(3.6);
+      expect(on[22]).toBeGreaterThan(3.5);
+      expect(on[34]).toBeGreaterThanOrEqual(1);
+      expect(on[36]).toBeGreaterThan(1.2);
+      // the shape in whole players: as many starter-minutes as the starters have, never a flicker
+      for (const total of [60, 72, 80, 88, 100]) {
+        const n = starterTargets(0, total, [], 0.37);
+        expect(n.reduce((a, b) => a + b, 0)).toBe(total);
+        for (let q = 0; q < 2; q++) for (let i = 1; i < 12; i++) expect(q === 0 ? n[i] <= n[i - 1] : n[12 + i] >= n[12 + i - 1], `${total}: ${n.join('')}`).toBe(true);
+      }
     }
     {
       // never lists a player twice when one swap fixes both a missing guard and too many bigs

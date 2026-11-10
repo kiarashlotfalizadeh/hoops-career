@@ -13,7 +13,8 @@ import { type SP, type ST, type LateMode, ACTION_LIST } from './state';
 import type { GameSim } from './game';
 
 export const usageMethods = {
-  usageWeight(this: GameSim, p: SP, t: ST, action: ActionType | 'any'): number {
+  /** `free`: the crunch-time go-to player, whom the night's share of the ball doesn't hold back (see pickActor). */
+  usageWeight(this: GameSim, p: SP, t: ST, action: ActionType | 'any', free = false): number {
     if (!p.on) return 0;
     const roleU = ROLE_USAGE[p.role];
     let skill: number;
@@ -41,6 +42,8 @@ export const usageMethods = {
     if (t.t.offense.hotHand && p.hot >= 3) w *= 1.25;
     // a wing stopper on him keeps the ball out of his hands a little
     if (this.T && this.T[1 - t.side].guardOf.get(p.pid)?.drole === 'stopper') w *= levW(K.role.stopperTouch);
+    // (with the game on the line the ball goes to him however much of it he has had tonight)
+    if (free) return w;
     // defenses load up on a high-usage player as the game goes on (a junk defense's chaser sooner)
     const teamUse = p.b.tFga + 0.44 * p.b.tFta + p.b.tTov;
     if (teamUse >= 12.5) {
@@ -68,9 +71,21 @@ export const usageMethods = {
     return share > K.astCap ? p.tp * Math.exp(-10 * (share - K.astCap)) : p.tp;
   },
 
-  /** Shoot-vs-pass tilt for a player with the ball in an action: high-usage players hunt their own shot. */
+  /**
+   * Shoot-vs-pass tilt for a player with the ball in an action: high-usage players hunt their own shot,
+   * and the go-to player with a shot for the tie or the lead in the last seconds takes it himself.
+   */
   selfShot(this: GameSim, p: SP): number {
-    return Math.pow(clamp(p.tu, 0.1, 25), K.selfShotExp);
+    const w = Math.pow(clamp(p.tu, 0.1, 25), K.selfShotExp);
+    return this.q >= 4 && this.clock <= 120 && this.lastShotFor(p) ? w * K.goToSelf : w;
+  },
+
+  /** Whether `p` is his side's go-to player on a trip for the tie or the lead in the last seconds (K.goToFrom: the trips whose shot goes up in the last 24). */
+  lastShotFor(this: GameSim, p: SP): boolean {
+    if (this.q < 4 || this.clock > K.goToFrom) return false;
+    const t = this.T[0].byId.get(p.pid) === p ? this.T[0] : this.T[1];
+    const m = t.score - this.T[1 - t.side].score;
+    return m <= 0 && m >= -3 && this.goTo(t) === p;
   },
 
   pickActor(this: GameSim, t: ST, action: ActionType | 'any', exclude?: SP): SP {
@@ -82,7 +97,10 @@ export const usageMethods = {
       called.b.acts++;
       return called;
     }
-    const ws = t.on.map((p) => (p === exclude ? 0 : this.usageWeight(p, t, action)));
+    // crunch time: the ball finds the go-to player (the one named, or else the staff's: his best scorer
+    // on the floor), whatever his share of it so far; most of all for the last shot (K.goToLast)
+    const go = this.goTo(t);
+    const ws = t.on.map((p) => (p === exclude ? 0 : this.usageWeight(p, t, action, p === go)));
     // hunting one defender: the player he guards gets the isolations, post-ups and ball screens (in
     // place of the automatic mismatch hunt)
     const hunted = action === 'iso' || action === 'post' || action === 'pnr' ? this.hunted(t, this.T[1 - t.side]) : null;
@@ -98,9 +116,7 @@ export const usageMethods = {
     // a junk defense's chasers face-guard their men: the ball goes elsewhere
     const def = this.T[1 - t.side];
     for (const c of this.chased(def, t)) ws[t.on.indexOf(c)] *= levW(K.chaseTouch);
-    // crunch time: the ball finds the go-to player (the one named, or else the staff's: his best scorer on the floor)
-    const go = this.goTo(t);
-    if (go) ws[t.on.indexOf(go)] *= go.pid === t.t.manage.goTo ? K.goToPick : K.goToAuto;
+    if (go) ws[t.on.indexOf(go)] *= (go.pid === t.t.manage.goTo ? K.goToPick : K.goToAuto) * (this.lastShotFor(go) ? K.goToLast : 1);
     const actor = t.on[this.rng.weighted(ws)];
     for (const p of t.on) p.b.tActs++;
     actor.b.acts++;
@@ -150,7 +166,8 @@ export const usageMethods = {
     if (go) {
       const mine: ActionType[] = ['pnr', 'iso', 'post', 'handoff'];
       const best = mine.reduce((b, act) => (this.usageWeight(go, off, act) > this.usageWeight(go, off, b) ? act : b), mine[0]);
-      ws[ACTION_LIST.indexOf(best)] *= go.pid === off.t.manage.goTo ? K.goToAction : K.goToAutoAction;
+      // (and with a shot for the tie or the lead coming, the play is his)
+      ws[ACTION_LIST.indexOf(best)] *= (go.pid === off.t.manage.goTo ? K.goToAction : K.goToAutoAction) * (this.lastShotFor(go) ? K.goToLast : 1);
     }
     return ACTION_LIST[this.rng.weighted(ws)];
   },

@@ -11,15 +11,15 @@ export const K = {
   zoneBase: { rim: 0.592, paint: 0.437, mid: 0.411, c3: 0.371, ab3: 0.336 } as Record<ShotZone, number>,
   zoneSkill: { rim: 0.15, paint: 0.13, mid: 0.13, c3: 0.1, ab3: 0.1 } as Record<ShotZone, number>,
   zoneOpen: { rim: 0.1, paint: 0.07, mid: 0.055, c3: 0.06, ab3: 0.06 } as Record<ShotZone, number>,
-  foulRate: { rim: 0.208, paint: 0.106, mid: 0.041, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
+  foulRate: { rim: 0.204, paint: 0.104, mid: 0.04, c3: 0.014, ab3: 0.016 } as Record<ShotZone, number>,
   /** Share of misses that are blocks, for an average contesting defender. */
   blockMiss: { rim: 0.24, paint: 0.154, mid: 0.04, c3: 0.0165, ab3: 0.0165 } as Record<ShotZone, number>,
   /** Extra share of misses blocked by the shooter's own defender (from behind, on the contest). */
   chaseBlock: { rim: 0.06, paint: 0.048, mid: 0.026, c3: 0.01, ab3: 0.01 } as Record<ShotZone, number>,
-  orbBase: 0.262,
+  orbBase: 0.265,
   toBase: 0.146,
   /** Reach-ins and holds on the handler, a chance per trip (0.23 until 2026-10-25: see K.recenter). */
-  nonShootFoul: 0.158,
+  nonShootFoul: 0.154,
   /**
    * The officials (see whistle): a foul call's chance falls by exp(-whistleBalance) per foul the calls
    * have gone against the side beyond what the two sides' play drew, and the home side's by homeWhistle
@@ -31,8 +31,18 @@ export const K = {
    * chance a trip whose shot clock is running out never gets its shot off (0.67-0.74 a team-game).
    */
   whistleBalance: 0.3,
-  homeWhistle: 0.012,
+  homeWhistle: 0.008,
+  /**
+   * The whistle through a game: the chance of a shooting foul or a reach-in by quarter (overtime as
+   * the fourth). NBA 2024-26 officials call a light first quarter and the most fouls in the fourth
+   * (3.5-3.9 a team, then 4.3-4.7, 4.5-4.7 and 4.8-5.0; free throws 4.2-4.8 a team in the first and
+   * 6.1-6.4 in the fourth); with the same whistle all night the sim's ran 4.5, 4.5, 4.3 and 4.4, the
+   * most in the first.
+   */
+  whistleQ: [0.78, 1, 1.08, 1.125] as number[],
   tech: 0.019,
+  /** The chance a player's first technical is an ejection on the spot (see randomTechnical). */
+  ejectP: 0.04,
   flagrant: 0.012,
   kicked: 0.006,
   looseBall: 0.027,
@@ -51,17 +61,37 @@ export const K = {
   chargeShare: 0.3,
   /**
    * The reach-in rate of a defense tied or protecting a one-to-three-point lead in the last 24 seconds
-   * of the fourth quarter or overtime: it plays without fouling (a reach-in there was a free tie or lead).
+   * of the fourth quarter or overtime: it plays a little more carefully (0.3 until 2026-11-09: NBA
+   * 2024-26, a side behind by one to three with the ball in the last 40 seconds is fouled before its
+   * shot on 21% of trips, the sim's on 14%; two free throws down two are how a good share of the
+   * NBA's late ties are made).
    */
-  lateLeadFoul: 0.3,
+  lateLeadFoul: 0.5,
   /**
-   * A trailing defense's late fouls (see lateFoulAt), the chance on a trip: down three or less with
-   * more time left than a shot clock, a foul a few seconds in anyway (`early`); down four to six, at
-   * once from 32 seconds (`two`), or from about half a minute on a trip begun before (`twoEarly`).
-   * Fitted to the NBA's 2024-26 play-by-play: the leader up 1-3 with 24-40 seconds left was fouled
-   * before the next shot 25-37% of the time, up 4-6 there 71-72%.
+   * A trailing defense's late fouls (see lateFoulAt), the chance on a trip. Down three or less with
+   * more time left than a shot clock, a foul a few seconds in anyway (`early`: NBA 2024-26, the leader
+   * up 1-3 with 24-40 seconds left was fouled before its next shot 33-36% of the time); with 4 seconds
+   * or fewer, `last` (68-85%: there isn't always time). Down four to nine, `by`: a row for each deficit
+   * from four, by the seconds left when the leader gains the ball (5 or fewer, to 8, to 14, to 32, and
+   * a trip begun before that), the NBA's shares of those trips the leader was fouled on: nearly always
+   * down four with a quarter minute left (94%), half the time with seconds left (46%), and hardly ever
+   * down six by then (3%), while down seven most coaches still foul with half a minute left (77%).
+   * With one number for four to six (0.85 to the last 6 seconds, none after) a four-point lead with 12
+   * seconds left stayed four half the time, the NBA's a quarter, and games ended at four or five 30%
+   * more often than the NBA's while fewer ended inside three.
    */
-  lateFoul: { early: 0.3, two: 0.85, twoEarly: 0.66 },
+  lateFoul: {
+    early: 0.3,
+    last: 0.9,
+    by: [
+      [0.46, 0.6, 0.78, 0.92, 0.72],
+      [0.3, 0.62, 0.75, 0.8, 0.8],
+      [0.05, 0.33, 0.45, 0.7, 0.66],
+      [0, 0.07, 0.36, 0.45, 0.75],
+      [0.05, 0.08, 0.11, 0.28, 0.5],
+      [0.05, 0, 0.11, 0.17, 0.36],
+    ] as number[][],
+  },
   /**
    * The last `from` seconds of a game within `lead` points: the leader's setup runs `slow` seconds
    * longer (a range) and the trailing side's is cut to `push` of it (see lateMode). Halved on
@@ -69,7 +99,7 @@ export const K = {
    * score, the NBA's 58-59%, and trailing sides shot within 8 seconds of a defensive board on 65%,
    * the NBA's 48-51%.
    */
-  lateSlow: { from: 180, lead: 8, slow: [2, 5] as [number, number], push: 0.95 },
+  lateSlow: { from: 180, lead: 8, slow: [1.2, 4] as [number, number], push: 0.95 },
   /**
    * Early offense: after a defensive board or a steal that isn't a run-out, the share of trips (times
    * the coach's habit and the team's pace) that are in the half court within a couple of seconds and
@@ -85,27 +115,40 @@ export const K = {
    */
   /**
    * Seconds from a miss to the rebound (a range): the flight and the scramble. With none, every board
-   * came on the shot's tick, and trips had to run longer than the NBA's to hold its pace.
+   * came on the shot's tick, and trips had to run longer than the NBA's to hold its pace. A shot that
+   * goes up with more than `horn` seconds left in a period is rebounded before the horn; one later
+   * than that is nobody's board (see rebound).
    */
-  reboundTime: { shot: [1.2, 3.4] as [number, number], ft: [0.2, 0.9] as [number, number] },
-  putback: { base: 0.4, max: 0.75, time: [0.2, 1.4] as [number, number], kick: 0.55, kickAct: [0.5, 2] as [number, number] },
+  reboundTime: { shot: [1.2, 3.4] as [number, number], ft: [0.2, 0.9] as [number, number], horn: 1 },
+  putback: { base: 0.45, max: 0.78, time: [0.2, 1.4] as [number, number], kick: 0.55, kickAct: [0.5, 2] as [number, number] },
   /**
    * The staff's late-game timeouts with the ball (see autoTimeouts), a chance at each trip: behind or
-   * tied by six or less in the last `at` seconds, ahead by one to three after the other side scored in
-   * the last 24, and in a game within five in the last two minutes after the other side scored. NBA
-   * 2024-26: 2.2 timeouts in the last two minutes of games within five, 1.5 of them in the last 24
-   * seconds. Before 3:00 of the fourth (from `spend` seconds left), a team with more than the two it may
-   * keep spends one at a dead ball (`spendP`).
+   * tied by six or less in the last `at` seconds (`behindEarly` from `from` seconds), ahead by one to
+   * six after the other side scored there (`ahead`, `aheadEarly`), and in a game within five in the
+   * last two minutes after the other side scored (`close`). NBA 2024-26: 2.2-2.3 timeouts in the last
+   * two minutes of games within five, 1.3 of them in the last 24 seconds, 0.6-0.7 from 1:00 to 0:24
+   * and 0.3 before that; a quarter of them the leader's (with every late dead ball a 40% chance and
+   * only leads of one to three calling one, the sim's coaches had spent theirs early: 0.7, 0.75 and
+   * 0.7, the leader's a fifth). Before 3:00 of the fourth (from `spend` seconds left), a team with
+   * more than the two it may keep now and then spends one at a dead ball (`spendP`: at 0.3 from 7:00
+   * the spares went in a burst, three or more timeouts between 7:00 and 5:00 in 6% of games, the
+   * NBA's 0.3%); the rest go through the quarter (K.quarterTO.q4) or lapse.
    */
-  lateTO: { at: 40, behind: 0.85, ahead: 0.5, close: 0.4, spend: 420, spendP: 0.3 },
+  lateTO: { from: 60, at: 24, behind: 0.95, behindEarly: 0.4, ahead: 0.7, aheadEarly: 0.3, close: 0.14, spend: 600, spendP: 0.03 },
   /**
    * An AI coach's timeouts through a quarter (before the last three minutes of the fourth), the chance
-   * when the other side has just scored: by its unanswered points (`run6` at six or more, `run4` at
-   * four or five), else `any`; times his own habit. NBA 2024-26: a third of the first three
-   * quarters' timeouts come before 7:00 and a third in the minute after 7:00 and 3:00 (the TV's, when
-   * nobody has called one); with only the 8-0 run to call one against, seven in ten came on the TV's marks.
+   * when the other side has just scored: by its unanswered points (`run8` at eight, `per` more a point
+   * past it; `run6` at six or seven; `run4` at four or five, else `any`, those two only when play has
+   * gone `quiet` seconds without a timeout and, in the first three quarters, the quarter hasn't had
+   * its two already, and `mid` times as likely between 7:00 and 3:00);
+   * `q4` times as likely in the fourth, where a timeout not used by 3:00 is lost; times his own habit.
+   * NBA 2024-26: a third of the first three quarters' timeouts come before 7:00, a sixth in the minute
+   * after 7:00, 27% from 6:00 to 3:00 and a sixth in the minute after 3:00 (the TV's, when nobody has
+   * called one); 11-12% are called against a run of eight or more, and an 8-0 run draws one before the
+   * side on the wrong end scores about three times in ten. With a timeout at every 8-0 run the sim's
+   * had 23% against such runs and seven in ten of them drew one.
    */
-  quarterTO: { run6: 0.4, run4: 0.2, any: 0.07 },
+  quarterTO: { run8: 0.3, per: 0.05, run6: 0.25, run4: 0.2, any: 0.09, quiet: 90, mid: 2.5, q4: 2 },
   /**
    * An AI staff whose base defense is a 2-3 or 3-2 zone plays it this share of the time, in stretches
    * of `zoneStretch` seconds, man-to-man the rest: playing it every trip, AI defenses were in a zone on
@@ -135,17 +178,39 @@ export const K = {
    * with a second and a half left became a layup at the other end as often as any rushed shot went in.
    */
   scramble: { sec: 3.5, cut: 0.55 },
-  /** Share of rebounds credited to the team rather than a player (NBA box scores leave these out). */
-  teamReb: { orb: 0.02, drb: 0.09 },
-  transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, start: 0 } as Record<string, number>,
-  setup: { made: 8.6, dreb: 4.9, steal: 2.0, ft: 8.4, deadTO: 8.0, start: 5.6 } as Record<string, number>,
-  actionTime: 7.6,
+  /**
+   * Share of rebounds credited to the team rather than a player (NBA box scores leave these out), and
+   * `keep`: the chance a miss the defense had goes out of bounds off it, the offense's ball with 14 on
+   * the shot clock and nobody's rebound. NBA 2024-26 play-by-play: 4.0 offensive team rebounds a
+   * team-game that aren't the dead ball between free throws (blocks out of bounds among them) and 2.4
+   * defensive; the sim had 0.2 and 3.1 with about 1.5 blocks out of bounds, so 2.3 second chances a
+   * team-game were missing: shots ran 2.7% under the NBA's and second-chance points 15% under, with
+   * the players' own boards on its numbers.
+   */
+  teamReb: { orb: 0.02, drb: 0.07, keep: 0.05 },
+  /** (`oob`: a dead ball that isn't a turnover, a defensive board gone out of bounds: an inbound under the basket.) */
+  transitionBase: { steal: 0.62, dreb: 0.19, made: 0.035, ft: 0.03, deadTO: 0.03, oob: 0.03, start: 0 } as Record<string, number>,
+  setup: { made: 8.4, dreb: 4.8, steal: 2.0, ft: 8.2, deadTO: 7.8, oob: 7.8, start: 5.6 } as Record<string, number>,
+  actionTime: 7.2,
+  /**
+   * Overtime is played a little slower than the game before it (setups and actions this much longer):
+   * the NBA's overtime periods run 3% under the fourth quarter's pace, the sim's ran 3% over, and its
+   * overtime games ended inside three 29% of the time (38%).
+   */
+  otPace: 1.07,
   /**
    * The spread of setups and actions (the sd of a log-normal multiplier around 1): at uniform 0.75-1.25
    * and 0.6-1.4 nearly every trip after a make shot 16-20 seconds in (42%, NBA 26%) and almost none
    * 8-12 seconds in (2.6%, NBA 16%).
    */
   spread: { setup: 0.38, action: 0.42 },
+  /**
+   * Seconds a run-out takes to its shot (a range): off a steal, and off a board or anything else. NBA
+   * 2024-26: 21% of trips after a steal have their first shot or turnover within 4 seconds; at 2.2-5.5
+   * for a steal's run-out the sim's had 34%, and 7.4% of all shots came in the shot clock's first 4
+   * seconds (the NBA's 4%).
+   */
+  runOutTime: { steal: [2.8, 6.2] as [number, number], other: [3, 6.5] as [number, number] },
   continueBase: 0.38,
   injuryRate: 0.00042,
   /** A player playing through an injury (a game-time decision: SimTeamInput.play) is this many times as likely to get hurt in the game. */
@@ -170,6 +235,16 @@ export const K = {
   useLevel: 0.32,
   usageDamp: 10.5,
   /**
+   * ...and past useLevel the shots he still takes are tougher ones, by this much make probability per
+   * unit of share over it (the defense is loaded up on him: 3 points of percentage at a 35% share),
+   * as K.threeUse.contest does for a shooter's threes. The real league's highest-usage scorers give
+   * efficiency back for volume; the sim's kept all of theirs, so a star who grew into a 95 rating
+   * scored 37-40 a game on a 35-37% share in star-check's seasons (Edwards, once his season-one line
+   * was fitted to his real one), where the real league's 35% seasons are 32-34. The seed's ratings
+   * are fitted with it, so the real league's own high-usage scorers keep their real lines.
+   */
+  useContest: 1.1,
+  /**
    * ...and past `level` it falls by exp(-damp) per unit more: a season's share past it is beyond all
    * but two real seasons of 1,354 since 2004 (Westbrook's 0.408 and Harden's 0.406; the 99.5th
    * percentile is 0.374). The soft levelling alone held the first season, its stars fitted against
@@ -177,7 +252,7 @@ export const K = {
    * level's usage) took the floor a star's share jumped in a summer: Edwards 0.32 to 0.40 and Mitchell
    * 0.31 to 0.39, with seasons of 34-39 points a game.
    */
-  useCeil: { level: 0.38, damp: 25 },
+  useCeil: { level: 0.355, damp: 40 },
   /**
    * A shooter's three-point volume levels off past `level` of his team's shots while he's on the
    * floor (see threeDamp; from `from` of them on), his three-point tendency falling by exp(-damp) per
@@ -204,7 +279,7 @@ export const K = {
    * looks are left out (nobody is running him off the line there): at every share it took the 2-3's
    * and box-and-one's measured worth with it (tacticsModel, engineDefense).
    */
-  threeUse: { from: 15, level: 0.18, damp: 30, contest: 1 },
+  threeUse: { from: 15, level: 0.165, damp: 36, contest: 1.15 },
   /**
    * A three-point shooter's skill (c3 or pu3) counts in full up to `from`, at `keep` of it to `top` and
    * at `keepTop` past that. The real league's shooting was fitted to the engine before the big
@@ -299,9 +374,14 @@ export const K = {
   switchTag: 0.95,
   /** Share of offensive boards given up at full transition-D sprint back. */
   getBackOrb: 0.08,
-  /** Game-to-game conditions shared by both teams (SDs): tempo, field-goal percentage, foul calls. */
+  /**
+   * Game-to-game conditions shared by both teams (SDs): tempo and foul calls. (And field-goal
+   * percentage, 0.012, until 2026-11-09: in the NBA one team's shooting night says nothing about the
+   * other's, the two teams' FG% correlated −0.01 to 0.01 and their points 0.19-0.22; with a shared
+   * shooting night the sim's were 0.18 and 0.33. Each team's own night, K.envTeam, took its share.)
+   */
   envPace: 0.035,
-  envShoot: 0.012,
+  envShoot: 0,
   envFouls: 0.08,
   /**
    * ...and each team's own shooting night (SD, field-goal percentage): some nights the shots fall for
@@ -309,7 +389,7 @@ export const K = {
    * came to win more surely than the NBA's does (streaks of 36 and 39 games in star-check's 64
    * seasons, where the record is 33) and the final margin's SD ran 15.3-15.5 (16.1).
    */
-  envTeam: 0.012,
+  envTeam: 0.019,
   /**
    * The score effect, from the tip: the side ahead gives back `per` of field-goal percentage for each
    * ten points of its lead and the side behind gains it, up to a lead of `cap`. NBA 2024-26: a quarter's
@@ -333,15 +413,20 @@ export const K = {
    * games a season decided by 40 or more (27.8 before; the NBA about 6), the season's biggest margin
    * 50 on average and 63 at most (68 and 89; the record is 73), its biggest team score in regulation
    * 160 and 171 (163 and 191), with the margin's SD at 15.7 (16.5) and 23% of games decided by 20 or
-   * more (22%).
+   * more (22%). (`from` 27 until 2026-11-09: the NBA of 2024-26 has 20 games a season decided by 40 or
+   * more and its biggest margin is 55-59, where the sim's seasons had four and 40-47; eased from 30,
+   * 30-point games come nearly as often as the NBA's and star-check's widest margin in 64 seasons is 66.)
    */
-  easeBig: { from: 27, span: 12, x: 0.08 },
+  easeBig: { from: 30, span: 12, x: 0.08 },
   /**
    * Garbage time (see wantsGarbage): with `start` seconds of regulation left or fewer (from the start
    * of the third quarter), a lead of `from` + `per`·√(minutes left) decides a game for a coach at the
-   * league's line (34.5 at the half, 30 with three minutes left in the third, 28.5 at the start of the
-   * fourth, 23 with five minutes left, 18 with one), times his own `patience` tonight (a range, drawn
-   * per game: some coaches empty the bench sooner). (`start` was 900, 3:00 left in the third, until
+   * league's line (35.5 at the half, 31 with three minutes left in the third, 29.5 at the start of the
+   * fourth, 24.5 with five minutes left, 19 with one), times his own `patience` tonight (a range, drawn
+   * per game: some coaches empty the bench sooner). (`from` was 14 until 2026-11-09: NBA starters play
+   * 18 of their 60 fourth-quarter minutes in games 20 or more apart after three, the sim's played 13.5,
+   * and games decided by 30 or more ran 4.3% against the NBA's 6.5-7.8%. At 16, with the blowout's
+   * easing from 33, star-check's seasons had margins of 74-79 in three runs of twelve.) (`start` was 900, 3:00 left in the third, until
    * 2026-10-26: a 70-win team 45 up at the half played its starters on through the third quarter, and
    * star-check's seasons had nights decided by 74-86; from the half, the worst of one such matchup's
    * 3,000 nights came down from 78 to 68.) Both benches finish it, until the lead is back under the line
@@ -367,7 +452,7 @@ export const K = {
    */
   garbage: {
     start: 1440,
-    from: 14,
+    from: 15,
     per: 4.2,
     patience: [0.9, 1.15] as [number, number],
     exit: 8,
@@ -403,20 +488,35 @@ export const K = {
    */
   tempo: { early: 1.3, earlyFull: 3.5, earlyEnd: 5.5, dead: 0.4, perAct: 0.12, acts: 3, lateFrom: 12, late: 0, forced: 0.6 },
   /**
-   * Shots against the horn, as a share of their chance. `quarter`: any shot in the last `horn`
-   * seconds of a period (NBA 2024-26, heaves aside: 42-43% on twos and 25-26% on threes; the sim's
-   * went in at 53% and 33%). `game`: one to tie or win in the last `horn` seconds of the fourth quarter
-   * or overtime, the defense set for it and nothing else to guard (33-34% and 20-21%; 50% and 38%).
-   * `late`: one to tie or win with `horn` to `sec` seconds left (51-54% and 23-27%; 59% and 44%).
-   * Each is [twos, threes]; `far`: a three down four to six in the last `sec` seconds, the line
-   * guarded. With them the catch-up rule is gone: the trailing side's shots in the last
-   * four minutes of a game within six went in 5 points more often and the leader's 5 less (K.clutchEase),
-   * and its threes in the final 5 seconds went in at 38%, the NBA's at 20%.
+   * Shots against the horn, as a share of their chance, each [twos, threes]. `quarter`: any shot in
+   * the last `horn` seconds of a period (NBA 2024-26, heaves aside: 42-43% on twos and 25-26% on
+   * threes; the sim's went in at 53% and 33%). `game`: one to tie or win in the last `horn` seconds of
+   * the fourth quarter or overtime, the defense set for it and nothing else to guard (33-34% and
+   * 20-21%; 50% and 38%); `late`: one with `horn` to `sec` seconds left (51-54% and 23-27%; 59% and
+   * 44%). Each by whether the shooting side is `tied` or `behind`: tied, nobody has to shoot it and the
+   * last look is a contested one (29% on twos in the last five seconds, behind by one to three 36-38%;
+   * with one number for both the sim's were the other way round, 35% and 29%), and a side down two
+   * that goes to the basket for the tie gets there (`down2` on its twos: 43-54% in the last 24
+   * seconds against 40-42% down one; the sim's 38% and 42%). `far`: a three
+   * down four to six in the last `sec` seconds, the line guarded; `concede`: a two down three or more
+   * there, which the leader gives up rather than foul (60-70%; the sim's 42-57%). With them the
+   * catch-up rule is gone: the trailing side's shots in the last four minutes of a game within six
+   * went in 5 points more often and the leader's 5 less (K.clutchEase), and its threes in the final
+   * 5 seconds went in at 38%, the NBA's at 20%.
    */
-  lastLook: { sec: 24, horn: 5, quarter: [0.84, 0.78] as [number, number], game: [0.7, 0.64] as [number, number], late: [0.95, 0.7] as [number, number], far: 0.8 },
+  lastLook: {
+    sec: 24,
+    horn: 5,
+    quarter: [0.84, 0.78] as [number, number],
+    game: { tied: [0.55, 0.7] as [number, number], behind: [0.8, 0.6] as [number, number] },
+    late: { tied: [0.95, 0.8] as [number, number], behind: [1.05, 0.7] as [number, number] },
+    far: 0.88,
+    concede: 1.15,
+    down2: 1.15,
+  },
   /**
    * The last `sec` seconds of a game within `within`: both defenses tighten (`all` off every shot's
-   * chance) and the side ahead plays not to lose (`leadTwo` more off its twos). NBA 2024-26, from
+   * chance) and the side ahead plays not to lose (`leadTwo` more off its twos, `leadThree` off its threes). NBA 2024-26, from
    * 4:00 to 0:24 of games within six: the leader shot 50-51% on twos and 32-34% on threes, the
    * trailing side 53-54% and 34-35%, against 54.5-55% and 36% over whole games. The sim's sides both
    * shot what they did all night or better (the starters are on); before 2026-11-09 a catch-up rule
@@ -424,9 +524,11 @@ export const K = {
    * it over more there (16.3% of its trips against the trailing side's 12.9%; `leadTO`, `trailTO` on
    * the turnover chance), and more shots are fouled at both ends (`fouls`; free throws per shot 0.42
    * and 0.36 against 0.25 all game), though not one for the tie or the lead at the horn (`hornFouls`,
-   * the last K.lastLook.horn seconds).
+   * the last K.lastLook.horn seconds), and a side up four or more in the last 24 seconds keeps its
+   * hands off altogether (`safe`: the NBA's trailing sides went to the line 0.03-0.09 times in the
+   * last 8 seconds down four to six, the sim's 0.2).
    */
-  clutchD: { sec: 240, within: 6, all: 0.033, leadTwo: 0.03, leadTO: 1.2, trailTO: 0.95, fouls: 1.12, hornFouls: 0.5 },
+  clutchD: { sec: 240, within: 6, all: 0.025, leadTwo: 0.03, leadThree: 0.012, leadTO: 1.25, trailTO: 0.95, fouls: 1.12, hornFouls: 0.6, safe: 0.3 },
   /**
    * Turnovers on a trip for the tie or the lead in the last 24 seconds of the fourth quarter or
    * overtime, as a share of the usual rate: those trips turned it over 12-18% of the time, the NBA's 2-10%.
@@ -447,9 +549,35 @@ export const K = {
    * the leader with the ball in the last 24 seconds: fouled 81-86% up one to three, the clock running
    * out on 1-4% of trips and the leader turning it over on 7-12% (up four to six: 64-65%, 21-23% and
    * 5-7%); the sim's "steal first" trips never fouled and never stole it, and the clock ran out on
-   * 14-29%.
+   * 14-29%. `beat`: the leader breaks the trap for a layup (`beatPress`: or the pressure, with nobody
+   * fouling); it got a shot off on 3-7% of those trips, the sim's on 0-1%.
    */
-  lateSteal: { first: 0.18, trap: 0.25, miss: 0.25, time: [3, 6] as [number, number], inbound: 0.03, press: 0.4 },
+  lateSteal: { first: 0.18, trap: 0.2, beat: 0.2, miss: 0.2, time: [3, 6] as [number, number], inbound: 0.02, press: 0.4, beatPress: 0.18 },
+  /**
+   * Behind by one to three in the last `from` seconds of the fourth quarter or overtime and not holding
+   * for the last shot: the trip is run in a hurry, its setup no longer than `setup` (a range) and each
+   * action no longer than `act`, so there is time to foul and get the ball back. NBA 2024-26, games
+   * within five at 2:00: 2.3 shots, 1.3 trips to the line and 4.0-4.2 points in the last 24 seconds (both
+   * sides); walking it up after the leader's free throws, the sim's had 1.9, 1.0 and 3.1, and went to
+   * overtime 10.7% of the time (14-15%). `dash`: behind by nine or fewer with `dashFrom` seconds or fewer left and
+   * not holding for one shot, the ball is up the floor in `dashSetup` seconds and the first look goes
+   * up within `dash` (a four-point lead with 8 seconds left stayed four a third of the time in the NBA,
+   * the trailing side getting 1.2 shots up and the leader to the line 0.65 times; using the clock that
+   * was left for one shot, the sim's stayed four 64% of the time, with 0.8 shots and 0.5 trips).
+   * `ato`: out of a timeout that advanced the ball, a side two possessions down shoots off the inbound play (its first action's seconds, a range: the NBA's trailing sides
+   * shot 3.9 seconds after the inbound there, the sim's 5.9).
+   */
+  lateRush: {
+    from: 36,
+    setup: [3, 5.5] as [number, number],
+    act: 6,
+    ato: [1, 2.6] as [number, number],
+    dashFrom: 10,
+    dashSetup: [0.5, 1.6] as [number, number],
+    dash: [0.8, 2.6] as [number, number],
+  },
+  /** Down one with the last shot, a two wins it: the weight left on the three (NBA 2024-26: 19-21% of those shots are threes; at 0.45 on the action's own shots only, 38%). */
+  lateTwo: 0.25,
   /**
    * Foul trouble as a tendency (see sitsForFouls): the chance an AI coach leaves a player on with the
    * foul that puts him at the quarter's limit (2 in the first, 3 in the second, 4 in the third, 5 in
@@ -462,7 +590,7 @@ export const K = {
    * on the floor at or past the quarter's limit plays with his hands off: `careful` of his usual share
    * of his side's fouls (NBA 2024-26: 0.18-0.21 foul-outs a game; riding without it, 0.29).
    */
-  foulRide: { q: [0.5, 0.22, 0.47, 0.38] as number[], star: 0.1, starMin: 32, over: 0.25, back: 150, backP: 0.35, careful: 0.55 },
+  foulRide: { q: [0.5, 0.15, 0.4, 0.5] as number[], star: 0.1, starMin: 32, over: 0.25, back: 150, backP: 0.35, careful: 0.55 },
   /**
    * Team feel vs team defense: field-goal percentage per 50 points of difference between the
    * offense's feel (oiq/pas/hnd) and the defense's team defense (diq/perD/intD), past the gap at
@@ -539,11 +667,23 @@ export const K = {
   /**
    * Crunch time: how much more often the ball finds the go-to player, and how much more his best action
    * is run; and the same for the staff's own go-to (the best scorer on the floor) when nobody is named.
+   * His share of the ball so far tonight doesn't hold him back there (see usageWeight: by the fourth
+   * quarter a star is past K.useLevel, and the damp took back most of the boost). `goToLast`: more
+   * again, the ball and the play, on a trip for the tie or the lead begun in the last `goToFrom` seconds
+   * (the trips whose shot goes up in the last 24), where he also takes the shot himself more often than
+   * he passes out of it (`goToSelf`). NBA 2024-26: a team's top scorer takes 30-32% of its shots for
+   * the tie or the lead in the last 24 seconds and its top two 47-51%, against 15% of its shots
+   * earlier in games; the sim's took 17% and 34%, and take 28% and 46% now (eight seasons). The rest
+   * is putbacks, scrambles and nights its top scorer isn't the one on the floor; pushed further, fewer
+   * of the makes are assisted than the NBA's half (39% now).
    */
   goToPick: 2.5,
   goToAction: 1.6,
   goToAuto: 1.7,
   goToAutoAction: 1.25,
+  goToLast: 4.5,
+  goToSelf: 2.3,
+  goToFrom: 36,
   /** Chance an off-ball cross-screen against a switching defense leaves a big posting up a small (when the mismatch is there). */
   crossSwitch: 0.12,
   /** ...and the size edge (height rating, about 4.3 an inch) it takes. */
@@ -737,6 +877,9 @@ export const K = {
    * came to lean twice as much on the rim protector, `rimProt` 200 → 100, and a hedge's recovery half
    * again as much on the big's feet, `speed` 60 → 40, so Drop pays a rim protector and Hedge a mobile
    * big, as their playbooks say, rather than each paying nearly every roster alike.)
+   * (Ice's corner 0.6 → 0.75 on 2026-11-09, when the seed was refit to the engine of the game-day
+   * rounds and its scorers' finishing came up with it: taking the middle away was worth more, and Ice
+   * measured best for 14 of 30 teams, style-gate's limit 12; now 8.)
    * The blitz's and a star double's trap: the handler's passing over 55 that's a step of escape (the
    * turnovers it forces and the 4-on-3 behind it). `help`: how far the help comes at a setting
    * (help's room on drives and kick-outs, and its pull on the rim's contests, grow with it).
@@ -744,7 +887,7 @@ export const K = {
   cov: {
     drop: { pull: 0.85, rim: 0.7, rimProt: 100, roll: 0.6, pop: 0.7 },
     hedge: { stall: 0.4, roll: 0.45, kick: 0.35, speed: 40 },
-    ice: { pull: 0.35, rim: 0.3, roll: 0.1, kick: 0.6, to: 0 },
+    ice: { pull: 0.35, rim: 0.3, roll: 0.1, kick: 0.75, to: 0 },
     switch: { scramble: 0.2, speed: 0.5, slip: 0.15, slipOpen: 0.3 },
     blitz: { escape: 50 },
     double: { escape: 40 },
@@ -818,19 +961,26 @@ export const K = {
   /**
    * The share of a defender's turnovers that are his steals, against the action's own (stealBy): the
    * turnovers containing gives back are mostly live balls, so steals ran about 6% over the league's
-   * 8.2 with turnovers on its 13.9 (0.88 then; 0.92 since stealCap).
+   * 8.2 with turnovers on its 13.9. (0.92 while a defender's steals were capped in a game, his chance
+   * falling by exp(-0.6) for each past his second: that held the ball hawks' averages and took the
+   * league's 5-steal games down to 19 a season, the NBA's 122-144. The stopper's own exposure,
+   * K.role.poaSteal, does the first without the second.)
    */
-  stealShare: 0.92,
+  stealShare: 0.98,
   /**
-   * Past `from` steals in a game a defender's share of his man's turnovers that are steals falls by
-   * exp(-damp) a steal: handlers stop putting the ball near him. The calibrated ball hawks stole
-   * twice their real rates in league play, where they guard the other team's lead handler as its
-   * point-of-attack stopper (Caruso 2.8-3.4 a game in 21 minutes, his real 1.3): the steals leader
-   * averaged 2.98 a game (3.48 at most, one season of nine real-league runs), the NBA's about 2.0-2.3.
-   * With this and stealShare up from 0.88 to give the league back its steals: 2.41 (2.96), the
-   * league's steals at 7.85 a team game (8.08; the NBA's 8.2); over 48 seasons 2.19 (2.72 at most).
+   * ...and how much of a defender's steal tendency counts in it (an exponent): his tendency was fitted
+   * with the per-game cap in place, and without it the best hands stole 15% more than their real rates
+   * (per 36 minutes the top three 3.2, 2.9 and 2.5, the real league's 2.8, 2.5 and 2.4), 203 5-steal
+   * games a season where the NBA has 122-144.
    */
-  stealCap: { from: 2, damp: 0.6 },
+  stealSpread: 0.45,
+  /**
+   * ...and past `from` steals in a game it falls by exp(-damp) a steal: handlers stop putting the ball
+   * near him. (From his second steal at 0.6 until 2026-11-09: see stealShare.) With the tendency alone
+   * a ball hawk who grew into 36 minutes a night led the league at 3.4-3.7 a game in a few of
+   * star-check's 64 seasons, where 3.0 has been reached once since 1991.
+   */
+  stealCap: { from: 3, damp: 0.4 },
   /**
    * A roamer's give-back (the open catch his man gets while he helps) grows as the leverage to this
    * power, about 1.6 times at 2x. The offense takes more of a bigger gift, and each one is better, so
@@ -901,7 +1051,10 @@ export const K = {
   },
   /**
    * Out-of-possession roles (DEF_ROLE_META): the point-of-attack stopper's edge against the
-   * handler's blow-bys and the turnovers he forces on him; the wing stopper's man's touches and the
+   * handler's blow-bys and the turnovers he forces on him (`poaSteal`: the share of his own steal
+   * tendency that counts on the ball: his steals were fitted in games where he guarded whoever came,
+   * and guarding the lead handler every trip the calibrated ball hawks stole twice their real rates,
+   * Caruso 2.8-3.4 a game in 21 minutes for a real 1.3); the wing stopper's man's touches and the
    * contest he adds; the rim anchor's weight among the rim's contesters and the open catch his man
    * gets per unit of shooting over 50; the roamer's help (rim openness off teammates' drives, cuts and
    * rolls) and his man's open catch (at the roamer's give-back, see giftExp); and the extra drain of
@@ -911,6 +1064,7 @@ export const K = {
   role: {
     poaBlowBy: 0.035,
     poaTO: 0.04,
+    poaSteal: 0.5,
     stopperTouch: 0.95,
     stopperContest: 0.006,
     anchorRim: 1.15,

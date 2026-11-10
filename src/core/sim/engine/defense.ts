@@ -328,12 +328,14 @@ export const defenseMethods = {
   },
 
   /**
-   * Live-ball steal by `d` with base chance `base`, scaled by his steal tendency, and less often once
-   * he has K.stealCap.from steals tonight (handlers stop putting the ball near him); else a dead-ball
-   * turnover.
+   * Live-ball steal by `d` with base chance `base`, scaled by his steal tendency (to the power
+   * K.stealSpread; a point-of-attack stopper's own man's by K.role.poaSteal: `onBall`), less often
+   * past his third of the night (K.stealCap); else a dead-ball turnover.
    */
-  stealBy(this: GameSim, d: SP, base: number): SP | null {
+  stealBy(this: GameSim, d: SP, base: number, onBall = false): SP | null {
     const over = d.b.stl - K.stealCap.from;
-    return this.rng.chance(clamp(base * K.stealShare * d.tsl * (over >= 0 ? Math.exp(-K.stealCap.damp * (over + 1)) : 1), 0, 0.92)) ? d : null;
+    const p =
+      base * K.stealShare * Math.pow(d.tsl, K.stealSpread) * (onBall && d.drole === 'poa' ? K.role.poaSteal : 1) * (over >= 0 ? Math.exp(-K.stealCap.damp * (over + 1)) : 1);
+    return this.rng.chance(clamp(p, 0, 0.92)) ? d : null;
   },
 };

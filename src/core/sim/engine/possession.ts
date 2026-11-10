@@ -131,7 +131,7 @@ export const possessionMethods = {
     let pressed = 0;
     // (a team up big calls off its press, whatever the quarter: K.garbage.pressLead)
     const pressOn = (def.t.defense.press === 'always' || (def.t.defense.press === 'afterMade' && (ctx === 'made' || ctx === 'ft'))) && def.score - off.score < K.garbage.pressLead;
-    if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'start' || outOfTimeout) && !late.hold) {
+    if (pressOn && (ctx === 'made' || ctx === 'ft' || ctx === 'deadTO' || ctx === 'oob' || ctx === 'start' || outOfTimeout) && !late.hold) {
       const before = this.clock;
       const res = this.press(off, def);
       pressed = before - this.clock;
@@ -189,6 +189,7 @@ export const possessionMethods = {
     const advanced = outOfTimeout && off.advance;
     off.advance = false;
     if (advanced) setup = this.rng.uniform(K.advanceSetup[0], K.advanceSetup[1]);
+    this.quickIn = advanced && late.hurry;
     // early offense: off a defensive board or a steal, the ball pushed up and into a quick look
     this.early = false;
     if (!outOfTimeout && !queued && !late.hold && !late.milk && !late.slow && (ctx === 'dreb' || ctx === 'steal')) {
@@ -215,11 +216,13 @@ export const possessionMethods = {
       setup = Math.max(setup, this.clock - (start ? this.rng.uniform(start[0], start[1]) : K.holdStart.quarter));
     }
     if (late.quick || late.hurry) setup = Math.min(setup, 2.5);
+    else if (late.rush) setup = Math.min(setup, this.rng.uniform(K.lateRush.setup[0], K.lateRush.setup[1]));
     // the period is about to run out: push it up the floor and get a shot off before the buzzer
     // (unless it's a lead to run out: then the clock dies with the ball); tied or down three or less
     // at the end of the game, a second is enough for a quick catch-and-shoot
     const chasing = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
     if (!late.milk && this.clock >= (chasing ? 0.8 : 2.5) && setup > this.clock - 2.5) setup = Math.max(0.5, this.clock * 0.4);
+    if (late.dash) setup = Math.min(setup, this.rng.uniform(K.lateRush.dashSetup[0], K.lateRush.dashSetup[1]));
     // the shot clock started on the inbound: time spent breaking a press is gone
     let shotClock = shotFull - (shotFrom - this.clock);
     if (this.record) this.cur!.steps.push({ k: 'advance', pid: off.on.reduce((a, p) => (p.c.pnrHandle > a.c.pnrHandle ? p : a), off.on[0]).pid });
@@ -272,6 +275,11 @@ export const possessionMethods = {
             this.turnover(off, def, this.lateFoulTarget(off), this.rng.chance(0.7) ? this.stealer(def) : null, 'misc');
             return;
           }
+          // (or the leader breaks it: a pass over the top and a layup at the other end)
+          if (r < K.lateSteal.trap + K.lateSteal.beat) {
+            this.beatsTrap(off, def);
+            return;
+          }
           if (r > 1 - K.lateSteal.miss) this.foulAt = 0;
         }
         if (this.foulAt > 0) {
@@ -289,11 +297,20 @@ export const possessionMethods = {
           continue;
         }
         // (or, still within two possessions and not fouling, its pressure gets the ball)
-        if (!pressed && this.clock > 2 && off.score - def.score <= 6 && this.rng.chance(K.lateSteal.press)) {
-          this.tick(this.rng.uniform(1, this.clock - 0.5));
-          if (this.cur) this.cur.label = 'Turnover against the pressure';
-          this.turnover(off, def, this.lateFoulTarget(off), this.rng.chance(0.7) ? this.stealer(def) : null, 'misc');
-          return;
+        if (!pressed && this.clock > 2 && off.score - def.score <= 6) {
+          const r = this.rng.next();
+          if (r < K.lateSteal.press) {
+            this.tick(this.rng.uniform(1, this.clock - 0.5));
+            if (this.cur) this.cur.label = 'Turnover against the pressure';
+            this.turnover(off, def, this.lateFoulTarget(off), this.rng.chance(0.7) ? this.stealer(def) : null, 'misc');
+            return;
+          }
+          // (or the pressure is beaten for a layup)
+          if (r < K.lateSteal.press + K.lateSteal.beatPress) {
+            this.tick(this.rng.uniform(1, this.clock - 0.5));
+            this.beatsTrap(off, def);
+            return;
+          }
         }
         pressed = true;
         this.tick(this.clock);
@@ -332,6 +349,12 @@ export const possessionMethods = {
       this.early = false;
       if (late.quick && n === 0) dt = Math.min(dt, 3.5);
       if (late.hurry) dt = Math.min(dt, 4);
+      else if (late.rush) dt = Math.min(dt, K.lateRush.act);
+      // (behind with seconds left, the shot goes up as soon as there is one)
+      if (late.dash && !lastShot) dt = Math.min(dt, this.rng.uniform(K.lateRush.dash[0], K.lateRush.dash[1]));
+      // (a side in a hurry out of a timeout shoots off the inbound play)
+      if (this.quickIn && n === 0) dt = Math.min(dt, this.rng.uniform(K.lateRush.ato[0], K.lateRush.ato[1]));
+      this.quickIn = false;
       // a set takes longer to run than whatever the team would do: with too little clock it's rushed
       if (play) dt += SETS[play.cast.id].time;
       let buzzer = false;
@@ -378,6 +401,13 @@ export const possessionMethods = {
     this.finishPoss(off, 'misc');
   },
 
+  /** The leader beats a trailing defense's trap or pressure in the last seconds: a runner behind it, a layup with nobody back. */
+  beatsTrap(this: GameSim, off: ST, def: ST) {
+    const sh = off.on[this.rng.weighted(off.on.map((p) => p.r.spd + p.c.rim))];
+    if (this.cur) this.cur.label = 'Beats the pressure';
+    this.shoot(off, def, { shooter: sh, zone: 'rim', open: 0.5, contest: this.rimContester(def, this.defOf(def, sh), 0.8), assister: null, finish: 'misc' });
+  },
+
   runAction(this: GameSim, action: ActionType, off: ST, def: ST, open: number, ballFrom: SP | null, late: LateMode, forced: boolean): ActionResult {
     if (this.cur && !this.cur.action) this.cur.action = action;
     switch (action) {
@@ -408,14 +438,17 @@ export const possessionMethods = {
     // (two: the weight left on the looks that can only be twos, the roll and the drive on the catch)
     let two = 1;
     if (late.need3) {
-      three *= 6;
+      // (down four or five a quick two keeps it a game, and the defense gives it up: NBA 2024-26, a
+      // quarter of those shots in the last 12 seconds are twos, two in three of them made)
+      const one = off.score - this.T[1 - off.side].score >= -3;
+      three *= one ? 6 : 3.5;
       mid *= 0.1;
       // with the clock nearly out a two doesn't tie it: only a three will do
-      two = this.clock <= 12 ? 0.08 : 0.3;
+      two = !one ? 0.6 : this.clock <= 12 ? 0.15 : 0.4;
     } else if (late.hurry) {
       three *= 1.8;
       mid *= 0.5;
-    } else if (late.two) three *= 0.45;
+    } else if (late.two) three *= K.lateTwo;
     // (a team easing off a blowout hunts fewer threes)
     if (this.eases(off)) three *= K.garbage.three;
     return { three, mid, rim: late.need3 ? rim * two : rim, two };

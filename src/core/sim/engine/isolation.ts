@@ -56,7 +56,7 @@ export const isolationMethods = {
 
     const pTO = this.toChance(K.toBase * 0.95, A, def);
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, this.stealBy(D, 0.55), finish);
+      this.turnover(off, def, A, this.stealBy(D, 0.55, true), finish);
       return 'done';
     }
     if (this.nonShootingFoul(off, def, A, D, finish)) return 'done';

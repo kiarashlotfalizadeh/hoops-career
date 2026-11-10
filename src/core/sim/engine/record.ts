@@ -197,6 +197,7 @@ export const recordMethods = {
         pm: p.b.pm,
         energy: Math.round(p.energy * 100) / 100,
         dnp: p.played ? undefined : (p.dnp ?? "Coach's decision"),
+        left: !p.played ? undefined : p.ejected ? 'ejected' : p.out === 2 ? 'injury' : undefined,
       }));
       return {
         tid: t.tid,

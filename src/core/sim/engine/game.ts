@@ -53,22 +53,23 @@ function cachedPlan(players: PlanPlayer[]): number[][] {
 
 /**
  * An AI coach's late-game habits, from his name: the same every night, differing from coach to coach
- * as real ones do (NBA 2024-26 play-by-play): about two in three foul when up three in the last
- * seconds (leaders did in 28-30% of the chances), four in five take a two-for-one when it's there
- * (79-80% of the chances), and down a possession late most foul at once, 81-86% of the time, the rest
- * playing for a steal first. A staff whose base defense is a zone plays it in stretches (K.zoneShare).
+ * as real ones do (NBA 2024-26 play-by-play): half foul when up three in the last seconds (leaders
+ * did in 28-33% of the chances; with two in three, 43%), each takes the two-for-one when it's there
+ * in his own share of periods (10-60%: a trip begun with 33-40 seconds left shoots in time for another
+ * 64-65% of the time, half of them without trying to; it was 89% with four coaches in five taking every one), and down a possession late most foul at
+ * once, 81-86% of the time, the rest playing for a steal first. A staff whose base defense is a zone plays it in stretches (K.zoneShare).
  * The user's side plays its settings as rules.
  */
 export function coachHabits(input: SimTeamInput): ST['habit'] {
   const m = input.team.tactics.manage;
-  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne, lateFoul: 0.85, earlyO: 1, zone: 1, ride: 0, calls: 0 };
+  const rules = { foulUp3: m.foulUp3, twoForOne: m.twoForOne ? 1 : 0, lateFoul: 0.85, earlyO: 1, zone: 1, ride: 0, calls: 0 };
   if (!input.adjust || input.team.assistant) return rules;
   let h = input.team.tid + 1;
   for (const ch of input.team.coach?.name ?? '') h = mix(h, ch.charCodeAt(0));
   const u = (n: number) => mix(h, n) / 4294967296;
   return {
-    foulUp3: m.foulUp3 && u(1) < 0.62,
-    twoForOne: m.twoForOne && u(2) < 0.85,
+    foulUp3: m.foulUp3 && u(1) < 0.55,
+    twoForOne: m.twoForOne ? 0.1 + 0.5 * u(2) : 0,
     lateFoul: 0.74 + 0.2 * u(3),
     earlyO: 0.7 + 0.6 * u(4),
     zone: K.zoneShare,
@@ -175,10 +176,14 @@ export class GameSim {
   sideOut = false;
   /** This trip is early offense (see possession), or a kick-out off an offensive board: its first action is quick. */
   early: boolean | 'kick' = false;
+  /** This trip comes out of a timeout that advanced the ball, with its side in a hurry: its first action is the inbound play's quick look (see K.lateRush). */
+  quickIn = false;
   /** Seconds left at which the trailing defense fouls on this trip (0: it doesn't; see lateFoulAt). */
   foulAt = 0;
   /** The stretch of the quarter the last timeout came in (the quarter times ten, plus 0 before 7:00, 1 to 3:00, 2 after). */
   toWindow = 0;
+  /** Game seconds played when the last timeout was called (see autoTimeouts). */
+  lastTO = -Infinity;
   /** Timeouts taken this period by both sides, as of the last mandatory one's mark (see autoTimeouts). */
   mandatory = { q: 0, n: 0 };
   /** A set handed to the action about to run (it takes it: see takePlay). */
@@ -548,6 +553,7 @@ export class GameSim {
     t.timeouts--;
     t.qTimeouts++;
     this.toWindow = this.q * 10 + (this.clock > 420 ? 0 : this.clock > 180 ? 1 : 2);
+    this.lastTO = this.elapsed;
     // NBA: in the last two minutes of the fourth quarter or overtime a timeout by the team with the
     // ball advances it to the frontcourt
     t.advance = this.q >= 4 && this.clock <= 120 && this.poss === side;

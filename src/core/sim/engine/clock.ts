@@ -104,14 +104,14 @@ export const clockMethods = {
 
   /** Time multiplier for setups and actions: the team's pace, in this game's tempo. */
   paceF(this: GameSim, off: ST) {
-    return (1.12 - 0.24 * (off.t.offense.pace / 100)) / this.env.pace;
+    return ((1.12 - 0.24 * (off.t.offense.pace / 100)) / this.env.pace) * (this.q > 4 ? K.otPace : 1);
   },
 
   lateMode(this: GameSim, off: ST, def: ST): LateMode {
     const diff = off.score - def.score;
     const final = this.q >= 4;
     const clock = this.clock;
-    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, two: false, slow: false, push: false };
+    const res = { hold: false, quick: false, milk: false, need3: false, hurry: false, rush: false, dash: false, two: false, slow: false, push: false };
     // (tied, a team holds for the last shot; behind by one or two with time for more than one trip, it
     // goes now and plays on: NBA 2024-26, down one or two, half the shots in the last 24 seconds come before the last 5)
     if (final && clock <= 26 && diff >= -2 && diff <= 0 && (diff === 0 || clock <= K.holdBehind)) res.hold = true;
@@ -126,9 +126,20 @@ export const clockMethods = {
     // down one with the last shot: a two wins it
     if (final && clock <= 24 && diff === -1) res.two = true;
     // two possessions or more down late, still within reach: quick shots, more of them threes
-    if (final && diff <= -4 && diff >= -3 - clock / 12 && clock > 1 && clock <= 20 + 10 * -diff) res.hurry = true;
-    if (off.habit.twoForOne && clock >= 29 && clock <= 40 && !(final && diff > 0)) res.quick = true;
+    if (final && diff <= -4 && (diff >= -9 || diff >= -3 - clock / 12) && clock > 1 && clock <= 10 + 7 * -diff) res.hurry = true;
+    // behind by a possession in the last half minute, not holding for the last shot: it gets a shot up
+    // quickly, to have time to foul and come back down
+    if (final && diff < 0 && diff >= -3 && clock <= K.lateRush.from && clock > 3 && !res.hold) res.rush = true;
+    // and with seconds left it shoots the first look it gets: a make leaves time to foul, a miss to rebound
+    if (final && diff < 0 && diff >= -9 && clock <= K.lateRush.dashFrom && !res.hold) res.dash = true;
+    if (clock >= 29 && clock <= 40 && !(final && diff > 0) && this.takesTwoForOne(off)) res.quick = true;
     return res;
+  },
+
+  /** Whether this coach goes for the two-for-one this period: his habit (ST.habit), decided once a period. */
+  takesTwoForOne(this: GameSim, off: ST): boolean {
+    const h = off.habit.twoForOne;
+    return h >= 1 || (h > 0 && mix(this.seed, 0x2f100000 + 2 * this.q + off.side) / 4294967296 < h);
   },
 };
 

@@ -40,7 +40,7 @@ export const postUpMethods = {
     if (this.rng.chance(doubleP)) return this.doubleTeam(off, def, A, 'post', starDouble, play);
     const pTO = this.toChance(K.toBase * 1.1, A, def, this.setJump(play, def, A));
     if (this.rng.chance(pTO)) {
-      this.turnover(off, def, A, this.stealBy(D, 0.4), 'post');
+      this.turnover(off, def, A, this.stealBy(D, 0.4, true), 'post');
       return 'done';
     }
     const advOpen = clamp(adv * 0.4, -0.7, 0.8);

@@ -31,9 +31,9 @@ export const transitionMethods = {
     this.impact('press_break', off.side, pBroken * 0.75 * (K.runOutPts + 0.6 * K.transAdvPts));
     const r = this.rng.next();
     if (r < pTO) {
-      // (a trap's steal is his like any other: past his second of the night it comes less often, see
-      // K.stealCap, and a press turnover that isn't a steal is a ten-second call or one thrown away;
-      // crediting every one to the trapper had a ball hawk on a pressing team at 3.25 a game in 25 minutes)
+      // (a trap's steal is his like any other, by his own tendency, and a press turnover that isn't a
+      // steal is a ten-second call or one thrown away; crediting every one to the trapper had a ball
+      // hawk on a pressing team at 3.25 a game in 25 minutes)
       this.turnover(off, def, h, this.stealBy(this.stealer(def), 1), 'press');
       return 'to';
     }
@@ -58,7 +58,7 @@ export const transitionMethods = {
     const ws = off.on.map((p) => (p.r.spd + p.c.create * 0.6) * (p.guard ? 1.4 : 0.7) * Math.sqrt(p.tu));
     const h = off.on[this.rng.weighted(ws)];
     // (a run-out off a steal is at the rim sooner than one off a board)
-    this.tick(ctx === 'steal' ? this.rng.uniform(2.2, 5.5) : this.rng.uniform(3, 6.5));
+    this.tick(ctx === 'steal' ? this.rng.uniform(K.runOutTime.steal[0], K.runOutTime.steal[1]) : this.rng.uniform(K.runOutTime.other[0], K.runOutTime.other[1]));
     if (this.record) this.cur!.steps.push({ k: 'transition', pid: h.pid });
     let adv = (off.speed - def.speed) / K.runSpeed.edge + (ctx === 'steal' ? 0.7 : 0.15) + (pressBroken ? 0.6 : 0);
     adv -= lev((def.t.defense.getBack - 50) / 100);

@@ -140,6 +140,8 @@ export interface SP {
   risk: number;
   /** Technical fouls tonight (a second ejects him). */
   techs?: number;
+  /** Thrown out of the game (see randomTechnical): the box score says so. */
+  ejected?: boolean;
 }
 
 export interface ST {
@@ -218,11 +220,12 @@ export interface ST {
   /**
    * This coach's late-game habits (see coachHabits): an AI coach's own, the same every night; the
    * user's side plays its settings as rules. `lateFoul`: the chance he fouls at once when down a
-   * possession late (the rest of the time his defense plays for the steal first). `ride`: how readily
+   * possession late (the rest of the time his defense plays for the steal first). `twoForOne`: the
+   * share of periods he goes for it in (1: always, the user's setting). `ride`: how readily
    * he leaves a player in foul trouble on the floor (0: never, the user's rule; see K.foulRide).
    * `calls`: how readily he calls a timeout through a quarter (0: only against the run the user set; see K.quarterTO).
    */
-  habit: { foulUp3: boolean; twoForOne: boolean; lateFoul: number; earlyO: number; zone: number; ride: number; calls: number };
+  habit: { foulUp3: boolean; twoForOne: number; lateFoul: number; earlyO: number; zone: number; ride: number; calls: number };
   /** A timeout in the last two minutes with the ball: the trip out of it is inbounded in the frontcourt. */
   advance: boolean;
   /** Timeouts this period. */
@@ -294,7 +297,7 @@ export interface InGameInjury {
 }
 
 /** How a possession starts; 'orb' only marks a live offensive board, and a trip that ends on one hands the ball over as a defensive rebound. */
-export type Ctx = 'start' | 'made' | 'dreb' | 'steal' | 'ft' | 'deadTO' | 'orb';
+export type Ctx = 'start' | 'made' | 'dreb' | 'steal' | 'ft' | 'deadTO' | 'orb' | 'oob';
 
 export interface ShotOpts {
   shooter: SP;
@@ -332,6 +335,10 @@ export interface LateMode {
   need3: boolean;
   /** Two possessions or more down late, still within reach: quick shots, more of them threes. */
   hurry: boolean;
+  /** Behind by a possession with the clock running down and time for another trip: no walking it up (K.lateRush). */
+  rush: boolean;
+  /** Behind with seconds left and not holding for one last shot: the first look there is, at once (K.lateRush.dash). */
+  dash: boolean;
   /** Down one with the last shot: a two wins it, so fewer threes. */
   two: boolean;
 }

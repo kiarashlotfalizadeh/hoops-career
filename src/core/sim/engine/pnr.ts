@@ -231,7 +231,7 @@ export const pnrMethods = {
     if (this.rng.chance(pTO)) {
       // the screener's man makes the play: the pocket pass to the roller (a roll-man turnover)
       const onRoll = !this.rng.chance(0.6);
-      this.turnover(off, def, H, this.stealBy(onRoll ? dS : dH, 0.6), onRoll ? 'pnrRoll' : 'pnrBH');
+      this.turnover(off, def, H, this.stealBy(onRoll ? dS : dH, 0.6, !onRoll), onRoll ? 'pnrRoll' : 'pnrBH');
       return 'done';
     }
     // non-shooting foul: free throws in the penalty, else a side out (the shot clock restarts at 14 or

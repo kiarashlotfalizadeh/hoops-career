@@ -10,12 +10,21 @@ import type { GameSim } from './game';
 
 export const reboundsMethods = {
   rebound(this: GameSim, off: ST, def: ST, zone: ShotZone, blocked: boolean, ft: boolean) {
-    // the ball in the air and the scramble for it: the clock runs (a free throw's miss is live sooner)
-    this.tick(ft ? this.rng.uniform(K.reboundTime.ft[0], K.reboundTime.ft[1]) : this.rng.uniform(K.reboundTime.shot[0], K.reboundTime.shot[1]));
+    // the ball in the air and the scramble for it: the clock runs (a free throw's miss is live sooner);
+    // a shot that went up with time for it comes down before the horn, if only just
+    const flight = ft ? this.rng.uniform(K.reboundTime.ft[0], K.reboundTime.ft[1]) : this.rng.uniform(K.reboundTime.shot[0], K.reboundTime.shot[1]);
+    this.tick(flight >= this.clock && this.clock > K.reboundTime.horn ? this.clock - this.rng.uniform(0.1, 0.4) : flight);
     // blocked shots sometimes go out of bounds to the offense
     if (blocked && this.rng.chance(0.3)) {
       this.ctx = 'orb';
       this.continueAfterOrb(off, def, null);
+      return;
+    }
+    // the horn sounded with the ball in the air or loose: nobody is credited with a board (NBA 2024-26:
+    // 0.04 player rebounds a game at 0:00.0; crediting whoever came down with it, 2.3)
+    if (this.atBuzzer()) {
+      this.ctx = 'oob';
+      this.finishPoss(off, this.possFinish);
       return;
     }
     // the fight for the ball: a loose-ball foul, or two players tied up for a jump ball
@@ -70,6 +79,17 @@ export const reboundsMethods = {
       this.continueAfterOrb(off, def, team ? null : r);
       return;
     }
+    // the defense has it, but now and then the ball goes out of bounds off it: the offense's ball, a
+    // team rebound nobody is credited with (K.teamReb.keep)
+    if (!ft && this.rng.chance(K.teamReb.keep)) {
+      if (this.record) {
+        this.addPbp(off.side, `${off.team.abbrev} team rebound.`, 'other');
+        this.cur!.steps.push({ k: 'reb' });
+      }
+      this.ctx = 'orb';
+      this.continueAfterOrb(off, def, null, true);
+      return;
+    }
     const ws = def.on.map((p) => Math.pow(p.c.drb, 2.2) * p.tdr);
     const r = def.on[this.rng.weighted(ws)];
     const team = this.rng.chance(K.teamReb.drb);
@@ -81,7 +101,10 @@ export const reboundsMethods = {
       this.cur!.steps.push(team ? { k: 'reb' } : { k: 'reb', pid: r.pid });
       this.addPbp(def.side, team ? `${def.team.abbrev} team rebound.` : `Defensive rebound ${r.name}.`, 'other');
     }
-    this.ctx = 'dreb';
+    // (a team rebound is a dead ball, out of bounds off the offense: the trip after it starts with an
+    // inbound, not a push; played as a live board, 13.5% of those trips shot or turned it over within
+    // 4 seconds, the NBA's 0.7%)
+    this.ctx = team ? 'oob' : 'dreb';
     this.finishPoss(off, this.possFinish);
   },
 
@@ -179,7 +202,8 @@ export const reboundsMethods = {
     return shapeOf(off.t.offense) === 'fiveOut' ? lev(K.shape.fiveOut.glass) : 0;
   },
 
-  continueAfterOrb(this: GameSim, off: ST, def: ST, rebounder: SP | null) {
+  /** `dead`: the ball went out of bounds to the offense (nobody's board): an inbound, no kick-out on the spot. */
+  continueAfterOrb(this: GameSim, off: ST, def: ST, rebounder: SP | null, dead = false) {
     this.secondChance = true;
     // (the shot clock is back at 14: ten seconds of a full one gone, for what the look is worth)
     this.shotStart = this.clock + 10;
@@ -206,8 +230,8 @@ export const reboundsMethods = {
     const late = this.lateMode(off, def);
     const paceF = this.paceF(off);
     // (often a kick-out on the spot to a shooter, the defense still scrambled back)
-    const kick = this.rng.chance(K.putback.kick);
-    const setup = Math.min(kick ? this.rng.uniform(0.2, 0.8) : this.rng.uniform(1.5, 4.5), Math.max(0.3, this.clock * 0.4));
+    const kick = !dead && this.rng.chance(K.putback.kick);
+    const setup = Math.min(kick ? this.rng.uniform(0.2, 0.8) : dead ? this.rng.uniform(2.5, 5) : this.rng.uniform(1.5, 4.5), Math.max(0.3, this.clock * 0.4));
     this.early = kick ? 'kick' : false;
     this.tick(setup);
     if (this.clock <= 0.05) {

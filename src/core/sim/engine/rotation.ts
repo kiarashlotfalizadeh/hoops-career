@@ -63,7 +63,7 @@ export const rotationMethods = {
 
   /**
    * Whether the game is a blowout the bench should finish: a lead past the coach's line (see
-   * K.garbage: 28.5 or so at the start of the fourth quarter, 23 with five minutes left, 18 with
+   * K.garbage: 29.5 or so at the start of the fourth quarter, 24.5 with five minutes left, 19 with
    * one), and nobody empties the bench for the last half minute. Once the bench is in it stays until
    * the game is back within reach: a lead dipping to 14 with seconds left doesn't bring the starters
    * back.

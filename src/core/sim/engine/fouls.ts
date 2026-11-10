@@ -75,17 +75,19 @@ export const foulsMethods = {
    * fouls on the trip just begun, or 0 for none on it. Down three or less, it fouls once the leader
    * could run the clock out (the game clock under the shot clock), as real teams do 81-86% of the
    * time: most at once, the rest after playing for a steal for a few seconds (the coach's habit; it
-   * sets `trap`, see K.lateSteal and halfCourt); with more time left now and then it
-   * fouls a few seconds in anyway, for two trips to the leader's one (25-37% of the chances). Down
-   * four to six it fouls from about half a minute (71-72% of the chances at 24-40 seconds), down
-   * seven to nine sooner, the further down the fewer coaches still do. Down four or more with
-   * seconds left a foul only pads the margin.
+   * sets `trap`, see K.lateSteal and halfCourt), a little less often with only seconds left (there
+   * isn't always time); with more time left now and then it fouls a few seconds in anyway, for two
+   * trips to the leader's one (25-37% of the chances). Down four to nine it fouls by how far down it
+   * is and how much time is left (K.lateFoul.by, the NBA's own shares): at once, or from about half a
+   * minute on a trip begun before that.
    */
   lateFoulAt(this: GameSim, def: ST, down: number, clock: number, shotLeft: number): number {
     if (clock <= 1.2) return 0;
     const r = this.rng.next();
+    const k = K.lateFoul;
     if (down <= 3) {
       if (clock <= shotLeft + 1) {
+        if (clock <= 4) return r < k.last ? clock : 0;
         if (r < def.habit.lateFoul - K.lateSteal.first) return clock;
         // the steal first, then the foul (with no time for both, the foul)
         const at = clock - this.rng.uniform(K.lateSteal.time[0], K.lateSteal.time[1]);
@@ -93,20 +95,13 @@ export const foulsMethods = {
         this.trap = true;
         return at;
       }
-      if (clock <= 40) return r < K.lateFoul.early ? clock - this.rng.uniform(2, 9) : 0;
+      if (clock <= 40) return r < k.early ? clock - this.rng.uniform(2, 9) : 0;
       return 0;
     }
-    if (down <= 6) {
-      if (clock <= 6) return 0;
-      if (clock <= 32) return r < K.lateFoul.two ? clock : 0;
-      if (clock <= 46) return r < K.lateFoul.twoEarly ? this.rng.uniform(26, 33) : 0;
-      return 0;
-    }
-    if (down <= 9 && clock > 6 && clock <= 52) {
-      const reach = down === 7 ? 0.6 : down === 8 ? 0.35 : 0.15;
-      return r < reach ? Math.min(clock, 50) : 0;
-    }
-    return 0;
+    if (down > 9 || clock <= 2.5 || clock > (down <= 6 ? 46 : 52)) return 0;
+    const row = k.by[down - 4];
+    if (clock > 32) return r < row[4] ? (down <= 6 ? this.rng.uniform(26, 33) : clock) : 0;
+    return r < row[clock <= 5 ? 0 : clock <= 8 ? 1 : clock <= 14 ? 2 : 3] ? clock : 0;
   },
 
   /** Late in a game the offense gets the ball to its best free throw shooters, and the defense fouls whoever has it. */
@@ -177,7 +172,7 @@ export const foulsMethods = {
     const mult = Math.max(0.25, 1 + 0.3 * phys + 0.25 * pr);
     // (a defense protecting a narrow lead in the last 24 seconds keeps its hands off)
     const lead = def.score - off.score;
-    const careful = this.q >= 4 && this.clock <= 24 && lead >= 0 && lead <= 3 ? K.lateLeadFoul : 1;
+    const careful = this.q >= 4 && this.clock <= 24 && lead >= 0 ? (lead <= 3 ? K.lateLeadFoul : K.clutchD.safe) : 1;
     const p = this.whistle(def, K.nonShootFoul * mult * (0.8 + handler.c.foulDraw / 250) * this.env.fouls * careful);
     if (this.rng.chance(p)) def.wpf++;
     else {
@@ -310,14 +305,18 @@ export const foulsMethods = {
    * a little more while they've gone its way (crews even out a night's luck: NBA 2025-26, the gap
    * between two teams' fouls in a game has an SD of 5.0, the sim's 7.1 with every whistle independent).
    * Only the luck: a side that draws fouls by its play keeps drawing them. And a hair less on the home
-   * side (+0.6 free throws a game at home). Books `p` as a call the side's play drew (see calledOn).
+   * side (NBA 2024-26: 0.1-0.4 fewer fouls and 0.25-0.6 more free throws a game at home), and fewer
+   * early in a game than late (K.whistleQ). Books the call the side's play drew.
    */
   whistle(this: GameSim, def: ST, p: number): number {
+    // (the quarter's whistle, K.whistleQ, and the home side's are what its play draws tonight, not luck
+    // to give back: booked before the evening-out, which had taken the home side's edge at the line away)
+    p *= K.whistleQ[Math.min(this.q, 4) - 1] * (this.opts.neutral ? 1 : def.side === 0 ? 1 - K.homeWhistle : 1 + K.homeWhistle);
     def.xpf += p;
     const o = this.T[1 - def.side];
     const luck = def.wpf - def.xpf - (o.wpf - o.xpf);
     // (2 / (1 + e^x): what one side loses the other gains, so a night's calls add up as before)
-    return ((p * 2) / (1 + Math.exp(K.whistleBalance * luck))) * (def.side === 0 && !this.opts.neutral ? 1 - K.homeWhistle : 1 + K.homeWhistle);
+    return (p * 2) / (1 + Math.exp(K.whistleBalance * luck));
   },
 
   /**
@@ -329,7 +328,7 @@ export const foulsMethods = {
     // (at the dead ball before a trip, on the side without the ball, so its free throw opens the trip:
     // the chance is doubled and the side drawn as either, the half of them that would land on the side
     // with the ball not given)
-    if (this.over || this.atBuzzer() || (this.ctx !== 'made' && this.ctx !== 'ft' && this.ctx !== 'deadTO') || !this.rng.chance(K.tech)) return;
+    if (this.over || this.atBuzzer() || (this.ctx !== 'made' && this.ctx !== 'ft' && this.ctx !== 'deadTO' && this.ctx !== 'oob') || !this.rng.chance(K.tech)) return;
     const w = this.T.map((t) => {
       const o = this.T[1 - t.side];
       return Math.exp(0.08 * (t.tot.pf - o.tot.pf) + 0.03 * Math.max(0, o.score - t.score));
@@ -343,10 +342,14 @@ export const foulsMethods = {
     const p = t.on[this.rng.weighted(t.on.map((x) => (1 + x.fouls) * (x.starter ? 1.6 : 1) * (0.6 + x.c.ballSec / 100)))];
     p.techs = (p.techs ?? 0) + 1;
     this.technical(t, p.name);
-    if (p.techs >= 2 && p.out === 0) {
+    // a second technical is an ejection, and now and then the first one is enough (NBA 2024-26: 5-7
+    // ejections per 100 games; with second technicals alone, 1.6)
+    const tossed = p.techs < 2 && this.rng.chance(K.ejectP);
+    if ((p.techs >= 2 || tossed) && p.out === 0) {
       p.out = 1;
       p.outAt = this.elapsed;
-      this.addPbp(t.side, `${p.name} is ejected (second technical).`, 'foul');
+      p.ejected = true;
+      this.addPbp(t.side, `${p.name} is ejected${tossed ? '' : ' (second technical)'}.`, 'foul');
       this.replace(t, p);
     }
   },

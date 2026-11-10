@@ -311,6 +311,7 @@ describe('engine tactics', () => {
       // All of them again 2026-10-28, when the threes were recentred (K.recenter.three) after partnerships and familiarity were deleted. And again the same day, when Five-Out, Pace & Space, Ice and the 2-3 zone were retuned and the staffs' reads refit.
       // All of them again 2026-11-09, the game-day realism round: late fouls and timeouts, tempo, the rebound's flight, the whistle, shot locations and the stint plan.
       // And again the same day, its second round: a shot's worth by the shot clock, shots at the horn, the score effect from the tip, rebounds before loose-ball fouls.
+      // And again that day, its third round (see engineDefense.test.ts).
       const zone = (tid: number): SimTeamInput => ({ team: { ...league.teams[tid], tactics: defaultTactics('balanced', 'zone') }, players: teamPlayers(league, tid) });
       const out: number[][] = [];
       for (let g = 0; g < 4; g++) {
@@ -318,10 +319,10 @@ describe('engine tactics', () => {
         out.push([res.home.pts, res.away.pts, res.home.t.fga, res.away.t.fga, res.home.t.tpa, res.away.t.tpa, res.home.t.orb, res.away.t.orb]);
       }
       expect(out).toEqual([
-        [88, 110, 91, 94, 42, 54, 15, 16],
-        [102, 108, 90, 96, 45, 40, 10, 19],
-        [102, 121, 98, 93, 54, 48, 21, 8],
-        [102, 121, 83, 89, 51, 36, 13, 15],
+        [83, 106, 101, 95, 43, 49, 21, 15],
+        [109, 105, 90, 95, 43, 42, 18, 13],
+        [139, 140, 101, 108, 56, 58, 12, 13],
+        [107, 129, 85, 98, 45, 34, 9, 11],
       ]);
     }
 

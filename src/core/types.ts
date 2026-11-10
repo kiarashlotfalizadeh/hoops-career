@@ -829,6 +829,8 @@ export interface BoxLine {
   pm: number;
   energy: number; // energy at end (0..1)
   dnp?: string;
+  /** Played and didn't finish: hurt during the game, or thrown out of it. */
+  left?: 'injury' | 'ejected';
 }
 
 export interface TeamBox {

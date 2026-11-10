@@ -30,6 +30,15 @@
 // last-second shots (heaves, which the engine names, are left out as the NBA's are), what happens
 // when the leader gains the ball in the last 24 s, foul trouble (the share of the window a starter
 // spends on the floor after the foul), late tempo, end-of-quarter trips and when timeouts come.
+//
+// From the third review (review/GAMEDAY-REALISM-3.md): who takes the last shot (a team's top scorer by
+// season points a game, 20+ games, and its top two; shots for the tie or the lead in the last 24 s),
+// boards credited at the horn, the two-for-one (a trip begun with 33-40 s left in Q1-Q3 whose first
+// shot or turnover comes with more than 24 s left), the whistle by quarter and the home side's, how
+// the two teams' shooting nights move together, starters on the floor at fixed minutes (from each
+// player's stretches on it), timeouts against runs and the fourth quarter's spares, team spread (the
+// SD of the teams' season margins) and the season's star lines: so a change that keeps the
+// multi-season tails star-check guards can't quietly flatten a single season, or the other way round.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createLeague, defaultSettings, type SeedData } from '../src/core/league/create';
 import { startRegularSeason, simDay } from '../src/core/league/season';
@@ -62,6 +71,7 @@ interface Tm {
   score: number;
   timeouts: number;
   on: Pl[];
+  players: Pl[];
   tot: { fga: number; fgm: number };
 }
 interface Pl {
@@ -72,11 +82,11 @@ interface Pl {
 }
 
 type Ev = { q: number; clock: number; side: 0 | 1; hs: number; as: number } & (
-  | { k: 'shot'; zone: string; finish: string; fga: boolean; made: boolean; desc: string; fga0: number; fgm0: number }
+  | { k: 'shot'; pid: number; zone: string; finish: string; fga: boolean; made: boolean; desc: string; fga0: number; fgm0: number }
   | { k: 'to'; steal: boolean }
   | { k: 'foul'; def: boolean }
   | { k: 'ft'; n: number }
-  | { k: 'orb' }
+  | { k: 'orb'; team: boolean }
   | { k: 'timeout' }
   | { k: 'end'; ctx: string }
 );
@@ -168,9 +178,9 @@ function wrap(name: string, around: (s: GameSim, g: G, args: unknown[], call: ()
 
 wrap('step', (_s, _g, _a, call) => call());
 wrap('shoot', (s, g, [off, , o], call) => {
-  const so = o as { zone: string; finish: string };
+  const so = o as { zone: string; finish: string; shooter: Pl };
   const t = off as Tm;
-  const ev = push(s, g, { k: 'shot', side: t.side, zone: so.zone, finish: so.finish, fga: false, made: false, desc: '', fga0: t.tot.fga, fgm0: t.tot.fgm });
+  const ev = push(s, g, { k: 'shot', side: t.side, pid: so.shooter.pid, zone: so.zone, finish: so.finish, fga: false, made: false, desc: '', fga0: t.tot.fga, fgm0: t.tot.fgm });
   g.pending = ev as Extract<Ev, { k: 'shot' }>;
   const r = call();
   if (g.pending === ev) resolve(s, g);
@@ -211,8 +221,9 @@ wrap('chargeFoul', (s, g, [t, p], call) => {
   if (pl.starter) g.pfs.push({ pid: pl.pid, n: pl.fouls, q, clock, at });
   return r;
 });
-wrap('continueAfterOrb', (s, g, [off], call) => {
-  push(s, g, { k: 'orb', side: (off as Tm).side });
+// (`team`: nobody's board, a ball gone out of bounds to the offense: an inbound, not a rebound to put back)
+wrap('continueAfterOrb', (s, g, [off, , rebounder], call) => {
+  push(s, g, { k: 'orb', side: (off as Tm).side, team: !rebounder });
   return call();
 });
 wrap('finishPoss', (s, g, [off], call) => {
@@ -277,6 +288,12 @@ wrap('result', (s, g, _a, call) => {
 if (missing.length) console.warn(`WARNING: GameSim no longer has ${missing.join(', ')}: the measures that read them are blank`);
 
 // ------------------------------------------------------------ the tallies
+
+const mean = (x: number[]) => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : NaN);
+const sd = (x: number[]) => {
+  const m = mean(x);
+  return Math.sqrt(mean(x.map((v) => (v - m) ** 2)));
+};
 
 const A = {
   games: 0,
@@ -345,7 +362,97 @@ const A = {
   closeAt: {} as Record<string, number>,
   hold: {} as Record<string, { n: number; change: number; ot: number; wins: number }>,
   qMargin: [[], [], []] as number[][],
+  hornBoards: 0,
+  twoForOne: [0, 0],
+  down1: [0, 0],
+  /** Personal fouls and free-throw attempts by quarter (overtime with the fourth). */
+  pfQ: [0, 0, 0, 0],
+  ftaQ: [0, 0, 0, 0],
+  fgPct: [[], []] as number[][],
+  /** Starters on the floor at the marks of STARTER_MARKS (sum over team-games, and how many). */
+  startersOn: {} as Record<string, [number, number]>,
+  toRun: [0, 0],
+  q4Spare: [0, 0],
+  deadReb: [0, 0],
+  /** Per season: the SD of the teams' margins, the better team's games and wins, the star lines. */
+  teamSd: [] as number[],
+  better: [0, 0],
+  twenty: [] as number[],
+  leaderPpg: [] as number[],
+  steal5: [] as number[],
+  lastShot: [0, 0, 0],
+  early: [0, 0, 0],
 };
+/** One season's games, for what is measured over a season (see closeSeason). */
+let SEASON = newSeason();
+function newSeason() {
+  return {
+    games: [] as { home: number; away: number; margin: number }[],
+    /** Points by player and team, a game at a time. */
+    pts: new Map<string, number[]>(),
+    steal5: 0,
+    /** Shots for the tie or the lead in the last 24 s, and shots earlier in games: team and shooter. */
+    last: [] as [number, number][],
+    early: [] as [number, number][],
+  };
+}
+/** [label, elapsed seconds, close games only (within 6 with 6:00 left)] */
+const STARTER_MARKS: [string, number, boolean][] = [
+  ['q2_1130', 750, false],
+  ['q2_730', 990, false],
+  ['q2_130', 1350, false],
+  ['q3_230', 2010, false],
+  ['q4_1130', 2190, false],
+  ['q4_130c', 2790, true],
+];
+
+function closeSeason() {
+  const S = SEASON;
+  SEASON = newSeason();
+  if (!S.games.length) return;
+  const by = new Map<number, number[]>();
+  for (const g of S.games) {
+    by.set(g.home, [...(by.get(g.home) ?? []), g.margin]);
+    by.set(g.away, [...(by.get(g.away) ?? []), -g.margin]);
+  }
+  const strength = new Map([...by].map(([tid, m]) => [tid, mean(m)]));
+  A.teamSd.push(sd([...strength.values()]));
+  for (const g of S.games) {
+    const d = strength.get(g.home)! - strength.get(g.away)!;
+    if (!d) continue;
+    A.better[0]++;
+    if (d > 0 === g.margin > 0) A.better[1]++;
+  }
+  // a season's scorers: everyone with 58+ games, by points a game over all his teams
+  const all = new Map<number, number[]>();
+  const tops = new Map<number, [number, number][]>();
+  for (const [key, v] of S.pts) {
+    const [tid, pid] = key.split(':').map(Number);
+    all.set(pid, [...(all.get(pid) ?? []), ...v]);
+    if (v.length >= 20) tops.set(tid, [...(tops.get(tid) ?? []), [mean(v), pid]]);
+  }
+  const ppg = [...all.values()]
+    .filter((v) => v.length >= 58)
+    .map(mean)
+    .sort((a, b) => b - a);
+  A.twenty.push(ppg.filter((x) => x >= 20).length);
+  A.leaderPpg.push(ppg[0] ?? NaN);
+  A.steal5.push(S.steal5);
+  const top = (tid: number, n: number) =>
+    (tops.get(tid) ?? [])
+      .sort((a, b) => b[0] - a[0])
+      .slice(0, n)
+      .map((x) => x[1]);
+  for (const [tid, pid] of S.last) {
+    A.lastShot[0]++;
+    if (top(tid, 1).includes(pid)) A.lastShot[1]++;
+    if (top(tid, 2).includes(pid)) A.lastShot[2]++;
+  }
+  for (const [tid, pid] of S.early) {
+    A.early[0]++;
+    if (top(tid, 1).includes(pid)) A.early[1]++;
+  }
+}
 let userTid = 0;
 
 const sit = (key: string, yes: boolean) => {
@@ -404,8 +511,17 @@ function harvest(s: GameSim, g: G, res: GameResult) {
   if (res.ot > 0) A.ot++;
   A.pfDiff.push(res.home.t.pf - res.away.t.pf);
   A.ftaDiff.push(res.home.t.fta - res.away.t.fta);
+  SEASON.games.push({ home: res.home.tid, away: res.away.tid, margin });
+  A.fgPct[0].push(res.home.t.fgm / res.home.t.fga);
+  A.fgPct[1].push(res.away.t.fgm / res.away.t.fga);
   for (const [i, b] of box.entries()) {
     const o = box[1 - i];
+    for (const p of b.players) {
+      if (p.min <= 0) continue;
+      const key = `${b.tid}:${p.pid}`;
+      SEASON.pts.set(key, [...(SEASON.pts.get(key) ?? []), p.pts]);
+      if (p.stl >= 5) SEASON.steal5++;
+    }
     A.pts += b.pts;
     A.fgm += b.t.fgm;
     A.fga += b.t.fga;
@@ -458,6 +574,8 @@ function harvest(s: GameSim, g: G, res: GameResult) {
     if (/jump ball|held ball/i.test(p.text)) A.heldBalls++;
     if (/loose[- ]ball foul/i.test(p.text)) A.looseBall++;
     if (/shot[- ]clock/i.test(p.text) && p.kind !== 'foul') A.scv++;
+    // a player's board at 0:00.0
+    if (/rebound/i.test(p.text) && !/team rebound/i.test(p.text) && p.clock <= 0.05) A.hornBoards++;
   }
 
   // zone defense: AI defenses' half-court possessions
@@ -472,6 +590,23 @@ function harvest(s: GameSim, g: G, res: GameResult) {
     let sg = g.segs.get(pid);
     if (!sg) g.segs.set(pid, (sg = []));
     sg.push([from, s.elapsed]);
+  }
+  // starters on the floor at fixed minutes (regulation), the fourth quarter's late one in close games only
+  {
+    let at6 = 0;
+    for (const e of ev) {
+      if (e.q > 4 || (e.q === 4 && e.clock < 360)) break;
+      at6 = e.hs - e.as;
+    }
+    for (const t of T(s)) {
+      const starters = t.players.filter((p) => p.starter);
+      for (const [label, at, closeOnly] of STARTER_MARKS) {
+        if (closeOnly && Math.abs(at6) > 6) continue;
+        const c = (A.startersOn[label] ??= [0, 0]);
+        c[0] += starters.filter((p) => (g.segs.get(p.pid) ?? []).some(([a, b]) => a <= at && at < b)).length;
+        c[1]++;
+      }
+    }
   }
   for (const f of g.pfs) {
     const key =
@@ -584,8 +719,38 @@ function harvest(s: GameSim, g: G, res: GameResult) {
     A.lead2[0]++;
     if (g.at2 > 0 === margin > 0) A.lead2[1]++;
   }
+  // unanswered points by each side as the events go by (the score an event carries is the one before it)
+  const run = [0, 0];
+  let seen = [0, 0];
+  let runQ = 1;
+  let spare = 0;
+  const tids = [res.home.tid, res.away.tid];
   for (const [i, e] of ev.entries()) {
     const lead = (side: 0 | 1) => (side === 0 ? e.hs - e.as : e.as - e.hs);
+    if (e.q !== runQ) {
+      runQ = e.q;
+      run[0] = run[1] = 0;
+    }
+    for (const side of [0, 1] as const) {
+      const d = (side === 0 ? e.hs : e.as) - seen[side];
+      if (d > 0) {
+        run[side] += d;
+        run[1 - side] = 0;
+      }
+    }
+    seen = [e.hs, e.as];
+    if (e.k === 'foul') A.pfQ[Math.min(e.q, 4) - 1]++;
+    if (e.k === 'ft') A.ftaQ[Math.min(e.q, 4) - 1] += e.n;
+    if (e.k === 'timeout' && e.q <= 3) {
+      A.toRun[0]++;
+      if (run[1 - e.side] >= 8) A.toRun[1]++;
+    }
+    if (e.k === 'timeout' && e.q === 4 && e.clock <= 420 && e.clock > 300) spare++;
+    if (e.k === 'shot' && e.fga && !/heave/i.test(e.desc)) {
+      const up = lead(e.side);
+      if (e.q >= 4 && e.clock <= 24 && up <= 0 && up >= -3) SEASON.last.push([tids[e.side], e.pid]);
+      else if (e.q <= 3 || e.clock > 300) SEASON.early.push([tids[e.side], e.pid]);
+    }
     if (e.k === 'timeout') {
       A.timeouts++;
       if (e.q === 4) A.timeoutsQ4++;
@@ -618,7 +783,7 @@ function harvest(s: GameSim, g: G, res: GameResult) {
       }
       if (e.finish === 'cut') A.shots.cut++;
     }
-    if (e.k === 'orb') {
+    if (e.k === 'orb' && !e.team) {
       const n = nextAction(ev, i, e.side, true);
       if (n) {
         A.orbNext[0]++;
@@ -631,6 +796,22 @@ function harvest(s: GameSim, g: G, res: GameResult) {
     if ((e.ctx === 'dreb' || e.ctx === 'made') && e.clock > 24) {
       const n = nextAction(ev, i, ball);
       if (n) (e.ctx === 'dreb' ? A.drebDt : A.makeDt).push(e.clock - n.clock);
+    }
+    // a dead-ball team rebound: the trip after it starts with an inbound
+    if (e.ctx === 'oob' && e.clock > 24) {
+      const n = nextAction(ev, i, ball);
+      if (n) {
+        A.deadReb[0]++;
+        if (e.clock - n.clock <= 4) A.deadReb[1]++;
+      }
+    }
+    // the two-for-one: a trip begun with 33-40 seconds left whose first shot or turnover leaves time for another
+    if (e.q < 4 && e.clock >= 33 && e.clock <= 40) {
+      const n = nextAction(ev, i, ball);
+      if (n) {
+        A.twoForOne[0]++;
+        if (n.clock > 24) A.twoForOne[1]++;
+      }
     }
     // a trip begun with 1-6 seconds left in the first three quarters: does it get a shot off?
     if (e.q < 4 && e.clock >= 1 && e.clock <= 6) {
@@ -665,9 +846,23 @@ function harvest(s: GameSim, g: G, res: GameResult) {
       if (e.clock > 24 && e.clock <= 40 && up === 3) sit('up3_40', fouled);
       if (e.clock > 24 && e.clock <= 40 && up >= 4 && up <= 6) sit('up46_40', fouled);
     }
+    // down one with the ball in the last 12 seconds: a three, or something else
+    if (up === -1 && e.clock <= 12 && e.clock >= 1) {
+      A.down1[0]++;
+      for (let j = i + 1; j < ev.length; j++) {
+        const x = ev[j];
+        if (x.q !== e.q || (x.k === 'foul' && x.side !== ball) || (x.k === 'to' && x.side === ball)) break;
+        if (x.k === 'shot' && x.side === ball) {
+          if (x.zone === 'c3' || x.zone === 'ab3') A.down1[1]++;
+          break;
+        }
+      }
+    }
     // the trailing side gains the ball, down three, in the last 12 seconds: does the leader foul?
     if (up === -3 && e.clock <= 12 && e.clock > 0) sit('leaderFoul3', foulsFirst(ev, i, e.side, ball));
   }
+  A.q4Spare[0] += spare;
+  if (spare >= 3) A.q4Spare[1]++;
 }
 
 // ------------------------------------------------------------ the seasons
@@ -685,16 +880,12 @@ for (const rngSeed of seeds) {
   if (errs.length) throw new Error(errs.join('; '));
   const before = A.games;
   while (league.phase === 'regular') simDay(league);
+  closeSeason();
   console.log(`seed ${rngSeed}: ${A.games - before} games in ${((performance.now() - ts) / 1000).toFixed(1)}s`);
 }
 
 // ------------------------------------------------------------ the table
 
-const mean = (x: number[]) => (x.length ? x.reduce((a, b) => a + b, 0) / x.length : NaN);
-const sd = (x: number[]) => {
-  const m = mean(x);
-  return Math.sqrt(mean(x.map((v) => (v - m) ** 2)));
-};
 const corr = (a: number[], b: number[]) => {
   const ma = mean(a);
   const mb = mean(b);
@@ -720,6 +911,7 @@ const lateN = (k: string) => `n=${A.late[k]?.[1] ?? 0}`;
 const l24 = (k: string, what: string) => pct(A.lead24[k]?.[what] ?? 0, A.lead24[k]?.n ?? 0);
 const trouble = (k: string) => pct(A.trouble[k]?.[1] ?? 0, A.trouble[k]?.[0] ?? 0);
 const tempoPct = (k: string) => pct(A.tempo[k]?.[1] ?? 0, A.tempo[k]?.[0] ?? 0);
+const st = (k: string) => (A.startersOn[k]?.[0] ?? NaN) / (A.startersOn[k]?.[1] ?? 1);
 const rows: Row[] = [
   ['Results', 'Points per team-game', 113.8, 115.6, A.pts / tg],
   ['Results', 'Home win %', 54.4, 55.5, pct(A.homeWins, gm), '%'],
@@ -867,6 +1059,36 @@ const rows: Row[] = [
   ['Shots', 'Cut share of FGA', 4, 8, pct(A.shots.cut, A.shots.fga), '%'],
   ['Shots', 'Zone D, share of AI half-court poss', 1, 5, pct(A.zonePoss, A.halfPoss), '%'],
   ['Shots', 'Second-chance points', 14.1, 15.0, A.secondChance / tg],
+  ['Crunch', 'Last 0:24, tied or down 1-3: shots by the top scorer', 30, 32, pct(A.lastShot[1], A.lastShot[0]), '%', 1, `n=${A.lastShot[0]}`],
+  ['Crunch', '... by the top two', 47, 51, pct(A.lastShot[2], A.lastShot[0]), '%'],
+  ['Crunch', "Top scorer's share of shots earlier in games", 15, 15, pct(A.early[1], A.early[0]), '%'],
+  ['Crunch', 'Down 1, last 0:12 with the ball: shoots a three', 19, 21, pct(A.down1[1], A.down1[0]), '%', 1, `n=${A.down1[0]}`],
+  ['End game', 'Leader up 1-2, last 0:24: gets a shot off', 5, 6, l24('up12', 'shot'), '%'],
+  ['End game', 'Leader up 4-6, last 0:24: gets a shot off', 6, 7, l24('up46', 'shot'), '%'],
+  ['Clock', 'Two-for-one taken (trip begun 0:33-0:40, Q1-Q3)', 64, 65.3, pct(A.twoForOne[1], A.twoForOne[0]), '%', 1, `n=${A.twoForOne[0]}`],
+  ['Clock', 'After a dead-ball team rebound: shot/TO within 4 s', 0.7, 0.7, pct(A.deadReb[1], A.deadReb[0]), '%', 1, `n=${A.deadReb[0]}`],
+  ['Box', 'Rebounds credited at the horn, per game', 0.04, 0.04, A.hornBoards / gm, '', 2],
+  ['Whistle', 'Fouls per team, Q1', 3.52, 3.85, A.pfQ[0] / tg, '', 2],
+  ['Whistle', '... Q4 (and overtime)', 4.82, 5.02, A.pfQ[3] / tg, '', 2],
+  ['Whistle', 'Free-throw attempts per team, Q1', 4.2, 4.79, A.ftaQ[0] / tg, '', 2],
+  ['Whistle', '... Q4 (and overtime)', 6.08, 6.38, A.ftaQ[3] / tg, '', 2],
+  ['Whistle', 'Home minus away: fouls', -0.39, -0.07, mean(A.pfDiff), '', 2],
+  ['Whistle', '... free-throw attempts', 0.25, 0.57, mean(A.ftaDiff), '', 2],
+  ['Results', "Correlation of the two teams' FG%", -0.05, 0.05, corr(A.fgPct[0], A.fgPct[1]), '', 2],
+  ['Results', 'Team strength: SD of season margins', 5.9, 6.1, mean(A.teamSd), '', 2],
+  ['Results', 'Better team (by season margin) wins', 68.7, 69.3, pct(A.better[1], A.better[0]), '%'],
+  ['Rotation', 'Starters on the floor: Q2 at 11:30', 1.94, 2.13, st('q2_1130'), '', 2],
+  ['Rotation', '... Q2 at 7:30', 2.82, 2.87, st('q2_730'), '', 2],
+  ['Rotation', '... Q2 at 1:30', 3.7, 3.8, st('q2_130'), '', 2],
+  ['Rotation', '... Q3 at 2:30', 1.63, 1.79, st('q3_230'), '', 2],
+  ['Rotation', '... Q4 at 11:30', 2.07, 2.21, st('q4_1130'), '', 2],
+  ['Rotation', '... Q4 at 1:30, within 6 at 6:00', 3.82, 3.84, st('q4_130c'), '', 2],
+  ['Coaching', 'Q1-Q3 timeouts called down an 8+ run', 11, 12, pct(A.toRun[1], A.toRun[0]), '%'],
+  ['Coaching', 'Q4 timeouts between 7:00 and 5:00, per game', 0.62, 0.67, A.q4Spare[0] / gm, '', 2],
+  ['Coaching', '... games with 3+', 0.3, 0.3, pct(A.q4Spare[1], gm), '%'],
+  ['Players', 'Players averaging 20+ points, per season', 33, 34, mean(A.twenty)],
+  ['Players', 'Scoring leader, points a game', 32.7, 33.5, mean(A.leaderPpg)],
+  ['Players', '5-steal games per season', 122, 144, mean(A.steal5), '', 0],
   ['Players', 'Triple-doubles per game', 0.111, 0.121, A.tripleDoubles / gm, '', 3],
   ['Players', 'Team-games with a 50-pt scorer', 0.69, 0.73, pct(A.fifty, tg), '%', 2],
 ];

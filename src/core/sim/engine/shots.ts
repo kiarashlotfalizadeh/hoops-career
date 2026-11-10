@@ -21,6 +21,9 @@ const blockSkill = (p: { r: { blk: number; hgt: number; ath: number } }) => 0.7 
  */
 const TWO_ASSIST = 0.91;
 
+/** ...and what a pass that led to a paint or mid-range make keeps on top (see assistProb). */
+const ZONE_ASSIST = { paint: 1.25, mid: 1.3 };
+
 /** No tags (shared: never added to). */
 const NONE_TAGS: [string, number][] = [];
 
@@ -99,7 +102,7 @@ export const shotsMethods = {
     let x = (K.band.per * Math.min(a, K.band.cap)) / 10;
     if (this.q >= 3) x += clamp((a - K.easeBig.from) / K.easeBig.span, 0, 1) * K.easeBig.x;
     const c = K.clutchD;
-    const tight = this.q >= 4 && this.clock < c.sec && a <= c.within ? c.all + (m > 0 && !three ? c.leadTwo : 0) : 0;
+    const tight = this.q >= 4 && this.clock < c.sec && a <= c.within ? c.all + (m > 0 ? (three ? c.leadThree : c.leadTwo) : 0) : 0;
     return (m > 0 ? -x : x) - tight;
   },
 
@@ -121,9 +124,12 @@ export const shotsMethods = {
     const k = K.lastLook;
     if (this.clock > k.sec) return 1;
     const i = three ? 1 : 0;
-    const chase = this.q >= 4 && off.score <= def.score && off.score >= def.score - 3;
-    if (this.clock <= k.horn) return chase ? k.game[i] : k.quarter[i];
-    return chase ? k.late[i] : three && this.q >= 4 && off.score < def.score && off.score >= def.score - 6 ? k.far : 1;
+    const m = off.score - def.score;
+    // (a leader up three or more gives up the two: no foul, no three)
+    if (!three && this.q >= 4 && m <= -3) return k.concede;
+    if (this.q >= 4 && m <= 0 && m >= -3) return (this.clock <= k.horn ? k.game : k.late)[m === 0 ? 'tied' : 'behind'][i] * (m === -2 && !three ? k.down2 : 1);
+    if (this.clock <= k.horn) return k.quarter[i];
+    return three && this.q >= 4 && m < 0 && m >= -6 ? k.far : 1;
   },
 
   cornerOrWing(this: GameSim, off: ST, sh?: SP): ShotZone {
@@ -217,6 +223,13 @@ export const shotsMethods = {
     // (a shooter past his share of the threes gets tougher ones from a man defense, or from the chaser
     // of a junk defense that is after him; a zone's open looks stay open: see K.threeUse.contest)
     if (three && sh.b.tFga >= K.threeUse.from && (!this.zone(def) || this.lock(def, off, sh))) p -= K.threeUse.contest * Math.max(0, sh.b.tpa / sh.b.tFga - K.threeUse.level);
+    // (and one past his share of the possessions gets tougher looks of every kind, a junk defense's
+    // chaser on him sooner: K.useContest, K.chaseCap)
+    const teamUse = sh.b.tFga + 0.44 * sh.b.tFta + sh.b.tTov;
+    if (teamUse >= 25) {
+      const level = K.useLevel - (this.chased(def, off).includes(sh) ? lev(K.chaseCap) : 0);
+      p -= K.useContest * Math.max(0, (sh.b.fga + 0.44 * sh.b.fta + sh.b.tov) / teamUse - level);
+    }
     // contesting defender quality
     const c = s.contest;
     let stopper = 0;
@@ -244,7 +257,8 @@ export const shotsMethods = {
     if (this.q >= 4 && this.clock < 120 && Math.abs(off.score - def.score) <= 5) p -= (60 - sh.r.oiq) / 2000;
     // a trip begun with the period nearly over gets a scrambled look (see halfCourt), and any shot
     // against the horn is a tougher one
-    p *= Math.min(this.scramble, this.lastLook(off, def, three));
+    const look = this.lastLook(off, def, three);
+    p *= this.scramble < 1 ? Math.min(this.scramble, look) : look;
     p = s.heave ? K.heave.make : clamp(p, 0.04, 0.93);
 
     // impact accounting: each tag's openness contribution in expected points (a big decision's with
@@ -280,7 +294,14 @@ export const shotsMethods = {
     // (late in a close game more shots are fouled; one for the tie or the lead at the horn rarely is: K.clutchD)
     const cd = K.clutchD;
     const gap = off.score - def.score;
-    const lateCall = this.q < 4 || this.clock >= cd.sec || Math.abs(gap) > cd.within ? 1 : this.clock <= K.lastLook.horn && gap <= 0 && gap >= -3 ? cd.hornFouls : cd.fouls;
+    const lateCall =
+      this.q >= 4 && this.clock <= K.lastLook.sec && gap <= -4
+        ? cd.safe
+        : this.q < 4 || this.clock >= cd.sec || Math.abs(gap) > cd.within
+          ? 1
+          : this.clock <= K.lastLook.horn && gap <= 0 && gap >= -3
+            ? cd.hornFouls
+            : cd.fouls;
     const pFoul = this.whistle(def, K.foulRate[zone] * (1 + levExtra(K.recenter.foul)) * draw * this.env.fouls * lateCall);
     if (phys !== 0) {
       // net of the extra fouls (a trip to the line instead of the shot) and the tighter contest
@@ -417,7 +438,7 @@ export const shotsMethods = {
       if (gift) s = { ...s, open: s.open + gift, tags: [...(s.tags ?? []), [md!.drole === 'roamer' ? 'role_roam' : 'role_anchor', gift]] };
     }
     const t3 = off.t.offense.threePoint / 100;
-    const wShoot =
+    let wShoot =
       Math.pow(Math.max(5, sh.c.c3) / 50, 2.2) *
       (0.55 + t3) *
       (1 + levExtra(K.recenter.three)) *
@@ -427,8 +448,12 @@ export const shotsMethods = {
     let wDrive = Math.pow(Math.max(5, sh.c.create) / 50, 2) * 0.42 * sh.td * (0.7 + 0.6 * (off.t.offense.rimAttack / 100)) * (1 - 0.35 * clamp(s.open, -0.5, 1));
     // (a defender closing out high gets attacked off the catch)
     if (lk) wDrive *= 1 + 2 * lk.beat;
-    // (down three late, the catch is for the three)
-    if (this.q >= 4 && this.clock <= 35) wDrive *= this.prefs(off, this.lateMode(off, def)).two;
+    // (down three late, the catch is for the three; down one with the last shot, it's driven: a two wins it)
+    if (this.q >= 4 && this.clock <= 35) {
+      const lm = this.lateMode(off, def);
+      wDrive *= this.prefs(off, lm).two;
+      if (lm.two) wShoot *= K.lateTwo;
+    }
     if (this.rng.weighted([wShoot, wDrive]) === 0) {
       this.shoot(off, def, s);
       return;
@@ -469,7 +494,11 @@ export const shotsMethods = {
    */
   assistProb(this: GameSim, f: FinishType, zone: ShotZone) {
     const three = zone === 'c3' || zone === 'ab3';
-    return three ? this.finishAssist(f, zone, true) : TWO_ASSIST * this.finishAssist(f, zone, false);
+    if (three) return this.finishAssist(f, zone, true);
+    // (a floater or a pull-up off the catch is credited more often than it was: NBA 2024-26, 48-49% of
+    // paint makes and 38-39% of mid-range makes are assisted, the sim's 38-40% and 28-31%, with the
+    // rim's on its 60-61%)
+    return Math.min(0.97, TWO_ASSIST * this.finishAssist(f, zone, false) * (zone === 'paint' ? ZONE_ASSIST.paint : zone === 'mid' ? ZONE_ASSIST.mid : 1));
   },
 
   /** A finish's assist rate before TWO_ASSIST (see assistProb). */
@@ -484,12 +513,13 @@ export const shotsMethods = {
       case 'handoff':
         return three ? 0.96 : zone === 'rim' ? 0.5 : zone === 'paint' ? 0.55 : 0.65;
       case 'transition':
-        // (an outlet or a hit-ahead the runner still has to take to the basket himself, often enough)
-        return 0.8;
+        // (an outlet or a hit-ahead the runner still has to take to the basket himself, often enough;
+        // a trailer's three off the kick-ahead is a catch-and-shoot)
+        return three ? 0.95 : 0.8;
       case 'post':
         return 0.25;
       default:
-        return 0.6;
+        return three ? 0.85 : 0.6;
     }
   },
 

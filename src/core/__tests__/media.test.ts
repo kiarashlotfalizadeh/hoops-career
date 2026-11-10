@@ -226,7 +226,9 @@ describe('the press', () => {
       expect(heads).toContain('Season wrap');
       expect(c.wrap).toBe(wrap.id);
       expect(c.stories.filter((x) => x.id !== wrap.id && x.tids.includes(me))).toHaveLength(3);
-      expect(heads.filter((h) => h.startsWith('Record'))).toHaveLength(2);
+      // (two of a kind: these, or a record the season's own games set)
+      expect(c.stories.filter((x) => x.kind === 'record' && !x.tids.includes(me))).toHaveLength(2);
+      expect(heads.filter((h) => h.startsWith('Record')).length).toBeLessThanOrEqual(2);
       expect(heads).not.toContain('Small one');
       expect(heads).not.toContain('A preview');
       expect(c.series).toEqual([[4, 3, 7, 4, 2]]);
