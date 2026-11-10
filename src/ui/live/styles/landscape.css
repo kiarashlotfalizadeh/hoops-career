@@ -1,88 +1,80 @@
-/* Held sideways: the court on the left, the scorebug, the bench bar and the console beside it. Last,
-   so it overrides the partials above. */
+/* Held sideways, or on a desktop: the broadcast on the left (the scorebug, the call bar, the whole
+   court), the bench on the right (the bench bar over the console). Last, so it overrides the
+   partials above. Every track is sized by the grid: no width worked out by hand. */
 @media (orientation: landscape) and (min-width: 600px) {
   :root {
     --lq-h: 54px;
   }
   .app main.page.lv {
-    max-width: 1240px;
+    max-width: 1360px;
     display: grid;
-    grid-template-columns: auto minmax(320px, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas:
-      'stage bug'
-      'stage bar'
+      'bug bar'
+      'bug con'
+      'call con'
       'stage con';
     column-gap: 14px;
     padding: 8px max(12px, var(--safe-r)) calc(8px + var(--safe-b)) max(12px, var(--safe-l));
-  }
-  .lv .lv-stage {
-    grid-area: stage;
-    align-self: start;
-    margin: 0;
-    width: min(calc(100vw - 380px - var(--safe-l) - var(--safe-r)), calc((100dvh - var(--top-h) - var(--safe-t) - var(--safe-b) - 17px) * 532 / 494));
-  }
-  /* stopped: the report beside the scorebug, the court's room its own */
-  .lv.stopped {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      'bug'
-      'bar'
-      'con';
-  }
-  /* (the report reads at a comfortable width when it has the whole screen) */
-  .lv.stopped .lv-con-body,
-  .lv.stopped .lv-bb {
-    max-width: 760px;
-    margin-left: auto;
-    margin-right: auto;
   }
   .lv .lv-bug {
     grid-area: bug;
     margin: 0;
     padding: 0;
   }
-  .lv .lv-lb {
-    width: auto;
-    border-radius: var(--radius);
+  .lv .lv-call {
+    grid-area: call;
   }
-  .lv-stage .court-cv,
-  .lv-stage > .live-intro {
-    border-radius: var(--radius);
+  .lv .lv-stage {
+    grid-area: stage;
+    align-self: start;
+    margin: 0;
+    /* as much of the column as the height left allows */
+    max-height: 100%;
+    --court-h: auto;
   }
-  /* the bench bar under the scorebug: a strip of card stock of its own */
-  .lv-bar {
+  /* the bench bar heads the console: a strip of card stock of its own */
+  .lv .lv-bar {
     grid-area: bar;
     position: static;
-    margin: 8px 0 4px;
+    align-self: start;
+    margin: 0 0 6px;
     padding: 0 6px;
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
   }
-  .lv-con {
+  .lv .lv-con {
     grid-area: con;
   }
-  .lv-grab {
-    display: none;
+  .app main.page.lv.at-final {
+    padding-bottom: calc(8px + var(--safe-b));
   }
 }
-/* A phone held sideways: the game takes the whole height (the top bar is already gone, page.css),
-   and at a stop the scorebug and the bench bar stay on the left while the report or the huddle has
-   the rest of the screen beside them. */
+/* A phone held sideways: the court takes the whole height on the left with the call bar under it;
+   the scorebug moves over the bench. */
 @media (orientation: landscape) and (max-height: 520px) {
   :root[data-gameday] {
     --top-h: 0px;
   }
-  .app main.page.lv.stopped {
-    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
-    grid-template-rows: auto auto minmax(0, 1fr);
+  .app main.page.lv {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
-      'bug con'
-      'bar con'
-      '. con';
+      'stage bug'
+      'stage bar'
+      'stage con'
+      'call con';
+    padding-top: 6px;
+    padding-bottom: calc(6px + var(--safe-b));
   }
-  .lv.stopped .lv-con-body,
-  .lv.stopped .lv-bb {
-    max-width: none;
+  .lv .lv-stage {
+    align-self: stretch;
+    min-height: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    --court-h: 100%;
+  }
+  .lv .lv-bar {
+    margin: 6px 0 4px;
   }
 }

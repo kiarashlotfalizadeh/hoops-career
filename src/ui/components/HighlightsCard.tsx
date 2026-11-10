@@ -7,7 +7,7 @@ import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
 import { Court, courtFloor } from '../live/Court';
-import { jerseyColors } from '../teamColors';
+import { matchKits } from '../teamColors';
 import { rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
 import { neutralSite } from '../../core/league/games';
@@ -19,9 +19,9 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
   const reel = league.reel?.gid === res.gid ? league.reel : undefined;
   const home = league.teams[res.home.tid];
   const away = league.teams[res.away.tid];
-  const colors = useMemo(() => jerseyColors(home.colors, away.colors), [home, away]);
+  const kits = useMemo(() => matchKits(home.colors, away.colors), [home, away]);
   // the floor it was played on: the home team's, or the Cup final's neutral one
-  const floor = useMemo(() => courtFloor(home, neutralSite(res), res.cup === 'final' ? 'NBA Cup' : ''), [home, res]);
+  const floor = useMemo(() => courtFloor(home, kits[0], neutralSite(res), res.cup === 'final' ? 'NBA Cup' : ''), [home, kits, res]);
   // names as the box score had them (players since traded or retired keep theirs)
   const nameOf = useMemo(() => {
     const per = [res.home, res.away].map((b) => {
@@ -76,7 +76,7 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
               script={sc}
               speed={league.settings.liveSpeed || 1}
               paused={false}
-              colors={colors}
+              kits={kits}
               jersey={(pid) => league.players[pid]?.jersey || '0'}
               onDone={() => go(i !== null && i + 1 < scripts.length ? i + 1 : null)}
               onBeat={setBeat}

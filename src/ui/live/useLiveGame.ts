@@ -20,8 +20,8 @@ import type { PossLog } from '../../core/sim/log';
 import { playTypeBaselines } from '../../core/analysis/playTypes';
 import { gameKeys } from '../../core/analysis/keys';
 import { fmtClock, periodLabel, rosterNames } from '../stats';
-import { jerseyColors } from '../teamColors';
-import { buildScript, type Script } from './choreo';
+import { matchKits } from '../teamColors';
+import { buildScript, standing, type Script, type Standing } from './choreo';
 import { drawnPlayer, snapshot, type Drawn } from './drawn';
 import { closeGame, crunchTime, lastPossession, liveAlerts, newEvents, recentLevers, type AlertInput, type LiveEvent } from './alerts';
 import { staffNotes } from './staff';
@@ -30,8 +30,8 @@ import { benchFor, CALL_BANNER_LINE, callNote, callQuietLine, nextStop, noStops,
 import { CALL_BREAK_MS, CALL_BUDGET_MS } from '../../state/liveWorth';
 import { isKey } from './keyPlays';
 import { createBeat, createTicker, type Beat, type Ticker } from './ticker';
-import { graphicCandidates, nextGraphic, type Graphic, type GraphicInput } from './graphics';
-import { playersBefore } from './LowerThird';
+import { graphicCandidates, nextGraphic, playersBefore, type Graphic, type GraphicInput } from './graphics';
+
 import { useOverCourt } from './useOverCourt';
 import { otherGames } from './scoreboard';
 import { hurtStarters, simDecided, type SkipTo } from './skip';
@@ -120,6 +120,16 @@ export function useLiveGame() {
   // read when the court finishes drawing (from its animation loop)
   const scriptRef = useRef<Script | null>(null);
   scriptRef.current = script;
+  // where the last possession drawn left the ten players and the ball: the next one starts from there
+  // and runs the floor. After a break, a timeout or plays skipped, the court cuts to the next one instead.
+  const stand = useRef<{ at: Standing; q: number } | null>(null);
+  const cut = useCallback(() => {
+    stand.current = null;
+    setScript(null);
+  }, []);
+  // the final buzzer, as the court drew it: the floor freezes under the final score for a beat before the final card
+  const [buzzer, setBuzzer] = useState(false);
+  const endBuzzer = useCallback(() => setBuzzer(false), []);
   const [speed, setSpeed] = useState<number>(() => league.settings.liveSpeed || 1);
   const [paused, setPaused] = useState(false);
   // stopped at a period's buzzer (a natural break or a skip): the next period starts when the user resumes
@@ -160,13 +170,15 @@ export function useLiveGame() {
       clearTimeout(ff.current.timer);
     };
   }, []);
-  // while a game is on, the tab bar gives way to the quick actions (live.css: :root[data-gameday])
+  // while a game is on (and through its buzzer frame), the top bar and the tab bar give way to the
+  // broadcast (page.css: :root[data-gameday])
+  const onAir = status === 'live' || (status === 'final' && buzzer);
   useEffect(() => {
-    if (status !== 'live') return;
+    if (!onAir) return;
     const root = document.documentElement;
     root.dataset.gameday = '';
     return () => void delete root.dataset.gameday;
-  }, [status]);
+  }, [onAir]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const baselines = useMemo(() => playTypeBaselines(league), [league.season]);
   const keyPlays = !!league.settings.liveKeyPlays;
@@ -179,7 +191,10 @@ export function useLiveGame() {
   userSideRef.current = userSide;
   const home = game ? league.teams[game.game.home] : null;
   const away = game ? league.teams[game.game.away] : null;
-  const colors = useMemo(() => (home && away ? jerseyColors(home.colors, away.colors) : null), [home, away]);
+  // tonight's kits: one colour a team everywhere the game is on screen (the bug, the floor, the graphics)
+  const kits = useMemo(() => (home && away ? matchKits(home.colors, away.colors) : null), [home, away]);
+  // (the lists that badge a player by his jersey: [fill, trim] a side)
+  const colors = useMemo(() => (kits ? (kits.map((k) => [k.token.fill, k.token.ring]) as [[string, string], [string, string]]) : null), [kits]);
 
   const nameOf = useMemo(() => (game ? simNames(league, game.sim) : () => ''), [game, league]);
 
@@ -392,7 +407,8 @@ export function useLiveGame() {
       setToPending(called);
       huddleNext.current = called;
       setGame(lg);
-      setScript(null);
+      setBuzzer(false);
+      cut();
       const intro = !!lg && lg.steps === 0 && useStore.getState().league?.settings.liveIntro !== false;
       setIntro(intro);
       if (!intro) setReveal((x) => x + 1);
@@ -417,7 +433,7 @@ export function useLiveGame() {
       setTicker(createTicker(lg.sim.clock, score));
       setStatus('live');
     },
-    [resetOverCourt, atmoApi, staffReset],
+    [resetOverCourt, atmoApi, staffReset, cut],
   );
 
   /** What became of the game this screen is coaching: null while it's still the screen's to finish. */
@@ -531,30 +547,36 @@ export function useLiveGame() {
     [ticker],
   );
 
-  const finish = useCallback(() => {
-    const lg = liveRef.current;
-    if (!lg) return;
-    clearTimeout(ff.current.timer);
-    ff.current = { timer: 0, waiting: false };
-    const now = fate(lg);
-    // its league went back to the last save: today's game there starts over
-    if (now === 'gone') return start();
-    if (now === null) {
-      // a sim running now finishes the game itself (from its journal): the screen catches up when it's done
-      if (useStore.getState().sim) return;
-      // recording it plays out the day (the standings, the playoff series, the league's moves): if that
-      // throws, the league goes back to before it rather than keep a game recorded on a day that never ended
-      if (!act('Recording the game', (l) => void lg.commit(l))) return leave();
-      clearLive();
-      // what the night's moves were worth: measured in the worker now, kept on the result for its report
-      measureTonight(lg);
-    }
-    // the box score shows the final numbers
-    viewRef.current = snapshot(lg.sim, lg.logs.length);
-    setView(viewRef.current);
-    if (lg.committed) showFinal(lg);
-    else showSimmed(lg);
-  }, [fate, start, leave, showFinal, showSimmed]);
+  /** The game is over. `drawn`: the court just showed its last possession (the buzzer frame comes first). */
+  const finish = useCallback(
+    (drawn = false) => {
+      const lg = liveRef.current;
+      if (!lg) return;
+      clearTimeout(ff.current.timer);
+      ff.current = { timer: 0, waiting: false };
+      const now = fate(lg);
+      // its league went back to the last save: today's game there starts over
+      if (now === 'gone') return start();
+      if (now === null) {
+        // a sim running now finishes the game itself (from its journal): the screen catches up when it's done
+        if (useStore.getState().sim) return;
+        // recording it plays out the day (the standings, the playoff series, the league's moves): if that
+        // throws, the league goes back to before it rather than keep a game recorded on a day that never ended
+        if (!act('Recording the game', (l) => void lg.commit(l))) return leave();
+        clearLive();
+        // what the night's moves were worth: measured in the worker now, kept on the result for its report
+        measureTonight(lg);
+      }
+      // the box score shows the final numbers
+      viewRef.current = snapshot(lg.sim, lg.logs.length);
+      setView(viewRef.current);
+      if (lg.committed) {
+        setBuzzer(drawn);
+        showFinal(lg);
+      } else showSimmed(lg);
+    },
+    [fate, start, leave, showFinal, showSimmed],
+  );
 
   // another screen finished this game (the Play menu's sims), or a sim error reloaded the last save: stop animating a ghost
   const v = useVersion();
@@ -573,8 +595,8 @@ export function useLiveGame() {
       // a break is a good moment to save where the game is (the app may be closed next)
       saveSpot(lg);
       staffBreak(lg);
-      setScript(null);
-      // (the court steps aside: its callout goes with it, the period report tells the story)
+      cut();
+      // (the break has the screen: the callout goes, the period report tells the story)
       atmoApi.clear();
       setAtBreak(true);
       setPaused(true);
@@ -583,7 +605,7 @@ export function useLiveGame() {
       ticker.set(lg.sim.clock, [h.score, a.score], true);
       setAnnounce(`${lg.sim.q === 2 ? 'Halftime' : `End of ${periodLabel(lg.sim.q)}`}. ${a.team.abbrev} ${a.score}, ${h.team.abbrev} ${h.score}.`);
     },
-    [ticker, atmoApi, staffBreak],
+    [ticker, atmoApi, staffBreak, cut],
   );
 
   /** Something in the sim's last possession the assistant would bring up, or the night would call: worth drawing in key plays mode. */
@@ -629,7 +651,7 @@ export function useLiveGame() {
       if (s.timeoutOpens() === lg.userSide) {
         // (a timeout on the last possession is where its play gets called: the game doesn't stop for it again)
         if (lastPossession(v, lg.userSide)) stoppedFor.current.add(lastId(v.q));
-        setScript(null);
+        cut();
         setPaused(true);
         setClipOpen(false);
         setPanel('none');
@@ -646,7 +668,7 @@ export function useLiveGame() {
       if (s.q >= 4 && s.T[0].score !== s.T[1].score) {
         lg.step();
         flushFeed();
-        return finish();
+        return finish(true);
       }
       if (brokeAt.current !== s.q && breakAfter(opts.current.breaks, s.q)) {
         brokeAt.current = s.q;
@@ -687,13 +709,13 @@ export function useLiveGame() {
     staffAfter(lg, timeouts);
     if (!logs.length) {
       flushFeed();
-      return finish();
+      return finish(true);
     }
     const log = logs[logs.length - 1];
     if (opts.current.keyPlays && !isKey(log, { runBefore: [v.sides[0].run, v.sides[1].run], runAfter: [s.T[0].run, s.T[1].run], event: eventAhead(lg, v) })) {
       // not worth drawing: the scorebug jumps to where it ended and the next one comes up
       ticker.set(log.clockEnd, log.score, true);
-      setScript(null);
+      cut();
       ff.current.timer = window.setTimeout(() => {
         ff.current.timer = 0;
         if (opts.current.paused) ff.current.waiting = true;
@@ -702,11 +724,20 @@ export function useLiveGame() {
       return;
     }
     beat.set(0);
-    setScript(
-      buildScript(log, info, logs.length > 1 ? logs[logs.length - 2].score : from, [s.T[0].team.abbrev, s.T[1].team.abbrev], loopHelpers.current.nameOf, atmoApi.voiceAhead(lg)),
+    const was = stand.current?.q === log.q ? stand.current.at : undefined;
+    const next = buildScript(
+      log,
+      info,
+      logs.length > 1 ? logs[logs.length - 2].score : from,
+      [s.T[0].team.abbrev, s.T[1].team.abbrev],
+      loopHelpers.current.nameOf,
+      atmoApi.voiceAhead(lg),
+      was,
     );
+    stand.current = { at: standing(next), q: log.q };
+    setScript(next);
     setTick((t) => t + 1);
-  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi, staffAfter, staffBreak, staffHush]);
+  }, [info, finish, flushFeed, fate, ticker, beat, takeView, enterBreak, eventAhead, atmoApi, staffAfter, staffBreak, staffHush, cut]);
   nextRef.current = nextPossession;
 
   /** The court finished drawing: on to the next possession. */
@@ -775,7 +806,7 @@ export function useLiveGame() {
     if (s.clock <= 0.05) {
       // a real break: subs and tactic changes made now apply from the next period's first possession
       brokeAt.current = s.q;
-      // (the court steps aside at a break: his line comes up over the report)
+      // (at a break his line comes up in the call bar, over the report)
       for (const b of hurtLines) useStore.getState().toast(`${b.title} is hurt and out for the game.`, 'bad');
       return enterBreak(lg);
     }
@@ -788,7 +819,7 @@ export function useLiveGame() {
     if (hurt.length) {
       queueBanner(hurtLines);
       haptic('warning');
-      setScript(null);
+      cut();
       setPaused(true);
       ff.current.waiting = true;
       return;
@@ -915,6 +946,9 @@ export function useLiveGame() {
     home,
     away,
     colors,
+    kits,
+    buzzer,
+    endBuzzer,
     userSide,
     nameOf,
     subFor,

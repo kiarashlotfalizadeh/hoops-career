@@ -60,16 +60,66 @@ export function colorDistance(a: string, b: string): number {
 }
 const CLASH = 90;
 
+/** How far apart two colours look (OKLab distance, 0 to about 1): hue counts, so a dark green and a navy stand apart where straight RGB calls them the same. */
+export function lookDistance(a: string, b: string): number {
+  const lab = (hex: string) => {
+    const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    const [r, g, bl] = rgb(hex).map(lin);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * bl);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * bl);
+    const s2 = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * bl);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s2, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s2, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s2];
+  };
+  const [x, y] = [lab(a), lab(b)];
+  return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]);
+}
+/** Under this two teams' colours read as the same side by side (two reds, two navies; not green and navy). */
+const SAME_LOOK = 0.12;
+
 /** One readable colour per team for two-team charts, [home, away]: the colour each half of a game's board wears (deep enough to read on paper; `nightFill` it for ink), the away side switching when they clash. */
 export function matchupColors(home: [string, string, string], away: [string, string, string]): [string, string] {
   const [h, a] = matchupLooks(home, away);
   return [h.slab, a.slab];
 }
 
-/** Jerseys on the live court, [home, away] as [fill, trim] (a trim matching its fill takes the third colour); on a clash the away side wears white. */
-export function jerseyColors(home: [string, string, string], away: [string, string, string]): [[string, string], [string, string]] {
-  const kit = (c: [string, string, string]): [string, string] => [c[0], c[1] === c[0] ? c[2] : c[1]];
-  return [kit(home), colorDistance(home[0], away[0]) < CLASH ? ['#f1f1f1', away[0]] : kit(away)];
+/**
+ * A team as one game shows it, everywhere that game is on screen: the scorebug's block, the graphics,
+ * the charts and the players on the floor all read from this, so a team is one colour all night.
+ */
+export interface MatchKit {
+  /** The team's colour tonight (white text reads on it): its block, its graphics, its chart marks. */
+  color: string;
+  /** A second colour that stands apart from it: a pinstripe, an edge. */
+  trim: string;
+  /** The colour lifted to stand out on ink (the win bar, a dot on an ink plate). */
+  night: string;
+  /** The colour as text on the paper. */
+  text: string;
+  /** Wears the light kit on the floor (the home team, as on its own painted key). */
+  light: boolean;
+  /** A player on the court: the disc, its ring and his number. */
+  token: { fill: string; ring: string; num: string };
+}
+
+/** The light kit's cloth: a warm white that reads on the maple and on any painted key. */
+const HOME_WHITE = '#fbf8f1';
+
+/**
+ * Tonight's two kits, [home, away]. The home team wears white trimmed in its colour (it stands on its
+ * own paint), the visitors their colour solid: the two never look alike on the floor. Colours that read
+ * as the same (matchupLooks) send the visitors to their next one, here and everywhere else.
+ */
+export function matchKits(home: [string, string, string], away: [string, string, string]): [MatchKit, MatchKit] {
+  const [h, a] = matchupLooks(home, away);
+  const kit = (l: TeamLook, light: boolean): MatchKit => ({
+    color: l.slab,
+    trim: l.trim,
+    night: nightFill(l.slab),
+    text: onPaper(l.slab),
+    light,
+    token: light ? { fill: HOME_WHITE, ring: l.slab, num: l.slab } : { fill: l.slab, ring: contrast(l.trim, l.slab) >= 1.6 ? l.trim : '#ffffff', num: '#ffffff' },
+  });
+  return [kit(h, true), kit(a, false)];
 }
 
 /** A team's identity colours, for its slabs, its jersey badges and your rows. */
@@ -119,7 +169,7 @@ export function matchupLooks(home: [string, string, string], away: [string, stri
   const tries: [string, string, string][] = [away, [away[1], away[0], away[2]], [away[2], away[0], away[1]]];
   for (const c of tries) {
     const a = teamLook(c);
-    if (colorDistance(a.slab, h.slab) >= CLASH) return [h, a];
+    if (lookDistance(a.slab, h.slab) >= SAME_LOOK) return [h, a];
   }
   return [h, { ...teamLook(away), slab: '#2a3441' }];
 }

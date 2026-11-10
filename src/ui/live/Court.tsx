@@ -1,59 +1,122 @@
+// The court: a full maple floor, both baskets, drawn on a canvas from a possession's script
+// (choreo.ts). Teams attack fixed ends and run the floor, so a change of possession is a run back,
+// not a cut.
+//
+// Two views of the same floor, picked by the shape the layout gives the canvas:
+// - upright (a phone held upright): a window on the floor that pans with the ball, so the players
+//   stay big; a set plays out at one end and a break carries the camera to the other;
+// - sideways (wide: a tablet, a desktop, or the compact court at a break): the whole floor at once.
+//
+// With no possession to draw the court is never empty: the fives line up for the tip, the players
+// stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
 import { useEffect, useRef } from 'react';
-import type { Frame, Pt, Script } from './choreo';
-import type { Team } from '../../core/types';
+import { BASKET, COURT_LEN, toWorld, type Frame, type Pt, type Script } from './choreo';
+import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
-import { inkOn, teamLook } from '../teamColors';
+import { inkOn, type MatchKit } from '../teamColors';
 
 /**
- * The floor the game is played on: maple, with the home team's colours painted in the key and the
- * center circle (its mark there, its name behind the basket), or a neutral one (the Cup final).
+ * The floor the game is played on: maple, with the home team's colour painted in both keys and the
+ * center circle (its mark there, its name along the baselines), or a neutral one (the Cup final).
  */
-export type CourtFloor = { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; mark: FranchiseDef['mark'] } | { kind: 'neutral'; name: string };
+export type CourtFloor =
+  { kind: 'home'; abbrev: string; name: string; colors: [string, string, string]; paint: string; trim: string; mark: FranchiseDef['mark'] } | { kind: 'neutral'; name: string };
 
-/** The floor of a game at `home`'s arena, or a neutral one; `neutralName` goes behind the basket there. */
-export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'colors'>, neutral: boolean, neutralName = ''): CourtFloor {
+/** The floor of a game at `home`'s arena in tonight's colours (`kit`), or a neutral one; `neutralName` goes along the baselines there. */
+export function courtFloor(home: Pick<Team, 'tid' | 'abbrev' | 'name' | 'colors'>, kit: MatchKit, neutral: boolean, neutralName = ''): CourtFloor {
   if (neutral) return { kind: 'neutral', name: neutralName };
-  return { kind: 'home', abbrev: home.abbrev, name: home.name, colors: home.colors, mark: FRANCHISES[home.tid]?.mark ?? 'circle' };
+  return { kind: 'home', abbrev: home.abbrev, name: home.name, colors: home.colors, paint: kit.color, trim: kit.trim, mark: FRANCHISES[home.tid]?.mark ?? 'circle' };
 }
+
+/** What the court shows between possessions. */
+export type CourtIdle =
+  /** Before the opening tip: both fives around the center circle. */
+  | { kind: 'tip'; fives: [number[], number[]] }
+  /** A break: every shot so far, each team's at the end it attacks first. */
+  | { kind: 'chart'; shots: ShotRecord[] }
+  /** A huddle or a stop: the players stay where the last play left them. */
+  | { kind: 'hold' };
 
 export interface CourtProps {
   script: Script | null;
   speed: number; // 1 = normal
   paused: boolean;
-  colors: [[string, string], [string, string]]; // [home [fill, stroke], away]
+  /** Tonight's kits, [home, away]: the same colours the scorebug and the graphics wear. */
+  kits: [MatchKit, MatchKit];
   jersey: (pid: number) => string;
   onDone: () => void;
   onTick?: (clock: number, score: [number, number] | null) => void;
-  /** The last frame the court has reached, as it changes (the Live screen's captions follow it). */
+  /** The last frame the court has reached, as it changes (the call bar's caption follows it). */
   onBeat?: (frame: number) => void;
   /** The ball handler's name tag (none without it). */
   names?: (pid: number) => string;
-  /** [home, away]: the team with the ball is named along the baseline it attacks. */
+  /** [home, away], for the shot chart's labels. */
   abbrevs?: [string, string];
   /** Whose floor it is (a plain neutral floor without it). */
   floor?: CourtFloor;
   /** Players on a hot streak: they wear a heat ring. */
   hot?: ReadonlySet<number>;
+  /** What to show with no possession to draw (default: hold the last frame). */
+  idle?: CourtIdle;
+  /** Clutch time: the building's lights come down around the floor. */
+  clutch?: boolean;
   /** What the court shows, for screen readers. */
   label: string;
 }
 
-const W_FT = 50;
-const H_FT = 47;
-/** The apron around the half court: a band along each sideline, and a deeper one behind the baseline for the scoreboards. */
-const SIDE = 1.6;
-const TOP = 2.4;
-/** The canvas in feet, apron included: the Live screen's layouts size the court by this ratio (live.css). */
-const FLOOR_W = W_FT + 2 * SIDE;
-const FLOOR_H = H_FT + TOP;
+const HALF_W = 25;
+/** The apron around the floor: a band along each sideline and a deeper one behind each baseline. */
+const SIDE = 1.8;
+const END = 3.4;
+/** The whole floor in feet, apron included. */
+const FLOOR_W = 2 * HALF_W + 2 * SIDE;
+const FLOOR_L = COURT_LEN + 2 * END;
+/** A canvas at least this much wider than tall shows the whole floor sideways. */
+const WIDE = 1.6;
+/** Upright, the window keeps the ball this far (ft) from its trailing edge: the rest of the view is ahead of it, toward the basket. */
+const TRAIL = 8;
+/** A player is a disc this many feet across the middle (choreo.ts keeps them at least two of these apart). */
+const BODY = 1.45;
+/** Nothing written on the court is smaller than this (px). */
+const TEXT_MIN = 12;
 
 const ease = (t: number) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
-/** How long a new possession's opening frame takes to dissolve in over the last one's (ms, at 1×): a broadcast's cut. */
-const CUT_MS = 200;
+/** The colours the canvas paints with: the app's tokens, read once (tokens.css), with the same values to fall back on. */
+interface Paints {
+  wood: string;
+  wood2: string;
+  seam: string;
+  ink: string;
+  line: string;
+  rim: string;
+  ball: string;
+  ballSeam: string;
+  good: string;
+  bad: string;
+  warn: string;
+}
+function readPaints(el: Element): Paints {
+  const cs = getComputedStyle(el);
+  const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+  return {
+    wood: v('--maple', '#dcae76'),
+    wood2: v('--maple-2', '#d4a46b'),
+    seam: v('--maple-seam', 'rgba(122, 72, 24, 0.2)'),
+    ink: v('--ink', '#121212'),
+    line: v('--on-ink', '#ffffff'),
+    rim: v('--court-rim', '#e8551c'),
+    ball: v('--court-ball', '#e9772a'),
+    ballSeam: v('--court-ball-seam', '#3d1c00'),
+    // (the app's signals as they read on an ink plate)
+    good: v('--good-night', '#7fe3a8'),
+    bad: v('--bad-night', '#ff9a8f'),
+    warn: v('--warn-night', '#ffc65c'),
+  };
+}
 
 /** Each player's velocity (feet a ms) as he passes through each frame of a script: [frame][offense..., defense...]. */
 type Tangents = Pt[][];
@@ -62,10 +125,9 @@ const tangentCache = new WeakMap<Script, Tangents>();
 
 /**
  * The velocity a player carries through a frame, so a run through several frames is one smooth move
- * instead of a stop at each (the frames are a few hundred ms apart). He stops at a frame where he
- * stands still on either side of it, turns back, or the move is a cut (no time to get there); a turn
- * slows him, and he's never faster through a frame than on the slower of the moves either side of it
- * (no overshoot).
+ * instead of a stop at each. He stops at a frame where he stands still on either side of it or turns
+ * back; a turn slows him, and he's never faster through a frame than on the slower of the moves
+ * either side of it (no overshoot).
  */
 function tangentsOf(sc: Script): Tangents {
   const hit = tangentCache.get(sc);
@@ -91,9 +153,7 @@ function tangentsOf(sc: Script): Tangents {
       if (la < 0.05 || lb < 0.05) return ZERO;
       const cos = (ax * bx + ay * by) / (la * lb);
       if (cos <= 0) return ZERO;
-      const va = { x: ax / dtA, y: ay / dtA };
-      const vb = { x: bx / dtB, y: by / dtB };
-      const m = { x: (va.x + vb.x) / 2, y: (va.y + vb.y) / 2 };
+      const m = { x: (ax / dtA + bx / dtB) / 2, y: (ay / dtA + by / dtB) / 2 };
       const lm = Math.hypot(m.x, m.y) || 1;
       const cap = Math.min(la / dtA, lb / dtB) * cos;
       return { x: (m.x / lm) * cap, y: (m.y / lm) * cap };
@@ -123,333 +183,461 @@ function setFont(ctx: CanvasRenderingContext2D, weight: number, px: number, stre
   if ('fontStretch' in ctx) (ctx as CanvasRenderingContext2D & { fontStretch: string }).fontStretch = stretch;
 }
 
-export function Court({ script, speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, label }: CourtProps) {
+/** How the floor sits on the canvas this frame: feet to pixels, either view. */
+interface View {
+  wide: boolean;
+  /** Pixels a foot. */
+  k: number;
+  w: number;
+  h: number;
+  /** Upright: the court y at the top edge of the window. Sideways: the margins that center the floor. */
+  top: number;
+  ox: number;
+  oy: number;
+}
+const project = (v: View, p: Pt): Pt =>
+  v.wide ? { x: v.ox + (p.y + END) * v.k, y: v.oy + (HALF_W + SIDE - p.x) * v.k } : { x: (p.x + HALF_W + SIDE) * v.k, y: (p.y - v.top) * v.k };
+
+/** A player standing on the floor between possessions. */
+interface Stander {
+  pid: number;
+  side: 0 | 1;
+  at: Pt;
+}
+
+export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, label }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, score: null as [number, number] | null, beat: -1 });
-  const props = useRef({ speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot });
-  props.current = { speed, paused, colors, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot };
+  const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, beat: -1 });
+  const props = useRef({ speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch });
+  props.current = { speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch };
 
   // each possession is drawn from its start
   useEffect(() => {
-    state.current = { t: 0, last: 0, script, done: false, score: null, beat: -1 };
+    state.current = { t: 0, last: 0, script, done: false, beat: -1 };
   }, [script]);
 
   useEffect(() => {
     let raf = 0;
     const canvas = ref.current!;
     const ctx = canvas.getContext('2d')!;
-    let drawn = '';
-    let lastScript: typeof state.current.script | undefined;
-    // the floor, its lines and its marks never change: drawn once per canvas size, then copied each frame
-    const floor = document.createElement('canvas');
+    const paints = readPaints(canvas);
+    // the floor, its lines and its marks never change: painted once a canvas size, then copied each frame
+    const floorCv = document.createElement('canvas');
     let floorKey = '';
     let floorWas: CourtFloor | undefined;
     let floorId = '';
-    // the floor's lettering waits for the font: drawn again once it's in
+    // the floor's lettering waits for the font: painted again once it's in
     let fontsIn = 0;
     document.fonts?.ready.then(() => void (fontsIn = 1));
-    // reduced motion: players and the ball jump from spot to spot instead of gliding, and nothing flashes over the court
-    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)');
-    // a new possession (or the court clearing for a break) dissolves in over the last frame of the one before
-    const cut = document.createElement('canvas');
-    let cutAt = 0;
+    // reduced motion: the players still move (that is the game), but the camera cuts instead of panning
+    // and nothing spins, shakes, trails or fades
+    const calmQ = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let drawn = '';
+    let lastScript: Script | null | undefined;
+    // the window's top edge (upright), and where the ball and the players were last drawn (on the court itself)
+    let cam: number | null = null;
+    let ballAt: Pt | null = null;
+    let standers: Stander[] = [];
+
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
       const s = state.current;
+      const p = props.current;
       const dpr = Math.min(2, window.devicePixelRatio || 1);
-      const cssW = canvas.clientWidth;
-      const cssH = (cssW * FLOOR_H) / FLOOR_W;
-      if (canvas.width !== Math.round(cssW * dpr)) {
-        canvas.width = Math.round(cssW * dpr);
-        canvas.height = Math.round(cssH * dpr);
-        canvas.style.height = `${cssH}px`;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
       }
       const dt = s.last ? Math.min(100, now - s.last) : 0;
       s.last = now;
-      if (!props.current.paused && !s.done) s.t += dt * props.current.speed;
-      const fl = props.current.floor;
+      if (!p.paused && !s.done) s.t += dt * p.speed;
+      const calm = !!calmQ?.matches;
+      const sc = s.script && s.script.frames.length ? s.script : null;
+      const cut = sc !== lastScript;
+      lastScript = sc;
+
+      // the view: the whole floor sideways when the canvas is wide, a window on it upright
+      const wide = w >= h * WIDE;
+      const k = wide ? Math.min(w / FLOOR_L, h / FLOOR_W) : w / FLOOR_W;
+      const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide ? (h - FLOOR_W * k) / 2 : 0 };
+      const play = sc ? pose(sc, s.t, calm) : null;
+      // (the view just turned upright: the window finds the play again)
+      if (wide) cam = null;
+      if (!wide) {
+        const len = h / k;
+        const lo = -END;
+        const hi = Math.max(lo, COURT_LEN + END - len);
+        let want: number;
+        if (play && sc) {
+          // most of the window ahead of the ball, toward the basket it's headed for
+          // (so a set plays out with the window pinned to the baseline, and a break carries it up the floor)
+          const local = clamp(play.ball.y - (len - TRAIL), -END, COURT_LEN + END - len);
+          want = sc.dir === 1 ? local : COURT_LEN - local - len;
+        } else if (p.idle?.kind === 'chart') want = lo;
+        else if (p.idle?.kind === 'tip' || !ballAt) want = COURT_LEN / 2 - len / 2;
+        // (a huddle or a stop: the window stays where it was, or finds the ball if the view has just turned upright)
+        else want = cam ?? ballAt.y - len / 2;
+        want = clamp(want, lo, hi);
+        // a new possession that doesn't pick up where the last one ended (a highlight, after a break) is a cut
+        const jump =
+          cam === null || calm || (cut && sc && (!ballAt || Math.hypot(ballAt.x - toWorld(sc.frames[0].ball, sc.dir).x, ballAt.y - toWorld(sc.frames[0].ball, sc.dir).y) > 10));
+        cam = jump ? want : cam! + (want - cam!) * (1 - Math.exp((-dt * Math.max(1, p.speed)) / 170));
+        if (Math.abs(want - cam) < 0.02) cam = want;
+        view.top = cam;
+      }
+
+      const fl = p.floor;
       if (fl !== floorWas) {
         floorWas = fl;
         floorId = fl ? JSON.stringify(fl) : '';
       }
-      const key = `${canvas.width}x${canvas.height}|${fontsIn}|${floorId}`;
+      const key = `${canvas.width}x${canvas.height}|${wide}|${fontsIn}|${floorId}`;
       // paused, finished or waiting for the next possession: nothing moved, so skip the redraw (battery)
-      const cutting = cutAt > 0 && now - cutAt < CUT_MS;
-      const sig = `${key}|${s.t}|${s.done}|${cutting ? now : ''}`;
-      if (sig === drawn && s.script === lastScript) return;
+      const idleKey = sc ? '' : `${p.idle?.kind ?? 'hold'}|${p.idle?.kind === 'chart' ? p.idle.shots.length : p.idle?.kind === 'tip' ? p.idle.fives.join('/') : standers.length}`;
+      const sig = `${key}|${s.t}|${s.done}|${view.top}|${idleKey}|${p.clutch}|${p.hot?.size ?? 0}`;
+      if (sig === drawn && !cut) return;
       drawn = sig;
-      if (s.script !== lastScript && lastScript !== undefined && !still?.matches && canvas.width && canvas.height) {
-        // (what's on the canvas now is the last frame of the possession before)
-        cut.width = canvas.width;
-        cut.height = canvas.height;
-        cut.getContext('2d')!.drawImage(canvas, 0, 0);
-        cutAt = now;
+      if (!canvas.width || !canvas.height) {
+        // (a hidden, zero-size canvas can't be painted, but the possession still has to play out)
+        if (play) report(play);
+        return;
       }
-      lastScript = s.script;
-      const k = cssW / FLOOR_W;
       if (key !== floorKey) {
         floorKey = key;
-        floor.width = canvas.width;
-        floor.height = canvas.height;
-        const fctx = floor.getContext('2d')!;
-        fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        drawFloor(fctx, cssW, cssH, k, fl);
+        paintFloor(floorCv, view, dpr, fl, paints);
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      // (a hidden, zero-size canvas can't be copied, but the possession still has to play out)
-      if (floor.width && floor.height) ctx.drawImage(floor, 0, 0);
-      // everything on the floor is placed in court feet, from the corner where the baseline meets the left sideline
-      ctx.setTransform(dpr, 0, 0, dpr, SIDE * k * dpr, TOP * k * dpr);
-      const sc = s.script;
-      if (sc && sc.frames.length > 0) drawScript(sc);
-      const p = cutAt ? (now - cutAt) / CUT_MS : 1;
-      if (p < 1 && cut.width === canvas.width) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalAlpha = 1 - ease(Math.max(0, p));
-        ctx.drawImage(cut, 0, 0);
-        ctx.globalAlpha = 1;
+      if (wide) {
+        ctx.fillStyle = paints.ink;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(floorCv, Math.round(view.ox * dpr), Math.round(view.oy * dpr));
+      } else ctx.drawImage(floorCv, 0, Math.round((view.top + END) * k * dpr), canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      if (sc && play) {
+        drawPlay(sc, play, view, calm, s.t);
+        report(play);
+      } else if (p.idle?.kind === 'chart') drawChart(ctx, view, p.idle.shots, p.kits, p.abbrevs, paints);
+      else {
+        const who = p.idle?.kind === 'tip' ? tipOff(p.idle.fives) : standers;
+        for (const st of who) drawPlayer(ctx, view, st.at, p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints);
+        const b = p.idle?.kind === 'tip' ? { x: 0, y: COURT_LEN / 2 } : ballAt;
+        if (b) drawBall(ctx, view, b, 0, 0, paints);
       }
+      if (p.clutch) drawLights(ctx, view);
     };
-    const drawScript = (sc: Script) => {
+
+    /** The callbacks a possession owes the screen as it plays: the clock and score, the beat, and the end. */
+    const report = (play: Pose) => {
       const s = state.current;
-      const k = canvas.clientWidth / FLOOR_W;
-      // locate segment
-      let acc = 0;
-      let i = 1;
-      for (; i < sc.frames.length; i++) {
-        if (s.t < acc + sc.frames[i].dur) break;
-        acc += sc.frames[i].dur;
+      const p = props.current;
+      p.onTick?.(play.clock, play.score);
+      if (play.beat !== s.beat) {
+        s.beat = play.beat;
+        p.onBeat?.(play.beat);
       }
-      const total = sc.frames.reduce((a, f) => a + f.dur, 0);
-      let a: Frame;
-      let b: Frame;
-      let u: number;
-      // (the move's time, linear: the players' paths run on it; `u`, eased, times the ball, the flashes and the rim)
-      let lu: number;
-      if (i >= sc.frames.length) {
-        a = b = sc.frames[sc.frames.length - 1];
-        u = lu = 1;
-      } else {
-        a = sc.frames[i - 1];
-        b = sc.frames[i];
-        lu = b.dur && !still?.matches ? Math.min(1, (s.t - acc) / b.dur) : 1;
-        u = ease(lu);
-      }
-      // score/clock callbacks
-      const reached = sc.frames.slice(0, i + (u >= 1 ? 1 : 0)).filter((f) => f.score);
-      const lastScore = reached.length ? reached[reached.length - 1].score! : null;
-      const clock = lerp(sc.clockStart, sc.clockEnd, Math.min(1, s.t / Math.max(1, total)));
-      props.current.onTick?.(clock, lastScore);
-      const beat = Math.min(sc.frames.length - 1, u >= 1 ? i : i - 1);
-      if (beat !== s.beat) {
-        s.beat = beat;
-        props.current.onBeat?.(beat);
-      }
-      const offColors = props.current.colors[sc.off];
-      const defColors = props.current.colors[1 - sc.off];
-      // the team with the ball, on the boards behind the baseline it attacks
-      const ab = props.current.abbrevs;
-      if (ab) drawBaseline(ctx, k, ab[sc.off], offColors);
-      const calm = !!still?.matches;
-      // the net or the rim answers a shot as it lands, and a moment after
-      const fx = b.fx && u > 0.72 ? { kind: b.fx, p: (u - 0.72) / 0.28 } : a.fx && u < 0.5 && i > 1 ? { kind: a.fx, p: 1 + u / 0.5 } : null;
-      // the net under the rim, swaying on a make
-      drawNet(ctx, k, !calm && fx?.kind === 'make' ? fx.p : 0);
-      if (fx && !calm) drawRim(ctx, k, fx.kind, fx.p);
-      // defense first (under), then offense; a hot shooter in a ring of the warning colour
-      const hold = u >= 0.5 ? b.hold : a.hold;
-      const hotSet = props.current.hot;
-      // each player along a smooth path through the frames (see tangentsOf); reduced motion: from spot to spot
-      const bi = Math.min(i, sc.frames.length - 1);
-      const tan = tangentsOf(sc);
-      const nO = sc.oPids.length;
-      const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 || calm ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, lu, b.dur));
-      const dAt = sc.dPids.map((_, j) => path(a.d[j], b.d[j], nO + j));
-      const oAt = sc.oPids.map((_, j) => path(a.o[j], b.o[j], j));
-      sc.dPids.forEach((pid, j) => drawPlayer(ctx, k, dAt[j], defColors, props.current.jersey(pid), false, !!hotSet?.has(pid)));
-      sc.oPids.forEach((pid, j) => drawPlayer(ctx, k, oAt[j], offColors, props.current.jersey(pid), true, !!hotSet?.has(pid)));
-      // the ball handler's name, under him (whoever has it at the end of this move, once he does)
-      const nm = props.current.names;
-      if (nm && hold !== undefined && hold >= 0) {
-        const off = hold < sc.oPids.length;
-        const pid = off ? sc.oPids[hold] : sc.dPids[hold - sc.oPids.length];
-        const at = off ? oAt[hold] : dAt[hold - sc.oPids.length];
-        if (pid !== undefined && at) drawTag(ctx, k, at, nm(pid));
-      }
-      // ball: its shadow stays on the floor and shrinks as it rises; it spins as it travels
-      // (in one man's hands from frame to frame, it goes where he goes)
-      const carried = a.hold !== undefined && a.hold >= 0 && a.hold === b.hold ? (a.hold < nO ? oAt[a.hold] : dAt[a.hold - nO]) : undefined;
-      const bp = carried ?? lerpPt(a.ball, b.ball, u);
-      const z = b.ballZ ? Math.sin(Math.PI * u) * 7 : 0;
-      // a shot's flight leaves a faint trail behind the ball
-      if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, k, a.ball, b.ball, u);
-      const shadow = 1 / (1 + z * 0.12);
-      ctx.fillStyle = `rgba(0,0,0,${0.42 * shadow})`;
-      ctx.beginPath();
-      ctx.ellipse(bp.x * k + (W_FT / 2) * k + 2, bp.y * k + 2, 0.6 * k * shadow, 0.42 * k * shadow, 0, 0, Math.PI * 2);
-      ctx.fill();
-      const travel = Math.hypot(b.ball.x - a.ball.x, b.ball.y - a.ball.y);
-      drawBall(ctx, bp.x * k + (W_FT / 2) * k, (bp.y - z) * k, (0.62 + z * 0.04) * k, calm ? 0 : (s.t / 90 + travel * u * 0.9) % (Math.PI * 2));
-      // flash
-      const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
-      if (fl && !still?.matches) {
-        const alpha = fl === b.flash ? Math.min(1, (u - 0.35) / 0.25) : 1 - u / 0.35;
-        drawFlash(ctx, k, fl.text, fl.kind, fl.x, fl.y, alpha);
-      }
-      if (s.t >= total + 220 && !s.done) {
+      if (s.t >= play.total + 180 && !s.done) {
         s.done = true;
-        props.current.onDone();
+        p.onDone();
       }
     };
+
+    const drawPlay = (sc: Script, play: Pose, view: View, calm: boolean, t: number) => {
+      const p = props.current;
+      const { a, b, u } = play;
+      const kitO = p.kits[sc.off];
+      const kitD = p.kits[1 - sc.off];
+      const W = (pt: Pt) => toWorld(pt, sc.dir);
+      // the net or the rim answers a shot as it lands, and a moment after
+      const fx = b.fx && u > 0.72 ? { kind: b.fx, p: (u - 0.72) / 0.28 } : a.fx && u < 0.5 && play.i > 1 ? { kind: a.fx, p: 1 + u / 0.5 } : null;
+      if (fx && !calm) drawRimFx(ctx, view, W(BASKET), fx.kind, fx.p, paints);
+      // defense first (under), then offense; the man with the ball last, ringed and named
+      const hold = u >= 0.5 ? b.hold : a.hold;
+      const nO = sc.oPids.length;
+      const dW = play.d.map(W);
+      const oW = play.o.map(W);
+      standers = [...sc.oPids.map((pid, j) => ({ pid, side: sc.off, at: oW[j] })), ...sc.dPids.map((pid, j) => ({ pid, side: (1 - sc.off) as 0 | 1, at: dW[j] }))];
+      sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints));
+      sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints));
+      if (p.names && hold !== undefined && hold >= 0) {
+        const pid = hold < nO ? sc.oPids[hold] : sc.dPids[hold - nO];
+        const at = hold < nO ? oW[hold] : dW[hold - nO];
+        if (pid !== undefined && at) drawTag(ctx, view, at, p.names(pid), paints);
+      }
+      // the ball: carried, it goes where its man goes; passed, it lifts a little; shot, it climbs with the distance
+      const from = W(a.ball);
+      const to = W(b.ball);
+      let bw = W(play.ball);
+      ballAt = bw;
+      // (in a man's hands it's held out toward the basket he's going at, off his number)
+      if (play.carried) {
+        const rim = W(BASKET);
+        const away = Math.hypot(rim.x - bw.x, rim.y - bw.y) || 1;
+        const reach = (bodyR(view.k) * 0.95) / view.k;
+        bw = { x: bw.x + ((rim.x - bw.x) / away) * reach, y: bw.y + ((rim.y - bw.y) / away) * reach };
+      }
+      const travel = Math.hypot(to.x - from.x, to.y - from.y);
+      const peak = b.ballZ ?? (play.carried || travel < 3 ? 0 : Math.min(2.2, travel * 0.07));
+      const z = peak ? Math.sin(Math.PI * u) * peak : 0;
+      if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, view, from, to, u, b.ballZ, paints);
+      drawBall(ctx, view, bw, z, calm ? 0 : (t / 90 + travel * u * 0.9) % (Math.PI * 2), paints);
+      // the play's label: it fades in and out, or just shows (reduced motion)
+      const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
+      if (fl) {
+        const alpha = calm ? 1 : fl === b.flash ? Math.min(1, (u - 0.35) / 0.25) : 1 - u / 0.35;
+        drawFlash(ctx, view, W({ x: fl.x, y: fl.y }), fl.text, fl.kind, alpha, paints);
+      }
+    };
+
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  return <canvas ref={ref} className="court-cv" role="img" aria-label={label} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }} />;
+  // (its shape comes from the layout: --court-ar, upright by default; see live/styles/page.css)
+  return (
+    <canvas ref={ref} className="court-cv" role="img" aria-label={label} style={{ width: '100%', aspectRatio: 'var(--court-ar, 1.3)', display: 'block', touchAction: 'pan-y' }} />
+  );
 }
 
-/** A small, steady hash: each plank and joint of the floor sits in the same place on every draw. */
+/** Where a possession is at time `t`: the two frames it's between, everyone's spot (in the offense's frame), the clock and the score reached. */
+interface Pose {
+  i: number;
+  a: Frame;
+  b: Frame;
+  /** The move's time, eased: it times the ball, the labels and the rim. */
+  u: number;
+  o: Pt[];
+  d: Pt[];
+  ball: Pt;
+  /** The ball is in one man's hands through this move. */
+  carried: boolean;
+  beat: number;
+  clock: number;
+  score: [number, number] | null;
+  total: number;
+}
+
+function pose(sc: Script, t: number, calm: boolean): Pose {
+  const f = sc.frames;
+  let acc = 0;
+  let i = 1;
+  for (; i < f.length; i++) {
+    if (t < acc + f[i].dur) break;
+    acc += f[i].dur;
+  }
+  let total = 0;
+  for (const fr of f) total += fr.dur;
+  const end = i >= f.length;
+  const a = end ? f[f.length - 1] : f[i - 1];
+  const b = end ? a : f[i];
+  // (the players' paths run on the move's own time; the ball and the labels on it eased)
+  const lu = end || !b.dur ? 1 : Math.min(1, (t - acc) / b.dur);
+  const u = calm ? lu : ease(lu);
+  const bi = Math.min(i, f.length - 1);
+  const tan = tangentsOf(sc);
+  const nO = sc.oPids.length;
+  const path = (pa: Pt, pb: Pt, j: number) => (lu >= 1 ? pb : hermite(pa, pb, tan[bi - 1]?.[j] ?? ZERO, tan[bi]?.[j] ?? ZERO, lu, b.dur));
+  const o = sc.oPids.map((_, j) => path(a.o[j], b.o[j], j));
+  const d = sc.dPids.map((_, j) => path(a.d[j], b.d[j], nO + j));
+  const carrier = a.hold !== undefined && a.hold >= 0 && a.hold === b.hold ? (a.hold < nO ? o[a.hold] : d[a.hold - nO]) : undefined;
+  let score: [number, number] | null = null;
+  for (let j = 0; j < i + (u >= 1 ? 1 : 0) && j < f.length; j++) if (f[j].score) score = f[j].score!;
+  return {
+    i,
+    a,
+    b,
+    u,
+    o,
+    d,
+    ball: carrier ?? lerpPt(a.ball, b.ball, u),
+    carried: !!carrier,
+    beat: Math.min(f.length - 1, u >= 1 ? i : i - 1),
+    clock: lerp(sc.clockStart, sc.clockEnd, Math.min(1, t / Math.max(1, total))),
+    score,
+    total,
+  };
+}
+
+/** Both fives around the center circle for the opening tip: the two jumpers in it, the home team on the side it defends. */
+function tipOff([home, away]: [number[], number[]]): Stander[] {
+  const mid = COURT_LEN / 2;
+  const ring: Pt[] = [
+    { x: 0, y: 1.7 },
+    { x: -8.5, y: 3.5 },
+    { x: 8.5, y: 3.5 },
+    { x: -5, y: 12 },
+    { x: 5, y: 12 },
+  ];
+  // (the tallest is listed last in neither five for sure: whoever is fifth jumps, as good a guess as any)
+  const five = (pids: number[], side: 0 | 1, sign: 1 | -1): Stander[] =>
+    [...pids].reverse().map((pid, i) => ({ pid, side, at: { x: ring[i % 5].x, y: mid + sign * ring[i % 5].y } }));
+  return [...five(home, 0, 1), ...five(away, 1, -1)];
+}
+
+/** A small, steady hash: each board and joint of the floor sits in the same place on every paint. */
 const grain = (n: number) => {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 };
 
 /**
- * The maple floor every game is played on, flat as a broadcast graphic draws it (no lighting, no gloss):
- * the boards, their joints, the darker stain of the apron around the court. The Hardwood look's floor;
- * the tactics board's half court paints the same colours (from the --maple tokens in tokens.css).
+ * The floor, painted once at the canvas's size: maple boards along its length, the darker apron,
+ * the home team's paint in both keys and the center circle, the lines, the baskets, its mark at
+ * center court. Flat, as a broadcast graphic draws it (no lighting, no gloss).
  */
-export const MAPLE = { wood: '#dcae76', light: 'rgba(255,246,228,', dark: 'rgba(122,72,24,', joint: 'rgba(122,72,24,0.2)', apron: '#b07a46' } as const;
-
-/** The colours a floor is painted in: the paint (the key and the center circle), the pinstripe, the lines. */
-function palette(floor: CourtFloor | undefined) {
+function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints) {
+  const { k, wide } = view;
+  cv.width = Math.max(1, Math.round((wide ? FLOOR_L : FLOOR_W) * k * dpr));
+  cv.height = Math.max(1, Math.round((wide ? FLOOR_W : FLOOR_L) * k * dpr));
+  const ctx = cv.getContext('2d')!;
+  // everything below is drawn in feet, on the court itself (x across, y along): the view turns it
+  const s = k * dpr;
+  if (wide) ctx.setTransform(0, -s, s, 0, END * s, (HALF_W + SIDE) * s);
+  else ctx.setTransform(s, 0, 0, s, (HALF_W + SIDE) * s, END * s);
+  const px = (n: number) => n / k;
   // a neutral floor (the Cup final): the paint in ink, a gold pinstripe
-  if (floor?.kind !== 'home') return { paint: '#1c1b19', trim: '#c9a24a', mark: null };
-  const look = teamLook(floor.colors);
-  return { paint: look.slab, trim: look.trim, mark: floor };
-}
+  const home = floor?.kind === 'home' ? floor : null;
+  const paint = home?.paint ?? paints.ink;
+  const trim = home?.trim ?? '#c9a24a';
 
-function drawFloor(ctx: CanvasRenderingContext2D, w: number, h: number, k: number, floor: CourtFloor | undefined) {
-  const pal = palette(floor);
-  ctx.fillStyle = MAPLE.wood;
-  ctx.fillRect(0, 0, w, h);
   // boards along the court's length, each a shade apart, their joints staggered
-  const plank = k * 1.15;
-  for (let i = 0, x = 0; x < w; i++, x += plank) {
+  ctx.fillStyle = paints.wood;
+  ctx.fillRect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
+  const board = 1.15;
+  for (let i = 0, x = -HALF_W - SIDE; x < HALF_W + SIDE; i++, x += board) {
     const r = grain(i);
-    ctx.fillStyle = r > 0.5 ? `${MAPLE.light}${((r - 0.5) * 0.34).toFixed(3)})` : `${MAPLE.dark}${((0.5 - r) * 0.16).toFixed(3)})`;
-    ctx.fillRect(x, 0, plank, h);
-    ctx.fillStyle = MAPLE.joint;
-    ctx.fillRect(x, 0, 1, h);
-    for (let y = -grain(i + 99) * 11 * k; y < h; y += 11 * k) ctx.fillRect(x, y, plank, 1);
+    ctx.globalAlpha = r > 0.5 ? (r - 0.5) * 0.5 : (0.5 - r) * 0.9;
+    ctx.fillStyle = r > 0.5 ? '#fff6e4' : paints.wood2;
+    ctx.fillRect(x, -END, board, FLOOR_L);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = paints.seam;
+    ctx.fillRect(x, -END, px(1), FLOOR_L);
+    for (let y = -END - grain(i + 99) * 11; y < COURT_LEN + END; y += 11) ctx.fillRect(x, y, board, px(1));
   }
-  const X = (x: number) => (x + W_FT / 2 + SIDE) * k;
-  const Y = (y: number) => (y + TOP) * k;
-  // the apron: the sidelines' bands and the deeper one behind the baseline, stained darker, a pinstripe
-  // in the home team's trim where it meets the court
-  ctx.fillStyle = MAPLE.apron;
-  ctx.globalAlpha = 0.9;
-  ctx.fillRect(0, 0, w, Y(0));
-  ctx.fillRect(0, Y(0), X(-25), h - Y(0));
-  ctx.fillRect(X(25), Y(0), w - X(25), h - Y(0));
-  ctx.globalAlpha = 1;
-  const pin = 0.35 * k;
-  ctx.strokeStyle = pal.paint;
-  ctx.lineWidth = Math.max(1.5, k * 0.2);
+  // the apron: stained darker all round, a pinstripe in the trim where it meets the court
+  ctx.fillStyle = 'rgba(96, 54, 16, 0.42)';
   ctx.beginPath();
-  ctx.moveTo(X(-25) - pin, h);
-  ctx.lineTo(X(-25) - pin, Y(0) - pin);
-  ctx.lineTo(X(25) + pin, Y(0) - pin);
-  ctx.lineTo(X(25) + pin, h);
+  ctx.rect(-HALF_W - SIDE, -END, FLOOR_W, FLOOR_L);
+  ctx.rect(-HALF_W, 0, 2 * HALF_W, COURT_LEN);
+  ctx.fill('evenodd');
+  ctx.strokeStyle = trim;
+  ctx.lineWidth = Math.max(px(1.5), 0.18);
+  ctx.strokeRect(-HALF_W - 0.45, -0.45, 2 * HALF_W + 0.9, COURT_LEN + 0.9);
+
+  // the paint: both keys and the center circle, solid in the home team's colour
+  ctx.fillStyle = paint;
+  ctx.fillRect(-8, 0, 16, 19);
+  ctx.fillRect(-8, COURT_LEN - 19, 16, 19);
+  ctx.beginPath();
+  ctx.arc(0, COURT_LEN / 2, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  // the lines
+  ctx.strokeStyle = paints.line;
+  ctx.fillStyle = paints.line;
+  const line = Math.max(px(1.5), 0.19);
+  const thin = Math.max(px(1), 0.14);
+  ctx.lineWidth = line;
+  ctx.lineJoin = 'miter';
+  ctx.strokeRect(-HALF_W, 0, 2 * HALF_W, COURT_LEN);
+  ctx.beginPath();
+  ctx.moveTo(-HALF_W, COURT_LEN / 2);
+  ctx.lineTo(HALF_W, COURT_LEN / 2);
   ctx.stroke();
-  // the home team's name behind the basket, between the scoreboards, painted in its colour
-  if (floor?.name) {
-    setFont(ctx, 860, Math.max(9, TOP * k * 0.52));
+  ctx.beginPath();
+  ctx.arc(0, COURT_LEN / 2, 6, 0, Math.PI * 2);
+  ctx.stroke();
+  // each end the same, turned about center court
+  for (const turn of [0, 1]) {
+    ctx.save();
+    if (turn) {
+      ctx.translate(0, COURT_LEN);
+      ctx.scale(-1, -1);
+    }
+    ctx.lineWidth = line;
+    ctx.strokeStyle = paints.line;
+    ctx.strokeRect(-8, 0, 16, 19);
+    // the free-throw circle: solid away from the basket, dashed inside the lane
+    ctx.beginPath();
+    ctx.arc(0, 19, 6, 0, Math.PI);
+    ctx.stroke();
+    ctx.lineWidth = thin;
+    ctx.setLineDash([0.9, 0.9]);
+    ctx.beginPath();
+    ctx.arc(0, 19, 6, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // the three-point line: straight in the corners, the arc above them
+    ctx.lineWidth = line;
+    const arcR = 23.75;
+    const cornerY = BASKET.y + Math.sqrt(arcR * arcR - 22 * 22);
+    const ang = Math.atan2(cornerY - BASKET.y, -22);
+    ctx.beginPath();
+    ctx.moveTo(-22, 0);
+    ctx.lineTo(-22, cornerY);
+    ctx.arc(0, BASKET.y, arcR, ang, Math.PI - ang, true);
+    ctx.lineTo(22, 0);
+    ctx.stroke();
+    // the restricted area, the lane's hash marks and blocks
+    ctx.beginPath();
+    ctx.arc(0, BASKET.y, 4, 0, Math.PI);
+    ctx.stroke();
+    ctx.lineWidth = thin;
+    ctx.beginPath();
+    for (const side of [-1, 1]) {
+      for (const hy of [7, 11, 14, 17]) {
+        ctx.moveTo(side * 8, hy);
+        ctx.lineTo(side * 8.7, hy);
+      }
+    }
+    ctx.stroke();
+    for (const side of [-1, 1]) ctx.fillRect(side > 0 ? 8 : -8.7, 7.6, 0.7, 1);
+    // the backboard, the rim and its net (seen from above: a ring inside the ring)
+    ctx.strokeStyle = paints.line;
+    ctx.lineWidth = Math.max(px(2), 0.3);
+    ctx.beginPath();
+    ctx.moveTo(-3, 4);
+    ctx.lineTo(3, 4);
+    ctx.stroke();
+    ctx.lineWidth = Math.max(px(1), 0.1);
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.arc(0, BASKET.y, 0.45, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = paints.rim;
+    ctx.lineWidth = Math.max(px(2), 0.22);
+    ctx.beginPath();
+    ctx.arc(0, BASKET.y, 0.75, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // the lettering and the mark are drawn upright on the screen, whichever way the floor is turned
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const at = (p: Pt) => project({ ...view, top: -END, ox: 0, oy: 0 }, p);
+  const name = floor?.name ?? '';
+  const size = END * k * 0.56;
+  if (name && size >= TEXT_MIN - 1) {
+    setFont(ctx, 820, size);
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(floor.name.toUpperCase(), X(0), Y(0) / 2 - pin / 2 + 0.5);
-  }
-  // the paint, solid in the home team's colour
-  ctx.fillStyle = pal.paint;
-  ctx.fillRect(X(-8), Y(0), 16 * k, 19 * k);
-  // center court: the circle painted in the team's colour, its mark in the half this end shows
-  ctx.beginPath();
-  ctx.arc(X(0), Y(47), 6 * k, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  const markR = 2.9;
-  if (pal.mark) drawMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * 2 * k, pal.mark);
-  else drawNeutralMark(ctx, X(0), Y(H_FT - markR - 0.35), markR * k, pal.trim, pal.paint);
-  // the lines, white
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = Math.max(1.5, k * 0.19);
-  ctx.lineJoin = 'miter';
-  // baseline and sidelines
-  ctx.beginPath();
-  ctx.moveTo(X(-25), Y(47));
-  ctx.lineTo(X(-25), Y(0));
-  ctx.lineTo(X(25), Y(0));
-  ctx.lineTo(X(25), Y(47));
-  ctx.stroke();
-  ctx.strokeRect(X(-8), Y(0), 16 * k, 19 * k);
-  // FT circle: its half away from the basket (the half inside the lane is dashed, below)
-  ctx.beginPath();
-  ctx.arc(X(0), Y(19), 6 * k, 0, Math.PI);
-  ctx.stroke();
-  // three point line
-  const arcR = 23.75;
-  const by = 5.25;
-  const cornerY = by + Math.sqrt(arcR * arcR - 22 * 22);
-  ctx.beginPath();
-  ctx.moveTo(X(-22), Y(0));
-  ctx.lineTo(X(-22), Y(cornerY));
-  const ang = Math.atan2(cornerY - by, -22);
-  ctx.arc(X(0), Y(by), arcR * k, ang, Math.PI - ang, true);
-  ctx.lineTo(X(22), Y(0));
-  ctx.stroke();
-  // restricted area
-  ctx.beginPath();
-  ctx.arc(X(0), Y(by), 4 * k, 0, Math.PI);
-  ctx.stroke();
-  // the lane's hash marks and blocks, and the dashed lower half of the free-throw circle
-  ctx.lineWidth = Math.max(1, k * 0.14);
-  ctx.beginPath();
-  for (const side of [-1, 1]) {
-    for (const hy of [7, 11, 14, 17]) {
-      ctx.moveTo(X(side * 8), Y(hy));
-      ctx.lineTo(X(side * 8.7), Y(hy));
+    ctx.fillStyle = paints.line;
+    for (const y of [-END / 2 - 0.25, COURT_LEN + END / 2 + 0.25]) {
+      const p = at({ x: 0, y });
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      // (sideways, it runs up the baseline it's painted along)
+      if (wide) ctx.rotate(-Math.PI / 2);
+      ctx.fillText(name, 0, 0.5);
+      ctx.restore();
     }
   }
-  ctx.stroke();
-  ctx.fillStyle = '#ffffff';
-  for (const side of [-1, 1]) ctx.fillRect(Math.min(X(side * 8), X(side * 8.7)), Y(7.6), 0.7 * k, 1 * k);
-  ctx.setLineDash([k * 0.9, k * 0.9]);
-  ctx.beginPath();
-  ctx.arc(X(0), Y(19), 6 * k, Math.PI, Math.PI * 2);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.lineWidth = Math.max(1.5, k * 0.19);
-  // half court
-  ctx.beginPath();
-  ctx.moveTo(X(-25), Y(46.8));
-  ctx.lineTo(X(25), Y(46.8));
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(X(0), Y(47), 6 * k, Math.PI, 0);
-  ctx.stroke();
-  // backboard & rim
-  ctx.strokeStyle = '#f2f2f2';
-  ctx.lineWidth = Math.max(2, k * 0.3);
-  ctx.beginPath();
-  ctx.moveTo(X(-3), Y(4));
-  ctx.lineTo(X(3), Y(4));
-  ctx.stroke();
-  ctx.strokeStyle = '#ff5a1f';
-  ctx.lineWidth = Math.max(2, k * 0.22);
-  ctx.beginPath();
-  ctx.arc(X(0), Y(by), 0.75 * k, 0, Math.PI * 2);
-  ctx.stroke();
+  const c = at({ x: 0, y: COURT_LEN / 2 });
+  if (home) drawMark(ctx, c.x, c.y, 8.6 * k, home);
+  else drawNeutralMark(ctx, c.x, c.y, 4.3 * k, trim, paint);
 }
 
 /** The team's mark as TeamLogo draws it (its shape in its colours, the abbreviation inside), `size` across. */
@@ -477,7 +665,6 @@ function drawMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: n
     default:
       shape.arc(50, 50, 44, 0, Math.PI * 2);
   }
-  ctx.globalAlpha = 0.95;
   ctx.fillStyle = c1;
   ctx.fill(shape);
   ctx.lineWidth = 6;
@@ -499,7 +686,7 @@ function drawMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: n
   ctx.restore();
 }
 
-/** A neutral floor's center: a disc in the apron's colour with a star. */
+/** A neutral floor's center: a disc with a star. */
 function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, trim: string, fill: string) {
   ctx.fillStyle = fill;
   ctx.strokeStyle = trim;
@@ -519,56 +706,76 @@ function drawNeutralMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.fill();
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, k: number, p: Pt, colors: [string, string], num: string, offense: boolean, hot = false) {
-  const x = (p.x + W_FT / 2) * k;
-  const y = p.y * k;
-  const r = 1.45 * k;
-  // a hot shooter wears a steady ring in the warning colour, edged in ink so it reads on the maple and the
-  // paint alike (the scorebug's run and the feed's flame are its words)
-  if (hot) {
-    const hr = r + Math.max(3.5, k * 0.55);
-    ctx.strokeStyle = '#121212';
-    ctx.lineWidth = Math.max(3.5, k * 0.42);
+/** A player's disc on screen: never smaller than a fingertip reads. */
+const bodyR = (k: number) => Math.max(BODY * k, 7.5);
+
+/**
+ * A player: his team's disc, ringed, his number on it. The home team wears white trimmed in its
+ * colour, the visitors their colour solid, so the two never look alike. The man with the ball gets a
+ * second, bright ring; a hot shooter a ring in the warning colour.
+ */
+function drawPlayer(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: MatchKit, num: string, ball: boolean, hot: boolean, paints: Paints) {
+  const { x, y } = project(view, at);
+  const k = view.k;
+  const r = bodyR(k);
+  const ring = Math.max(2, k * 0.32);
+  // his shadow on the boards
+  ctx.fillStyle = 'rgba(40, 20, 0, 0.22)';
+  ctx.beginPath();
+  ctx.ellipse(x + r * 0.12, y + r * 0.22, r * 1.02, r * 0.96, 0, 0, Math.PI * 2);
+  ctx.fill();
+  if (hot || ball) {
+    // (edged in ink so the ring reads on the maple and the paint alike)
+    const hr = r + ring + Math.max(2, k * 0.3);
+    ctx.strokeStyle = paints.ink;
+    ctx.lineWidth = Math.max(3.5, k * 0.5);
     ctx.beginPath();
     ctx.arc(x, y, hr, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = '#ffb21e';
-    ctx.lineWidth = Math.max(2, k * 0.26);
+    ctx.strokeStyle = hot ? paints.warn : paints.line;
+    ctx.lineWidth = Math.max(2, k * 0.3);
     ctx.stroke();
   }
-  // the jersey, flat in its colours
-  ctx.fillStyle = colors[0];
-  ctx.strokeStyle = colors[1];
-  ctx.lineWidth = Math.max(2, k * 0.28);
+  ctx.fillStyle = kit.token.fill;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
+  ctx.strokeStyle = kit.token.ring;
+  ctx.lineWidth = ring;
+  ctx.beginPath();
+  ctx.arc(x, y, r - ring / 2, 0, Math.PI * 2);
   ctx.stroke();
-  // an ink hairline around the trim: a light jersey still reads on the maple
-  ctx.strokeStyle = 'rgba(18,18,18,0.7)';
+  // an ink hairline around him: a white disc still reads on the maple, a dark one on the paint
+  ctx.strokeStyle = 'rgba(18, 18, 18, 0.75)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(x, y, r + Math.max(1, k * 0.14), 0, Math.PI * 2);
+  ctx.arc(x, y, r + 0.5, 0, Math.PI * 2);
   ctx.stroke();
-  // the defense: a faint ink ring a step out
-  if (!offense) {
-    ctx.strokeStyle = 'rgba(18,18,18,0.32)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(x, y, r + 3, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.fillStyle = inkOn(colors[0]);
-  setFont(ctx, 760, Math.max(10, r * 1.1));
+  // his number, when the disc has room for one that reads
+  const size = Math.max(TEXT_MIN, r * 1.02);
+  if (r < 9.5) return;
+  ctx.fillStyle = kit.token.num;
+  setFont(ctx, 800, size);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(num, x, y + 0.5);
 }
 
-/** The ball: orange with its seams, turned by `spin`. */
-function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, spin: number) {
-  ctx.fillStyle = '#f07a22';
-  ctx.strokeStyle = '#3d1c00';
+/** The ball `z` feet up: its shadow stays on the floor and shrinks as it rises; it turns by `spin`. */
+function drawBall(ctx: CanvasRenderingContext2D, view: View, at: Pt, z: number, spin: number, paints: Paints) {
+  const p = project(view, at);
+  const k = view.k;
+  const shade = 1 / (1 + z * 0.12);
+  const base = Math.max(0.62 * k, 4);
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.4 * shade})`;
+  ctx.beginPath();
+  ctx.ellipse(p.x + 1.5, p.y + 2, base * shade, base * 0.7 * shade, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const x = p.x;
+  const y = p.y - z * k;
+  const r = base * (1 + z * 0.045);
+  ctx.fillStyle = paints.ball;
+  ctx.strokeStyle = paints.ballSeam;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -580,7 +787,7 @@ function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.clip();
   ctx.translate(x, y);
   ctx.rotate(spin);
-  ctx.strokeStyle = 'rgba(40,16,0,0.75)';
+  ctx.globalAlpha = 0.75;
   ctx.lineWidth = Math.max(0.6, r * 0.12);
   ctx.beginPath();
   ctx.moveTo(-r, 0);
@@ -597,68 +804,39 @@ function drawBall(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.restore();
 }
 
-/** The net under the rim; `sway` (0..2 over a make and the moment after) makes it ripple out and settle. */
-function drawNet(ctx: CanvasRenderingContext2D, k: number, sway: number) {
-  const x = (W_FT / 2) * k;
-  const y = 5.25 * k;
-  const top = 0.75 * k;
-  const len = 1.7 * k;
-  // the net hangs below the rim as a broadcast angle shows it (toward the court); a make pulls it long and wide
-  const t = sway > 0 ? Math.sin(Math.min(1, sway / 2) * Math.PI) : 0;
-  const bottom = top * (0.55 + 0.3 * t);
-  const drop = len * (1 + 0.5 * t);
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
-  ctx.lineWidth = Math.max(0.8, k * 0.08);
-  ctx.beginPath();
-  for (let i = 0; i <= 6; i++) {
-    const f = i / 6;
-    const ax = x - top + 2 * top * f;
-    const bx = x - bottom + 2 * bottom * f + Math.sin(sway * 9 + i) * 0.12 * k * t;
-    ctx.moveTo(ax, y);
-    ctx.lineTo(bx, y + drop);
+/** A shot's flight so far (u: how far along), a dotted arc behind the ball. */
+function drawTrail(ctx: CanvasRenderingContext2D, view: View, from: Pt, to: Pt, u: number, peak: number, paints: Paints) {
+  ctx.fillStyle = paints.ballSeam;
+  const n = 9;
+  for (let i = 1; i <= n; i++) {
+    const v = (u * i) / (n + 1);
+    const p = project(view, lerpPt(from, to, v));
+    ctx.globalAlpha = 0.08 + (0.34 * i) / n;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - Math.sin(Math.PI * v) * peak * view.k, 0.16 * view.k + 0.6, 0, Math.PI * 2);
+    ctx.fill();
   }
-  ctx.moveTo(x - bottom, y + drop);
-  ctx.lineTo(x + bottom, y + drop);
-  ctx.moveTo(x - (top + bottom) / 2, y + drop / 2);
-  ctx.lineTo(x + (top + bottom) / 2, y + drop / 2);
-  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
-/** The team with the ball, in its colours, on the boards behind the baseline it attacks (both sides of the basket). */
-function drawBaseline(ctx: CanvasRenderingContext2D, k: number, abbrev: string, colors: [string, string]) {
-  // ink boards, lit in the team's jersey colour along the bottom: the broadcast's graphics on the apron
-  const h = (TOP - 0.6) * k;
-  const w = 7 * k;
-  const bar = Math.max(2, 0.28 * k);
-  setFont(ctx, 760, Math.max(9, h * 0.66));
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (const cx of [-14.5, 14.5]) {
-    const x = (cx + W_FT / 2) * k - w / 2;
-    const y = -TOP * k + 0.2 * k;
-    ctx.fillStyle = '#121212';
-    ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = colors[0];
-    ctx.fillRect(x, y + h - bar, w, bar);
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(abbrev, x + w / 2, y + (h - bar) / 2 + 0.5);
-  }
-}
-
-/** A made shot ripples the net; a miss rattles the rim. `p` runs 0..2 over the landing and the moment after. */
-function drawRim(ctx: CanvasRenderingContext2D, k: number, kind: 'make' | 'miss', p: number) {
-  const x = (W_FT / 2) * k;
-  const y = 5.25 * k;
+/** A made shot sends a ring out from the net; a miss rattles the rim. `p` runs 0..2 over the landing and the moment after. */
+function drawRimFx(ctx: CanvasRenderingContext2D, view: View, basket: Pt, kind: 'make' | 'miss', p: number, paints: Paints) {
+  const { x, y } = project(view, basket);
+  const k = view.k;
   const t = Math.min(1, p / 2);
   ctx.globalAlpha = Math.max(0, 1 - t);
   ctx.lineWidth = Math.max(1.5, k * 0.18);
   if (kind === 'make') {
-    ctx.strokeStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x, y, (0.9 + t * 2.2) * k, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.strokeStyle = paints.line;
+    for (const lag of [0, 0.35]) {
+      const tt = Math.max(0, t - lag);
+      if (!tt) continue;
+      ctx.beginPath();
+      ctx.arc(x, y, (0.8 + tt * 2.6) * k, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   } else {
-    ctx.strokeStyle = '#ff8c2b';
+    ctx.strokeStyle = paints.rim;
     const j = Math.sin(p * Math.PI * 6) * 0.25 * k;
     ctx.beginPath();
     ctx.arc(x + j, y, 0.95 * k, 0, Math.PI * 2);
@@ -667,61 +845,81 @@ function drawRim(ctx: CanvasRenderingContext2D, k: number, kind: 'make' | 'miss'
   ctx.globalAlpha = 1;
 }
 
-/** The ball's arc so far on a shot (u: how far along). */
-function drawTrail(ctx: CanvasRenderingContext2D, k: number, from: Pt, to: Pt, u: number) {
-  ctx.fillStyle = '#c4531a';
-  const n = 9;
-  for (let i = 1; i <= n; i++) {
-    const v = (u * i) / (n + 1);
-    const p = lerpPt(from, to, v);
-    const z = Math.sin(Math.PI * v) * 7;
-    ctx.globalAlpha = 0.1 + (0.4 * i) / n;
-    ctx.beginPath();
-    ctx.arc((p.x + W_FT / 2) * k, (p.y - z) * k, 0.16 * k + 0.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.globalAlpha = 1;
-}
-
-/** The ball handler's name, in a small tag under his circle. */
-function drawTag(ctx: CanvasRenderingContext2D, k: number, p: Pt, name: string) {
-  if (!name) return;
-  const x = (p.x + W_FT / 2) * k;
-  const y = p.y * k + 1.45 * k + Math.max(7, k * 1.05);
-  setFont(ctx, 700, Math.max(10.5, k * 1.3), 'semi-condensed');
+/** An ink pill with a word on it, centered at (x, y) but kept whole inside the canvas. */
+function pill(ctx: CanvasRenderingContext2D, view: View, x: number, y: number, text: string, px: number, color: string, paints: Paints, weight = 800) {
+  setFont(ctx, weight, px, 'semi-condensed');
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  const w = ctx.measureText(name).width + 10;
-  const h = Math.max(15, k * 1.85);
-  ctx.fillStyle = '#121212';
+  const w = ctx.measureText(text).width + px * 1.1;
+  const h = px * 1.55;
+  const cx = clamp(x, w / 2 + 4, view.w - w / 2 - 4);
+  const cy = clamp(y, h / 2 + 4, view.h - h / 2 - 4);
+  ctx.fillStyle = paints.ink;
   ctx.beginPath();
-  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
-  if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
-  ctx.fill();
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(name, x, y + 0.5);
-}
-
-/** A play's call on the floor ("+3", "Block", "Foul"): an ink pill with the word in its signal's colour, as the broadcast's graphics have it. */
-function drawFlash(ctx: CanvasRenderingContext2D, k: number, text: string, kind: string, fx: number, fy: number, alpha: number) {
-  // (kept off the sidelines: a ball thrown out of bounds would put it under the playback buttons)
-  const x = (clamp(fx, -13, 13) + W_FT / 2) * k;
-  const y = fy * k;
-  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
-  const px = Math.max(15, k * 2.3);
-  setFont(ctx, 860, px);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  // (the app's signals, lifted to read on ink: a make green, a block or turnover red, a foul amber)
-  const color = kind === 'make' ? '#7fe3a8' : kind === 'block' || kind === 'to' ? '#ff9a8f' : kind === 'foul' ? '#ffd27a' : '#ffffff';
-  const w = ctx.measureText(text).width + px * 0.9;
-  const h = px * 1.35;
-  ctx.fillStyle = '#121212';
-  ctx.beginPath();
-  ctx.roundRect?.(x - w / 2, y - h / 2, w, h, h / 2);
-  if (!ctx.roundRect) ctx.rect(x - w / 2, y - h / 2, w, h);
+  if (ctx.roundRect) ctx.roundRect(cx - w / 2, cy - h / 2, w, h, h / 2);
+  else ctx.rect(cx - w / 2, cy - h / 2, w, h);
   ctx.fill();
   ctx.fillStyle = color;
-  ctx.fillText(text, x, y + 0.5);
+  ctx.fillText(text, cx, cy + 0.5);
+}
+
+/** The ball handler's name, in a small tag under his disc. */
+function drawTag(ctx: CanvasRenderingContext2D, view: View, at: Pt, name: string, paints: Paints) {
+  if (!name) return;
+  const p = project(view, at);
+  const px = Math.max(TEXT_MIN, view.k * 1.3);
+  pill(ctx, view, p.x, p.y + bodyR(view.k) + Math.max(4, view.k * 0.5) + px * 0.95, name, px, paints.line, paints, 700);
+}
+
+/** A play's label on the floor ("+3", "Blocked", "Foul"): an ink pill, the word in its signal's colour. */
+function drawFlash(ctx: CanvasRenderingContext2D, view: View, at: Pt, text: string, kind: string, alpha: number, paints: Paints) {
+  const p = project(view, at);
+  ctx.globalAlpha = clamp(alpha, 0, 1);
+  const color = kind === 'make' ? paints.good : kind === 'block' || kind === 'to' ? paints.bad : kind === 'foul' ? paints.warn : paints.line;
+  pill(ctx, view, p.x, p.y, text, Math.max(14, view.k * 2.1), color, paints);
   ctx.globalAlpha = 1;
+}
+
+/**
+ * The shot chart a break shows on the floor: each team's shots at the end it attacks first (upright,
+ * both at the one end in view), a made
+ * one a dot in its colour and a miss a white one ringed in it, with its count beside center court.
+ */
+function drawChart(ctx: CanvasRenderingContext2D, view: View, shots: ShotRecord[], kits: [MatchKit, MatchKit], abbrevs: [string, string] | undefined, paints: Paints) {
+  const k = view.k;
+  const r = Math.max(0.85 * k, 3.5);
+  // (upright, the window shows one end: both teams' shots go on it, told apart by colour)
+  const dirOf = (t: 0 | 1) => (t === 0 || !view.wide ? 1 : -1) as 1 | -1;
+  // misses under makes: a make is a dot in the team's colour, a miss the same dot left white
+  for (const made of [false, true]) {
+    for (const sh of shots) {
+      if (sh.made !== made) continue;
+      const p = project(view, toWorld({ x: sh.x, y: sh.y }, dirOf(sh.t)));
+      const kit = kits[sh.t];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = made ? kit.color : paints.line;
+      ctx.fill();
+      ctx.strokeStyle = made ? paints.line : kit.color;
+      ctx.lineWidth = made ? 1.25 : Math.max(1.5, r * 0.36);
+      ctx.stroke();
+    }
+  }
+  // each team's count, on its half's sideline beside center court (clear of the arc and the mark)
+  for (const t of [0, 1] as const) {
+    const mine = shots.filter((s) => s.t === t);
+    if (!mine.length) continue;
+    const made = mine.filter((s) => s.made).length;
+    const p = project(view, view.wide ? toWorld({ x: 21 * dirOf(t), y: 37 }, dirOf(t)) : { x: t === 0 ? -13 : 13, y: 36 });
+    pill(ctx, view, p.x, p.y, `${abbrevs?.[t] ?? (t === 0 ? 'Home' : 'Away')} ${made} of ${mine.length}`, Math.max(TEXT_MIN, Math.min(15, k * 2.6)), paints.line, paints, 700);
+  }
+}
+
+/** Clutch time: the building's lights come down around the floor. */
+function drawLights(ctx: CanvasRenderingContext2D, view: View) {
+  const g = ctx.createRadialGradient(view.w / 2, view.h / 2, Math.min(view.w, view.h) * 0.42, view.w / 2, view.h / 2, Math.max(view.w, view.h) * 0.78);
+  g.addColorStop(0, 'rgba(8, 6, 4, 0)');
+  g.addColorStop(1, 'rgba(8, 6, 4, 0.5)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, view.w, view.h);
 }

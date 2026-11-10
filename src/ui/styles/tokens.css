@@ -135,10 +135,17 @@
   --tier-low: #5a5752;
   --tier-bad: #6d6a67;
   /* the floor: maple boards, a second board tone and the seams between them (the live court's
-     floor in live/Court.tsx MAPLE, the tactics board) */
+     floor in live/Court.tsx, the tactics board); the rim and the ball on it */
   --maple: #dcae76;
   --maple-2: #d4a46b;
   --maple-seam: rgba(122, 72, 24, 0.2);
+  --court-rim: #e8551c;
+  --court-ball: #e9772a;
+  --court-ball-seam: #3d1c00;
+  /* the signals lifted to read on an ink plate (the live game's graphics, the court's labels) */
+  --good-night: #7fe3a8;
+  --bad-night: #ff9a8f;
+  --warn-night: #ffc65c;
   /* your team: set by applyAccent from its colours */
   --team: #2f6fde;
   --team-2: #ffc72c;

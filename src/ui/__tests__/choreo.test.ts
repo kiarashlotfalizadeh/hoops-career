@@ -2,7 +2,7 @@
 // sets and defenses look like themselves, its score follows the scoreboard, timeouts name their caller
 // and the captions call the play.
 import { describe, expect, it } from 'vitest';
-import { buildScript, captionAt, type Frame } from '../live/choreo';
+import { attackDir, buildScript, captionAt, standing, toWorld, type Frame } from '../live/choreo';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -167,7 +167,7 @@ describe('live court choreography', () => {
         },
         info,
       );
-      expect(floppy.frames.filter((f) => f.flash?.text === 'FLOPPY')).toHaveLength(1);
+      expect(floppy.frames.filter((f) => f.flash?.text === 'Floppy')).toHaveLength(1);
       const end = floppy.frames.at(-1)!;
       const shooter = end.o[off.indexOf(3)];
       expect(Math.abs(shooter.x)).toBeGreaterThan(12);
@@ -254,7 +254,7 @@ describe('live court choreography', () => {
       };
       const s = buildScript(quiet, info, [40, 38]);
       expect(scores(s)).toEqual([[41, 38]]);
-      expect(s.frames.at(-1)!.flash?.text).toBe('TECH FT');
+      expect(s.frames.at(-1)!.flash?.text).toBe('Tech FT');
     }
 
     // every possession of real games ends on the scoreboard, technical free throws included, and never runs backwards
@@ -276,7 +276,7 @@ describe('live court choreography', () => {
           sim.step();
           for (const l of sim.drainLogs()) {
             const s = buildScript(l, info, from);
-            techs += s.frames.filter((f) => f.flash?.text === 'TECH FT').length;
+            techs += s.frames.filter((f) => f.flash?.text === 'Tech FT').length;
             for (const sc of scores(s)) {
               expect(sc![0] >= shown[0] && sc![1] >= shown[1]).toBe(true);
               shown = sc!;
@@ -299,7 +299,7 @@ describe('live court choreography', () => {
         undefined,
         ['OKC', 'BOS'],
       );
-      expect(s.frames.filter((f) => f.flash?.text.startsWith('TIMEOUT')).map((f) => f.flash!.text)).toEqual(['TIMEOUT BOS']);
+      expect(s.frames.filter((f) => f.flash?.text.startsWith('Timeout')).map((f) => f.flash!.text)).toEqual(['Timeout BOS']);
     }
 
     // the caller of a real timeout named: the engine's step says whose it was
@@ -316,7 +316,59 @@ describe('live court choreography', () => {
       sim.step();
       const [first] = sim.drainLogs();
       const s = buildScript(first, info, undefined, [league.teams[0].abbrev, league.teams[1].abbrev]);
-      expect(s.frames.filter((f) => f.flash?.text.startsWith('TIMEOUT')).map((f) => f.flash!.text)).toEqual([`TIMEOUT ${league.teams[1].abbrev}`]);
+      expect(s.frames.filter((f) => f.flash?.text.startsWith('Timeout')).map((f) => f.flash!.text)).toEqual([`Timeout ${league.teams[1].abbrev}`]);
+    }
+
+    // a full court: the next possession starts where the last one left everyone and runs the floor the other way
+    {
+      const made = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'shot', pid: 1, x: 0, y: 6, zone: 'rim', made: true, v: 2 },
+        ]),
+        info,
+      );
+      // the home team goes at one end in the first half and the other in the second; the visitors at the opposite one
+      expect(made.dir).toBe(1);
+      expect([attackDir(0, 1), attackDir(1, 1), attackDir(0, 3), attackDir(1, 4), attackDir(0, 5)]).toEqual([1, -1, -1, 1, -1]);
+      expect(toWorld(toWorld({ x: 3, y: 20 }, -1), -1)).toEqual({ x: 3, y: 20 });
+      const was = standing(made);
+      const back: PossLog = { ...log([{ k: 'advance', pid: 11 }]), off: 1 };
+      const next = buildScript(back, info, undefined, undefined, undefined, undefined, was);
+      expect(next.dir).toBe(-1);
+      // nobody jumps: its first frame is the last one's, seen from the other end
+      next.oPids.forEach((pid, i) =>
+        expect(Math.hypot(toWorld(next.frames[0].o[i], -1).x - was.at.get(pid)!.x, toWorld(next.frames[0].o[i], -1).y - was.at.get(pid)!.y)).toBeLessThan(0.01),
+      );
+      // the ball is inbounded to the man who brings it up, from the far end, over half court, into the set
+      expect(next.frames[0].ball.y).toBeGreaterThan(80);
+      expect(next.frames[1].hold).toBe(0);
+      expect(next.frames.some((f) => f.o[0].y > 47)).toBe(true);
+      const end = next.frames.at(-1)!;
+      expect(Math.max(...end.o.map((p) => p.y), ...end.d.map((p) => p.y))).toBeLessThan(40);
+      for (const f of next.frames) expect(closest(f)).toBeGreaterThanOrEqual(2.9);
+      // a long run takes longer than a step in the half court, at a pace that still reads
+      expect(Math.max(...next.frames.map((f) => f.dur))).toBeLessThan(1200);
+      // a steal goes the other way: the thief is off with it, and the break starts from where he is
+      const stolen = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'steal', pid: 1, pid2: 11 },
+        ]),
+        info,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        standing(next),
+      );
+      const thief = stolen.frames.at(-1)!;
+      expect(thief.hold).toBe(off.length);
+      expect(thief.d[0].y).toBeGreaterThan(stolen.frames.at(-2)!.d[0].y);
+      const brk = buildScript({ ...log([{ k: 'transition', pid: 11 }]), off: 1, kind: 'transition' }, info, undefined, undefined, undefined, undefined, standing(stolen));
+      expect(brk.frames[0].hold).toBe(0);
+      // (the defense is still getting back as the ball crosses half court)
+      expect(brk.frames[1].d.some((p) => p.y > 30)).toBe(true);
     }
 
     // captions call the play by name as the court reaches each beat, and the shot as the play-by-play does
@@ -383,7 +435,7 @@ describe('live court choreography', () => {
       const s = buildScript(late, info, [98, 100], ['OKC', 'BOS'], names);
       const caps = s.frames.map((f) => f.cap).filter(Boolean);
       expect(caps).toContain('P1 driving layup: good! Tied at 100!');
-      expect(s.frames.some((f) => f.flash?.text === 'AND ONE!')).toBe(true);
+      expect(s.frames.some((f) => f.flash?.text === 'And one!')).toBe(true);
       expect(caps).toContain('And one! Foul on P12');
       expect(s.moment).toBeUndefined();
     }
@@ -411,7 +463,7 @@ describe('live court choreography', () => {
       expect(shot(2, [50, 40]).moment).toBe('buzzer');
       const winner = shot(4, [99, 100]);
       expect(winner.moment).toBe('winner');
-      expect(winner.frames.some((f) => f.flash?.text === 'GAME WINNER')).toBe(true);
+      expect(winner.frames.some((f) => f.flash?.text === 'Game winner')).toBe(true);
       // already ahead: a buzzer beater, not the winner
       expect(shot(4, [104, 100]).moment).toBe('buzzer');
       // a miss at the buzzer is no moment

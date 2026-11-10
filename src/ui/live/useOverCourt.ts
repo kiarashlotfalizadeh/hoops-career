@@ -1,12 +1,11 @@
 // What goes up over the live court, and when: the banners (an injury, a foul-out, the other coach's
 // adjustment, the staff's word), one at a time and each once a night, and the broadcast graphics,
 // each once and one every two game minutes. useLiveGame feeds it the drawn game; the screen draws
-// what's up (live/Overlays.tsx).
+// what's up (live/CallBar.tsx).
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { BannerItem } from './Banner';
-import type { Graphic } from './graphics';
+import type { BannerItem } from './CallBar';
 import type { LiveAlert } from './alerts';
-import { GRAPHIC_MS } from './LowerThird';
+import { GRAPHIC_MS, type Graphic } from './graphics';
 import { EVENT_MS, WORD_MS, bannerKey } from './session';
 
 export function useOverCourt({ paused, atBreak }: { paused: boolean; atBreak: boolean }) {

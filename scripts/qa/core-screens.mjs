@@ -62,7 +62,7 @@ await page.locator('.lv-bb-views').getByRole('tab', { name: 'Tactics' }).click()
 await shot('20-live-plan');
 await page.locator('.lv-bb-views').getByRole('tab', { name: /^Now/ }).click();
 // the live game's playback controls come up with a tap on the court
-if (await page.locator('.lv-pb:not(.up)').count()) await page.locator('.lv-pb').click({ position: { x: 12, y: 12 } });
+await page.locator('.lv-stage .court-cv').click({ position: { x: 12, y: 12 } });
 await page.getByRole('button', { name: 'Skip ahead', exact: true }).click();
 await page
   .locator('.sheet')

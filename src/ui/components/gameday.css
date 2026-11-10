@@ -7,7 +7,8 @@
    The poster every game screen opens with: two solid blocks of the teams' colours side by side, away
    on the left, a full court's white lines printed across both (the half line on the seam, a key at
    each end), each team's figure in the condensed black cut as big as it fits, its mark and name under
-   it, and one white pill on the seam ("Won by 18", "To win"). The side that lost steps back. */
+   it, and one white pill on the seam ("Won by 18", "To win"). The side that lost is set lighter and a
+   size down, in the same white. */
 .gd-final {
   display: flex;
   flex-direction: column;
@@ -101,8 +102,15 @@
   letter-spacing: 0;
   vertical-align: 1.3em;
 }
+/* the side that lost: its figure lighter and a size down, still full white on its slab (4.5:1 and up);
+   the winner leads by weight and size, not by fading the other */
 .gd-bd-team.lost .gd-bd-fig {
-  color: rgba(255, 255, 255, 0.66);
+  font-weight: 480;
+  font-size: clamp(64px, 21vw, 92px);
+}
+/* (its smaller figure stands on the winner's baseline) */
+.gd-bd-figc.lost {
+  align-items: flex-end;
 }
 /* the marks and names under the figures, the pill between them on the seam */
 .gd-bd-ids {
@@ -159,7 +167,7 @@
   color: var(--text-dim);
 }
 .gd-bd-team.lost .gd-bd-nm {
-  color: var(--text-2);
+  font-weight: 640;
 }
 .gd-bd-mid {
   display: flex;
@@ -501,6 +509,9 @@
   }
   .gd-bd-fig {
     font-size: 132px;
+  }
+  .gd-board:not(.compact) .gd-bd-team.lost .gd-bd-fig {
+    font-size: 112px;
   }
   .gd-bd-nm {
     font-size: 18px;

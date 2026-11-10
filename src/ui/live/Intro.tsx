@@ -1,14 +1,14 @@
-// Before the opening tip of a live game: the starting lineups on the court, as a broadcast
-// introduces them (the night's billing as its opening graphic, "Rivalry night at Madison Square
-// Garden", the arena, what's at stake, both fives with their numbers, positions and season lines),
-// until a few seconds pass (or the user skips the rest).
+// Before the opening tip of a live game: the broadcast's first frame. The night's billing over the
+// dimmed court ("Rivalry night at Madison Square Garden") and the two starting fives side by side,
+// each under its team's colour tonight (the kit: the same colour as its scorebug block and its discs
+// on the floor), until a few seconds pass or the user skips the rest. It fits the court it's on: the
+// tall court adds each starter's line; the wide short one keeps names and numbers, with Skip in view.
 import { useEffect, useState, type CSSProperties } from 'react';
 import { SkipForward } from 'lucide-react';
 import type { League, Team } from '../../core/types';
 import { FRANCHISES } from '../../core/teams';
 import { seasonTotals } from '../../core/league/helpers';
-import { inkOn, matchupLooks } from '../teamColors';
-import '../components/gameday.css';
+import type { MatchKit } from '../teamColors';
 import { useLeagueMemo } from '../../state/store';
 import { arenaOf, billingFor } from '../../core/analysis/gameStory';
 import { billingTitle } from '../games/occasion';
@@ -18,7 +18,7 @@ export const INTRO_MS = 9000;
 
 /**
  * A starter's line for the intro: this season's per game, or last season's (`last`) before his first game.
- * `short` rounds to whole numbers, the units between them, for a phone's half court (to the tenth, the
+ * `short` rounds to whole numbers, the units between them, for a narrow column (to the tenth, the
  * assists were cut off).
  */
 export function introLine(league: League, pid: number): { text: string; short: string; last: boolean } {
@@ -55,9 +55,10 @@ export function Intro({
   teams: [Team, Team];
   /** The fives on the floor for the tip, [home, away]. */
   fives: [number[], number[]];
-  /** Jersey [fill, trim], [home, away]. */
-  kits: [[string, string], [string, string]];
+  /** Tonight's kits, [home, away]. */
+  kits: [MatchKit, MatchKit];
   names: (pid: number) => string;
+  /** What's at stake ("Game 3 · series tied 1-1"), when the billing doesn't already say. */
   context?: string;
   /** On a neutral floor (the Cup final): not the home team's arena. */
   neutral?: boolean;
@@ -88,36 +89,40 @@ export function Intro({
   // opening nights read last season's lines (said once, at the top); a starter yet to play this season says so on his line
   const withLines = [...lines.values()].filter((l) => l.text && l.text !== 'Rookie');
   const lastSeason = withLines.length > 0 && withLines.every((l) => l.last);
-  const perGame = withLines.length > 0 ? `Per game, ${lastSeason ? 'last' : 'this'} season` : '';
-  // the two headers never read as one colour: on a clash the away side wears its second
-  const looks = matchupLooks(home.colors, away.colors);
+  const perGame = withLines.length > 0 ? `per game, ${lastSeason ? 'last' : 'this'} season` : '';
+  // the headline: the billing, or the plain thing this is; under it one line (the billing's reason unless
+  // it only names the arena again, or where the game is, or what's at stake)
+  const title = bill ? billingTitle(bill, billAt) : 'Starting lineups';
+  const where = neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`;
+  const sub = bill ? (arena && bill.line.includes(arena) ? context : bill.line) : (context ?? where);
   const col = (side: 0 | 1) => {
     const t = teams[side];
     const kit = kits[side];
-    const look = looks[side];
     return (
-      <div className="lv-li-col">
+      <div className="lv-in-col">
         {/* the name alone, as a broadcast has it: "Oklahoma City Thunder" doesn't fit half a phone's court */}
-        <div className="lv-li-team" style={{ '--lb-c': look.slab, '--lb-t': look.trim } as CSSProperties}>
+        <div className="lv-in-team" style={{ '--in-c': kit.color, '--in-t': kit.trim } as CSSProperties}>
           {t.name}
         </div>
         {fives[side].map((pid) => {
           const p = league.players[pid];
+          const line = lines.get(pid);
           return (
-            <div key={pid} className="lv-li-row">
-              <span className="lv-li-num" style={{ background: kit[0], color: inkOn(kit[0]), borderColor: kit[1] }}>
+            <div key={pid} className="lv-in-row">
+              <span className="lv-in-num" style={{ background: kit.token.fill, color: kit.token.num, borderColor: kit.token.ring }}>
                 {p?.jersey || '0'}
               </span>
-              <span className="lv-li-who">
-                {/* (a long name wraps, at its hyphen if it has one, rather than lose its end and the position) */}
-                <span className="lv-li-name">
-                  {names(pid)} <span className="lv-li-pos">{p?.pos}</span>
+              <span className="lv-in-who">
+                <span className="lv-in-name">
+                  {names(pid)} <span className="lv-in-pos">{p?.pos}</span>
                 </span>
-                <span className="lv-li-line ellipsis">
-                  <span className="live-intro-dec">{lines.get(pid)?.text}</span>
-                  <span className="live-intro-whole">{lines.get(pid)?.short}</span>
-                  {!lastSeason && lines.get(pid)?.last ? ' · last season' : ''}
-                </span>
+                {line?.text && (
+                  <span className="lv-in-line">
+                    <span className="lv-in-dec">{line.text}</span>
+                    <span className="lv-in-whole">{line.short}</span>
+                    {!lastSeason && line.last ? ' · last season' : ''}
+                  </span>
+                )}
               </span>
             </div>
           );
@@ -126,33 +131,31 @@ export function Intro({
     );
   };
   return (
-    // (a region, not a dialog: it doesn't take the focus, and the playback buttons beside it stay in reach)
-    <div className="live-intro fade-in" role="region" aria-label="Starting lineups">
-      <div className="lv-li-head">
-        {bill && (
-          <>
-            <div className="gd-intro-bill">{billingTitle(bill, billAt)}</div>
-            {/* (its reason, unless that only names the arena again) */}
-            {!(arena && bill.line.includes(arena)) && <div className="gd-intro-line ellipsis">{bill.line}</div>}
-          </>
-        )}
-        {/* (under a billing, one quiet line: what this is and what the figures are) */}
-        <div className="lv-li-kicker">Starting lineups{bill && perGame ? ` · ${perGame.toLowerCase()}` : ''}</div>
-        {/* (the billing names the arena) */}
-        {!bill && <div className="lv-li-where ellipsis">{neutral ? 'Neutral floor' : `${arena ? `${arena} · ` : ''}${home.region}`}</div>}
-        {context && <div className="lv-li-where ellipsis live-intro-ctx">{context}</div>}
-        {!bill && perGame && <div className="lv-li-where ellipsis">{perGame}</div>}
+    // (a region, not a dialog: it doesn't take the focus)
+    <div className="lv-intro" role="region" aria-label="Starting lineups">
+      <div className="lv-in">
+        <div className="lv-in-head">
+          <div className="lv-in-bill">{title}</div>
+          {sub && <div className="lv-in-sub">{sub}</div>}
+          {/* (one quiet line where the figures show: what they are) */}
+          {perGame && (
+            <div className="lv-in-note">
+              {bill ? 'Starting lineups · ' : ''}
+              {bill ? perGame : perGame.charAt(0).toUpperCase() + perGame.slice(1)}
+            </div>
+          )}
+        </div>
+        <div className="lv-in-fives">
+          {col(1)}
+          {col(0)}
+        </div>
+        {/* (the game tips off by itself when the rule runs out: this only skips the wait, so it isn't a second "Tip off") */}
+        <button type="button" className="lv-in-skip" onClick={onTip}>
+          <SkipForward size={15} aria-hidden="true" /> Skip intro
+        </button>
       </div>
-      <div className="lv-li-grid">
-        {col(1)}
-        {col(0)}
-      </div>
-      {/* (the game tips off by itself when the bar runs out: this only skips the wait, so it isn't a second "Tip off") */}
-      <button className="btn primary sm lv-li-tip" onClick={onTip}>
-        <SkipForward size={15} aria-hidden="true" /> Skip intro
-      </button>
-      <span className="lv-li-bar" aria-hidden="true">
-        <span style={{ width: `${Math.max(0, Math.min(100, (left / INTRO_MS) * 100))}%` }} />
+      <span className="lv-in-bar" aria-hidden="true">
+        <span style={{ transform: `scaleX(${Math.max(0, Math.min(1, left / INTRO_MS))})` }} />
       </span>
       {/* (screen readers: who starts, before the court takes over) */}
       <span className="sr-only">

@@ -323,13 +323,41 @@ first: wide screens get the same single column, centred, at most 788px. Grid col
 
 ## The live game
 
-Broadcast first: the court is always the biggest thing on screen. It is a maple floor with your
-colours painted in the key and the centre circle, under an ink scorebug (the broadcast's own
-graphics package); the console under it is paper and card stock like every other screen.
+Broadcast first. From the top: the ink scorebug, the call bar, the court, the console, with the bench
+bar in the tab bar's place. The scorebug, the call bar and the court are the broadcast's graphics
+package (ink plates, white type); the console is paper and card stock like every other screen.
 
-- A slim scorebug sits over a full-width court (the win bar, with no figures, and the scores ticker
-  under it when Settings has them on). Captions, graphics and **one banner at a time** (injuries,
-  foul-outs, their adjustments, the staff's word) go over the court, never beside it.
+- **The court is a full court and never leaves the screen.** Teams attack fixed ends (they swap at the
+  half) and run the floor: the next possession starts where the last one left the players
+  (`standing` in `live/choreo.ts`), so a steal goes the other way and a break is a run, not a cut.
+  A phone held upright shows a window on the floor that pans with the ball; anything wide (a tablet, a
+  desktop, a phone sideways, or the compact court) shows the whole floor sideways. The canvas picks
+  the view from the box the layout gives it (`--court-ar` / `--court-h`, `live/styles/page.css`).
+- **The floor is the home team's**: maple, its colour in both keys and the centre circle, its mark at
+  centre court, its name along the baselines. The Cup final's floor is neutral.
+- **One colour a team, all night** (`matchKits` in `teamColors.ts`, `s.kits` in the live game): the
+  scorebug's block, the win bar, the call bar's chips, the shot chart and the players on the floor
+  all read from the same kit. The home team wears white trimmed in its colour (it stands on its own
+  paint), the visitors their colour solid, so the two sides never look alike. Two teams whose
+  colours read as the same (a perceptual distance, `lookDistance`) send the visitors to their next
+  colour everywhere at once. Live code never calls `teamLook`, `matchupLooks` or `nightFill` itself.
+- **Nothing sits over the court while the game plays** but the canvas's own short labels (Steal, +3,
+  Foul: sentence case, never under 12px) and the ball handler's name tag. Everything else goes in the
+  **call bar** (`live/CallBar.tsx`), one fixed-height ink strip that shows exactly one thing at a
+  time: playback when the user asks (a tap on the court or its pause button), an offer, the one
+  banner, a callout, a graphic, the crowd's line, or by default the running call of the play.
+- **The court is never empty.** Before the tip the fives stand around the centre circle; in a huddle
+  or a stop the players stay where the play left them; at a break the floor shows every shot so far
+  (each team's at the end it attacks first, a make solid, a miss a ring).
+- **The breaks keep the court.** At a period's end or in your timeout the stage becomes the compact
+  whole floor and the console opens on the break board (`BreakBoard`: the line score, and at a break
+  the team comparisons) above the period report or the huddle. The next period starts from the bench bar.
+- **The final buzzer is a frame**: a game watched to the end freezes the floor under the final score
+  (`FinalFrame`) for a beat before the final card.
+- **Clutch time shows**: the scorebug's clock plate, the call bar's edge and the stage's frame change,
+  and the building's lights come down around the floor.
+- **Reduced motion** keeps the game: the players still move (that is the content) and every label
+  still shows; the camera cuts instead of panning and nothing spins, shakes, trails or fades.
 - **The scorebug labels its figures**: each team's block reads Timeouts n and Fouls n (Penalty n
   when the other team is in the bonus), and the bar under it reads To win. A player's row shows his
   energy as a bar and a word (Fresh, Tiring, Tired), then OVR, MIN, PTS and PF in columns.
@@ -351,14 +379,12 @@ graphics package); the console under it is paper and card stock like every other
   Don't build another advice box.
 - **Every move is tracked**: a tactics change, sub or timeout shows in Your moves with the score since
   (`coachMoves`, drawn with `MovesList`), in the live game and in the report.
-- Playback (pause, skip, speed, key plays) lives only in the court's tap-to-reveal overlay.
+- Playback (pause, skip, speed, key plays) lives only in the call bar.
 - **The way out is on the scorebug's top line** (Leave, beside what's at stake): the game waits where
   it is, and the Continue bar and its Matchup page resume it.
-- **The breaks are on the screen, not over it**: at a period's end or in your timeout the court
-  steps aside for the period report or the huddle in the console; the next period starts from the
-  bench bar. The period report is the story so far, the staff and its calls, what's deciding it,
-  who is tired or in foul trouble, the keys, and both benches; the box score and play types stay in
-  their own views.
+- The period report is the story so far, the staff and its calls, what's deciding it (each edge named
+  by its team, never by colour alone), who is tired or in foul trouble, the keys, and both benches;
+  the box score and play types stay in their own views.
 - **The game stops for you only when it's close** (`closeGame`: neither side 95% to win it): a fifth
   foul or a closer out of legs the staff won't handle, and the last possession (your ball, tied or
   down three, the shot clock off), which opens the play call without a timeout. Late in a game the

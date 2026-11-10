@@ -8,7 +8,7 @@ import { buildSimInput } from '../../core/league/games';
 import { hashString } from '../../core/random';
 import type { LiveGame } from '../../state/live';
 import { eventLines, foulLimit, type LiveEvent } from './alerts';
-import type { BannerItem } from './Banner';
+import type { BannerItem } from './CallBar';
 import type { SubOptions } from './MyPlayer';
 import { drawnPlayer, subsLine, type Drawn } from './drawn';
 import { livePills, type Pill } from './pills';

@@ -1,8 +1,7 @@
-/* The night's atmosphere (Atmos.tsx): the crowd's glow around the floor, clutch time's frame, the
-   callout for a big moment, the crowd's line, the offer to watch the finish at 1×; and what it adds
-   to the scorebug (clutch time, the momentum on the win-probability line), the play-by-play's voice
-   and the break's story. Only opacity and transform move, so a phone keeps its frame rate; reduced
-   motion holds everything still. Text over the court is white whatever the theme. */
+/* The night's atmosphere: around the court, the crowd's rule and clutch time's frame (Atmos.tsx); in
+   the console, the play-by-play's voice and the break's story. What the night says in words is on the
+   call bar (court.css). Only opacity moves, so a phone keeps its frame rate; reduced motion holds
+   everything still and in view. */
 
 /* ------------------------------------------------------------------ the crowd around the floor */
 .lv-crowd {
@@ -15,24 +14,25 @@
   --crowd-o: 0.5;
   --crowd-w: 2px;
 }
-/* the building along the floor's edges, in the home team's colour on the maple's stained apron: a
-   crisp rule that thickens with the noise, never a haze */
-.lv-crowd::before {
+/* the building along the floor's edges, in the home team's colour on the maple's apron: a crisp rule
+   that gets heavier with the noise, never a haze over the play */
+.lv-crowd::before,
+.lv-crowd::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
+}
+.lv-crowd::before {
   box-shadow: inset 0 0 0 var(--crowd-w) var(--crowd-c);
   opacity: var(--crowd-o);
-  transition:
-    opacity 0.9s ease,
-    box-shadow 0.9s ease;
+  transition: opacity 0.9s ease;
 }
 .lv-crowd.lvl-0 {
   --crowd-o: 0;
 }
 .lv-crowd.lvl-1 {
-  --crowd-o: 0.25;
+  --crowd-o: 0.3;
   --crowd-w: 1px;
 }
 .lv-crowd.lvl-3 {
@@ -43,285 +43,45 @@
   --crowd-o: 1;
   --crowd-w: 4px;
 }
-/* on its feet: the rule breathes with the noise (opacity only) */
+/* on its feet: the rule breathes with the noise */
 .lv-crowd.lvl-4::before {
   animation: lv-crowd-pulse 1.2s ease-in-out infinite alternate;
 }
 @keyframes lv-crowd-pulse {
   from {
-    opacity: calc(var(--crowd-o) * 0.55);
+    opacity: 0.55;
   }
   to {
-    opacity: var(--crowd-o);
+    opacity: 1;
   }
 }
-/* clutch time: the frame tightens, an amber rule edged in ink around the floor, as the broadcast
-   frames its finish (hushed, the crowd's rule is simply off) */
+
+/* ------------------------------------------------------------------ clutch time
+   The frame tightens around the floor: the brand's red, edged in ink so it reads on the maple and on
+   any painted key, breathing slowly. The crowd's own rule gives way to it; the call bar wears the same
+   red along its foot (court.css), so the finish looks like one from the scorebug down. */
 .lv-crowd::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
   opacity: 0;
   box-shadow:
-    inset 0 0 0 3px var(--warn),
-    inset 0 0 0 4.5px var(--ink);
-  transition: opacity 0.9s ease;
+    inset 0 0 0 4px var(--brand),
+    inset 0 0 0 5.5px var(--ink);
+  transition: opacity 0.6s ease;
+}
+.lv-crowd.clutch::before {
+  opacity: 0;
+  animation: none;
 }
 .lv-crowd.clutch::after {
   opacity: 1;
+  animation: lv-clutch-frame 2.4s ease-in-out 0.6s infinite alternate;
 }
-
-/* ------------------------------------------------------------------ a big moment, called over the court */
-.lv-call-wrap {
-  position: absolute;
-  left: 14px;
-  right: 14px;
-  top: 28%;
-  z-index: 3;
-  display: flex;
-  justify-content: center;
-  pointer-events: none;
-}
-/* the big moment over the floor, the one place the court uses the headline cut: its kicker on a flat
-   label in the team's colour, the black expanded headline on the broadcast's ink, its line under it */
-.lv-call {
-  --call-c: var(--ink-2);
-  --call-ink: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  max-width: min(100%, 440px);
-  padding: 0 18px 14px;
-  border-radius: var(--radius);
-  background: var(--lv-plate-hi);
-  text-align: center;
-  animation: lv-call 2.6s var(--ease-out) both;
-}
-.lv-call.neutral {
-  --call-c: var(--warn);
-  --call-ink: var(--ink);
-}
-.lv-call-k {
-  margin-bottom: 9px;
-  padding: 4px 12px 5px;
-  border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-  background: var(--call-c);
-  color: var(--call-ink);
-  font-size: 12px;
-  font-weight: 720;
-}
-.lv-call-t {
-  max-width: 100%;
-  font-family: var(--head);
-  font-stretch: var(--head-w);
-  font-weight: 900;
-  font-size: 22px;
-  line-height: 1;
-  letter-spacing: -0.035em;
-  text-wrap: balance;
-  overflow-wrap: anywhere;
-}
-.lv-call.w-3 .lv-call-t {
-  font-size: 27px;
-}
-.lv-call-l {
-  max-width: 100%;
-  margin-top: 5px;
-  font-size: 13px;
-  font-weight: 560;
-  line-height: 1.3;
-  font-variant-numeric: tabular-nums;
-  color: rgba(255, 255, 255, 0.76);
-}
-@keyframes lv-call {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  10% {
-    opacity: 1;
-    transform: none;
-  }
-  86% {
+@keyframes lv-clutch-frame {
+  from {
     opacity: 1;
   }
-  100% {
-    opacity: 0;
+  to {
+    opacity: 0.5;
   }
-}
-/* a big court (a tablet, a desktop): a callout to its scale */
-@media (min-width: 760px) and (min-height: 521px) {
-  .lv-call {
-    max-width: min(100%, 560px);
-    padding: 0 24px 17px;
-  }
-  .lv-call-k {
-    font-size: 13.5px;
-  }
-  .lv-call-t {
-    font-size: 30px;
-  }
-  .lv-call.w-3 .lv-call-t {
-    font-size: 36px;
-  }
-  .lv-call-l {
-    font-size: 15px;
-  }
-  .lv-crowd-line {
-    font-size: 13.5px;
-  }
-}
-@media (max-width: 399px) {
-  .lv-call-t {
-    font-size: 20px;
-  }
-  .lv-call.w-3 .lv-call-t {
-    font-size: 24px;
-  }
-}
-
-/* ------------------------------------------------------------------ the crowd's line, at the top of the floor */
-.lv-crowd-line {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 3;
-  max-width: calc(100% - 16px);
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 10px 5px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--lv-plate);
-  font-size: 12.5px;
-  font-weight: 620;
-  pointer-events: none;
-  animation: lv-crowd-line 3.8s ease both;
-}
-.lv-crowd-meter {
-  display: inline-flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 11px;
-}
-.lv-crowd-meter i {
-  display: block;
-  width: 3px;
-  border-radius: 1px;
-  background: rgba(255, 255, 255, 0.25);
-}
-.lv-crowd-meter i:nth-child(1) {
-  height: 4px;
-}
-.lv-crowd-meter i:nth-child(2) {
-  height: 6px;
-}
-.lv-crowd-meter i:nth-child(3) {
-  height: 9px;
-}
-.lv-crowd-meter i:nth-child(4) {
-  height: 11px;
-}
-.lv-crowd-meter i.on {
-  background: var(--warn);
-}
-.lv-crowd-line.hush .lv-crowd-meter i.on {
-  background: rgba(255, 255, 255, 0.6);
-}
-@keyframes lv-crowd-line {
-  0% {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-  8%,
-  88% {
-    opacity: 1;
-    transform: none;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
-/* ------------------------------------------------------------------ clutch time at speed: watch the finish at 1× */
-.lv-slow {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 3;
-  max-width: calc(100% - 16px);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 4px 4px 12px;
-  border-radius: var(--radius-pill);
-  background: var(--lv-plate-hi);
-  animation: lv-up var(--dur) var(--ease-out);
-  transition: top 0.2s ease;
-}
-/* (the playback controls up: it steps down under their chips) */
-.lv-pb.up ~ .lv-slow {
-  top: 52px;
-}
-.lv-slow-ic {
-  flex: none;
-  color: var(--warn);
-}
-.lv-slow-t {
-  font-size: 12.5px;
-  font-weight: 640;
-  white-space: nowrap;
-}
-.lv-slow-b {
-  position: relative;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: #fff;
-  color: var(--ink);
-  font-size: 12.5px;
-  font-weight: 640;
-  white-space: nowrap;
-}
-.lv-slow-b.ghost {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-.lv-slow-bi {
-  margin-right: 3px;
-  vertical-align: -2px;
-}
-.lv-slow-b::after,
-.lv-slow-x::after {
-  content: '';
-  position: absolute;
-  inset: -8px -3px;
-}
-.lv-slow-x {
-  position: relative;
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  color: rgba(255, 255, 255, 0.76);
-}
-
-/* ------------------------------------------------------------------ the scorebug: clutch time, the momentum */
-/* clutch time: the period's label in its colour (the court's frame says the rest) */
-.lv-lb.clutch .lv-lb-q {
-  color: var(--warn);
-  font-weight: 660;
-}
-/* the side with the momentum: its share of the line stands thicker (surging: thicker still) */
-.lv-lb-wp-bar.mo-away > span:first-child,
-.lv-lb-wp-bar.mo-home > span:last-child {
-  height: 5px;
-}
-.lv-lb-wp-bar.mo-2.mo-away > span:first-child,
-.lv-lb-wp-bar.mo-2.mo-home > span:last-child {
-  height: 6px;
 }
 
 /* ------------------------------------------------------------------ the play-by-play's voice */
@@ -369,23 +129,10 @@
   color: var(--warn);
 }
 
-/* ------------------------------------------------------------------ the break's story so far */
-.lv-rep-story {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 420;
-  line-height: 1.45;
-  color: var(--text-2);
-  text-wrap: pretty;
-}
-
+/* reduced motion: the rule and the frame are simply there */
 @media (prefers-reduced-motion: reduce) {
   .lv-crowd::before,
-  .lv-crowd::after,
-  .lv-call,
-  .lv-crowd-line,
-  .lv-slow,
-  .lv-lb-wp-bar > span {
+  .lv-crowd::after {
     animation: none !important;
     transition: none;
   }

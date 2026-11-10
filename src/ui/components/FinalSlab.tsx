@@ -54,7 +54,7 @@ export interface BoardSide {
   fig: ReactNode;
   /** A short line under the abbreviation: a record, a rank. */
   sub?: ReactNode;
-  /** The side that lost (or trails): its figure steps back. */
+  /** The side that lost (or trails): its figure is lighter and a size down, in the same white (the winner leads by weight, not by fading the other). */
   lost?: boolean;
 }
 

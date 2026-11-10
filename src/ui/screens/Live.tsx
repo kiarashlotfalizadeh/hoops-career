@@ -1,13 +1,15 @@
-// The live game, broadcast first: the scorebug and the court own the top of the screen; under them,
-// the console answers one question a view: Now (what the staff sees and what needs you), Players (who's
-// on, who's tired, who to sub), Tactics (what each side is running, beside the lever that moves it) and
-// Stats; the bench bar in the tab bar's place has the timeout and the views. At a
-// period's end or in your timeout the court steps aside for the report or the huddle, on this screen.
-// Playback is a tap on the court. Around it, the night: the crowd's glow and its lines, the callouts
-// for a run or a big play, clutch time on the scorebug and the court (live/atmosphere.ts, Atmos.tsx).
-// The broadcast itself runs in useLiveGame (live/useLiveGame.ts);
-// this screen draws it and makes the coaching moves (live/coaching.ts). The game is a journal
-// (state/live.ts): every move goes into it, so the game picks up where it was after the app is closed.
+// The live game, broadcast first: the scorebug, the call bar and the court own the top of the screen;
+// under them the console answers one question a view: Now (what the staff sees and what needs you),
+// Players (who's on, who's tired, who to sub), Tactics (what each side is running, beside the lever
+// that moves it) and Stats; the bench bar in the tab bar's place has the timeout and the views.
+// The court is a full one and never leaves the screen: at a period's end or in your timeout it
+// becomes the compact whole floor (the shot chart, or the players where they stood) over the break
+// board and the report or the huddle; at the final buzzer it freezes under the final score.
+// Nothing sits over the court while the game plays: the call bar (live/CallBar.tsx) shows the running
+// call, the graphics, the one banner, the offers and the playback controls, one at a time.
+// The broadcast itself runs in useLiveGame (live/useLiveGame.ts); this screen draws it and makes the
+// coaching moves (live/coaching.ts). The game is a journal (state/live.ts): every move goes into it,
+// so the game picks up where it was after the app is closed.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -20,7 +22,6 @@ import { winProb } from '../../core/analysis/winProb';
 import { GAME } from '../../core/constants';
 import { Empty, Segmented, Sheet } from '../components/ui';
 import { periodLabel } from '../stats';
-import { identityColor, matchupColors, matchupLooks, teamLook } from '../teamColors';
 import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
@@ -34,7 +35,9 @@ import { OppPlayer } from '../live/OppPlayer';
 import { MyPlayer } from '../live/MyPlayer';
 import { Lineup } from '../live/Lineup';
 import { Feed } from '../live/Feed';
-import { Playback } from '../live/Playback';
+import { CallBar } from '../live/CallBar';
+import { BreakBoard } from '../live/BreakBoard';
+import { FinalFrame } from '../live/FinalFrame';
 import { BenchBar, type ConsoleView } from '../live/BenchBar';
 import { StaffView } from '../live/StaffView';
 import { PlanView } from '../live/PlanView';
@@ -43,10 +46,8 @@ import { staffRead, type StaffAction, type StaffNote } from '../live/staff';
 import { ScoresSheet, ScoreTicker } from '../live/ScoreTicker';
 import { Intro } from '../live/Intro';
 import { LiveFinal, NoGame } from '../live/Final';
-import { CourtLower } from '../live/Overlays';
 import { SkipSheet } from '../live/SkipSheet';
 import { useLiveGame } from '../live/useLiveGame';
-import { useBugHeight } from '../live/useLiveLayout';
 import { coachingMoves } from '../live/coaching';
 import { Touchline } from '../live/Touchline';
 import type { CallId } from '../../core/types';
@@ -55,21 +56,22 @@ import { HOT_STREAK } from '../live/Lineup';
 import { changesLine, screenChanges } from '../tactics/changes';
 import { nightWatch } from '../games/data';
 import { breakStory, crowdLevel, currentRun, isClutch, RUN_MIN } from '../live/atmosphere';
-import { CallOut, ClutchOffer, Crowd, CrowdLine, FinalOffer, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
+import { Crowd, clutchSlowAlways, setClutchSlowAlways } from '../live/Atmos';
 import { COACH_MARKS, CoachMark, coachMarksSeen, markCoachMarksSeen } from '../live/CoachMarks';
 import '../live/live.css';
 
 export default function Live() {
   const s = useLiveGame();
-  const { league, nav, simBusy, status, game, view, home, away, colors, userSide, nameOf, over, script, panel, setPanel, coach } = s;
+  const { league, nav, simBusy, status, game, view, home, away, colors, kits, userSide, nameOf, over, script, panel, setPanel, coach } = s;
   // the console's view (at a stop, the staff's is the report or the huddle)
   const [cview, setCview] = useState<ConsoleView>('staff');
   const [statsTab, setStatsTab] = useState<BoxTab | 'pbp'>('players');
   // the player whose sheet is open
   const [picked, setPicked] = useState<number | undefined>();
   const { applyTactics, setKeep, substitute } = coachingMoves(s, () => setCview('lineup'));
-  const setBugEl = useBugHeight();
   const conRef = useRef<HTMLDivElement>(null);
+  // a tap on the court brings the playback controls up in the call bar
+  const [courtTap, setCourtTap] = useState(0);
 
   const persist = !!game?.keep;
   const tactics = useMemo(
@@ -206,7 +208,7 @@ export default function Live() {
   };
 
   if (status === 'none') return <NoGame league={league} canSim={!!nextAction?.sim} next={nextAction?.sub} busy={simBusy} onNext={() => void nextGame()} />;
-  if (!game || !home || !away || !colors || !view || !tactics)
+  if (!game || !home || !away || !colors || !kits || !view || !tactics)
     return (
       <main className="page">
         <Empty>Preparing the arena…</Empty>
@@ -214,7 +216,9 @@ export default function Live() {
     );
 
   // ------------------------------------------------------------ the final: the result, the report, the next game
-  if (over) {
+  // (a game watched to the buzzer holds on the frozen floor under the final score first: see FinalFrame below)
+  const frozen = over && s.buzzer && status === 'final';
+  if (over && !frozen) {
     const final = status === 'final';
     return (
       <LiveFinal
@@ -239,7 +243,7 @@ export default function Live() {
   const quarter = script?.q ?? view.q;
   // the fives the court is drawing (between possessions, the ones on the floor now)
   const fives: [number[], number[]] = script ? (script.off === 0 ? [script.oPids, script.dPids] : [script.dPids, script.oPids]) : [view.sides[0].on, view.sides[1].on];
-  const flowKits = matchupColors(home.colors, away.colors);
+  const flowKits: [string, string] = [kits[0].color, kits[1].color];
   // the user's team carries the accent in two-team comparisons (away first)
   const barColors: [string, string] = userSide === 1 ? ['var(--accent)', 'var(--text-dim)'] : ['var(--text-dim)', 'var(--accent)'];
   const plan = planFor(league, userSide === 0 ? game.game.away : game.game.home, game.game);
@@ -252,7 +256,7 @@ export default function Live() {
   const buzzer = sim.atBuzzer();
   const jersey = (pid: number) => league.players[pid]?.jersey || '0';
   // whose floor: the home team's, or a neutral one for the Cup final
-  const floor = courtFloor(home, neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
+  const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const myView = view.sides[userSide];
   const abbrevs = { us: me.team.abbrev, them: sim.T[1 - userSide].team.abbrev };
   const teams: [typeof home, typeof away] = [home, away];
@@ -264,8 +268,6 @@ export default function Live() {
   const top = (sd: 0 | 1) => [...view.sides[sd].players].sort((a, b) => b.pts - a.pts).slice(0, 1);
   const story = atBreak && night && actx ? breakStory(night, actx, view.q, [top(0), top(1)]) : undefined;
   const crowd = night ? crowdLevel(night.crowd) : 2;
-  // (a team's callout wears its block's colour on the scorebug)
-  const callKit = s.call && s.call.side !== -1 ? matchupLooks(home.colors, away.colors)[s.call.side].slab : undefined;
   const notes = s.notes;
   const calls = notes.filter((n) => n.kind === 'decision').length;
   const moreBench = league.settings.liveView === 'bench';
@@ -348,6 +350,7 @@ export default function Live() {
     moves,
     busy: simBusy,
     quiet: s.quiet,
+    kits,
   };
 
   const consoleBody = () => {
@@ -469,7 +472,10 @@ export default function Live() {
   };
 
   return (
-    <main className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${moreBench ? ' more-bench' : ''}`} data-tip={tipUp ? COACH_MARKS[tip].at.join(' ') : undefined}>
+    <main
+      className={`page lv${atBreak ? ' at-break' : ''}${stop ? ' stopped' : ''}${stop || moreBench || frozen ? ' compact' : ''}${clutch ? ' clutch' : ''}${frozen ? ' at-final' : ''}`}
+      data-tip={tipUp ? COACH_MARKS[tip].at.join(' ') : undefined}
+    >
       {/* the scorebug is the visible title: screen readers get a heading to land on */}
       <h1 className="sr-only">
         Live game: {away.region} {away.name} {neutral ? 'vs' : 'at'} {home.region} {home.name}
@@ -478,9 +484,11 @@ export default function Live() {
         {s.announce}
       </div>
 
-      <div className="lv-bug" ref={setBugEl}>
+      <div className="lv-bug">
         <ScoreBug
           ticker={s.ticker}
+          kits={kits}
+          ball={atBreak || s.intro || frozen ? null : script ? script.off : tipped ? view.ball : null}
           view={view}
           home={home}
           away={away}
@@ -498,12 +506,80 @@ export default function Live() {
         </ScoreBug>
       </div>
 
-      <div className="lv-stage">
+      <div className="lv-call">
+        <CallBar
+          script={script}
+          ffing={ffing}
+          beat={s.beat}
+          kits={kits}
+          title={
+            frozen
+              ? 'Final'
+              : s.intro
+                ? 'Tip-off'
+                : atBreak
+                  ? view.q === 2
+                    ? 'Halftime'
+                    : `End of ${periodLabel(view.q)}`
+                  : huddling
+                    ? s.huddle === 'last'
+                      ? 'Last possession'
+                      : 'Timeout'
+                    : undefined
+          }
+          graphic={s.graphic}
+          banner={s.intro || frozen ? undefined : s.banner}
+          onDropBanner={s.dropBanner}
+          call={s.call}
+          crowdLine={s.crowdLine}
+          crowd={crowd}
+          clutchOffer={
+            offer
+              ? {
+                  onSlow: () => {
+                    watchAt(1);
+                    setOffer(false);
+                  },
+                  onAlways: () => {
+                    setClutchSlowAlways(true);
+                    watchAt(1);
+                    setOffer(false);
+                  },
+                  onClose: closeOffer,
+                }
+              : undefined
+          }
+          finalOffer={
+            finalOffer && !offer
+              ? {
+                  onSim: () => {
+                    setFinalOffer(false);
+                    s.skip('end');
+                  },
+                  onClose: closeFinalOffer,
+                }
+              : undefined
+          }
+          paused={paused}
+          speed={s.speed}
+          keyPlays={s.keyPlays}
+          reveal={s.reveal}
+          tap={courtTap}
+          onPause={s.togglePause}
+          onSpeed={s.pickSpeed}
+          onKeyPlays={s.toggleKeyPlays}
+          onSkip={() => setPanel('skip')}
+          clutch={clutch}
+        />
+      </div>
+
+      {/* the court: nothing sits over it while the game plays but its own short labels (the call bar has the rest) */}
+      <div className="lv-stage" onClick={stop || frozen || s.intro ? undefined : () => setCourtTap((n) => n + 1)}>
         <Court
           script={script}
           speed={s.speed}
           paused={paused}
-          colors={colors}
+          kits={kits}
           jersey={jersey}
           onDone={s.courtDone}
           onTick={(c, sc) => s.ticker.set(c, sc)}
@@ -512,70 +588,28 @@ export default function Live() {
           abbrevs={[home.abbrev, away.abbrev]}
           floor={floor}
           hot={hot}
-          label={atBreak ? `Court: end of ${periodLabel(view.q)}.` : ffing ? 'Court: fast-forwarding to the next key play.' : `Court: ${script?.label ?? 'tip-off'}.`}
+          // between possessions the floor is never empty: the tip's line-up, the break's shot chart, or the players where they stood
+          idle={s.intro ? { kind: 'tip', fives: [view.sides[0].on, view.sides[1].on] } : atBreak ? { kind: 'chart', shots: view.box.shots ?? [] } : { kind: 'hold' }}
+          clutch={clutch}
+          label={
+            frozen
+              ? 'Court: the final buzzer.'
+              : atBreak
+                ? `Court: end of ${periodLabel(view.q)}, both teams' shots so far.`
+                : ffing
+                  ? 'Court: fast-forwarding to the next key play.'
+                  : `Court: ${script?.label ?? 'tip-off'}.`
+          }
         />
-        {!s.intro && !atBreak && (
-          <Playback
-            paused={paused}
-            speed={s.speed}
-            keyPlays={s.keyPlays}
-            playLabel="Resume"
-            reveal={s.reveal}
-            onPause={s.togglePause}
-            onSpeed={s.pickSpeed}
-            onKeyPlays={s.toggleKeyPlays}
-            onSkip={() => setPanel('skip')}
-          />
-        )}
-        {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side); after
-            the playback controls, so clutch time's offer can step down under them */}
-        {!s.intro && !atBreak && <Crowd level={crowd} color={neutral ? 'var(--accent)' : identityColor(home.colors)} clutch={clutch} />}
-        {/* (clutch time's offer says so itself: its callout waits while it's up) */}
-        {!s.intro && !atBreak && s.call && !(offer && s.call.kind === 'clutch') && <CallOut ev={s.call} kit={callKit} />}
-        {!s.intro && !atBreak && s.crowdLine && !offer && !finalOffer && <CrowdLine ev={s.crowdLine} level={crowd} />}
-        {offer && !atBreak && (
-          <ClutchOffer
-            onSlow={() => {
-              watchAt(1);
-              setOffer(false);
-            }}
-            onAlways={() => {
-              setClutchSlowAlways(true);
-              watchAt(1);
-              setOffer(false);
-            }}
-            onClose={closeOffer}
-          />
-        )}
-        {finalOffer && !offer && !atBreak && (
-          <FinalOffer
-            onSim={() => {
-              setFinalOffer(false);
-              s.skip('end');
-            }}
-            onClose={closeFinalOffer}
-          />
-        )}
-        {!atBreak && (script || ffing || s.graphic || s.banner) && (
-          <CourtLower
-            drawing={script}
-            ffing={ffing}
-            beat={s.beat}
-            capColor={script ? colors[script.off][0] : undefined}
-            // (a callout up over the court has the moment: the graphic waits under it, one thing at a time)
-            graphic={s.call ? null : s.graphic}
-            kit={teamLook((s.graphic?.side === 0 ? home : away).colors).slab}
-            banner={s.intro ? undefined : s.banner}
-            onDropBanner={s.dropBanner}
-          />
-        )}
+        {/* the building: the home crowd's glow around the floor (a neutral floor's crowd has no side) */}
+        {!s.intro && !stop && !frozen && <Crowd level={crowd} color={neutral ? 'var(--accent)' : kits[0].color} clutch={clutch} />}
         {tipUp && <CoachMark step={tip} onNext={nextTip} />}
         {s.intro && (
           <Intro
             league={league}
             teams={[home, away]}
             fives={[view.sides[0].on, view.sides[1].on]}
-            kits={colors}
+            kits={kits}
             names={nameOf}
             context={context}
             neutral={neutral}
@@ -584,10 +618,20 @@ export default function Live() {
             onTip={s.tipOff}
           />
         )}
+        {frozen && (
+          <FinalFrame
+            teams={[home, away]}
+            kits={kits}
+            score={[view.sides[0].score, view.sides[1].score]}
+            label={view.q > 4 ? `Final · ${view.q === 5 ? 'OT' : `${view.q - 4}OT`}` : 'Final'}
+            won={view.sides[userSide].score > view.sides[1 - userSide].score}
+            onDone={s.endBuzzer}
+          />
+        )}
       </div>
 
       <div className="lv-con" ref={conRef}>
-        {!stop && (
+        {!stop && !frozen && (
           <button
             className="lv-grab"
             onClick={() => edit((l) => void (l.settings.liveView = moreBench ? 'court' : 'bench'))}
@@ -596,26 +640,29 @@ export default function Live() {
             {moreBench ? 'Bigger court' : 'Smaller court'}
           </button>
         )}
-        <div className="lv-con-body">{consoleBody()}</div>
+        {(stop || frozen) && <BreakBoard view={view} teams={teams} kits={kits} side={userSide} kind={stop === 'huddle' ? 'huddle' : 'break'} />}
+        {!frozen && <div className="lv-con-body">{consoleBody()}</div>}
       </div>
 
-      <div className="lv-bar">
-        <BenchBar
-          view={cview}
-          onView={(v) => {
-            setCview(v);
-            conRef.current?.scrollTo({ top: 0 });
-          }}
-          calls={calls}
-          stop={stop}
-          timeouts={myView.timeouts}
-          canTimeout={canTimeout}
-          toPending={toPending}
-          toState={toState}
-          onTimeout={() => s.callTimeout()}
-          go={atBreak ? { label: `Start ${periodLabel(view.q + 1)}`, run: s.togglePause } : huddling ? { label: 'Resume', run: s.resume } : undefined}
-        />
-      </div>
+      {!frozen && (
+        <div className="lv-bar">
+          <BenchBar
+            view={cview}
+            onView={(v) => {
+              setCview(v);
+              conRef.current?.scrollTo({ top: 0 });
+            }}
+            calls={calls}
+            stop={stop}
+            timeouts={myView.timeouts}
+            canTimeout={canTimeout}
+            toPending={toPending}
+            toState={toState}
+            onTimeout={() => s.callTimeout()}
+            go={atBreak ? { label: `Start ${periodLabel(view.q + 1)}`, run: s.togglePause } : huddling ? { label: 'Resume', run: s.resume } : undefined}
+          />
+        </div>
+      )}
 
       <Sheet open={s.clipOpen} onClose={() => s.setClipOpen(false)} title="Every setting">
         {s.clipOpen && (

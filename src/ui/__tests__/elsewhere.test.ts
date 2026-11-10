@@ -163,19 +163,19 @@ describe('what happened elsewhere', () => {
     const firstPlain = list.findIndex((o) => !o.why);
     if (firstPlain >= 0) expect(list.slice(firstPlain).every((o) => !o.why)).toBe(true);
 
-    // each game tipped at its home team's local 7:00 or 7:30, in Eastern time (on the same league: tips
-    // read only the franchise)
+    // each game tipped at its home team's local 7:00, in Eastern time (on the same league: tips read
+    // only the franchise), so a game in the user's time zone is in the period his is
     const tid = (ab: string) => l.teams.find((t) => t.abbrev === ab)!.tid;
-    expect(tipMinute(l, tid('BOS'), 2)).toBe(0);
-    expect(tipMinute(l, tid('BOS'), 3)).toBe(30);
-    expect(tipMinute(l, tid('SAS'), 2)).toBe(60);
-    expect(tipMinute(l, tid('DEN'), 2)).toBe(120);
-    expect(tipMinute(l, tid('LAL'), 3)).toBe(210);
+    expect(tipMinute(l, tid('BOS'))).toBe(0);
+    expect(tipMinute(l, tid('NYK'))).toBe(0);
+    expect(tipMinute(l, tid('SAS'))).toBe(60);
+    expect(tipMinute(l, tid('DEN'))).toBe(120);
+    expect(tipMinute(l, tid('LAL'))).toBe(180);
     // a team god mode renames still plays in its city
     const lal = tid('LAL');
     l.teams[lal].abbrev = 'LAX';
-    expect(tipMinute(l, lal, 3)).toBe(210);
+    expect(tipMinute(l, lal)).toBe(180);
     expect(tipLabel(0)).toBe('7:00 PM');
-    expect(tipLabel(210)).toBe('10:30 PM');
+    expect(tipLabel(180)).toBe('10:00 PM');
   }, 180_000);
 });

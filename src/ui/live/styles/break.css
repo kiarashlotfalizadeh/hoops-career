@@ -1,0 +1,764 @@
+/* The stops, as a broadcast has them: the board that heads the console at a break (BreakBoard), the
+   period report and the huddle in cards under it (PeriodReport), the Skip ahead sheet, and the final
+   frame over the frozen court at the buzzer (FinalFrame). The board and the frame are the broadcast's
+   ink; the report is card stock on the paper, like the console's other views. Team colours are the
+   night's kits, set inline. Only opacity and transform move. */
+
+/* ------------------------------------------------------------------ the board (BreakBoard)
+   An ink plate: the stop's name and where you stand, the line score, then four team numbers. */
+.lv-bd {
+  --text: var(--paper-ink);
+  --text-2: color-mix(in srgb, var(--paper-ink) 84%, transparent);
+  --text-dim: color-mix(in srgb, var(--paper-ink) 64%, transparent);
+  --line: color-mix(in srgb, var(--paper-ink) 14%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px 14px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  color: var(--text);
+  animation: lv-bd-in 0.3s var(--ease-out);
+}
+@keyframes lv-bd-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+/* a huddle: the line score alone, a strip */
+.lv-bd.huddle {
+  padding: 8px 16px 9px;
+  border-radius: var(--radius-md);
+}
+.lv-bd-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lv-bd-title {
+  margin: 0;
+  min-width: 0;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+  color: var(--text);
+}
+.lv-bd-lead {
+  flex: none;
+  font-size: 13.5px;
+  font-weight: 640;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+/* the line score: a box score's figures in mono, the total set apart, the leader's bold */
+.lv-bd-ls {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+.lv-bd-ls th,
+.lv-bd-ls td {
+  height: 28px;
+  padding: 0 4px;
+  text-align: right;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.lv-bd-ls thead th {
+  height: 20px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.lv-bd-ls abbr {
+  text-decoration: none;
+}
+.lv-bd-ls tbody tr + tr > * {
+  border-top: 1px solid var(--line);
+}
+/* the team: its chip, then its abbreviation in the headline cut */
+.lv-bd-ls .l {
+  width: 34%;
+  padding-left: 0;
+  text-align: left;
+  font-family: var(--head);
+  font-stretch: 110%;
+  font-size: 15px;
+  font-weight: 860;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.lv-bd-chip {
+  display: inline-block;
+  width: 5px;
+  height: 15px;
+  margin-right: 8px;
+  border-radius: 2px;
+  vertical-align: -2px;
+}
+.lv-bd-ls .t {
+  width: 46px;
+  padding-right: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.lv-bd-ls thead .t {
+  font-size: 12px;
+}
+.lv-bd-ls tr.ahead .t {
+  font-weight: 700;
+  color: var(--text);
+}
+.lv-bd-none {
+  color: var(--text-dim);
+}
+/* the team numbers: whose side is whose in words, then two a row (four across with the room) */
+.lv-bd-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.lv-bd-key {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 640;
+  line-height: 15px;
+  color: var(--text-2);
+}
+/* (the home side's chip on the outside, as its figures are) */
+.lv-bd-key > span:last-child {
+  display: inline-flex;
+  flex-direction: row-reverse;
+  align-items: center;
+}
+.lv-bd-key > span:last-child .lv-bd-chip {
+  margin: 0 0 0 8px;
+}
+.lv-bd-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+@media (min-width: 720px) {
+  .lv-bd-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.lv-bd-cmp {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 6px;
+}
+.lv-bd-v {
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+}
+.lv-bd-v.win {
+  font-weight: 700;
+  color: var(--text);
+}
+.lv-bd-l {
+  font-size: 12px;
+  font-weight: 560;
+  text-align: center;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+.lv-bd-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 2px;
+  height: 3px;
+}
+.lv-bd-bar > i {
+  flex: 1 1 0;
+  min-width: 3px;
+}
+.lv-bd-bar > i.dim {
+  opacity: 0.4;
+}
+
+/* ------------------------------------------------------------------ the report and the huddle (PeriodReport)
+   Cards on the paper: short lines, one job a card. */
+.lv-br {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.lv-br.huddle {
+  gap: 14px;
+}
+.lv-br-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--raised);
+  box-shadow: var(--shadow-card);
+}
+.lv-br-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+}
+/* a huddle's own title (the board over a period's end carries that stop's) */
+.lv-br-title {
+  margin: 0;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 21px;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+/* a card's kicker */
+.lv-br-over {
+  font-size: 12.5px;
+  font-weight: 680;
+  line-height: 1.3;
+  color: var(--text-dim);
+}
+/* Skip ahead, Timeout: an ink-ringed pill at the head's end */
+.lv-br-btn {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 13px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--radius-pill);
+  background: none;
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 680;
+  color: var(--text);
+  cursor: pointer;
+}
+/* (a full-size target) */
+.lv-br-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px -4px;
+}
+.lv-br-btn:active {
+  background: var(--surface-2);
+}
+.lv-br-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-br-btn:not(:disabled):hover {
+    background: var(--surface);
+  }
+}
+.lv-br-story {
+  margin: 0;
+  font-size: 15.5px;
+  font-weight: 480;
+  line-height: 1.42;
+  color: var(--text);
+  text-wrap: pretty;
+}
+.lv-br-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.lv-br-chip {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  font-weight: 640;
+  line-height: 18px;
+  color: var(--text-2);
+}
+/* (the last possession's situation: where it stands, as a board's chips) */
+.lv-br-chip.strong {
+  background: var(--ink);
+  color: var(--paper-ink);
+}
+.lv-br-note,
+.lv-br-quiet {
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+/* the staff: its read on a card, its calls under it */
+.lv-br-staff {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* what's deciding it: the edge, whose it is in words (the team in its colour) and how big, its detail */
+.lv-br-edges {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lv-br-edge {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding: 11px var(--row-px);
+}
+.lv-br-edge-t {
+  font-size: 15px;
+  font-weight: 680;
+  line-height: 1.25;
+  letter-spacing: -0.012em;
+}
+.lv-br-edge-who {
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.lv-br-edge-who b {
+  font-family: var(--head);
+  font-stretch: 110%;
+  font-weight: 880;
+  letter-spacing: -0.02em;
+}
+.lv-br-edge-d {
+  grid-column: 1 / -1;
+  font-size: 13.5px;
+  line-height: 1.38;
+  color: var(--text-2);
+}
+/* both benches: their coach's card, your moves; side by side with the room */
+.lv-br-benches {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+@media (min-width: 720px) {
+  .lv-br-benches {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+.lv-br-mine {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.lv-br-mine > .lv-br-over {
+  padding: 0 2px;
+}
+/* their plan: an item a chip */
+.lv-br-plan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lv-br-plan > li {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 18px;
+}
+/* their adjustments: when (mono), then what */
+.lv-br-adj {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+.lv-br-adj > li {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+}
+.lv-br-when {
+  font-family: var(--mono);
+  font-stretch: normal;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--text-dim);
+}
+.lv-br-ato {
+  font-size: 15px;
+  font-weight: 680;
+}
+/* the late play call: who it's built around, then a row a play (his isolation and sets first), the one
+   called lit with its mark filled */
+.lv-br-pc-who {
+  margin-top: -4px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.lv-br-pc {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--row-min);
+  padding: var(--row-py) var(--row-px);
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lv-br-pc-tx {
+  flex: 1;
+  min-width: 0;
+}
+.lv-br-pc .lr-name,
+.lv-br-pc .lr-meta {
+  display: block;
+}
+.lv-br-pc:not(:disabled):active {
+  background: var(--surface);
+}
+.lv-br-pc.on {
+  background: var(--surface-2);
+}
+.lv-br-pc:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.lv-br-pc-mark {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--line-3);
+  display: grid;
+  place-items: center;
+  color: var(--on-ink);
+}
+.lv-br-pc.on .lv-br-pc-mark {
+  background: var(--on);
+  border-color: var(--on);
+}
+/* the staff's pick, at the row's end */
+.lv-br-pc-pick {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 680;
+  color: var(--accent-text);
+  white-space: nowrap;
+}
+.lv-br-pc-foot {
+  font-size: 13.5px;
+  color: var(--text-dim);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-br-pc:not(.on):not(:disabled):hover {
+    background: color-mix(in srgb, var(--surface) 60%, transparent);
+  }
+}
+
+/* ------------------------------------------------------------------ the Skip ahead sheet (SkipSheet)
+   A row a choice on one card: where it stops, then what that means in a sentence (the body face). */
+.lv-sk {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.lv-sk-opt {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 11px 16px 11px var(--row-px);
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lv-sk-opt:active {
+  background: var(--surface);
+}
+@media (hover: hover) and (pointer: fine) {
+  .lv-sk-opt:hover {
+    background: var(--surface);
+  }
+}
+.lv-sk-tx {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lv-sk-l {
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.22;
+  letter-spacing: -0.012em;
+}
+.lv-sk-s {
+  font-family: var(--font);
+  font-size: 13.5px;
+  font-weight: 420;
+  line-height: 1.35;
+  color: var(--text-2);
+  text-wrap: pretty;
+}
+.lv-sk-c {
+  flex: none;
+  color: var(--text-dim);
+}
+.lv-sk-note {
+  margin: 0 4px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--text-dim);
+}
+
+/* ------------------------------------------------------------------ the final frame (FinalFrame)
+   Over the frozen court: a light scrim, and an ink plate with the word, both teams' blocks (away on
+   the left, home on the right, as the scorebug has them) and the way on. The scores slam in. */
+.lv-ff {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  color: var(--paper-ink);
+  animation: lv-ff-fade 0.25s ease;
+}
+@keyframes lv-ff-fade {
+  from {
+    opacity: 0;
+  }
+}
+.lv-ff-plate {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 400px);
+  max-height: 100%;
+  padding: 10px 12px 12px;
+  border-radius: var(--radius);
+  background: var(--ink);
+  box-shadow: var(--shadow-float);
+  animation: lv-ff-rise 0.35s var(--ease-out);
+}
+@keyframes lv-ff-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+.lv-ff-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 2px;
+}
+.lv-ff-word {
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 20px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.035em;
+}
+/* your result: card stock with ink for a win, a white ring for a loss (as the final card's pill) */
+.lv-ff-res {
+  flex: none;
+  padding: 0 11px;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 24px;
+  white-space: nowrap;
+}
+.lv-ff-res.l {
+  background: transparent;
+  color: var(--paper-ink);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--paper-ink) 90%, transparent);
+}
+.lv-ff-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+}
+/* a team's block in its kit colour, its trim along the foot: white on it keeps 4.5:1 for both teams */
+.lv-ff-team {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 14px 11px;
+  background: var(--ff-c);
+  box-shadow: inset 0 -3px 0 var(--ff-t);
+  color: var(--paper-ink);
+}
+.lv-ff-team.home {
+  align-items: flex-end;
+  text-align: right;
+}
+.lv-ff-ab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--head);
+  font-stretch: var(--head-w);
+  font-size: 16px;
+  font-weight: 880;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.lv-ff-team.home .lv-ff-ab {
+  flex-direction: row-reverse;
+}
+/* the winner's mark: a white pennant pointing at its name */
+.lv-ff-mark {
+  width: 0;
+  height: 0;
+  border-block: 5px solid transparent;
+  border-inline-end: 7px solid var(--paper-ink);
+}
+.lv-ff-team.home .lv-ff-mark {
+  border-inline-end: 0;
+  border-inline-start: 7px solid var(--paper-ink);
+}
+/* the score: the loser's lighter and a size down, still white; the winner's black and full size */
+.lv-ff-pts {
+  display: block;
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-size: clamp(40px, 13vw, 56px);
+  font-weight: 500;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  transform-origin: 0 70%;
+  animation: lv-ff-slam 0.42s var(--ease-out) 0.18s backwards;
+}
+.lv-ff-team.home .lv-ff-pts {
+  transform-origin: 100% 70%;
+  animation-delay: 0.34s;
+}
+.lv-ff-team.winner .lv-ff-pts {
+  font-size: clamp(48px, 15.5vw, 66px);
+  font-weight: 900;
+}
+@keyframes lv-ff-slam {
+  from {
+    opacity: 0;
+    transform: scale(1.9);
+  }
+  70% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+}
+/* the way on: card stock on the ink, a full-size target */
+.lv-ff-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--paper-ink);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 720;
+  cursor: pointer;
+  transition: opacity var(--dur-fast) ease;
+}
+.lv-ff-go:active {
+  opacity: 0.85;
+}
+/* (a ring that reads on the ink plate: white, off the white button) */
+.lv-ff-go:focus-visible {
+  outline: 2px solid var(--paper-ink);
+  outline-offset: 3px;
+}
+/* a short stage (the wide court on a phone): the word, the blocks and the way on in less height */
+@media (max-height: 480px), (max-width: 599px) {
+  .lv-ff-plate {
+    gap: 6px;
+    padding: 8px 10px 10px;
+  }
+  .lv-ff-team {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 12px 8px;
+  }
+  .lv-ff-team.home {
+    flex-direction: row-reverse;
+  }
+  .lv-ff-pts {
+    font-size: 38px;
+  }
+  .lv-ff-team.winner .lv-ff-pts {
+    font-size: 46px;
+  }
+  .lv-ff-go {
+    min-height: 44px;
+  }
+}
+
+/* reduced motion: everything is there at once, nothing moves */
+@media (prefers-reduced-motion: reduce) {
+  .lv-bd,
+  .lv-ff,
+  .lv-ff-plate,
+  .lv-ff-pts {
+    animation: none;
+  }
+}

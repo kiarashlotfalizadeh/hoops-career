@@ -1,8 +1,9 @@
 // Around the league: the night's other games, ticking along with the user's live game. They were
 // played before it (prepareLive sims the rest of the day first), so each one's score at a moment of
-// the user's game is read from its quarters: games tip at their home team's local 7:00 or 7:30, and
-// all of them run at the pace of the user's (a broadcast's 48 minutes take about two and a quarter
-// hours), so a West Coast game is still to come when an East Coast one ends. The ones that matter
+// the user's game is read from its quarters: games tip at their home team's local 7:00, and all of
+// them run at the pace of the user's (a broadcast's 48 minutes take about two and a quarter hours),
+// so a game in the user's time zone is in the period his is, and a West Coast game is still to come
+// when an East Coast one ends (until it tips, the ticker gives its tip time). The ones that matter
 // to the user come first: teams near his in the conference standings, his next opponent, and every
 // playoff game.
 
@@ -34,13 +35,17 @@ const TIP_ZONE: Record<string, number> = {
   SAC: 180,
 };
 
-/** When a game tips, in minutes after 7:00 p.m. ET: its home team's local 7:00, or 7:30 for every other game id. */
-export function tipMinute(league: League, home: number, gid: number): number {
+/**
+ * When a game tips, in minutes after 7:00 p.m. ET: its home team's local 7:00. (Every game in a time
+ * zone tips together: a half-hour stagger left the ticker a quarter behind or ahead of the user's own
+ * game all night, which read as a stale score, not as a later tip.)
+ */
+export function tipMinute(league: League, home: number): number {
   // (by the franchise, whose city stays put when god mode renames the team)
-  return (league.teams[home] ? (TIP_ZONE[FRANCHISES[home]?.abbrev] ?? 0) : 0) + (gid % 2 ? 30 : 0);
+  return league.teams[home] ? (TIP_ZONE[FRANCHISES[home]?.abbrev] ?? 0) : 0;
 }
 
-/** "7:30 PM" (ET), the way a ticker gives a tip time. */
+/** "8:00 PM" (ET), the way a ticker gives a tip time. */
 export function tipLabel(minute: number): string {
   const h = 7 + Math.floor(minute / 60);
   const m = minute % 60;
@@ -58,7 +63,7 @@ export interface OtherGame {
 /** Tonight's other games (season, day): the ones that matter first, then by tip time. */
 export function otherGames(league: League, gid: number, day: number, userTid: number): OtherGame[] {
   const mine = league.schedule.find((g) => g.gid === gid);
-  const myTip = mine ? tipMinute(league, mine.home, gid) : 0;
+  const myTip = mine ? tipMinute(league, mine.home) : 0;
   const conf = league.teams[userTid].conf;
   const table = confStandings(league, conf);
   const myRank = table.findIndex((r) => r.tid === userTid);
@@ -78,7 +83,7 @@ export function otherGames(league: League, gid: number, day: number, userTid: nu
       why = res.type === 'playin' ? 'Play-In' : s ? (s.round === 4 ? 'Finals' : s.round === 3 ? 'Conf. Finals' : `Round ${s.round}`) : 'Playoffs';
     } else if (nextOpp !== undefined && tids.includes(nextOpp)) why = 'Your next opponent';
     else if (tids.some((t) => near.has(t))) why = `${conf === 'E' ? 'East' : 'West'} race`;
-    out.push({ res, offset: tipMinute(league, res.home.tid, res.gid) - myTip, ...(why && { why }) });
+    out.push({ res, offset: tipMinute(league, res.home.tid) - myTip, ...(why && { why }) });
   }
   return out.sort((a, b) => Number(!!b.why) - Number(!!a.why) || a.offset - b.offset || a.res.gid - b.res.gid);
 }
