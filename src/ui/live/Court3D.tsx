@@ -17,6 +17,8 @@ export interface Court3DProps {
   body: (pid: number) => Body;
   names?: (pid: number) => string;
   hot?: ReadonlySet<number>;
+  /** The game is over: the side that won it. */
+  final?: 0 | 1;
   floor?: CourtFloor;
   clutch?: boolean;
   /** The play's speed (the 2D court's clock runs on it), and the bodies' (see COURT3D_PACE). */
@@ -38,8 +40,17 @@ export interface Court3DProps {
 const SLOW_MS = 38;
 /** Slower than this (under 40 a second) the shadows and the floor's mirror go: a phone held at 30 is spared them. */
 const LITE_MS = 25;
-/** No more than 60 pictures a second, whatever the screen's rate (battery, heat): the gap between two, ms. */
-const FRAME_MS = 1000 / 60 - 2;
+/**
+ * No more than 60 pictures a second, whatever the screen's rate (battery, heat): the gap between two, ms.
+ * Kept as a schedule, not a least gap: a 75, 90 or 144 Hz screen then draws 60 of its frames a second
+ * (a least gap would make it every second or third one: 37 to 48).
+ */
+const FRAME_MS = 1000 / 60;
+/** A frame this close (ms) to when the next picture is due draws it. */
+const EARLY_MS = 2;
+/** Shadows and the mirror come back after this many fast stretches in a row (under FAST_MS a frame), twice at most. */
+const FAST_MS = 19;
+const FAST_RUN = 4;
 /** A lost context that isn't back after this long in view (ms) is not coming back. */
 const GONE_MS = 3000;
 
@@ -62,6 +73,9 @@ export default function Court3D(props: Court3DProps) {
     let raf = 0;
     let dead = false;
     let last = 0;
+    let due = 0;
+    let fast = 0;
+    let backs = 0;
     let floorKey = '';
     let fontsIn = 0;
     document.fonts?.ready.then(() => void (fontsIn = 1));
@@ -102,7 +116,9 @@ export default function Court3D(props: Court3DProps) {
 
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
-      if (last && now - last < FRAME_MS) return;
+      if (now < due - EARLY_MS) return;
+      // (the next is due one gap after this one was; a frame that came late doesn't owe a burst)
+      due = Math.max(due + FRAME_MS, now);
       const p = live.current;
       const real = last ? Math.min(100, now - last) : 0;
       last = now;
@@ -139,16 +155,20 @@ export default function Court3D(props: Court3DProps) {
         dirty = true;
       }
       const dt = p.paused ? 0 : real * p.speed;
-      // paused, nothing moves: a few frames for the camera to settle, then none (battery)
+      // the play's clock stopped with no play in the middle of a move (a timeout, a break, the buzzer): the men
+      // are not statues, they finish what they were doing and come to a stand
+      const at = p.stage.current.play;
+      const idle = !at || at.a === at.b;
+      // paused, nothing moves: a few frames for the camera (and the men) to settle, then none (battery)
       still = dt > 0 || dirty ? 0 : still + 1;
-      if (still > 40) return;
+      if (still > (idle ? (p.final === undefined ? 150 : 600) : 40)) return;
       const labels = scene.frame(
         p.stage.current,
-        { kits: p.kits, jersey: p.jersey, body: p.body, names: p.names, hot: p.hot, board: fl?.kind === 'home' ? fl.paint : paints.ink, warn },
+        { kits: p.kits, jersey: p.jersey, body: p.body, names: p.names, hot: p.hot, final: p.final, board: fl?.kind === 'home' ? fl.paint : paints.ink, warn },
         dt,
         real,
         !!calmQ?.matches,
-        p.paused ? 0 : real * p.own,
+        p.paused ? (idle ? real : 0) : real * p.own,
       );
       place(tagRef.current, labels.tag, 1);
       place(flashRef.current, labels.flash, labels.flash?.alpha ?? 0);
@@ -168,15 +188,24 @@ export default function Court3D(props: Court3DProps) {
             // (first without the shadows and the floor's mirror, then less sharp)
             if (avg > LITE_MS) {
               plain = true;
+              fast = 0;
               scene.lite(true);
             }
           } else if (avg > SLOW_MS) {
+            fast = 0;
             if (quality === 1 && (window.devicePixelRatio || 1) > 1) quality = 0.5;
             else if (!told) {
               told = true;
               p.onSlow();
             }
-          }
+          } else if (quality === 1 && avg < FAST_MS && backs < 2) {
+            // (it was a bad stretch, not a slow device: they come back)
+            if (++fast >= FAST_RUN) {
+              plain = false;
+              backs++;
+              scene.lite(false);
+            }
+          } else fast = 0;
         }
       }
     };

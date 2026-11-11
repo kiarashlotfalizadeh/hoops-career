@@ -101,6 +101,9 @@ export interface MatchKit {
   token: { fill: string; ring: string; num: string };
 }
 
+/** Two markers on ink (the win bar's halves, the break board's bars) closer than this read as one team's. */
+const NIGHT_APART = 0.16;
+
 /** The light kit's cloth: a warm white that reads on the maple and on any painted key. */
 const HOME_WHITE = '#fbf8f1';
 
@@ -111,10 +114,17 @@ const HOME_WHITE = '#fbf8f1';
  */
 export function matchKits(home: [string, string, string], away: [string, string, string]): [MatchKit, MatchKit] {
   const [h, a] = matchupLooks(home, away);
+  // on ink both are lifted toward white, which brings two dark colours together (a navy and a black):
+  // the visitors' marker then takes the first of their other colours that stands apart (white last)
+  const nights = [nightFill(h.slab), nightFill(a.slab)];
+  if (lookDistance(nights[0], nights[1]) < NIGHT_APART) {
+    const others = [a.trim, ...away, '#ffffff', '#9aa3ad'].map(nightFill);
+    nights[1] = others.find((c) => lookDistance(c, nights[0]) >= NIGHT_APART) ?? others.sort((x, y) => lookDistance(y, nights[0]) - lookDistance(x, nights[0]))[0];
+  }
   const kit = (l: TeamLook, light: boolean): MatchKit => ({
     color: l.slab,
     trim: l.trim,
-    night: nightFill(l.slab),
+    night: nights[light ? 0 : 1],
     text: onPaper(l.slab),
     light,
     token: light ? { fill: HOME_WHITE, ring: l.slab, num: l.slab } : { fill: l.slab, ring: contrast(l.trim, l.slab) >= 1.6 ? l.trim : '#ffffff', num: '#ffffff' },

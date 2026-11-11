@@ -73,6 +73,7 @@ export function CourtView({ look, onLook, body, ...court }: CourtViewProps) {
             body={body}
             names={court.names}
             hot={court.hot}
+            final={court.final}
             floor={court.floor}
             clutch={court.clutch}
             speed={speed}

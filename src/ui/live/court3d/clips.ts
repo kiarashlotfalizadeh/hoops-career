@@ -408,11 +408,48 @@ const KEYED: Record<Exclude<ClipId, 'idle2' | 'idle3'>, Clip> = {
   ]),
 };
 
+/** A captured stance shorter than this (ms) is a snatch of a man shifting his weight: looped at its own speed it twitches, so it's played over this long. */
+const LOOP_MIN = 1100;
+
+/**
+ * A captured loop's join. Its last pose is its first, but the motion into the join and out of it are two
+ * different moments of the take: every limb changes speed there, each time round (a twitch in a stance,
+ * a hitch in a runner's arm). The poses around the join are smoothed round it, most at the join itself.
+ */
+function mend(poses: Float32Array[]): Float32Array[] {
+  const n = poses.length - 1;
+  if (n < 6) return poses;
+  const reach = Math.max(2, Math.round(n * 0.22));
+  let now = poses.slice(0, n);
+  for (let pass = 0; pass < 6; pass++) {
+    const next = now.map((p) => Float32Array.from(p));
+    for (let k = -reach; k <= reach; k++) {
+      const i = (k + n) % n;
+      const w = 1 - Math.abs(k) / (reach + 1);
+      const a = now[(i + n - 1) % n];
+      const b = now[(i + 1) % n];
+      for (let c = 0; c < N; c++) next[i][c] += ((a[c] + b[c]) / 2 - now[i][c]) * 0.5 * w;
+    }
+    now = next;
+  }
+  return [...now, Float32Array.from(now[0])];
+}
+
 /** The captured clips (mocap.gen.ts), if they were measured on these channels. */
 const CAPTURED: Partial<Record<ClipId, Clip>> = {};
 if (MOCAP_CHANNELS.length === N && MOCAP_CHANNELS.every((c, i) => c === CHANNELS[i]))
-  for (const [id, m] of Object.entries(MOCAP))
-    CAPTURED[id as ClipId] = { id: id as ClipId, kind: m.kind, dur: m.dur, at: m.at, poses: m.poses.map((p) => Float32Array.from(p)), grip: m.grip, dense: true };
+  for (const [id, m] of Object.entries(MOCAP)) {
+    const poses = m.poses.map((p) => Float32Array.from(p));
+    CAPTURED[id as ClipId] = {
+      id: id as ClipId,
+      kind: m.kind,
+      dur: m.kind === 'loop' && m.dur < 700 ? LOOP_MIN : m.dur,
+      at: m.at,
+      poses: m.kind === 'shot' ? poses : mend(poses),
+      grip: m.grip,
+      dense: true,
+    };
+  }
 
 /** Every clip: captured where a take covers the move, keyed by hand where none does (a dunk, a block, a celebration). */
 export const CLIPS: Record<ClipId, Clip> = { ...KEYED, idle2: KEYED.idle, idle3: KEYED.idle, ...CAPTURED };
@@ -451,7 +488,27 @@ export const DUNK_AT = 180;
 /** A 'shot' clip's first and last moment (ms around its anchor). */
 export const span = (c: Clip): [number, number] => [c.at[0], c.at[c.at.length - 1]];
 
-const smooth = (u: number) => u * u * (3 - 2 * u);
+/**
+ * How fast each channel is moving at each key of a hand-keyed clip (per unit of its time). Through a key
+ * on the way up or down it keeps going (the two sides' rates, meaned so it never overshoots either
+ * pose); at a key where it turns round, and at the clip's ends, it is still.
+ */
+const SLOPES = new WeakMap<Clip, Float32Array[]>();
+function slopes(c: Clip): Float32Array[] {
+  let m = SLOPES.get(c);
+  if (!m) {
+    const { at, poses } = c;
+    m = poses.map(() => new Float32Array(N));
+    for (let k = 1; k < at.length - 1; k++)
+      for (let i = 0; i < N; i++) {
+        const d0 = (poses[k][i] - poses[k - 1][i]) / (at[k] - at[k - 1]);
+        const d1 = (poses[k + 1][i] - poses[k][i]) / (at[k + 1] - at[k]);
+        if (d0 * d1 > 0) m[k][i] = (2 * d0 * d1) / (d0 + d1);
+      }
+    SLOPES.set(c, m);
+  }
+  return m;
+}
 
 /** The clip's pose at `t` (a loop's or a gait's fraction 0..1, a shot's ms), written into `out`. */
 export function sample(c: Clip, t: number, out: Float32Array): Float32Array {
@@ -467,8 +524,20 @@ export function sample(c: Clip, t: number, out: Float32Array): Float32Array {
     const a = poses[k - 1];
     const b = poses[k];
     const x = (u - at[k - 1]) / (at[k] - at[k - 1]);
-    const w = c.dense ? x : smooth(x);
-    for (let i = 0; i < N; i++) out[i] = a[i] + (b[i] - a[i]) * w;
+    if (c.dense) for (let i = 0; i < N; i++) out[i] = a[i] + (b[i] - a[i]) * x;
+    else {
+      // a curve through the keys: he moves through a pose on his way to the next, not to it and then on
+      const m = slopes(c);
+      const ma = m[k - 1];
+      const mb = m[k];
+      const h = at[k] - at[k - 1];
+      const x2 = x * x;
+      const x3 = x2 * x;
+      const h10 = (x3 - 2 * x2 + x) * h;
+      const h11 = (x3 - x2) * h;
+      const h01 = 3 * x2 - 2 * x3;
+      for (let i = 0; i < N; i++) out[i] = a[i] + (b[i] - a[i]) * h01 + ma[i] * h10 + mb[i] * h11;
+    }
   }
   c.fn?.(out, u);
   return out;

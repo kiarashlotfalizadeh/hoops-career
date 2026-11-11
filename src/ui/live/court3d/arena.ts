@@ -38,6 +38,8 @@ import type { Props } from './props';
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
 const MID = COURT_LEN / 2;
+/** What a bench's warm-ups are darkened toward. */
+const WARMUP = new Color('#26272c');
 /** Where the seats start: behind the far boards, behind each basket's boards, and in front of the camera. */
 const FAR = HALF_W + SIDE + 7.5;
 const ENDX = MID + END + 9.5;
@@ -465,7 +467,8 @@ export class Arena {
           return HAIR[(i * 3 + 1) % HAIR.length];
         case 'jersey':
         case 'cloth':
-          return kit.token.fill;
+          // (warm-ups over their kit, dark in the team's colour: the bench is not five more men in the play)
+          return `#${c.set(kit.color).lerp(WARMUP, 0.62).getHexString()}`;
         case 'trim':
           return kit.token.ring;
         case 'tie':

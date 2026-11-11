@@ -600,6 +600,7 @@ export default function Live() {
           // between possessions the floor is never empty: the tip's line-up, the break's shot chart, or the players where they stood
           idle={s.intro ? { kind: 'tip', fives: [view.sides[0].on, view.sides[1].on] } : atBreak ? { kind: 'chart', shots: view.box.shots ?? [] } : { kind: 'hold' }}
           clutch={clutch}
+          final={frozen ? (view.sides[0].score > view.sides[1].score ? 0 : 1) : undefined}
           label={
             frozen
               ? 'Court: the final buzzer.'

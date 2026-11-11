@@ -149,6 +149,13 @@ const title = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 /** Two players are never drawn closer than this (a player is a 1.45 ft disc): a crowd at the rim spreads into a ring. */
 const APART = 2.92;
+/** A shot from nearer the rim than this (ft), a layup or a dunk is contested from beside the rim, this far from it. */
+const RIM_NEAR = 3.5;
+const BESIDE = 3.2;
+/** Where a dunker hangs from the rim (puppet.ts: this far from it, the way he came tipped this much up the floor), and how far from where he lands everyone else is kept (ft). */
+const DUNK_OFF = 2;
+const DUNK_OPEN = 1.5;
+const LAND = 3.1;
 /** The quickest anyone crosses the floor, in feet a millisecond at 1× (a broadcast's pace, not a stopwatch's). */
 const PACE = 0.085;
 
@@ -776,16 +783,41 @@ export function buildScript(
         moveTo(pid, target);
         give(pid);
         follow();
-        // contest: nearest defender closes out to a hand's length, on the basket side (not on top of a shooter at the rim)
+        // contest: nearest defender closes out to a hand's length, on the basket side
         // (a blocked shot: the man who blocks it is the one who goes up with him)
         const next = steps[at + 1];
         const blocker = next?.k === 'block' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
         const near = blocker ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
         const toRim = dist(target, BASKET);
         const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
-        if (near !== undefined) d.set(near, { x: target.x + ux * 3, y: Math.max(0.5, target.y + uy * 3) });
+        const how = shotAct(st);
+        if (near !== undefined) {
+          if (how === 'dunk' || how === 'layup' || toRim < RIM_NEAR) {
+            // a shot at the rim takes the shooter to it: his man goes up beside the rim, square to the way he
+            // comes in (the side he is already on), never where the shooter comes down and never behind the board
+            const was = d.get(near)!;
+            const sides = [1, -1].map((k) => ({ x: BASKET.x - uy * k * BESIDE, y: BASKET.y + ux * k * BESIDE }));
+            const open = sides.filter((p) => p.y >= BASKET.y - 0.6);
+            d.set(near, (open.length ? open : sides).sort((a, b) => dist(a, was) - dist(b, was))[0]);
+          } else d.set(near, { x: target.x + ux * 3, y: Math.max(0.5, target.y + uy * 3) });
+        }
+        if (how === 'dunk' || how === 'layup') {
+          // (he comes down short of the rim, on the side he came from, a dunker out toward the open floor: see
+          // puppet.ts. Nobody is left standing where he lands)
+          const out = how === 'dunk' ? { x: target.x - BASKET.x, y: target.y - BASKET.y + DUNK_OPEN } : { x: -ux, y: -uy };
+          const ol = Math.hypot(out.x, out.y) || 1;
+          const off = how === 'dunk' ? DUNK_OFF : Math.min(toRim, 1);
+          const land = { x: BASKET.x + (out.x / ol) * off, y: BASKET.y + (out.y / ol) * off };
+          for (const [who, spot] of [...o, ...d]) {
+            const gap = dist(spot, land);
+            if (who === pid || gap >= LAND) continue;
+            const [ax, ay] = gap > 0.01 ? [(spot.x - land.x) / gap, (spot.y - land.y) / gap] : [1, 0];
+            spot.x = land.x + ax * LAND;
+            spot.y = land.y + ay * LAND;
+          }
+        }
         const what = st.d ?? (st.v === 3 ? 'three' : 'jumper');
-        does(pid, shotAct(st), BASKET);
+        does(pid, how, BASKET);
         does(near, blocker !== undefined ? 'block' : 'contest', target);
         snap(300, cap(`${N(pid)}, ${what}…`));
         // (the shooter's own spot, as the crowd around him left it)

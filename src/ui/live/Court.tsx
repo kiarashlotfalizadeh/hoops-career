@@ -60,6 +60,8 @@ export interface CourtProps {
   idle?: CourtIdle;
   /** Clutch time: the building's lights come down around the floor. */
   clutch?: boolean;
+  /** The game is over: the side that won it (the 3D court's winners celebrate). */
+  final?: 0 | 1;
   /** What the court shows, for screen readers. */
   label: string;
   /** Where the play is, written each frame: the 3D court (Court3D.tsx) draws the same moment from it. */
@@ -920,28 +922,47 @@ function drawFlash(ctx: CanvasRenderingContext2D, view: View, at: Pt, text: stri
 /**
  * The shot chart a break shows on the floor: each team's shots at the end it attacks first (upright,
  * both at the one end in view), a made
- * one a dot in its colour and a miss a white one ringed in it, with its count beside center court.
+ * one a dot in its colour and a miss a cross in it, both edged in white, with its count beside center
+ * court. (Told apart by shape, not by which is filled: on a key painted the team's own colour a
+ * filled dot reads as a ring and a white one as the solid mark.)
  */
 function drawChart(ctx: CanvasRenderingContext2D, view: View, shots: ShotRecord[], kits: [MatchKit, MatchKit], abbrevs: [string, string] | undefined, paints: Paints) {
   const k = view.k;
   const r = Math.max(0.85 * k, 3.5);
   // (upright, the window shows one end: both teams' shots go on it, told apart by colour)
   const dirOf = (t: 0 | 1) => (t === 0 || !view.wide ? 1 : -1) as 1 | -1;
-  // misses under makes: a make is a dot in the team's colour, a miss the same dot left white
+  // misses under makes: a make is a dot in the team's colour, a miss a cross in it
+  ctx.lineCap = 'round';
   for (const made of [false, true]) {
     for (const sh of shots) {
       if (sh.made !== made) continue;
       const p = project(view, toWorld({ x: sh.x, y: sh.y }, dirOf(sh.t)));
       const kit = kits[sh.t];
       ctx.beginPath();
-      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-      ctx.fillStyle = made ? kit.color : paints.line;
-      ctx.fill();
-      ctx.strokeStyle = made ? paints.line : kit.color;
-      ctx.lineWidth = made ? 1.25 : Math.max(1.5, r * 0.36);
+      if (made) {
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fillStyle = kit.color;
+        ctx.fill();
+        ctx.strokeStyle = paints.line;
+        ctx.lineWidth = Math.max(1.5, r * 0.3);
+        ctx.stroke();
+        continue;
+      }
+      const a = r * 0.8;
+      ctx.moveTo(p.x - a, p.y - a);
+      ctx.lineTo(p.x + a, p.y + a);
+      ctx.moveTo(p.x + a, p.y - a);
+      ctx.lineTo(p.x - a, p.y + a);
+      // (white under the colour: the cross keeps its edge on any paint)
+      ctx.strokeStyle = paints.line;
+      ctx.lineWidth = Math.max(4, r * 0.95);
+      ctx.stroke();
+      ctx.strokeStyle = kit.color;
+      ctx.lineWidth = Math.max(2, r * 0.5);
       ctx.stroke();
     }
   }
+  ctx.lineCap = 'butt';
   // each team's count, on its half's sideline beside center court (clear of the arc and the mark)
   for (const t of [0, 1] as const) {
     const mine = shots.filter((s) => s.t === t);

@@ -74,6 +74,10 @@
     border-radius: var(--radius) var(--radius) 0 0;
     --court-h: 100%;
   }
+  /* (the picture fills the box it is given, whatever its shape: no band of ink under it) */
+  .lv .lv-stage .court-view {
+    height: 100%;
+  }
   .lv .lv-bar {
     margin: 6px 0 4px;
   }
