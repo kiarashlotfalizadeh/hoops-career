@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Hoops Career — a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
+  "description": "Hoops Career \u2014 a mobile-first basketball GM + head coach simulation with a deep tactics layer.",
   "engines": {
     "node": ">=22.15"
   },
@@ -23,6 +23,8 @@
     "data:fetch-extra": "NODE_USE_ENV_PROXY=1 tsx scripts/data/extra/fetch.ts",
     "data:extras": "tsx scripts/data/extra/refresh.ts",
     "data:history": "tsx scripts/data/history-apply.ts",
+    "mocap:build": "tsx scripts/mocap/build.ts",
+    "models:build": "tsx scripts/blender/run.ts",
     "cap:sync": "npm run build && cap sync",
     "data": "npm run data:fetch && npm run data:fetch-nba && npm run data:fetch-extra && npm run data:build",
     "bench": "tsx scripts/engine-bench.ts",
@@ -52,6 +54,7 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.18.4",
+    "three": "0.170.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -60,6 +63,7 @@
     "@types/node": "^22.20.5",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "@types/three": "0.170.0",
     "@vitejs/plugin-react": "^4.7.0",
     "cheerio": "^1.2.0",
     "eslint": "^10.12.0",

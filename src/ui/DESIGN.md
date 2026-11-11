@@ -333,6 +333,58 @@ package (ink plates, white type); the console is paper and card stock like every
   A phone held upright shows a window on the floor that pans with the ball; anything wide (a tablet, a
   desktop, a phone sideways, or the compact court) shows the whole floor sideways. The canvas picks
   the view from the box the layout gives it (`--court-ar` / `--court-h`, `live/styles/page.css`).
+- **Two pictures of the one play** (`live/CourtView.tsx`). By default a 3D broadcast camera high on
+  the near sideline (`live/Court3D.tsx`, `live/court3d/`): athletes in the night's kits,
+  each as tall and as broad as his listed height and weight, all one neutral tone (no likeness). The camera button in the court's
+  corner switches to the 2D floor from straight above (the tactics view), and back; the choice is
+  saved (`settings.courtLook`). The 2D court always runs underneath: it keeps the play's clock,
+  draws the break's shot chart, and is the whole court where WebGL 2 is missing or the 3D scene
+  fails to load. If frames run slow the picture is first drawn less sharp, then the court offers 2D.
+  three.js loads with the first 3D frame, never with the app.
+- **The 3D picture is an arena whose things are modelled in Blender** (`scripts/blender/`,
+  `npm run models:build`: headless Blender builds the models side by side, `run.ts` packs each
+  (the same shape in some 40% fewer bytes) into `court3d/models/*.glb` and notes the scripts it was
+  built from in `manifest.json`; `court3d/glb.ts` reads them, no glTF library; `models.test.ts`
+  holds the contract between the two and fails when a script changed without a rebuild).
+  `figure.glb` is the player: one fused skin on the puppet's 18 bones (shoulders, elbows and knees
+  bend without a seam), a face, cropped hair, fingered hands, sneakers with a soft collar, a V-neck
+  vest with sewn trim tucked into shorts cut as their own garment (a seat, a leg each that parts at
+  the fork and swings a beat behind his thigh), every hollow's shade baked in. Everyone is one
+  neutral tone; hair is that tone a little darker, one of a few crops per player, and his name is
+  over his number on his back. `people.glb` is that same body posed and baked: two bench sitters
+  and a coach in a suit with folded arms. `arena.glb` is the basket unit, rim, net, ball, bench
+  chair, scorer's table, scoreboard and the spectator the crowd is made of (182 triangles, and a
+  28-triangle stand-in that only the floor's mirror draws) (`court3d/props.ts`). The app gives
+  each part its material by the name Blender gave it, and paints kits and the home colour on. A
+  model changes in its `.py`, never by hand in the `.glb`. Two dev-server pages look at them in
+  the app's own light: `scripts/qa/figure-lab` (one move as a strip of moments) and
+  `scripts/qa/scene-lab` (the whole arena held still from any camera; `lab.bench()` costs a frame).
+  The scene (`court3d/scene.ts`, `court3d/arena.ts`) lights it: one shadow-casting light, a warm fill bounced off the wood, a dark pool where each foot meets
+  the floor; the floor is lit (its paint keeps its colour, the lamp banks leave hot spots) and gets a
+  faint blurred mirror; a crowd of people who shift in their seats and stand, arms up, for a basket,
+  benches, boards, an upper deck. The camera cuts: sideline (pushes in near the rim), low baseline
+  for free throws, the whole building after 1.5 s with nothing to follow, and short cut-ins: a
+  close-up on the scorer after a dunk, a three or a big basket and on the man fouled, the stands
+  dimmed behind him (at most one every 12 s, none at 4x speed or with reduced motion). A slow device loses shadows and the mirror first.
+- **3D plays a possession at half the 2D pace** (`COURT3D_PACE`): discs can cross the floor in a
+  second, bodies can't. Only the play's clock is slowed; the figures' legs run on their own time, so
+  a planted foot stays planted. The speed chips mean the same in both; a 3D game takes twice as long.
+- **3D is drawn at most 60 times a second**, on the device's normal GPU setting, and not at all
+  while paused. A phone takes the drawing context from an app in the background: the 2D court shows
+  until it is back, then the scene is rebuilt (a new canvas is tried if it isn't back in 3 s).
+- **The plan is `choreo.ts`'s; the figures only act it out.** Each keyframe says where every player
+  is, what he is doing (`Frame.act`: dribble, screen, jumper, contest, rebound...) and where he
+  faces (`Frame.face`). `court3d/puppet.ts` turns that into a body: it picks one of the clips in
+  `court3d/clips.ts`, blends from the last, walks the feet (a planted foot stays where it landed) and
+  solves arms and legs, so a hand on the ball is on the ball. Nothing in `court3d/` decides anything
+  about the game.
+- **Most clips are motion capture** (`court3d/mocap.gen.ts`, written by `npm run mocap:build` from
+  CMU Motion Capture Database takes kept in `data/raw/mocap`, outside the repository): standing,
+  walk, run, sprint, the defensive slide and stance, both dribbles, the crossover, the chest pass,
+  the jump shot, free throw and layup. A take is measured into the puppet's own channels (hands from
+  shoulders, hips, chest, head, elbows), so it fits any build and the feet stay the puppet's. No take
+  covers a dunk, block, rebound, screen, post-up or celebration: those are keyed by hand in
+  `clips.ts`. `scripts/qa/figure-lab/` shows any move as a strip of moments on the dev server.
 - **The floor is the home team's**: maple, its colour in both keys and the centre circle, its mark at
   centre court, its name along the baselines. The Cup final's floor is neutral.
 - **One colour a team, all night** (`matchKits` in `teamColors.ts`, `s.kits` in the live game): the

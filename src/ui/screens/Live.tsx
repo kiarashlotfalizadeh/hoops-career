@@ -25,7 +25,9 @@ import { periodLabel } from '../stats';
 import { flowActions } from '../flow';
 import { canGoBack } from '../nav';
 import { sealedGame, simDecided, skipChoices } from '../live/skip';
-import { Court, courtFloor } from '../live/Court';
+import { courtFloor } from '../live/Court';
+import { CourtView } from '../live/CourtView';
+import { bodyOf } from '../live/court3d/puppet';
 import { drawnPlayer } from '../live/drawn';
 import { offPlan, resetToPlan } from '../live/pills';
 import { ScoreBug, gameContext } from '../live/ScoreBug';
@@ -255,6 +257,10 @@ export default function Live() {
   // the sim is at the period's buzzer while the court draws its last possession: no timeout then (the break is the stop)
   const buzzer = sim.atBuzzer();
   const jersey = (pid: number) => league.players[pid]?.jersey || '0';
+  const body = (pid: number) => {
+    const p = league.players[pid];
+    return bodyOf(p?.heightIn ?? 78, p?.weightLb ?? 215, p?.ratings.str);
+  };
   // whose floor: the home team's, or a neutral one for the Cup final
   const floor = courtFloor(home, kits[0], neutral, game.game.cup === 'final' ? 'NBA Cup' : '');
   const myView = view.sides[userSide];
@@ -575,7 +581,10 @@ export default function Live() {
 
       {/* the court: nothing sits over it while the game plays but its own short labels (the call bar has the rest) */}
       <div className="lv-stage" onClick={stop || frozen || s.intro ? undefined : () => setCourtTap((n) => n + 1)}>
-        <Court
+        <CourtView
+          look={league.settings.courtLook ?? '3d'}
+          onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
+          body={body}
           script={script}
           speed={s.speed}
           paused={paused}

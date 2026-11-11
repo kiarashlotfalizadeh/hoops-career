@@ -12,6 +12,40 @@ import { madeAtt } from '../../core/format';
 import { CLEAR_OUT, SETS } from '../../core/sim/sets';
 import type { LogVoice } from './atmosphere';
 
+/**
+ * What a player is doing through a move. The court's 3D figures act it out (court3d/); nothing here is
+ * decided there. A shot is two moves: he goes up for it ('jumper', 'floater', 'layup', 'dunk', 'ft':
+ * the ball leaves as the move ends), then it's away ('release'); the man on him goes up with him
+ * ('contest', 'block') and comes down ('land').
+ */
+export type Act =
+  | 'stand' // waiting: a dead ball, the lane at a free throw, a huddle
+  | 'move' // getting somewhere without the ball: spacing, a cut, running the floor
+  | 'dribble' // has the ball, on the dribble
+  | 'drive' // attacks the basket off the dribble
+  | 'hold' // has it in both hands
+  | 'pass'
+  | 'catch'
+  | 'screen'
+  | 'post'
+  | 'jumper'
+  | 'floater'
+  | 'layup'
+  | 'dunk'
+  | 'ft'
+  | 'release'
+  | 'guard' // on the ball, in a stance
+  | 'defend' // off the ball
+  | 'trap'
+  | 'contest'
+  | 'block'
+  | 'land'
+  | 'steal'
+  | 'boxout'
+  | 'rebound'
+  | 'celebrate'
+  | 'rue';
+
 export interface Pt {
   x: number;
   y: number;
@@ -39,6 +73,12 @@ export interface Frame {
   hold?: number;
   /** A shot landing: the net (a make) or the rim (a miss) reacts. */
   fx?: 'make' | 'miss';
+  /** What each player does through the move into this frame: [offense..., defense...]. */
+  act: Act[];
+  /** Where each faces as he gets here, [offense..., defense...]: a heading in the offense's frame (radians, atan2(y, x)); `faceWorld` turns it. */
+  face: number[];
+  /** A blocked shot: who got a hand to it (an index into [offense..., defense...]). */
+  swat?: number;
 }
 
 export interface Script {
@@ -70,6 +110,20 @@ export function attackDir(side: 0 | 1, q: number): 1 | -1 {
 /** A point in an offense's frame, on the court itself (and back: the turn is its own inverse). */
 export function toWorld(p: Pt, dir: 1 | -1): Pt {
   return dir === 1 ? { x: p.x, y: p.y } : { x: -p.x, y: COURT_LEN - p.y };
+}
+
+/** A heading in an offense's frame, on the court itself (the far end's is turned half round). */
+export function faceWorld(a: number, dir: 1 | -1): number {
+  return dir === 1 ? a : a + Math.PI;
+}
+
+/** How a shot is taken, from its zone and the play-by-play's word for it. */
+function shotAct(st: PossStep): Act {
+  const d = st.d ?? '';
+  if (/dunk|alley-oop/.test(d)) return 'dunk';
+  if (st.zone === 'rim' || /layup|finger roll|putback|tip-in|up-and-under/.test(d)) return 'layup';
+  if (/floater|runner|hook/.test(d)) return 'floater';
+  return 'jumper';
 }
 
 /** Where everyone and the ball stand, on the court itself. */
@@ -306,18 +360,70 @@ export function buildScript(
   };
   let lastO = oPids.map((p) => ({ ...o.get(p)! }));
   let lastD = dPids.map((p) => ({ ...d.get(p)! }));
+  // what the next keyframe says a player is doing and where he looks, when a step has something to say
+  // (the rest follows from who has the ball and who is guarding whom)
+  const doing = new Map<number, Act>();
+  const looks = new Map<number, Pt>();
+  const does = (pid: number | undefined, act: Act, look?: Pt) => {
+    if (pid === undefined) return;
+    doing.set(pid, act);
+    if (look) looks.set(pid, { ...look });
+  };
+  const all = [...oPids, ...dPids];
+  const nO = oPids.length;
+  let lastFace: number[] = all.map((_, j) => (j < nO ? -Math.PI / 2 : Math.PI / 2));
+  const heading = (a: Pt, b: Pt) => Math.atan2(b.y - a.y, b.x - a.x);
   /** A keyframe of where everyone is now, `dur` ms after the last (longer when somebody has a long way to run). */
   const snap = (dur: number, extra: Partial<Frame> = {}) => {
     const hold = holding();
     spread(hold);
     const fo = oPids.map((p) => ({ ...o.get(p)! }));
     const fd = dPids.map((p) => ({ ...d.get(p)! }));
+    const now = [...fo, ...fd];
+    const was = [...lastO, ...lastD];
     let far = 0;
-    fo.forEach((p, i) => (far = Math.max(far, dist(p, lastO[i]))));
-    fd.forEach((p, i) => (far = Math.max(far, dist(p, lastD[i]))));
+    now.forEach((p, i) => (far = Math.max(far, dist(p, was[i]))));
+    // the man on the ball: its nearest defender, if he's close
+    let onBall = -1;
+    if (hold >= 0 && hold < nO) {
+      fd.forEach((p, j) => {
+        if (dist(p, now[hold]) < (onBall < 0 ? 8 : dist(now[onBall], now[hold]))) onBall = nO + j;
+      });
+    }
+    const act = all.map((pid, j): Act => {
+      const said = doing.get(pid);
+      // (standing with the ball is holding it)
+      if (said) return said === 'stand' && j === hold ? 'hold' : said;
+      if (j === hold) return 'dribble';
+      const run = dist(now[j], was[j]);
+      if (j < nO) return run > 1.5 ? 'move' : 'stand';
+      // (a long way to go: he turns and runs back)
+      return run > 12 ? 'move' : j === onBall ? 'guard' : 'defend';
+    });
+    const face = all.map((pid, j) => {
+      const p = now[j];
+      const run = dist(p, was[j]);
+      let to = looks.get(pid);
+      if (!to) {
+        const a = act[j];
+        // running, he faces where he's going
+        if (run > 2 && (a === 'move' || ((a === 'dribble' || a === 'drive') && run > 6))) return heading(was[j], p);
+        if (j < nO) to = j === hold || hold < 0 ? BASKET : now[hold];
+        else {
+          // a defender sees his man and the ball (in a zone, the ball)
+          const man = manOf.get(pid);
+          const mp = man !== undefined && !zone ? o.get(man) : undefined;
+          to = a === 'guard' || !mp ? (hold >= 0 ? now[hold] : ball) : { x: (mp.x + ball.x) / 2, y: (mp.y + ball.y) / 2 };
+        }
+      }
+      return dist(p, to) > 0.4 ? heading(p, to) : lastFace[j];
+    });
+    doing.clear();
+    looks.clear();
+    lastFace = face;
     lastO = fo;
     lastD = fd;
-    frames.push({ dur: dur > 0 ? Math.round(Math.max(dur, far / PACE)) : 0, o: fo, d: fd, ball: { ...ball }, hold, ...extra });
+    frames.push({ dur: dur > 0 ? Math.round(Math.max(dur, far / PACE)) : 0, o: fo, d: fd, ball: { ...ball }, hold, act, face, ...extra });
   };
   // captions name the players (without names, the court shows the play's label throughout)
   const N = (pid: number | undefined) => (pid === undefined || !name ? '' : name(pid));
@@ -343,6 +449,8 @@ export function buildScript(
     const was = holder;
     give(pid);
     follow();
+    does(was, 'pass', o.get(pid));
+    does(pid, 'catch', o.get(was));
     snap(360, cap(`${N(was)} finds ${N(pid)}`));
   };
   /** The ball gets to the man who starts the possession: the inbound after a basket, the outlet after a stop. */
@@ -350,6 +458,22 @@ export function buildScript(
     holder = pid;
     const at = o.get(pid);
     if (!at || dist(at, ball) < 0.01) return;
+    // nobody has it (it dropped through the net, or went out): the nearest teammate picks it up and gets it in
+    let passer = holding();
+    if (passer < 0) {
+      const near = oPids.filter((p) => p !== pid).sort((a, b) => dist(o.get(a)!, ball) - dist(o.get(b)!, ball))[0];
+      if (near !== undefined) {
+        // (after a basket, from behind that baseline)
+        o.set(near, ball.y > 80 ? { x: clamp(ball.x + 4, -24, 24), y: COURT_LEN - 1 } : { x: clamp(ball.x, -24.5, 24.5), y: clamp(ball.y, 0.5, COURT_LEN - 0.5) });
+        ball = { ...o.get(near)! };
+        does(near, 'hold', at);
+        snap(200);
+        passer = oPids.indexOf(near);
+      }
+    }
+    const from = passer >= 0 ? all[passer] : undefined;
+    if (from !== undefined && from !== pid) does(from, 'pass', at);
+    does(pid, 'catch', { ...ball });
     ball = { ...at };
     snap(240);
   };
@@ -484,6 +608,7 @@ export function buildScript(
         const hp = o.get(h)!;
         moveTo(scr, { x: hp.x + 3, y: hp.y - 1.5 });
         follow();
+        does(scr, 'screen', hp);
         snap(480);
         moveTo(h, { x: hp.x - 4, y: hp.y - 6 });
         moveTo(scr, { x: hp.x + 1, y: 12 });
@@ -558,9 +683,11 @@ export function buildScript(
         }
         moveTo(scr, spot);
         follow();
+        does(scr, 'screen', o.get(cut));
         snap(420);
         moveTo(cut, to);
         if (log.set?.id === 'postSplit') moveTo(scr, { x: -side * 18, y: 20 });
+        else does(scr, 'screen');
         follow();
         // (the set's name once, on its first screen)
         snap(480, {
@@ -574,6 +701,8 @@ export function buildScript(
         const hp = o.get(h)!;
         const near = [...dPids].sort((a, b) => dist(d.get(a)!, hp) - dist(d.get(b)!, hp)).slice(0, 2);
         near.forEach((pid, i) => d.set(pid, { x: hp.x + (i ? 2.2 : -2.2), y: hp.y - 2 }));
+        near.forEach((pid) => does(pid, 'trap', hp));
+        does(h, 'hold');
         snap(420, { flash: { text: 'Trap', kind: 'info', x: hp.x, y: hp.y + 4 }, ...cap(`${N(h)} is trapped`) });
         break;
       }
@@ -583,6 +712,7 @@ export function buildScript(
         const p = o.get(pid)!;
         moveTo(pid, { x: p.x * 0.35, y: 10 });
         follow();
+        does(pid, 'drive');
         snap(620, cap(`${N(pid)} drives`));
         break;
       }
@@ -591,6 +721,8 @@ export function buildScript(
         const side = (o.get(pid)!.x >= 0 ? 1 : -1) * 7;
         moveTo(pid, { x: side, y: 8 });
         follow();
+        // (his back to the basket)
+        does(pid, 'post', { x: side * 3, y: 8 + (8 - BASKET.y) * 2 });
         snap(560, cap(`${N(pid)} posts up`));
         // the entry pass once he has his spot
         catchBall(pid);
@@ -610,9 +742,16 @@ export function buildScript(
         moveTo(big, { x: side * 9, y: 21 });
         follow();
         snap(480);
+        if (holder !== big) {
+          does(holder, 'pass', o.get(big));
+          does(big, 'catch', o.get(holder));
+        }
         give(big);
         moveTo(sh, { x: side * 11, y: 24 });
+        does(big, doing.get(big) ?? 'hold');
         snap(380);
+        does(big, 'pass', o.get(sh));
+        does(sh, 'catch', o.get(big));
         give(sh);
         moveTo(sh, { x: side * 13, y: 25 });
         follow();
@@ -622,6 +761,10 @@ export function buildScript(
       case 'pass': {
         const to = st.pid2!;
         const was = st.pid ?? holder;
+        if (was !== to) {
+          does(was, 'pass', o.get(to));
+          does(to, 'catch', o.get(was));
+        }
         give(to);
         follow();
         snap(360, cap(was !== to ? `${N(was)} finds ${N(to)}` : `${N(to)} has it`));
@@ -634,11 +777,16 @@ export function buildScript(
         give(pid);
         follow();
         // contest: nearest defender closes out to a hand's length, on the basket side (not on top of a shooter at the rim)
-        const near = [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
+        // (a blocked shot: the man who blocks it is the one who goes up with him)
+        const next = steps[at + 1];
+        const blocker = next?.k === 'block' && next.pid !== undefined && d.has(next.pid) ? next.pid : undefined;
+        const near = blocker ?? [...dPids].sort((a, b) => dist(d.get(a)!, target) - dist(d.get(b)!, target))[0];
         const toRim = dist(target, BASKET);
         const [ux, uy] = toRim > 0.5 ? [(BASKET.x - target.x) / toRim, (BASKET.y - target.y) / toRim] : [0, -1];
         if (near !== undefined) d.set(near, { x: target.x + ux * 3, y: Math.max(0.5, target.y + uy * 3) });
         const what = st.d ?? (st.v === 3 ? 'three' : 'jumper');
+        does(pid, shotAct(st), BASKET);
+        does(near, blocker !== undefined ? 'block' : 'contest', target);
         snap(300, cap(`${N(pid)}, ${what}…`));
         // (the shooter's own spot, as the crowd around him left it)
         const release = o.get(pid)!;
@@ -656,7 +804,11 @@ export function buildScript(
         const flashText = atBuzzer ? (moment === 'winner' ? 'Game winner' : 'Buzzer beater') : `+${st.v ?? 2}`;
         // a layup barely leaves the hand; a jumper climbs with its distance
         const far = dist(release, BASKET);
+        // it's away: he follows through, his man comes down, the rest turn to the basket and find a body
+        for (const p of oPids) does(p, p === pid ? 'release' : 'stand', BASKET);
+        for (const p of dPids) does(p, p === near ? 'land' : dist(d.get(p)!, BASKET) < 15 ? 'boxout' : 'defend', BASKET);
         snap(st.zone === 'rim' ? 380 : Math.round(520 + far * 7), {
+          ...(blocker !== undefined && { swat: nO + dPids.indexOf(blocker) }),
           ballZ: st.zone === 'rim' ? 2.4 : 4.5 + far * 0.24,
           fx: made ? 'make' : 'miss',
           flash: made ? { text: flashText, kind: 'make', x: 0, y: 10 } : { text: 'Miss', kind: 'miss', x: 0, y: 10 },
@@ -664,7 +816,11 @@ export function buildScript(
           ...cap(made ? (voiced() ?? `${N(pid)} ${what}: good!${st.pid2 !== undefined ? ` (${N(st.pid2)} assist)` : ''}${swing}`) : `${N(pid)} misses the ${what}`),
         });
         // at the buzzer, the court lingers on it
-        if (atBuzzer) snap(900);
+        if (atBuzzer) {
+          for (const p of oPids) does(p, 'celebrate');
+          for (const p of dPids) does(p, 'rue');
+          snap(900);
+        }
         break;
       }
       case 'block': {
@@ -681,6 +837,7 @@ export function buildScript(
           holder = pid;
         } else if (pid !== undefined && d.has(pid)) d.set(pid, pt);
         ball = { ...pt };
+        does(pid, 'rebound', BASKET);
         // (the board everyone expects needs no label; the one that keeps a possession alive gets one)
         const flash: Flash | undefined =
           pid === undefined ? { text: 'Team rebound', kind: 'info', x: pt.x, y: pt.y + 4 } : offensive ? { text: 'Off. rebound', kind: 'info', x: pt.x, y: pt.y + 4 } : undefined;
@@ -694,8 +851,13 @@ export function buildScript(
       case 'steal': {
         const stl = st.pid2;
         const stolen = stl !== undefined && d.has(stl);
-        if (stolen) ball = { ...d.get(stl)! };
-        else ball = { x: 25, y: ball.y };
+        if (stolen) {
+          does(stl, 'steal', o.get(st.pid ?? holder));
+          ball = { ...d.get(stl)! };
+        } else {
+          does(st.pid ?? holder, 'rue');
+          ball = { x: 25, y: ball.y };
+        }
         snap(420, {
           flash: { text: st.k === 'steal' ? 'Steal' : 'Turnover', kind: 'to', x: ball.x * 0.5, y: ball.y + 3 },
           ...cap(st.k === 'steal' && stl !== undefined ? (voiced() ?? `${N(stl)} steals it from ${N(st.pid)}!`) : `Turnover, ${N(st.pid ?? holder)}`),
@@ -725,12 +887,18 @@ export function buildScript(
         oPids.filter((p) => p !== pid).forEach((p, i) => moveTo(p, FT_OFF[i] ?? { x: 0, y: 30 }));
         dPids.forEach((p, i) => d.set(p, FT_DEF[i] ?? { x: 0, y: 32 }));
         ball = { ...o.get(pid)! };
+        for (const p of all) does(p, p === pid ? 'hold' : 'stand', BASKET);
         snap(450);
+        // (one trip to the line is one motion here, however many he shoots)
+        for (const p of all) does(p, p === pid ? 'ft' : 'stand', BASKET);
+        snap(260);
         ball = { ...BASKET };
+        for (const p of all) does(p, p === pid ? 'release' : 'stand', BASKET);
         score[off] += st.v ?? 0;
         // "1-2 FT": made-attempted, as a box score writes it (a log without attempts just counts the makes)
         snap(520, {
           ballZ: 6,
+          fx: (st.v ?? 0) > 0 ? 'make' : 'miss',
           flash: { text: st.n ? `${madeAtt(st.v ?? 0, st.n)} FT` : `${st.v ?? 0} FT`, kind: (st.v ?? 0) > 0 ? 'make' : 'miss', x: 0, y: 10 },
           score: [...score] as [number, number],
           ...cap(`${N(pid)} ${st.n ? `${st.v ?? 0} of ${st.n}` : `${st.v ?? 0}`} at the line`),
@@ -739,6 +907,7 @@ export function buildScript(
       }
       case 'timeout':
         // the one flash a timeout gets, naming the team that called it
+        for (const p of all) does(p, 'stand');
         snap(900, {
           flash: { text: st.t !== undefined && teams ? `Timeout ${teams[st.t]}` : 'Timeout', kind: 'info', x: 0, y: 26 },
           ...cap(st.t !== undefined ? `Timeout, ${abbrev(st.t)}` : 'Timeout'),

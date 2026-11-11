@@ -247,6 +247,12 @@ export default function Settings() {
           <Section title="During the game">
             <fieldset className="card flush set-list" disabled={simming}>
               <Toggle
+                on={st.courtLook !== 'flat'}
+                onChange={(v) => set('courtLook', v ? '3d' : 'flat')}
+                label="3D court"
+                help="Players as figures, seen from a broadcast camera. Off: the 2D floor from above. The camera button on the court switches too."
+              />
+              <Toggle
                 on={st.liveWinProb !== false}
                 onChange={(v) => set('liveWinProb', v)}
                 label="Win bar"

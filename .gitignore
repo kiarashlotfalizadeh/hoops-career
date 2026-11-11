@@ -17,3 +17,6 @@ ios/App/build
 # scripts/qa screenshot folders (their default output)
 /shots
 /tour
+# Blender's working files (.blend, preview renders); the .glb models in src are kept
+scripts/blender/out
+__pycache__

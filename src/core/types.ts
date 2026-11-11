@@ -1432,6 +1432,8 @@ export interface Settings {
   liveStaff?: 'ask' | 'auto';
   /** Live games on a phone held upright: the court at full size ('court') or smaller, for more of the bench under it ('bench'). */
   liveView?: 'court' | 'bench';
+  /** The court's picture: the 3D broadcast camera (the default, where the device draws WebGL) or the 2D floor from above ('flat'). */
+  courtLook?: '3d' | 'flat';
   /** Live games open with the starting lineups on the court before the tip (default on). */
   liveIntro?: boolean;
   /** Live games show the night's other scores as they go (default on). */

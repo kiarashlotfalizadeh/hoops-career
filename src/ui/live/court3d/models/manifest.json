@@ -1,0 +1,20 @@
+{
+  "figure": {
+    "sources": "031b6c11290e6cecb40bf6a958726581b7e993f98bceeac2e1ecf8daef6a2c1b",
+    "pack": 1,
+    "blender": "Blender 5.2.1 LTS",
+    "bytes": 318480
+  },
+  "people": {
+    "sources": "5315438f468c7280654f85b1a730a37d493f8add7b0ed7633da3aa88cfdc6b6d",
+    "pack": 1,
+    "blender": "Blender 5.2.1 LTS",
+    "bytes": 378272
+  },
+  "arena": {
+    "sources": "3481d10afd4f8890264e4fa8e24e895542cbc9c2a01ad9aee3b8b7015949edef",
+    "pack": 1,
+    "blender": "Blender 5.2.1 LTS",
+    "bytes": 199848
+  }
+}

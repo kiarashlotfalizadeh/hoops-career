@@ -52,11 +52,14 @@ export default defineConfig({
       },
       workbox: {
         // woff2 only: every browser that supports service workers reads it, so the .woff fallbacks just waste the precache
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json}'],
+        // (glb: the 3D court's models, so it draws offline too)
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,json,glb}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),
   ],
+  // (the 3D court's models: files to serve, not code)
+  assetsInclude: ['**/*.glb'],
   worker: { format: 'es' },
   build: {
     target: 'es2022',

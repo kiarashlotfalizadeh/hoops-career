@@ -2,7 +2,14 @@
 // sets and defenses look like themselves, its score follows the scoreboard, timeouts name their caller
 // and the captions call the play.
 import { describe, expect, it } from 'vitest';
-import { attackDir, buildScript, captionAt, standing, toWorld, type Frame } from '../live/choreo';
+import { attackDir, buildScript, captionAt, faceWorld, standing, toWorld, type Frame } from '../live/choreo';
+import { captured, CHANNELS, CLIPS, I, mirror, N, sample } from '../live/court3d/clips';
+import { figureGeo } from '../live/court3d/figure';
+import { readGlb } from '../live/court3d/glb';
+import arenaGlb from '../live/court3d/models/arena.glb?inline';
+import figureGlb from '../live/court3d/models/figure.glb?inline';
+import peopleGlb from '../live/court3d/models/people.glb?inline';
+import { BALL_R, baseClip, bodyOf, HIP, J, Puppet } from '../live/court3d/puppet';
 import type { PossLog, PossStep } from '../../core/sim/log';
 import { createLeague, defaultSettings } from '../../core/league/create';
 import { teamPlayers } from '../../core/league/helpers';
@@ -342,7 +349,13 @@ describe('live court choreography', () => {
       );
       // the ball is inbounded to the man who brings it up, from the far end, over half court, into the set
       expect(next.frames[0].ball.y).toBeGreaterThan(80);
-      expect(next.frames[1].hold).toBe(0);
+      // (a teammate picks it up behind the baseline and gets it in to him)
+      expect(next.frames[1].hold).toBeGreaterThan(0);
+      expect(next.frames[1].hold).toBeLessThan(5);
+      expect(next.frames[1].o[next.frames[1].hold!].y).toBeGreaterThan(90);
+      expect(next.frames[2].hold).toBe(0);
+      expect(next.frames[2].act[next.frames[1].hold!]).toBe('pass');
+      expect(next.frames[2].act[0]).toBe('catch');
       expect(next.frames.some((f) => f.o[0].y > 47)).toBe(true);
       const end = next.frames.at(-1)!;
       expect(Math.max(...end.o.map((p) => p.y), ...end.d.map((p) => p.y))).toBeLessThan(40);
@@ -486,10 +499,174 @@ describe('live court choreography', () => {
         for (const l of sim.drainLogs()) {
           const s = buildScript(l, info, undefined, [league.teams[2].abbrev, league.teams[3].abbrev], nm);
           for (const f of s.frames) if (f.cap !== undefined) expect(f.cap).not.toMatch(/^\s|undefined| {2}|^, |\bfor $/);
+          // every frame says what all ten are doing and where they face
+          for (const f of s.frames) {
+            expect(f.act.length).toBe(10);
+            expect(f.face.every((a) => Number.isFinite(a))).toBe(true);
+          }
+          // whoever has the ball is doing something with it; a shot goes up and then is away
+          for (const f of s.frames) if (f.hold !== undefined && f.hold >= 0) expect(f.act[f.hold]).not.toMatch(/^(stand|move|guard|defend|boxout)$/);
+          s.frames.forEach((f, i) => {
+            const who = f.act.indexOf('release');
+            if (who >= 0) expect(s.frames[i - 1].act[who]).toMatch(/^(jumper|floater|layup|dunk|ft)$/);
+          });
           for (const st of l.steps) if (st.k === 'shot') shots += st.d ? 1 : 0;
         }
       }
       expect(shots).toBeGreaterThan(100);
+    }
+
+    // what the players are doing and where they look, for the 3D figures
+    {
+      const s = buildScript(
+        log([
+          { k: 'advance', pid: 1 },
+          { k: 'pass', pid: 1, pid2: 2 },
+          { k: 'shot', pid: 2, x: 16, y: 22, zone: 'ab3', made: false, v: 3 },
+          { k: 'block', pid: 12, pid2: 2 },
+          { k: 'reb', pid: 15 },
+        ]),
+        info,
+      );
+      const acts = (j: number) => s.frames.map((f) => f.act[j]);
+      expect(acts(0)).toContain('pass');
+      expect(acts(1).join()).toMatch(/catch,jumper,release/);
+      // the man who blocks it goes up with the shooter, and the flight knows whose hand it meets
+      expect(acts(6).join()).toMatch(/block,land/);
+      expect(s.frames.find((f) => f.swat !== undefined)?.swat).toBe(6);
+      expect(acts(9)).toContain('rebound');
+      // the shooter faces the basket as he goes up; his defender faces him
+      const up = s.frames.find((f) => f.act[1] === 'jumper')!;
+      const to = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.atan2(b.y - a.y, b.x - a.x);
+      expect(up.face[1]).toBeCloseTo(to(up.o[1], { x: 0, y: 5.25 }), 5);
+      expect(Math.cos(up.face[6] - to(up.d[1], up.o[1]))).toBeGreaterThan(0.99);
+      // the far end's headings are turned half round on the court itself
+      expect(faceWorld(0.5, 1)).toBe(0.5);
+      expect(faceWorld(0.5, -1)).toBeCloseTo(0.5 + Math.PI);
+      // rim finishes by the play-by-play's word
+      const finish = (d: string) => buildScript(log([{ k: 'shot', pid: 1, x: 1, y: 6, zone: 'rim', made: true, v: 2, d }]), info).frames.map((f) => f.act[0]);
+      expect(finish('slam dunk')).toContain('dunk');
+      expect(finish('driving layup')).toContain('layup');
+    }
+
+    // the models Blender built: the player hangs on the puppet's own bones (every point of him on some), and the bench, the coach and the building's props are in their files
+    {
+      const glb = (file: string) => readGlb(Uint8Array.from(atob(file.slice(file.indexOf(',') + 1)), (ch) => ch.charCodeAt(0)).buffer);
+      const geo = figureGeo((o) => o, glb(figureGlb));
+      expect([...geo.order].sort((x, y) => x - y)).toEqual(Array.from({ length: 18 }, (_, i) => i));
+      expect(geo.wears).toEqual(expect.arrayContaining(['skin', 'hair', 'jersey', 'trim', 'cloth', 'shoe', 'white']));
+      const w = geo.body.getAttribute('skinWeight');
+      for (let i = 0; i < w.count; i += 37) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
+      // (6 ft 6 and his soles, standing as built)
+      geo.body.computeBoundingBox();
+      const tall = geo.body.boundingBox!.max.y - geo.body.boundingBox!.min.y;
+      expect(tall).toBeGreaterThan(6.5);
+      expect(tall).toBeLessThan(6.9);
+      expect([...glb(peopleGlb).keys()].sort()).toEqual(['benchA', 'benchB', 'coach']);
+      expect([...glb(arenaGlb).keys()].sort()).toEqual(['ball', 'chair', 'fan', 'fanFar', 'hoop', 'net', 'rim', 'scoreboard', 'table']);
+    }
+
+    // the figures: a planted foot stays where it landed, the ball stays in his hands, a big man is bigger
+    {
+      const big = bodyOf(86, 260, 70);
+      const small = bodyOf(73, 180, 40);
+      expect(big.s).toBeGreaterThan(small.s);
+      expect(big.bulk).toBeGreaterThan(small.bulk);
+      expect(CHANNELS.length).toBe(N);
+      expect(Object.keys(CLIPS).length).toBeGreaterThanOrEqual(25);
+      for (const c of Object.values(CLIPS)) expect(c.at.every((t, i) => i === 0 || t > c.at[i - 1])).toBe(true);
+      // running in a straight line at a half-court pace: while a foot is down it doesn't slide
+      const p = new Puppet(bodyOf(78, 215));
+      let slid = 0;
+      let steps = 0;
+      const down: ({ x: number; z: number } | null)[] = [null, null];
+      for (let t = 0; t < 2400; t += 16) {
+        p.update({ x: t * 0.016, z: 3, yaw: Math.PI / 2, act: 'move', ms: t, dur: 2400, ball: false }, 16);
+        p.feet.forEach((f, k) => {
+          if (f.swing) {
+            if (down[k]) steps++;
+            down[k] = null;
+          } else if (!down[k]) down[k] = { x: f.x, z: f.z };
+          else if (t > 400) slid = Math.max(slid, Math.hypot(f.x - down[k]!.x, f.z - down[k]!.z));
+        });
+        // (his feet are on the floor under him, his head above his hips)
+        expect(p.j[J.fl * 3 + 1]).toBeGreaterThan(0);
+        expect(p.j[J.head * 3 + 1]).toBeGreaterThan(p.j[J.hips * 3 + 1] + 2);
+      }
+      expect(steps).toBeGreaterThan(6);
+      expect(slid).toBeLessThan(0.02);
+      expect(p.clip).toBe('run');
+      // a fast break as the plan runs it (50 ft/s): the 3D court plays it at half pace on the body's own
+      // time, so his legs keep up; on the play's time they can't, and a planted foot is dragged
+      const drag = (pace: number) => {
+        const q = new Puppet(bodyOf(78, 215));
+        const at: ({ x: number; z: number } | null)[] = [null, null];
+        let worst = 0;
+        for (let t = 0; t < 1400; t += 16 * pace) {
+          q.update({ x: t * 0.05, z: 3, yaw: Math.PI / 2, act: 'move', ms: t, dur: 1400, ball: false }, 16 * pace, 16);
+          q.feet.forEach((f, k) => {
+            if (f.swing) at[k] = null;
+            else if (!at[k]) at[k] = { x: f.x, z: f.z };
+            else if (t > 400) worst = Math.max(worst, Math.hypot(f.x - at[k]!.x, f.z - at[k]!.z));
+          });
+        }
+        return worst;
+      };
+      expect(drag(0.5)).toBeLessThan(0.02);
+      expect(drag(1)).toBeGreaterThan(0.5);
+      // a jump shot, from the gather to the landing: until the release the shooting hand is on the ball
+      const sh = new Puppet(bodyOf(78, 215));
+      const out = { x: 0, y: 0, z: 0 };
+      let peak = 0;
+      for (let t = 0; t < 1100; t += 16) {
+        const up = t < 400;
+        sh.update({ x: 0, z: 0, yaw: 0, act: up ? 'jumper' : 'release', ms: up ? t : t - 400, dur: up ? 400 : 700, ball: up }, 16);
+        const ball = sh.carry(out);
+        sh.arms(up ? ball : null);
+        if (up && t > 200) expect(Math.hypot(sh.j[J.hr * 3] - ball.x, sh.j[J.hr * 3 + 1] - ball.y, sh.j[J.hr * 3 + 2] - ball.z)).toBeLessThan(BALL_R + 0.2);
+        peak = Math.max(peak, sh.j[J.hips * 3 + 1]);
+      }
+      expect(sh.clip).not.toBe('jumper');
+      expect(peak).toBeGreaterThan(HIP + 0.8);
+      // the moves a take covers are captured motion (measured on these same channels); the rest are keyed
+      for (const id of ['walk', 'run', 'sprint', 'shuffle', 'stance', 'dribble', 'dribbleRun', 'crossover', 'pass', 'jumper', 'freeThrow', 'layup'] as const)
+        expect(captured(id)).toBe(true);
+      expect(captured('dunk')).toBe(false);
+      for (const c of Object.values(CLIPS)) for (const pose of c.poses) expect(pose.length).toBe(N);
+      // a loop ends where it began; a pose flipped twice is itself
+      for (const id of ['idle', 'dribble', 'run'] as const) {
+        const c = CLIPS[id];
+        for (let i = 0; i < N; i++) expect(c.poses[c.poses.length - 1][i]).toBeCloseTo(c.poses[0][i], 5);
+      }
+      const once = sample(CLIPS.dribble, 0.3, new Float32Array(N));
+      const twice = Float32Array.from(once);
+      mirror(twice);
+      expect(twice[I.bx]).toBeCloseTo(-once[I.bx], 5);
+      mirror(twice);
+      for (let i = 0; i < N; i++) expect(twice[i]).toBeCloseTo(once[i], 5);
+      // a dribble: the ball comes down to the floor and back up to his hand, which is on it at the top
+      const dr = new Puppet(bodyOf(78, 215));
+      let low = 9;
+      let high = 0;
+      for (let t = 0; t < 2600; t += 16) {
+        dr.update({ x: 0, z: 0, yaw: 0, act: 'dribble', ms: t, dur: 2600, ball: true }, 16);
+        const ball = dr.carry(out);
+        dr.arms(ball);
+        low = Math.min(low, ball.y);
+        high = Math.max(high, ball.y);
+        if (t > 300 && dr.pose[I.gr] > 0.95) expect(Math.hypot(dr.j[J.hr * 3] - ball.x, dr.j[J.hr * 3 + 1] - ball.y, dr.j[J.hr * 3 + 2] - ball.z)).toBeLessThan(BALL_R + 0.2);
+      }
+      expect(low).toBeLessThan(BALL_R + 0.25);
+      expect(high).toBeGreaterThan(2);
+      // a crossover leaves it in his other hand, and the dribble that follows is that hand's
+      const cr = new Puppet(bodyOf(78, 215));
+      for (let t = 0; t < 900; t += 16) cr.update({ x: 0, z: t * 0.006, yaw: 0, act: 'drive', ms: t, dur: 900, ball: true }, 16);
+      expect(cr.lefty).toBe(true);
+      // what he does picks the clip, not the other way round
+      expect(baseClip('guard', false, 0, 0, 0)).toBe('stance');
+      expect(baseClip('defend', false, 20, -18, 2)).toBe('backpedal');
+      expect(baseClip('dribble', true, 25, 24, 0)).toBe('dribbleRun');
+      expect(baseClip('move', false, 40, 39, 0)).toBe('sprint');
     }
   });
 });

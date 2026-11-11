@@ -1,0 +1,116 @@
+/* The court as the page shows it (CourtView.tsx): the 2D canvas gives the box its shape, the 3D
+   picture lies over it, and the camera button sits in its corner. The 3D picture's labels (the
+   handler's name, a play's word) are the same ink pills the 2D court draws. */
+.court-view {
+  position: relative;
+  display: block;
+  line-height: 0;
+}
+.c3d {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  line-height: 1.2;
+}
+.c3d[hidden] {
+  display: none;
+}
+.c3d-gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* (until its first frame is drawn the 2D court shows through) */
+.court-view[data-look='flat'] .c3d {
+  visibility: hidden;
+}
+.c3d-pill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 9px 4px;
+  border-radius: 999px;
+  background: var(--ink, #121212);
+  color: var(--on-ink, #fff);
+  font:
+    700 12px/1.2 'Archivo Variable',
+    system-ui,
+    sans-serif;
+  font-stretch: semi-condensed;
+  white-space: nowrap;
+  opacity: 0;
+  will-change: transform, opacity;
+}
+.c3d-tag {
+  margin-top: 6px;
+}
+.c3d-flash {
+  margin-top: -14px;
+  padding: 4px 12px 5px;
+  font-size: 15px;
+  font-weight: 800;
+}
+.c3d-flash[data-kind='make'] {
+  color: var(--good-night, #7fe3a8);
+}
+.c3d-flash[data-kind='block'],
+.c3d-flash[data-kind='to'] {
+  color: var(--bad-night, #ff9a8f);
+}
+.c3d-flash[data-kind='foul'] {
+  color: var(--warn-night, #ffc65c);
+}
+/* clutch time: the building's lights come down around the floor */
+.c3d-lights {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(8, 6, 4, 0) 45%, rgba(8, 6, 4, 0.55) 100%);
+}
+/* the camera: the broadcast picture, or the floor from straight above */
+.court-cam {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(18, 18, 18, 0.82);
+  color: var(--on-ink, #fff);
+  cursor: pointer;
+}
+.court-cam::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+.court-cam:focus-visible {
+  outline: 2px solid var(--on-ink, #fff);
+  outline-offset: 2px;
+}
+/* the picture can't keep up: the 2D court, offered */
+.court-slow {
+  position: absolute;
+  left: 8px;
+  right: 48px;
+  top: 8px;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: var(--surface, #f1ece2);
+  color: var(--text, #121212);
+  font-size: 13px;
+  line-height: 1.25;
+}
+.court-slow span {
+  flex: 1 1 150px;
+}

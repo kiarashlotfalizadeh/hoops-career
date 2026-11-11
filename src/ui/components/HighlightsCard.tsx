@@ -6,7 +6,10 @@ import { Play, SkipBack, SkipForward, Square } from 'lucide-react';
 import type { GameResult, League } from '../../core/types';
 import { composites } from '../../core/ratings';
 import { buildScript, captionAt, type Script } from '../live/choreo';
-import { Court, courtFloor } from '../live/Court';
+import { courtFloor } from '../live/Court';
+import { CourtView } from '../live/CourtView';
+import { bodyOf } from '../live/court3d/puppet';
+import { edit } from '../../state/actions';
 import { matchKits } from '../teamColors';
 import { rosterNames } from '../stats';
 import { teamPlayers } from '../../core/league/helpers';
@@ -72,7 +75,10 @@ export function HighlightsCard({ league, res }: { league: League; res: GameResul
       {sc && i !== null && (
         <div className="gd-hl">
           <div className="gd-hl-court">
-            <Court
+            <CourtView
+              look={league.settings.courtLook ?? '3d'}
+              onLook={(v) => edit((l) => void (l.settings.courtLook = v))}
+              body={(pid) => bodyOf(league.players[pid]?.heightIn ?? 78, league.players[pid]?.weightLb ?? 215, league.players[pid]?.ratings.str)}
               script={sc}
               speed={league.settings.liveSpeed || 1}
               paused={false}

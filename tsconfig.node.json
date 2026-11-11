@@ -14,7 +14,8 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "types": ["node"]
+    "types": ["node"],
+    "jsx": "react-jsx"
   },
-  "include": ["vite.config.ts", "capacitor.config.ts", "scripts"]
+  "include": ["vite.config.ts", "capacitor.config.ts", "scripts", "src/globals.d.ts"]
 }

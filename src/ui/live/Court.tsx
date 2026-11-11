@@ -9,7 +9,7 @@
 //
 // With no possession to draw the court is never empty: the fives line up for the tip, the players
 // stand where the last play left them (a huddle, a stop), or the floor shows the shot chart (a break).
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import { BASKET, COURT_LEN, toWorld, type Frame, type Pt, type Script } from './choreo';
 import type { ShotRecord, Team } from '../../core/types';
 import { FRANCHISES, type FranchiseDef } from '../../core/teams';
@@ -62,15 +62,29 @@ export interface CourtProps {
   clutch?: boolean;
   /** What the court shows, for screen readers. */
   label: string;
+  /** Where the play is, written each frame: the 3D court (Court3D.tsx) draws the same moment from it. */
+  stage?: MutableRefObject<Stage>;
+  /** Something else is drawing the floor (the 3D court): this one keeps the play's time and paints nothing. */
+  mute?: boolean;
 }
 
-const HALF_W = 25;
+/** The moment the court is at, for another view of it to draw. */
+export interface Stage {
+  script: Script | null;
+  play: Pose | null;
+  /** Who stands where between possessions (the court itself), and the ball. */
+  standers: Stander[];
+  ball: Pt | null;
+}
+export const emptyStage = (): Stage => ({ script: null, play: null, standers: [], ball: null });
+
+export const HALF_W = 25;
 /** The apron around the floor: a band along each sideline and a deeper one behind each baseline. */
-const SIDE = 1.8;
-const END = 3.4;
+export const SIDE = 1.8;
+export const END = 3.4;
 /** The whole floor in feet, apron included. */
-const FLOOR_W = 2 * HALF_W + 2 * SIDE;
-const FLOOR_L = COURT_LEN + 2 * END;
+export const FLOOR_W = 2 * HALF_W + 2 * SIDE;
+export const FLOOR_L = COURT_LEN + 2 * END;
 /** A canvas at least this much wider than tall shows the whole floor sideways. */
 const WIDE = 1.6;
 /** Upright, the window keeps the ball this far (ft) from its trailing edge: the rest of the view is ahead of it, toward the basket. */
@@ -86,7 +100,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const lerpPt = (a: Pt, b: Pt, t: number): Pt => ({ x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t) });
 
 /** The colours the canvas paints with: the app's tokens, read once (tokens.css), with the same values to fall back on. */
-interface Paints {
+export interface Paints {
   wood: string;
   wood2: string;
   seam: string;
@@ -99,7 +113,7 @@ interface Paints {
   bad: string;
   warn: string;
 }
-function readPaints(el: Element): Paints {
+export function readPaints(el: Element): Paints {
   const cs = getComputedStyle(el);
   const v = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
   return {
@@ -184,7 +198,7 @@ function setFont(ctx: CanvasRenderingContext2D, weight: number, px: number, stre
 }
 
 /** How the floor sits on the canvas this frame: feet to pixels, either view. */
-interface View {
+export interface View {
   wide: boolean;
   /** Pixels a foot. */
   k: number;
@@ -199,17 +213,17 @@ const project = (v: View, p: Pt): Pt =>
   v.wide ? { x: v.ox + (p.y + END) * v.k, y: v.oy + (HALF_W + SIDE - p.x) * v.k } : { x: (p.x + HALF_W + SIDE) * v.k, y: (p.y - v.top) * v.k };
 
 /** A player standing on the floor between possessions. */
-interface Stander {
+export interface Stander {
   pid: number;
   side: 0 | 1;
   at: Pt;
 }
 
-export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, label }: CourtProps) {
+export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, label, stage, mute }: CourtProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const state = useRef({ t: 0, last: 0, script: null as Script | null, done: false, beat: -1 });
-  const props = useRef({ speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch });
-  props.current = { speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch };
+  const props = useRef({ speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, stage, mute });
+  props.current = { speed, paused, kits, jersey, onDone, onTick, onBeat, names, abbrevs, floor, hot, idle, clutch, stage, mute };
 
   // each possession is drawn from its start
   useEffect(() => {
@@ -263,6 +277,26 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const k = wide ? Math.min(w / FLOOR_L, h / FLOOR_W) : w / FLOOR_W;
       const view: View = { wide, k, w, h, top: 0, ox: wide ? (w - FLOOR_L * k) / 2 : 0, oy: wide ? (h - FLOOR_W * k) / 2 : 0 };
       const play = sc ? pose(sc, s.t, calm) : null;
+      // where everyone is, for the 3D court and for the floor between possessions
+      if (sc && play) {
+        const W = (pt: Pt) => toWorld(pt, sc.dir);
+        standers = [...sc.oPids.map((pid, j) => ({ pid, side: sc.off, at: W(play.o[j]) })), ...sc.dPids.map((pid, j) => ({ pid, side: (1 - sc.off) as 0 | 1, at: W(play.d[j]) }))];
+        ballAt = W(play.ball);
+      }
+      const tip = !sc && p.idle?.kind === 'tip' ? tipOff(p.idle.fives) : null;
+      if (p.stage) {
+        const st = p.stage.current;
+        st.script = sc;
+        st.play = play;
+        st.standers = tip ?? standers;
+        st.ball = tip ? { x: 0, y: COURT_LEN / 2 } : ballAt;
+      }
+      if (p.mute) {
+        // (the 3D court is drawing this: the possession still has to play out)
+        if (play) report(play);
+        drawn = '';
+        return;
+      }
       // (the view just turned upright: the window finds the play again)
       if (wide) cam = null;
       if (!wide) {
@@ -321,7 +355,7 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
         report(play);
       } else if (p.idle?.kind === 'chart') drawChart(ctx, view, p.idle.shots, p.kits, p.abbrevs, paints);
       else {
-        const who = p.idle?.kind === 'tip' ? tipOff(p.idle.fives) : standers;
+        const who = tip ?? standers;
         for (const st of who) drawPlayer(ctx, view, st.at, p.kits[st.side], p.jersey(st.pid), false, !!p.hot?.has(st.pid), paints);
         const b = p.idle?.kind === 'tip' ? { x: 0, y: COURT_LEN / 2 } : ballAt;
         if (b) drawBall(ctx, view, b, 0, 0, paints);
@@ -358,7 +392,6 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const nO = sc.oPids.length;
       const dW = play.d.map(W);
       const oW = play.o.map(W);
-      standers = [...sc.oPids.map((pid, j) => ({ pid, side: sc.off, at: oW[j] })), ...sc.dPids.map((pid, j) => ({ pid, side: (1 - sc.off) as 0 | 1, at: dW[j] }))];
       sc.dPids.forEach((pid, j) => drawPlayer(ctx, view, dW[j], kitD, p.jersey(pid), hold === nO + j, !!p.hot?.has(pid), paints));
       sc.oPids.forEach((pid, j) => drawPlayer(ctx, view, oW[j], kitO, p.jersey(pid), hold === j, !!p.hot?.has(pid), paints));
       if (p.names && hold !== undefined && hold >= 0) {
@@ -370,7 +403,6 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const from = W(a.ball);
       const to = W(b.ball);
       let bw = W(play.ball);
-      ballAt = bw;
       // (in a man's hands it's held out toward the basket he's going at, off his number)
       if (play.carried) {
         const rim = W(BASKET);
@@ -402,8 +434,11 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
 }
 
 /** Where a possession is at time `t`: the two frames it's between, everyone's spot (in the offense's frame), the clock and the score reached. */
-interface Pose {
+export interface Pose {
   i: number;
+  /** Time into the move toward `b`, and its length (ms): past its end on the last frame, the time goes on counting. */
+  ms: number;
+  dur: number;
   a: Frame;
   b: Frame;
   /** The move's time, eased: it times the ball, the labels and the rim. */
@@ -419,7 +454,7 @@ interface Pose {
   total: number;
 }
 
-function pose(sc: Script, t: number, calm: boolean): Pose {
+export function pose(sc: Script, t: number, calm: boolean): Pose {
   const f = sc.frames;
   let acc = 0;
   let i = 1;
@@ -446,6 +481,8 @@ function pose(sc: Script, t: number, calm: boolean): Pose {
   for (let j = 0; j < i + (u >= 1 ? 1 : 0) && j < f.length; j++) if (f[j].score) score = f[j].score!;
   return {
     i,
+    ms: end ? a.dur + (t - total) : t - acc,
+    dur: b.dur,
     a,
     b,
     u,
@@ -487,7 +524,7 @@ const grain = (n: number) => {
  * the home team's paint in both keys and the center circle, the lines, the baskets, its mark at
  * center court. Flat, as a broadcast graphic draws it (no lighting, no gloss).
  */
-function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints) {
+export function paintFloor(cv: HTMLCanvasElement, view: View, dpr: number, floor: CourtFloor | undefined, paints: Paints) {
   const { k, wide } = view;
   cv.width = Math.max(1, Math.round((wide ? FLOOR_L : FLOOR_W) * k * dpr));
   cv.height = Math.max(1, Math.round((wide ? FLOOR_W : FLOOR_L) * k * dpr));

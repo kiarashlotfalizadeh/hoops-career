@@ -15,3 +15,5 @@ package-lock.json
 src/data/realStyles.json
 # the tactics lab's generated runs
 scripts/tactics-lab/out
+src/ui/live/court3d/mocap.gen.ts
+scripts/blender/out
