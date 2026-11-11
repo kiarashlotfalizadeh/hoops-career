@@ -22,7 +22,7 @@ import { useLeague, useLeagueMemo } from '../../state/store';
 import { takeTeam, turnDownJob, useBusy } from '../../state/actions/office';
 import { AgendaRow } from '../components/Agenda';
 import { TeamLogo } from '../components/TeamLogo';
-import { More, PageHeader, Section, Segmented, Statline } from '../components/ui';
+import { CountUp, More, PageHeader, Section, Segmented, Statline } from '../components/ui';
 import { TabBar, useQueryParam } from '../league/shared';
 import { slabVars } from '../teamColors';
 import { STRATEGY_META, capSeason, fmtGrade, shortSeason } from './common';
@@ -89,7 +89,7 @@ function Profile({ league }: { league: League }) {
         {k && (
           <div className="fo-career-rec">
             <span className="fo-career-rec-v num">
-              {k.won}-{k.lost}
+              <CountUp value={String(k.won)} />-<CountUp value={String(k.lost)} />
             </span>
             <span className="fo-career-rec-k">
               Career record · <span className="num">{pct(k.won, k.lost)}</span>

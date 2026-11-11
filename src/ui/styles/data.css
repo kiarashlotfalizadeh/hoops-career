@@ -9,6 +9,10 @@
 .bar > div {
   height: 100%;
   border-radius: 3px;
+  /* fills from the left when it shows, and slides to a new value */
+  transform-origin: left center;
+  animation: grow-x var(--dur-slow) var(--ease-out) 0.08s backwards;
+  transition: width var(--dur-slow) var(--ease-out);
   background: var(--ink);
 }
 

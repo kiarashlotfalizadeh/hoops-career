@@ -13,6 +13,10 @@
   pointer-events: none;
   line-height: 1.2;
 }
+/* (the picture comes up over the 2D court, it doesn't pop in) */
+.court-view[data-look='3d'] .c3d {
+  transition: opacity var(--dur-slow, 0.36s) var(--ease-out, ease-out);
+}
 .c3d[hidden] {
   display: none;
 }
@@ -24,6 +28,7 @@
 /* (until its first frame is drawn the 2D court shows through) */
 .court-view[data-look='flat'] .c3d {
   visibility: hidden;
+  opacity: 0;
 }
 .c3d-pill {
   position: absolute;
@@ -83,6 +88,10 @@
   background: rgba(18, 18, 18, 0.82);
   color: var(--on-ink, #fff);
   cursor: pointer;
+  transition: scale var(--dur-fast, 0.15s) var(--ease-out, ease-out);
+}
+.court-cam:active {
+  scale: 0.92;
 }
 .court-cam::after {
   content: '';

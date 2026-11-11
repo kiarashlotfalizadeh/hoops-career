@@ -115,11 +115,11 @@ export default function Start() {
     <main className="page standalone st-page st-menu">
       {/* the masthead: the wordmark as a poster's headline, the box score's line under it */}
       <header className="st-hero">
-        <BrandMark size={30} className="st-mark" />
+        <BrandMark size={34} className="st-mark" draw />
         <h1 className="st-word">
-          Hoops
+          <span>Hoops</span>
           <br />
-          Career
+          <span>Career</span>
         </h1>
         <p className="st-tag">GM and head coach of a real NBA roster. Build it in the office, coach it on the floor.</p>
         <Statline

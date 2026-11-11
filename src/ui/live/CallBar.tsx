@@ -5,7 +5,9 @@
 // adjustment, the staff's word), the callout for a big moment in its team's colour, a graphic, the
 // crowd's line, and under them all the running call of the play. At a break, in a huddle and before
 // the tip it reads the stop's name (`title`); only a banner goes over that.
-// A change of state fades in (opacity only); the strip never changes height, so the court never moves.
+// A change of state wipes in from the left like a lower third, the running call ticks to its next
+// line, and the play's result (+3, Miss, Steal) lands at the line's end; the strip never changes
+// height, so the court never moves.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { AlertTriangle, FastForward, Flame, Lightbulb, Pause, Play, X, Zap } from 'lucide-react';
 import { LIVE_SPEEDS } from '../settingsOptions';
@@ -326,6 +328,7 @@ export function CallBar(p: CallBarProps) {
             <div className="lv-cb-t grow" aria-hidden="true">
               <Caption script={script} beat={beat} />
             </div>
+            <Result script={script} beat={beat} />
           </>
         ) : state === 'ff' ? (
           <div className="lv-cb-t quiet one grow" aria-hidden="true">
@@ -351,5 +354,31 @@ export function CallBar(p: CallBarProps) {
 /** The running call of the possession the court is drawing ("Holmgren screens for Mitchell"), from the frame it has reached. */
 function Caption({ script, beat }: { script: Script; beat: Beat }) {
   const i = useSyncExternalStore(beat.subscribe, beat.get);
-  return <>{captionAt(script, i)}</>;
+  const text = captionAt(script, i);
+  // (keyed by its words: a new line ticks in, the same line carried over a frame stays put)
+  return (
+    <span key={text} className="lv-cb-cap">
+      {text}
+    </span>
+  );
+}
+
+/** How the play came out, once the court has drawn it: the court's own word for it (+3, Miss, Steal), landing at the line's end. */
+function Result({ script, beat }: { script: Script; beat: Beat }) {
+  const i = useSyncExternalStore(beat.subscribe, beat.get);
+  let at = -1;
+  for (let j = Math.min(i, script.frames.length - 1); j >= 0; j--) {
+    const f = script.frames[j].flash;
+    if (f && f.kind !== 'info') {
+      at = j;
+      break;
+    }
+  }
+  if (at < 0) return null;
+  const f = script.frames[at].flash!;
+  return (
+    <span key={at} className={`lv-cb-res ${f.kind}`} aria-hidden="true">
+      {f.text}
+    </span>
+  );
 }

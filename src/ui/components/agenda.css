@@ -195,3 +195,54 @@ a.ag-head:active {
   line-height: 1.38;
   color: var(--text-dim);
 }
+
+/* ------------------------------------------------------------ motion */
+/* a step just ticked: its circle fills with a small spring, the tick is drawn, the words settle */
+.ag-check {
+  transition:
+    background var(--dur) ease,
+    border-color var(--dur) ease;
+}
+.ag-step.just .ag-check {
+  animation: ag-tick 0.5s var(--ease-spring) 0.25s backwards;
+}
+.ag-step.just .ag-check svg {
+  stroke-dasharray: 24;
+  animation: ag-tick-draw 0.34s var(--ease-out) 0.5s backwards;
+}
+.ag-step.just {
+  animation: flash 1.4s ease-out 0.25s backwards;
+  border-radius: var(--radius-xs);
+}
+@keyframes ag-tick {
+  from {
+    scale: 0.4;
+    background-color: transparent;
+    border-color: var(--line-3);
+  }
+}
+@keyframes ag-tick-draw {
+  from {
+    stroke-dashoffset: 24;
+  }
+}
+/* the next step's arrow leans toward its screen under a press */
+.ag-step > svg:last-child,
+.ag-head > svg:last-child {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.ag-step:active > svg:last-child,
+a.ag-head:active > svg:last-child {
+  translate: 3px 0;
+}
+/* a choice waiting on its second tap: the button's new words arrive, its cost drops in under it */
+.ag-why {
+  animation: drop var(--dur) var(--ease-out) backwards;
+}
+.ag-acts .btn.danger {
+  animation: pop var(--dur) var(--ease-spring);
+}
+/* the guide's strip on its step's screen */
+.guide-strip .btn {
+  flex: none;
+}

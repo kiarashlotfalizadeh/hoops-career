@@ -67,7 +67,7 @@
   font-weight: 600;
   font-size: 22.5px;
   line-height: 1;
-  min-width: 58px; /* "+35.7" and "-8.2" alike, so the names line up */
+  min-width: 5ch; /* "+35.7" and "-8.2" alike, so the names line up */
   text-align: right;
   display: flex;
   flex-direction: column;

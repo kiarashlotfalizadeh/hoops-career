@@ -15,6 +15,7 @@ import { rosterNames } from '../stats';
 import { Board, type BoardSide } from './Board';
 import { startersOf } from './formation';
 import './bench.css';
+import { Star } from './Star';
 
 const NO_ORDER: number[] = [];
 
@@ -78,7 +79,7 @@ function Bench({ players, bench, side, onPick }: { players: Player[]; bench: Pla
                   <span className="ellipsis">{role}</span>
                   <span className="tx-floor-s num" aria-hidden="true">
                     {stars}
-                    <i>★</i>
+                    <Star />
                   </span>
                   <span className="sr-only">, {stars} of 5 for it</span>
                 </span>

@@ -45,8 +45,9 @@ import { forecastFor, seatOf } from './seat';
 import { PulseSection } from './Pulse';
 import { reviewPath, seasonReviewOf } from '../../core/league/legacy';
 import { useLeague, useLeagueMemo } from '../../state/store';
-import { Bar, More, PageHeader, Section, Tag } from '../components/ui';
+import { Bar, CountUp, More, PageHeader, Section, Tag } from '../components/ui';
 import { CenterBar, HelpSheet, fmtGrade } from './common';
+import { useArrived } from './motion';
 import './office.css';
 import { keepFigures, money } from '../../core/format';
 
@@ -244,7 +245,11 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
   return (
     <section className={`fo-seat tone-${tone}`} aria-label={`Job security: ${js.label}, ${js.score} of 100`}>
       <div className="fo-seat-top">
-        {!league.fired && <span className="fo-seat-v num">{js.score}</span>}
+        {!league.fired && (
+          <span className="fo-seat-v num">
+            <CountUp value={String(js.score)} ms={800} />
+          </span>
+        )}
         <div className="grow">
           <div className="fo-seat-l">{js.label}</div>
           {/* (fired, there's no figure for it to describe) */}
@@ -301,6 +306,8 @@ function Seat({ league, js, seasonsIn }: { league: League; js: JobSecurity; seas
 /** A track from the hot seat to secure, the firing line marked, and where he stands. */
 function SeatMeter({ score }: { score: number }) {
   const line = Math.round(50 + 50 * FIRING_LINE);
+  // the pin starts on "goals met" and travels to where he stands once the screen is up
+  const arrived = useArrived();
   return (
     <div className="fo-meterbar" aria-hidden="true">
       <div className="fo-meterbar-track">
@@ -319,7 +326,7 @@ function SeatMeter({ score }: { score: number }) {
       {/* the two ends named in the ladder's words, so the zones read without their colours (the hot seat is hatched too) */}
       <span className="fo-meterbar-end lo">{seatHeat(0).label}</span>
       <span className="fo-meterbar-end hi">{seatHeat(100).label}</span>
-      <span className="fo-meterbar-pin" style={{ left: `${Math.max(1, Math.min(99, score))}%` }} />
+      <span className="fo-meterbar-pin" style={{ left: `${arrived ? Math.max(1, Math.min(99, score)) : 50}%` }} />
     </div>
   );
 }

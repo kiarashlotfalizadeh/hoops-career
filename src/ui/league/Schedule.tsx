@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useChanged } from '../motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { GameResult, League, ScheduledGame } from '../../core/types';
 import { curTeamSeason, fmtDate } from '../../core/league/helpers';
@@ -66,9 +67,11 @@ export function DayScoreboard({ league }: { league: League }) {
   const afterDay = useLeagueMemo(() => recordsByDay(league), [league]);
   const days = useLeagueMemo(() => [...new Set(league.schedule.map((g) => g.day))].sort((a, b) => a - b), [league]);
   const [dayStr, setDayStr] = useQueryParam<string>('day', '');
-  if (!days.length) return <div className="card empty">No games scheduled.</div>;
   const fallback = days.includes(league.day) ? league.day : (days.find((d) => d >= league.day) ?? days[days.length - 1]);
   const day = dayStr !== '' && days.includes(Number(dayStr)) ? Number(dayStr) : fallback;
+  // a step to another day slides the board in from the side it came from
+  const moved = useChanged(day);
+  if (!days.length) return <div className="card empty">No games scheduled.</div>;
   const idx = days.indexOf(day);
   const prev = idx > 0 ? days[idx - 1] : undefined;
   const next = idx < days.length - 1 ? days[idx + 1] : undefined;
@@ -82,6 +85,7 @@ export function DayScoreboard({ league }: { league: League }) {
     });
   const isToday = day === league.day;
   const played = games.filter((g) => g.played).length;
+  const slide = moved.dir > 0 ? 'm-slide-l' : moved.dir < 0 ? 'm-slide-r' : '';
 
   return (
     <>
@@ -93,7 +97,9 @@ export function DayScoreboard({ league }: { league: League }) {
             {plural(games.length, 'game')}
             {played && played < games.length ? ` · ${played} final` : played ? ' · all final' : ''}
           </p>
-          <h2 className="lg-day-d">{fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}</h2>
+          <h2 key={day} className={`lg-day-d ${moved.dir ? 'm-rise-sm' : ''}`}>
+            {fmtDate(league.season, day, { weekday: 'short', month: 'short', day: 'numeric' })}
+          </h2>
         </div>
         <div className="lg-day-nav">
           <button className="iconbtn" disabled={prev === undefined} onClick={() => go(prev)} aria-label="Previous day">
@@ -109,7 +115,7 @@ export function DayScoreboard({ league }: { league: League }) {
           Jump to {fallback === league.day ? 'today' : fallback > league.day ? 'next game day' : 'latest games'}
         </button>
       )}
-      <div className="card flush lg-sb-grid">
+      <div key={day} className={`card flush lg-sb-grid ${slide}`}>
         {games.map((g) => (
           <ScoreCard key={g.gid} league={league} g={g} res={byGid.get(g.gid)} after={day < league.day ? afterDay.get(day) : undefined} />
         ))}

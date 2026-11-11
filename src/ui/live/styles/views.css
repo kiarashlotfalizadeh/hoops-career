@@ -29,6 +29,24 @@
 .lv-pl.out {
   opacity: 0.55;
 }
+/* just checked in: his row comes in from the bench's side and is washed once */
+.lv-pl.in {
+  animation:
+    slide-r var(--dur-slow) var(--ease-out),
+    flash 1.4s ease-out;
+}
+/* a figure that just changed (a basket, a foul) ticks up */
+.lv-pl-tick {
+  display: inline-block;
+  animation: lv-pl-tick var(--dur-slow) var(--ease-out);
+}
+@keyframes lv-pl-tick {
+  from {
+    opacity: 0;
+    translate: 0 0.5em;
+    scale: 1.35;
+  }
+}
 /* the columns' names, once over a list */
 .lv-pl.lv-pl-h {
   min-height: 0;
@@ -115,6 +133,10 @@
   height: 100%;
   border-radius: 2px;
   background: var(--e);
+  /* (energy drains and comes back by sliding, and the colour turns with it) */
+  transition:
+    width 0.5s var(--ease-move),
+    background var(--dur-slow) ease;
 }
 .lv-pl-ovr {
   display: flex;
@@ -336,6 +358,11 @@
 .lv-sh-row:active {
   background: var(--surface-2);
 }
+.lv-sh-row {
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease;
+}
 .lv-sh-row.on {
   background: var(--on);
   color: var(--on-ink);
@@ -367,6 +394,17 @@
 .lv-fd-row + .lv-fd-row {
   border-top: 1px solid var(--line);
 }
+/* the newest line drops in at the head of the list (only the head: the rest have already arrived) */
+.lv-fd-list > .lv-fd-row:first-child {
+  animation: drop var(--dur-slow) var(--ease-out);
+}
+/* a moment the night called arrives washed once */
+.lv-fd-list > .lv-fd-row.beat:first-child,
+.lv-fd-list > .lv-fd-row.tier-3:first-child {
+  animation:
+    drop var(--dur-slow) var(--ease-out),
+    flash 1.4s ease-out;
+}
 .lv-fd-row.strong {
   color: var(--text);
   font-weight: 650;
@@ -394,9 +432,9 @@
 /* whose play: a small square in the team's colour */
 .lv-fd-team {
   flex: none;
-  width: 7px;
-  height: 7px;
-  margin-top: 6px;
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
   border-radius: 50%;
 }
 /* his role, folded: the one he plays on the line, its options under it */

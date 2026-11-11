@@ -56,13 +56,14 @@
 .tm-role-stars {
   flex: none;
   margin-left: auto;
-  font-size: 12px;
-  letter-spacing: 1px;
-  color: var(--tier-elite);
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 13px;
   white-space: nowrap;
 }
-.tm-role-stars .dim {
-  color: var(--line-3);
+.tm-role-stars .tx-star {
+  margin-left: 0;
 }
 .tm-role-opt-l .ellipsis {
   min-width: 0;

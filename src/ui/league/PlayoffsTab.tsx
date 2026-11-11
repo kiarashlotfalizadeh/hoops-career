@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Trophy } from 'lucide-react';
 import type { GameResult, League, PlayInGame, PlayoffSeries } from '../../core/types';
 import { confStandings } from '../../core/league/standings';
 import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
@@ -306,7 +306,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen?: (
       {line(s.low, s.lowSeed, s.lowWins, s.tbdLow)}
     </>
   );
-  const cls = `bk-s ${me ? 'me' : ''} ${live ? 'live' : ''}`;
+  const cls = `bk-s ${me ? 'me' : ''} ${live ? 'live' : ''} ${s.winner !== undefined ? 'done' : ''}`;
   if (s.series && onOpen) {
     const ser = s.series;
     return (
@@ -324,7 +324,7 @@ function SeriesCard({ league, s, onOpen }: { league: League; s: Slot; onOpen?: (
 
 export function FinalsCard({ league, finals, onOpen }: { league: League; finals?: PlayoffSeries; onOpen?: (s: PlayoffSeries) => void }) {
   const side = (tid: number | undefined, wins: number, conf: string) => (
-    <div className={`side ${finals?.winner !== undefined && finals.winner !== tid ? 'lose' : ''}`}>
+    <div className={`side ${finals?.winner === undefined ? '' : finals.winner === tid ? 'win' : 'lose'}`}>
       {tid !== undefined ? <TeamLogo tid={tid} size={46} decorative /> : <span className="bk-ghost" />}
       {/* (two lines at most: "East champion"; "Timberwolves" as much smaller as it needs to fit whole) */}
       <Fit className="bk-fname" min={11}>
@@ -332,6 +332,11 @@ export function FinalsCard({ league, finals, onOpen }: { league: League; finals?
       </Fit>
       {tid !== undefined && <div className="bk-fconf">{conf}</div>}
       {finals && <div className="score">{wins}</div>}
+      {finals && finals.winner === tid && (
+        <div className="bk-champ">
+          <Trophy size={13} aria-hidden="true" /> Champions
+        </div>
+      )}
     </div>
   );
   const eTid = finals ? (league.teams[finals.high].conf === 'E' ? finals.high : finals.low) : undefined;

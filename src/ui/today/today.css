@@ -1244,3 +1244,327 @@
     flex: 0 1 220px;
   }
 }
+
+/* ------------------------------------------------------------ motion
+   The front page arrives as a front page: the poster first, its figure landing, then the words, then
+   the blocks under it (the page's own staggered rise). What a sim changes while Today is open ticks
+   or pops in; nothing here loops. */
+
+/* a result landing: your score slams in from its corner, theirs a beat later, then the margin */
+.td-score-n {
+  transform-origin: left bottom;
+  animation: slam 0.42s var(--ease-out) 0.1s backwards;
+}
+.td-score-n.them {
+  transform-origin: right bottom;
+  animation-delay: 0.2s;
+}
+.td-score-by {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.42s backwards;
+}
+.td-score-tm {
+  animation: fade var(--dur-slow) ease 0.3s backwards;
+}
+/* the words under a poster: the kicker, the headline, its line, the figures, one after another */
+.td-lead-kick,
+.td-lead-over {
+  animation: fade var(--dur-slow) ease 0.12s backwards;
+}
+.td-lead-head {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.16s backwards;
+}
+.td-lead-dek,
+.td-lead-by {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.22s backwards;
+}
+.td-lead-by .td-lead-dek {
+  animation: none;
+}
+.td-result .statline,
+.td-foot-s {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.28s backwards;
+}
+/* game day: the staff's word from the left, the two teams from the right, away then home */
+.td-gd-win {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.12s backwards;
+}
+.td-gd-team {
+  animation: slide-l var(--dur-slow) var(--ease-out) 0.14s backwards;
+}
+.td-gd-team + .td-gd-team {
+  animation-delay: 0.2s;
+}
+.td-tags .tag {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.34s backwards;
+}
+/* the phase card and the ceremonies: the title, its line, then the list under the rule */
+.td-phase-t {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.1s backwards;
+}
+.td-phase-l {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.16s backwards;
+}
+.td-phase-goals {
+  animation: fade var(--dur-slow) ease 0.22s backwards;
+}
+.td-phase-gl > li {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.24s + var(--stagger) * var(--i, 4));
+}
+.td-phase-gl > li:nth-child(1) {
+  --i: 0;
+}
+.td-phase-gl > li:nth-child(2) {
+  --i: 1;
+}
+.td-phase-gl > li:nth-child(3) {
+  --i: 2;
+}
+.td-phase-gl > li:nth-child(4) {
+  --i: 3;
+}
+/* the poster answers a press as one object */
+.td-lead {
+  transition: scale 0.12s ease;
+}
+.td-lead:active {
+  scale: 0.99;
+}
+.td-lead-go svg,
+.td-gd-go svg,
+.td-page .card-link svg {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.td-lead:active .td-lead-go svg,
+.td-gd-go:active svg,
+.td-page .card-link:active svg {
+  translate: 3px 0;
+}
+
+/* needs you: each card arrives after the one above it; one that lands later rises in alone */
+.td-needs > .td-need {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * var(--i, 4));
+}
+.td-needs > .td-need:nth-child(1) {
+  --i: 0;
+}
+.td-needs > .td-need:nth-child(2) {
+  --i: 1;
+}
+.td-needs > .td-need:nth-child(3) {
+  --i: 2;
+}
+.td-needs > .td-need:nth-child(4) {
+  --i: 3;
+}
+.td-count {
+  display: inline-block;
+}
+
+/* the next game's card: the arrow of a row that goes somewhere */
+.td-next-win {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.td-next:active .td-next-win {
+  translate: 2px 0;
+}
+
+/* your season: the rule is drawn, the last five land one by one (oldest first), a word a sim
+   changed ticks in */
+.td-strip {
+  position: relative;
+  border-top-color: transparent;
+}
+.td-strip::before {
+  content: '';
+  position: absolute;
+  inset: -2px 0 auto 0;
+  height: 2px;
+  background: var(--text);
+  transform-origin: left center;
+  animation: grow-x 0.5s var(--ease-move) 0.1s backwards;
+}
+.td-form > span {
+  display: inline-block;
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+  animation-delay: calc(0.18s + 45ms * var(--i, 0));
+}
+.td-form > span:nth-child(2) {
+  --i: 1;
+}
+.td-form > span:nth-child(3) {
+  --i: 2;
+}
+.td-form > span:nth-child(4) {
+  --i: 3;
+}
+.td-form > span:nth-child(5) {
+  --i: 4;
+}
+.td-cell-v.td-tick {
+  animation: tick-up var(--dur-slow) var(--ease-out) backwards;
+}
+.td-cell-k,
+.td-cell-v {
+  transition: color var(--dur-fast) ease;
+}
+
+/* the news and More: rows one after another, the first few */
+.td-news > .td-hl,
+.td-more > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * var(--i, 3));
+}
+.td-news > :nth-child(1),
+.td-more > :nth-child(1) {
+  --i: 0;
+}
+.td-news > :nth-child(2),
+.td-more > :nth-child(2) {
+  --i: 1;
+}
+.td-news > :nth-child(3),
+.td-more > :nth-child(3) {
+  --i: 2;
+}
+.td-mrow > svg:last-child,
+.dg-res > svg:last-child,
+.dg-story > svg:last-child,
+.dg-mail > svg:last-child {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.td-mrow:not(:disabled):active > svg:last-child,
+.dg-res:active > svg:last-child,
+.dg-story:active > svg:last-child,
+.dg-mail:active > svg:last-child {
+  translate: 3px 0;
+}
+
+/* the inbox: the newest few arrive in order; a message read lets go of its dot and its weight */
+.td-mail > .td-msg:nth-child(-n + 8) {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * var(--i, 0));
+}
+.td-mail > .td-msg:nth-child(2) {
+  --i: 1;
+}
+.td-mail > .td-msg:nth-child(3) {
+  --i: 2;
+}
+.td-mail > .td-msg:nth-child(4) {
+  --i: 3;
+}
+.td-mail > .td-msg:nth-child(5) {
+  --i: 4;
+}
+.td-mail > .td-msg:nth-child(6) {
+  --i: 5;
+}
+.td-mail > .td-msg:nth-child(7) {
+  --i: 6;
+}
+.td-mail > .td-msg:nth-child(8) {
+  --i: 7;
+}
+.td-msg-dot {
+  scale: 0;
+  transition:
+    scale var(--dur) var(--ease-spring),
+    background var(--dur-fast) ease;
+}
+.td-msg.unread .td-msg-dot {
+  scale: 1;
+}
+.td-msg-subj {
+  transition: color var(--dur) ease;
+}
+/* a message in full: its date, its words, then what it asks */
+.td-sheet > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.1s + var(--stagger) * var(--i, 3));
+}
+.td-sheet > :nth-child(1) {
+  --i: 0;
+}
+.td-sheet > :nth-child(2) {
+  --i: 1;
+}
+.td-sheet > :nth-child(3) {
+  --i: 2;
+}
+
+/* while you were away: the sheet's blocks arrive in reading order, the stretch's record slams in,
+   each result's letter lands with its row */
+.dg > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.08s + 26ms * var(--i, 7));
+}
+.dg > :nth-child(1) {
+  --i: 0;
+}
+.dg > :nth-child(2) {
+  --i: 1;
+}
+.dg > :nth-child(3) {
+  --i: 2;
+}
+.dg > :nth-child(4) {
+  --i: 3;
+}
+.dg > :nth-child(5) {
+  --i: 4;
+}
+.dg > :nth-child(6) {
+  --i: 5;
+}
+.dg > :nth-child(7) {
+  --i: 6;
+}
+.dg-rec-v {
+  display: inline-block;
+  transform-origin: left bottom;
+  animation: slam 0.42s var(--ease-out) 0.22s backwards;
+}
+.dg-move {
+  animation: slide-l var(--dur-slow) var(--ease-out) 0.3s backwards;
+}
+.dg-move + .dg-move {
+  animation-delay: 0.36s;
+}
+.dg-moment-head {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.14s backwards;
+}
+.dg-res:nth-child(-n + 6) > .td-wl {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+  animation-delay: calc(0.3s + 40ms * var(--i, 0));
+}
+.dg-res:nth-child(2) {
+  --i: 1;
+}
+.dg-res:nth-child(3) {
+  --i: 2;
+}
+.dg-res:nth-child(4) {
+  --i: 3;
+}
+.dg-res:nth-child(5) {
+  --i: 4;
+}
+.dg-res:nth-child(6) {
+  --i: 5;
+}
+
+/* a small phone (320-359px): the strip's four cells keep their words and all five letters whole */
+@media (max-width: 359px) {
+  .td-strip {
+    column-gap: 6px;
+  }
+  .td-cell-v {
+    font-size: 20px;
+  }
+  .td-word {
+    font-size: 14px;
+    letter-spacing: -0.02em;
+  }
+}

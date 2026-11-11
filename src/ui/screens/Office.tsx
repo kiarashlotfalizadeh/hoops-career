@@ -23,7 +23,7 @@ import { agenda, type AgendaKind } from '../../core/league/agenda';
 import { seasonsInCharge } from '../../core/league/owner';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { useBusy } from '../../state/actions/office';
-import { Bar, Section, Sheet, Statline } from '../components/ui';
+import { Bar, CountUp, Section, Sheet, Statline } from '../components/ui';
 import { AgendaRow, runAgenda } from '../components/Agenda';
 import { AssistantCards } from '../components/Assistant';
 import { Term } from '../components/Glossary';
@@ -311,23 +311,31 @@ function CapCard({ league }: { league: League }) {
             Cap sheet <ChevronRight size={15} aria-hidden="true" />
           </span>
         </span>
-        <span className="fo-capslab-v num">{money(pay)}</span>
+        <span className="fo-capslab-v num">
+          <CountUp value={money(pay)} ms={700} />
+        </span>
         <span className="fo-capslab-status">{status.label}</span>
         <CapBar pay={pay} cap={cap.salaryCap} tax={cap.luxuryTax} add={holds} legend={false} />
         <span className="statline fo-capslab-figs">
           <span>
             <span className="k">{space >= 0 ? 'Cap space' : 'Over the cap'}</span>
-            <span className="v">{money(Math.abs(space))}</span>
+            <span className="v">
+              <CountUp value={money(Math.abs(space))} />
+            </span>
           </span>
           {pay > cap.luxuryTax ? (
             <span>
               <span className="k">Tax bill</span>
-              <span className="v">{money(bill)}</span>
+              <span className="v">
+                <CountUp value={money(bill)} />
+              </span>
             </span>
           ) : (
             <span>
               <span className="k">Under the tax</span>
-              <span className="v">{money(cap.luxuryTax - pay)}</span>
+              <span className="v">
+                <CountUp value={money(cap.luxuryTax - pay)} />
+              </span>
             </span>
           )}
         </span>
@@ -354,7 +362,9 @@ function CapSheet({ league }: { league: League }) {
       <div className="fo-pay">
         <div className="grow">
           <div className="over">Payroll{dead > 0 ? ` · incl. ${money(dead)} dead money` : ''}</div>
-          <div className="fo-pay-v num">{money(pay)}</div>
+          <div className="fo-pay-v num">
+            <CountUp value={money(pay)} />
+          </div>
         </div>
         {/* cap holds count against the cap (trades treat the team as over it), not toward the tax */}
         <span className={`tag ${status.tone}`}>{status.label}</span>
@@ -698,7 +708,7 @@ function Desks({ league }: { league: League }) {
 
   return (
     <Section title="Desks">
-      <nav className="card flush fo-desks" aria-label="Desks">
+      <nav className="card flush fo-desks m-stagger" aria-label="Desks">
         {desks.map((d) => (
           <Link key={d.to} to={d.to} className={`fo-dept ${d.hot ? 'hot' : ''} ${d.muted ? 'muted' : ''}`}>
             <span className="grow">

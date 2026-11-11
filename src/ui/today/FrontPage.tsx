@@ -23,6 +23,7 @@ import { useForecast } from '../useForecast';
 import { headOf, lastResults, leadOf, leagueHeadlines, runOf, scoreText, storyLink, type Result } from './front';
 import { digestLine } from './digest';
 import { tenureOf } from '../../core/league/media/tenure';
+import { useChanged } from '../motion';
 import '../league/legacy.css';
 
 /** What a news item is, over its headline. */
@@ -173,6 +174,16 @@ function ResultPoster({ league, lead }: { league: League; lead: Extract<Lead, { 
 
 const MOOD_WORD = (w: string) => w.charAt(0).toUpperCase() + w.slice(1);
 
+/** A cell's word or figure: when a sim changes it, the new one ticks in. */
+function CellValue({ v, className = '' }: { v: string; className?: string }) {
+  const c = useChanged(v);
+  return (
+    <span key={c.key} className={`td-cell-v ${className} ${c.changed ? 'td-tick' : ''}`}>
+      {v}
+    </span>
+  );
+}
+
 /**
  * His season in one strip, each cell opening where it lives in full: his chance at the postseason goal
  * in a word (the standings), the last five results (the schedule), the owner's and the fans' mood (Office →
@@ -197,7 +208,7 @@ export function YourSeason({ league }: { league: League }) {
           // (the chance at the owner's postseason goal while he has one, named by it: "Play-in: In reach")
           <Link to="/league" className="td-cell" aria-label={odds.out ? 'Out of the postseason. Standings' : `${chance.label}: ${goalWord(chance.p, chance.sure)}. Standings`}>
             <span className="td-cell-k">{chance.label}</span>
-            <span className={`td-cell-v td-word ${odds.out ? 'bad' : ''}`}>{odds.out ? 'Out' : goalWord(chance.p, chance.sure)}</span>
+            <CellValue v={odds.out ? 'Out' : goalWord(chance.p, chance.sure)} className={`td-word ${odds.out ? 'bad' : ''}`} />
           </Link>
         )}
         {results.length > 0 && (
@@ -225,20 +236,20 @@ export function YourSeason({ league }: { league: League }) {
               <span className="td-cell-k">
                 Owner <TrendMark trend={pulse.owner.trend} />
               </span>
-              <span className={`td-cell-v td-word tone-${pulse.owner.tone}`}>{MOOD_WORD(pulse.owner.word)}</span>
+              <CellValue v={MOOD_WORD(pulse.owner.word)} className={`td-word tone-${pulse.owner.tone}`} />
             </Link>
             {/* while the Cup runs, its cell takes the fans' place (they're on Office → Owner) */}
             {cup ? (
               <Link to="/league/cup" className="td-cell" aria-label={`${cup.label}. The Cup`}>
                 <span className="td-cell-k">Cup</span>
-                <span className="td-cell-v">{cup.v}</span>
+                <CellValue v={cup.v} />
               </Link>
             ) : (
               <Link to="/office/owner" className="td-cell" aria-label={`The fans are ${pulse.fans.word}. Owner`}>
                 <span className="td-cell-k">
                   Fans <TrendMark trend={pulse.fans.trend} />
                 </span>
-                <span className={`td-cell-v td-word tone-${pulse.fans.tone}`}>{MOOD_WORD(pulse.fans.word)}</span>
+                <CellValue v={MOOD_WORD(pulse.fans.word)} className={`td-word tone-${pulse.fans.tone}`} />
               </Link>
             )}
           </>

@@ -81,9 +81,9 @@
   color: var(--bad);
 }
 .tx-q-bar {
-  height: 3px;
+  height: 4px;
   margin: 0 var(--row-px) 9px;
-  border-radius: 1px;
+  border-radius: 2px;
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -91,6 +91,9 @@
   display: block;
   height: 100%;
   border-radius: 2px;
+  /* fills from the left as the report opens, then slides to a new grade */
+  transform-origin: left center;
+  animation: grow-x 0.5s var(--ease-out) 0.1s backwards;
   transition:
     width 0.25s ease-out,
     background-color 0.25s ease-out;
@@ -107,7 +110,9 @@
 .tx-q-bar > .bad {
   background: var(--tier-bad);
 }
+/* what a grade is made of, opening under it */
 .tx-q-parts {
+  animation: drop var(--dur) var(--ease-out) backwards;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -160,15 +165,18 @@
    in white */
 .tx-floor {
   --tx-maple: var(--maple);
-  --tx-maple-2: var(--maple-2);
+  /* (the second board a breath off the first: planks, not stripes) */
+  --tx-maple-2: color-mix(in srgb, var(--maple) 45%, var(--maple-2));
   --tx-seam: var(--maple-seam);
   --tx-court-line: var(--paper-ink);
+  /* the floor's height in hundredths of its width (the court and its apron: 108 by 92) */
+  --tx-ar: 0.8519;
   position: relative;
   container-type: inline-size;
   max-width: 600px;
   margin-inline: auto;
   width: 100%;
-  aspect-ratio: 100 / 84;
+  aspect-ratio: 108 / 92;
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--tx-maple);
@@ -180,6 +188,10 @@
   width: 100%;
   height: 100%;
 }
+/* every line keeps its weight whatever the court's size (a phone's and a tablet's alike) */
+.tx-floor-court :is(path, rect, circle) {
+  vector-effect: non-scaling-stroke;
+}
 .tx-floor-wood {
   fill: var(--tx-maple);
 }
@@ -188,7 +200,7 @@
 }
 .tx-floor-seam {
   stroke: var(--tx-seam);
-  stroke-width: 0.18;
+  stroke-width: 0.6px;
   fill: none;
 }
 .tx-floor-paint {
@@ -196,33 +208,47 @@
 }
 .tx-floor-line {
   stroke: var(--tx-court-line);
-  stroke-width: 0.7;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.tx-floor-dash {
+  stroke-dasharray: 5 5;
+  stroke-linecap: butt;
 }
 .tx-floor-board {
   stroke: var(--tx-court-line);
-  stroke-width: 0.9;
+  stroke-width: 3.5px;
+  stroke-linecap: round;
+  fill: none;
 }
 .tx-floor-rim {
   stroke: var(--tx-court-line);
-  stroke-width: 0.7;
+  stroke-width: 2px;
+}
+/* the lines are drawn as the board opens: the court first, then the five on it */
+.tx-floor-line > path {
+  animation: fade var(--dur-slow) ease backwards;
 }
 /* a player token: a printed card on the floor, white card stock with his name in ink, the role under
    it and how he suits it as one figure; centred on its spot but never past the court's edges (half a card
-   in from each) */
+   in from each). Its place is a `translate`, so a new shape, the board's other end or a swap slides
+   the card to its new spot */
 .tx-floor-p {
   --hh: 1.95em;
   /* the cards grow with the court (13px on a 390px phone, 12px on a narrower one) */
   font-size: clamp(12px, 3.65cqw, 17px);
   position: absolute;
-  left: clamp(16.5%, var(--x), 83.5%);
-  top: clamp(calc(var(--hh) + 5px), var(--y), calc(100% - var(--hh) - 5px));
+  left: 0;
+  top: 0;
+  translate: clamp(16.5cqw, calc(var(--x) * 1cqw), 83.5cqw) clamp(calc(var(--hh) + 5px), calc(var(--y) * var(--tx-ar) * 1cqw), calc(100cqw * var(--tx-ar) - var(--hh) - 5px));
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1px;
   width: max-content;
-  max-width: 33%;
+  max-width: 33cqw;
   padding: 0.36em 0.62em 0.42em;
   border-radius: var(--radius-sm);
   background: var(--raised);
@@ -233,8 +259,32 @@
   color: var(--text);
   text-align: center;
   transition:
+    translate 0.46s var(--ease-move),
     transform var(--dur-fast) var(--ease-out),
     border-color var(--dur-fast) ease-out;
+  /* the five set down one after another as the board opens */
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+  animation-delay: calc(60ms + var(--stagger) * var(--n, 0));
+}
+.tx-floor-p:nth-child(3) {
+  --n: 1;
+}
+.tx-floor-p:nth-child(4) {
+  --n: 2;
+}
+.tx-floor-p:nth-child(5) {
+  --n: 3;
+}
+.tx-floor-p:nth-child(6) {
+  --n: 4;
+}
+/* a plate that joins an open board (a swap from the bench): it settles at once */
+.tx-floor-p.joined {
+  animation-delay: 0s;
+}
+/* his role at this end, new on the plate */
+.tx-floor-r {
+  animation: fade var(--dur-slow) ease backwards;
 }
 /* out of his best role: a line more, and a warning ring */
 .tx-floor-p.off {
@@ -286,10 +336,6 @@
   font-weight: 650;
   letter-spacing: -0.03em;
   color: var(--text);
-}
-.tx-floor-s i {
-  font-style: normal;
-  color: var(--tier-elite);
 }
 .tx-floor-best {
   font-size: max(12px, 0.75em);

@@ -10,7 +10,7 @@ import { useLeagueMemo } from '../../state/store';
 import { seasonLabel } from '../../core/constants';
 import { Section, Statline } from '../components/ui';
 import { rosterNames } from '../stats';
-import { PastTitleBanners, RetiredBanners } from './RetiredBanners';
+import { RetiredBanners, TitleBanners } from './RetiredBanners';
 import { pastTitles } from '../../core/league/media/past';
 import { winPctLabel } from './Coaches';
 import { OutcomeTag, careerTotals, ordinal, seasonOutcome } from './shared';
@@ -57,16 +57,7 @@ export function FranchiseHistory({ league, tid }: { league: League; tid: number 
     <>
       {(titles.length > 0 || (team.retired?.length ?? 0) > 0 || pastTitles(league, tid).length > 0) && (
         <Section title="Banners">
-          <PastTitleBanners league={league} tid={tid} />
-          {titles.length > 0 && (
-            <div className="chips">
-              {titles.map((s) => (
-                <span key={s.season} className="tag lg-gold lg-title-yr">
-                  {seasonLabel(s.season)} champions
-                </span>
-              ))}
-            </div>
-          )}
+          <TitleBanners league={league} tid={tid} seasons={titles.map((t) => t.season)} />
           <RetiredBanners league={league} tid={tid} />
         </Section>
       )}

@@ -88,14 +88,9 @@
     display: none;
   }
 }
-/* a console view comes in with a short fade (opacity only: nothing moves or resizes) */
+/* a console view comes in from just under its place (a short rise, nothing resizes) */
 .lv-con-body > * {
-  animation: lv-fade-in 0.2s ease-out;
-}
-@keyframes lv-fade-in {
-  from {
-    opacity: 0;
-  }
+  animation: rise-sm var(--dur) var(--ease-out);
 }
 @media (prefers-reduced-motion: reduce) {
   .lv-con-body > * {

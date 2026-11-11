@@ -3,7 +3,7 @@
 // his row's meta line), and the stint plan the targets make. A player's sheet sets his spot,
 // minutes, cap, closing and rest on back-to-backs.
 import { attrDisplay } from '../../core/ratings';
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ArrowUp, BedDouble, Undo2 } from 'lucide-react';
 import { useLeague, useLeagueMemo, useStore } from '../../state/store';
 import { edit } from '../../state/actions';
@@ -18,10 +18,21 @@ import type { Player, Rotation as RotationT } from '../../core/types';
 import { f1, ordinal, playerSeason, rosterNames, startingFive } from '../stats';
 import { injuryName, plural } from '../../core/format';
 import { swapSpots } from '../../core/analysis/lineups';
+import { reducedMotion, useChanged } from '../motion';
 import './team.css';
 
 /** The most a target can be. */
 const MAX_MIN = 44;
+/** A minutes figure that ticks to its new value (up from below, down from above); still on first show. */
+function Tick({ n }: { n: number }) {
+  const { key, dir } = useChanged(n);
+  return (
+    <span key={key} className={dir > 0 ? 'm-tick-up' : dir < 0 ? 'm-tick-down' : undefined}>
+      {n}
+    </span>
+  );
+}
+
 /** Season wear the staff flags (as the advisor does). */
 const WORN = 55;
 
@@ -90,8 +101,29 @@ export default function Rotation() {
   }, [JSON.stringify(rot), playoffs]);
   const planned = healthyOrder.filter((pid) => (plan.norm[pid] ?? 0) > 0);
 
+  // the two rows that trade places slide to their new lines (measured before the swap, played after
+  // it), and the one that moved up is washed once
+  const listRef = useRef<HTMLDivElement>(null);
+  const slide = (pids: number[]) => {
+    const el = listRef.current;
+    if (!el || reducedMotion()) return;
+    const row = (pid: number) => el.querySelector<HTMLElement>(`[data-pid="${pid}"]`);
+    const was = pids.map((pid) => row(pid)?.getBoundingClientRect().top ?? 0);
+    requestAnimationFrame(() =>
+      pids.forEach((pid, i) => {
+        const r = row(pid);
+        const d = r ? was[i] - r.getBoundingClientRect().top : 0;
+        if (!r || !d) return;
+        r.animate([{ translate: `0 ${d}px` }, { translate: '0 0' }], { duration: 320, easing: 'cubic-bezier(0.3, 0, 0.1, 1)' });
+        if (i === 0)
+          r.animate([{ backgroundColor: 'color-mix(in srgb, var(--accent-2) 30%, transparent)' }, { backgroundColor: 'transparent' }], { duration: 1100, easing: 'ease-out' });
+      }),
+    );
+  };
   // one arrow a row: he trades places with the player above (to move one down, move the next one up)
-  const moveUp = (pid: number) =>
+  const moveUp = (pid: number) => {
+    const at = order.indexOf(pid);
+    if (at > 0) slide([pid, order[at - 1]]);
     update((r) => {
       const o = order.slice();
       const i = o.indexOf(pid);
@@ -99,6 +131,7 @@ export default function Rotation() {
       [o[i - 1], o[i]] = [o[i], o[i - 1]];
       r.order = o;
     });
+  };
 
   const ep = editing !== null ? byId.get(editing) : null;
 
@@ -147,7 +180,7 @@ export default function Rotation() {
 
       <section className="sec tm-depth" aria-label="Depth chart">
         <div className="tm-rlist">
-          <div className="list">
+          <div className="list" ref={listRef}>
             {order.map((pid, i) => {
               const p = byId.get(pid)!;
               const m = rot.minutes[pid] ?? 0;
@@ -158,7 +191,7 @@ export default function Rotation() {
                 <Fragment key={pid}>
                   {(i === 0 || i === benchFrom) && <RotationHead label={i === 0 ? 'Starters' : 'Bench'} help={i === 0 ? <RotationHelp /> : undefined} />}
                   {/* an injured player is marked Out and greyed by colour, not opacity: the OVR badge and jersey keep their contrast */}
-                  <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`}>
+                  <div className={`listrow tm-rrow ${p.injury ? 'out' : ''}`} data-pid={pid}>
                     <button
                       className="iconbtn tm-rup"
                       onClick={() => moveUp(pid)}
@@ -213,7 +246,7 @@ export default function Rotation() {
                         </>
                       )}
                       <span className="tm-rmin num">
-                        {m}
+                        <Tick n={m} />
                         <span className="sr-only"> minutes, his target</span>
                       </span>
                       <span className="tm-rovr">
@@ -252,6 +285,7 @@ export default function Rotation() {
             <div
               key={pid}
               className={`tm-plan-row ${i === 5 ? 'gap' : ''}`}
+              style={{ '--i': Math.min(i, 9) } as CSSProperties}
               role="img"
               aria-label={`${nameOf(pid)}: ${plan.norm[pid]} minutes, on the floor in minutes ${stints(plan.slots, pid)}`}
             >
@@ -265,7 +299,9 @@ export default function Rotation() {
                   </span>
                 ))}
               </span>
-              <span className="tm-plan-m num">{plan.norm[pid]}</span>
+              <span className="tm-plan-m num">
+                <Tick n={plan.norm[pid]} />
+              </span>
             </div>
           ))}
         </div>

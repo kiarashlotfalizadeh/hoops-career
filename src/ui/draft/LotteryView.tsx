@@ -127,7 +127,11 @@ export function LotteryView({ league, onTrade }: { league: League; onTrade?: (dp
             // a row opens the trade sheet for its pick while trading is open (once the order is out)
             const Row = onTrade && done ? 'button' : 'div';
             return (
-              <Row key={d.dpid} className={`listrow fo-sel ${mine ? 'me' : ''} ${done ? '' : 'dn-in'}`} onClick={onTrade && done ? () => onTrade(d.dpid) : undefined}>
+              <Row
+                key={d.dpid}
+                className={`listrow fo-sel ${mine ? 'me' : ''} ${done ? '' : i < 4 ? 'dn-in dn-drawn' : 'dn-in'}`}
+                onClick={onTrade && done ? () => onTrade(d.dpid) : undefined}
+              >
                 <span className="fo-rank">{d.pick}</span>
                 <TeamLogo tid={d.tid} size={30} decorative />
                 <div className="grow">

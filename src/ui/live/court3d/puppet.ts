@@ -121,6 +121,8 @@ const ONE: Partial<Record<Act, [ClipId, 'end' | 'start']>> = {
 /** The clip for a man not in the middle of one of those: by what he's doing and how he's moving (ft a second: ahead, and overall). */
 export function baseClip(act: Act, ball: boolean, sp: number, vf: number, vs: number): ClipId {
   const moving = sp > 2.5;
+  // (the buzzer is everyone's: the man who had the ball lets go of it, see the scene)
+  if (act === 'celebrate') return 'celebrate';
   if (ball)
     return act === 'hold' || act === 'pass' || act === 'stand'
       ? 'hold'
@@ -147,8 +149,6 @@ export function baseClip(act: Act, ball: boolean, sp: number, vf: number, vs: nu
       return moving ? gait : 'postUp';
     case 'boxout':
       return moving ? 'shuffle' : 'boxout';
-    case 'celebrate':
-      return 'celebrate';
     case 'rue':
       return moving ? gait : 'rue';
     default:
@@ -448,8 +448,10 @@ export class Puppet {
       this.x = rx;
       this.z = rz;
       // (a dunker turns to the rim as he goes up: his hands go where he is looking)
-      const face = this.clip === 'dunk' && this.hasAim && leap > 0.2 ? Math.atan2(this.ax - rx, this.az - rz) : d.yaw;
-      this.yaw += wrap(face - this.yaw) * (1 - Math.exp(-ease / (ONE[d.act] ? 45 : 95)));
+      const up = this.clip === 'dunk' && this.hasAim && leap > 0.2;
+      const face = up ? Math.atan2(this.ax - rx, this.az - rz) : d.yaw;
+      // (in the air he turns in his own time: played fast, he still has the rim in front of him when he gets to it)
+      this.yaw += wrap(face - this.yaw) * (1 - Math.exp(-(up ? Math.max(ease, own * 0.6) : ease) / (ONE[d.act] ? 45 : 95)));
     }
     if (own <= 0 && this.placed && !jumped) return;
     this.placed = true;

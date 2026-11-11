@@ -1,7 +1,6 @@
 // The development watch's marks, wherever a player shows: an arrow with his change this season
 // (OVR or a rating) and the tag a roster row carries (Breakout, Rising, Prospect, Declining). The
 // numbers come from core/league/devWatch.ts; this file only draws them.
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { DevTag } from '../../core/league/devWatch';
 import './growth.css';
 
@@ -14,10 +13,13 @@ export const signedInt = (n: number) => (n < 0 ? `−${-n}` : `+${n}`);
  */
 export function DevDelta({ d, since, size = 'sm' }: { d: number; since?: string; size?: 'sm' | 'md' }) {
   if (!d) return null;
-  const Icon = d > 0 ? ArrowUp : ArrowDown;
+  const px = size === 'md' ? 10 : 8;
   return (
     <span className={`dv-d ${size} ${d > 0 ? 'up' : 'down'}`}>
-      <Icon size={size === 'md' ? 13 : 10} strokeWidth={3} aria-hidden="true" />
+      {/* a solid wedge: a stroked arrow this small prints as a smudge */}
+      <svg width={px} height={px} viewBox="0 0 10 10" aria-hidden="true" focusable="false">
+        <path d={d > 0 ? 'M5 1.2 9.4 8.6H.6z' : 'M5 8.8.6 1.4h8.8z'} fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinejoin="round" />
+      </svg>
       <span aria-hidden="true">{Math.abs(d)}</span>
       <span className="sr-only">
         {d > 0 ? 'up' : 'down'} {Math.abs(d)}

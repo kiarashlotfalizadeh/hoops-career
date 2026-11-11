@@ -42,7 +42,7 @@ export function StandingsTab({ league }: { league: League }) {
       {view === 'odds' && <OddsView league={league} />}
       {view === 'lottery' && <LotteryView league={league} />}
       {view === 'power' && <Power league={league} />}
-      {(view === 'E' || view === 'W' || view === 'league') && <Standings league={league} view={view} />}
+      {(view === 'E' || view === 'W' || view === 'league') && <Standings key={view} league={league} view={view} />}
     </>
   );
 }

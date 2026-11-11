@@ -443,3 +443,155 @@
 .nl-pick-owner.dim {
   color: var(--text-dim);
 }
+
+/* ------------------------------------------------------------ motion
+   The first screen a player sees: the ball is drawn, the wordmark's two lines rise one after the
+   other, then the line under it and the box score. New League: the step's rule fills, a choice's
+   check lands, the team you pick prints in its colours and its poster re-sets around it. */
+.bm-draw > * {
+  stroke-dasharray: 1;
+  animation: draw 0.6s var(--ease-move) backwards;
+}
+.bm-draw > :nth-child(1) {
+  animation-duration: 0.7s;
+}
+.bm-draw > :nth-child(2) {
+  animation-delay: 0.3s;
+}
+.bm-draw > :nth-child(3) {
+  animation-delay: 0.38s;
+}
+.bm-draw > :nth-child(4) {
+  animation-delay: 0.5s;
+}
+.bm-draw > :nth-child(5) {
+  animation-delay: 0.56s;
+}
+.st-word > span {
+  display: inline-block;
+  animation: st-word-in 0.6s var(--ease-out) 0.06s backwards;
+}
+.st-word > span:last-child {
+  animation-delay: 0.14s;
+}
+@keyframes st-word-in {
+  from {
+    opacity: 0;
+    translate: 0 0.22em;
+  }
+}
+.st-tag {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.26s backwards;
+}
+.st-hero .statline {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.32s backwards;
+}
+/* the continue poster: its record lands as a slab's figure does */
+.st-c-rec {
+  transform-origin: right bottom;
+  animation: slam 0.42s var(--ease-out) 0.22s backwards;
+}
+.st-c-over svg {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.st-continue:active .st-c-over svg {
+  translate: 3px 0;
+}
+/* saved leagues: rows one after another */
+.st-page .list > .st-row {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.st-page .list > .st-row:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.st-page .list > .st-row:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.st-page .list > .st-row:nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+
+/* the steps: the rule of the step you reach fills from the left */
+.nl-steps span {
+  position: relative;
+  overflow: hidden;
+}
+.nl-steps span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.4s var(--ease-move);
+}
+.nl-steps span.on {
+  background: var(--line-2);
+}
+.nl-steps span.on::after {
+  transform: scaleX(1);
+}
+/* a choice made: the ring closes round it, the check lands */
+.nl-check {
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.nl-check svg {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+/* the team picked: its tile prints in its colours, its mark lands with a small spring */
+.nl-team.on > svg {
+  animation: nl-on 0.42s var(--ease-spring);
+}
+@keyframes nl-on {
+  from {
+    scale: 0.8;
+  }
+}
+/* a conference's tiles arrive row by row (on every tile, chosen or not: a tile let go doesn't arrive again) */
+.nl-grid > .nl-team {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.nl-grid > .nl-team:nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.nl-grid > .nl-team:nth-child(n + 7) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.nl-grid > .nl-team:nth-child(n + 10) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.nl-grid > .nl-team:nth-child(n + 13) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+/* its poster: the colour changes hands, the name, the mark and the foot re-set for the new team */
+.nl-pick {
+  transition: background-color var(--dur-slow) ease;
+}
+.nl-pick .nl-pick-name {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.nl-pick .nl-pick-over > svg {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.nl-pick .nl-pick-foot {
+  animation: fade var(--dur-slow) ease 0.06s backwards;
+}
+.nl-pick-rank-v {
+  transform-origin: right bottom;
+  animation: slam 0.4s var(--ease-out) 0.1s backwards;
+}
+.nl-pick-top > .row {
+  animation: slide-r var(--dur-slow) var(--ease-out) backwards;
+}
+.nl-pick-top > .row:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.nl-pick-top > .row:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.nl-chosen-main > svg {
+  animation: pop 0.42s var(--ease-spring) 0.12s backwards;
+}

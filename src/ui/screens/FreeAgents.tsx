@@ -18,6 +18,7 @@ import { HARDSHIP_OUT, TEN_DAYS, hardship, tenDayClosedReason, wantsTenDay } fro
 import { playerAge } from '../../core/playerGen';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import { Chips, Empty, PageHeader, Section, Segmented, Sheet, Statline } from '../components/ui';
+import { Fig } from '../office/motion';
 import { Callout, capRoomFig, capSeason, floorText, rosterFig, shortSeason } from '../office/common';
 import { Term } from '../components/Glossary';
 import { FA_DAYS, faDayNumber } from '../../core/league/season';
@@ -152,7 +153,9 @@ export default function FreeAgents() {
       {/* the desk's poster: what you can spend, as big as it fits; the roster and the best exception under the rule */}
       <section className="fo-room" aria-label="Your room">
         <div className="over">{room.k}</div>
-        <div className="fo-room-v num">{room.v}</div>
+        <div className="fo-room-v num">
+          <Fig value={space} text={room.v} />
+        </div>
         {/* (the holds said with their amount, as on the Office's cap sheet: pending offers and sheets hold room too) */}
         <div className="fo-room-s">{holds > 0 ? `after ${money(holds)} in holds` : space > 0 ? 'to spend on free agents' : 'sign for the minimum or with an exception'}</div>
         {/* (under the salary floor the difference is paid at the season's end anyway: money to spend) */}

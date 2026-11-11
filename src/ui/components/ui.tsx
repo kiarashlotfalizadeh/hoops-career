@@ -8,6 +8,7 @@ import { LEVEL_VALUES, levelIndex, type LevelNames } from '../../core/sim/tactic
 import { FRANCHISES } from '../../core/teams';
 import { keepFigures } from '../../core/format';
 import { useBack } from '../nav';
+import { reducedMotion, useIndicator } from '../motion';
 import { jerseyKit } from '../teamColors';
 import { useTeamLook } from './TeamLogo';
 
@@ -149,8 +150,10 @@ export function Segmented<T extends string>({
     onChange(options[j].id);
     ref.current?.querySelectorAll<HTMLElement>('button')[j]?.focus();
   };
+  // the thumb (or the tabs' ink rule) slides to the choice; until it's measured the button draws its own
+  const ind = useIndicator(ref, 'button.on', `${value}|${options.length}`, !!tabs);
   return (
-    <div className={`seg ${tabs ? 'tabs' : ''}`} role="radiogroup" aria-label={label} ref={ref}>
+    <div className={`seg ${tabs ? 'tabs' : ''} ${ind ? 'has-ind' : ''}`} role="radiogroup" aria-label={label} ref={ref}>
       {options.map((o, i) => (
         <button
           key={o.id}
@@ -165,6 +168,7 @@ export function Segmented<T extends string>({
           {o.label}
         </button>
       ))}
+      {ind && <span className={`seg-ind ${ind.ready ? 'ready' : ''}`} aria-hidden="true" style={{ width: ind.w, transform: `translateX(${ind.x}px)` }} />}
     </div>
   );
 }
@@ -323,12 +327,20 @@ export function Levels({
     if (j !== cur) onChange(LEVEL_VALUES[j]);
     ref.current?.querySelectorAll<HTMLElement>('button')[j]?.focus();
   };
+  // the chosen level is an ink thumb that slides along the scale, the wash under the lower levels following it
+  const ind = useIndicator(ref, 'button.on', cur);
   return (
     <div className="levels" style={{ opacity: disabled ? 0.5 : 1 }}>
       <span id={`${id}l`} className="slider-label">
         {label}
       </span>
-      <div className="levels-row" role="radiogroup" aria-labelledby={`${id}l`} aria-describedby={help ? `${id}h` : undefined} ref={ref}>
+      <div className={`levels-row ${ind ? 'has-ind' : ''}`} role="radiogroup" aria-labelledby={`${id}l`} aria-describedby={help ? `${id}h` : undefined} ref={ref}>
+        {ind && (
+          <>
+            <span className={`levels-fill ${ind.ready ? 'ready' : ''}`} aria-hidden="true" style={{ width: ind.x + ind.w - 3 }} />
+            <span className={`levels-ind ${ind.ready ? 'ready' : ''}`} aria-hidden="true" style={{ width: ind.w, transform: `translateX(${ind.x}px)` }} />
+          </>
+        )}
         {names.map((n, i) => (
           <button
             key={i}
@@ -765,7 +777,7 @@ export function Statline({ items }: { items: { k: ReactNode; v: ReactNode; s?: R
 }
 
 /** "+11.3", "114.7", "$216.2M", "97": one number with a prefix and a suffix that hold no digits. */
-const COUNTABLE = /^([^\d+-]*)([+-]?)(\d+(?:\.(\d+))?)(\D*)$/;
+const COUNTABLE = /^([^\d+-]*)([+-]?)(\d+(?:\.(\d+))?)(?!st|nd|rd|th)(\D*)$/;
 
 /**
  * A figure that counts up from zero when it first shows (a screen opening), then just shows its
@@ -806,8 +818,6 @@ export function CountUp({ value, ms = 650 }: { value: string; ms?: number }) {
     </>
   );
 }
-
-const reducedMotion = () => typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export function Kpi({ k, v, sub, color }: { k: ReactNode; v: ReactNode; sub?: ReactNode; color?: string }) {
   return (

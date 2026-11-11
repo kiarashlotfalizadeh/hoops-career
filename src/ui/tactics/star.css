@@ -1,0 +1,12 @@
+/* the fit star: drawn, a cap-height tall, sitting on the figure's baseline */
+.tx-star {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-left: 0.04em;
+  vertical-align: -0.1em;
+  fill: var(--tier-elite);
+}
+.tx-star.dim {
+  fill: color-mix(in srgb, var(--text) 16%, transparent);
+}

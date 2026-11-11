@@ -192,3 +192,30 @@
 .lg-showmore {
   align-self: center;
 }
+
+/* the leaders' cards arrive one after another (eight of them) */
+.lg-leaders > .lg-lead {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * 7);
+}
+.lg-leaders > .lg-lead:nth-child(1) {
+  animation-delay: 0s;
+}
+.lg-leaders > .lg-lead:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.lg-leaders > .lg-lead:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.lg-leaders > .lg-lead:nth-child(4) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.lg-leaders > .lg-lead:nth-child(5) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.lg-leaders > .lg-lead:nth-child(6) {
+  animation-delay: calc(var(--stagger) * 5);
+}
+.lg-leaders > .lg-lead:nth-child(7) {
+  animation-delay: calc(var(--stagger) * 6);
+}

@@ -403,3 +403,19 @@
     font-size: 13px;
   }
 }
+
+/* the two posters arriving: each OVR lands, its rule draws out from its own edge, then "vs" is set
+   down on the seam */
+.cmp-ovr-v {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.08s backwards;
+}
+.cmp-ovr-rule {
+  transform-origin: left center;
+  animation: grow-x 0.5s var(--ease-out) 0.22s backwards;
+}
+.cmp-head.b .cmp-ovr-rule {
+  transform-origin: right center;
+}
+.cmp-vs-badge {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.3s backwards;
+}

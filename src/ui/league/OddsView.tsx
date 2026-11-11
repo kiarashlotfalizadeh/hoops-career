@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import type { League } from '../../core/types';
@@ -136,8 +137,10 @@ function OddsRow({ league, t, rank }: { league: League; t: TeamOdds; rank: numbe
         {/* the wins it reaches in 8 seasons of 10, a range of wins ("30–44 W"), never a record */}
         {t.lo !== t.hi && <span className="odds-range">{`${t.lo}–${t.hi}\u00a0W`}</span>}
       </span>
-      <span className={`hi ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
+      {/* (the chance as a short bar under its figure: the column reads down the table at a glance) */}
+      <span className={`hi lg-odds ${t.reach[0] >= 0.5 ? 'good' : ''}`} aria-hidden="true">
         {pct(t.reach[0], t.clinched || t.out)}
+        <i style={{ '--p': t.out ? 0 : t.clinched ? 1 : Math.max(0.03, t.reach[0]) } as CSSProperties} />
       </span>
       <span className="hi" aria-hidden="true">
         {pct(t.reach[4], t.out)}

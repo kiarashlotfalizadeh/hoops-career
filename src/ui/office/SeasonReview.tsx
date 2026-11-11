@@ -15,7 +15,7 @@ import { endText, gradeWord, vsPress, type SeasonReview } from '../../core/leagu
 import { ownerWord } from '../../core/league/legacyPulse';
 import { resultText } from '../../core/league/ownerGoals';
 import { ordinal, plural } from '../../core/format';
-import { Avatar, More, PageHeader, Section, Statline } from '../components/ui';
+import { Avatar, CountUp, More, PageHeader, Section, Statline } from '../components/ui';
 import { slabVars } from '../teamColors';
 import { CenterBar, fmtGrade } from './common';
 import { PulseChart } from './Pulse';
@@ -49,7 +49,7 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
         <h2 className="fo-rv-head">{r.fired ? 'Fired' : endText(r)}</h2>
         {/* the poster's figure: the season's record, as big as it fits */}
         <span className="fo-rv-rec-v num">
-          {r.won}-{r.lost}
+          <CountUp value={String(r.won)} ms={800} />-<CountUp value={String(r.lost)} ms={800} />
         </span>
         {r.round === 5 && (
           <div className="fo-rv-crown">
@@ -58,7 +58,8 @@ export function SeasonReviewView({ league, season }: { league: League; season: n
         )}
         <Statline
           items={[
-            { k: r.conf === 'E' ? 'East' : 'West', v: r.confRank ? ordinal(r.confRank) : '—', s: r.seed ? `${ordinal(r.seed)} seed` : 'no seed' },
+            // (a node, not a string: a place doesn't count up, "2th", "6th", on its way to "8th")
+            { k: r.conf === 'E' ? 'East' : 'West', v: r.confRank ? <span className="v-fit">{ordinal(r.confRank)}</span> : '—', s: r.seed ? `${ordinal(r.seed)} seed` : 'no seed' },
             ...(verdict ? [{ k: 'Owner grade', v: fmtGrade(verdict.grade), s: gradeWord(verdict.grade) }] : []),
           ]}
         />

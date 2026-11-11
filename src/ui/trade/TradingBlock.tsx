@@ -93,6 +93,8 @@ export function TradingBlock({
               const t = league.teams[o.tid];
               const tone = packageWord(o.neutralGive, o.neutralGet);
               const inSal = o.offer.b.pids.reduce((a, x) => a + capSalary(league, x), 0);
+              // (an initial and the last name, as the builder's lists write them: a full name is cut off on a phone)
+              const nameOf = rosterNames(teamPlayers(league, o.tid), { initial: true });
               return (
                 <div key={o.tid} className="fo-pkg">
                   <div className="fo-pkg-h">
@@ -118,8 +120,8 @@ export function TradingBlock({
                       return (
                         <div key={x} className="fo-pkg-item">
                           <Ovr v={p.ovr} size="sm" />
-                          <Link to={`/player/${p.pid}`} className="grow ellipsis bold">
-                            {playerName(p)}
+                          <Link to={`/player/${p.pid}`} className="grow ellipsis bold" aria-label={playerName(p)}>
+                            {nameOf(p.pid)}
                           </Link>
                           <span className="dim">
                             {p.pos} · {playerAge(p, league.season)}

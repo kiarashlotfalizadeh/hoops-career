@@ -61,7 +61,8 @@ export const Feed = memo(function Feed({
           return (
             <div key={key} className={cls} style={beat || tier ? undefined : { opacity: pbpOpacity(e.kind) }}>
               <span className="lv-fd-when num">{gameTime(e.q, e.clock)}</span>
-              <span className="lv-fd-team" style={{ background: e.t === -1 ? 'transparent' : colors[e.t][0] }} />
+              {/* (the kit's cloth ringed in its trim: the home white still reads on the card) */}
+              <span className="lv-fd-team" style={e.t === -1 ? undefined : { background: colors[e.t][0], boxShadow: `inset 0 0 0 1.5px ${colors[e.t][1]}` }} />
               <span className="grow">
                 {beat && <span className="lv-fd-k">{beat.kicker}</span>}
                 {e.text}

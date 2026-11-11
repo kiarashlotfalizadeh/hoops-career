@@ -274,3 +274,34 @@
 .lg-poster .lg-pickline svg {
   color: inherit;
 }
+
+/* ------------------------------------------------------------------ motion
+   a slab's name and its giant figure land a beat after the slab; its ranked list follows row by row */
+.lg-title-name {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.06s backwards;
+}
+.lg-title-fig {
+  transform-origin: left bottom;
+  animation: slam 0.42s var(--ease-out) 0.14s backwards;
+}
+.lg-title-figl {
+  animation: lg-fade var(--dur-slow) ease 0.3s backwards;
+}
+.lg-title-list > a {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.2s + var(--stagger) * 3);
+}
+.lg-title-list > a:nth-child(1) {
+  animation-delay: 0.2s;
+}
+.lg-title-list > a:nth-child(2) {
+  animation-delay: calc(0.2s + var(--stagger) * 1);
+}
+.lg-title-list > a:nth-child(3) {
+  animation-delay: calc(0.2s + var(--stagger) * 2);
+}
+/* a poster's figure settles as it counts */
+.lg-poster-fig .v {
+  transform-origin: right bottom;
+  animation: slam 0.4s var(--ease-out) 0.05s backwards;
+}

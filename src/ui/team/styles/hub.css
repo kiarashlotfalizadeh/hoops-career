@@ -47,6 +47,9 @@
   line-height: 0.8;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  /* the record lands a beat after the slab, as a slab's one big figure does */
+  transform-origin: right bottom;
+  animation: slam var(--dur-slow) var(--ease-out) 0.12s backwards;
 }
 .tm-hh-rank {
   font-family: var(--mono);

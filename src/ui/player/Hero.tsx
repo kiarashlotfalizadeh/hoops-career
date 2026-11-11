@@ -14,7 +14,7 @@ import { FRANCHISES } from '../../core/teams';
 import { awardRaces } from '../../core/league/awards';
 import { playerAge } from '../../core/playerGen';
 import { useLeagueMemo } from '../../state/store';
-import { Fit, Statline, Tag, pct } from '../components/ui';
+import { CountUp, Fit, Statline, Tag, pct } from '../components/ui';
 import { OvrSheet } from '../components/OvrKey';
 import { TeamLogo } from '../components/TeamLogo';
 import { f1, ordinal, playerSeason } from '../stats';
@@ -327,7 +327,7 @@ function HeroOvr({ league, p }: { league: League; p: Player }) {
           <DevDelta d={ovrChange(league, p)} since={baseLabel(devBase(league, p))} size="md" />
         </span>
         <span className="tm-hovr-v num" aria-hidden="true" style={{ color: ovrColor(ovr) }}>
-          {ovr}
+          <CountUp value={String(ovr)} ms={520} />
         </span>
         <span className="tm-hovr-rule" style={{ background: ovrColor(ovr) }} aria-hidden="true" />
         <span className="tm-hovr-k" aria-hidden="true">

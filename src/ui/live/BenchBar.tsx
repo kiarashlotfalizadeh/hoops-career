@@ -1,4 +1,5 @@
 import { Activity, BarChart3, ClipboardList, Play, Timer, Users } from 'lucide-react';
+import { useChanged } from '../motion';
 
 /**
  * The console's views: Now (the staff's read and what needs you; the report at a break, the huddle in a
@@ -46,6 +47,8 @@ export function BenchBar({
   /** At a stop: start the next period, or resume; its label. */
   go?: { label: string; run: () => void };
 }) {
+  // (a timeout spent: the count lands on its new figure)
+  const left = useChanged(timeouts);
   return (
     <div className={`lv-bb${stop ? ' stopped' : ''}`} role="group" aria-label="Game controls">
       {stop && go ? (
@@ -57,7 +60,9 @@ export function BenchBar({
         <button className={`lv-bb-btn lv-bb-to${toPending ? ' on' : ''}`} data-v="timeout" disabled={!canTimeout} onClick={onTimeout}>
           <span className="lv-bb-ic" aria-hidden="true">
             <Timer size={20} />
-            <span className="lv-bb-n num">{timeouts}</span>
+            <span key={left.key} className={`lv-bb-n num${left.changed ? ' chg' : ''}`}>
+              {timeouts}
+            </span>
           </span>
           <span className="lv-bb-l">Timeout</span>
           <span className="sr-only">
@@ -71,7 +76,11 @@ export function BenchBar({
           <button key={id} role="tab" aria-selected={view === id} className={`lv-bb-btn${view === id ? ' on' : ''}`} data-v={id} onClick={() => onView(id)}>
             <span className="lv-bb-ic" aria-hidden="true">
               <Icon size={20} />
-              {id === 'staff' && calls > 0 && <span className="lv-bb-badge num">{calls}</span>}
+              {id === 'staff' && calls > 0 && (
+                <span key={calls} className="lv-bb-badge num">
+                  {calls}
+                </span>
+              )}
             </span>
             <span className="lv-bb-l">{label}</span>
             {id === 'staff' && calls > 0 && <span className="sr-only">: {calls} calls waiting</span>}

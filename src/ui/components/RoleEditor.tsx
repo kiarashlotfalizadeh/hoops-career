@@ -13,6 +13,7 @@ import { betterFit, defRoleFits, roleFits, roleScale, roleStars } from '../../co
 import { DEF_ROLE_META, GLASS_META, defRoleOf } from '../../core/sim/tactics';
 import { ordinal as ordinalOf, rosterNames } from '../stats';
 import { Help, Section, Segmented, Toggle } from './ui';
+import { Star } from '../tactics/Star';
 import '../screens/team.css';
 import '../tactics/bench.css';
 
@@ -22,8 +23,9 @@ type Side = 'off' | 'def';
 export function Stars({ n, label }: { n: number; label?: string }) {
   return (
     <span className="tm-role-stars" role="img" aria-label={label ?? `${n} of 5`}>
-      {'★'.repeat(n)}
-      <span className="dim">{'★'.repeat(5 - n)}</span>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Star key={i} dim={i >= n} />
+      ))}
     </span>
   );
 }

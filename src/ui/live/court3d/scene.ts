@@ -47,6 +47,8 @@ export interface SceneProps {
   warn: string;
   /** The game is over: the side that won it (they celebrate, the others don't). */
   final?: 0 | 1;
+  /** Clutch time: the main camera comes in a little, and the building is on its feet for less. */
+  clutch?: boolean;
 }
 
 /** What the page writes over the picture this frame (in CSS pixels). */
@@ -72,12 +74,14 @@ const WIDE_AFTER = 1500;
 /** A cut-in (a close-up of a scorer or the man a whistle was for) has this long at most (ms), and there is this long between two. */
 const CUT_MS = 1700;
 const CUT_GAP = 12000;
+/** And goes this far round him while it holds (radians). */
+const CUT_ARC = 0.1;
 /** The play runs no faster than this against the clock for a cut-in (at 4x there is no time for one). */
 const CUT_PACE = 1.1;
 /** How much of their light the stands keep behind a close-up: the picture is the player, not the crowd behind him. */
 const CUT_DIM = 0.18;
 /** And the benches while a play is on: the men on the floor by the far sideline stand out from their own bench. */
-const BENCH_DIM = 0.5;
+const BENCH_DIM = 0.4;
 /** And from the low camera at a free throw, which looks along them. */
 const FT_BENCH = 0.24;
 /** At the buzzer each man takes it in in his own time: the last of them this long (ms) after the first. */
@@ -87,9 +91,7 @@ const TRUNK = 0.5;
 /** And out of heads: a head's (on the 6 ft 6 puppet), and how far off a body the ball starts to give way (ft). */
 const SKULL = 0.42;
 const GIVE = 0.4;
-/** A pass is in the two men's hands at its ends: it gives way to the bodies it goes by only past this much of its way from either. */
-const HANDS = 0.2;
-/** And it gives way over this long (ms), not in a frame: a pass bends round a man, it doesn't hop off him. */
+/** The ball gives way to a body over this long (ms), not in a frame: it bends round a man, it doesn't hop off him. */
 const BEND_MS = 80;
 /** A loose ball is moved off a body at this speed at most, ft a second: it rolls off him, it doesn't jump. */
 const BALL_PUSH = 14;
@@ -116,8 +118,15 @@ const VARNISH = /* glsl */ `
     }
   }`;
 
+/** A ball through the net pulls it for this long (ms): down, flicked back up past where it hangs, and still. */
+const NET_MS = 700;
+/** The main camera gets to where it is turning in about this long (s): it starts and stops, it doesn't lurch. */
+const FOLLOW_S = 0.34;
+/** And looks this far ahead of a ball on its way along the floor: ft for each ft a second, and at most. */
+const LEAD = 0.14;
+const LEAD_MAX = 5;
+
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-const smooth = (u: number) => u * u * (3 - 2 * u);
 /** A point on the court, in the scene: x along the floor, z across it (toward the camera). */
 const sx = (p: Pt) => p.y - MID;
 const sz = (p: Pt) => -p.x;
@@ -125,6 +134,7 @@ const sz = (p: Pt) => -p.x;
 const A = new Vector3();
 const TMP: V3 = { x: 0, y: 0, z: 0 };
 const TMP2: V3 = { x: 0, y: 0, z: 0 };
+const SIDE = { x: 0, z: 0 };
 
 export class CourtScene {
   private readonly renderer: WebGLRenderer;
@@ -145,6 +155,16 @@ export class CourtScene {
   private readonly ballShadow: Mesh;
   private readonly nets: Object3D[] = [];
   private readonly rims: Object3D[] = [];
+  private readonly units: Object3D[] = [];
+  private readonly swish: Vector3[] = [];
+  // how hard the net and the rim were last hit (a dunk more than a shot), and the way the ball last rolled
+  private netHit = 1;
+  private rimHit = 1;
+  private readonly spin = new Vector3(1, 0, 0);
+  // the main camera's turn: how fast it is turning, how fast the ball goes along the floor, how far it has come in for the clutch
+  private focusV = 0;
+  private ballVx = 0;
+  private tight = 0;
   // the ball: where it is, where this move picked it up, how fast it's falling
   private readonly ball = new Vector3(0, BALL_R, 0);
   private readonly from = new Vector3();
@@ -255,12 +275,14 @@ export class CourtScene {
 
     // the baskets: the unit behind each baseline, its board, the rim and its net
     for (const end of [-1, 1]) {
-      const { group, rim, net } = props.basket();
+      const { group, rim, net, swish } = props.basket();
       // (built for the basket at the low end, facing up the floor; the other is turned round)
       group.position.set(end * (MID - BASKET.y), 0, 0);
       if (end > 0) group.rotation.y = Math.PI;
       this.rims.push(rim);
       this.nets.push(net);
+      this.units.push(group);
+      this.swish.push(swish);
       this.scene.add(group);
     }
 
@@ -285,10 +307,10 @@ export class CourtScene {
     return m;
   };
 
-  /** A device that can't keep up: no shadows thrown, no mirror in the floor. */
-  lite(on: boolean) {
-    this.key.castShadow = !on;
-    this.arena.lite(on);
+  /** A device that can't keep up: no shadows thrown (1), and no mirror in the floor either (2). */
+  lite(level: 0 | 1 | 2) {
+    this.key.castShadow = level < 1;
+    this.arena.lite(level > 1);
   }
 
   /** What comes back up off the floor is the floor's colour (kept warm: it is mostly wood). */
@@ -383,6 +405,9 @@ export class CourtScene {
     let rimEnd = 0;
     let line = false;
     let near = 0;
+    let backspin = false;
+    /** The building gets up for a basket: all of it for the home side's big ones, a stir for the visitors'. */
+    const roar = (home: boolean, big: boolean) => this.arena.cheer(home ? (big || p.clutch ? 1 : line ? 0.25 : 0.42) : big ? 0.22 : 0.12);
     // (where the page's words go: found now, put on the picture once the camera is aimed)
     let tagAt: { x: number; z: number; text: string } | null = null;
     let flashAt: { x: number; z: number; fl: Flash; alpha: number } | null = null;
@@ -402,7 +427,7 @@ export class CourtScene {
       const rimPt = toWorld(BASKET, sc.dir);
       const rim = { x: sx(rimPt), z: sz(rimPt) };
       rimEnd = rim.x < 0 ? 0 : 1;
-      const carried = play.carried ? (a.hold as number) : -1;
+      let carried = play.carried ? (a.hold as number) : -1;
       const figs: Fig[] = [];
       // (the move the play is in: past the script's end it is still its last)
       const bi = Math.min(play.i, sc.frames.length - 1);
@@ -431,7 +456,8 @@ export class CourtScene {
             act,
             ms: play.ms,
             dur: play.dur,
-            ball: j === carried,
+            // (at the buzzer the man with the ball lets it go: his arms are up, or his head is down, like everyone's)
+            ball: j === carried && act === b.act[j],
             aim: AIMED.has(act) ? rim : undefined,
             cut,
           },
@@ -450,12 +476,15 @@ export class CourtScene {
         this.slammed = false;
         this.landed = false;
         this.path = null;
-        this.bend.x = this.bend.z = 0;
         if (fresh) {
           const start = toWorld(sc.frames[0].ball, sc.dir);
-          if (cut || Math.hypot(ball.x - sx(start), ball.z - sz(start)) > 12) ball.set(sx(start), BALL_R, sz(start));
+          if (cut || Math.hypot(ball.x - sx(start), ball.z - sz(start)) > 12) {
+            ball.set(sx(start), BALL_R, sz(start));
+            this.bend.x = this.bend.z = 0;
+          }
         }
-        this.from.copy(ball);
+        // (where the move picks it up, less what a body by it had moved it: that is still added on, eased)
+        this.from.set(ball.x - this.bend.x, ball.y, ball.z - this.bend.z);
         this.vy = 0;
       }
       const lu = play.dur > 0 ? clamp(play.ms / play.dur, 0, 1) : 1;
@@ -463,22 +492,31 @@ export class CourtScene {
       const next = b.hold !== undefined && b.hold >= 0 ? figs[b.hold] : null;
       if (was) hands.add(was);
       if (next) hands.add(next);
-      if (carried >= 0) {
+      if (carried >= 0 && over(pids[carried], figs[carried].side, 'hold') !== 'hold') {
+        carried = -1;
+        free = true;
+      } else if (carried >= 0) {
         holder = figs[carried];
         set(ball, holder.pup.carry(TMP));
+        this.give(holder, null, ease);
       } else if (b.fx) {
         const one = was?.pup.one;
         if (was && one?.id === 'dunk' && !this.slammed) {
           // a dunk: it stays in his hands to the rim
           set(ball, was.pup.carry(TMP));
+          this.give(null, null, ease, false);
           holder = was;
           if (one.tau >= DUNK_AT) {
             this.slammed = true;
             ball.set(rim.x, RIM_H - 0.2, rim.z);
             this.vy = -20;
+            // (the rim takes his weight and springs back; the net is pulled harder than a shot pulls it)
+            this.rimKick = 1;
+            this.rimHit = 1.7;
             if (b.fx === 'make') {
               this.netKick = 1;
-              this.arena.cheer(p.kits[sc.off].light ? 1 : 0.3);
+              this.netHit = 1.5;
+              roar(sc.off === 0, true);
             }
           }
         } else if (this.slammed) free = true;
@@ -499,6 +537,7 @@ export class CourtScene {
             const d = Math.hypot(dx, dz) || 1;
             ball.set(this.swatAt.x + (dx / d) * 9 * w, Math.max(BALL_R, this.swatAt.y * (1 - w * w)), this.swatAt.z + (dz / d) * 9 * w);
           }
+          this.give(null, null, ease, false);
         } else {
           // a shot: up from his hand, over the top and down at the rim (through it, or off the iron)
           const peak = (b.ballZ ?? 6) * 0.62;
@@ -519,16 +558,23 @@ export class CourtScene {
           if (this.landed) free = true;
           else {
             ball.set(this.from.x + (ex - this.from.x) * w, this.from.y + (top - this.from.y) * w + 4 * peak * w * (1 - w), this.from.z + (ez - this.from.z) * w);
+            // (what a body had moved it in his hands is let go of on the way up)
+            this.give(null, null, ease, false);
+            backspin = true;
             if (made && lu > T) {
               ball.y = top - ((lu - T) / (1 - T)) * 2.7;
               if (!this.netKick && !calm) {
                 this.netKick = 1;
-                this.arena.cheer(p.kits[sc.off].light ? 0.8 : 0.25);
+                this.netHit = 1;
+                roar(sc.off === 0, b.flash?.text === '+3' || !!sc.moment);
               }
             }
             if (lu >= 1) {
               this.landed = true;
-              if (!made && !this.rimKick && !calm) this.rimKick = 1;
+              if (!made && !this.rimKick && !calm) {
+                this.rimKick = 1;
+                this.rimHit = 1;
+              }
               // (it leaves the net as fast as it went through it, in the bodies' time; off the iron it pops up)
               const pace = own > 0 && dt > 0 ? dt / own : 1;
               this.vy = made ? -clamp((2.7 / Math.max(0.03, ((1 - T) * play.dur) / 1000)) * pace, 8, 30) : 7;
@@ -557,23 +603,14 @@ export class CourtScene {
           );
         }
         const arc = Math.max(this.path.lob, Math.min(1.8, far * 0.05) + (next ? 0 : Math.min(1.5, far * 0.1)));
-        const side = swerve(this.path, lu);
+        const side = swerve(this.path, lu, SIDE);
         ball.set(
-          this.from.x + (to.x - this.from.x) * lu + this.path.bx * side,
+          this.from.x + (to.x - this.from.x) * lu + side.x,
           this.from.y + (to.y - this.from.y) * lu + 4 * arc * lu * (1 - lu),
-          this.from.z + (to.z - this.from.z) * lu + this.path.bz * side,
+          this.from.z + (to.z - this.from.z) * lu + side.z,
         );
-        // (kept out of the bodies it goes by: eased, and not at all in the hands at either end)
-        const px = ball.x;
-        const pz = ball.z;
-        this.clear(was, next);
-        const k = 1 - Math.exp(-ease / BEND_MS);
-        this.bend.x += (ball.x - px - this.bend.x) * k;
-        this.bend.z += (ball.z - pz - this.bend.z) * k;
-        // (an end with no hands at it, a ball coming off the rim or going to the floor, is not held to its line)
-        const open = smooth(clamp(Math.min(was ? lu : 1, next ? 1 - lu : 1) / HANDS, 0, 1));
-        ball.x = px + this.bend.x * open;
-        ball.z = pz + this.bend.z * open;
+        // (kept out of the bodies it goes by, eased: the two men's hands go with it)
+        this.give(was, next, ease);
         if (lu >= 1) {
           if (next) holder = next;
           else free = true;
@@ -624,8 +661,8 @@ export class CourtScene {
         const f = this.fig(st.pid, st.side, p);
         const x = at[j * 2];
         const z = at[j * 2 + 1];
-        const has = st.pid === this.heldBy;
-        const act = over(st.pid, st.side, has ? 'hold' : 'stand');
+        const act = over(st.pid, st.side, st.pid === this.heldBy ? 'hold' : 'stand');
+        const has = act === 'hold';
         f.pup.update({ x, z, yaw: f.pup.placed ? f.pup.yaw : Math.atan2(-x, -z), act, ms: 0, dur: 0, ball: has, cut }, dt, own, ease);
         seen.add(st.pid);
         if (has) holder = f;
@@ -633,6 +670,7 @@ export class CourtScene {
       if (holder) {
         hands.add(holder);
         set(ball, holder.pup.carry(TMP));
+        this.give(holder, null, ease);
       } else {
         this.heldBy = null;
         if (stage.ball && Math.hypot(ball.x - sx(stage.ball), ball.z - sz(stage.ball)) > 14) ball.set(sx(stage.ball), BALL_R, sz(stage.ball));
@@ -640,6 +678,8 @@ export class CourtScene {
       }
     }
     // loose, it falls and bounces
+    // (it is where it is: nothing more is owed to a body it went by)
+    if (free) this.bend.x = this.bend.z = 0;
     if (free && sec > 0) {
       this.vy -= G * sec;
       ball.y += this.vy * sec;
@@ -663,20 +703,30 @@ export class CourtScene {
       if (f.ring.visible) (f.ring.material as MeshBasicMaterial).color.set(hot ? p.warn : '#ffffff');
     }
 
-    // the ball turns as it travels; its shadow stays on the floor
-    const moved = this.ballMesh.position.distanceTo(ball);
-    this.ballMesh.position.copy(ball);
-    if (!calm && moved < 20) this.ballMesh.rotation.x += moved * 1.1;
+    // the ball rolls the way it goes (a shot spins back); its shadow stays on the floor, wider and fainter the higher it is
+    const bm = this.ballMesh.position;
+    const moved = bm.distanceTo(ball);
+    const flat = Math.hypot(ball.x - bm.x, ball.z - bm.z);
+    // (a dribble goes up and down: it keeps the spin it had)
+    if (flat > 0.3 * moved && flat > 1e-3) this.spin.set((ball.z - bm.z) / flat, 0, -(ball.x - bm.x) / flat);
+    if (!calm && moved < 20 && moved > 1e-4) this.ballMesh.rotateOnWorldAxis(this.spin, (backspin ? -1 : 1) * Math.min(0.8, moved * 1.1));
+    bm.copy(ball);
     this.ballShadow.position.set(ball.x, 0.035, ball.z);
-    this.ballShadow.scale.setScalar(1 / (1 + ball.y * 0.07));
-    // the net takes a made shot, the rim a miss
-    this.netKick = Math.max(0, this.netKick - own / 420);
+    this.ballShadow.scale.setScalar(1 + Math.min(1.2, ball.y * 0.06));
+    (this.ballShadow.material as MeshBasicMaterial).opacity = 0.34 / (1 + ball.y * 0.3);
+    // the net takes a made shot, the rim a miss or a dunk
+    this.netKick = Math.max(0, this.netKick - own / NET_MS);
     this.rimKick = Math.max(0, this.rimKick - own / 380);
-    // (the net stretches down more than it narrows: its loops stay on the ring. The rim tips on its hinge at the board, and the net hangs from it)
+    // (the ball pulls the net down its length, it flicks back up past where it hangs, wider at the foot, and swings out; its
+    // loops stay on the ring. The rim tips on its hinge at the board, the net hangs from it, and the whole unit rocks a little with it)
+    const age = (1 - this.netKick) * NET_MS;
+    const pull = this.netKick > 0 ? this.netHit * Math.exp(-age / 230) : 0;
     this.nets.forEach((n, i) => {
-      const k = i === rimEnd ? this.netKick : 0;
-      const tip = i === rimEnd ? Math.sin(this.rimKick * 18) * this.rimKick * 0.07 : 0;
-      n.scale.set(1 - k * 0.05, 1 + k * 0.4, 1 - k * 0.05);
+      const k = i === rimEnd ? pull : 0;
+      const wave = Math.cos(age / 50);
+      this.swish[i].set(k * wave, k * 0.2 * Math.max(0, -wave), k * 0.22 * Math.sin(age / 64));
+      const tip = i === rimEnd ? Math.sin(this.rimKick * 18) * this.rimKick * 0.07 * this.rimHit : 0;
+      this.units[i].rotation.z = tip * 0.1;
       for (const o of [n, this.rims[i]]) {
         o.rotation.z = tip;
         o.position.set(RIM_HINGE * (Math.cos(tip) - 1), RIM_H + RIM_HINGE * Math.sin(tip), 0);
@@ -729,7 +779,7 @@ export class CourtScene {
     }
     this.kicked = this.netKick;
 
-    this.aim(stage, real, calm, line, near, quiet);
+    this.aim(stage, real, calm, line, near, quiet, !!p.clutch);
     this.camera.updateMatrixWorld();
     if (tagAt) {
       const t: { x: number; z: number; text: string } = tagAt;
@@ -794,7 +844,24 @@ export class CourtScene {
     ball.x = x + dx * k;
     ball.z = z + dz * k;
   }
-  /** How far the pass in the air is bent off its line by the bodies it goes by (x, z). */
+  /**
+   * The ball, in a man's hands or on its way between two, gives way to the bodies by it (all but `a` and
+   * `b`, whose hands it is in): eased, so it is carried and passed round a man, never hopped off him, and
+   * what it has given way is kept from one move to the next. `on` false: nothing to give way to, and what
+   * it had is eased out.
+   */
+  private give(a: Fig | null, b: Fig | null, ease: number, on = true) {
+    const ball = this.ball;
+    const px = ball.x;
+    const pz = ball.z;
+    if (on) this.clear(a, b);
+    const k = 1 - Math.exp(-ease / BEND_MS);
+    this.bend.x += (ball.x - px - this.bend.x) * k;
+    this.bend.z += (ball.z - pz - this.bend.z) * k;
+    ball.x = px + this.bend.x;
+    ball.z = pz + this.bend.z;
+  }
+  /** How far the ball is off where its move has it, for the bodies by it (x, z). */
   private readonly bend = { x: 0, z: 0 };
   /** Where the plan had each man last frame (x, z), before anyone stepped aside. */
   private readonly planAt = new Map<number, [number, number]>();
@@ -822,7 +889,7 @@ export class CourtScene {
    * tight on the scorer of a big basket or the man a whistle was for, the stands behind him dimmed. It cuts
    * between them, never more often than HOLD_MS. Reduced motion: one camera, the whole floor, held still.
    */
-  private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean) {
+  private aim(stage: Stage, real: number, calm: boolean, line: boolean, near: number, quiet: boolean, clutch: boolean) {
     const cam = this.camera;
     const aspect = this.w / this.h;
     const fov = (across: number) => (2 * Math.atan(Math.tan((across * Math.PI) / 360) / aspect) * 180) / Math.PI;
@@ -891,7 +958,11 @@ export class CourtScene {
       this.look.lerp(A.set(c.x, Math.max(3.6, c.y), c.z), 1 - Math.exp(-real / 200));
       const half = (5.9 - 0.9 * Math.min(1, this.shotMs / CUT_MS)) / Math.min(1, aspect);
       cam.fov = clamp((2 * Math.atan(half / this.seat.distanceTo(this.look)) * 180) / Math.PI, 10, 58);
-      cam.position.copy(this.seat);
+      // (it drifts round him a little as it holds: a camera on a man's shoulder, not one on a post)
+      const turn = CUT_ARC * Math.min(1, this.shotMs / CUT_MS) * (this.seat.x < this.look.x ? 1 : -1);
+      const ox = this.seat.x - this.look.x;
+      const oz = this.seat.z - this.look.z;
+      cam.position.set(this.look.x + ox * Math.cos(turn) - oz * Math.sin(turn), this.seat.y, this.look.z + ox * Math.sin(turn) + oz * Math.cos(turn));
       cam.lookAt(this.look);
       cam.updateProjectionMatrix();
       return;
@@ -917,26 +988,49 @@ export class CourtScene {
       return;
     }
     this.push += (near - this.push) * (1 - Math.exp(-real / 420));
-    cam.fov = fov((tall ? 35 : 46) - this.push * (tall ? 3 : 5));
+    // (clutch time: it comes in and down a little, slowly, and stays there while the play is on)
+    this.tight += ((clutch && live ? 1 : 0) - this.tight) * (1 - Math.exp(-real / 1800));
+    // (a ball by the far sideline: the near half of the floor is empty wood, so it looks farther and a little tighter)
+    this.far += (clamp((-this.ball.z - 7) / 14, 0, 1) - this.far) * (1 - Math.exp(-real / 600));
+    cam.fov = fov((tall ? 35 : 46) - this.push * (tall ? 3 : 5) - this.tight * (tall ? 1.5 : 2.5) - this.far * (tall ? 1.5 : 2.5));
     // (a ball by the near sideline: the picture may go farther along the floor to keep its man in it)
     const reach = (tall ? 30 : 24) + clamp(this.ball.z, 0, 25) * 0.36;
     const sc = stage.script;
+    const sec = real / 1000;
+    // how fast the ball is going along the floor, eased (a pass is over before the camera has heard of it; a break is not)
+    const vx = sec > 0 ? clamp((this.ball.x - this.ballWas) / sec, -60, 60) : 0;
+    this.ballWas = this.ball.x;
+    this.ballVx += (vx - this.ballVx) * (1 - Math.exp(-real / 450));
     let to = this.ball.x;
-    // (most of the picture ahead of the ball, toward the basket it's going at)
-    if (sc && stage.play) to += (sc.dir === 1 ? -1 : 1) * (tall ? 7 : 4);
+    // (most of the picture ahead of the ball, toward the basket it's going at, and a little more ahead of one on its way)
+    if (sc && stage.play) to += (sc.dir === 1 ? -1 : 1) * (tall ? 7 : 4) + clamp(this.ballVx * LEAD, -LEAD_MAX, LEAD_MAX);
     to = clamp(to, -reach, reach);
     const jump = this.focus === null || Math.abs(to - this.focus) > 60;
-    this.focus = jump ? to : this.focus! + (to - this.focus!) * (1 - Math.exp(-real / 260));
+    if (jump) {
+      this.focus = to;
+      this.focusV = this.ballVx = 0;
+    } else if (sec > 0) {
+      // (a spring with no bounce in it: the turn has a speed of its own, so it eases off and eases in)
+      const w = 2 / FOLLOW_S;
+      const x = w * sec;
+      const e = 1 / (1 + x + 0.48 * x * x + 0.235 * x * x * x);
+      const off = this.focus! - to;
+      const t = (this.focusV + w * off) * sec;
+      this.focusV = (this.focusV - w * t) * e;
+      this.focus = to + (off + t) * e;
+    }
     // it looks nearer for a ball on the near side (a man in the near corner keeps his feet in the picture),
     // and a little higher for one in the air (a long shot stays in it at the top)
     const dip = clamp((this.ball.z - 8) * 0.8, 0, 12);
     const lift = clamp((this.ball.y - 9) * 0.7, 0, 5);
     this.dip = jump ? dip : this.dip + (dip - this.dip) * (1 - Math.exp(-real / 380));
     this.lift = jump ? 0 : this.lift + (lift - this.lift) * (1 - Math.exp(-real / 220));
-    cam.position.set(this.focus * 0.78, 33, 60);
-    cam.lookAt(this.focus, this.lift, (tall ? -6 : -4) + this.dip);
+    cam.position.set(this.focus! * 0.78, 33 - this.tight * 2, 60 - this.tight * 1.5);
+    cam.lookAt(this.focus!, this.lift, (tall ? -6 : -4) + this.dip - this.far * 3);
     cam.updateProjectionMatrix();
   }
+  private ballWas = 0;
+  private far = 0;
 
   /** A point of the scene on the page (CSS pixels). */
   private screen(v: Vector3): { x: number; y: number } {

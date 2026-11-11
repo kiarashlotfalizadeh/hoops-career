@@ -136,3 +136,9 @@
     background: color-mix(in srgb, var(--surface) 60%, transparent);
   }
 }
+
+/* ------------------------------------------------------------ motion */
+/* a change that waits for opening night drops in under its setting */
+.set-list > .set-pending {
+  animation: drop var(--dur) var(--ease-out) backwards;
+}

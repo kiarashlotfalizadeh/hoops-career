@@ -28,11 +28,98 @@
   color: var(--paper-ink);
   container: lv-cb / inline-size;
 }
-/* one state at a time, each filling the strip; a new one fades in over the ink */
+/* one state at a time, each filling the strip. A new one comes in like a lower third: the plate wipes
+   across from the left and its words slide in a beat behind (playback and the running call, which
+   come and go all night, only fade) */
 .lv-cb-state {
   position: absolute;
   inset: 0;
   animation: lv-cb-in 0.18s ease-out both;
+}
+.lv-cb.is-title > .lv-cb-state,
+.lv-cb.is-banner > .lv-cb-state,
+.lv-cb.is-call > .lv-cb-state,
+.lv-cb.is-graphic > .lv-cb-state,
+.lv-cb.is-crowd > .lv-cb-state,
+.lv-cb.is-clutch > .lv-cb-state,
+.lv-cb.is-final > .lv-cb-state {
+  animation: lv-cb-wipe 0.34s var(--ease-move) both;
+}
+.lv-cb.is-title .lv-cb-row > *,
+.lv-cb.is-banner .lv-cb-row > *,
+.lv-cb.is-call .lv-cb-row > *,
+.lv-cb.is-graphic .lv-cb-row > *,
+.lv-cb.is-crowd .lv-cb-row > *,
+.lv-cb.is-clutch .lv-cb-row > *,
+.lv-cb.is-final .lv-cb-row > * {
+  animation: lv-cb-slide 0.36s var(--ease-out) 0.08s backwards;
+}
+/* a big moment lands a touch bigger */
+.lv-cb-state.big .lv-cb-head {
+  transform-origin: 0 60%;
+  animation: lv-cb-big 0.5s var(--ease-out) 0.1s backwards;
+}
+@keyframes lv-cb-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes lv-cb-slide {
+  from {
+    opacity: 0;
+    translate: -12px 0;
+  }
+}
+@keyframes lv-cb-big {
+  from {
+    opacity: 0;
+    scale: 1.22;
+  }
+}
+/* the running call's line: a new one ticks up into place */
+.lv-cb-cap {
+  display: block;
+  animation: lv-cb-tick var(--dur) var(--ease-out);
+}
+@keyframes lv-cb-tick {
+  from {
+    opacity: 0;
+    translate: 0 0.45em;
+  }
+}
+/* how the play came out, at the line's end: the court's own word, landing as the shot does */
+.lv-cb-res {
+  flex: none;
+  padding: 0 8px;
+  border-radius: var(--radius-xs);
+  box-shadow: inset 0 0 0 1.5px var(--cb-hair);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 24px;
+  white-space: nowrap;
+  color: var(--cb-dim);
+  animation: lv-cb-res 0.4s var(--ease-spring);
+}
+.lv-cb-res.make {
+  background: var(--paper-ink);
+  box-shadow: none;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-stretch: normal;
+}
+.lv-cb-res.to,
+.lv-cb-res.block,
+.lv-cb-res.foul {
+  color: var(--warn);
+}
+@keyframes lv-cb-res {
+  from {
+    opacity: 0;
+    scale: 1.5;
+  }
 }
 @keyframes lv-cb-in {
   from {
@@ -122,6 +209,7 @@
   border-radius: 50%;
   background: var(--cb-night, var(--cb-dim));
   box-shadow: 0 0 0 1.5px var(--cb-hair);
+  transition: background var(--dur) ease;
 }
 .lv-cb-ff {
   margin-right: 4px;
@@ -470,24 +558,50 @@
   line-height: 1.25;
   letter-spacing: -0.03em;
 }
+/* the billing opens the broadcast: the headline lands, its line follows, each five's plate wipes
+   across from its own side, then the names come up (below) */
+.lv-in-bill {
+  animation: slam 0.5s var(--ease-out) 0.05s backwards;
+}
+.lv-in-sub,
+.lv-in-note {
+  animation: fade var(--dur-slow) ease 0.3s backwards;
+}
+.lv-in-team {
+  animation: lv-cb-wipe 0.4s var(--ease-move) 0.1s backwards;
+}
+.lv-in-col + .lv-in-col .lv-in-team {
+  animation-name: lv-in-wipe-r;
+}
+@keyframes lv-in-wipe-r {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.lv-intro .lv-in-skip {
+  animation: fade var(--dur-slow) ease 0.5s backwards;
+}
 .lv-in-row {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  animation: lv-in-row 0.35s var(--ease-out) both;
+  animation: lv-in-row 0.35s var(--ease-out) 0.2s both;
 }
 .lv-in-row:nth-child(3) {
-  animation-delay: 0.07s;
+  animation-delay: 0.26s;
 }
 .lv-in-row:nth-child(4) {
-  animation-delay: 0.14s;
+  animation-delay: 0.32s;
 }
 .lv-in-row:nth-child(5) {
-  animation-delay: 0.21s;
+  animation-delay: 0.38s;
 }
 .lv-in-row:nth-child(6) {
-  animation-delay: 0.28s;
+  animation-delay: 0.44s;
 }
 @keyframes lv-in-row {
   from {
@@ -787,7 +901,11 @@
 
 /* reduced motion: everything still appears, nothing moves or breathes */
 @media (prefers-reduced-motion: reduce) {
-  .lv-cb-state,
+  .lv-cb .lv-cb-state,
+  .lv-cb .lv-cb-row > *,
+  .lv-cb .lv-cb-head,
+  .lv-cb-cap,
+  .lv-cb-res,
   .lv-intro,
   .lv-in-row,
   .lv-tip,

@@ -93,3 +93,13 @@
   flex-direction: column;
   min-width: 0;
 }
+/* a 320px phone: the header's two links give the title its room */
+@media (max-width: 359px) {
+  .lg-ph-links {
+    gap: 4px;
+  }
+  .lg-ph-links .btn {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+}

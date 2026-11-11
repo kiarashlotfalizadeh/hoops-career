@@ -7,7 +7,7 @@ import { useLeagueMemo } from '../../state/store';
 import { curTeamSeason, seasonTotals } from '../../core/league/helpers';
 import { draftStandings } from '../../core/league/draft';
 import { RATED_SEASONS } from '../../core/constants';
-import { Fit, Segmented, Sheet, keep, scrollBehavior } from '../components/ui';
+import { CountUp, Fit, Segmented, Sheet, keep, scrollBehavior } from '../components/ui';
 import { TeamLogo } from '../components/TeamLogo';
 import { slabVars } from '../teamColors';
 import { HONOR_AWARDS } from '../../core/league/media/honors';
@@ -363,7 +363,8 @@ export function Poster({ over, head, dek, fig, children }: { over: ReactNode; he
       </div>
       {fig && (
         <div className="lg-poster-fig">
-          <span className="v">{fig.v}</span>
+          {/* (a figure counts up to its value as the poster opens, and again when a switch changes it) */}
+          <span className="v">{typeof fig.v === 'string' ? <CountUp key={fig.v} value={fig.v} ms={520} /> : fig.v}</span>
           <span className="k">{fig.k}</span>
         </div>
       )}

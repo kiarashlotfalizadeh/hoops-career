@@ -1,0 +1,354 @@
+/* The Office in motion: what fills, lands, ticks and leaves on the GM's desks. The vocabulary
+   (keyframes, eases, durations) is the app's (ui/styles/motion.css); this file only says where it
+   applies. Loaded last, so a rule here wins over its desk's partial. Reduced motion collapses every
+   duration in tokens.css; the hooks (office/motion.tsx) stand still under it. */
+
+/* ------------------------------------------------------------ the cap bar */
+/* the payroll and its stripe are wiped in from the left as the bar first shows (the track, the cap
+   and the tax line are there from the start: the scale first, then the money against it) */
+.fo-cap-fills {
+  position: absolute;
+  inset: 0;
+  animation: wipe 0.7s var(--ease-move) 0.08s backwards;
+}
+
+/* ------------------------------------------------------------ the hub */
+/* where the payroll stands lands after the figure has counted most of the way */
+.fo-capslab-status {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.2s backwards;
+}
+
+/* ------------------------------------------------------------ trade: the deal */
+/* an asset tapped into the deal arrives in its column; one taken out shrinks away first */
+.fo-pill {
+  transform-origin: left center;
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.fo-m-out {
+  opacity: 0;
+  scale: 0.86;
+  transition:
+    opacity 0.13s var(--ease-in),
+    scale 0.13s var(--ease-in);
+}
+.fo-deal-none {
+  animation: fade var(--dur) ease backwards;
+}
+/* the row's check fills with a small settle */
+.fo-check {
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.fo-asset.on .fo-check {
+  animation: fo-check-on var(--dur-slow) var(--ease-spring);
+}
+@keyframes fo-check-on {
+  from {
+    scale: 0.6;
+  }
+}
+.fo-asset.on .fo-check svg {
+  animation: pop var(--dur) var(--ease-out) backwards;
+}
+
+/* ------------------------------------------------------------ trade: the dock */
+/* their GM arrives with the first asset (the dock is sticky, not fixed: it can move as itself) */
+.fo-dock {
+  animation: rise var(--dur-slow) var(--ease-out) backwards;
+}
+/* the meter moves like a needle settling, not a bar snapping */
+.fo-meter > i {
+  transition:
+    width 0.5s var(--ease-spring),
+    background-color var(--dur-slow) var(--ease-out);
+}
+/* a rule the deal breaks, their reasons, the figures behind the fold: each comes in under the verdict */
+.fo-dock-rule,
+.fo-dock > .fo-notes,
+.fo-dock > .fo-terms,
+.fo-dock-figs,
+.fo-dock-force {
+  animation: rise-sm var(--dur) var(--ease-out) backwards;
+}
+/* a deal they'd take: the handshake lands */
+.fo-dock-btns .btn.good:not(:disabled) {
+  animation: pop var(--dur-slow) var(--ease-spring);
+}
+.fo-dock-btns .btn.good:not(:disabled) svg {
+  animation: fo-shake 0.5s var(--ease-out) 0.1s;
+}
+@keyframes fo-shake {
+  30% {
+    rotate: -14deg;
+  }
+  60% {
+    rotate: 10deg;
+  }
+}
+
+/* counters and the last look: each version of the deal rises in turn */
+.fo-counter {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.fo-counter:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.fo-counter:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.fo-counter:nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 6);
+}
+.fo-counter-sides > .fo-counter-side:first-child {
+  animation: slide-r var(--dur-slow) var(--ease-out) backwards;
+}
+.fo-counter-sides > .fo-counter-side:last-child {
+  animation: slide-l var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* packages (the block, the finder, offers): the first few come in one after another */
+.fo-pkg,
+.fo-offer {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.fo-pkg:nth-child(2),
+.fo-offer:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.fo-pkg:nth-child(3),
+.fo-offer:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.fo-pkg:nth-child(n + 4),
+.fo-offer:nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 6);
+}
+
+/* the partner's slab: a new team's figure lands */
+.fo-partner-fig {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* ------------------------------------------------------------ contracts and offers */
+/* a block that answers the offer (it doesn't fit, he counters, his agent replies) comes in where it sits */
+.fo-contract > .fo-callout,
+.fo-bid > .fo-callout,
+.fo-talk > .fo-callout,
+.fo-talk-warn {
+  animation: rise-sm var(--dur) var(--ease-out) backwards;
+}
+/* the chosen length settles */
+.fo-yr {
+  transition:
+    background var(--dur-fast) ease,
+    color var(--dur-fast) ease,
+    border-color var(--dur-fast) ease,
+    scale 0.1s ease;
+}
+.fo-yr:not(:disabled):active {
+  scale: 0.96;
+}
+.fo-yr.on {
+  animation: fo-settle var(--dur-slow) var(--ease-spring);
+}
+@keyframes fo-settle {
+  from {
+    scale: 0.93;
+  }
+}
+.fo-stepper {
+  transition:
+    background var(--dur-fast) ease,
+    scale 0.1s ease;
+}
+.fo-stepper:active {
+  scale: 0.9;
+}
+/* his patience: the dots that are left land one by one; a lost one is felt as the row resettles */
+.fo-patience > i {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.fo-patience > i:nth-child(2) {
+  animation-delay: 60ms;
+}
+.fo-patience > i:nth-child(3) {
+  animation-delay: 120ms;
+}
+/* what matters to him: the verdict marks tick in down the list */
+.fo-fit > svg {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.fo-line:nth-child(3) .fo-fit > svg {
+  animation-delay: 50ms;
+}
+.fo-line:nth-child(4) .fo-fit > svg {
+  animation-delay: 100ms;
+}
+.fo-line:nth-child(5) .fo-fit > svg {
+  animation-delay: 150ms;
+}
+
+/* ------------------------------------------------------------ free agency and re-signing */
+/* a signing the market just made, an offer of yours added to the list */
+.fo-market .fo-notes > li:first-child,
+.fo-pending-item {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+/* qualified: the row answers */
+.fo-qualify.on > svg {
+  animation: pop var(--dur-slow) var(--ease-spring);
+}
+/* a player re-signed: his row settles into the signed list */
+.fo-confirm-row {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+
+/* ------------------------------------------------------------ the owner */
+/* the heat's word arrives beside the score as it counts */
+.fo-seat-l {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.1s backwards;
+}
+/* the track is laid from the hot seat to secure, then the pin travels from the middle to where he stands */
+.fo-meterbar-track {
+  animation: wipe 0.6s var(--ease-move) backwards;
+}
+.fo-meterbar-pin {
+  transition: left 0.8s var(--ease-spring);
+}
+/* a goal's bar fills from its foot; a grade grows out from the centre line, to the side it fell on */
+.fo-goal .bar > div,
+.fo-att .bar > div,
+.fo-now .bar > div {
+  transform-origin: left center;
+  animation: grow-x 0.6s var(--ease-out) 0.1s backwards;
+}
+.fo-cbar > i {
+  transform-origin: left center;
+  animation: grow-x 0.55s var(--ease-out) 0.12s backwards;
+}
+.fo-cbar > i.neg {
+  transform-origin: right center;
+}
+.fo-goal:nth-child(2) :is(.bar > div, .fo-cbar > i),
+.fo-owner-row:nth-child(2) .fo-cbar > i {
+  animation-delay: 0.17s;
+}
+.fo-goal:nth-child(3) :is(.bar > div, .fo-cbar > i),
+.fo-owner-row:nth-child(3) .fo-cbar > i {
+  animation-delay: 0.24s;
+}
+.fo-goal:nth-child(n + 4) :is(.bar > div, .fo-cbar > i),
+.fo-owner-row:nth-child(n + 4) .fo-cbar > i {
+  animation-delay: 0.31s;
+}
+/* a grade lands as its bar reaches it (waiting in view, faint: never hidden) */
+@keyframes fo-land {
+  from {
+    opacity: 0.3;
+    scale: 1.3;
+  }
+}
+.fo-goal-v {
+  animation: fo-land var(--dur-slow) var(--ease-out) 0.3s backwards;
+}
+.fo-goal:nth-child(2) .fo-goal-v {
+  animation-delay: 0.37s;
+}
+.fo-goal:nth-child(3) .fo-goal-v {
+  animation-delay: 0.44s;
+}
+.fo-goal:nth-child(n + 4) .fo-goal-v {
+  animation-delay: 0.51s;
+}
+
+/* ------------------------------------------------------------ the pulse */
+/* the season's two lines are drawn from opening night to today */
+.fo-pulse-chart > svg {
+  animation: wipe 0.9s var(--ease-move) 0.1s backwards;
+}
+.fo-pulse-word {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.08s backwards;
+}
+
+/* ------------------------------------------------------------ finances */
+/* the season's costs are laid end to end; the profit columns grow from the zero line */
+.fo-stack {
+  animation: wipe 0.7s var(--ease-move) 0.08s backwards;
+}
+.fo-minichart .pos > .b {
+  transform-origin: center bottom;
+  animation: grow-y 0.55s var(--ease-out) backwards;
+}
+.fo-minichart .neg > .b {
+  transform-origin: center top;
+  animation: grow-y 0.55s var(--ease-out) backwards;
+}
+.fo-minichart > div:nth-child(2) .b {
+  animation-delay: 40ms;
+}
+.fo-minichart > div:nth-child(3) .b {
+  animation-delay: 80ms;
+}
+.fo-minichart > div:nth-child(4) .b {
+  animation-delay: 120ms;
+}
+.fo-minichart > div:nth-child(5) .b {
+  animation-delay: 160ms;
+}
+.fo-minichart > div:nth-child(n + 6) .b {
+  animation-delay: 200ms;
+}
+.fo-minichart .v {
+  animation: fade var(--dur-slow) ease 0.25s backwards;
+}
+
+/* ------------------------------------------------------------ the career */
+/* the cabinet: each honor is set on its shelf */
+.fo-cab-t {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.fo-cab-t:nth-child(2) {
+  animation-delay: 60ms;
+}
+.fo-cab-t:nth-child(3) {
+  animation-delay: 120ms;
+}
+.fo-cab-t:nth-child(4) {
+  animation-delay: 180ms;
+}
+.fo-cab-t:nth-child(n + 5) {
+  animation-delay: 240ms;
+}
+/* the timeline: the first milestones step in down the line, each dot landing on it */
+.fo-tl-row:nth-child(-n + 8) {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * (var(--fo-i, 0)));
+}
+.fo-tl-row:nth-child(2) {
+  --fo-i: 1;
+}
+.fo-tl-row:nth-child(3) {
+  --fo-i: 2;
+}
+.fo-tl-row:nth-child(4) {
+  --fo-i: 3;
+}
+.fo-tl-row:nth-child(5) {
+  --fo-i: 4;
+}
+.fo-tl-row:nth-child(6) {
+  --fo-i: 5;
+}
+.fo-tl-row:nth-child(7) {
+  --fo-i: 6;
+}
+.fo-tl-row:nth-child(8) {
+  --fo-i: 7;
+}
+.fo-tl-row.big:nth-child(-n + 8) .fo-tl-dot {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.15s backwards;
+}
+.fo-lc-job-v {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.1s backwards;
+}

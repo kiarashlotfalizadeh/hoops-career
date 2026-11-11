@@ -67,17 +67,23 @@ export function QuarterTable({ g, abbrevs }: { g: Pick<GameResult, 'home' | 'awa
           </tr>
         </thead>
         <tbody>
-          {[g.away, g.home].map((t) => (
-            <tr key={t.tid}>
-              <th className="l" scope="row">
-                {abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}
-              </th>
-              {Array.from({ length: n }, (_, i) => (
-                <td key={i}>{t.quarters[i] ?? '—'}</td>
-              ))}
-              <td className="gd-ls-t">{t.pts}</td>
-            </tr>
-          ))}
+          {[g.away, g.home].map((t) => {
+            const o = t === g.away ? g.home : g.away;
+            return (
+              <tr key={t.tid} className={t.pts > o.pts ? 'won' : undefined}>
+                <th className="l" scope="row">
+                  {abbrevs[t.tid] ?? (t === g.away ? 'Away' : 'Home')}
+                </th>
+                {Array.from({ length: n }, (_, i) => (
+                  // (the period a team took reads in ink, the one it lost steps back)
+                  <td key={i} className={(t.quarters[i] ?? 0) > (o.quarters[i] ?? 0) ? 'hi' : undefined}>
+                    {t.quarters[i] ?? '—'}
+                  </td>
+                ))}
+                <td className="gd-ls-t">{t.pts}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

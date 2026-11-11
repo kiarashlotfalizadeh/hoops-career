@@ -36,10 +36,24 @@ export interface Court3DProps {
   onSlow: () => void;
 }
 
-/** Slower than this a frame (ms), on average, is not worth watching. */
-const SLOW_MS = 38;
-/** Slower than this (under 40 a second) the shadows and the floor's mirror go: a phone held at 30 is spared them. */
-const LITE_MS = 25;
+/** Slower than this a frame (ms), on average, with everything already given up, is not worth watching: the page offers the 2D court. */
+const SLOW_MS = 31;
+/** Slower than this (under 45 a second) the picture gives something up, a step at a time (see STEPS). */
+const LITE_MS = 22;
+/** Frames are timed over stretches this long. */
+const STRETCH = 60;
+/**
+ * What a device that can't keep up gives up, in order, the least missed first: a little sharpness,
+ * the thrown shadows, the floor's mirror, then half the sharpness. Each is how sharp it is drawn
+ * (of the screen's own, 2 at most) and the scene's `lite` level.
+ */
+const STEPS: readonly (readonly [number, 0 | 1 | 2])[] = [
+  [1, 0],
+  [0.75, 0],
+  [0.75, 1],
+  [0.75, 2],
+  [0.5, 2],
+];
 /**
  * No more than 60 pictures a second, whatever the screen's rate (battery, heat): the gap between two, ms.
  * Kept as a schedule, not a least gap: a 75, 90 or 144 Hz screen then draws 60 of its frames a second
@@ -48,9 +62,9 @@ const LITE_MS = 25;
 const FRAME_MS = 1000 / 60;
 /** A frame this close (ms) to when the next picture is due draws it. */
 const EARLY_MS = 2;
-/** Shadows and the mirror come back after this many fast stretches in a row (under FAST_MS a frame), twice at most. */
-const FAST_MS = 19;
-const FAST_RUN = 4;
+/** A step is taken back after this many fast stretches in a row (under FAST_MS a frame), three times at most. */
+const FAST_MS = 18.5;
+const FAST_RUN = 5;
 /** A lost context that isn't back after this long in view (ms) is not coming back. */
 const GONE_MS = 3000;
 
@@ -81,8 +95,7 @@ export default function Court3D(props: Court3DProps) {
     document.fonts?.ready.then(() => void (fontsIn = 1));
     const floorCv = document.createElement('canvas');
     // how sharp it's drawn: full, or less on a device that can't keep up
-    let quality = 1;
-    let plain = false;
+    let level = 0;
     let sized = '';
     let frames = 0;
     let spent = 0;
@@ -92,7 +105,7 @@ export default function Court3D(props: Court3DProps) {
     const build = () => {
       scene?.dispose();
       scene = new Scene!(canvas, paints.ball, paints.ballSeam, models!);
-      scene.lite(plain);
+      scene.lite(STEPS[level][1]);
       sized = floorKey = '';
       shown = false;
     };
@@ -136,7 +149,8 @@ export default function Court3D(props: Court3DProps) {
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (!w || !h) return;
-      const ratio = Math.min(2, window.devicePixelRatio || 1) * quality;
+      // (a screen of one dot a point has no sharpness to give: its steps are the shadows and the mirror)
+      const ratio = Math.max(1, Math.min(2, window.devicePixelRatio || 1) * STEPS[level][0]);
       const size = `${w}x${h}@${ratio}`;
       let dirty = false;
       if (size !== sized) {
@@ -164,46 +178,42 @@ export default function Court3D(props: Court3DProps) {
       if (still > (idle ? (p.final === undefined ? 150 : 600) : 40)) return;
       const labels = scene.frame(
         p.stage.current,
-        { kits: p.kits, jersey: p.jersey, body: p.body, names: p.names, hot: p.hot, final: p.final, board: fl?.kind === 'home' ? fl.paint : paints.ink, warn },
+        { kits: p.kits, jersey: p.jersey, body: p.body, names: p.names, hot: p.hot, final: p.final, clutch: p.clutch, board: fl?.kind === 'home' ? fl.paint : paints.ink, warn },
         dt,
         real,
         !!calmQ?.matches,
         p.paused ? (idle ? real : 0) : real * p.own,
       );
       place(tagRef.current, labels.tag, 1);
-      place(flashRef.current, labels.flash, labels.flash?.alpha ?? 0);
+      // (a play's word lands: it comes up to its size as it comes in)
+      place(flashRef.current, labels.flash, labels.flash?.alpha ?? 0, true);
       if (flashRef.current && labels.flash) flashRef.current.dataset.kind = labels.flash.kind;
       if (!shown) {
         shown = true;
         p.onReady();
       }
-      // too slow to watch: first drawn less sharp, then the page is told (it offers the 2D court)
+      // too slow: the picture gives up a step, and with none left the page is told (it offers the 2D court)
       if (dt > 0 && real > 0) {
         frames++;
         spent += real;
-        if (frames >= 90) {
+        if (frames >= STRETCH) {
           const avg = spent / frames;
           frames = spent = 0;
-          if (!plain) {
-            // (first without the shadows and the floor's mirror, then less sharp)
-            if (avg > LITE_MS) {
-              plain = true;
-              fast = 0;
-              scene.lite(true);
-            }
-          } else if (avg > SLOW_MS) {
+          const last = STEPS.length - 1;
+          if (avg > LITE_MS && level < last) {
             fast = 0;
-            if (quality === 1 && (window.devicePixelRatio || 1) > 1) quality = 0.5;
-            else if (!told) {
+            scene.lite(STEPS[++level][1]);
+          } else if (avg > SLOW_MS && level === last) {
+            if (!told) {
               told = true;
               p.onSlow();
             }
-          } else if (quality === 1 && avg < FAST_MS && backs < 2) {
-            // (it was a bad stretch, not a slow device: they come back)
+          } else if (level > 0 && avg < FAST_MS && backs < 3) {
+            // (it was a bad stretch, not a slow device: a step comes back)
             if (++fast >= FAST_RUN) {
-              plain = false;
+              fast = 0;
               backs++;
-              scene.lite(false);
+              scene.lite(STEPS[--level][1]);
             }
           } else fast = 0;
         }
@@ -242,13 +252,14 @@ export default function Court3D(props: Court3DProps) {
 }
 
 /** A label at its point of the picture (or out of sight). */
-function place(el: HTMLElement | null, at: { x: number; y: number; text: string } | null, alpha: number) {
+function place(el: HTMLElement | null, at: { x: number; y: number; text: string } | null, alpha: number, grow = false) {
   if (!el) return;
   if (!at || !at.text) {
     el.style.opacity = '0';
     return;
   }
   if (el.textContent !== at.text) el.textContent = at.text;
-  el.style.opacity = String(Math.max(0, Math.min(1, alpha)));
-  el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, 0)`;
+  const a = Math.max(0, Math.min(1, alpha));
+  el.style.opacity = String(a);
+  el.style.transform = `translate(${Math.round(at.x)}px, ${Math.round(at.y)}px) translate(-50%, 0)${grow && a < 1 ? ` scale(${(0.84 + 0.16 * a).toFixed(3)})` : ''}`;
 }

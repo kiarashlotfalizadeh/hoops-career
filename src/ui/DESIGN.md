@@ -6,8 +6,8 @@ score in mono, one ink dock at the foot, and screens that show a few things well
 everything at once. Built for players who want the whole sim: depth is always there, one tap
 down, never hidden behind a mode. Read this before changing a screen;
 `src/ui/theme.css` indexes the design system's partials (`src/ui/styles/`: tokens, type, layout,
-the app's chrome, surfaces, controls, badges, forms, data, overlays, figures, and the rules that
-load last), `src/ui/components/ui.tsx` holds the shared components.
+the app's chrome, surfaces, controls, badges, forms, data, overlays, figures, motion, and the rules
+that load last), `src/ui/components/ui.tsx` holds the shared components.
 
 **Who it's for: players who know sims.** Understandable means fast scanning, no decoding and no
 hunting: every figure says what it is and which way is good, the same thing has the same name
@@ -144,30 +144,30 @@ world (no people layer: no morale, personalities or player conversations, by the
 
 ## Tokens (theme.css `:root`)
 
-| Token                                           | Use                                                                                                                                                                                                 |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--bg` `--bg-2`                                 | the paper; a recessed track (a `Segmented`)                                                                                                                                                         |
-| `--raised`                                      | white card stock: cards, tables, list grounds                                                                                                                                                       |
-| `--surface` `--surface-2` `--surface-3`         | pressed rows, level buttons, tracks, tags (paper tones, darker each step)                                                                                                                           |
-| `--line` `--line-2` `--line-3`                  | hairlines: between rows / a chip's ring, a table's foot / strong ink rule                                                                                                                           |
-| `--text` `--text-2` `--text-dim`                | ink / secondary / labels and meta (all 4.5:1 on paper, card and `--surface-2`)                                                                                                                      |
-| `--ink` `--ink-2` `--paper-ink`                 | the controls' ink (a primary pill, a ring, the dock) / pressed / text on ink                                                                                                                        |
-| `--on` `--on-ink`                               | a chosen option: a chip, a level (solid ink, white text)                                                                                                                                            |
-| `--accent` `--accent-ink`                       | your team's colour as a fill on paper (a switch that's on, progress) / ink on it                                                                                                                    |
-| `--accent-text`                                 | links and "go there" text: your team's colour, darkened to read on paper                                                                                                                            |
-| `--team-night` `--team-night-ink`               | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                                      |
-| `--brand`                                       | red-orange, only for what needs you: the inbox count, live                                                                                                                                          |
-| `--good` `--bad` `--warn` `--info`              | signals only (wins, losses, issues, tips), deep enough to read on paper; `--bad` a deep red, `--warn` an ochre a step lighter, the gold tier lighter again: the three part for colour-blind players |
-| `--tier-*`                                      | OVR tiers (via `ovrColor`), gold > violet > blue > teal > grey > light grey: text colours that read on white, on their wash and under a white figure                                                |
-| `--team` `--team-2` `--team-text` `--team-slab` | your team's identity (set by `applyAccent`)                                                                                                                                                         |
-| `--font` `--display` `--head` `--mono`          | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                                              |
-| `--gut-l` `--gut-r`                             | the page's side gutters (16px, more past a notch)                                                                                                                                                   |
-| `--gap-page` `--gap-sec` `--pad-card`           | rhythm: between sections (32), head to content (12), in a card (18)                                                                                                                                 |
-| `--row-min` `--row-py` `--row-px`               | a list row: 54px tall at least, its padding                                                                                                                                                         |
-| `--cell-py` `--cell-px`                         | a stat table's cell padding                                                                                                                                                                         |
-| `--radius-xs` … `--radius-xl`, `--radius-pill`  | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment                   |
-| `--shadow-card` `--shadow` `--shadow-float`     | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                                    |
-| `--ease-out` `--dur-fast` `--dur`               | motion: ease-out curve, 150ms for state changes, 220ms for entrances                                                                                                                                |
+| Token                                                                                                               | Use                                                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--bg` `--bg-2`                                                                                                     | the paper; a recessed track (a `Segmented`)                                                                                                                                                         |
+| `--raised`                                                                                                          | white card stock: cards, tables, list grounds                                                                                                                                                       |
+| `--surface` `--surface-2` `--surface-3`                                                                             | pressed rows, level buttons, tracks, tags (paper tones, darker each step)                                                                                                                           |
+| `--line` `--line-2` `--line-3`                                                                                      | hairlines: between rows / a chip's ring, a table's foot / strong ink rule                                                                                                                           |
+| `--text` `--text-2` `--text-dim`                                                                                    | ink / secondary / labels and meta (all 4.5:1 on paper, card and `--surface-2`)                                                                                                                      |
+| `--ink` `--ink-2` `--paper-ink`                                                                                     | the controls' ink (a primary pill, a ring, the dock) / pressed / text on ink                                                                                                                        |
+| `--on` `--on-ink`                                                                                                   | a chosen option: a chip, a level (solid ink, white text)                                                                                                                                            |
+| `--accent` `--accent-ink`                                                                                           | your team's colour as a fill on paper (a switch that's on, progress) / ink on it                                                                                                                    |
+| `--accent-text`                                                                                                     | links and "go there" text: your team's colour, darkened to read on paper                                                                                                                            |
+| `--team-night` `--team-night-ink`                                                                                   | your team's trim, lightened to read on ink: the play button, links in the dock                                                                                                                      |
+| `--brand`                                                                                                           | red-orange, only for what needs you: the inbox count, live                                                                                                                                          |
+| `--good` `--bad` `--warn` `--info`                                                                                  | signals only (wins, losses, issues, tips), deep enough to read on paper; `--bad` a deep red, `--warn` an ochre a step lighter, the gold tier lighter again: the three part for colour-blind players |
+| `--tier-*`                                                                                                          | OVR tiers (via `ovrColor`), gold > violet > blue > teal > grey > light grey: text colours that read on white, on their wash and under a white figure                                                |
+| `--team` `--team-2` `--team-text` `--team-slab`                                                                     | your team's identity (set by `applyAccent`)                                                                                                                                                         |
+| `--font` `--display` `--head` `--mono`                                                                              | text / big figures (`--display-w` 72%) / headlines (`--head-w` 118%) / the box score; `--serif` is `--head`'s old name                                                                              |
+| `--gut-l` `--gut-r`                                                                                                 | the page's side gutters (16px, more past a notch)                                                                                                                                                   |
+| `--gap-page` `--gap-sec` `--pad-card`                                                                               | rhythm: between sections (32), head to content (12), in a card (18)                                                                                                                                 |
+| `--row-min` `--row-py` `--row-px`                                                                                   | a list row: 54px tall at least, its padding                                                                                                                                                         |
+| `--cell-py` `--cell-px`                                                                                             | a stat table's cell padding                                                                                                                                                                         |
+| `--radius-xs` … `--radius-xl`, `--radius-pill`                                                                      | corners: xs 6 tags and badges, sm 10 level buttons, md 14 inputs and toasts, `--radius` 20 cards, lg 26 slabs and the dock, xl 30 sheets; pill for every button, chip and segment                   |
+| `--shadow-card` `--shadow` `--shadow-float`                                                                         | a card on the paper; a panel over the page; a bar floating over the dock (all warm, never black)                                                                                                    |
+| `--ease-out` `--ease-in` `--ease-move` `--ease-spring`, `--dur-fast` `--dur` `--dur-slow` `--dur-page`, `--stagger` | motion: arriving, leaving, moving, settling; 150ms state changes, 220ms entrances, 360ms a thing travelling, 340ms a screen's blocks, 32ms between them                                             |
 
 Don't hard-code colours, spacing, corners or shadows that exist as tokens: screens read the density
 tokens so they tighten (or loosen) together. A control inside a padded box is concentric with it (the
@@ -511,11 +511,26 @@ package (ink plates, white type); the console is paper and card stock like every
 
 ## Motion
 
-- Screens fade in (opacity only: a transform would trap fixed docks). Sheets and the Continue bar
-  slide up; a sheet slides back down when it closes (showing what it showed while open), and a drag
-  let go short of closing settles back. Press states scale to 0.97 (buttons, team tiles) or darken
-  (rows, chips, segments, icon buttons); a mouse gets a hover state too (`(hover: hover)` only, never
-  something a touch needs).
+- **One vocabulary** (`styles/motion.css`, hooks in `ui/motion.ts`). Arriving eases out
+  (`--ease-out`), leaving eases in and is shorter (`--ease-in`), a thing moving between two places
+  uses `--ease-move`, a small control settling uses `--ease-spring`. Only opacity, the `translate` /
+  `scale` properties (never fighting an element's own `transform`), a clip and a stroke being drawn
+  move. Motion says something: where a thing came from, what changed, what answered the touch.
+  Nothing loops unless it's live (a game in progress, a sim running, the draft clock).
+- **A screen's blocks rise in one after another**, top first (`.page > *`, 32ms apart, the first
+  six). The page itself never moves (a transform would trap its fixed docks); a block holding a
+  fixed dock stays still, and `.no-rise` opts a block out. A thing that mounts later takes a utility:
+  `m-rise`, `m-pop`, `m-slam` (a result landing), `m-flash` (a value that just changed, with
+  `useChanged`), `m-tick-up`, `m-draw` (an SVG line, `pathLength="1"`), `m-grow-x` / `m-grow-y`,
+  `m-stagger` (a short row of children, the first eight). A chart or a meter starts when it scrolls
+  into view (`useSeen`); a number that changes glides (`useTween`).
+- **A choice slides.** The segmented control's thumb, the page tabs' ink rule and the level scale's
+  ink thumb travel to the option chosen (`useIndicator`); a bar fills from the left and slides to a
+  new value; a switch's knob settles.
+- Sheets and the Continue bar slide up; a sheet slides back down when it closes (showing what it
+  showed while open), and a drag let go short of closing settles back. Press states scale to 0.97
+  (buttons, team tiles, chips) or darken (rows, segments, icon buttons); a mouse gets a hover state
+  too (`(hover: hover)` only, never something a touch needs).
 - **Toasts** (ink pills with white text) rise above the Continue bar (over a sheet: at the top, clear of its buttons), at most two
   at once, one width, an icon for their tone. A tap dismisses one or opens its link. A sim or a phase
   change starting clears the ones before it: a toast is about the league as it was.
@@ -530,7 +545,8 @@ package (ink plates, white type); the console is paper and card stock like every
   story never takes the screen there.
 - The live game's atmosphere (`live/atmosphere.ts`): runs, the crowd's glow by the arena's name, one
   big-play callout at a time (rate-limited), and a clutch state in the last five minutes within five.
-- Everything respects `prefers-reduced-motion` (theme.css zeroes animations).
+- Everything respects `prefers-reduced-motion` (tokens.css zeroes animations; a keyframe names only
+  its start, so a thing that never animates is still there; scripts ask `reducedMotion()`).
 
 ## Accessibility (unchanged bar)
 

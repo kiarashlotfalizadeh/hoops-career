@@ -5,7 +5,7 @@
 // one fact: an upcoming game's billing on the user's own schedule (a rivalry, Christmas Day, Game 7)
 // or the opponent's standing; a result's W or L and score, with its top scorer (or, for a front-page
 // night, its headline).
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { GameResult, League, NewsItem, ScheduledGame } from '../../core/types';
@@ -204,7 +204,7 @@ function Months({
         {right}
       </div>
       <div className="card flush gs-list">
-        <MonthRows rows={shown} all={all} records={records} {...p} />
+        <MonthRows rows={shown} all={all} records={records} fresh={open ? first : undefined} {...p} />
         {hidden > 0 && (
           <button className="gs-more" onClick={() => setOpen(true)}>
             <ChevronDown size={15} aria-hidden="true" /> {more(hidden)}
@@ -228,16 +228,18 @@ function Chronological({ list, all, collapse, ...p }: RowProps & { list: Row[]; 
           <ChevronDown size={15} aria-hidden="true" /> Show {hidden} earlier game{hidden === 1 ? '' : 's'}
         </button>
       )}
-      <MonthRows rows={list.slice(hidden)} all={all} {...p} />
+      <MonthRows rows={list.slice(hidden)} all={all} fresh={expanded && collapse ? 0 : undefined} freshEnd={anchor > 5 ? anchor - 3 : 0} {...p} />
     </div>
   );
 }
 
-function MonthRows({ rows, all, records = true, ...p }: RowProps & { rows: Row[]; all: Row[]; records?: boolean }) {
+/** `fresh`..`freshEnd`: the rows a "Show more" just let in (the first eight of them rise into place). */
+function MonthRows({ rows, all, records = true, fresh, freshEnd = Infinity, ...p }: RowProps & { rows: Row[]; all: Row[]; records?: boolean; fresh?: number; freshEnd?: number }) {
   let last = '';
   return (
     <>
-      {rows.map((r) => {
+      {rows.map((r, i) => {
+        const nth = fresh !== undefined && i >= fresh && i < freshEnd ? i - fresh : undefined;
         const month = monthOf(p.league.season, r.g.day);
         const head = month !== last;
         last = month;
@@ -250,7 +252,7 @@ function MonthRows({ rows, all, records = true, ...p }: RowProps & { rows: Row[]
                 {rec && <span className="num">{keepFigures(rec)}</span>}
               </div>
             )}
-            <GameRow r={r} {...p} />
+            <GameRow r={r} nth={nth !== undefined && nth < 8 ? nth : undefined} {...p} />
           </Fragment>
         );
       })}
@@ -258,7 +260,7 @@ function MonthRows({ rows, all, records = true, ...p }: RowProps & { rows: Row[]
   );
 }
 
-function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
+function GameRow({ r, league, tid, h2hTid, ranks, nth }: RowProps & { r: Row; nth?: number }) {
   const user = league.userTid;
   const mine = tid === user || r.opp === user;
   const live = league.phase === 'regular' || league.phase === 'playin' || league.phase === 'playoffs';
@@ -294,7 +296,11 @@ function GameRow({ r, league, tid, h2hTid, ranks }: RowProps & { r: Row }) {
   }
   const ot = r.res?.ot ? (r.res.ot > 1 ? `${r.res.ot}OT` : 'OT') : '';
   return (
-    <Link to={to} className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}`}>
+    <Link
+      to={to}
+      className={`gs-row${today ? ' today' : ''}${h2hTid !== undefined && r.opp === h2hTid ? ' h2h' : ''}${nth !== undefined ? ' gs-in' : ''}`}
+      style={nth !== undefined ? ({ '--i': nth } as CSSProperties) : undefined}
+    >
       <span className="gs-date">
         <span className="wd">{today ? 'Today' : fmtDate(league.season, r.g.day, { weekday: 'short' })}</span>
         <span className="d num">{fmtDate(league.season, r.g.day)}</span>

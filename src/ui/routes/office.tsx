@@ -30,11 +30,17 @@ export function OfficeGate({ children }: { children: ReactNode }) {
   if (!fired && !live) return <>{children}</>;
   return (
     <main className="page">
-      <div className="card col" role="alert" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <AlertTriangle className={fired ? 'bad' : 'warn'} size={24} />
-        <h2>{fired ? 'You were fired' : 'Finish your live game first'}</h2>
-        <div className="small dim2">{fired ? 'Take a job offer (Career) to trade, sign and draft again.' : 'Roster moves wait until the game in progress is over.'}</div>
-        <button className="btn primary" onClick={() => nav(fired ? '/office/career' : '/live')}>
+      {/* the screen's poster: the desk is closed, and the one way on */}
+      <div className="slab col" role="alert" style={{ gap: 8, alignItems: 'flex-start', padding: '22px 22px 24px', minHeight: 220, justifyContent: 'flex-end' }}>
+        <div className="over row" style={{ gap: 6 }}>
+          <AlertTriangle size={15} aria-hidden="true" />
+          {fired ? 'Front office closed' : 'Game in progress'}
+        </div>
+        <h2 style={{ fontSize: 30, lineHeight: 1 }}>{fired ? 'You were fired' : 'Finish your live game first'}</h2>
+        <div className="small" style={{ color: 'var(--text-2)' }}>
+          {fired ? 'Take a job offer (Career) to trade, sign and draft again.' : 'Roster moves wait until the game in progress is over.'}
+        </div>
+        <button className="btn primary" style={{ marginTop: 8 }} onClick={() => nav(fired ? '/office/career' : '/live')}>
           {fired ? 'Find a new job' : 'Back to the game'}
         </button>
       </div>

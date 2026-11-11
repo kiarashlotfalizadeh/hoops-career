@@ -18,6 +18,29 @@ import './agenda.css';
 /** The choice waiting on its second tap, if one is (the Continue bar won't run past it: see App.tsx). */
 export const pendingConfirm: { label: string | null } = { label: null };
 
+/**
+ * The checklist steps already seen done, by item: a step ticked since the list last showed (on its
+ * own screen, usually) draws its tick in once, and the ones done before stay still.
+ */
+const seenDone = new Map<string, Set<string>>();
+function useJustDone(item: AgendaItem): Set<string> {
+  const done = (item.steps ?? []).filter((s) => s.done).map((s) => s.title);
+  const key = done.join('|');
+  const [just] = useState(() => {
+    const seen = seenDone.get(item.id);
+    return new Set(seen ? done.filter((t) => !seen.has(t)) : []);
+  });
+  // (a step ticked while the list is on screen: it's new against what was last noted)
+  const live = seenDone.get(item.id);
+  const fresh = live ? done.filter((t) => !live.has(t)) : [];
+  useEffect(() => {
+    if (item.steps) seenDone.set(item.id, new Set(key ? key.split('|') : []));
+  }, [item.id, item.steps, key]);
+  const [shown, setShown] = useState(just);
+  if (fresh.some((t) => !shown.has(t))) setShown(new Set([...shown, ...fresh]));
+  return shown;
+}
+
 /** Carry out an agenda choice, all or nothing, and say how it went. True when it went through. */
 export function runAgenda(label: string, a: AgendaAction): boolean {
   let r = { ok: false, text: '' };
@@ -47,6 +70,7 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
     if (item.kind === 'tradeOffer' && !simming && l && openProposals(l).some((p) => !p.seen)) touch(markOffersSeen);
   }, [item.id, item.kind, simming]);
   const armedChoice = choices.find((c) => c.label === armed);
+  const justDone = useJustDone(item);
   useEffect(() => {
     if (!armed) return;
     pendingConfirm.label = armed;
@@ -85,7 +109,7 @@ export function AgendaRow({ item }: { item: AgendaItem }) {
           <ol className="ag-steps" aria-label="Steps">
             {item.steps.map((s) => (
               <li key={s.title}>
-                <Link to={s.to} className={`ag-step ${s.done ? 'done' : ''} ${s.next ? 'next' : ''}`}>
+                <Link to={s.to} className={`ag-step ${s.done ? 'done' : ''} ${s.next ? 'next' : ''} ${s.done && justDone.has(s.title) ? 'just' : ''}`}>
                   <span className="ag-check" aria-hidden="true">
                     {s.done && <Check size={13} strokeWidth={3} />}
                   </span>

@@ -120,6 +120,16 @@
   color: var(--text);
   font-weight: 720;
 }
+/* the view just chosen: its pill settles in */
+.lv-bb-views .lv-bb-btn.on .lv-bb-ic {
+  animation: lv-bb-on var(--dur-slow) var(--ease-spring);
+}
+@keyframes lv-bb-on {
+  from {
+    scale: 0.6 0.8;
+    opacity: 0.4;
+  }
+}
 .lv-bb-views .lv-bb-btn.on .lv-bb-ic {
   background: var(--on);
   color: var(--on-ink);
@@ -180,6 +190,20 @@
   background: var(--paper-ink);
   color: var(--ink);
 }
+/* a timeout spent: the count lands on its new figure */
+.lv-bb-n.chg {
+  animation: lv-bb-n var(--dur-slow) var(--ease-spring);
+}
+@keyframes lv-bb-n {
+  from {
+    scale: 1.7;
+  }
+}
+.lv-bb-to {
+  transition:
+    background var(--dur) ease,
+    color var(--dur) ease;
+}
 /* the staff's calls waiting on you: the brand's count, as the bell has it */
 .lv-bb-badge {
   position: absolute;
@@ -234,6 +258,60 @@
 .lv-staff > .lv-calm {
   margin-top: -10px;
   padding: 0 0 0 46px;
+}
+/* the staff's read: a new sentence ticks in (StaffView keys the head by its words) */
+.lv-staff > .lv-ah .lv-ah-read,
+.lv-staff > .lv-calm {
+  animation: rise-sm var(--dur-slow) var(--ease-out);
+}
+/* a call arriving, or a player joining the tired list */
+.lv-staff .lv-notes > *,
+.lv-staff .lv-bk-row {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.lv-staff .lv-notes > :nth-child(2) {
+  animation-delay: var(--stagger);
+}
+.lv-staff .lv-notes > :nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+/* a key to the game that changes state (On track, Behind, Done) flips once: each tone has its own
+   name for the one animation, so a new tone starts it again and the same tone never does */
+.lv .gd-kl .tag {
+  transform-origin: 50% 50%;
+}
+.lv .gd-kl .tag.good {
+  animation: lv-key-good 0.5s var(--ease-out);
+}
+.lv .gd-kl .tag.warn {
+  animation: lv-key-warn 0.5s var(--ease-out);
+}
+.lv .gd-kl .tag.bad {
+  animation: lv-key-bad 0.5s var(--ease-out);
+}
+@keyframes lv-key-good {
+  from {
+    scale: 1 0;
+  }
+  60% {
+    scale: 1.08 1.08;
+  }
+}
+@keyframes lv-key-warn {
+  from {
+    scale: 1 0;
+  }
+  60% {
+    scale: 1.08 1.08;
+  }
+}
+@keyframes lv-key-bad {
+  from {
+    scale: 1 0;
+  }
+  60% {
+    scale: 1.08 1.08;
+  }
 }
 /* (the console's small room: the head steps down, and the name's role is said elsewhere) */
 .lv-con .sec-h h3 {
@@ -441,6 +519,22 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+/* a Stats section comes in under the tabs as a console view does */
+.lv-stats > :nth-child(2) {
+  animation: rise-sm var(--dur) var(--ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lv-bb-views .lv-bb-btn.on .lv-bb-ic,
+  .lv-bb-n.chg,
+  .lv-staff > .lv-ah .lv-ah-read,
+  .lv-staff > .lv-calm,
+  .lv-staff .lv-notes > *,
+  .lv-staff .lv-bk-row,
+  .lv .gd-kl .tag,
+  .lv-stats > :nth-child(2) {
+    animation: none;
+  }
 }
 
 /* ------------------------------------------------------------------ the final */

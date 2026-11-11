@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { League, Player } from '../../core/types';
 import { seasonTrail } from '../../core/league/devWatch';
 import { fmtDate } from '../../core/league/helpers';
+import { useSeen } from '../motion';
 
 interface Pt {
   x: number;
@@ -54,6 +55,8 @@ export function arcPoints(league: League, p: Player): Pt[] {
 export function ArcChart({ league, p, height = 150 }: { league: League; p: Player; height?: number }) {
   const [ref, w] = useWidth();
   const [hover, setHover] = useState<number | null>(null);
+  // the line is drawn, and its points set down along it, when the chart scrolls into view
+  const seen = useSeen(ref);
   const pts = arcPoints(league, p);
   if (pts.length < 2) return null;
   const showPot = p.pot > p.ovr;
@@ -75,31 +78,33 @@ export function ArcChart({ league, p, height = 150 }: { league: League; p: Playe
   const ticks = pts.filter((q) => q.tick);
   const every = Math.max(1, Math.ceil((ticks.length * 30) / (w - padL - padR)));
   const hv = hover !== null ? pts[hover] : null;
+  // his OVR now is printed over its dot, or under it when the ceiling's line and label sit just above
+  const nowUnder = showPot && y(last.ovr) - y(p.pot) < 22;
   return (
-    <div ref={ref} className="dv-arc">
+    <div ref={ref} className={`dv-arc${seen ? ' seen' : ''}`}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Career arc: ${pts.map((q) => q.label).join('; ')}${showPot ? `; potential ${p.pot}` : ''}`}>
         {grid.map((v) => (
           <g key={v}>
             <line x1={padL} x2={w - padR} y1={y(v)} y2={y(v)} stroke="var(--line)" strokeWidth={1} />
-            <text x={padL - 6} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--text-dim)">
+            <text x={padL - 6} y={y(v) + 3.5} textAnchor="end" fontSize="10.5" fill="var(--text-dim)">
               {v}
             </text>
           </g>
         ))}
         {showPot && (
-          <>
-            <line x1={x(last.x)} x2={w - padR} y1={y(p.pot)} y2={y(p.pot)} stroke="var(--tier-star)" strokeWidth={2} strokeDasharray="5 4" />
-            <line x1={x(last.x)} x2={x(last.x)} y1={y(last.ovr)} y2={y(p.pot)} stroke="var(--tier-star)" strokeWidth={1} strokeDasharray="2 3" opacity={0.6} />
-            <text x={w - padR} y={y(p.pot) - 6} textAnchor="end" fontSize="10.5" fontWeight={750} fill="var(--text-2)">
+          <g className="dv-arc-pot">
+            <line x1={x(last.x)} x2={w - padR} y1={y(p.pot)} y2={y(p.pot)} stroke="var(--tier-star)" strokeWidth={2} strokeDasharray="5 4" strokeLinecap="round" />
+            <line x1={x(last.x)} x2={x(last.x)} y1={y(last.ovr) - 7} y2={y(p.pot)} stroke="var(--tier-star)" strokeWidth={1} strokeDasharray="2 3" opacity={0.6} />
+            <text x={w - padR} y={y(p.pot) - 6} textAnchor="end" fontSize="10.5" fontWeight={600} fill="var(--text-2)">
               POT {p.pot}
             </text>
-          </>
+          </g>
         )}
-        <path d={d} fill="none" stroke="var(--accent)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+        <path className="dv-arc-line" d={d} pathLength={1} fill="none" stroke="var(--accent)" strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
         {pts.map((q, i) => {
           const isLast = i === pts.length - 1;
           return (
-            <g key={i}>
+            <g key={i} className="dv-arc-pt" style={{ animationDelay: `${(0.15 + (i / (pts.length - 1)) * 0.6).toFixed(2)}s` }}>
               <circle
                 cx={x(q.x)}
                 cy={y(q.ovr)}
@@ -123,7 +128,7 @@ export function ArcChart({ league, p, height = 150 }: { league: League; p: Playe
             </g>
           );
         })}
-        <text x={x(last.x)} y={y(last.ovr) - 10} textAnchor="middle" fontSize="11" fontWeight={800} fill="var(--text)">
+        <text className="dv-arc-now" x={x(last.x)} y={nowUnder ? y(last.ovr) + 19 : y(last.ovr) - 10} textAnchor="middle" fontSize="12" fontWeight={600} fill="var(--text)">
           {last.ovr}
         </text>
         {ticks.map((q, i) =>
@@ -135,16 +140,8 @@ export function ArcChart({ league, p, height = 150 }: { league: League; p: Playe
         )}
         {hv && (
           <g pointerEvents="none">
-            <rect
-              x={Math.min(w - padR - 150, Math.max(padL, x(hv.x) - 75))}
-              y={Math.max(0, y(hv.ovr) - 40)}
-              width={150}
-              height={22}
-              rx={6}
-              fill="var(--surface-2)"
-              stroke="var(--line-2)"
-            />
-            <text x={Math.min(w - padR - 75, Math.max(padL + 75, x(hv.x)))} y={Math.max(0, y(hv.ovr) - 40) + 15} textAnchor="middle" fontSize="11" fill="var(--text)">
+            <rect x={Math.min(w - padR - 150, Math.max(padL, x(hv.x) - 75))} y={Math.max(0, y(hv.ovr) - 40)} width={150} height={22} rx={6} fill="var(--ink)" />
+            <text x={Math.min(w - padR - 75, Math.max(padL + 75, x(hv.x)))} y={Math.max(0, y(hv.ovr) - 40) + 15} textAnchor="middle" fontSize="11" fill="var(--on-ink)">
               {hv.label}
             </text>
           </g>

@@ -71,7 +71,8 @@ export function StaffView({
   const offered = useMemo(() => new Set(decisions.flatMap((n) => n.actions.flatMap((a) => (a.kind === 'sub' ? [a.out] : [])))), [decisions]);
   return (
     <div className="lv-staff">
-      <AssistantHead name={assistant.name} initials={assistant.initials} read={read} />
+      {/* (keyed by his words: a new read ticks in) */}
+      <AssistantHead key={read} name={assistant.name} initials={assistant.initials} read={read} />
       {decisions.length > 0 ? (
         <div className="lv-notes">
           {decisions.slice(0, 3).map((n) => (
@@ -79,7 +80,7 @@ export function StaffView({
           ))}
         </div>
       ) : (
-        <div className="lv-calm small dim" role="status">
+        <div key={quiet ?? ''} className="lv-calm small dim" role="status">
           {quiet ?? 'Nothing the staff would change right now.'}
         </div>
       )}

@@ -9,6 +9,10 @@
   justify-content: space-between;
   gap: 10px;
 }
+.gs-month > :first-child {
+  font-weight: 600;
+  color: var(--text-2);
+}
 .gs-month .num {
   font-weight: 600;
   color: var(--text);
@@ -137,18 +141,41 @@
 .gs-wl {
   flex: none;
   align-self: flex-start;
-  width: 12px;
-  text-align: center;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-top: -1px;
+  border-radius: 6px;
   font-family: var(--mono);
-  font-weight: 600;
-  font-size: 15.5px;
-  line-height: 1.15;
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1;
 }
+/* a win is a solid block, a loss a ring: the two tell apart by shape as well as colour */
 .gs-wl.w {
-  color: var(--good);
+  background: var(--good);
+  color: #fff;
 }
 .gs-wl.l {
   color: var(--bad);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--bad) 55%, transparent);
+}
+/* (a loss's score steps back a little: the wins lead down the list) */
+.gs-wl.l + .gs-score {
+  font-weight: 500;
+  color: var(--text-2);
+}
+/* rows a "Show more" just let in: the first few rise into place one after another */
+.gs-row.gs-in {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * var(--i, 0));
+}
+.gs-more svg {
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.gs-more:active svg {
+  translate: 0 2px;
 }
 .gs-more {
   width: 100%;
@@ -185,4 +212,24 @@
 }
 .gs-head {
   color: var(--text-2);
+}
+/* the narrowest phones: the date column, the result's block and its score give the opponent's name room */
+@media (max-width: 359px) {
+  .gs-row {
+    grid-template-columns: 44px 28px minmax(0, 1fr) auto;
+    gap: 0 8px;
+  }
+  .gs-res {
+    gap: 5px;
+  }
+  .gs-wl {
+    width: 17px;
+    height: 17px;
+    border-radius: 5px;
+    font-size: 11px;
+  }
+  .gs-score {
+    min-width: 0;
+    font-size: 14.5px;
+  }
 }

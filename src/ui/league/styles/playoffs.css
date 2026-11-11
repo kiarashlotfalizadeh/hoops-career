@@ -372,3 +372,207 @@ a.lg-sr-lead:active {
 .lg-sr-head > span {
   font-size: 12px;
 }
+
+/* ------------------------------------------------------------------ the bracket, drawn
+   (the 2026-11 visuals pass: heavier connectors, a decided series that reads at a glance, and the
+   rounds arriving left to right) */
+.bk-pair::after {
+  right: -8px;
+  width: 8px;
+  border: 1.5px solid var(--line-3);
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+.bk-col.r2 .bk-slot::before,
+.bk-col.r3 .bk-slot::before {
+  left: -7px;
+  width: 7px;
+  border-top-width: 1.5px;
+}
+/* a round still to be drawn: its lines wait in the lighter hairline, as its slots do */
+.bk-pair:has(.bk-s.tbd)::after {
+  border-color: var(--line-2);
+}
+.bk-s {
+  border-width: 1.5px;
+}
+.bk-t {
+  grid-template-columns: 11px 18px minmax(0, 1fr) 18px;
+  padding: 0 5px 0 6px;
+  height: 29px;
+}
+.bk-t .w {
+  justify-self: end;
+  min-width: 18px;
+  height: 19px;
+  line-height: 19px;
+  border-radius: 5px;
+  text-align: center;
+  font-size: 13.5px;
+}
+/* a series won: the winner's wins printed solid in ink, his name heavier; the loser greys */
+.bk-s.done .bk-t.win {
+  font-weight: 800;
+}
+.bk-s.done .bk-t.win .w {
+  background: var(--ink);
+  color: var(--paper-ink);
+}
+.bk-s.pi .bk-t.win .w {
+  color: var(--good);
+}
+.bk-s.pi .bk-t .w {
+  min-width: 0;
+  height: auto;
+  line-height: inherit;
+  text-align: right;
+}
+.bk-s.pi .bk-t.win {
+  font-weight: 800;
+}
+.bk-s.done:not(.me) {
+  border-color: var(--line-2);
+}
+@media (max-width: 400px) {
+  .bk-head,
+  .bk-grid {
+    gap: 0 10px;
+  }
+  .bk-pair::after {
+    right: -6px;
+    width: 6px;
+  }
+  .bk-col.r2 .bk-slot::before,
+  .bk-col.r3 .bk-slot::before {
+    left: -5px;
+    width: 5px;
+  }
+  .bk-grid .bk-t {
+    grid-template-columns: 8px 18px minmax(0, 1fr) 17px;
+    gap: 3px;
+    padding: 0 3px 0 4px;
+  }
+  .bk-grid .bk-t .w {
+    min-width: 17px;
+  }
+}
+/* the Finals: the wins in the condensed black cut, the champion named under his */
+.bk-finals .score {
+  font-family: var(--display);
+  font-stretch: var(--display-w);
+  font-weight: 900;
+  font-size: 54px;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  margin-top: 4px;
+}
+.bk-champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 3px 9px 3px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--paper-ink);
+  font-size: 12px;
+  font-weight: 680;
+}
+.bk-sscore .num {
+  font-weight: 900;
+  font-size: 48px;
+  letter-spacing: -0.03em;
+}
+
+/* ---- motion: the rounds arrive in order, each line after the series it leaves; a conference
+   shown by its chip arrives again (display toggles restart it) */
+@keyframes lg-fade {
+  from {
+    opacity: 0;
+  }
+}
+.bk-conf {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.bk-col .bk-s {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.bk-col.r1 .bk-pair:nth-child(2) .bk-s {
+  animation-delay: calc(var(--stagger) * 1.5);
+}
+.bk-col.r2 .bk-s {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.bk-col.r3 .bk-s {
+  animation-delay: calc(var(--stagger) * 7);
+}
+.bk-pair::after,
+.bk-col .bk-slot::before {
+  animation: lg-fade var(--dur-slow) ease backwards;
+}
+.bk-col.r1 .bk-pair::after,
+.bk-col.r2 .bk-slot::before {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.bk-col.r2 .bk-pair::after,
+.bk-col.r3 .bk-slot::before {
+  animation-delay: calc(var(--stagger) * 6);
+}
+.bk-s.done .bk-t.win .w {
+  animation: pop var(--dur-slow) var(--ease-spring) calc(var(--stagger) * 8) backwards;
+}
+.bk-finals .score,
+.bk-sscore .num {
+  animation: slam var(--dur-slow) var(--ease-out) 0.08s backwards;
+}
+.bk-champ {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.28s backwards;
+}
+/* the two sides hang from one line (the champion's is a row taller) */
+.bk-finals {
+  align-items: start;
+}
+.bk-finals > .bk-vs,
+.bk-finals > .bk-sscore {
+  align-self: center;
+}
+.bk-s.pi .bk-t {
+  padding-right: 9px;
+}
+/* the narrowest phones: tighter still, so a three-letter abbreviation shows whole beside its wins */
+@media (max-width: 359px) {
+  .bk-card {
+    padding: 10px 6px 8px;
+  }
+  .bk-head,
+  .bk-grid {
+    gap: 0 6px;
+  }
+  .bk-pair::after {
+    right: -4px;
+    width: 4px;
+    border-radius: 0 4px 4px 0;
+  }
+  .bk-col.r2 .bk-slot::before,
+  .bk-col.r3 .bk-slot::before {
+    left: -3px;
+    width: 3px;
+  }
+  .bk-grid .bk-t {
+    grid-template-columns: 7px 16px minmax(0, 1fr) 15px;
+    gap: 2px;
+    padding: 0 3px;
+    letter-spacing: -0.02em;
+  }
+  .bk-grid .bk-t > svg {
+    width: 16px;
+    height: 16px;
+  }
+  .bk-grid .bk-t .w {
+    min-width: 15px;
+    font-size: 12.5px;
+  }
+  .bk-grid .bk-t .ellipsis {
+    text-overflow: clip;
+  }
+}

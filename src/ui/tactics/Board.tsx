@@ -4,7 +4,7 @@
 // (one figure: his stars of five, as his sheet shows them); a tap opens his player sheet. The board's
 // heading is its end, the switch between them. Over the court, the formation's picker: the shape, with
 // each shape's fit for this roster, or the scheme (its one home; the coverage is on Instructions).
-import { useMemo, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { useLeague, useLeagueMemo } from '../../state/store';
 import type { DefScheme, OffShape, Player, Tactics } from '../../core/types';
 import { DEF_ROLES, OFF_SHAPES } from '../../core/types';
@@ -20,6 +20,7 @@ import { Term } from '../components/Glossary';
 import { PickRow } from './Pick';
 import { HeadSwitch } from './HeadSwitch';
 import { tweak } from './edit';
+import { Star } from './Star';
 import { BOARD_H, DEF_SPOTS, OFF_SPOTS, place, type BoardPlayer } from './formation';
 
 export type BoardSide = 'in' | 'out';
@@ -60,6 +61,11 @@ const shapeLean = (v: number): Lean => leanOf(Math.round(v) / 10);
 
 const TIER: Record<Lean, number> = { gain: 0, even: 1, cost: 2 };
 
+/** The apron around the court on the board, in court units (the lines sit inside the card's edges). */
+const APRON = 4;
+const VB_W = 100 + APRON * 2;
+const VB_H = BOARD_H + APRON * 2;
+
 /** First sentence of a line of help. */
 const first = (s: string) => s.split(/(?<=\.)\s/)[0];
 
@@ -97,6 +103,11 @@ export function Board({
     }),
   );
   const fits = useLeagueMemo(() => shapeFits(fitRoster(players), t, order), [players, t, order]);
+  // the five arrive one after another as the board opens; a plate that joins later (a swap) pops in alone
+  const opened = useRef(false);
+  useEffect(() => {
+    opened.current = true;
+  }, []);
   return (
     <Section
       className="tx-boardsec"
@@ -189,28 +200,40 @@ export function Board({
         <div className={`tx-floor tx-board ${inPoss ? 'in' : 'out'}`} role="list" aria-label={inPoss ? 'Your five in possession' : 'Your five out of possession'}>
           {/* a maple half court: the boards running baseline to half court, your colour in the key and
             the centre circle, the lines in white */}
-          <svg className="tx-floor-court" viewBox={`0 0 100 ${BOARD_H}`} preserveAspectRatio="none" aria-hidden="true">
+          <svg className="tx-floor-court" viewBox={`${-APRON} ${-APRON} ${VB_W} ${VB_H}`} preserveAspectRatio="none" aria-hidden="true">
             <defs>
-              <pattern id="tx-planks" width="7" height={BOARD_H} patternUnits="userSpaceOnUse">
-                <rect width="7" height={BOARD_H} className="tx-floor-wood" />
-                <rect x="3.5" width="3.5" height={BOARD_H} className="tx-floor-wood2" />
-                <path d="M 3.5 0 V 84 M 7 0 V 84 M 0 31 H 3.5 M 3.5 62 H 7 M 0 76 H 3.5 M 3.5 18 H 7" className="tx-floor-seam" />
+              <pattern id="tx-planks" x={-APRON} y={-APRON} width="7" height={VB_H} patternUnits="userSpaceOnUse">
+                <rect width="7" height={VB_H} className="tx-floor-wood" />
+                <rect x="3.5" width="3.5" height={VB_H} className="tx-floor-wood2" />
+                <path d={`M 3.5 0 V ${VB_H} M 7 0 V ${VB_H} M 0 31 H 3.5 M 3.5 62 H 7 M 0 76 H 3.5 M 3.5 18 H 7`} className="tx-floor-seam" />
               </pattern>
             </defs>
-            <rect x="0" y="0" width="100" height={BOARD_H} fill="url(#tx-planks)" />
-            <rect x="33" y="0" width="34" height="27" className="tx-floor-paint" />
-            <circle cx="50" cy="94" r="12" className="tx-floor-paint" />
+            <rect x={-APRON} y={-APRON} width={VB_W} height={VB_H} fill="url(#tx-planks)" />
+            {/* the paint: the key and the centre circle's half */}
+            <rect x="34" y="0" width="32" height="27" className="tx-floor-paint" />
+            <path d="M 38 84 A 12 12 0 0 1 62 84 Z" className="tx-floor-paint" />
             <g className="tx-floor-line" fill="none">
-              <rect x="33" y="0" width="34" height="27" />
-              <path d="M 6 0 L 6 14 A 44 44 0 0 0 94 14 L 94 0" />
+              {/* the sidelines, the baseline and half court */}
+              <path d="M 0 84 V 0 H 100 V 84" />
+              <path d={`M ${-APRON} 84 H ${100 + APRON}`} />
+              {/* the key, its blocks and hash marks */}
+              <path d="M 34 0 V 27 H 66 V 0" />
+              <path d="M 32.2 9 H 34 M 32.2 13.5 H 34 M 32.2 18 H 34 M 32.2 22.5 H 34 M 66 9 H 67.8 M 66 13.5 H 67.8 M 66 18 H 67.8 M 66 22.5 H 67.8" />
+              {/* the free-throw circle: drawn toward half court, dashed inside the key */}
               <path d="M 41 27 A 9 9 0 0 0 59 27" />
-              <path d="M 41 27 A 9 9 0 0 1 59 27" strokeDasharray="1.6 1.4" />
-              <path d="M 45 5 A 5 5 0 0 0 55 5" />
-              <circle cx="50" cy="94" r="12" />
-              <path d="M 0 84 H 100" />
+              <path d="M 41 27 A 9 9 0 0 1 59 27" className="tx-floor-dash" />
+              {/* the three-point line: straight in the corners, then the arc */}
+              <path d="M 6 0 V 14 A 44 44 0 0 0 94 14 V 0" />
+              {/* the restricted area */}
+              <path d="M 44 2.6 V 5 A 6 6 0 0 0 56 5 V 2.6" />
+              {/* the centre circle's half, and the jump circle inside it */}
+              <path d="M 38 84 A 12 12 0 0 1 62 84" />
+              <path d="M 46 84 A 4 4 0 0 1 54 84" />
             </g>
-            <path d="M 44 2.6 H 56" className="tx-floor-board" />
-            <circle cx="50" cy="4.6" r="1.6" className="tx-floor-rim" fill="none" />
+            {/* the backboard, the rim and its neck */}
+            <path d="M 44.5 2.6 H 55.5" className="tx-floor-board" />
+            <path d="M 50 2.6 V 3.4" className="tx-floor-rim" />
+            <circle cx="50" cy="5" r="1.6" className="tx-floor-rim" fill="none" />
           </svg>
           {rows.map((r) => {
             const spot = placed.get(r.p.pid);
@@ -224,19 +247,21 @@ export function Board({
               <button
                 key={r.p.pid}
                 role="listitem"
-                className={`tx-floor-p${off ? ' off' : ''}`}
-                style={{ '--x': `${spot.x}%`, '--y': `${(spot.y / BOARD_H) * 100}%` } as CSSProperties}
+                className={`tx-floor-p${off ? ' off' : ''}${opened.current ? ' joined' : ''}`}
+                // (plain numbers, in hundredths of the floor's width and height: the styles turn them into a `translate` that glides)
+                style={{ '--x': ((spot.x + APRON) / VB_W) * 100, '--y': ((spot.y + APRON) / VB_H) * 100 } as CSSProperties}
                 onClick={() => onPick(r.p.pid)}
                 aria-label={`${nameOf(r.p.pid)}, ${spot.name}: ${role}, ${fit} of 5 for it${off ? `; suits ${bestName} better` : ''}`}
               >
                 <span className="tx-floor-n">
                   <span className="ellipsis">{nameOf(r.p.pid)}</span>
                 </span>
-                <span className="tx-floor-r">
+                {/* (keyed by the role: a new one, or the board's other end, fades in on the plate as it travels) */}
+                <span className="tx-floor-r" key={role}>
                   <span className="ellipsis">{role}</span>
                   <span className="tx-floor-s num" aria-hidden="true">
                     {fit}
-                    <i>★</i>
+                    <Star />
                   </span>
                 </span>
                 {r.p.injury && <span className="tx-floor-best">Out</span>}

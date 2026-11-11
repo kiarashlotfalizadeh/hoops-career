@@ -26,6 +26,82 @@
     transform: translateY(8px);
   }
 }
+/* the board stands clear of the court over it and of the report under it */
+.lv-con > .lv-bd {
+  margin-top: 8px;
+}
+.lv-con > .lv-bd + .lv-con-body {
+  margin-top: 14px;
+}
+@media (min-width: 600px) {
+  .lv-con > .lv-bd {
+    margin-top: 0;
+  }
+}
+/* its parts arrive in order: the title, the line score's rows, then the team numbers, whose bars
+   grow out from the seam between the two sides */
+.lv-bd-title {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.08s backwards;
+}
+.lv-bd-lead {
+  animation: fade var(--dur-slow) ease 0.3s backwards;
+}
+.lv-bd-ls tbody tr {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.14s backwards;
+}
+.lv-bd-ls tbody tr + tr {
+  animation-delay: 0.2s;
+}
+.lv-bd-ls tbody .t {
+  animation: slam 0.45s var(--ease-out) 0.34s backwards;
+}
+.lv-bd-cmp {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.2s backwards;
+}
+.lv-bd-cmp:nth-child(2) {
+  animation-delay: 0.24s;
+}
+.lv-bd-cmp:nth-child(3) {
+  animation-delay: 0.28s;
+}
+.lv-bd-cmp:nth-child(4) {
+  animation-delay: 0.32s;
+}
+.lv-bd-bar > i {
+  transform-origin: 100% 50%;
+  animation: grow-x 0.6s var(--ease-move) 0.3s backwards;
+}
+.lv-bd-bar > i + i {
+  transform-origin: 0 50%;
+}
+/* the report's cards come up one after another under the board */
+.lv-br > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.lv-br > :nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.lv-br > :nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.lv-br > :nth-child(4) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.lv-br > :nth-child(n + 5) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+/* a play called in the huddle: its mark fills with a small settle */
+.lv-br-pc-mark {
+  transition:
+    background var(--dur-fast) ease,
+    border-color var(--dur-fast) ease;
+}
+.lv-br-pc.on .lv-br-pc-mark > * {
+  animation: pop var(--dur-slow) var(--ease-spring);
+}
+.lv-br-pc {
+  transition: background var(--dur-fast) ease;
+}
 /* a huddle: the line score alone, a strip */
 .lv-bd.huddle {
   padding: 8px 16px 9px;
@@ -701,6 +777,41 @@
     opacity: 1;
     transform: scale(0.96);
   }
+}
+/* the word first, then (after the scores have slammed in) your result and the winner's mark, then the way on */
+.lv-ff-word {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.05s backwards;
+}
+.lv-ff-res {
+  animation: pop 0.4s var(--ease-spring) 0.72s backwards;
+}
+.lv-ff-mark {
+  animation: pop 0.4s var(--ease-spring) 0.8s backwards;
+}
+.lv-ff-team {
+  animation: lv-ff-block 0.4s var(--ease-move) 0.06s backwards;
+}
+.lv-ff-team.home {
+  animation-name: lv-ff-block-r;
+}
+@keyframes lv-ff-block {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes lv-ff-block-r {
+  from {
+    clip-path: inset(0 0 0 100%);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+.lv-ff-go {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.6s backwards;
 }
 /* the way on: card stock on the ink, a full-size target */
 .lv-ff-go {

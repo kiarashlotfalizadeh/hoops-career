@@ -111,7 +111,7 @@ export function CourtView({ look, onLook, body, ...court }: CourtViewProps) {
         </button>
       )}
       {on && slow && !hide && (
-        <div className="court-slow" role="status" onClick={(e) => e.stopPropagation()}>
+        <div className="court-slow m-drop" role="status" onClick={(e) => e.stopPropagation()}>
           <span>3D is running slowly on this device.</span>
           <button className="btn xs" onClick={flat}>
             Use 2D

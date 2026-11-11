@@ -201,6 +201,21 @@
   font-weight: 600;
   font-size: 23px;
 }
+/* a wider screen: minutes a game and stamina level with the target, not under the name */
+@media (min-width: 640px) {
+  .tm-rrow-main,
+  .tm-rhead {
+    grid-template-columns: minmax(0, 1fr) 44px 36px 56px 34px;
+    column-gap: 10px;
+  }
+  .tm-rname {
+    grid-column: 1;
+  }
+  .tm-rfig {
+    grid-row: 1 / -1;
+    font-size: 14px;
+  }
+}
 .tm-rrow.out .tm-rmin {
   color: var(--text-dim);
 }
@@ -238,21 +253,33 @@
 .tm-plan-q {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  height: 14px;
-  border-radius: var(--radius-xs);
+  height: 12px;
+  border-radius: 3px;
   overflow: hidden;
   background: var(--surface-2);
 }
 .tm-plan-q i {
   display: block;
   height: 100%;
+  transition: background-color var(--dur) ease;
 }
+/* a stint: one solid bar from the minute he checks in to the minute he sits, its ends rounded */
 .tm-plan-q i.on {
   background: var(--accent);
 }
-/* a minute on after a minute on: one bar, with a hairline marking the minute */
-.tm-plan-q i.on + i.on {
-  box-shadow: inset 1px 0 0 rgba(0, 0, 0, 0.16);
+.tm-plan-q i.on:not(i.on + i) {
+  border-radius: 3px 0 0 3px;
+}
+.tm-plan-q i.on:not(:has(+ i.on)) {
+  border-radius: 0 3px 3px 0;
+}
+.tm-plan-q i.on:not(i.on + i):not(:has(+ i.on)) {
+  border-radius: 3px;
+}
+/* the plan is drawn left to right as it shows, a row after the one above */
+.tm-plan-row:not(.tm-plan-head) > .tm-plan-qs {
+  animation: wipe 0.55s var(--ease-move) backwards;
+  animation-delay: calc(var(--stagger) * var(--i, 0));
 }
 /* names in the narrow cut, so a long one fits the column whole */
 .tm-plan-n {

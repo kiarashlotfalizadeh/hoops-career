@@ -65,6 +65,23 @@
   color: var(--text);
   white-space: nowrap;
 }
+/* the poster's two figures land after the slab: his number, then the OVR card and its rule */
+.tm-jno {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.1s backwards;
+}
+.tm-hovr-b {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.16s backwards;
+}
+.tm-hovr-rule {
+  transform-origin: left center;
+  animation: grow-x 0.5s var(--ease-out) 0.34s backwards;
+}
+.tm-tags > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.2s backwards;
+}
+.tm-tags > :nth-child(2) {
+  animation-delay: 0.26s;
+}
 .tm-jno.pos {
   font-size: 96px;
 }

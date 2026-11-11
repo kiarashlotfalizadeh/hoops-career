@@ -5,7 +5,7 @@
 .dv-d {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
+  gap: 3px;
   font-weight: 720;
   font-size: 12px;
   line-height: 1;
@@ -14,7 +14,7 @@
 }
 .dv-d.md {
   font-size: 13px;
-  gap: 2px;
+  gap: 3px;
 }
 .dv-d.up {
   color: var(--good);
@@ -64,6 +64,30 @@
 .dv-arc svg {
   display: block;
   overflow: visible;
+}
+/* the chart's figures are box-score figures */
+.dv-arc text {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
+}
+/* drawn when it comes into view: the line from his first season to now, its points set down along
+   it, then the ceiling ahead of him. Until then the marks wait unseen (never under reduced motion:
+   `seen` is true at once) */
+.dv-arc:not(.seen) :is(.dv-arc-line, .dv-arc-pt, .dv-arc-pot, .dv-arc-now) {
+  opacity: 0;
+}
+.dv-arc.seen .dv-arc-line {
+  stroke-dasharray: 1;
+  animation: draw 0.9s var(--ease-move) backwards;
+}
+.dv-arc.seen .dv-arc-pt {
+  animation: fade 0.25s ease backwards;
+}
+.dv-arc.seen .dv-arc-pot {
+  animation: fade var(--dur-slow) ease 0.8s backwards;
+}
+.dv-arc.seen .dv-arc-now {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.75s backwards;
 }
 .dv-arc-key {
   display: flex;
@@ -137,7 +161,7 @@
 .dv-climb {
   position: relative;
   height: 6px;
-  border-radius: 2px;
+  border-radius: 3px;
   background: var(--surface-2);
   overflow: hidden;
 }
@@ -147,6 +171,13 @@
   bottom: 0;
   left: 0;
   border-radius: 2px;
+  /* where he is fills first, then the room to his ceiling beyond it */
+  transform-origin: left center;
+  animation: grow-x 0.5s var(--ease-out) 0.1s backwards;
+}
+.dv-climb > .room {
+  animation-duration: 0.7s;
+  animation-delay: 0.3s;
 }
 /* the room to his ceiling: his potential's tier colour, quiet */
 .dv-climb .room {

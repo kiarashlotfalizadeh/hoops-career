@@ -13,6 +13,7 @@ import { TeamLogo } from '../components/TeamLogo';
 import { Term } from '../components/Glossary';
 import { TradeNotes } from './common';
 import { taxLine, useDockHeight } from '../office/common';
+import { Tick } from '../office/motion';
 import { TermsList } from './Terms';
 import { overpayNote } from './ConfirmSheet';
 import { type EditCheck } from '../../core/league/godMode';
@@ -157,13 +158,13 @@ export function Dock({
                 <Term id="matching">Salary out · in</Term>
               </div>
               <div className="v num">
-                {money(out)} · {money(inc)}
+                <Tick value={out}>{money(out)}</Tick> · <Tick value={inc}>{money(inc)}</Tick>
               </div>
             </div>
             <div>
               <div className="k">Payroll after</div>
               <div className="v num" style={{ color: after > cap.luxuryTax ? 'var(--bad)' : after > cap.salaryCap ? 'var(--warn)' : 'var(--good)' }}>
-                {money(after)}
+                <Tick value={after}>{money(after)}</Tick>
               </div>
               <div className="s num">
                 {after > cap.secondApron
@@ -181,7 +182,7 @@ export function Dock({
             <div>
               <div className="k">Rosters</div>
               <div className="v num" style={{ color: rosterAfter > maxSize || (theirAfter > maxSize && !waives) ? 'var(--bad)' : undefined }}>
-                {rosterAfter} · {theirAfter}
+                <Tick value={rosterAfter}>{rosterAfter}</Tick> · <Tick value={theirAfter}>{theirAfter}</Tick>
               </div>
               {/* (in season an AI team waives its end of the bench to make room) */}
               <div className="s">{waives && theirAfter > maxSize ? `${abbrev} would waive ${theirAfter - maxSize}` : `you · ${abbrev}`}</div>

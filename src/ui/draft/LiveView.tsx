@@ -73,11 +73,12 @@ function Announcer({ league, picks }: { league: League; picks: Player[] }) {
         With the {pickWords(n)} in the {league.season} draft, {mine ? 'you select' : `the ${t.region} ${t.name} select`}
         {named ? '' : '…'}
       </span>
-      <span className="dn-stage-pick num" aria-hidden="true">
+      {/* (keyed: each pick's number lands as it takes the stage) */}
+      <span key={n} className="dn-stage-pick num" aria-hidden="true">
         #{n}
       </span>
       {named ? (
-        <span className="dn-stage-name fade-in">
+        <span className="dn-stage-name dn-named">
           <span className="dn-stage-n">{playerName(p)}</span>
           <span className="dn-stage-meta">
             {p.pos} · {p.college || p.country} <GradeTag league={league} p={p} />
@@ -102,7 +103,8 @@ function YourPick({ league, picks }: { league: League; picks: Player[] }) {
   if (!p) return null;
   const n = overallPick(league, p.draft.round, p.draft.pick);
   return (
-    <Link to={`/player/${p.pid}`} className="card dn-yours">
+    // (keyed: a new pick of yours arrives as its own card)
+    <Link key={p.pid} to={`/player/${p.pid}`} className="card dn-yours">
       <span className="dn-yours-over">Your pick · #{n}</span>
       <span className="row" style={{ gap: 12, alignItems: 'center' }}>
         <span className="grow" style={{ minWidth: 0 }}>
@@ -180,15 +182,20 @@ export function OnTheClock({
         </span>
       </div>
       <div className="fo-clock-main">
-        <span className="fo-clock-n num">#{n}</span>
-        <div className="grow">
+        {/* (keyed: the clock moving to the next pick shows, the number ticking over and the team stepping up) */}
+        <span key={`n${n}`} className="fo-clock-n num dn-clock-n">
+          #{n}
+        </span>
+        <div key={`t${n}`} className="grow dn-clock-team">
           <div className="fo-clock-team">{mine ? "You're up" : t.name}</div>
           <div className="fo-clock-sub">
             {mine ? `${t.region} ${t.name}` : t.region}
             {np.originalTid !== np.tid && ` · via ${league.teams[np.originalTid].abbrev}`}
           </div>
         </div>
-        <TeamLogo tid={np.tid} size={52} decorative />
+        <span key={`m${np.tid}`} className="dn-clock-mark">
+          <TeamLogo tid={np.tid} size={52} decorative />
+        </span>
       </div>
       {mine ? (
         <>
@@ -256,7 +263,7 @@ export function LiveView({
       <YourPick league={league} picks={inOrder} />
       {order.length > 1 && (
         <Section title="Up next" right={onTrade ? <span className="tiny dim">Tap a pick to trade for it</span> : undefined}>
-          <div className="hscroll">
+          <div className="hscroll m-stagger">
             {order.slice(1, 13).map((d) => {
               const n = overallPick(league, d.round, d.pick!);
               const body = (

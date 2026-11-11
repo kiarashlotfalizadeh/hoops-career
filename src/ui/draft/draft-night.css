@@ -44,17 +44,42 @@
     background: color-mix(in srgb, var(--accent) 35%, var(--surface-2));
   }
 }
+/* a slot turned over: the row flips up from its "?" and its team's mark lands */
 .dn-in {
-  animation: dn-rise var(--dur) var(--ease-out) both;
+  animation: dn-turn var(--dur-slow) var(--ease-out) backwards;
+  transform-origin: center top;
+}
+@keyframes dn-turn {
+  from {
+    opacity: 0;
+    scale: 1 0.6;
+    translate: 0 -4px;
+  }
+}
+.dn-in > svg,
+.dn-in > img {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.08s backwards;
+}
+/* a drawn pick (the top four) lands harder: its name wipes in, how far it moved pops last */
+.dn-drawn .fo-name {
+  animation: wipe 0.45s var(--ease-move) 0.1s backwards;
+}
+.dn-drawn .fo-move {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.35s backwards;
+}
+.dn-in.me {
+  animation:
+    dn-turn var(--dur-slow) var(--ease-out) backwards,
+    flash 1.4s ease-out 0.2s backwards;
+}
+/* the slots still face down: the count runs down the left as they turn */
+.dn-hidden .fo-name {
+  transition: color var(--dur) ease;
 }
 @keyframes dn-rise {
   from {
     opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
+    translate: 0 6px;
   }
 }
 /* your lottery result: the poster in your colours, the slot as big as it fits, the headline beside it */
@@ -63,7 +88,14 @@
   align-items: flex-end;
   gap: 16px;
   padding: 18px 20px 20px;
-  animation: dn-rise var(--dur) var(--ease-out) both;
+}
+/* your slot: the number slams onto the poster, the words follow it */
+.dn-moment-n {
+  transform-origin: left bottom;
+  animation: slam 0.5s var(--ease-out) 0.12s backwards;
+}
+.dn-moment > .grow {
+  animation: slide-l var(--dur-slow) var(--ease-out) 0.3s backwards;
 }
 .dn-moment-n {
   flex: none;
@@ -170,6 +202,35 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+/* the pick takes the stage: its number lands, the name is read out a beat later */
+.dn-stage-pick {
+  transform-origin: right top;
+  animation: slam var(--dur-slow) var(--ease-out) backwards;
+}
+.dn-named .dn-stage-n {
+  animation: wipe 0.5s var(--ease-move) backwards;
+}
+.dn-named .dn-stage-meta {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.18s backwards;
+}
+.dn-stage.mine .dn-named .dn-stage-n {
+  animation:
+    wipe 0.5s var(--ease-move) backwards,
+    slam 0.5s var(--ease-out) backwards;
+  transform-origin: left center;
+}
+/* the clock moves on: the number ticks over, the next team steps up, its mark lands */
+.dn-clock-n {
+  animation: tick-up var(--dur-slow) var(--ease-out) backwards;
+}
+.dn-clock-team {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.06s backwards;
+}
+.dn-clock-mark {
+  display: block;
+  line-height: 0;
+  animation: pop var(--dur-slow) var(--ease-spring) 0.1s backwards;
+}
 .dn-wait {
   flex-direction: row;
   gap: 6px;
@@ -256,6 +317,10 @@
   font-size: clamp(100px, 30vw, 132px);
   line-height: 0.76;
   letter-spacing: -0.04em;
+}
+/* (the slab's figure lands a beat after the slab, as every slab's does) */
+.dn-poster-n {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.12s backwards;
 }
 .dn-poster-k {
   font-family: var(--head);

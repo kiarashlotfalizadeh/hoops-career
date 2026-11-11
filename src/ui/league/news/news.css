@@ -346,3 +346,65 @@
   line-height: 1;
   letter-spacing: -0.04em;
 }
+
+/* ------------------------------------------------------------------ motion
+   the front page sets itself: the lead's headline, its dek, then the stories under it; a story
+   opens kicker, headline, dek, text */
+.lg-fp-lead > .lg-fp-head {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.04s backwards;
+}
+.lg-fp-lead > .lg-fp-dek,
+.lg-fp-lead > .lg-fp-read {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.12s backwards;
+}
+.lg-fp-hls > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.14s + var(--stagger) * 4);
+}
+.lg-fp-hls > :nth-child(1) {
+  animation-delay: 0.14s;
+}
+.lg-fp-hls > :nth-child(2) {
+  animation-delay: calc(0.14s + var(--stagger) * 1);
+}
+.lg-fp-hls > :nth-child(3) {
+  animation-delay: calc(0.14s + var(--stagger) * 2);
+}
+.lg-fp-hls > :nth-child(4) {
+  animation-delay: calc(0.14s + var(--stagger) * 3);
+}
+.lg-story > * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger) * 5);
+}
+.lg-story > :nth-child(1) {
+  animation-delay: 0s;
+}
+.lg-story > :nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1.5);
+}
+.lg-story > :nth-child(3) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.lg-story > :nth-child(4) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+/* the week's move on the power list: the arrow nudges the way it went */
+@keyframes lg-nudge-up {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+@keyframes lg-nudge-down {
+  from {
+    opacity: 0;
+    translate: 0 -4px;
+  }
+}
+.lg-pw-row:nth-child(-n + 8) .lg-pw-mv.good {
+  animation: lg-nudge-up var(--dur-slow) var(--ease-out) 0.2s backwards;
+}
+.lg-pw-row:nth-child(-n + 8) .lg-pw-mv.bad {
+  animation: lg-nudge-down var(--dur-slow) var(--ease-out) 0.2s backwards;
+}

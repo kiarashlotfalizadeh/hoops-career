@@ -191,7 +191,8 @@ export default function Lineups() {
           </div>
         ) : (
           <div className="tm-lulist">
-            <div className="list">
+            {/* (keyed by what it lists: a new view or sort arrives row by row; rows a "Show more" adds rise in too) */}
+            <div className="list m-stagger" key={`${view}-${sort}-${season}`}>
               {view === 'onoff'
                 ? shownSplits.slice(0, limit).map((r) => {
                     const p = league.players[r.pid];

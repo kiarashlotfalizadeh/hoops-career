@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { Flame, Snowflake } from 'lucide-react';
 import type { GameSim } from '../../core/sim/engine';
 import type { GameManagement } from '../../core/types';
@@ -7,6 +7,7 @@ import { Ovr, Section, Tag, Toggle } from '../components/ui';
 import { inkOn } from '../teamColors';
 import { foulLimit } from './alerts';
 import { subsLine, type Drawn, type DrawnPlayer } from './drawn';
+import { useChanged } from '../motion';
 
 /** Made shots in a row that light the flame (the engine's Hot hand feeds a shooter from three). */
 export const HOT_STREAK = 3;
@@ -23,6 +24,21 @@ export interface SideInfo {
 
 /** Energy in a word, against the staff's sub-out mark. */
 const ENERGY = { good: 'Fresh', warn: 'Tiring', bad: 'Tired' } as const;
+
+/** How long a player who just checked in wears his mark. */
+const IN_MS = 1600;
+
+/** A figure in a player's row (points, fouls): it ticks up when it changes. */
+function Tick({ v, cls }: { v: number; cls: string }) {
+  const { key, changed } = useChanged(v);
+  return (
+    <span className={`lv-pl-n num${cls}`} aria-hidden="true">
+      <span key={key} className={changed ? 'lv-pl-tick' : undefined}>
+        {v}
+      </span>
+    </span>
+  );
+}
 
 /** The columns' names, once over a list, in the rows' own grid. */
 function RowHead() {
@@ -72,6 +88,13 @@ export function Lineup({
 }) {
   const t = sim.T[side];
   const other = (1 - side) as 0 | 1;
+  // who just checked in (either five): his row is marked for a moment, so a sub is seen being made
+  const floor = useRef<{ on: Set<number>; at: Map<number, number> } | null>(null);
+  const onNow = new Set([...fives[0], ...fives[1]]);
+  const now = Date.now();
+  if (floor.current) for (const pid of onNow) if (!floor.current.on.has(pid)) floor.current.at.set(pid, now);
+  floor.current = { on: onNow, at: floor.current?.at ?? new Map() };
+  const justIn = (pid: number) => now - (floor.current?.at.get(pid) ?? -IN_MS) < IN_MS;
   const row = (pid: number, s: 0 | 1) => {
     const sp = sim.T[s].byId.get(pid);
     if (!sp) return null;
@@ -88,7 +111,7 @@ export function Lineup({
     return (
       <button
         key={pid}
-        className={`lv-pl${l.out ? ' out' : ''}`}
+        className={`lv-pl${l.out ? ' out' : ''}${onNow.has(pid) && justIn(pid) ? ' in' : ''}`}
         onClick={() => onTap(pid, mine)}
         aria-haspopup="dialog"
         title={hot ? `${p.streak} straight makes` : cold ? `${madeAtt(p.fgm, p.fga)} FG` : undefined}
@@ -129,12 +152,8 @@ export function Lineup({
         <span className="lv-pl-n num" aria-hidden="true">
           {l.min}
         </span>
-        <span className="lv-pl-n strong num" aria-hidden="true">
-          {l.pts}
-        </span>
-        <span className={`lv-pl-n num${l.fouls >= 5 ? ' bad' : l.fouls >= limit ? ' warn' : ''}`} aria-hidden="true">
-          {l.fouls}
-        </span>
+        <Tick v={l.pts} cls=" strong" />
+        <Tick v={l.fouls} cls={l.fouls >= 5 ? ' bad' : l.fouls >= limit ? ' warn' : ''} />
       </button>
     );
   };

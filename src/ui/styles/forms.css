@@ -6,17 +6,24 @@
   gap: 7px;
 }
 .levels-row {
+  /* one scale: a recessed track, the chosen level an ink thumb on it, the levels under it washed */
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 3px;
+  gap: 0;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
   container-type: inline-size;
 }
 .levels-row button {
-  min-height: 44px;
+  position: relative;
+  z-index: 1;
+  min-height: 42px;
   padding: 4px 2px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--line);
-  background: var(--surface);
+  border-radius: 11px;
+  border: 1px solid transparent;
+  background: transparent;
   font-size: 12px;
   font-weight: 620;
   line-height: 1.15;
@@ -29,8 +36,21 @@
   overflow-wrap: break-word;
   transition:
     background var(--dur-fast) ease,
-    border-color var(--dur-fast) ease,
+    color var(--dur) ease,
     transform var(--dur-fast) var(--ease-out);
+}
+/* hairlines between the levels that aren't chosen or washed */
+.levels-row button + button:not(.on, .below)::after {
+  content: '';
+  position: absolute;
+  left: -1px;
+  top: 28%;
+  bottom: 28%;
+  width: 1px;
+  background: var(--line-2);
+}
+.levels-row button.on + button::after {
+  display: none;
 }
 /* a phone's card: Archivo's narrower cut keeps "Aggressive" and "Balanced" whole at 12px */
 @container (max-width: 330px) {
@@ -46,24 +66,54 @@
 .levels-row button:not(.on):active {
   background: var(--surface-2);
 }
-/* the scale fills up to the chosen level: below it a faint wash, the level itself white */
+/* the scale fills up to the chosen level: below it a faint wash, the level itself ink */
 .levels-row button.below {
-  background: color-mix(in srgb, var(--on) 12%, var(--surface));
-  border-color: transparent;
+  background: color-mix(in srgb, var(--on) 12%, transparent);
+  border-radius: 0;
+}
+.levels-row button.below:first-of-type {
+  border-radius: 11px 0 0 11px;
 }
 .levels-row button.on {
-  border-color: var(--on);
   background: var(--on);
   color: var(--on-ink);
   font-weight: 700;
+}
+/* measured (Levels): the thumb and the wash are their own layers and slide to the choice */
+.levels-row.has-ind button.on,
+.levels-row.has-ind button.below {
+  background: transparent;
+}
+.levels-fill,
+.levels-ind {
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  pointer-events: none;
+}
+.levels-fill {
+  left: 3px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--on) 12%, transparent);
+}
+.levels-ind {
+  border-radius: 11px;
+  background: var(--on);
+  box-shadow: 0 2px 6px -2px rgba(20, 14, 4, 0.45);
+}
+.levels-fill.ready {
+  transition: width var(--dur-slow) var(--ease-move);
+}
+.levels-ind.ready {
+  transition:
+    transform var(--dur-slow) var(--ease-spring),
+    width var(--dur-slow) var(--ease-move);
 }
 .levels-row button.on.mark::before {
   background: var(--on-ink);
 }
 /* a reference setting (the playbook's own): a dot in the corner */
-.levels-row button.mark {
-  position: relative;
-}
 .levels-row button.mark::before {
   content: '';
   position: absolute;
@@ -182,7 +232,7 @@ input[type='range']:focus-visible::-moz-range-thumb {
   background: var(--surface-3);
   border: 1px solid transparent;
   flex: none;
-  transition: background 0.15s;
+  transition: background var(--dur) ease;
 }
 .toggle::after {
   content: '';
@@ -195,7 +245,7 @@ input[type='range']:focus-visible::-moz-range-thumb {
   background: #fff;
   box-shadow: 0 1px 3px rgba(40, 26, 6, 0.3);
   transition:
-    transform 0.18s cubic-bezier(0.3, 0.7, 0.3, 1.2),
+    transform 0.26s var(--ease-spring),
     width 0.15s ease,
     background 0.15s;
 }

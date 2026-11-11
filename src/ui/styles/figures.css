@@ -75,10 +75,25 @@
   text-wrap: balance;
 }
 .empty {
-  padding: 28px 16px;
+  padding: 26px 16px 28px;
   text-align: center;
   color: var(--text-dim);
   font-size: 14px;
+  text-wrap: balance;
+}
+/* nothing here yet: an empty floor's lines over the words */
+.empty::before {
+  content: '';
+  display: block;
+  width: 66px;
+  height: 44px;
+  margin: 0 auto 12px;
+  background: var(--line-3);
+  opacity: 0.5;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 66 44' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M1 43V1h64v42M22 43V20h22v23M24.5 20a8.5 8.5 0 0 0 17 0M6 43V30a27 27 0 0 1 54 0v13'/%3E%3Ccircle cx='33' cy='1' r='7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 66 44' fill='none' stroke='black' stroke-width='1.5'%3E%3Cpath d='M1 43V1h64v42M22 43V20h22v23M24.5 20a8.5 8.5 0 0 0 17 0M6 43V30a27 27 0 0 1 54 0v13'/%3E%3Ccircle cx='33' cy='1' r='7'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 .pill {
   display: inline-flex;

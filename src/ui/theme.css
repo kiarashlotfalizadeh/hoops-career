@@ -14,4 +14,5 @@
 @import './styles/data.css';
 @import './styles/overlays.css';
 @import './styles/figures.css';
+@import './styles/motion.css';
 @import './styles/adaptive.css';

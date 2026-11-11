@@ -179,11 +179,26 @@ html:has(.continue:not(.is-compact)) {
   box-shadow: 0 -10px 30px -18px rgba(20, 14, 4, 0.5);
 }
 .bottomnav-inner {
+  position: relative;
   max-width: 640px;
   margin: 0 auto;
   height: var(--nav-h);
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+/* a short white rule over the tab that's on: it slides to the next one (as a page tab's ink rule does) */
+.nav-ind {
+  position: absolute;
+  left: -13px;
+  top: 0;
+  width: 26px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  background: var(--text);
+  pointer-events: none;
+}
+.nav-ind.ready {
+  transition: transform var(--dur-slow) var(--ease-move);
 }
 .navitem {
   display: flex;
@@ -247,8 +262,25 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
 @keyframes cont-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    translate: 0 8px;
   }
+}
+/* the row's content changing hands (a sim starting, a sim done, the next step's name): the ink
+   stays put, what's on it arrives */
+.continue-go > .grow,
+.continue-busy > .grow {
+  animation: rise-sm var(--dur) var(--ease-out) backwards;
+}
+.continue-go > .cg-swap {
+  animation: tick-up var(--dur-slow) var(--ease-out) backwards;
+}
+.continue-go .cg-disc,
+.continue-chip,
+.continue-stop {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+}
+.continue-inner.compact {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
 }
 .continue-go {
   flex: 1;
@@ -269,13 +301,16 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
   place-items: center;
   background: var(--accent);
   color: var(--accent-ink);
-  transition: transform 0.12s ease;
+  transition:
+    transform var(--dur) var(--ease-spring),
+    background var(--dur-fast) ease;
 }
 .cg-disc svg {
   margin-left: 2px;
 }
 .continue-go:active .cg-disc {
-  transform: scale(0.92);
+  transform: scale(0.9);
+  transition-duration: 0.08s;
 }
 .continue-go .cg-label {
   display: block;
@@ -363,6 +398,11 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
   box-shadow: inset 0 -3px 0 var(--accent);
   transition: width 0.3s ease-out;
   pointer-events: none;
+  animation: fade var(--dur) ease backwards;
+}
+/* the day's count ticks in the box score's figures, without the line jittering */
+.continue-busy .cg-sub {
+  font-variant-numeric: tabular-nums;
 }
 /* a one-shot job (a new season, free agency): no count to show, so a glow sweeps across */
 .continue-fill.pulse {
@@ -469,6 +509,14 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
   grid-column: 2;
   grid-row: 1 / span 2;
   color: var(--text-dim);
+  transition: translate var(--dur-fast) var(--ease-out);
+}
+.flow-opt:not(:disabled):active .fo-c {
+  translate: 3px 0;
+}
+/* the Play options arriving: the next step first, then the list's rows one after another */
+.flow-opt.primary {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
 }
 .flow-opt.primary {
   background: var(--ink);
@@ -523,4 +571,16 @@ body:has(.continue:not(.is-compact)) .bottomnav-inner {
 /* while the play row shows, the end of a page scrolls clear of it */
 body:has(.continue) .page {
   padding-bottom: calc(var(--nav-h) + var(--safe-b) + var(--cont-h) + 40px);
+}
+
+/* a desktop: the dock is a tab at the foot of the page column, not a band across the whole window */
+@media (min-width: 1100px) {
+  .bottomnav,
+  .continue:not(.is-compact) {
+    left: calc(50% - 380px);
+    right: calc(50% - 380px);
+  }
+  .continue.is-compact {
+    right: calc(50% - 380px);
+  }
 }

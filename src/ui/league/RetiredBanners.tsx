@@ -42,19 +42,24 @@ export function RetiredBanners({ league, tid, small }: { league: League; tid: nu
 }
 
 /**
- * A franchise's titles from before the league (a real league's past: League.past), as the banners
- * over the court: the year, and the name it won under when that was another ("1979 SuperSonics").
+ * A franchise's championship banners, oldest first: the titles from before the league (a real
+ * league's past: League.past; the name it won under when that was another, "1979 SuperSonics"), then
+ * this league's (`seasons`). Gold cloth, the year in the big cut: the rafters over the court.
  */
-export function PastTitleBanners({ league, tid }: { league: League; tid: number }) {
-  const won = (league.past?.finals ?? []).filter((f) => f[1] === tid);
-  if (!won.length) return null;
+export function TitleBanners({ league, tid, seasons = [] }: { league: League; tid: number; seasons?: number[] }) {
+  const past = (league.past?.finals ?? []).filter((f) => f[1] === tid);
+  if (!past.length && !seasons.length) return null;
+  const list = [
+    ...past.map((f) => ({ key: `p${f[0]}`, yr: String(f[0]), as: f[6] ? f[6].split(' ').slice(-1)[0] : '' })),
+    ...[...seasons].sort((a, b) => a - b).map((y) => ({ key: `s${y}`, yr: seasonLabel(y), as: '' })),
+  ];
   return (
-    <div className="chips" aria-label={`${won.length} titles before this league`}>
-      {won.map((f) => (
-        <span key={f[0]} className="tag lg-gold lg-title-yr">
-          {f[0]}
-          {f[6] ? ` ${f[6].split(' ').slice(-1)[0]}` : ''}
-        </span>
+    <div className="lg-banners sm lg-titles" role="list" aria-label={`${list.length} championship ${list.length === 1 ? 'banner' : 'banners'}`}>
+      {list.map((b) => (
+        <div key={b.key} className="lg-banner title" role="listitem">
+          <span className={`no${b.yr.length > 4 ? ' long' : ''}`}>{b.yr}</span>
+          <span className="nm">{b.as || 'Champions'}</span>
+        </div>
       ))}
     </div>
   );

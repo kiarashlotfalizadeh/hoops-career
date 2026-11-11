@@ -16,7 +16,7 @@ import { capSeason, isOffseason, rosterFig, shortSeason } from '../office/basis'
 import '../screens/team.css';
 import { money } from '../../core/format';
 import { TeamLogo } from '../components/TeamLogo';
-import { Fit } from '../components/ui';
+import { CountUp, Fit } from '../components/ui';
 import { ordinal } from '../stats';
 import { useTeamEditWatch } from '../tactics/editWatch';
 
@@ -80,7 +80,9 @@ function TeamHeader({ league }: { league: League }) {
           <span className="tm-hh-k">{r.color ? r.s : `${r.k}${r.s ? ` · ${r.s}` : ''}`}</span>
         </div>
         <div className="tm-hh-fig">
-          <span className="tm-hh-v">{money(pay)}</span>
+          <span className="tm-hh-v">
+            <CountUp value={money(pay)} />
+          </span>
           <span className="tm-hh-k">Payroll{off}</span>
         </div>
       </div>

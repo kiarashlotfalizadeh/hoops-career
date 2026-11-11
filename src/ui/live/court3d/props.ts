@@ -23,8 +23,12 @@ import { placed, type Thing } from './glb';
 type Keep = <T extends { dispose(): void }>(o: T) => T;
 
 export interface Props {
-  /** One basket unit built for the low end (rim over the origin, facing +x); the caller places and turns it. rim and net are children placed at y = 10 that the caller animates. */
-  basket(): { group: Group; rim: Object3D; net: Object3D };
+  /**
+   * One basket unit built for the low end (rim over the origin, facing +x); the caller places and turns it. rim and net are
+   * children placed at y = 10 that the caller animates. `swish` is how the net's cords are pulled this frame: x down its
+   * length (1: stretched by a ball going through, under 0: flicked back up), y wider at its foot, z swung toward the floor.
+   */
+  basket(): { group: Group; rim: Object3D; net: Object3D; swish: Vector3 };
   /** Chairs at these places (y is the floor there), each turned `turn` radians about y; one InstancedMesh per material. `seat` is the padding's material (the caller owns and recolours it; with `vertexColors` on, it takes the baked shade). */
   chairs(at: { x: number; y: number; z: number; turn: number }[], seat: Material): Object3D;
   /** The scorer's table (34 ft along x, on the floor, its front toward +z); `board` is the caller's material for its LED front, whose uv runs 0..1 left to right and bottom to top. */
@@ -41,6 +45,18 @@ export interface Props {
 
 /** How high the rim is over the floor. */
 const RIM_H = 10;
+/** How long the net hangs below the ring (ft): how far down it a cord's point is says how much of a pull it takes. */
+const NET_LEN = 1.36;
+/** The net's cords, pulled: all of it at the foot, none at the loops on the ring. */
+const NET_PULL = /* glsl */ `
+  #include <begin_vertex>
+  {
+    float down = clamp(-position.y / ${NET_LEN}, 0.0, 1.0);
+    float foot = down * down;
+    transformed.y -= uSwish.x * foot * 0.62;
+    transformed.xz *= 1.0 + down * uSwish.y - foot * 0.16 * max(uSwish.x, 0.0);
+    transformed.x += uSwish.z * foot;
+  }`;
 /** The parts of the basket unit that throw no shadow: the glass lets the light through, the clock's face lies on its box. */
 const NO_SHADOW = new Set(['glass', 'clock']);
 // (What else throws one: the rim and the ball. Not the net, whose cords are thinner than a point of the
@@ -99,11 +115,19 @@ export function buildProps(things: Map<string, Thing>, keep: Keep): Props {
       }
       // (the rim tips and the net swings about the rim's centre: each is its own thing, there)
       const [ring] = dress('rim', rim, { iron });
-      const [mesh] = dress('net', net, { cord });
+      // (each net has its own cords' material: the two are not pulled together)
+      const swish = new Vector3();
+      const cords = keep(cord.clone());
+      cords.onBeforeCompile = (sh) => {
+        sh.uniforms.uSwish = { value: swish };
+        sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform vec3 uSwish;').replace('#include <begin_vertex>', NET_PULL);
+      };
+      cords.customProgramCacheKey = () => 'net';
+      const [mesh] = dress('net', net, { cord: cords });
       ring.position.y = mesh.position.y = RIM_H;
       ring.castShadow = true;
       group.add(ring, mesh);
-      return { group, rim: ring, net: mesh };
+      return { group, rim: ring, net: mesh, swish };
     },
 
     chairs(at, seat) {

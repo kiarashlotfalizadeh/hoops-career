@@ -130,17 +130,19 @@
 .tx-fieldset {
   display: contents;
 }
-/* a level takes the tap at once: it gives under the finger and the fill slides along the scale */
-.tx-fieldset .levels-row button {
-  transition:
-    background-color 0.15s ease-out,
-    border-color 0.15s ease-out,
-    color 0.15s ease-out,
-    transform 0.1s ease-out;
+/* a section arriving (a tab of the boxed switch, a view of Analysis): its blocks rise in turn, as a
+   screen's do (the fieldset is `display: contents`, so the page's own entrance doesn't reach them) */
+.tx-fieldset > * {
+  animation: rise var(--dur-page) var(--ease-out) backwards;
 }
-.tx-fieldset .levels-row button:not(.on):not(:disabled):active {
-  transform: scale(0.97);
-  background: var(--surface);
+.tx-fieldset > :nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.tx-fieldset > :nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.tx-fieldset > :nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 3);
 }
 /* how teams see you: the rank grid, the play types, what they'll attack */
 .tx-seen {

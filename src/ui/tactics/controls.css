@@ -4,6 +4,9 @@
 .tx-phasebody {
   gap: 10px;
 }
+.tx-phase-in {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
 /* a control's name with its ⓘ beside it */
 .tx-label {
   display: flex;
@@ -53,13 +56,32 @@
 .tx-fine-c {
   flex: none;
   color: var(--text-dim);
-  transition: transform var(--dur-fast) var(--ease-out);
+  transition: transform var(--dur-slow) var(--ease-spring);
 }
 .tx-fine[open] .tx-fine-c {
   transform: rotate(180deg);
 }
 .tx-fine-body {
   border-top: 1px solid var(--line);
+}
+/* opening: what's inside drops in under the row; where the browser can, the card grows to it */
+.tx-fine[open] > .tx-fine-body {
+  animation: drop var(--dur-slow) var(--ease-out) backwards;
+}
+@supports selector(::details-content) and (interpolate-size: allow-keywords) {
+  .tx-fine {
+    interpolate-size: allow-keywords;
+  }
+  .tx-fine::details-content {
+    block-size: 0;
+    overflow: clip;
+    transition:
+      block-size var(--dur-slow) var(--ease-move),
+      content-visibility var(--dur-slow) allow-discrete;
+  }
+  .tx-fine[open]::details-content {
+    block-size: auto;
+  }
 }
 .tx-fine-pad {
   padding: var(--pad-card);
@@ -127,7 +149,9 @@
   font-weight: 620;
   font-size: 14.5px;
 }
+/* (a new choice ticks in: PickRow keys the value) */
 .tx-pickrow-v {
+  animation: rise-sm var(--dur) var(--ease-out) backwards;
   flex: 1;
   min-width: 0;
   text-align: right;
@@ -162,6 +186,9 @@
 /* the chosen option: a step up from the ground, its check in the row's end */
 .tx-opt.on {
   background: var(--surface-2);
+}
+.tx-opt-c {
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
 }
 .tx-opt-l {
   display: block;

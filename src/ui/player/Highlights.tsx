@@ -13,6 +13,7 @@ import { useLeagueMemo } from '../../state/store';
 import { ordinal } from '../../core/format';
 import { Section, Statline } from '../components/ui';
 import { f1 } from '../stats';
+import { Star } from '../tactics/Star';
 
 /** A career high worth a line: below these it's a career only a few games old talking. */
 const HIGH_FLOOR: Record<RecStat, number> = { pts: 15, reb: 10, ast: 8, stl: 4, blk: 4, tpm: 4 };
@@ -79,7 +80,7 @@ function Row({ h }: { h: Highlight }) {
   const body = (
     <>
       <span className="dv-hl-fig num">
-        {h.fig}
+        {h.fig === '★' ? <Star /> : h.fig}
         <small>{h.unit}</small>
       </span>
       <span className="dv-hl-t">

@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, type CSSProperties, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { League, Player, SeasonAwards } from '../../core/types';
 import { curTeamSeason, fmtDate, playerName } from '../../core/league/helpers';
@@ -464,6 +464,8 @@ function RaceCard({ league, title, list, kind = 'off', right }: { league: League
                 <span className="lg-race-v num">
                   {rel(score, i)}
                   <span className="sr-only"> of 100</span>
+                  {/* (the gap to the leader, drawn: a bar of the score under it) */}
+                  <i aria-hidden="true" style={{ '--p': Math.max(0.03, rel(score, i) / 100) } as CSSProperties} />
                 </span>
               </Link>
             );

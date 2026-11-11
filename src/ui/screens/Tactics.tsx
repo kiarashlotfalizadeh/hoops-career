@@ -130,7 +130,7 @@ function TacticsScreen() {
           <span className="grow tx-dock-l">
             {moved.length ? (
               moved.slice(0, 2).map((m) => (
-                <span key={m.id} className={`tx-dock-m ${m.up ? 'good' : 'bad'}`}>
+                <span key={`${m.id}${m.to}`} className={`tx-dock-m m-tick-up ${m.up ? 'good' : 'bad'}`}>
                   {QUALITY_META[m.id].label} {m.from}→{m.to}
                 </span>
               ))

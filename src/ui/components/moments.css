@@ -17,27 +17,41 @@
   overscroll-behavior: contain;
   color: #fff;
   text-align: center;
-  animation: fade 0.25s ease;
   --text-dim: rgba(255, 255, 255, 0.78);
 }
-/* the team's colour as one solid field, the court's lines printed on it (as on a slab) */
+/* dismissed: the poster lets go of the screen */
+.moment.leaving {
+  pointer-events: none;
+  animation: moment-out 0.15s var(--ease-in) forwards;
+}
+@keyframes moment-out {
+  to {
+    opacity: 0;
+    scale: 1.03;
+  }
+}
+/* the team's colour as one solid field; the court's lines on it are centre court, round the mark */
 .moment-bg {
   position: fixed;
   inset: 0;
   overflow: hidden;
   background: var(--slab);
+  /* the team's colour floods up the screen from the floor, as a slab printed in one pass */
+  animation: moment-flood 0.46s var(--ease-move) backwards;
 }
-.moment-bg::before {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -2px;
-  width: min(140vw, 760px);
-  aspect-ratio: 360 / 250;
-  transform: translateX(-50%);
-  opacity: 0.18;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 360 250' fill='none' stroke='white' stroke-width='2.4'%3E%3Cpath d='M108 252V70h144v182M120 70a60 60 0 0 0 120 0M30 252V180a150 150 0 0 1 300 0v72M0 2h360'/%3E%3Ccircle cx='180' cy='2' r='46'/%3E%3C/svg%3E")
-    center bottom / 100% 100% no-repeat;
+@keyframes moment-flood {
+  from {
+    clip-path: inset(100% 0 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes moment-court {
+  from {
+    opacity: 0;
+    scale: 1.12;
+  }
 }
 .moment-body {
   position: relative;
@@ -48,10 +62,59 @@
   max-width: 440px;
   width: 100%;
 }
+@media (min-width: 640px) {
+  .moment-body {
+    max-width: 600px;
+  }
+}
+/* the mark stands at centre court: the centre circle round it, the half-court line behind it */
 .moment-mark {
   position: relative;
-  margin-bottom: 26px;
-  animation: moment-in 0.5s var(--ease-out) 0.1s both;
+  isolation: isolate;
+  margin-bottom: 46px;
+  animation: pop 0.5s var(--ease-spring) 0.22s backwards;
+}
+.moment-mark::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: -1;
+  width: 200vw;
+  height: 172px;
+  margin: -86px 0 0 -100vw;
+  opacity: 0.2;
+  background:
+    radial-gradient(circle closest-side, transparent calc(100% - 2.4px), #fff calc(100% - 2.4px), #fff calc(100% - 0.4px), transparent 100%) center / 172px 172px no-repeat,
+    linear-gradient(#fff, #fff) left center / calc(50% - 86px) 2.4px no-repeat,
+    linear-gradient(#fff, #fff) right center / calc(50% - 86px) 2.4px no-repeat;
+  animation: moment-court 0.7s var(--ease-out) 0.2s backwards;
+  pointer-events: none;
+}
+/* a title or a cup: a white ring goes out from the centre circle, once */
+.moment.big .moment-mark::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 172px;
+  height: 172px;
+  margin: -86px 0 0 -86px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+  animation: moment-ring 0.9s var(--ease-out) 0.42s backwards;
+}
+@keyframes moment-ring {
+  from {
+    opacity: 0.6;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 2.4;
+  }
 }
 .moment-mark .avatar.lg {
   width: 112px;
@@ -64,7 +127,7 @@
   font-weight: 500;
   letter-spacing: -0.01em;
   color: rgba(255, 255, 255, 0.88);
-  animation: fade 0.4s ease 0.25s both;
+  animation: rise-sm 0.4s var(--ease-out) 0.32s backwards;
 }
 .moment-title {
   position: relative;
@@ -76,13 +139,11 @@
   line-height: 0.92;
   letter-spacing: -0.045em;
   text-wrap: balance;
-  animation: moment-in 0.6s var(--ease-out) 0.2s both;
+  animation: rise 0.5s var(--ease-out) 0.38s backwards;
 }
-@keyframes moment-in {
-  from {
-    transform: translateY(12px);
-    opacity: 0;
-  }
+/* the biggest ones land: the headline comes down to its size */
+.moment.big .moment-title {
+  animation: slam 0.5s var(--ease-out) 0.38s backwards;
 }
 .moment-sub {
   margin: 18px 0 0;
@@ -92,7 +153,7 @@
   line-height: 1.42;
   color: rgba(255, 255, 255, 0.88);
   text-wrap: balance;
-  animation: fade 0.4s ease 0.45s both;
+  animation: rise-sm 0.4s var(--ease-out) 0.5s backwards;
 }
 /* the job's moments: a few short lines under the sub (the owner's goal by goal, the record, what's next) */
 .moment-lines {
@@ -103,7 +164,20 @@
   font-size: 14px;
   line-height: 1.4;
   color: rgba(255, 255, 255, 0.82);
-  animation: fade 0.4s ease 0.55s both;
+}
+/* the job's lines, one after another */
+.moment-lines li {
+  animation: rise-sm 0.4s var(--ease-out) backwards;
+  animation-delay: calc(0.54s + 40ms * var(--i, 3));
+}
+.moment-lines li:nth-child(1) {
+  --i: 0;
+}
+.moment-lines li:nth-child(2) {
+  --i: 1;
+}
+.moment-lines li:nth-child(3) {
+  --i: 2;
 }
 .moment-lines li + li {
   margin-top: 6px;
@@ -133,7 +207,7 @@
   background: #fff;
   border-color: #fff;
   color: var(--slab);
-  animation: fade 0.4s ease 0.6s both;
+  animation: rise-sm 0.4s var(--ease-out) 0.6s backwards;
 }
 .moment-go:active {
   background: rgba(255, 255, 255, 0.86);
@@ -142,7 +216,7 @@
   background: transparent;
   border-color: rgba(255, 255, 255, 0.9);
   color: #fff;
-  animation: fade 0.4s ease 0.7s both;
+  animation: rise-sm 0.4s var(--ease-out) 0.66s backwards;
 }
 .moment-read:active {
   background: rgba(255, 255, 255, 0.14);
@@ -175,7 +249,14 @@
   height: 13px;
   border-radius: 1px;
   opacity: 0.9;
-  animation: moment-fall linear infinite;
+  /* a celebration, not a screensaver: three passes, then the floor is clear */
+  animation: moment-fall linear 3 forwards;
+}
+/* every fourth piece a streamer */
+.moment-confetti span:nth-child(4n + 1) {
+  width: 4px;
+  height: 20px;
+  border-radius: 2px;
 }
 .moment-confetti span:nth-child(3n) {
   width: 6px;
@@ -196,6 +277,10 @@
 @media (max-height: 560px) {
   .moment-mark {
     margin-bottom: 14px;
+  }
+  .moment-mark::before,
+  .moment.big .moment-mark::after {
+    display: none;
   }
   .moment-mark .avatar.lg {
     width: 72px;

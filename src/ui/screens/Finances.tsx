@@ -23,6 +23,7 @@ import {
 } from '../../core/league/finances';
 import { useLeague } from '../../state/store';
 import { edit } from '../../state/actions';
+import { Fig } from '../office/motion';
 import { Bar, More, PageHeader, Section, Segmented, Slider, StatTable, Statline, type Col } from '../components/ui';
 import { Callout, HelpSheet, Line, PRACTICE, capSeason, isOffseason, ordinal, shortSeason } from '../office/common';
 import { money, moneySigned, plural } from '../../core/format';
@@ -109,7 +110,7 @@ function Overview({ team }: { team: Team }) {
           <div className="grow">
             <div className="over">Cash</div>
             <div className="fo-pay-v num" style={team.cash < 0 ? { color: 'var(--bad)' } : undefined}>
-              {money(team.cash)}
+              <Fig value={team.cash} text={money(team.cash)} />
             </div>
           </div>
           {/* where the regular season's books close, tax paid (bar what he signed off on): the one figure the owner's review reads (the playoff gates come after) */}

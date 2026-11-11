@@ -23,6 +23,7 @@ import { teamPlayers } from '../../../core/league/helpers';
 import { changesLine, screenChanges } from '../../tactics/changes';
 import { liveSeries, NO_PLAN } from '../data';
 import { CountersCard } from './CountersCard';
+import { reducedMotion } from '../../motion';
 import { Fold } from '../occasion';
 import { ftChance } from '../../../core/sim/engine';
 
@@ -36,6 +37,9 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
   const scope: PlanScope = kept && (kept !== 'series' || series) ? kept : defaultScope(league, opp);
   const base = league.teams[league.userTid].tactics;
   const extras = plan ? plannedExtras(plan) : '';
+  // the items the plan had when the screen opened stand still; one added since arrives
+  const had = useRef<Set<string> | null>(null);
+  had.current ??= new Set(plan?.items.map((it) => it.id));
   return (
     <>
       <Section
@@ -59,7 +63,7 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
         {plan && (plan.items.length > 0 || extras) ? (
           <div className="card flush list">
             {plan.items.map((it) => (
-              <PlanItemRow key={it.id} league={league} opp={opp} it={it} />
+              <PlanItemRow key={it.id} league={league} opp={opp} it={it} fresh={!had.current!.has(it.id)} onGone={() => had.current!.delete(it.id)} />
             ))}
             {extras && <div className="mu-item mu-note">Plus {extras}, on Matchups.</div>}
           </div>
@@ -104,19 +108,32 @@ export function PlanTab({ league, opp }: { league: League; opp: number }) {
 }
 
 /** One item in the plan: its name, what it changes from your playbook (why is on its counter's row), and Remove. */
-function PlanItemRow({ league, opp, it }: { league: League; opp: number; it: GamePlanItem }) {
+function PlanItemRow({ league, opp, it, fresh, onGone }: { league: League; opp: number; it: GamePlanItem; fresh?: boolean; onGone?: () => void }) {
   const simming = useStore((s) => !!s.sim);
+  // a removed item leaves (a short slide out) before the plan drops it
+  const [leaving, setLeaving] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const remove = () => {
+    const gone = () => {
+      onGone?.();
+      edit((l) => removePlanItem(l, opp, it.id));
+    };
+    if (reducedMotion() || typeof window.matchMedia !== 'function') return gone();
+    setLeaving(true);
+    timer.current = setTimeout(gone, 150);
+  };
   const line = useLeagueMemo(() => {
     const base = league.teams[league.userTid].tactics;
     return changesLine(screenChanges(base, applyPatch(base, it.patch)));
   }, [league, it]);
   return (
-    <div className="mu-item">
+    <div className={`mu-item${leaving ? ' mu-out' : fresh ? ' mu-in' : ''}`}>
       <span className="grow">
         <span className="lr-name">{it.label}</span>
         {line && <span className="mu-changes">{line}</span>}
       </span>
-      <button className="iconbtn" disabled={simming} onClick={() => edit((l) => removePlanItem(l, opp, it.id))} aria-label={`Remove ${it.label}`}>
+      <button className="iconbtn" disabled={simming || leaving} onClick={remove} aria-label={`Remove ${it.label}`}>
         <X size={18} />
       </button>
     </div>

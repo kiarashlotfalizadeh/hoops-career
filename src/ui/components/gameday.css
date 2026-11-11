@@ -94,6 +94,10 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+/* (the tight tracking pulls the last figure past the column's edge: the home side takes it back) */
+.gd-bd-team.home .gd-bd-fig {
+  padding-right: 0.035em;
+}
 /* a percentage's sign rides small beside its figure */
 .gd-bd-fig small {
   margin-left: 2px;
@@ -200,6 +204,32 @@
   background: transparent;
   color: #fff;
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.9);
+}
+/* the board arriving: the court settles in under it, the figures rise, the pill on the seam lands */
+@keyframes gd-court {
+  from {
+    opacity: 0;
+    scale: 1.07;
+  }
+}
+@keyframes gd-stamp {
+  from {
+    scale: 1.32;
+  }
+}
+.gd-board::before {
+  animation: gd-court 0.7s var(--ease-out) 0.05s backwards;
+}
+.gd-board:not(.compact) .gd-bd-fig {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.06s backwards;
+}
+.gd-bd-pill,
+.gd-bd-k {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.2s backwards;
+}
+/* a result's first showing: the verdict is stamped on the seam as the count ends */
+.gd-moment .gd-bd-pill {
+  animation: gd-stamp 0.42s var(--ease-out) 0.78s;
 }
 /* one line: on a screen's later tabs the board steps back to a band (mark, figure, pill, figure, mark) */
 .gd-board.compact {
@@ -345,14 +375,34 @@
   letter-spacing: -0.02em;
 }
 .gd-ls td {
-  color: var(--text-2);
+  color: var(--text-dim);
+}
+/* the periods keep a figure's width and sit together on the right, the team's name takes the rest */
+.gd-ls .l {
+  width: 100%;
+}
+.gd-ls thead th:not(.l),
+.gd-ls td {
+  min-width: 40px;
+}
+/* a period won reads in ink */
+.gd-ls td.hi {
+  font-weight: 600;
+  color: var(--text);
 }
 .gd-ls .gd-ls-t {
-  width: 1%;
+  min-width: 52px;
   padding-left: 14px;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 16px;
+  color: var(--text-2);
+}
+.gd-ls tr.won .gd-ls-t {
+  font-weight: 700;
   color: var(--text);
+}
+.gd-ls tbody tr:not(.won) th {
+  font-weight: 620;
 }
 
 /* ------------------------------------------------------------ the result as a story (FinalSlab's StoryBlock)
@@ -821,6 +871,18 @@
     text-decoration-color: var(--line-3);
     text-underline-offset: 3px;
   }
+}
+/* a team's high in points, rebounds or assists: the figure on a wash of the paper's gold */
+.bx-hi {
+  display: inline-block;
+  min-width: 2.2em;
+  margin: -2px -5px;
+  padding: 2px 5px;
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--accent-2) 26%, transparent);
+  font-weight: 700;
+  color: var(--text);
+  text-align: right;
 }
 .bx-pog {
   flex: none;
@@ -1354,6 +1416,49 @@ table.stats .bx-div td {
   font-weight: 600;
   fill: var(--paper-ink);
 }
+.ch-val.last {
+  font-weight: 700;
+  fill: var(--text);
+}
+/* a label that sits on the plot: a halo of the card keeps it clear of the line under it */
+.ch-halo {
+  paint-order: stroke;
+  stroke: var(--raised);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+/* A chart draws when it scrolls into view (charts.tsx: `ch-wait`, then `ch-go`): the line is drawn
+   from its start, the areas fade up under it, each mark lands as the line reaches it (`--d`), a
+   comparison's bars grow from their own edges. Under the fold the plot waits unseen. */
+.ch-wait :is(.ch-line, .ch-area, .ch-dot, .ch-miss, .ch-pt, .ch-cmp-bars > i) {
+  visibility: hidden;
+}
+.ch-go .ch-line {
+  stroke-dasharray: 1;
+  animation: draw 0.9s var(--ease-move) backwards;
+}
+.ch-go .ch-area {
+  animation: fade 0.6s ease 0.35s backwards;
+}
+.ch-go :is(.ch-dot, .ch-pt .ch-dot) {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pop var(--dur-slow) var(--ease-spring) var(--d, 0ms) backwards;
+}
+.ch-go .ch-pt .ch-val,
+.ch-go .ch-miss {
+  animation: fade var(--dur) ease var(--d, 0ms) backwards;
+}
+.ch-go .ch-pt .ch-dot {
+  animation-delay: var(--d, 0ms);
+}
+.ch-go.ch-cmp .ch-cmp-bars > i {
+  transform-origin: left center;
+  animation: grow-x 0.55s var(--ease-out) backwards;
+}
+.ch-go.ch-cmp .ch-cmp-bars > i:last-child {
+  transform-origin: right center;
+}
 .ch-wrap {
   position: relative;
 }
@@ -1378,6 +1483,11 @@ table.stats .bx-div td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  animation: fade var(--dur-fast) ease backwards;
+}
+.ch-tip .num {
+  font-family: var(--mono);
+  letter-spacing: -0.03em;
 }
 /* a two-team comparison (CompareBar): the figures and the label over two thin bars */
 .ch-cmp {
@@ -1408,8 +1518,8 @@ table.stats .bx-div td {
   gap: 3px;
 }
 .ch-cmp-bars > i {
-  height: 5px;
-  border-radius: 1px;
+  height: 6px;
+  border-radius: 2px;
   min-width: 2px;
 }
 .ch-cmp-bars > i.dim {
@@ -1520,4 +1630,44 @@ table.stats .bx-div td {
 }
 .gd-fold-b > .mu-note {
   padding: 14px 44px 14px var(--row-px);
+}
+
+/* ------------------------------------------------------------ rows that open (Fold, a factor, the night)
+   The rest drops in under the summary, the chevron turns with it. */
+.gd-fold[open] > .gd-fold-b,
+.gv-factor[open] > :not(summary),
+.gd-night[open] > :not(summary) {
+  animation: drop var(--dur) var(--ease-out) backwards;
+}
+.gd-fold-c {
+  transition: transform var(--dur) var(--ease-out);
+}
+
+/* ------------------------------------------------------------ small arrivals
+   The debrief's reads come one after another under the verdict; a key's mark (met, missed) lands
+   as its row shows; a live key's tag lands when its state changes rows. */
+.gd-debrief .lv-notes.reads > *,
+.gd-next > .gd-next-row {
+  animation: rise-sm var(--dur-slow) var(--ease-out) backwards;
+}
+.gd-debrief .lv-notes.reads > :nth-child(2),
+.gd-next > .gd-next-row:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.gd-debrief .lv-notes.reads > :nth-child(3),
+.gd-next > .gd-next-row:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.gd-debrief .lv-notes.reads > :nth-child(n + 4),
+.gd-next > .gd-next-row:nth-child(n + 4) {
+  animation-delay: calc(var(--stagger) * 6);
+}
+.gd-key-mark {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.08s backwards;
+}
+.gd-key + .gd-key .gd-key-mark {
+  animation-delay: 0.16s;
+}
+.gd-key + .gd-key + .gd-key .gd-key-mark {
+  animation-delay: 0.24s;
 }

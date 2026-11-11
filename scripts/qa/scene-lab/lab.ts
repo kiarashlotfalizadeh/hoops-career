@@ -36,7 +36,7 @@ const canvas = document.getElementById('c') as HTMLCanvasElement;
 const paints = readPaints(canvas);
 const kits = matchKits(q.has('away') ? ['#0c2340', '#c8102e', '#ffffff'] : ['#002b5c', '#e31837', '#c4ced4'], ['#00471b', '#eee1c6', '#0077c0']);
 const scene = new CourtScene(canvas, paints.ball, paints.ballSeam, await loadModels());
-scene.lite(q.has('lite'));
+scene.lite(q.has('lite') ? 2 : 0);
 const floorCv = document.createElement('canvas');
 const floor: CourtFloor = { kind: 'home', abbrev: 'WAS', name: 'Wizards', colors: ['#002b5c', '#e31837', '#c4ced4'], paint: kits[0].color, trim: kits[0].trim, mark: 'circle' };
 paintFloor(floorCv, { wide: true, k: 14, w: 0, h: 0, top: 0, ox: 0, oy: 0 }, 1, floor, paints);

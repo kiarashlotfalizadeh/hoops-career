@@ -254,19 +254,65 @@
 
 /* ------------------------------------------------------------------ the review */
 
-/* the sections come in one after another (about 0.9s in all), and not at all with reduced motion */
+/* the report card is handed over a block at a time (about 0.9s in all), and not at all with reduced motion */
 .fo-rv-in {
-  animation: fo-rv-in var(--dur) var(--ease-out) both;
+  animation: fo-rv-in var(--dur-slow) var(--ease-out) backwards;
   animation-delay: calc(var(--fo-rv-i, 0) * 90ms);
 }
 
 @keyframes fo-rv-in {
   from {
     opacity: 0;
+    translate: 0 10px;
   }
-  to {
-    opacity: 1;
-  }
+}
+
+/* the owner's grades land one by one down the card, each as its bar reaches it, then the verdict's word */
+.fo-review .fo-goal .fo-cbar > i {
+  animation-delay: calc(0.22s + var(--fo-g, 0) * 0.14s);
+}
+.fo-review .fo-goal .fo-goal-v {
+  animation: fo-land var(--dur-slow) var(--ease-out) backwards;
+  animation-delay: calc(0.4s + var(--fo-g, 0) * 0.14s);
+}
+.fo-review .fo-goal:nth-child(2) {
+  --fo-g: 1;
+}
+.fo-review .fo-goal:nth-child(3) {
+  --fo-g: 2;
+}
+.fo-review .fo-goal:nth-child(4) {
+  --fo-g: 3;
+}
+.fo-review .fo-goal:nth-child(n + 5) {
+  --fo-g: 4;
+}
+.fo-rv-grade {
+  animation: fo-land var(--dur-slow) var(--ease-out) 0.9s backwards;
+}
+/* (`fo-land`, office/styles/motion.css: a thing that lands late waits in view, faint, never hidden) */
+/* the season's record lands on its poster; a title's crown after it */
+.fo-rv-rec-v {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.1s backwards;
+}
+.fo-rv-crown {
+  animation: fo-land var(--dur-slow) var(--ease-out) 0.4s backwards;
+}
+/* honors: each medal is pinned on in turn */
+.fo-rv-honor > svg {
+  animation: fo-land var(--dur-slow) var(--ease-out) 0.5s backwards;
+}
+.fo-rv-honor:nth-child(2) > svg {
+  animation-delay: 0.58s;
+}
+.fo-rv-honor:nth-child(3) > svg {
+  animation-delay: 0.66s;
+}
+.fo-rv-honor:nth-child(n + 4) > svg {
+  animation-delay: 0.74s;
+}
+.fo-rv-next-v {
+  animation: fo-land var(--dur-slow) var(--ease-out) 0.5s backwards;
 }
 
 .fo-rv-slab {

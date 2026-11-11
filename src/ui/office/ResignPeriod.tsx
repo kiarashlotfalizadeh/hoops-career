@@ -1,7 +1,7 @@
 // The re-sign period (between the draft and free agency): next season's payroll if you keep
 // everyone, the team options to decide, the expiring contracts to re-sign, qualify or renounce,
 // and Open free agency.
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleCheck, DoorOpen, PenLine } from 'lucide-react';
 import type { Player } from '../../core/types';
@@ -22,6 +22,7 @@ import { FIRM_BUMP, PLAYER_OPTION, TEAM_OPTION, talkAsk, talkState } from '../..
 import { money } from '../../core/format';
 import { teamTaxBill } from '../../core/league/finances';
 import { ExtendRow, PlayerTop, StatLine, extendablePlayers } from './resignRows';
+import { Fig, Tick } from './motion';
 
 export function ResignPeriod() {
   const league = useLeague();
@@ -42,6 +43,8 @@ export function ResignPeriod() {
   const holds = holders.reduce((a, h) => a + h.amount, 0);
   const ifAll = committed + holds;
   const resigned = signedThisSummer(league).sort((a, b) => b.ovr - a.ovr);
+  // the ones signed before the screen opened: a deal made while it's up lands with a flash
+  const signedBefore = useRef(new Set(resigned.map((p) => p.pid)));
   const options = useLeagueMemo(() => pendingTeamOptions(league, tid).sort((a, b) => b.ovr - a.ovr), [league, tid]);
   // in the final season of their deals next season (a rookie whose option was just exercised among them)
   const extendable = useLeagueMemo(() => extendablePlayers(league), [league]);
@@ -132,12 +135,16 @@ export function ResignPeriod() {
           <div className="fo-pay">
             <div className="grow">
               <div className="over">Committed</div>
-              <div className="fo-pay-v num">{money(committed)}</div>
+              <div className="fo-pay-v num">
+                <Fig value={committed} text={money(committed)} />
+              </div>
             </div>
             {/* every expiring player kept at about his ask (his cap hold) */}
             <div className="right">
               <div className="over">Keep everyone</div>
-              <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>{money(ifAll)}</div>
+              <div className={`fo-pay-v2 num ${ifAll > cap.luxuryTax ? 'bad' : ifAll > cap.salaryCap ? 'warn' : 'good'}`}>
+                <Tick value={ifAll}>{money(ifAll)}</Tick>
+              </div>
               {ifAll > cap.luxuryTax && <div className="tiny bad num">tax ≈ {money(teamTaxBill(league, tid, ifAll, next))}</div>}
             </div>
           </div>
@@ -246,7 +253,7 @@ export function ResignPeriod() {
         <Section title="Signed this summer">
           <div className="card flush list">
             {resigned.map((p) => (
-              <div key={p.pid} className="listrow">
+              <div key={p.pid} className={`listrow ${signedBefore.current.has(p.pid) ? '' : 'm-flash'}`}>
                 <OvrPot p={p} showPot={false} />
                 <div className="grow fo-min0">
                   <div className="fo-name">{playerName(p)}</div>

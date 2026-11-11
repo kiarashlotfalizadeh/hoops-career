@@ -215,10 +215,13 @@ export function CapBar({
     <div>
       <div className="fo-cap">
         <div className="fo-cap-track">
-          {zones.map((z) => (
-            <div key={z.cls || 'base'} className={`fo-cap-fill ${z.cls}`} style={{ left: `${pct(z.from)}%`, width: `${pct(z.to) - pct(z.from)}%` }} />
-          ))}
-          {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
+          {/* (the payroll and its stripe are wiped in together from the left as the bar first shows) */}
+          <div className="fo-cap-fills">
+            {zones.map((z) => (
+              <div key={z.cls || 'base'} className={`fo-cap-fill ${z.cls}`} style={{ left: `${pct(z.from)}%`, width: `${pct(z.to) - pct(z.from)}%` }} />
+            ))}
+            {add > 0 && <div className="fo-cap-add" style={{ left: `${pct(pay)}%`, width: `${pct(total) - pct(pay)}%` }} />}
+          </div>
           {aprons && (
             <>
               <div className="fo-cap-notch" style={{ left: `${pct(aprons.first)}%` }} />
@@ -278,7 +281,7 @@ export function CenterBar({ value }: { value: number }) {
   const color = v >= 0.1 ? 'var(--good)' : v <= -0.1 ? 'var(--bad)' : 'var(--warn)';
   return (
     <div className="fo-cbar">
-      <i style={{ left: v >= 0 ? '50%' : `${50 - w}%`, width: `${Math.max(w, 1.5)}%`, background: color }} />
+      <i className={v >= 0 ? 'pos' : 'neg'} style={{ left: v >= 0 ? '50%' : `${50 - w}%`, width: `${Math.max(w, 1.5)}%`, background: color }} />
     </div>
   );
 }

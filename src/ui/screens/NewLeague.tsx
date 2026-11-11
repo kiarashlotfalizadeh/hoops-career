@@ -255,9 +255,9 @@ export default function NewLeague() {
                 <span className="ellipsis">
                   {f.div} · {market(f.pop)} market
                 </span>
-                <TeamLogo tid={tid} size={44} decorative />
+                <TeamLogo key={tid} tid={tid} size={44} decorative />
               </span>
-              <span className="nl-pick-name">
+              <span key={`n${tid}`} className="nl-pick-name">
                 <span className="nl-pick-region">{f.region}</span>
                 <Fit as="span" min={18}>
                   {f.name}
@@ -266,7 +266,7 @@ export default function NewLeague() {
               <span className="nl-pick-sub">{kind === 'fictional' ? 'Generated players' : rosterSize?.[tid] ? rosterLine(rosterSize[tid]) : null}</span>
               <span className={`nl-pick-owner ${owner(tid) ? '' : 'dim'}`}>{owner(tid) ?? 'Owner: reading the roster…'}</span>
               {(teamInfo?.[tid] || rank) && (
-                <span className="nl-pick-foot">
+                <span key={`f${tid}`} className="nl-pick-foot">
                   {teamInfo?.[tid] && (
                     <span className="nl-pick-top">
                       {teamInfo[tid].top.map((p) => (

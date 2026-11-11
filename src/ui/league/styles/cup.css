@@ -65,3 +65,20 @@ a.bk-s:hover {
   font-size: 12px;
   color: var(--text-dim);
 }
+
+/* a Cup tie is one game: its figures are scores (three digits), plain in mono, the winner's green */
+.bk-s.cup-tie .bk-t,
+.bk-grid .bk-s.cup-tie .bk-t {
+  grid-template-columns: 11px 18px minmax(0, 1fr) 30px;
+  gap: 4px;
+  padding: 0 6px;
+}
+.bk-s.cup-tie .bk-t .w {
+  min-width: 0;
+  height: auto;
+  line-height: inherit;
+  text-align: right;
+}
+.bk-s.cup-tie .bk-t.win {
+  font-weight: 800;
+}

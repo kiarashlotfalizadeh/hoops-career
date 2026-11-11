@@ -10,6 +10,7 @@ import { Ovr, Section } from '../components/ui';
 import { ProtectSelect, TermsList, protectable } from './Terms';
 import { moneyExact } from '../../core/format';
 import { type Sel } from './sel';
+import { leaving } from '../office/motion';
 
 export function DealCard({
   league,
@@ -53,7 +54,7 @@ export function DealCard({
           <span key={pid} className="fo-pill">
             <Ovr v={p.ovr} size="sm" />
             <span className="fo-pill-name grow">{nameOf(tid)(pid)}</span>
-            <button className="x" aria-label={`Remove ${nameOf(tid)(pid)}`} onClick={() => set({ ...sel, pids: sel.pids.filter((x) => x !== pid) })}>
+            <button className="x" aria-label={`Remove ${nameOf(tid)(pid)}`} onClick={leaving('.fo-pill', () => set({ ...sel, pids: sel.pids.filter((x) => x !== pid) }))}>
               <X size={14} />
             </button>
           </span>
@@ -69,7 +70,7 @@ export function DealCard({
             <span className="fo-pill">
               <Ticket size={15} className="fo-pill-ic" />
               <span className="ellipsis grow">{label}</span>
-              <button className="x" aria-label={`Remove ${label}`} onClick={() => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) })}>
+              <button className="x" aria-label={`Remove ${label}`} onClick={leaving('.fo-deal-pick', () => set({ ...sel, dpids: sel.dpids.filter((x) => x !== d) }))}>
                 <X size={14} />
               </button>
             </span>
@@ -82,7 +83,7 @@ export function DealCard({
         <span key={`s${y}`} className="fo-pill">
           <Repeat size={14} className="fo-pill-ic" />
           <span className="ellipsis grow">{y} swap right</span>
-          <button className="x" aria-label={`Remove the ${y} swap right`} onClick={() => set({ ...sel, swaps: sel.swaps!.filter((x) => x !== y) })}>
+          <button className="x" aria-label={`Remove the ${y} swap right`} onClick={leaving('.fo-pill', () => set({ ...sel, swaps: sel.swaps!.filter((x) => x !== y) }))}>
             <X size={14} />
           </button>
         </span>
@@ -91,7 +92,7 @@ export function DealCard({
         <span className="fo-pill">
           <Banknote size={15} className="fo-pill-ic" />
           <span className="ellipsis grow">{moneyExact(sel.cash!)} cash</span>
-          <button className="x" aria-label="Remove the cash" onClick={() => set({ ...sel, cash: 0 })}>
+          <button className="x" aria-label="Remove the cash" onClick={leaving('.fo-pill', () => set({ ...sel, cash: 0 }))}>
             <X size={14} />
           </button>
         </span>

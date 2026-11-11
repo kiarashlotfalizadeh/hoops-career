@@ -44,6 +44,7 @@ import { DigestHost } from './today/AwaySheet';
 import { QuickSearch } from './components/QuickSearch';
 import { applyAccent } from './teamColors';
 import { haptic } from '../native';
+import { useChanged, useIndicator } from './motion';
 import { TABS, tabFor, type TabId } from './nav';
 import { AgendaList, pendingConfirm } from './components/Agenda';
 import { useNeedsYou } from './today/needs';
@@ -232,6 +233,9 @@ function TopBar() {
   // (fired: the old team's mark stays up there, but it isn't his to run; outside the memo, as a firing plays no game)
   const status = league.fired ? `Between jobs · ${PHASE_LABEL[league.phase] ?? seasonLabel(league.season)}` : gamesMemo(statusLines, league, () => statusLine(league));
   const [searching, setSearching] = useState(false);
+  // motion: the record ticks to its new value after a game, the bell's count pops when it changes
+  const rec = useChanged(ts.won * 1000 + ts.lost);
+  const bump = useChanged(unread);
   // Ctrl/⌘ K anywhere, or "/" when not typing, opens search
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -253,7 +257,7 @@ function TopBar() {
           <div style={{ textAlign: 'left', minWidth: 0 }}>
             <div className="title ellipsis">
               {t.abbrev}{' '}
-              <span className="num">
+              <span key={rec.key} className={`num ${rec.changed ? 'm-tick-up' : ''}`}>
                 {ts.won}-{ts.lost}
               </span>
             </div>
@@ -282,7 +286,11 @@ function TopBar() {
         {/* named by the badge it shows: "9+ need you (12)", "3 need you", "Needs you" */}
         <button className="iconbtn" onClick={() => setNeedsAt(loc.key)} aria-haspopup="dialog">
           <Bell size={20} aria-hidden="true" />
-          {unread > 0 && <span className="badge-dot">{unread > 9 ? '9+' : unread}</span>}
+          {unread > 0 && (
+            <span key={bump.key} className={`badge-dot ${bump.changed ? 'badge-pop' : ''}`}>
+              {unread > 9 ? '9+' : unread}
+            </span>
+          )}
           <span className="sr-only">{unread > 9 ? ` need you (${unread})` : unread > 0 ? ' need you' : 'Needs you'}</span>
         </button>
         <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Settings" aria-current={pathname === '/settings' ? 'page' : undefined}>
@@ -302,9 +310,13 @@ function BottomNav() {
   const { pathname } = useLocation();
   const league = useLeague();
   const section = tabFor(pathname, (pid) => league.players[pid]?.tid === league.userTid);
+  // motion: a short rule over the tab that's on, sliding to the next one
+  const row = useRef<HTMLDivElement>(null);
+  const ind = useIndicator(row, '.navitem.active', section);
   return (
     <nav className="bottomnav" aria-label="Main">
-      <div className="bottomnav-inner">
+      <div className="bottomnav-inner" ref={row}>
+        {ind && <span className={`nav-ind ${ind.ready ? 'ready' : ''}`} style={{ transform: `translateX(${ind.x + ind.w / 2}px)` }} aria-hidden="true" />}
         {TABS.map((it) => {
           const active = section === it.id;
           const Icon = TAB_ICON[it.id];
@@ -388,6 +400,8 @@ function ContinueBar() {
   const here = !!primary?.to && pathname === primary.to.split('?')[0];
   // game day: a quick sim of tonight's game is one tap too, beside Watch & coach
   const quick = primary?.cmd === 'watchLive' && primary.id === 'live' && !liveInProgress(league) ? actions.find((a) => a.id === 'quick' && a.cmd === 'quickGame') : undefined;
+  // motion: the next step's name changes with a small rise, not a swap
+  const step = useChanged(`${label}|${primary?.disabled ?? primary?.sub ?? ''}`);
   return (
     <>
       <div className="sr-only" role="status">
@@ -426,7 +440,7 @@ function ContinueBar() {
                   <span className="cg-disc" aria-hidden="true">
                     <Play size={16} fill="currentColor" />
                   </span>
-                  <span className="grow">
+                  <span key={step.key} className={`grow ${step.changed ? 'cg-swap' : ''}`}>
                     <span className="cg-label ellipsis">{label}</span>
                     {(primary.disabled ?? primary.sub) && <span className="cg-sub ellipsis">{keep(primary.disabled ?? primary.sub)}</span>}
                   </span>
@@ -458,7 +472,7 @@ function ContinueBar() {
           {/* the next step as the one ink block, every other option a row of one list under it */}
           {primary && <FlowOption a={primary} disabled={!!primary.disabled || !!sim} onPick={() => pick(primary)} />}
           {actions.length > 1 && (
-            <div className="card flush flow-list">
+            <div className="card flush flow-list m-stagger">
               {actions
                 .filter((a) => a !== primary)
                 .map((a) => (

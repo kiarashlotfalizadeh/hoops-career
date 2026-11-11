@@ -25,36 +25,52 @@ export function TeamLogo({ tid, size = 36, abbrev, colors, decorative }: { tid: 
   const text = ab.length > 3 ? ab.slice(0, 3) : ab;
   const ink = inkOn(c1);
   const ring = c2.toLowerCase() === c1.toLowerCase() ? c3 : c2;
+  // a small mark (a row's, a board's) carries a heavier ring and bigger letters: at 18-24px the
+  // regular ones thin out to a hairline and a smudge
+  const small = size <= 24;
+  const sw = small ? 6 : 4.5;
+  // where the letters sit and how big, by shape: a shield's weight is above its middle, a diamond
+  // and a hexagon are narrower across than a roundel
   let body: JSX.Element;
+  let cy = 50;
+  let fs = 31;
   switch (shape) {
     case 'shield':
-      body = <path d="M50 5 L90 15.5 L87 57 Q83.5 81 50 95 Q16.5 81 13 57 L10 15.5 Z" fill={c1} stroke={ring} strokeWidth="4.5" strokeLinejoin="round" />;
+      body = <path d="M50 5 L90 15.5 L87 57 Q83.5 81 50 95 Q16.5 81 13 57 L10 15.5 Z" fill={c1} stroke={ring} strokeWidth={sw} strokeLinejoin="round" />;
+      cy = 46.5;
       break;
     case 'hex':
-      body = <polygon points="50,5 89,27.5 89,72.5 50,95 11,72.5 11,27.5" fill={c1} stroke={ring} strokeWidth="4.5" strokeLinejoin="round" />;
+      body = <polygon points="50,5 89,27.5 89,72.5 50,95 11,72.5 11,27.5" fill={c1} stroke={ring} strokeWidth={sw} strokeLinejoin="round" />;
+      fs = 30;
       break;
     case 'diamond':
-      body = <rect x="18" y="18" width="64" height="64" rx="6" transform="rotate(45 50 50)" fill={c1} stroke={ring} strokeWidth="4.5" />;
+      body = <rect x="18" y="18" width="64" height="64" rx="7" transform="rotate(45 50 50)" fill={c1} stroke={ring} strokeWidth={sw} />;
+      fs = 28;
       break;
     case 'round-square':
-      body = <rect x="8" y="8" width="84" height="84" rx="16" fill={c1} stroke={ring} strokeWidth="4.5" />;
+      body = <rect x="8" y="8" width="84" height="84" rx="18" fill={c1} stroke={ring} strokeWidth={sw} />;
+      fs = 33;
       break;
     default:
-      body = <circle cx="50" cy="50" r="44" fill={c1} stroke={ring} strokeWidth="4.5" />;
+      body = <circle cx="50" cy="50" r="44" fill={c1} stroke={ring} strokeWidth={sw} />;
   }
+  if (text.length < 3) fs += 6;
+  if (small) fs += 2;
+  // (Archivo's capitals stand 0.69em tall: the baseline that centres them on `cy`)
+  const base = cy + fs * 0.345;
   return (
     <svg width={size} height={size} viewBox="0 0 100 100" {...(decorative ? { 'aria-hidden': true } : { role: 'img', 'aria-label': ab })} style={{ flex: 'none' }}>
       {body}
       <text
         x="50"
-        y="61"
+        y={base.toFixed(1)}
         textAnchor="middle"
         fontFamily="Archivo Variable, sans-serif"
         fontWeight="860"
         style={{ fontStretch: '74%' }}
-        fontSize={text.length === 3 ? 31 : 37}
+        fontSize={fs}
         fill={ink}
-        letterSpacing="0.5"
+        letterSpacing={small ? 0 : 0.5}
       >
         {text}
       </text>

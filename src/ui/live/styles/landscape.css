@@ -1,14 +1,19 @@
 /* Held sideways, or on a desktop: the broadcast on the left (the scorebug, the call bar, the whole
    court), the bench on the right (the bench bar over the console). Last, so it overrides the
-   partials above. Every track is sized by the grid: no width worked out by hand. */
+   partials above. The court is the hero: the page grows until the whole floor fills the height left
+   under the scorebug and the call bar, the bench keeps a column beside it, and whatever height the
+   floor can't use is the building around it, in ink (never a band of blank paper under the court). */
 @media (orientation: landscape) and (min-width: 600px) {
   :root {
     --lq-h: 54px;
   }
   .app main.page.lv {
-    max-width: 1360px;
+    /* (what the scorebug, the call bar and the page's own padding take of the height) */
+    --lv-chrome: 228px;
+    --lv-bench: clamp(300px, 26vw, 440px);
+    max-width: calc((100dvh - var(--lv-chrome)) * var(--court-wide) + var(--lv-bench) + 38px);
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+    grid-template-columns: minmax(0, 1fr) var(--lv-bench);
     grid-template-rows: auto auto auto minmax(0, 1fr);
     grid-template-areas:
       'bug bar'
@@ -28,10 +33,13 @@
   }
   .lv .lv-stage {
     grid-area: stage;
-    align-self: start;
+    /* the whole of the column under the call bar: the floor straight under the call of the play,
+       the building below it */
+    align-self: stretch;
+    min-height: 0;
+    display: grid;
+    align-content: start;
     margin: 0;
-    /* as much of the column as the height left allows */
-    max-height: 100%;
     --court-h: auto;
   }
   /* the bench bar heads the console: a strip of card stock of its own */
@@ -39,7 +47,7 @@
     grid-area: bar;
     position: static;
     align-self: start;
-    margin: 0 0 6px;
+    margin: 0 0 10px;
     padding: 0 6px;
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
@@ -51,6 +59,23 @@
     padding-bottom: calc(8px + var(--safe-b));
   }
 }
+/* A small, squarer screen (a small tablet held sideways, a small window): the whole floor would leave a third of the
+   column to the building, so while the game plays the court takes the column's whole height and
+   shows the window on the floor that follows the ball, as a phone held sideways does. A stop keeps
+   the whole floor (the shot chart, the players where they stood), in the middle of the column. */
+@media (orientation: landscape) and (min-width: 600px) and (max-width: 1099px) and (max-aspect-ratio: 3/2) {
+  .lv:not(.stopped, .at-final) .lv-stage {
+    display: block;
+    --court-h: 100%;
+  }
+  .lv:not(.stopped, .at-final) .lv-stage .court-view {
+    height: 100%;
+  }
+  .lv.stopped .lv-stage,
+  .lv.at-final .lv-stage {
+    align-content: center;
+  }
+}
 /* A phone held sideways: the court takes the whole height on the left with the call bar under it;
    the scorebug moves over the bench. */
 @media (orientation: landscape) and (max-height: 520px) {
@@ -58,6 +83,7 @@
     --top-h: 0px;
   }
   .app main.page.lv {
+    max-width: 1360px;
     grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     grid-template-areas:
@@ -69,8 +95,7 @@
     padding-bottom: calc(6px + var(--safe-b));
   }
   .lv .lv-stage {
-    align-self: stretch;
-    min-height: 0;
+    display: block;
     border-radius: var(--radius) var(--radius) 0 0;
     --court-h: 100%;
   }

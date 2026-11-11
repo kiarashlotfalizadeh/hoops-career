@@ -7,6 +7,7 @@ import { TeamLogo } from './TeamLogo';
 import { Avatar } from './ui';
 import { slabVars } from '../teamColors';
 import { haptic } from '../../native';
+import { reducedMotion } from '../motion';
 import './moments.css';
 
 /** What decides whether the moments need reading again: a game, a series, an award, a move, the phase or the team. */
@@ -106,16 +107,32 @@ export function Moments() {
 }
 
 const PIECES = 46;
+/** How long a moment takes to leave once it's dismissed (moments.css: `.moment.leaving`). */
+const LEAVE_MS = 150;
 
 function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors: [string, string, string]; onDone: () => void }) {
   const btn = useRef<HTMLButtonElement>(null);
   const nav = useNavigate();
   const p = useStore((s) => (m.pid !== undefined ? s.league?.players[m.pid] : undefined));
+  // dismissed: the poster lets go of the screen (a short fade) before the page has it back
+  const [leaving, setLeaving] = useState(false);
+  const done = useRef(onDone);
+  done.current = onDone;
+  const leave = (then?: () => void) => {
+    if (leaving) return;
+    const go = () => {
+      done.current();
+      then?.();
+    };
+    if (reducedMotion()) return go();
+    setLeaving(true);
+    setTimeout(go, LEAVE_MS);
+  };
   useEffect(() => {
     haptic(m.big ? 'success' : 'tap');
     btn.current?.focus({ preventScroll: true });
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onDone();
+      if (e.key === 'Escape') btn.current?.click();
       // Tab stays on the card's buttons (Continue, and its link when there's one)
       if (e.key === 'Tab') {
         e.preventDefault();
@@ -126,7 +143,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [m, onDone]);
+  }, [m]);
   // confetti in the team's colours and white, scattered the same way each time a moment shows
   const confetti = useMemo(
     () =>
@@ -146,7 +163,14 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
     [m.big, colors],
   );
   return (
-    <div className={`moment ${m.kind}`} role="dialog" aria-modal="true" aria-labelledby="moment-title" style={slabVars(colors) as CSSProperties} onClick={onDone}>
+    <div
+      className={`moment ${m.kind} ${m.big ? 'big' : ''} ${leaving ? 'leaving' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="moment-title"
+      style={slabVars(colors) as CSSProperties}
+      onClick={() => leave()}
+    >
       <div className="moment-bg" aria-hidden="true" />
       {confetti.length > 0 && (
         <div className="moment-confetti" aria-hidden="true">
@@ -177,7 +201,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
             className="btn big moment-go"
             onClick={(e) => {
               e.stopPropagation();
-              onDone();
+              leave();
             }}
           >
             Continue
@@ -187,8 +211,7 @@ function MomentCard({ m, tid, colors, onDone }: { m: Moment; tid: number; colors
               className="btn big moment-read"
               onClick={(e) => {
                 e.stopPropagation();
-                onDone();
-                nav(m.link!);
+                leave(() => nav(m.link!));
               }}
             >
               {m.linkLabel ?? 'Read the story'}

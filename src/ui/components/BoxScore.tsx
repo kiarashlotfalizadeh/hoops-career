@@ -66,6 +66,11 @@ export function BoxScore({
   // (played and didn't finish: hurt during the game, or thrown out of it)
   const left = dnp ? box.players.filter((p) => p.left) : [];
   const min = wholeMinutes(box.players);
+  // the team's high in points, rebounds and assists is marked (once somebody has any; ties share it)
+  const top = (f: (p: BoxLine) => number) => Math.max(1, ...rows.map(f));
+  const reb = (p: BoxLine) => p.orb + p.drb;
+  const [hiPts, hiReb, hiAst] = [top((p) => p.pts), top(reb), top((p) => p.ast)];
+  const fig = (v: number, hi: number) => (v === hi && rows.length > 1 ? <span className="bx-hi">{v}</span> : v);
   const t = box.t;
   // on a phone the figures past TOV wait to the right: the names stay put and the edge fades until
   // they're in view (StatTable's .tablewrap-o, as the league's tables do)
@@ -133,9 +138,9 @@ export function BoxScore({
                         )}
                       </td>
                       <td>{min(p.pid)}</td>
-                      <td className="bold">{p.pts}</td>
-                      <td>{p.orb + p.drb}</td>
-                      <td>{p.ast}</td>
+                      <td className="bold">{fig(p.pts, hiPts)}</td>
+                      <td>{fig(reb(p), hiReb)}</td>
+                      <td>{fig(p.ast, hiAst)}</td>
                       <td>{p.stl}</td>
                       <td>{p.blk}</td>
                       <td>{p.tov}</td>

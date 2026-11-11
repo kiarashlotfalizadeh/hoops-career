@@ -56,6 +56,8 @@ export const LAMPS: readonly (readonly [number, number, number])[] = [
   ...[-2, -1, 0, 1, 2].map((i) => [(i * 2 * (ENDX + ROWS * DEEP)) / 5.4, 47.2 + ROWS * RISE, -(FAR + ROWS * DEEP + 31)] as const),
   ...[-1, 1].map((e) => [e * (ENDX + ROWS * DEEP + 31), 47.2 + ROWS * RISE, 0] as const),
 ];
+/** How much of the light the crowd keeps while it sits. */
+const SAT = 0.8;
 /** The most pools of dark the floor can take: two feet and a body for every figure on it. */
 const TOUCHES = 48;
 
@@ -214,6 +216,7 @@ export class Arena {
   private readonly time = { value: 0 };
   private readonly cheerU = { value: 0 };
   private readonly dimU = { value: 1 };
+  private dimTo = 1;
   /** Which of the crowd wear the home colour. */
   private readonly fans: number[] = [];
   private readonly total: number;
@@ -468,7 +471,7 @@ export class Arena {
         case 'jersey':
         case 'cloth':
           // (warm-ups over their kit, dark in the team's colour: the bench is not five more men in the play)
-          return `#${c.set(kit.color).lerp(WARMUP, 0.62).getHexString()}`;
+          return `#${c.set(kit.color).lerp(WARMUP, 0.7).getHexString()}`;
         case 'trim':
           return kit.token.ring;
         case 'tie':
@@ -495,7 +498,7 @@ export class Arena {
 
   /** How much of their light the people in the stands keep (1: all of it), and those on the benches. */
   dim(to: number, bench = to) {
-    this.dimU.value = to;
+    this.dimTo = to;
     for (const m of this.castMats) m.color.setScalar(bench);
   }
 
@@ -509,11 +512,14 @@ export class Arena {
     if (calm) {
       this.cheering = 0;
       this.cheerU.value = 0;
+      this.dimU.value = this.dimTo;
       return;
     }
     this.time.value += real / 1000;
     this.cheering = Math.max(0, this.cheering - real / 2600);
     this.cheerU.value += (Math.min(1, this.cheering * 1.6) - this.cheerU.value) * (1 - Math.exp(-real / 180));
+    // (sat down, the stands are a shade under the floor's light: the play is in front of them. On their feet they are in it)
+    this.dimU.value = this.dimTo * (SAT + (1 - SAT) * this.cheerU.value);
   }
 
   /**

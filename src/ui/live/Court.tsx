@@ -380,6 +380,8 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       }
     };
 
+    // the shot the possession on the floor has taken (its mark stays until the next possession)
+    let shot: { sc: Script; at: Pt; made: boolean } | null = null;
     const drawPlay = (sc: Script, play: Pose, view: View, calm: boolean, t: number) => {
       const p = props.current;
       const { a, b, u } = play;
@@ -389,6 +391,10 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       // the net or the rim answers a shot as it lands, and a moment after
       const fx = b.fx && u > 0.72 ? { kind: b.fx, p: (u - 0.72) / 0.28 } : a.fx && u < 0.5 && play.i > 1 ? { kind: a.fx, p: 1 + u / 0.5 } : null;
       if (fx && !calm) drawRimFx(ctx, view, W(BASKET), fx.kind, fx.p, paints);
+      // where a shot was taken from, once it lands: the mark the break's chart will keep (a dot, a
+      // cross), on the boards under the players
+      if (b.fx && b.ballZ) shot = { sc, at: W(a.ball), made: b.fx === 'make' };
+      if (shot && shot.sc === sc && !(b.fx && u < 0.72)) drawShotMark(ctx, view, shot.at, kitO, shot.made, b.fx ? (u - 0.72) / 0.2 : 1, paints);
       // defense first (under), then offense; the man with the ball last, ringed and named
       const hold = u >= 0.5 ? b.hold : a.hold;
       const nO = sc.oPids.length;
@@ -416,6 +422,8 @@ export function Court({ script, speed, paused, kits, jersey, onDone, onTick, onB
       const peak = b.ballZ ?? (play.carried || travel < 3 ? 0 : Math.min(2.2, travel * 0.07));
       const z = peak ? Math.sin(Math.PI * u) * peak : 0;
       if (b.ballZ && !calm && u > 0 && u < 1) drawTrail(ctx, view, from, to, u, b.ballZ, paints);
+      // a pass: a line behind the ball from the hands it left, gone as it's caught
+      else if (!b.ballZ && !play.carried && travel >= 6 && !calm && u > 0.04 && u < 1) drawPass(ctx, view, from, bw, u, paints);
       drawBall(ctx, view, bw, z, calm ? 0 : (t / 90 + travel * u * 0.9) % (Math.PI * 2), paints);
       // the play's label: it fades in and out, or just shows (reduced motion)
       const fl = (u > 0.35 ? b.flash : undefined) ?? (u <= 0.35 ? a.flash : undefined);
@@ -858,6 +866,62 @@ function drawTrail(ctx: CanvasRenderingContext2D, view: View, from: Pt, to: Pt, 
   ctx.globalAlpha = 1;
 }
 
+/** A pass in the air: a line from where it was thrown to the ball, fading toward the thrower and gone as it arrives. */
+function drawPass(ctx: CanvasRenderingContext2D, view: View, from: Pt, ball: Pt, u: number, paints: Paints) {
+  const a = project(view, from);
+  const b = project(view, ball);
+  // (the tail follows the ball: it never trails more than a few feet)
+  const len = Math.hypot(b.x - a.x, b.y - a.y);
+  const keep = Math.min(len, 9 * view.k);
+  if (len < 2) return;
+  const tx = b.x - ((b.x - a.x) / len) * keep;
+  const ty = b.y - ((b.y - a.y) / len) * keep;
+  const g = ctx.createLinearGradient(tx, ty, b.x, b.y);
+  g.addColorStop(0, 'rgba(255, 255, 255, 0)');
+  g.addColorStop(1, paints.line);
+  ctx.globalAlpha = 0.7 * Math.min(1, (1 - u) / 0.25);
+  ctx.strokeStyle = g;
+  ctx.lineWidth = Math.max(1.5, view.k * 0.22);
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(tx, ty);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.globalAlpha = 1;
+}
+
+/** Where a shot was taken from, as the break's chart marks it: a dot in the team's colour for a make, a cross for a miss, both edged in white. */
+function drawShotMark(ctx: CanvasRenderingContext2D, view: View, at: Pt, kit: MatchKit, made: boolean, alpha: number, paints: Paints) {
+  const p = project(view, at);
+  const r = Math.max(0.6 * view.k, 3);
+  ctx.globalAlpha = clamp(alpha, 0, 1) * 0.9;
+  ctx.beginPath();
+  if (made) {
+    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = kit.color;
+    ctx.fill();
+    ctx.strokeStyle = paints.line;
+    ctx.lineWidth = Math.max(1.5, r * 0.3);
+    ctx.stroke();
+  } else {
+    const a = r * 0.8;
+    ctx.lineCap = 'round';
+    ctx.moveTo(p.x - a, p.y - a);
+    ctx.lineTo(p.x + a, p.y + a);
+    ctx.moveTo(p.x + a, p.y - a);
+    ctx.lineTo(p.x - a, p.y + a);
+    ctx.strokeStyle = paints.line;
+    ctx.lineWidth = Math.max(4, r * 0.95);
+    ctx.stroke();
+    ctx.strokeStyle = kit.color;
+    ctx.lineWidth = Math.max(2, r * 0.5);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+  }
+  ctx.globalAlpha = 1;
+}
+
 /** A made shot sends a ring out from the net; a miss rattles the rim. `p` runs 0..2 over the landing and the moment after. */
 function drawRimFx(ctx: CanvasRenderingContext2D, view: View, basket: Pt, kind: 'make' | 'miss', p: number, paints: Paints) {
   const { x, y } = project(view, basket);
@@ -874,6 +938,12 @@ function drawRimFx(ctx: CanvasRenderingContext2D, view: View, basket: Pt, kind: 
       ctx.arc(x, y, (0.8 + tt * 2.6) * k, 0, Math.PI * 2);
       ctx.stroke();
     }
+    // the net snaps: the rim itself shows white for the moment the ball drops through
+    ctx.globalAlpha = Math.max(0, 1 - t * 2.2);
+    ctx.lineWidth = Math.max(2.5, k * 0.3);
+    ctx.beginPath();
+    ctx.arc(x, y, 0.75 * k, 0, Math.PI * 2);
+    ctx.stroke();
   } else {
     ctx.strokeStyle = paints.rim;
     const j = Math.sin(p * Math.PI * 6) * 0.25 * k;

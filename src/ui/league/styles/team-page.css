@@ -239,3 +239,45 @@ button.lg-kvl:active {
 a.lg-h2h:active {
   background: var(--surface);
 }
+
+/* form: a win a solid dot, a loss a ring (it reads without its colour), arriving oldest first */
+.lg-form {
+  align-items: center;
+}
+.lg-form i {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--bad);
+  animation: pop var(--dur-slow) var(--ease-spring) backwards;
+  animation-delay: calc(var(--stagger) * 9);
+}
+.lg-form i.w {
+  background: var(--good);
+  box-shadow: none;
+}
+.lg-form i:nth-child(1) {
+  animation-delay: 0s;
+}
+.lg-form i:nth-child(2) {
+  animation-delay: calc(var(--stagger) * 1);
+}
+.lg-form i:nth-child(3) {
+  animation-delay: calc(var(--stagger) * 2);
+}
+.lg-form i:nth-child(4) {
+  animation-delay: calc(var(--stagger) * 3);
+}
+.lg-form i:nth-child(5) {
+  animation-delay: calc(var(--stagger) * 4);
+}
+.lg-form i:nth-child(6) {
+  animation-delay: calc(var(--stagger) * 5);
+}
+.lg-form i:nth-child(7) {
+  animation-delay: calc(var(--stagger) * 6);
+}
+.lg-form i:nth-child(8) {
+  animation-delay: calc(var(--stagger) * 7);
+}
+.lg-form i:nth-child(9) {
+  animation-delay: calc(var(--stagger) * 8);
+}

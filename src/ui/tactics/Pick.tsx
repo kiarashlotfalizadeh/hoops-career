@@ -38,7 +38,9 @@ export function PickRow<T extends string | number>({
     <div className="tx-pick">
       <button className="tx-pickrow" aria-haspopup="dialog" onClick={() => setOpen(true)}>
         <span className="tx-pickrow-l">{label}</span>
-        <span className="tx-pickrow-v ellipsis">{cur?.label ?? '—'}</span>
+        <span key={String(value)} className="tx-pickrow-v ellipsis">
+          {cur?.label ?? '—'}
+        </span>
         <ChevronRight size={16} className="dim" aria-hidden="true" />
       </button>
       {note && <div className="tx-note">{note}</div>}

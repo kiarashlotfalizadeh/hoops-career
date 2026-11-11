@@ -7,7 +7,7 @@
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
   z-index: 80;
-  animation: fade 0.18s ease;
+  animation: fade 0.24s ease;
   /* a drag on the dimmed page doesn't scroll it behind the sheet (iOS ignores the body's overflow) */
   touch-action: none;
 }
@@ -34,7 +34,8 @@
   border-top: none;
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 6px var(--gut-r) calc(22px + var(--safe-b)) var(--gut-l);
-  animation: sheet-up 0.26s var(--ease-out);
+  /* (anchored to the foot of the screen: it comes up to its place and stops, never past it) */
+  animation: sheet-up 0.34s var(--ease-out);
   max-width: 720px;
   margin: 0 auto;
   box-shadow: 0 -20px 50px rgba(24, 18, 8, 0.28);
@@ -89,21 +90,32 @@
 }
 @keyframes sheet-up {
   from {
-    transform: translateY(40px);
+    transform: translateY(min(38%, 240px));
     opacity: 0;
   }
 }
 @keyframes sheet-down {
   to {
-    transform: translateY(60px);
+    transform: translateY(min(30%, 180px));
     opacity: 0;
   }
 }
 @keyframes dialog-in {
   from {
-    transform: translateY(12px) scale(0.98);
+    transform: translateY(14px) scale(0.96);
     opacity: 0;
   }
+}
+/* what a sheet holds arrives a beat after the sheet: its title, then its content (and inside a
+   column of blocks, each block after the last) */
+.sheet > .sheet-head {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.04s backwards;
+}
+.sheet > .sheet-head ~ * {
+  animation: rise-sm var(--dur-slow) var(--ease-out) 0.09s backwards;
+}
+.sheet.closing > * {
+  animation: none;
 }
 @keyframes dialog-out {
   to {
@@ -177,7 +189,10 @@ body.sheet-open .toasts {
   font-weight: 580;
   line-height: 1.3;
   text-align: left;
-  animation: toast-in 0.24s var(--ease-out);
+  animation: toast-in 0.3s var(--ease-out);
+  transition:
+    background var(--dur-fast) ease,
+    scale 0.1s ease;
 }
 .toast > .toast-t {
   flex: 1;
@@ -200,19 +215,29 @@ body.sheet-open .toasts {
 }
 .toast:active {
   background: var(--ink-2);
+  scale: 0.98;
 }
 @keyframes toast-in {
   from {
-    transform: translateY(12px);
+    translate: 0 14px;
+    scale: 0.96;
     opacity: 0;
   }
+}
+/* its icon lands a beat after the pill */
+.toast-ic {
+  animation: pop var(--dur-slow) var(--ease-spring) 0.1s backwards;
+}
+.toast.has-link .toast-go {
+  animation: slide-r var(--dur-slow) var(--ease-out) 0.16s backwards;
 }
 body.sheet-open .toast {
   animation-name: toast-drop;
 }
 @keyframes toast-drop {
   from {
-    transform: translateY(-12px);
+    translate: 0 -14px;
+    scale: 0.96;
     opacity: 0;
   }
 }

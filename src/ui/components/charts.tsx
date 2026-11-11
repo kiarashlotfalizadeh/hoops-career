@@ -1,7 +1,8 @@
-import { useId, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ShotRecord } from '../../core/types';
 import { periodLabel } from '../stats';
 import { wpText } from '../../core/analysis/winProb';
+import { reducedMotion } from '../motion';
 import './gameday.css';
 
 /**
@@ -20,8 +21,37 @@ function useWidth(fallback = 320) {
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
-  return [setEl, w] as const;
+  return [setEl, w, el] as const;
 }
+
+/**
+ * True once the element has scrolled into view (and stays true): a chart draws when the player
+ * reaches it, not under the fold. `useSeen`'s rule for an element held in state (a chart that had
+ * nothing to draw mounts its element later). True at once under reduced motion.
+ */
+function useInView(el: Element | null): boolean {
+  const [seen, setSeen] = useState(() => reducedMotion() || typeof IntersectionObserver === 'undefined');
+  useEffect(() => {
+    if (seen || !el) return;
+    const io = new IntersectionObserver(
+      (es) => {
+        if (es.some((e) => e.isIntersecting)) {
+          setSeen(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '0px 0px -6% 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [el, seen]);
+  return seen;
+}
+
+/** A chart's wrapper class: waiting under the fold (its plot hidden), then drawing (`ch-go`). */
+const chartCls = (seen: boolean, extra = '') => `ch${extra ? ` ${extra}` : ''} ${seen ? 'ch-go' : 'ch-wait'}`;
+/** When a mark at `frac` of the way along a line lands, in step with the line being drawn. */
+const along = (frac: number, ms = 800): CSSProperties => ({ '--d': `${Math.round(Math.max(0, Math.min(1, frac)) * ms)}ms` }) as CSSProperties;
 
 export function LineChart({
   points,
@@ -43,7 +73,8 @@ export function LineChart({
   /** Each point's value over it (twelve points or fewer). */
   values?: boolean;
 }) {
-  const [ref, w] = useWidth();
+  const [ref, w, el] = useWidth();
+  const seen = useInView(el);
   const h = height;
   // a value that isn't a number (NaN, ±Infinity) leaves a gap in the line instead of breaking the chart
   const known = points.filter((v) => isFinite(v));
@@ -58,19 +89,28 @@ export function LineChart({
   const labelW = labels?.length ? Math.max(...labels.map((l) => l.length)) * 6 : 0;
   const every = labels && labels.length > 1 ? Math.max(1, Math.ceil((labelW * 1.5 + 8) / ((w - 28) / (labels.length - 1)))) : 1;
   return (
-    <div ref={ref}>
+    <div ref={ref} className={chartCls(seen)}>
       <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Trend: ${points.map((v) => (isFinite(v) ? Math.round(v) : 'none')).join(', ')}`}>
         <line x1={0} x2={w} y1={h - 18} y2={h - 18} stroke="var(--line-2)" />
         {refLine !== undefined && <line x1={0} x2={w} y1={y(refLine)} y2={y(refLine)} stroke="var(--line-3)" strokeDasharray="2 4" />}
-        {known.length === points.length && <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.08} />}
-        <path d={d} fill="none" stroke={color} strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" />
+        {known.length === points.length && <path d={`${d} L${x(points.length - 1)},${h - 18} L${x(0)},${h - 18} Z`} fill={color} opacity={0.1} className="ch-area" />}
+        <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="ch-line" />
         {points.map(
           (v, i) =>
             isFinite(v) && (
-              <g key={i}>
-                <circle cx={x(i)} cy={y(v)} r={2.75} fill={color} stroke="var(--raised)" strokeWidth={1.5} />
+              <g key={i} className="ch-pt" style={along(points.length > 1 ? i / (points.length - 1) : 0)}>
+                {/* (the latest point is the one the eye wants: a size up) */}
+                <circle
+                  className="ch-dot"
+                  cx={x(i)}
+                  cy={y(v)}
+                  r={i === points.length - 1 && points.length > 1 ? 3.75 : 2.75}
+                  fill={color}
+                  stroke="var(--raised)"
+                  strokeWidth={1.5}
+                />
                 {values && points.length <= 12 && (
-                  <text x={x(i)} y={y(v) - 8} textAnchor="middle" className="ch-val">
+                  <text x={x(i)} y={y(v) - 9} textAnchor="middle" className={`ch-val${i === points.length - 1 && points.length > 1 ? ' last' : ''}`}>
                     {Math.round(v)}
                   </text>
                 )}
@@ -117,7 +157,8 @@ export function FlowChart({
   periodStarts?: number[];
   height?: number;
 }) {
-  const [ref, w] = useWidth();
+  const [ref, w, el] = useWidth();
+  const seen = useInView(el);
   const clip = useId().replace(/:/g, '');
   const h = height;
   if (flow.length < 2) return null;
@@ -125,22 +166,24 @@ export function FlowChart({
   const total = periods.reduce((a, p) => a + p, 0);
   // periods sit at their game time, as on the win-probability chart: with recorded starts, each
   // period's points spread evenly across its own stretch of the axis
-  const at = periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * w);
+  // (the line stops 4px short of the edge: its last dot sits whole inside the chart)
+  const pw = w - 4;
+  const at = periods.map((_, i) => (periods.slice(0, i).reduce((a, p) => a + p, 0) / total) * pw);
   const marks = periodStarts?.length === periods.length ? periodStarts.map((i) => Math.min(i, flow.length - 1)) : null;
   const x = (i: number) => {
-    if (!marks) return (i / (flow.length - 1)) * w;
+    if (!marks) return (i / (flow.length - 1)) * pw;
     let k = 0;
     while (k + 1 < marks.length && i >= marks[k + 1]) k++;
     const from = marks[k];
     const to = k + 1 < marks.length ? marks[k + 1] : flow.length - 1;
-    const end = at[k + 1] ?? w;
+    const end = at[k + 1] ?? pw;
     return to > from ? at[k] + ((i - from) / (to - from)) * (end - at[k]) : at[k];
   };
   const y = (v: number) => h / 2 - (v / max) * (h / 2 - 6);
   const d = flow.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
   const starts = at;
   return (
-    <div ref={ref}>
+    <div ref={ref} className={chartCls(seen)}>
       <svg viewBox={`0 0 ${w} ${h + 16}`} width="100%" height={h + 16} role="img" aria-label="Score margin over the game">
         <defs>
           <clipPath id={`${clip}-top`}>
@@ -159,13 +202,26 @@ export function FlowChart({
           </g>
         ))}
         <line x1={0} x2={w} y1={h / 2} y2={h / 2} stroke="var(--line-3)" />
-        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.3} clipPath={`url(#${clip}-top)`} />
-        <path d={`${d} L${w},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.3} clipPath={`url(#${clip}-bot)`} />
-        <path d={d} fill="none" stroke="var(--text-2)" strokeWidth={1.25} strokeLinejoin="round" />
-        <text x={4} y={12} className="ch-axis">
+        <g className="ch-area">
+          <path d={`${d} L${pw},${h / 2} L0,${h / 2} Z`} fill={colorA} opacity={0.3} clipPath={`url(#${clip}-top)`} />
+          <path d={`${d} L${pw},${h / 2} L0,${h / 2} Z`} fill={colorB} opacity={0.3} clipPath={`url(#${clip}-bot)`} />
+        </g>
+        <path d={d} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="ch-line" />
+        {/* where it ended: the final margin's dot, in the colour of the side that won it */}
+        <circle
+          className="ch-dot"
+          style={along(1)}
+          cx={w - 4}
+          cy={y(flow[flow.length - 1])}
+          r={4}
+          fill={flow[flow.length - 1] > 0 ? colorA : flow[flow.length - 1] < 0 ? colorB : 'var(--text)'}
+          stroke="var(--raised)"
+          strokeWidth={2}
+        />
+        <text x={4} y={12} className="ch-axis ch-halo">
           +{max}
         </text>
-        <text x={4} y={h - 4} className="ch-axis">
+        <text x={4} y={h - 4} className="ch-axis ch-halo">
           −{max}
         </text>
       </svg>
@@ -210,7 +266,8 @@ export function WinProbChart({
   /** The shape alone, no percentages: the live game's. */
   bare?: boolean;
 }) {
-  const [ref, w] = useWidth();
+  const [ref, w, el] = useWidth();
+  const seen = useInView(el);
   const clip = useId().replace(/:/g, '');
   const [at, setAt] = useState<number | null>(null);
   const h = height;
@@ -221,7 +278,7 @@ export function WinProbChart({
   );
   // room on the left for the 100% / 50% / 0% ticks
   const left = 36;
-  const x = (t: number) => left + (Math.min(total, Math.max(0, t)) / total) * (w - left - 4);
+  const x = (t: number) => left + (Math.min(total, Math.max(0, t)) / total) * (w - left - 5);
   const y = (wp: number) => 6 + (1 - wp) * (h - 12);
   const d = points.map((p, i) => `${i ? 'L' : 'M'}${x(p.t).toFixed(1)},${y(p.wp).toFixed(1)}`).join(' ');
   const end = x(points[points.length - 1].t);
@@ -239,7 +296,7 @@ export function WinProbChart({
   const shown = at !== null && at < points.length ? at : null;
   const tipLeft = shown !== null ? Math.min(Math.max(x(points[shown].t), 110), w - 110) : 0;
   return (
-    <div ref={ref} className="ch-wrap">
+    <div ref={ref} className={chartCls(seen, 'ch-wrap')}>
       <svg
         viewBox={`0 0 ${w} ${h + 16}`}
         width="100%"
@@ -284,12 +341,25 @@ export function WinProbChart({
               {Math.round(v * 100)}%
             </text>
           ))}
-        <path d={area} fill={color} opacity={0.26} clipPath={`url(#${clip}-top)`} />
-        <path d={area} fill={colorOther} opacity={0.26} clipPath={`url(#${clip}-bot)`} />
-        <path d={d} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+        <g className="ch-area">
+          <path d={area} fill={color} opacity={0.26} clipPath={`url(#${clip}-top)`} />
+          <path d={area} fill={colorOther} opacity={0.26} clipPath={`url(#${clip}-bot)`} />
+        </g>
+        <path d={d} fill="none" stroke="var(--text)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="ch-line" />
+        {/* where it stands (a game still on) or ended: the line's last point, in the colour of the side ahead */}
+        <circle
+          className="ch-dot"
+          style={along(1)}
+          cx={end}
+          cy={y(points[points.length - 1].wp)}
+          r={4}
+          fill={points[points.length - 1].wp >= 0.5 ? color : colorOther}
+          stroke="var(--raised)"
+          strokeWidth={2}
+        />
         {marks.map((i, k) =>
           points[i] ? (
-            <g key={i}>
+            <g key={i} className="ch-dot" style={along(points[i].t / total)}>
               <circle cx={x(points[i].t)} cy={y(points[i].wp)} r={7.5} fill="var(--accent)" stroke="var(--raised)" strokeWidth={2} />
               <text x={x(points[i].t)} y={y(points[i].wp) + 3.5} textAnchor="middle" className="ch-mark">
                 {k + 1}
@@ -299,8 +369,8 @@ export function WinProbChart({
         )}
         {shown !== null && (
           <g pointerEvents="none">
-            <line x1={x(points[shown].t)} x2={x(points[shown].t)} y1={0} y2={h} stroke="var(--line-3)" />
-            <circle cx={x(points[shown].t)} cy={y(points[shown].wp)} r={4} fill="var(--text)" stroke="var(--raised)" strokeWidth={2} />
+            <line x1={x(points[shown].t)} x2={x(points[shown].t)} y1={0} y2={h} stroke="var(--text)" strokeWidth={1} />
+            <circle cx={x(points[shown].t)} cy={y(points[shown].wp)} r={4.5} fill="var(--text)" stroke="var(--raised)" strokeWidth={2} />
           </g>
         )}
       </svg>
@@ -346,15 +416,21 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
   const by = 5.25;
   const cornerY = by + Math.sqrt(arcR * arcR - 22 * 22);
   const made = shots.filter((s) => s.made).length;
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const seen = useInView(el);
+  // the shots arrive in the order they were taken, the whole game inside 0.7s
+  const when = (i: number) => along(shots.length > 1 ? i / (shots.length - 1) : 0, 700);
   return (
-    <div className="shot-chart">
+    <div className={chartCls(seen, 'shot-chart')} ref={setEl}>
       <svg viewBox={`0 0 ${size} ${h}`} style={{ maxWidth: size * 1.4 }} role="img" aria-label={`Shot chart: ${made} of ${shots.length} shots made`}>
         <rect x={0} y={0} width={size} height={h} rx={6} fill="var(--bg-2)" />
-        <g stroke="var(--line-3)" strokeWidth={1.1} fill="none">
+        <g stroke="var(--line-3)" strokeWidth={1.25} fill="none" strokeLinecap="round">
           <rect x={sx(-8)} y={0} width={sx(8) - sx(-8)} height={sy(19)} />
-          <circle cx={sx(0)} cy={sy(19)} r={(6 / W) * size} />
-          <circle cx={sx(0)} cy={sy(by)} r={(0.75 / W) * size} />
-          <line x1={sx(-3)} x2={sx(3)} y1={sy(4)} y2={sy(4)} />
+          {/* the free-throw circle: its far half solid, the half in the lane dashed, as it's painted */}
+          <path d={`M${sx(-6)},${sy(19)} A${(6 / W) * size},${(6 / W) * size} 0 0 1 ${sx(6)},${sy(19)}`} />
+          <path d={`M${sx(-6)},${sy(19)} A${(6 / W) * size},${(6 / W) * size} 0 0 0 ${sx(6)},${sy(19)}`} strokeDasharray="3 4" />
+          <circle cx={sx(0)} cy={sy(by)} r={(0.75 / W) * size} strokeWidth={1.5} />
+          <line x1={sx(-3)} x2={sx(3)} y1={sy(4)} y2={sy(4)} strokeWidth={2} />
           <path d={`M${sx(-4)},${sy(by)} A${(4 / W) * size},${(4 / W) * size} 0 0 0 ${sx(4)},${sy(by)}`} />
           <line x1={sx(-22)} x2={sx(-22)} y1={0} y2={sy(cornerY)} />
           <line x1={sx(22)} x2={sx(22)} y1={0} y2={sy(cornerY)} />
@@ -362,9 +438,9 @@ export function ShotChart({ shots, color = 'var(--accent)', size = 320, keyed = 
         </g>
         {shots.map((s, i) =>
           s.made ? (
-            <circle key={i} cx={sx(s.x)} cy={sy(s.y)} r={4} fill={color} stroke="var(--bg-2)" strokeWidth={1.25} />
+            <circle key={i} className="ch-dot" style={when(i)} cx={sx(s.x)} cy={sy(s.y)} r={4} fill={color} stroke="var(--bg-2)" strokeWidth={1.25} />
           ) : (
-            <g key={i} stroke={MISS} strokeWidth={1.4} strokeLinecap="round" opacity={0.75}>
+            <g key={i} className="ch-miss" style={when(i)} stroke={MISS} strokeWidth={1.4} strokeLinecap="round" opacity={0.75}>
               <line x1={sx(s.x) - 3} y1={sy(s.y) - 3} x2={sx(s.x) + 3} y2={sy(s.y) + 3} />
               <line x1={sx(s.x) - 3} y1={sy(s.y) + 3} x2={sx(s.x) + 3} y2={sy(s.y) - 3} />
             </g>
@@ -409,6 +485,8 @@ export function CompareBar({
   const tie = neutral || !isFinite(a) || !isFinite(b) || show(a) === show(b);
   const aWins = !tie && (higherBetter ? a > b : a < b);
   const bWins = !tie && !aWins;
+  const [el, setEl] = useState<HTMLDivElement | null>(null);
+  const seen = useInView(el);
   const fig = (v: number, wins: boolean, color: string) => (
     <span className={`num cmp-v${wins ? ' win' : tie ? '' : ' lose'}`} style={{ '--cmp-c': color } as CSSProperties}>
       {show(v)}
@@ -416,7 +494,7 @@ export function CompareBar({
     </span>
   );
   return (
-    <div className="ch-cmp">
+    <div className={chartCls(seen, 'ch-cmp')} ref={setEl}>
       <div className="ch-cmp-top">
         {fig(a, aWins, colorA)}
         <span className="ch-cmp-l">{label}</span>

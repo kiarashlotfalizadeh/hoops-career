@@ -21,6 +21,9 @@ const LOB_MAX = 4.5;
 const LANE = 1.1;
 /** A pass that can't go over a man goes round him, this far (ft) from his middle. */
 const ROUND = 1.3;
+/** A man by either end of it (this much of its way) is given more room: the hands it leaves and the hands it goes to are still moving. */
+const END_ZONE = 0.3;
+const END_LANE = 1.9;
 /** How many points along a pass are looked at for who it meets. */
 const LOOKS = 24;
 
@@ -158,24 +161,32 @@ export interface Man {
   mate: boolean;
 }
 
-/** How a pass gets past the men in its way: an arc over (ft), and a swerve round (x, z at its widest, where along the pass that is). */
+/** A swerve round one man: how far to the side (x, z) where the pass goes by him, and where along the pass that is (0..1). */
+export interface Round {
+  x: number;
+  z: number;
+  at: number;
+}
+
+/** How a pass gets past the men in its way: an arc over (ft), and a swerve round one man near each end at most. */
 export interface PassPath {
   lob: number;
-  bx: number;
-  bz: number;
-  at: number;
+  round: Round[];
 }
 
 /**
  * The way through for a pass from `from` to `to` (`gx`, `gz`: how far the catcher still has to go). It is
  * followed to where each man will be when it gets to him. A defender well down its line is cleared by an
  * arc; a man it can't go over (a teammate, one too near either end, one too tall for LOB_MAX) by a swerve
- * to the side of him it was already passing on. Nobody in the way, or a short pass: flat and straight.
+ * to the side of him it was already passing on: the widest one needed in each half of its way (the man on
+ * the passer, the man on the catcher). Nobody in the way, or a short pass: flat and straight.
  */
 export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable<Man>): PassPath {
-  const path: PassPath = { lob: 0, bx: 0, bz: 0, at: 0.5 };
-  if (Math.hypot(to.x - from.x, to.z - from.z) <= 4) return path;
-  let wide = 0;
+  const path: PassPath = { lob: 0, round: [] };
+  const far = Math.hypot(to.x - from.x, to.z - from.z);
+  if (far <= 4) return path;
+  const wide = [0, 0];
+  const best: (Round | null)[] = [null, null];
   for (const m of men) {
     // the nearest it comes to him, both moving
     let near = Infinity;
@@ -189,7 +200,8 @@ export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable
       const d = Math.hypot(dx, dz);
       if (d < near) [near, t, ox, oz] = [d, u, dx, dz];
     }
-    if (near > LANE) continue;
+    const ends = !m.mate && (t < END_ZONE || t > 1 - END_ZONE);
+    if (near > (ends ? END_LANE : LANE)) continue;
     if (!m.mate && t >= 0.15 && t <= 0.85) {
       const need = (CLEAR_H * m.s - (from.y + (to.y - from.y) * t)) / (4 * t * (1 - t));
       if (need <= LOB_MAX) {
@@ -197,27 +209,32 @@ export function passPath(from: P3, to: P3, gx: number, gz: number, men: Iterable
         continue;
       }
     }
-    const round = ROUND * Math.sqrt(m.s) - near;
-    if (round <= wide) continue;
-    wide = round;
+    const half = t < 0.5 ? 0 : 1;
+    const round = (ends ? END_LANE : ROUND) * Math.sqrt(m.s) - near;
+    if (round <= wide[half]) continue;
+    wide[half] = round;
     // (dead on him: to the side square to the pass)
-    if (near < 0.05) [ox, oz, near] = [-(to.z - from.z), to.x - from.x, Math.hypot(to.x - from.x, to.z - from.z)];
-    path.bx = (ox / near) * round;
-    path.bz = (oz / near) * round;
-    path.at = t;
+    if (near < 0.05) [ox, oz, near] = [-(to.z - from.z), to.x - from.x, far];
+    best[half] = { x: (ox / near) * round, z: (oz / near) * round, at: Math.max(0.08, Math.min(0.92, t)) };
   }
+  for (const r of best) if (r) path.round.push(r);
   return path;
 }
 
 /**
- * How much of a pass's swerve it has at `u` of its way (0..1): none at either end, and the same shape
- * coming as going, so it never steps sideways out of a hand. It is widest halfway; a man near one end
- * gets most of it (the curve is made wider for him, up to twice).
+ * A pass's swerve at `u` of its way (0..1), into `out` (x, z): none at either end, all of each man's where
+ * it goes by him, eased out to him and back in from him. So a pass round the man on the passer leaves the
+ * hands wide of him and straightens on its way to the catcher, and one round the catcher's man curls in.
  */
-export function swerve(path: PassPath, u: number): number {
-  if (!path.bx && !path.bz) return 0;
-  const t = Math.max(0.12, Math.min(0.88, path.at));
-  return Math.sin(Math.PI * Math.max(0, Math.min(1, u))) / Math.max(0.5, Math.sin(Math.PI * t));
+export function swerve(path: PassPath, u: number, out: { x: number; z: number }): { x: number; z: number } {
+  out.x = out.z = 0;
+  const v = Math.max(0, Math.min(1, u));
+  for (const r of path.round) {
+    const w = Math.sin((Math.PI / 2) * (v < r.at ? v / r.at : (1 - v) / (1 - r.at)));
+    out.x += r.x * w;
+    out.z += r.z * w;
+  }
+  return out;
 }
 
 /**

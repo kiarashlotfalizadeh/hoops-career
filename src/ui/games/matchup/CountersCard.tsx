@@ -2,7 +2,7 @@
 // opinion of it tonight (see useCounterWorth: the ones it likes first, the costs behind "more") and
 // Add. A row opens on the rest: exactly what it changes in the Tactics screen's words, why, the
 // scouting behind it, and Always (confirmed: in your tactics for every game).
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { applyPatch } from '../../../core/sim/tactics';
 import { counterCandidates, tacticsWithCounter, type Candidate } from '../../../core/ai/advisor';
@@ -27,6 +27,9 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
   const worth = measuring?.worth;
   const cands = byWorth(drafted, worth);
   const inPlan = new Set(planFor(league, opp)?.items.map((it) => it.id));
+  // (the ones in the plan when the screen opened stand still; one added since lands)
+  const had = useRef<Set<string> | null>(null);
+  had.current ??= new Set(inPlan);
   const [all, setAll] = useState(false);
   // Always writes into your tactics for every game: a second tap confirms it
   const [armed, setArmed] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export function CountersCard({ league, opp }: { league: League; opp: number }) {
           // a counter that only names their players (attacking one defender) has nothing to keep for every game
           const always = JSON.stringify(persistableTactics(applyPatch(mine, c.patch), mine)) !== JSON.stringify(persistableTactics(mine, mine));
           return (
-            <div key={c.id} className="mu-cand">
+            <div key={c.id} className={`mu-cand${added && !had.current!.has(c.id) ? ' mu-added' : ''}`}>
               <details className="mu-cand-d">
                 <summary className="mu-cand-s">
                   <span className="grow mu-cand-t">
@@ -148,5 +151,5 @@ function CounterChanges({ league, opp, c }: { league: League; opp: number; c: Ca
 export function WorthTag({ w, measuring }: { w?: CounterWorth; measuring: boolean }) {
   if (!w) return measuring ? <span className="mu-worth dim">Staff still looking…</span> : null;
   const { text, tone } = worthText(w);
-  return <span className={`mu-worth ${tone ?? 'dim'}`}>{text}</span>;
+  return <span className={`mu-worth m-fade ${tone ?? 'dim'}`}>{text}</span>;
 }

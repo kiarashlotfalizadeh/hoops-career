@@ -29,6 +29,7 @@ import { NeedRow, needRows } from './NeedsList';
 import './today.css';
 import { useForecast } from '../useForecast';
 import { dayStamp, freshAdvice, noteSeen, readSeen } from './staffAge';
+import { useChanged } from '../motion';
 
 /** Today's advice leaves the owner to the job-security row. */
 const STAFF_AREAS: AssistantArea[] = ['team', 'tactics', 'games', 'office'];
@@ -98,10 +99,13 @@ export default function Today() {
   ) : allStar ? (
     <AllStarHero league={league} />
   ) : leadIsHero ? (
-    <LeadStory league={league} lead={lead} />
+    // (keyed by what it tells: a new result or story arrives as one, it doesn't swap its words in place)
+    <LeadStory key={lead.kind === 'story' ? `s${lead.n.id}` : `g${lead.r.gid}`} league={league} lead={lead} />
   ) : (
-    <NextGameSlab league={league} g={g} noPlan={noPlan} />
+    <NextGameSlab key={g.gid} league={league} g={g} noPlan={noPlan} />
   );
+  // motion: the count pops when a decision is settled or a new one lands
+  const counted = useChanged(needs.count);
   // every row of Needs you, in order (see needs.ts); a message opens here
   const rows = needRows(league, needs, (m) => {
     setOpenMsg(m.id);
@@ -143,7 +147,7 @@ export default function Today() {
               </button>
             ) : (
               needs.count > 0 && (
-                <span className="td-count num" aria-hidden="true">
+                <span key={counted.key} className={`td-count num ${counted.changed ? 'badge-pop' : ''}`} aria-hidden="true">
                   {needs.count}
                 </span>
               )

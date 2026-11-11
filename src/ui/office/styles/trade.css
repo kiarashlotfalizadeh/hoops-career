@@ -775,6 +775,19 @@ body:has(.simbar) .fo-dock {
   text-align: right;
 }
 
+/* a phone: the lines step in less and sit closer, so a name has room beside its figures */
+@media (max-width: 479px) {
+  .fo-pkg-items {
+    padding-left: 12px;
+  }
+  .fo-pkg-item {
+    gap: 6px;
+  }
+  .fo-pkg-end {
+    min-width: 0;
+  }
+}
+
 /* a package's figures (age, salary, its end) are the box score's */
 .fo-pkg-item > .num,
 .fo-pkg-item > .dim:not(.fo-pkg-ic) {

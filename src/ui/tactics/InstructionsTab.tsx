@@ -15,17 +15,20 @@ export function InstructionsTab({ t, players, phase, setPhase }: { t: Tactics; p
     <div className="col tx-phasebody">
       <h3 className="sr-only">Instructions</h3>
       <HeadSwitch label="Phase of play" value={phase} onChange={setPhase} options={PHASES.map((p) => ({ id: p.id, label: p.short }))} />
-      <PlaybookLine phase={phase} help={phase === 'inPoss' ? <InPossessionHelp /> : phase === 'inTrans' ? <InTransitionHelp /> : <OutOfPossessionHelp />} />
-      {phase === 'inPoss' && <InPossession t={t} />}
-      {phase === 'inTrans' && <InTransition t={t} />}
-      {phase === 'outPoss' && <OutOfPossession t={t} />}
-      <Disclosure key={phase} label="Fine-tune" meta={phase === 'inPoss' ? IN_POSS_FINE : phase === 'inTrans' ? IN_TRANS_FINE : OUT_POSS_FINE}>
-        <div className="col tx-group tx-fine-pad">
-          {phase === 'inPoss' && <InPossessionFine t={t} />}
-          {phase === 'inTrans' && <InTransitionFine t={t} players={players} />}
-          {phase === 'outPoss' && <OutOfPossessionFine t={t} />}
-        </div>
-      </Disclosure>
+      {/* (keyed by the phase: its controls arrive under the heading that chose them) */}
+      <div key={phase} className="col tx-phasebody tx-phase-in">
+        <PlaybookLine phase={phase} help={phase === 'inPoss' ? <InPossessionHelp /> : phase === 'inTrans' ? <InTransitionHelp /> : <OutOfPossessionHelp />} />
+        {phase === 'inPoss' && <InPossession t={t} />}
+        {phase === 'inTrans' && <InTransition t={t} />}
+        {phase === 'outPoss' && <OutOfPossession t={t} />}
+        <Disclosure key={phase} label="Fine-tune" meta={phase === 'inPoss' ? IN_POSS_FINE : phase === 'inTrans' ? IN_TRANS_FINE : OUT_POSS_FINE}>
+          <div className="col tx-group tx-fine-pad">
+            {phase === 'inPoss' && <InPossessionFine t={t} />}
+            {phase === 'inTrans' && <InTransitionFine t={t} players={players} />}
+            {phase === 'outPoss' && <OutOfPossessionFine t={t} />}
+          </div>
+        </Disclosure>
+      </div>
     </div>
   );
 }

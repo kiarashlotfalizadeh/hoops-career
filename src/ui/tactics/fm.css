@@ -146,12 +146,17 @@
   min-width: 0;
 }
 /* a wide screen: the board on the left, the plan and the bench beside it */
-@media (min-width: 900px) {
+@media (min-width: 760px) {
   .tx-tactic {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
     align-items: start;
     gap: var(--gap-page) 20px;
+  }
+  /* the side's first heading sits level with the board's (whose switch is a 44px row) */
+  .tx-tactic-side > .sec:first-child > .sec-h {
+    min-height: 44px;
+    align-items: center;
   }
 }
 /* the board: one card, the formation's pickers over the floor and the row to the bench under it.
